@@ -57,14 +57,15 @@ use layerstack::spec_path::VariantSelectionSite;
 use layerstack::variable_expression::is_expression;
 use layerstack::{
     ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex, AssetResolveError, AssetResolver,
-    MetadataTarget, PropertyType, ReferenceTarget, ResolvedAsset, SchemaRegistry, SharedVec,
-    StringArray, TypedArray,
+    ListOpItem, MetadataField, MetadataTarget, MetadataType, PropertyType, ReferenceTarget,
+    ResolvedAsset, SchemaRegistry, SharedVec, StringArray, TypedArray,
 };
 use smallvec::SmallVec;
 
 use crate::Span;
 use crate::ast;
 use crate::diagnostic::Diagnostic;
+use crate::metadata::{MetadataRejection, MetadataValueError};
 use crate::numeric::{convert_scalar, dimensioned_value, element_type_hint};
 use layerstack::value_type::ValueType;
 
@@ -115,12 +116,14 @@ pub fn emit(
 
 /// Emits USDA with caller-registered metadata types and spec targets.
 ///
-/// The registry must use `tokens`' interner. Core and bundled field types retain
-/// their standard definitions; the registry types additional metadata fields.
-/// Registered literals are converted to their declared scalar, array or list-op
-/// types. Invalid literals or spec targets reject the layer with diagnostics.
-/// Registered defaults remain registry data; importing never authors them.
-/// Asset resolution remains caller-owned, including recursively emitted layers.
+/// The registry must use `tokens`' interner. It types the fields its plugins
+/// declare as the built-in fields are typed ([`crate::metadata`]): a statement
+/// of a field registered for its kind of spec converts to the field's type,
+/// and a literal the type cannot hold rejects the layer with a diagnostic
+/// ([`crate::metadata::MetadataRejection`]); a field registered only for other
+/// kinds of spec keeps its literal's own type. Registered defaults remain
+/// registry data; importing never authors them. Asset resolution remains
+/// caller-owned, including recursively emitted layers.
 ///
 /// Spec: AOUSD Core §7.4 (metadata), §6.2–6.6 (typed values), §16.2 (USDA).
 pub fn emit_with_registry(
@@ -569,18 +572,43 @@ impl EmitCtx<'_> {
                     declare_listed_sets(&names, &mut spec.variant_sets);
                     spec.variant_set_names.make_mut().merge(names);
                 }
-                ast::PrimMeta::Custom(entry) if entry.key == "instanceable" => {
-                    if let ast::MetadataValue::Value(ast::Value::Bool(b)) = &entry.value {
-                        spec.instanceable = Some(*b);
-                    } else {
-                        self.emit_metadata_entry(entry, &mut spec.fields, MetadataTarget::Prim);
+                // `instanceable` and `active` have members of their own,
+                // and `typeName` is the spec's type; each reads as its
+                // field's type (`instanceable = 0` is `false`).
+                ast::PrimMeta::Custom(entry) if matches!(entry.key, "instanceable" | "active") => {
+                    match self.metadata_entry(entry, MetadataTarget::Prim) {
+                        Some((_, FieldValue::Value(Value::Bool(b)))) if entry.key == "active" => {
+                            spec.active = Some(b);
+                        }
+                        Some((_, FieldValue::Value(Value::Bool(b)))) => spec.instanceable = Some(b),
+                        Some((key, value)) => set_field_vec(&mut spec.fields, key, value),
+                        None => {}
                     }
                 }
-                ast::PrimMeta::Custom(entry) if entry.key == "active" => {
-                    if let ast::MetadataValue::Value(ast::Value::Bool(b)) = &entry.value {
-                        spec.active = Some(*b);
-                    } else {
-                        self.emit_metadata_entry(entry, &mut spec.fields, MetadataTarget::Prim);
+                ast::PrimMeta::Custom(entry) if entry.key == "typeName" => {
+                    let token = MetadataType::Value(ValueType::Token);
+                    match crate::metadata::typed(
+                        &entry.value,
+                        entry.op,
+                        token,
+                        self.tokens,
+                        &mut |_| Value::Null,
+                    ) {
+                        Ok(FieldValue::Value(Value::Token(name))) => spec.type_name = Some(name),
+                        Ok(_) => {}
+                        Err(error) => {
+                            let rejection = MetadataRejection {
+                                field: "typeName".into(),
+                                target: MetadataTarget::Prim,
+                                value_type: Some(token),
+                                error,
+                            };
+                            self.diagnostics.push(
+                                Diagnostic::error(entry.span, format!("{rejection}"))
+                                    .with_metadata(rejection),
+                            );
+                            self.rejected = true;
+                        }
                     }
                 }
                 ast::PrimMeta::Kind(_) | ast::PrimMeta::Doc(_) | ast::PrimMeta::Custom(_) => {
@@ -624,241 +652,150 @@ impl EmitCtx<'_> {
         }
     }
 
-    /// Emits one generic metadata entry into `fields`.
+    /// Emits one generic metadata statement into `fields`, those of a
+    /// spec of `target` (a variant's as a prim's, see
+    /// [`crate::metadata`]).
     ///
-    /// Values are converted with the field's registered type where it is
-    /// known (see [`metadata_field_type`]), so `interpolation = "vertex"`
-    /// becomes a token and `metersPerUnit = 1` a double, as OpenUSD's text
-    /// parser does with its schema-registered field types. Repeated list-op
-    /// statements for one field combine into a single list op.
+    /// A field registered for `target` — built in or in the registry,
+    /// alike ([`MetadataField::lookup`]) — reads its value as its type, so
+    /// `interpolation = "vertex"` is a token and `metersPerUnit = 1` a
+    /// double, and a literal it cannot hold rejects the layer
+    /// ([`MetadataRejection`]); so does a key that is a field of the spec
+    /// but not metadata. Any other key keeps its literal's own type, as
+    /// OpenUSD keeps such a field's text. Repeated list-op statements for
+    /// one field combine into a single list op.
     ///
     /// Spec: AOUSD Core §7.4 (metadata fields), §12.2.6 (list ops).
+    /// OpenUSD: `_KeyValueMetadataStart` and `_KeyValueMetadataEnd`
+    /// (`pxr/usd/sdf/textParserHelpers.cpp`).
     fn emit_metadata_entry(
         &mut self,
         entry: &ast::MetadataEntry<'_>,
         fields: &mut Vec<FieldEntry>,
         target: MetadataTarget,
     ) {
+        let Some((key, value)) = self.metadata_entry(entry, target) else {
+            return;
+        };
+        match get_field_mut(fields, &key) {
+            Some(existing) if value.is_list_op() => {
+                if !merge_field_list_ops(existing, value) {
+                    self.diagnostics.push(Diagnostic::error(
+                        entry.span,
+                        format!(
+                            "`{}` list op statements disagree on type; ignored",
+                            entry.key
+                        ),
+                    ));
+                }
+            }
+            Some(existing) => *existing = value,
+            None => set_field_vec(fields, key, value),
+        }
+    }
+
+    /// The field and value of one generic metadata statement on a spec of
+    /// `target` (see [`Self::emit_metadata_entry`]); `None` when it gives
+    /// none, with the reason reported.
+    fn metadata_entry(
+        &mut self,
+        entry: &ast::MetadataEntry<'_>,
+        target: MetadataTarget,
+    ) -> Option<(TokenId, FieldValue)> {
         let key_name = match entry.key {
             // `doc` is the USDA spelling of the `documentation` field.
             "doc" => "documentation",
             key => key,
         };
         let key = self.tokens.intern(key_name);
-        let builtin = metadata_field_type(key_name);
-        let registered = (builtin == MetadataFieldType::Unknown)
-            .then(|| self.registry.and_then(|registry| registry.metadata(key)))
-            .flatten();
-        if registered.is_some_and(|definition| !definition.applies_to(target)) {
-            self.reject(
-                entry.span,
-                format!("`{key_name}` metadata is not registered for {target:?} specs; ignored"),
-            );
-            return;
-        }
-        let declared = registered.map(|definition| definition.value_type.name());
-        let field_type = if let Some(name) = declared {
-            let Some(field_type) = registered_metadata_type(name) else {
-                self.reject(
-                    entry.span,
-                    format!(
-                        "`{key_name}` has unsupported registered metadata type `{name}`; ignored"
-                    ),
-                );
-                return;
+        let reject = |ctx: &mut Self, value_type, error| {
+            let rejection = MetadataRejection {
+                field: key_name.into(),
+                target,
+                value_type,
+                error,
             };
-            field_type
-        } else {
-            builtin
-        };
-        if declared.is_some()
-            && entry.op != ast::ListOpKind::Explicit
-            && !matches!(field_type, MetadataFieldType::ListOp(_))
-        {
-            self.reject(
-                entry.span,
-                format!("`{key_name}` is not list-op metadata; ignored"),
+            ctx.diagnostics.push(
+                Diagnostic::error(entry.span, format!("{rejection}")).with_metadata(rejection),
             );
-            return;
-        }
-        let element = match field_type {
-            MetadataFieldType::ListOp(element) => Some(element),
-            _ if entry.op != ast::ListOpKind::Explicit => {
-                // An unregistered list-op field: integers make an `int64`
-                // list op, anything else a token list op.
-                Some(if self.metadata_items_are_integers(&entry.value) {
-                    ListElement::Int64
-                } else {
-                    ListElement::Token
-                })
-            }
-            _ => None,
+            ctx.rejected = true;
         };
-        if let Some(element) = element {
-            if declared.is_some()
-                && !matches!(
-                    entry.value,
-                    ast::MetadataValue::None | ast::MetadataValue::Value(ast::Value::Array(_))
-                )
-            {
-                self.reject(
-                    entry.span,
-                    format!("`{key_name}` list-op metadata requires an array or None; ignored"),
-                );
-                return;
-            }
-            let Some(value) = self.metadata_list_op(entry, element) else {
-                self.diagnostics.push(Diagnostic::error(
-                    entry.span,
-                    format!("`{key_name}` list op items do not match its element type; ignored"),
-                ));
-                self.rejected |= declared.is_some();
-                return;
-            };
-            match get_field_mut(fields, &key) {
-                Some(existing) => {
-                    if !merge_field_list_ops(existing, value) {
-                        self.diagnostics.push(Diagnostic::error(
-                            entry.span,
-                            format!("`{key_name}` list op statements disagree on type; ignored"),
-                        ));
-                    }
+        // A bare string is the `comment` field (`lower`).
+        if key_name != "comment" && layerstack::is_spec_field(key_name, target) {
+            reject(self, None, MetadataValueError::NotMetadata);
+            return None;
+        }
+        let field = MetadataField::lookup(key_name, self.registry, self.tokens)
+            .filter(|field| field.applies_to(target));
+        if let Some(field) = field {
+            let value_type = field.value_type();
+            let tokens = self.tokens;
+            let converted =
+                crate::metadata::typed(&entry.value, entry.op, value_type, tokens, &mut |value| {
+                    self.convert_metadata_value(value, "dictionary")
+                });
+            return match converted {
+                Ok(value) => Some((key, value)),
+                Err(error) => {
+                    reject(self, Some(value_type), error);
+                    None
                 }
-                None => set_field_vec(fields, key, value),
-            }
-            return;
+            };
         }
-        let expected =
-            declared.map(|name| default_scalar_for_type(name.strip_suffix("[]").unwrap_or(name)));
-        if let Some(expected) = &expected
-            && (matches!(expected, Value::Null)
-                || !metadata_literal_shape(&entry.value, field_type.type_hint(), expected))
-        {
-            self.reject(
-                entry.span,
-                format!(
-                    "`{key_name}` metadata does not match registered type `{}`; ignored",
-                    field_type.type_hint()
-                ),
-            );
-            return;
+        if entry.op != ast::ListOpKind::Explicit {
+            // A list-op statement of a field no registration types: an
+            // `int64` list op of integers, else a token list op.
+            let item = if self.metadata_items_are_integers(&entry.value) {
+                ListOpItem::Int64
+            } else {
+                ListOpItem::Token
+            };
+            let tokens = self.tokens;
+            return match crate::metadata::typed(
+                &entry.value,
+                entry.op,
+                MetadataType::ListOp(item),
+                tokens,
+                &mut |_| Value::Null,
+            ) {
+                Ok(value) => Some((key, value)),
+                Err(_) => {
+                    self.diagnostics.push(Diagnostic::error(
+                        entry.span,
+                        format!(
+                            "`{key_name}` list op items do not match its element type; ignored"
+                        ),
+                    ));
+                    None
+                }
+            };
         }
-        let Some(value) = self.checked(entry.span, |ctx| {
-            ctx.convert_metadata_value(&entry.value, field_type.type_hint())
-        }) else {
-            self.rejected |= declared.is_some();
-            return;
+        // OpenUSD keeps such a field's text; a number array mixing
+        // integers and reals is kept as reals, so it writes back as read.
+        let numbers = |items: &[ast::Value<'_>]| {
+            items.iter().all(|item| {
+                matches!(
+                    item,
+                    ast::Value::Int(_) | ast::Value::UInt(_) | ast::Value::Number(_)
+                )
+            }) && items
+                .iter()
+                .any(|item| matches!(item, ast::Value::Number(_)))
         };
-        if let Some(expected) = &expected
-            && !metadata_value_matches(&value, field_type.type_hint(), expected)
-        {
-            self.reject(
-                entry.span,
-                format!(
-                    "`{key_name}` metadata does not match registered type `{}`; ignored",
-                    field_type.type_hint()
-                ),
-            );
-            return;
-        }
-        set_field_vec(fields, key, FieldValue::Value(value));
+        let hint = match &entry.value {
+            ast::MetadataValue::Value(ast::Value::Array(items)) if numbers(items) => "double[]",
+            _ => "",
+        };
+        let value = self.checked(entry.span, |ctx| {
+            ctx.convert_metadata_value(&entry.value, hint)
+        })?;
+        Some((key, FieldValue::Value(value)))
     }
 
     /// Returns `true` when a metadata value is an array of integers.
     fn metadata_items_are_integers(&self, value: &ast::MetadataValue<'_>) -> bool {
         matches!(value, ast::MetadataValue::Value(ast::Value::Array(items))
             if !items.is_empty() && items.iter().all(|v| matches!(v, ast::Value::Int(_))))
-    }
-
-    /// Converts one list-op metadata statement, or returns `None` when an
-    /// item does not fit `element`.
-    ///
-    /// Spec: AOUSD Core §12.2.6 (list ops).
-    fn metadata_list_op(
-        &mut self,
-        entry: &ast::MetadataEntry<'_>,
-        element: ListElement,
-    ) -> Option<FieldValue> {
-        let items: &[ast::Value<'_>] = match &entry.value {
-            ast::MetadataValue::Value(ast::Value::Array(items)) => items,
-            ast::MetadataValue::Value(single) => core::slice::from_ref(single),
-            // `= None` clears the list.
-            _ => &[],
-        };
-        fn list<T>(op: ast::ListOpKind, items: Vec<T>) -> ListOp<T> {
-            let mut list = ListOp::default();
-            match op {
-                ast::ListOpKind::Explicit => list.explicit = Some(items),
-                ast::ListOpKind::Prepend => list.prepend = items,
-                ast::ListOpKind::Append => list.append = items,
-                ast::ListOpKind::Add => list.add = items,
-                ast::ListOpKind::Delete => list.delete = items,
-                ast::ListOpKind::Reorder => list.reorder = items,
-            }
-            list
-        }
-        // OpenUSD's Sdf parser uses checked GfNumericCast for integral list
-        // items, including finite floating literals truncated toward zero.
-        // Reuse scalar conversion so ranges agree with attribute ingestion.
-        let integer = |value: &ast::Value<'_>, ty| match convert_scalar(value, ty)?.ok()? {
-            Value::Int(value) => Some(i128::from(value)),
-            Value::UInt(value) => Some(i128::from(value)),
-            Value::Int64(value) => Some(i128::from(value)),
-            Value::UInt64(value) => Some(i128::from(value)),
-            _ => None,
-        };
-        let op = entry.op;
-        Some(match element {
-            ListElement::Token => {
-                let mut tokens = Vec::with_capacity(items.len());
-                for item in items {
-                    match item {
-                        ast::Value::String(s) => tokens.push(self.tokens.intern(s)),
-                        ast::Value::Identifier(s) => tokens.push(self.tokens.intern(s)),
-                        _ => return None,
-                    }
-                }
-                FieldValue::TokenListOp(Box::new(list(op, tokens)))
-            }
-            ListElement::String => {
-                let strings = items
-                    .iter()
-                    .map(|v| match v {
-                        ast::Value::String(s) => Some(Arc::from(&**s)),
-                        _ => None,
-                    })
-                    .collect::<Option<Vec<_>>>()?;
-                FieldValue::StringListOp(Box::new(list(op, strings)))
-            }
-            ListElement::Int => FieldValue::IntListOp(Box::new(list(
-                op,
-                items
-                    .iter()
-                    .map(|value| i32::try_from(integer(value, "int")?).ok())
-                    .collect::<Option<Vec<_>>>()?,
-            ))),
-            ListElement::UInt => FieldValue::UIntListOp(Box::new(list(
-                op,
-                items
-                    .iter()
-                    .map(|value| u32::try_from(integer(value, "uint")?).ok())
-                    .collect::<Option<Vec<_>>>()?,
-            ))),
-            ListElement::Int64 => FieldValue::Int64ListOp(Box::new(list(
-                op,
-                items
-                    .iter()
-                    .map(|value| i64::try_from(integer(value, "int64")?).ok())
-                    .collect::<Option<Vec<_>>>()?,
-            ))),
-            ListElement::UInt64 => FieldValue::UInt64ListOp(Box::new(list(
-                op,
-                items
-                    .iter()
-                    .map(|value| u64::try_from(integer(value, "uint64")?).ok())
-                    .collect::<Option<Vec<_>>>()?,
-            ))),
-        })
     }
 
     // ── Properties ──────────────────────────────────────────────────
@@ -1967,133 +1904,6 @@ fn absolute_path<'p>(path: &'p str, anchor: &str) -> Cow<'p, str> {
     Cow::Owned(out)
 }
 
-/// The registered value type of a metadata field, as far as ingestion needs
-/// it to convert USDA literals.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum MetadataFieldType<'a> {
-    /// Convert with this USDA type name.
-    Typed(&'a str),
-    /// A list-op field: explicit assignments are list ops too.
-    ListOp(ListElement),
-    /// Unregistered here: convert from the literal alone.
-    Unknown,
-}
-
-/// The element type of a list-op metadata field.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum ListElement {
-    Token,
-    String,
-    Int,
-    UInt,
-    Int64,
-    UInt64,
-}
-
-fn registered_metadata_type(name: &str) -> Option<MetadataFieldType<'_>> {
-    Some(match name {
-        "tokenlistop" => MetadataFieldType::ListOp(ListElement::Token),
-        "stringlistop" => MetadataFieldType::ListOp(ListElement::String),
-        "intlistop" => MetadataFieldType::ListOp(ListElement::Int),
-        "uintlistop" => MetadataFieldType::ListOp(ListElement::UInt),
-        "int64listop" => MetadataFieldType::ListOp(ListElement::Int64),
-        "uint64listop" => MetadataFieldType::ListOp(ListElement::UInt64),
-        "dictionary" => MetadataFieldType::Typed(name),
-        name if registered_scalar_type(name.strip_suffix("[]").unwrap_or(name)) => {
-            MetadataFieldType::Typed(name)
-        }
-        _ => return None,
-    })
-}
-
-/// Restrict registered declarations to actual Sdf value names before literal
-/// inference. Empty arrays must not validate a fabricated semantic alias.
-/// AOUSD Core §6.3–6.5 (scalar, compound and role value types).
-fn registered_scalar_type(name: &str) -> bool {
-    ValueType::from_name(name).is_some_and(|ty| ty.storage() != ValueType::Opaque)
-}
-
-/// Check shape before conversion, which otherwise deliberately preserves
-/// malformed unregistered literals and may fill missing tuple components.
-fn metadata_literal_shape(value: &ast::MetadataValue<'_>, hint: &str, expected: &Value) -> bool {
-    fn scalar(value: &ast::Value<'_>, expected: &Value) -> bool {
-        let width = match expected {
-            Value::Vec2d(_) | Value::Vec2f(_) | Value::Vec2h(_) | Value::Vec2i(_) => 2,
-            Value::Vec3d(_) | Value::Vec3f(_) | Value::Vec3h(_) | Value::Vec3i(_) => 3,
-            Value::Vec4d(_)
-            | Value::Vec4f(_)
-            | Value::Vec4h(_)
-            | Value::Vec4i(_)
-            | Value::Quatd(_)
-            | Value::Quatf(_)
-            | Value::Quath(_) => 4,
-            Value::Matrix2d(_) => 2,
-            Value::Matrix3d(_) => 3,
-            Value::Matrix4d(_) => 4,
-            _ => {
-                return !matches!(
-                    value,
-                    ast::Value::Blocked | ast::Value::AnimationBlock | ast::Value::ArrayEdit(_)
-                );
-            }
-        };
-        let ast::Value::Tuple(items) = value else {
-            return false;
-        };
-        let component = |value: &ast::Value<'_>| {
-            matches!(
-                value,
-                ast::Value::Bool(_)
-                    | ast::Value::Int(_)
-                    | ast::Value::UInt(_)
-                    | ast::Value::Number(_)
-                    | ast::Value::String(_)
-                    | ast::Value::Identifier(_)
-            )
-        };
-        if matches!(
-            expected,
-            Value::Matrix2d(_) | Value::Matrix3d(_) | Value::Matrix4d(_)
-        ) {
-            items.len() == width && items.iter().all(|row| matches!(row, ast::Value::Tuple(values) if values.len() == width && values.iter().all(component)))
-        } else {
-            items.len() == width && items.iter().all(component)
-        }
-    }
-    match value {
-        ast::MetadataValue::Value(ast::Value::Array(items)) if hint.ends_with("[]") => {
-            items.iter().all(|value| scalar(value, expected))
-        }
-        ast::MetadataValue::Value(value) if !hint.ends_with("[]") => scalar(value, expected),
-        ast::MetadataValue::Dictionary(_) => {
-            !hint.ends_with("[]") && matches!(expected, Value::Dictionary(_))
-        }
-        ast::MetadataValue::String(_) => !hint.ends_with("[]"),
-        _ => false,
-    }
-}
-
-fn metadata_value_matches(value: &Value, hint: &str, expected: &Value) -> bool {
-    let matches =
-        |value: &Value| core::mem::discriminant(value) == core::mem::discriminant(expected);
-    if hint.ends_with("[]") {
-        value
-            .array_ref()
-            .is_some_and(|items| items.iter().all(|value| matches(&value)))
-    } else {
-        matches(value)
-    }
-}
-
-impl<'a> MetadataFieldType<'a> {
-    fn type_hint(self) -> &'a str {
-        match self {
-            Self::Typed(hint) => hint,
-            Self::ListOp(_) | Self::Unknown => "",
-        }
-    }
-}
-
 /// Combines a list-op statement into an earlier one for the same field.
 /// Returns `false` when the two have different element types.
 fn merge_field_list_ops(existing: &mut FieldValue, value: FieldValue) -> bool {
@@ -2108,50 +1918,6 @@ fn merge_field_list_ops(existing: &mut FieldValue, value: FieldValue) -> bool {
         _ => return false,
     }
     true
-}
-
-/// Returns the registered type of a well-known metadata field.
-///
-/// USDA writes tokens and strings alike as quoted literals and integers
-/// without a type suffix, so the field's registered type decides the value
-/// type. The Sdf fields come from `pxr/usd/sdf/schema.cpp`
-/// (`_RegisterStandardFields`); the plugin fields from the `SdfMetadata`
-/// sections of `pxr/usd/usd/plugInfo.json`, `usdGeom/plugInfo.json`,
-/// `usdPhysics/plugInfo.json`, `usdShade/plugInfo.json` and `usdSkel/plugInfo.json`.
-///
-/// Spec: AOUSD Core §7.6 (core metadata fields and their types).
-fn metadata_field_type(key: &str) -> MetadataFieldType<'static> {
-    use MetadataFieldType::{ListOp, Typed, Unknown};
-    match key {
-        "kind"
-        | "colorSpace"
-        | "colorManagementSystem"
-        | "symmetryFunction"
-        | "upAxis"
-        | "interpolation"
-        | "connectability"
-        | "renderType"
-        | "bindMaterialAs"
-        | "outputName"
-        | "constraintTargetIdentifier" => Typed("token"),
-        "documentation" | "comment" | "displayName" | "displayGroup" | "owner" | "sessionOwner"
-        | "prefix" | "suffix" | "symmetricPeer" => Typed("string"),
-        "metersPerUnit" | "kilogramsPerUnit" | "timeCodesPerSecond" | "framesPerSecond"
-        | "startTimeCode" | "endTimeCode" | "startFrame" | "endFrame" => Typed("double"),
-        "weight" => Typed("float"),
-        "elementSize" | "framePrecision" | "unauthoredValuesIndex" => Typed("int"),
-        "arraySizeConstraint" => Typed("int64"),
-        "hidden" | "active" | "instanceable" | "noLoadHint" => Typed("bool"),
-        "allowedTokens" => Typed("token[]"),
-        "displayGroupOrder" => Typed("string[]"),
-        "colorConfiguration" => Typed("asset"),
-        // Sdf's plugin registration; AOUSD Core §7.4 (metadata field types).
-        "payloadAssetDependencies" => Typed("asset[]"),
-        "apiSchemas" => ListOp(ListElement::Token),
-        "clipSets" => ListOp(ListElement::String),
-        "inactiveIds" => ListOp(ListElement::Int64),
-        _ => Unknown,
-    }
 }
 
 fn convert_specifier(spec: ast::Specifier) -> Specifier {

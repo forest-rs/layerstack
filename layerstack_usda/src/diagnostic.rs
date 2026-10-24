@@ -3,9 +3,11 @@
 
 //! Parse diagnostics for error reporting and recovery.
 
+use alloc::boxed::Box;
 use alloc::string::String;
 
 use crate::Span;
+use crate::metadata::MetadataRejection;
 
 /// Severity of a diagnostic.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -28,6 +30,9 @@ pub struct Diagnostic {
     pub message: String,
     /// Severity level.
     pub severity: Severity,
+    /// The metadata statement refused, for a diagnostic that refuses one:
+    /// the field, its type and why, without parsing the message.
+    pub metadata: Option<Box<MetadataRejection>>,
 }
 
 impl Diagnostic {
@@ -37,6 +42,7 @@ impl Diagnostic {
             span,
             message: message.into(),
             severity: Severity::Error,
+            metadata: None,
         }
     }
 
@@ -46,6 +52,14 @@ impl Diagnostic {
             span,
             message: message.into(),
             severity: Severity::Warning,
+            metadata: None,
         }
+    }
+
+    /// The diagnostic, naming the metadata statement it refuses.
+    #[must_use]
+    pub fn with_metadata(mut self, rejection: MetadataRejection) -> Self {
+        self.metadata = Some(Box::new(rejection));
+        self
     }
 }

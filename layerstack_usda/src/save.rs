@@ -858,10 +858,13 @@ impl Lowering<'_> {
         if let LayerValue::Array(items) = value
             && items.is_empty()
         {
-            let declared = match key {
-                "allowedTokens" => "token[]",
-                "displayGroupOrder" => "string[]",
-                "payloadAssetDependencies" => "asset[]",
+            // A metadata statement writes no type, so a field's empty
+            // array is `[]` whatever its elements: a built-in array
+            // field's type, else any. A dictionary value (`key` empty)
+            // writes its type.
+            let declared = match layerstack::MetadataField::builtin(key).map(|f| f.value_type()) {
+                Some(value_type @ layerstack::MetadataType::Array(_)) => value_type.name(),
+                _ if !key.is_empty() => "token[]",
                 _ => return unsupported(path, Unsupported::Value("untyped empty array")),
             };
             return Value::empty_array_of(declared)

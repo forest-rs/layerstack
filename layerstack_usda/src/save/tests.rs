@@ -180,7 +180,10 @@ def Xform "Asset" (
     custom uniform token exedra:mode = "fast" (
         allowedTokens = ["fast", "slow"]
     )
-    prepend rel exedra:targets = [</Asset/High>, </Asset.a>]
+    prepend rel exedra:targets = [
+        </Asset/High>,
+        </Asset.a>,
+    ]
     int[] ids = [1, 2, 3]
     rel material:binding = </Asset/Looks/M>
     string note = "/Asset/Looks/M"
@@ -332,7 +335,7 @@ fn arcs_need_authored_asset_paths() {
         "{text}"
     );
     assert!(
-        text.contains("    append references = [@./x.usda@</A>, <>]\n"),
+        text.contains("    append references = [\n        @./x.usda@</A>,\n        <>\n    ]\n"),
         "{text}"
     );
 
@@ -460,8 +463,14 @@ def "A" (
     delete inherits = </C>
     append inherits = </D>
     kind = "group"
-    payload = [@./p.usda@</P> (scale = 2), </A/B>]
-    prepend references = [@./r.usda@ (offset = 3), <>]
+    payload = [
+        @./p.usda@</P> (scale = 2),
+        </A/B>
+    ]
+    prepend references = [
+        @./r.usda@ (offset = 3),
+        <>
+    ]
     append references = @./r.usda@</R>
     specializes = None
 )
@@ -1071,7 +1080,7 @@ def Xform "Forest" (
     variants = {
         string density = "dense"
     }
-    prepend variantSets = ["density"]
+    prepend variantSets = "density"
 )
 {
     def Xform "Tree" (
@@ -1082,7 +1091,6 @@ def Xform "Forest" (
     )
     {
         double height = 1
-
         variantSet "season" = {
             "summer" (
                 prepend references = </Library/Leaves>
@@ -1101,10 +1109,10 @@ def Xform "Forest" (
                 {
                     color3f[] primvars:displayColor = [(0.1, 0.5, 0.1)]
                 }
-
                 variantSet "size" = {
                     "short" {
                         double height = 3
+
                     }
                     "tall" {
                         double height = 9
@@ -1112,17 +1120,19 @@ def Xform "Forest" (
                         def Scope "Crown"
                         {
                         }
+
                     }
                 }
+
             }
             "winter" (
                 kind = "component"
             ) {
                 double height = 2
+
             }
         }
     }
-
     variantSet "density" = {
         "dense" {
             over "Tree" (
@@ -1141,19 +1151,22 @@ def Xform "Forest" (
             )
             {
                 int count = 3
-
                 variantSet "moss" = {
                     "bare" {
+
                     }
                     "covered" {
                         def Scope "Moss"
                         {
                         }
+
                     }
                 }
             }
+
         }
         "sparse" {
+
         }
     }
 }
@@ -1177,16 +1190,9 @@ class "Library"
 fn saves_variant_sets_and_selections() {
     let imported = Imported::new(VARIANTS);
     let text = imported.save().unwrap();
-    // The source as the writer spells it: bracketed `variantSets` lists,
-    // and a blank line at the end.
-    let mut expected = String::from(VARIANTS) + "\n";
-    for set in ["density", "moss", "season", "size"] {
-        expected = expected.replace(
-            &format!("prepend variantSets = \"{set}\""),
-            &format!("prepend variantSets = [\"{set}\"]"),
-        );
-    }
-    assert_eq!(text, expected);
+    // The source is OpenUSD's export of itself, but for the blank line
+    // that ends a layer.
+    assert_eq!(text, String::from(VARIANTS) + "\n");
     assert_eq!(Imported::new(&text).save().unwrap(), text, "stable");
 }
 

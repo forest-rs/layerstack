@@ -4,7 +4,10 @@ def "Asset" (
     prepend apiSchemas = ["CollectionAPI:lights"]
 )
 {
-    rel collection:lights:includes = [</Asset/Light>, </Asset/Light.intensity>]
+    rel collection:lights:includes = [
+        </Asset/Light>,
+        </Asset/Light.intensity>,
+    ]
 
     def "Light"
     {

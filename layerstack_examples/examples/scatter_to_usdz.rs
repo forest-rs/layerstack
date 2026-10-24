@@ -148,9 +148,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let usda = scene.to_usda()?;
     assert!(
-        usda.contains(
-            "rel prototypes = [</Root/Field/Prototypes/Tree>, </Root/Field/Prototypes/Rock>]"
-        ),
+        usda.contains(concat!(
+            "rel prototypes = [\n",
+            "            </Root/Field/Prototypes/Tree>,\n",
+            "            </Root/Field/Prototypes/Rock>,\n",
+            "        ]\n",
+        )),
         "the prototypes relationship keeps the prototype order"
     );
     assert!(

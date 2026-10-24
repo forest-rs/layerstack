@@ -102,7 +102,10 @@ fn golden_instancer() {
         quatf[] orientationsf = [(1, 0, 0, 0), (0.70710677, 0, 0, 0.70710677), (1, 0, 0, 0)]
         point3f[] positions = [(0, 0, 0), (10, 0, 0), (0, 5, 1)]
         int[] protoIndices = [0, 1, 0]
-        rel prototypes = [</Root/Field/Prototypes/Tri>, </Root/Field/Prototypes/Pair>]
+        rel prototypes = [
+            </Root/Field/Prototypes/Tri>,
+            </Root/Field/Prototypes/Pair>,
+        ]
         float3[] scales = [(1, 1, 1), (1, 1, 1), (2, 2, 1)]
         custom string site:set = "stones"
 

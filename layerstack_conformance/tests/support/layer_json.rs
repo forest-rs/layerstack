@@ -167,7 +167,7 @@ pub(crate) fn prim(spec: &PrimSpec, store: &InMemoryStore) -> Json {
     })
 }
 
-/// Every prim spec of `layer`, by path.
+/// Every prim spec of `layer` below the pseudo-root, by path.
 pub(crate) fn layer(store: &InMemoryStore, layer: LayerId) -> Json {
     let layer: &Layer = store.layer(layer).expect("the layer");
     Json::Object(
@@ -175,6 +175,7 @@ pub(crate) fn layer(store: &InMemoryStore, layer: LayerId) -> Json {
             .prims()
             .iter()
             .map(|(path, spec)| (store.paths.display(*path, &store.tokens), prim(spec, store)))
+            .filter(|(path, _)| path != "/")
             .collect(),
     )
 }

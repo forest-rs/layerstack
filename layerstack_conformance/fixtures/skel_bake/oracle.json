@@ -1,0 +1,5116 @@
+{
+ "openusd_version": "26.8",
+ "root_interval": {
+  "/Character": {
+   "apiSchemas": [],
+   "kind": "component",
+   "properties": {
+    "extentsHint": {
+     "default": null,
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {
+      "1.0": [
+       [
+        -0.2749999761581421,
+        -1.366025447845459,
+        -0.5
+       ],
+       [
+        1.5,
+        1.5,
+        1.081205129623413
+       ]
+      ],
+      "2.0": [
+       [
+        0.08631899952888489,
+        -1.5790817737579346,
+        -0.7954950928688049
+       ],
+       [
+        1.5957154035568237,
+        1.5,
+        1.1835110187530518
+       ]
+      ],
+      "3.0": [
+       [
+        0.44327279925346375,
+        -1.5817933082580566,
+        -1.0825316905975342
+       ],
+       [
+        2.334455728530884,
+        1.5,
+        1.3581887483596802
+       ]
+      ]
+     },
+     "type": "float3[]",
+     "uniform": false
+    }
+   },
+   "specifier": "def",
+   "type": "Xform"
+  },
+  "/Character/Root": {
+   "apiSchemas": [
+    "SkelBindingAPI"
+   ],
+   "kind": null,
+   "properties": {
+    "skel:skeleton": {
+     "targets": [
+      "/Character/Root/Skel"
+     ]
+    },
+    "xformOp:translate": {
+     "default": [
+      0.0,
+      1.0,
+      0.0
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "double3",
+     "uniform": false
+    },
+    "xformOpOrder": {
+     "default": [
+      "xformOp:translate"
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "token[]",
+     "uniform": true
+    }
+   },
+   "specifier": "def",
+   "type": "Xform"
+  },
+  "/Character/Root/Badge": {
+   "apiSchemas": [
+    "SkelBindingAPI"
+   ],
+   "kind": null,
+   "properties": {
+    "faceVertexCounts": {
+     "default": [
+      3
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "int[]",
+     "uniform": false
+    },
+    "faceVertexIndices": {
+     "default": [
+      0,
+      1,
+      2
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "int[]",
+     "uniform": false
+    },
+    "points": {
+     "default": [
+      [
+       0.0,
+       -2.0,
+       0.10000000149011612
+      ],
+      [
+       0.10000000149011612,
+       -2.0,
+       0.10000000149011612
+      ],
+      [
+       0.0,
+       -1.899999976158142,
+       0.10000000149011612
+      ]
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "point3f[]",
+     "uniform": false
+    },
+    "primvars:skel:jointIndices": {
+     "default": [
+      2
+     ],
+     "elementSize": 1,
+     "interpolation": "constant",
+     "timeSamples": {},
+     "type": "int[]",
+     "uniform": false
+    },
+    "primvars:skel:jointWeights": {
+     "default": [
+      1.0
+     ],
+     "elementSize": 1,
+     "interpolation": "constant",
+     "timeSamples": {},
+     "type": "float[]",
+     "uniform": false
+    },
+    "xformOp:transform": {
+     "default": null,
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {
+      "1.0": [
+       [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        1.2990380823612213,
+        0.75,
+        0.0
+       ],
+       [
+        0.0,
+        -0.5,
+        0.8660253882408142,
+        0.0
+       ],
+       [
+        0.25,
+        0.7320507764816284,
+        1.0,
+        1.0
+       ]
+      ],
+      "2.0": [
+       [
+        0.9462995941837601,
+        0.2665022167091262,
+        -0.18301269207672277,
+        0.0
+       ],
+       [
+        -0.09244260146243555,
+        1.0566241341092706,
+        1.0606601536273956,
+        0.0
+       ],
+       [
+        0.31736259336703815,
+        -0.6578560701881964,
+        0.6830127381827253,
+        0.0
+       ],
+       [
+        0.5966024628030362,
+        0.3245854473683387,
+        1.3258251920342445,
+        1.0
+       ]
+      ],
+      "3.0": [
+       [
+        0.7776766372917243,
+        0.5768179666021611,
+        -0.25,
+        0.0
+       ],
+       [
+        -0.13023612275719643,
+        0.738605797290802,
+        1.2990380823612213,
+        0.0
+       ],
+       [
+        0.6226399829427149,
+        -0.6517816889393356,
+        0.4330126941204071,
+        0.0
+       ],
+       [
+        1.0217060204595327,
+        -0.12310096621513367,
+        1.5155444294214249,
+        1.0
+       ]
+      ]
+     },
+     "type": "matrix4d",
+     "uniform": false
+    },
+    "xformOpOrder": {
+     "default": [
+      "xformOp:transform"
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "token[]",
+     "uniform": true
+    }
+   },
+   "specifier": "def",
+   "type": "Mesh"
+  },
+  "/Character/Root/Body": {
+   "apiSchemas": [
+    "SkelBindingAPI"
+   ],
+   "kind": null,
+   "properties": {
+    "extent": {
+     "default": null,
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {
+      "1.0": [
+       [
+        -0.2749999761581421,
+        -2.366025447845459,
+        -0.6339746713638306
+       ],
+       [
+        0.7749999761581421,
+        -0.04893851280212402,
+        0.08120512962341309
+       ]
+      ],
+      "2.0": [
+       [
+        0.08631899952888489,
+        -2.5790817737579346,
+        -1.1918253898620605
+       ],
+       [
+        1.5957154035568237,
+        -0.05751939117908478,
+        0.09698486328125
+       ]
+      ],
+      "3.0": [
+       [
+        0.44327279925346375,
+        -2.5817933082580566,
+        -1.7561696767807007
+       ],
+       [
+        2.334455728530884,
+        -0.08952777087688446,
+        0.08792757987976074
+       ]
+      ]
+     },
+     "type": "float3[]",
+     "uniform": false
+    },
+    "faceVertexCounts": {
+     "default": [
+      4,
+      4
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "int[]",
+     "uniform": false
+    },
+    "faceVertexIndices": {
+     "default": [
+      0,
+      1,
+      2,
+      3,
+      3,
+      2,
+      4,
+      5
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "int[]",
+     "uniform": false
+    },
+    "normals": {
+     "default": [
+      [
+       0.0,
+       0.0,
+       1.0
+      ],
+      [
+       0.0,
+       0.0,
+       1.0
+      ],
+      [
+       0.0,
+       0.6000000238418579,
+       0.800000011920929
+      ],
+      [
+       0.0,
+       0.6000000238418579,
+       0.800000011920929
+      ],
+      [
+       0.0,
+       0.0,
+       1.0
+      ],
+      [
+       0.0,
+       0.0,
+       1.0
+      ]
+     ],
+     "elementSize": null,
+     "interpolation": "vertex",
+     "timeSamples": {
+      "1.0": [
+       [
+        0.051040928810834885,
+        -0.10208184272050858,
+        0.9934657216072083
+       ],
+       [
+        0.051040928810834885,
+        -0.10208184272050858,
+        0.9934657216072083
+       ],
+       [
+        0.0,
+        0.03499339520931244,
+        0.9993875622749329
+       ],
+       [
+        0.0,
+        0.03499339520931244,
+        0.9993875622749329
+       ],
+       [
+        0.0,
+        -0.5000000596046448,
+        0.8660253882408142
+       ],
+       [
+        0.0,
+        -0.5000000596046448,
+        0.8660253882408142
+       ]
+      ],
+      "2.0": [
+       [
+        0.11694793403148651,
+        -0.13807412981987,
+        0.9834931492805481
+       ],
+       [
+        0.11694793403148651,
+        -0.13807412981987,
+        0.9834931492805481
+       ],
+       [
+        0.12882041931152344,
+        -0.20552527904510498,
+        0.9701364636421204
+       ],
+       [
+        0.12882041931152344,
+        -0.20552527904510498,
+        0.9701364636421204
+       ],
+       [
+        0.29268813133239746,
+        -0.6645531058311462,
+        0.6875338554382324
+       ],
+       [
+        0.29268813133239746,
+        -0.6645531058311462,
+        0.6875338554382324
+       ]
+      ],
+      "3.0": [
+       [
+        0.0997418686747551,
+        -0.17386578023433685,
+        0.9797052145004272
+       ],
+       [
+        0.0997418686747551,
+        -0.17386578023433685,
+        0.9797052145004272
+       ],
+       [
+        0.2887860834598541,
+        -0.38641878962516785,
+        0.8759469389915466
+       ],
+       [
+        0.2887860834598541,
+        -0.38641878962516785,
+        0.8759469389915466
+       ],
+       [
+        0.5824806094169617,
+        -0.6801413893699646,
+        0.4451112449169159
+       ],
+       [
+        0.5824806094169617,
+        -0.6801413893699646,
+        0.4451112449169159
+       ]
+      ]
+     },
+     "type": "normal3f[]",
+     "uniform": false
+    },
+    "points": {
+     "default": [
+      [
+       -0.5,
+       0.0,
+       0.0
+      ],
+      [
+       0.5,
+       0.0,
+       0.0
+      ],
+      [
+       0.5,
+       -1.0,
+       0.0
+      ],
+      [
+       -0.5,
+       -1.0,
+       0.0
+      ],
+      [
+       0.5,
+       -2.0,
+       0.0
+      ],
+      [
+       -0.5,
+       -2.0,
+       0.0
+      ]
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {
+      "1.0": [
+       [
+        -0.2749999761581421,
+        -0.04893851280212402,
+        0.08120512962341309
+       ],
+       [
+        0.7749999761581421,
+        -0.04893851280212402,
+        0.08120512962341309
+       ],
+       [
+        0.7749999761581421,
+        -1.2834936380386353,
+        -0.008974552154541016
+       ],
+       [
+        -0.2749999761581421,
+        -1.2834936380386353,
+        -0.008974552154541016
+       ],
+       [
+        0.7749999761581421,
+        -2.366025447845459,
+        -0.6339746713638306
+       ],
+       [
+        -0.2749999761581421,
+        -2.366025447845459,
+        -0.6339746713638306
+       ]
+      ],
+      "2.0": [
+       [
+        0.08631899952888489,
+        -0.15339067578315735,
+        0.09698486328125
+       ],
+       [
+        1.1821331977844238,
+        -0.05751939117908478,
+        0.09698486328125
+       ],
+       [
+        1.4242818355560303,
+        -1.4479968547821045,
+        -0.22268617153167725
+       ],
+       [
+        0.35590994358062744,
+        -1.6425087451934814,
+        -0.12202918529510498
+       ],
+       [
+        1.5957154035568237,
+        -2.3056576251983643,
+        -1.1918253898620605
+       ],
+       [
+        0.5492974519729614,
+        -2.5790817737579346,
+        -1.0106428861618042
+       ]
+      ],
+      "3.0": [
+       [
+        0.44327279925346375,
+        -0.2979055941104889,
+        0.08792757987976074
+       ],
+       [
+        1.625042200088501,
+        -0.08952777087688446,
+        0.08792757987976074
+       ],
+       [
+        2.078052282333374,
+        -1.4504425525665283,
+        -0.5002404451370239
+       ],
+       [
+        1.020561695098877,
+        -1.9007221460342407,
+        -0.35024046897888184
+       ],
+       [
+        2.334455728530884,
+        -1.9379922151565552,
+        -1.7561696767807007
+       ],
+       [
+        1.3763880729675293,
+        -2.5817933082580566,
+        -1.486169695854187
+       ]
+      ]
+     },
+     "type": "point3f[]",
+     "uniform": false
+    },
+    "primvars:skel:geomBindTransform": {
+     "default": [
+      [
+       1.0,
+       0.0,
+       0.0,
+       0.0
+      ],
+      [
+       0.0,
+       1.0,
+       0.0,
+       0.0
+      ],
+      [
+       0.0,
+       0.0,
+       1.0,
+       0.0
+      ],
+      [
+       0.0,
+       0.0,
+       1.0,
+       1.0
+      ]
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "matrix4d",
+     "uniform": false
+    },
+    "primvars:skel:jointIndices": {
+     "default": [
+      0,
+      1,
+      0,
+      1,
+      1,
+      2,
+      1,
+      2,
+      2,
+      1,
+      2,
+      1
+     ],
+     "elementSize": 2,
+     "interpolation": "vertex",
+     "timeSamples": {},
+     "type": "int[]",
+     "uniform": false
+    },
+    "primvars:skel:jointWeights": {
+     "default": [
+      0.800000011920929,
+      0.20000000298023224,
+      0.800000011920929,
+      0.20000000298023224,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.8999999761581421,
+      0.10000000149011612,
+      0.8999999761581421,
+      0.10000000149011612
+     ],
+     "elementSize": 2,
+     "interpolation": "vertex",
+     "timeSamples": {},
+     "type": "float[]",
+     "uniform": false
+    },
+    "skel:blendShapeTargets": {
+     "targets": [
+      "/Character/Root/Body/Smile",
+      "/Character/Root/Body/Wide"
+     ]
+    },
+    "skel:blendShapes": {
+     "default": [
+      "Smile",
+      "Wide"
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "token[]",
+     "uniform": true
+    },
+    "xformOp:translate": {
+     "default": [
+      0.0,
+      0.0,
+      1.0
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "double3",
+     "uniform": false
+    },
+    "xformOpOrder": {
+     "default": [
+      "xformOp:translate"
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "token[]",
+     "uniform": true
+    }
+   },
+   "specifier": "def",
+   "type": "Mesh"
+  },
+  "/Character/Root/Body/Smile": {
+   "apiSchemas": [],
+   "kind": null,
+   "properties": {
+    "inbetweens:half": {
+     "default": [
+      [
+       0.0,
+       0.07999999821186066,
+       0.0
+      ],
+      [
+       0.0,
+       0.07999999821186066,
+       0.0
+      ]
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "vector3f[]",
+     "uniform": true
+    },
+    "inbetweens:half:normalOffsets": {
+     "default": [
+      [
+       0.05000000074505806,
+       0.0,
+       0.0
+      ],
+      [
+       0.05000000074505806,
+       0.0,
+       0.0
+      ]
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "vector3f[]",
+     "uniform": true
+    },
+    "normalOffsets": {
+     "default": [
+      [
+       0.10000000149011612,
+       0.0,
+       0.0
+      ],
+      [
+       0.10000000149011612,
+       0.0,
+       0.0
+      ]
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "vector3f[]",
+     "uniform": true
+    },
+    "offsets": {
+     "default": [
+      [
+       0.0,
+       0.10000000149011612,
+       0.0
+      ],
+      [
+       0.0,
+       0.10000000149011612,
+       0.0
+      ]
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "vector3f[]",
+     "uniform": true
+    },
+    "pointIndices": {
+     "default": [
+      0,
+      1
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "int[]",
+     "uniform": true
+    }
+   },
+   "specifier": "def",
+   "type": "BlendShape"
+  },
+  "/Character/Root/Body/Wide": {
+   "apiSchemas": [],
+   "kind": null,
+   "properties": {
+    "offsets": {
+     "default": [
+      [
+       -0.10000000149011612,
+       0.0,
+       0.0
+      ],
+      [
+       0.10000000149011612,
+       0.0,
+       0.0
+      ],
+      [
+       0.10000000149011612,
+       0.0,
+       0.0
+      ],
+      [
+       -0.10000000149011612,
+       0.0,
+       0.0
+      ],
+      [
+       0.10000000149011612,
+       0.0,
+       0.0
+      ],
+      [
+       -0.10000000149011612,
+       0.0,
+       0.0
+      ]
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "vector3f[]",
+     "uniform": true
+    }
+   },
+   "specifier": "def",
+   "type": "BlendShape"
+  },
+  "/Character/Root/Dust": {
+   "apiSchemas": [
+    "SkelBindingAPI"
+   ],
+   "kind": null,
+   "properties": {
+    "extent": {
+     "default": null,
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {
+      "1.0": [
+       [
+        0.09999999403953552,
+        -2.2660255432128906,
+        -0.21698731184005737
+       ],
+       [
+        0.4000000059604645,
+        0.05000000074505806,
+        0.550000011920929
+       ]
+      ],
+      "2.0": [
+       [
+        0.574999988079071,
+        -2.2675909996032715,
+        -0.603988766670227
+       ],
+       [
+        1.0901689529418945,
+        0.05000000074505806,
+        0.550000011920929
+       ]
+      ],
+      "3.0": [
+       [
+        0.949999988079071,
+        -2.0762033462524414,
+        -1.016025424003601
+       ],
+       [
+        1.7434982061386108,
+        0.05000000074505806,
+        0.550000011920929
+       ]
+      ]
+     },
+     "type": "float3[]",
+     "uniform": false
+    },
+    "points": {
+     "default": [
+      [
+       0.0,
+       0.0,
+       0.5
+      ],
+      [
+       0.0,
+       -1.0,
+       0.5
+      ],
+      [
+       0.0,
+       -2.0,
+       0.5
+      ]
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {
+      "1.0": [
+       [
+        0.25,
+        0.0,
+        0.5
+       ],
+       [
+        0.25,
+        -1.25,
+        0.4330126941204071
+       ],
+       [
+        0.25,
+        -2.116025447845459,
+        -0.0669873058795929
+       ]
+      ],
+      "2.0": [
+       [
+        0.625,
+        0.0,
+        0.5
+       ],
+       [
+        0.7429699301719666,
+        -1.348402738571167,
+        0.3535534143447876
+       ],
+       [
+        0.9401689767837524,
+        -2.11759090423584,
+        -0.4539887607097626
+       ]
+      ],
+      "3.0": [
+       [
+        1.0,
+        0.0,
+        0.5
+       ],
+       [
+        1.248840093612671,
+        -1.4112420082092285,
+        0.25
+       ],
+       [
+        1.5934982299804688,
+        -1.9262033700942993,
+        -0.8660253882408142
+       ]
+      ]
+     },
+     "type": "point3f[]",
+     "uniform": false
+    },
+    "primvars:skel:jointIndices": {
+     "default": [
+      0,
+      1,
+      2
+     ],
+     "elementSize": 1,
+     "interpolation": "vertex",
+     "timeSamples": {},
+     "type": "int[]",
+     "uniform": false
+    },
+    "primvars:skel:jointWeights": {
+     "default": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "elementSize": 1,
+     "interpolation": "vertex",
+     "timeSamples": {},
+     "type": "float[]",
+     "uniform": false
+    },
+    "widths": {
+     "default": [
+      0.10000000149011612,
+      0.20000000298023224,
+      0.30000001192092896
+     ],
+     "elementSize": null,
+     "interpolation": "vertex",
+     "timeSamples": {},
+     "type": "float[]",
+     "uniform": false
+    }
+   },
+   "specifier": "def",
+   "type": "Points"
+  },
+  "/Character/Root/Faceted": {
+   "apiSchemas": [
+    "SkelBindingAPI"
+   ],
+   "kind": null,
+   "properties": {
+    "extent": {
+     "default": null,
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {
+      "1.0": [
+       [
+        0.0,
+        -2.116025447845459,
+        -0.06698738783597946
+       ],
+       [
+        0.5,
+        -1.6180607080459595,
+        0.2205127477645874
+       ]
+      ],
+      "2.0": [
+       [
+        0.5633918046951294,
+        -2.1433145999908447,
+        -0.43834635615348816
+       ],
+       [
+        1.130326271057129,
+        -1.6346114873886108,
+        0.03884091228246689
+       ]
+      ],
+      "3.0": [
+       [
+        1.130976915359497,
+        -2.0363588333129883,
+        -0.7957690358161926
+       ],
+       [
+        1.7196909189224243,
+        -1.5636316537857056,
+        -0.16846495866775513
+       ]
+      ]
+     },
+     "type": "float3[]",
+     "uniform": false
+    },
+    "faceVertexCounts": {
+     "default": [
+      4
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "int[]",
+     "uniform": false
+    },
+    "faceVertexIndices": {
+     "default": [
+      0,
+      1,
+      2,
+      3
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "int[]",
+     "uniform": false
+    },
+    "normals": {
+     "default": [
+      [
+       0.0,
+       0.0,
+       1.0
+      ],
+      [
+       0.0,
+       0.0,
+       1.0
+      ],
+      [
+       0.0,
+       0.6000000238418579,
+       0.800000011920929
+      ],
+      [
+       0.6000000238418579,
+       0.0,
+       0.800000011920929
+      ]
+     ],
+     "elementSize": null,
+     "interpolation": "faceVarying",
+     "timeSamples": {
+      "1.0": [
+       [
+        0.0,
+        -0.5,
+        0.8660253882408142
+       ],
+       [
+        0.0,
+        -0.5,
+        0.8660253882408142
+       ],
+       [
+        0.0,
+        0.016819901764392853,
+        0.999858558177948
+       ],
+       [
+        0.5999999642372131,
+        -0.4000000059604645,
+        0.6928203105926514
+       ]
+      ],
+      "2.0": [
+       [
+        0.1395367980003357,
+        -0.6954153180122375,
+        0.7049305438995361
+       ],
+       [
+        0.1395367980003357,
+        -0.6954153180122375,
+        0.7049305438995361
+       ],
+       [
+        0.15414875745773315,
+        -0.22247880697250366,
+        0.962674081325531
+       ],
+       [
+        0.7579638361930847,
+        -0.4279005527496338,
+        0.49233317375183105
+       ]
+      ],
+      "3.0": [
+       [
+        0.3021107316017151,
+        -0.8153576254844666,
+        0.4938836097717285
+       ],
+       [
+        0.3021107316017151,
+        -0.8153576254844666,
+        0.4938836097717285
+       ],
+       [
+        0.3391457498073578,
+        -0.3960757255554199,
+        0.8532902002334595
+       ],
+       [
+        0.8920868039131165,
+        -0.34852227568626404,
+        0.2875993549823761
+       ]
+      ]
+     },
+     "type": "normal3f[]",
+     "uniform": false
+    },
+    "points": {
+     "default": [
+      [
+       -0.25,
+       -1.5,
+       0.5
+      ],
+      [
+       0.25,
+       -1.5,
+       0.5
+      ],
+      [
+       0.25,
+       -2.0,
+       0.5
+      ],
+      [
+       -0.25,
+       -2.0,
+       0.5
+      ]
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {
+      "1.0": [
+       [
+        0.0,
+        -1.6180607080459595,
+        0.2205127477645874
+       ],
+       [
+        0.5,
+        -1.6180607080459595,
+        0.2205127477645874
+       ],
+       [
+        0.5,
+        -2.116025447845459,
+        -0.06698738783597946
+       ],
+       [
+        0.0,
+        -2.116025447845459,
+        -0.06698738783597946
+       ]
+      ],
+      "2.0": [
+       [
+        0.5633918046951294,
+        -1.7056670188903809,
+        0.03884091228246689
+       ],
+       [
+        1.0575404167175293,
+        -1.6346114873886108,
+        0.01112359669059515
+       ],
+       [
+        1.130326271057129,
+        -2.04516339302063,
+        -0.43834635615348816
+       ],
+       [
+        0.6431856155395508,
+        -2.1433145999908447,
+        -0.3830258846282959
+       ]
+      ],
+      "3.0": [
+       [
+        1.130976915359497,
+        -1.7158899307250977,
+        -0.16846495866775513
+       ],
+       [
+        1.6056323051452637,
+        -1.5636316537857056,
+        -0.20744886994361877
+       ],
+       [
+        1.7196909189224243,
+        -1.8218994140625,
+        -0.7957690358161926
+       ],
+       [
+        1.2746872901916504,
+        -2.0363588333129883,
+        -0.7184461355209351
+       ]
+      ]
+     },
+     "type": "point3f[]",
+     "uniform": false
+    },
+    "primvars:skel:jointIndices": {
+     "default": [
+      1,
+      0,
+      1,
+      0,
+      0,
+      1,
+      0,
+      1
+     ],
+     "elementSize": 2,
+     "interpolation": "vertex",
+     "timeSamples": {},
+     "type": "int[]",
+     "uniform": false
+    },
+    "primvars:skel:jointWeights": {
+     "default": [
+      0.699999988079071,
+      0.30000001192092896,
+      0.699999988079071,
+      0.30000001192092896,
+      0.6000000238418579,
+      0.4000000059604645,
+      0.6000000238418579,
+      0.4000000059604645
+     ],
+     "elementSize": 2,
+     "interpolation": "vertex",
+     "timeSamples": {},
+     "type": "float[]",
+     "uniform": false
+    },
+    "primvars:skel:skinningMethod": {
+     "default": "dualQuaternion",
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "token",
+     "uniform": true
+    },
+    "skel:joints": {
+     "default": [
+      "Hip/Knee/Foot",
+      "Hip/Knee"
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "token[]",
+     "uniform": true
+    }
+   },
+   "specifier": "def",
+   "type": "Mesh"
+  },
+  "/Character/Root/Hat": {
+   "apiSchemas": [
+    "SkelBindingAPI"
+   ],
+   "kind": null,
+   "properties": {
+    "primvars:skel:jointIndices": {
+     "default": [
+      1,
+      2
+     ],
+     "elementSize": 2,
+     "interpolation": "constant",
+     "timeSamples": {},
+     "type": "int[]",
+     "uniform": false
+    },
+    "primvars:skel:jointWeights": {
+     "default": [
+      0.5,
+      0.5
+     ],
+     "elementSize": 2,
+     "interpolation": "constant",
+     "timeSamples": {},
+     "type": "float[]",
+     "uniform": false
+    },
+    "size": {
+     "default": 0.2,
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "double",
+     "uniform": false
+    },
+    "xformOp:transform": {
+     "default": null,
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {
+      "1.0": [
+       [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        1.0825318098068237,
+        0.625,
+        0.0
+       ],
+       [
+        0.0,
+        -0.5,
+        0.866025447845459,
+        0.0
+       ],
+       [
+        0.25,
+        0.2990380823612213,
+        0.75,
+        1.0
+       ]
+      ],
+      "2.0": [
+       [
+        0.9712472558021545,
+        0.17682895064353943,
+        -0.09150636196136475,
+        0.0
+       ],
+       [
+        -0.07703550159931183,
+        0.8805201053619385,
+        0.8838833570480347,
+        0.0
+       ],
+       [
+        0.1894954890012741,
+        -0.6811360120773315,
+        0.6950597763061523,
+        0.0
+       ],
+       [
+        0.6235648840665817,
+        0.016403406858444214,
+        1.0164660215377808,
+        1.0
+       ]
+      ],
+      "3.0": [
+       [
+        0.8812422752380371,
+        0.37523308396339417,
+        -0.125,
+        0.0
+       ],
+       [
+        -0.10853010416030884,
+        0.6155048608779907,
+        1.0825316905975342,
+        0.0
+       ],
+       [
+        0.38651183247566223,
+        -0.7523249983787537,
+        0.46650636196136475,
+        0.0
+       ],
+       [
+        1.0542650520801544,
+        -0.30775243043899536,
+        1.1907849311828613,
+        1.0
+       ]
+      ]
+     },
+     "type": "matrix4d",
+     "uniform": false
+    },
+    "xformOp:translate": {
+     "default": [
+      0.0,
+      -1.0,
+      0.2
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "double3",
+     "uniform": false
+    },
+    "xformOpOrder": {
+     "default": [
+      "xformOp:transform"
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "token[]",
+     "uniform": true
+    }
+   },
+   "specifier": "def",
+   "type": "Cube"
+  },
+  "/Character/Root/Morph": {
+   "apiSchemas": [
+    "SkelBindingAPI"
+   ],
+   "kind": null,
+   "properties": {
+    "extent": {
+     "default": null,
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {
+      "1.0": [
+       [
+        1.0,
+        0.0,
+        0.05000000074505806
+       ],
+       [
+        1.5,
+        0.5,
+        0.15000000596046448
+       ]
+      ],
+      "2.0": [
+       [
+        1.0,
+        0.0,
+        0.10000000149011612
+       ],
+       [
+        1.5,
+        0.5,
+        0.30000001192092896
+       ]
+      ],
+      "3.0": [
+       [
+        1.0,
+        0.0,
+        0.20000000298023224
+       ],
+       [
+        1.5,
+        0.5,
+        0.6000000238418579
+       ]
+      ]
+     },
+     "type": "float3[]",
+     "uniform": false
+    },
+    "faceVertexCounts": {
+     "default": [
+      3
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "int[]",
+     "uniform": false
+    },
+    "faceVertexIndices": {
+     "default": [
+      0,
+      1,
+      2
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "int[]",
+     "uniform": false
+    },
+    "points": {
+     "default": [
+      [
+       1.0,
+       0.0,
+       0.0
+      ],
+      [
+       1.5,
+       0.0,
+       0.0
+      ],
+      [
+       1.0,
+       0.5,
+       0.0
+      ]
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {
+      "1.0": [
+       [
+        1.0,
+        0.0,
+        0.05000000074505806
+       ],
+       [
+        1.5,
+        0.0,
+        0.10000000149011612
+       ],
+       [
+        1.0,
+        0.5,
+        0.15000000596046448
+       ]
+      ],
+      "2.0": [
+       [
+        1.0,
+        0.0,
+        0.10000000149011612
+       ],
+       [
+        1.5,
+        0.0,
+        0.20000000298023224
+       ],
+       [
+        1.0,
+        0.5,
+        0.30000001192092896
+       ]
+      ],
+      "3.0": [
+       [
+        1.0,
+        0.0,
+        0.20000000298023224
+       ],
+       [
+        1.5,
+        0.0,
+        0.4000000059604645
+       ],
+       [
+        1.0,
+        0.5,
+        0.6000000238418579
+       ]
+      ]
+     },
+     "type": "point3f[]",
+     "uniform": false
+    },
+    "skel:blendShapeTargets": {
+     "targets": [
+      "/Character/Root/Morph/Wide"
+     ]
+    },
+    "skel:blendShapes": {
+     "default": [
+      "Wide"
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "token[]",
+     "uniform": true
+    }
+   },
+   "specifier": "def",
+   "type": "Mesh"
+  },
+  "/Character/Root/Morph/Wide": {
+   "apiSchemas": [],
+   "kind": null,
+   "properties": {
+    "offsets": {
+     "default": [
+      [
+       0.0,
+       0.0,
+       0.20000000298023224
+      ],
+      [
+       0.0,
+       0.0,
+       0.4000000059604645
+      ],
+      [
+       0.0,
+       0.0,
+       0.6000000238418579
+      ]
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "vector3f[]",
+     "uniform": true
+    }
+   },
+   "specifier": "def",
+   "type": "BlendShape"
+  },
+  "/Character/Root/Skel": {
+   "apiSchemas": [
+    "SkelBindingAPI"
+   ],
+   "kind": null,
+   "properties": {
+    "bindTransforms": {
+     "default": [
+      [
+       [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+       ]
+      ],
+      [
+       [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+       ],
+       [
+        0.0,
+        -1.0,
+        0.0,
+        1.0
+       ]
+      ],
+      [
+       [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+       ],
+       [
+        0.0,
+        -2.0,
+        0.0,
+        1.0
+       ]
+      ]
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "matrix4d[]",
+     "uniform": true
+    },
+    "joints": {
+     "default": [
+      "Hip",
+      "Hip/Knee",
+      "Hip/Knee/Foot"
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "token[]",
+     "uniform": true
+    },
+    "restTransforms": {
+     "default": [
+      [
+       [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+       ]
+      ],
+      [
+       [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+       ],
+       [
+        0.0,
+        -1.0,
+        0.0,
+        1.0
+       ]
+      ],
+      [
+       [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+       ],
+       [
+        0.0,
+        -1.0,
+        0.0,
+        1.0
+       ]
+      ]
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "matrix4d[]",
+     "uniform": true
+    },
+    "skel:animationSource": {
+     "targets": [
+      "/Character/Root/Skel/Anim"
+     ]
+    },
+    "xformOp:translate": {
+     "default": null,
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {
+      "0.0": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "4.0": [
+       1.0,
+       0.0,
+       0.0
+      ]
+     },
+     "type": "double3",
+     "uniform": false
+    },
+    "xformOpOrder": {
+     "default": [
+      "xformOp:translate"
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "token[]",
+     "uniform": true
+    }
+   },
+   "specifier": "def",
+   "type": "Skeleton"
+  },
+  "/Character/Root/Skel/Anim": {
+   "apiSchemas": [],
+   "kind": null,
+   "properties": {
+    "blendShapeWeights": {
+     "default": null,
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {
+      "0.0": [
+       0.0,
+       0.0
+      ],
+      "2.0": [
+       1.0,
+       0.5
+      ],
+      "4.0": [
+       0.25,
+       1.5
+      ]
+     },
+     "type": "float[]",
+     "uniform": false
+    },
+    "blendShapes": {
+     "default": [
+      "Smile",
+      "Wide"
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "token[]",
+     "uniform": true
+    },
+    "joints": {
+     "default": [
+      "Hip",
+      "Hip/Knee",
+      "Hip/Knee/Foot"
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "token[]",
+     "uniform": true
+    },
+    "rotations": {
+     "default": null,
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {
+      "1.0": [
+       [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+       ],
+       [
+        0.258819043636322,
+        0.0,
+        0.0,
+        0.9659258127212524
+       ],
+       [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+       ]
+      ],
+      "3.0": [
+       [
+        0.0,
+        0.0,
+        0.08715573698282242,
+        0.9961947202682495
+       ],
+       [
+        0.5,
+        0.0,
+        0.0,
+        0.8660253882408142
+       ],
+       [
+        0.0,
+        0.258819043636322,
+        0.0,
+        0.9659258127212524
+       ]
+      ]
+     },
+     "type": "quatf[]",
+     "uniform": false
+    },
+    "scales": {
+     "default": [
+      [
+       1.0,
+       1.0,
+       1.0
+      ],
+      [
+       1.0,
+       1.0,
+       1.0
+      ],
+      [
+       1.0,
+       1.5,
+       1.0
+      ]
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "half3[]",
+     "uniform": false
+    },
+    "translations": {
+     "default": null,
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {
+      "1.0": [
+       [
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        -1.0,
+        0.0
+       ],
+       [
+        0.0,
+        -1.0,
+        0.0
+       ]
+      ],
+      "3.0": [
+       [
+        0.25,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        -1.0,
+        0.0
+       ],
+       [
+        0.0,
+        -1.25,
+        0.0
+       ]
+      ]
+     },
+     "type": "float3[]",
+     "uniform": false
+    }
+   },
+   "specifier": "def",
+   "type": "SkelAnimation"
+  },
+  "/Statue": {
+   "apiSchemas": [],
+   "kind": null,
+   "properties": {},
+   "specifier": "def",
+   "type": "SkelRoot"
+  },
+  "/Statue/Skel": {
+   "apiSchemas": [],
+   "kind": null,
+   "properties": {
+    "bindTransforms": {
+     "default": [
+      [
+       [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+       ]
+      ]
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "matrix4d[]",
+     "uniform": true
+    },
+    "joints": {
+     "default": [
+      "A"
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "token[]",
+     "uniform": true
+    },
+    "restTransforms": {
+     "default": [
+      [
+       [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+       ],
+       [
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+       ],
+       [
+        2.0,
+        0.0,
+        0.0,
+        1.0
+       ]
+      ]
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "matrix4d[]",
+     "uniform": true
+    }
+   },
+   "specifier": "def",
+   "type": "Skeleton"
+  },
+  "/Statue/Stone": {
+   "apiSchemas": [
+    "SkelBindingAPI"
+   ],
+   "kind": null,
+   "properties": {
+    "faceVertexCounts": {
+     "default": [
+      3
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "int[]",
+     "uniform": false
+    },
+    "faceVertexIndices": {
+     "default": [
+      0,
+      1,
+      2
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "int[]",
+     "uniform": false
+    },
+    "points": {
+     "default": [
+      [
+       0.0,
+       0.0,
+       0.0
+      ],
+      [
+       1.0,
+       0.0,
+       0.0
+      ],
+      [
+       0.0,
+       1.0,
+       0.0
+      ]
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "point3f[]",
+     "uniform": false
+    },
+    "primvars:skel:jointIndices": {
+     "default": [
+      0,
+      0,
+      0
+     ],
+     "elementSize": 1,
+     "interpolation": "vertex",
+     "timeSamples": {},
+     "type": "int[]",
+     "uniform": false
+    },
+    "primvars:skel:jointWeights": {
+     "default": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "elementSize": 1,
+     "interpolation": "vertex",
+     "timeSamples": {},
+     "type": "float[]",
+     "uniform": false
+    },
+    "skel:skeleton": {
+     "targets": [
+      "/Statue/Skel"
+     ]
+    }
+   },
+   "specifier": "def",
+   "type": "Mesh"
+  }
+ },
+ "stage": {
+  "/Character": {
+   "apiSchemas": [],
+   "kind": "component",
+   "properties": {
+    "extentsHint": {
+     "default": null,
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {
+      "0.0": [
+       [
+        -0.5,
+        -1.366025447845459,
+        -0.5
+       ],
+       [
+        1.5,
+        1.5,
+        1.0732051134109497
+       ]
+      ],
+      "1.0": [
+       [
+        -0.2749999761581421,
+        -1.366025447845459,
+        -0.5
+       ],
+       [
+        1.5,
+        1.5,
+        1.081205129623413
+       ]
+      ],
+      "2.0": [
+       [
+        0.08631899952888489,
+        -1.5790817737579346,
+        -0.7954950928688049
+       ],
+       [
+        1.5957154035568237,
+        1.5,
+        1.1835110187530518
+       ]
+      ],
+      "3.0": [
+       [
+        0.44327279925346375,
+        -1.5817933082580566,
+        -1.0825316905975342
+       ],
+       [
+        2.334455728530884,
+        1.5,
+        1.3581887483596802
+       ]
+      ],
+      "4.0": [
+       [
+        0.6510652303695679,
+        -1.6086182594299316,
+        -1.0825316905975342
+       ],
+       [
+        2.624375343322754,
+        1.5,
+        1.3581887483596802
+       ]
+      ]
+     },
+     "type": "float3[]",
+     "uniform": false
+    }
+   },
+   "specifier": "def",
+   "type": "Xform"
+  },
+  "/Character/Root": {
+   "apiSchemas": [
+    "SkelBindingAPI"
+   ],
+   "kind": null,
+   "properties": {
+    "skel:skeleton": {
+     "targets": [
+      "/Character/Root/Skel"
+     ]
+    },
+    "xformOp:translate": {
+     "default": [
+      0.0,
+      1.0,
+      0.0
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "double3",
+     "uniform": false
+    },
+    "xformOpOrder": {
+     "default": [
+      "xformOp:translate"
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "token[]",
+     "uniform": true
+    }
+   },
+   "specifier": "def",
+   "type": "Xform"
+  },
+  "/Character/Root/Badge": {
+   "apiSchemas": [
+    "SkelBindingAPI"
+   ],
+   "kind": null,
+   "properties": {
+    "faceVertexCounts": {
+     "default": [
+      3
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "int[]",
+     "uniform": false
+    },
+    "faceVertexIndices": {
+     "default": [
+      0,
+      1,
+      2
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "int[]",
+     "uniform": false
+    },
+    "points": {
+     "default": [
+      [
+       0.0,
+       -2.0,
+       0.10000000149011612
+      ],
+      [
+       0.10000000149011612,
+       -2.0,
+       0.10000000149011612
+      ],
+      [
+       0.0,
+       -1.899999976158142,
+       0.10000000149011612
+      ]
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "point3f[]",
+     "uniform": false
+    },
+    "primvars:skel:jointIndices": {
+     "default": [
+      2
+     ],
+     "elementSize": 1,
+     "interpolation": "constant",
+     "timeSamples": {},
+     "type": "int[]",
+     "uniform": false
+    },
+    "primvars:skel:jointWeights": {
+     "default": [
+      1.0
+     ],
+     "elementSize": 1,
+     "interpolation": "constant",
+     "timeSamples": {},
+     "type": "float[]",
+     "uniform": false
+    },
+    "xformOp:transform": {
+     "default": null,
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {
+      "0.0": [
+       [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        1.2990380823612213,
+        0.75,
+        0.0
+       ],
+       [
+        0.0,
+        -0.5,
+        0.8660253882408142,
+        0.0
+       ],
+       [
+        0.0,
+        0.7320507764816284,
+        1.0,
+        1.0
+       ]
+      ],
+      "1.0": [
+       [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        1.2990380823612213,
+        0.75,
+        0.0
+       ],
+       [
+        0.0,
+        -0.5,
+        0.8660253882408142,
+        0.0
+       ],
+       [
+        0.25,
+        0.7320507764816284,
+        1.0,
+        1.0
+       ]
+      ],
+      "2.0": [
+       [
+        0.9462995941837601,
+        0.2665022167091262,
+        -0.18301269207672277,
+        0.0
+       ],
+       [
+        -0.09244260146243555,
+        1.0566241341092706,
+        1.0606601536273956,
+        0.0
+       ],
+       [
+        0.31736259336703815,
+        -0.6578560701881964,
+        0.6830127381827253,
+        0.0
+       ],
+       [
+        0.5966024628030362,
+        0.3245854473683387,
+        1.3258251920342445,
+        1.0
+       ]
+      ],
+      "3.0": [
+       [
+        0.7776766372917243,
+        0.5768179666021611,
+        -0.25,
+        0.0
+       ],
+       [
+        -0.13023612275719643,
+        0.738605797290802,
+        1.2990380823612213,
+        0.0
+       ],
+       [
+        0.6226399829427149,
+        -0.6517816889393356,
+        0.4330126941204071,
+        0.0
+       ],
+       [
+        1.0217060204595327,
+        -0.12310096621513367,
+        1.5155444294214249,
+        1.0
+       ]
+      ],
+      "4.0": [
+       [
+        0.7776766372917243,
+        0.5768179666021611,
+        -0.25,
+        0.0
+       ],
+       [
+        -0.13023612275719643,
+        0.738605797290802,
+        1.2990380823612213,
+        0.0
+       ],
+       [
+        0.6226399829427149,
+        -0.6517816889393356,
+        0.4330126941204071,
+        0.0
+       ],
+       [
+        1.2717060204595327,
+        -0.12310096621513367,
+        1.5155444294214249,
+        1.0
+       ]
+      ]
+     },
+     "type": "matrix4d",
+     "uniform": false
+    },
+    "xformOpOrder": {
+     "default": [
+      "xformOp:transform"
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "token[]",
+     "uniform": true
+    }
+   },
+   "specifier": "def",
+   "type": "Mesh"
+  },
+  "/Character/Root/Body": {
+   "apiSchemas": [
+    "SkelBindingAPI"
+   ],
+   "kind": null,
+   "properties": {
+    "extent": {
+     "default": null,
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {
+      "0.0": [
+       [
+        -0.5,
+        -2.366025447845459,
+        -0.6339746713638306
+       ],
+       [
+        0.5,
+        -0.12679491937160492,
+        0.07320511341094971
+       ]
+      ],
+      "1.0": [
+       [
+        -0.2749999761581421,
+        -2.366025447845459,
+        -0.6339746713638306
+       ],
+       [
+        0.7749999761581421,
+        -0.04893851280212402,
+        0.08120512962341309
+       ]
+      ],
+      "2.0": [
+       [
+        0.08631899952888489,
+        -2.5790817737579346,
+        -1.1918253898620605
+       ],
+       [
+        1.5957154035568237,
+        -0.05751939117908478,
+        0.09698486328125
+       ]
+      ],
+      "3.0": [
+       [
+        0.44327279925346375,
+        -2.5817933082580566,
+        -1.7561696767807007
+       ],
+       [
+        2.334455728530884,
+        -0.08952777087688446,
+        0.08792757987976074
+       ]
+      ],
+      "4.0": [
+       [
+        0.6510652303695679,
+        -2.6086182594299316,
+        -1.767419695854187
+       ],
+       [
+        2.624375343322754,
+        -0.12073009461164474,
+        0.08013331890106201
+       ]
+      ]
+     },
+     "type": "float3[]",
+     "uniform": false
+    },
+    "faceVertexCounts": {
+     "default": [
+      4,
+      4
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "int[]",
+     "uniform": false
+    },
+    "faceVertexIndices": {
+     "default": [
+      0,
+      1,
+      2,
+      3,
+      3,
+      2,
+      4,
+      5
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "int[]",
+     "uniform": false
+    },
+    "normals": {
+     "default": [
+      [
+       0.0,
+       0.0,
+       1.0
+      ],
+      [
+       0.0,
+       0.0,
+       1.0
+      ],
+      [
+       0.0,
+       0.6000000238418579,
+       0.800000011920929
+      ],
+      [
+       0.0,
+       0.6000000238418579,
+       0.800000011920929
+      ],
+      [
+       0.0,
+       0.0,
+       1.0
+      ],
+      [
+       0.0,
+       0.0,
+       1.0
+      ]
+     ],
+     "elementSize": null,
+     "interpolation": "vertex",
+     "timeSamples": {
+      "0.0": [
+       [
+        0.0,
+        -0.10221508145332336,
+        0.9947623610496521
+       ],
+       [
+        0.0,
+        -0.10221508145332336,
+        0.9947623610496521
+       ],
+       [
+        0.0,
+        0.03499339520931244,
+        0.9993875622749329
+       ],
+       [
+        0.0,
+        0.03499339520931244,
+        0.9993875622749329
+       ],
+       [
+        0.0,
+        -0.5000000596046448,
+        0.8660253882408142
+       ],
+       [
+        0.0,
+        -0.5000000596046448,
+        0.8660253882408142
+       ]
+      ],
+      "1.0": [
+       [
+        0.051040928810834885,
+        -0.10208184272050858,
+        0.9934657216072083
+       ],
+       [
+        0.051040928810834885,
+        -0.10208184272050858,
+        0.9934657216072083
+       ],
+       [
+        0.0,
+        0.03499339520931244,
+        0.9993875622749329
+       ],
+       [
+        0.0,
+        0.03499339520931244,
+        0.9993875622749329
+       ],
+       [
+        0.0,
+        -0.5000000596046448,
+        0.8660253882408142
+       ],
+       [
+        0.0,
+        -0.5000000596046448,
+        0.8660253882408142
+       ]
+      ],
+      "2.0": [
+       [
+        0.11694793403148651,
+        -0.13807412981987,
+        0.9834931492805481
+       ],
+       [
+        0.11694793403148651,
+        -0.13807412981987,
+        0.9834931492805481
+       ],
+       [
+        0.12882041931152344,
+        -0.20552527904510498,
+        0.9701364636421204
+       ],
+       [
+        0.12882041931152344,
+        -0.20552527904510498,
+        0.9701364636421204
+       ],
+       [
+        0.29268813133239746,
+        -0.6645531058311462,
+        0.6875338554382324
+       ],
+       [
+        0.29268813133239746,
+        -0.6645531058311462,
+        0.6875338554382324
+       ]
+      ],
+      "3.0": [
+       [
+        0.0997418686747551,
+        -0.17386578023433685,
+        0.9797052145004272
+       ],
+       [
+        0.0997418686747551,
+        -0.17386578023433685,
+        0.9797052145004272
+       ],
+       [
+        0.2887860834598541,
+        -0.38641878962516785,
+        0.8759469389915466
+       ],
+       [
+        0.2887860834598541,
+        -0.38641878962516785,
+        0.8759469389915466
+       ],
+       [
+        0.5824806094169617,
+        -0.6801413893699646,
+        0.4451112449169159
+       ],
+       [
+        0.5824806094169617,
+        -0.6801413893699646,
+        0.4451112449169159
+       ]
+      ],
+      "4.0": [
+       [
+        0.05965707078576088,
+        -0.18130707740783691,
+        0.981615424156189
+       ],
+       [
+        0.05965707078576088,
+        -0.18130707740783691,
+        0.981615424156189
+       ],
+       [
+        0.2887860834598541,
+        -0.38641878962516785,
+        0.8759469389915466
+       ],
+       [
+        0.2887860834598541,
+        -0.38641878962516785,
+        0.8759469389915466
+       ],
+       [
+        0.5824806094169617,
+        -0.6801413893699646,
+        0.4451112449169159
+       ],
+       [
+        0.5824806094169617,
+        -0.6801413893699646,
+        0.4451112449169159
+       ]
+      ]
+     },
+     "type": "normal3f[]",
+     "uniform": false
+    },
+    "points": {
+     "default": [
+      [
+       -0.5,
+       0.0,
+       0.0
+      ],
+      [
+       0.5,
+       0.0,
+       0.0
+      ],
+      [
+       0.5,
+       -1.0,
+       0.0
+      ],
+      [
+       -0.5,
+       -1.0,
+       0.0
+      ],
+      [
+       0.5,
+       -2.0,
+       0.0
+      ],
+      [
+       -0.5,
+       -2.0,
+       0.0
+      ]
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {
+      "0.0": [
+       [
+        -0.5,
+        -0.12679491937160492,
+        0.07320511341094971
+       ],
+       [
+        0.5,
+        -0.12679491937160492,
+        0.07320511341094971
+       ],
+       [
+        0.5,
+        -1.2834936380386353,
+        -0.008974552154541016
+       ],
+       [
+        -0.5,
+        -1.2834936380386353,
+        -0.008974552154541016
+       ],
+       [
+        0.5,
+        -2.366025447845459,
+        -0.6339746713638306
+       ],
+       [
+        -0.5,
+        -2.366025447845459,
+        -0.6339746713638306
+       ]
+      ],
+      "1.0": [
+       [
+        -0.2749999761581421,
+        -0.04893851280212402,
+        0.08120512962341309
+       ],
+       [
+        0.7749999761581421,
+        -0.04893851280212402,
+        0.08120512962341309
+       ],
+       [
+        0.7749999761581421,
+        -1.2834936380386353,
+        -0.008974552154541016
+       ],
+       [
+        -0.2749999761581421,
+        -1.2834936380386353,
+        -0.008974552154541016
+       ],
+       [
+        0.7749999761581421,
+        -2.366025447845459,
+        -0.6339746713638306
+       ],
+       [
+        -0.2749999761581421,
+        -2.366025447845459,
+        -0.6339746713638306
+       ]
+      ],
+      "2.0": [
+       [
+        0.08631899952888489,
+        -0.15339067578315735,
+        0.09698486328125
+       ],
+       [
+        1.1821331977844238,
+        -0.05751939117908478,
+        0.09698486328125
+       ],
+       [
+        1.4242818355560303,
+        -1.4479968547821045,
+        -0.22268617153167725
+       ],
+       [
+        0.35590994358062744,
+        -1.6425087451934814,
+        -0.12202918529510498
+       ],
+       [
+        1.5957154035568237,
+        -2.3056576251983643,
+        -1.1918253898620605
+       ],
+       [
+        0.5492974519729614,
+        -2.5790817737579346,
+        -1.0106428861618042
+       ]
+      ],
+      "3.0": [
+       [
+        0.44327279925346375,
+        -0.2979055941104889,
+        0.08792757987976074
+       ],
+       [
+        1.625042200088501,
+        -0.08952777087688446,
+        0.08792757987976074
+       ],
+       [
+        2.078052282333374,
+        -1.4504425525665283,
+        -0.5002404451370239
+       ],
+       [
+        1.020561695098877,
+        -1.9007221460342407,
+        -0.35024046897888184
+       ],
+       [
+        2.334455728530884,
+        -1.9379922151565552,
+        -1.7561696767807007
+       ],
+       [
+        1.3763880729675293,
+        -2.5817933082580566,
+        -1.486169695854187
+       ]
+      ],
+      "4.0": [
+       [
+        0.6510652303695679,
+        -0.34647271037101746,
+        0.08013331890106201
+       ],
+       [
+        1.9313151836395264,
+        -0.12073009461164474,
+        0.08013331890106201
+       ],
+       [
+        2.372114419937134,
+        -1.4316809177398682,
+        -0.5064904689788818
+       ],
+       [
+        1.2264995574951172,
+        -1.9194839000701904,
+        -0.3439904451370239
+       ],
+       [
+        2.624375343322754,
+        -1.9111672639846802,
+        -1.767419695854187
+       ],
+       [
+        1.5864686965942383,
+        -2.6086182594299316,
+        -1.4749196767807007
+       ]
+      ]
+     },
+     "type": "point3f[]",
+     "uniform": false
+    },
+    "primvars:skel:geomBindTransform": {
+     "default": [
+      [
+       1.0,
+       0.0,
+       0.0,
+       0.0
+      ],
+      [
+       0.0,
+       1.0,
+       0.0,
+       0.0
+      ],
+      [
+       0.0,
+       0.0,
+       1.0,
+       0.0
+      ],
+      [
+       0.0,
+       0.0,
+       1.0,
+       1.0
+      ]
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "matrix4d",
+     "uniform": false
+    },
+    "primvars:skel:jointIndices": {
+     "default": [
+      0,
+      1,
+      0,
+      1,
+      1,
+      2,
+      1,
+      2,
+      2,
+      1,
+      2,
+      1
+     ],
+     "elementSize": 2,
+     "interpolation": "vertex",
+     "timeSamples": {},
+     "type": "int[]",
+     "uniform": false
+    },
+    "primvars:skel:jointWeights": {
+     "default": [
+      0.800000011920929,
+      0.20000000298023224,
+      0.800000011920929,
+      0.20000000298023224,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.8999999761581421,
+      0.10000000149011612,
+      0.8999999761581421,
+      0.10000000149011612
+     ],
+     "elementSize": 2,
+     "interpolation": "vertex",
+     "timeSamples": {},
+     "type": "float[]",
+     "uniform": false
+    },
+    "skel:blendShapeTargets": {
+     "targets": [
+      "/Character/Root/Body/Smile",
+      "/Character/Root/Body/Wide"
+     ]
+    },
+    "skel:blendShapes": {
+     "default": [
+      "Smile",
+      "Wide"
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "token[]",
+     "uniform": true
+    },
+    "xformOp:translate": {
+     "default": [
+      0.0,
+      0.0,
+      1.0
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "double3",
+     "uniform": false
+    },
+    "xformOpOrder": {
+     "default": [
+      "xformOp:translate"
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "token[]",
+     "uniform": true
+    }
+   },
+   "specifier": "def",
+   "type": "Mesh"
+  },
+  "/Character/Root/Body/Smile": {
+   "apiSchemas": [],
+   "kind": null,
+   "properties": {
+    "inbetweens:half": {
+     "default": [
+      [
+       0.0,
+       0.07999999821186066,
+       0.0
+      ],
+      [
+       0.0,
+       0.07999999821186066,
+       0.0
+      ]
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "vector3f[]",
+     "uniform": true
+    },
+    "inbetweens:half:normalOffsets": {
+     "default": [
+      [
+       0.05000000074505806,
+       0.0,
+       0.0
+      ],
+      [
+       0.05000000074505806,
+       0.0,
+       0.0
+      ]
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "vector3f[]",
+     "uniform": true
+    },
+    "normalOffsets": {
+     "default": [
+      [
+       0.10000000149011612,
+       0.0,
+       0.0
+      ],
+      [
+       0.10000000149011612,
+       0.0,
+       0.0
+      ]
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "vector3f[]",
+     "uniform": true
+    },
+    "offsets": {
+     "default": [
+      [
+       0.0,
+       0.10000000149011612,
+       0.0
+      ],
+      [
+       0.0,
+       0.10000000149011612,
+       0.0
+      ]
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "vector3f[]",
+     "uniform": true
+    },
+    "pointIndices": {
+     "default": [
+      0,
+      1
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "int[]",
+     "uniform": true
+    }
+   },
+   "specifier": "def",
+   "type": "BlendShape"
+  },
+  "/Character/Root/Body/Wide": {
+   "apiSchemas": [],
+   "kind": null,
+   "properties": {
+    "offsets": {
+     "default": [
+      [
+       -0.10000000149011612,
+       0.0,
+       0.0
+      ],
+      [
+       0.10000000149011612,
+       0.0,
+       0.0
+      ],
+      [
+       0.10000000149011612,
+       0.0,
+       0.0
+      ],
+      [
+       -0.10000000149011612,
+       0.0,
+       0.0
+      ],
+      [
+       0.10000000149011612,
+       0.0,
+       0.0
+      ],
+      [
+       -0.10000000149011612,
+       0.0,
+       0.0
+      ]
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "vector3f[]",
+     "uniform": true
+    }
+   },
+   "specifier": "def",
+   "type": "BlendShape"
+  },
+  "/Character/Root/Dust": {
+   "apiSchemas": [
+    "SkelBindingAPI"
+   ],
+   "kind": null,
+   "properties": {
+    "extent": {
+     "default": null,
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {
+      "0.0": [
+       [
+        -0.15000000596046448,
+        -2.2660255432128906,
+        -0.21698731184005737
+       ],
+       [
+        0.15000000596046448,
+        0.05000000074505806,
+        0.550000011920929
+       ]
+      ],
+      "1.0": [
+       [
+        0.09999999403953552,
+        -2.2660255432128906,
+        -0.21698731184005737
+       ],
+       [
+        0.4000000059604645,
+        0.05000000074505806,
+        0.550000011920929
+       ]
+      ],
+      "2.0": [
+       [
+        0.574999988079071,
+        -2.2675909996032715,
+        -0.603988766670227
+       ],
+       [
+        1.0901689529418945,
+        0.05000000074505806,
+        0.550000011920929
+       ]
+      ],
+      "3.0": [
+       [
+        0.949999988079071,
+        -2.0762033462524414,
+        -1.016025424003601
+       ],
+       [
+        1.7434982061386108,
+        0.05000000074505806,
+        0.550000011920929
+       ]
+      ],
+      "4.0": [
+       [
+        1.2000000476837158,
+        -2.0762033462524414,
+        -1.016025424003601
+       ],
+       [
+        1.9934982061386108,
+        0.05000000074505806,
+        0.550000011920929
+       ]
+      ]
+     },
+     "type": "float3[]",
+     "uniform": false
+    },
+    "points": {
+     "default": [
+      [
+       0.0,
+       0.0,
+       0.5
+      ],
+      [
+       0.0,
+       -1.0,
+       0.5
+      ],
+      [
+       0.0,
+       -2.0,
+       0.5
+      ]
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {
+      "0.0": [
+       [
+        0.0,
+        0.0,
+        0.5
+       ],
+       [
+        0.0,
+        -1.25,
+        0.4330126941204071
+       ],
+       [
+        0.0,
+        -2.116025447845459,
+        -0.0669873058795929
+       ]
+      ],
+      "1.0": [
+       [
+        0.25,
+        0.0,
+        0.5
+       ],
+       [
+        0.25,
+        -1.25,
+        0.4330126941204071
+       ],
+       [
+        0.25,
+        -2.116025447845459,
+        -0.0669873058795929
+       ]
+      ],
+      "2.0": [
+       [
+        0.625,
+        0.0,
+        0.5
+       ],
+       [
+        0.7429699301719666,
+        -1.348402738571167,
+        0.3535534143447876
+       ],
+       [
+        0.9401689767837524,
+        -2.11759090423584,
+        -0.4539887607097626
+       ]
+      ],
+      "3.0": [
+       [
+        1.0,
+        0.0,
+        0.5
+       ],
+       [
+        1.248840093612671,
+        -1.4112420082092285,
+        0.25
+       ],
+       [
+        1.5934982299804688,
+        -1.9262033700942993,
+        -0.8660253882408142
+       ]
+      ],
+      "4.0": [
+       [
+        1.25,
+        0.0,
+        0.5
+       ],
+       [
+        1.498840093612671,
+        -1.4112420082092285,
+        0.25
+       ],
+       [
+        1.8434982299804688,
+        -1.9262033700942993,
+        -0.8660253882408142
+       ]
+      ]
+     },
+     "type": "point3f[]",
+     "uniform": false
+    },
+    "primvars:skel:jointIndices": {
+     "default": [
+      0,
+      1,
+      2
+     ],
+     "elementSize": 1,
+     "interpolation": "vertex",
+     "timeSamples": {},
+     "type": "int[]",
+     "uniform": false
+    },
+    "primvars:skel:jointWeights": {
+     "default": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "elementSize": 1,
+     "interpolation": "vertex",
+     "timeSamples": {},
+     "type": "float[]",
+     "uniform": false
+    },
+    "widths": {
+     "default": [
+      0.10000000149011612,
+      0.20000000298023224,
+      0.30000001192092896
+     ],
+     "elementSize": null,
+     "interpolation": "vertex",
+     "timeSamples": {},
+     "type": "float[]",
+     "uniform": false
+    }
+   },
+   "specifier": "def",
+   "type": "Points"
+  },
+  "/Character/Root/Faceted": {
+   "apiSchemas": [
+    "SkelBindingAPI"
+   ],
+   "kind": null,
+   "properties": {
+    "extent": {
+     "default": null,
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {
+      "0.0": [
+       [
+        -0.25,
+        -2.116025447845459,
+        -0.06698738783597946
+       ],
+       [
+        0.25,
+        -1.6180607080459595,
+        0.2205127477645874
+       ]
+      ],
+      "1.0": [
+       [
+        0.0,
+        -2.116025447845459,
+        -0.06698738783597946
+       ],
+       [
+        0.5,
+        -1.6180607080459595,
+        0.2205127477645874
+       ]
+      ],
+      "2.0": [
+       [
+        0.5633918046951294,
+        -2.1433145999908447,
+        -0.43834635615348816
+       ],
+       [
+        1.130326271057129,
+        -1.6346114873886108,
+        0.03884091228246689
+       ]
+      ],
+      "3.0": [
+       [
+        1.130976915359497,
+        -2.0363588333129883,
+        -0.7957690358161926
+       ],
+       [
+        1.7196909189224243,
+        -1.5636316537857056,
+        -0.16846495866775513
+       ]
+      ],
+      "4.0": [
+       [
+        1.380976915359497,
+        -2.0363588333129883,
+        -0.7957690358161926
+       ],
+       [
+        1.9696909189224243,
+        -1.5636316537857056,
+        -0.16846495866775513
+       ]
+      ]
+     },
+     "type": "float3[]",
+     "uniform": false
+    },
+    "faceVertexCounts": {
+     "default": [
+      4
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "int[]",
+     "uniform": false
+    },
+    "faceVertexIndices": {
+     "default": [
+      0,
+      1,
+      2,
+      3
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "int[]",
+     "uniform": false
+    },
+    "normals": {
+     "default": [
+      [
+       0.0,
+       0.0,
+       1.0
+      ],
+      [
+       0.0,
+       0.0,
+       1.0
+      ],
+      [
+       0.0,
+       0.6000000238418579,
+       0.800000011920929
+      ],
+      [
+       0.6000000238418579,
+       0.0,
+       0.800000011920929
+      ]
+     ],
+     "elementSize": null,
+     "interpolation": "faceVarying",
+     "timeSamples": {
+      "0.0": [
+       [
+        0.0,
+        -0.5,
+        0.8660253882408142
+       ],
+       [
+        0.0,
+        -0.5,
+        0.8660253882408142
+       ],
+       [
+        0.0,
+        0.016819901764392853,
+        0.999858558177948
+       ],
+       [
+        0.5999999642372131,
+        -0.4000000059604645,
+        0.6928203105926514
+       ]
+      ],
+      "1.0": [
+       [
+        0.0,
+        -0.5,
+        0.8660253882408142
+       ],
+       [
+        0.0,
+        -0.5,
+        0.8660253882408142
+       ],
+       [
+        0.0,
+        0.016819901764392853,
+        0.999858558177948
+       ],
+       [
+        0.5999999642372131,
+        -0.4000000059604645,
+        0.6928203105926514
+       ]
+      ],
+      "2.0": [
+       [
+        0.1395367980003357,
+        -0.6954153180122375,
+        0.7049305438995361
+       ],
+       [
+        0.1395367980003357,
+        -0.6954153180122375,
+        0.7049305438995361
+       ],
+       [
+        0.15414875745773315,
+        -0.22247880697250366,
+        0.962674081325531
+       ],
+       [
+        0.7579638361930847,
+        -0.4279005527496338,
+        0.49233317375183105
+       ]
+      ],
+      "3.0": [
+       [
+        0.3021107316017151,
+        -0.8153576254844666,
+        0.4938836097717285
+       ],
+       [
+        0.3021107316017151,
+        -0.8153576254844666,
+        0.4938836097717285
+       ],
+       [
+        0.3391457498073578,
+        -0.3960757255554199,
+        0.8532902002334595
+       ],
+       [
+        0.8920868039131165,
+        -0.34852227568626404,
+        0.2875993549823761
+       ]
+      ],
+      "4.0": [
+       [
+        0.3021107316017151,
+        -0.8153576254844666,
+        0.4938836097717285
+       ],
+       [
+        0.3021107316017151,
+        -0.8153576254844666,
+        0.4938836097717285
+       ],
+       [
+        0.3391457498073578,
+        -0.3960757255554199,
+        0.8532902002334595
+       ],
+       [
+        0.8920868039131165,
+        -0.34852227568626404,
+        0.2875993549823761
+       ]
+      ]
+     },
+     "type": "normal3f[]",
+     "uniform": false
+    },
+    "points": {
+     "default": [
+      [
+       -0.25,
+       -1.5,
+       0.5
+      ],
+      [
+       0.25,
+       -1.5,
+       0.5
+      ],
+      [
+       0.25,
+       -2.0,
+       0.5
+      ],
+      [
+       -0.25,
+       -2.0,
+       0.5
+      ]
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {
+      "0.0": [
+       [
+        -0.25,
+        -1.6180607080459595,
+        0.2205127477645874
+       ],
+       [
+        0.25,
+        -1.6180607080459595,
+        0.2205127477645874
+       ],
+       [
+        0.25,
+        -2.116025447845459,
+        -0.06698738783597946
+       ],
+       [
+        -0.25,
+        -2.116025447845459,
+        -0.06698738783597946
+       ]
+      ],
+      "1.0": [
+       [
+        0.0,
+        -1.6180607080459595,
+        0.2205127477645874
+       ],
+       [
+        0.5,
+        -1.6180607080459595,
+        0.2205127477645874
+       ],
+       [
+        0.5,
+        -2.116025447845459,
+        -0.06698738783597946
+       ],
+       [
+        0.0,
+        -2.116025447845459,
+        -0.06698738783597946
+       ]
+      ],
+      "2.0": [
+       [
+        0.5633918046951294,
+        -1.7056670188903809,
+        0.03884091228246689
+       ],
+       [
+        1.0575404167175293,
+        -1.6346114873886108,
+        0.01112359669059515
+       ],
+       [
+        1.130326271057129,
+        -2.04516339302063,
+        -0.43834635615348816
+       ],
+       [
+        0.6431856155395508,
+        -2.1433145999908447,
+        -0.3830258846282959
+       ]
+      ],
+      "3.0": [
+       [
+        1.130976915359497,
+        -1.7158899307250977,
+        -0.16846495866775513
+       ],
+       [
+        1.6056323051452637,
+        -1.5636316537857056,
+        -0.20744886994361877
+       ],
+       [
+        1.7196909189224243,
+        -1.8218994140625,
+        -0.7957690358161926
+       ],
+       [
+        1.2746872901916504,
+        -2.0363588333129883,
+        -0.7184461355209351
+       ]
+      ],
+      "4.0": [
+       [
+        1.380976915359497,
+        -1.7158899307250977,
+        -0.16846495866775513
+       ],
+       [
+        1.8556323051452637,
+        -1.5636316537857056,
+        -0.20744886994361877
+       ],
+       [
+        1.9696909189224243,
+        -1.8218994140625,
+        -0.7957690358161926
+       ],
+       [
+        1.5246872901916504,
+        -2.0363588333129883,
+        -0.7184461355209351
+       ]
+      ]
+     },
+     "type": "point3f[]",
+     "uniform": false
+    },
+    "primvars:skel:jointIndices": {
+     "default": [
+      1,
+      0,
+      1,
+      0,
+      0,
+      1,
+      0,
+      1
+     ],
+     "elementSize": 2,
+     "interpolation": "vertex",
+     "timeSamples": {},
+     "type": "int[]",
+     "uniform": false
+    },
+    "primvars:skel:jointWeights": {
+     "default": [
+      0.699999988079071,
+      0.30000001192092896,
+      0.699999988079071,
+      0.30000001192092896,
+      0.6000000238418579,
+      0.4000000059604645,
+      0.6000000238418579,
+      0.4000000059604645
+     ],
+     "elementSize": 2,
+     "interpolation": "vertex",
+     "timeSamples": {},
+     "type": "float[]",
+     "uniform": false
+    },
+    "primvars:skel:skinningMethod": {
+     "default": "dualQuaternion",
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "token",
+     "uniform": true
+    },
+    "skel:joints": {
+     "default": [
+      "Hip/Knee/Foot",
+      "Hip/Knee"
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "token[]",
+     "uniform": true
+    }
+   },
+   "specifier": "def",
+   "type": "Mesh"
+  },
+  "/Character/Root/Hat": {
+   "apiSchemas": [
+    "SkelBindingAPI"
+   ],
+   "kind": null,
+   "properties": {
+    "primvars:skel:jointIndices": {
+     "default": [
+      1,
+      2
+     ],
+     "elementSize": 2,
+     "interpolation": "constant",
+     "timeSamples": {},
+     "type": "int[]",
+     "uniform": false
+    },
+    "primvars:skel:jointWeights": {
+     "default": [
+      0.5,
+      0.5
+     ],
+     "elementSize": 2,
+     "interpolation": "constant",
+     "timeSamples": {},
+     "type": "float[]",
+     "uniform": false
+    },
+    "size": {
+     "default": 0.2,
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "double",
+     "uniform": false
+    },
+    "xformOp:transform": {
+     "default": null,
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {
+      "0.0": [
+       [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        1.0825318098068237,
+        0.625,
+        0.0
+       ],
+       [
+        0.0,
+        -0.5,
+        0.866025447845459,
+        0.0
+       ],
+       [
+        0.0,
+        0.2990380823612213,
+        0.75,
+        1.0
+       ]
+      ],
+      "1.0": [
+       [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        1.0825318098068237,
+        0.625,
+        0.0
+       ],
+       [
+        0.0,
+        -0.5,
+        0.866025447845459,
+        0.0
+       ],
+       [
+        0.25,
+        0.2990380823612213,
+        0.75,
+        1.0
+       ]
+      ],
+      "2.0": [
+       [
+        0.9712472558021545,
+        0.17682895064353943,
+        -0.09150636196136475,
+        0.0
+       ],
+       [
+        -0.07703550159931183,
+        0.8805201053619385,
+        0.8838833570480347,
+        0.0
+       ],
+       [
+        0.1894954890012741,
+        -0.6811360120773315,
+        0.6950597763061523,
+        0.0
+       ],
+       [
+        0.6235648840665817,
+        0.016403406858444214,
+        1.0164660215377808,
+        1.0
+       ]
+      ],
+      "3.0": [
+       [
+        0.8812422752380371,
+        0.37523308396339417,
+        -0.125,
+        0.0
+       ],
+       [
+        -0.10853010416030884,
+        0.6155048608779907,
+        1.0825316905975342,
+        0.0
+       ],
+       [
+        0.38651183247566223,
+        -0.7523249983787537,
+        0.46650636196136475,
+        0.0
+       ],
+       [
+        1.0542650520801544,
+        -0.30775243043899536,
+        1.1907849311828613,
+        1.0
+       ]
+      ],
+      "4.0": [
+       [
+        0.8812422752380371,
+        0.37523308396339417,
+        -0.125,
+        0.0
+       ],
+       [
+        -0.10853010416030884,
+        0.6155048608779907,
+        1.0825316905975342,
+        0.0
+       ],
+       [
+        0.38651183247566223,
+        -0.7523249983787537,
+        0.46650636196136475,
+        0.0
+       ],
+       [
+        1.3042650520801544,
+        -0.30775243043899536,
+        1.1907849311828613,
+        1.0
+       ]
+      ]
+     },
+     "type": "matrix4d",
+     "uniform": false
+    },
+    "xformOp:translate": {
+     "default": [
+      0.0,
+      -1.0,
+      0.2
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "double3",
+     "uniform": false
+    },
+    "xformOpOrder": {
+     "default": [
+      "xformOp:transform"
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "token[]",
+     "uniform": true
+    }
+   },
+   "specifier": "def",
+   "type": "Cube"
+  },
+  "/Character/Root/Morph": {
+   "apiSchemas": [
+    "SkelBindingAPI"
+   ],
+   "kind": null,
+   "properties": {
+    "extent": {
+     "default": null,
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {
+      "0.0": [
+       [
+        1.0,
+        0.0,
+        0.0
+       ],
+       [
+        1.5,
+        0.5,
+        0.0
+       ]
+      ],
+      "1.0": [
+       [
+        1.0,
+        0.0,
+        0.05000000074505806
+       ],
+       [
+        1.5,
+        0.5,
+        0.15000000596046448
+       ]
+      ],
+      "2.0": [
+       [
+        1.0,
+        0.0,
+        0.10000000149011612
+       ],
+       [
+        1.5,
+        0.5,
+        0.30000001192092896
+       ]
+      ],
+      "3.0": [
+       [
+        1.0,
+        0.0,
+        0.20000000298023224
+       ],
+       [
+        1.5,
+        0.5,
+        0.6000000238418579
+       ]
+      ],
+      "4.0": [
+       [
+        1.0,
+        0.0,
+        0.30000001192092896
+       ],
+       [
+        1.5,
+        0.5,
+        0.9000000357627869
+       ]
+      ]
+     },
+     "type": "float3[]",
+     "uniform": false
+    },
+    "faceVertexCounts": {
+     "default": [
+      3
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "int[]",
+     "uniform": false
+    },
+    "faceVertexIndices": {
+     "default": [
+      0,
+      1,
+      2
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "int[]",
+     "uniform": false
+    },
+    "points": {
+     "default": [
+      [
+       1.0,
+       0.0,
+       0.0
+      ],
+      [
+       1.5,
+       0.0,
+       0.0
+      ],
+      [
+       1.0,
+       0.5,
+       0.0
+      ]
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {
+      "0.0": [
+       [
+        1.0,
+        0.0,
+        0.0
+       ],
+       [
+        1.5,
+        0.0,
+        0.0
+       ],
+       [
+        1.0,
+        0.5,
+        0.0
+       ]
+      ],
+      "1.0": [
+       [
+        1.0,
+        0.0,
+        0.05000000074505806
+       ],
+       [
+        1.5,
+        0.0,
+        0.10000000149011612
+       ],
+       [
+        1.0,
+        0.5,
+        0.15000000596046448
+       ]
+      ],
+      "2.0": [
+       [
+        1.0,
+        0.0,
+        0.10000000149011612
+       ],
+       [
+        1.5,
+        0.0,
+        0.20000000298023224
+       ],
+       [
+        1.0,
+        0.5,
+        0.30000001192092896
+       ]
+      ],
+      "3.0": [
+       [
+        1.0,
+        0.0,
+        0.20000000298023224
+       ],
+       [
+        1.5,
+        0.0,
+        0.4000000059604645
+       ],
+       [
+        1.0,
+        0.5,
+        0.6000000238418579
+       ]
+      ],
+      "4.0": [
+       [
+        1.0,
+        0.0,
+        0.30000001192092896
+       ],
+       [
+        1.5,
+        0.0,
+        0.6000000238418579
+       ],
+       [
+        1.0,
+        0.5,
+        0.9000000357627869
+       ]
+      ]
+     },
+     "type": "point3f[]",
+     "uniform": false
+    },
+    "skel:blendShapeTargets": {
+     "targets": [
+      "/Character/Root/Morph/Wide"
+     ]
+    },
+    "skel:blendShapes": {
+     "default": [
+      "Wide"
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "token[]",
+     "uniform": true
+    }
+   },
+   "specifier": "def",
+   "type": "Mesh"
+  },
+  "/Character/Root/Morph/Wide": {
+   "apiSchemas": [],
+   "kind": null,
+   "properties": {
+    "offsets": {
+     "default": [
+      [
+       0.0,
+       0.0,
+       0.20000000298023224
+      ],
+      [
+       0.0,
+       0.0,
+       0.4000000059604645
+      ],
+      [
+       0.0,
+       0.0,
+       0.6000000238418579
+      ]
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "vector3f[]",
+     "uniform": true
+    }
+   },
+   "specifier": "def",
+   "type": "BlendShape"
+  },
+  "/Character/Root/Skel": {
+   "apiSchemas": [
+    "SkelBindingAPI"
+   ],
+   "kind": null,
+   "properties": {
+    "bindTransforms": {
+     "default": [
+      [
+       [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+       ]
+      ],
+      [
+       [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+       ],
+       [
+        0.0,
+        -1.0,
+        0.0,
+        1.0
+       ]
+      ],
+      [
+       [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+       ],
+       [
+        0.0,
+        -2.0,
+        0.0,
+        1.0
+       ]
+      ]
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "matrix4d[]",
+     "uniform": true
+    },
+    "joints": {
+     "default": [
+      "Hip",
+      "Hip/Knee",
+      "Hip/Knee/Foot"
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "token[]",
+     "uniform": true
+    },
+    "restTransforms": {
+     "default": [
+      [
+       [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+       ]
+      ],
+      [
+       [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+       ],
+       [
+        0.0,
+        -1.0,
+        0.0,
+        1.0
+       ]
+      ],
+      [
+       [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+       ],
+       [
+        0.0,
+        -1.0,
+        0.0,
+        1.0
+       ]
+      ]
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "matrix4d[]",
+     "uniform": true
+    },
+    "skel:animationSource": {
+     "targets": [
+      "/Character/Root/Skel/Anim"
+     ]
+    },
+    "xformOp:translate": {
+     "default": null,
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {
+      "0.0": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "4.0": [
+       1.0,
+       0.0,
+       0.0
+      ]
+     },
+     "type": "double3",
+     "uniform": false
+    },
+    "xformOpOrder": {
+     "default": [
+      "xformOp:translate"
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "token[]",
+     "uniform": true
+    }
+   },
+   "specifier": "def",
+   "type": "Skeleton"
+  },
+  "/Character/Root/Skel/Anim": {
+   "apiSchemas": [],
+   "kind": null,
+   "properties": {
+    "blendShapeWeights": {
+     "default": null,
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {
+      "0.0": [
+       0.0,
+       0.0
+      ],
+      "2.0": [
+       1.0,
+       0.5
+      ],
+      "4.0": [
+       0.25,
+       1.5
+      ]
+     },
+     "type": "float[]",
+     "uniform": false
+    },
+    "blendShapes": {
+     "default": [
+      "Smile",
+      "Wide"
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "token[]",
+     "uniform": true
+    },
+    "joints": {
+     "default": [
+      "Hip",
+      "Hip/Knee",
+      "Hip/Knee/Foot"
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "token[]",
+     "uniform": true
+    },
+    "rotations": {
+     "default": null,
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {
+      "1.0": [
+       [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+       ],
+       [
+        0.258819043636322,
+        0.0,
+        0.0,
+        0.9659258127212524
+       ],
+       [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+       ]
+      ],
+      "3.0": [
+       [
+        0.0,
+        0.0,
+        0.08715573698282242,
+        0.9961947202682495
+       ],
+       [
+        0.5,
+        0.0,
+        0.0,
+        0.8660253882408142
+       ],
+       [
+        0.0,
+        0.258819043636322,
+        0.0,
+        0.9659258127212524
+       ]
+      ]
+     },
+     "type": "quatf[]",
+     "uniform": false
+    },
+    "scales": {
+     "default": [
+      [
+       1.0,
+       1.0,
+       1.0
+      ],
+      [
+       1.0,
+       1.0,
+       1.0
+      ],
+      [
+       1.0,
+       1.5,
+       1.0
+      ]
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "half3[]",
+     "uniform": false
+    },
+    "translations": {
+     "default": null,
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {
+      "1.0": [
+       [
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        -1.0,
+        0.0
+       ],
+       [
+        0.0,
+        -1.0,
+        0.0
+       ]
+      ],
+      "3.0": [
+       [
+        0.25,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        -1.0,
+        0.0
+       ],
+       [
+        0.0,
+        -1.25,
+        0.0
+       ]
+      ]
+     },
+     "type": "float3[]",
+     "uniform": false
+    }
+   },
+   "specifier": "def",
+   "type": "SkelAnimation"
+  },
+  "/Statue": {
+   "apiSchemas": [],
+   "kind": null,
+   "properties": {},
+   "specifier": "def",
+   "type": "Xform"
+  },
+  "/Statue/Skel": {
+   "apiSchemas": [],
+   "kind": null,
+   "properties": {
+    "bindTransforms": {
+     "default": [
+      [
+       [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+       ]
+      ]
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "matrix4d[]",
+     "uniform": true
+    },
+    "joints": {
+     "default": [
+      "A"
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "token[]",
+     "uniform": true
+    },
+    "restTransforms": {
+     "default": [
+      [
+       [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+       ],
+       [
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+       ],
+       [
+        2.0,
+        0.0,
+        0.0,
+        1.0
+       ]
+      ]
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "matrix4d[]",
+     "uniform": true
+    }
+   },
+   "specifier": "def",
+   "type": "Skeleton"
+  },
+  "/Statue/Stone": {
+   "apiSchemas": [
+    "SkelBindingAPI"
+   ],
+   "kind": null,
+   "properties": {
+    "extent": {
+     "default": [
+      [
+       1.0,
+       0.0,
+       0.0
+      ],
+      [
+       2.0,
+       1.0,
+       0.0
+      ]
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "float3[]",
+     "uniform": false
+    },
+    "faceVertexCounts": {
+     "default": [
+      3
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "int[]",
+     "uniform": false
+    },
+    "faceVertexIndices": {
+     "default": [
+      0,
+      1,
+      2
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "int[]",
+     "uniform": false
+    },
+    "points": {
+     "default": [
+      [
+       2.0,
+       0.0,
+       0.0
+      ],
+      [
+       2.0,
+       1.0,
+       0.0
+      ],
+      [
+       1.0,
+       0.0,
+       0.0
+      ]
+     ],
+     "elementSize": null,
+     "interpolation": null,
+     "timeSamples": {},
+     "type": "point3f[]",
+     "uniform": false
+    },
+    "primvars:skel:jointIndices": {
+     "default": [
+      0,
+      0,
+      0
+     ],
+     "elementSize": 1,
+     "interpolation": "vertex",
+     "timeSamples": {},
+     "type": "int[]",
+     "uniform": false
+    },
+    "primvars:skel:jointWeights": {
+     "default": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "elementSize": 1,
+     "interpolation": "vertex",
+     "timeSamples": {},
+     "type": "float[]",
+     "uniform": false
+    },
+    "skel:skeleton": {
+     "targets": [
+      "/Statue/Skel"
+     ]
+    }
+   },
+   "specifier": "def",
+   "type": "Mesh"
+  }
+ }
+}

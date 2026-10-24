@@ -1,0 +1,222 @@
+#usda 1.0
+(
+    defaultPrim = "Character"
+    endTimeCode = 4
+    framesPerSecond = 12
+    startTimeCode = 0
+    timeCodesPerSecond = 24
+    upAxis = "Y"
+)
+
+def Xform "Character" (
+    kind = "component"
+)
+{
+    float3[] extentsHint = [(-1, -1, -1), (1, 1, 1)]
+
+    def SkelRoot "Root" (
+        prepend apiSchemas = ["SkelBindingAPI"]
+    )
+    {
+        rel skel:skeleton = </Character/Root/Skel>
+        double3 xformOp:translate = (0, 1, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+
+        def Skeleton "Skel" (
+            prepend apiSchemas = ["SkelBindingAPI"]
+        )
+        {
+            uniform matrix4d[] bindTransforms = [( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1) ), ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, -1, 0, 1) ), ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, -2, 0, 1) )]
+            uniform token[] joints = ["Hip", "Hip/Knee", "Hip/Knee/Foot"]
+            uniform matrix4d[] restTransforms = [( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1) ), ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, -1, 0, 1) ), ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, -1, 0, 1) )]
+            rel skel:animationSource = </Character/Root/Skel/Anim>
+            double3 xformOp:translate.timeSamples = {
+                0: (0, 0, 0),
+                4: (1, 0, 0),
+            }
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+
+            def SkelAnimation "Anim"
+            {
+                uniform token[] blendShapes = ["Smile", "Wide"]
+                float[] blendShapeWeights.timeSamples = {
+                    0: [0, 0],
+                    2: [1, 0.5],
+                    4: [0.25, 1.5],
+                }
+                uniform token[] joints = ["Hip", "Hip/Knee", "Hip/Knee/Foot"]
+                quatf[] rotations.timeSamples = {
+                    1: [(1, 0, 0, 0), (0.9659258, 0.25881904, 0, 0), (1, 0, 0, 0)],
+                    3: [(0.9961947, 0, 0, 0.08715574), (0.8660254, 0.5, 0, 0), (0.9659258, 0, 0.25881904, 0)],
+                }
+                half3[] scales = [(1, 1, 1), (1, 1, 1), (1, 1.5, 1)]
+                float3[] translations.timeSamples = {
+                    1: [(0, 0, 0), (0, -1, 0), (0, -1, 0)],
+                    3: [(0.25, 0, 0), (0, -1, 0), (0, -1.25, 0)],
+                }
+            }
+        }
+
+        def Mesh "Body" (
+            prepend apiSchemas = ["SkelBindingAPI"]
+        )
+        {
+            int[] faceVertexCounts = [4, 4]
+            int[] faceVertexIndices = [0, 1, 2, 3, 3, 2, 4, 5]
+            normal3f[] normals = [(0, 0, 1), (0, 0, 1), (0, 0.6, 0.8), (0, 0.6, 0.8), (0, 0, 1), (0, 0, 1)] (
+                interpolation = "vertex"
+            )
+            point3f[] points = [(-0.5, 0, 0), (0.5, 0, 0), (0.5, -1, 0), (-0.5, -1, 0), (0.5, -2, 0), (-0.5, -2, 0)]
+            matrix4d primvars:skel:geomBindTransform = ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 1, 1) )
+            int[] primvars:skel:jointIndices = [0, 1, 0, 1, 1, 2, 1, 2, 2, 1, 2, 1] (
+                elementSize = 2
+                interpolation = "vertex"
+            )
+            float[] primvars:skel:jointWeights = [0.8, 0.2, 0.8, 0.2, 0.5, 0.5, 0.5, 0.5, 0.9, 0.1, 0.9, 0.1] (
+                elementSize = 2
+                interpolation = "vertex"
+            )
+            uniform token[] skel:blendShapes = ["Smile", "Wide"]
+            rel skel:blendShapeTargets = [
+                </Character/Root/Body/Smile>,
+                </Character/Root/Body/Wide>,
+            ]
+            double3 xformOp:translate = (0, 0, 1)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+
+            def BlendShape "Smile"
+            {
+                uniform vector3f[] inbetweens:half = [(0, 0.08, 0), (0, 0.08, 0)] (
+                    weight = 0.5
+                )
+                uniform vector3f[] inbetweens:half:normalOffsets = [(0.05, 0, 0), (0.05, 0, 0)]
+                uniform vector3f[] normalOffsets = [(0.1, 0, 0), (0.1, 0, 0)]
+                uniform vector3f[] offsets = [(0, 0.1, 0), (0, 0.1, 0)]
+                uniform int[] pointIndices = [0, 1]
+            }
+
+            def BlendShape "Wide"
+            {
+                uniform vector3f[] offsets = [(-0.1, 0, 0), (0.1, 0, 0), (0.1, 0, 0), (-0.1, 0, 0), (0.1, 0, 0), (-0.1, 0, 0)]
+            }
+        }
+
+        def Mesh "Faceted" (
+            prepend apiSchemas = ["SkelBindingAPI"]
+        )
+        {
+            int[] faceVertexCounts = [4]
+            int[] faceVertexIndices = [0, 1, 2, 3]
+            normal3f[] normals = [(0, 0, 1), (0, 0, 1), (0, 0.6, 0.8), (0.6, 0, 0.8)] (
+                interpolation = "faceVarying"
+            )
+            point3f[] points = [(-0.25, -1.5, 0.5), (0.25, -1.5, 0.5), (0.25, -2, 0.5), (-0.25, -2, 0.5)]
+            int[] primvars:skel:jointIndices = [1, 0, 1, 0, 0, 1, 0, 1] (
+                elementSize = 2
+                interpolation = "vertex"
+            )
+            float[] primvars:skel:jointWeights = [0.7, 0.3, 0.7, 0.3, 0.6, 0.4, 0.6, 0.4] (
+                elementSize = 2
+                interpolation = "vertex"
+            )
+            uniform token primvars:skel:skinningMethod = "dualQuaternion"
+            uniform token[] skel:joints = ["Hip/Knee/Foot", "Hip/Knee"]
+        }
+
+        def Cube "Hat" (
+            prepend apiSchemas = ["SkelBindingAPI"]
+        )
+        {
+            int[] primvars:skel:jointIndices = [1, 2] (
+                elementSize = 2
+                interpolation = "constant"
+            )
+            float[] primvars:skel:jointWeights = [0.5, 0.5] (
+                elementSize = 2
+                interpolation = "constant"
+            )
+            double size = 0.2
+            double3 xformOp:translate = (0, -1, 0.2)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+
+        def Mesh "Badge" (
+            prepend apiSchemas = ["SkelBindingAPI"]
+        )
+        {
+            int[] faceVertexCounts = [3]
+            int[] faceVertexIndices = [0, 1, 2]
+            point3f[] points = [(0, -2, 0.1), (0.1, -2, 0.1), (0, -1.9, 0.1)]
+            int[] primvars:skel:jointIndices = [2] (
+                elementSize = 1
+                interpolation = "constant"
+            )
+            float[] primvars:skel:jointWeights = [1] (
+                elementSize = 1
+                interpolation = "constant"
+            )
+        }
+
+        def Points "Dust" (
+            prepend apiSchemas = ["SkelBindingAPI"]
+        )
+        {
+            point3f[] points = [(0, 0, 0.5), (0, -1, 0.5), (0, -2, 0.5)]
+            int[] primvars:skel:jointIndices = [0, 1, 2] (
+                elementSize = 1
+                interpolation = "vertex"
+            )
+            float[] primvars:skel:jointWeights = [1, 1, 1] (
+                elementSize = 1
+                interpolation = "vertex"
+            )
+            float[] widths = [0.1, 0.2, 0.3] (
+                interpolation = "vertex"
+            )
+        }
+
+        def Mesh "Morph" (
+            prepend apiSchemas = ["SkelBindingAPI"]
+        )
+        {
+            int[] faceVertexCounts = [3]
+            int[] faceVertexIndices = [0, 1, 2]
+            point3f[] points = [(1, 0, 0), (1.5, 0, 0), (1, 0.5, 0)]
+            uniform token[] skel:blendShapes = ["Wide"]
+            rel skel:blendShapeTargets = </Character/Root/Morph/Wide>
+
+            def BlendShape "Wide"
+            {
+                uniform vector3f[] offsets = [(0, 0, 0.2), (0, 0, 0.4), (0, 0, 0.6)]
+            }
+        }
+    }
+}
+
+def SkelRoot "Statue"
+{
+    def Skeleton "Skel"
+    {
+        uniform matrix4d[] bindTransforms = [( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1) )]
+        uniform token[] joints = ["A"]
+        uniform matrix4d[] restTransforms = [( (0, 1, 0, 0), (-1, 0, 0, 0), (0, 0, 1, 0), (2, 0, 0, 1) )]
+    }
+
+    def Mesh "Stone" (
+        prepend apiSchemas = ["SkelBindingAPI"]
+    )
+    {
+        int[] faceVertexCounts = [3]
+        int[] faceVertexIndices = [0, 1, 2]
+        point3f[] points = [(0, 0, 0), (1, 0, 0), (0, 1, 0)]
+        int[] primvars:skel:jointIndices = [0, 0, 0] (
+            elementSize = 1
+            interpolation = "vertex"
+        )
+        float[] primvars:skel:jointWeights = [1, 1, 1] (
+            elementSize = 1
+            interpolation = "vertex"
+        )
+        rel skel:skeleton = </Statue/Skel>
+    }
+}

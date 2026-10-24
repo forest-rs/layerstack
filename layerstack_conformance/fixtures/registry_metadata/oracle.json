@@ -1275,6 +1275,45 @@
   },
   {
    "reopened": true,
+   "spec": "variant",
+   "statement": "acceptVariantsAndNodes = \"medium\"",
+   "value": {
+    "unregistered": "\"medium\""
+   },
+   "written": "acceptVariantsAndNodes = \"medium\""
+  },
+  {
+   "reopened": true,
+   "spec": "variant",
+   "statement": "acceptVariantsAndNodes = 3",
+   "value": {
+    "unregistered": "3"
+   },
+   "written": "acceptVariantsAndNodes = 3"
+  },
+  {
+   "reopened": true,
+   "spec": "variant",
+   "statement": "acceptVariantsAndNodes = @a.usda@",
+   "value": {
+    "unregistered": "@a.usda@"
+   },
+   "written": "acceptVariantsAndNodes = @a.usda@"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "acceptWrappedInt64 = -9223372036854775808",
+   "value": -9223372036854775808,
+   "written": "acceptWrappedInt64 = -9223372036854775808"
+  },
+  {
+   "error": "Error parsing simple value: Failed to parse value (at sub-part 0 if there are multiple parts)",
+   "spec": "prim",
+   "statement": "acceptWrappedInt64 = 9223372036854775808"
+  },
+  {
+   "reopened": true,
    "spec": "layer",
    "statement": "metaAnywhere = \"medium\"",
    "value": "medium",
@@ -2335,6 +2374,21 @@
    ],
    "type": "int[]"
   },
+  "acceptVariantsAndNodes": {
+   "fallback": "",
+   "specs": [
+    "variant"
+   ],
+   "type": "token"
+  },
+  "acceptWrappedInt64": {
+   "fallback": 1,
+   "specs": [
+    "prim",
+    "variant"
+   ],
+   "type": "int64"
+  },
   "metaAnywhere": {
    "fallback": "",
    "specs": [
@@ -2761,6 +2815,9 @@
   },
   "rejectUnknownType": {
    "specs": []
+  },
+  "rejectWrappedUInt": {
+   "specs": []
   }
  },
  "registration_errors": [
@@ -2772,6 +2829,7 @@
   "\"metaFloat\" is already a registered field",
   "\"path\" is not a registered value type",
   "Could not parse default value: Failed to parse value (at sub-part -1 if there are multiple parts)",
+  "Could not parse default value: Failed to parse value (at sub-part 0 if there are multiple parts)",
   "Could not parse default value: Failed to parse value (at sub-part 0 if there are multiple parts)",
   "Could not parse default value: Failed to parse value (at sub-part 0 if there are multiple parts)",
   "Could not parse default value: Failed to parse value (at sub-part 0 if there are multiple parts)",
@@ -2795,6 +2853,7 @@
   "Error parsing default value for metadata (at \"rejectTypeCase\"",
   "Error parsing default value for metadata (at \"rejectUCharRange\"",
   "Error parsing default value for metadata (at \"rejectUnknownType\"",
+  "Error parsing default value for metadata (at \"rejectWrappedUInt\"",
   "Not enough values to parse value of type Vec3f",
   "Tuple dimensions error for attribute of type float3.",
   "Value must be a dictionary (at \"rejectNotObject\""
@@ -2809,6 +2868,13 @@
   },
   {
    "field": "acceptScalarForArray",
+   "has": false,
+   "has_authored": false,
+   "object": "prim",
+   "value": null
+  },
+  {
+   "field": "acceptWrappedInt64",
    "has": false,
    "has_authored": false,
    "object": "prim",

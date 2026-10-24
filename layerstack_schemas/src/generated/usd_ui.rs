@@ -200,6 +200,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             layerstack::MetadataTarget::Relationship,
         ],
         default: None,
+        display_group: "",
         documentation: "Presentation hints",
     }],
 };

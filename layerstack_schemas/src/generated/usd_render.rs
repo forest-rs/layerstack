@@ -480,6 +480,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
         type_name: "string",
         targets: &[layerstack::MetadataTarget::Layer],
         default: fallback(|_| Value::String(Arc::from(""))),
+        display_group: "",
         documentation: "",
     }],
 };

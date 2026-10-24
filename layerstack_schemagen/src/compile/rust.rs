@@ -166,7 +166,7 @@ pub(crate) fn module_text(
 ) -> Result<String, CompileError> {
     // The library's schemas, read from its generated schema layer as
     // OpenUSD's are read from theirs.
-    let mut store = InMemoryStore::default();
+    let store = InMemoryStore::default();
     let parsed = layerstack_usda::parser::parse(generated_schema);
     let emitted = layerstack_usda::emit::emit(
         &parsed.layer,
@@ -297,7 +297,6 @@ pub(crate) fn module_text(
         .transpose()
         .map_err(|e| error(format!("plugInfo.json: {e}")))?;
     let mut auto_applies = Vec::new();
-    let mut metadata = Vec::new();
     for plugin in plug_info
         .as_ref()
         .and_then(|json| json["Plugins"].as_array())
@@ -305,11 +304,25 @@ pub(crate) fn module_text(
         .flatten()
     {
         auto_applies.extend(model::auto_applies(&plugin["Info"]));
-        metadata.extend(
-            crate::metadata::read(&plugin["Info"]["SdfMetadata"], &mut store.tokens)
-                .map_err(|e| error(format!("plugInfo.json: {e}")))?,
-        );
     }
+    // The plugins' `SdfMetadata`, as OpenUSD's `SdfSchema` registers them
+    // after its own and usd-core's fields; the module registers those it
+    // accepts, so any it refuses is an error.
+    let declared = match plug_info_text {
+        Some(text) => crate::metadata::read([("plugInfo.json", text)], &store.tokens)
+            .map_err(|e| error(format!("plugInfo.json: {}", e.message)))?,
+        None => crate::metadata::PluginMetadata::default(),
+    };
+    if !declared.rejected.is_empty() {
+        return Err(CompileError::Metadata {
+            rejected: declared.rejected,
+        });
+    }
+    let metadata: Vec<layerstack::MetadataDefinition> = declared
+        .accepted
+        .into_iter()
+        .map(|declaration| declaration.definition)
+        .collect();
     // The plugins' `Kinds`, as OpenUSD's `KindRegistry` reads them; the
     // module registers those it accepts, so any it refuses is an error.
     let kinds = match plug_info_text {

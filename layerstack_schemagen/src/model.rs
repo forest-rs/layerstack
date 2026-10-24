@@ -203,10 +203,7 @@ pub(crate) fn read(pxr: &Path, source: &Path) -> Result<Model, String> {
             plugin_metadata
                 .entry(plugin)
                 .or_insert_with(Vec::new)
-                .extend(crate::metadata::read(
-                    &info["SdfMetadata"],
-                    &mut store.tokens,
-                )?);
+                .extend(crate::metadata::read_bundled(plugin, info, &store.tokens)?);
             if let Some(types_json) = info["Types"].as_object() {
                 for (name, entry) in types_json {
                     types.insert(

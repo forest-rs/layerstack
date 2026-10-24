@@ -1492,6 +1492,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
         type_name: "double",
         targets: &[layerstack::MetadataTarget::Layer],
         default: fallback(|_| Value::Double(1.0)),
+        display_group: "Stage",
         documentation: "",
     }],
 };

@@ -3852,6 +3852,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             type_name: "token",
             targets: &[layerstack::MetadataTarget::Attribute],
             default: fallback(|t| Value::Token(t.intern(""))),
+            display_group: "",
             documentation: "Unique identifier within a model's namespace for an matrix-valued attribute representing a constraint target",
         },
         Metadata {
@@ -3859,6 +3860,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             type_name: "int",
             targets: &[layerstack::MetadataTarget::Attribute],
             default: fallback(|_| Value::Int(1)),
+            display_group: "Primvars",
             documentation: "The number of values in a primvar's value array that must be aggregated for each element on the primitive.",
         },
         Metadata {
@@ -3866,6 +3868,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             type_name: "int64listop",
             targets: &[layerstack::MetadataTarget::Prim],
             default: None,
+            display_group: "",
             documentation: "",
         },
         Metadata {
@@ -3873,6 +3876,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             type_name: "token",
             targets: &[layerstack::MetadataTarget::Attribute],
             default: fallback(|t| Value::Token(t.intern("constant"))),
+            display_group: "Primvars",
             documentation: "How a primvar interpolates across a primitive; equivalent to RenderMan's 'class specifier'",
         },
         Metadata {
@@ -3880,6 +3884,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             type_name: "double",
             targets: &[layerstack::MetadataTarget::Layer],
             default: fallback(|_| Value::Double(0.01)),
+            display_group: "Stage",
             documentation: "",
         },
         Metadata {
@@ -3887,6 +3892,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             type_name: "int",
             targets: &[layerstack::MetadataTarget::Attribute],
             default: fallback(|_| Value::Int(-1)),
+            display_group: "Primvars",
             documentation: "The index that represents unauthored values in the indices array of an indexed primvar.",
         },
         Metadata {
@@ -3894,6 +3900,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             type_name: "token",
             targets: &[layerstack::MetadataTarget::Layer],
             default: fallback(|t| Value::Token(t.intern("Y"))),
+            display_group: "Stage",
             documentation: "",
         },
     ],

@@ -1,71 +1,540 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-//! Reads `SdfMetadata` and emits typed metadata accessors.
+//! Plugin metadata declarations: the `SdfMetadata` of each plugin's `Info`
+//! in a `plugInfo.json`, read as OpenUSD's `SdfSchema` registers them, and
+//! the typed accessors generated for them.
+//!
+//! ```json
+//! { "Plugins": [{ "Name": "lights", "Info": { "SdfMetadata": {
+//!     "lumenScale": { "type": "float", "appliesTo": ["prims", "attributes"],
+//!                     "default": 1, "displayGroup": "Lighting" }
+//! }}}]}
+//! ```
+//!
+//! [`read`] takes the declarations of a set of `plugInfo.json` files apart
+//! into the fields OpenUSD registers ([`MetadataDeclaration`]) and the
+//! declarations it refuses ([`MetadataDeclarationError`], naming the
+//! plugin, the field, the offending key and value and the
+//! [`MetadataRejection`]). OpenUSD's rules, from
+//! `SdfSchemaBase::_UpdateMetadataFromPlugins` and `_GetDefaultMetadataValue`
+//! (`pxr/usd/sdf/schema.cpp`):
+//!
+//! - a field is an object with a string `type`: a value type or its array
+//!   form, `dictionary`, or a list-op type (`tokenlistop`, …);
+//! - a field Sdf or one of usd-core's own plugins registers, or an earlier
+//!   plugin of the set declares, is refused (`"…" is already a registered
+//!   field`);
+//! - `default` is a string, an integer, a real, or an array of one of
+//!   those (a JSON `true` is none of them), read as USDA's text of a value
+//!   of the type with the values in order (a `float3[]` default is a flat
+//!   list of floats): `irIsInvertible`'s `1` is `true`, `1.5` an `int`'s
+//!   `1`, a single value an array's one element. An integer is taken as
+//!   OpenUSD's plugin reader takes it, as a 32-bit `int`. A dictionary or
+//!   list-op field takes no default. Without one the field falls back to
+//!   its type's ([`layerstack::MetadataType::fallback`]);
+//! - `appliesTo` is a kind of spec or a list of them (`layers`, `prims`,
+//!   `attributes`, `relationships`, `properties`, `variants`); without one,
+//!   or with one that is neither, the field is metadata on every kind, and
+//!   names that are no kind are ignored, so `["nodes"]` registers the
+//!   field for none. Prims imply variants.
+//!
+//! A schema library's Rust module
+//! ([`CompiledSchema::rust_module`](crate::compile::CompiledSchema::rust_module))
+//! registers the accepted fields and refuses to generate while any
+//! declaration is refused.
+//!
+//! Spec: AOUSD Core §7.4 (metadata).
 
+use std::collections::BTreeMap;
+use std::fmt::{self, Write as _};
+
+use crate::kinds::PlugInfoError;
 use crate::model::Model;
-use layerstack::{MetadataDefinition, MetadataTarget, TokenInterner, Value};
+use layerstack::{
+    MetadataDefinition, MetadataField, MetadataTarget, MetadataType, TokenInterner, Value,
+};
+use layerstack_usda::metadata::MetadataValueError;
 use serde_json::Value as Json;
-use std::fmt::Write as _;
 
-pub(crate) fn read(
-    json: &Json,
-    tokens: &mut TokenInterner,
-) -> Result<Vec<MetadataDefinition>, String> {
-    if json.is_null() {
-        return Ok(Vec::new());
-    }
-    let fields = json.as_object().ok_or("SdfMetadata must be an object")?;
-    fields
-        .iter()
-        .map(|(name, entry)| {
-            let type_name = entry["type"]
-                .as_str()
-                .ok_or_else(|| format!("{name}: missing metadata type"))?;
-            // Fail generation when a newly introduced type needs a conversion.
-            conversion(type_name)?;
-            let applies = &entry["appliesTo"];
-            let names = if let Some(name) = applies.as_str() {
-                vec![name]
-            } else {
-                applies
-                    .as_array()
-                    .ok_or_else(|| format!("{name}: appliesTo must be a string or array"))?
-                    .iter()
-                    .map(|value| value.as_str().ok_or("appliesTo entries must be strings"))
-                    .collect::<Result<Vec<_>, _>>()?
-            };
-            let mut targets = Vec::new();
-            for target in names {
-                match target {
-                    "layers" => targets.push(MetadataTarget::Layer),
-                    "prims" => targets.push(MetadataTarget::Prim),
-                    "attributes" => targets.push(MetadataTarget::Attribute),
-                    "relationships" => targets.push(MetadataTarget::Relationship),
-                    "properties" => {
-                        targets.extend([MetadataTarget::Attribute, MetadataTarget::Relationship]);
-                    }
-                    other => return Err(format!("{name}: unknown metadata target {other}")),
-                }
+/// A metadata field a plugin declares and OpenUSD registers.
+#[derive(Clone, Debug, PartialEq)]
+pub struct MetadataDeclaration {
+    /// The declaring plugin ([`MetadataDeclarationError::plugin`]).
+    pub plugin: String,
+    /// The field, its names interned in the interner [`read`] is given.
+    pub definition: MetadataDefinition,
+}
+
+/// A metadata declaration OpenUSD refuses, and where it is.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MetadataDeclarationError {
+    /// The plugin: its `Name`, or `Plugins[<index>]` without one, after
+    /// the file's label when [`read`] is given several.
+    pub plugin: String,
+    /// The declared field, or `None` when the plugin's `SdfMetadata` as a
+    /// whole is malformed.
+    pub field: Option<String>,
+    /// The offending key of the declaration (`type`, `default`), if one.
+    pub key: Option<&'static str>,
+    /// The offending value, as JSON text, if one.
+    pub value: Option<String>,
+    /// Why it is refused.
+    pub reason: MetadataRejection,
+}
+
+/// Why OpenUSD refuses a metadata declaration.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum MetadataRejection {
+    /// The plugin's `SdfMetadata` is not an object; OpenUSD ignores it.
+    MetadataNotAnObject,
+    /// The declaration is not an object (OpenUSD: "Value must be a
+    /// dictionary").
+    NotAnObject,
+    /// `type` is missing or not a string (OpenUSD: "Could not read a
+    /// string for \"type\"").
+    TypeNotAString,
+    /// `type` names no metadata type (OpenUSD: "\"…\" is not a registered
+    /// value type").
+    UnknownType,
+    /// The field is registered already (OpenUSD: "\"…\" is already a
+    /// registered field"), by `by`: Sdf, one of usd-core's own plugins, or
+    /// an earlier plugin of the set.
+    AlreadyRegistered {
+        /// Who registers it.
+        by: String,
+    },
+    /// A `default` for a dictionary or list-op field (OpenUSD: "Default
+    /// values are not allowed on fields of type …").
+    DefaultNotAllowed,
+    /// A `default` that is not a string, an integer, a real or an array of
+    /// one of those (OpenUSD: "Value was not a string, an int, a double,
+    /// or a vector of those types").
+    DefaultNotAValue,
+    /// A `default` that is no value of the type (OpenUSD: "Could not parse
+    /// default value").
+    DefaultNotOfType(MetadataValueError),
+}
+
+impl MetadataDeclarationError {
+    /// OpenUSD's message for the refusal, as `SdfSchemaBase` raises it,
+    /// without the plugin's path; `None` for the refusal OpenUSD ignores
+    /// silently.
+    #[must_use]
+    pub fn openusd_message(&self) -> Option<String> {
+        let field = self.field.as_deref().unwrap_or_default();
+        Some(match &self.reason {
+            MetadataRejection::MetadataNotAnObject => return None,
+            MetadataRejection::NotAnObject => format!("Value must be a dictionary (at \"{field}\""),
+            MetadataRejection::TypeNotAString => {
+                format!("Could not read a string for \"type\" (at \"{field}\"")
             }
-            if targets.is_empty() {
-                return Err(format!("{name}: no metadata targets"));
+            MetadataRejection::AlreadyRegistered { .. } => {
+                format!("\"{field}\" is already a registered field")
             }
-            targets.sort_unstable();
-            targets.dedup();
-            let default = entry
-                .get("default")
-                .map(|value| default_value(type_name, value, tokens))
-                .transpose()
-                .map_err(|why| format!("{name}: {why}"))?;
-            let value_type = layerstack::MetadataType::parse(type_name)
-                .ok_or_else(|| format!("{name}: `{type_name}` is not a metadata type"))?;
-            let mut definition = MetadataDefinition::new(tokens.intern(name), value_type, targets)
-                .with_documentation(entry["documentation"].as_str().unwrap_or_default());
-            definition.default = default;
-            Ok(definition)
+            MetadataRejection::UnknownType
+            | MetadataRejection::DefaultNotAllowed
+            | MetadataRejection::DefaultNotAValue
+            | MetadataRejection::DefaultNotOfType(_) => {
+                format!("Error parsing default value for metadata (at \"{field}\"")
+            }
         })
-        .collect()
+    }
+}
+
+impl fmt::Display for MetadataDeclarationError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "plugin `{}`", self.plugin)?;
+        if let Some(field) = &self.field {
+            write!(f, ", field `{field}`")?;
+        }
+        if let Some(key) = self.key {
+            write!(f, ", `{key}`")?;
+        }
+        if let Some(value) = &self.value {
+            write!(f, " {value}")?;
+        }
+        f.write_str(": ")?;
+        match &self.reason {
+            MetadataRejection::MetadataNotAnObject => f.write_str("`SdfMetadata` is not an object"),
+            MetadataRejection::NotAnObject => f.write_str("the declaration is not an object"),
+            MetadataRejection::TypeNotAString => f.write_str("no string `type`"),
+            MetadataRejection::UnknownType => f.write_str("not a registered value type"),
+            MetadataRejection::AlreadyRegistered { by } => {
+                write!(f, "registered already, by {by}")
+            }
+            MetadataRejection::DefaultNotAllowed => {
+                f.write_str("a dictionary or list-op field takes no default")
+            }
+            MetadataRejection::DefaultNotAValue => f.write_str(
+                "a default is a string, an integer, a real, or an array of one of those",
+            ),
+            MetadataRejection::DefaultNotOfType(error) => {
+                write!(f, "not a value of the type ({error:?})")
+            }
+        }
+    }
+}
+
+impl std::error::Error for MetadataDeclarationError {}
+
+/// The metadata declarations of a set of `plugInfo.json` files, as OpenUSD
+/// takes them.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct PluginMetadata {
+    /// The fields OpenUSD registers, in file and plugin order, each
+    /// plugin's in name order (OpenUSD reads `SdfMetadata` as an ordered
+    /// map).
+    pub accepted: Vec<MetadataDeclaration>,
+    /// The declarations it refuses, in the same order.
+    pub rejected: Vec<MetadataDeclarationError>,
+}
+
+/// Reads the `SdfMetadata` declarations of `plug_infos`, `(label, text)`
+/// pairs of `plugInfo.json` files (whole-line `#` comments allowed), as
+/// OpenUSD registers them, interning names and tokens in `tokens`. A
+/// single file's plugins are labelled by name alone.
+///
+/// # Errors
+///
+/// [`PlugInfoError`] for a file that is not JSON or has no `Plugins` list.
+pub fn read<'a>(
+    plug_infos: impl IntoIterator<Item = (&'a str, &'a str)>,
+    tokens: &TokenInterner,
+) -> Result<PluginMetadata, PlugInfoError> {
+    let files: Vec<(&str, &str)> = plug_infos.into_iter().collect();
+    let mut out = PluginMetadata::default();
+    let mut declared = BTreeMap::new();
+    for &(file, text) in &files {
+        let error = |message: String| PlugInfoError {
+            file: file.into(),
+            message,
+        };
+        let json = crate::model::plug_info_text(text).map_err(error)?;
+        let plugins = json["Plugins"]
+            .as_array()
+            .ok_or_else(|| error("no `Plugins` list".into()))?;
+        for (index, plugin) in plugins.iter().enumerate() {
+            let name = plugin["Name"]
+                .as_str()
+                .map_or_else(|| format!("Plugins[{index}]"), String::from);
+            let label = if files.len() == 1 {
+                name
+            } else {
+                format!("{file}: {name}")
+            };
+            read_plugin(
+                &label,
+                &plugin["Info"],
+                tokens,
+                Registration::Plugin(&mut declared),
+                &mut out,
+            );
+        }
+    }
+    Ok(out)
+}
+
+/// Which fields a plugin's declarations are checked against.
+pub(crate) enum Registration<'a> {
+    /// A plugin of one's own: refused for a built-in field or one an
+    /// earlier plugin declares (by name, with the plugin declaring it).
+    Plugin(&'a mut BTreeMap<String, String>),
+    /// One of usd-core's own, whose fields are the built-in ones.
+    Bundled,
+}
+
+/// One plugin's `Info.SdfMetadata`, as `_UpdateMetadataFromPlugins` reads
+/// it.
+pub(crate) fn read_plugin(
+    plugin: &str,
+    info: &Json,
+    tokens: &TokenInterner,
+    mut registration: Registration<'_>,
+    out: &mut PluginMetadata,
+) {
+    let Some(fields) = info.get("SdfMetadata") else {
+        return;
+    };
+    let reject =
+        |out: &mut PluginMetadata, field: Option<&str>, key, value: Option<&Json>, reason| {
+            out.rejected.push(MetadataDeclarationError {
+                plugin: plugin.into(),
+                field: field.map(String::from),
+                key,
+                value: value.map(Json::to_string),
+                reason,
+            });
+        };
+    let Some(fields) = fields.as_object() else {
+        reject(
+            out,
+            None,
+            None,
+            Some(fields),
+            MetadataRejection::MetadataNotAnObject,
+        );
+        return;
+    };
+    // OpenUSD's `JsObject` is a `std::map`: declarations in name order.
+    let fields: BTreeMap<&String, &Json> = fields.iter().collect();
+    for (name, entry) in fields {
+        let Some(entry) = entry.as_object() else {
+            reject(
+                out,
+                Some(name),
+                None,
+                Some(entry),
+                MetadataRejection::NotAnObject,
+            );
+            continue;
+        };
+        let Some(type_name) = entry.get("type").and_then(Json::as_str) else {
+            reject(
+                out,
+                Some(name),
+                Some("type"),
+                entry.get("type"),
+                MetadataRejection::TypeNotAString,
+            );
+            continue;
+        };
+        if let Registration::Plugin(declared) = &registration {
+            let by = MetadataField::builtin(name)
+                .map(|field| field.origin().to_string())
+                .or_else(|| {
+                    declared
+                        .get(name.as_str())
+                        .map(|by| format!("plugin `{by}`"))
+                });
+            if let Some(by) = by {
+                reject(
+                    out,
+                    Some(name),
+                    None,
+                    None,
+                    MetadataRejection::AlreadyRegistered { by },
+                );
+                continue;
+            }
+        }
+        let Some(value_type) = MetadataType::parse(type_name) else {
+            reject(
+                out,
+                Some(name),
+                Some("type"),
+                entry.get("type"),
+                MetadataRejection::UnknownType,
+            );
+            continue;
+        };
+        let default = match entry.get("default").filter(|value| !value.is_null()) {
+            None => None,
+            Some(value) => match default_value(value_type, value, tokens) {
+                Ok(default) => Some(default),
+                Err(reason) => {
+                    reject(out, Some(name), Some("default"), Some(value), reason);
+                    continue;
+                }
+            },
+        };
+        let mut definition = MetadataDefinition::new(
+            tokens.intern(name),
+            value_type,
+            targets(entry.get("appliesTo")),
+        )
+        .with_display_group(
+            entry
+                .get("displayGroup")
+                .and_then(Json::as_str)
+                .unwrap_or_default(),
+        )
+        .with_documentation(
+            entry
+                .get("documentation")
+                .and_then(Json::as_str)
+                .unwrap_or_default(),
+        );
+        definition.default = default;
+        if let Registration::Plugin(declared) = &mut registration {
+            declared.insert(name.clone(), plugin.into());
+        }
+        out.accepted.push(MetadataDeclaration {
+            plugin: plugin.into(),
+            definition,
+        });
+    }
+}
+
+/// The fields one of usd-core's own plugins declares, which are the
+/// built-in fields; an error naming any declaration OpenUSD would refuse.
+pub(crate) fn read_bundled(
+    plugin: &str,
+    info: &Json,
+    tokens: &TokenInterner,
+) -> Result<Vec<MetadataDefinition>, String> {
+    let mut out = PluginMetadata::default();
+    read_plugin(plugin, info, tokens, Registration::Bundled, &mut out);
+    if let Some(error) = out.rejected.first() {
+        return Err(error.to_string());
+    }
+    Ok(out.accepted.into_iter().map(|d| d.definition).collect())
+}
+
+/// The kinds of spec `appliesTo` registers a field for.
+fn targets(applies_to: Option<&Json>) -> Vec<MetadataTarget> {
+    let names: Vec<&str> = match applies_to {
+        Some(Json::String(name)) => vec![name.as_str()],
+        Some(Json::Array(items)) if items.iter().all(Json::is_string) => {
+            items.iter().filter_map(Json::as_str).collect()
+        }
+        // Absent, or neither a string nor a list of strings: every kind.
+        _ => Vec::new(),
+    };
+    if names.is_empty() {
+        return vec![
+            MetadataTarget::Layer,
+            MetadataTarget::Prim,
+            MetadataTarget::Attribute,
+            MetadataTarget::Relationship,
+        ];
+    }
+    let mut targets = Vec::new();
+    for name in names {
+        match name {
+            "layers" => targets.push(MetadataTarget::Layer),
+            "prims" => targets.push(MetadataTarget::Prim),
+            "variants" => targets.push(MetadataTarget::Variant),
+            "attributes" => targets.push(MetadataTarget::Attribute),
+            "relationships" => targets.push(MetadataTarget::Relationship),
+            "properties" => {
+                targets.extend([MetadataTarget::Attribute, MetadataTarget::Relationship]);
+            }
+            _ => {}
+        }
+    }
+    targets.sort_unstable();
+    targets.dedup();
+    if targets.contains(&MetadataTarget::Prim) {
+        targets.retain(|target| *target != MetadataTarget::Variant);
+    }
+    targets
+}
+
+/// A plugin's `default` of a field of `value_type`, as `_ParseValue` reads
+/// it: its values, in order, fed to the text parser's value context of the
+/// type.
+fn default_value(
+    value_type: MetadataType,
+    value: &Json,
+    tokens: &TokenInterner,
+) -> Result<Value, MetadataRejection> {
+    if matches!(
+        value_type,
+        MetadataType::Dictionary | MetadataType::ListOp(_)
+    ) {
+        return Err(MetadataRejection::DefaultNotAllowed);
+    }
+    // A string, an int or a double, or a list of one of them alone.
+    let scalar = |value: &Json| -> Option<(u8, String)> {
+        Some(match value {
+            Json::String(text) => (0, usda_string(text)),
+            // OpenUSD takes an integer as an `int`, wrapping it
+            // (`JsValue::Get<int>`, a `static_cast` of its 64 bits).
+            Json::Number(number) if number.is_i64() || number.is_u64() => {
+                let bits = number.as_i64().map_or_else(
+                    || number.as_u64().map_or([0; 8], u64::to_le_bytes),
+                    i64::to_le_bytes,
+                );
+                let low = i32::from_le_bytes([bits[0], bits[1], bits[2], bits[3]]);
+                (1, low.to_string())
+            }
+            Json::Number(number) => (2, format!("{:?}", number.as_f64()?)),
+            _ => return None,
+        })
+    };
+    let values: Vec<String> = match value {
+        Json::Array(items) => {
+            let items = items.iter().map(scalar).collect::<Option<Vec<_>>>();
+            let items = items.ok_or(MetadataRejection::DefaultNotAValue)?;
+            if items.windows(2).any(|pair| pair[0].0 != pair[1].0) {
+                return Err(MetadataRejection::DefaultNotAValue);
+            }
+            items.into_iter().map(|(_, text)| text).collect()
+        }
+        value => vec![scalar(value).ok_or(MetadataRejection::DefaultNotAValue)?.1],
+    };
+    let literal = shaped(value_type, &values);
+    match layerstack_usda::metadata::metadata_value(&literal, value_type, tokens) {
+        Ok(layerstack::FieldValue::Value(value)) => Ok(value),
+        Ok(_) => Err(MetadataRejection::DefaultNotAllowed),
+        Err(error) => Err(MetadataRejection::DefaultNotOfType(error)),
+    }
+}
+
+/// USDA's text of `values` as a value of `value_type`, shaped as OpenUSD's
+/// `_AddValuesToValueContext` shapes them: tuples of the type's
+/// components, in an array for an array type.
+fn shaped(value_type: MetadataType, values: &[String]) -> String {
+    let (element, array) = match value_type.storage() {
+        MetadataType::Value(ty) => (ty, false),
+        MetadataType::Array(ty) => (ty, true),
+        _ => unreachable!("dictionaries and list ops take no default"),
+    };
+    let (size, rows) = components(element);
+    let one = |values: &[String]| -> String {
+        if size == 0 {
+            return values.join(", ");
+        }
+        let tuple = |values: &[String]| format!("({})", values.join(", "));
+        if rows {
+            let rows: Vec<String> = values.chunks(size).map(tuple).collect();
+            format!("({})", rows.join(", "))
+        } else {
+            tuple(values)
+        }
+    };
+    let per = if rows { size * size } else { size.max(1) };
+    if array {
+        let items: Vec<String> = values.chunks(per).map(one).collect();
+        format!("[{}]", items.join(", "))
+    } else if values.len() > per {
+        format!("[{}]", values.join(", "))
+    } else {
+        one(values)
+    }
+}
+
+/// The components of a value of `ty` (a storage type), and whether they
+/// are rows of that many; `0` for a type without components.
+fn components(ty: layerstack::ValueType) -> (usize, bool) {
+    use layerstack::ValueType as T;
+    match ty {
+        T::Int2 | T::Half2 | T::Float2 | T::Double2 => (2, false),
+        T::Int3 | T::Half3 | T::Float3 | T::Double3 => (3, false),
+        T::Int4 | T::Half4 | T::Float4 | T::Double4 | T::Quath | T::Quatf | T::Quatd => (4, false),
+        T::Matrix2d => (2, true),
+        T::Matrix3d => (3, true),
+        T::Matrix4d => (4, true),
+        _ => (0, false),
+    }
+}
+
+/// `text` as a quoted USDA string.
+fn usda_string(text: &str) -> String {
+    let mut out = String::with_capacity(text.len() + 2);
+    out.push('"');
+    for c in text.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
 }
 
 fn element_type(ty: &str) -> Option<&str> {
@@ -98,102 +567,6 @@ fn primitive(ty: &str, tokens: &mut TokenInterner) -> Result<Value, String> {
         "pathExpression" => Value::PathExpression("".into()),
         _ => return Err(format!("no typed metadata conversion for {ty}")),
     })
-}
-
-fn default_value(ty: &str, value: &Json, tokens: &mut TokenInterner) -> Result<Value, String> {
-    if let Some(element) = element_type(ty) {
-        let items = value
-            .as_array()
-            .ok_or_else(|| format!("{ty} default must be an array"))?
-            .iter()
-            .map(|value| default_value(element, value, tokens))
-            .collect::<Result<Vec<_>, _>>()?;
-        return Ok(Value::array_with_element(
-            items,
-            Some(&primitive(element, tokens)?),
-        ));
-    }
-    let signed = || {
-        value
-            .as_i64()
-            .ok_or_else(|| format!("{ty} default must be a signed integer"))
-    };
-    let unsigned = || {
-        value
-            .as_u64()
-            .ok_or_else(|| format!("{ty} default must be an unsigned integer"))
-    };
-    let float = || {
-        let number = serde_json::from_value::<f32>(value.clone())
-            .map_err(|_| format!("{ty} default must be numeric"))?;
-        if !number.is_finite() {
-            return Err(format!("{ty} default must fit f32"));
-        }
-        Ok(number)
-    };
-    let text = || {
-        value
-            .as_str()
-            .ok_or_else(|| format!("{ty} default must be a string"))
-    };
-    Ok(match ty {
-        "token" => Value::Token(tokens.intern(text()?)),
-        "string" => Value::string(text()?),
-        "asset" => Value::Asset(text()?.into()),
-        "pathExpression" => Value::PathExpression(text()?.into()),
-        "bool" => Value::Bool(value.as_bool().ok_or("bool default must be a boolean")?),
-        "uchar" => {
-            Value::UChar(u8::try_from(unsigned()?).map_err(|_| "uchar default must fit u8")?)
-        }
-        "int" => Value::Int(i32::try_from(signed()?).map_err(|_| "int default must fit i32")?),
-        "uint" => Value::UInt(u32::try_from(unsigned()?).map_err(|_| "uint default must fit u32")?),
-        "int64" => Value::Int64(signed()?),
-        "uint64" => Value::UInt64(unsigned()?),
-        "half" => {
-            let bits = layerstack::half::from_f32(float()?);
-            if !layerstack::half::to_f32(bits).is_finite() {
-                return Err("half default must fit f16".into());
-            }
-            Value::Half(bits)
-        }
-        "float" => Value::Float(float()?),
-        "double" => Value::Double(value.as_f64().ok_or("double default must be numeric")?),
-        "timecode" => Value::TimeCode(value.as_f64().ok_or("timecode default must be numeric")?),
-        "dictionary" => dictionary_default(value)?,
-        _ => return Err(format!("cannot emit a {ty} metadata default")),
-    })
-}
-
-fn dictionary_default(value: &Json) -> Result<Value, String> {
-    fn entry(value: &Json) -> Result<Value, String> {
-        match value {
-            Json::Bool(value) => Ok(Value::Bool(*value)),
-            Json::String(value) => Ok(Value::string(value.as_str())),
-            Json::Number(value) if value.is_i64() => {
-                Ok(Value::Int64(value.as_i64().expect("i64 number")))
-            }
-            Json::Number(value) if value.is_u64() => {
-                Ok(Value::UInt64(value.as_u64().expect("u64 number")))
-            }
-            Json::Number(value) => Ok(Value::Double(
-                value.as_f64().ok_or("dictionary number must fit f64")?,
-            )),
-            Json::Array(items) => Ok(Value::Array(
-                items.iter().map(entry).collect::<Result<_, _>>()?,
-            )),
-            Json::Object(_) => dictionary_default(value),
-            Json::Null => Err("dictionary defaults cannot contain null".into()),
-        }
-    }
-    let entries = value
-        .as_object()
-        .ok_or("dictionary default must be an object")?;
-    Ok(Value::Dictionary(
-        entries
-            .iter()
-            .map(|(key, value)| Ok((key.as_str().into(), entry(value)?)))
-            .collect::<Result<_, String>>()?,
-    ))
 }
 
 fn conversion(ty: &str) -> Result<(String, String), String> {
@@ -264,165 +637,232 @@ pub(crate) fn files(model: &Model) -> Result<Vec<(String, String)>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The fields one plugin of `fields`' declarations registers, and the
+    /// reasons it refuses the others.
+    fn declare(fields: Json) -> (PluginMetadata, TokenInterner) {
+        let tokens = TokenInterner::default();
+        let text =
+            serde_json::json!({"Plugins": [{"Name": "host", "Info": {"SdfMetadata": fields}}]})
+                .to_string();
+        (
+            read([("plugInfo.json", text.as_str())], &tokens).unwrap(),
+            tokens,
+        )
+    }
+
+    fn default_of(ty: &str, default: Json) -> Result<Value, MetadataRejection> {
+        let (read, _) = declare(serde_json::json!({"hostField": {"type": ty, "default": default}}));
+        match (read.accepted.first(), read.rejected.first()) {
+            (Some(accepted), None) => Ok(accepted.definition.default.clone().unwrap()),
+            (None, Some(rejected)) => Err(rejected.reason.clone()),
+            _ => panic!("one declaration"),
+        }
+    }
+
     #[test]
     fn plugin_targets_expand_and_defaults_keep_the_declared_type() {
-        let mut tokens = TokenInterner::default();
-        let fields = read(&serde_json::json!({"renderType": {"type": "token", "appliesTo": "properties", "default": "color"}}), &mut tokens).unwrap();
+        let (read, tokens) = declare(
+            serde_json::json!({"renderStyle": {"type": "token", "appliesTo": "properties", "default": "color"}}),
+        );
+        let field = &read.accepted[0].definition;
         assert_eq!(
-            fields[0].targets,
+            field.targets,
             [MetadataTarget::Attribute, MetadataTarget::Relationship]
         );
-        assert_eq!(
-            fields[0].default,
-            Some(Value::Token(tokens.intern("color")))
-        );
-        assert!(read(&serde_json::json!({"bad": {"type": "int", "appliesTo": ["prims"], "default": 2147483648_i64}}), &mut tokens).is_err());
-        assert!(
-            read(
-                &serde_json::json!({"bad": {"type": "token", "appliesTo": ["unknown"]}}),
-                &mut tokens
-            )
-            .is_err()
-        );
+        assert_eq!(field.default, Some(Value::Token(tokens.intern("color"))));
+        for (applies_to, targets) in [
+            (
+                Json::Null,
+                vec![
+                    MetadataTarget::Layer,
+                    MetadataTarget::Prim,
+                    MetadataTarget::Attribute,
+                    MetadataTarget::Relationship,
+                ],
+            ),
+            (
+                serde_json::json!(3),
+                vec![
+                    MetadataTarget::Layer,
+                    MetadataTarget::Prim,
+                    MetadataTarget::Attribute,
+                    MetadataTarget::Relationship,
+                ],
+            ),
+            (serde_json::json!(["nodes"]), vec![]),
+            (
+                serde_json::json!(["variants"]),
+                vec![MetadataTarget::Variant],
+            ),
+            (
+                serde_json::json!(["variants", "prims"]),
+                vec![MetadataTarget::Prim],
+            ),
+        ] {
+            assert_eq!(targets_of(applies_to.clone()), targets, "{applies_to}");
+        }
+    }
+
+    fn targets_of(applies_to: Json) -> Vec<MetadataTarget> {
+        let mut entry = serde_json::json!({"type": "int"});
+        if !applies_to.is_null() {
+            entry["appliesTo"] = applies_to;
+        }
+        let (read, _) = declare(serde_json::json!({ "hostField": entry }));
+        read.accepted[0].definition.targets.clone()
     }
 
     #[test]
-    fn primitive_arrays_and_list_defaults_keep_element_types_and_ranges() {
-        let mut tokens = TokenInterner::default();
-        for (ty, literal, expected) in [
-            ("uchar", serde_json::json!(255), Value::UChar(u8::MAX)),
+    fn defaults_read_as_openusd_feeds_them_to_the_text_parser() {
+        for (ty, default, expected) in [
+            ("bool", serde_json::json!(1), Value::Bool(true)),
+            ("int", serde_json::json!(1.5), Value::Int(1)),
+            ("double", serde_json::json!(2), Value::Double(2.0)),
+            ("uchar", serde_json::json!(200), Value::UChar(200)),
+            // An integer is a 32-bit `int` first, as OpenUSD reads it.
             (
-                "uint",
-                serde_json::json!(4294967295_u64),
-                Value::UInt(u32::MAX),
+                "int64",
+                serde_json::json!(4_294_967_297_i64),
+                Value::Int64(1),
             ),
-            ("int64", serde_json::json!(i64::MIN), Value::Int64(i64::MIN)),
-            (
-                "uint64",
-                serde_json::json!(u64::MAX),
-                Value::UInt64(u64::MAX),
-            ),
-            (
-                "half",
-                serde_json::json!(0.5),
-                Value::Half(layerstack::half::from_f32(0.5)),
-            ),
-            ("timecode", serde_json::json!(3), Value::TimeCode(3.)),
             (
                 "asset",
-                serde_json::json!("texture.png"),
-                Value::Asset("texture.png".into()),
+                serde_json::json!("a.usda"),
+                Value::Asset("a.usda".into()),
             ),
             (
-                "pathExpression",
-                serde_json::json!("/World/**"),
-                Value::PathExpression("/World/**".into()),
+                "float3",
+                serde_json::json!([1, 2, 3]),
+                Value::Vec3f([1.0, 2.0, 3.0]),
+            ),
+            ("int[]", serde_json::json!(4), Value::from(vec![4_i32])),
+            (
+                "float3[]",
+                serde_json::json!([1, 2, 3, 4, 5, 6]),
+                Value::from(vec![[1.0_f32, 2.0, 3.0], [4.0, 5.0, 6.0]]),
             ),
         ] {
             assert_eq!(
-                default_value(ty, &literal, &mut tokens).unwrap(),
-                expected,
-                "{ty}"
-            );
-            assert_eq!(
-                default_value(
-                    &format!("{ty}[]"),
-                    &serde_json::json!([literal]),
-                    &mut tokens
-                )
-                .unwrap()
-                .array_ref()
-                .unwrap()
-                .get(0)
-                .unwrap()
-                .as_ref(),
-                &expected,
-                "{ty}[]"
-            );
-        }
-        for (ty, literal) in [
-            ("tokenlistop", serde_json::json!(["red", "green"])),
-            ("stringlistop", serde_json::json!(["one", "two"])),
-            ("intlistop", serde_json::json!([i32::MIN, i32::MAX])),
-            ("uintlistop", serde_json::json!([0, u32::MAX])),
-            ("int64listop", serde_json::json!([i64::MIN, i64::MAX])),
-            ("uint64listop", serde_json::json!([0, u64::MAX])),
-        ] {
-            let declarations = read(&serde_json::json!({"hostField": {"type": ty, "appliesTo": "prims", "default": literal}}), &mut tokens).unwrap();
-            assert_eq!(
-                declarations[0]
-                    .default
-                    .as_ref()
-                    .unwrap()
-                    .array_ref()
-                    .unwrap()
-                    .len(),
-                2,
-                "{ty}"
-            );
-            assert_eq!(
-                default_value(ty, &serde_json::json!([]), &mut tokens)
-                    .unwrap()
-                    .array_ref()
-                    .unwrap()
-                    .len(),
-                0
+                default_of(ty, default.clone()),
+                Ok(expected),
+                "{ty} {default}"
             );
         }
     }
 
     #[test]
-    fn malformed_defaults_fail_generation_without_silent_coercion() {
-        let mut tokens = TokenInterner::default();
-        for (ty, literal) in [
-            ("uchar", serde_json::json!(256)),
-            ("uint", serde_json::json!(-1)),
-            ("int", serde_json::json!(2147483648_i64)),
-            ("int64", serde_json::json!(u64::MAX)),
-            ("half", serde_json::json!(70000)),
-            ("float", serde_json::json!(1e100)),
-            ("float[]", serde_json::json!([1, "bad"])),
-            ("token[]", serde_json::json!("not an array")),
-            ("uintlistop", serde_json::json!([-1])),
-            ("dictionary", serde_json::json!([])),
-            ("dictionary", serde_json::json!({"nested": null})),
+    fn malformed_defaults_are_refused_as_openusd_refuses_them() {
+        for (ty, default, reason) in [
+            (
+                "bool",
+                serde_json::json!(true),
+                MetadataRejection::DefaultNotAValue,
+            ),
+            (
+                "float[]",
+                serde_json::json!([1, 2.5]),
+                MetadataRejection::DefaultNotAValue,
+            ),
+            (
+                "int",
+                serde_json::json!({"a": 1}),
+                MetadataRejection::DefaultNotAValue,
+            ),
+            (
+                "dictionary",
+                serde_json::json!({}),
+                MetadataRejection::DefaultNotAllowed,
+            ),
+            (
+                "tokenlistop",
+                serde_json::json!(["a"]),
+                MetadataRejection::DefaultNotAllowed,
+            ),
+            (
+                "uchar",
+                serde_json::json!(300),
+                MetadataRejection::DefaultNotOfType(MetadataValueError::Unconvertible {
+                    element: None,
+                }),
+            ),
+            (
+                "float3",
+                serde_json::json!([1, 2]),
+                MetadataRejection::DefaultNotOfType(MetadataValueError::TupleDimensions),
+            ),
+            (
+                "token",
+                serde_json::json!(3),
+                MetadataRejection::DefaultNotOfType(MetadataValueError::Unconvertible {
+                    element: None,
+                }),
+            ),
         ] {
-            assert!(read(&serde_json::json!({"hostField": {"type": ty, "appliesTo": "prims", "default": literal}}), &mut tokens).is_err(), "{ty}");
-        }
-        for ty in ["float3", "dictionary[]", "intlistop[]", "hostOpaque"] {
-            assert!(
-                read(
-                    &serde_json::json!({"hostField": {"type": ty, "appliesTo": "prims"}}),
-                    &mut tokens
-                )
-                .is_err(),
-                "unsupported {ty} must not generate a foreign-kind reader"
+            assert_eq!(
+                default_of(ty, default.clone()),
+                Err(reason),
+                "{ty} {default}"
             );
         }
     }
 
     #[test]
-    fn dictionary_defaults_preserve_nested_json_types() {
-        let mut tokens = TokenInterner::default();
-        let value = default_value(
-            "dictionary",
-            &serde_json::json!({"nested": {"enabled": true, "count": 3, "items": ["red", 0.5]}}),
-            &mut tokens,
-        )
-        .unwrap();
+    fn declarations_of_registered_fields_and_unknown_types_are_refused() {
+        let (read, _) = declare(serde_json::json!({
+            "documentation": {"type": "string"},
+            "interpolation": {"type": "token", "appliesTo": "attributes"},
+            "hostPath": {"type": "path"},
+            "hostCase": {"type": "Float"},
+            "hostNumber": {"type": 3},
+            "hostText": "token",
+        }));
+        let reasons: Vec<(&str, &MetadataRejection)> = read
+            .rejected
+            .iter()
+            .map(|error| (error.field.as_deref().unwrap(), &error.reason))
+            .collect();
         assert_eq!(
-            value,
-            Value::Dictionary(vec![(
-                "nested".into(),
-                Value::Dictionary(vec![
-                    ("count".into(), Value::Int64(3)),
-                    ("enabled".into(), Value::Bool(true)),
-                    (
-                        "items".into(),
-                        Value::Array(vec![Value::string("red"), Value::Double(0.5)])
-                    ),
-                ])
-            )])
+            reasons,
+            [
+                (
+                    "documentation",
+                    &MetadataRejection::AlreadyRegistered { by: "Sdf".into() }
+                ),
+                ("hostCase", &MetadataRejection::UnknownType),
+                ("hostNumber", &MetadataRejection::TypeNotAString),
+                ("hostPath", &MetadataRejection::UnknownType),
+                ("hostText", &MetadataRejection::NotAnObject),
+                (
+                    "interpolation",
+                    &MetadataRejection::AlreadyRegistered {
+                        by: "the `usdGeom` plugin".into()
+                    }
+                ),
+            ]
+        );
+        assert!(read.accepted.is_empty());
+        let message = read.rejected[0].openusd_message().unwrap();
+        assert_eq!(message, "\"documentation\" is already a registered field");
+    }
+
+    #[test]
+    fn a_later_plugin_cannot_declare_a_field_again() {
+        let tokens = TokenInterner::default();
+        let plugin = |name: &str| {
+            serde_json::json!({"Plugins": [{"Name": name, "Info": {"SdfMetadata": {
+                "hostWeight": {"type": "float"}
+            }}}]})
+            .to_string()
+        };
+        let (first, second) = (plugin("first"), plugin("second"));
+        let read = read([("a", first.as_str()), ("b", second.as_str())], &tokens).unwrap();
+        assert_eq!(read.accepted.len(), 1);
+        assert_eq!(
+            read.rejected[0].reason,
+            MetadataRejection::AlreadyRegistered {
+                by: "plugin `a: first`".into()
+            }
         );
     }
 }

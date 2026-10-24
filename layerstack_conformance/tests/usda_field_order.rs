@@ -19,9 +19,15 @@
 //! unregistered metadata sorts in byte order on the layer and in
 //! dictionary order on a prim.
 //!
+//! Numbers are spelled as OpenUSD spells them: the `numbers` case, and
+//! the hashes of OpenUSD's text of generated arrays (every half but the
+//! NaNs, and floats, doubles and time codes from random bits and short
+//! decimals).
+//! OpenUSD's text of each case reads back as the same layer.
+//!
 //! Spec: AOUSD Core §6.6.2 (dictionaries are unordered), §8.2 (element
 //! ordering), §11.3.2 (property order is the sorted names, then
-//! `propertyOrder`), §16.2 (USDA).
+//! `propertyOrder`), §16.2 (USDA), §16.2.5 (numeric literals).
 
 #![allow(missing_docs, reason = "integration tests")]
 
@@ -35,6 +41,7 @@ use layerstack::spec_path::SpecPath;
 use layerstack::{Address, InMemoryStore, LayerOffset, ListPosition, Transaction};
 use layerstack_conformance::save_corpus::Imported;
 use layerstack_conformance::workspace_root;
+use layerstack_usda::writer::Value as WriterValue;
 use serde_json::Value as Json;
 
 const ORACLE: &str = include_str!("../fixtures/usda_field_order/oracle.json");
@@ -48,33 +55,71 @@ fn oracle() -> Json {
     oracle
 }
 
+/// A number of a step: JSON's, or text read as Rust reads a `f64`
+/// (`"1e-7"`, `"-0"`, `"inf"`, `"nan"`), as the oracle reads it with
+/// Python's `float`.
+fn number(json: &Json) -> f64 {
+    match json.as_str() {
+        Some(text) => text.parse().expect("a number"),
+        None => json.as_f64().expect("a number"),
+    }
+}
+
+/// A `float`, rounded from the number's `double` as C++ casts it.
+#[allow(clippy::cast_possible_truncation, reason = "`float` values")]
+fn float(json: &Json) -> f32 {
+    number(json) as f32
+}
+
+/// A `half`, rounded through `float` as `GfHalf` is from a `double`.
+fn half(json: &Json) -> u16 {
+    layerstack::half::from_f32(float(json))
+}
+
+fn items(json: &Json) -> &[Json] {
+    json.as_array().expect("an array")
+}
+
 /// A step value as the layer holds it.
 fn value(store: &InMemoryStore, json: &Json) -> Value {
     let item = &json["value"];
-    #[allow(clippy::cast_possible_truncation, reason = "`float` values")]
-    let float = |v: &Json| v.as_f64().unwrap() as f32;
-    let floats = |v: &Json| v.as_array().unwrap().iter().map(float).collect::<Vec<_>>();
+    let floats = |v: &Json| items(v).iter().map(float).collect::<Vec<_>>();
+    let doubles = |v: &Json| items(v).iter().map(number).collect::<Vec<_>>();
+    let halves = |v: &Json| items(v).iter().map(half).collect::<Vec<_>>();
+    let array = |f: &dyn Fn(&Json) -> Value| Value::array(items(item).iter().map(f).collect());
+    // `(r, i, j, k)` in the step, stored `[i, j, k, r]`.
+    fn quat<T: Copy>([r, i, j, k]: [T; 4]) -> [T; 4] {
+        [i, j, k, r]
+    }
     match json["type"].as_str().unwrap() {
         "bool" => Value::Bool(item.as_bool().unwrap()),
         "int" => Value::Int(i32::try_from(item.as_i64().unwrap()).unwrap()),
+        "half" => Value::Half(half(item)),
         "float" => Value::Float(float(item)),
-        "double" => Value::Double(item.as_f64().unwrap()),
+        "double" => Value::Double(number(item)),
+        "timecode" => Value::TimeCode(number(item)),
         "token" => Value::Token(store.tokens.intern(item.as_str().unwrap())),
         "string" => Value::String(Arc::from(item.as_str().unwrap())),
-        "point3f[]" => Value::Array(
-            item.as_array()
-                .unwrap()
+        "half[]" => array(&|v| Value::Half(half(v))),
+        "float[]" => array(&|v| Value::Float(float(v))),
+        "double[]" => array(&|v| Value::Double(number(v))),
+        "timecode[]" => array(&|v| Value::TimeCode(number(v))),
+        "half3" => Value::Vec3h(halves(item).try_into().unwrap()),
+        "float3" => Value::Vec3f(floats(item).try_into().unwrap()),
+        "double4" => Value::Vec4d(doubles(item).try_into().unwrap()),
+        "quath" => Value::Quath(quat(halves(item).try_into().unwrap())),
+        "quatf" => Value::Quatf(quat(floats(item).try_into().unwrap())),
+        "quatd" => Value::Quatd(quat(doubles(item).try_into().unwrap())),
+        "matrix2d" => Value::Matrix2d(Box::new(
+            items(item)
                 .iter()
-                .map(|v| Value::Vec3f(floats(v).try_into().unwrap()))
-                .collect(),
-        ),
-        "texCoord2f[]" => Value::Array(
-            item.as_array()
-                .unwrap()
-                .iter()
-                .map(|v| Value::Vec2f(floats(v).try_into().unwrap()))
-                .collect(),
-        ),
+                .flat_map(doubles)
+                .collect::<Vec<_>>()
+                .try_into()
+                .unwrap(),
+        )),
+        "point3f[]" => array(&|v| Value::Vec3f(floats(v).try_into().unwrap())),
+        "texCoord2f[]" => array(&|v| Value::Vec2f(floats(v).try_into().unwrap())),
         "dictionary" => Value::Dictionary(
             item.as_object()
                 .unwrap()
@@ -140,11 +185,7 @@ fn transaction(store: &InMemoryStore, step: &Json) -> Transaction {
             }
             edit.create_property(at(), spec)
         }
-        "sample" => edit.set_time_sample(
-            at(),
-            step["time"].as_f64().unwrap(),
-            value(store, &step["value"]),
-        ),
+        "sample" => edit.set_time_sample(at(), number(&step["time"]), value(store, &step["value"])),
         "connect" => edit.set_targets(at(), targets()),
         "metadata" if path == "/" => edit.set_layer_metadata(
             SCENE,
@@ -165,9 +206,17 @@ fn transaction(store: &InMemoryStore, step: &Json) -> Transaction {
                 Some(asset) => Reference::with_asset(ASSET, prim, asset),
                 None => Reference::new(SCENE, prim),
             };
+            let or = |key: &str, default: f64| {
+                let json = &step[key];
+                if json.is_null() {
+                    default
+                } else {
+                    number(json)
+                }
+            };
             arc.layer_offset = LayerOffset {
-                offset: step["offset"].as_f64().unwrap_or(0.0),
-                scale: 1.0,
+                offset: or("offset", 0.0),
+                scale: or("scale", 1.0),
             };
             if op == "reference" {
                 edit.add_reference(at(), arc, ListPosition::BackOfPrepend)
@@ -217,7 +266,114 @@ fn scrambled_authoring_saves_as_openusd_writes_it() {
             &store.paths,
         )
         .expect("saves");
-        assert_eq!(text, case["text"].as_str().unwrap(), "{name}");
+        let expected = case["text"].as_str().unwrap();
+        assert_eq!(text, expected, "{name}");
+        // OpenUSD's text reads back as the same layer: every number it
+        // spells is read.
+        assert_eq!(
+            Imported::usda(expected).save_usda().unwrap(),
+            expected,
+            "{name} read back"
+        );
+    }
+}
+
+/// `splitmix64`, as the oracle draws its generated numbers.
+struct SplitMix64(u64);
+
+impl Iterator for SplitMix64 {
+    type Item = u64;
+
+    fn next(&mut self) -> Option<u64> {
+        self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
+        let mut z = self.0;
+        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+        Some(z ^ (z >> 31))
+    }
+}
+
+/// A decimal of up to six digits, `m * 10^k` or `m / 10^k`, rounded as the
+/// oracle's `decimal` rounds it.
+#[allow(clippy::cast_precision_loss, reason = "`m` is below 10^6")]
+fn decimal(bits: u64) -> f64 {
+    let m = (bits % 1_999_999) as f64 - 999_999.0;
+    let mut power = 1.0;
+    for _ in 0..(bits >> 32) % 23 {
+        power *= 10.0;
+    }
+    if bits >> 63 == 0 {
+        m * power
+    } else {
+        m / power
+    }
+}
+
+/// The oracle's generated array `name`.
+#[allow(clippy::cast_possible_truncation, reason = "`float` bits and values")]
+fn generated(name: &str, count: usize) -> WriterValue {
+    let seed = match name {
+        // But the NaNs, whose sign the C library OpenUSD's stream uses
+        // spells or not.
+        "every half" => {
+            let nan = |bits: &u16| bits & 0x7C00 == 0x7C00 && bits & 0x3FF != 0;
+            return WriterValue::HalfArray((0..=u16::MAX).filter(|bits| !nan(bits)).collect());
+        }
+        "float bits" => 1,
+        "double bits" => 2,
+        "decimal floats" => 3,
+        "decimal doubles" => 4,
+        "decimal time codes" => 5,
+        other => panic!("no generated array {other}"),
+    };
+    let draws = SplitMix64(seed).take(count);
+    match name {
+        "float bits" => WriterValue::FloatArray(
+            draws
+                .map(|bits| f32::from_bits((bits >> 32) as u32))
+                .collect(),
+        ),
+        "double bits" => WriterValue::DoubleArray(draws.map(f64::from_bits).collect()),
+        "decimal floats" => {
+            WriterValue::FloatArray(draws.map(|bits| decimal(bits) as f32).collect())
+        }
+        "decimal doubles" => WriterValue::DoubleArray(draws.map(decimal).collect()),
+        _ => WriterValue::TimeCodeArray(draws.map(decimal).collect()),
+    }
+}
+
+fn fnv1a64(text: &str) -> String {
+    let hash = text.bytes().fold(0xCBF2_9CE4_8422_2325_u64, |hash, byte| {
+        (hash ^ u64::from(byte)).wrapping_mul(0x0000_0100_0000_01B3)
+    });
+    format!("{hash:016x}")
+}
+
+/// Every half but the NaNs, and floats, doubles and time codes drawn from random bits
+/// and from short decimals, are spelled as OpenUSD spells them (compared
+/// by hash of each array's text), and read back as themselves.
+#[test]
+fn generated_numbers_are_spelled_as_openusd_writes_them() {
+    let oracle = oracle();
+    let arrays = oracle["generated"].as_array().unwrap();
+    assert!(arrays.len() >= 6, "the oracle's generated arrays");
+    for array in arrays {
+        let name = array["name"].as_str().unwrap();
+        let count = usize::try_from(array["count"].as_u64().unwrap()).unwrap();
+        let text = generated(name, count).to_usda_text();
+        assert_eq!(
+            fnv1a64(&text),
+            array["fnv1a64"].as_str().unwrap(),
+            "{name}: {}",
+            &text[..200]
+        );
+        let type_name = array["type"].as_str().unwrap();
+        let layer = format!("#usda 1.0\n\ndef \"P\"\n{{\n    {type_name} a = {text}\n}}\n\n");
+        assert_eq!(
+            Imported::usda(&layer).save_usda().unwrap(),
+            layer,
+            "{name} read back"
+        );
     }
 }
 

@@ -33,8 +33,20 @@ to the prepended items, as `UsdReferences::AddReference` and its siblings
 do by default), `variant_set` (`UsdVariantSets::AddVariantSet`: the set
 spec, and the name appended to the prepended `variantSetNames`),
 `select`, `property_order` and `prim_order`. Values are
-`{"type": ..., "value": ...}`, a dictionary's entries keyed by name.
+`{"type": ..., "value": ...}`, a dictionary's entries keyed by name, and
+a number may be text (`"1e-7"`, `"-0"`, `"nan"`) read with `float`.
 `text` is the layer's `ExportToString` after every step.
+
+OpenUSD spells a `double` or `float` with `TfStringify`
+(`pxr/base/tf/stringUtils.cpp`): the fewest digits that read back,
+positional for a decimal exponent in [-6, 15) and `3.42e-8` otherwise,
+ties between two such candidates broken to the even one; and a `half` or
+`timecode` with a stream's `%g`, six significant digits (`0.0999756`,
+`1e-07`). The `numbers` case puts such numbers everywhere a value is
+written. `generated` holds, for arrays too long to keep, an FNV-1a hash of
+OpenUSD's text of each: every half but the NaNs, and `float`, `double`
+and `timecode` arrays drawn from `splitmix64` bits and from decimals of
+up to six digits.
 
 `round_trip` holds `ExportToString` of `scrambled.usda`, a file written
 out of order by hand, and of `scrambled.usdc`, OpenUSD's crate file of it,
@@ -55,9 +67,10 @@ import argparse
 import filecmp
 import json
 import os
+import struct
 import tempfile
 
-from pxr import Sdf, Usd
+from pxr import Gf, Sdf, Usd, Vt
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 FIXTURES = os.path.normpath(os.path.join(HERE, "..", "fixtures", "usda_field_order"))
@@ -213,7 +226,145 @@ CASES = {
         {"op": "metadata", "path": "/", "key": "customLayerData",
          "value": dictionary(zz=v("int", 1), Ab=v("int", 2), aa=v("int", 3))},
     ],
+    # Numbers in every place a value is written: `double` and `float` as
+    # `TfStringify` writes them (the fewest digits that read back, with an
+    # exponent outside [-6, 15)), `half` and `timecode` as a stream writes
+    # them (`%g`, six digits). Numbers are text, read as `float(text)`.
+    "numbers": [
+        {"op": "prim", "path": "/G", "specifier": "def"},
+        {"op": "prim", "path": "/F", "specifier": "def"},
+        {"op": "attribute", "path": "/F.d", "type": "double[]", "default": v("double[]", [
+            "0.1", "3.42e-8", "1e-6", "1.5e-6", "1e-7", "1e15", "999999999999999", "1e16",
+            "1e21", "1e300", "5e-324", "-0", "0", "1", "-2.5", "123456789012345678",
+            "1.7976931348623157e308", "2.2250738585072014e-308", "inf", "-inf", "nan"])},
+        {"op": "attribute", "path": "/F.f", "type": "float[]", "default": v("float[]", [
+            "0.1", "1e-7", "1e-6", "1e15", "1e14", "123456789", "16777217", "-0", "1",
+            "3.4e38", "1e-45", "1.1754944e-38", "0.3", "inf", "-inf", "nan"])},
+        {"op": "attribute", "path": "/F.h", "type": "half[]", "default": v("half[]", [
+            "0.1", "1e-5", "6e-8", "65504", "-0", "1", "0.0001", "0.00009", "2049", "0.333",
+            "1000.5", "inf", "-inf", "nan"])},
+        {"op": "attribute", "path": "/F.t", "type": "timecode[]", "default": v("timecode[]", [
+            "1e-7", "1234560", "0.0001", "0.00001", "2.5", "-0", "1e-10", "100000", "1e20",
+            "inf", "-inf", "nan"])},
+        {"op": "attribute", "path": "/F.one", "type": "half", "default": v("half", "0.1")},
+        {"op": "attribute", "path": "/F.time", "type": "timecode",
+         "default": v("timecode", "1e-7")},
+        {"op": "sample", "path": "/F.time", "time": "2", "value": v("timecode", "0.00001")},
+        {"op": "attribute", "path": "/F.vh", "type": "half3",
+         "default": v("half3", ["0.1", "1e-5", "-0"])},
+        {"op": "attribute", "path": "/F.vf", "type": "float3",
+         "default": v("float3", ["0.1", "1e-7", "1e15"])},
+        {"op": "attribute", "path": "/F.vd", "type": "double4",
+         "default": v("double4", ["1e-7", "1e15", "-0", "0.000001"])},
+        {"op": "attribute", "path": "/F.qh", "type": "quath",
+         "default": v("quath", ["0.1", "0.2", "0.3", "0.4"])},
+        {"op": "attribute", "path": "/F.qf", "type": "quatf",
+         "default": v("quatf", ["0.1", "1e-7", "0.3", "0.4"])},
+        {"op": "attribute", "path": "/F.qd", "type": "quatd",
+         "default": v("quatd", ["1", "3.42e-8", "-0", "1e16"])},
+        {"op": "attribute", "path": "/F.m", "type": "matrix2d",
+         "default": v("matrix2d", [["1e-7", "0.1"], ["1e20", "-0"]])},
+        {"op": "attribute", "path": "/F.s", "type": "double", "default": v("double", "0.1")},
+        {"op": "sample", "path": "/F.s", "time": "1e20", "value": v("double", "3.42e-8")},
+        {"op": "sample", "path": "/F.s", "time": "1.2345678", "value": v("double", "1e15")},
+        {"op": "sample", "path": "/F.s", "time": "1e-7", "value": v("double", "-0")},
+        {"op": "sample", "path": "/F.s", "time": "-0", "value": v("double", "1e-7")},
+        {"op": "reference", "path": "/F", "target": "/G", "offset": "1e-7",
+         "scale": "1.2345678e20"},
+        {"op": "metadata", "path": "/", "key": "startTimeCode", "value": v("double", "1e-7")},
+        {"op": "metadata", "path": "/", "key": "endTimeCode", "value": v("double", "1e15")},
+        {"op": "metadata", "path": "/F", "key": "customData",
+         "value": dictionary(d=v("double", "3.42e-8"), f=v("float", "1e-7"),
+                             h=v("half", "0.1"), t=v("timecode", "1e-7"),
+                             hs=v("half[]", ["1e-5", "0.1"]), ts=v("timecode[]", ["1e6"]))},
+    ],
 }
+
+# Generated values `generated` records OpenUSD's text of, as an FNV-1a
+# hash of each array's text (`[0, 5.96046e-08, ...]`): every half but the
+# NaNs, which a stream writes as the C library does (glibc's `-nan` for a
+# negative one, Apple's `nan`), and
+# 100000 numbers each from `splitmix64` bits (any `float` or `double`) and
+# from decimals of up to six digits at scales from 10^-22 to 10^22.
+GENERATED = [
+    ("every half", "half[]"),
+    ("float bits", "float[]"),
+    ("double bits", "double[]"),
+    ("decimal floats", "float[]"),
+    ("decimal doubles", "double[]"),
+    ("decimal time codes", "timecode[]"),
+]
+GENERATED_COUNT = 100000
+MASK = (1 << 64) - 1
+
+
+def splitmix64(state):
+    while True:
+        state = (state + 0x9E3779B97F4A7C15) & MASK
+        z = state
+        z = ((z ^ (z >> 30)) * 0xBF58476D1CE4E5B9) & MASK
+        z = ((z ^ (z >> 27)) * 0x94D049BB133111EB) & MASK
+        yield z ^ (z >> 31)
+
+
+def power_of_ten(k):
+    p = 1.0
+    for _ in range(k):
+        p *= 10.0
+    return p
+
+
+def decimal(bits):
+    """A decimal of up to six digits, `m * 10^k` or `m / 10^k`."""
+    m = bits % 1999999 - 999999
+    k = (bits >> 32) % 23
+    return m / power_of_ten(k) if bits >> 63 else m * power_of_ten(k)
+
+
+def as_float(x):
+    """`x` rounded to a `float`, as a C++ cast rounds it."""
+    return struct.unpack("<f", struct.pack("<f", x))[0]
+
+
+def generated(name):
+    """The values of the generated array `name`, the same in
+    `tests/usda_field_order.rs`."""
+    if name == "every half":
+        # But the NaNs: the C library spells their sign, or not.
+        return [struct.unpack("<e", struct.pack("<H", bits))[0] for bits in range(1 << 16)
+                if bits & 0x7C00 != 0x7C00 or not bits & 0x3FF]
+    bits = splitmix64({"float bits": 1, "double bits": 2, "decimal floats": 3,
+                       "decimal doubles": 4, "decimal time codes": 5}[name])
+    draws = [next(bits) for _ in range(GENERATED_COUNT)]
+    if name == "float bits":
+        return [struct.unpack("<f", struct.pack("<I", b >> 32))[0] for b in draws]
+    if name == "double bits":
+        return [struct.unpack("<d", struct.pack("<Q", b))[0] for b in draws]
+    if name == "decimal floats":
+        return [as_float(decimal(b)) for b in draws]
+    return [decimal(b) for b in draws]
+
+
+def fnv1a64(text):
+    h = 0xCBF29CE484222325
+    for byte in text.encode():
+        h = ((h ^ byte) * 0x100000001B3) & MASK
+    return f"{h:016x}"
+
+
+def generated_texts():
+    """OpenUSD's text of each generated array, hashed."""
+    layer = Sdf.Layer.CreateAnonymous("generated.usda")
+    prim = Sdf.CreatePrimInLayer(layer, "/P")
+    prim.specifier = Sdf.SpecifierDef
+    for i, (name, type_name) in enumerate(GENERATED):
+        attr = Sdf.AttributeSpec(prim, f"a{i}", sdf_type(type_name))
+        attr.default = array(type_name, generated(name))
+    lines = {line.split(" = ", 1)[0].split()[-1]: line.split(" = ", 1)[1]
+             for line in layer.ExportToString().splitlines() if " a" in line and " = [" in line}
+    return [{"name": name, "type": type_name, "count": len(generated(name)),
+             "fnv1a64": fnv1a64(lines[f"a{i}"])}
+            for i, (name, type_name) in enumerate(GENERATED)]
 
 SCRAMBLED = '''#usda 1.0
 (
@@ -341,14 +492,38 @@ def sdf_type(name):
     return found
 
 
+def array(type_name, items):
+    """A `Vt` array of `type_name` (`half[]` and its siblings)."""
+    return {"half[]": Vt.HalfArray, "float[]": Vt.FloatArray, "double[]": Vt.DoubleArray,
+            "timecode[]": Sdf.TimeCodeArray}[type_name](items)
+
+
 def python_value(value):
-    """A step value as `pxr` takes it for its declared type."""
-    if value["type"] == "dictionary":
-        return {key: python_value(entry) for key, entry in value["value"].items()}
-    v = value["value"]
-    if value["type"] == "double":
+    """A step value as `pxr` takes it for its declared type. Numbers given
+    as text are read with `float`."""
+    type_name, v = value["type"], value["value"]
+    if type_name == "dictionary":
+        return {key: python_value(entry) for key, entry in v.items()}
+    if type_name in ("half[]", "float[]", "double[]", "timecode[]"):
+        return array(type_name, [float(x) for x in v])
+    if type_name in ("half", "float"):
+        # Typed, for a dictionary entry: a Python `float` is a `double`.
+        return {"half": Vt.Half, "float": Vt.Float}[type_name](float(v))
+    if type_name == "double":
         return float(v)
-    if value["type"].endswith("[]") and v and isinstance(v[0], list):
+    if type_name == "timecode":
+        return Sdf.TimeCode(float(v))
+    if type_name[:-1] in ("half", "float", "double") and type_name[-1].isdigit():
+        vec = {"half": "Vec%sh", "float": "Vec%sf", "double": "Vec%sd"}[type_name[:-1]]
+        return getattr(Gf, vec % type_name[-1])(*[float(x) for x in v])
+    if type_name in ("quath", "quatf", "quatd"):
+        quat, vec = {"quath": (Gf.Quath, Gf.Vec3h), "quatf": (Gf.Quatf, Gf.Vec3f),
+                     "quatd": (Gf.Quatd, Gf.Vec3d)}[type_name]
+        r, i, j, k = [float(x) for x in v]
+        return quat(r, vec(i, j, k))
+    if type_name == "matrix2d":
+        return Gf.Matrix2d(*[float(x) for row in v for x in row])
+    if type_name.endswith("[]") and v and isinstance(v[0], list):
         return [tuple(item) for item in v]
     return v
 
@@ -386,7 +561,7 @@ def run(steps):
             explicit(rel.targetPathList, step["targets"])
         elif op == "sample":
             attr = layer.GetAttributeAtPath(path)
-            layer.SetTimeSample(attr.path, step["time"], python_value(step["value"]))
+            layer.SetTimeSample(attr.path, float(step["time"]), python_value(step["value"]))
         elif op == "connect":
             explicit(layer.GetAttributeAtPath(path).connectionPathList, step["targets"])
         elif op == "metadata":
@@ -404,7 +579,7 @@ def run(steps):
             prim.SetInfo("apiSchemas", schemas)
         elif op in ("reference", "payload"):
             prim = layer.GetPrimAtPath(path)
-            offset = Sdf.LayerOffset(step.get("offset", 0.0))
+            offset = Sdf.LayerOffset(float(step.get("offset", 0.0)), float(step.get("scale", 1.0)))
             if op == "reference":
                 arc = Sdf.Reference(step.get("asset", ""), step["target"], offset)
                 prim.referenceList.prependedItems.append(arc)
@@ -481,6 +656,7 @@ def write(out, crate=None):
         "openusd_version": f"{minor}.{patch}",
         "cases": [{"name": name, "steps": steps, "text": run(steps)}
                   for name, steps in CASES.items()],
+        "generated": generated_texts(),
         "round_trip": {
             "usda": text.ExportToString(),
             "usdc": binary.ExportToString(),

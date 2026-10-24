@@ -946,6 +946,399 @@
     }
    ],
    "text": "#usda 1.0\n(\n    \"a layer\"\n    customLayerData = {\n        int Ab = 2\n        int aa = 3\n        int zz = 1\n    }\n    defaultPrim = \"Z\"\n    doc = \"docs\"\n    endTimeCode = 10\n    framesPerSecond = 24\n    metersPerUnit = 0.01\n    startTimeCode = 1\n    timeCodesPerSecond = 24\n    upAxis = \"Z\"\n)\n\ndef \"Z\"\n{\n    def \"z\"\n    {\n    }\n\n    def \"a\"\n    {\n    }\n\n    def \"m\"\n    {\n    }\n}\n\ndef \"A\"\n{\n}\n\n"
+  },
+  {
+   "name": "numbers",
+   "steps": [
+    {
+     "op": "prim",
+     "path": "/G",
+     "specifier": "def"
+    },
+    {
+     "op": "prim",
+     "path": "/F",
+     "specifier": "def"
+    },
+    {
+     "default": {
+      "type": "double[]",
+      "value": [
+       "0.1",
+       "3.42e-8",
+       "1e-6",
+       "1.5e-6",
+       "1e-7",
+       "1e15",
+       "999999999999999",
+       "1e16",
+       "1e21",
+       "1e300",
+       "5e-324",
+       "-0",
+       "0",
+       "1",
+       "-2.5",
+       "123456789012345678",
+       "1.7976931348623157e308",
+       "2.2250738585072014e-308",
+       "inf",
+       "-inf",
+       "nan"
+      ]
+     },
+     "op": "attribute",
+     "path": "/F.d",
+     "type": "double[]"
+    },
+    {
+     "default": {
+      "type": "float[]",
+      "value": [
+       "0.1",
+       "1e-7",
+       "1e-6",
+       "1e15",
+       "1e14",
+       "123456789",
+       "16777217",
+       "-0",
+       "1",
+       "3.4e38",
+       "1e-45",
+       "1.1754944e-38",
+       "0.3",
+       "inf",
+       "-inf",
+       "nan"
+      ]
+     },
+     "op": "attribute",
+     "path": "/F.f",
+     "type": "float[]"
+    },
+    {
+     "default": {
+      "type": "half[]",
+      "value": [
+       "0.1",
+       "1e-5",
+       "6e-8",
+       "65504",
+       "-0",
+       "1",
+       "0.0001",
+       "0.00009",
+       "2049",
+       "0.333",
+       "1000.5",
+       "inf",
+       "-inf",
+       "nan"
+      ]
+     },
+     "op": "attribute",
+     "path": "/F.h",
+     "type": "half[]"
+    },
+    {
+     "default": {
+      "type": "timecode[]",
+      "value": [
+       "1e-7",
+       "1234560",
+       "0.0001",
+       "0.00001",
+       "2.5",
+       "-0",
+       "1e-10",
+       "100000",
+       "1e20",
+       "inf",
+       "-inf",
+       "nan"
+      ]
+     },
+     "op": "attribute",
+     "path": "/F.t",
+     "type": "timecode[]"
+    },
+    {
+     "default": {
+      "type": "half",
+      "value": "0.1"
+     },
+     "op": "attribute",
+     "path": "/F.one",
+     "type": "half"
+    },
+    {
+     "default": {
+      "type": "timecode",
+      "value": "1e-7"
+     },
+     "op": "attribute",
+     "path": "/F.time",
+     "type": "timecode"
+    },
+    {
+     "op": "sample",
+     "path": "/F.time",
+     "time": "2",
+     "value": {
+      "type": "timecode",
+      "value": "0.00001"
+     }
+    },
+    {
+     "default": {
+      "type": "half3",
+      "value": [
+       "0.1",
+       "1e-5",
+       "-0"
+      ]
+     },
+     "op": "attribute",
+     "path": "/F.vh",
+     "type": "half3"
+    },
+    {
+     "default": {
+      "type": "float3",
+      "value": [
+       "0.1",
+       "1e-7",
+       "1e15"
+      ]
+     },
+     "op": "attribute",
+     "path": "/F.vf",
+     "type": "float3"
+    },
+    {
+     "default": {
+      "type": "double4",
+      "value": [
+       "1e-7",
+       "1e15",
+       "-0",
+       "0.000001"
+      ]
+     },
+     "op": "attribute",
+     "path": "/F.vd",
+     "type": "double4"
+    },
+    {
+     "default": {
+      "type": "quath",
+      "value": [
+       "0.1",
+       "0.2",
+       "0.3",
+       "0.4"
+      ]
+     },
+     "op": "attribute",
+     "path": "/F.qh",
+     "type": "quath"
+    },
+    {
+     "default": {
+      "type": "quatf",
+      "value": [
+       "0.1",
+       "1e-7",
+       "0.3",
+       "0.4"
+      ]
+     },
+     "op": "attribute",
+     "path": "/F.qf",
+     "type": "quatf"
+    },
+    {
+     "default": {
+      "type": "quatd",
+      "value": [
+       "1",
+       "3.42e-8",
+       "-0",
+       "1e16"
+      ]
+     },
+     "op": "attribute",
+     "path": "/F.qd",
+     "type": "quatd"
+    },
+    {
+     "default": {
+      "type": "matrix2d",
+      "value": [
+       [
+        "1e-7",
+        "0.1"
+       ],
+       [
+        "1e20",
+        "-0"
+       ]
+      ]
+     },
+     "op": "attribute",
+     "path": "/F.m",
+     "type": "matrix2d"
+    },
+    {
+     "default": {
+      "type": "double",
+      "value": "0.1"
+     },
+     "op": "attribute",
+     "path": "/F.s",
+     "type": "double"
+    },
+    {
+     "op": "sample",
+     "path": "/F.s",
+     "time": "1e20",
+     "value": {
+      "type": "double",
+      "value": "3.42e-8"
+     }
+    },
+    {
+     "op": "sample",
+     "path": "/F.s",
+     "time": "1.2345678",
+     "value": {
+      "type": "double",
+      "value": "1e15"
+     }
+    },
+    {
+     "op": "sample",
+     "path": "/F.s",
+     "time": "1e-7",
+     "value": {
+      "type": "double",
+      "value": "-0"
+     }
+    },
+    {
+     "op": "sample",
+     "path": "/F.s",
+     "time": "-0",
+     "value": {
+      "type": "double",
+      "value": "1e-7"
+     }
+    },
+    {
+     "offset": "1e-7",
+     "op": "reference",
+     "path": "/F",
+     "scale": "1.2345678e20",
+     "target": "/G"
+    },
+    {
+     "key": "startTimeCode",
+     "op": "metadata",
+     "path": "/",
+     "value": {
+      "type": "double",
+      "value": "1e-7"
+     }
+    },
+    {
+     "key": "endTimeCode",
+     "op": "metadata",
+     "path": "/",
+     "value": {
+      "type": "double",
+      "value": "1e15"
+     }
+    },
+    {
+     "key": "customData",
+     "op": "metadata",
+     "path": "/F",
+     "value": {
+      "type": "dictionary",
+      "value": {
+       "d": {
+        "type": "double",
+        "value": "3.42e-8"
+       },
+       "f": {
+        "type": "float",
+        "value": "1e-7"
+       },
+       "h": {
+        "type": "half",
+        "value": "0.1"
+       },
+       "hs": {
+        "type": "half[]",
+        "value": [
+         "1e-5",
+         "0.1"
+        ]
+       },
+       "t": {
+        "type": "timecode",
+        "value": "1e-7"
+       },
+       "ts": {
+        "type": "timecode[]",
+        "value": [
+         "1e6"
+        ]
+       }
+      }
+     }
+    }
+   ],
+   "text": "#usda 1.0\n(\n    endTimeCode = 1e15\n    startTimeCode = 1e-7\n)\n\ndef \"G\"\n{\n}\n\ndef \"F\" (\n    customData = {\n        double d = 3.42e-8\n        float f = 1e-7\n        half h = 0.0999756\n        half[] hs = [1.00136e-05, 0.0999756]\n        timecode t = 1e-07\n        timecode[] ts = [1e+06]\n    }\n    prepend references = </G> (offset = 1e-7; scale = 1.2345678e20)\n)\n{\n    double[] d = [0.1, 3.42e-8, 0.000001, 0.0000015, 1e-7, 1e15, 999999999999999, 1e16, 1e21, 1e300, 5e-324, -0, 0, 1, -2.5, 1.2345678901234568e17, 1.7976931348623157e308, 2.2250738585072014e-308, inf, -inf, nan]\n    float[] f = [0.1, 1e-7, 0.000001, 1e15, 100000000000000, 123456790, 16777216, -0, 1, 3.4e38, 1e-45, 1.1754944e-38, 0.3, inf, -inf, nan]\n    half[] h = [0.0999756, 1.00136e-05, 5.96046e-08, 65504, -0, 1, 0.000100017, 9.0003e-05, 2048, 0.333008, 1000.5, inf, -inf, nan]\n    matrix2d m = ( (1e-7, 0.1), (1e20, -0) )\n    half one = 0.0999756\n    quatd qd = (1, 3.42e-8, -0, 1e16)\n    quatf qf = (0.1, 1e-7, 0.3, 0.4)\n    quath qh = (0.0999756, 0.199951, 0.300049, 0.399902)\n    double s = 0.1\n    double s.timeSamples = {\n        -0: 1e-7,\n        1e-7: -0,\n        1.2345678: 1e15,\n        1e20: 3.42e-8,\n    }\n    timecode[] t = [1e-07, 1.23456e+06, 0.0001, 1e-05, 2.5, -0, 1e-10, 100000, 1e+20, inf, -inf, nan]\n    timecode time = 1e-07\n    timecode time.timeSamples = {\n        2: 1e-05,\n    }\n    double4 vd = (1e-7, 1e15, -0, 0.000001)\n    float3 vf = (0.1, 1e-7, 1e15)\n    half3 vh = (0.0999756, 1.00136e-05, -0)\n}\n\n"
+  }
+ ],
+ "generated": [
+  {
+   "count": 63490,
+   "fnv1a64": "49f4f9c65fb5a286",
+   "name": "every half",
+   "type": "half[]"
+  },
+  {
+   "count": 100000,
+   "fnv1a64": "4da8dc5bf3ccc1fc",
+   "name": "float bits",
+   "type": "float[]"
+  },
+  {
+   "count": 100000,
+   "fnv1a64": "8ba08f7811be1a05",
+   "name": "double bits",
+   "type": "double[]"
+  },
+  {
+   "count": 100000,
+   "fnv1a64": "020a132bf19bce39",
+   "name": "decimal floats",
+   "type": "float[]"
+  },
+  {
+   "count": 100000,
+   "fnv1a64": "4121670b8577c9cc",
+   "name": "decimal doubles",
+   "type": "double[]"
+  },
+  {
+   "count": 100000,
+   "fnv1a64": "4be0181eeb20112f",
+   "name": "decimal time codes",
+   "type": "timecode[]"
   }
  ],
  "openusd_version": "26.8",

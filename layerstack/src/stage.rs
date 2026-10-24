@@ -62,6 +62,7 @@ use hashbrown::{HashMap, HashSet};
 
 use invalidation::InvalidationGraph;
 
+pub(crate) use crate::ident::dictionary_cmp;
 use crate::variant_fallbacks::VariantFallbacks;
 use crate::{
     composition_error::{CompositionError, order_errors},
@@ -3993,52 +3994,6 @@ pub fn apply_property_order(order: &[TokenId], names: &mut [TokenId]) {
 /// ([`dictionary_cmp`]).
 fn sort_property_names(names: &mut [TokenId], tokens: &crate::interner::TokenInterner) {
     names.sort_by(|a, b| dictionary_cmp(tokens.resolve(*a), tokens.resolve(*b)));
-}
-
-/// Orders names as OpenUSD's `TfDictionaryLessThan`
-/// (`pxr/base/tf/stringUtils.h`) does for the ASCII names of properties:
-/// letters ignoring case, `_` before letters, runs of digits by value, and
-/// ties by bytes.
-pub(crate) fn dictionary_cmp(a: &str, b: &str) -> core::cmp::Ordering {
-    use core::cmp::Ordering;
-    let (x, y) = (a.as_bytes(), b.as_bytes());
-    /// The end of the run of digits at `start`, and its digits without
-    /// leading zeros.
-    fn digits(s: &[u8], start: usize) -> (usize, &[u8]) {
-        let end = s[start..]
-            .iter()
-            .position(|c| !c.is_ascii_digit())
-            .map_or(s.len(), |n| start + n);
-        let zeros = s[start..end].iter().take_while(|&&c| c == b'0').count();
-        (end, &s[start + zeros..end])
-    }
-    let (mut i, mut j) = (0, 0);
-    while i < x.len() && j < y.len() {
-        let (l, r) = (x[i], y[j]);
-        if l.is_ascii_digit() && r.is_ascii_digit() {
-            let (x_end, x_run) = digits(x, i);
-            let (y_end, y_run) = digits(y, j);
-            let order = x_run.len().cmp(&y_run.len()).then_with(|| x_run.cmp(y_run));
-            if order != Ordering::Equal {
-                return order;
-            }
-            (i, j) = (x_end, y_end);
-            continue;
-        }
-        if l != r {
-            let letter_zone = (0x40..0x80).contains(&l) && (0x40..0x80).contains(&r);
-            if letter_zone && (l & !0x20) != (r & !0x20) {
-                // `(c + 5) & 31` puts `_` before every letter.
-                return (l.wrapping_add(5) & 31).cmp(&(r.wrapping_add(5) & 31));
-            }
-            if !(l.is_ascii_alphabetic() && r.is_ascii_alphabetic()) {
-                return l.cmp(&r);
-            }
-        }
-        i += 1;
-        j += 1;
-    }
-    (x.len() - i).cmp(&(y.len() - j)).then_with(|| a.cmp(b))
 }
 
 /// An iterator for deterministic preorder stage traversal.

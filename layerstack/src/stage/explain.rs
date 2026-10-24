@@ -823,6 +823,7 @@ impl Stage {
                 Some(_) => source.unwrap_or(ValueSource::Fallback),
                 None => ValueSource::None,
             };
+            roles.record_blocks(time);
             return roles.finish(fold.value, source, seeded);
         }
 
@@ -857,6 +858,7 @@ impl Stage {
             return roles.finish(None, ValueSource::None, false);
         };
         roles.apply_strongest_wins(reads, value.is_none());
+        roles.record_blocks(time);
         let source = if value.is_none() {
             ValueSource::None
         } else if let Some((lower, upper)) = opinions
@@ -1168,6 +1170,38 @@ impl<'s> Roles<'s> {
         for event in &report.events {
             let (position, role) = chain_role(event);
             self.roles[position] = Some(role);
+        }
+    }
+
+    /// Records, for each block in effect that holds a sampled block at stage
+    /// time `time`, that sample, so the explanation says where the block is
+    /// held (OpenUSD's resolve info names its time samples and marks the
+    /// value blocked). A default block offers no sample.
+    ///
+    /// Spec: AOUSD Core §12.3.6 (individual time samples can be blocked).
+    fn record_blocks(&mut self, time: f64) {
+        for position in 0..self.opinions.len() {
+            if !matches!(self.roles[position], Some(OpinionRole::Block))
+                || !self.samples[position].is_empty()
+            {
+                continue;
+            }
+            let opinion = &self.opinions[position];
+            let Some(samples) = opinion.value.time_samples().filter(|s| !s.is_empty()) else {
+                continue;
+            };
+            let offset = opinion.layer_offset;
+            let Some((held, _)) =
+                sample_bracket(samples, offset.map_time(time), InterpolationType::Held)
+            else {
+                continue;
+            };
+            if matches!(samples[held].1, Value::Blocked) {
+                self.samples[position].push(SampleUse {
+                    time: samples[held].0 * offset.scale + offset.offset,
+                    role: OpinionRole::Block,
+                });
+            }
         }
     }
 

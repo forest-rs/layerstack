@@ -10,37 +10,6 @@ use alloc::{
 use core::ops::Deref;
 use hashbrown::{HashMap, HashSet};
 
-/// Most composed prims consult one layer. Keep that builder case inline,
-/// promoting only when another contributor is discovered.
-#[derive(Debug)]
-pub(crate) enum MutableLayerSet {
-    One(LayerId),
-    Many(Vec<LayerId>),
-}
-impl MutableLayerSet {
-    fn as_slice(&self) -> &[LayerId] {
-        match self {
-            Self::One(layer) => core::slice::from_ref(layer),
-            Self::Many(layers) => layers,
-        }
-    }
-    pub(crate) fn add(&mut self, layer: LayerId) {
-        match self {
-            Self::One(old) if *old == layer => {}
-            Self::One(old) => {
-                let mut layers = alloc::vec![*old, layer];
-                layers.sort_unstable();
-                *self = Self::Many(layers);
-            }
-            Self::Many(layers) => {
-                if let Err(at) = layers.binary_search(&layer) {
-                    layers.insert(at, layer);
-                }
-            }
-        }
-    }
-}
-
 /// Physical sharing of retained prim-to-layer contributor sets.
 /// Counts exclude reverse indexes, arc topology, cache keys and allocator overhead.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -75,15 +44,18 @@ impl Deref for LayerSets {
     }
 }
 impl LayerSets {
-    pub(crate) fn from_mutable(sets: HashMap<PathId, MutableLayerSet>) -> Self {
-        let mut result = Self {
-            by_prim: HashMap::with_capacity(sets.len()),
+    /// No sets, with room for `prims` prims'.
+    pub(crate) fn with_capacity(prims: usize) -> Self {
+        Self {
+            by_prim: HashMap::with_capacity(prims),
             interned: HashMap::new(),
-        };
-        for (prim, layers) in sets {
-            result.set(prim, layers.as_slice(), None);
         }
-        result
+    }
+
+    /// Sets the layers of `prim` to `layers`, sorted and each once,
+    /// sharing the storage of an equal set.
+    pub(crate) fn insert(&mut self, prim: PathId, layers: &[LayerId]) {
+        self.set(prim, layers, None);
     }
     fn prune(&mut self) {
         if self.interned.len() > self.by_prim.len().saturating_mul(2).max(16) {

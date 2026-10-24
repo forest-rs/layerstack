@@ -302,6 +302,58 @@ where
     pool_in(threads, Job::Offering(work), body)
 }
 
+/// Runs `a` on the calling thread and, at the same time, `b` on a thread
+/// the budget `threads` spares, and returns both results. With no thread
+/// to spare, or without the `std` feature, `b` runs after `a` on the
+/// calling thread. `b` holds its thread until it returns, so work either
+/// runs on the same budget ([`with_pool_in`], another `join`) takes the
+/// threads left.
+///
+/// For independent work, whose results do not depend on the thread that
+/// does it.
+///
+/// ```
+/// use layerstack::parallel::{Threads, join};
+///
+/// let threads = Threads::new(2);
+/// let (evens, odds) = join(
+///     &threads,
+///     || (0..10u32).filter(|n| n % 2 == 0).sum::<u32>(),
+///     || (0..10u32).filter(|n| n % 2 == 1).sum::<u32>(),
+/// );
+/// assert_eq!((evens, odds), (20, 25));
+/// assert_eq!(threads.spare(), 1);
+/// ```
+pub fn join<A, B>(threads: &Threads, a: impl FnOnce() -> A, b: impl FnOnce() -> B + Send) -> (A, B)
+where
+    B: Send,
+{
+    #[cfg(feature = "std")]
+    if threads.claim() {
+        // Taken by whichever thread runs it: the one started for it, or
+        // this one where threads cannot start (as on `wasm32-wasip1`).
+        let task = std::sync::Mutex::new(Some(b));
+        let run = || lock(&task).take().map(|b| b());
+        let out = std::thread::scope(|scope| {
+            let started = std::thread::Builder::new().spawn_scoped(scope, run);
+            let a = a();
+            let b = match started {
+                Ok(handle) => handle
+                    .join()
+                    .unwrap_or_else(|panic| std::panic::resume_unwind(panic)),
+                Err(_) => None,
+            };
+            (a, b)
+        });
+        threads.give_back();
+        let (a, b) = out;
+        let b = b.or_else(run).expect("the second task runs once");
+        return (a, b);
+    }
+    let _ = threads;
+    (a(), b())
+}
+
 fn pool_in<T, R, B>(
     threads: &Threads,
     work: Job<'_, T, R>,
@@ -814,6 +866,42 @@ mod tests {
         let ran = with_pool_in(&threads, &outer, |pool| pool.run(alloc::vec![0]));
         let overlapped: Vec<_> = ran.into_iter().flatten().flatten().collect();
         assert_eq!(overlapped, [true, true]);
+    }
+
+    /// The two halves of a join run at once on a thread the budget spares,
+    /// which they give back, and one after the other on one thread.
+    #[cfg(feature = "std")]
+    #[test]
+    #[cfg_attr(target_os = "wasi", ignore = "WASI runs tests without threads")]
+    fn join_runs_both_halves_at_once_on_a_spare_thread() {
+        for limit in [1, 2] {
+            let started = core::sync::atomic::AtomicBool::new(false);
+            let threads = Threads::new(limit);
+            let (overlapped, ran) = join(
+                &threads,
+                || {
+                    if limit == 1 {
+                        return started.load(Ordering::SeqCst);
+                    }
+                    // Waits, for a long while at most, for the other half.
+                    let start = std::time::Instant::now();
+                    while !started.load(Ordering::SeqCst) {
+                        if start.elapsed() > std::time::Duration::from_secs(10) {
+                            return false;
+                        }
+                        core::hint::spin_loop();
+                    }
+                    true
+                },
+                || {
+                    started.store(true, Ordering::SeqCst);
+                    threads.spare()
+                },
+            );
+            assert_eq!(overlapped, limit == 2, "{limit} threads");
+            assert_eq!(ran, 0, "the second half holds the spare thread");
+            assert_eq!(threads.spare(), limit - 1);
+        }
     }
 
     /// A task offered while the task that added it runs starts before that

@@ -15,12 +15,18 @@
 use alloc::vec::Vec;
 mod layer_sets;
 pub use layer_sets::LayerDependencyStorage;
-pub(crate) use layer_sets::{LayerSets, MutableLayerSet};
+pub(crate) use layer_sets::LayerSets;
 
 use hashbrown::{HashMap, HashSet};
 use invalidation::{CycleHandling, InvalidationGraph};
 
-use crate::{doc::LayerId, expression_variables::VariableReads, path::PathId, prim_index::ArcKind};
+use crate::{
+    doc::LayerId,
+    expression_variables::VariableReads,
+    parallel::{Threads, join},
+    path::PathId,
+    prim_index::ArcKind,
+};
 
 use crate::live_stage::OPINION_EDIT;
 
@@ -74,28 +80,89 @@ impl CompositionDeps {
     }
 }
 
+/// What one composed prim depends on, as composition records it on the
+/// thread that indexes the prim.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct PrimDependencies {
+    /// The layers that contribute opinions to the prim, or author a
+    /// reference or payload that reaches it, sorted, each once.
+    pub(crate) layers: Vec<LayerId>,
+    /// The layers whose `defaultPrim` composing the prim consulted.
+    pub(crate) default_prim_layers: Vec<LayerId>,
+    /// The arcs the prim receives opinions through: the site prim each
+    /// reads (or the arc target, for inherits), its kind, and the root
+    /// layer of the stack it reads; each once.
+    pub(crate) arcs: Vec<(PathId, ArcKind, LayerId)>,
+}
+
+impl PrimDependencies {
+    /// Lists each arc once, in no particular order.
+    pub(crate) fn dedup_arcs(&mut self) {
+        self.arcs
+            .sort_unstable_by_key(|&(source, kind, layer)| (source, kind as u8, layer));
+        self.arcs.dedup();
+    }
+}
+
+/// The fewest prims whose dependency maps are built on threads
+/// ([`DependencyBuilder::from_prims`]): about a millisecond of work.
+const THREADED_BUILD_PRIMS: usize = 1024;
+
 /// Builder for composition dependency data, used during composition.
 ///
-/// Writes arc dependencies directly into an [`InvalidationGraph`] and
-/// records metadata and layer-opinion edges for queries.
+/// Builds the arc dependencies of every composed prim into an
+/// [`InvalidationGraph`], and records their metadata and the layer-opinion
+/// edges for queries.
 pub(crate) struct DependencyBuilder {
     graph: InvalidationGraph<PathId>,
     arc_set: HashSet<ArcDependency>,
     layer_to_prims: HashMap<LayerId, HashSet<PathId>>,
-    prim_to_layers: HashMap<PathId, MutableLayerSet>,
+    prim_to_layers: LayerSets,
     default_prim_dependents: HashMap<LayerId, HashSet<PathId>>,
     relocation_layers: HashSet<LayerId>,
     expression_variables: VariableReads,
 }
 
 impl DependencyBuilder {
-    pub(crate) fn new() -> Self {
+    /// The dependencies `prims` record, each composed prim's under its
+    /// path.
+    ///
+    /// The graph, the arc metadata and the two layer maps are built from
+    /// them apart, each by one pass over `prims`, at once on as many of
+    /// `threads` as the budget spares: each is the same whichever thread
+    /// builds it, and the graph is built in the order `prims` iterates in,
+    /// as adding the arcs one by one would. For a few prims, as a live edit
+    /// recomposes, they are built in turn: starting a thread costs more.
+    pub(crate) fn from_prims(prims: &HashMap<PathId, PrimDependencies>, threads: &Threads) -> Self {
+        let one = Threads::new(1);
+        let threads = if prims.len() >= THREADED_BUILD_PRIMS {
+            threads
+        } else {
+            &one
+        };
+        let ((graph, arc_set), ((layer_to_prims, default_prim_dependents), prim_to_layers)) = join(
+            threads,
+            || join(threads, || arc_graph(prims), || arc_set(prims)),
+            || {
+                join(
+                    threads,
+                    || layer_prims(prims),
+                    || {
+                        let mut sets = LayerSets::with_capacity(prims.len());
+                        for (&prim, record) in prims {
+                            sets.insert(prim, &record.layers);
+                        }
+                        sets
+                    },
+                )
+            },
+        );
         Self {
-            graph: InvalidationGraph::new(),
-            arc_set: HashSet::new(),
-            layer_to_prims: HashMap::new(),
-            prim_to_layers: HashMap::new(),
-            default_prim_dependents: HashMap::new(),
+            graph,
+            arc_set,
+            layer_to_prims,
+            prim_to_layers,
+            default_prim_dependents,
             relocation_layers: HashSet::new(),
             expression_variables: VariableReads::default(),
         }
@@ -118,115 +185,13 @@ impl DependencyBuilder {
         self.relocation_layers.extend(layers);
     }
 
-    /// Records an arc dependency edge.
-    ///
-    /// Writes both the graph edge (target depends on source) and the
-    /// diagnostic metadata.
-    pub(crate) fn add_arc(&mut self, dep: ArcDependency) {
-        if self.arc_set.insert(dep) {
-            // The edge closes a cycle only along a path from `source` to
-            // `target`: when `source` depends on nothing yet, or nothing
-            // depends on `target`, there is none, and the search for one,
-            // a walk of everything `source` depends on, is skipped. A
-            // self-dependency is ignored either way.
-            let handling = if self.graph.has_dependencies(dep.source, OPINION_EDIT)
-                && self.graph.has_dependents(dep.target, OPINION_EDIT)
-            {
-                CycleHandling::Ignore
-            } else {
-                CycleHandling::Allow
-            };
-            // target depends on source: if source changes, target needs recomposition.
-            let _ = self
-                .graph
-                .add_dependency(dep.target, dep.source, OPINION_EDIT, handling);
-        }
-    }
-
-    /// Records layer-opinion dependency edges: `prim` receives opinions
-    /// from each of `layers`, or is reached by a reference or payload one
-    /// authors. `layers` is sorted, without repeats.
-    pub(crate) fn add_layer_opinions(&mut self, prim: PathId, layers: &[LayerId]) {
-        debug_assert!(layers.is_sorted_by(|a, b| a < b), "sorted and unique");
-        for &layer in layers {
-            self.layer_to_prims.entry(layer).or_default().insert(prim);
-        }
-        match self.prim_to_layers.entry(prim) {
-            hashbrown::hash_map::Entry::Occupied(mut set) => {
-                for &layer in layers {
-                    set.get_mut().add(layer);
-                }
-            }
-            hashbrown::hash_map::Entry::Vacant(slot) => match layers {
-                [] => {}
-                [layer] => {
-                    slot.insert(MutableLayerSet::One(*layer));
-                }
-                _ => {
-                    slot.insert(MutableLayerSet::Many(layers.to_vec()));
-                }
-            },
-        }
-    }
-
-    /// Makes room for `additional` more arc edges.
-    pub(crate) fn reserve_arcs(&mut self, additional: usize) {
-        self.arc_set.reserve(additional);
-    }
-
-    /// Records that composing `prim` consulted the `defaultPrim` of `layer`,
-    /// whether or not it resolved.
-    ///
-    /// Changing that `defaultPrim` retargets the arc, so `prim` must be
-    /// recomposed (OpenUSD treats the change as a resync, see
-    /// `PcpChanges::DidChange` in `pxr/usd/pcp/changes.cpp`).
-    pub(crate) fn add_default_prim_dependency(&mut self, layer: LayerId, prim: PathId) {
-        self.default_prim_dependents
-            .entry(layer)
-            .or_default()
-            .insert(prim);
-    }
-
-    /// Drops every recorded dependency whose dependent prim is not in `prims`.
-    ///
-    /// Composition records dependencies while expanding arcs, before variant
-    /// pruning and spec-less prim removal decide the final prim set. A
-    /// dependency on a prim that is not composed would make invalidation
-    /// target a path that does not exist.
-    pub(crate) fn retain_prims<V>(&mut self, prims: &HashMap<PathId, V>) {
-        let dropped: Vec<ArcDependency> = self
-            .arc_set
-            .iter()
-            .filter(|dep| !prims.contains_key(&dep.target))
-            .copied()
-            .collect();
-        for dep in dropped {
-            self.arc_set.remove(&dep);
-            let _ = self
-                .graph
-                .remove_dependency(dep.target, dep.source, OPINION_EDIT);
-        }
-        for layer_prims in self.layer_to_prims.values_mut() {
-            layer_prims.retain(|prim| prims.contains_key(prim));
-        }
-        self.layer_to_prims
-            .retain(|_, layer_prims| !layer_prims.is_empty());
-        self.prim_to_layers
-            .retain(|prim, _| prims.contains_key(prim));
-        for dependents in self.default_prim_dependents.values_mut() {
-            dependents.retain(|prim| prims.contains_key(prim));
-        }
-        self.default_prim_dependents
-            .retain(|_, dependents| !dependents.is_empty());
-    }
-
     /// Consumes the builder and produces [`CompositionDeps`].
     pub(crate) fn finish(self) -> CompositionDeps {
         CompositionDeps {
             graph: self.graph,
             arcs: self.arc_set,
             layer_to_prims: self.layer_to_prims,
-            prim_to_layers: LayerSets::from_mutable(self.prim_to_layers),
+            prim_to_layers: self.prim_to_layers,
             default_prim_dependents: self.default_prim_dependents,
             relocation_layers: self.relocation_layers,
             expression_variables: self.expression_variables,
@@ -234,63 +199,206 @@ impl DependencyBuilder {
     }
 }
 
+/// The arcs of `prims` as dependency edges: each prim depends on the
+/// sites it reads, in `OPINION_EDIT`.
+fn arc_graph(prims: &HashMap<PathId, PrimDependencies>) -> InvalidationGraph<PathId> {
+    let mut graph = InvalidationGraph::new();
+    for (&target, record) in prims {
+        for &(source, _, _) in &record.arcs {
+            add_edge(&mut graph, target, source);
+        }
+    }
+    graph
+}
+
+/// Adds the edge `target` depends on `source`, unless it closes a cycle:
+/// if `source` changes, `target` needs recomposition.
+fn add_edge(graph: &mut InvalidationGraph<PathId>, target: PathId, source: PathId) {
+    // The edge closes a cycle only along a path from `source` to `target`:
+    // when `source` depends on nothing yet, or nothing depends on `target`,
+    // there is none, and the search for one, a walk of everything `source`
+    // depends on, is skipped. A self-dependency is ignored either way.
+    let handling = if graph.has_dependencies(source, OPINION_EDIT)
+        && graph.has_dependents(target, OPINION_EDIT)
+    {
+        CycleHandling::Ignore
+    } else {
+        CycleHandling::Allow
+    };
+    let _ = graph.add_dependency(target, source, OPINION_EDIT, handling);
+}
+
+/// The arcs of `prims`, for diagnostic queries.
+fn arc_set(prims: &HashMap<PathId, PrimDependencies>) -> HashSet<ArcDependency> {
+    let mut arcs = HashSet::with_capacity(prims.values().map(|record| record.arcs.len()).sum());
+    for (&target, record) in prims {
+        arcs.extend(
+            record
+                .arcs
+                .iter()
+                .map(|&(source, arc_kind, layer)| ArcDependency {
+                    source,
+                    target,
+                    arc_kind,
+                    layer,
+                }),
+        );
+    }
+    arcs
+}
+
+/// The prims of `prims` each layer contributes to, and those whose
+/// composition consulted each layer's `defaultPrim`.
+fn layer_prims(prims: &HashMap<PathId, PrimDependencies>) -> (PrimsByLayer, PrimsByLayer) {
+    // Each layer's set is sized once, rather than rehashed as it grows.
+    let mut counts: HashMap<LayerId, usize> = HashMap::new();
+    for record in prims.values() {
+        for &layer in &record.layers {
+            *counts.entry(layer).or_default() += 1;
+        }
+    }
+    let mut layer_to_prims: PrimsByLayer = counts
+        .into_iter()
+        .map(|(layer, count)| (layer, HashSet::with_capacity(count)))
+        .collect();
+    let mut default_prim_dependents: PrimsByLayer = HashMap::new();
+    for (&prim, record) in prims {
+        for layer in &record.layers {
+            if let Some(set) = layer_to_prims.get_mut(layer) {
+                set.insert(prim);
+            }
+        }
+        for &layer in &record.default_prim_layers {
+            default_prim_dependents
+                .entry(layer)
+                .or_default()
+                .insert(prim);
+        }
+    }
+    (layer_to_prims, default_prim_dependents)
+}
+
+/// Prims by a layer they depend on.
+type PrimsByLayer = HashMap<LayerId, HashSet<PathId>>;
+
 #[cfg(test)]
 mod tests {
-    use alloc::vec::Vec;
+    use alloc::{sync::Arc, vec::Vec};
 
     use super::*;
 
     #[test]
-    fn builder_deduplicates_arcs() {
-        let mut builder = DependencyBuilder::new();
-        let dep = ArcDependency {
-            source: PathId::from_raw(1),
-            target: PathId::from_raw(2),
-            arc_kind: ArcKind::References,
-            layer: LayerId(10),
+    fn a_prims_arcs_are_listed_once() {
+        let arc = (PathId::from_raw(1), ArcKind::References, LayerId(10));
+        let mut record = PrimDependencies {
+            arcs: alloc::vec![
+                arc,
+                (PathId::from_raw(3), ArcKind::Inherits, LayerId(10)),
+                arc
+            ],
+            ..PrimDependencies::default()
         };
-        builder.add_arc(dep);
-        builder.add_arc(dep);
-        let deps = builder.finish();
-        assert_eq!(deps.arcs.len(), 1, "duplicate arcs should be deduplicated");
+        record.dedup_arcs();
+        let prims = HashMap::from([(PathId::from_raw(2), record)]);
+        let deps = DependencyBuilder::from_prims(&prims, &Threads::new(1)).finish();
+        assert_eq!(deps.arcs.len(), 2, "each arc once");
     }
 
     #[test]
-    fn builder_deduplicates_layer_opinions() {
-        let mut builder = DependencyBuilder::new();
-        builder.add_layer_opinions(PathId::from_raw(5), &[LayerId(1)]);
-        builder.add_layer_opinions(PathId::from_raw(5), &[LayerId(1), LayerId(2)]);
-        let deps = builder.finish();
+    fn layer_maps_list_each_prims_layers() {
+        let record = |layers: &[u64], default_prims: &[u64]| PrimDependencies {
+            layers: layers.iter().map(|&id| LayerId(id)).collect(),
+            default_prim_layers: default_prims.iter().map(|&id| LayerId(id)).collect(),
+            arcs: Vec::new(),
+        };
+        let prims = HashMap::from([
+            (PathId::from_raw(5), record(&[1, 2], &[])),
+            (PathId::from_raw(6), record(&[1, 2], &[3])),
+            (PathId::from_raw(7), record(&[2], &[])),
+        ]);
+        let deps = DependencyBuilder::from_prims(&prims, &Threads::new(1)).finish();
+        let prims_of = |layer| {
+            let mut prims: Vec<u32> = deps.layer_to_prims[&LayerId(layer)]
+                .iter()
+                .map(|prim| prim.get())
+                .collect();
+            prims.sort_unstable();
+            prims
+        };
+        assert_eq!(prims_of(1), [5, 6]);
+        assert_eq!(prims_of(2), [5, 6, 7]);
         assert_eq!(
-            deps.layer_to_prims.get(&LayerId(1)).unwrap().len(),
-            1,
-            "duplicate layer opinions should be deduplicated"
-        );
-        assert_eq!(
-            **deps.prim_to_layers.get(&PathId::from_raw(5)).unwrap(),
+            **deps.prim_to_layers.get(&PathId::from_raw(6)).unwrap(),
             [LayerId(1), LayerId(2)]
         );
+        // Equal sets share storage.
+        assert!(Arc::ptr_eq(
+            &deps.prim_to_layers[&PathId::from_raw(5)],
+            &deps.prim_to_layers[&PathId::from_raw(6)]
+        ));
+        assert_eq!(
+            deps.default_prim_dependents[&LayerId(3)],
+            HashSet::from([PathId::from_raw(6)])
+        );
+    }
+
+    /// The dependencies built on any number of threads are the ones built
+    /// on one.
+    #[test]
+    fn dependencies_are_the_same_on_any_number_of_threads() {
+        let prims: HashMap<PathId, PrimDependencies> = (0..200_u32)
+            .map(|at| {
+                let layer = u64::from(at);
+                let record = PrimDependencies {
+                    layers: alloc::vec![LayerId(layer % 7), LayerId(10 + layer % 3)],
+                    default_prim_layers: alloc::vec![LayerId(layer % 5)],
+                    arcs: alloc::vec![
+                        (PathId::from_raw(at / 2), ArcKind::References, LayerId(1)),
+                        (PathId::from_raw(at + 1), ArcKind::Inherits, LayerId(2)),
+                    ],
+                };
+                (PathId::from_raw(at), record)
+            })
+            .collect();
+        let edges = |deps: &CompositionDeps| {
+            let mut edges: Vec<(u32, u32)> = deps
+                .graph
+                .edges(OPINION_EDIT)
+                .map(|(from, to)| (from.get(), to.get()))
+                .collect();
+            edges.sort_unstable();
+            edges
+        };
+        let one = DependencyBuilder::from_prims(&prims, &Threads::new(1)).finish();
+        for threads in [2, 4] {
+            let many = DependencyBuilder::from_prims(&prims, &Threads::new(threads)).finish();
+            assert_eq!(edges(&many), edges(&one));
+            assert_eq!(many.arcs, one.arcs);
+            assert_eq!(many.layer_to_prims, one.layer_to_prims);
+            assert_eq!(many.prim_to_layers, one.prim_to_layers);
+            assert_eq!(many.default_prim_dependents, one.default_prim_dependents);
+        }
     }
 
     #[test]
     fn an_arc_closing_a_cycle_is_ignored_wherever_it_is_added() {
-        let arc = |source, target| ArcDependency {
-            source: PathId::from_raw(source),
-            target: PathId::from_raw(target),
-            arc_kind: ArcKind::References,
-            layer: LayerId(1),
+        let mut graph = InvalidationGraph::new();
+        let mut add = |source, target| {
+            add_edge(
+                &mut graph,
+                PathId::from_raw(target),
+                PathId::from_raw(source),
+            );
         };
-        let mut builder = DependencyBuilder::new();
         // 2 depends on 1, 3 on 2: nothing to search for yet.
-        builder.add_arc(arc(1, 2));
-        builder.add_arc(arc(2, 3));
+        add(1, 2);
+        add(2, 3);
         // 1 depending on 3 would close 1 -> 3 -> 2 -> 1.
-        builder.add_arc(arc(3, 1));
+        add(3, 1);
         // 4 depending on 3 closes nothing, though 3 depends on 2.
-        builder.add_arc(arc(3, 4));
-        let deps = builder.finish();
+        add(3, 4);
         let depends = |key| {
-            deps.graph
+            graph
                 .dependencies(PathId::from_raw(key), OPINION_EDIT)
                 .collect::<Vec<_>>()
         };
@@ -302,14 +410,12 @@ mod tests {
 
     #[test]
     fn graph_has_correct_topology() {
-        let mut builder = DependencyBuilder::new();
-        builder.add_arc(ArcDependency {
-            source: PathId::from_raw(1),
-            target: PathId::from_raw(2),
-            arc_kind: ArcKind::Inherits,
-            layer: LayerId(1),
-        });
-        let deps = builder.finish();
+        let record = PrimDependencies {
+            arcs: alloc::vec![(PathId::from_raw(1), ArcKind::Inherits, LayerId(1))],
+            ..PrimDependencies::default()
+        };
+        let prims = HashMap::from([(PathId::from_raw(2), record)]);
+        let deps = DependencyBuilder::from_prims(&prims, &Threads::new(1)).finish();
 
         // target (2) depends on source (1).
         let graph_deps: Vec<_> = deps

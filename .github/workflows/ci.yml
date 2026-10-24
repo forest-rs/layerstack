@@ -450,6 +450,14 @@ jobs:
       - name: check schema compiler oracle
         run: python layerstack_conformance/scripts/schema_compiler_oracle.py --check
 
+      # Types with several bases must be what OpenUSD's registry makes of
+      # them, and plugin kinds what its kind registry registers.
+      - name: check schema bases oracle
+        run: python layerstack_conformance/scripts/schema_bases_oracle.py --check
+
+      - name: check plugin kinds oracle
+        run: python layerstack_conformance/scripts/plugin_kinds_oracle.py --check
+
       # The dynamic file format port must pass OpenUSD's own test cases on
       # its fixtures.
       - name: test dynamic payloads against OpenUSD's fixtures

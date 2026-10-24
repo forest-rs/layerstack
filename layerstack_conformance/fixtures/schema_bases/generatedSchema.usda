@@ -1,0 +1,61 @@
+#usda 1.0
+(
+    "A hand-written codeless schema plugin whose types declare more than one base in plugInfo.json, which usdGenSchema cannot write."
+)
+
+class "Body"
+{
+    float body:mass = 1
+}
+
+class "Tagged"
+{
+    string tag:label = "none"
+}
+
+class Thing "Thing"
+{
+    float body:mass = 2
+    float thing:size = 3
+}
+
+class Gadget "Gadget"
+{
+    float body:mass = 2
+    int gadget:count = 4
+    float thing:size = 3
+}
+
+class Twin "Twin"
+{
+    string tag:label = "twin"
+}
+
+class Muddle "Muddle"
+{
+    float muddle:depth = 5
+}
+
+class Slim "Slim"
+{
+    int slim:width = 1
+}
+
+class Stray "Stray"
+{
+    int stray:steps = 1
+}
+
+class Lost "Lost"
+{
+    int lost:way = 1
+}
+
+class "TagAPI"
+{
+    token tag:mode = "on"
+}
+
+class "OnlyAPI"
+{
+}

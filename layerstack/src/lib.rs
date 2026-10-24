@@ -280,9 +280,9 @@ pub use property::{
 };
 pub use relocates::RelocationTable;
 pub use schema::{
-    AppliedSchema, CannotApply, MetadataConflict, MetadataDefinition, MetadataTarget,
-    PrimDefinition, PropertyDefinition, SchemaDefinition, SchemaIssue, SchemaKind, SchemaRegistry,
-    SchemaRegistryBuilder,
+    AppliedSchema, CannotApply, InvalidBaseReason, MetadataConflict, MetadataDefinition,
+    MetadataTarget, PrimDefinition, PropertyDefinition, SchemaDefinition, SchemaIssue, SchemaKind,
+    SchemaRegistry, SchemaRegistryBuilder,
 };
 pub use spec_path::{SpecComponent, SpecPath, SpecPathError};
 pub use spline::SplineData;

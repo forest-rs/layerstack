@@ -602,13 +602,7 @@ jobs:
       - name: test against OpenUSD
         env:
           LAYERSTACK_USD_PYTHON: python
-        run: |
-          tests=()
-          for file in $(grep -l LAYERSTACK_USD_PYTHON layerstack_conformance/tests/*.rs); do
-            tests+=(--test "$(basename "$file" .rs)")
-          done
-          cargo test --locked --no-fail-fast -p layerstack_conformance "${tests[@]}" \
-            --test layer_save --test prim_field_edits
+        run: bash layerstack_conformance/scripts/test_against_openusd.sh
 
       # The transform oracle must be what OpenUSD computes, to within the
       # rounding of the platform's trigonometry.

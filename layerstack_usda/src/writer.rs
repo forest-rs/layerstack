@@ -230,7 +230,7 @@ impl Document {
         if self.default_prim.is_some() {
             keys.push("defaultPrim");
         }
-        validate_metadata(&self.metadata, &mut keys, "/", false)?;
+        validate_metadata(&self.metadata, &mut keys, "/")?;
         for sublayer in &self.sublayers {
             validate_asset_path(&sublayer.asset, "/")?;
             validate_layer_offset(sublayer.offset, "/")?;
@@ -435,7 +435,7 @@ impl Prim {
     /// `path` names the spec (`/P` or `/P{v=x}`).
     fn validate_body(&self, path: &str) -> Result<(), WriteError> {
         let path = String::from(path);
-        validate_metadata(&self.metadata, &mut Vec::new(), &path, true)?;
+        validate_metadata(&self.metadata, &mut Vec::new(), &path)?;
         for (key, arcs) in [
             ("inherits", &self.inherits),
             ("specializes", &self.specializes),
@@ -839,7 +839,7 @@ impl Attribute {
             }
         }
         validate_targets(self.connections.as_ref(), path, true)?;
-        validate_metadata(&self.metadata, &mut Vec::new(), path, true)
+        validate_metadata(&self.metadata, &mut Vec::new(), path)
     }
 }
 
@@ -892,7 +892,7 @@ impl Relationship {
 
     fn validate(&self, path: &str) -> Result<(), WriteError> {
         validate_targets(self.targets.as_ref(), path, false)?;
-        validate_metadata(&self.metadata, &mut Vec::new(), path, true)
+        validate_metadata(&self.metadata, &mut Vec::new(), path)
     }
 }
 
@@ -1797,13 +1797,13 @@ fn validate_text_body(body: &Prim, path: &str) -> Result<(), WriteError> {
     Ok(())
 }
 
-/// Validates metadata keys and values; `list_ops` admits list-op entries
-/// (prim and property metadata only).
+/// Validates metadata keys and values. A list op is a statement of the
+/// metadata of a layer, prim or property (OpenUSD writes one for metadata
+/// authored so, `Sdf_FileIOUtility::WriteListOp`), not a value.
 fn validate_metadata<'a>(
     entries: &'a [Metadatum],
     seen: &mut Vec<&'a str>,
     path: &str,
-    list_ops: bool,
 ) -> Result<(), WriteError> {
     for entry in entries {
         if matches!(entry.value, Value::Block | Value::AnimationBlock) {
@@ -1811,9 +1811,7 @@ fn validate_metadata<'a>(
                 path: alloc::format!("{path}#{}", entry.key),
             });
         }
-        if let Some(valid) = entry.value.list_op_is_valid()
-            && !(list_ops && valid)
-        {
+        if entry.value.list_op_is_valid() == Some(false) {
             return Err(WriteError::InvalidListOp {
                 path: alloc::format!("{path}#{}", entry.key),
             });
@@ -4171,10 +4169,12 @@ def Xform "Root"
         }
         let op = Value::TokenListOp(ListOp::prepend(vec!["A".into()]));
         let mut doc = shading_doc();
-        doc.metadata.push(Metadatum::new("apiSchemas", op.clone()));
+        doc.metadata.push(Metadatum::new("tags", op.clone()));
         assert!(
-            matches!(doc.to_usda(), Err(WriteError::InvalidListOp { .. })),
-            "no list ops in layer metadata"
+            doc.to_usda()
+                .unwrap()
+                .contains("\n    prepend tags = [\"A\"]\n"),
+            "a list-op statement in layer metadata"
         );
         let mut doc = shading_doc();
         doc.prims[0].metadata.push(Metadatum::new(

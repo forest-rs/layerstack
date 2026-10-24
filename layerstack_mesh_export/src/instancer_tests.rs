@@ -98,7 +98,7 @@ fn golden_instancer() {
     assert!(text.contains(expected), "{text}");
     let expected = r#"
         int64[] ids = [7, 3, -1]
-        quath[] orientations = [(1, 0, 0, 0), (0.70703125, 0, 0, 0.70703125), (1, 0, 0, 0)]
+        quath[] orientations = [(1, 0, 0, 0), (0.707031, 0, 0, 0.707031), (1, 0, 0, 0)]
         quatf[] orientationsf = [(1, 0, 0, 0), (0.70710677, 0, 0, 0.70710677), (1, 0, 0, 0)]
         point3f[] positions = [(0, 0, 0), (10, 0, 0), (0, 5, 1)]
         int[] protoIndices = [0, 1, 0]
@@ -205,7 +205,7 @@ fn orientation_precision_picks_the_authored_attributes() {
             "{precision:?}: {text}"
         );
         assert_eq!(
-            text.contains("quath[] orientations = [(0.70703125, 0, 0, 0.70703125)]"),
+            text.contains("quath[] orientations = [(0.707031, 0, 0, 0.707031)]"),
             half,
             "{precision:?}: {text}"
         );

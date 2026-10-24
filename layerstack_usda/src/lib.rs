@@ -134,6 +134,7 @@ pub mod lower;
 )]
 pub mod emit;
 
+mod float_text;
 mod numeric;
 mod read;
 mod token_source;

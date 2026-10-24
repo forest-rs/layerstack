@@ -75,6 +75,59 @@ fn typed_schemas_inherit_properties_and_is_a() {
     assert!(registry.issues().is_empty());
 }
 
+/// A flattened definition, as a generated schema layer holds one, is the
+/// whole prim definition: OpenUSD composes nothing of its ancestors in. A
+/// hand-built one composes its parent chain up to a flattened ancestor.
+#[test]
+fn flattened_definitions_compose_no_ancestor() {
+    let mut t = TokenInterner::default();
+    let [base, slim, mid, leaf, label] =
+        ["Base", "Slim", "Mid", "Leaf", "LabelAPI"].map(|n| t.intern(n));
+    let mut builder = SchemaRegistry::builder();
+    builder
+        .register(
+            SchemaDefinition::new(base, SchemaKind::AbstractTyped)
+                .with_property(attr(&mut t, "base:mass", 1))
+                .with_built_in(label),
+        )
+        .register(SchemaDefinition::api(label).with_property(attr(&mut t, "label:text", "")))
+        .register(
+            SchemaDefinition::typed(slim)
+                .with_parent(base)
+                .flattened()
+                .with_property(attr(&mut t, "slim:x", 1)),
+        )
+        .register(
+            SchemaDefinition::new(mid, SchemaKind::AbstractTyped)
+                .with_parent(base)
+                .flattened()
+                .with_property(attr(&mut t, "mid:y", 2)),
+        )
+        .register(
+            SchemaDefinition::typed(leaf)
+                .with_parent(mid)
+                .with_property(attr(&mut t, "leaf:z", 3)),
+        );
+    let registry = builder.build(&t);
+    let names = |definition: &PrimDefinition| -> Vec<String> {
+        definition
+            .properties()
+            .iter()
+            .map(|p| String::from(t.resolve(p.name)))
+            .collect()
+    };
+    // OpenUSD: a generated class that leaves its base's properties out
+    // lacks them; it still is its base.
+    let slim_definition = registry.prim_definition(Some(slim), &[], &t);
+    assert_eq!(names(&slim_definition), ["slim:x"]);
+    assert!(slim_definition.is_a(base) && slim_definition.applied_schemas().is_empty());
+    // Composed by hand up to `Mid`, whose class holds the rest.
+    let leaf_definition = registry.prim_definition(Some(leaf), &[], &t);
+    assert_eq!(names(&leaf_definition), ["leaf:z", "mid:y"]);
+    assert!(leaf_definition.is_a(base));
+    assert!(registry.issues().is_empty(), "{:?}", registry.issues());
+}
+
 #[test]
 fn inclusions_compose_right_after_their_schema() {
     // Spec: AOUSD Core §13.3.2.3's order: each schema's built-ins and

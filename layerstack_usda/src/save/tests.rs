@@ -760,10 +760,10 @@ def "A" (
 }
 "#;
     let text = Imported::new(source).save().unwrap();
-    // A half is written as the shortest decimal of its exact value, which
-    // reads back as the same half. Properties are in OpenUSD's order, and
-    // OpenUSD ends a layer with a blank line.
-    let expected = source.replace("half h = 0.1", "half h = 0.099975586") + "\n";
+    // A half is written in six significant digits, as OpenUSD writes it,
+    // which read back as the same half. Properties are in OpenUSD's
+    // order, and OpenUSD ends a layer with a blank line.
+    let expected = source.replace("half h = 0.1", "half h = 0.0999756") + "\n";
     assert_eq!(text, expected, "saved text");
     assert_eq!(Imported::new(&text).save().unwrap(), text, "stable");
 

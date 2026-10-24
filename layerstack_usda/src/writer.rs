@@ -42,7 +42,11 @@
 //! with a double quote and no single quote, triple quotes around text with
 //! a line break, which is written as it is), dictionary keys bare when they
 //! are ASCII identifiers, `bool` values as `1` and `0` (metadata fields as
-//! `true` and `false`), and a blank line ending the layer. Written in
+//! `true` and `false`), `double` and `float` values in the fewest digits
+//! that read back, with an exponent outside `[-6, 15)` (`3.42e-8`), `half`
+//! and `timecode` values in six significant digits (`0.0999756`,
+//! `1e-07`), a time code that needs more in the digits that keep it, and
+//! a blank line ending the layer. Written in
 //! OpenUSD's field order, a layer is the text OpenUSD writes for it.
 //!
 //! Scope: prims with their children and property order (`reorder
@@ -106,6 +110,8 @@ use layerstack::ident::dictionary_cmp;
 use layerstack::spline::SplineData;
 use layerstack::value_type::ValueType;
 use smallvec::SmallVec;
+
+use crate::float_text;
 
 pub use crate::ast::Specifier;
 
@@ -2953,7 +2959,7 @@ impl Writer<'_> {
             self.attribute_head(attribute);
             if let Some(value) = &attribute.value {
                 self.out.push_str(" = ");
-                self.value(value, depth);
+                self.attribute_value(attribute, value, depth);
             }
             if !attribute.metadata.is_empty() {
                 self.out.push_str(" (\n");
@@ -2971,7 +2977,7 @@ impl Writer<'_> {
                 self.indent(depth + 1);
                 self.f64(*time);
                 self.out.push_str(": ");
-                self.value(value, depth + 1);
+                self.attribute_value(attribute, value, depth + 1);
                 self.out.push_str(",\n");
             }
             self.indent(depth);
@@ -3012,6 +3018,17 @@ impl Writer<'_> {
                 w.out.push_str(".connect = ");
                 w.targets(targets, depth);
             });
+        }
+    }
+
+    /// A default or time sample of `attribute`. A document holds a
+    /// `timecode` attribute's values as doubles, as the crate writer reads
+    /// them; they are written as the time codes they are (§6.3).
+    fn attribute_value(&mut self, attribute: &Attribute, value: &Value, depth: usize) {
+        match (attribute.type_name.as_str(), value) {
+            ("timecode", Value::Double(v)) => self.time_code(*v),
+            ("timecode[]", Value::DoubleArray(v)) => self.array(v, |w, x| w.time_code(*x)),
+            _ => self.value(value, depth),
         }
     }
 
@@ -3187,7 +3204,8 @@ impl Writer<'_> {
             Value::UInt64(v) => self.display(v),
             Value::Half(v) => self.half(*v),
             Value::Float(v) => self.f32(*v),
-            Value::Double(v) | Value::TimeCode(v) => self.f64(*v),
+            Value::Double(v) => self.f64(*v),
+            Value::TimeCode(v) => self.time_code(*v),
             Value::String(v) | Value::Token(v) | Value::PathExpression(v) => self.string(v),
             Value::Asset(v) => self.asset(v),
             Value::Float2(v) => self.tuple(v, Self::f32),
@@ -3218,7 +3236,8 @@ impl Writer<'_> {
             Value::UInt64Array(v) => self.array(v, |w, x| w.display(x)),
             Value::HalfArray(v) => self.array(v, |w, x| w.half(*x)),
             Value::FloatArray(v) => self.array(v, |w, x| w.f32(*x)),
-            Value::DoubleArray(v) | Value::TimeCodeArray(v) => self.array(v, |w, x| w.f64(*x)),
+            Value::DoubleArray(v) => self.array(v, |w, x| w.f64(*x)),
+            Value::TimeCodeArray(v) => self.array(v, |w, x| w.time_code(*x)),
             Value::StringArray(v) | Value::TokenArray(v) | Value::PathExpressionArray(v) => {
                 self.array(v, |w, s| w.string(s));
             }
@@ -3300,28 +3319,26 @@ impl Writer<'_> {
         self.display(&v);
     }
 
-    /// Shortest representation that parses back to the same `f32` (Rust's
-    /// `Display`), with the USDA spellings for non-finite values (§16.2.5).
+    /// A `float` as OpenUSD writes it ([`float_text`]).
     fn f32(&mut self, v: f32) {
-        if v.is_finite() {
-            self.display(&v);
-        } else {
-            self.non_finite(v.is_nan(), v.is_sign_negative());
-        }
+        float_text::push_float(self.out, v);
     }
 
-    /// A `half`, widened exactly to `f32` and written as that: the shortest
-    /// decimal that reads back as the same half.
+    /// A `half` as OpenUSD writes it: six significant digits, which read
+    /// back as the same half ([`float_text`]).
     fn half(&mut self, bits: u16) {
-        self.f32(layerstack::half::to_f32(bits));
+        float_text::push_half(self.out, bits);
     }
 
+    /// A `double` as OpenUSD writes it ([`float_text`]).
     fn f64(&mut self, v: f64) {
-        if v.is_finite() {
-            self.display(&v);
-        } else {
-            self.non_finite(v.is_nan(), v.is_sign_negative());
-        }
+        float_text::push_double(self.out, v);
+    }
+
+    /// A `timecode` as OpenUSD writes it where that reads back as the same
+    /// time ([`float_text`]).
+    fn time_code(&mut self, v: f64) {
+        float_text::push_time_code(self.out, v);
     }
 
     /// `(r, i, j, k)`, the USDA order of a quaternion stored as `i, j, k,
@@ -3340,14 +3357,6 @@ impl Writer<'_> {
             self.tuple(row, Self::f64);
         }
         self.out.push_str(" )");
-    }
-
-    fn non_finite(&mut self, nan: bool, negative: bool) {
-        self.out.push_str(match (nan, negative) {
-            (true, _) => "nan",
-            (false, false) => "inf",
-            (false, true) => "-inf",
-        });
     }
 
     fn tuple<T>(&mut self, items: &[T], mut item: impl FnMut(&mut Self, T))
@@ -3730,7 +3739,7 @@ over "P" (
             .to_usda()
             .unwrap();
         assert!(
-            text.contains("quath[] orientations = [(0.70703125, 0, 0, 0.70703125), (1, 0, 0, 0)]"),
+            text.contains("quath[] orientations = [(0.707031, 0, 0, 0.707031), (1, 0, 0, 0)]"),
             "{text}"
         );
         assert!(parse(&text).diagnostics.is_empty(), "reparses");

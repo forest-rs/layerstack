@@ -5004,6 +5004,42 @@ mod tests {
         })
     }
 
+    /// Before the first composed sample, edits that compose over a weaker
+    /// default hold their first sample, and the explanation names it as the
+    /// time samples the value comes from, as OpenUSD's resolve info does.
+    ///
+    /// Spec: AOUSD Core §12.5.1.
+    #[test]
+    fn edits_held_before_their_first_sample_explain_as_samples() {
+        let ty = PropertyType::parse("int[]").unwrap();
+        let strong = PropertySpec::typed_attribute(ty.clone())
+            .with_time_samples(vec![(2.0, append_edit(9)), (4.0, append_edit(8))]);
+        let weak = PropertySpec::typed_attribute(ty).with_default(array_value(&[1, 2]));
+        let (stage, prim, field) = property_stack_fixture(vec![strong, weak]);
+        let property = PropertyPath::new(prim, field);
+        for time in [Time::held(0.0), Time::at(1.0), Time::held(2.0)] {
+            let explained = stage.explain_property_value(property, time).unwrap();
+            assert_eq!(
+                explained.value,
+                stage
+                    .resolve_property_path_at_time(property, time)
+                    .map(|r| r.value)
+            );
+            assert!(
+                matches!(
+                    explained.source,
+                    ValueSource::TimeSamples {
+                        lower: 2.0,
+                        upper: 2.0,
+                        ..
+                    }
+                ),
+                "{time:?}: {:?}",
+                explained.source
+            );
+        }
+    }
+
     /// A block discards weaker authored opinions (AOUSD Core §12.3.6), but
     /// stronger sparse edits still compose over the weakest dense value that
     /// survives it, the schema fallback or the empty array (sparse-array-edits

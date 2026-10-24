@@ -379,6 +379,7 @@ impl DeferredArraySource for LazyArray {
                     | DecodedField::StringArray(_)
                     | DecodedField::PathListOp(_)
                     | DecodedField::Text(..)
+                    | DecodedField::UnregisteredText(_)
                     | DecodedField::Retained(_) => {
                         return Err(ArrayReadError::InvalidData(Arc::from(
                             "numeric array decoder returned a scalar",

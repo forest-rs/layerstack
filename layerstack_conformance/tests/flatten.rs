@@ -42,8 +42,7 @@ use std::sync::Arc;
 
 use layerstack::stage::flatten::{
     AssetPaths, ExternalDependency, FindingKind, FlattenError, FlattenReport, FlattenRequirements,
-    FlattenVerification, Loss, LossPolicy, MismatchKind, Preserved, Requirement, SkipReason,
-    Transformation,
+    FlattenVerification, Loss, LossPolicy, Preserved, Requirement, SkipReason, Transformation,
 };
 use layerstack::{
     AssetResolveError, AssetResolver, InMemoryStore, Layer, LayerId, ListOp, PathInterner,
@@ -72,11 +71,8 @@ fn not_exact() -> Vec<&'static str> {
         .collect()
 }
 
-/// Unregistered metadata the cases author. The USDA reader types its value
-/// from its text; a USDC file holds the text, as OpenUSD's text parser
-/// records it (an `SdfUnregisteredValue` string), so it reads back from the
-/// USDC as a string, and each must still differ that way. OpenUSD's own
-/// flatten drops it, as it cannot set it on a spec; this flatten keeps it.
+/// Unregistered metadata the cases author. OpenUSD's own flatten drops it,
+/// as it cannot set it on a spec; this flatten keeps it.
 const UNREGISTERED: &[(&str, &str)] = &[("BasicVariantWithConnections_root", "avar")];
 
 /// Cases where OpenUSD's composition differs from Layerstack's in what the
@@ -493,24 +489,7 @@ fn flattened_layers_compose_the_flattened_stage() {
                 failures.push(format!("{name}: cannot read the {format} back: {e}"));
                 continue;
             }
-            let unregistered: Vec<&str> = UNREGISTERED
-                .iter()
-                .filter(|(case, _)| format == "usdc" && case == name)
-                .map(|(_, field)| *field)
-                .collect();
-            let verified = verify(&mut flat, id).map(|mut verification| {
-                let before = verification.mismatches.len();
-                verification.mismatches.retain(|m| {
-                    !matches!(&m.kind, MismatchKind::PropertyMetadata { field }
-                        if unregistered.contains(&field.as_str())
-                            && m.found.starts_with("String("))
-                });
-                if !unregistered.is_empty() && before == verification.mismatches.len() {
-                    failures.push(format!("{name}: {unregistered:?} now reads back typed"));
-                }
-                verification
-            });
-            match verified {
+            match verify(&mut flat, id) {
                 Err(e) => failures.push(format!("{name} ({format}): {e}")),
                 Ok(verification) if !verification.is_equivalent() => failures.push(format!(
                     "{name} ({format}): composes differently\n{}",

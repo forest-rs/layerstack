@@ -371,6 +371,10 @@ pub(crate) enum DecodedField<'a> {
     /// index of its text ([`decode_text_index`]), `u32::MAX` for the empty
     /// text, which assembly converts without copying the text first.
     Text(TextKind, u32),
+    /// The text of an `SdfUnregisteredValue` that holds text: the USDA
+    /// text of a metadata value no schema registers, as OpenUSD's text
+    /// parser recorded it (`"1"`, `[1, 2]`), which assembly reads as USDA.
+    UnregisteredText(String),
     /// A value left encoded, for a retained read to decode on demand.
     #[cfg(feature = "std")]
     Retained(RawValueRep),
@@ -385,7 +389,8 @@ impl DecodedField<'_> {
             | Self::TokenArray(_)
             | Self::StringArray(_)
             | Self::PathListOp(_)
-            | Self::Text(..) => None,
+            | Self::Text(..)
+            | Self::UnregisteredText(_) => None,
             #[cfg(feature = "std")]
             Self::Retained(_) => None,
         }
@@ -789,8 +794,11 @@ fn decode_nested(
                 DecodedField::TokenArray(_)
                 | DecodedField::StringArray(_)
                 | DecodedField::PathListOp(_)
-                | DecodedField::Text(..) => {
-                    unreachable!("indices are decoded only for top-level fields")
+                | DecodedField::Text(..)
+                | DecodedField::UnregisteredText(_) => {
+                    unreachable!(
+                        "indices and unregistered text are decoded only for top-level fields"
+                    )
                 }
                 #[cfg(feature = "std")]
                 DecodedField::Retained(_) => unreachable!("only top-level fields are retained"),

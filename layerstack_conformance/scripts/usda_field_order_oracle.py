@@ -58,6 +58,14 @@ keys on the layer and on a prim, which shows the two orders apart:
 `Beta`, `_u`, `a10`, `a9` in the layer, `_u`, `a9`, `a10`, `Beta` on the
 prim.
 
+OpenUSD keeps metadata no schema registers as the text of its value, as
+its text parser read it (`textParserHelpers.cpp`), a crate file stores
+that text, and the text writer writes it back as it is. `unregistered.usdc`
+and `unregistered_values.usdc`, crate files of the unregistered keys and
+of unregistered values of many kinds (strings, numbers that read back
+respelled, lists, a dictionary, list-op statements on the layer and a
+prim), export as their text files do.
+
 `variant_order` holds the export of `variant_order.usda`, whose
 `variantSet` blocks are out of `variantSets` order, nested ones included,
 and `variant_order.usdc` that of its crate file. OpenUSD writes variant
@@ -516,6 +524,36 @@ def "P" (
 '''
 
 
+UNREGISTERED_VALUES = '''#usda 1.0
+(
+    s = "1"
+    n = 1.50
+    i = -3
+    big = 18446744073709551615
+    tiny = 0.0000000342
+    ints = [1, 2]
+    words = ["a", "b"]
+    one = ["a"]
+    flag = true
+    dict = {
+        int a = 1
+        string b = "x"
+    }
+    prepend tags = ["a", "b"]
+    append ids = [1, 2]
+    delete ids = [3]
+)
+
+def "P" (
+    q = 'it"s'
+    note = "a \\"quoted\\" note"
+    explicit = ["x"]
+    prepend tags = ["c"]
+)
+{
+}
+'''
+
 VARIANT_ORDER = '''#usda 1.0
 
 def "P" (
@@ -572,7 +610,8 @@ def "Q" (
 # kept as `usda` and `usdc`.
 FILES = [
     ("scrambled", SCRAMBLED, True),
-    ("unregistered", UNREGISTERED, False),
+    ("unregistered", UNREGISTERED, True),
+    ("unregistered_values", UNREGISTERED_VALUES, True),
     ("variant_order", VARIANT_ORDER, True),
 ]
 

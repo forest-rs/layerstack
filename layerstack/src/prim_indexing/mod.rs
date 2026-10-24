@@ -281,10 +281,12 @@ pub(crate) fn compose(
             added,
         )
     };
-    crate::parallel::with_pool(options.threads, &work, |pool| {
+    let threads = crate::parallel::Threads::new(options.threads);
+    crate::parallel::with_pool_in(&threads, &work, |pool| {
         let mut walk = Walk {
             ctx: &ctx,
             pool,
+            threads: &threads,
             out: &mut out,
             scope: &scope,
             checks,
@@ -299,10 +301,7 @@ pub(crate) fn compose(
         // Only the prims the composition keeps depend on anything.
         let Composition { records, prims, .. } = &mut out;
         records.retain(|path, _| prims.contains_key(path));
-        out.deps = Some(DependencyBuilder::from_prims(
-            &out.records,
-            &crate::parallel::Threads::new(options.threads),
-        ));
+        out.deps = Some(DependencyBuilder::from_prims(&out.records, &threads));
     }
     // The stage's own layer stack, and any no arc reached, report last.
     for (at, stack) in (0..).zip(ctx.stacks.iter()) {
@@ -323,6 +322,11 @@ pub(crate) fn compose(
     out
 }
 
+/// The fewest spent instance indexes freed on a thread of their own while
+/// instances get their descendants ([`Walk::share_prototypes`]): for fewer,
+/// starting the thread costs more than freeing them.
+const SPENT_ON_THREAD: usize = 256;
+
 /// The instances a composition has seen, by the key their prototype is
 /// shared by.
 #[derive(Default)]
@@ -332,6 +336,24 @@ struct Instances {
     /// Instances whose descendants wait for their representative's, with
     /// the instance's index when it was indexed rather than copied.
     deferred: Vec<(PathId, PathId, Option<Arc<Graph>>)>,
+    /// The representative of each instance of `deferred`, by instance.
+    waiting: HashMap<PathId, PathId>,
+}
+
+impl Instances {
+    /// Defers the descendants of `instance` until `representative`'s are
+    /// composed.
+    fn defer(&mut self, instance: PathId, representative: PathId, graph: Option<Arc<Graph>>) {
+        self.deferred.push((instance, representative, graph));
+        self.waiting.insert(instance, representative);
+    }
+
+    /// The instance deferred last, with its representative and index.
+    fn next(&mut self) -> Option<(PathId, PathId, Option<Arc<Graph>>)> {
+        let next = self.deferred.pop()?;
+        self.waiting.remove(&next.0);
+        Some(next)
+    }
 }
 
 /// What an instance's descendants are composed from: its instanceable
@@ -664,6 +686,8 @@ fn prim_record(
 struct Walk<'a, 'c, 'p> {
     ctx: &'a Ctx<'c>,
     pool: &'a crate::parallel::Pool<'p, Pending, Indexed>,
+    /// The budget the pool's threads are drawn from.
+    threads: &'a crate::parallel::Threads,
     out: &'a mut Composition,
     scope: &'a Scope<'a>,
     checks: &'a mut crate::composition_checks::Findings,
@@ -778,9 +802,7 @@ impl Walk<'_, '_, '_> {
         if let Some(key) = key {
             match self.instances.representatives.get(&key) {
                 Some(&representative) => {
-                    self.instances
-                        .deferred
-                        .push((path, representative, graph.clone()));
+                    self.instances.defer(path, representative, graph.clone());
                     deferred = true;
                 }
                 None => {
@@ -845,10 +867,39 @@ impl Walk<'_, '_, '_> {
     /// Spec: AOUSD Core §11.3.3 (instances share prototypes). OpenUSD:
     /// `Usd_InstanceCache`, `PcpInstanceKey`.
     fn share_prototypes(&mut self) {
+        // Whether a representative's descendants can be shared is decided
+        // by what was composed beneath it, which giving deferred instances
+        // their descendants does not change: those are written beneath the
+        // instances, and an instance nested beneath a representative gets
+        // its own only after every instance copying that representative.
         let mut shareable: HashMap<PathId, bool> = HashMap::new();
+        let mut spent = Vec::new();
+        for (_, representative, graph) in &mut self.instances.deferred {
+            let can_share = *shareable
+                .entry(*representative)
+                .or_insert_with(|| prototype_is_shareable(self.ctx, self.out, *representative));
+            // The index of an instance that copies its representative's
+            // descendants is not read again: it is freed on a spare thread
+            // while the copies are made.
+            if can_share {
+                spent.extend(graph.take());
+            }
+        }
+        if spent.len() < SPENT_ON_THREAD {
+            self.give_descendants(shareable);
+            return;
+        }
+        let threads = self.threads;
+        crate::parallel::join(threads, || self.give_descendants(shareable), || drop(spent));
+    }
+
+    /// Gives each deferred instance its descendants (see
+    /// [`Self::share_prototypes`]), `shareable` holding whether the
+    /// descendants of the representatives decided so far can be shared.
+    fn give_descendants(&mut self, mut shareable: HashMap<PathId, bool>) {
         // Composing an instance's descendants can defer the instances nested
         // in them in turn.
-        while let Some((instance, representative, graph)) = self.instances.deferred.pop() {
+        while let Some((instance, representative, graph)) = self.instances.next() {
             let can_share = *shareable
                 .entry(representative)
                 .or_insert_with(|| prototype_is_shareable(self.ctx, self.out, representative));
@@ -1045,14 +1096,10 @@ fn copy_prototype(
         out.reused_prim_indexes += 1;
         // A nested instance still waiting for its own representative's
         // descendants waits beneath the copy too.
-        if let Some(&(_, nested, _)) = instances
-            .deferred
-            .iter()
-            .find(|(path, _, _)| *path == source)
-        {
+        if let Some(&nested) = instances.waiting.get(&source) {
             // The copy's index is not kept apart: its descendants, if
             // composed, start from indexes of their ancestors built anew.
-            instances.deferred.push((target, nested, None));
+            instances.defer(target, nested, None);
         }
         let map = |path: PathId, paths: &crate::path::PathInterner| {
             paths.intern_reparented(path, from, to).unwrap_or(path)

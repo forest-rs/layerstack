@@ -1,0 +1,107 @@
+#usda 1.0
+(
+    relocates = {
+        </Model/Child>: </Model/Moved>
+    }
+    subLayers = [
+        @./weak.usda@,
+        @./base.usda@
+    ]
+)
+
+def "Plain"
+{
+    double animBlocked = AnimationBlock
+    double blocked = None
+    double blockedSamples.timeSamples = {
+        0: None,
+    }
+    double both = 2
+    double both.timeSamples = {
+        0: 3,
+    }
+    double curve.spline = {
+        0: 1; post held,
+        10: 2; post held,
+    }
+    double sampled.timeSamples = {
+        0: 0,
+        10: 10,
+    }
+    double settled = 1
+}
+
+def Sphere "Ball"
+{
+}
+
+def "Model" (
+    references = @./asset.usda@</Asset>
+)
+{
+    double local = 1
+
+    def "Bare"
+    {
+    }
+}
+
+def "Var" (
+    variants = {
+        string mode = "on"
+    }
+    prepend variantSets = "mode"
+)
+{
+    variantSet "mode" = {
+        "off" {
+            double x = 8
+        }
+        "on" {
+            double x = 9
+        }
+    }
+}
+
+class "Base"
+{
+    double inherited = 4
+}
+
+def "Kid" (
+    inherits = </Base>
+)
+{
+}
+
+def "Inst" (
+    instanceable = true
+    references = @./asset.usda@</Asset>
+)
+{
+}
+
+def "Clipped" (
+    clips = {
+        dictionary default = {
+            double2[] active = [(0, 0), (10, 1)]
+            asset[] assetPaths = [@./clip0.usda@, @./clip1.usda@]
+            asset manifestAssetPath = @./manifest.usda@
+            string primPath = "/Clip"
+        }
+    }
+)
+{
+}
+
+def "AutoClipped" (
+    clips = {
+        dictionary default = {
+            double2[] active = [(0, 0), (10, 1)]
+            asset[] assetPaths = [@./clip0.usda@, @./clip1.usda@]
+            string primPath = "/Clip"
+        }
+    }
+)
+{
+}

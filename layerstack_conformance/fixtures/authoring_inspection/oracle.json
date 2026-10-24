@@ -1,0 +1,4540 @@
+{
+ "cases": [
+  {
+   "name": "stronger samples mask a default",
+   "property": "/Plain.sampled",
+   "target": {
+    "layer": "weak.usda"
+   },
+   "times": [
+    {
+     "after": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": "default"
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "shows": false,
+     "time": -5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "shows": false,
+     "time": 0.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "shows": false,
+     "time": 5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "shows": false,
+     "time": 15.0
+    }
+   ],
+   "write": "default"
+  },
+  {
+   "name": "stronger samples mask a sample",
+   "property": "/Plain.sampled",
+   "target": {
+    "layer": "weak.usda"
+   },
+   "times": [
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "shows": false,
+     "time": -5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "shows": false,
+     "time": 0.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "shows": false,
+     "time": 5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "shows": false,
+     "time": 15.0
+    }
+   ],
+   "write": "sample"
+  },
+  {
+   "name": "own samples mask a default",
+   "property": "/Plain.sampled",
+   "target": {
+    "layer": "root.usda"
+   },
+   "times": [
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": "default"
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "shows": false,
+     "time": -5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "shows": false,
+     "time": 0.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "shows": false,
+     "time": 5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "shows": false,
+     "time": 15.0
+    }
+   ],
+   "write": "default"
+  },
+  {
+   "name": "a sample beside samples",
+   "property": "/Plain.sampled",
+   "target": {
+    "layer": "root.usda"
+   },
+   "times": [
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "shows": true,
+     "time": -5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "shows": true,
+     "time": 0.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "shows": true,
+     "time": 5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "shows": true,
+     "time": 15.0
+    }
+   ],
+   "write": "sample"
+  },
+  {
+   "name": "a stronger default",
+   "property": "/Plain.settled",
+   "target": {
+    "layer": "weak.usda"
+   },
+   "times": [
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": false,
+     "time": "default"
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": false,
+     "time": -5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": false,
+     "time": 0.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": false,
+     "time": 5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": false,
+     "time": 15.0
+    }
+   ],
+   "write": "default"
+  },
+  {
+   "name": "a sample beside a default",
+   "property": "/Plain.settled",
+   "target": {
+    "layer": "root.usda"
+   },
+   "times": [
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": -5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": 0.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": 5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": 15.0
+    }
+   ],
+   "write": "sample"
+  },
+  {
+   "name": "a stronger block",
+   "property": "/Plain.blocked",
+   "target": {
+    "layer": "weak.usda"
+   },
+   "times": [
+    {
+     "after": {
+      "blocked": true,
+      "layer": null,
+      "node": null,
+      "source": "none"
+     },
+     "before": {
+      "blocked": true,
+      "layer": null,
+      "node": null,
+      "source": "none"
+     },
+     "shows": false,
+     "time": "default"
+    },
+    {
+     "after": {
+      "blocked": true,
+      "layer": null,
+      "node": null,
+      "source": "none"
+     },
+     "before": {
+      "blocked": true,
+      "layer": null,
+      "node": null,
+      "source": "none"
+     },
+     "shows": false,
+     "time": -5.0
+    },
+    {
+     "after": {
+      "blocked": true,
+      "layer": null,
+      "node": null,
+      "source": "none"
+     },
+     "before": {
+      "blocked": true,
+      "layer": null,
+      "node": null,
+      "source": "none"
+     },
+     "shows": false,
+     "time": 0.0
+    },
+    {
+     "after": {
+      "blocked": true,
+      "layer": null,
+      "node": null,
+      "source": "none"
+     },
+     "before": {
+      "blocked": true,
+      "layer": null,
+      "node": null,
+      "source": "none"
+     },
+     "shows": false,
+     "time": 5.0
+    },
+    {
+     "after": {
+      "blocked": true,
+      "layer": null,
+      "node": null,
+      "source": "none"
+     },
+     "before": {
+      "blocked": true,
+      "layer": null,
+      "node": null,
+      "source": "none"
+     },
+     "shows": false,
+     "time": 15.0
+    }
+   ],
+   "write": "default"
+  },
+  {
+   "name": "a stronger blocked sample",
+   "property": "/Plain.blockedSamples",
+   "target": {
+    "layer": "weak.usda"
+   },
+   "times": [
+    {
+     "after": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": null,
+      "node": null,
+      "source": "none"
+     },
+     "shows": true,
+     "time": "default"
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "shows": false,
+     "time": -5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "shows": false,
+     "time": 0.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "shows": false,
+     "time": 5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "shows": false,
+     "time": 15.0
+    }
+   ],
+   "write": "default"
+  },
+  {
+   "name": "an animation block skips weaker samples",
+   "property": "/Plain.animBlocked",
+   "target": {
+    "layer": "base.usda"
+   },
+   "times": [
+    {
+     "after": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": false,
+     "time": "default"
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": false,
+     "time": -5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": false,
+     "time": 0.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": false,
+     "time": 5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": false,
+     "time": 15.0
+    }
+   ],
+   "write": "default"
+  },
+  {
+   "name": "a default beside skipped samples",
+   "property": "/Plain.animBlocked",
+   "target": {
+    "layer": "weak.usda"
+   },
+   "times": [
+    {
+     "after": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": "default"
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": -5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": 0.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": 5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": 15.0
+    }
+   ],
+   "write": "default"
+  },
+  {
+   "name": "an animation block masks a sample",
+   "property": "/Plain.animBlocked",
+   "target": {
+    "layer": "weak.usda"
+   },
+   "times": [
+    {
+     "after": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": false,
+     "time": -5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": false,
+     "time": 0.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": false,
+     "time": 5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": false,
+     "time": 15.0
+    }
+   ],
+   "write": "sample"
+  },
+  {
+   "name": "a sample beside an animation block",
+   "property": "/Plain.animBlocked",
+   "target": {
+    "layer": "root.usda"
+   },
+   "times": [
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": -5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": 0.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": 5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": 15.0
+    }
+   ],
+   "write": "sample"
+  },
+  {
+   "name": "stronger samples and default",
+   "property": "/Plain.both",
+   "target": {
+    "layer": "weak.usda"
+   },
+   "times": [
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": false,
+     "time": "default"
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "shows": false,
+     "time": -5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "shows": false,
+     "time": 0.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "shows": false,
+     "time": 5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "shows": false,
+     "time": 15.0
+    }
+   ],
+   "write": "default"
+  },
+  {
+   "name": "a stronger spline masks a default",
+   "property": "/Plain.curve",
+   "target": {
+    "layer": "weak.usda"
+   },
+   "times": [
+    {
+     "after": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": null,
+      "node": null,
+      "source": "none"
+     },
+     "shows": true,
+     "time": "default"
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "spline"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "spline"
+     },
+     "shows": false,
+     "time": -5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "spline"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "spline"
+     },
+     "shows": false,
+     "time": 0.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "spline"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "spline"
+     },
+     "shows": false,
+     "time": 5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "spline"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "spline"
+     },
+     "shows": false,
+     "time": 15.0
+    }
+   ],
+   "write": "default"
+  },
+  {
+   "name": "own spline masks a default",
+   "property": "/Plain.curve",
+   "target": {
+    "layer": "root.usda"
+   },
+   "times": [
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": null,
+      "node": null,
+      "source": "none"
+     },
+     "shows": true,
+     "time": "default"
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "spline"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "spline"
+     },
+     "shows": false,
+     "time": -5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "spline"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "spline"
+     },
+     "shows": false,
+     "time": 0.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "spline"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "spline"
+     },
+     "shows": false,
+     "time": 5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "spline"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "spline"
+     },
+     "shows": false,
+     "time": 15.0
+    }
+   ],
+   "write": "default"
+  },
+  {
+   "name": "a sample beside a spline",
+   "property": "/Plain.curve",
+   "target": {
+    "layer": "root.usda"
+   },
+   "times": [
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "spline"
+     },
+     "shows": true,
+     "time": -5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "spline"
+     },
+     "shows": true,
+     "time": 0.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "spline"
+     },
+     "shows": true,
+     "time": 5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "spline"
+     },
+     "shows": true,
+     "time": 15.0
+    }
+   ],
+   "write": "sample"
+  },
+  {
+   "name": "a stronger spline masks a spline",
+   "property": "/Plain.curve",
+   "target": {
+    "layer": "weak.usda"
+   },
+   "times": [
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "spline"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "spline"
+     },
+     "shows": false,
+     "time": -5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "spline"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "spline"
+     },
+     "shows": false,
+     "time": 0.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "spline"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "spline"
+     },
+     "shows": false,
+     "time": 5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "spline"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "spline"
+     },
+     "shows": false,
+     "time": 15.0
+    }
+   ],
+   "write": "spline"
+  },
+  {
+   "name": "a spline over a weaker default",
+   "property": "/Plain.free",
+   "target": {
+    "layer": "root.usda"
+   },
+   "times": [
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "spline"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": -5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "spline"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": 0.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "spline"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": 5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "spline"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Plain",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": 15.0
+    }
+   ],
+   "write": "spline"
+  },
+  {
+   "name": "over a schema fallback",
+   "property": "/Ball.radius",
+   "target": {
+    "layer": "weak.usda"
+   },
+   "times": [
+    {
+     "after": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Ball",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": null,
+      "node": null,
+      "source": "fallback"
+     },
+     "shows": true,
+     "time": "default"
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Ball",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": null,
+      "node": null,
+      "source": "fallback"
+     },
+     "shows": true,
+     "time": -5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Ball",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": null,
+      "node": null,
+      "source": "fallback"
+     },
+     "shows": true,
+     "time": 0.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Ball",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": null,
+      "node": null,
+      "source": "fallback"
+     },
+     "shows": true,
+     "time": 5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Ball",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": null,
+      "node": null,
+      "source": "fallback"
+     },
+     "shows": true,
+     "time": 15.0
+    }
+   ],
+   "write": "default"
+  },
+  {
+   "name": "a reference without a local opinion",
+   "property": "/Model.x",
+   "target": {
+    "arc": "reference",
+    "holder": "/Model",
+    "layer": "asset.usda",
+    "site": "/Asset"
+   },
+   "times": [
+    {
+     "after": {
+      "blocked": false,
+      "layer": "asset.usda",
+      "node": {
+       "arc": "reference",
+       "site": "/Asset",
+       "stack": "asset.usda"
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "asset.usda",
+      "node": {
+       "arc": "reference",
+       "site": "/Asset",
+       "stack": "asset.usda"
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": "default"
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "asset.usda",
+      "node": {
+       "arc": "reference",
+       "site": "/Asset",
+       "stack": "asset.usda"
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "asset.usda",
+      "node": {
+       "arc": "reference",
+       "site": "/Asset",
+       "stack": "asset.usda"
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": -5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "asset.usda",
+      "node": {
+       "arc": "reference",
+       "site": "/Asset",
+       "stack": "asset.usda"
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "asset.usda",
+      "node": {
+       "arc": "reference",
+       "site": "/Asset",
+       "stack": "asset.usda"
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": 0.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "asset.usda",
+      "node": {
+       "arc": "reference",
+       "site": "/Asset",
+       "stack": "asset.usda"
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "asset.usda",
+      "node": {
+       "arc": "reference",
+       "site": "/Asset",
+       "stack": "asset.usda"
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": 5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "asset.usda",
+      "node": {
+       "arc": "reference",
+       "site": "/Asset",
+       "stack": "asset.usda"
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "asset.usda",
+      "node": {
+       "arc": "reference",
+       "site": "/Asset",
+       "stack": "asset.usda"
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": 15.0
+    }
+   ],
+   "write": "default"
+  },
+  {
+   "name": "a reference under a local opinion",
+   "property": "/Model.local",
+   "target": {
+    "arc": "reference",
+    "holder": "/Model",
+    "layer": "asset.usda",
+    "site": "/Asset"
+   },
+   "times": [
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Model",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Model",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": false,
+     "time": "default"
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Model",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Model",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": false,
+     "time": -5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Model",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Model",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": false,
+     "time": 0.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Model",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Model",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": false,
+     "time": 5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Model",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Model",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": false,
+     "time": 15.0
+    }
+   ],
+   "write": "default"
+  },
+  {
+   "name": "a local default over referenced samples",
+   "property": "/Model.sampled",
+   "target": {
+    "layer": "root.usda"
+   },
+   "times": [
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Model",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": null,
+      "node": null,
+      "source": "none"
+     },
+     "shows": true,
+     "time": "default"
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Model",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "asset.usda",
+      "node": {
+       "arc": "reference",
+       "site": "/Asset",
+       "stack": "asset.usda"
+      },
+      "source": "time_samples"
+     },
+     "shows": true,
+     "time": -5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Model",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "asset.usda",
+      "node": {
+       "arc": "reference",
+       "site": "/Asset",
+       "stack": "asset.usda"
+      },
+      "source": "time_samples"
+     },
+     "shows": true,
+     "time": 0.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Model",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "asset.usda",
+      "node": {
+       "arc": "reference",
+       "site": "/Asset",
+       "stack": "asset.usda"
+      },
+      "source": "time_samples"
+     },
+     "shows": true,
+     "time": 5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Model",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "asset.usda",
+      "node": {
+       "arc": "reference",
+       "site": "/Asset",
+       "stack": "asset.usda"
+      },
+      "source": "time_samples"
+     },
+     "shows": true,
+     "time": 15.0
+    }
+   ],
+   "write": "default"
+  },
+  {
+   "name": "a culled reference site",
+   "property": "/Model/Bare.x",
+   "target": {
+    "arc": "reference",
+    "holder": "/Model",
+    "layer": "asset.usda",
+    "site": "/Asset"
+   },
+   "times": [
+    {
+     "after": {
+      "blocked": false,
+      "layer": "asset.usda",
+      "node": {
+       "arc": "reference",
+       "site": "/Asset/Bare",
+       "stack": "asset.usda"
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": null,
+      "node": null,
+      "source": "none"
+     },
+     "shows": true,
+     "time": -5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "asset.usda",
+      "node": {
+       "arc": "reference",
+       "site": "/Asset/Bare",
+       "stack": "asset.usda"
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": null,
+      "node": null,
+      "source": "none"
+     },
+     "shows": true,
+     "time": 0.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "asset.usda",
+      "node": {
+       "arc": "reference",
+       "site": "/Asset/Bare",
+       "stack": "asset.usda"
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": null,
+      "node": null,
+      "source": "none"
+     },
+     "shows": true,
+     "time": 5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "asset.usda",
+      "node": {
+       "arc": "reference",
+       "site": "/Asset/Bare",
+       "stack": "asset.usda"
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": null,
+      "node": null,
+      "source": "none"
+     },
+     "shows": true,
+     "time": 15.0
+    }
+   ],
+   "write": "sample"
+  },
+  {
+   "name": "the selected variant",
+   "property": "/Var.x",
+   "target": {
+    "arc": "variant",
+    "holder": "/Var",
+    "layer": "root.usda",
+    "site": "/Var{mode=on}"
+   },
+   "times": [
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "variant",
+       "site": "/Var{mode=on}",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "variant",
+       "site": "/Var{mode=on}",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": "default"
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "variant",
+       "site": "/Var{mode=on}",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "variant",
+       "site": "/Var{mode=on}",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": -5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "variant",
+       "site": "/Var{mode=on}",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "variant",
+       "site": "/Var{mode=on}",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": 0.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "variant",
+       "site": "/Var{mode=on}",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "variant",
+       "site": "/Var{mode=on}",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": 5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "variant",
+       "site": "/Var{mode=on}",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "variant",
+       "site": "/Var{mode=on}",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": 15.0
+    }
+   ],
+   "write": "default"
+  },
+  {
+   "name": "an unselected variant",
+   "property": "/Var.x",
+   "target": {
+    "layer": "root.usda",
+    "variant": "/Var{mode=off}"
+   },
+   "times": [
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "variant",
+       "site": "/Var{mode=on}",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "variant",
+       "site": "/Var{mode=on}",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": false,
+     "time": "default"
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "variant",
+       "site": "/Var{mode=on}",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "variant",
+       "site": "/Var{mode=on}",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": false,
+     "time": -5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "variant",
+       "site": "/Var{mode=on}",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "variant",
+       "site": "/Var{mode=on}",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": false,
+     "time": 0.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "variant",
+       "site": "/Var{mode=on}",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "variant",
+       "site": "/Var{mode=on}",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": false,
+     "time": 5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "variant",
+       "site": "/Var{mode=on}",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "variant",
+       "site": "/Var{mode=on}",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": false,
+     "time": 15.0
+    }
+   ],
+   "write": "default"
+  },
+  {
+   "name": "a local sample over a variant",
+   "property": "/Var.x",
+   "target": {
+    "layer": "root.usda"
+   },
+   "times": [
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Var",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "variant",
+       "site": "/Var{mode=on}",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": -5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Var",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "variant",
+       "site": "/Var{mode=on}",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": 0.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Var",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "variant",
+       "site": "/Var{mode=on}",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": 5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Var",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "variant",
+       "site": "/Var{mode=on}",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": 15.0
+    }
+   ],
+   "write": "sample"
+  },
+  {
+   "name": "the inherited class",
+   "property": "/Kid.inherited",
+   "target": {
+    "arc": "inherit",
+    "holder": "/Kid",
+    "layer": "root.usda",
+    "site": "/Base"
+   },
+   "times": [
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "inherit",
+       "site": "/Base",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "inherit",
+       "site": "/Base",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": "default"
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "inherit",
+       "site": "/Base",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "inherit",
+       "site": "/Base",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": -5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "inherit",
+       "site": "/Base",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "inherit",
+       "site": "/Base",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": 0.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "inherit",
+       "site": "/Base",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "inherit",
+       "site": "/Base",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": 5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "inherit",
+       "site": "/Base",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "inherit",
+       "site": "/Base",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": 15.0
+    }
+   ],
+   "write": "default"
+  },
+  {
+   "name": "a local sample over an inherited class",
+   "property": "/Kid.inherited",
+   "target": {
+    "layer": "root.usda"
+   },
+   "times": [
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Kid",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "inherit",
+       "site": "/Base",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": -5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Kid",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "inherit",
+       "site": "/Base",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": 0.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Kid",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "inherit",
+       "site": "/Base",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": 5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Kid",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "inherit",
+       "site": "/Base",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": 15.0
+    }
+   ],
+   "write": "sample"
+  },
+  {
+   "name": "a relocated prim's local opinion",
+   "property": "/Model/Moved.x",
+   "target": {
+    "layer": "root.usda"
+   },
+   "times": [
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Model/Moved",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "asset.usda",
+      "node": {
+       "arc": "reference",
+       "site": "/Asset/Child",
+       "stack": "asset.usda"
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": "default"
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Model/Moved",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "asset.usda",
+      "node": {
+       "arc": "reference",
+       "site": "/Asset/Child",
+       "stack": "asset.usda"
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": -5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Model/Moved",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "asset.usda",
+      "node": {
+       "arc": "reference",
+       "site": "/Asset/Child",
+       "stack": "asset.usda"
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": 0.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Model/Moved",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "asset.usda",
+      "node": {
+       "arc": "reference",
+       "site": "/Asset/Child",
+       "stack": "asset.usda"
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": 5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Model/Moved",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "asset.usda",
+      "node": {
+       "arc": "reference",
+       "site": "/Asset/Child",
+       "stack": "asset.usda"
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": 15.0
+    }
+   ],
+   "write": "default"
+  },
+  {
+   "name": "a relocated prim's source",
+   "property": "/Model/Moved.x",
+   "target": {
+    "arc": "reference",
+    "holder": "/Model/Moved",
+    "layer": "asset.usda",
+    "site": "/Asset/Child"
+   },
+   "times": [
+    {
+     "after": {
+      "blocked": false,
+      "layer": "asset.usda",
+      "node": {
+       "arc": "reference",
+       "site": "/Asset/Child",
+       "stack": "asset.usda"
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "asset.usda",
+      "node": {
+       "arc": "reference",
+       "site": "/Asset/Child",
+       "stack": "asset.usda"
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": -5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "asset.usda",
+      "node": {
+       "arc": "reference",
+       "site": "/Asset/Child",
+       "stack": "asset.usda"
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "asset.usda",
+      "node": {
+       "arc": "reference",
+       "site": "/Asset/Child",
+       "stack": "asset.usda"
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": 0.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "asset.usda",
+      "node": {
+       "arc": "reference",
+       "site": "/Asset/Child",
+       "stack": "asset.usda"
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "asset.usda",
+      "node": {
+       "arc": "reference",
+       "site": "/Asset/Child",
+       "stack": "asset.usda"
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": 5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "asset.usda",
+      "node": {
+       "arc": "reference",
+       "site": "/Asset/Child",
+       "stack": "asset.usda"
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "asset.usda",
+      "node": {
+       "arc": "reference",
+       "site": "/Asset/Child",
+       "stack": "asset.usda"
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": 15.0
+    }
+   ],
+   "write": "sample"
+  },
+  {
+   "name": "an instance proxy's prototype",
+   "property": "/Inst/Child.x",
+   "target": {
+    "arc": "reference",
+    "holder": "/Inst",
+    "layer": "asset.usda",
+    "site": "/Asset"
+   },
+   "times": [
+    {
+     "after": {
+      "blocked": false,
+      "layer": "asset.usda",
+      "node": {
+       "arc": "reference",
+       "site": "/Asset/Child",
+       "stack": "asset.usda"
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "asset.usda",
+      "node": {
+       "arc": "reference",
+       "site": "/Asset/Child",
+       "stack": "asset.usda"
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": "default"
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "asset.usda",
+      "node": {
+       "arc": "reference",
+       "site": "/Asset/Child",
+       "stack": "asset.usda"
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "asset.usda",
+      "node": {
+       "arc": "reference",
+       "site": "/Asset/Child",
+       "stack": "asset.usda"
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": -5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "asset.usda",
+      "node": {
+       "arc": "reference",
+       "site": "/Asset/Child",
+       "stack": "asset.usda"
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "asset.usda",
+      "node": {
+       "arc": "reference",
+       "site": "/Asset/Child",
+       "stack": "asset.usda"
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": 0.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "asset.usda",
+      "node": {
+       "arc": "reference",
+       "site": "/Asset/Child",
+       "stack": "asset.usda"
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "asset.usda",
+      "node": {
+       "arc": "reference",
+       "site": "/Asset/Child",
+       "stack": "asset.usda"
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": 5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "asset.usda",
+      "node": {
+       "arc": "reference",
+       "site": "/Asset/Child",
+       "stack": "asset.usda"
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "asset.usda",
+      "node": {
+       "arc": "reference",
+       "site": "/Asset/Child",
+       "stack": "asset.usda"
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": 15.0
+    }
+   ],
+   "write": "default"
+  },
+  {
+   "name": "an instance proxy's local opinion",
+   "property": "/Inst/Child.x",
+   "target": {
+    "layer": "root.usda"
+   },
+   "times": [
+    {
+     "after": {
+      "blocked": false,
+      "layer": "asset.usda",
+      "node": {
+       "arc": "reference",
+       "site": "/Asset/Child",
+       "stack": "asset.usda"
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "asset.usda",
+      "node": {
+       "arc": "reference",
+       "site": "/Asset/Child",
+       "stack": "asset.usda"
+      },
+      "source": "default"
+     },
+     "shows": false,
+     "time": "default"
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "asset.usda",
+      "node": {
+       "arc": "reference",
+       "site": "/Asset/Child",
+       "stack": "asset.usda"
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "asset.usda",
+      "node": {
+       "arc": "reference",
+       "site": "/Asset/Child",
+       "stack": "asset.usda"
+      },
+      "source": "default"
+     },
+     "shows": false,
+     "time": -5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "asset.usda",
+      "node": {
+       "arc": "reference",
+       "site": "/Asset/Child",
+       "stack": "asset.usda"
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "asset.usda",
+      "node": {
+       "arc": "reference",
+       "site": "/Asset/Child",
+       "stack": "asset.usda"
+      },
+      "source": "default"
+     },
+     "shows": false,
+     "time": 0.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "asset.usda",
+      "node": {
+       "arc": "reference",
+       "site": "/Asset/Child",
+       "stack": "asset.usda"
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "asset.usda",
+      "node": {
+       "arc": "reference",
+       "site": "/Asset/Child",
+       "stack": "asset.usda"
+      },
+      "source": "default"
+     },
+     "shows": false,
+     "time": 5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "asset.usda",
+      "node": {
+       "arc": "reference",
+       "site": "/Asset/Child",
+       "stack": "asset.usda"
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "asset.usda",
+      "node": {
+       "arc": "reference",
+       "site": "/Asset/Child",
+       "stack": "asset.usda"
+      },
+      "source": "default"
+     },
+     "shows": false,
+     "time": 15.0
+    }
+   ],
+   "write": "default"
+  },
+  {
+   "name": "clips mask a default",
+   "property": "/Clipped.x",
+   "target": {
+    "layer": "weak.usda"
+   },
+   "times": [
+    {
+     "after": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Clipped",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Clipped",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": "default"
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Clipped",
+       "stack": ""
+      },
+      "source": "value_clips"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Clipped",
+       "stack": ""
+      },
+      "source": "value_clips"
+     },
+     "shows": false,
+     "time": -5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Clipped",
+       "stack": ""
+      },
+      "source": "value_clips"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Clipped",
+       "stack": ""
+      },
+      "source": "value_clips"
+     },
+     "shows": false,
+     "time": 0.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Clipped",
+       "stack": ""
+      },
+      "source": "value_clips"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Clipped",
+       "stack": ""
+      },
+      "source": "value_clips"
+     },
+     "shows": false,
+     "time": 5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Clipped",
+       "stack": ""
+      },
+      "source": "value_clips"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Clipped",
+       "stack": ""
+      },
+      "source": "value_clips"
+     },
+     "shows": false,
+     "time": 15.0
+    }
+   ],
+   "write": "default"
+  },
+  {
+   "name": "clips mask a sample with no clip value",
+   "property": "/Clipped.y",
+   "target": {
+    "layer": "weak.usda"
+   },
+   "times": [
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Clipped",
+       "stack": ""
+      },
+      "source": "value_clips"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Clipped",
+       "stack": ""
+      },
+      "source": "value_clips"
+     },
+     "shows": false,
+     "time": -5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Clipped",
+       "stack": ""
+      },
+      "source": "value_clips"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Clipped",
+       "stack": ""
+      },
+      "source": "value_clips"
+     },
+     "shows": false,
+     "time": 0.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Clipped",
+       "stack": ""
+      },
+      "source": "value_clips"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Clipped",
+       "stack": ""
+      },
+      "source": "value_clips"
+     },
+     "shows": false,
+     "time": 5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Clipped",
+       "stack": ""
+      },
+      "source": "value_clips"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Clipped",
+       "stack": ""
+      },
+      "source": "value_clips"
+     },
+     "shows": false,
+     "time": 15.0
+    }
+   ],
+   "write": "sample"
+  },
+  {
+   "name": "a uniform manifest attribute",
+   "property": "/Clipped.u",
+   "target": {
+    "layer": "weak.usda"
+   },
+   "times": [
+    {
+     "after": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Clipped",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Clipped",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": "default"
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Clipped",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Clipped",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": -5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Clipped",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Clipped",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": 0.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Clipped",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Clipped",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": 5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Clipped",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Clipped",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": 15.0
+    }
+   ],
+   "write": "default"
+  },
+  {
+   "name": "a sample at the clips' anchor",
+   "property": "/Clipped.x",
+   "target": {
+    "layer": "root.usda"
+   },
+   "times": [
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Clipped",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Clipped",
+       "stack": ""
+      },
+      "source": "value_clips"
+     },
+     "shows": true,
+     "time": -5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Clipped",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Clipped",
+       "stack": ""
+      },
+      "source": "value_clips"
+     },
+     "shows": true,
+     "time": 0.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Clipped",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Clipped",
+       "stack": ""
+      },
+      "source": "value_clips"
+     },
+     "shows": true,
+     "time": 5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Clipped",
+       "stack": ""
+      },
+      "source": "time_samples"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/Clipped",
+       "stack": ""
+      },
+      "source": "value_clips"
+     },
+     "shows": true,
+     "time": 15.0
+    }
+   ],
+   "write": "sample"
+  },
+  {
+   "name": "generated manifest clips before activation",
+   "property": "/AutoClipped.z",
+   "target": {
+    "layer": "weak.usda"
+   },
+   "times": [
+    {
+     "after": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/AutoClipped",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/AutoClipped",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": "default"
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/AutoClipped",
+       "stack": ""
+      },
+      "source": "value_clips"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/AutoClipped",
+       "stack": ""
+      },
+      "source": "value_clips"
+     },
+     "shows": false,
+     "time": -5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/AutoClipped",
+       "stack": ""
+      },
+      "source": "value_clips"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/AutoClipped",
+       "stack": ""
+      },
+      "source": "value_clips"
+     },
+     "shows": false,
+     "time": 0.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/AutoClipped",
+       "stack": ""
+      },
+      "source": "value_clips"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/AutoClipped",
+       "stack": ""
+      },
+      "source": "value_clips"
+     },
+     "shows": false,
+     "time": 5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/AutoClipped",
+       "stack": ""
+      },
+      "source": "value_clips"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "root.usda",
+      "node": {
+       "arc": "root",
+       "site": "/AutoClipped",
+       "stack": ""
+      },
+      "source": "value_clips"
+     },
+     "shows": false,
+     "time": 15.0
+    }
+   ],
+   "write": "default"
+  },
+  {
+   "name": "an attribute no clip holds",
+   "property": "/AutoClipped.y",
+   "target": {
+    "layer": "weak.usda"
+   },
+   "times": [
+    {
+     "after": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/AutoClipped",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/AutoClipped",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": "default"
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/AutoClipped",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/AutoClipped",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": -5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/AutoClipped",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/AutoClipped",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": 0.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/AutoClipped",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/AutoClipped",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": 5.0
+    },
+    {
+     "after": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/AutoClipped",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "before": {
+      "blocked": false,
+      "layer": "weak.usda",
+      "node": {
+       "arc": "root",
+       "site": "/AutoClipped",
+       "stack": ""
+      },
+      "source": "default"
+     },
+     "shows": true,
+     "time": 15.0
+    }
+   ],
+   "write": "default"
+  }
+ ],
+ "openusd_version": "26.8",
+ "root": "root.usda"
+}

@@ -1,0 +1,25 @@
+#usda 1.0
+
+over "Plain"
+{
+    double animBlocked = 6
+    double animBlocked.timeSamples = {
+        0: 4,
+    }
+    double free = 7
+    double sampled = 5
+}
+
+over "Clipped"
+{
+    uniform double u = 3
+    double x = 1
+    double y = 2
+}
+
+over "AutoClipped"
+{
+    double x = 1
+    double y = 2
+    double z = 3
+}

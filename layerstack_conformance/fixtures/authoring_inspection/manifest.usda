@@ -1,0 +1,8 @@
+#usda 1.0
+
+over "Clip"
+{
+    uniform double u
+    double x
+    double y
+}

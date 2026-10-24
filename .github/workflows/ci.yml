@@ -535,6 +535,12 @@ jobs:
       - name: check define prim oracle
         run: python layerstack_conformance/scripts/define_prim_oracle.py --check
 
+      # The authoring inspection oracle must be where OpenUSD's
+      # `UsdAttribute::GetResolveInfo` reads a value before and after each
+      # prospective write.
+      - name: check authoring inspection oracle
+        run: python layerstack_conformance/scripts/authoring_inspection_oracle.py --check
+
       # The make visible oracle must be what OpenUSD's
       # `UsdGeomImageable::MakeVisible` and `MakeInvisible` author, call by call.
       - name: check make visible oracle

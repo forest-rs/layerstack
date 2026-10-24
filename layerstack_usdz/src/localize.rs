@@ -21,6 +21,7 @@ use alloc::{
     vec::Vec,
 };
 use core::fmt;
+use layerstack::asset::UdimPattern;
 use layerstack::asset_dependencies::{AssetDependency, rewrite_layer_assets};
 use layerstack::{Layer, LayerId, LayerStore, PathInterner, TokenInterner};
 
@@ -139,6 +140,14 @@ pub enum LocalizationError {
         /// Unrepresented destination identifier.
         member: Arc<str>,
     },
+    /// A UDIM destination pattern was supplied a file that is none of its
+    /// tiles, so the copied layer could never find it.
+    UnmatchedTile {
+        /// Destination pattern, such as `textures/color.<UDIM>.png`.
+        pattern: Arc<str>,
+        /// The supplied member, which spells no tile of `pattern`.
+        member: Arc<str>,
+    },
     /// Destination layer extension has no serializer here.
     UnsupportedLayerFormat {
         /// Rejected member.
@@ -174,6 +183,12 @@ impl fmt::Display for LocalizationError {
                 f,
                 "replacement {member:?} names no supplied localization resource"
             ),
+            Self::UnmatchedTile { pattern, member } => {
+                write!(
+                    f,
+                    "localization member {member:?} is no tile of {pattern:?}"
+                )
+            }
             Self::UnsupportedLayerFormat { member } => {
                 write!(f, "no layer serializer for {member:?}")
             }
@@ -200,8 +215,10 @@ impl core::error::Error for LocalizationError {
 /// Every variant and authored asset use is visited, even when unselected.
 ///
 /// For a pattern, the host supplies its destination pattern and all concrete
-/// files. Pattern expansion correctness is host-owned; missing expansion is an
-/// error. No partial plan is returned after a resolution or naming failure.
+/// files. Which tiles or clips exist is host-owned; missing expansion is an
+/// error, and every file supplied for a UDIM pattern must be one of its tiles
+/// ([`UdimPattern::tile_of`]), as the copied layer finds them by spelling.
+/// No partial plan is returned after a resolution or naming failure.
 pub fn localize_asset(
     store: &dyn LayerStore,
     root: LayerId,
@@ -238,6 +255,18 @@ pub fn localize_asset(
             {
                 return Err(LocalizationError::MissingReplacement {
                     member: target.member,
+                });
+            }
+            if let Some(pattern) = UdimPattern::parse(&target.member)
+                && let Some(stray) = target
+                    .resources
+                    .iter()
+                    .map(resource_member)
+                    .find(|member| pattern.tile_of(member).is_none())
+            {
+                return Err(LocalizationError::UnmatchedTile {
+                    pattern: target.member.clone(),
+                    member: stray.clone(),
                 });
             }
             for resource in target.resources {
@@ -337,7 +366,7 @@ fn resource_member(resource: &LocalizationResource) -> &Arc<str> {
     }
 }
 fn is_pattern(member: &str) -> bool {
-    member.contains("<UDIM>") || member.contains('#')
+    UdimPattern::parse(member).is_some() || member.contains('#')
 }
 fn valid_member(member: &Arc<str>) -> Result<(), LocalizationError> {
     if member.is_empty()

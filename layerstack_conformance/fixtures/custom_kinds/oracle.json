@@ -1,0 +1,192 @@
+{
+ "base_kinds": {
+  "assembly": "group",
+  "component": "model",
+  "group": "model",
+  "lab_bench": "component",
+  "lab_station": "lab_wing",
+  "lab_wing": "assembly",
+  "model": "",
+  "stack_blank": "",
+  "stack_branch": "component",
+  "stack_extra": "stack_leaf",
+  "stack_leaf": "stack_branch",
+  "stack_orphan": "stack_missing",
+  "stack_ring_a": "stack_ring_b",
+  "stack_ring_b": "stack_ring_a",
+  "stack_root": "",
+  "stack_spur": "stack_ring_a",
+  "subcomponent": ""
+ },
+ "errors": [
+  "Expected dict for kind 'listed'",
+  "Expected string for baseKind",
+  "Invalid kind: 'bad name'",
+  "Kind 'model' has already been registered",
+  "Kind 'stack_leaf' has already been registered"
+ ],
+ "hangs": {
+  "stack_ring_a": [
+   "assembly",
+   "component",
+   "group",
+   "lab_bench",
+   "lab_station",
+   "lab_wing",
+   "model",
+   "stack_blank",
+   "stack_branch",
+   "stack_extra",
+   "stack_leaf",
+   "stack_orphan",
+   "stack_root",
+   "stack_spur",
+   "subcomponent",
+   "stack_missing",
+   "unknown"
+  ],
+  "stack_ring_b": [
+   "assembly",
+   "component",
+   "group",
+   "lab_bench",
+   "lab_station",
+   "lab_wing",
+   "model",
+   "stack_blank",
+   "stack_branch",
+   "stack_extra",
+   "stack_leaf",
+   "stack_orphan",
+   "stack_root",
+   "stack_spur",
+   "subcomponent",
+   "stack_missing",
+   "unknown"
+  ],
+  "stack_spur": [
+   "assembly",
+   "component",
+   "group",
+   "lab_bench",
+   "lab_station",
+   "lab_wing",
+   "model",
+   "stack_blank",
+   "stack_branch",
+   "stack_extra",
+   "stack_leaf",
+   "stack_orphan",
+   "stack_root",
+   "subcomponent",
+   "stack_missing",
+   "unknown"
+  ]
+ },
+ "is_a": {
+  "assembly": [
+   "assembly",
+   "group",
+   "model"
+  ],
+  "component": [
+   "component",
+   "model"
+  ],
+  "group": [
+   "group",
+   "model"
+  ],
+  "lab_bench": [
+   "component",
+   "lab_bench",
+   "model"
+  ],
+  "lab_station": [
+   "assembly",
+   "group",
+   "lab_station",
+   "lab_wing",
+   "model"
+  ],
+  "lab_wing": [
+   "assembly",
+   "group",
+   "lab_wing",
+   "model"
+  ],
+  "model": [
+   "model"
+  ],
+  "stack_blank": [
+   "stack_blank"
+  ],
+  "stack_branch": [
+   "component",
+   "model",
+   "stack_branch"
+  ],
+  "stack_extra": [
+   "component",
+   "model",
+   "stack_branch",
+   "stack_extra",
+   "stack_leaf"
+  ],
+  "stack_leaf": [
+   "component",
+   "model",
+   "stack_branch",
+   "stack_leaf"
+  ],
+  "stack_missing": [
+   "stack_missing"
+  ],
+  "stack_orphan": [
+   "stack_orphan",
+   "stack_missing"
+  ],
+  "stack_ring_a": [
+   "stack_ring_a",
+   "stack_ring_b"
+  ],
+  "stack_ring_b": [
+   "stack_ring_a",
+   "stack_ring_b"
+  ],
+  "stack_root": [
+   "stack_root"
+  ],
+  "stack_spur": [
+   "stack_ring_a",
+   "stack_ring_b",
+   "stack_spur"
+  ],
+  "subcomponent": [
+   "subcomponent"
+  ],
+  "unknown": [
+   "unknown"
+  ]
+ },
+ "kinds": [
+  "assembly",
+  "component",
+  "group",
+  "lab_bench",
+  "lab_station",
+  "lab_wing",
+  "model",
+  "stack_blank",
+  "stack_branch",
+  "stack_extra",
+  "stack_leaf",
+  "stack_orphan",
+  "stack_ring_a",
+  "stack_ring_b",
+  "stack_root",
+  "stack_spur",
+  "subcomponent"
+ ],
+ "openusd_version": "0.26.8"
+}

@@ -5,7 +5,10 @@
 //!
 //! A schema ascribes properties, each with a declared type, variability and
 //! optional fallback, to composed prims. A *typed* schema is the prim's
-//! type (its `typeName`), with single inheritance; an *applied* schema is
+//! type (its `typeName`), with single inheritance of properties from its
+//! parent, and ancestry that additional bases can widen as a hand-written
+//! `plugInfo.json`'s `bases` do ([`SchemaRegistry::ancestors`]); an
+//! *applied* schema is
 //! named in the prim's `apiSchemas` list op, once for a single-apply schema
 //! and once per instance name for a multiple-apply one.
 //!
@@ -242,10 +245,27 @@ pub struct SchemaDefinition {
     /// Typed or applied, and which of each.
     pub kind: SchemaKind,
     /// The typed schema this typed schema inherits from, whose properties
-    /// and built-ins it has too, weaker than its own.
+    /// and built-ins it has too, weaker than its own (unless it is
+    /// [flattened](SchemaDefinition::flattened)): the class usdGenSchema's
+    /// single `inherits` names, and the first of the `bases` its
+    /// `plugInfo.json` declares.
     ///
     /// Spec: AOUSD Core §13.3.1 (single inheritance).
     pub parent: Option<TokenId>,
+    /// Further typed schemas the schema is, after its parent, in the order
+    /// a hand-written `plugInfo.json` lists them in `bases` (usdGenSchema
+    /// writes one base only). They give ancestry and nothing else: the
+    /// schema [`is_a`](SchemaRegistry::is_a) each of them and their
+    /// ancestors, so the auto-applies and `apiSchemaCanOnlyApplyTo` lists
+    /// naming them reach it, and they order its
+    /// [`ancestors`](SchemaRegistry::ancestors); no property, built-in or
+    /// override of theirs composes in, as none does in OpenUSD, whose prim
+    /// definition is the generated class alone.
+    ///
+    /// OpenUSD: `TfType` bases (`PlugPlugin::_DeclareType`), which
+    /// `UsdPrim::IsA`, `UsdPrim::CanApplyAPI` and the auto-applies
+    /// (`TfType::GetAllDerivedTypes`) follow.
+    pub additional_bases: Vec<TokenId>,
     /// Whether [`SchemaDefinition::properties`], [`SchemaDefinition::built_ins`]
     /// and [`SchemaDefinition::overrides`] already hold those of the schemas
     /// it inherits from, as each class of a generated schema layer does
@@ -310,6 +330,7 @@ impl SchemaDefinition {
             name,
             kind,
             parent: None,
+            additional_bases: Vec::new(),
             flattened: false,
             built_ins: Vec::new(),
             properties: Vec::new(),
@@ -336,6 +357,15 @@ impl SchemaDefinition {
     #[must_use]
     pub fn with_parent(mut self, parent: TokenId) -> Self {
         self.parent = Some(parent);
+        self
+    }
+
+    /// Adds a typed schema this one also is, after its parent and the
+    /// bases added before ([`SchemaDefinition::additional_bases`])
+    /// (builder).
+    #[must_use]
+    pub fn with_additional_base(mut self, base: TokenId) -> Self {
+        self.additional_bases.push(base);
         self
     }
 
@@ -475,15 +505,46 @@ pub enum SchemaIssue {
         /// The target, as given.
         target: TokenId,
     },
-    /// `schema` inherits from `parent`, which is not a registered typed
-    /// schema or inherits from `schema` itself; the inheritance chain stops
-    /// there.
-    InvalidParent {
-        /// The inheriting schema.
+    /// `schema`'s parent or one of its additional bases is left out of its
+    /// ancestry, for `reason`; the rest of its bases still count.
+    ///
+    /// OpenUSD: a base without schema info fails the registry's
+    /// verification ("Could not find schema info for base type",
+    /// `UsdSchemaRegistry::_PruneBaseClassPropertiesForPrimDefinition`);
+    /// a type among its own bases is a fatal error (`TfType::Declare`).
+    InvalidBase {
+        /// The schema declaring the base.
         schema: TokenId,
-        /// The parent, as given.
-        parent: TokenId,
+        /// The base, as given.
+        base: TokenId,
+        /// Why it is left out.
+        reason: InvalidBaseReason,
     },
+    /// `schema`'s bases list two of its ancestors in an order other
+    /// bases contradict, so they have no C3 linearization: the schema still
+    /// is every ancestor, but [`SchemaRegistry::ancestors`] orders them only
+    /// up to the contradiction, then depth first.
+    ///
+    /// OpenUSD: `TfType::GetAllAncestorTypes` reports the hierarchy as
+    /// inconsistent; `TfType::IsA` still finds every ancestor.
+    InconsistentAncestry {
+        /// The schema.
+        schema: TokenId,
+        /// Its parent and additional bases, in order.
+        bases: Vec<TokenId>,
+    },
+}
+
+/// Why a base is left out of a schema's ancestry
+/// ([`SchemaIssue::InvalidBase`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum InvalidBaseReason {
+    /// No registered schema has the name.
+    Unregistered,
+    /// The base is an applied schema, not a typed one.
+    NotTyped,
+    /// The base is, or derives from, the schema itself.
+    Cycle,
 }
 
 /// Collects schema definitions and auto-applies, then builds a
@@ -582,8 +643,7 @@ impl SchemaRegistryBuilder {
         let mut names: Vec<TokenId> = schemas.keys().copied().collect();
         names.sort_unstable();
         for &name in &names {
-            let chain = build.type_chain(name);
-            build.chains.insert(name, chain);
+            build.ancestry(name, &mut Vec::new());
         }
         build.collect_auto_applies(&self.auto_applies);
 
@@ -835,14 +895,28 @@ impl SchemaRegistry {
     }
 
     /// Whether the typed schema `type_name` is `schema` or inherits from it,
-    /// abstract ancestors included.
+    /// abstract ancestors and additional bases included.
     ///
-    /// Spec: AOUSD Core §13.3.1.
+    /// Spec: AOUSD Core §13.3.1. OpenUSD: `TfType::IsA` of the schema types.
     #[must_use]
     pub fn is_a(&self, type_name: TokenId, schema: TokenId) -> bool {
         self.definitions
             .get(&type_name)
             .is_some_and(|definition| definition.is_a(schema))
+    }
+
+    /// The typed schema `type_name` and the typed schemas it is, in
+    /// OpenUSD's order ([`PrimDefinition::ancestors`]); empty when it is not
+    /// a registered typed schema. An abstract schema has ancestors too,
+    /// though a prim typed with it is typeless.
+    ///
+    /// OpenUSD: `TfType::GetAllAncestorTypes` (C3), less its non-schema
+    /// types.
+    #[must_use]
+    pub fn ancestors(&self, type_name: TokenId) -> &[TokenId] {
+        self.definitions
+            .get(&type_name)
+            .map_or(&[], |definition| definition.ancestors())
     }
 
     /// The prim definition of a composed prim whose resolved `typeName` is
@@ -1118,7 +1192,7 @@ struct Build<'a> {
     schemas: &'a HashMap<TokenId, SchemaDefinition>,
     tokens: &'a TokenInterner,
     placeholder: TokenId,
-    /// Each typed schema and its ancestors, nearest first.
+    /// Each typed schema and its ancestors, in C3 order.
     chains: HashMap<TokenId, Vec<TokenId>>,
     /// The schemas auto-applied to each schema, strongest first.
     auto_applied: HashMap<TokenId, Vec<TokenId>>,
@@ -1135,36 +1209,98 @@ impl<'a> Build<'a> {
         }
     }
 
-    /// `name` and the typed schemas it inherits from, nearest first.
-    fn type_chain(&mut self, name: TokenId) -> Vec<TokenId> {
-        let mut chain = vec![name];
+    /// `name` and the typed schemas it is, in OpenUSD's order: the C3
+    /// linearization of its parent and additional bases (`TfType`'s
+    /// `GetAllAncestorTypes`), each base's ancestry merged after it. Bases
+    /// that are not registered typed schemas, or are being linearized
+    /// (`visiting`, a cycle), are left out with an issue. Memoized in
+    /// `chains`.
+    fn ancestry(&mut self, name: TokenId, visiting: &mut Vec<TokenId>) -> Vec<TokenId> {
+        if let Some(chain) = self.chains.get(&name) {
+            return chain.clone();
+        }
         let Some(schema) = self.schemas.get(&name) else {
-            return chain;
+            return vec![name];
         };
         if !schema.kind.is_typed() {
-            return chain;
+            return vec![name];
         }
-        let mut current = schema;
-        while let Some(parent) = current.parent {
-            match self.schemas.get(&parent) {
-                Some(next) if next.kind.is_typed() && !chain.contains(&parent) => {
-                    chain.push(parent);
-                    current = next;
-                }
-                _ => {
-                    self.issue(SchemaIssue::InvalidParent {
-                        schema: current.name,
-                        parent,
-                    });
-                    break;
-                }
+        let declared: Vec<TokenId> = schema
+            .parent
+            .iter()
+            .chain(&schema.additional_bases)
+            .copied()
+            .collect();
+        visiting.push(name);
+        let mut bases = Vec::new();
+        for &base in &declared {
+            let reason = match self.schemas.get(&base) {
+                None => Some(InvalidBaseReason::Unregistered),
+                Some(found) if !found.kind.is_typed() => Some(InvalidBaseReason::NotTyped),
+                Some(_) if visiting.contains(&base) => Some(InvalidBaseReason::Cycle),
+                Some(_) => None,
+            };
+            match reason {
+                Some(reason) => self.issue(SchemaIssue::InvalidBase {
+                    schema: name,
+                    base,
+                    reason,
+                }),
+                None if !bases.contains(&base) => bases.push(base),
+                None => {}
             }
+        }
+        let inherited: Vec<Vec<TokenId>> = bases
+            .iter()
+            .map(|&base| self.ancestry(base, visiting))
+            .collect();
+        visiting.pop();
+        let chain = match inherited.as_slice() {
+            [] => vec![name],
+            [only] => core::iter::once(name).chain(only.iter().copied()).collect(),
+            _ => {
+                let mut sequences = vec![vec![name], bases.clone()];
+                sequences.extend(inherited.iter().cloned());
+                let (mut chain, consistent) = c3_merge(sequences);
+                if !consistent {
+                    self.issue(SchemaIssue::InconsistentAncestry {
+                        schema: name,
+                        bases: declared,
+                    });
+                    // The rest depth first, so the schema is still each.
+                    for ancestor in inherited.iter().flatten() {
+                        if !chain.contains(ancestor) {
+                            chain.push(*ancestor);
+                        }
+                    }
+                }
+                chain
+            }
+        };
+        self.chains.insert(name, chain.clone());
+        chain
+    }
+
+    /// `name` and the parents whose properties, built-ins and overrides
+    /// its definition composes: up to the first flattened one, which holds
+    /// the rest, and never past a parent left out of its ancestry.
+    fn property_chain(&self, name: TokenId) -> Vec<TokenId> {
+        let mut chain = vec![name];
+        let mut current = &self.schemas[&name];
+        while !current.flattened
+            && let Some(parent) = current.parent
+            && self.chains[&current.name].contains(&parent)
+            && !chain.contains(&parent)
+        {
+            chain.push(parent);
+            current = &self.schemas[&parent];
         }
         chain
     }
 
     /// Distributes the auto-applies to their targets: a typed target and
-    /// every schema derived from it, or an applied target. Each target's
+    /// every schema derived from it through any of its bases
+    /// (`TfType::GetAllDerivedTypes`), or an applied target. Each target's
     /// list is in reverse dictionary order, as OpenUSD orders it
     /// (`Usd_SortAutoAppliedAPISchemas`).
     fn collect_auto_applies(&mut self, auto_applies: &[(TokenId, TokenId)]) {
@@ -1329,17 +1465,10 @@ impl<'a> Build<'a> {
     /// Spec: AOUSD Core §13.3.1 (inheritance), §13.3.2.3.
     fn typed_definition(&mut self, name: TokenId) -> PrimDefinition {
         let schemas = self.schemas;
-        let chain = self.chains[&name].clone();
         let mut definition = PrimDefinition::default();
         definition.type_name = Some(name);
-        definition.type_chain.clone_from(&chain);
-        // What the definition composes: the schema and its parent chain up
-        // to the first flattened one, which holds the rest already.
-        let flattened = chain
-            .iter()
-            .position(|ancestor| schemas[ancestor].flattened)
-            .map_or(chain.len(), |at| at + 1);
-        let chain = &chain[..flattened];
+        definition.ancestors.clone_from(&self.chains[&name]);
+        let chain = &self.property_chain(name);
         let mut inclusions = Vec::new();
         for ancestor in chain {
             let ancestor = &schemas[ancestor];
@@ -1412,5 +1541,37 @@ impl<'a> Build<'a> {
     }
 }
 
+/// Merges `sequences` as C3 linearization does: repeatedly takes the first
+/// head of a sequence that is in no sequence's tail. Returns what was
+/// merged and whether every sequence was consumed; when not, the
+/// hierarchy is inconsistent and the merge stopped there.
+///
+/// OpenUSD: `_MergeAncestors` (`pxr/base/tf/type.cpp`).
+fn c3_merge(mut sequences: Vec<Vec<TokenId>>) -> (Vec<TokenId>, bool) {
+    let mut merged = Vec::new();
+    loop {
+        sequences.retain(|sequence| !sequence.is_empty());
+        if sequences.is_empty() {
+            return (merged, true);
+        }
+        let Some(candidate) = sequences
+            .iter()
+            .map(|sequence| sequence[0])
+            .find(|candidate| {
+                sequences
+                    .iter()
+                    .all(|sequence| !sequence[1..].contains(candidate))
+            })
+        else {
+            return (merged, false);
+        };
+        merged.push(candidate);
+        for sequence in &mut sequences {
+            if sequence[0] == candidate {
+                sequence.remove(0);
+            }
+        }
+    }
+}
 #[cfg(test)]
 mod tests;

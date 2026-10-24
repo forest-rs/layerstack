@@ -1,0 +1,216 @@
+{
+ "openusd_version": "0.26.8",
+ "registry_errors": [
+  "Failed verification: ' schemaInfo ' -- Could not find schema info for base type 'SbMixin' of schema 'Gadget'",
+  "Failed verification: ' schemaInfo ' -- Could not find schema info for base type 'SbNowhere' of schema 'Stray'"
+ ],
+ "types": {
+  "Body": {
+   "ancestor_errors": [],
+   "ancestors": [
+    "Body",
+    "Typed"
+   ],
+   "applied_schemas": [],
+   "can_apply": {
+    "OnlyAPI": false,
+    "TagAPI": true
+   },
+   "is_a": [],
+   "properties": [
+    "body:mass"
+   ],
+   "schema": true
+  },
+  "Gadget": {
+   "ancestor_errors": [],
+   "ancestors": [
+    "Gadget",
+    "Thing",
+    "Body",
+    "Tagged",
+    "Typed"
+   ],
+   "applied_schemas": [
+    "TagAPI"
+   ],
+   "can_apply": {
+    "OnlyAPI": true,
+    "TagAPI": true
+   },
+   "is_a": [
+    "Body",
+    "Gadget",
+    "Tagged",
+    "Thing",
+    "Typed"
+   ],
+   "properties": [
+    "body:mass",
+    "gadget:count",
+    "tag:mode",
+    "thing:size"
+   ],
+   "schema": true
+  },
+  "Lost": {
+   "can_apply": {
+    "OnlyAPI": false,
+    "TagAPI": true
+   },
+   "is_a": [],
+   "schema": false
+  },
+  "Muddle": {
+   "ancestor_errors": [
+    "Cannot resolve ancestor classes for 'SbMuddle' because the inheritance hierarchy is inconsistent.  Please check that multiply-inherited types are inherited in the same order throughout the inherited hierarchy."
+   ],
+   "applied_schemas": [
+    "TagAPI"
+   ],
+   "can_apply": {
+    "OnlyAPI": true,
+    "TagAPI": true
+   },
+   "is_a": [
+    "Body",
+    "Muddle",
+    "Tagged",
+    "Thing",
+    "Typed"
+   ],
+   "properties": [
+    "muddle:depth",
+    "tag:mode"
+   ],
+   "schema": true
+  },
+  "Slim": {
+   "ancestor_errors": [],
+   "ancestors": [
+    "Slim",
+    "Body",
+    "Tagged",
+    "Typed"
+   ],
+   "applied_schemas": [
+    "TagAPI"
+   ],
+   "can_apply": {
+    "OnlyAPI": true,
+    "TagAPI": true
+   },
+   "is_a": [
+    "Body",
+    "Slim",
+    "Tagged",
+    "Typed"
+   ],
+   "properties": [
+    "slim:width",
+    "tag:mode"
+   ],
+   "schema": true
+  },
+  "Stray": {
+   "ancestor_errors": [],
+   "ancestors": [
+    "Stray",
+    "Tagged",
+    "Typed"
+   ],
+   "applied_schemas": [
+    "TagAPI"
+   ],
+   "can_apply": {
+    "OnlyAPI": true,
+    "TagAPI": true
+   },
+   "is_a": [
+    "Stray",
+    "Tagged",
+    "Typed"
+   ],
+   "properties": [
+    "stray:steps",
+    "tag:mode"
+   ],
+   "schema": true
+  },
+  "Tagged": {
+   "ancestor_errors": [],
+   "ancestors": [
+    "Tagged",
+    "Typed"
+   ],
+   "applied_schemas": [
+    "TagAPI"
+   ],
+   "can_apply": {
+    "OnlyAPI": false,
+    "TagAPI": true
+   },
+   "is_a": [],
+   "properties": [
+    "tag:label",
+    "tag:mode"
+   ],
+   "schema": true
+  },
+  "Thing": {
+   "ancestor_errors": [],
+   "ancestors": [
+    "Thing",
+    "Body",
+    "Tagged",
+    "Typed"
+   ],
+   "applied_schemas": [
+    "TagAPI"
+   ],
+   "can_apply": {
+    "OnlyAPI": true,
+    "TagAPI": true
+   },
+   "is_a": [
+    "Body",
+    "Tagged",
+    "Thing",
+    "Typed"
+   ],
+   "properties": [
+    "body:mass",
+    "tag:mode",
+    "thing:size"
+   ],
+   "schema": true
+  },
+  "Twin": {
+   "ancestor_errors": [],
+   "ancestors": [
+    "Twin",
+    "Tagged",
+    "Body",
+    "Typed"
+   ],
+   "applied_schemas": [
+    "TagAPI"
+   ],
+   "can_apply": {
+    "OnlyAPI": true,
+    "TagAPI": true
+   },
+   "is_a": [
+    "Body",
+    "Tagged",
+    "Twin",
+    "Typed"
+   ],
+   "properties": [
+    "tag:label",
+    "tag:mode"
+   ],
+   "schema": true
+  }
+ }
+}

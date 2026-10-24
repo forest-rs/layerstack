@@ -39,8 +39,13 @@ pub struct SchemaDeclaration {
     pub name: TokenId,
     /// The schema's kind.
     pub kind: SchemaKind,
-    /// The typed schema it inherits from, if any.
+    /// The typed schema it inherits from, if any: the first of the
+    /// `bases` `plugInfo.json` declares, by schema identifier.
     pub parent: Option<TokenId>,
+    /// The rest of its `bases`, by schema identifier, in order
+    /// ([`SchemaDefinition::additional_bases`]): only a hand-written
+    /// `plugInfo.json` declares more than one.
+    pub additional_bases: Vec<TokenId>,
     /// `apiSchemaCanOnlyApplyTo` ([`SchemaDefinition::can_only_apply_to`]).
     pub can_only_apply_to: Vec<TokenId>,
     /// `apiSchemaAllowedInstanceNames`
@@ -59,6 +64,7 @@ impl SchemaDeclaration {
             name,
             kind,
             parent: None,
+            additional_bases: Vec::new(),
             can_only_apply_to: Vec::new(),
             allowed_instance_names: Vec::new(),
             instance_can_only_apply_to: Vec::new(),
@@ -128,6 +134,9 @@ pub fn read_generated_schema(
                 })?;
             let mut schema = SchemaDefinition::new(declaration.name, declaration.kind).flattened();
             schema.parent = declaration.parent;
+            schema
+                .additional_bases
+                .clone_from(&declaration.additional_bases);
             schema
                 .can_only_apply_to
                 .clone_from(&declaration.can_only_apply_to);

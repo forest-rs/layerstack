@@ -1,0 +1,25 @@
+{
+  "Plugins": [{
+    "Name": "LayerstackSchemaBases",
+    "Type": "resource",
+    "Root": ".",
+    "ResourcePath": ".",
+    "LibraryPath": "",
+    "Info": {
+      "Types": {
+        "SbBody": {"bases": ["UsdTyped"], "schemaKind": "abstractTyped", "schemaIdentifier": "Body"},
+        "SbTagged": {"bases": ["UsdTyped"], "schemaKind": "abstractTyped", "schemaIdentifier": "Tagged"},
+        "SbThing": {"bases": ["SbBody", "SbTagged"], "schemaKind": "concreteTyped", "schemaIdentifier": "Thing"},
+        "SbMixin": {},
+        "SbGadget": {"bases": ["SbThing", "SbMixin"], "schemaKind": "concreteTyped", "schemaIdentifier": "Gadget"},
+        "SbTwin": {"bases": ["SbTagged", "SbBody"], "schemaKind": "concreteTyped", "schemaIdentifier": "Twin"},
+        "SbMuddle": {"bases": ["SbBody", "SbThing"], "schemaKind": "concreteTyped", "schemaIdentifier": "Muddle"},
+        "SbSlim": {"bases": ["SbBody", "SbTagged"], "schemaKind": "concreteTyped", "schemaIdentifier": "Slim"},
+        "SbStray": {"bases": ["SbNowhere", "SbTagged"], "schemaKind": "concreteTyped", "schemaIdentifier": "Stray"},
+        "SbLost": {"bases": ["SbNowhere"], "schemaKind": "concreteTyped", "schemaIdentifier": "Lost"},
+        "SbTagAPI": {"bases": ["UsdAPISchemaBase"], "schemaKind": "singleApplyAPI", "schemaIdentifier": "TagAPI", "apiSchemaAutoApplyTo": ["Tagged"]},
+        "SbOnlyAPI": {"bases": ["UsdAPISchemaBase"], "schemaKind": "singleApplyAPI", "schemaIdentifier": "OnlyAPI", "apiSchemaCanOnlyApplyTo": ["Tagged"]}
+      }
+    }
+  }]
+}

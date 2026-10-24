@@ -128,6 +128,138 @@ fn flattened_definitions_compose_no_ancestor() {
     assert!(registry.issues().is_empty(), "{:?}", registry.issues());
 }
 
+/// Additional bases give ancestry in C3 order, which auto-applies and
+/// `apiSchemaCanOnlyApplyTo` follow, and no properties: OpenUSD's
+/// `TfType` ancestry of a hand-written `plugInfo.json`'s `bases`.
+#[test]
+fn additional_bases_give_c3_ancestry_but_no_properties() {
+    let mut t = TokenInterner::default();
+    let [body, tagged, thing, twin, gadget, muddle, tag, only, lost] = [
+        "Body", "Tagged", "Thing", "Twin", "Gadget", "Muddle", "TagAPI", "OnlyAPI", "Lost",
+    ]
+    .map(|n| t.intern(n));
+    let mut builder = SchemaRegistry::builder();
+    builder
+        .register(
+            SchemaDefinition::new(body, SchemaKind::AbstractTyped).with_property(attr(
+                &mut t,
+                "body:mass",
+                1,
+            )),
+        )
+        .register(
+            SchemaDefinition::new(tagged, SchemaKind::AbstractTyped).with_property(attr(
+                &mut t,
+                "tag:label",
+                "",
+            )),
+        )
+        .register(
+            SchemaDefinition::typed(thing)
+                .with_parent(body)
+                .with_additional_base(tagged)
+                .with_property(attr(&mut t, "thing:size", 3)),
+        )
+        .register(
+            SchemaDefinition::typed(twin)
+                .with_parent(tagged)
+                .with_additional_base(body),
+        )
+        .register(
+            SchemaDefinition::typed(gadget)
+                .with_parent(thing)
+                .with_additional_base(lost)
+                .with_additional_base(tag),
+        )
+        .register(
+            SchemaDefinition::typed(muddle)
+                .with_parent(body)
+                .with_additional_base(thing),
+        )
+        .register(SchemaDefinition::api(tag).with_property(attr(&mut t, "tag:mode", "on")))
+        .register(SchemaDefinition::api(only).with_can_only_apply_to(tagged))
+        .auto_apply(tag, tagged);
+    let registry = builder.build(&t);
+
+    assert_eq!(registry.ancestors(thing), [thing, body, tagged]);
+    assert_eq!(registry.ancestors(twin), [twin, tagged, body]);
+    assert_eq!(registry.ancestors(gadget), [gadget, thing, body, tagged]);
+    assert!(registry.ancestors(tag).is_empty());
+    let definition = registry.prim_definition(Some(thing), &[], &t);
+    assert!(definition.is_a(tagged) && definition.is_a(body));
+    assert_eq!(definition.ancestors(), [thing, body, tagged]);
+    // The parent's properties compose in, the additional base's do not;
+    // the auto-apply to `Tagged` reaches `Thing` through it.
+    let names: Vec<&str> = definition
+        .properties()
+        .iter()
+        .map(|p| t.resolve(p.name))
+        .collect();
+    assert_eq!(names, ["thing:size", "body:mass", "tag:mode"]);
+    assert_eq!(applied_names(&definition, &t), ["TagAPI"]);
+    assert_eq!(registry.can_apply(Some(thing), only, None, &t), Ok(()));
+    assert!(registry.can_apply(Some(gadget), only, None, &t).is_ok());
+
+    // `Muddle` names `Body` before `Thing`, which names `Body` first: no
+    // linearization, but it still is each ancestor.
+    assert_eq!(registry.ancestors(muddle)[0], muddle);
+    let mut ancestors = registry.ancestors(muddle).to_vec();
+    ancestors.sort_unstable();
+    let mut expected = vec![muddle, body, thing, tagged];
+    expected.sort_unstable();
+    assert_eq!(ancestors, expected);
+    assert_eq!(
+        registry.issues(),
+        [
+            SchemaIssue::InvalidBase {
+                schema: gadget,
+                base: lost,
+                reason: InvalidBaseReason::Unregistered,
+            },
+            SchemaIssue::InvalidBase {
+                schema: gadget,
+                base: tag,
+                reason: InvalidBaseReason::NotTyped,
+            },
+            SchemaIssue::InconsistentAncestry {
+                schema: muddle,
+                bases: vec![body, thing],
+            },
+        ]
+    );
+}
+
+/// A base that is the schema itself, directly or through its own bases, is
+/// left out; the other bases still count.
+#[test]
+fn base_cycles_are_cut_and_reported() {
+    let t = TokenInterner::default();
+    let [a, b, c, me] = ["A", "B", "C", "Me"].map(|n| t.intern(n));
+    let mut builder = SchemaRegistry::builder();
+    builder
+        .register(SchemaDefinition::typed(a).with_parent(b))
+        .register(
+            SchemaDefinition::typed(b)
+                .with_parent(a)
+                .with_additional_base(c),
+        )
+        .register(SchemaDefinition::new(c, SchemaKind::AbstractTyped))
+        .register(SchemaDefinition::typed(me).with_parent(me));
+    let registry = builder.build(&t);
+    assert_eq!(registry.ancestors(a), [a, b, c]);
+    assert_eq!(registry.ancestors(me), [me]);
+    assert!(registry.issues().contains(&SchemaIssue::InvalidBase {
+        schema: b,
+        base: a,
+        reason: InvalidBaseReason::Cycle,
+    }));
+    assert!(registry.issues().contains(&SchemaIssue::InvalidBase {
+        schema: me,
+        base: me,
+        reason: InvalidBaseReason::Cycle,
+    }));
+}
+
 #[test]
 fn inclusions_compose_right_after_their_schema() {
     // Spec: AOUSD Core §13.3.2.3's order: each schema's built-ins and

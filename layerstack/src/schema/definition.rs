@@ -40,8 +40,8 @@ pub struct AppliedSchema {
 pub struct PrimDefinition {
     /// The typed schema, if the prim has one.
     pub(super) type_name: Option<TokenId>,
-    /// The typed schema and its ancestors, nearest first.
-    pub(super) type_chain: Vec<TokenId>,
+    /// The typed schema and its ancestors, in C3 order.
+    pub(super) ancestors: Vec<TokenId>,
     applied: Vec<AppliedSchema>,
     properties: Vec<PropertyDefinition>,
     index: HashMap<TokenId, usize>,
@@ -58,12 +58,27 @@ impl PrimDefinition {
     }
 
     /// Whether the prim's type is `schema` or inherits from it, abstract
-    /// ancestors included. Always `false` for a typeless prim.
+    /// ancestors and [additional bases](crate::SchemaDefinition::additional_bases)
+    /// included. Always `false` for a typeless prim.
     ///
-    /// Spec: AOUSD Core §13.3.1 ("a prim is of type T if ...").
+    /// Spec: AOUSD Core §13.3.1 ("a prim is of type T if ..."). OpenUSD:
+    /// `UsdPrim::IsA`.
     #[must_use]
     pub fn is_a(&self, schema: TokenId) -> bool {
-        self.type_chain.contains(&schema)
+        self.ancestors.contains(&schema)
+    }
+
+    /// The prim's type and the typed schemas it is, in OpenUSD's order:
+    /// the C3 linearization of its bases, the type first. With a single
+    /// base each, this is the parent chain, nearest first. Empty for a
+    /// typeless prim.
+    ///
+    /// A consumer that picks behaviour by type, most derived first, walks
+    /// this as OpenUSD walks `TfType::GetAllAncestorTypes`, as for
+    /// `UsdGeomBoundable`'s extent functions.
+    #[must_use]
+    pub fn ancestors(&self) -> &[TokenId] {
+        &self.ancestors
     }
 
     /// The applied schemas, strongest first: the type's built-ins and

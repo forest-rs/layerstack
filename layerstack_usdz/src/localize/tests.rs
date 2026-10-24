@@ -198,3 +198,35 @@ fn invalid_names_empty_expansions_and_missing_layers_are_explicit() {
         Err(LocalizationError::MissingReplacement { .. })
     ));
 }
+
+#[test]
+fn a_udim_destination_accepts_only_its_own_tiles() {
+    let (store, _, _) = fixture();
+    let error = localize_asset(&store, LayerId(1), "root.usda", |d| {
+        Ok(if let Some(layer) = d.layer_hint {
+            LocalizationTarget::layer(layer, "models/model.usda")
+        } else {
+            LocalizationTarget {
+                member: "textures/color.<UDIM>.png".into(),
+                resources: vec![
+                    LocalizationResource::Asset {
+                        member: "textures/color.1001.png".into(),
+                        data: Arc::from(&b"a"[..]),
+                    },
+                    LocalizationResource::Asset {
+                        member: "textures/color.1101.png".into(),
+                        data: Arc::from(&b"b"[..]),
+                    },
+                ],
+            }
+        })
+    })
+    .unwrap_err();
+    let LocalizationError::UnmatchedTile { pattern, member } = &error else {
+        panic!("{error}");
+    };
+    assert_eq!(
+        (&**pattern, &**member),
+        ("textures/color.<UDIM>.png", "textures/color.1101.png")
+    );
+}

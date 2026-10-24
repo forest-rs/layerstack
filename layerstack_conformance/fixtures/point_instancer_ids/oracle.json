@@ -1,0 +1,2925 @@
+{
+ "calls": [
+  {
+   "accepted": true,
+   "call": [
+    "deactivate",
+    "/Legacy",
+    [
+     40,
+     10,
+     40
+    ]
+   ],
+   "inactive": {
+    "add": [],
+    "append": [
+     10,
+     40
+    ],
+    "delete": [
+     20
+    ],
+    "explicit": null,
+    "prepend": [
+     30
+    ],
+    "reorder": []
+   },
+   "invisible": null,
+   "masks": {
+    "0.5": [
+     false,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true
+    ],
+    "1.0": [
+     false,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true
+    ],
+    "1.5": [
+     false,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true
+    ],
+    "2.0": [
+     false,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true
+    ],
+    "3.0": [
+     false,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true
+    ],
+    "4.0": [
+     false,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true
+    ],
+    "default": [
+     false,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true
+    ]
+   }
+  },
+  {
+   "accepted": true,
+   "call": [
+    "activate",
+    "/Legacy",
+    [
+     30,
+     90,
+     30
+    ]
+   ],
+   "inactive": {
+    "add": [],
+    "append": [],
+    "delete": [
+     20,
+     30,
+     90
+    ],
+    "explicit": null,
+    "prepend": [
+     10,
+     40
+    ],
+    "reorder": []
+   },
+   "invisible": null,
+   "masks": {
+    "0.5": [
+     false,
+     true,
+     true,
+     false,
+     true,
+     true,
+     true,
+     true
+    ],
+    "1.0": [
+     false,
+     true,
+     true,
+     false,
+     true,
+     true,
+     true,
+     true
+    ],
+    "1.5": [
+     false,
+     true,
+     true,
+     false,
+     true,
+     true,
+     true,
+     true
+    ],
+    "2.0": [
+     false,
+     true,
+     true,
+     false,
+     true,
+     true,
+     true,
+     true
+    ],
+    "3.0": [
+     false,
+     true,
+     true,
+     false,
+     true,
+     true,
+     true,
+     true
+    ],
+    "4.0": [
+     false,
+     true,
+     true,
+     false,
+     true,
+     true,
+     true,
+     true
+    ],
+    "default": [
+     false,
+     true,
+     true,
+     false,
+     true,
+     true,
+     true,
+     true
+    ]
+   }
+  },
+  {
+   "accepted": true,
+   "call": [
+    "deactivate",
+    "/Legacy",
+    [
+     50
+    ]
+   ],
+   "inactive": {
+    "add": [],
+    "append": [
+     50
+    ],
+    "delete": [
+     20,
+     30,
+     90
+    ],
+    "explicit": null,
+    "prepend": [
+     10,
+     40
+    ],
+    "reorder": []
+   },
+   "invisible": null,
+   "masks": {
+    "0.5": [
+     false,
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true
+    ],
+    "1.0": [
+     false,
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true
+    ],
+    "1.5": [
+     false,
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true
+    ],
+    "2.0": [
+     false,
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true
+    ],
+    "3.0": [
+     false,
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true
+    ],
+    "4.0": [
+     false,
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true
+    ],
+    "default": [
+     false,
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true
+    ]
+   }
+  },
+  {
+   "accepted": true,
+   "call": [
+    "activate",
+    "/Legacy",
+    []
+   ],
+   "inactive": {
+    "add": [],
+    "append": [],
+    "delete": [
+     20,
+     30,
+     90
+    ],
+    "explicit": null,
+    "prepend": [
+     10,
+     40,
+     50
+    ],
+    "reorder": []
+   },
+   "invisible": null,
+   "masks": {
+    "0.5": [
+     false,
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true
+    ],
+    "1.0": [
+     false,
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true
+    ],
+    "1.5": [
+     false,
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true
+    ],
+    "2.0": [
+     false,
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true
+    ],
+    "3.0": [
+     false,
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true
+    ],
+    "4.0": [
+     false,
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true
+    ],
+    "default": [
+     false,
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true
+    ]
+   }
+  },
+  {
+   "accepted": true,
+   "call": [
+    "deactivate",
+    "/Legacy",
+    [
+     99,
+     60,
+     99,
+     50
+    ]
+   ],
+   "inactive": {
+    "add": [],
+    "append": [
+     60,
+     99,
+     50
+    ],
+    "delete": [
+     20,
+     30,
+     90
+    ],
+    "explicit": null,
+    "prepend": [
+     10,
+     40
+    ],
+    "reorder": []
+   },
+   "invisible": null,
+   "masks": {
+    "0.5": [
+     false,
+     true,
+     true,
+     false,
+     false,
+     false,
+     true,
+     false
+    ],
+    "1.0": [
+     false,
+     true,
+     true,
+     false,
+     false,
+     false,
+     true,
+     false
+    ],
+    "1.5": [
+     false,
+     true,
+     true,
+     false,
+     false,
+     false,
+     true,
+     false
+    ],
+    "2.0": [
+     false,
+     true,
+     true,
+     false,
+     false,
+     false,
+     true,
+     false
+    ],
+    "3.0": [
+     false,
+     true,
+     true,
+     false,
+     false,
+     false,
+     true,
+     false
+    ],
+    "4.0": [
+     false,
+     true,
+     true,
+     false,
+     false,
+     false,
+     true,
+     false
+    ],
+    "default": [
+     false,
+     true,
+     true,
+     false,
+     false,
+     false,
+     true,
+     false
+    ]
+   }
+  },
+  {
+   "accepted": true,
+   "call": [
+    "deactivate",
+    "/Explicit",
+    [
+     20,
+     10
+    ]
+   ],
+   "inactive": {
+    "add": [],
+    "append": [],
+    "delete": [],
+    "explicit": [
+     30,
+     20,
+     10
+    ],
+    "prepend": [],
+    "reorder": []
+   },
+   "invisible": null,
+   "masks": {
+    "0.5": [
+     false,
+     false,
+     false,
+     true,
+     true,
+     true
+    ],
+    "1.0": [
+     false,
+     false,
+     false,
+     true,
+     true,
+     true
+    ],
+    "1.5": [
+     false,
+     false,
+     false,
+     true,
+     true,
+     true
+    ],
+    "2.0": [
+     false,
+     false,
+     false,
+     true,
+     true,
+     true
+    ],
+    "3.0": [
+     false,
+     false,
+     false,
+     true,
+     true,
+     true
+    ],
+    "4.0": [
+     false,
+     false,
+     false,
+     true,
+     true,
+     true
+    ],
+    "default": [
+     false,
+     false,
+     false,
+     true,
+     true,
+     true
+    ]
+   }
+  },
+  {
+   "accepted": true,
+   "call": [
+    "activate",
+    "/Explicit",
+    [
+     30,
+     30
+    ]
+   ],
+   "inactive": {
+    "add": [],
+    "append": [],
+    "delete": [],
+    "explicit": [
+     20,
+     10
+    ],
+    "prepend": [],
+    "reorder": []
+   },
+   "invisible": null,
+   "masks": {
+    "0.5": [
+     false,
+     false,
+     true,
+     true,
+     true,
+     true
+    ],
+    "1.0": [
+     false,
+     false,
+     true,
+     true,
+     true,
+     true
+    ],
+    "1.5": [
+     false,
+     false,
+     true,
+     true,
+     true,
+     true
+    ],
+    "2.0": [
+     false,
+     false,
+     true,
+     true,
+     true,
+     true
+    ],
+    "3.0": [
+     false,
+     false,
+     true,
+     true,
+     true,
+     true
+    ],
+    "4.0": [
+     false,
+     false,
+     true,
+     true,
+     true,
+     true
+    ],
+    "default": [
+     false,
+     false,
+     true,
+     true,
+     true,
+     true
+    ]
+   }
+  },
+  {
+   "accepted": true,
+   "call": [
+    "deactivate",
+    "/Explicit",
+    []
+   ],
+   "inactive": {
+    "add": [],
+    "append": [],
+    "delete": [],
+    "explicit": [
+     20,
+     10
+    ],
+    "prepend": [],
+    "reorder": []
+   },
+   "invisible": null,
+   "masks": {
+    "0.5": [
+     false,
+     false,
+     true,
+     true,
+     true,
+     true
+    ],
+    "1.0": [
+     false,
+     false,
+     true,
+     true,
+     true,
+     true
+    ],
+    "1.5": [
+     false,
+     false,
+     true,
+     true,
+     true,
+     true
+    ],
+    "2.0": [
+     false,
+     false,
+     true,
+     true,
+     true,
+     true
+    ],
+    "3.0": [
+     false,
+     false,
+     true,
+     true,
+     true,
+     true
+    ],
+    "4.0": [
+     false,
+     false,
+     true,
+     true,
+     true,
+     true
+    ],
+    "default": [
+     false,
+     false,
+     true,
+     true,
+     true,
+     true
+    ]
+   }
+  },
+  {
+   "accepted": true,
+   "call": [
+    "activate_all",
+    "/Legacy"
+   ],
+   "inactive": {
+    "add": [],
+    "append": [],
+    "delete": [],
+    "explicit": [],
+    "prepend": [],
+    "reorder": []
+   },
+   "invisible": null,
+   "masks": {
+    "0.5": [],
+    "1.0": [],
+    "1.5": [],
+    "2.0": [],
+    "3.0": [],
+    "4.0": [],
+    "default": []
+   }
+  },
+  {
+   "accepted": true,
+   "call": [
+    "deactivate",
+    "/Legacy",
+    [
+     20
+    ]
+   ],
+   "inactive": {
+    "add": [],
+    "append": [],
+    "delete": [],
+    "explicit": [
+     20
+    ],
+    "prepend": [],
+    "reorder": []
+   },
+   "invisible": null,
+   "masks": {
+    "0.5": [
+     true,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "1.0": [
+     true,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "1.5": [
+     true,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "2.0": [
+     true,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "3.0": [
+     true,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "4.0": [
+     true,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "default": [
+     true,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ]
+   }
+  },
+  {
+   "accepted": true,
+   "call": [
+    "deactivate",
+    "/Sparse",
+    [
+     2,
+     4
+    ]
+   ],
+   "inactive": {
+    "add": [],
+    "append": [
+     2,
+     4
+    ],
+    "delete": [
+     1
+    ],
+    "explicit": null,
+    "prepend": [
+     0,
+     3
+    ],
+    "reorder": []
+   },
+   "invisible": null,
+   "masks": {
+    "0.5": [
+     false,
+     true,
+     false,
+     false,
+     false,
+     true
+    ],
+    "1.0": [
+     false,
+     true,
+     false,
+     false,
+     false,
+     true
+    ],
+    "1.5": [
+     false,
+     true,
+     false,
+     false,
+     false,
+     true
+    ],
+    "2.0": [
+     false,
+     true,
+     false,
+     false,
+     false,
+     true
+    ],
+    "3.0": [
+     false,
+     true,
+     false,
+     false,
+     false,
+     true
+    ],
+    "4.0": [
+     false,
+     true,
+     false,
+     false,
+     false,
+     true
+    ],
+    "default": [
+     false,
+     true,
+     false,
+     false,
+     false,
+     true
+    ]
+   }
+  },
+  {
+   "accepted": true,
+   "call": [
+    "activate",
+    "/Sparse",
+    [
+     3,
+     1
+    ]
+   ],
+   "inactive": {
+    "add": [],
+    "append": [],
+    "delete": [
+     1,
+     3
+    ],
+    "explicit": null,
+    "prepend": [
+     0,
+     2,
+     4
+    ],
+    "reorder": []
+   },
+   "invisible": null,
+   "masks": {
+    "0.5": [
+     false,
+     true,
+     false,
+     true,
+     false,
+     true
+    ],
+    "1.0": [
+     false,
+     true,
+     false,
+     true,
+     false,
+     true
+    ],
+    "1.5": [
+     false,
+     true,
+     false,
+     true,
+     false,
+     true
+    ],
+    "2.0": [
+     false,
+     true,
+     false,
+     true,
+     false,
+     true
+    ],
+    "3.0": [
+     false,
+     true,
+     false,
+     true,
+     false,
+     true
+    ],
+    "4.0": [
+     false,
+     true,
+     false,
+     true,
+     false,
+     true
+    ],
+    "default": [
+     false,
+     true,
+     false,
+     true,
+     false,
+     true
+    ]
+   }
+  },
+  {
+   "accepted": true,
+   "call": [
+    "deactivate",
+    "/Sparse",
+    [
+     5,
+     1,
+     5
+    ]
+   ],
+   "inactive": {
+    "add": [],
+    "append": [
+     1,
+     5
+    ],
+    "delete": [
+     3
+    ],
+    "explicit": null,
+    "prepend": [
+     0,
+     2,
+     4
+    ],
+    "reorder": []
+   },
+   "invisible": null,
+   "masks": {
+    "0.5": [
+     false,
+     false,
+     false,
+     true,
+     false,
+     false
+    ],
+    "1.0": [
+     false,
+     false,
+     false,
+     true,
+     false,
+     false
+    ],
+    "1.5": [
+     false,
+     false,
+     false,
+     true,
+     false,
+     false
+    ],
+    "2.0": [
+     false,
+     false,
+     false,
+     true,
+     false,
+     false
+    ],
+    "3.0": [
+     false,
+     false,
+     false,
+     true,
+     false,
+     false
+    ],
+    "4.0": [
+     false,
+     false,
+     false,
+     true,
+     false,
+     false
+    ],
+    "default": [
+     false,
+     false,
+     false,
+     true,
+     false,
+     false
+    ]
+   }
+  },
+  {
+   "accepted": true,
+   "call": [
+    "activate",
+    "/Sparse",
+    [
+     0
+    ]
+   ],
+   "inactive": {
+    "add": [],
+    "append": [],
+    "delete": [
+     3,
+     0
+    ],
+    "explicit": null,
+    "prepend": [
+     1,
+     2,
+     4,
+     5
+    ],
+    "reorder": []
+   },
+   "invisible": null,
+   "masks": {
+    "0.5": [
+     true,
+     false,
+     false,
+     true,
+     false,
+     false
+    ],
+    "1.0": [
+     true,
+     false,
+     false,
+     true,
+     false,
+     false
+    ],
+    "1.5": [
+     true,
+     false,
+     false,
+     true,
+     false,
+     false
+    ],
+    "2.0": [
+     true,
+     false,
+     false,
+     true,
+     false,
+     false
+    ],
+    "3.0": [
+     true,
+     false,
+     false,
+     true,
+     false,
+     false
+    ],
+    "4.0": [
+     true,
+     false,
+     false,
+     true,
+     false,
+     false
+    ],
+    "default": [
+     true,
+     false,
+     false,
+     true,
+     false,
+     false
+    ]
+   }
+  },
+  {
+   "accepted": true,
+   "call": [
+    "vis",
+    "/Sampled",
+    [
+     99
+    ],
+    null
+   ],
+   "inactive": null,
+   "invisible": {
+    "default": [
+     7,
+     7,
+     3
+    ],
+    "samples": {
+     "1.0": [
+      5
+     ],
+     "2.0": [
+      5,
+      6
+     ]
+    }
+   },
+   "masks": {
+    "0.5": [
+     true,
+     true,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "1.0": [
+     true,
+     true,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "1.5": [
+     true,
+     true,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "2.0": [
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "3.0": [
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "4.0": [
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "default": [
+     true,
+     false,
+     true,
+     true,
+     false,
+     true,
+     true,
+     true,
+     true
+    ]
+   }
+  },
+  {
+   "accepted": true,
+   "call": [
+    "invis",
+    "/Sampled",
+    [
+     3,
+     8,
+     8
+    ],
+    null
+   ],
+   "inactive": null,
+   "invisible": {
+    "default": [
+     7,
+     7,
+     3,
+     8,
+     8
+    ],
+    "samples": {
+     "1.0": [
+      5
+     ],
+     "2.0": [
+      5,
+      6
+     ]
+    }
+   },
+   "masks": {
+    "0.5": [
+     true,
+     true,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "1.0": [
+     true,
+     true,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "1.5": [
+     true,
+     true,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "2.0": [
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "3.0": [
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "4.0": [
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "default": [
+     true,
+     false,
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true
+    ]
+   }
+  },
+  {
+   "accepted": true,
+   "call": [
+    "vis",
+    "/Sampled",
+    [
+     7
+    ],
+    null
+   ],
+   "inactive": null,
+   "invisible": {
+    "default": [
+     3,
+     8
+    ],
+    "samples": {
+     "1.0": [
+      5
+     ],
+     "2.0": [
+      5,
+      6
+     ]
+    }
+   },
+   "masks": {
+    "0.5": [
+     true,
+     true,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "1.0": [
+     true,
+     true,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "1.5": [
+     true,
+     true,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "2.0": [
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "3.0": [
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "4.0": [
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "default": [
+     true,
+     false,
+     true,
+     true,
+     true,
+     false,
+     true,
+     true,
+     true
+    ]
+   }
+  },
+  {
+   "accepted": true,
+   "call": [
+    "invis",
+    "/Sampled",
+    [
+     20,
+     40,
+     20
+    ],
+    null
+   ],
+   "inactive": null,
+   "invisible": {
+    "default": [
+     3,
+     8,
+     20,
+     40,
+     20
+    ],
+    "samples": {
+     "1.0": [
+      5
+     ],
+     "2.0": [
+      5,
+      6
+     ]
+    }
+   },
+   "masks": {
+    "0.5": [
+     true,
+     true,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "1.0": [
+     true,
+     true,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "1.5": [
+     true,
+     true,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "2.0": [
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "3.0": [
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "4.0": [
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "default": [
+     true,
+     false,
+     true,
+     true,
+     true,
+     false,
+     true,
+     false,
+     false
+    ]
+   }
+  },
+  {
+   "accepted": true,
+   "call": [
+    "invis",
+    "/Sampled",
+    [
+     6
+    ],
+    1.0
+   ],
+   "inactive": null,
+   "invisible": {
+    "default": [
+     3,
+     8,
+     20,
+     40,
+     20
+    ],
+    "samples": {
+     "1.0": [
+      5,
+      6
+     ],
+     "2.0": [
+      5,
+      6
+     ]
+    }
+   },
+   "masks": {
+    "0.5": [
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "1.0": [
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "1.5": [
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "2.0": [
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "3.0": [
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "4.0": [
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "default": [
+     true,
+     false,
+     true,
+     true,
+     true,
+     false,
+     true,
+     false,
+     false
+    ]
+   }
+  },
+  {
+   "accepted": true,
+   "call": [
+    "invis",
+    "/Sampled",
+    [
+     9,
+     9
+    ],
+    1.5
+   ],
+   "inactive": null,
+   "invisible": {
+    "default": [
+     3,
+     8,
+     20,
+     40,
+     20
+    ],
+    "samples": {
+     "1.0": [
+      5,
+      6
+     ],
+     "1.5": [
+      5,
+      6,
+      9,
+      9
+     ],
+     "2.0": [
+      5,
+      6
+     ]
+    }
+   },
+   "masks": {
+    "0.5": [
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "1.0": [
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "1.5": [
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     false,
+     true,
+     true
+    ],
+    "2.0": [
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "3.0": [
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "4.0": [
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "default": [
+     true,
+     false,
+     true,
+     true,
+     true,
+     false,
+     true,
+     false,
+     false
+    ]
+   }
+  },
+  {
+   "accepted": true,
+   "call": [
+    "vis",
+    "/Sampled",
+    [
+     5
+    ],
+    2.0
+   ],
+   "inactive": null,
+   "invisible": {
+    "default": [
+     3,
+     8,
+     20,
+     40,
+     20
+    ],
+    "samples": {
+     "1.0": [
+      5,
+      6
+     ],
+     "1.5": [
+      5,
+      6,
+      9,
+      9
+     ],
+     "2.0": [
+      6
+     ]
+    }
+   },
+   "masks": {
+    "0.5": [
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "1.0": [
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "1.5": [
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     false,
+     true,
+     true
+    ],
+    "2.0": [
+     true,
+     true,
+     true,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "3.0": [
+     true,
+     true,
+     true,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "4.0": [
+     true,
+     true,
+     true,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "default": [
+     true,
+     false,
+     true,
+     true,
+     true,
+     false,
+     true,
+     false,
+     false
+    ]
+   }
+  },
+  {
+   "accepted": true,
+   "call": [
+    "vis",
+    "/Sampled",
+    [
+     1
+    ],
+    2.0
+   ],
+   "inactive": null,
+   "invisible": {
+    "default": [
+     3,
+     8,
+     20,
+     40,
+     20
+    ],
+    "samples": {
+     "1.0": [
+      5,
+      6
+     ],
+     "1.5": [
+      5,
+      6,
+      9,
+      9
+     ],
+     "2.0": [
+      6
+     ]
+    }
+   },
+   "masks": {
+    "0.5": [
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "1.0": [
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "1.5": [
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     false,
+     true,
+     true
+    ],
+    "2.0": [
+     true,
+     true,
+     true,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "3.0": [
+     true,
+     true,
+     true,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "4.0": [
+     true,
+     true,
+     true,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "default": [
+     true,
+     false,
+     true,
+     true,
+     true,
+     false,
+     true,
+     false,
+     false
+    ]
+   }
+  },
+  {
+   "accepted": true,
+   "call": [
+    "invis",
+    "/Sampled",
+    [
+     1
+    ],
+    0.5
+   ],
+   "inactive": null,
+   "invisible": {
+    "default": [
+     3,
+     8,
+     20,
+     40,
+     20
+    ],
+    "samples": {
+     "0.5": [
+      5,
+      6,
+      1
+     ],
+     "1.0": [
+      5,
+      6
+     ],
+     "1.5": [
+      5,
+      6,
+      9,
+      9
+     ],
+     "2.0": [
+      6
+     ]
+    }
+   },
+   "masks": {
+    "0.5": [
+     false,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "1.0": [
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "1.5": [
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     false,
+     true,
+     true
+    ],
+    "2.0": [
+     true,
+     true,
+     true,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "3.0": [
+     true,
+     true,
+     true,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "4.0": [
+     true,
+     true,
+     true,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "default": [
+     true,
+     false,
+     true,
+     true,
+     true,
+     false,
+     true,
+     false,
+     false
+    ]
+   }
+  },
+  {
+   "accepted": true,
+   "call": [
+    "vis_all",
+    "/Sampled",
+    3.0
+   ],
+   "inactive": null,
+   "invisible": {
+    "default": [
+     3,
+     8,
+     20,
+     40,
+     20
+    ],
+    "samples": {
+     "0.5": [
+      5,
+      6,
+      1
+     ],
+     "1.0": [
+      5,
+      6
+     ],
+     "1.5": [
+      5,
+      6,
+      9,
+      9
+     ],
+     "2.0": [
+      6
+     ],
+     "3.0": []
+    }
+   },
+   "masks": {
+    "0.5": [
+     false,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "1.0": [
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "1.5": [
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     false,
+     true,
+     true
+    ],
+    "2.0": [
+     true,
+     true,
+     true,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "3.0": [],
+    "4.0": [],
+    "default": [
+     true,
+     false,
+     true,
+     true,
+     true,
+     false,
+     true,
+     false,
+     false
+    ]
+   }
+  },
+  {
+   "accepted": true,
+   "call": [
+    "invis",
+    "/Sampled",
+    [
+     8
+    ],
+    4.0
+   ],
+   "inactive": null,
+   "invisible": {
+    "default": [
+     3,
+     8,
+     20,
+     40,
+     20
+    ],
+    "samples": {
+     "0.5": [
+      5,
+      6,
+      1
+     ],
+     "1.0": [
+      5,
+      6
+     ],
+     "1.5": [
+      5,
+      6,
+      9,
+      9
+     ],
+     "2.0": [
+      6
+     ],
+     "3.0": [],
+     "4.0": [
+      8
+     ]
+    }
+   },
+   "masks": {
+    "0.5": [
+     false,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "1.0": [
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "1.5": [
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     false,
+     true,
+     true
+    ],
+    "2.0": [
+     true,
+     true,
+     true,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "3.0": [],
+    "4.0": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     false,
+     true,
+     true,
+     true
+    ],
+    "default": [
+     true,
+     false,
+     true,
+     true,
+     true,
+     false,
+     true,
+     false,
+     false
+    ]
+   }
+  },
+  {
+   "accepted": true,
+   "call": [
+    "vis_all",
+    "/Sampled",
+    null
+   ],
+   "inactive": null,
+   "invisible": {
+    "default": [],
+    "samples": {
+     "0.5": [
+      5,
+      6,
+      1
+     ],
+     "1.0": [
+      5,
+      6
+     ],
+     "1.5": [
+      5,
+      6,
+      9,
+      9
+     ],
+     "2.0": [
+      6
+     ],
+     "3.0": [],
+     "4.0": [
+      8
+     ]
+    }
+   },
+   "masks": {
+    "0.5": [
+     false,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "1.0": [
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "1.5": [
+     true,
+     true,
+     false,
+     false,
+     true,
+     true,
+     false,
+     true,
+     true
+    ],
+    "2.0": [
+     true,
+     true,
+     true,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    "3.0": [],
+    "4.0": [
+     true,
+     true,
+     true,
+     true,
+     true,
+     false,
+     true,
+     true,
+     true
+    ],
+    "default": []
+   }
+  },
+  {
+   "accepted": true,
+   "call": [
+    "vis_all",
+    "/Unauthored",
+    null
+   ],
+   "inactive": null,
+   "invisible": null,
+   "masks": {
+    "0.5": [],
+    "1.0": [],
+    "1.5": [],
+    "2.0": [],
+    "3.0": [],
+    "4.0": [],
+    "default": []
+   }
+  },
+  {
+   "accepted": true,
+   "call": [
+    "vis_all",
+    "/Unauthored",
+    2.0
+   ],
+   "inactive": null,
+   "invisible": null,
+   "masks": {
+    "0.5": [],
+    "1.0": [],
+    "1.5": [],
+    "2.0": [],
+    "3.0": [],
+    "4.0": [],
+    "default": []
+   }
+  },
+  {
+   "accepted": true,
+   "call": [
+    "vis",
+    "/Unauthored",
+    [
+     1
+    ],
+    null
+   ],
+   "inactive": null,
+   "invisible": {
+    "default": [],
+    "samples": {}
+   },
+   "masks": {
+    "0.5": [],
+    "1.0": [],
+    "1.5": [],
+    "2.0": [],
+    "3.0": [],
+    "4.0": [],
+    "default": []
+   }
+  },
+  {
+   "accepted": true,
+   "call": [
+    "invis",
+    "/Unauthored",
+    [
+     2,
+     3
+    ],
+    2.0
+   ],
+   "inactive": null,
+   "invisible": {
+    "default": [],
+    "samples": {
+     "2.0": [
+      2,
+      3
+     ]
+    }
+   },
+   "masks": {
+    "0.5": [
+     true,
+     true,
+     false,
+     false
+    ],
+    "1.0": [
+     true,
+     true,
+     false,
+     false
+    ],
+    "1.5": [
+     true,
+     true,
+     false,
+     false
+    ],
+    "2.0": [
+     true,
+     true,
+     false,
+     false
+    ],
+    "3.0": [
+     true,
+     true,
+     false,
+     false
+    ],
+    "4.0": [
+     true,
+     true,
+     false,
+     false
+    ],
+    "default": []
+   }
+  },
+  {
+   "accepted": true,
+   "call": [
+    "vis_all",
+    "/Unauthored",
+    1.0
+   ],
+   "inactive": null,
+   "invisible": {
+    "default": [],
+    "samples": {
+     "1.0": [],
+     "2.0": [
+      2,
+      3
+     ]
+    }
+   },
+   "masks": {
+    "0.5": [],
+    "1.0": [],
+    "1.5": [],
+    "2.0": [
+     true,
+     true,
+     false,
+     false
+    ],
+    "3.0": [
+     true,
+     true,
+     false,
+     false
+    ],
+    "4.0": [
+     true,
+     true,
+     false,
+     false
+    ],
+    "default": []
+   }
+  },
+  {
+   "accepted": true,
+   "call": [
+    "activate_all",
+    "/Unauthored"
+   ],
+   "inactive": {
+    "add": [],
+    "append": [],
+    "delete": [],
+    "explicit": [],
+    "prepend": [],
+    "reorder": []
+   },
+   "invisible": {
+    "default": [],
+    "samples": {
+     "1.0": [],
+     "2.0": [
+      2,
+      3
+     ]
+    }
+   },
+   "masks": {
+    "0.5": [],
+    "1.0": [],
+    "1.5": [],
+    "2.0": [
+     true,
+     true,
+     false,
+     false
+    ],
+    "3.0": [
+     true,
+     true,
+     false,
+     false
+    ],
+    "4.0": [
+     true,
+     true,
+     false,
+     false
+    ],
+    "default": []
+   }
+  }
+ ],
+ "masks": [
+  {
+   "mask": [
+    false,
+    true,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true
+   ],
+   "query": [
+    "/Legacy",
+    null,
+    null
+   ]
+  },
+  {
+   "mask": [
+    false,
+    true,
+    false,
+    true,
+    false
+   ],
+   "query": [
+    "/Legacy",
+    null,
+    [
+     10,
+     20,
+     30,
+     77,
+     30
+    ]
+   ]
+  },
+  {
+   "mask": [],
+   "query": [
+    "/Legacy",
+    null,
+    []
+   ]
+  },
+  {
+   "mask": [],
+   "query": [
+    "/Legacy",
+    null,
+    [
+     40,
+     50
+    ]
+   ]
+  },
+  {
+   "mask": [
+    false,
+    false,
+    true
+   ],
+   "query": [
+    "/Explicit",
+    null,
+    [
+     30,
+     10,
+     20
+    ]
+   ]
+  },
+  {
+   "mask": [
+    false,
+    true,
+    true,
+    false,
+    false,
+    true
+   ],
+   "query": [
+    "/Sparse",
+    null,
+    null
+   ]
+  },
+  {
+   "mask": [
+    false,
+    true,
+    true,
+    false,
+    false,
+    false
+   ],
+   "query": [
+    "/Sparse",
+    null,
+    [
+     0,
+     1,
+     2,
+     3,
+     4,
+     4
+    ]
+   ]
+  },
+  {
+   "mask": [
+    true,
+    true,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true
+   ],
+   "query": [
+    "/Sampled",
+    1.5,
+    null
+   ]
+  },
+  {
+   "mask": [
+    false,
+    true,
+    true
+   ],
+   "query": [
+    "/Sampled",
+    1.5,
+    [
+     5,
+     6,
+     7
+    ]
+   ]
+  },
+  {
+   "mask": [
+    false,
+    false,
+    false
+   ],
+   "query": [
+    "/Sampled",
+    null,
+    [
+     7,
+     3,
+     3
+    ]
+   ]
+  },
+  {
+   "mask": [],
+   "query": [
+    "/Unauthored",
+    null,
+    null
+   ]
+  },
+  {
+   "mask": [],
+   "query": [
+    "/Unauthored",
+    null,
+    [
+     1,
+     2
+    ]
+   ]
+  }
+ ],
+ "openusd_version": "26.8"
+}

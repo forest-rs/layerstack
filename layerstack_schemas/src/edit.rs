@@ -11,7 +11,7 @@ use layerstack::edit::{EditTarget, Transaction};
 use layerstack::{
     CannotApply, LayerStore, ListOp, ListPosition, PathId, PrimPathArg, PropertyDeclaration,
     PropertyDefinition, PropertyKind, PropertyPath, PropertySpec, PropertyType, ResolvedValue,
-    Specifier, Stage, TargetPath, TokenId, TokenInterner, Value,
+    Specifier, Stage, TargetPath, Time, TokenId, TokenInterner, Value,
 };
 
 #[cfg(test)]
@@ -163,6 +163,9 @@ pub struct SchemaEdit<'s> {
     created: Vec<(PathId, TokenId, Option<PropertyType>)>,
     /// The defaults this edit sets, latest last.
     defaults: Vec<(PathId, TokenId, Value)>,
+    /// The time samples this edit sets, in stage time, latest last.
+    #[cfg(feature = "usd-geom")]
+    samples: Vec<TimeSampleEdit>,
     /// Prim metadata this edit authors, including target-local list operations.
     #[cfg(feature = "usd-geom")]
     metadata: Vec<(PathId, TokenId, layerstack::FieldValue)>,
@@ -172,6 +175,15 @@ pub struct SchemaEdit<'s> {
     removed: Vec<(PathId, TokenId)>,
     #[cfg(feature = "usd-ui")]
     ui_hints: Vec<(TargetPath, Value)>,
+}
+
+/// One time sample an edit authors, in stage time.
+#[cfg(feature = "usd-geom")]
+#[derive(Clone, Debug)]
+struct TimeSampleEdit {
+    property: PropertyPath,
+    time: f64,
+    value: Value,
 }
 
 /// One property metadata field an edit authors or clears.
@@ -209,6 +221,8 @@ impl<'s> SchemaEdit<'s> {
             applied: Vec::new(),
             created: Vec::new(),
             defaults: Vec::new(),
+            #[cfg(feature = "usd-geom")]
+            samples: Vec::new(),
             #[cfg(feature = "usd-geom")]
             metadata: Vec::new(),
             property_metadata: Vec::new(),
@@ -438,6 +452,8 @@ impl<'s> SchemaEdit<'s> {
             created: self.created.clone(),
             defaults: self.defaults.clone(),
             #[cfg(feature = "usd-geom")]
+            samples: self.samples.clone(),
+            #[cfg(feature = "usd-geom")]
             metadata: self.metadata.clone(),
             property_metadata: self.property_metadata.clone(),
             removed: self.removed.clone(),
@@ -451,6 +467,10 @@ impl<'s> SchemaEdit<'s> {
         self.applied = child.applied;
         self.created = child.created;
         self.defaults = child.defaults;
+        #[cfg(feature = "usd-geom")]
+        {
+            self.samples = child.samples;
+        }
         #[cfg(feature = "usd-geom")]
         {
             self.metadata = child.metadata;
@@ -479,7 +499,7 @@ impl<'s> SchemaEdit<'s> {
         &mut self,
         path: PathId,
         name: &str,
-        time: layerstack::Time,
+        time: Time,
     ) -> Result<layerstack::AuthoringInspection, layerstack::AuthoringInspectionError> {
         let name = self.tokens().intern(name);
         self.stage.inspect_property_authoring(
@@ -728,6 +748,12 @@ impl<'s> SchemaEdit<'s> {
                 match time {
                     None => spec.default = Some(value),
                     Some(time) => {
+                        #[cfg(feature = "usd-geom")]
+                        self.samples.push(TimeSampleEdit {
+                            property: PropertyPath::new(path, token),
+                            time,
+                            value: value.clone(),
+                        });
                         let time = self.target.map_to_spec_time(time);
                         spec.time_samples = Some(alloc::vec![(time, value)].into());
                     }
@@ -747,7 +773,15 @@ impl<'s> SchemaEdit<'s> {
                         self.defaults.push((path, token, value.clone()));
                         self.transaction.set_default(at, value)
                     }
-                    Some(time) => self.transaction.set_time_sample(at, time, value),
+                    Some(time) => {
+                        #[cfg(feature = "usd-geom")]
+                        self.samples.push(TimeSampleEdit {
+                            property: PropertyPath::new(path, token),
+                            time,
+                            value: value.clone(),
+                        });
+                        self.transaction.set_time_sample(at, time, value)
+                    }
                 };
             }
         }
@@ -793,12 +827,88 @@ impl<'s> SchemaEdit<'s> {
         // A typed read leaves out an array that does not decode; the
         // authored value keeps it, for the caller's decode to report.
         let resolved = attribute
-            .get(layerstack::Time::Default)
-            .or_else(|| attribute.authored_value(layerstack::Time::Default))?;
+            .get(Time::Default)
+            .or_else(|| attribute.authored_value(Time::Default))?;
         match resolved.value {
             Value::Dictionary(_) => None,
             value => Some(value),
         }
+    }
+
+    /// The value of the attribute `name` of `path` at `time` (its default for
+    /// `None`) as this edit leaves it, with held interpolation: the samples
+    /// this edit sets join the stage's composed sample times, a sample this
+    /// edit sets wins at its own time, and before the first sample the first
+    /// one answers. Without samples on either side, the default as this edit
+    /// leaves it ([`Self::default_value`]) answers.
+    ///
+    /// OpenUSD: `UsdAttribute::Get` after earlier `Set` calls on the edit
+    /// target; AOUSD Core §12.3.2 (time samples), §12.3.4 (held values).
+    #[cfg(feature = "usd-geom")]
+    pub(crate) fn value_at(
+        &mut self,
+        path: PathId,
+        name: &str,
+        time: Option<f64>,
+    ) -> Option<Value> {
+        let Some(time) = time else {
+            return self.default_value(path, name);
+        };
+        let token = self.store.tokens_mut().intern(name);
+        let property = PropertyPath::new(path, token);
+        let attribute = self.stage_property(property).and_then(|p| p.as_attribute());
+        let stage_times = attribute.map(|a| a.sample_times()).unwrap_or_default();
+        let pending: Vec<&TimeSampleEdit> = self
+            .samples
+            .iter()
+            .filter(|sample| sample.property == property)
+            .collect();
+        if pending.is_empty() {
+            if stage_times.is_empty() {
+                return self.default_value(path, name);
+            }
+            return attribute
+                .and_then(|a| a.get(Time::held(time)))
+                .map(|r| r.value);
+        }
+        let mut times: Vec<f64> = stage_times;
+        times.extend(pending.iter().map(|sample| sample.time));
+        times.sort_by(f64::total_cmp);
+        let at = times
+            .iter()
+            .copied()
+            .rfind(|&t| t <= time)
+            .unwrap_or(times[0]);
+        if let Some(sample) = pending.iter().rev().find(|sample| sample.time == at) {
+            return Some(sample.value.clone());
+        }
+        attribute
+            .and_then(|a| a.get(Time::held(at)))
+            .map(|r| r.value)
+    }
+
+    /// Whether the attribute `name` of `path` has an authored value, default
+    /// or time samples, as this edit leaves it.
+    ///
+    /// OpenUSD: `UsdAttribute::HasAuthoredValue`.
+    #[cfg(feature = "usd-geom")]
+    pub(crate) fn has_authored_value(&mut self, path: PathId, name: &str) -> bool {
+        let token = self.store.tokens_mut().intern(name);
+        let property = PropertyPath::new(path, token);
+        if let Some((_, _, value)) = self
+            .defaults
+            .iter()
+            .rev()
+            .find(|(p, n, _)| (*p, *n) == (path, token))
+        {
+            return !matches!(value, Value::Blocked)
+                || self.samples.iter().any(|s| s.property == property);
+        }
+        if self.samples.iter().any(|s| s.property == property) {
+            return true;
+        }
+        !self.removed.contains(&(path, token))
+            && crate::PrimView::new(self.scene(), path).has_authored_value(name)
     }
 
     // Resolve declarations after queued removals without hiding other source
@@ -1399,6 +1509,8 @@ impl<'s> SchemaEdit<'s> {
         let at = self.target.property(PropertyPath::new(path, name));
         self.transaction.block_attribute(at);
         self.defaults.push((path, name, Value::Blocked));
+        let property = PropertyPath::new(path, name);
+        self.samples.retain(|sample| sample.property != property);
     }
 
     #[cfg(feature = "usd-geom")]
@@ -1409,6 +1521,8 @@ impl<'s> SchemaEdit<'s> {
         self.removed.push((path, name));
         self.created.retain(|(p, n, _)| (*p, *n) != (path, name));
         self.defaults.retain(|(p, n, _)| (*p, *n) != (path, name));
+        let property = PropertyPath::new(path, name);
+        self.samples.retain(|sample| sample.property != property);
         #[cfg(feature = "usd-ui")]
         self.ui_hints
             .retain(|(at, _)| *at != TargetPath::Property(PropertyPath::new(path, name)));

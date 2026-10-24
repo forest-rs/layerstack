@@ -566,19 +566,23 @@ are outside its validation snapshot. Apply the batch, then call
 `Imageable::try_validate_subset_family` to validate the complete family and its
 samples.
 
-`PointInstancerEdit::activate_ids` and `deactivate_ids` preserve target-local
-list operations, including future weaker-layer opinions; `activate_all_ids`
-authors an explicit empty cutoff. `make_invisible`, `make_visible`, and
-`make_all_visible` edit only default-time visibility and leave numeric samples
-unchanged. Repeated calls observe earlier edits in the batch, and failed child
-groups restore those overlays.
+`PointInstancerEdit::activate_ids` and `deactivate_ids` author the edit
+target's `inactiveIds` as OpenUSD's `ActivateIds` and `DeactivateIds` do:
+canonicalized, then composed with the new deletes or appends, so weaker
+layers keep participating; `activate_all_ids` authors an explicit empty
+cutoff. `make_invisible`, `make_visible` and `make_all_visible` edit the
+default of `invisibleIds`, and their `_at` forms read and author the time
+sample at one time code, as `InvisIds`, `VisIds` and `VisAllIds` do.
+Repeated calls observe earlier edits in the batch, defaults and samples
+included, and failed child groups restore those overlays.
 
 `PointInstancer::apply_mask_to_array` compacts consecutive groups in place
 without cloning values. Supply a `NonZeroUsize` element size. Empty masks leave
 arrays unchanged; incompatible mask/array lengths return an error before mutation.
 
 `PointInstancer::compute_mask` matches inactive and invisible IDs against stable
-IDs or array positions. `compute_instance_transforms` retains original indices
+IDs or array positions; `compute_mask_for_ids` matches them against IDs the
+caller supplies. `compute_instance_transforms` retains original indices
 and IDs after masking, includes optional prototype-local transforms and anchors
 velocity, acceleration and angular velocity samples to an explicit base time.
 `prepare_instance_transforms` captures validated immutable inputs for direct

@@ -546,6 +546,12 @@ jobs:
       - name: check make visible oracle
         run: python layerstack_conformance/scripts/make_visible_oracle.py --check
 
+      # The point instancer ID oracle must be what OpenUSD's `ActivateIds`,
+      # `DeactivateIds`, `InvisIds`, `VisIds` and their siblings author, call
+      # by call, and the masks `ComputeMaskAtTime` computes after each.
+      - name: check point instancer IDs oracle
+        run: python layerstack_conformance/scripts/point_instancer_ids_oracle.py --check
+
       # The proxy edits oracle must be which authoring calls OpenUSD refuses
       # on instance proxies and prototype prims, and what the others author.
       - name: check proxy edits oracle

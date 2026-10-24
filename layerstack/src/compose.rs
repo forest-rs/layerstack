@@ -102,8 +102,14 @@ fn compose_indexed(
     let scope = match (listed, options.mask.as_ref()) {
         (Some(paths), _) => crate::prim_indexing::Scope::listed(store.paths_mut(), paths),
         (None, None) => crate::prim_indexing::Scope::All,
-        (None, Some(mask)) if exact_mask => crate::prim_indexing::Scope::Exact(&mask.include),
-        (None, Some(mask)) => crate::prim_indexing::Scope::Mask(mask),
+        (None, Some(mask)) => {
+            let selection = crate::prim_indexing::Selection::new(store.paths(), &mask.include);
+            if exact_mask {
+                crate::prim_indexing::Scope::Exact(selection)
+            } else {
+                crate::prim_indexing::Scope::Mask(selection)
+            }
+        }
     };
     let mut checks = Findings::default();
     let mut composed = crate::prim_indexing::compose(

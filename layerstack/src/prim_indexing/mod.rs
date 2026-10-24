@@ -97,10 +97,10 @@ pub(crate) enum Scope<'m> {
     /// Every prim.
     All,
     /// The prims a population mask includes, and their ancestors.
-    Mask(&'m crate::stage::PopulationMask),
+    Mask(Selection),
     /// Exactly the listed prims and their ancestors, each with its whole
     /// child list.
-    Exact(&'m [PathId]),
+    Exact(Selection),
     /// Exactly the listed prims, whose child lists name only listed prims
     /// (the live stage's local namespace updates). Unlisted ancestors are
     /// indexed for their children to start from, but not kept.
@@ -108,6 +108,51 @@ pub(crate) enum Scope<'m> {
         listed: &'m HashSet<PathId>,
         ancestors: HashSet<PathId>,
     },
+}
+
+/// The paths a mask selects, kept for lookups that cost a path's depth
+/// rather than the number of paths: a live edit can recompose as many
+/// sibling subtrees as prims reference what it changed.
+pub(crate) struct Selection {
+    /// The selected paths.
+    selected: HashSet<PathId>,
+    /// The selected paths and their ancestors.
+    above: HashSet<PathId>,
+}
+
+impl Selection {
+    /// The selection of the paths `include`.
+    pub(crate) fn new(paths: &crate::path::PathInterner, include: &[PathId]) -> Self {
+        let selected: HashSet<PathId> = include.iter().copied().collect();
+        let mut above = HashSet::new();
+        for &path in include {
+            let mut current = Some(path);
+            while let Some(at) = current {
+                if !above.insert(at) {
+                    break;
+                }
+                current = paths.parent(at);
+            }
+        }
+        Self { selected, above }
+    }
+
+    /// Whether `path` is a selected path or an ancestor of one.
+    fn is_above(&self, path: PathId) -> bool {
+        self.above.contains(&path)
+    }
+
+    /// Whether `path` is a selected path or beneath one.
+    fn is_beneath(&self, paths: &crate::path::PathInterner, path: PathId) -> bool {
+        let mut current = Some(path);
+        while let Some(at) = current {
+            if self.selected.contains(&at) {
+                return true;
+            }
+            current = paths.parent(at);
+        }
+        false
+    }
 }
 
 impl<'m> Scope<'m> {
@@ -141,8 +186,8 @@ impl<'m> Scope<'m> {
     fn places(&self, paths: &crate::path::PathInterner, child: PathId) -> (bool, bool) {
         match self {
             Self::All => (true, true),
-            Self::Mask(mask) => {
-                let included = mask.includes(child, paths);
+            Self::Mask(_) => {
+                let included = self.includes(paths, child);
                 (included, included)
             }
             Self::Listed { listed, ancestors } => {
@@ -157,17 +202,19 @@ impl<'m> Scope<'m> {
     fn includes(&self, paths: &crate::path::PathInterner, path: PathId) -> bool {
         match self {
             Self::All => true,
-            Self::Mask(mask) => mask.includes(path, paths),
+            // As `PopulationMask::includes`: the pseudo-root, the selected
+            // subtrees and their ancestors.
+            Self::Mask(selection) => {
+                paths.parent(path).is_none()
+                    || selection.is_above(path)
+                    || selection.is_beneath(paths, path)
+            }
             Self::Listed { listed, ancestors } => {
                 listed.contains(&path)
                     || ancestors.contains(&path)
                     || paths.resolve(path).depth() == 0
             }
-            Self::Exact(list) => {
-                let target = paths.resolve(path);
-                list.iter()
-                    .any(|p| *p == path || target.is_prefix_of(paths.resolve(*p)))
-            }
+            Self::Exact(selection) => selection.is_above(path),
         }
     }
 }
@@ -1593,4 +1640,47 @@ fn finish(out: &mut Composition) {
     out.inactive.retain(|prim| out.prims.contains_key(prim));
     let mut seen = HashSet::new();
     out.errors.retain(|error| seen.insert(error.clone()));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Scope, Selection};
+    use crate::{InMemoryStore, LayerStore, PathId, stage::PopulationMask};
+
+    /// A mask scope includes what [`PopulationMask::includes`] does, and an
+    /// exact scope the selected paths and their ancestors, by ancestor
+    /// walks rather than a scan of the selected paths.
+    #[test]
+    fn selection_scopes_include_what_the_mask_selects() {
+        let store = InMemoryStore::default();
+        let paths: alloc::vec::Vec<PathId> = [
+            "/", "/A", "/A/B", "/A/B/C", "/A/D", "/E", "/E/F", "/E/F/G", "/H",
+        ]
+        .into_iter()
+        .map(|path| store.path(path))
+        .collect();
+        for include in [
+            alloc::vec![],
+            alloc::vec![store.path("/A/B"), store.path("/E/F")],
+            alloc::vec![store.path("/"), store.path("/E")],
+        ] {
+            let mask = PopulationMask {
+                include: include.clone(),
+            };
+            let interner = store.paths();
+            let scope = Scope::Mask(Selection::new(interner, &include));
+            let exact = Scope::Exact(Selection::new(interner, &include));
+            for &path in &paths {
+                assert_eq!(
+                    scope.includes(interner, path),
+                    mask.includes(path, interner),
+                    "{path:?} in {include:?}"
+                );
+                let above = include
+                    .iter()
+                    .any(|s| interner.resolve(path).is_prefix_of(interner.resolve(*s)));
+                assert_eq!(exact.includes(interner, path), above, "{path:?}");
+            }
+        }
+    }
 }

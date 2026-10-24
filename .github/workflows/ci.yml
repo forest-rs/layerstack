@@ -38,6 +38,9 @@ env:
     --exclude wind_tunnel
   # List of features that depend on the standard library and will be excluded from no_std checks.
   FEATURES_DEPENDING_ON_STD: "std,default"
+  # Line tables keep backtraces readable (file and line) and drop the rest
+  # of the debug info, which is most of each test binary and of its link.
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
 
 
 # Rationale

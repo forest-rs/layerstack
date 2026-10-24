@@ -227,7 +227,7 @@ impl EditTarget {
     fn from_node(
         prim: PathId,
         graph: &PrimIndexGraph,
-        node: &PrimNode,
+        node: PrimNode<'_>,
         layer: LayerId,
         offset: LayerOffset,
     ) -> Self {
@@ -345,7 +345,7 @@ fn editable_node(
     stage: &Stage,
     prim: PathId,
     node: NodeId,
-) -> Option<(&PrimIndexGraph, &PrimNode)> {
+) -> Option<(&PrimIndexGraph, PrimNode<'_>)> {
     let graph = stage.explain_prim_graph(prim)?;
     let node = graph.node(node)?;
     (node.arc_kind() != ArcKind::Relocates).then_some((graph, node))

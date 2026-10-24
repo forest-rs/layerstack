@@ -390,7 +390,7 @@ pub(crate) fn drop_instance_targets(
         if !index
             .graph
             .nodes()
-            .any(|(_, node)| node.arc.arc_kind == ArcKind::Inherits)
+            .any(|(_, node)| node.arc_kind() == ArcKind::Inherits)
         {
             continue;
         }
@@ -408,15 +408,15 @@ pub(crate) fn drop_instance_targets(
                 let Some(node) = index.graph.node(opinion.key.node) else {
                     continue;
                 };
-                if node.arc.arc_kind != ArcKind::Inherits {
+                if node.arc_kind() != ArcKind::Inherits {
                     continue;
                 }
                 // The inherit maps the class `class` onto `dest`, an ancestor
                 // of `prim` when the arc is ancestral.
-                let depth = usize::from(node.arc.namespace_depth).min(prim_path.depth());
+                let depth = usize::from(node.namespace_depth()).min(prim_path.depth());
                 let below = prim_path.depth() - depth;
                 let dest = prefix(prim_path, depth);
-                let site = paths.resolve(node.arc.site.prim_path());
+                let site = paths.resolve(node.site().prim_path());
                 let class = prefix(site, site.depth().saturating_sub(below));
                 for target in targets.inserted_items() {
                     if findings.is_class_internal_target(prim, property, *target) {
@@ -428,9 +428,9 @@ pub(crate) fn drop_instance_targets(
                     }
                     let inherits_class = prims.get(&target.prim_path()).is_some_and(|other| {
                         other.graph.nodes().any(|(_, other)| {
-                            other.arc.arc_kind == ArcKind::Inherits
-                                && other.arc.layer_stack == node.arc.layer_stack
-                                && class.is_prefix_of(paths.resolve(other.arc.site.prim_path()))
+                            other.arc_kind() == ArcKind::Inherits
+                                && other.layer_stack_identifier() == node.layer_stack_identifier()
+                                && class.is_prefix_of(paths.resolve(other.site().prim_path()))
                         })
                     });
                     if inherits_class {

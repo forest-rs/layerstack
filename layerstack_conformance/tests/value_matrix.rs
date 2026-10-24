@@ -340,7 +340,7 @@ impl Composed {
 
     /// `node` as the oracle names a resolve info's node: `arc|site|layer
     /// stack`.
-    fn node(&self, node: &PrimNode) -> String {
+    fn node(&self, node: PrimNode<'_>) -> String {
         let arc = match node.arc_kind() {
             ArcKind::Local => "local",
             ArcKind::Inherits => "inherits",

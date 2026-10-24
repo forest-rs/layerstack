@@ -180,7 +180,7 @@ pub struct ExplainedOpinion<'s> {
     /// The node of the prim's composition graph the opinion was read from
     /// ([`Prim::composition_graph`](crate::Prim::composition_graph)): its
     /// arc kind and site.
-    pub node: Option<&'s PrimNode>,
+    pub node: Option<PrimNode<'s>>,
     /// The opinion's part in the value.
     pub role: OpinionRole,
     /// For a time query, the part each of the opinion's samples played, one
@@ -192,7 +192,7 @@ pub struct ExplainedOpinion<'s> {
 impl PartialEq for ExplainedOpinion<'_> {
     fn eq(&self, other: &Self) -> bool {
         let same_node = match (self.node, other.node) {
-            (Some(a), Some(b)) => core::ptr::eq(a, b),
+            (Some(a), Some(b)) => a.is(b),
             (None, None) => true,
             _ => false,
         };

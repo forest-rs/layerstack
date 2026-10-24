@@ -352,9 +352,13 @@ impl core::ops::DerefMut for PrimIndex {
 impl PrimIndex {
     /// An empty prim index over `graph`.
     pub(crate) fn new(graph: PrimIndexGraph) -> Self {
+        // Not `..Self::default()`: an empty graph allocates its shape.
         Self {
+            type_info: None,
+            type_name: None,
             graph,
-            ..Self::default()
+            data: Arc::default(),
+            dynamic: None,
         }
     }
 

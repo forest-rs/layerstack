@@ -105,6 +105,50 @@ pub(crate) struct Graph {
     pub(crate) has_payloads: bool,
     /// Whether the prim is an instance.
     pub(crate) instanceable: bool,
+    /// The shape of the prim index graph built from this graph, which the
+    /// graphs of the prim's children share when theirs is the same
+    /// ([`crate::prim_index_graph::NodeShape`]); `None` until it is built.
+    pub(crate) shape: Option<alloc::sync::Arc<crate::prim_index_graph::GraphShape>>,
+    /// The shape of the first of the prim's children's graphs built, for
+    /// its siblings to share ([`ChildShape`]).
+    pub(crate) child_shape: ChildShape,
+}
+
+/// The shape of a prim's children's prim index graphs, once one is built:
+/// the children of a prim often lose the same nodes of their parent's
+/// graph (culled for having no specs beneath it), so their graphs match
+/// one another's but not their parent's. A graph cloned to build a child
+/// from starts without one. Without the `std` feature, which composes on
+/// one thread from graphs that must still be `Send`, none is kept.
+#[derive(Debug, Default)]
+pub(crate) struct ChildShape(
+    #[cfg(feature = "std")]
+    std::sync::OnceLock<alloc::sync::Arc<crate::prim_index_graph::GraphShape>>,
+);
+
+impl ChildShape {
+    /// The shape, if a child's graph has been built.
+    pub(crate) fn get(&self) -> Option<&alloc::sync::Arc<crate::prim_index_graph::GraphShape>> {
+        #[cfg(feature = "std")]
+        let shape = self.0.get();
+        #[cfg(not(feature = "std"))]
+        let shape = None;
+        shape
+    }
+
+    /// Records `shape` unless a child's shape is recorded already.
+    pub(crate) fn offer(&self, shape: &alloc::sync::Arc<crate::prim_index_graph::GraphShape>) {
+        #[cfg(feature = "std")]
+        self.0.get_or_init(|| alloc::sync::Arc::clone(shape));
+        #[cfg(not(feature = "std"))]
+        let _ = shape;
+    }
+}
+
+impl Clone for ChildShape {
+    fn clone(&self) -> Self {
+        Self::default()
+    }
 }
 
 /// Whether arcs of `kind` are inherits or specializes.
@@ -147,6 +191,8 @@ impl Graph {
             }],
             has_payloads: false,
             instanceable: false,
+            shape: None,
+            child_shape: ChildShape::default(),
         }
     }
 

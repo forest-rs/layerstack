@@ -66,6 +66,9 @@ pub(crate) struct Ctx<'s> {
     /// The token `__AnyType__`, when interned: a type name naming no
     /// type ([`crate::Stage::source_type_name`]).
     pub(crate) any_type: Option<TokenId>,
+    /// The shapes of the prim index graphs composed so far, which graphs
+    /// of the same shape share.
+    pub(crate) shapes: crate::prim_index_graph::GraphShapes,
 }
 
 /// Whether a prim index's payload was included.

@@ -67,11 +67,15 @@ use crate::layer_stack::LayerStackIdentifier;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::cmp::Ordering;
+use core::hash::{BuildHasher, Hash, Hasher};
+
+use hashbrown::HashTable;
 
 use crate::{
     doc::{LayerId, LayerOffset},
     prim_index::{ArcKind, OpinionKey},
     spec_path::SpecPath,
+    sync::ReadLock,
 };
 
 /// Identifies a node of a [`PrimIndexGraph`].
@@ -130,36 +134,231 @@ pub(crate) struct NodeArc {
     pub(crate) skips_duplicates: bool,
 }
 
-/// One node of a [`PrimIndexGraph`]: a site that contributes opinions to a
-/// composed prim, and the arc that reaches it.
+/// Everything about a node of a [`PrimIndexGraph`] but its site: what
+/// reaches it, where it sits in the graph and how its layers' times map to
+/// the stage.
 ///
-/// Spec: AOUSD Core §10.4. OpenUSD: `PcpNodeRef` (`pxr/usd/pcp/node.h`).
+/// Prims whose graphs differ only in their sites, as the prims of one
+/// referenced asset beneath many references do, share their nodes' shapes
+/// ([`GraphShapes`]). OpenUSD shares a graph's nodes the same way, apart
+/// from their site paths (`PcpPrimIndex_Graph::_SharedData` and
+/// `_nodeSitePaths` in `pxr/usd/pcp/primIndex_Graph.h`).
 #[derive(Clone, Debug)]
-pub struct PrimNode {
+pub(crate) struct NodeShape {
     parent: Option<NodeId>,
     origin: Option<NodeId>,
     /// Most nodes have few children; they are kept inline.
     children: smallvec::SmallVec<[NodeId; 4]>,
-    pub(crate) arc: NodeArc,
+    arc_kind: ArcKind,
+    layer_stack: LayerStackIdentifier,
+    namespace_depth: u16,
+    sibling_index: u16,
+    implied: bool,
     /// The offset from the layers of the node's layer stack to the stage,
     /// before their sublayer offsets; `None` until composition records it.
     layer_offset: Option<LayerOffset>,
     stack_offsets: Arc<[(LayerId, LayerOffset)]>,
 }
 
-impl PrimNode {
+impl NodeShape {
+    /// Whether `self` and `other` are the same in every respect, their
+    /// offsets bit for bit: whether a graph may read one for the other.
+    fn same(&self, other: &Self) -> bool {
+        self.children == other.children && self.same_but_children(other)
+    }
+
+    /// [`Self::same`] but for the children, which the same parents of the
+    /// same number of nodes, in order, give two graphs alike.
+    fn same_but_children(&self, other: &Self) -> bool {
+        let same_offset = |a: &LayerOffset, b: &LayerOffset| {
+            a.offset.to_bits() == b.offset.to_bits() && a.scale.to_bits() == b.scale.to_bits()
+        };
+        self.parent == other.parent
+            && self.origin == other.origin
+            && self.arc_kind == other.arc_kind
+            && self.layer_stack == other.layer_stack
+            && self.namespace_depth == other.namespace_depth
+            && self.sibling_index == other.sibling_index
+            && self.implied == other.implied
+            && match (&self.layer_offset, &other.layer_offset) {
+                (Some(a), Some(b)) => same_offset(a, b),
+                (None, None) => true,
+                _ => false,
+            }
+            && (Arc::ptr_eq(&self.stack_offsets, &other.stack_offsets)
+                || self.stack_offsets.len() == other.stack_offsets.len()
+                    && self
+                        .stack_offsets
+                        .iter()
+                        .zip(other.stack_offsets.iter())
+                        .all(|((a, x), (b, y))| a == b && same_offset(x, y)))
+    }
+
+    /// Hashes some of what [`Self::same`] compares: enough to tell most
+    /// shapes apart, cheaply, since every composed prim's graph is hashed
+    /// unless its parent's is the same.
+    fn hash_into(&self, state: &mut impl Hasher) {
+        self.parent.hash(state);
+        self.arc_kind.hash(state);
+        self.layer_stack.root.hash(state);
+        self.namespace_depth.hash(state);
+        self.sibling_index.hash(state);
+    }
+}
+
+/// The shape of a graph: its nodes but for their sites, in node order.
+/// Graphs hold it by a thin [`Arc`], so a composed prim's index stays as
+/// small as when it held its nodes itself.
+#[derive(Debug)]
+pub(crate) struct GraphShape {
+    nodes: alloc::boxed::Box<[NodeShape]>,
+}
+
+impl core::ops::Deref for GraphShape {
+    type Target = [NodeShape];
+    fn deref(&self) -> &[NodeShape] {
+        &self.nodes
+    }
+}
+
+impl GraphShape {
+    fn of(nodes: ShapeBuffer) -> Arc<Self> {
+        Arc::new(Self {
+            nodes: nodes.into_vec().into_boxed_slice(),
+        })
+    }
+}
+
+/// Whether two graphs' shapes are the same, node for node.
+fn same_shape(a: &[NodeShape], b: &[NodeShape]) -> bool {
+    a.len() == b.len() && a.iter().zip(b).all(|(a, b)| a.same(b))
+}
+
+/// A graph's shape while it is built: most graphs have few nodes and
+/// share the shape of another, so it is built without allocating.
+type ShapeBuffer = smallvec::SmallVec<[NodeShape; 8]>;
+
+/// The number of separately locked tables of a [`GraphShapes`]; a power of
+/// two.
+const SHAPE_SHARDS: usize = 16;
+
+/// One table of a [`GraphShapes`].
+type ShapeTable = ReadLock<HashTable<Arc<GraphShape>>>;
+
+/// The distinct graph shapes of one composition, which the graphs of its
+/// prims share ([`NodeShape`]): from any number of threads, each table of
+/// shapes locked apart.
+pub(crate) struct GraphShapes {
+    hasher: hashbrown::DefaultHashBuilder,
+    shards: alloc::boxed::Box<[ShapeTable]>,
+}
+
+impl Default for GraphShapes {
+    fn default() -> Self {
+        Self {
+            hasher: hashbrown::DefaultHashBuilder::default(),
+            shards: (0..SHAPE_SHARDS)
+                .map(|_| ReadLock::new(HashTable::new()))
+                .collect(),
+        }
+    }
+}
+
+impl core::fmt::Debug for GraphShapes {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("GraphShapes").finish_non_exhaustive()
+    }
+}
+
+impl GraphShapes {
+    fn hash(&self, shape: &[NodeShape]) -> u64 {
+        let mut state = self.hasher.build_hasher();
+        shape.len().hash(&mut state);
+        for node in shape {
+            node.hash_into(&mut state);
+        }
+        state.finish()
+    }
+
+    /// The shape equal to `shape` that a graph already holds, `shape`
+    /// itself if none does.
+    fn intern(&self, shape: ShapeBuffer) -> Arc<GraphShape> {
+        let hash = self.hash(&shape);
+        // The top bits pick the table; the table indexes by the low ones.
+        #[allow(
+            clippy::cast_possible_truncation,
+            reason = "the top four bits pick one of 16 tables"
+        )]
+        let shard = &self.shards[(hash >> 60) as usize & (SHAPE_SHARDS - 1)];
+        // Most shapes are held already: find them under a shared lock.
+        if let Some(found) =
+            shard.read(|table| table.find(hash, |held| same_shape(held, &shape)).cloned())
+        {
+            return found;
+        }
+        shard.write(|table| {
+            match table.entry(
+                hash,
+                |held| same_shape(held, &shape),
+                |held| self.hash(held),
+            ) {
+                hashbrown::hash_table::Entry::Occupied(held) => Arc::clone(held.get()),
+                hashbrown::hash_table::Entry::Vacant(vacant) => {
+                    let shape = GraphShape::of(shape);
+                    vacant.insert(Arc::clone(&shape));
+                    shape
+                }
+            }
+        })
+    }
+}
+
+/// One node of a [`PrimIndexGraph`]: a site that contributes opinions to a
+/// composed prim, and the arc that reaches it. A view into its graph,
+/// which [`PrimIndexGraph::node`] hands out.
+///
+/// Spec: AOUSD Core §10.4. OpenUSD: `PcpNodeRef` (`pxr/usd/pcp/node.h`).
+#[derive(Clone, Copy)]
+pub struct PrimNode<'a> {
+    shape: &'a NodeShape,
+    site: &'a SpecPath,
+}
+
+impl core::fmt::Debug for PrimNode<'_> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("PrimNode")
+            .field("parent", &self.shape.parent)
+            .field("origin", &self.shape.origin)
+            .field("children", &self.shape.children)
+            .field("arc_kind", &self.shape.arc_kind)
+            .field("layer_stack", &self.shape.layer_stack)
+            .field("site", self.site)
+            .field("namespace_depth", &self.shape.namespace_depth)
+            .field("sibling_index", &self.shape.sibling_index)
+            .field("implied", &self.shape.implied)
+            .field("layer_offset", &self.shape.layer_offset)
+            .finish_non_exhaustive()
+    }
+}
+
+impl<'a> PrimNode<'a> {
+    /// Whether `self` and `other` are the same node of the same graph.
+    pub(crate) fn is(self, other: Self) -> bool {
+        core::ptr::eq(self.shape, other.shape) && core::ptr::eq(self.site, other.site)
+    }
+
     /// The kind of arc from [`Self::parent`] to this node;
     /// [`ArcKind::Local`] for the root.
     #[must_use]
-    pub fn arc_kind(&self) -> ArcKind {
-        self.arc.arc_kind
+    pub fn arc_kind(self) -> ArcKind {
+        self.shape.arc_kind
     }
 
     /// The node whose site authors the arc to this node; `None` for the
     /// root.
     #[must_use]
-    pub fn parent(&self) -> Option<NodeId> {
-        self.parent
+    pub fn parent(self) -> Option<NodeId> {
+        self.shape.parent
     }
 
     /// The node this one was implied from; `None` for a node whose arc is
@@ -174,15 +373,15 @@ impl PrimNode {
     /// `PcpNodeRef::GetOriginNode`, which names the parent for an authored
     /// arc.
     #[must_use]
-    pub fn origin(&self) -> Option<NodeId> {
-        self.origin
+    pub fn origin(self) -> Option<NodeId> {
+        self.shape.origin
     }
 
     /// The nodes reached through arcs authored at this node's site, in the
     /// order they were added.
     #[must_use]
-    pub fn children(&self) -> &[NodeId] {
-        &self.children
+    pub fn children(self) -> &'a [NodeId] {
+        &self.shape.children
     }
 
     /// The root layer of the layer stack this node's site is in.
@@ -194,22 +393,22 @@ impl PrimNode {
     ///
     /// OpenUSD: `PcpNodeRef::GetLayerStack`.
     #[must_use]
-    pub fn layer_stack(&self) -> LayerId {
-        self.arc.layer_stack.root
+    pub fn layer_stack(self) -> LayerId {
+        self.shape.layer_stack.root
     }
 
     /// The complete stack identity, including a stage-local session root.
     /// External references retain a session-free identity.
     #[must_use]
-    pub fn layer_stack_identifier(&self) -> LayerStackIdentifier {
-        self.arc.layer_stack
+    pub fn layer_stack_identifier(self) -> LayerStackIdentifier {
+        self.shape.layer_stack
     }
 
     /// The prim spec path this node reads in its layer stack, including the
     /// variant selections of a variant node (`/Model{shape=round}`).
     #[must_use]
-    pub fn site(&self) -> &SpecPath {
-        &self.arc.site
+    pub fn site(self) -> &'a SpecPath {
+        self.site
     }
 
     /// Namespace depth of the prim the arc to this node is authored on:
@@ -217,8 +416,8 @@ impl PrimNode {
     ///
     /// OpenUSD: `PcpNodeRef::GetNamespaceDepth`.
     #[must_use]
-    pub fn namespace_depth(&self) -> u16 {
-        self.arc.namespace_depth
+    pub fn namespace_depth(self) -> u16 {
+        self.shape.namespace_depth
     }
 
     /// Position of the arc to this node among the arcs of its kind authored
@@ -226,8 +425,8 @@ impl PrimNode {
     ///
     /// OpenUSD: `PcpNodeRef::GetSiblingNumAtOrigin`.
     #[must_use]
-    pub fn sibling_index(&self) -> u16 {
-        self.arc.sibling_index
+    pub fn sibling_index(self) -> u16 {
+        self.shape.sibling_index
     }
 
     /// `true` for an implied class arc: an inherits or specializes arc
@@ -239,14 +438,14 @@ impl PrimNode {
     /// Spec: AOUSD Core §10.4.2.4 (implied class arcs). OpenUSD:
     /// `_EvalImpliedClasses` in `pxr/usd/pcp/primIndex.cpp`.
     #[must_use]
-    pub fn is_implied(&self) -> bool {
-        self.arc.implied
+    pub fn is_implied(self) -> bool {
+        self.shape.implied
     }
 
     /// The persistent root layer's time offset to the stage. Unlike the
     /// stack-domain offset, this includes session/root time-rate conversion.
     #[must_use]
-    pub fn root_layer_offset(&self) -> LayerOffset {
+    pub fn root_layer_offset(self) -> LayerOffset {
         self.layer_offset_for_layer(self.layer_stack())
             .unwrap_or_else(|| self.layer_offset())
     }
@@ -255,8 +454,9 @@ impl PrimNode {
     /// by composition. Muted layers and unresolved expression targets are
     /// absent. This includes sublayer and session/root rate conversion.
     #[must_use]
-    pub fn layer_offset_for_layer(&self, layer: LayerId) -> Option<LayerOffset> {
-        self.stack_offsets
+    pub fn layer_offset_for_layer(self, layer: LayerId) -> Option<LayerOffset> {
+        self.shape
+            .stack_offsets
             .iter()
             .find(|(id, _)| *id == layer)
             .map(|(_, offset)| self.layer_offset().compose(*offset))
@@ -264,13 +464,14 @@ impl PrimNode {
 
     /// The resident, unmuted layers of the node's layer stack, strongest
     /// first, as composition gathered them.
-    pub(crate) fn stack_layers(&self) -> impl Iterator<Item = LayerId> + '_ {
-        self.stack_offsets.iter().map(|(id, _)| *id)
+    pub(crate) fn stack_layers(self) -> impl Iterator<Item = LayerId> + 'a {
+        self.shape.stack_offsets.iter().map(|(id, _)| *id)
     }
 
     /// Strength of a resident, unmuted layer, even when it has no spec here.
-    pub(crate) fn layer_strength(&self, layer: LayerId) -> Option<u16> {
-        self.stack_offsets
+    pub(crate) fn layer_strength(self, layer: LayerId) -> Option<u16> {
+        self.shape
+            .stack_offsets
             .iter()
             .position(|(id, _)| *id == layer)
             .map(|position| u16::try_from(position).unwrap_or(u16::MAX))
@@ -288,12 +489,12 @@ impl PrimNode {
     ///
     /// Spec: AOUSD Core §10.3.1.1 (offsets concatenate along an arc
     /// chain), §12.3.2.1 (layer offset and scale).
-    pub(crate) fn layer_offset(&self) -> LayerOffset {
-        self.layer_offset.unwrap_or(LayerOffset::IDENTITY)
+    pub(crate) fn layer_offset(self) -> LayerOffset {
+        self.shape.layer_offset.unwrap_or(LayerOffset::IDENTITY)
     }
 }
 
-/// One node for [`PrimIndexGraph::from_ordered`].
+/// One node for [`PrimIndexGraph::from_ordered_in`].
 pub(crate) type OrderedNode = (
     Option<NodeId>,
     Option<NodeId>,
@@ -305,12 +506,24 @@ pub(crate) type OrderedNode = (
 /// The composition graph of one composed prim.
 ///
 /// See the [module docs](self) for how it relates to strength order.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct PrimIndexGraph {
-    /// The nodes in strength order: each node after its parent and the
-    /// nodes beneath its stronger siblings, each node's children strongest
-    /// first, as prim indexing lists them.
-    nodes: Vec<PrimNode>,
+    /// The nodes in strength order, but for their sites: each node after
+    /// its parent and the nodes beneath its stronger siblings, each node's
+    /// children strongest first, as prim indexing lists them. Shared with
+    /// every graph of the composition whose nodes are the same.
+    shape: Arc<GraphShape>,
+    /// Each node's site, in the order of [`Self::shape`].
+    sites: alloc::boxed::Box<[SpecPath]>,
+}
+
+impl Default for PrimIndexGraph {
+    fn default() -> Self {
+        Self {
+            shape: GraphShape::of(ShapeBuffer::new()),
+            sites: alloc::boxed::Box::default(),
+        }
+    }
 }
 
 impl PrimIndexGraph {
@@ -391,24 +604,130 @@ impl PrimIndexGraph {
     /// parent, and a node's children in the order they rank. Each entry is
     /// the node's parent, origin, arc, layer offset, and the resident layers
     /// of its layer stack with their offsets.
+    #[cfg(test)]
     pub(crate) fn from_ordered(nodes: impl IntoIterator<Item = OrderedNode>) -> Self {
-        let nodes = nodes.into_iter();
-        let mut out: Vec<PrimNode> = Vec::with_capacity(nodes.size_hint().0);
-        for (parent, origin, arc, layer_offset, stack_offsets) in nodes {
-            let id = NodeId::from_index(out.len());
-            if let Some(parent) = parent {
-                out[parent.index()].children.push(id);
-            }
-            out.push(PrimNode {
-                parent,
-                origin,
-                children: smallvec::SmallVec::new(),
-                arc,
-                layer_offset: Some(layer_offset),
-                stack_offsets,
-            });
+        let (shape, sites) = Self::split(nodes);
+        Self {
+            shape: GraphShape::of(shape),
+            sites,
         }
-        Self { nodes: out }
+    }
+
+    /// A graph of `nodes`, listed in strength order, as `from_ordered`
+    /// builds one (in tests), its shape shared: `like`'s, when it is the
+    /// same, as a child prim's often is its parent's, or else the one in
+    /// `shapes` that is the same, if any is ([`NodeShape`]).
+    pub(crate) fn from_ordered_in(
+        nodes: impl IntoIterator<Item = OrderedNode>,
+        shapes: &GraphShapes,
+        like: Option<&Arc<GraphShape>>,
+    ) -> Self {
+        let nodes = nodes.into_iter();
+        let mut sites: Vec<SpecPath> = Vec::with_capacity(nodes.size_hint().0);
+        // While every node so far is `like`'s, nothing is built but the
+        // sites; the first that differs builds the shape, from `like`'s
+        // nodes before it.
+        let mut matched = 0;
+        let mut built: Option<ShapeBuffer> = None;
+        for node in nodes {
+            let (node, site) = Self::shape_of(node);
+            sites.push(site);
+            let shape = match (&mut built, like) {
+                (Some(shape), _) => shape,
+                (None, Some(like))
+                    if like
+                        .get(matched)
+                        .is_some_and(|it| it.same_but_children(&node)) =>
+                {
+                    matched += 1;
+                    continue;
+                }
+                (None, _) => built.insert(Self::prefix(like, matched)),
+            };
+            Self::push(shape, node);
+        }
+        let shape = match (built, like) {
+            (None, Some(like)) if matched == like.len() => Arc::clone(like),
+            (built, like) => shapes.intern(built.unwrap_or_else(|| Self::prefix(like, matched))),
+        };
+        Self {
+            shape,
+            sites: sites.into_boxed_slice(),
+        }
+    }
+
+    /// The first `len` nodes of `like` as a shape still being built: their
+    /// children found again, as [`Self::push`] adds them.
+    fn prefix(like: Option<&Arc<GraphShape>>, len: usize) -> ShapeBuffer {
+        let mut shape = ShapeBuffer::new();
+        for node in like.map_or(&[][..], |like| &like[..len]) {
+            Self::push(
+                &mut shape,
+                NodeShape {
+                    children: smallvec::SmallVec::new(),
+                    ..node.clone()
+                },
+            );
+        }
+        shape
+    }
+
+    /// Adds `node` to `shape`, and to its parent's children.
+    fn push(shape: &mut ShapeBuffer, node: NodeShape) {
+        let id = NodeId::from_index(shape.len());
+        if let Some(parent) = node.parent {
+            shape[parent.index()].children.push(id);
+        }
+        shape.push(node);
+    }
+
+    /// The shapes and sites of `nodes`, apart.
+    #[cfg(test)]
+    fn split(
+        nodes: impl IntoIterator<Item = OrderedNode>,
+    ) -> (ShapeBuffer, alloc::boxed::Box<[SpecPath]>) {
+        let nodes = nodes.into_iter();
+        let mut shape = ShapeBuffer::with_capacity(nodes.size_hint().0);
+        let mut sites: Vec<SpecPath> = Vec::with_capacity(nodes.size_hint().0);
+        for node in nodes {
+            let (node, site) = Self::shape_of(node);
+            Self::push(&mut shape, node);
+            sites.push(site);
+        }
+        (shape, sites.into_boxed_slice())
+    }
+
+    /// `node`'s shape, without children, and its site.
+    fn shape_of(
+        (parent, origin, arc, layer_offset, stack_offsets): OrderedNode,
+    ) -> (NodeShape, SpecPath) {
+        let NodeArc {
+            arc_kind,
+            layer_stack,
+            site,
+            namespace_depth,
+            sibling_index,
+            implied,
+            skips_duplicates: _,
+        } = arc;
+        let shape = NodeShape {
+            parent,
+            origin,
+            children: smallvec::SmallVec::new(),
+            arc_kind,
+            layer_stack,
+            namespace_depth,
+            sibling_index,
+            implied,
+            layer_offset: Some(layer_offset),
+            stack_offsets,
+        };
+        (shape, site)
+    }
+
+    /// The nodes' shapes, which graphs of the same shape share.
+    pub(crate) fn shape(&self) -> &Arc<GraphShape> {
+        &self.shape
     }
 
     /// Moves the sites of `stage_stack`'s nodes beneath `from` to beneath
@@ -422,11 +741,11 @@ impl PrimIndexGraph {
         to: crate::path::PathId,
     ) {
         let (from_site, to_site) = (SpecPath::from_prim_path(from), SpecPath::from_prim_path(to));
-        for node in &mut self.nodes {
-            if node.arc.layer_stack != stage_stack {
+        for (node, site) in self.shape.iter().zip(self.sites.iter_mut()) {
+            if node.layer_stack != stage_stack {
                 continue;
             }
-            let prim = node.arc.site.prim_path();
+            let prim = site.prim_path();
             if prim != from
                 && !paths
                     .resolve(prim)
@@ -435,19 +754,15 @@ impl PrimIndexGraph {
             {
                 continue;
             }
-            node.arc.site = crate::prim_indexing::site_paths::replace_prefix(
-                paths,
-                &node.arc.site,
-                &from_site,
-                &to_site,
-            );
+            *site =
+                crate::prim_indexing::site_paths::replace_prefix(paths, site, &from_site, &to_site);
         }
     }
 
     /// `true` when two nodes read the same site of the same layer stack.
     fn same_site(&self, a: NodeId, b: NodeId) -> bool {
-        let (a, b) = (&self.nodes[a.index()].arc, &self.nodes[b.index()].arc);
-        a.layer_stack == b.layer_stack && a.site == b.site
+        self.shape[a.index()].layer_stack == self.shape[b.index()].layer_stack
+            && self.sites[a.index()] == self.sites[b.index()]
     }
 
     /// `true` for a specializes node propagated to the root: a child of the
@@ -456,8 +771,8 @@ impl PrimIndexGraph {
     ///
     /// OpenUSD: `Pcp_IsPropagatedSpecializesNode` in `pxr/usd/pcp/utils.h`.
     fn is_propagated_specializes(&self, node: NodeId) -> bool {
-        let entry = &self.nodes[node.index()];
-        entry.arc.arc_kind == ArcKind::Specializes
+        let entry = &self.shape[node.index()];
+        entry.arc_kind == ArcKind::Specializes
             && entry.parent == Some(NodeId::ROOT)
             && entry
                 .origin
@@ -469,10 +784,9 @@ impl PrimIndexGraph {
     /// sites whose layers have no specs yet (AOUSD Core §10.4.1).
     pub(crate) fn is_inert_specializes_site(&self, mut node: NodeId) -> bool {
         loop {
-            if self
-                .nodes()
-                .any(|(id, entry)| entry.origin == Some(node) && self.is_propagated_specializes(id))
-            {
+            if self.nodes().any(|(id, entry)| {
+                entry.origin() == Some(node) && self.is_propagated_specializes(id)
+            }) {
                 return true;
             }
             let Some(parent) = self.node(node).and_then(PrimNode::parent) else {
@@ -513,33 +827,37 @@ impl PrimIndexGraph {
     /// graph.
     #[must_use]
     pub fn root(&self) -> Option<NodeId> {
-        (!self.nodes.is_empty()).then_some(NodeId::ROOT)
+        (!self.shape.is_empty()).then_some(NodeId::ROOT)
     }
 
     /// Returns the node `id`, if it is a node of this graph.
     #[must_use]
-    pub fn node(&self, id: NodeId) -> Option<&PrimNode> {
-        self.nodes.get(id.index())
+    pub fn node(&self, id: NodeId) -> Option<PrimNode<'_>> {
+        Some(PrimNode {
+            shape: self.shape.get(id.index())?,
+            site: &self.sites[id.index()],
+        })
     }
 
     /// Returns the number of nodes.
     #[must_use]
     pub fn len(&self) -> usize {
-        self.nodes.len()
+        self.shape.len()
     }
 
     /// Returns `true` when the graph has no nodes.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.nodes.is_empty()
+        self.shape.is_empty()
     }
 
     /// Iterates over every node with its id, in the order nodes were added.
-    pub fn nodes(&self) -> impl Iterator<Item = (NodeId, &PrimNode)> {
-        self.nodes
+    pub fn nodes(&self) -> impl Iterator<Item = (NodeId, PrimNode<'_>)> {
+        self.shape
             .iter()
+            .zip(self.sites.iter())
             .enumerate()
-            .map(|(index, node)| (NodeId::from_index(index), node))
+            .map(|(index, (shape, site))| (NodeId::from_index(index), PrimNode { shape, site }))
     }
 
     /// Returns every node in the order the prim's opinions are ranked,
@@ -553,11 +871,11 @@ impl PrimIndexGraph {
     /// children strongest first: [`Self::strength_order`].
     #[must_use]
     pub fn depth_first(&self) -> Vec<NodeId> {
-        let mut order = Vec::with_capacity(self.nodes.len());
+        let mut order = Vec::with_capacity(self.shape.len());
         let mut stack: Vec<NodeId> = self.root().into_iter().collect();
         while let Some(id) = stack.pop() {
             order.push(id);
-            stack.extend(self.nodes[id.index()].children.iter().rev());
+            stack.extend(self.shape[id.index()].children.iter().rev());
         }
         order
     }
@@ -759,6 +1077,113 @@ mod tests {
             layer_id: LayerId(layer_id),
             lookup_path: PathId::from_raw(0),
             spec_path,
+        }
+    }
+
+    /// Prims whose graphs differ only in their sites share their nodes'
+    /// shapes: a prim and its child reached through the same reference,
+    /// and the prims of one asset beneath two references to it. Each graph
+    /// still reads its own sites.
+    #[test]
+    fn graphs_differing_only_in_sites_share_their_shape() {
+        use crate::{InMemoryStore, Layer, PrimSpec, Reference, Stage, StageOptions};
+
+        let mut store = InMemoryStore::default();
+        let (a, b, asset) = (store.path("/A"), store.path("/B"), store.path("/Asset"));
+        let (a_leaf, b_leaf, asset_leaf) = (
+            store.path("/A/Leaf"),
+            store.path("/B/Leaf"),
+            store.path("/Asset/Leaf"),
+        );
+        let mut scene = Layer::new(LayerId(1));
+        scene.insert_prim(
+            a,
+            PrimSpec::def().with_reference(Reference::new(LayerId(2), asset)),
+        );
+        scene.insert_prim(
+            b,
+            PrimSpec::def().with_reference(Reference::new(LayerId(2), asset)),
+        );
+        store.insert_layer(scene);
+        let mut library = Layer::new(LayerId(2));
+        library.insert_prim(asset, PrimSpec::def());
+        library.insert_prim(asset_leaf, PrimSpec::def());
+        store.insert_layer(library);
+
+        let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+        let graph = |prim| stage.explain_prim_graph(prim).expect("composed prim");
+        for prim in [b, a_leaf, b_leaf] {
+            assert!(
+                Arc::ptr_eq(graph(a).shape(), graph(prim).shape()),
+                "one shape for every prim referencing the asset"
+            );
+        }
+        let sites = |prim| -> Vec<SpecPath> {
+            graph(prim)
+                .nodes()
+                .map(|(_, node)| node.site().clone())
+                .collect()
+        };
+        assert_eq!(
+            sites(a_leaf),
+            vec![
+                SpecPath::from_prim_path(a_leaf),
+                SpecPath::from_prim_path(asset_leaf)
+            ]
+        );
+        assert_eq!(
+            sites(b_leaf),
+            vec![
+                SpecPath::from_prim_path(b_leaf),
+                SpecPath::from_prim_path(asset_leaf)
+            ]
+        );
+        let reference = graph(b_leaf).node(NodeId(1)).expect("reference node");
+        assert_eq!(reference.arc_kind(), ArcKind::References);
+        assert_eq!(reference.parent(), Some(NodeId::ROOT));
+    }
+
+    /// The children of a prim that lose the same culled nodes of its graph
+    /// share one shape with each other, not their parent's.
+    #[test]
+    fn siblings_losing_the_same_nodes_share_their_shape() {
+        use crate::{InMemoryStore, Layer, PrimSpec, Reference, Stage, StageOptions};
+
+        let mut store = InMemoryStore::default();
+        let (target, source) = (store.path("/Target"), store.path("/Source"));
+        let children: Vec<_> = (0..4)
+            .map(|at| store.path(&alloc::format!("/Target/C{at}")))
+            .collect();
+        let mut layer = Layer::new(LayerId(1));
+        layer.insert_prim(source, PrimSpec::def());
+        layer.insert_prim(
+            target,
+            PrimSpec::def().with_reference(Reference::new(LayerId(1), source)),
+        );
+        for &child in &children {
+            layer.insert_prim(child, PrimSpec::def());
+        }
+        store.insert_layer(layer);
+
+        let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+        let graph = |prim| stage.explain_prim_graph(prim).expect("composed prim");
+        assert_eq!(graph(target).len(), 2, "the prim and its reference");
+        assert_eq!(
+            graph(children[0]).len(),
+            1,
+            "the reference has nothing beneath it"
+        );
+        for &child in &children[1..] {
+            assert!(Arc::ptr_eq(
+                graph(children[0]).shape(),
+                graph(child).shape()
+            ));
+            assert_eq!(
+                graph(child)
+                    .node(NodeId::ROOT)
+                    .map(|node| node.site().clone()),
+                Some(SpecPath::from_prim_path(child))
+            );
         }
     }
 

@@ -417,7 +417,6 @@ impl LiveStage {
             return self.full_rebuild(store, changes);
         }
         let mut affected: Vec<_> = old.union(&new).copied().collect();
-        affected.sort_unstable();
         let hierarchy = affected.clone();
         // Structural authoring also changes source provenance/child-order at
         // boundary parents. Refresh their indexes while preserving full lists.
@@ -435,8 +434,10 @@ impl LiveStage {
             }
         }
         affected.extend(refreshed.iter().copied());
-        affected.sort_unstable();
-        affected.dedup();
+        // In namespace order, the order they are reported in: the change
+        // lists below are filtered from it, so each is sorted already and
+        // publishing them, and returning these, sorts in one pass.
+        store.paths().sort_paths(&mut affected, store.tokens());
         self.work.replaced_prim_indexes = affected.len();
         let deps = partial.take_deps().unwrap_or_default();
         self.expression_variables
@@ -461,13 +462,21 @@ impl LiveStage {
             self.local_namespace = local::LocalSlot::pending(store, self.root, &self.options);
         }
         if let Some(changes) = changes {
-            changes.created = new.difference(&old).copied().collect();
-            changes.removed = old.difference(&new).copied().collect();
-            lists_changed.extend(refreshed);
-            lists_changed.sort_unstable();
-            lists_changed.dedup();
-            changes.changed_info_only = lists_changed;
-            changes.resynced = roots;
+            let filtered = |keep: &dyn Fn(PathId) -> bool| -> Vec<PathId> {
+                affected.iter().copied().filter(|p| keep(*p)).collect()
+            };
+            changes.created = filtered(&|p| new.contains(&p) && !old.contains(&p));
+            changes.removed = filtered(&|p| old.contains(&p) && !new.contains(&p));
+            let listed: HashSet<PathId> = lists_changed.into_iter().chain(refreshed).collect();
+            changes.changed_info_only = filtered(&|p| listed.contains(&p));
+            // A root no prim was or is at is not among `affected`.
+            changes.resynced = filtered(&|p| within.contains(&p));
+            if changes.resynced.len() < roots.len() {
+                changes.resynced = roots;
+                store
+                    .paths()
+                    .sort_paths(&mut changes.resynced, store.tokens());
+            }
         }
         affected
     }
@@ -637,9 +646,21 @@ mod tests {
         create.create_prim(target.prim(added), Specifier::Def, None);
         let mut remove = Transaction::new();
         remove.remove_spec(target.prim(added));
+        // The created or removed prims, `/Proto/Added` first, in namespace
+        // order (`/World/I10/Added` before `/World/I2/Added`).
+        let mut changed = under.clone();
+        changed.push(added);
+        store.paths.sort_paths(&mut changed, &store.tokens);
         for (edit, present) in [(&create, true), (&remove, false), (&create, true)] {
-            live.apply(&mut store, edit).expect("edit applies");
+            let applied = live.apply(&mut store, edit).expect("edit applies");
             assert!(!live.recomposition_work().full_rebuild);
+            let listed = if present {
+                &applied.changes.created
+            } else {
+                &applied.changes.removed
+            };
+            assert_eq!(*listed, changed);
+            assert_eq!(applied.changes.resynced, changed);
             for &prim in &under {
                 assert_eq!(live.stage().has_prim(prim), present, "{prim:?}");
             }

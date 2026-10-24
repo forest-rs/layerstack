@@ -111,6 +111,26 @@ package opens, index hits, copied encoded bytes and resident archive ownership.
 Run `cargo run -p layerstack_examples --bin prepared_reload` for a complete
 reject/accept workflow with checked geometry, host budgets and packaged textures.
 
+## UDIM texture tiles
+
+`resolve_udim_tiles(pattern, authoring_layer, &mut discovery)` lists the
+existing tiles of a `layerstack::asset::UdimPattern` such as
+`./textures/color.<UDIM>.png`, as OpenUSD's dependency discovery finds them:
+tile spellings resolve relative to the authoring layer (inside its package
+first) from 1001 upwards until one exists, and the other tiles of 1001 through
+1100 are looked for beside it. Each `UdimTileAsset` carries its tile number,
+authored spelling and resolved identifier, which `read_asset_bytes(identifier,
+None)` reads. Storage needs `Storage::exists` for tile probes;
+`Storage::list_siblings`, which `Filesystem` implements, lets one directory
+listing replace up to 99 of them. Package members come from the resident index
+without storage work. A host-owned `UdimDiscovery` keeps found sets, directory
+listings and packages for later calls, so a directory is listed once for all
+its sets; it never refreshes, so clear it when files change. A listing reads a
+whole directory, about 1 ms for 2000 files on local APFS against 0.1 ms to probe
+one set's tiles, so `UdimDiscovery::probing()` never lists. `UdimDiscoveryWork`
+reports every identify, probe, listing and package lookup, per call and in
+total.
+
 ## Bounded resources and root reloads
 
 `read_asset_bytes_bounded(asset, authoring_layer, AssetReadLimits { bytes,

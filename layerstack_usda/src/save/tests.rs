@@ -646,6 +646,31 @@ fn rejects_invalid_layers() {
 /// time the formats cannot order is rejected before any output.
 ///
 /// Spec: AOUSD Core §16.2.16.3 (time samples), §12.3.6 (blocked samples).
+/// Metadata no schema registers, authored as list-op statements, reads
+/// and saves on the layer as on a prim: OpenUSD writes it so on either
+/// (`Sdf_FileIOUtility::WriteListOp`), and reads it back.
+///
+/// Spec: AOUSD Core §7.4 (metadata), §16.2.14 (list-op statements).
+#[test]
+fn saves_list_op_metadata_on_the_layer() {
+    let source = r#"#usda 1.0
+(
+    delete ids = [3]
+    append ids = [1, 2]
+    prepend tags = ["a", "b"]
+)
+
+def "A" (
+    prepend tags = ["c"]
+)
+{
+}
+
+"#;
+    let text = Imported::new(source).save().unwrap();
+    assert_eq!(text, source);
+}
+
 #[test]
 fn saves_time_samples() {
     let source = r#"#usda 1.0

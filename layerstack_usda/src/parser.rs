@@ -416,6 +416,10 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
     fn parse_generic_layer_meta_entry(&mut self) {
         let start = self.current_span().start;
         self.builder.start_node(SyntaxKind::LayerMetaEntry, start);
+        // A list-op statement, as on a prim: OpenUSD writes metadata no
+        // schema registers that way when it was authored so
+        // (`Sdf_FileIOUtility::WriteListOp`), on the layer too.
+        let _op = self.try_parse_listop_prefix();
         self.parse_metadata_entry_inner();
         let end = self.current_span().start;
         self.builder.finish_node(end);

@@ -248,6 +248,7 @@ pub(crate) fn compose(
         dynamic_formats: &options.dynamic_formats,
         schemas: options.schemas.as_deref(),
         any_type: store.tokens().lookup("__AnyType__"),
+        shapes: crate::prim_index_graph::GraphShapes::default(),
     };
     let identifier = LayerStackIdentifier {
         root,
@@ -564,7 +565,12 @@ fn index_prim(
         parent.as_deref(),
         &mut outputs,
     );
-    drop(parent);
+    // A child's graph is often its parent's but for its sites, or else its
+    // siblings'. The shape is borrowed, not cloned: the children of one
+    // parent, on every thread, would contend for its count.
+    let like = parent
+        .as_deref()
+        .and_then(|parent| parent.child_shape.get().or(parent.shape.as_ref()));
     let mut graph = core::mem::take(&mut outputs.graph);
     cull(&mut graph, ctx.store.paths(), ctx.stage_stack);
     graph.instanceable = path != ctx.root_path && is_instanceable(ctx.store, &ctx.stacks, &graph);
@@ -572,7 +578,11 @@ fn index_prim(
 
     let names = child_names(ctx, &graph);
     let mut findings = crate::composition_checks::Findings::default();
-    let mut index = prim_index(ctx, path, &graph, &mut findings);
+    let mut index = prim_index(ctx, path, &graph, like, &mut findings);
+    if let Some(parent) = parent.as_deref() {
+        parent.child_shape.offer(index.graph.shape());
+    }
+    drop(parent);
     // Found here, on the thread indexing the prim, for the stage's type
     // info to read.
     index.type_name = Some(crate::Stage::source_type_name(
@@ -630,6 +640,10 @@ fn index_prim(
     }
     let record = with_dependencies.then(|| prim_record(ctx, &graph, &index, &mut outputs));
     let (has_payloads, instanceable) = (graph.has_payloads, graph.instanceable);
+    // Only the children of the prim read its shape from its graph.
+    if !composed_children.is_empty() {
+        graph.shape = Some(Arc::clone(index.graph.shape()));
+    }
     let graph = Arc::new(graph);
     let descended = active
         && key
@@ -1438,10 +1452,14 @@ fn is_active(ctx: &Ctx<'_>, graph: &Graph) -> bool {
 /// The prim index the stage reads: `graph`'s nodes and the opinions of
 /// their specs, strongest first, each node's target paths mapped into the
 /// stage namespace.
+/// The index's graph shares its shape with `like`, the graph of the
+/// prim's parent, when they are the same, and otherwise with any graph
+/// of the composition that has it ([`PrimIndexGraph::from_ordered_in`]).
 fn prim_index(
     ctx: &Ctx<'_>,
     prim: PathId,
     graph: &Graph,
+    like: Option<&Arc<crate::prim_index_graph::GraphShape>>,
     checks: &mut crate::composition_checks::Findings,
 ) -> PrimIndex {
     let nodes = graph.nodes.iter().map(|node| {
@@ -1470,7 +1488,7 @@ fn prim_index(
             stack_offsets,
         )
     });
-    let mut index = PrimIndex::new(PrimIndexGraph::from_ordered(nodes));
+    let mut index = PrimIndex::new(PrimIndexGraph::from_ordered_in(nodes, &ctx.shapes, like));
     // At most one source per layer of each contributing node's stack.
     index.reserve_sources(
         graph
@@ -1767,6 +1785,7 @@ pub(crate) fn expanded_prim_index(
         dynamic_formats: &options.dynamic_formats,
         schemas: options.schemas.as_deref(),
         any_type: store.tokens().lookup("__AnyType__"),
+        shapes: crate::prim_index_graph::GraphShapes::default(),
     };
     let identifier = LayerStackIdentifier {
         root,
@@ -1806,6 +1825,7 @@ pub(crate) fn expanded_prim_index(
         &ctx,
         path,
         &graph,
+        None,
         &mut crate::composition_checks::Findings::default(),
     )
 }

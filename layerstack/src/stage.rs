@@ -10,8 +10,9 @@ mod authoring;
 mod dangling;
 mod explain;
 pub use authoring::{
-    AuthoringInspection, AuthoringInspectionError, AuthoringSource, AuthoringSourceKind,
-    SourceComposability,
+    AuthoringInspection, AuthoringInspectionError, AuthoringQuery, AuthoringSource,
+    AuthoringSourceKind, AuthoringSpan, AuthoringTimes, AuthoringVerdict, AuthoringWrite,
+    CurrentSource, SampleBracket, SourceComposability, SourceStanding, SpanTimes,
 };
 mod objects;
 mod relationships;

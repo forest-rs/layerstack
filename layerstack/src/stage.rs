@@ -5040,6 +5040,42 @@ mod tests {
         }
     }
 
+    /// A sampled block in effect says which of its samples blocks the value,
+    /// before the first sample too, while a default block offers none.
+    ///
+    /// Spec: AOUSD Core §12.3.6.
+    #[test]
+    fn explanations_name_the_held_sampled_block() {
+        let ty = PropertyType::parse("double").unwrap();
+        let strong = PropertySpec::typed_attribute(ty.clone())
+            .with_time_samples(vec![(2.0, Value::Blocked), (4.0, Value::Double(400.0))]);
+        let weak = PropertySpec::typed_attribute(ty.clone())
+            .with_time_samples(vec![(1.0, Value::Double(10.0)), (3.0, Value::Double(30.0))]);
+        let (stage, prim, field) = property_stack_fixture(vec![strong, weak.clone()]);
+        let property = PropertyPath::new(prim, field);
+        for time in [Time::held(0.0), Time::held(3.0), Time::at(3.0)] {
+            let explained = stage.explain_property_value(property, time).unwrap();
+            assert_eq!(explained.value, None);
+            assert_eq!(explained.source, ValueSource::None);
+            let block = &explained.opinions[0];
+            assert_eq!(block.role, OpinionRole::Block);
+            assert_eq!(
+                block.samples,
+                vec![SampleUse {
+                    time: 2.0,
+                    role: OpinionRole::Block
+                }]
+            );
+        }
+        let blocked = PropertySpec::typed_attribute(ty).with_default(Value::Blocked);
+        let (stage, prim, field) = property_stack_fixture(vec![blocked, weak]);
+        let explained = stage
+            .explain_property_value(PropertyPath::new(prim, field), Time::held(3.0))
+            .unwrap();
+        assert_eq!(explained.opinions[0].role, OpinionRole::Block);
+        assert!(explained.opinions[0].samples.is_empty());
+    }
+
     /// A block discards weaker authored opinions (AOUSD Core §12.3.6), but
     /// stronger sparse edits still compose over the weakest dense value that
     /// survives it, the schema fallback or the empty array (sparse-array-edits

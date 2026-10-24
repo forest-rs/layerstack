@@ -4,9 +4,11 @@
 //! Value explanations: why a property or metadata field has its value.
 //!
 //! Each explanation ([`Attribute::explain`](crate::Attribute::explain),
-//! [`Prim::explain_metadata`](crate::Prim::explain_metadata)) mirrors one
-//! read ([`Attribute::get`](crate::Attribute::get),
-//! [`Prim::metadata`](crate::Prim::metadata)) and answers with the same
+//! [`Prim::explain_metadata`](crate::Prim::explain_metadata),
+//! [`Property::explain_metadata`](crate::Property::explain_metadata))
+//! mirrors one read ([`Attribute::get`](crate::Attribute::get),
+//! [`Prim::metadata`](crate::Prim::metadata),
+//! [`Property::metadata`](crate::Property::metadata)) and answers with the same
 //! value, plus the opinions resolution consulted and the part each one
 //! played. It is the counterpart of OpenUSD's
 //! `UsdAttribute::GetResolveInfo` (`UsdResolveInfo`, `pxr/usd/usd/resolveInfo.h`),
@@ -60,11 +62,13 @@ use crate::{
 
 /// Why a property or metadata field has its value.
 ///
-/// Returned by [`Attribute::explain`](crate::Attribute::explain) and
-/// [`Prim::explain_metadata`](crate::Prim::explain_metadata), each of which
-/// mirrors a read: [`ValueExplanation::value`] is exactly the value that
-/// read resolves ([`Attribute::get`](crate::Attribute::get),
-/// [`Prim::metadata`](crate::Prim::metadata)).
+/// Returned by [`Attribute::explain`](crate::Attribute::explain),
+/// [`Prim::explain_metadata`](crate::Prim::explain_metadata) and
+/// [`Property::explain_metadata`](crate::Property::explain_metadata), each
+/// of which mirrors a read: [`ValueExplanation::value`] is exactly the value
+/// that read resolves ([`Attribute::get`](crate::Attribute::get),
+/// [`Prim::metadata`](crate::Prim::metadata),
+/// [`Property::metadata`](crate::Property::metadata)).
 #[derive(Clone, Debug, PartialEq)]
 pub struct ValueExplanation<'s, T> {
     /// The resolved value; `None` when the query resolves no value.
@@ -377,6 +381,71 @@ impl Stage {
                 interpolation,
             } => self.explain_value_at_time_with_schema(prim, field, code, interpolation),
         }
+    }
+
+    /// Explains [`Stage::resolve_property_metadata`]: why a property's
+    /// metadata field `key`, such as `customData`, has its value, the
+    /// schema's fallback included.
+    ///
+    /// Each opinion is explained as the field it authors, so a dictionary's
+    /// entries name the opinion, and so the layer, that supplied them.
+    /// Returns `None` when no opinion authors the field and the schema has
+    /// no fallback for it.
+    ///
+    /// Spec: AOUSD Core §12.2 (metadata resolution), §12.2.5 (dictionaries
+    /// combine), §13.3.2.3 (fallback metadata).
+    #[must_use]
+    pub(crate) fn explain_property_metadata(
+        &self,
+        prim: PathId,
+        property: TokenId,
+        key: TokenId,
+    ) -> Option<ValueExplanation<'_, ResolvedValue>> {
+        let index = self.prims.get(&prim)?;
+        let opinions = index.property_opinions(property).unwrap_or(&[]);
+        let fallback = self
+            .property_definition_ref(prim, property)
+            .and_then(|definition| definition.metadata(key));
+        // Each opinion as its `key` field, position for position; one that
+        // does not author it authors nothing the explanation reads.
+        let nothing = OpinionValue::from(PropertySpec::attribute());
+        let fields: Vec<Opinion> = opinions
+            .iter()
+            .map(|opinion| Opinion {
+                value: opinion
+                    .value
+                    .as_property()
+                    .and_then(|spec| spec.metadata(key))
+                    .map_or_else(
+                        || nothing.clone(),
+                        |field| OpinionValue::Field(field.clone()),
+                    ),
+                ..opinion.clone()
+            })
+            .collect();
+        let authored = fields.iter().find_map(|opinion| opinion.value.as_field());
+        if authored.is_none() && fallback.is_none() {
+            return None;
+        }
+        let explained = match authored {
+            Some(list) if list.is_list_op() => explain_field_list(index, &fields, list),
+            _ => {
+                let fallback = match fallback {
+                    Some(FieldValue::Value(value)) => Some(value),
+                    _ => None,
+                };
+                self.explain_default(index, key, &fields, None, fallback)
+            }
+        };
+        let mut explained = rebind(index, opinions, &fields, explained);
+        if explained.value.is_none() && authored.is_none() {
+            // Only the schema's fallback answers.
+            explained.value = self
+                .resolve_property_metadata(prim, property, key)
+                .map(|resolved| resolved.value);
+            explained.source = ValueSource::Fallback;
+        }
+        Some(explained)
     }
 
     /// Why a property has its default-time value, or a relationship its

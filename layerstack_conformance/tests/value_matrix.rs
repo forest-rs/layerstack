@@ -22,7 +22,9 @@
 //! composed sample grid brackets the time with, as
 //! `UsdAttribute::GetBracketingTimeSamples` reports them. Asset paths
 //! resolve against the layer of the winning opinion
-//! (`Attribute::read_with_provenance`), as OpenUSD anchors them.
+//! (`Attribute::read_with_provenance`), and those in a composed dictionary
+//! against the layer of the opinion that supplied their entry
+//! (`Property::explain_metadata`), as OpenUSD anchors them.
 //!
 //! An explanation names its source as `UsdResolveInfo` does, with two
 //! differences of form: a sampled block in effect is
@@ -52,8 +54,9 @@ use std::sync::Arc;
 
 use layerstack::asset::anchor_asset_path;
 use layerstack::{
-    ArcKind, AttributeQuery, ExplainedOpinion, InterpolationType, LayerId, OpinionRole, Prim,
-    PrimNode, PropertyPath, Stage, StageOptions, Time, Value, ValueExplanation, ValueSource,
+    ArcKind, AttributeQuery, Contribution, ExplainedOpinion, InterpolationType, LayerId,
+    OpinionRole, Prim, PrimNode, PropertyPath, ResolvedValue, Stage, StageOptions, Time, Value,
+    ValueExplanation, ValueSource,
 };
 use layerstack_conformance::usda_real::{LoadedStage, load_entry_usda};
 use layerstack_conformance::workspace_root;
@@ -91,9 +94,7 @@ const DIVERGENCES: &[(&str, &str)] = &[
 
 /// Mismatches a later change fixes: the kind of result, the attribute's
 /// name (a `*` in it matches any run of characters), and why it differs.
-const KNOWN: &[(&str, &str, &str)] = &[("customData", "cd*_dbl", DICTIONARY_ASSETS)];
-
-const DICTIONARY_ASSETS: &str = "dictionary asset paths cannot be anchored";
+const KNOWN: &[(&str, &str, &str)] = &[];
 
 /// Whether `name` matches the [`KNOWN`] pattern `pattern`, in which one `*`
 /// matches any run of characters.
@@ -251,6 +252,17 @@ impl Composed {
 
     /// A value in the vectors' JSON form, asset paths anchored at `layer`.
     fn encode(&self, value: &Value, layer: Option<LayerId>) -> Json {
+        self.encode_at(value, &|_| layer, &mut Vec::new())
+    }
+
+    /// A value in the vectors' JSON form, the asset path at each key path
+    /// (from the root of a dictionary) anchored at the layer `anchor` names.
+    fn encode_at(
+        &self,
+        value: &Value,
+        anchor: &dyn Fn(&[Arc<str>]) -> Option<LayerId>,
+        key: &mut Vec<Arc<str>>,
+    ) -> Json {
         let tokens = &self.loaded.store.tokens;
         match value {
             Value::Blocked | Value::Null | Value::AnimationBlock => Json::Null,
@@ -266,7 +278,7 @@ impl Composed {
             Value::Token(v) => Json::from(tokens.resolve(*v)),
             Value::Asset(path) => serde_json::json!({
                 "asset": path.as_ref(),
-                "resolved": self.resolve_asset(path, layer),
+                "resolved": self.resolve_asset(path, anchor(key)),
             }),
             Value::PathExpression(text) => serde_json::json!({ "expr": text.as_ref() }),
             Value::Vec3f(v) => {
@@ -274,29 +286,56 @@ impl Composed {
             }
             Value::Vec3d(v) => Json::from(v.iter().map(|c| number(*c)).collect::<Vec<_>>()),
             Value::Dictionary(entries) => {
-                let map = entries
-                    .iter()
-                    .map(|(key, value)| (key.to_string(), self.encode(value, layer)))
-                    .collect::<BTreeMap<_, _>>()
-                    .into_iter()
-                    .collect();
-                serde_json::json!({ "dict": Json::Object(map) })
+                let mut map = BTreeMap::new();
+                for (name, value) in entries {
+                    key.push(name.clone());
+                    map.insert(name.to_string(), self.encode_at(value, anchor, key));
+                    key.pop();
+                }
+                serde_json::json!({ "dict": Json::Object(map.into_iter().collect()) })
             }
             Value::Array(_) | Value::TypedArray(_) => {
                 let array = value.array_ref().expect("array");
                 Json::from(
                     array
                         .iter()
-                        .map(|element| self.encode(&element, layer))
+                        .map(|element| self.encode_at(&element, anchor, key))
                         .collect::<Vec<_>>(),
                 )
             }
             Value::Deferred(_) => {
                 let materialized = value.try_materialize().expect("value decodes");
-                self.encode(materialized, layer)
+                self.encode_at(materialized, anchor, key)
             }
             other => panic!("unexpected value {other:?}"),
         }
+    }
+
+    /// The composed dictionary `explanation` explains, each asset path
+    /// anchored at the layer of the opinion that supplied its entry.
+    fn encode_dictionary(&self, explanation: &ValueExplanation<'_, ResolvedValue>) -> Json {
+        let Some(ResolvedValue::Dictionary(entries)) = &explanation.value else {
+            return Json::Null;
+        };
+        let mut supplied: Vec<(&[Arc<str>], LayerId)> = Vec::new();
+        for opinion in explanation.contributors() {
+            if let OpinionRole::Contributed(Contribution::Dictionary(merge)) = &opinion.role {
+                for key in &merge.supplied {
+                    supplied.push((key.as_slice(), opinion.layer()));
+                }
+            }
+        }
+        let anchor = |key: &[Arc<str>]| {
+            supplied
+                .iter()
+                .find(|(supplier, _)| key.starts_with(supplier))
+                .map(|(_, layer)| *layer)
+        };
+        self.encode_at(
+            &Value::Dictionary(entries.clone()),
+            &anchor,
+            &mut Vec::new(),
+        )
     }
 
     /// `node` as the oracle names a resolve info's node: `arc|site|layer
@@ -676,15 +715,30 @@ fn check_attribute(
         );
     }
     if let Some(expected) = &record.custom_data {
-        let actual = attribute
+        let read = attribute
             .metadata("customData")
-            .and_then(|resolved| {
-                let anchor = resolved.provenance.as_ref().map(|p| p.layer);
-                resolved
-                    .into_value()
-                    .map(|resolved| composed.encode(&resolved.value, anchor))
+            .and_then(|resolved| resolved.into_value())
+            .map(|resolved| resolved.value);
+        let explained = attribute.explain_metadata("customData");
+        let explained_value = explained.as_ref().and_then(|e| match &e.value {
+            Some(ResolvedValue::Dictionary(entries)) => Some(Value::Dictionary(entries.clone())),
+            _ => None,
+        });
+        if explained_value != read {
+            failures.push(
+                "explained",
+                case,
+                record,
+                format!("explain_metadata {explained_value:?} != metadata {read:?}"),
+            );
+        }
+        let actual = explained
+            .as_ref()
+            .map_or(Json::Null, |explained| {
+                composed.encode_dictionary(explained)
             })
-            .and_then(|encoded| encoded.get("dict").cloned())
+            .get("dict")
+            .cloned()
             .unwrap_or(Json::Null);
         if !same(&actual, expected) {
             failures.push(

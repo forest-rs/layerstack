@@ -1,0 +1,957 @@
+{
+ "cases": [
+  {
+   "name": "mesh",
+   "steps": [
+    {
+     "op": "prim",
+     "path": "/M",
+     "specifier": "def",
+     "type": "Mesh"
+    },
+    {
+     "default": {
+      "type": "float",
+      "value": 1.0
+     },
+     "op": "attribute",
+     "path": "/M.zeta",
+     "type": "float"
+    },
+    {
+     "default": {
+      "type": "point3f[]",
+      "value": [
+       [
+        0,
+        0,
+        0
+       ]
+      ]
+     },
+     "op": "attribute",
+     "path": "/M.points",
+     "type": "point3f[]"
+    },
+    {
+     "op": "relationship",
+     "path": "/M.links",
+     "targets": [
+      "/M"
+     ]
+    },
+    {
+     "key": "kind",
+     "op": "metadata",
+     "path": "/M",
+     "value": {
+      "type": "token",
+      "value": "component"
+     }
+    },
+    {
+     "op": "active",
+     "path": "/M",
+     "value": true
+    }
+   ],
+   "text": "#usda 1.0\n\ndef Mesh \"M\" (\n    active = true\n    kind = \"component\"\n)\n{\n    rel links = </M>\n    point3f[] points = [(0, 0, 0)]\n    float zeta = 1\n}\n\n"
+  },
+  {
+   "name": "names",
+   "steps": [
+    {
+     "op": "prim",
+     "path": "/N",
+     "specifier": "def",
+     "type": "Xform"
+    },
+    {
+     "custom": true,
+     "default": {
+      "type": "int",
+      "value": 0
+     },
+     "op": "attribute",
+     "path": "/N.primvars_x",
+     "type": "int"
+    },
+    {
+     "custom": true,
+     "default": {
+      "type": "int",
+      "value": 1
+     },
+     "op": "attribute",
+     "path": "/N.primvars:st",
+     "type": "int"
+    },
+    {
+     "custom": true,
+     "default": {
+      "type": "int",
+      "value": 2
+     },
+     "op": "attribute",
+     "path": "/N.Points2",
+     "type": "int"
+    },
+    {
+     "custom": true,
+     "default": {
+      "type": "int",
+      "value": 3
+     },
+     "op": "attribute",
+     "path": "/N.a10",
+     "type": "int"
+    },
+    {
+     "custom": true,
+     "default": {
+      "type": "int",
+      "value": 4
+     },
+     "op": "attribute",
+     "path": "/N.a9",
+     "type": "int"
+    },
+    {
+     "custom": true,
+     "default": {
+      "type": "int",
+      "value": 5
+     },
+     "op": "attribute",
+     "path": "/N.a09",
+     "type": "int"
+    },
+    {
+     "custom": true,
+     "default": {
+      "type": "int",
+      "value": 6
+     },
+     "op": "attribute",
+     "path": "/N.B",
+     "type": "int"
+    },
+    {
+     "custom": true,
+     "default": {
+      "type": "int",
+      "value": 7
+     },
+     "op": "attribute",
+     "path": "/N.b",
+     "type": "int"
+    },
+    {
+     "custom": true,
+     "default": {
+      "type": "int",
+      "value": 8
+     },
+     "op": "attribute",
+     "path": "/N.a_b",
+     "type": "int"
+    },
+    {
+     "custom": true,
+     "default": {
+      "type": "int",
+      "value": 9
+     },
+     "op": "attribute",
+     "path": "/N.aB",
+     "type": "int"
+    },
+    {
+     "custom": true,
+     "default": {
+      "type": "int",
+      "value": 10
+     },
+     "op": "attribute",
+     "path": "/N.ab",
+     "type": "int"
+    },
+    {
+     "custom": true,
+     "default": {
+      "type": "int",
+      "value": 11
+     },
+     "op": "attribute",
+     "path": "/N.primvars:normals",
+     "type": "int"
+    },
+    {
+     "custom": true,
+     "default": {
+      "type": "int",
+      "value": 12
+     },
+     "op": "attribute",
+     "path": "/N.x01",
+     "type": "int"
+    },
+    {
+     "custom": true,
+     "default": {
+      "type": "int",
+      "value": 13
+     },
+     "op": "attribute",
+     "path": "/N.x1",
+     "type": "int"
+    },
+    {
+     "custom": true,
+     "default": {
+      "type": "int",
+      "value": 14
+     },
+     "op": "attribute",
+     "path": "/N.x001",
+     "type": "int"
+    },
+    {
+     "custom": true,
+     "default": {
+      "type": "int",
+      "value": 15
+     },
+     "op": "attribute",
+     "path": "/N._hidden",
+     "type": "int"
+    },
+    {
+     "custom": true,
+     "default": {
+      "type": "int",
+      "value": 16
+     },
+     "op": "attribute",
+     "path": "/N.points",
+     "type": "int"
+    },
+    {
+     "custom": true,
+     "default": {
+      "type": "int",
+      "value": 17
+     },
+     "op": "attribute",
+     "path": "/N.primvars:st:indices",
+     "type": "int"
+    },
+    {
+     "custom": true,
+     "default": {
+      "type": "int",
+      "value": 18
+     },
+     "op": "attribute",
+     "path": "/N.xformOp:translate",
+     "type": "int"
+    },
+    {
+     "custom": true,
+     "default": {
+      "type": "int",
+      "value": 19
+     },
+     "op": "attribute",
+     "path": "/N.xformOpOrder",
+     "type": "int"
+    },
+    {
+     "op": "relationship",
+     "path": "/N.material:binding",
+     "targets": [
+      "/N"
+     ]
+    },
+    {
+     "custom": true,
+     "op": "relationship",
+     "path": "/N.proxyPrim",
+     "targets": []
+    },
+    {
+     "op": "relationship",
+     "path": "/N.a5",
+     "targets": [
+      "/N",
+      "/N.a9"
+     ]
+    }
+   ],
+   "text": "#usda 1.0\n\ndef Xform \"N\"\n{\n    custom int _hidden = 15\n    rel a5 = [\n        </N>,\n        </N.a9>,\n    ]\n    custom int a9 = 4\n    custom int a09 = 5\n    custom int a10 = 3\n    custom int a_b = 8\n    custom int aB = 9\n    custom int ab = 10\n    custom int B = 6\n    custom int b = 7\n    rel material:binding = </N>\n    custom int points = 16\n    custom int Points2 = 2\n    custom int primvars:normals = 11\n    custom int primvars:st = 1\n    custom int primvars:st:indices = 17\n    custom int primvars_x = 0\n    custom rel proxyPrim = None\n    custom int x1 = 13\n    custom int x01 = 12\n    custom int x001 = 14\n    custom int xformOp:translate = 18\n    custom int xformOpOrder = 19\n}\n\n"
+  },
+  {
+   "name": "prim_fields",
+   "steps": [
+    {
+     "op": "prim",
+     "path": "/C",
+     "specifier": "class"
+    },
+    {
+     "op": "prim",
+     "path": "/S",
+     "specifier": "def"
+    },
+    {
+     "op": "prim",
+     "path": "/P",
+     "specifier": "def",
+     "type": "Xform"
+    },
+    {
+     "names": [
+      "y",
+      "x"
+     ],
+     "op": "prim_order",
+     "path": "/P"
+    },
+    {
+     "names": [
+      "b",
+      "a"
+     ],
+     "op": "property_order",
+     "path": "/P"
+    },
+    {
+     "name": "shade",
+     "op": "variant_set",
+     "path": "/P"
+    },
+    {
+     "op": "prim",
+     "path": "/P{shade=dark}"
+    },
+    {
+     "op": "select",
+     "path": "/P",
+     "set": "shade",
+     "variant": "dark"
+    },
+    {
+     "op": "specialize",
+     "path": "/P",
+     "target": "/S"
+    },
+    {
+     "op": "reference",
+     "path": "/P",
+     "target": "/S"
+    },
+    {
+     "asset": "asset.usda",
+     "offset": 2.0,
+     "op": "reference",
+     "path": "/P",
+     "target": "/A"
+    },
+    {
+     "op": "payload",
+     "path": "/P",
+     "target": "/S"
+    },
+    {
+     "key": "kind",
+     "op": "metadata",
+     "path": "/P",
+     "value": {
+      "type": "token",
+      "value": "group"
+     }
+    },
+    {
+     "op": "instanceable",
+     "path": "/P",
+     "value": false
+    },
+    {
+     "op": "inherit",
+     "path": "/P",
+     "target": "/C"
+    },
+    {
+     "key": "hidden",
+     "op": "metadata",
+     "path": "/P",
+     "value": {
+      "type": "bool",
+      "value": true
+     }
+    },
+    {
+     "key": "documentation",
+     "op": "metadata",
+     "path": "/P",
+     "value": {
+      "type": "string",
+      "value": "d"
+     }
+    },
+    {
+     "key": "displayName",
+     "op": "metadata",
+     "path": "/P",
+     "value": {
+      "type": "string",
+      "value": "P"
+     }
+    },
+    {
+     "key": "customData",
+     "op": "metadata",
+     "path": "/P",
+     "value": {
+      "type": "dictionary",
+      "value": {
+       "Ab": {
+        "type": "string",
+        "value": "x"
+       },
+       "_x": {
+        "type": "int",
+        "value": 2
+       },
+       "aa": {
+        "type": "double",
+        "value": 0.5
+       },
+       "b10": {
+        "type": "int",
+        "value": 3
+       },
+       "b9": {
+        "type": "int",
+        "value": 4
+       },
+       "nested": {
+        "type": "dictionary",
+        "value": {
+         "x": {
+          "type": "int",
+          "value": 2
+         },
+         "y": {
+          "type": "int",
+          "value": 1
+         }
+        }
+       },
+       "zz": {
+        "type": "int",
+        "value": 1
+       }
+      }
+     }
+    },
+    {
+     "name": "MaterialBindingAPI",
+     "op": "api_schema",
+     "path": "/P"
+    },
+    {
+     "name": "CollectionAPI:a",
+     "op": "api_schema",
+     "path": "/P"
+    },
+    {
+     "op": "active",
+     "path": "/P",
+     "value": true
+    },
+    {
+     "key": "comment",
+     "op": "metadata",
+     "path": "/P",
+     "value": {
+      "type": "string",
+      "value": "a note"
+     }
+    },
+    {
+     "default": {
+      "type": "double",
+      "value": 1.0
+     },
+     "op": "attribute",
+     "path": "/P.b",
+     "type": "double"
+    },
+    {
+     "default": {
+      "type": "double",
+      "value": 2.0
+     },
+     "op": "attribute",
+     "path": "/P.a",
+     "type": "double"
+    },
+    {
+     "op": "prim",
+     "path": "/P/y",
+     "specifier": "def"
+    },
+    {
+     "op": "prim",
+     "path": "/P/x",
+     "specifier": "over"
+    }
+   ],
+   "text": "#usda 1.0\n\nclass \"C\"\n{\n}\n\ndef \"S\"\n{\n}\n\ndef Xform \"P\" (\n    \"a note\"\n    active = true\n    prepend apiSchemas = [\"MaterialBindingAPI\", \"CollectionAPI:a\"]\n    customData = {\n        string Ab = \"x\"\n        int _x = 2\n        double aa = 0.5\n        int b10 = 3\n        int b9 = 4\n        dictionary nested = {\n            int x = 2\n            int y = 1\n        }\n        int zz = 1\n    }\n    displayName = \"P\"\n    doc = \"d\"\n    hidden = true\n    prepend inherits = </C>\n    instanceable = false\n    kind = \"group\"\n    prepend payload = </S>\n    prepend references = [\n        </S>,\n        @asset.usda@</A> (offset = 2)\n    ]\n    prepend specializes = </S>\n    variants = {\n        string shade = \"dark\"\n    }\n    prepend variantSets = \"shade\"\n)\n{\n    reorder properties = [\"b\", \"a\"]\n    reorder nameChildren = [\"y\", \"x\"]\n    double a = 2\n    double b = 1\n\n    def \"y\"\n    {\n    }\n\n    over \"x\"\n    {\n    }\n    variantSet \"shade\" = {\n        \"dark\" {\n\n        }\n    }\n}\n\n"
+  },
+  {
+   "name": "property_fields",
+   "steps": [
+    {
+     "op": "prim",
+     "path": "/Q",
+     "specifier": "def",
+     "type": "Mesh"
+    },
+    {
+     "default": {
+      "type": "texCoord2f[]",
+      "value": [
+       [
+        0,
+        0
+       ],
+       [
+        1,
+        0
+       ]
+      ]
+     },
+     "op": "attribute",
+     "path": "/Q.primvars:st",
+     "type": "texCoord2f[]"
+    },
+    {
+     "key": "interpolation",
+     "op": "metadata",
+     "path": "/Q.primvars:st",
+     "value": {
+      "type": "token",
+      "value": "vertex"
+     }
+    },
+    {
+     "key": "elementSize",
+     "op": "metadata",
+     "path": "/Q.primvars:st",
+     "value": {
+      "type": "int",
+      "value": 1
+     }
+    },
+    {
+     "key": "hidden",
+     "op": "metadata",
+     "path": "/Q.primvars:st",
+     "value": {
+      "type": "bool",
+      "value": true
+     }
+    },
+    {
+     "key": "displayName",
+     "op": "metadata",
+     "path": "/Q.primvars:st",
+     "value": {
+      "type": "string",
+      "value": "UV"
+     }
+    },
+    {
+     "key": "documentation",
+     "op": "metadata",
+     "path": "/Q.primvars:st",
+     "value": {
+      "type": "string",
+      "value": "texture coordinates"
+     }
+    },
+    {
+     "key": "customData",
+     "op": "metadata",
+     "path": "/Q.primvars:st",
+     "value": {
+      "type": "dictionary",
+      "value": {
+       "a": {
+        "type": "int",
+        "value": 2
+       },
+       "z": {
+        "type": "int",
+        "value": 1
+       }
+      }
+     }
+    },
+    {
+     "key": "comment",
+     "op": "metadata",
+     "path": "/Q.primvars:st",
+     "value": {
+      "type": "string",
+      "value": "first"
+     }
+    },
+    {
+     "default": {
+      "type": "float",
+      "value": 2.0
+     },
+     "op": "attribute",
+     "path": "/Q.size",
+     "type": "float",
+     "uniform": true
+    },
+    {
+     "op": "sample",
+     "path": "/Q.size",
+     "time": 10.0,
+     "value": {
+      "type": "float",
+      "value": 3.0
+     }
+    },
+    {
+     "op": "sample",
+     "path": "/Q.size",
+     "time": -1.0,
+     "value": {
+      "type": "float",
+      "value": 1.0
+     }
+    },
+    {
+     "op": "sample",
+     "path": "/Q.size",
+     "time": 2.5,
+     "value": {
+      "type": "float",
+      "value": 4.0
+     }
+    },
+    {
+     "custom": true,
+     "op": "attribute",
+     "path": "/Q.inputs:b",
+     "type": "float"
+    },
+    {
+     "custom": true,
+     "op": "attribute",
+     "path": "/Q.inputs:a",
+     "type": "float"
+    },
+    {
+     "op": "connect",
+     "path": "/Q.inputs:b",
+     "targets": [
+      "/Q.size",
+      "/Q.inputs:a"
+     ]
+    },
+    {
+     "custom": true,
+     "op": "relationship",
+     "path": "/Q.rel",
+     "targets": [
+      "/Q",
+      "/Q.size",
+      "/Q.inputs:a"
+     ]
+    },
+    {
+     "key": "documentation",
+     "op": "metadata",
+     "path": "/Q.rel",
+     "value": {
+      "type": "string",
+      "value": "r"
+     }
+    },
+    {
+     "key": "customData",
+     "op": "metadata",
+     "path": "/Q.rel",
+     "value": {
+      "type": "dictionary",
+      "value": {
+       "k": {
+        "type": "int",
+        "value": 1
+       }
+      }
+     }
+    }
+   ],
+   "text": "#usda 1.0\n\ndef Mesh \"Q\"\n{\n    custom float inputs:a\n    custom float inputs:b\n    float inputs:b.connect = [\n        </Q.size>,\n        </Q.inputs:a>,\n    ]\n    texCoord2f[] primvars:st = [(0, 0), (1, 0)] (\n        \"first\"\n        customData = {\n            int a = 2\n            int z = 1\n        }\n        displayName = \"UV\"\n        doc = \"texture coordinates\"\n        elementSize = 1\n        hidden = true\n        interpolation = \"vertex\"\n    )\n    custom rel rel = [\n        </Q>,\n        </Q.size>,\n        </Q.inputs:a>,\n    ] (\n        customData = {\n            int k = 1\n        }\n        doc = \"r\"\n    )\n    uniform float size = 2\n    uniform float size.timeSamples = {\n        -1: 1,\n        2.5: 4,\n        10: 3,\n    }\n}\n\n"
+  },
+  {
+   "name": "variants",
+   "steps": [
+    {
+     "op": "prim",
+     "path": "/V",
+     "specifier": "def",
+     "type": "Xform"
+    },
+    {
+     "name": "zset",
+     "op": "variant_set",
+     "path": "/V"
+    },
+    {
+     "name": "aset",
+     "op": "variant_set",
+     "path": "/V"
+    },
+    {
+     "op": "prim",
+     "path": "/V{zset=b}"
+    },
+    {
+     "op": "prim",
+     "path": "/V{zset=a}"
+    },
+    {
+     "op": "prim",
+     "path": "/V{aset=x}"
+    },
+    {
+     "op": "select",
+     "path": "/V",
+     "set": "zset",
+     "variant": "b"
+    },
+    {
+     "op": "select",
+     "path": "/V",
+     "set": "aset",
+     "variant": "x"
+    },
+    {
+     "default": {
+      "type": "float",
+      "value": 1.0
+     },
+     "op": "attribute",
+     "path": "/V{zset=a}.zeta",
+     "type": "float"
+    },
+    {
+     "default": {
+      "type": "float",
+      "value": 2.0
+     },
+     "op": "attribute",
+     "path": "/V{zset=a}.alpha",
+     "type": "float"
+    },
+    {
+     "key": "kind",
+     "op": "metadata",
+     "path": "/V{zset=a}",
+     "value": {
+      "type": "token",
+      "value": "x"
+     }
+    },
+    {
+     "op": "active",
+     "path": "/V{zset=a}",
+     "value": false
+    },
+    {
+     "op": "prim",
+     "path": "/V{zset=a}Z",
+     "specifier": "def"
+    },
+    {
+     "op": "prim",
+     "path": "/V{zset=a}A",
+     "specifier": "def"
+    },
+    {
+     "default": {
+      "type": "float",
+      "value": 1.0
+     },
+     "op": "attribute",
+     "path": "/V{zset=b}.q",
+     "type": "float"
+    },
+    {
+     "default": {
+      "type": "double",
+      "value": 1.0
+     },
+     "op": "attribute",
+     "path": "/V.height",
+     "type": "double"
+    },
+    {
+     "op": "prim",
+     "path": "/V/Child",
+     "specifier": "def"
+    }
+   ],
+   "text": "#usda 1.0\n\ndef Xform \"V\" (\n    variants = {\n        string aset = \"x\"\n        string zset = \"b\"\n    }\n    prepend variantSets = [\"zset\", \"aset\"]\n)\n{\n    double height = 1\n\n    def \"Child\"\n    {\n    }\n    variantSet \"zset\" = {\n        \"a\" (\n            active = false\n            kind = \"x\"\n        ) {\n            float alpha = 2\n            float zeta = 1\n\n            def \"Z\"\n            {\n            }\n\n            def \"A\"\n            {\n            }\n\n        }\n        \"b\" {\n            float q = 1\n\n        }\n    }\n    variantSet \"aset\" = {\n        \"x\" {\n\n        }\n    }\n}\n\n"
+  },
+  {
+   "name": "layer",
+   "steps": [
+    {
+     "key": "upAxis",
+     "op": "metadata",
+     "path": "/",
+     "value": {
+      "type": "token",
+      "value": "Z"
+     }
+    },
+    {
+     "key": "metersPerUnit",
+     "op": "metadata",
+     "path": "/",
+     "value": {
+      "type": "double",
+      "value": 0.01
+     }
+    },
+    {
+     "op": "prim",
+     "path": "/Z",
+     "specifier": "def"
+    },
+    {
+     "op": "prim",
+     "path": "/A",
+     "specifier": "def"
+    },
+    {
+     "op": "prim",
+     "path": "/Z/z",
+     "specifier": "def"
+    },
+    {
+     "op": "prim",
+     "path": "/Z/a",
+     "specifier": "def"
+    },
+    {
+     "op": "prim",
+     "path": "/Z/m",
+     "specifier": "def"
+    },
+    {
+     "key": "endTimeCode",
+     "op": "metadata",
+     "path": "/",
+     "value": {
+      "type": "double",
+      "value": 10.0
+     }
+    },
+    {
+     "key": "startTimeCode",
+     "op": "metadata",
+     "path": "/",
+     "value": {
+      "type": "double",
+      "value": 1.0
+     }
+    },
+    {
+     "key": "defaultPrim",
+     "op": "metadata",
+     "path": "/",
+     "value": {
+      "type": "token",
+      "value": "Z"
+     }
+    },
+    {
+     "key": "documentation",
+     "op": "metadata",
+     "path": "/",
+     "value": {
+      "type": "string",
+      "value": "docs"
+     }
+    },
+    {
+     "key": "comment",
+     "op": "metadata",
+     "path": "/",
+     "value": {
+      "type": "string",
+      "value": "a layer"
+     }
+    },
+    {
+     "key": "timeCodesPerSecond",
+     "op": "metadata",
+     "path": "/",
+     "value": {
+      "type": "double",
+      "value": 24.0
+     }
+    },
+    {
+     "key": "framesPerSecond",
+     "op": "metadata",
+     "path": "/",
+     "value": {
+      "type": "double",
+      "value": 24.0
+     }
+    },
+    {
+     "key": "customLayerData",
+     "op": "metadata",
+     "path": "/",
+     "value": {
+      "type": "dictionary",
+      "value": {
+       "Ab": {
+        "type": "int",
+        "value": 2
+       },
+       "aa": {
+        "type": "int",
+        "value": 3
+       },
+       "zz": {
+        "type": "int",
+        "value": 1
+       }
+      }
+     }
+    }
+   ],
+   "text": "#usda 1.0\n(\n    \"a layer\"\n    customLayerData = {\n        int Ab = 2\n        int aa = 3\n        int zz = 1\n    }\n    defaultPrim = \"Z\"\n    doc = \"docs\"\n    endTimeCode = 10\n    framesPerSecond = 24\n    metersPerUnit = 0.01\n    startTimeCode = 1\n    timeCodesPerSecond = 24\n    upAxis = \"Z\"\n)\n\ndef \"Z\"\n{\n    def \"z\"\n    {\n    }\n\n    def \"a\"\n    {\n    }\n\n    def \"m\"\n    {\n    }\n}\n\ndef \"A\"\n{\n}\n\n"
+  }
+ ],
+ "openusd_version": "26.8",
+ "round_trip": {
+  "unregistered": "#usda 1.0\n(\n    Beta = \"2\"\n    _u = \"4\"\n    a10 = \"x\"\n    a9 = \"y\"\n    zeta = \"1\"\n)\n\ndef \"P\" (\n    _u = \"4\"\n    a9 = \"y\"\n    a10 = \"x\"\n    Beta = \"2\"\n    zeta = \"1\"\n)\n{\n}\n\n",
+  "usda": "#usda 1.0\n(\n    \"layer comment\"\n    customLayerData = {\n        int a = 2\n        dictionary b = {\n            int x = 2\n            int y = 1\n        }\n        int zz = 1\n    }\n    defaultPrim = \"P\"\n    metersPerUnit = 1\n    subLayers = [\n        @./b.usda@,\n        @./a.usda@ (offset = 2)\n    ]\n    upAxis = \"Z\"\n)\n\ndef \"P\" (\n    \"prim comment\"\n    active = true\n    customData = {\n        int a = 2\n        int z = 1\n    }\n    inherits = </Q>\n    kind = \"group\"\n    references = [\n        </Q>,\n        @./r.usda@</R>\n    ]\n    variants = {\n        string aa = \"a\"\n        string zz = \"b\"\n    }\n    prepend variantSets = [\"zz\", \"aa\"]\n)\n{\n    reorder properties = [\"zeta\", \"alpha\"]\n    reorder nameChildren = [\"Y\", \"X\"]\n    double A2 = 1\n    double a9 = 1\n    double a10 = 1\n    float alpha = 3 (\n        \"property comment\"\n        customData = {\n            int a = 2\n            int b = 1\n        }\n        doc = \"x\"\n        interpolation = \"vertex\"\n    )\n    float alpha.timeSamples = {\n        1: 2,\n        5: 1,\n    }\n    float alpha.connect = </P.zeta>\n    custom rel arel\n    float zeta = 1\n    rel zrel = [\n        </P/Y>,\n        </P/X>,\n    ]\n\n    def \"Y\"\n    {\n    }\n\n    def \"X\"\n    {\n    }\n    variantSet \"zz\" = {\n        \"a\" (\n            active = false\n            kind = \"x\"\n        ) {\n            float b = 1\n            float q = 2\n\n        }\n        \"b\" {\n            float q = 1\n\n        }\n    }\n    variantSet \"aa\" = {\n        \"a\" {\n\n        }\n    }\n}\n\ndef \"Q\"\n{\n}\n\n",
+  "usdc": "#usda 1.0\n(\n    \"layer comment\"\n    customLayerData = {\n        int a = 2\n        dictionary b = {\n            int x = 2\n            int y = 1\n        }\n        int zz = 1\n    }\n    defaultPrim = \"P\"\n    metersPerUnit = 1\n    subLayers = [\n        @./b.usda@,\n        @./a.usda@ (offset = 2)\n    ]\n    upAxis = \"Z\"\n)\n\ndef \"P\" (\n    \"prim comment\"\n    active = true\n    customData = {\n        int a = 2\n        int z = 1\n    }\n    inherits = </Q>\n    kind = \"group\"\n    references = [\n        </Q>,\n        @./r.usda@</R>\n    ]\n    variants = {\n        string aa = \"a\"\n        string zz = \"b\"\n    }\n    prepend variantSets = [\"zz\", \"aa\"]\n)\n{\n    reorder properties = [\"zeta\", \"alpha\"]\n    reorder nameChildren = [\"Y\", \"X\"]\n    double A2 = 1\n    double a9 = 1\n    double a10 = 1\n    float alpha = 3 (\n        \"property comment\"\n        customData = {\n            int a = 2\n            int b = 1\n        }\n        doc = \"x\"\n        interpolation = \"vertex\"\n    )\n    float alpha.timeSamples = {\n        1: 2,\n        5: 1,\n    }\n    float alpha.connect = </P.zeta>\n    custom rel arel\n    float zeta = 1\n    rel zrel = [\n        </P/Y>,\n        </P/X>,\n    ]\n\n    def \"Y\"\n    {\n    }\n\n    def \"X\"\n    {\n    }\n    variantSet \"zz\" = {\n        \"a\" (\n            active = false\n            kind = \"x\"\n        ) {\n            float b = 1\n            float q = 2\n\n        }\n        \"b\" {\n            float q = 1\n\n        }\n    }\n    variantSet \"aa\" = {\n        \"a\" {\n\n        }\n    }\n}\n\ndef \"Q\"\n{\n}\n\n"
+ }
+}

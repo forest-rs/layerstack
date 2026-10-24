@@ -13,6 +13,8 @@ use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 
+use smallvec::SmallVec;
+
 use crate::Span;
 use crate::ast::*;
 use crate::cst::{SyntaxKind, SyntaxNode, SyntaxTree};
@@ -95,6 +97,26 @@ struct LowerCtx<'a> {
     lowered: Vec<LoweredPrim<'a>>,
 }
 
+/// The kinds and ids of a node's non-trivia children, which lowering reads
+/// by position: a statement's or entry's signature. Signatures are short, so
+/// they stay inline.
+type Signature = SmallVec<[(SyntaxKind, u32); 16]>;
+
+fn signature(node: SyntaxNode<'_>) -> Signature {
+    node.children_no_trivia()
+        .map(|child| (child.kind(), child.id.0))
+        .collect()
+}
+
+/// The children of `node` that are `kind` nodes, which is no trivia kind.
+fn children_of(
+    node: SyntaxNode<'_>,
+    kind: SyntaxKind,
+) -> impl Iterator<Item = SyntaxNode<'_>> + Clone {
+    debug_assert!(!kind.is_trivia(), "trivia nodes are filtered as trivia");
+    node.children().filter(move |child| child.kind() == kind)
+}
+
 impl<'a> LowerCtx<'a> {
     fn error(&mut self, span: Span, message: impl Into<String>) {
         self.diagnostics.push(Diagnostic::error(span, message));
@@ -116,15 +138,11 @@ impl<'a> LowerCtx<'a> {
         let tree = root.tree();
         let mut version = "";
         let mut metadata = Vec::new();
-        let mut prims = Vec::new();
+        let mut prims = Vec::with_capacity(children_of(root, SyntaxKind::PrimDef).count());
         let mut root_prim_order = None;
 
-        let children: Vec<_> = root
-            .children_no_trivia()
-            .map(|c| (c.kind(), c.id.0))
-            .collect();
-
-        for (kind, id) in children {
+        for child in root.children_no_trivia() {
+            let (kind, id) = (child.kind(), child.id.0);
             match kind {
                 SyntaxKind::Header => {
                     version = self.lower_header(self.node_from(tree, id));
@@ -172,13 +190,20 @@ impl<'a> LowerCtx<'a> {
 
     fn lower_layer_metadata(&mut self, node: SyntaxNode<'_>) -> Vec<LayerMeta<'a>> {
         let tree = node.tree();
-        let children: Vec<_> = node
-            .children_no_trivia()
-            .map(|c| (c.kind(), c.id.0))
-            .collect();
-
-        let mut items = Vec::new();
-        for (kind, id) in children {
+        let mut items = Vec::with_capacity(
+            node.children()
+                .filter(|child| {
+                    matches!(
+                        child.kind(),
+                        SyntaxKind::SubLayersList
+                            | SyntaxKind::RelocatesMap
+                            | SyntaxKind::LayerMetaEntry
+                    )
+                })
+                .count(),
+        );
+        for child in node.children_no_trivia() {
+            let (kind, id) = (child.kind(), child.id.0);
             match kind {
                 SyntaxKind::SubLayersList => {
                     items.push(self.lower_sublayers(self.node_from(tree, id)));
@@ -220,14 +245,10 @@ impl<'a> LowerCtx<'a> {
 
     fn lower_sublayers(&mut self, node: SyntaxNode<'_>) -> LayerMeta<'a> {
         let tree = node.tree();
-        let item_ids: Vec<u32> = node
-            .children_no_trivia()
-            .filter(|c| c.kind() == SyntaxKind::SubLayerItem)
-            .map(|c| c.id.0)
-            .collect();
+        let item_ids = children_of(node, SyntaxKind::SubLayerItem);
 
-        let mut items = Vec::new();
-        for id in item_ids {
+        let mut items = Vec::with_capacity(item_ids.clone().count());
+        for id in item_ids.map(|child| child.id.0) {
             items.push(self.lower_sublayer_item(self.node_from(tree, id)));
         }
         LayerMeta::SubLayers(items)
@@ -245,14 +266,10 @@ impl<'a> LowerCtx<'a> {
 
     fn lower_relocates(&mut self, node: SyntaxNode<'_>) -> LayerMeta<'a> {
         let tree = node.tree();
-        let entry_ids: Vec<u32> = node
-            .children_no_trivia()
-            .filter(|c| c.kind() == SyntaxKind::RelocateEntry)
-            .map(|c| c.id.0)
-            .collect();
+        let entry_ids = children_of(node, SyntaxKind::RelocateEntry);
 
-        let mut entries = Vec::new();
-        for id in entry_ids {
+        let mut entries = Vec::with_capacity(entry_ids.clone().count());
+        for id in entry_ids.map(|child| child.id.0) {
             entries.push(self.lower_relocate_entry(self.node_from(tree, id)));
         }
         LayerMeta::Relocates(entries)
@@ -260,12 +277,9 @@ impl<'a> LowerCtx<'a> {
 
     fn lower_relocate_entry(&mut self, node: SyntaxNode<'_>) -> RelocateEntry<'a> {
         let span = node.span();
-        let paths: Vec<_> = node
-            .children_no_trivia()
-            .filter(|c| c.kind() == SyntaxKind::PathRef)
-            .collect();
-        let source = paths.first().map(|n| self.lower_path_ref(*n)).unwrap_or("");
-        let target = paths.get(1).map(|n| self.lower_path_ref(*n)).unwrap_or("");
+        let mut paths = children_of(node, SyntaxKind::PathRef);
+        let source = paths.next().map(|n| self.lower_path_ref(n)).unwrap_or("");
+        let target = paths.next().map(|n| self.lower_path_ref(n)).unwrap_or("");
         RelocateEntry {
             span,
             source,
@@ -299,10 +313,7 @@ impl<'a> LowerCtx<'a> {
         }
         let span = node.span();
         let tree = node.tree();
-        let sig: Vec<_> = node
-            .children_no_trivia()
-            .map(|c| (c.kind(), c.id.0))
-            .collect();
+        let sig = signature(node);
 
         let mut specifier = Specifier::Def;
         let mut type_name = None;
@@ -363,14 +374,10 @@ impl<'a> LowerCtx<'a> {
 
     fn lower_prim_metadata(&mut self, node: SyntaxNode<'_>) -> Vec<PrimMeta<'a>> {
         let tree = node.tree();
-        let entry_ids: Vec<u32> = node
-            .children_no_trivia()
-            .filter(|c| c.kind() == SyntaxKind::PrimMetaEntry)
-            .map(|c| c.id.0)
-            .collect();
+        let entry_ids = children_of(node, SyntaxKind::PrimMetaEntry);
 
-        let mut items = Vec::new();
-        for id in entry_ids {
+        let mut items = Vec::with_capacity(entry_ids.clone().count());
+        for id in entry_ids.map(|child| child.id.0) {
             if let Some(meta) = self.lower_prim_meta_entry(self.node_from(tree, id)) {
                 items.push(meta);
             }
@@ -383,10 +390,7 @@ impl<'a> LowerCtx<'a> {
             return Some(PrimMeta::Custom(comment));
         }
         let tree = node.tree();
-        let sig: Vec<_> = node
-            .children_no_trivia()
-            .map(|c| (c.kind(), c.id.0))
-            .collect();
+        let sig = signature(node);
 
         let mut idx = 0;
         let mut op = ListOpKind::Explicit;
@@ -486,13 +490,22 @@ impl<'a> LowerCtx<'a> {
 
     fn lower_prim_body(&mut self, node: SyntaxNode<'_>) -> Vec<PrimChild<'a>> {
         let tree = node.tree();
-        let children_info: Vec<_> = node
-            .children_no_trivia()
-            .map(|c| (c.kind(), c.id.0))
-            .collect();
-
-        let mut children = Vec::new();
-        for (kind, id) in children_info {
+        let mut children = Vec::with_capacity(
+            node.children()
+                .filter(|child| {
+                    matches!(
+                        child.kind(),
+                        SyntaxKind::PrimDef
+                            | SyntaxKind::AttributeDef
+                            | SyntaxKind::RelationshipDef
+                            | SyntaxKind::VariantSetDef
+                            | SyntaxKind::ReorderStmt
+                    )
+                })
+                .count(),
+        );
+        for child in node.children_no_trivia() {
+            let (kind, id) = (child.kind(), child.id.0);
             match kind {
                 SyntaxKind::PrimDef => {
                     children.push(PrimChild::Prim(self.lower_prim(self.node_from(tree, id))));
@@ -526,10 +539,7 @@ impl<'a> LowerCtx<'a> {
     fn lower_attribute(&mut self, node: SyntaxNode<'_>) -> Attribute<'a> {
         let span = node.span();
         let tree = node.tree();
-        let sig: Vec<_> = node
-            .children_no_trivia()
-            .map(|c| (c.kind(), c.id.0))
-            .collect();
+        let sig = signature(node);
 
         let mut custom = false;
         let mut uniform = false;
@@ -627,10 +637,7 @@ impl<'a> LowerCtx<'a> {
                 SyntaxKind::SplineSuffix => {
                     let node = self.node_from(tree, id);
                     if let Some((data, times)) = self.lower_spline(node, type_name, is_array) {
-                        let dictionaries = node
-                            .children_no_trivia()
-                            .filter(|c| c.kind() == SyntaxKind::DictionaryValue)
-                            .collect::<Vec<_>>();
+                        let dictionaries = children_of(node, SyntaxKind::DictionaryValue);
                         for (time, dictionary) in times.into_iter().zip(dictionaries) {
                             spline_custom_data.push((time, self.lower_dictionary(dictionary)));
                         }
@@ -706,14 +713,10 @@ impl<'a> LowerCtx<'a> {
 
     fn lower_attribute_metadata(&mut self, node: SyntaxNode<'_>) -> Vec<MetadataEntry<'a>> {
         let tree = node.tree();
-        let entry_ids: Vec<u32> = node
-            .children_no_trivia()
-            .filter(|c| c.kind() == SyntaxKind::MetadataEntry)
-            .map(|c| c.id.0)
-            .collect();
+        let entry_ids = children_of(node, SyntaxKind::MetadataEntry);
 
-        let mut items = Vec::new();
-        for id in entry_ids {
+        let mut items = Vec::with_capacity(entry_ids.clone().count());
+        for id in entry_ids.map(|child| child.id.0) {
             items.push(self.lower_metadata_entry(self.node_from(tree, id)));
         }
         items
@@ -724,10 +727,7 @@ impl<'a> LowerCtx<'a> {
     fn lower_relationship(&mut self, node: SyntaxNode<'_>) -> Relationship<'a> {
         let span = node.span();
         let tree = node.tree();
-        let sig: Vec<_> = node
-            .children_no_trivia()
-            .map(|c| (c.kind(), c.id.0))
-            .collect();
+        let sig = signature(node);
 
         let mut op = ListOpKind::Explicit;
         let mut custom = false;
@@ -825,22 +825,16 @@ impl<'a> LowerCtx<'a> {
 
     fn lower_variant_set(&mut self, node: SyntaxNode<'_>) -> VariantSet<'a> {
         let span = node.span();
-        let tree = node.tree();
-        let sig: Vec<_> = node
-            .children_no_trivia()
-            .map(|c| (c.kind(), c.id.0))
-            .collect();
-
         let mut name = "";
-        let mut branches = Vec::new();
+        let mut branches = Vec::with_capacity(children_of(node, SyntaxKind::VariantBranch).count());
 
-        for (kind, id) in &sig {
-            match *kind {
+        for child in node.children_no_trivia() {
+            match child.kind() {
                 k if is_string_kind(k) => {
-                    name = self.name_literal(self.node_from(tree, *id));
+                    name = self.name_literal(child);
                 }
                 SyntaxKind::VariantBranch => {
-                    branches.push(self.lower_variant_branch(self.node_from(tree, *id)));
+                    branches.push(self.lower_variant_branch(child));
                 }
                 _ => {}
             }
@@ -855,10 +849,7 @@ impl<'a> LowerCtx<'a> {
 
     fn lower_variant_branch(&mut self, node: SyntaxNode<'_>) -> VariantBranch<'a> {
         let tree = node.tree();
-        let sig: Vec<_> = node
-            .children_no_trivia()
-            .map(|c| (c.kind(), c.id.0))
-            .collect();
+        let sig = signature(node);
 
         let mut name = "";
         let mut metadata = Vec::new();
@@ -887,15 +878,9 @@ impl<'a> LowerCtx<'a> {
     }
 
     fn lower_reorder_stmt(&mut self, node: SyntaxNode<'_>) -> PrimChild<'a> {
-        let tree = node.tree();
-        let idents: Vec<u32> = node
-            .children_no_trivia()
-            .filter(|c| c.kind() == SyntaxKind::Ident)
-            .map(|c| c.id.0)
-            .collect();
-        let kind = idents
-            .get(1)
-            .map(|id| self.text(self.node_from(tree, *id)))
+        let kind = children_of(node, SyntaxKind::Ident)
+            .nth(1)
+            .map(|ident| self.text(ident))
             .unwrap_or("");
         let names = self.lower_name_list_from_reorder(node);
         match kind {
@@ -933,14 +918,10 @@ impl<'a> LowerCtx<'a> {
             return ListOpArc { kind, items: None };
         }
         let tree = node.tree();
-        let arc_ids: Vec<u32> = node
-            .children_no_trivia()
-            .filter(|c| c.kind() == SyntaxKind::ArcRef)
-            .map(|c| c.id.0)
-            .collect();
+        let arc_ids = children_of(node, SyntaxKind::ArcRef);
 
-        let mut items = Vec::new();
-        for id in arc_ids {
+        let mut items = Vec::with_capacity(arc_ids.clone().count());
+        for id in arc_ids.map(|child| child.id.0) {
             items.push(self.lower_arc_ref(self.node_from(tree, id)));
         }
         ListOpArc {
@@ -951,10 +932,7 @@ impl<'a> LowerCtx<'a> {
 
     fn lower_arc_ref(&mut self, node: SyntaxNode<'_>) -> ArcRef<'a> {
         let tree = node.tree();
-        let sig: Vec<_> = node
-            .children_no_trivia()
-            .map(|c| (c.kind(), c.id.0))
-            .collect();
+        let sig = signature(node);
 
         let mut asset = None;
         let mut prim_path = None;
@@ -1027,10 +1005,10 @@ impl<'a> LowerCtx<'a> {
     }
 
     fn lower_path_list(&mut self, node: SyntaxNode<'_>) -> Vec<&'a str> {
-        node.children_no_trivia()
-            .filter(|c| c.kind() == SyntaxKind::PathRef)
-            .map(|c| self.lower_path_ref(c))
-            .collect()
+        let refs = children_of(node, SyntaxKind::PathRef);
+        let mut paths = Vec::with_capacity(refs.clone().count());
+        paths.extend(refs.map(|c| self.lower_path_ref(c)));
+        paths
     }
 
     fn lower_name_listop(
@@ -1055,10 +1033,10 @@ impl<'a> LowerCtx<'a> {
     }
 
     fn lower_name_list(&mut self, node: SyntaxNode<'_>) -> Vec<&'a str> {
-        node.children_no_trivia()
-            .filter(|c| is_string_kind(c.kind()))
-            .map(|c| self.name_literal(c))
-            .collect()
+        let strings = node.children().filter(|c| is_string_kind(c.kind()));
+        let mut names = Vec::with_capacity(strings.clone().count());
+        names.extend(strings.map(|c| self.name_literal(c)));
+        names
     }
 
     fn lower_variant_selections(
@@ -1069,14 +1047,10 @@ impl<'a> LowerCtx<'a> {
             return Vec::new();
         };
         let tree = node.tree();
-        let entry_ids: Vec<u32> = node
-            .children_no_trivia()
-            .filter(|c| c.kind() == SyntaxKind::VariantSelectionEntry)
-            .map(|c| c.id.0)
-            .collect();
+        let entry_ids = children_of(node, SyntaxKind::VariantSelectionEntry);
 
-        let mut selections = Vec::new();
-        for id in entry_ids {
+        let mut selections = Vec::with_capacity(entry_ids.clone().count());
+        for id in entry_ids.map(|child| child.id.0) {
             selections.push(self.lower_variant_selection_entry(self.node_from(tree, id)));
         }
         selections
@@ -1084,16 +1058,21 @@ impl<'a> LowerCtx<'a> {
 
     fn lower_variant_selection_entry(&mut self, node: SyntaxNode<'_>) -> VariantSelection<'a> {
         let tree = node.tree();
-        let sig: Vec<_> = node
-            .children_no_trivia()
-            .map(|c| (c.kind(), c.id.0))
-            .collect();
+        let sig = signature(node);
 
         let mut set_name = "";
         let mut branch_name = "";
 
-        let strings: Vec<_> = sig.iter().filter(|s| is_string_kind(s.0)).collect();
-        let idents: Vec<_> = sig.iter().filter(|s| s.0 == SyntaxKind::Ident).collect();
+        let strings: Signature = sig
+            .iter()
+            .filter(|s| is_string_kind(s.0))
+            .copied()
+            .collect();
+        let idents: Signature = sig
+            .iter()
+            .filter(|s| s.0 == SyntaxKind::Ident)
+            .copied()
+            .collect();
 
         if strings.len() >= 2 {
             set_name = self.name_literal(self.node_from(tree, strings[0].1));
@@ -1203,21 +1182,15 @@ impl<'a> LowerCtx<'a> {
     }
 
     fn lower_array_edit(&mut self, node: SyntaxNode<'_>) -> ArrayEdit<'a> {
-        let tree = node.tree();
-        let instructions = node
-            .children_no_trivia()
-            .filter(|child| child.kind() == SyntaxKind::ArrayEditInstruction)
-            .map(|child| self.lower_array_edit_instruction(self.node_from(tree, child.id.0)))
-            .collect();
+        let nodes = children_of(node, SyntaxKind::ArrayEditInstruction);
+        let mut instructions = Vec::with_capacity(nodes.clone().count());
+        instructions.extend(nodes.map(|child| self.lower_array_edit_instruction(child)));
         ArrayEdit { instructions }
     }
 
     fn lower_array_edit_instruction(&mut self, node: SyntaxNode<'_>) -> ArrayEditInstruction<'a> {
         let tree = node.tree();
-        let sig: Vec<_> = node
-            .children_no_trivia()
-            .map(|child| (child.kind(), child.id.0))
-            .collect();
+        let sig = signature(node);
 
         let keyword = sig
             .iter()
@@ -1296,10 +1269,7 @@ impl<'a> LowerCtx<'a> {
 
     fn lower_array_edit_index(&mut self, node: SyntaxNode<'_>) -> Option<ArrayEditIndex> {
         let tree = node.tree();
-        let sig: Vec<_> = node
-            .children_no_trivia()
-            .map(|child| (child.kind(), child.id.0))
-            .collect();
+        let sig = signature(node);
 
         let mut negative = false;
         for (kind, id) in sig {
@@ -1356,33 +1326,21 @@ impl<'a> LowerCtx<'a> {
     }
 
     fn lower_last_array_edit_index(&mut self, node: SyntaxNode<'_>) -> Option<ArrayEditIndex> {
-        let tree = node.tree();
-        let children: Vec<_> = node.children_no_trivia().collect();
-        children
-            .iter()
-            .rev()
-            .find(|child| child.kind() == SyntaxKind::ArrayEditIndex)
-            .and_then(|child| self.lower_array_edit_index(self.node_from(tree, child.id.0)))
+        children_of(node, SyntaxKind::ArrayEditIndex)
+            .last()
+            .and_then(|child| self.lower_array_edit_index(child))
     }
 
     fn lower_dictionary(&mut self, node: SyntaxNode<'_>) -> Vec<DictionaryEntry<'a>> {
-        let tree = node.tree();
-        let ids: Vec<u32> = node
-            .children_no_trivia()
-            .filter(|c| c.kind() == SyntaxKind::DictionaryEntry)
-            .map(|c| c.id.0)
-            .collect();
-        ids.iter()
-            .map(|id| self.lower_dictionary_entry(self.node_from(tree, *id)))
-            .collect()
+        let nodes = children_of(node, SyntaxKind::DictionaryEntry);
+        let mut entries = Vec::with_capacity(nodes.clone().count());
+        entries.extend(nodes.map(|entry| self.lower_dictionary_entry(entry)));
+        entries
     }
 
     fn lower_dictionary_entry(&mut self, node: SyntaxNode<'_>) -> DictionaryEntry<'a> {
         let tree = node.tree();
-        let sig: Vec<_> = node
-            .children_no_trivia()
-            .map(|c| (c.kind(), c.id.0))
-            .collect();
+        let sig = signature(node);
 
         let mut type_name = None;
         let mut key = Cow::Borrowed("");
@@ -1440,36 +1398,19 @@ impl<'a> LowerCtx<'a> {
     }
 
     fn lower_time_samples(&mut self, node: SyntaxNode<'_>) -> Vec<TimeSample<'a>> {
-        let tree = node.tree();
-        let mut samples = Vec::new();
-
         // Find TimeSampleMap child.
-        let map_id = node
-            .children_no_trivia()
-            .find(|c| c.kind() == SyntaxKind::TimeSampleMap)
-            .map(|c| c.id.0);
-
-        if let Some(map_id) = map_id {
-            let map_node = self.node_from(tree, map_id);
-            let entry_ids: Vec<u32> = map_node
-                .children_no_trivia()
-                .filter(|c| c.kind() == SyntaxKind::TimeSampleEntry)
-                .map(|c| c.id.0)
-                .collect();
-
-            for id in entry_ids {
-                samples.push(self.lower_time_sample_entry(self.node_from(tree, id)));
-            }
-        }
+        let Some(map_node) = node.child_by_kind(SyntaxKind::TimeSampleMap) else {
+            return Vec::new();
+        };
+        let entries = children_of(map_node, SyntaxKind::TimeSampleEntry);
+        let mut samples = Vec::with_capacity(entries.clone().count());
+        samples.extend(entries.map(|entry| self.lower_time_sample_entry(entry)));
         samples
     }
 
     fn lower_time_sample_entry(&mut self, node: SyntaxNode<'_>) -> TimeSample<'a> {
         let tree = node.tree();
-        let sig: Vec<_> = node
-            .children_no_trivia()
-            .map(|c| (c.kind(), c.id.0))
-            .collect();
+        let sig = signature(node);
 
         let mut time = 0.0;
         let mut value = None;
@@ -1510,10 +1451,7 @@ impl<'a> LowerCtx<'a> {
 
     fn lower_connection(&mut self, node: SyntaxNode<'_>) -> Vec<&'a str> {
         let tree = node.tree();
-        let sig: Vec<_> = node
-            .children_no_trivia()
-            .map(|c| (c.kind(), c.id.0))
-            .collect();
+        let sig = signature(node);
 
         // Check for None.
         if sig.iter().any(|(k, id)| {
@@ -1634,10 +1572,7 @@ impl<'a> LowerCtx<'a> {
 
     fn lower_layer_offset_params(&self, node: SyntaxNode<'_>) -> (Option<f64>, Option<f64>) {
         let tree = node.tree();
-        let sig: Vec<_> = node
-            .children_no_trivia()
-            .map(|c| (c.kind(), c.id.0))
-            .collect();
+        let sig = signature(node);
 
         let mut offset = None;
         let mut scale = None;
@@ -1699,10 +1634,7 @@ impl<'a> LowerCtx<'a> {
             return comment;
         }
         let tree = node.tree();
-        let sig: Vec<_> = node
-            .children_no_trivia()
-            .map(|c| (c.kind(), c.id.0))
-            .collect();
+        let sig = signature(node);
 
         let mut key = "";
         let mut value = MetadataValue::None;

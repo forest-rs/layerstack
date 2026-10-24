@@ -58,6 +58,7 @@ use layerstack::{
     ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex, AssetResolveError, AssetResolver,
     MetadataTarget, PropertyType, ReferenceTarget, ResolvedAsset, SchemaRegistry, StringArray,
 };
+use smallvec::SmallVec;
 
 use crate::Span;
 use crate::ast;
@@ -1066,11 +1067,16 @@ impl EmitCtx<'_> {
         // its set, as OpenUSD's text parser does not.
         let set_tok = self.tokens.intern(vs.name);
         let set_spec = sets.get_or_insert_default(set_tok);
+        set_spec.variants.reserve(vs.branches.len());
+        // The branch sites of each branch in turn: the enclosing ones, then
+        // the branch's own.
+        let mut branch_context = Vec::with_capacity(enclosing.len() + 1);
 
         for branch in &vs.branches {
             let branch_tok = self.tokens.intern(branch.name);
             let mut variant_spec = set_spec.variants.remove(&branch_tok).unwrap_or_default();
-            let mut branch_context = enclosing.to_vec();
+            branch_context.clear();
+            branch_context.extend_from_slice(enclosing);
             branch_context.push(self.variant_site(prim_path_id, set_tok, branch_tok));
 
             // Process branch metadata (arcs on the branch itself).
@@ -1213,10 +1219,12 @@ impl EmitCtx<'_> {
             return ListOp::explicit(Vec::new());
         };
 
-        let refs: Vec<Reference> = items
-            .iter()
-            .filter_map(|r| self.emit_arc_ref(r, arc, in_branch))
-            .collect();
+        let mut refs = Vec::with_capacity(items.len());
+        refs.extend(
+            items
+                .iter()
+                .filter_map(|r| self.emit_arc_ref(r, arc, in_branch)),
+        );
 
         let mut listop = ListOp::default();
         match arc_list.kind {
@@ -1573,7 +1581,11 @@ impl EmitCtx<'_> {
     fn declared_property_type(type_hint: &str, is_array: bool) -> PropertyType {
         let base = type_hint.strip_suffix("[]").unwrap_or(type_hint);
         let parsed = if is_array {
-            PropertyType::parse(&format!("{base}[]"))
+            // The array type's name, spelled where a type name fits.
+            let mut name = SmallVec::<[u8; 64]>::new();
+            name.extend_from_slice(base.as_bytes());
+            name.extend_from_slice(b"[]");
+            PropertyType::parse(core::str::from_utf8(&name).expect("a name and `[]` are UTF-8"))
         } else {
             PropertyType::parse(base)
         };

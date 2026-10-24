@@ -1,12 +1,60 @@
 # Copyright 2026 the LayerStack Authors
 # SPDX-License-Identifier: Apache-2.0 OR MIT
-"""Pin primary camera frusta, including scale/shear/reflection conformance."""
+"""Pin primary camera frusta, including scale/shear/reflection conformance.
+
+`--check` requires `fixtures/camera.json` to be what OpenUSD computes here,
+numbers to within 1e-12 of the largest magnitude in their field (`close`),
+everything else exactly. A frustum keeps its rotation as a `GfRotation`, an
+axis and an angle taken with `acos` from the conformed transform and turned
+back into a matrix with `GfSinCos` (`GfFrustum::SetPositionAndRotationFromMatrix`,
+`pxr/base/gf/frustum.cpp`; `pxr/base/gf/rotation.cpp`), so its view matrix,
+corners and the points and boxes placed through it carry the rounding of
+the platform's trigonometry: usd-core 26.08 on x86-64 Linux and on arm64
+macOS differ by up to 64 ulps, 5.3e-15 in a field of magnitude 16.
+`tests/camera.rs` compares layerstack with the file to within 2e-10.
+"""
 import json
+import math
 import pathlib
 import sys
 from pxr import Gf, Usd, UsdGeom
 
 HERE = pathlib.Path(__file__).resolve().parents[1] / "fixtures"
+
+
+def leaves(value):
+    """The numbers of a number or a nested list of numbers."""
+    if isinstance(value, list):
+        return [leaf for item in value for leaf in leaves(item)]
+    return [value]
+
+
+def is_number(value):
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def close(pinned, computed, where="", scale=None):
+    """The places where `computed` differs from `pinned`: numbers by more
+    than 1e-12 of `scale`, the largest magnitude (at least 1) of the field
+    they belong to; anything else at all."""
+    if isinstance(pinned, dict) and isinstance(computed, dict):
+        if pinned.keys() != computed.keys():
+            return [(where, sorted(pinned), sorted(computed))]
+        return [d for key in pinned for d in close(pinned[key], computed[key], f"{where}.{key}")]
+    if isinstance(pinned, list) and isinstance(computed, list):
+        if len(pinned) != len(computed):
+            return [(where, pinned, computed)]
+        if scale is None and all(is_number(v) for v in leaves(pinned) + leaves(computed)):
+            scale = max([1.0] + [abs(v) for v in leaves(pinned)])
+        return [d for i, (p, c) in enumerate(zip(pinned, computed))
+                for d in close(p, c, f"{where}[{i}]", scale)]
+    if is_number(pinned) and is_number(computed):
+        bound = 1e-12 * (scale if scale is not None else max(1.0, abs(pinned)))
+        if math.isfinite(pinned) and abs(pinned - computed) <= bound:
+            return []
+    elif type(pinned) is type(computed) and pinned == computed:
+        return []
+    return [(where, pinned, computed)]
 
 def matrix(m):
     return [list(row) for row in m]
@@ -62,6 +110,9 @@ output += ",\n".join("    " + json.dumps(row, sort_keys=True) for row in report[
 output += "\n  ]\n}\n"
 path = HERE / "camera.json"
 if "--check" in sys.argv:
-    assert path.read_text() == output, "camera oracle differs from OpenUSD"
+    differences = close(json.loads(path.read_text()), json.loads(output))
+    for where, pinned, computed in differences:
+        print(f"{where}: pinned {pinned!r}, OpenUSD computes {computed!r}", file=sys.stderr)
+    assert not differences, "camera oracle differs from OpenUSD"
 else:
     path.write_text(output)

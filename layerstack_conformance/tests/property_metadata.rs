@@ -22,8 +22,9 @@ mod support;
 
 use std::sync::Arc;
 
-use layerstack::{EditTarget, LayerId, PropertyKind, ResolvedValue, Value};
-use layerstack_schemas::{PrimEdit, PropertyMetadataError, SchemaEdit};
+use layerstack::{EditTarget, LayerId, ResolvedValue, Value};
+use layerstack::{MetadataEditError, MetadataEditReason, MetadataTarget, MetadataType};
+use layerstack_schemas::{MetadataError, PrimEdit, SchemaEdit};
 use serde::Deserialize;
 
 const ORACLE: &str = include_str!("../fixtures/property_metadata/oracle.json");
@@ -152,8 +153,27 @@ fn property_metadata_authoring_matches_openusd_call_by_call() {
         }
         let transaction = edit.finish();
         live.apply(&mut store, &transaction).unwrap();
+        let target = if call.property == "a" {
+            MetadataTarget::Attribute
+        } else {
+            MetadataTarget::Relationship
+        };
+        let refused = |reason| {
+            Err(MetadataError::Field(MetadataEditError {
+                field: call.key.as_str().into(),
+                target,
+                reason,
+            }))
+        };
         if matches!(call.key.as_str(), "typeName" | "custom" | "default") {
-            assert_eq!(result, Err(PropertyMetadataError::SpecField), "{label}");
+            // A field of the spec with its own edit, or one the kind of
+            // spec has not (a relationship's `typeName`).
+            let reason = if layerstack::is_spec_field(&call.key, target) {
+                MetadataEditReason::SpecField
+            } else {
+                MetadataEditReason::NotForSpec
+            };
+            assert_eq!(result, refused(reason), "{label}");
             continue;
         }
         assert_eq!(result.is_ok(), call.accepted, "{label}: {result:?}");
@@ -168,25 +188,20 @@ fn property_metadata_authoring_matches_openusd_call_by_call() {
                     .unwrap();
                 assert_eq!(Some(json(&read.value, &store.tokens)), call.read, "{label}");
             }
-            (Err(error), "nope", _) => assert_eq!(*error, PropertyMetadataError::NoSuchProperty),
-            (Err(error), _, "unknownKey") => {
-                assert_eq!(*error, PropertyMetadataError::UnknownField);
+            (Err(error), "nope", _) => assert_eq!(*error, MetadataError::NoSuchProperty),
+            (Err(_), _, "unknownKey") => {
+                assert_eq!(result, refused(MetadataEditReason::Unregistered), "{label}");
             }
-            (Err(error), _, "documentation") => assert_eq!(
-                *error,
-                PropertyMetadataError::ValueType {
-                    expected: "string".into()
-                }
-            ),
-            (Err(error), property, _) => assert_eq!(
-                *error,
-                PropertyMetadataError::NotValidForProperty(if property == "a" {
-                    PropertyKind::Attribute
-                } else {
-                    PropertyKind::Relationship
+            (Err(_), _, "documentation") => assert_eq!(
+                result,
+                refused(MetadataEditReason::ValueType {
+                    expected: MetadataType::parse("string").unwrap()
                 }),
                 "{label}"
             ),
+            (Err(_), ..) => {
+                assert_eq!(result, refused(MetadataEditReason::NotForSpec), "{label}");
+            }
         }
     }
     // An unauthored schema attribute gets its spec from the definition.
@@ -232,9 +247,11 @@ fn property_metadata_clears_only_target_specs() {
         .unwrap();
     assert_eq!(
         handle.clear_property_metadata(&mut edit, "a", "noLoadHint"),
-        Err(PropertyMetadataError::NotValidForProperty(
-            PropertyKind::Attribute
-        ))
+        Err(MetadataError::Field(MetadataEditError {
+            field: "noLoadHint".into(),
+            target: MetadataTarget::Attribute,
+            reason: MetadataEditReason::NotForSpec,
+        }))
     );
     let transaction = edit.finish();
     live.apply(&mut store, &transaction).unwrap();

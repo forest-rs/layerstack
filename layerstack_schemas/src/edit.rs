@@ -195,7 +195,7 @@ struct TimeSampleEdit {
 struct PropertyMetadataEdit {
     property: PropertyPath,
     key: TokenId,
-    value: Option<Value>,
+    value: Option<layerstack::FieldValue>,
 }
 
 impl fmt::Debug for SchemaEdit<'_> {
@@ -1043,14 +1043,15 @@ impl<'s> SchemaEdit<'s> {
         path: PathId,
         name: &str,
         key: &str,
-        value: Value,
+        value: impl Into<layerstack::FieldValue>,
     ) {
+        let value = value.into();
         let token = self.tokens().intern(name);
         let property = PropertyPath::new(path, token);
         self.ensure_property(property);
         let key = self.tokens().intern(key);
         let at = self.target.property(property);
-        self.transaction.set_metadata(at, key, value.clone().into());
+        self.transaction.set_metadata(at, key, value.clone());
         self.property_metadata.push(PropertyMetadataEdit {
             property,
             key,
@@ -1076,7 +1077,10 @@ impl<'s> SchemaEdit<'s> {
             .rev()
             .find(|edit| edit.property == property && edit.key == key)
         {
-            return edit.value.clone();
+            return match &edit.value {
+                Some(layerstack::FieldValue::Value(value)) => Some(value.clone()),
+                _ => None,
+            };
         }
         if self.removed.contains(&(path, property.property())) {
             return None;
@@ -1131,17 +1135,16 @@ impl<'s> SchemaEdit<'s> {
         path: PathId,
         name: &str,
         key: &str,
-        value: Option<Value>,
-    ) -> Result<(), PropertyMetadataError> {
+        value: Option<layerstack::FieldValue>,
+    ) -> Result<(), MetadataError> {
         let kind = self
             .property_kind(path, name)
-            .ok_or(PropertyMetadataError::NoSuchProperty)?;
-        let expected = self.metadata_field_type(key, kind)?;
-        if let Some(value) = &value
-            && !value_fits(&expected, value)
-        {
-            return Err(PropertyMetadataError::ValueType { expected });
-        }
+            .ok_or(MetadataError::NoSuchProperty)?;
+        let target = match kind {
+            PropertyKind::Attribute => layerstack::MetadataTarget::Attribute,
+            PropertyKind::Relationship => layerstack::MetadataTarget::Relationship,
+        };
+        self.check_metadata(key, target, value.as_ref())?;
         match value {
             Some(value) => self.set_property_metadata(path, name, key, value),
             None => {
@@ -1168,58 +1171,53 @@ impl<'s> SchemaEdit<'s> {
         Ok(())
     }
 
-    /// The registered type of the metadata field `key` on a property of
-    /// `kind`: a core Sdf field (`pxr/usd/sdf/schema.cpp`,
-    /// `_RegisterStandardFields` and the property spec definitions), else
-    /// one the stage's schema registry has from a plugin's `SdfMetadata`.
+    /// Checks and authors (`Some`) or clears (`None`) the metadata field
+    /// `key` of the prim at `path`. See [`crate::PrimEdit::write_metadata`].
+    pub(crate) fn author_prim_metadata(
+        &mut self,
+        path: PathId,
+        key: &str,
+        value: Option<layerstack::FieldValue>,
+    ) -> Result<(), MetadataError> {
+        if !self.exists(path) {
+            return Err(MetadataError::NoSuchPrim);
+        }
+        self.can_edit(path).map_err(MetadataError::CannotEdit)?;
+        self.check_metadata(key, layerstack::MetadataTarget::Prim, value.as_ref())?;
+        let name = self.tokens().intern(key);
+        let at = self.target.prim(path);
+        match value {
+            Some(value) => {
+                self.transaction.set_metadata(at, name, value.clone());
+                #[cfg(feature = "usd-geom")]
+                self.metadata.push((path, name, value));
+            }
+            None => {
+                self.transaction.clear_metadata(at, name);
+            }
+        }
+        Ok(())
+    }
+
+    /// The field `key` checked for a spec of `target` with the stage's
+    /// schema registry ([`layerstack::MetadataField::check_edit`]).
     ///
-    /// Spec: AOUSD Core §7.4 (metadata), §7.6.4–§7.6.5 (property fields).
-    fn metadata_field_type(
+    /// Spec: AOUSD Core §7.4 (metadata), §7.6 (the fields of each spec).
+    fn check_metadata(
         &self,
         key: &str,
-        kind: PropertyKind,
-    ) -> Result<alloc::sync::Arc<str>, PropertyMetadataError> {
-        let attribute = kind == PropertyKind::Attribute;
-        let core = match key {
-            "typeName" | "custom" | "variability" | "default" | "timeSamples" | "spline"
-            | "connectionPaths" | "targetPaths" | "displayUnit" | "permission" => {
-                return Err(PropertyMetadataError::SpecField);
-            }
-            "comment" | "displayGroup" | "displayName" | "documentation" | "prefix" | "suffix"
-            | "symmetricPeer" => Some((true, "string")),
-            "assetInfo" | "customData" | "symmetryArguments" => Some((true, "dictionary")),
-            "hidden" => Some((true, "bool")),
-            "symmetryFunction" => Some((true, "token")),
-            "allowedTokens" => Some((attribute, "token[]")),
-            "arraySizeConstraint" => Some((attribute, "int64")),
-            "colorSpace" => Some((attribute, "token")),
-            "limits" => Some((attribute, "dictionary")),
-            "noLoadHint" => Some((!attribute, "bool")),
-            _ => None,
-        };
-        if let Some((applies, type_name)) = core {
-            return if applies {
-                Ok(alloc::sync::Arc::from(type_name))
-            } else {
-                Err(PropertyMetadataError::NotValidForProperty(kind))
-            };
-        }
-        let definition = self
-            .store
-            .tokens()
-            .lookup(key)
-            .zip(self.stage.schemas())
-            .and_then(|(key, registry)| registry.metadata(key))
-            .ok_or(PropertyMetadataError::UnknownField)?;
-        let target = if attribute {
-            layerstack::MetadataTarget::Attribute
-        } else {
-            layerstack::MetadataTarget::Relationship
-        };
-        if !definition.applies_to(target) {
-            return Err(PropertyMetadataError::NotValidForProperty(kind));
-        }
-        Ok(alloc::sync::Arc::from(definition.value_type.name()))
+        target: layerstack::MetadataTarget,
+        value: Option<&layerstack::FieldValue>,
+    ) -> Result<(), MetadataError> {
+        layerstack::MetadataField::check_edit(
+            key,
+            target,
+            value,
+            self.stage.schemas(),
+            self.store.tokens(),
+        )
+        .map(|_| ())
+        .map_err(MetadataError::Field)
     }
 
     // AOUSD Core §12.2.5: update only the mapped target layer's dictionary;
@@ -1673,74 +1671,36 @@ fn value_of(spec: &PropertySpec) -> Value {
     spec.default.clone().unwrap_or(Value::Null)
 }
 
-/// Why a property metadata field cannot be authored. Nothing is collected.
+/// Why a prim or property metadata field cannot be authored. Nothing is
+/// collected.
 ///
-/// OpenUSD: the errors `UsdObject::SetMetadata` raises, except
-/// [`Self::SpecField`].
+/// OpenUSD: the errors `UsdObject::SetMetadata` raises.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum PropertyMetadataError {
+pub enum MetadataError {
+    /// No prim is at the path: none is on the stage or defined earlier in
+    /// this edit.
+    NoSuchPrim,
     /// The prim has no property of that name: none is authored, created
     /// earlier in this edit, or defined by the prim's schemas.
     NoSuchProperty,
-    /// No metadata field of that name is registered, by Sdf or a plugin
-    /// ("Unregistered metadata key").
-    UnknownField,
-    /// The field is registered, but not for this kind of property, as
-    /// `bindMaterialAs` is only for relationships ("not registered as valid
-    /// metadata for spec type").
-    NotValidForProperty(PropertyKind),
-    /// The field is part of the property spec itself (`typeName`, `custom`,
-    /// `variability`, `default`, `timeSamples`, targets, connections),
-    /// which its own edits author. C++ writes these through `SetMetadata`
-    /// too, even where the spec kind has no such field.
-    SpecField,
-    /// The value is not of the field's registered type.
-    ValueType {
-        /// The registered type name (`string`, `token`, `float`,
-        /// `dictionary`, `token[]`, …).
-        expected: alloc::sync::Arc<str>,
-    },
+    /// The prim is beneath an instance or in a prototype.
+    CannotEdit(CannotEdit),
+    /// The field cannot be authored on that kind of spec, or the value is
+    /// not of its type: unregistered, registered for other kinds of spec,
+    /// a field of the spec with its own edit, or a value of another type
+    /// ([`layerstack::MetadataEditError`]).
+    Field(layerstack::MetadataEditError),
 }
 
-impl fmt::Display for PropertyMetadataError {
+impl fmt::Display for MetadataError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::NoSuchPrim => f.write_str("no such prim"),
             Self::NoSuchProperty => f.write_str("no such property"),
-            Self::UnknownField => f.write_str("unregistered metadata field"),
-            Self::NotValidForProperty(kind) => {
-                write!(f, "metadata field not registered for a {kind:?}")
-            }
-            Self::SpecField => f.write_str("a property spec field, not metadata"),
-            Self::ValueType { expected } => write!(f, "metadata value must be a {expected}"),
+            Self::CannotEdit(error) => error.fmt(f),
+            Self::Field(error) => error.fmt(f),
         }
     }
 }
 
-impl core::error::Error for PropertyMetadataError {}
-
-/// Whether `value` is a value of the registered type `type_name`, a value
-/// type name (`token[]` included) or `dictionary`. List-op typed fields
-/// take no value here.
-fn value_fits(type_name: &str, value: &Value) -> bool {
-    use core::mem::discriminant;
-    if type_name == "dictionary" {
-        return matches!(value, Value::Dictionary(_));
-    }
-    let Some((ty, array)) = layerstack::ValueType::parse(type_name) else {
-        return false;
-    };
-    let zero = ty.zero();
-    if matches!(zero, Value::Null) {
-        return false;
-    }
-    if !array {
-        return discriminant(value) == discriminant(&zero);
-    }
-    match value {
-        Value::Array(items) => items
-            .iter()
-            .all(|item| discriminant(item) == discriminant(&zero)),
-        Value::TypedArray(items) => discriminant(&items.element_kind()) == discriminant(&zero),
-        _ => false,
-    }
-}
+impl core::error::Error for MetadataError {}

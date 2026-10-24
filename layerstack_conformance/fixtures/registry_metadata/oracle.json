@@ -2355,6 +2355,7 @@
  ],
  "registration": {
   "acceptOpaque": {
+   "declared": "opaque",
    "fallback": {
     "opaque": true
    },
@@ -2365,6 +2366,7 @@
    "type": "opaque"
   },
   "acceptScalarForArray": {
+   "declared": "int[]",
    "fallback": [
     4
    ],
@@ -2375,6 +2377,7 @@
    "type": "int[]"
   },
   "acceptVariantsAndNodes": {
+   "declared": "token",
    "fallback": "",
    "specs": [
     "variant"
@@ -2382,6 +2385,7 @@
    "type": "token"
   },
   "acceptWrappedInt64": {
+   "declared": "int64",
    "fallback": 1,
    "specs": [
     "prim",
@@ -2390,6 +2394,7 @@
    "type": "int64"
   },
   "metaAnywhere": {
+   "declared": "token",
    "fallback": "",
    "specs": [
     "layer",
@@ -2401,6 +2406,7 @@
    "type": "token"
   },
   "metaAsset": {
+   "declared": "asset",
    "fallback": {
     "asset": "a.usda"
    },
@@ -2411,6 +2417,7 @@
    "type": "asset"
   },
   "metaAssets": {
+   "declared": "asset[]",
    "fallback": [],
    "specs": [
     "prim",
@@ -2419,6 +2426,7 @@
    "type": "asset[]"
   },
   "metaBool": {
+   "declared": "bool",
    "fallback": true,
    "specs": [
     "prim",
@@ -2428,6 +2436,7 @@
    "type": "bool"
   },
   "metaBools": {
+   "declared": "bool[]",
    "fallback": [],
    "specs": [
     "prim",
@@ -2436,6 +2445,7 @@
    "type": "bool[]"
   },
   "metaColor": {
+   "declared": "color3f",
    "fallback": [
     0.0,
     0.0,
@@ -2447,6 +2457,7 @@
    "type": "float3"
   },
   "metaDictionary": {
+   "declared": "dictionary",
    "fallback": {
     "dictionary": {}
    },
@@ -2459,6 +2470,7 @@
    "type": "dictionary"
   },
   "metaDouble": {
+   "declared": "double",
    "fallback": 2.0,
    "specs": [
     "layer"
@@ -2466,6 +2478,7 @@
    "type": "double"
   },
   "metaExpression": {
+   "declared": "pathExpression",
    "fallback": {
     "expression": ""
    },
@@ -2476,6 +2489,7 @@
    "type": "pathExpression"
   },
   "metaFloat": {
+   "declared": "float",
    "fallback": 0.25,
    "specs": [
     "prim",
@@ -2484,6 +2498,7 @@
    "type": "float"
   },
   "metaFloat3": {
+   "declared": "float3",
    "fallback": [
     1.0,
     2.0,
@@ -2496,6 +2511,7 @@
    "type": "float3"
   },
   "metaFloats": {
+   "declared": "float[]",
    "fallback": [
     0.5,
     1.5
@@ -2506,6 +2522,7 @@
    "type": "float[]"
   },
   "metaHalf": {
+   "declared": "half",
    "fallback": 0.5,
    "specs": [
     "attribute"
@@ -2513,6 +2530,7 @@
    "type": "half"
   },
   "metaInt": {
+   "declared": "int",
    "fallback": -7,
    "specs": [
     "layer",
@@ -2522,6 +2540,7 @@
    "type": "int"
   },
   "metaInt64": {
+   "declared": "int64",
    "fallback": -12,
    "specs": [
     "prim",
@@ -2530,6 +2549,7 @@
    "type": "int64"
   },
   "metaInt64List": {
+   "declared": "int64listop",
    "fallback": {
     "list_op": {}
    },
@@ -2540,6 +2560,7 @@
    "type": "int64listop"
   },
   "metaIntList": {
+   "declared": "intlistop",
    "fallback": {
     "list_op": {}
    },
@@ -2550,6 +2571,7 @@
    "type": "intlistop"
   },
   "metaInts": {
+   "declared": "int[]",
    "fallback": [
     1,
     2
@@ -2561,6 +2583,7 @@
    "type": "int[]"
   },
   "metaLoose": {
+   "declared": "int",
    "fallback": 0,
    "specs": [
     "layer",
@@ -2572,6 +2595,7 @@
    "type": "int"
   },
   "metaMatrices": {
+   "declared": "matrix2d[]",
    "fallback": [],
    "specs": [
     "prim",
@@ -2580,6 +2604,7 @@
    "type": "matrix2d[]"
   },
   "metaMatrix": {
+   "declared": "matrix4d",
    "fallback": [
     [
      1.0,
@@ -2613,9 +2638,11 @@
    "type": "matrix4d"
   },
   "metaNowhere": {
+   "declared": "int",
    "specs": []
   },
   "metaQuat": {
+   "declared": "quatf",
    "fallback": [
     1.0,
     0.0,
@@ -2629,6 +2656,7 @@
    "type": "quatf"
   },
   "metaString": {
+   "declared": "string",
    "fallback": "text",
    "specs": [
     "attribute",
@@ -2637,6 +2665,7 @@
    "type": "string"
   },
   "metaStringList": {
+   "declared": "stringlistop",
    "fallback": {
     "list_op": {}
    },
@@ -2647,6 +2676,7 @@
    "type": "stringlistop"
   },
   "metaStrings": {
+   "declared": "string[]",
    "fallback": [],
    "specs": [
     "prim",
@@ -2655,6 +2685,7 @@
    "type": "string[]"
   },
   "metaTimeCode": {
+   "declared": "timecode",
    "fallback": 12.0,
    "specs": [
     "prim",
@@ -2663,6 +2694,7 @@
    "type": "timecode"
   },
   "metaToken": {
+   "declared": "token",
    "fallback": "medium",
    "specs": [
     "relationship"
@@ -2670,6 +2702,7 @@
    "type": "token"
   },
   "metaTokenList": {
+   "declared": "tokenlistop",
    "fallback": {
     "list_op": {}
    },
@@ -2680,6 +2713,7 @@
    "type": "tokenlistop"
   },
   "metaTokens": {
+   "declared": "token[]",
    "fallback": [
     "a",
     "b"
@@ -2691,6 +2725,7 @@
    "type": "token[]"
   },
   "metaUChar": {
+   "declared": "uchar",
    "fallback": 200,
    "specs": [
     "prim",
@@ -2699,6 +2734,7 @@
    "type": "uchar"
   },
   "metaUInt": {
+   "declared": "uint",
    "fallback": 40000,
    "specs": [
     "prim",
@@ -2707,6 +2743,7 @@
    "type": "uint"
   },
   "metaUInt64": {
+   "declared": "uint64",
    "fallback": 0,
    "specs": [
     "prim",
@@ -2715,6 +2752,7 @@
    "type": "uint64"
   },
   "metaUInt64List": {
+   "declared": "uint64listop",
    "fallback": {
     "list_op": {}
    },
@@ -2725,6 +2763,7 @@
    "type": "uint64listop"
   },
   "metaUIntList": {
+   "declared": "uintlistop",
    "fallback": {
     "list_op": {}
    },
@@ -2735,6 +2774,7 @@
    "type": "uintlistop"
   },
   "metaVariantOnly": {
+   "declared": "int",
    "fallback": 0,
    "specs": [
     "variant"
@@ -2742,6 +2782,7 @@
    "type": "int"
   },
   "metaVectors": {
+   "declared": "float3[]",
    "fallback": [
     [
      1.0,
@@ -2761,18 +2802,23 @@
    "type": "float3[]"
   },
   "rejectBoolDefault": {
+   "declared": "bool",
    "specs": []
   },
   "rejectDictionaryArray": {
+   "declared": "dictionary[]",
    "specs": []
   },
   "rejectDictionaryDefault": {
+   "declared": "dictionary",
    "specs": []
   },
   "rejectFloatText": {
+   "declared": "float",
    "specs": []
   },
   "rejectIntFraction": {
+   "declared": "int",
    "fallback": 1,
    "specs": [
     "prim",
@@ -2781,12 +2827,14 @@
    "type": "int"
   },
   "rejectListDefault": {
+   "declared": "tokenlistop",
    "specs": []
   },
   "rejectMissingType": {
    "specs": []
   },
   "rejectMixedArray": {
+   "declared": "float[]",
    "specs": []
   },
   "rejectNotObject": {
@@ -2796,27 +2844,35 @@
    "specs": []
   },
   "rejectObjectDefault": {
+   "declared": "int",
    "specs": []
   },
   "rejectPathType": {
+   "declared": "path",
    "specs": []
   },
   "rejectShortVector": {
+   "declared": "float3",
    "specs": []
   },
   "rejectTokenNumber": {
+   "declared": "token",
    "specs": []
   },
   "rejectTypeCase": {
+   "declared": "Float",
    "specs": []
   },
   "rejectUCharRange": {
+   "declared": "uchar",
    "specs": []
   },
   "rejectUnknownType": {
+   "declared": "hostOpaque",
    "specs": []
   },
   "rejectWrappedUInt": {
+   "declared": "uint",
    "specs": []
   }
  },

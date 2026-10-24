@@ -14,6 +14,10 @@
 //! OpenUSD: `SdfSchemaBase` (`pxr/usd/sdf/schema.cpp`).
 
 #![allow(missing_docs, reason = "integration tests")]
+#![allow(
+    clippy::cast_possible_truncation,
+    reason = "samples narrow JSON numbers to their declared types"
+)]
 
 use std::collections::BTreeMap;
 
@@ -34,6 +38,31 @@ struct Oracle {
     registration_errors: Vec<String>,
     registration: BTreeMap<String, Registration>,
     reading: Vec<Reading>,
+    authoring: Vec<Authoring>,
+    unauthored: Vec<Unauthored>,
+}
+
+/// A `SetMetadata` call with a value of a type, and what OpenUSD did.
+#[derive(Deserialize)]
+struct Authoring {
+    spec: String,
+    field: String,
+    #[serde(rename = "type")]
+    type_name: String,
+    value: Json,
+    error: Option<String>,
+    stored: Option<Json>,
+    written: Option<String>,
+}
+
+/// What `GetMetadata` and `HasMetadata` answer for a field no layer
+/// authors.
+#[derive(Deserialize)]
+struct Unauthored {
+    object: String,
+    field: String,
+    value: Option<Json>,
+    has: bool,
 }
 
 /// A declared field as OpenUSD registers it: no `type` for one it
@@ -43,6 +72,8 @@ struct Registration {
     specs: Vec<String>,
     #[serde(rename = "type")]
     type_name: Option<String>,
+    /// The declaration's `type`, when it is a string.
+    declared: Option<String>,
     fallback: Option<Json>,
 }
 
@@ -257,19 +288,38 @@ fn target(spec: &str) -> MetadataTarget {
         .unwrap_or_else(|| panic!("no kind of spec {spec}"))
 }
 
+/// Whether OpenUSD refuses the declaration of `name` (the second of two
+/// declarations of one field included).
+fn refused(oracle: &Oracle, name: &str) -> bool {
+    oracle
+        .registration_errors
+        .iter()
+        .any(|message| message.contains(&format!("\"{name}\"")))
+}
+
 /// The registry OpenUSD's registration of the fixture plugins amounts to:
-/// each field it registers, with its type and spec kinds.
+/// each field it registers, with its type, spec kinds and fallback.
 fn registry(oracle: &Oracle, tokens: &TokenInterner) -> SchemaRegistry {
     let mut builder = SchemaRegistry::builder();
     for (name, registration) in &oracle.registration {
-        let Some(type_name) = &registration.type_name else {
+        let registered = !registration.specs.is_empty() || !refused(oracle, name);
+        let (true, Some(declared)) = (registered, &registration.declared) else {
             continue;
         };
-        let definition = MetadataDefinition::new(
+        let value_type = MetadataType::parse(declared).unwrap();
+        let mut definition = MetadataDefinition::new(
             tokens.intern(name),
-            MetadataType::parse(type_name).unwrap(),
+            value_type,
             registration.specs.iter().map(|spec| target(spec)),
         );
+        // The fallback, as the plugin's default.
+        if let (Some(fallback), Some(type_name)) = (&registration.fallback, &registration.type_name)
+            && matches!(value_type, MetadataType::Value(_) | MetadataType::Array(_))
+            && fallback.get("opaque").is_none()
+            && let FieldValue::Value(value) = sample(type_name, fallback, tokens)
+        {
+            definition.default = Some(value);
+        }
         builder.register_metadata(definition, tokens).unwrap();
     }
     builder.build(tokens)
@@ -550,5 +600,337 @@ mod registration {
             .find(|d| tokens.resolve(d.definition.name) == "metaFloat")
             .unwrap();
         assert_eq!(&*layout.definition.display_group, "Shape");
+    }
+}
+
+/// A sample's text, or an encoded fallback's (`{"asset": "a.usda"}`).
+fn text(value: &Json, key: &str) -> String {
+    value
+        .as_str()
+        .or_else(|| value.get(key).and_then(Json::as_str))
+        .unwrap()
+        .to_owned()
+}
+
+/// `sample` as a value of the type `ty`, as the oracle builds it in Python.
+fn sample(ty: &str, sample: &Json, tokens: &TokenInterner) -> FieldValue {
+    let f = |v: &Json| v.as_f64().unwrap();
+    let floats =
+        |v: &Json| -> Vec<f32> { v.as_array().unwrap().iter().map(|x| f(x) as f32).collect() };
+    let strings = |v: &Json| -> Vec<String> {
+        v.as_array()
+            .unwrap()
+            .iter()
+            .map(|x| text(x, "asset"))
+            .collect()
+    };
+    let list = |v: &Json| {
+        let mut op = ListOp::default();
+        for (part, items) in v.as_object().unwrap() {
+            let items: Vec<Json> = items.as_array().unwrap().clone();
+            match part.as_str() {
+                "explicit" => op.explicit = Some(items),
+                "prepended" => op.prepend = items,
+                "appended" => op.append = items,
+                "deleted" => op.delete = items,
+                "added" => op.add = items,
+                "ordered" => op.reorder = items,
+                other => panic!("{other}"),
+            }
+        }
+        op
+    };
+    fn map<T>(op: ListOp<Json>, item: impl Fn(&Json) -> T) -> Box<ListOp<T>> {
+        let all = |items: &[Json]| items.iter().map(&item).collect();
+        Box::new(ListOp {
+            explicit: op.explicit.as_deref().map(all),
+            prepend: all(&op.prepend),
+            append: all(&op.append),
+            delete: all(&op.delete),
+            add: all(&op.add),
+            reorder: all(&op.reorder),
+        })
+    }
+    FieldValue::Value(match ty {
+        "bool" => Value::Bool(sample.as_bool().unwrap()),
+        "uchar" => Value::UChar(u8::try_from(sample.as_u64().unwrap()).unwrap()),
+        "int" => Value::Int(i32::try_from(sample.as_i64().unwrap()).unwrap()),
+        "uint" => Value::UInt(u32::try_from(sample.as_u64().unwrap()).unwrap()),
+        "int64" => Value::Int64(sample.as_i64().unwrap()),
+        "uint64" => Value::UInt64(sample.as_u64().unwrap()),
+        "half" => Value::Half(layerstack::half::from_f32(f(sample) as f32)),
+        "float" => Value::Float(f(sample) as f32),
+        "double" => Value::Double(f(sample)),
+        "timecode" => Value::TimeCode(f(sample)),
+        "string" => Value::string(sample.as_str().unwrap()),
+        "token" => Value::Token(tokens.intern(sample.as_str().unwrap())),
+        // A sample's text, or an encoded fallback's.
+        "asset" => Value::Asset(text(sample, "asset").into()),
+        "pathExpression" => Value::PathExpression(text(sample, "expression").into()),
+        "float3" | "color3f" => Value::Vec3f(floats(sample).try_into().unwrap()),
+        "quatf" => {
+            let q = floats(sample);
+            Value::Quatf([q[1], q[2], q[3], q[0]])
+        }
+        "matrix4d" => {
+            let m: Vec<f64> = sample
+                .as_array()
+                .unwrap()
+                .iter()
+                .flat_map(|row| row.as_array().unwrap().iter().map(f))
+                .collect();
+            Value::Matrix4d(Box::new(m.try_into().unwrap()))
+        }
+        "bool[]" => Value::from(
+            sample
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|b| b.as_bool().unwrap())
+                .collect::<Vec<_>>(),
+        ),
+        "int[]" => Value::from(
+            sample
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|n| i32::try_from(n.as_i64().unwrap()).unwrap())
+                .collect::<Vec<_>>(),
+        ),
+        "float[]" => Value::from(floats(sample)),
+        "token[]" => Value::array_from_iter(
+            strings(sample)
+                .iter()
+                .map(|t| Value::Token(tokens.intern(t))),
+            None,
+        ),
+        "string[]" => Value::array_from_iter(
+            strings(sample).iter().map(|t| Value::string(t.as_str())),
+            None,
+        ),
+        "asset[]" => Value::Array(
+            strings(sample)
+                .iter()
+                .map(|t| Value::Asset(t.as_str().into()))
+                .collect(),
+        ),
+        "float3[]" => Value::from(
+            sample
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|v| <[f32; 3]>::try_from(floats(v)).unwrap())
+                .collect::<Vec<_>>(),
+        ),
+        "matrix2d[]" => Value::Array(
+            sample
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|m| {
+                    let m: Vec<f64> = m
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .flat_map(|row| row.as_array().unwrap().iter().map(f))
+                        .collect();
+                    Value::Matrix2d(Box::new(m.try_into().unwrap()))
+                })
+                .collect(),
+        ),
+        "dictionary" => Value::Dictionary(
+            sample
+                .as_object()
+                .unwrap()
+                .iter()
+                .map(|(key, typed)| {
+                    let (ty, value) = typed.as_object().unwrap().iter().next().unwrap();
+                    let FieldValue::Value(value) = self::sample(ty, value, tokens) else {
+                        panic!("a dictionary holds values");
+                    };
+                    (key.as_str().into(), value)
+                })
+                .collect(),
+        ),
+        "tokenlistop" => {
+            return FieldValue::TokenListOp(map(list(sample), |t| {
+                tokens.intern(t.as_str().unwrap())
+            }));
+        }
+        "stringlistop" => {
+            return FieldValue::StringListOp(map(list(sample), |t| t.as_str().unwrap().into()));
+        }
+        "intlistop" => {
+            return FieldValue::IntListOp(map(list(sample), |n| {
+                i32::try_from(n.as_i64().unwrap()).unwrap()
+            }));
+        }
+        "uintlistop" => {
+            return FieldValue::UIntListOp(map(list(sample), |n| {
+                u32::try_from(n.as_u64().unwrap()).unwrap()
+            }));
+        }
+        "int64listop" => {
+            return FieldValue::Int64ListOp(map(list(sample), |n| n.as_i64().unwrap()));
+        }
+        "uint64listop" => {
+            return FieldValue::UInt64ListOp(map(list(sample), |n| n.as_u64().unwrap()));
+        }
+        other => panic!("no sample of {other}"),
+    })
+}
+
+/// The stage the oracle authors on: `/P`, with the attribute `a` and the
+/// relationship `r`, composed with `registry`.
+fn authoring_stage(registry: SchemaRegistry, store: &mut InMemoryStore) -> layerstack::LiveStage {
+    let text = "#usda 1.0\ndef \"P\"\n{\n    custom float a\n    custom rel r\n}\n";
+    let read = read_usda_with_registry(
+        text,
+        LayerId(1),
+        &store.tokens,
+        &store.paths,
+        &mut NoAssets,
+        &registry,
+    );
+    assert!(!read.emitted.rejected, "{:?}", read.emitted.diagnostics);
+    store.insert_layer(read.emitted.layer);
+    layerstack::LiveStage::compose(
+        store,
+        LayerId(1),
+        layerstack::StageOptions {
+            schemas: Some(std::sync::Arc::new(registry)),
+            ..layerstack::StageOptions::default()
+        },
+    )
+}
+
+#[test]
+fn metadata_edits_are_checked_and_saved_as_openusd_checks_and_writes_them() {
+    let oracle = oracle();
+    for call in &oracle.authoring {
+        let mut store = InMemoryStore::default();
+        let mut live = authoring_stage(registry(&oracle, &store.tokens), &mut store);
+        let value = sample(&call.type_name, &call.value, &store.tokens);
+        let what = format!(
+            "{} on a {} as {} {}",
+            call.field, call.spec, call.type_name, call.value
+        );
+        let prim = store.path("/P");
+        let refused: Option<layerstack::MetadataEditError> = if call.spec == "stage" {
+            let key = store.tokens.intern(&call.field);
+            match live.set_stage_metadata(&mut store, LayerId(1), key, value.clone()) {
+                Ok(_) => None,
+                Err(layerstack::StageMetadataError::Field(error)) => Some(error),
+                Err(other) => panic!("{what}: {other:?}"),
+            }
+        } else {
+            let mut edit = layerstack_schemas::SchemaEdit::new(
+                live.stage(),
+                &mut store,
+                layerstack::EditTarget::for_layer(LayerId(1)),
+            );
+            let view = layerstack_schemas::PrimEdit::new(&edit, prim)
+                .expect("outside any instance")
+                .expect("the prim exists");
+            let result = match call.spec.as_str() {
+                "prim" => view.write_metadata(&mut edit, &call.field, value.clone()),
+                "attribute" => {
+                    view.write_property_metadata(&mut edit, "a", &call.field, value.clone())
+                }
+                _ => view.write_property_metadata(&mut edit, "r", &call.field, value.clone()),
+            };
+            let refused = match result {
+                Ok(()) => None,
+                Err(layerstack_schemas::MetadataError::Field(error)) => Some(error),
+                Err(other) => panic!("{what}: {other:?}"),
+            };
+            if refused.is_some() {
+                assert!(
+                    edit.transaction().is_empty(),
+                    "{what}: a refusal collects nothing"
+                );
+            }
+            let transaction = edit.finish();
+            live.apply(&mut store, &transaction).unwrap();
+            refused
+        };
+        match (&call.error, refused) {
+            (None, None) => {}
+            (Some(expected), Some(error)) => {
+                // The Python binding's message names the value and its
+                // C++ type, which a Rust value has not.
+                if expected.starts_with("Invalid value") {
+                    assert!(
+                        matches!(
+                            error.reason,
+                            layerstack::MetadataEditReason::ValueType { .. }
+                        ),
+                        "{what}: {error:?}"
+                    );
+                } else {
+                    assert_eq!(&error.openusd_message(), expected, "{what}");
+                }
+                continue;
+            }
+            (expected, refused) => panic!("{what}: OpenUSD {expected:?}, layerstack {refused:?}"),
+        }
+        let layer = store.layer(LayerId(1)).unwrap().clone();
+        if !value.is_list_op() {
+            assert_eq!(
+                Some(encode(&value, &store.tokens)),
+                call.stored,
+                "{what}: stored"
+            );
+        }
+        let text = save_usda(&layer, &store.tokens, &store.paths)
+            .unwrap_or_else(|e| panic!("{what} saves: {e:?}"));
+        assert_eq!(
+            Some(written(&text, &call.field)),
+            call.written,
+            "{what} saves:\n{text}"
+        );
+        let again = read_usda_with_registry(
+            &text,
+            LayerId(1),
+            &store.tokens,
+            &store.paths,
+            &mut NoAssets,
+            &registry(&oracle, &store.tokens),
+        );
+        assert_eq!(again.emitted.layer, layer, "{what} reopens as it was");
+    }
+}
+
+#[test]
+fn unauthored_fields_read_as_openusd_reads_them() {
+    let oracle = oracle();
+    let mut store = InMemoryStore::default();
+    let live = authoring_stage(registry(&oracle, &store.tokens), &mut store);
+    let scene = layerstack_schemas::Scene::new(live.stage(), &store);
+    let prim = layerstack_schemas::PrimView::new(scene, store.path("/P"));
+    for case in &oracle.unauthored {
+        let what = format!("{} on the {}", case.field, case.object);
+        let (value, has) = match case.object.as_str() {
+            "stage" => {
+                let value = scene.metadata().value(&case.field);
+                let key = store.tokens.lookup(&case.field).unwrap();
+                (value, live.stage().has_metadata(key, &store))
+            }
+            "prim" => (prim.metadata_value(&case.field), false),
+            "attribute" | "relationship" => {
+                let name = if case.object == "attribute" { "a" } else { "r" };
+                let metadata = prim.property_metadata(name).unwrap();
+                (
+                    metadata.value(&case.field),
+                    metadata.has_authored(&case.field),
+                )
+            }
+            other => panic!("{other}"),
+        };
+        let value = value.map(|value| encode(&FieldValue::Value(value), &store.tokens));
+        assert_eq!(value, case.value, "{what}");
+        if case.object == "stage" {
+            assert_eq!(has, case.has, "{what}");
+        }
     }
 }

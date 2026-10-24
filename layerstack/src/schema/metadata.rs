@@ -27,7 +27,7 @@
 
 mod builtin;
 
-use alloc::{boxed::Box, sync::Arc, vec::Vec};
+use alloc::{boxed::Box, format, sync::Arc, vec::Vec};
 use core::fmt;
 
 use crate::doc::{FieldValue, Value};
@@ -506,6 +506,167 @@ impl<'a> MetadataField<'a> {
     }
 }
 
+/// Why a metadata field cannot be authored on a spec, or a value cannot be
+/// authored as it: the field, the kind of spec, and the reason.
+///
+/// OpenUSD: `UsdObject::SetMetadata` and `UsdStage::SetMetadata`
+/// (`pxr/usd/usd/stage.cpp`), whose Python binding converts a value to the
+/// field's type (`UsdPythonToMetadataValue`); layerstack takes a value of
+/// the type.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MetadataEditError {
+    /// The field's name.
+    pub field: Arc<str>,
+    /// The kind of spec it is authored on.
+    pub target: MetadataTarget,
+    /// Why.
+    pub reason: MetadataEditReason,
+}
+
+/// Why a metadata edit is refused ([`MetadataEditError`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum MetadataEditReason {
+    /// No field of the name is built in or registered (OpenUSD:
+    /// "Unregistered metadata key").
+    Unregistered,
+    /// The field is registered, but not for this kind of spec (OpenUSD:
+    /// "… is not registered as valid metadata for spec type …").
+    NotForSpec,
+    /// The name is a field of the spec with an edit of its own
+    /// ([`is_spec_field`]); `comment` is not refused.
+    SpecField,
+    /// The value is not of the field's type (OpenUSD: "Invalid value …
+    /// Expected type …").
+    ValueType {
+        /// The field's type.
+        expected: MetadataType,
+    },
+}
+
+impl MetadataEditError {
+    /// OpenUSD's message for the refusal, without the layer it names, and
+    /// for a value of another type without the value and its C++ type.
+    #[must_use]
+    pub fn openusd_message(&self) -> alloc::string::String {
+        let field = &self.field;
+        match self.reason {
+            MetadataEditReason::Unregistered => format!("Unregistered metadata key: {field}"),
+            MetadataEditReason::NotForSpec if self.target == MetadataTarget::Layer => {
+                format!("Metadata '{field}' is not registered as valid Layer metadata")
+            }
+            MetadataEditReason::NotForSpec => format!(
+                "Cannot set metadata. '{field}' is not registered as valid metadata for spec type {}.",
+                self.target.spec_type_name()
+            ),
+            MetadataEditReason::SpecField => {
+                format!("\"{field}\" is registered as a non-metadata field")
+            }
+            MetadataEditReason::ValueType { expected } => {
+                format!("Invalid value for key '{field}'. Expected type '{expected}'")
+            }
+        }
+    }
+}
+
+impl fmt::Display for MetadataEditError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let field = &self.field;
+        let target = self.target;
+        match self.reason {
+            MetadataEditReason::Unregistered => {
+                write!(f, "no metadata field `{field}` is registered")
+            }
+            MetadataEditReason::NotForSpec => {
+                write!(
+                    f,
+                    "metadata field `{field}` is not registered for {target} specs"
+                )
+            }
+            MetadataEditReason::SpecField => {
+                write!(
+                    f,
+                    "`{field}` is a field of {target} specs with its own edit"
+                )
+            }
+            MetadataEditReason::ValueType { expected } => {
+                write!(f, "metadata field `{field}` takes a `{expected}` value")
+            }
+        }
+    }
+}
+
+impl core::error::Error for MetadataEditError {}
+
+impl MetadataField<'_> {
+    /// The field `name` as authored on a spec of `target`, with `value`
+    /// (`None` to clear it), checked as OpenUSD checks a `SetMetadata`
+    /// call: the field must be built in or in `registry` and registered
+    /// for `target`, not a field of the spec with an edit of its own, and
+    /// the value must be of its type ([`MetadataType::accepts`]).
+    ///
+    /// # Errors
+    ///
+    /// [`MetadataEditError`], naming the field and why.
+    pub fn check_edit<'r>(
+        name: &str,
+        target: MetadataTarget,
+        value: Option<&FieldValue>,
+        registry: Option<&'r SchemaRegistry>,
+        tokens: &TokenInterner,
+    ) -> Result<MetadataField<'r>, MetadataEditError> {
+        let error = |reason| MetadataEditError {
+            field: Arc::from(name),
+            target,
+            reason,
+        };
+        // `comment`, a field of every spec but not metadata, holds a
+        // string a generic edit may author, as `SetMetadata` may.
+        if name == "comment" {
+            let string = MetadataType::Value(ValueType::String);
+            return match value {
+                Some(value) if !string.accepts(value) => {
+                    Err(error(MetadataEditReason::ValueType { expected: string }))
+                }
+                _ => Ok(MetadataField {
+                    field: Field::Builtin(&builtin::COMMENT),
+                }),
+            };
+        }
+        if is_spec_field(name, target) {
+            return Err(error(MetadataEditReason::SpecField));
+        }
+        let Some(field) = MetadataField::lookup(name, registry, tokens) else {
+            // A field of another kind of spec (a relationship's `typeName`)
+            // is registered, if not for this one.
+            let elsewhere = [
+                MetadataTarget::Layer,
+                MetadataTarget::Prim,
+                MetadataTarget::Attribute,
+                MetadataTarget::Relationship,
+            ]
+            .into_iter()
+            .any(|other| is_spec_field(name, other));
+            return Err(error(if elsewhere {
+                MetadataEditReason::NotForSpec
+            } else {
+                MetadataEditReason::Unregistered
+            }));
+        };
+        if !field.applies_to(target) {
+            return Err(error(MetadataEditReason::NotForSpec));
+        }
+        if let Some(value) = value
+            && !field.value_type().accepts(value)
+        {
+            return Err(error(MetadataEditReason::ValueType {
+                expected: field.value_type(),
+            }));
+        }
+        Ok(field)
+    }
+}
+
 /// Whether `name` is a field of a spec of `target` that is not metadata:
 /// one of the spec's own fields (`specifier`, `default`, `targetPaths`,
 /// `subLayers`, …) or a metadata field with a route of its own (`typeName`,
@@ -702,6 +863,52 @@ mod tests {
         assert_eq!(
             MetadataType::parse("dictionary").unwrap().fallback(),
             Some(FieldValue::Value(Value::Dictionary(Vec::new())))
+        );
+    }
+
+    #[test]
+    fn edits_are_checked_against_the_field_and_its_kinds_of_spec() {
+        let tokens = TokenInterner::default();
+        let check = |name: &str, target, value: Value| {
+            MetadataField::check_edit(name, target, Some(&FieldValue::Value(value)), None, &tokens)
+                .map(|_| ())
+                .map_err(|error| error.reason)
+        };
+        let token = Value::Token(tokens.intern("vertex"));
+        assert_eq!(
+            check("interpolation", MetadataTarget::Attribute, token.clone()),
+            Ok(())
+        );
+        assert_eq!(
+            check("interpolation", MetadataTarget::Prim, token.clone()),
+            Err(MetadataEditReason::NotForSpec)
+        );
+        assert_eq!(
+            check(
+                "interpolation",
+                MetadataTarget::Attribute,
+                Value::string("vertex")
+            ),
+            Err(MetadataEditReason::ValueType {
+                expected: MetadataType::Value(ValueType::Token)
+            })
+        );
+        assert_eq!(
+            check("hostWeight", MetadataTarget::Prim, Value::Float(1.0)),
+            Err(MetadataEditReason::Unregistered)
+        );
+        assert_eq!(
+            check("default", MetadataTarget::Attribute, Value::Float(1.0)),
+            Err(MetadataEditReason::SpecField)
+        );
+        assert_eq!(
+            check("typeName", MetadataTarget::Relationship, token),
+            Err(MetadataEditReason::NotForSpec),
+            "a field of other kinds of spec"
+        );
+        assert_eq!(
+            check("comment", MetadataTarget::Prim, Value::string("note")),
+            Ok(())
         );
     }
 

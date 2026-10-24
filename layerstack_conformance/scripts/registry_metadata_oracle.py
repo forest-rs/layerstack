@@ -548,6 +548,9 @@ def main():
         if field in ("documentation", "interpolation"):
             continue
         entry = {"specs": where}
+        declaration = DECLARED[field]
+        if isinstance(declaration, dict) and isinstance(declaration.get("type"), str):
+            entry["declared"] = declaration["type"]
         if where:
             entry["type"] = sdf_type_name(specs[where[0]], field)
             entry["fallback"] = encode(specs[where[0]].GetFallbackForInfo(field))

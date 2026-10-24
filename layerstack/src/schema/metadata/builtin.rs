@@ -302,6 +302,10 @@ pub(super) static BUILTINS: &[Builtin] = &[
     ),
 ];
 
+/// `comment`: a string field of every kind of spec that is not metadata,
+/// which edits may author (`SetMetadata` takes any field of the spec).
+pub(super) static COMMENT: Builtin = sdf("comment", STRING, &[L, P, A, R], Default::None);
+
 pub(super) fn find(name: &str) -> Option<&'static Builtin> {
     BUILTINS
         .binary_search_by(|field| field.name.cmp(name))

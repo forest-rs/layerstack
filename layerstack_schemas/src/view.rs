@@ -630,13 +630,14 @@ impl PrimEdit {
     /// definition, as C++ creates one. Read it back with
     /// [`PrimView::property_metadata`].
     ///
-    /// The field must be registered for the property's kind, by Sdf or by
-    /// a plugin's `SdfMetadata` in the stage's schema registry, and `value`
-    /// must be of its registered type: a `token` field takes
+    /// The field must be registered for the property's kind, built in or
+    /// by a plugin's `SdfMetadata` in the stage's schema registry, and
+    /// `value` must be of its registered type: a `token` field takes
     /// [`Value::Token`], a `string` field [`Value::String`], a `float` field
-    /// [`Value::Float`]. Fields of the spec itself (`typeName`, `custom`,
-    /// `default`, …) have their own edits and are refused. A refusal
-    /// collects nothing.
+    /// [`Value::Float`], a list-op field the [`FieldValue`] list op of its
+    /// items ([`layerstack::MetadataField::check_edit`]). Fields of the
+    /// spec itself (`typeName`, `custom`, `default`, …) have their own
+    /// edits and are refused. A refusal collects nothing.
     ///
     /// OpenUSD: `UsdObject::SetMetadata`.
     ///
@@ -645,6 +646,8 @@ impl PrimEdit {
     /// # Errors
     ///
     /// Why the field cannot be authored on that property.
+    ///
+    /// [`FieldValue`]: layerstack::FieldValue
     #[doc(alias = "SetMetadata")]
     #[doc(alias = "UsdObject::SetMetadata")]
     pub fn write_property_metadata(
@@ -652,9 +655,9 @@ impl PrimEdit {
         edit: &mut SchemaEdit<'_>,
         name: &str,
         key: &str,
-        value: Value,
-    ) -> Result<(), crate::PropertyMetadataError> {
-        edit.author_property_metadata(self.path, name, key, Some(value))
+        value: impl Into<layerstack::FieldValue>,
+    ) -> Result<(), crate::MetadataError> {
+        edit.author_property_metadata(self.path, name, key, Some(value.into()))
     }
 
     /// Clears the metadata field `key` of the property `name` in the edit
@@ -674,8 +677,50 @@ impl PrimEdit {
         edit: &mut SchemaEdit<'_>,
         name: &str,
         key: &str,
-    ) -> Result<(), crate::PropertyMetadataError> {
+    ) -> Result<(), crate::MetadataError> {
         edit.author_property_metadata(self.path, name, key, None)
+    }
+
+    /// Authors `value` as the prim's metadata field `key` in the edit
+    /// target: a field registered for prims, built in (`kind`,
+    /// `customData`, `hidden`, …) or by a plugin's `SdfMetadata` in the
+    /// stage's schema registry, with a value of its type, checked as
+    /// [`Self::write_property_metadata`] checks a property's. Read it back
+    /// with [`PrimView::metadata_value`].
+    ///
+    /// OpenUSD: `UsdObject::SetMetadata` on a `UsdPrim`.
+    ///
+    /// Spec: AOUSD Core §7.4 (metadata), §7.6.2 (prim fields).
+    ///
+    /// # Errors
+    ///
+    /// Why the field cannot be authored on the prim: there is no prim, it
+    /// cannot be edited, or the field or value is refused.
+    #[doc(alias = "SetMetadata")]
+    pub fn write_metadata(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        key: &str,
+        value: impl Into<layerstack::FieldValue>,
+    ) -> Result<(), crate::MetadataError> {
+        edit.author_prim_metadata(self.path, key, Some(value.into()))
+    }
+
+    /// Clears the prim's metadata field `key` in the edit target, checked
+    /// as [`Self::write_metadata`] checks it.
+    ///
+    /// OpenUSD: `UsdObject::ClearMetadata` on a `UsdPrim`.
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::write_metadata`].
+    #[doc(alias = "ClearMetadata")]
+    pub fn clear_metadata(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        key: &str,
+    ) -> Result<(), crate::MetadataError> {
+        edit.author_prim_metadata(self.path, key, None)
     }
 }
 

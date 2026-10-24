@@ -113,7 +113,7 @@ impl DemandSet {
     pub(super) fn new(
         set: &ReadySet,
         path: PathId,
-        node: crate::NodeId,
+        node: NodeId,
         inventory: &[ClipAssetRequest],
     ) -> Self {
         let requests: Vec<_> = inventory

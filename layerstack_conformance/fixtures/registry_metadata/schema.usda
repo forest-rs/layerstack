@@ -1,0 +1,26 @@
+#usda 1.0
+(
+    """A schema library of one schema whose plugInfo.json declares metadata
+    fields of every type, for the typed metadata views its Rust module
+    generates."""
+    subLayers = [
+        @usd/schema.usda@
+    ]
+)
+
+over "GLOBAL" (
+    customData = {
+        string libraryName = "LayerstackRegistryMetadata"
+        string libraryPath = "."
+        bool skipCodeGeneration = true
+    }
+)
+{
+}
+
+class "Sample" (
+    inherits = </Typed>
+    doc = "A prim to hold metadata fields."
+)
+{
+}

@@ -19,7 +19,9 @@
 
 use alloc::{sync::Arc, vec::Vec};
 
-use layerstack::{ArrayReadError, StringArray, TokenInterner, TypedArray, Value, half};
+use layerstack::{
+    ArrayReadError, FieldValue, ListOp, StringArray, TokenInterner, TypedArray, Value, half,
+};
 
 /// Reads an array of `read`'s type.
 pub fn read_array<'a, T>(
@@ -686,6 +688,31 @@ matrix!(
     read_matrix4d_array,
     write_matrix4d_array
 );
+
+/// `op` with each item mapped by `item`.
+fn map_list_op<T, U>(op: &ListOp<T>, mut item: impl FnMut(&T) -> U) -> ListOp<U> {
+    let mut all = |items: &[T]| items.iter().map(&mut item).collect::<Vec<_>>();
+    ListOp {
+        explicit: op.explicit.as_deref().map(&mut all),
+        prepend: all(&op.prepend),
+        append: all(&op.append),
+        delete: all(&op.delete),
+        add: all(&op.add),
+        reorder: all(&op.reorder),
+    }
+}
+
+/// Encodes a list op of tokens, the value of a `tokenlistop` metadata
+/// field, with its tokens interned in `tokens`.
+pub fn write_token_list_op(op: &ListOp<&str>, tokens: &mut TokenInterner) -> FieldValue {
+    FieldValue::from(map_list_op(op, |token| tokens.intern(token)))
+}
+
+/// Encodes a list op of strings, the value of a `stringlistop` metadata
+/// field.
+pub fn write_string_list_op(op: &ListOp<&str>, _: &mut TokenInterner) -> FieldValue {
+    FieldValue::from(map_list_op(op, |text| Arc::<str>::from(*text)))
+}
 
 #[cfg(test)]
 mod tests {

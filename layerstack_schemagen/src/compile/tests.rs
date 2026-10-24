@@ -599,6 +599,69 @@ fn rust_modules_register_the_plugin_s_kinds() {
     );
 }
 
+/// The metadata fields an existing `plugInfo.json` declares get typed
+/// views; one OpenUSD's `SdfSchema` refuses fails the module, naming
+/// every refusal.
+#[test]
+fn rust_modules_type_the_plugin_s_metadata_fields() {
+    use crate::metadata::MetadataRejection;
+
+    let compile_with = |fields: &str| {
+        let directory = Directory::new();
+        let source = directory.0.join("schema.usda");
+        std::fs::write(
+            &source,
+            format!("{CODELESS}class Thing \"Thing\" (inherits = </Typed>) {{}}\n"),
+        )
+        .unwrap();
+        let existing = format!(
+            r#"{{"Plugins": [{{"Name": "fixture", "Info": {{"SdfMetadata": {fields}}}}}]}}"#
+        );
+        compile(
+            &source,
+            &CompileOptions::new()
+                .with_search_path(&directory.0)
+                .with_existing_plug_info(existing),
+        )
+        .expect("the schema compiles")
+    };
+    let module =
+        compile_with(r#"{"hostScale": {"type": "float", "appliesTo": "prims", "default": 2}}"#)
+            .rust_module()
+            .unwrap();
+    assert!(module.contains("pub struct PrimMetadata<'a>"), "{module}");
+    assert!(module.contains("pub fn set_host_scale("), "{module}");
+    assert!(
+        module.contains("fallback(|_| Value::Float(2.0))"),
+        "{module}"
+    );
+    let compiled = compile_with(
+        r#"{"kind": {"type": "token"}, "hostList": {"type": "tokenlistop", "default": ["a"]}}"#,
+    );
+    let Err(CompileError::Metadata { rejected }) = compiled.rust_module() else {
+        panic!("refused declarations fail the module");
+    };
+    let reasons: Vec<(Option<&str>, &MetadataRejection)> = rejected
+        .iter()
+        .map(|error| (error.field.as_deref(), &error.reason))
+        .collect();
+    assert_eq!(
+        reasons,
+        [
+            (Some("hostList"), &MetadataRejection::DefaultNotAllowed),
+            (
+                Some("kind"),
+                &MetadataRejection::AlreadyRegistered { by: "Sdf".into() }
+            ),
+        ]
+    );
+    let message = CompileError::Metadata { rejected }.to_string();
+    assert!(
+        message.contains("plugin `fixture`, field `kind`: registered already, by Sdf"),
+        "{message}"
+    );
+}
+
 #[test]
 fn rust_names_that_cannot_be_methods_or_types_fail() {
     let typed = |properties: &str| {

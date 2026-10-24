@@ -19,7 +19,7 @@ applied schemas and every property's kind, type, variability, fallback and
 `allowedTokens`, and for an applied schema where it can only be applied
 (per instance name), which probed instance names it allows and what it is
 auto-applied to. It writes `fixtures/schema_compiler/oracle.json`, which
-`tests/schema_compiler.rs` replays against layerstack's registry built from
+`tests/conformance/schema_compiler.rs` replays against layerstack's registry built from
 the same files; with `--check` it writes nothing and fails on a difference.
 """
 import argparse

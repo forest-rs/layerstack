@@ -11,7 +11,7 @@ Writes, under `layerstack_conformance/tests` by default:
 - `assets/default_prim/usdc/*.usdc`: the same layers written by OpenUSD as
   crate files, with asset paths pointing at the `.usdc` siblings;
 - `data/default_prim.json`: what OpenUSD composes from `root`, which
-  `tests/default_prim.rs` replays against layerstack for both formats.
+  `tests/conformance/default_prim.rs` replays against layerstack for both formats.
 
 For every composed prim the vectors record its children and prim stack, and
 for a few attributes their resolved default. Each composition error is

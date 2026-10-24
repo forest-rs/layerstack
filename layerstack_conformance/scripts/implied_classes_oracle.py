@@ -9,7 +9,7 @@ Writes, under `layerstack_conformance/fixtures/implied_classes` by default:
 
 - `*.usda`: the layers below, as authored;
 - `oracle.json`: what OpenUSD composes from `root.usda`, which
-  `tests/implied_classes.rs` replays against layerstack.
+  `tests/conformance/implied_classes.rs` replays against layerstack.
 
 A class arc authored inside a reference or payload target is implied into
 every stronger layer stack on the way to the root: the class path, mapped

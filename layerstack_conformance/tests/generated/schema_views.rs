@@ -11,7 +11,7 @@
 //  --source <OpenUSD checkout>`.
 
 //! Every generated view, getter, setter and enum of `layerstack_schemas`,
-//! which `tests/schema_views.rs` checks against OpenUSD.
+//! which `tests/conformance/schema_views.rs` checks against OpenUSD.
 //!
 //! Every concrete typed and applied schema gets two prims: `/Fallback_<S>`,
 //! which authors nothing but the schema, and `/Authored_<S>`, where every

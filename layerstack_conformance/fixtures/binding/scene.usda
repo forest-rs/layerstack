@@ -1,6 +1,6 @@
 #usda 1.0
 (
-    doc = "Material bindings and collection membership for tests/binding.rs; scripts/binding_oracle.py records what OpenUSD computes."
+    doc = "Material bindings and collection membership for tests/conformance/binding.rs; scripts/binding_oracle.py records what OpenUSD computes."
 )
 
 def Scope "Looks"

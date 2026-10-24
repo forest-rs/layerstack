@@ -16,7 +16,7 @@ schemas in `TfType::GetAllAncestorTypes` (C3) order, or that the order is
 inconsistent, its prim definition's properties and applied schemas, and
 whether each API schema can be applied to it; and the errors registering
 the plugin raises. It writes `fixtures/schema_bases/oracle.json`, which
-`tests/schema_bases.rs` replays against layerstack's registry built from
+`tests/conformance/schema_bases.rs` replays against layerstack's registry built from
 the same files; with `--check` it writes nothing and fails on a difference.
 """
 import argparse

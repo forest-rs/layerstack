@@ -17,7 +17,7 @@ kinds registered and their base kinds, and for every pair of those kinds
 (and two unregistered names) whether `KindRegistry::IsA` holds, or that it
 would not return, which is not asked: a walk of base kinds that comes back
 on itself without meeting the kind asked for. It writes
-`fixtures/custom_kinds/oracle.json`, which `tests/plugin_kinds.rs` replays
+`fixtures/custom_kinds/oracle.json`, which `tests/conformance/plugin_kinds.rs` replays
 against the kinds layerstack registers from the same files; with `--check`
 it writes nothing and fails on a difference.
 """

@@ -20,7 +20,7 @@ collider's material only when the collider (or face subset) has
 `MaterialBindingAPI` applied (`parseUtils.cpp` `_GetMaterialBinding`),
 while the mass computation reads the binding without it.
 
-`tests/physics_parse.rs` compares everything.
+`tests/conformance/physics_parse.rs` compares everything.
 """
 import argparse
 import json

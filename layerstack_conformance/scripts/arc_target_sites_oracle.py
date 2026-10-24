@@ -9,7 +9,7 @@ Writes, under `layerstack_conformance/fixtures/arc_target_sites` by default:
 
 - `*.usda`: the layers below, as authored;
 - `oracle.json`: what OpenUSD composes from `root.usda`, which
-  `tests/arc_target_sites.rs` replays against layerstack.
+  `tests/conformance/arc_target_sites.rs` replays against layerstack.
 
 OpenUSD builds an arc's target subgraph once (`_AddArc` in
 `pxr/usd/pcp/primIndex.cpp`), so a site appears once per arc path in a prim

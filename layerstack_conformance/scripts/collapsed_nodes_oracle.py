@@ -9,7 +9,7 @@ Writes, under `layerstack_conformance/fixtures/collapsed_nodes` by default:
 
 - `*.usda`: the layers below, as authored;
 - `oracle.json`: what OpenUSD composes from `root.usda`, which
-  `tests/collapsed_nodes.rs` replays against layerstack.
+  `tests/conformance/collapsed_nodes.rs` replays against layerstack.
 
 A prim index has one node per arc occurrence: a site reached through two
 references, or listed twice with different layer offsets, is two nodes,

@@ -21,7 +21,7 @@ interpolation (`linear@1.5`, `held@1.5`), it records:
   for each purpose, and `ComputePurposeInfo` (at the default time only,
   as purpose is uniform), with the prim whose authored purpose it is.
 
-Matrices are lists of rows. `tests/xform.rs` compares everything.
+Matrices are lists of rows. `tests/conformance/xform.rs` compares everything.
 
 With `--check` it writes nothing and fails unless the committed
 `oracle.json` is what OpenUSD computes here: the same records, with

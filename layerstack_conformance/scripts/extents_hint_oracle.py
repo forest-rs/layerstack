@@ -18,7 +18,7 @@ Opens `fixtures/extents_hint/scene.usda` and records:
   time code. For each: what it returned and what the root layer then
   authors for `extentsHint` (type, custom, default and time samples).
 
-Writes `oracle.json` beside the scene; `tests/extents_hint.rs` compares
+Writes `oracle.json` beside the scene; `tests/conformance/extents_hint.rs` compares
 `layerstack_schemas`. With `--check` it writes nothing and fails unless the
 committed `oracle.json` agrees, floats to within 1e-9 of their scale.
 """

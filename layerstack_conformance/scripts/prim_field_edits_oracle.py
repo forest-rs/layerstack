@@ -15,7 +15,7 @@ returns false or raises a coding error). After the last call it records
 the spec the target addresses (`MapToSpecPath` of the prim) in the
 target's layer, as normalized fields; `null` when there is none.
 
-`tests/prim_field_edits.rs` makes the same calls through layerstack's
+`tests/conformance/prim_field_edits.rs` makes the same calls through layerstack's
 `Transaction` and must agree with every record.
 
 Writes `fixtures/prim_field_edits/oracle.json` by default.

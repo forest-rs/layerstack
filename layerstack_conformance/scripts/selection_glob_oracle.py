@@ -16,7 +16,7 @@ evaluator matches nothing).
 
 `ArchRegex` searches with the platform's POSIX `regcomp`, and what that
 accepts beyond POSIX differs between platforms. These results are
-macOS's; CI, on Linux, does not rerun this oracle. `tests/path_expression.rs`
+macOS's; CI, on Linux, does not rerun this oracle. `tests/conformance/path_expression.rs`
 requires every glob to behave as recorded, except those
 `selection_glob_divergences.json` lists: syntax POSIX leaves undefined
 (`undefined`) and POSIX features layerstack does not implement

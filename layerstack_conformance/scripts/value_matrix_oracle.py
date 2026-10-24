@@ -8,7 +8,7 @@ Needs OpenUSD 26.08 through Python `pxr`, for example
 `pip install usd-core==26.8`. Writes, under
 `layerstack_conformance/fixtures/value_matrix` by default, one directory of
 USDA layers per composition arc (`root.usda` is each stage's root) and
-`oracle.json`, which `tests/value_matrix.rs` replays against layerstack.
+`oracle.json`, which `tests/conformance/value_matrix.rs` replays against layerstack.
 `--check` writes everything into a temporary directory and fails unless it
 matches the checked-in files.
 
@@ -96,7 +96,7 @@ OPENUSD = "0.26.8"
 # differently from OpenUSD on purpose, recorded as in
 # `temporal_sparse_oracle.py`, whose three it shares.
 # `docs/generic-sparse-composition.md` ("Divergences From OpenUSD") and
-# `tests/value_matrix.rs` list the same names and versions.
+# `tests/conformance/value_matrix.rs` list the same names and versions.
 DIVERGENCES = {
     name: temporal_sparse_oracle.DIVERGENCES[name]
     for name in ("nan-before-first-sample", "sampled-block-drops-fallback",

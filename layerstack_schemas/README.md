@@ -319,7 +319,7 @@ Run the complete two-producer workflow with:
 
 ```sh
 cargo run -p layerstack_examples --example generated_assets -- ./generated-output
-LAYERSTACK_USD_PYTHON=/path/to/usd-python cargo test -p layerstack_conformance --test generated_assets
+LAYERSTACK_USD_PYTHON=/path/to/usd-python cargo test -p layerstack_conformance --test conformance generated_assets::
 cargo bench -p wind_tunnel --bench geometry_publication
 ```
 

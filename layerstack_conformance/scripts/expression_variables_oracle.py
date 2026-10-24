@@ -10,7 +10,7 @@ default:
 
 - `*.usda`: the layers below, as authored;
 - `oracle.json`: what OpenUSD composes from `root.usda`, which
-  `tests/expression_variables.rs` replays against layerstack.
+  `tests/conformance/expression_variables.rs` replays against layerstack.
 
 A sublayer, reference or payload asset path may be a variable expression
 (`SdfVariableExpression`), evaluated with the `expressionVariables` of the

@@ -6,7 +6,7 @@ Each fixture is authored through `Sdf` and exported twice, as `NAME.usda` and
 `NAME.usdc`. The text is what OpenUSD's own writer produces, and the crate
 file carries the same layer in a form whose reader is checked independently
 (`usdc_versions`, `usdc_binary`), so
-`layerstack_conformance/tests/usda_openusd_text.rs` requires the USDA reader
+`layerstack_conformance/tests/conformance/usda_openusd_text.rs` requires the USDA reader
 to read each `.usda` as the USDC reader reads its `.usdc`.
 
 - `strings`: string, token and dictionary-key values holding every

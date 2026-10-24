@@ -9,7 +9,7 @@ Writes, under `layerstack_conformance/fixtures/missing_assets` by default:
 
 - `*.usda`: the layers below, as authored;
 - `oracle.json`: what OpenUSD composes from them, which
-  `tests/missing_assets.rs` replays against layerstack's `StageDocument`.
+  `tests/conformance/missing_assets.rs` replays against layerstack's `StageDocument`.
 
 `scene.usda` names assets that do not exist: a sublayer, a reference, a
 reference beside a valid sibling reference, a payload, a reference inside

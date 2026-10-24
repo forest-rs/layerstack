@@ -2791,7 +2791,7 @@ mod tests {
     /// OpenUSD 26.08 resolved values for a `Cube`'s `extent`, whose schema
     /// fallback is `[(-1, -1, -1), (1, 1, 1)]`: time-sampled edits compose
     /// over the fallback, and so do edits above a default block. The
-    /// `schema_*` cases of `layerstack_conformance/tests/temporal_sparse.rs`
+    /// `schema_*` cases of `layerstack_conformance/tests/conformance/temporal_sparse.rs`
     /// check the same through `Attribute::get`;
     /// these run against the resolver directly.
     #[test]

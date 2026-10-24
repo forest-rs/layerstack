@@ -10,7 +10,7 @@ default:
 
 - `*.usda`: the layers below, as authored;
 - `oracle.json`: what OpenUSD composes from `root.usda`, which
-  `tests/specializes_propagation.rs` replays against layerstack.
+  `tests/conformance/specializes_propagation.rs` replays against layerstack.
 
 OpenUSD adds a specializes arc where it is authored as an inert placeholder,
 then propagates a copy of that node, with the arcs of the specialized prim

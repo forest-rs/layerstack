@@ -28,7 +28,7 @@ wrong). It records, call by call:
   layer authors.
 
 It writes `fixtures/registry_metadata/oracle.json`, which
-`tests/registry_metadata.rs` replays against layerstack reading the same
+`tests/conformance/registry_metadata.rs` replays against layerstack reading the same
 declarations; with `--check` it writes nothing and fails on a difference.
 Values are recorded by content (a float field's `0.25` as the number), not
 by bytes, and the values are ones every platform writes alike.

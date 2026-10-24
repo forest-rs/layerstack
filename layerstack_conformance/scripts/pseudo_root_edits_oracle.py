@@ -8,7 +8,7 @@ Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.8`.
 Writes, under `layerstack_conformance/fixtures/pseudo_root_edits` by default:
 
 - `scene.usda`, the layer every case edits;
-- `oracle.json`, which `tests/pseudo_root_edits.rs` replays against
+- `oracle.json`, which `tests/conformance/pseudo_root_edits.rs` replays against
   layerstack.
 
 Each case is one `Transaction` edit addressed to `/`, or to the property

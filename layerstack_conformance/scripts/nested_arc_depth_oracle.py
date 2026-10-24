@@ -9,7 +9,7 @@ Writes, under `layerstack_conformance/fixtures/nested_arc_depth` by default:
 
 - `*.usda`: the layers below, as authored;
 - `oracle.json`: what OpenUSD composes from `root.usda`, which
-  `tests/nested_arc_depth.rs` replays against layerstack.
+  `tests/conformance/nested_arc_depth.rs` replays against layerstack.
 
 OpenUSD ranks opinions by a strong-to-weak depth-first walk of the prim
 index graph (`PcpCompareNodeStrength` in `pxr/usd/pcp/strengthOrdering.cpp`):

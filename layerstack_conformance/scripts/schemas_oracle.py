@@ -14,7 +14,7 @@ Writes, for each schema set below, under
   `__INSTANCE_NAME__`);
 - `scene.usda`: prims that use those schemas;
 - `oracle.json`: what OpenUSD reports for every prim of `scene.usda`, which
-  `tests/schemas.rs` replays against layerstack.
+  `tests/conformance/schemas.rs` replays against layerstack.
 
 OpenUSD reads one set of schema plugins per process, so each set is
 recorded by a child process with `PXR_PLUGINPATH_NAME` naming its

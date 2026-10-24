@@ -10,7 +10,7 @@ default:
 
 - `*.usda`: the layers below, as authored;
 - `oracle.json`: what OpenUSD composes from `root.usda`, which
-  `tests/specializes_placement.rs` replays against layerstack.
+  `tests/conformance/specializes_placement.rs` replays against layerstack.
 
 Specializes are the weakest arcs of the whole prim index: OpenUSD propagates
 every specializes node to the root of the graph and ranks it after every

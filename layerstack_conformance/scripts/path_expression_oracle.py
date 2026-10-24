@@ -23,7 +23,7 @@ and a reference to `asset.usda`) and writes `oracle.json` beside it:
   unknown predicate, arguments it does not bind, a malformed glob), where
   OpenUSD's evaluator matches nothing but Python raises.
 
-`tests/path_expression.rs` compares everything.
+`tests/conformance/path_expression.rs` compares everything.
 """
 import json
 import os

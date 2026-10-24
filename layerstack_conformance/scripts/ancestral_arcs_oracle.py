@@ -9,7 +9,7 @@ Writes, under `layerstack_conformance/fixtures/ancestral_arcs` by default:
 
 - `*.usda`: the layers below, as authored;
 - `oracle.json`: what OpenUSD composes from `root.usda`, which
-  `tests/ancestral_arcs.rs` replays against layerstack.
+  `tests/conformance/ancestral_arcs.rs` replays against layerstack.
 
 An arc to a subroot target `/T/B` reads the target's prim index, which
 starts from its parent's: the arcs and variant selections authored on `/T`

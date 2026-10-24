@@ -9,7 +9,7 @@ Writes, under `layerstack_conformance/fixtures/layer_offsets` by default:
 
 - `*.usda`: the layers below, as authored;
 - `oracle.json`: what OpenUSD composes from `root.usda`, which
-  `tests/layer_offsets.rs` replays against layerstack.
+  `tests/conformance/layer_offsets.rs` replays against layerstack.
 
 A reference or payload to another layer stack is read on the timeline of
 the layer that authors it: its own offset composes beneath the offset of

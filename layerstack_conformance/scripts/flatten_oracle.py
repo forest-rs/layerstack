@@ -1,6 +1,6 @@
 # Copyright 2026 the LayerStack Authors
 # SPDX-License-Identifier: Apache-2.0 OR MIT
-"""OpenUSD's flatten of a composed stage, for `tests/flatten.rs`.
+"""OpenUSD's flatten of a composed stage, for `tests/conformance/flatten.rs`.
 
 Usage (with a Python that imports OpenUSD's `pxr`):
 

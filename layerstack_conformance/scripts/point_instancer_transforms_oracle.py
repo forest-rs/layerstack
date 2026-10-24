@@ -24,7 +24,7 @@ the transform overload only that way.
 OpenUSD's Python bindings return an empty array when a computation fails,
 so a refused computation is recorded as `[]`; one that raises a coding
 error (`Tf.ErrorException`) is recorded as `null`. Writes `oracle.json` beside
-the scene; `tests/point_instancer_transforms.rs` compares
+the scene; `tests/conformance/point_instancer_transforms.rs` compares
 `layerstack_schemas`' results. With `--check` it writes nothing and fails
 unless the committed `oracle.json` agrees, floats to within 1e-9 of their
 scale.

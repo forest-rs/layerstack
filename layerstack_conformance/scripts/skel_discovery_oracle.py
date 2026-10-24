@@ -13,7 +13,7 @@ from the bound skeleton's animation, at default time) and the skinned
 points. C++ keeps a prim whose influences are malformed (no joint
 influences) and skips an inbetween whose weight is 0 or 1, with warnings.
 
-`tests/skel_discovery.rs` compares everything.
+`tests/conformance/skel_discovery.rs` compares everything.
 """
 import argparse
 import json

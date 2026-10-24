@@ -10,7 +10,7 @@ default:
 
 - `*.usda`: the layers below, as authored;
 - `oracle.json`: what OpenUSD composes from each entry layer, which
-  `tests/composition_errors.rs` replays against layerstack.
+  `tests/conformance/composition_errors.rs` replays against layerstack.
 
 Each composition is a `Pcp.Cache` in USD mode, the mode `UsdStage` uses,
 with the entry's variant fallbacks. For every prim it records the prim

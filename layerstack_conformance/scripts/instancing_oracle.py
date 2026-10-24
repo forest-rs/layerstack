@@ -31,7 +31,7 @@ with one entry per LAYER:
   authored `extent`, and the extent OpenUSD `computed` from its
   prototypes and instances (`ComputeExtentAtTime`).
 
-`tests/instanced_references.rs` compares the reports of the
+`tests/conformance/instanced_references.rs` compares the reports of the
 `PointInstancer` and instanced-reference forms of one scene.
 """
 import json

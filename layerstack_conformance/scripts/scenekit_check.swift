@@ -12,7 +12,7 @@
 // writes OUT.png. Apple's stack ignores `UsdGeomPointInstancer`, so a file
 // that relies on one reports only its prototypes here.
 //
-// `tests/instanced_references.rs` runs it when `LAYERSTACK_SCENEKIT=1`.
+// `tests/conformance/instanced_references.rs` runs it when `LAYERSTACK_SCENEKIT=1`.
 
 import AppKit
 import SceneKit

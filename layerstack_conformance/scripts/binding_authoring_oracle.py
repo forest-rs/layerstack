@@ -15,7 +15,7 @@ one at a time. After each it records whether the call was accepted and,
 for every binding relationship spec in the root layer, its explicit
 targets, its `bindMaterialAs` and whether it is `custom`.
 
-`tests/binding_authoring.rs` replays the calls through
+`tests/conformance/binding_authoring.rs` replays the calls through
 `MaterialBindingApiEdit` and compares the specs.
 """
 import argparse

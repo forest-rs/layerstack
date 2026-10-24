@@ -7,7 +7,7 @@ Usage: xform_ops_oracle.py [FIXTURES [OUT]]
 
 Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.8`.
 
-Opens `fixtures/xform_ops/scene.usda`, which `tests/xform_ops.rs` authors
+Opens `fixtures/xform_ops/scene.usda`, which `tests/conformance/xform_ops.rs` authors
 through `layerstack_schemas`' op API, and writes `oracle.json` beside it:
 
 - for every prim, `GetOrderedXformOps` (each op's name, type, precision and

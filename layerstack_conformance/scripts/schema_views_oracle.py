@@ -8,7 +8,7 @@ Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.8`,
 and an OpenUSD checkout of that release in `LAYERSTACK_OPENUSD_SOURCE` for
 the schemas the wheel is built without (see `openusd_source.py`).
 
-`tests/schema_views.rs` authors `fixtures/schema_views/scene.usda` through
+`tests/conformance/schema_views.rs` authors `fixtures/schema_views/scene.usda` through
 every setter of `layerstack_schemas`'s views (see
 `tests/generated/schema_views.rs`): a `/Fallback_<S>` prim, which authors
 nothing but the schema, and an `/Authored_<S>` prim, where every setter

@@ -47,11 +47,55 @@ impl ArcReads {
         }
     }
 }
+impl LayerReads {
+    /// What `layer` authors that discovery reads, found by visiting its
+    /// specs, unless a reader noted that none authors a reference or
+    /// payload ([`crate::Layer::known_without_reference_arcs`]).
+    fn scan(store: &dyn LayerStore, layer: &crate::Layer) -> Self {
+        // Most specs author no arc and hold no variant that could: they
+        // are passed over without looking their path up again.
+        let arcs = if layer.known_without_reference_arcs() {
+            HashMap::new()
+        } else {
+            layer
+                .prims
+                .iter()
+                .filter(|(path, spec)| {
+                    !spec.references.is_empty()
+                        || !spec.payloads.is_empty()
+                        || !spec.variant_sets.is_empty()
+                        || layer.variant_prims.contains_key(*path)
+                })
+                .map(|(&path, _)| (path, ArcReads::at(store, layer, path)))
+                .filter(|(_, arcs)| !arcs.targets.is_empty() || arcs.expressions)
+                .collect()
+        };
+        Self {
+            generation: layer.generation(),
+            structure: layer.structural_generation(),
+            sublayers: layer.sublayers.iter().map(|s| s.layer).collect(),
+            expressions: layer.sublayers.iter().any(|s| s.is_expression()),
+            arcs,
+        }
+    }
+
+    /// Whether a sublayer or an arc is authored as an expression.
+    fn has_expressions(&self) -> bool {
+        self.expressions || self.arcs.values().any(|a| a.expressions)
+    }
+
+    /// The layers the layer's sublayers and arcs name.
+    fn reached(&self) -> impl Iterator<Item = LayerId> + '_ {
+        self.sublayers
+            .iter()
+            .copied()
+            .chain(self.arcs.values().flat_map(|a| a.targets.iter().copied()))
+    }
+}
+
 impl LayerDiscovery {
     pub(super) fn has_expressions(&self) -> bool {
-        self.layers
-            .values()
-            .any(|reads| reads.expressions || reads.arcs.values().any(|a| a.expressions))
+        self.layers.values().any(LayerReads::has_expressions)
     }
 
     fn refresh(&mut self, store: &dyn LayerStore, id: LayerId) {
@@ -81,30 +125,48 @@ impl LayerDiscovery {
                 return;
             }
         }
-        // Most specs author no arc and hold no variant that could: they
-        // are passed over without looking their path up again.
-        let arcs = layer
-            .prims
-            .iter()
-            .filter(|(path, spec)| {
-                !spec.references.is_empty()
-                    || !spec.payloads.is_empty()
-                    || !spec.variant_sets.is_empty()
-                    || layer.variant_prims.contains_key(*path)
-            })
-            .map(|(&path, _)| (path, ArcReads::at(store, layer, path)))
-            .filter(|(_, arcs)| !arcs.targets.is_empty() || arcs.expressions)
-            .collect();
-        self.layers.insert(
-            id,
-            LayerReads {
-                generation: layer.generation(),
-                structure: layer.structural_generation(),
-                sublayers: layer.sublayers.iter().map(|s| s.layer).collect(),
-                expressions: layer.sublayers.iter().any(|s| s.is_expression()),
-                arcs,
-            },
-        );
+        self.layers.insert(id, LayerReads::scan(store, layer));
+    }
+
+    /// Every layer reached from `root`, as [`Self::participating`] finds
+    /// them, scanning the layers on up to `threads` threads when nothing is
+    /// retained yet, as when a stage composes: each layer's reads are its
+    /// own, and the layers reached are the same whichever thread reaches
+    /// each first.
+    pub(super) fn participating_on(
+        &mut self,
+        store: &dyn LayerStore,
+        root: LayerId,
+        muted: &BTreeSet<LayerId>,
+        threads: usize,
+    ) -> HashSet<LayerId> {
+        if !self.layers.is_empty() || threads <= 1 {
+            return self.participating(store, root, muted);
+        }
+        let seen = crate::sync::ReadLock::new(HashSet::new());
+        let scan = |id: LayerId, added: &mut Vec<LayerId>| {
+            if id == LayerId::UNRESOLVED
+                || muted.contains(&id)
+                || !seen.write(|seen| seen.insert(id))
+            {
+                return None;
+            }
+            let reads = LayerReads::scan(store, store.layer(id)?);
+            added.extend(reads.reached());
+            Some((id, reads))
+        };
+        let scanned =
+            crate::parallel::with_pool(threads, &scan, |pool| pool.run(alloc::vec![root]));
+        let mut expressions = false;
+        for (id, reads) in scanned.into_iter().flatten() {
+            expressions |= reads.has_expressions();
+            self.layers.insert(id, reads);
+        }
+        if expressions {
+            return participating_layers(store, root, muted);
+        }
+        let mut seen = seen;
+        core::mem::take(seen.get_mut())
     }
 
     pub(super) fn participating(
@@ -189,5 +251,52 @@ impl LayerDiscovery {
             }
         }
         Some(hosts)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{InMemoryStore, Layer, PrimSpec, Reference, SublayerEntry};
+
+    /// A discovery that scans on threads reaches the layers, and retains
+    /// the reads, a discovery on one thread does, muted layers and layers
+    /// the store does not hold included as on one thread.
+    #[test]
+    fn layers_scanned_on_threads_are_those_found_on_one() {
+        let mut store = InMemoryStore::default();
+        // Layer `n` sublayers `2n` and references `2n + 1` from a prim and
+        // from a variant of it, up to layer 63; 64 and beyond are missing.
+        for n in 1..64_u64 {
+            let mut layer = Layer::new(LayerId(n));
+            layer.sublayers.push(SublayerEntry::new(LayerId(2 * n)));
+            let prim = store.path(&alloc::format!("/P{n}"));
+            layer.insert_prim(
+                prim,
+                PrimSpec::def().with_reference(Reference::to_default_prim(LayerId(2 * n + 1))),
+            );
+            store.insert_layer(layer);
+        }
+        let muted = BTreeSet::from([LayerId(5)]);
+        let mut one = LayerDiscovery::default();
+        let found = one.participating(&store, LayerId(1), &muted);
+        assert!(found.contains(&LayerId(64)) && !found.contains(&LayerId(5)));
+        assert!(
+            !found.contains(&LayerId(10)),
+            "only muted layer 5 reaches it"
+        );
+        for threads in [1, 4] {
+            let mut many = LayerDiscovery::default();
+            assert_eq!(
+                many.participating_on(&store, LayerId(1), &muted, threads),
+                found
+            );
+            let mut retained: Vec<_> = many.layers.keys().copied().collect();
+            retained.sort_unstable();
+            let mut expected: Vec<_> = one.layers.keys().copied().collect();
+            expected.sort_unstable();
+            assert_eq!(retained, expected);
+        }
+        assert_eq!(found, participating_layers(&store, LayerId(1), &muted));
     }
 }

@@ -989,9 +989,12 @@ impl LiveStage {
 
     /// Records the generations of every layer the stage reads.
     fn record_generations(&mut self, store: &dyn LayerStore) {
-        let mut layers =
-            self.layer_discovery
-                .participating(store, self.root, &self.options.muted_layers);
+        let mut layers = self.layer_discovery.participating_on(
+            store,
+            self.root,
+            &self.options.muted_layers,
+            self.options.threads,
+        );
         if let Some(session) = self.options.session_layer {
             layers.extend(self.layer_discovery.participating(
                 store,

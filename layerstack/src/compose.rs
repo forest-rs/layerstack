@@ -134,7 +134,6 @@ fn compose_indexed(
     let mut reads_all = core::mem::take(&mut composed.reads);
     reads_all.extend(reads);
     let dependencies = composed.deps.take().map(|mut builder| {
-        builder.retain_prims(&prims);
         builder.add_expression_variable_reads(reads_all);
         builder.finish()
     });

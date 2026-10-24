@@ -30,7 +30,7 @@ use hashbrown::{HashMap, HashSet};
 use crate::{
     asset::AssetRequest,
     composition_error::CompositionError,
-    dependency_map::{ArcDependency, DependencyBuilder},
+    dependency_map::{DependencyBuilder, PrimDependencies},
     doc::{LayerId, LayerStore},
     expression_variables::VariableReads,
     interner::TokenId,
@@ -76,20 +76,13 @@ pub(crate) struct Composition {
     /// indexed rather than copied from another instance's descendants,
     /// found on the thread that indexed it.
     pub(crate) instance_keys: InstanceIndexKeys,
-    /// What each composed prim depends on, applied to `deps` at the end.
-    records: HashMap<PathId, PrimRecord>,
+    /// What each composed prim depends on, which `deps` is built from at
+    /// the end.
+    records: HashMap<PathId, PrimDependencies>,
     /// The layer stacks whose errors a prim has reported.
     reported_stacks: HashSet<StackId>,
     /// The layer stacks whose layers are in `used_layers`.
     used_stacks: HashSet<StackId>,
-}
-
-/// The dependencies one prim index records (see [`DependencyBuilder`]).
-#[derive(Clone, Default)]
-struct PrimRecord {
-    layers: Vec<LayerId>,
-    default_prim_layers: Vec<LayerId>,
-    arcs: Vec<(PathId, ArcKind, LayerId)>,
 }
 
 /// Which prims a composition indexes.
@@ -262,7 +255,6 @@ pub(crate) fn compose(
     ctx.stage_stack = ctx.stacks.find_or_compute(ctx.store, identifier, None);
     let mut out = Composition {
         local_layers: ctx.stacks.get(ctx.stage_stack).layers.clone(),
-        deps: options.with_dependencies.then(DependencyBuilder::new),
         ..Composition::default()
     };
 
@@ -297,27 +289,20 @@ pub(crate) fn compose(
             scope: &scope,
             checks,
             instances: &mut instances,
+            with_dependencies: options.with_dependencies,
         };
         walk.walk(alloc::vec![root_path], None);
         walk.share_prototypes();
     });
 
-    if let Some(deps) = out.deps.as_mut() {
-        deps.reserve_arcs(out.records.values().map(|record| record.arcs.len()).sum());
-        for (path, record) in &out.records {
-            deps.add_layer_opinions(*path, &record.layers);
-            for &layer in &record.default_prim_layers {
-                deps.add_default_prim_dependency(layer, *path);
-            }
-            for &(source, arc_kind, layer) in &record.arcs {
-                deps.add_arc(ArcDependency {
-                    source,
-                    target: *path,
-                    arc_kind,
-                    layer,
-                });
-            }
-        }
+    if options.with_dependencies {
+        // Only the prims the composition keeps depend on anything.
+        let Composition { records, prims, .. } = &mut out;
+        records.retain(|path, _| prims.contains_key(path));
+        out.deps = Some(DependencyBuilder::from_prims(
+            &out.records,
+            &crate::parallel::Threads::new(options.threads),
+        ));
     }
     // The stage's own layer stack, and any no arc reached, report last.
     for (at, stack) in (0..).zip(ctx.stacks.iter()) {
@@ -414,7 +399,7 @@ struct Indexed {
     /// its parent's.
     arc_stacks: smallvec::SmallVec<[StackId; 1]>,
     /// What the prim depends on, when the composition records it.
-    record: Option<PrimRecord>,
+    record: Option<PrimDependencies>,
     index: PrimIndex,
     /// The errors, asset requests and variable reads it reported, if any.
     reports: Option<Box<Reports>>,
@@ -638,8 +623,8 @@ fn prim_record(
     graph: &Graph,
     index: &PrimIndex,
     outputs: &mut Outputs,
-) -> PrimRecord {
-    let mut record = PrimRecord::default();
+) -> PrimDependencies {
+    let mut record = PrimDependencies::default();
     record
         .layers
         .extend(index.sources.iter().map(|source| source.layer_id));
@@ -666,6 +651,9 @@ fn prim_record(
             ctx.stacks.get(node.site.stack).identifier.root,
         ));
     }
+    // Nodes at one site prim, as variant branches of it are, read it
+    // through one arc.
+    record.dedup_arcs();
     record
 }
 
@@ -680,6 +668,8 @@ struct Walk<'a, 'c, 'p> {
     scope: &'a Scope<'a>,
     checks: &'a mut crate::composition_checks::Findings,
     instances: &'a mut Instances,
+    /// Whether each prim records its dependencies.
+    with_dependencies: bool,
 }
 
 impl Walk<'_, '_, '_> {
@@ -692,7 +682,7 @@ impl Walk<'_, '_, '_> {
         let indexed = self.pool.run(tasks);
         // Grown once, rather than rehashing as the prims join.
         self.out.prims.reserve(indexed.len());
-        if self.out.deps.is_some() {
+        if self.with_dependencies {
             self.out.records.reserve(indexed.len());
         }
         // One thread indexes prims in the order they join: a prim, then
@@ -1087,7 +1077,7 @@ fn copy_prototype(
             out.used_layer_sites.insert(target, layers);
         }
         if let Some(record) = out.records.get(&source).cloned() {
-            let record = PrimRecord {
+            let record = PrimDependencies {
                 arcs: record
                     .arcs
                     .into_iter()

@@ -8,6 +8,7 @@ Usage (with a Python that imports OpenUSD's `pxr`):
     layer_snapshot.py snapshot LAYER [WEAKER]   # JSON on stdout
     layer_snapshot.py compose LAYER TIME...     # JSON on stdout
     layer_snapshot.py convert IN OUT     # OpenUSD writes IN as OUT
+    layer_snapshot.py serve              # the above, one per line of stdin
 
 A snapshot holds what OpenUSD reads from the layer: its text as
 `SdfLayer::ExportToString` prints it (every spec and field with its type,
@@ -25,10 +26,20 @@ and list edits are checked against the opinions they block or edit.
 prints what it composes: every prim's specifier, type and variant
 selections, every attribute's value by default and at each TIME, every
 relationship's targets, and the number of composition errors.
+
+`serve` answers many commands from one process, so a caller pays for
+starting Python and loading `pxr` once: each line of standard input is a
+JSON array of a command's arguments, and each is answered by a line of JSON
+on standard output, `{"out": ...}` with what the command prints or
+`{"error": ...}` with why it failed. A command holds no layer once it has
+answered, and OpenUSD keeps a layer open only while something holds it, so
+every command reads its files as they are on disk when it runs.
 """
 
+import gc
 import json
 import sys
+import traceback
 
 from pxr import Sdf, Usd
 
@@ -128,23 +139,44 @@ def snapshot(path, weaker=None):
     return result
 
 
-def main(argv):
-    if argv[1:2] == ["version"]:
-        from pxr import Usd as _Usd
+def run(args):
+    """Runs the command `args`, returning what it prints, if anything."""
+    if args == ["version"]:
+        return ".".join(str(v) for v in Usd.GetVersion())
+    if args[:1] == ["snapshot"] and len(args) in (2, 3):
+        weaker = args[2] if len(args) == 3 else None
+        return json.dumps(snapshot(args[1], weaker), indent=1, sort_keys=True)
+    if args[:1] == ["compose"] and len(args) >= 2:
+        times = [float(t) for t in args[2:]]
+        return json.dumps(compose(args[1], times), indent=1, sort_keys=True)
+    if args[:1] == ["convert"] and len(args) == 3:
+        layer = Sdf.Layer.FindOrOpen(args[1])
+        if layer is None or not layer.Export(args[2]):
+            raise SystemExit(f"OpenUSD cannot convert {args[1]}")
+        return None
+    raise SystemExit(__doc__)
 
-        print(".".join(str(v) for v in _Usd.GetVersion()))
-    elif argv[1:2] == ["snapshot"] and len(argv) in (3, 4):
-        weaker = argv[3] if len(argv) == 4 else None
-        print(json.dumps(snapshot(argv[2], weaker), indent=1, sort_keys=True))
-    elif argv[1:2] == ["compose"] and len(argv) >= 3:
-        times = [float(t) for t in argv[3:]]
-        print(json.dumps(compose(argv[2], times), indent=1, sort_keys=True))
-    elif argv[1:2] == ["convert"] and len(argv) == 4:
-        layer = Sdf.Layer.FindOrOpen(argv[2])
-        if layer is None or not layer.Export(argv[3]):
-            raise SystemExit(f"OpenUSD cannot convert {argv[2]}")
-    else:
-        raise SystemExit(__doc__)
+
+def serve():
+    for line in sys.stdin:
+        try:
+            reply = {"out": run(json.loads(line)) or ""}
+        except SystemExit as error:
+            reply = {"error": str(error.code)}
+        except Exception:
+            reply = {"error": traceback.format_exc()}
+        # Frees the layers of any reference cycle the command left.
+        gc.collect()
+        print(json.dumps(reply), flush=True)
+
+
+def main(argv):
+    if argv[1:] == ["serve"]:
+        serve()
+        return
+    out = run(argv[1:])
+    if out is not None:
+        print(out)
 
 
 if __name__ == "__main__":

@@ -145,10 +145,95 @@ pub(crate) fn element_type_hint(hint: &str) -> &str {
 
 /// A number literal's value, as OpenUSD's text parser holds it.
 #[derive(Clone, Copy)]
-enum Number {
+pub(crate) enum Number {
     Int(i64),
     UInt(u64),
     Float(f64),
+}
+
+impl Number {
+    /// The number `value` holds, `None` for any other literal.
+    pub(crate) fn of(value: &ast::Value<'_>) -> Option<Self> {
+        match value {
+            ast::Value::Int(n) => Some(Self::Int(*n)),
+            ast::Value::UInt(n) => Some(Self::UInt(*n)),
+            ast::Value::Number(n) => Some(Self::Float(*n)),
+            _ => None,
+        }
+    }
+
+    fn as_f64(self) -> f64 {
+        match self {
+            Self::Int(n) => n as f64,
+            Self::UInt(n) => n as f64,
+            Self::Float(f) => f,
+        }
+    }
+
+    /// The `bool` a number converts to: true when nonzero, NaN included.
+    pub(crate) fn to_bool(self) -> bool {
+        match self {
+            Self::Int(n) => n != 0,
+            Self::UInt(n) => n != 0,
+            Self::Float(f) => f != 0.0,
+        }
+    }
+
+    /// The `half` a number converts to (narrowed through `float`).
+    pub(crate) fn to_half(self) -> u16 {
+        match self {
+            Self::Int(n) => layerstack::half::from_f32(n as f32),
+            Self::UInt(n) => layerstack::half::from_f32(n as f32),
+            Self::Float(f) => half_from_f64(f),
+        }
+    }
+
+    /// The `float` a number converts to.
+    pub(crate) fn to_float(self) -> f32 {
+        match self {
+            Self::Int(n) => n as f32,
+            Self::UInt(n) => n as f32,
+            Self::Float(f) => f as f32,
+        }
+    }
+
+    /// The `double` (or `timecode`) a number converts to.
+    pub(crate) fn to_double(self) -> f64 {
+        self.as_f64()
+    }
+
+    /// The integer in `min..=max` a number converts to, or why it does not
+    /// convert to `ty`, as OpenUSD's `GfNumericCast` does: a finite number
+    /// whose value truncated toward zero is in range.
+    pub(crate) fn to_integer(self, min: i128, max: i128, ty: &str) -> Result<i128, String> {
+        let n = match self {
+            Self::Int(n) => i128::from(n),
+            Self::UInt(n) => i128::from(n),
+            // `as` truncates toward zero.
+            Self::Float(f) if f.is_finite() => {
+                // OpenUSD GfNumericCast checks the open floating interval
+                // (lowest - 1, max + 1) before truncation. For i64/u64 these
+                // endpoints round, so a double at the apparent integer limit
+                // may be out of range. Do not let a rounded overflow literal
+                // impersonate an exact integer boundary. AOUSD Core §6.2.
+                let low = min as f64 - 1.;
+                let high = max as f64 + 1.;
+                if f <= low || f >= high {
+                    return Err(alloc::format!("{f} is out of range for `{ty}`"));
+                }
+                f as i128
+            }
+            Self::Float(f) => return Err(alloc::format!("{f} is not a `{ty}`")),
+        };
+        if (min..=max).contains(&n) {
+            Ok(n)
+        } else {
+            Err(alloc::format!(
+                "{} is out of range for `{ty}`",
+                self.as_f64()
+            ))
+        }
+    }
 }
 
 /// Converts a number, boolean or string literal to the scalar type `ty` as
@@ -192,9 +277,9 @@ pub(crate) fn convert_scalar(value: &ast::Value<'_>, ty: &str) -> Option<Result<
     }
     let floating = matches!(ty, "half" | "float" | "double" | "timecode");
     let number = match value {
-        ast::Value::Int(n) => Number::Int(*n),
-        ast::Value::UInt(n) => Number::UInt(*n),
-        ast::Value::Number(n) => Number::Float(*n),
+        ast::Value::Int(_) | ast::Value::UInt(_) | ast::Value::Number(_) => {
+            Number::of(value).expect("a number literal")
+        }
         ast::Value::Bool(b) if ty == "bool" => return Some(Ok(Value::Bool(*b))),
         ast::Value::String(s) if ty == "bool" => {
             return Some(
@@ -218,61 +303,17 @@ pub(crate) fn convert_scalar(value: &ast::Value<'_>, ty: &str) -> Option<Result<
 /// Converts `number` to the numeric or boolean type `ty` (see
 /// [`convert_scalar`]).
 fn convert_number(number: Number, ty: &str) -> Result<Value, String> {
-    let as_f64 = match number {
-        Number::Int(n) => n as f64,
-        Number::UInt(n) => n as f64,
-        Number::Float(f) => f,
-    };
-    // An integer target takes the value truncated toward zero, if finite.
-    let integral = |min: i128, max: i128| -> Result<i128, String> {
-        let n = match number {
-            Number::Int(n) => i128::from(n),
-            Number::UInt(n) => i128::from(n),
-            // `as` truncates toward zero.
-            Number::Float(f) if f.is_finite() => {
-                // OpenUSD GfNumericCast checks the open floating interval
-                // (lowest - 1, max + 1) before truncation. For i64/u64 these
-                // endpoints round, so a double at the apparent integer limit
-                // may be out of range. Do not let a rounded overflow literal
-                // impersonate an exact integer boundary. AOUSD Core §6.2.
-                let low = min as f64 - 1.;
-                let high = max as f64 + 1.;
-                if f <= low || f >= high {
-                    return Err(alloc::format!("{f} is out of range for `{ty}`"));
-                }
-                f as i128
-            }
-            Number::Float(f) => return Err(alloc::format!("{f} is not a `{ty}`")),
-        };
-        if (min..=max).contains(&n) {
-            Ok(n)
-        } else {
-            Err(alloc::format!("{as_f64} is out of range for `{ty}`"))
-        }
-    };
     Ok(match ty {
-        "bool" => Value::Bool(match number {
-            Number::Int(n) => n != 0,
-            Number::UInt(n) => n != 0,
-            Number::Float(f) => f != 0.0,
-        }),
-        "uchar" => Value::UChar(integral(0, u8::MAX.into())? as u8),
-        "int" => Value::Int(integral(i32::MIN.into(), i32::MAX.into())? as i32),
-        "uint" => Value::UInt(integral(0, u32::MAX.into())? as u32),
-        "int64" => Value::Int64(integral(i64::MIN.into(), i64::MAX.into())? as i64),
-        "uint64" => Value::UInt64(integral(0, u64::MAX.into())? as u64),
-        "half" => Value::Half(match number {
-            Number::Int(n) => layerstack::half::from_f32(n as f32),
-            Number::UInt(n) => layerstack::half::from_f32(n as f32),
-            Number::Float(f) => half_from_f64(f),
-        }),
-        "float" => Value::Float(match number {
-            Number::Int(n) => n as f32,
-            Number::UInt(n) => n as f32,
-            Number::Float(f) => f as f32,
-        }),
-        "double" => Value::Double(as_f64),
-        "timecode" => Value::TimeCode(as_f64),
+        "bool" => Value::Bool(number.to_bool()),
+        "uchar" => Value::UChar(number.to_integer(0, u8::MAX.into(), ty)? as u8),
+        "int" => Value::Int(number.to_integer(i32::MIN.into(), i32::MAX.into(), ty)? as i32),
+        "uint" => Value::UInt(number.to_integer(0, u32::MAX.into(), ty)? as u32),
+        "int64" => Value::Int64(number.to_integer(i64::MIN.into(), i64::MAX.into(), ty)? as i64),
+        "uint64" => Value::UInt64(number.to_integer(0, u64::MAX.into(), ty)? as u64),
+        "half" => Value::Half(number.to_half()),
+        "float" => Value::Float(number.to_float()),
+        "double" => Value::Double(number.to_double()),
+        "timecode" => Value::TimeCode(number.to_double()),
         _ => unreachable!("`convert_scalar` passes numeric types only"),
     })
 }
@@ -397,6 +438,42 @@ fn extract_matrix_f64<const N: usize>(items: &[ast::Value<'_>]) -> [f64; N] {
         }
     }
     out
+}
+
+/// A vector, matrix or quaternion component as the dimensioned conversion
+/// takes it ([`dimensioned_value`]): `None` when [`check_components`]
+/// rejects it, else its value as `extract_f64s`, `extract_f32s`,
+/// `extract_halves` or `extract_i32s` reads it.
+pub(crate) mod component {
+    use super::Number;
+
+    /// A `double` component: any number.
+    pub(crate) fn double(number: Option<Number>) -> Option<f64> {
+        Some(number?.as_f64())
+    }
+
+    /// A `float` component: any number, narrowed from its `double`.
+    pub(crate) fn float(number: Option<Number>) -> Option<f32> {
+        Some(number?.as_f64() as f32)
+    }
+
+    /// A `half` component: any number, narrowed from its `double`.
+    pub(crate) fn half(number: Option<Number>) -> Option<u16> {
+        Some(super::half_from_f64(number?.as_f64()))
+    }
+
+    /// An `int` component: a number that converts to `int`.
+    pub(crate) fn int(number: Option<Number>) -> Option<i32> {
+        let number = number?;
+        number
+            .to_integer(i32::MIN.into(), i32::MAX.into(), "int")
+            .ok()?;
+        Some(match number {
+            Number::Int(n) => n as i32,
+            Number::UInt(n) => n as i32,
+            Number::Float(f) => f as i32,
+        })
+    }
 }
 
 /// Converts an AST value node to f64 (best-effort).

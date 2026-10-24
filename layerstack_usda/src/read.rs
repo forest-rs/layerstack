@@ -3,7 +3,7 @@
 
 //! Scene import without materializing numeric property arrays as syntax trees.
 
-use alloc::{collections::BTreeMap, vec::Vec};
+use alloc::{collections::BTreeMap, sync::Arc, vec::Vec};
 use layerstack::{AssetResolver, LayerId, PathInterner, SchemaRegistry, TokenInterner};
 
 use crate::{
@@ -11,6 +11,7 @@ use crate::{
     diagnostic::Diagnostic,
     emit::EmitResult,
     lexer::{Lexer, Token, TokenKind},
+    numeric::Number,
 };
 
 /// Work counters for one USDA import, excluding recursively resolved layers.
@@ -152,10 +153,37 @@ fn trivia(kind: TokenKind) -> bool {
     )
 }
 
+#[derive(Clone)]
 struct LexicalCursor<'a> {
     source: &'a str,
     lexer: Lexer<'a>,
     lookahead: Option<Token>,
+}
+
+/// A literal an element component holds: a number, `true` or `false`.
+#[derive(Clone, Copy)]
+enum Literal {
+    Number(Number),
+    Bool(bool),
+}
+
+impl Literal {
+    /// The literal as structural lowering holds it.
+    fn value(self) -> ast::Value<'static> {
+        match self {
+            Self::Number(Number::Int(n)) => ast::Value::Int(n),
+            Self::Number(Number::UInt(n)) => ast::Value::UInt(n),
+            Self::Number(Number::Float(f)) => ast::Value::Number(f),
+            Self::Bool(b) => ast::Value::Bool(b),
+        }
+    }
+
+    fn number(self) -> Option<Number> {
+        match self {
+            Self::Number(number) => Some(number),
+            Self::Bool(_) => None,
+        }
+    }
 }
 
 impl<'a> LexicalCursor<'a> {
@@ -169,49 +197,99 @@ impl<'a> LexicalCursor<'a> {
         self.peek().filter(|token| token.kind == kind)?;
         self.lookahead.take()
     }
-    fn scalar(&mut self) -> Option<ast::Value<'a>> {
+    fn literal(&mut self) -> Option<Literal> {
         let negative = self.eat(TokenKind::Minus).is_some();
         let token = self.peek()?;
         let text = token.text(self.source);
-        let value = match token.kind {
+        let literal = match token.kind {
             TokenKind::Number => {
-                let value = crate::lower::parse_number_value(text);
-                if !negative {
+                let value = Number::of(&crate::lower::parse_number_value(text))
+                    .expect("a number literal parses to a number");
+                Literal::Number(if !negative {
                     value
                 } else {
                     match value {
-                        ast::Value::Int(0) if text == "0" => ast::Value::Number(-0.0),
-                        ast::Value::Int(n) => ast::Value::Int(-n),
+                        Number::Int(0) if text == "0" => Number::Float(-0.0),
+                        Number::Int(n) => Number::Int(-n),
                         // Match structural lowering: the signed minimum is an
                         // exact integer despite its unsigned magnitude. AOUSD
                         // Core §6.2; OpenUSD numeric literal classification.
-                        ast::Value::UInt(n) if n == i64::MAX as u64 + 1 => {
-                            ast::Value::Int(i64::MIN)
-                        }
-                        ast::Value::UInt(n) => ast::Value::Number(-(n as f64)),
-                        ast::Value::Number(n) => ast::Value::Number(-n),
-                        _ => unreachable!("numeric literal"),
+                        Number::UInt(n) if n == i64::MAX as u64 + 1 => Number::Int(i64::MIN),
+                        Number::UInt(n) => Number::Float(-(n as f64)),
+                        Number::Float(n) => Number::Float(-n),
                     }
-                }
+                })
             }
             TokenKind::Ident => match (text, negative) {
-                ("inf", false) => ast::Value::Number(f64::INFINITY),
-                ("inf", true) => ast::Value::Number(f64::NEG_INFINITY),
-                ("nan", false) => ast::Value::Number(f64::NAN),
-                ("true" | "True", false) => ast::Value::Bool(true),
-                ("false" | "False", false) => ast::Value::Bool(false),
+                ("inf", false) => Literal::Number(Number::Float(f64::INFINITY)),
+                ("inf", true) => Literal::Number(Number::Float(f64::NEG_INFINITY)),
+                ("nan", false) => Literal::Number(Number::Float(f64::NAN)),
+                ("true" | "True", false) => Literal::Bool(true),
+                ("false" | "False", false) => Literal::Bool(false),
                 _ => return None,
             },
             _ => return None,
         };
         self.lookahead = None;
-        Some(value)
+        Some(literal)
+    }
+}
+
+/// The elements of a numeric array after its `[`, read one at a time: a
+/// scalar, or a parenthesized tuple of `width` components.
+#[derive(Clone)]
+struct Elements<'a> {
+    cursor: LexicalCursor<'a>,
+    width: usize,
+}
+
+/// What [`Elements::next_element`] read.
+enum Element {
+    /// An element's components (the first `width.max(1)` of them).
+    Components([Literal; 4]),
+    /// The closing `]`, which ends at this offset.
+    End(u32),
+    /// Something no element or `]` starts with.
+    Malformed,
+}
+
+impl Elements<'_> {
+    fn next_element(&mut self) -> Element {
+        if let Some(end) = self.cursor.eat(TokenKind::RightBracket) {
+            return Element::End(end.span.end);
+        }
+        let mut components = [Literal::Bool(false); 4];
+        let valid = (|| {
+            if self.width != 0 {
+                self.cursor.eat(TokenKind::LeftParen)?;
+            }
+            for component in &mut components[..self.width.max(1)] {
+                *component = self.cursor.literal()?;
+                if self.width != 0 {
+                    self.cursor.eat(TokenKind::Comma);
+                }
+            }
+            if self.width != 0 {
+                self.cursor.eat(TokenKind::RightParen)?;
+            }
+            Some(())
+        })()
+        .is_some();
+        if !valid {
+            return Element::Malformed;
+        }
+        self.cursor.eat(TokenKind::Comma);
+        Element::Components(components)
     }
 }
 
 /// Consume typed numeric events once, keeping a checkpoint for generic
 /// grammar recovery. Conversion errors stay deferred until attribute emission
 /// so phase boundaries, diagnostic ordering and ignored declarations match.
+///
+/// An array whose every element converts to the declared type is read into
+/// its native buffer directly ([`native_array`]); one that does not is read
+/// again element by element, as values, to keep its errors and recovery.
 pub(crate) fn numeric_array<'a>(
     source: &'a str,
     start: u32,
@@ -224,10 +302,24 @@ pub(crate) fn numeric_array<'a>(
         lookahead: None,
     };
     cursor.eat(TokenKind::LeftBracket)?;
+    let elements = Elements { cursor, width };
+    if let Some(layout) = Layout::of(type_hint, width) {
+        let mut native = elements.clone();
+        if let Some(read) = native_array(&mut native, layout) {
+            return Some((
+                PreparedArray {
+                    span: Span::new(start, read.end),
+                    count: read.count,
+                    value: layerstack::Value::TypedArray(read.array),
+                    errors: Vec::new(),
+                },
+                native.cursor.lexer,
+            ));
+        }
+    }
     let mut events = NumericEvents {
-        cursor,
+        elements,
         type_hint,
-        width,
         count: 0,
         end: None,
         malformed: false,
@@ -248,14 +340,13 @@ pub(crate) fn numeric_array<'a>(
             value,
             errors: events.errors,
         },
-        events.cursor.lexer,
+        events.elements.cursor.lexer,
     ))
 }
 
 struct NumericEvents<'a, 't> {
-    cursor: LexicalCursor<'a>,
+    elements: Elements<'a>,
     type_hint: &'t str,
-    width: usize,
     count: usize,
     end: Option<u32>,
     malformed: bool,
@@ -268,35 +359,21 @@ impl Iterator for NumericEvents<'_, '_> {
         if self.malformed || self.end.is_some() {
             return None;
         }
-        if let Some(end) = self.cursor.eat(TokenKind::RightBracket) {
-            self.end = Some(end.span.end);
-            return None;
-        }
-        let mut components = core::array::from_fn::<_, 4, _>(|_| ast::Value::Blocked);
-        let valid = (|| {
-            if self.width != 0 {
-                self.cursor.eat(TokenKind::LeftParen)?;
+        let components = match self.elements.next_element() {
+            Element::Components(components) => components,
+            Element::End(end) => {
+                self.end = Some(end);
+                return None;
             }
-            for component in &mut components[..self.width.max(1)] {
-                *component = self.cursor.scalar()?;
-                if self.width != 0 {
-                    self.cursor.eat(TokenKind::Comma);
-                }
+            Element::Malformed => {
+                self.malformed = true;
+                return None;
             }
-            if self.width != 0 {
-                self.cursor.eat(TokenKind::RightParen)?;
-            }
-            Some(())
-        })()
-        .is_some();
-        if !valid {
-            self.malformed = true;
-            return None;
-        }
+        };
         self.count += 1;
-        self.cursor.eat(TokenKind::Comma);
-        match crate::numeric::element(&components[..self.width.max(1)], self.type_hint, self.width)
-        {
+        let width = self.elements.width;
+        let components = components.map(Literal::value);
+        match crate::numeric::element(&components[..width.max(1)], self.type_hint, width) {
             Ok(value) => Some(value),
             Err(message) => {
                 self.errors.push(message);
@@ -304,6 +381,179 @@ impl Iterator for NumericEvents<'_, '_> {
             }
         }
     }
+}
+
+/// The native element of a numeric array type, resolved once per array:
+/// what [`crate::numeric::element`] converts each element to.
+#[derive(Clone, Copy)]
+enum Layout {
+    Bool,
+    UChar,
+    Int,
+    UInt,
+    Int64,
+    UInt64,
+    Half,
+    Float,
+    Double,
+    TimeCode,
+    Vec2i,
+    Vec3i,
+    Vec4i,
+    Vec2h,
+    Vec3h,
+    Vec4h,
+    Vec2f,
+    Vec3f,
+    Vec4f,
+    Vec2d,
+    Vec3d,
+    Vec4d,
+    Quath,
+    Quatf,
+    Quatd,
+}
+
+impl Layout {
+    /// The layout of `type_hint`'s elements, `width` components each.
+    fn of(type_hint: &str, width: usize) -> Option<Self> {
+        Some(if width == 0 {
+            // A scalar converts by its declared name (`convert_scalar`).
+            match type_hint {
+                "bool" => Self::Bool,
+                "uchar" => Self::UChar,
+                "int" => Self::Int,
+                "uint" => Self::UInt,
+                "int64" => Self::Int64,
+                "uint64" => Self::UInt64,
+                "half" => Self::Half,
+                "float" => Self::Float,
+                "double" => Self::Double,
+                "timecode" => Self::TimeCode,
+                _ => return None,
+            }
+        } else {
+            // A tuple converts by its storage type (`dimensioned_value`).
+            match crate::numeric::storage_name(type_hint.strip_suffix("[]").unwrap_or(type_hint)) {
+                "int2" => Self::Vec2i,
+                "int3" => Self::Vec3i,
+                "int4" => Self::Vec4i,
+                "half2" => Self::Vec2h,
+                "half3" => Self::Vec3h,
+                "half4" => Self::Vec4h,
+                "float2" => Self::Vec2f,
+                "float3" => Self::Vec3f,
+                "float4" => Self::Vec4f,
+                "double2" => Self::Vec2d,
+                "double3" => Self::Vec3d,
+                "double4" => Self::Vec4d,
+                "quath" => Self::Quath,
+                "quatf" => Self::Quatf,
+                "quatd" => Self::Quatd,
+                _ => return None,
+            }
+        })
+    }
+}
+
+/// A numeric array read into its native buffer.
+struct NativeArray {
+    array: layerstack::TypedArray,
+    count: usize,
+    end: u32,
+}
+
+/// Reads the elements into the native buffer of `layout`, converting each
+/// as [`crate::numeric::element`] does; `None` when the array is empty or
+/// malformed, or an element does not convert, which the value path reports.
+fn native_array(elements: &mut Elements<'_>, layout: Layout) -> Option<NativeArray> {
+    use crate::numeric::component;
+    use layerstack::TypedArray;
+
+    fn read<E>(
+        elements: &mut Elements<'_>,
+        convert: impl Fn(&[Literal; 4]) -> Option<E>,
+    ) -> Option<(Arc<Vec<E>>, u32)> {
+        let mut items = Vec::new();
+        loop {
+            match elements.next_element() {
+                Element::Components(components) => items.push(convert(&components)?),
+                Element::End(end) if !items.is_empty() => {
+                    items.shrink_to_fit();
+                    return Some((Arc::new(items), end));
+                }
+                Element::End(_) | Element::Malformed => return None,
+            }
+        }
+    }
+    /// The first `N` components, each converted by `convert`.
+    fn tuple<C: Copy + Default, const N: usize>(
+        components: &[Literal; 4],
+        convert: fn(Option<Number>) -> Option<C>,
+    ) -> Option<[C; N]> {
+        let mut out = [C::default(); N];
+        for (out, literal) in out.iter_mut().zip(components) {
+            *out = convert(literal.number())?;
+        }
+        Some(out)
+    }
+    /// Quaternions are stored as (i, j, k, r) but authored as (r, i, j, k)
+    /// in USDA text per AOUSD Core §16.3.10.22.
+    fn quaternion<C: Copy>([r, i, j, k]: [C; 4]) -> [C; 4] {
+        [i, j, k, r]
+    }
+    /// An integer element of type `ty`, `min..=max`.
+    fn integer<T: Into<i128> + TryFrom<i128>>(
+        literal: Literal,
+        min: T,
+        max: T,
+        ty: &str,
+    ) -> Option<T> {
+        let n = literal
+            .number()?
+            .to_integer(min.into(), max.into(), ty)
+            .ok()?;
+        T::try_from(n).ok()
+    }
+
+    macro_rules! native {
+        ($kind:ident, $convert:expr) => {{
+            let (items, end) = read(elements, $convert)?;
+            let count = items.len();
+            (TypedArray::$kind(items), count, end)
+        }};
+    }
+    let (array, count, end) = match layout {
+        Layout::Bool => native!(Bool, |c| match c[0] {
+            Literal::Bool(b) => Some(b),
+            Literal::Number(number) => Some(number.to_bool()),
+        }),
+        Layout::UChar => native!(UChar, |c| integer(c[0], u8::MIN, u8::MAX, "uchar")),
+        Layout::Int => native!(Int, |c| integer(c[0], i32::MIN, i32::MAX, "int")),
+        Layout::UInt => native!(UInt, |c| integer(c[0], u32::MIN, u32::MAX, "uint")),
+        Layout::Int64 => native!(Int64, |c| integer(c[0], i64::MIN, i64::MAX, "int64")),
+        Layout::UInt64 => native!(UInt64, |c| integer(c[0], u64::MIN, u64::MAX, "uint64")),
+        Layout::Half => native!(Half, |c| Some(c[0].number()?.to_half())),
+        Layout::Float => native!(Float, |c| Some(c[0].number()?.to_float())),
+        Layout::Double => native!(Double, |c| Some(c[0].number()?.to_double())),
+        Layout::TimeCode => native!(TimeCode, |c| Some(c[0].number()?.to_double())),
+        Layout::Vec2i => native!(Vec2i, |c| tuple::<_, 2>(c, component::int)),
+        Layout::Vec3i => native!(Vec3i, |c| tuple::<_, 3>(c, component::int)),
+        Layout::Vec4i => native!(Vec4i, |c| tuple::<_, 4>(c, component::int)),
+        Layout::Vec2h => native!(Vec2h, |c| tuple::<_, 2>(c, component::half)),
+        Layout::Vec3h => native!(Vec3h, |c| tuple::<_, 3>(c, component::half)),
+        Layout::Vec4h => native!(Vec4h, |c| tuple::<_, 4>(c, component::half)),
+        Layout::Vec2f => native!(Vec2f, |c| tuple::<_, 2>(c, component::float)),
+        Layout::Vec3f => native!(Vec3f, |c| tuple::<_, 3>(c, component::float)),
+        Layout::Vec4f => native!(Vec4f, |c| tuple::<_, 4>(c, component::float)),
+        Layout::Vec2d => native!(Vec2d, |c| tuple::<_, 2>(c, component::double)),
+        Layout::Vec3d => native!(Vec3d, |c| tuple::<_, 3>(c, component::double)),
+        Layout::Vec4d => native!(Vec4d, |c| tuple::<_, 4>(c, component::double)),
+        Layout::Quath => native!(Quath, |c| Some(quaternion(tuple(c, component::half)?))),
+        Layout::Quatf => native!(Quatf, |c| Some(quaternion(tuple(c, component::float)?))),
+        Layout::Quatd => native!(Quatd, |c| Some(quaternion(tuple(c, component::double)?))),
+    };
+    Some(NativeArray { array, count, end })
 }
 
 fn compact_buffer(value: &mut layerstack::Value) {
@@ -446,6 +696,76 @@ mod tests {
             "#usda 1.0\ndef \"A\" { double[] values = [-0, -0.0, inf, -inf, nan, 18446744073709551615, -9223372036854775808] }",
         );
         compare("#usda 1.0\ndef \"A\" { float3[] values = [(1/*a*/2, 3,), (4, - 0, nan)] }");
+    }
+
+    #[test]
+    fn native_buffers_hold_what_value_conversion_holds() {
+        // Every element converts, so the array is read straight into its
+        // native buffer; the values (bits included) are those of the value
+        // path, for scalars by their declared type and tuples by storage.
+        let arrays = [
+            ("bool", "[0, 1, -0.0, nan, true, False, 2.5]"),
+            ("uchar", "[0, 255, 1.9, -0.5]"),
+            ("int", "[-2147483648, 2147483647, 2.7, -2.7, -0]"),
+            ("uint", "[0, 4294967295, 7.5]"),
+            ("int64", "[-9223372036854775808, 9223372036854775807, 1e3]"),
+            ("uint64", "[18446744073709551615, 0, 3]"),
+            ("half", "[1, 65504, 0.1, -0, inf, -inf, 16777217, 1e-8]"),
+            (
+                "float",
+                "[16777217, 9007199254740993, 0.1, -0, nan, 1e39, -1e-46]",
+            ),
+            (
+                "double",
+                "[0.1, -0, 9223372036854775808, -9223372036854775809, 1e308]",
+            ),
+            ("timecode", "[1, 2.5, -inf]"),
+            ("int2", "[(1, -2), (2.9, -2.9)]"),
+            ("int4", "[(1, 2, 3, 4)]"),
+            ("half3", "[(0.1, 1, 65519), (-0, 2, 3)]"),
+            ("float3", "[(16777217, 0.1, -0), (9007199254740993, 1, 2)]"),
+            ("double2", "[(0.1, 1e-300)]"),
+            ("color3f", "[(1, 0.5, 0)]"),
+            ("point3d", "[(1, 2, 3)]"),
+            ("normal3h", "[(0, 0, 1)]"),
+            ("texCoord2f", "[(0.25, 0.75)]"),
+            ("vector3f", "[(1, 0, 0),]"),
+            ("quath", "[(1, 0.5, 0.25, 0)]"),
+            ("quatf", "[(1, 2, 3, 4)]"),
+            ("quatd", "[(0.1, 0.2, 0.3, 0.4)]"),
+        ];
+        for (ty, value) in arrays {
+            let source = format!("#usda 1.0\ndef \"A\" {{ {ty}[] values = {value} }}");
+            let stats = compare(&source);
+            assert_eq!(stats.numeric_arrays, 1, "{source}");
+            let parsed = crate::parser::parse(&source);
+            let old = InMemoryStore::default();
+            let emitted = crate::emit::emit(
+                &parsed.layer,
+                LayerId(1),
+                &old.tokens,
+                &old.paths,
+                &mut NoAssets,
+            );
+            let new = InMemoryStore::default();
+            let imported = read_usda(&source, LayerId(1), &new.tokens, &new.paths, &mut NoAssets);
+            let value = |layer: &layerstack::Layer| {
+                let prim = layer
+                    .prims()
+                    .values()
+                    .find(|prim| !prim.properties.is_empty())
+                    .expect("the prim");
+                prim.properties[0].spec.default.clone()
+            };
+            let (expected, read) = (value(&emitted.layer), value(&imported.emitted.layer));
+            assert!(
+                matches!(read, Some(layerstack::Value::TypedArray(_))),
+                "{source}: {read:?}"
+            );
+            // `Debug` tells `-0.0` from `0.0` and compares NaN, which `==`
+            // never finds equal.
+            assert_eq!(format!("{expected:?}"), format!("{read:?}"), "{source}");
+        }
     }
 
     #[test]

@@ -32,7 +32,7 @@
 //! §12.2.6 (list ops), §12.3.1 (default values), §12.3.2 (time samples and
 //! splines), §12.3.6 (blocks), §13.3.2.4 (schema fallbacks).
 
-use alloc::{sync::Arc, vec, vec::Vec};
+use alloc::{borrow::Cow, sync::Arc, vec, vec::Vec};
 
 use opinionated::{
     ChainOpinion, DictionaryEvent, FamilyEvent, IgnoreReason, OpinionOp, ResolutionEvent,
@@ -564,7 +564,7 @@ impl Stage {
             self.explain_default_as_authored(index, opinions, property_type, fallback);
         if matches!(
             super::stage_time::opinions_in_stage_time(opinions),
-            alloc::borrow::Cow::Owned(_)
+            Cow::Owned(_)
         ) {
             explained.value = self
                 .resolve_default(field, opinions, property_type, fallback)
@@ -725,18 +725,39 @@ impl Stage {
         fallback: Option<&Value>,
         composability: Option<&crate::value_resolution::SampleComposability<'_>>,
     ) -> ValueExplanation<'s, Value> {
-        let mut explained = self.explain_at_time_as_authored(
-            index,
-            field,
-            opinions,
-            time,
-            interp,
-            fallback,
-            composability,
-        );
+        // Spec: AOUSD Core §12.3 (an animation block hides weaker time
+        // samples and splines, not weaker defaults). Explain the fold the
+        // read runs (`Stage::resolve_at_time_with_source`), over the masked
+        // opinions, and report it against the authored ones.
+        let animation = super::stage_time::animation_opinions(opinions);
+        let mut explained = match &animation {
+            Cow::Borrowed(_) => self.explain_at_time_as_authored(
+                index,
+                field,
+                opinions,
+                time,
+                interp,
+                fallback,
+                composability,
+            ),
+            Cow::Owned(masked) => rebind(
+                index,
+                opinions,
+                masked,
+                self.explain_at_time_as_authored(
+                    index,
+                    field,
+                    masked,
+                    time,
+                    interp,
+                    fallback,
+                    composability,
+                ),
+            ),
+        };
         if matches!(
             super::stage_time::opinions_in_stage_time(opinions),
-            alloc::borrow::Cow::Owned(_)
+            Cow::Owned(_)
         ) {
             explained.value = self
                 .resolve_at_time_with_source(
@@ -976,6 +997,46 @@ impl ListChainer for ReportLists {
         let (value, events) = report_list_chain(values.map(pick));
         self.events = events;
         value
+    }
+}
+
+/// `explained`, an explanation over `masked`, as one over `opinions`, the
+/// authored opinions `masked` copies position for position.
+fn rebind<'s, T>(
+    index: &'s PrimIndex,
+    opinions: &'s [Opinion],
+    masked: &[Opinion],
+    explained: ValueExplanation<'_, T>,
+) -> ValueExplanation<'s, T> {
+    let ValueExplanation {
+        value,
+        source,
+        clip,
+        seeded_by_fallback,
+        opinions: explained,
+    } = explained;
+    let opinions = explained
+        .into_iter()
+        .map(|entry| {
+            let position = masked
+                .iter()
+                .position(|opinion| core::ptr::eq(opinion, entry.opinion))
+                .expect("an explained opinion is one of the masked ones");
+            let opinion = &opinions[position];
+            ExplainedOpinion {
+                opinion,
+                node: index.graph.node(opinion.key.node),
+                role: entry.role,
+                samples: entry.samples,
+            }
+        })
+        .collect();
+    ValueExplanation {
+        value,
+        source,
+        clip,
+        seeded_by_fallback,
+        opinions,
     }
 }
 

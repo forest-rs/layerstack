@@ -64,7 +64,7 @@ fn stage() -> (InMemoryStore, LiveStage) {
 /// Authors the scene through the op API.
 fn author(edit: &mut SchemaEdit<'_>, paths: &BTreeMap<&str, PathId>) {
     let xform = |edit: &mut SchemaEdit<'_>, name: &str| -> XformableEdit {
-        Xform::define(edit, paths[name]);
+        Xform::define(edit, paths[name]).expect("outside any instance");
         XformableEdit::new(edit, paths[name]).expect("defined")
     };
 

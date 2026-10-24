@@ -22,7 +22,7 @@ use core::ops::Deref;
 
 use layerstack::{CannotApply, PathId};
 
-use crate::{PrimEdit, PrimView, Scene, SchemaEdit};
+use crate::{CannotDefine, PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "This LOD heuristic selects LOD children on the basis of distance from the view point to the LOD root."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `LODDistanceHeuristic`, inheriting [`LODHeuristic`]. Construct it with [`LODDistanceHeuristic::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
@@ -73,15 +73,23 @@ impl<'a> LODDistanceHeuristic<'a> {
         LODDistanceHeuristicEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def LODDistanceHeuristic` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `LODDistanceHeuristic`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `LODDistanceHeuristic` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdLodDistanceHeuristic::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> LODDistanceHeuristicEdit {
-        LODDistanceHeuristicEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(
+        edit: &mut SchemaEdit<'_>,
+        path: PathId,
+    ) -> Result<LODDistanceHeuristicEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(LODDistanceHeuristicEdit::from_prim)
     }
 
     /// The USD name of [`Self::blend_thresholds`].
@@ -1004,15 +1012,23 @@ impl<'a> LODScreenSizeHeuristic<'a> {
         LODScreenSizeHeuristicEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def LODScreenSizeHeuristic` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `LODScreenSizeHeuristic`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `LODScreenSizeHeuristic` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdLodScreenSizeHeuristic::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> LODScreenSizeHeuristicEdit {
-        LODScreenSizeHeuristicEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(
+        edit: &mut SchemaEdit<'_>,
+        path: PathId,
+    ) -> Result<LODScreenSizeHeuristicEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(LODScreenSizeHeuristicEdit::from_prim)
     }
 
     /// The USD name of [`Self::blend_thresholds`].

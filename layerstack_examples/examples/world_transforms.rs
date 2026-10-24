@@ -47,23 +47,25 @@ fn main() -> Result<(), XformOpError> {
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
     let double = XformOpPrecision::Double;
     let float = XformOpPrecision::Float;
-    Xform::define(&mut edit, orrery);
+    Xform::define(&mut edit, orrery).expect("outside any instance");
     let handle = |edit: &SchemaEdit<'_>, path| XformableEdit::new(edit, path).expect("defined");
     handle(&edit, orrery)
         .add_translate_op(&mut edit, double)?
         .set(&mut edit, [0.0, 1.0, 0.0])?;
 
-    Sphere::define(&mut edit, sun).set_radius(&mut edit, 2.0);
+    Sphere::define(&mut edit, sun)
+        .expect("outside any instance")
+        .set_radius(&mut edit, 2.0);
 
     // The orbit turns once over 24 time codes.
-    Xform::define(&mut edit, orbit);
+    Xform::define(&mut edit, orbit).expect("outside any instance");
     let turn = handle(&edit, orbit).add_op(&mut edit, XformOpType::RotateY, float, None, false)?;
     turn.set_at(&mut edit, 0.0, 0.0)?
         .set_at(&mut edit, 24.0, 360.0)?;
 
     // The planet: out along X, half size. The last op listed applies
     // first, so the planet is scaled, then moved.
-    Sphere::define(&mut edit, planet);
+    Sphere::define(&mut edit, planet).expect("outside any instance");
     let planet_ops = handle(&edit, planet);
     planet_ops
         .add_translate_op(&mut edit, double)?
@@ -72,17 +74,18 @@ fn main() -> Result<(), XformOpError> {
         .add_scale_op(&mut edit, float)?
         .set(&mut edit, [0.5, 0.5, 0.5])?;
 
-    Xform::define(&mut edit, moon_orbit);
+    Xform::define(&mut edit, moon_orbit).expect("outside any instance");
     handle(&edit, moon_orbit)
         .add_op(&mut edit, XformOpType::RotateZ, float, None, false)?
         .set(&mut edit, 30.0)?;
 
-    Sphere::define(&mut edit, moon);
+    Sphere::define(&mut edit, moon).expect("outside any instance");
     handle(&edit, moon)
         .add_translate_op(&mut edit, double)?
         .set(&mut edit, [4.0, 0.0, 0.0])?;
 
     Cube::define(&mut edit, guide)
+        .expect("outside any instance")
         .set_purpose(&mut edit, ImageablePurpose::Guide)
         .set_visibility(&mut edit, ImageableVisibility::Invisible);
 

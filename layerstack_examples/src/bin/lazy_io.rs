@@ -36,7 +36,7 @@ fn fixture() -> Result<PathBuf, Box<dyn std::error::Error>> {
     let root = live.stage().root_layer().unwrap();
     let mesh_path = store.path("/Mesh");
     let mut edit = SchemaEdit::new(live.stage(), store, EditTarget::for_layer(root));
-    let mesh = Mesh::define(&mut edit, mesh_path);
+    let mesh = Mesh::define(&mut edit, mesh_path)?;
     mesh.set_points(
         &mut edit,
         &[[0., 0., 0.], [1., 0., 0.], [1., 1., 0.], [0., 1., 0.]],

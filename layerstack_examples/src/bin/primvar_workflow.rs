@@ -28,14 +28,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
     );
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(layer));
-    let world = Xform::define(&mut edit, root);
+    let world = Xform::define(&mut edit, root)?;
     let tint = world.create_primvar(
         &mut edit,
         "tint",
         PropertyType::parse("float").expect("a registered value type"),
     )?;
     tint.set(&mut edit, Value::Float(0.7))?; // Unauthored interpolation is constant.
-    let mesh = Mesh::define(&mut edit, mesh_path);
+    let mesh = Mesh::define(&mut edit, mesh_path)?;
     let weights = mesh.create_indexed_primvar(
         &mut edit,
         "weight",

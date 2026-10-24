@@ -43,13 +43,13 @@ pub(crate) fn hello(directory: &std::path::Path) -> Document {
     let hello = store.path("/hello");
     let world = store.path("/hello/world");
     let mut edit = SchemaEdit::new(live.stage(), store, EditTarget::for_layer(root));
-    let xform = Xform::define(&mut edit, hello);
+    let xform = Xform::define(&mut edit, hello).expect("outside any instance");
     xform
         .add_translate_op(&mut edit, XformOpPrecision::Double)
         .unwrap()
         .set(&mut edit, [4.0, 5.0, 6.0])
         .unwrap();
-    let sphere = Sphere::define(&mut edit, world);
+    let sphere = Sphere::define(&mut edit, world).expect("outside any instance");
     sphere.set_radius(&mut edit, 2.0);
     sphere.set_extent(&mut edit, &[[-2.0, -2.0, -2.0], [2.0, 2.0, 2.0]]);
     sphere.set_display_color(&mut edit, &[[0.0, 0.0, 1.0]]);

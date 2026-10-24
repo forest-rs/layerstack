@@ -39,11 +39,11 @@ fn main() {
     let mut queries = RetainedQueries::new(Time::Default, BoundsOptions::default());
     let target = EditTarget::for_layer(layer);
     let mut edit = layerstack_schemas::SchemaEdit::new(live.stage(), &mut store, target.clone());
-    Xform::define(&mut edit, world);
-    let cube = Cube::define(&mut edit, shape);
+    Xform::define(&mut edit, world).expect("outside any instance");
+    let cube = Cube::define(&mut edit, shape).expect("outside any instance");
     cube.set_size(&mut edit, 2.0);
-    let material = Material::define(&mut edit, material);
-    let shader = Shader::define(&mut edit, shader);
+    let material = Material::define(&mut edit, material).expect("outside any instance");
+    let shader = Shader::define(&mut edit, shader).expect("outside any instance");
     let ty = PropertyType::parse("float").expect("a registered value type");
     let roughness = material
         .create_input(&mut edit, "roughness", ty.clone())

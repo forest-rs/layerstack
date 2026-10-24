@@ -149,7 +149,7 @@ fn rejected_runtime_application_adds_nothing_and_pending_definition_is_validated
             .is_err()
     );
     assert!(edit.transaction().is_empty());
-    Cube::define(&mut edit, created);
+    Cube::define(&mut edit, created).expect("outside any instance");
     edit.apply_api(created, "PipelineTintAPI", None).unwrap();
     let transaction = edit.finish();
     live.apply(&mut store, &transaction).unwrap();

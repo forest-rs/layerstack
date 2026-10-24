@@ -22,7 +22,7 @@ use core::ops::Deref;
 
 use layerstack::PathId;
 
-use crate::{PrimEdit, PrimView, Scene, SchemaEdit};
+use crate::{CannotDefine, PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "Represents an abstract generative procedural prim which delivers its input parameters via properties (including relationships) within the \"primvars:\" namespace."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `GenerativeProcedural`, inheriting [`crate::usd_geom::Boundable`]. Construct it with [`GenerativeProcedural::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
@@ -73,15 +73,23 @@ impl<'a> GenerativeProcedural<'a> {
         GenerativeProceduralEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def GenerativeProcedural` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `GenerativeProcedural`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `GenerativeProcedural` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdProcGenerativeProcedural::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> GenerativeProceduralEdit {
-        GenerativeProceduralEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(
+        edit: &mut SchemaEdit<'_>,
+        path: PathId,
+    ) -> Result<GenerativeProceduralEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(GenerativeProceduralEdit::from_prim)
     }
 
     /// The USD name of [`Self::procedural_system`].

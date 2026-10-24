@@ -151,7 +151,7 @@ fn same_batch_definition_retarget_block_and_undo_are_coherent() {
     let volume = store.path("/New");
     let field = store.path("/AbsentField");
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-    let handle = Volume::define(&mut edit, volume);
+    let handle = Volume::define(&mut edit, volume).expect("outside any instance");
     handle
         .create_field_relationship(&mut edit, "density", TargetPath::Prim(field))
         .unwrap();

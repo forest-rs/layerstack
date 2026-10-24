@@ -892,9 +892,9 @@ impl PreparedCache {
 /// let mut live = LiveStage::compose(&mut store, layer,
 ///     StageOptions { schemas: Some(schemas), ..Default::default() });
 /// let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(layer));
-/// Xform::define(&mut edit, parent).add_translate_op(&mut edit, XformOpPrecision::Double)?
+/// Xform::define(&mut edit, parent).expect("outside any instance").add_translate_op(&mut edit, XformOpPrecision::Double)?
 ///     .set(&mut edit, [10., 0., 0.])?;
-/// let xform = Xform::define(&mut edit, child);
+/// let xform = Xform::define(&mut edit, child).expect("outside any instance");
 /// xform.set_reset_xform_stack(&mut edit, true);
 /// let translation = xform.add_translate_op(&mut edit, XformOpPrecision::Double)?;
 /// translation.set(&mut edit, [1., 2., 3.])?;

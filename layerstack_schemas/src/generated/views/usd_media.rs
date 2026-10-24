@@ -22,7 +22,7 @@ use core::ops::Deref;
 
 use layerstack::{CannotApply, PathId};
 
-use crate::{PrimEdit, PrimView, Scene, SchemaEdit};
+use crate::{CannotDefine, PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "AssetPreviewsAPI supports providing thumbnail previews for assets."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's single-apply API schema `AssetPreviewsAPI`. Get it with [`AssetPreviewsApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
@@ -291,15 +291,23 @@ impl<'a> SpatialAudio<'a> {
         SpatialAudioEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def SpatialAudio` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `SpatialAudio`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `SpatialAudio` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdMediaSpatialAudio::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> SpatialAudioEdit {
-        SpatialAudioEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(
+        edit: &mut SchemaEdit<'_>,
+        path: PathId,
+    ) -> Result<SpatialAudioEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(SpatialAudioEdit::from_prim)
     }
 
     /// The USD name of [`Self::aural_mode`].

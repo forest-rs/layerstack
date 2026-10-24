@@ -22,7 +22,7 @@ use core::ops::Deref;
 
 use layerstack::{CannotApply, PathId};
 
-use crate::{PrimEdit, PrimView, Scene, SchemaEdit};
+use crate::{CannotDefine, PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "A base class used by intrinsic lights. Not intended to be used directly."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's abstract typed schema `BoundableLightBase`, inheriting [`crate::usd_geom::Boundable`]. Construct it with [`BoundableLightBase::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
@@ -169,15 +169,23 @@ impl<'a> CylinderLight<'a> {
         CylinderLightEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def CylinderLight` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `CylinderLight`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `CylinderLight` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdLuxCylinderLight::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> CylinderLightEdit {
-        CylinderLightEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(
+        edit: &mut SchemaEdit<'_>,
+        path: PathId,
+    ) -> Result<CylinderLightEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(CylinderLightEdit::from_prim)
     }
 
     /// The USD name of [`Self::length`].
@@ -381,15 +389,20 @@ impl<'a> DiskLight<'a> {
         DiskLightEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def DiskLight` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `DiskLight`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `DiskLight` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdLuxDiskLight::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> DiskLightEdit {
-        DiskLightEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<DiskLightEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(DiskLightEdit::from_prim)
     }
 
     /// The USD name of [`Self::radius`].
@@ -515,15 +528,23 @@ impl<'a> DistantLight<'a> {
         DistantLightEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def DistantLight` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `DistantLight`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `DistantLight` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdLuxDistantLight::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> DistantLightEdit {
-        DistantLightEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(
+        edit: &mut SchemaEdit<'_>,
+        path: PathId,
+    ) -> Result<DistantLightEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(DistantLightEdit::from_prim)
     }
 
     /// The USD name of [`Self::angle`].
@@ -717,15 +738,20 @@ impl<'a> DomeLight<'a> {
         DomeLightEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def DomeLight` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `DomeLight`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `DomeLight` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdLuxDomeLight::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> DomeLightEdit {
-        DomeLightEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<DomeLightEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(DomeLightEdit::from_prim)
     }
 
     /// The USD name of [`Self::guide_radius`].
@@ -1115,15 +1141,20 @@ impl<'a> DomeLight1<'a> {
         DomeLight1Edit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def DomeLight_1` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `DomeLight_1`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `DomeLight_1` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdLuxDomeLight_1::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> DomeLight1Edit {
-        DomeLight1Edit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<DomeLight1Edit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(DomeLight1Edit::from_prim)
     }
 
     /// The USD name of [`Self::guide_radius`].
@@ -1416,15 +1447,23 @@ impl<'a> GeometryLight<'a> {
         GeometryLightEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def GeometryLight` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `GeometryLight`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `GeometryLight` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdLuxGeometryLight::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> GeometryLightEdit {
-        GeometryLightEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(
+        edit: &mut SchemaEdit<'_>,
+        path: PathId,
+    ) -> Result<GeometryLightEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(GeometryLightEdit::from_prim)
     }
 
     /// The USD name of [`Self::geometry`].
@@ -2156,15 +2195,23 @@ impl<'a> LightFilter<'a> {
         LightFilterEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def LightFilter` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `LightFilter`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `LightFilter` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdLuxLightFilter::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> LightFilterEdit {
-        LightFilterEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(
+        edit: &mut SchemaEdit<'_>,
+        path: PathId,
+    ) -> Result<LightFilterEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(LightFilterEdit::from_prim)
     }
 
     /// The USD name of [`Self::shader_id`].
@@ -2996,15 +3043,23 @@ impl<'a> PluginLight<'a> {
         PluginLightEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def PluginLight` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `PluginLight`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `PluginLight` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdLuxPluginLight::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> PluginLightEdit {
-        PluginLightEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(
+        edit: &mut SchemaEdit<'_>,
+        path: PathId,
+    ) -> Result<PluginLightEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(PluginLightEdit::from_prim)
     }
 
     #[doc = "The prim's built-in `NodeDefAPI`, which every `PluginLight` has."]
@@ -3115,15 +3170,23 @@ impl<'a> PluginLightFilter<'a> {
         PluginLightFilterEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def PluginLightFilter` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `PluginLightFilter`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `PluginLightFilter` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdLuxPluginLightFilter::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> PluginLightFilterEdit {
-        PluginLightFilterEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(
+        edit: &mut SchemaEdit<'_>,
+        path: PathId,
+    ) -> Result<PluginLightFilterEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(PluginLightFilterEdit::from_prim)
     }
 
     #[doc = "The prim's built-in `NodeDefAPI`, which every `PluginLightFilter` has."]
@@ -3222,15 +3285,23 @@ impl<'a> PortalLight<'a> {
         PortalLightEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def PortalLight` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `PortalLight`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `PortalLight` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdLuxPortalLight::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> PortalLightEdit {
-        PortalLightEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(
+        edit: &mut SchemaEdit<'_>,
+        path: PathId,
+    ) -> Result<PortalLightEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(PortalLightEdit::from_prim)
     }
 
     /// The USD name of [`Self::height`].
@@ -3395,15 +3466,20 @@ impl<'a> RectLight<'a> {
         RectLightEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def RectLight` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `RectLight`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `RectLight` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdLuxRectLight::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> RectLightEdit {
-        RectLightEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<RectLightEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(RectLightEdit::from_prim)
     }
 
     /// The USD name of [`Self::height`].
@@ -4326,15 +4402,23 @@ impl<'a> SphereLight<'a> {
         SphereLightEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def SphereLight` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `SphereLight`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `SphereLight` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdLuxSphereLight::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> SphereLightEdit {
-        SphereLightEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(
+        edit: &mut SchemaEdit<'_>,
+        path: PathId,
+    ) -> Result<SphereLightEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(SphereLightEdit::from_prim)
     }
 
     /// The USD name of [`Self::radius`].

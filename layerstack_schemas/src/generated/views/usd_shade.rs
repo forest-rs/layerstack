@@ -22,7 +22,7 @@ use core::ops::Deref;
 
 use layerstack::{CannotApply, PathId};
 
-use crate::{InstanceEdit, InstanceView, PrimEdit, PrimView, Scene, SchemaEdit};
+use crate::{CannotDefine, InstanceEdit, InstanceView, PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "UsdShadeCoordSysAPI provides a way to designate, name, and discover coordinate systems."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's multiple-apply API schema `CoordSysAPI`. Get it with [`CoordSysApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
@@ -270,15 +270,20 @@ impl<'a> Material<'a> {
         MaterialEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def Material` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `Material`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `Material` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdShadeMaterial::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> MaterialEdit {
-        MaterialEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<MaterialEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(MaterialEdit::from_prim)
     }
 
     /// The USD name of [`Self::displacement`].
@@ -792,15 +797,20 @@ impl<'a> NodeGraph<'a> {
         NodeGraphEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def NodeGraph` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `NodeGraph`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `NodeGraph` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdShadeNodeGraph::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> NodeGraphEdit {
-        NodeGraphEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<NodeGraphEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(NodeGraphEdit::from_prim)
     }
 }
 
@@ -887,15 +897,20 @@ impl<'a> Shader<'a> {
         ShaderEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def Shader` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `Shader`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `Shader` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdShadeShader::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> ShaderEdit {
-        ShaderEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<ShaderEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(ShaderEdit::from_prim)
     }
 
     #[doc = "The prim's built-in `NodeDefAPI`, which every `Shader` has."]

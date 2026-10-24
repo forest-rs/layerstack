@@ -257,7 +257,7 @@ pub(crate) fn render(model: &Model, external: bool) -> Result<Vec<(String, Strin
     } else {
         crate::emit::header(model)
     };
-    out.push_str(&format!("\n//! {library} shader nodes, keyed by `info:id`.\n//! Inputs read authored values at the requested time; definition defaults are\n//! explicit associated functions. These views do not evaluate shaders or follow\n//! input connections. Port creation uses ordinary shading transactions.\n//! Spec: AOUSD Core §7.6.4.1 (typed attributes), §12.3 (value resolution),\n//! §12.4 (connections). Node identifiers and defaults are OpenUSD usdShaders definitions.\n#![allow(clippy::doc_markdown, clippy::too_long_first_doc_paragraph, reason = \"documentation is copied verbatim from OpenUSD\")]\n\n{alloc_decl}use core::ops::Deref;\n@LAYERSTACK_IMPORTS@\n{vec_import}use {schema_crate}::{{Scene, SchemaEdit}};\nuse {schema_crate}::shading::{{Port, PortEdit, PortError}};\nuse {schema_crate}::usd_shade::{{Shader, ShaderEdit, NodeDefApiImplementationSource}};\n"));
+    out.push_str(&format!("\n//! {library} shader nodes, keyed by `info:id`.\n//! Inputs read authored values at the requested time; definition defaults are\n//! explicit associated functions. These views do not evaluate shaders or follow\n//! input connections. Port creation uses ordinary shading transactions.\n//! Spec: AOUSD Core §7.6.4.1 (typed attributes), §12.3 (value resolution),\n//! §12.4 (connections). Node identifiers and defaults are OpenUSD usdShaders definitions.\n#![allow(clippy::doc_markdown, clippy::too_long_first_doc_paragraph, reason = \"documentation is copied verbatim from OpenUSD\")]\n\n{alloc_decl}use core::ops::Deref;\n@LAYERSTACK_IMPORTS@\n{vec_import}use {schema_crate}::{{CannotDefine, Scene, SchemaEdit}};\nuse {schema_crate}::shading::{{Port, PortEdit, PortError}};\nuse {schema_crate}::usd_shade::{{Shader, ShaderEdit, NodeDefApiImplementationSource}};\n"));
     // Include implementation imports and referenced prelude types in the same
     // namespace as node structs and their authoring handles.
     let mut node_names: std::collections::BTreeSet<String> = [
@@ -265,6 +265,7 @@ pub(crate) fn render(model: &Model, external: bool) -> Result<Vec<(String, Strin
         "ShaderEdit",
         "Scene",
         "SchemaEdit",
+        "CannotDefine",
         "PathId",
         "PropertyType",
         "Value",
@@ -297,7 +298,7 @@ pub(crate) fn render(model: &Model, external: bool) -> Result<Vec<(String, Strin
         let id = &node.id;
         let _ = writeln!(
             out,
-            "\n/// The {standard}`{id}` shader node.\n#[derive(Clone, Copy, Debug)]\npub struct {name}<'a> {{ shader: Shader<'a> }}\nimpl<'a> Deref for {name}<'a> {{ type Target = Shader<'a>; fn deref(&self) -> &Self::Target {{ &self.shader }} }}\nimpl<'a> {name}<'a> {{\n    /// The shader's definition identifier.\n    pub const ID: &'static str = {id:?};\n    /// Reads an identifier-based Shader whose composed `info:id` matches.\n    #[must_use]\n    pub fn new(scene: &Scene<'a>, path: impl layerstack::PrimPathArg) -> Option<Self> {{\n        let shader = Shader::new(scene, path)?;\n        let definition = shader.node_def_api();\n        (definition.id() == Some(Self::ID) && definition.implementation_source() == Some(NodeDefApiImplementationSource::Id)).then_some(Self {{ shader }})\n    }}\n    /// Defines a Shader with this node's `info:id`; inputs remain unauthored.\n    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> {name}Edit {{\n        let shader = Shader::define(edit, path);\n        shader.node_def_api().set_id(edit, Self::ID);\n        shader.node_def_api().set_implementation_source(edit, NodeDefApiImplementationSource::Id);\n        {name}Edit {{ shader }}\n    }}\n    /// An authoring handle for this validated node.\n    #[must_use]\n    pub fn edit(&self) -> {name}Edit {{ {name}Edit {{ shader: self.shader.edit() }} }}"
+            "\n/// The {standard}`{id}` shader node.\n#[derive(Clone, Copy, Debug)]\npub struct {name}<'a> {{ shader: Shader<'a> }}\nimpl<'a> Deref for {name}<'a> {{ type Target = Shader<'a>; fn deref(&self) -> &Self::Target {{ &self.shader }} }}\nimpl<'a> {name}<'a> {{\n    /// The shader's definition identifier.\n    pub const ID: &'static str = {id:?};\n    /// Reads an identifier-based Shader whose composed `info:id` matches.\n    #[must_use]\n    pub fn new(scene: &Scene<'a>, path: impl layerstack::PrimPathArg) -> Option<Self> {{\n        let shader = Shader::new(scene, path)?;\n        let definition = shader.node_def_api();\n        (definition.id() == Some(Self::ID) && definition.implementation_source() == Some(NodeDefApiImplementationSource::Id)).then_some(Self {{ shader }})\n    }}\n    /// Defines a Shader with this node's `info:id`, as [`Shader::define`] does; inputs remain unauthored.\n    ///\n    /// # Errors\n    ///\n    /// [`CannotDefine`] for a path beneath an instance or in a prototype; nothing is authored.\n    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<{name}Edit, CannotDefine> {{\n        let shader = Shader::define(edit, path)?;\n        shader.node_def_api().set_id(edit, Self::ID);\n        shader.node_def_api().set_implementation_source(edit, NodeDefApiImplementationSource::Id);\n        Ok({name}Edit {{ shader }})\n    }}\n    /// An authoring handle for this validated node.\n    #[must_use]\n    pub fn edit(&self) -> {name}Edit {{ {name}Edit {{ shader: self.shader.edit() }} }}"
         );
         let mut setters = String::new();
         let mut methods: std::collections::BTreeSet<String> = [
@@ -494,7 +495,10 @@ fn test_table(model: &Model) -> String {
         let name = crate::views::pascal(&crate::views::snake(
             node.id.strip_prefix("Usd").unwrap_or(&node.id),
         ));
-        let _ = writeln!(out, "    let node = {name}::define(edit, paths[{index}]);");
+        let _ = writeln!(
+            out,
+            "    let node = {name}::define(edit, paths[{index}]).expect(\"outside any instance\");"
+        );
         let _ = writeln!(
             comparisons,
             "    let node = {name}::new(scene, paths[{index}]).unwrap();\n    assert_eq!(node.ports(PortKind::Input).len() + node.ports(PortKind::Output).len(), expected[{:?}].as_object().unwrap().len(), \"{}: complete port inventory\");",

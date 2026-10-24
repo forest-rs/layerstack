@@ -1,0 +1,611 @@
+{
+ "before": {
+  "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\nover \"Over\"\n{\n}\n\nover Xform \"TypedOver\"\n{\n}\n\ndef \"Inactive\" (\n    active = false\n)\n{\n}\n\nover \"G\"\n{\n    over \"H\"\n    {\n    }\n}\n\nover \"OverParent\"\n{\n    def Xform \"Kid\"\n    {\n    }\n}\n\nclass \"Class\"\n{\n}\n\ndef Xform \"Instance\" (\n    instanceable = true\n    prepend references = </Prototype>\n)\n{\n}\n\ndef Xform \"Prototype\"\n{\n    def Xform \"Child\"\n    {\n    }\n}\n\n",
+  "weak.usda": "#usda 1.0\n\ndef Scope \"Typed\"\n{\n}\n\ndef Xform \"Same\"\n{\n}\n\ndef Scope \"WeakParent\"\n{\n}\n\n"
+ },
+ "cases": [
+  {
+   "name": "undefined_parent",
+   "steps": [
+    {
+     "calls": [
+      {
+       "defined": true,
+       "path": "/New/Leaf",
+       "raised": false,
+       "type": "Xform"
+      }
+     ],
+     "text": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\nover \"Over\"\n{\n}\n\nover Xform \"TypedOver\"\n{\n}\n\ndef \"Inactive\" (\n    active = false\n)\n{\n}\n\nover \"G\"\n{\n    over \"H\"\n    {\n    }\n}\n\nover \"OverParent\"\n{\n    def Xform \"Kid\"\n    {\n    }\n}\n\nclass \"Class\"\n{\n}\n\ndef Xform \"Instance\" (\n    instanceable = true\n    prepend references = </Prototype>\n)\n{\n}\n\ndef Xform \"Prototype\"\n{\n    def Xform \"Child\"\n    {\n    }\n}\n\ndef \"New\"\n{\n    def Xform \"Leaf\"\n    {\n    }\n}\n\n",
+     "traversal": [
+      "/Typed",
+      "/Same",
+      "/WeakParent",
+      "/Instance",
+      "/Prototype",
+      "/Prototype/Child",
+      "/New",
+      "/New/Leaf"
+     ]
+    }
+   ],
+   "target": "scene.usda"
+  },
+  {
+   "name": "over_in_target",
+   "steps": [
+    {
+     "calls": [
+      {
+       "defined": true,
+       "path": "/Over",
+       "raised": false,
+       "type": "Xform"
+      }
+     ],
+     "text": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Xform \"Over\"\n{\n}\n\nover Xform \"TypedOver\"\n{\n}\n\ndef \"Inactive\" (\n    active = false\n)\n{\n}\n\nover \"G\"\n{\n    over \"H\"\n    {\n    }\n}\n\nover \"OverParent\"\n{\n    def Xform \"Kid\"\n    {\n    }\n}\n\nclass \"Class\"\n{\n}\n\ndef Xform \"Instance\" (\n    instanceable = true\n    prepend references = </Prototype>\n)\n{\n}\n\ndef Xform \"Prototype\"\n{\n    def Xform \"Child\"\n    {\n    }\n}\n\n",
+     "traversal": [
+      "/Typed",
+      "/Same",
+      "/WeakParent",
+      "/Over",
+      "/Instance",
+      "/Prototype",
+      "/Prototype/Child"
+     ]
+    }
+   ],
+   "target": "scene.usda"
+  },
+  {
+   "name": "typed_over_in_target",
+   "steps": [
+    {
+     "calls": [
+      {
+       "defined": true,
+       "path": "/TypedOver",
+       "raised": false,
+       "type": "Xform"
+      }
+     ],
+     "text": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\nover \"Over\"\n{\n}\n\ndef Xform \"TypedOver\"\n{\n}\n\ndef \"Inactive\" (\n    active = false\n)\n{\n}\n\nover \"G\"\n{\n    over \"H\"\n    {\n    }\n}\n\nover \"OverParent\"\n{\n    def Xform \"Kid\"\n    {\n    }\n}\n\nclass \"Class\"\n{\n}\n\ndef Xform \"Instance\" (\n    instanceable = true\n    prepend references = </Prototype>\n)\n{\n}\n\ndef Xform \"Prototype\"\n{\n    def Xform \"Child\"\n    {\n    }\n}\n\n",
+     "traversal": [
+      "/Typed",
+      "/Same",
+      "/WeakParent",
+      "/TypedOver",
+      "/Instance",
+      "/Prototype",
+      "/Prototype/Child"
+     ]
+    }
+   ],
+   "target": "scene.usda"
+  },
+  {
+   "name": "same_type_in_sublayer",
+   "steps": [
+    {
+     "calls": [
+      {
+       "defined": true,
+       "path": "/Same",
+       "raised": false,
+       "type": "Xform"
+      }
+     ],
+     "text": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\nover \"Over\"\n{\n}\n\nover Xform \"TypedOver\"\n{\n}\n\ndef \"Inactive\" (\n    active = false\n)\n{\n}\n\nover \"G\"\n{\n    over \"H\"\n    {\n    }\n}\n\nover \"OverParent\"\n{\n    def Xform \"Kid\"\n    {\n    }\n}\n\nclass \"Class\"\n{\n}\n\ndef Xform \"Instance\" (\n    instanceable = true\n    prepend references = </Prototype>\n)\n{\n}\n\ndef Xform \"Prototype\"\n{\n    def Xform \"Child\"\n    {\n    }\n}\n\n",
+     "traversal": [
+      "/Typed",
+      "/Same",
+      "/WeakParent",
+      "/Instance",
+      "/Prototype",
+      "/Prototype/Child"
+     ]
+    }
+   ],
+   "target": "scene.usda"
+  },
+  {
+   "name": "other_type_in_sublayer",
+   "steps": [
+    {
+     "calls": [
+      {
+       "defined": true,
+       "path": "/Typed",
+       "raised": false,
+       "type": "Xform"
+      }
+     ],
+     "text": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\nover \"Over\"\n{\n}\n\nover Xform \"TypedOver\"\n{\n}\n\ndef \"Inactive\" (\n    active = false\n)\n{\n}\n\nover \"G\"\n{\n    over \"H\"\n    {\n    }\n}\n\nover \"OverParent\"\n{\n    def Xform \"Kid\"\n    {\n    }\n}\n\nclass \"Class\"\n{\n}\n\ndef Xform \"Instance\" (\n    instanceable = true\n    prepend references = </Prototype>\n)\n{\n}\n\ndef Xform \"Prototype\"\n{\n    def Xform \"Child\"\n    {\n    }\n}\n\ndef Xform \"Typed\"\n{\n}\n\n",
+     "traversal": [
+      "/Typed",
+      "/Same",
+      "/WeakParent",
+      "/Instance",
+      "/Prototype",
+      "/Prototype/Child"
+     ]
+    }
+   ],
+   "target": "scene.usda"
+  },
+  {
+   "name": "typeless_on_typed",
+   "steps": [
+    {
+     "calls": [
+      {
+       "defined": true,
+       "path": "/Typed",
+       "raised": false,
+       "type": ""
+      }
+     ],
+     "text": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\nover \"Over\"\n{\n}\n\nover Xform \"TypedOver\"\n{\n}\n\ndef \"Inactive\" (\n    active = false\n)\n{\n}\n\nover \"G\"\n{\n    over \"H\"\n    {\n    }\n}\n\nover \"OverParent\"\n{\n    def Xform \"Kid\"\n    {\n    }\n}\n\nclass \"Class\"\n{\n}\n\ndef Xform \"Instance\" (\n    instanceable = true\n    prepend references = </Prototype>\n)\n{\n}\n\ndef Xform \"Prototype\"\n{\n    def Xform \"Child\"\n    {\n    }\n}\n\n",
+     "traversal": [
+      "/Typed",
+      "/Same",
+      "/WeakParent",
+      "/Instance",
+      "/Prototype",
+      "/Prototype/Child"
+     ]
+    }
+   ],
+   "target": "scene.usda"
+  },
+  {
+   "name": "typeless_new",
+   "steps": [
+    {
+     "calls": [
+      {
+       "defined": true,
+       "path": "/Plain",
+       "raised": false,
+       "type": ""
+      }
+     ],
+     "text": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\nover \"Over\"\n{\n}\n\nover Xform \"TypedOver\"\n{\n}\n\ndef \"Inactive\" (\n    active = false\n)\n{\n}\n\nover \"G\"\n{\n    over \"H\"\n    {\n    }\n}\n\nover \"OverParent\"\n{\n    def Xform \"Kid\"\n    {\n    }\n}\n\nclass \"Class\"\n{\n}\n\ndef Xform \"Instance\" (\n    instanceable = true\n    prepend references = </Prototype>\n)\n{\n}\n\ndef Xform \"Prototype\"\n{\n    def Xform \"Child\"\n    {\n    }\n}\n\ndef \"Plain\"\n{\n}\n\n",
+     "traversal": [
+      "/Typed",
+      "/Same",
+      "/WeakParent",
+      "/Instance",
+      "/Prototype",
+      "/Prototype/Child",
+      "/Plain"
+     ]
+    }
+   ],
+   "target": "scene.usda"
+  },
+  {
+   "name": "under_sublayer_def",
+   "steps": [
+    {
+     "calls": [
+      {
+       "defined": true,
+       "path": "/WeakParent/Child",
+       "raised": false,
+       "type": "Xform"
+      }
+     ],
+     "text": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\nover \"Over\"\n{\n}\n\nover Xform \"TypedOver\"\n{\n}\n\ndef \"Inactive\" (\n    active = false\n)\n{\n}\n\nover \"G\"\n{\n    over \"H\"\n    {\n    }\n}\n\nover \"OverParent\"\n{\n    def Xform \"Kid\"\n    {\n    }\n}\n\nclass \"Class\"\n{\n}\n\ndef Xform \"Instance\" (\n    instanceable = true\n    prepend references = </Prototype>\n)\n{\n}\n\ndef Xform \"Prototype\"\n{\n    def Xform \"Child\"\n    {\n    }\n}\n\nover \"WeakParent\"\n{\n    def Xform \"Child\"\n    {\n    }\n}\n\n",
+     "traversal": [
+      "/Typed",
+      "/Same",
+      "/WeakParent",
+      "/WeakParent/Child",
+      "/Instance",
+      "/Prototype",
+      "/Prototype/Child"
+     ]
+    }
+   ],
+   "target": "scene.usda"
+  },
+  {
+   "name": "over_only_ancestors",
+   "steps": [
+    {
+     "calls": [
+      {
+       "defined": true,
+       "path": "/G/H/I",
+       "raised": false,
+       "type": "Xform"
+      }
+     ],
+     "text": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\nover \"Over\"\n{\n}\n\nover Xform \"TypedOver\"\n{\n}\n\ndef \"Inactive\" (\n    active = false\n)\n{\n}\n\ndef \"G\"\n{\n    def \"H\"\n    {\n        def Xform \"I\"\n        {\n        }\n    }\n}\n\nover \"OverParent\"\n{\n    def Xform \"Kid\"\n    {\n    }\n}\n\nclass \"Class\"\n{\n}\n\ndef Xform \"Instance\" (\n    instanceable = true\n    prepend references = </Prototype>\n)\n{\n}\n\ndef Xform \"Prototype\"\n{\n    def Xform \"Child\"\n    {\n    }\n}\n\n",
+     "traversal": [
+      "/Typed",
+      "/Same",
+      "/WeakParent",
+      "/G",
+      "/G/H",
+      "/G/H/I",
+      "/Instance",
+      "/Prototype",
+      "/Prototype/Child"
+     ]
+    }
+   ],
+   "target": "scene.usda"
+  },
+  {
+   "name": "defined_child_of_over",
+   "steps": [
+    {
+     "calls": [
+      {
+       "defined": true,
+       "path": "/OverParent/Kid",
+       "raised": false,
+       "type": "Xform"
+      }
+     ],
+     "text": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\nover \"Over\"\n{\n}\n\nover Xform \"TypedOver\"\n{\n}\n\ndef \"Inactive\" (\n    active = false\n)\n{\n}\n\nover \"G\"\n{\n    over \"H\"\n    {\n    }\n}\n\ndef \"OverParent\"\n{\n    def Xform \"Kid\"\n    {\n    }\n}\n\nclass \"Class\"\n{\n}\n\ndef Xform \"Instance\" (\n    instanceable = true\n    prepend references = </Prototype>\n)\n{\n}\n\ndef Xform \"Prototype\"\n{\n    def Xform \"Child\"\n    {\n    }\n}\n\n",
+     "traversal": [
+      "/Typed",
+      "/Same",
+      "/WeakParent",
+      "/OverParent",
+      "/OverParent/Kid",
+      "/Instance",
+      "/Prototype",
+      "/Prototype/Child"
+     ]
+    }
+   ],
+   "target": "scene.usda"
+  },
+  {
+   "name": "under_class",
+   "steps": [
+    {
+     "calls": [
+      {
+       "defined": true,
+       "path": "/Class/Member",
+       "raised": false,
+       "type": "Xform"
+      }
+     ],
+     "text": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\nover \"Over\"\n{\n}\n\nover Xform \"TypedOver\"\n{\n}\n\ndef \"Inactive\" (\n    active = false\n)\n{\n}\n\nover \"G\"\n{\n    over \"H\"\n    {\n    }\n}\n\nover \"OverParent\"\n{\n    def Xform \"Kid\"\n    {\n    }\n}\n\nclass \"Class\"\n{\n    def Xform \"Member\"\n    {\n    }\n}\n\ndef Xform \"Instance\" (\n    instanceable = true\n    prepend references = </Prototype>\n)\n{\n}\n\ndef Xform \"Prototype\"\n{\n    def Xform \"Child\"\n    {\n    }\n}\n\n",
+     "traversal": [
+      "/Typed",
+      "/Same",
+      "/WeakParent",
+      "/Instance",
+      "/Prototype",
+      "/Prototype/Child"
+     ]
+    }
+   ],
+   "target": "scene.usda"
+  },
+  {
+   "name": "below_inactive",
+   "steps": [
+    {
+     "calls": [
+      {
+       "defined": false,
+       "path": "/Inactive/Child",
+       "raised": true,
+       "type": "Xform"
+      }
+     ],
+     "text": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\nover \"Over\"\n{\n}\n\nover Xform \"TypedOver\"\n{\n}\n\ndef \"Inactive\" (\n    active = false\n)\n{\n    def Xform \"Child\"\n    {\n    }\n}\n\nover \"G\"\n{\n    over \"H\"\n    {\n    }\n}\n\nover \"OverParent\"\n{\n    def Xform \"Kid\"\n    {\n    }\n}\n\nclass \"Class\"\n{\n}\n\ndef Xform \"Instance\" (\n    instanceable = true\n    prepend references = </Prototype>\n)\n{\n}\n\ndef Xform \"Prototype\"\n{\n    def Xform \"Child\"\n    {\n    }\n}\n\n",
+     "traversal": [
+      "/Typed",
+      "/Same",
+      "/WeakParent",
+      "/Instance",
+      "/Prototype",
+      "/Prototype/Child"
+     ]
+    }
+   ],
+   "target": "scene.usda"
+  },
+  {
+   "name": "instance_root",
+   "steps": [
+    {
+     "calls": [
+      {
+       "defined": true,
+       "path": "/Instance",
+       "raised": false,
+       "type": "Scope"
+      }
+     ],
+     "text": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\nover \"Over\"\n{\n}\n\nover Xform \"TypedOver\"\n{\n}\n\ndef \"Inactive\" (\n    active = false\n)\n{\n}\n\nover \"G\"\n{\n    over \"H\"\n    {\n    }\n}\n\nover \"OverParent\"\n{\n    def Xform \"Kid\"\n    {\n    }\n}\n\nclass \"Class\"\n{\n}\n\ndef Scope \"Instance\" (\n    instanceable = true\n    prepend references = </Prototype>\n)\n{\n}\n\ndef Xform \"Prototype\"\n{\n    def Xform \"Child\"\n    {\n    }\n}\n\n",
+     "traversal": [
+      "/Typed",
+      "/Same",
+      "/WeakParent",
+      "/Instance",
+      "/Prototype",
+      "/Prototype/Child"
+     ]
+    }
+   ],
+   "target": "scene.usda"
+  },
+  {
+   "name": "instance_proxy",
+   "steps": [
+    {
+     "calls": [
+      {
+       "defined": false,
+       "path": "/Instance/Child",
+       "raised": true,
+       "type": "Xform"
+      }
+     ],
+     "text": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\nover \"Over\"\n{\n}\n\nover Xform \"TypedOver\"\n{\n}\n\ndef \"Inactive\" (\n    active = false\n)\n{\n}\n\nover \"G\"\n{\n    over \"H\"\n    {\n    }\n}\n\nover \"OverParent\"\n{\n    def Xform \"Kid\"\n    {\n    }\n}\n\nclass \"Class\"\n{\n}\n\ndef Xform \"Instance\" (\n    instanceable = true\n    prepend references = </Prototype>\n)\n{\n}\n\ndef Xform \"Prototype\"\n{\n    def Xform \"Child\"\n    {\n    }\n}\n\n",
+     "traversal": [
+      "/Typed",
+      "/Same",
+      "/WeakParent",
+      "/Instance",
+      "/Prototype",
+      "/Prototype/Child"
+     ]
+    }
+   ],
+   "target": "scene.usda"
+  },
+  {
+   "name": "beneath_instance",
+   "steps": [
+    {
+     "calls": [
+      {
+       "defined": false,
+       "path": "/Instance/New",
+       "raised": true,
+       "type": "Xform"
+      }
+     ],
+     "text": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\nover \"Over\"\n{\n}\n\nover Xform \"TypedOver\"\n{\n}\n\ndef \"Inactive\" (\n    active = false\n)\n{\n}\n\nover \"G\"\n{\n    over \"H\"\n    {\n    }\n}\n\nover \"OverParent\"\n{\n    def Xform \"Kid\"\n    {\n    }\n}\n\nclass \"Class\"\n{\n}\n\ndef Xform \"Instance\" (\n    instanceable = true\n    prepend references = </Prototype>\n)\n{\n}\n\ndef Xform \"Prototype\"\n{\n    def Xform \"Child\"\n    {\n    }\n}\n\n",
+     "traversal": [
+      "/Typed",
+      "/Same",
+      "/WeakParent",
+      "/Instance",
+      "/Prototype",
+      "/Prototype/Child"
+     ]
+    }
+   ],
+   "target": "scene.usda"
+  },
+  {
+   "name": "in_prototype",
+   "steps": [
+    {
+     "calls": [
+      {
+       "defined": false,
+       "path": "/__Prototype_1/Child",
+       "raised": true,
+       "type": "Xform"
+      }
+     ],
+     "text": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\nover \"Over\"\n{\n}\n\nover Xform \"TypedOver\"\n{\n}\n\ndef \"Inactive\" (\n    active = false\n)\n{\n}\n\nover \"G\"\n{\n    over \"H\"\n    {\n    }\n}\n\nover \"OverParent\"\n{\n    def Xform \"Kid\"\n    {\n    }\n}\n\nclass \"Class\"\n{\n}\n\ndef Xform \"Instance\" (\n    instanceable = true\n    prepend references = </Prototype>\n)\n{\n}\n\ndef Xform \"Prototype\"\n{\n    def Xform \"Child\"\n    {\n    }\n}\n\n",
+     "traversal": [
+      "/Typed",
+      "/Same",
+      "/WeakParent",
+      "/Instance",
+      "/Prototype",
+      "/Prototype/Child"
+     ]
+    }
+   ],
+   "target": "scene.usda"
+  },
+  {
+   "name": "pseudo_root",
+   "steps": [
+    {
+     "calls": [
+      {
+       "defined": true,
+       "path": "/",
+       "raised": false,
+       "type": "Xform"
+      }
+     ],
+     "text": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\nover \"Over\"\n{\n}\n\nover Xform \"TypedOver\"\n{\n}\n\ndef \"Inactive\" (\n    active = false\n)\n{\n}\n\nover \"G\"\n{\n    over \"H\"\n    {\n    }\n}\n\nover \"OverParent\"\n{\n    def Xform \"Kid\"\n    {\n    }\n}\n\nclass \"Class\"\n{\n}\n\ndef Xform \"Instance\" (\n    instanceable = true\n    prepend references = </Prototype>\n)\n{\n}\n\ndef Xform \"Prototype\"\n{\n    def Xform \"Child\"\n    {\n    }\n}\n\n",
+     "traversal": [
+      "/Typed",
+      "/Same",
+      "/WeakParent",
+      "/Instance",
+      "/Prototype",
+      "/Prototype/Child"
+     ]
+    }
+   ],
+   "target": "scene.usda"
+  },
+  {
+   "name": "sublayer_target",
+   "steps": [
+    {
+     "calls": [
+      {
+       "defined": true,
+       "path": "/Over/Deep",
+       "raised": false,
+       "type": "Xform"
+      }
+     ],
+     "text": "#usda 1.0\n\ndef Scope \"Typed\"\n{\n}\n\ndef Xform \"Same\"\n{\n}\n\ndef Scope \"WeakParent\"\n{\n}\n\ndef \"Over\"\n{\n    def Xform \"Deep\"\n    {\n    }\n}\n\n",
+     "traversal": [
+      "/Typed",
+      "/Same",
+      "/WeakParent",
+      "/Over",
+      "/Over/Deep",
+      "/Instance",
+      "/Prototype",
+      "/Prototype/Child"
+     ]
+    }
+   ],
+   "target": "weak.usda"
+  },
+  {
+   "name": "one_edit",
+   "steps": [
+    {
+     "calls": [
+      {
+       "defined": true,
+       "path": "/Seq/A",
+       "raised": false,
+       "type": "Xform"
+      },
+      {
+       "defined": true,
+       "path": "/Seq/A/B",
+       "raised": false,
+       "type": "Scope"
+      },
+      {
+       "defined": true,
+       "path": "/Seq/A",
+       "raised": false,
+       "type": "Xform"
+      },
+      {
+       "defined": true,
+       "path": "/Seq/A",
+       "raised": false,
+       "type": "Scope"
+      },
+      {
+       "defined": true,
+       "path": "/Seq",
+       "raised": false,
+       "type": ""
+      }
+     ],
+     "text": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\nover \"Over\"\n{\n}\n\nover Xform \"TypedOver\"\n{\n}\n\ndef \"Inactive\" (\n    active = false\n)\n{\n}\n\nover \"G\"\n{\n    over \"H\"\n    {\n    }\n}\n\nover \"OverParent\"\n{\n    def Xform \"Kid\"\n    {\n    }\n}\n\nclass \"Class\"\n{\n}\n\ndef Xform \"Instance\" (\n    instanceable = true\n    prepend references = </Prototype>\n)\n{\n}\n\ndef Xform \"Prototype\"\n{\n    def Xform \"Child\"\n    {\n    }\n}\n\ndef \"Seq\"\n{\n    def Scope \"A\"\n    {\n        def Scope \"B\"\n        {\n        }\n    }\n}\n\n",
+     "traversal": [
+      "/Typed",
+      "/Same",
+      "/WeakParent",
+      "/Instance",
+      "/Prototype",
+      "/Prototype/Child",
+      "/Seq",
+      "/Seq/A",
+      "/Seq/A/B"
+     ]
+    }
+   ],
+   "target": "scene.usda"
+  },
+  {
+   "name": "call_by_call",
+   "steps": [
+    {
+     "calls": [
+      {
+       "defined": true,
+       "path": "/Again",
+       "raised": false,
+       "type": "Xform"
+      }
+     ],
+     "text": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\nover \"Over\"\n{\n}\n\nover Xform \"TypedOver\"\n{\n}\n\ndef \"Inactive\" (\n    active = false\n)\n{\n}\n\nover \"G\"\n{\n    over \"H\"\n    {\n    }\n}\n\nover \"OverParent\"\n{\n    def Xform \"Kid\"\n    {\n    }\n}\n\nclass \"Class\"\n{\n}\n\ndef Xform \"Instance\" (\n    instanceable = true\n    prepend references = </Prototype>\n)\n{\n}\n\ndef Xform \"Prototype\"\n{\n    def Xform \"Child\"\n    {\n    }\n}\n\ndef Xform \"Again\"\n{\n}\n\n",
+     "traversal": [
+      "/Typed",
+      "/Same",
+      "/WeakParent",
+      "/Instance",
+      "/Prototype",
+      "/Prototype/Child",
+      "/Again"
+     ]
+    },
+    {
+     "calls": [
+      {
+       "defined": true,
+       "path": "/Again",
+       "raised": false,
+       "type": "Xform"
+      }
+     ],
+     "text": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\nover \"Over\"\n{\n}\n\nover Xform \"TypedOver\"\n{\n}\n\ndef \"Inactive\" (\n    active = false\n)\n{\n}\n\nover \"G\"\n{\n    over \"H\"\n    {\n    }\n}\n\nover \"OverParent\"\n{\n    def Xform \"Kid\"\n    {\n    }\n}\n\nclass \"Class\"\n{\n}\n\ndef Xform \"Instance\" (\n    instanceable = true\n    prepend references = </Prototype>\n)\n{\n}\n\ndef Xform \"Prototype\"\n{\n    def Xform \"Child\"\n    {\n    }\n}\n\ndef Xform \"Again\"\n{\n}\n\n",
+     "traversal": [
+      "/Typed",
+      "/Same",
+      "/WeakParent",
+      "/Instance",
+      "/Prototype",
+      "/Prototype/Child",
+      "/Again"
+     ]
+    },
+    {
+     "calls": [
+      {
+       "defined": true,
+       "path": "/Again",
+       "raised": false,
+       "type": "Scope"
+      }
+     ],
+     "text": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\nover \"Over\"\n{\n}\n\nover Xform \"TypedOver\"\n{\n}\n\ndef \"Inactive\" (\n    active = false\n)\n{\n}\n\nover \"G\"\n{\n    over \"H\"\n    {\n    }\n}\n\nover \"OverParent\"\n{\n    def Xform \"Kid\"\n    {\n    }\n}\n\nclass \"Class\"\n{\n}\n\ndef Xform \"Instance\" (\n    instanceable = true\n    prepend references = </Prototype>\n)\n{\n}\n\ndef Xform \"Prototype\"\n{\n    def Xform \"Child\"\n    {\n    }\n}\n\ndef Scope \"Again\"\n{\n}\n\n",
+     "traversal": [
+      "/Typed",
+      "/Same",
+      "/WeakParent",
+      "/Instance",
+      "/Prototype",
+      "/Prototype/Child",
+      "/Again"
+     ]
+    },
+    {
+     "calls": [
+      {
+       "defined": true,
+       "path": "/Again/Child",
+       "raised": false,
+       "type": ""
+      }
+     ],
+     "text": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\nover \"Over\"\n{\n}\n\nover Xform \"TypedOver\"\n{\n}\n\ndef \"Inactive\" (\n    active = false\n)\n{\n}\n\nover \"G\"\n{\n    over \"H\"\n    {\n    }\n}\n\nover \"OverParent\"\n{\n    def Xform \"Kid\"\n    {\n    }\n}\n\nclass \"Class\"\n{\n}\n\ndef Xform \"Instance\" (\n    instanceable = true\n    prepend references = </Prototype>\n)\n{\n}\n\ndef Xform \"Prototype\"\n{\n    def Xform \"Child\"\n    {\n    }\n}\n\ndef Scope \"Again\"\n{\n    def \"Child\"\n    {\n    }\n}\n\n",
+     "traversal": [
+      "/Typed",
+      "/Same",
+      "/WeakParent",
+      "/Instance",
+      "/Prototype",
+      "/Prototype/Child",
+      "/Again",
+      "/Again/Child"
+     ]
+    }
+   ],
+   "target": "scene.usda"
+  }
+ ],
+ "openusd_version": "26.8"
+}

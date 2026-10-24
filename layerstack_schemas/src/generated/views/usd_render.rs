@@ -22,7 +22,7 @@ use core::ops::Deref;
 
 use layerstack::PathId;
 
-use crate::{PrimEdit, PrimView, Scene, SchemaEdit};
+use crate::{CannotDefine, PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "Represents the renderer and scene configuration for a single render pass in a multi-pass rendering workflow."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `RenderPass`, inheriting [`crate::usd::Typed`]. Construct it with [`RenderPass::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
@@ -73,15 +73,20 @@ impl<'a> RenderPass<'a> {
         RenderPassEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def RenderPass` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `RenderPass`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `RenderPass` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdRenderPass::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> RenderPassEdit {
-        RenderPassEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<RenderPassEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(RenderPassEdit::from_prim)
     }
 
     /// The USD name of [`Self::command`].
@@ -413,15 +418,23 @@ impl<'a> RenderProduct<'a> {
         RenderProductEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def RenderProduct` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `RenderProduct`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `RenderProduct` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdRenderProduct::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> RenderProductEdit {
-        RenderProductEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(
+        edit: &mut SchemaEdit<'_>,
+        path: PathId,
+    ) -> Result<RenderProductEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(RenderProductEdit::from_prim)
     }
 
     /// The USD name of [`Self::ordered_vars`].
@@ -631,15 +644,23 @@ impl<'a> RenderSettings<'a> {
         RenderSettingsEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def RenderSettings` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `RenderSettings`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `RenderSettings` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdRenderSettings::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> RenderSettingsEdit {
-        RenderSettingsEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(
+        edit: &mut SchemaEdit<'_>,
+        path: PathId,
+    ) -> Result<RenderSettingsEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(RenderSettingsEdit::from_prim)
     }
 
     /// The USD name of [`Self::included_purposes`].
@@ -1335,15 +1356,20 @@ impl<'a> RenderVar<'a> {
         RenderVarEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def RenderVar` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `RenderVar`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `RenderVar` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdRenderVar::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> RenderVarEdit {
-        RenderVarEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<RenderVarEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(RenderVarEdit::from_prim)
     }
 
     /// The USD name of [`Self::data_type`].

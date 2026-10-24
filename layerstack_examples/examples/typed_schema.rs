@@ -56,8 +56,9 @@ fn main() {
     // --- The base layer: define the robot. ---
     let base = EditTarget::for_layer(LayerId(2));
     let mut edit = SchemaEdit::new(live.stage(), &mut store, base);
-    Xform::define(&mut edit, robot);
+    Xform::define(&mut edit, robot).expect("outside any instance");
     Mesh::define(&mut edit, arm)
+        .expect("outside any instance")
         .set_face_vertex_counts(&mut edit, &[4])
         .set_face_vertex_indices(&mut edit, &[0, 1, 2, 3])
         .set_points(
@@ -92,6 +93,7 @@ fn main() {
         swing.set_at(&mut edit, time, degrees).expect("degrees");
     }
     SphereLight::define(&mut edit, key)
+        .expect("outside any instance")
         .set_radius(&mut edit, 0.25)
         .light_api()
         .set_intensity(&mut edit, 800.0)

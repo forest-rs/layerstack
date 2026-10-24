@@ -174,11 +174,13 @@ fn captures_owned_uniform_and_sampled_inputs() {
     let path = store.path("/Distance");
     let spath = store.path("/Screen");
     let mut edit = SchemaEdit::new(stage.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-    let handle = LODDistanceHeuristic::define(&mut edit, path);
+    let handle = LODDistanceHeuristic::define(&mut edit, path).expect("outside any instance");
     handle.set_lod_domain(&mut edit, "imaging");
     handle.set_thresholds(&mut edit, &[10., 20.]);
     handle.set_center_at(&mut edit, 1., [1., 2., 3.]);
-    LODScreenSizeHeuristic::define(&mut edit, spath).set_lod_domain(&mut edit, "imaging");
+    LODScreenSizeHeuristic::define(&mut edit, spath)
+        .expect("outside any instance")
+        .set_lod_domain(&mut edit, "imaging");
     let transaction = edit.finish();
     stage.apply(&mut store, &transaction).unwrap();
     let scene = Scene::new(stage.stage(), &store);
@@ -219,11 +221,11 @@ fn capture_samples_uniform_settings_at_requested_time() {
     let distance = store.path("/Distance");
     let screen = store.path("/Screen");
     let mut edit = SchemaEdit::new(stage.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-    let d = LODDistanceHeuristic::define(&mut edit, distance);
+    let d = LODDistanceHeuristic::define(&mut edit, distance).expect("outside any instance");
     d.set_thresholds(&mut edit, &[10.]);
     d.set_blend_thresholds(&mut edit, &[20.]);
     d.set_lod_domain(&mut edit, "default");
-    let s = LODScreenSizeHeuristic::define(&mut edit, screen);
+    let s = LODScreenSizeHeuristic::define(&mut edit, screen).expect("outside any instance");
     s.set_thresholds(&mut edit, &[0.5]);
     s.set_blend_thresholds(&mut edit, &[0.4]);
     s.set_lod_domain(&mut edit, "default");

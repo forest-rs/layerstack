@@ -38,24 +38,26 @@ fn captures_scaled_shapes_bodies_scene_defaults_and_graph() {
     let joint = store.path("/World/Joint");
     let physics = store.path("/World/Scene");
     let mut edit = SchemaEdit::new(stage.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-    Xform::define(&mut edit, root);
-    Xform::define(&mut edit, a);
-    Xform::define(&mut edit, b);
+    Xform::define(&mut edit, root).expect("outside any instance");
+    Xform::define(&mut edit, a).expect("outside any instance");
+    Xform::define(&mut edit, b).expect("outside any instance");
     PhysicsRigidBodyApi::apply(&mut edit, a).unwrap();
     PhysicsRigidBodyApi::apply(&mut edit, b).unwrap();
-    let c = Cube::define(&mut edit, cube);
+    let c = Cube::define(&mut edit, cube).expect("outside any instance");
     c.set_size(&mut edit, 4.);
     c.add_scale_op(&mut edit, XformOpPrecision::Double)
         .unwrap()
         .set(&mut edit, [2., 3., 4.])
         .unwrap();
     PhysicsCollisionApi::apply(&mut edit, cube).unwrap();
-    Sphere::define(&mut edit, sphere).set_radius(&mut edit, 2.);
+    Sphere::define(&mut edit, sphere)
+        .expect("outside any instance")
+        .set_radius(&mut edit, 2.);
     PhysicsCollisionApi::apply(&mut edit, sphere).unwrap();
-    let j = PhysicsFixedJoint::define(&mut edit, joint);
+    let j = PhysicsFixedJoint::define(&mut edit, joint).expect("outside any instance");
     j.set_body0(&mut edit, &[TargetPath::Prim(a)]);
     j.set_body1(&mut edit, &[TargetPath::Prim(b)]);
-    PhysicsScene::define(&mut edit, physics);
+    PhysicsScene::define(&mut edit, physics).expect("outside any instance");
     PhysicsArticulationRootApi::apply(&mut edit, root).unwrap();
     let transaction = edit.finish();
     stage.apply(&mut store, &transaction).unwrap();
@@ -123,13 +125,13 @@ fn scope_exclusions_and_owner_filter_follow_body_for_attached_shapes() {
     let s2 = store.path("/S2");
     let material = store.path("/World/Material");
     let mut edit = SchemaEdit::new(stage.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-    Xform::define(&mut edit, root);
-    Xform::define(&mut edit, a);
-    Xform::define(&mut edit, b);
-    Sphere::define(&mut edit, shape);
-    Sphere::define(&mut edit, static_shape);
-    PhysicsScene::define(&mut edit, s1);
-    PhysicsScene::define(&mut edit, s2);
+    Xform::define(&mut edit, root).expect("outside any instance");
+    Xform::define(&mut edit, a).expect("outside any instance");
+    Xform::define(&mut edit, b).expect("outside any instance");
+    Sphere::define(&mut edit, shape).expect("outside any instance");
+    Sphere::define(&mut edit, static_shape).expect("outside any instance");
+    PhysicsScene::define(&mut edit, s1).expect("outside any instance");
+    PhysicsScene::define(&mut edit, s2).expect("outside any instance");
     PhysicsRigidBodyApi::apply(&mut edit, a)
         .unwrap()
         .set_simulation_owner(&mut edit, &[TargetPath::Prim(s1)]);
@@ -140,10 +142,11 @@ fn scope_exclusions_and_owner_filter_follow_body_for_attached_shapes() {
         .unwrap()
         .set_simulation_owner(&mut edit, &[TargetPath::Prim(s2)]);
     PhysicsCollisionApi::apply(&mut edit, static_shape).unwrap();
-    let j = PhysicsFixedJoint::define(&mut edit, joint);
+    let j = PhysicsFixedJoint::define(&mut edit, joint).expect("outside any instance");
     j.set_body0(&mut edit, &[TargetPath::Prim(a)]);
     j.set_body1(&mut edit, &[TargetPath::Prim(b)]);
-    edit.define_prim(material, "Material");
+    edit.define_prim(material, "Material")
+        .expect("outside any instance");
     PhysicsMaterialApi::apply(&mut edit, material).unwrap();
     let transaction = edit.finish();
     stage.apply(&mut store, &transaction).unwrap();
@@ -215,8 +218,8 @@ fn unsupported_collisions_and_nested_articulations_retain_errors() {
     let root = store.path("/Root");
     let bad = store.path("/Root/Bad");
     let mut edit = SchemaEdit::new(stage.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-    Xform::define(&mut edit, root);
-    Xform::define(&mut edit, bad);
+    Xform::define(&mut edit, root).expect("outside any instance");
+    Xform::define(&mut edit, bad).expect("outside any instance");
     PhysicsCollisionApi::apply(&mut edit, bad).unwrap();
     PhysicsArticulationRootApi::apply(&mut edit, root).unwrap();
     PhysicsArticulationRootApi::apply(&mut edit, bad).unwrap();
@@ -263,28 +266,35 @@ fn joint_limits_drives_and_descendant_anchor_conversion() {
     let spherical = store.path("/Root/Spherical");
     let d6 = store.path("/Root/D6");
     let mut edit = SchemaEdit::new(stage.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-    Xform::define(&mut edit, root);
-    let b = Xform::define(&mut edit, body);
+    Xform::define(&mut edit, root).expect("outside any instance");
+    let b = Xform::define(&mut edit, body).expect("outside any instance");
     b.add_scale_op(&mut edit, XformOpPrecision::Double)
         .unwrap()
         .set(&mut edit, [2., 3., 4.])
         .unwrap();
     PhysicsRigidBodyApi::apply(&mut edit, body).unwrap();
     Xform::define(&mut edit, anchor)
+        .expect("outside any instance")
         .add_translate_op(&mut edit, XformOpPrecision::Double)
         .unwrap()
         .set(&mut edit, [1., 2., 3.])
         .unwrap();
-    let j = PhysicsFixedJoint::define(&mut edit, fixed);
+    let j = PhysicsFixedJoint::define(&mut edit, fixed).expect("outside any instance");
     j.set_body0(&mut edit, &[TargetPath::Prim(anchor)]);
     j.set_local_pos0(&mut edit, [0.5; 3]);
-    PhysicsRevoluteJoint::define(&mut edit, revolute).set_lower_limit(&mut edit, -30.);
-    PhysicsPrismaticJoint::define(&mut edit, prismatic).set_lower_limit(&mut edit, -30.);
-    PhysicsDistanceJoint::define(&mut edit, distance).set_min_distance(&mut edit, 2.);
-    let j = PhysicsSphericalJoint::define(&mut edit, spherical);
+    PhysicsRevoluteJoint::define(&mut edit, revolute)
+        .expect("outside any instance")
+        .set_lower_limit(&mut edit, -30.);
+    PhysicsPrismaticJoint::define(&mut edit, prismatic)
+        .expect("outside any instance")
+        .set_lower_limit(&mut edit, -30.);
+    PhysicsDistanceJoint::define(&mut edit, distance)
+        .expect("outside any instance")
+        .set_min_distance(&mut edit, 2.);
+    let j = PhysicsSphericalJoint::define(&mut edit, spherical).expect("outside any instance");
     j.set_cone_angle0_limit(&mut edit, 20.);
     j.set_cone_angle1_limit(&mut edit, 40.);
-    PhysicsJoint::define(&mut edit, d6);
+    PhysicsJoint::define(&mut edit, d6).expect("outside any instance");
     let l = PhysicsLimitApi::apply(&mut edit, d6, "transX").unwrap();
     l.set_low(&mut edit, 1.);
     l.set_high(&mut edit, -1.);
@@ -382,17 +392,18 @@ fn mesh_points_group_and_material_capture_are_owned_and_checked() {
     let group = store.path("/Root/Group");
     let bad = store.path("/Root/BadMesh");
     let mut edit = SchemaEdit::new(stage.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-    Xform::define(&mut edit, root);
-    let m = Mesh::define(&mut edit, mesh);
+    Xform::define(&mut edit, root).expect("outside any instance");
+    let m = Mesh::define(&mut edit, mesh).expect("outside any instance");
     m.set_points(&mut edit, &[[0., 0., 0.], [1., 0., 0.], [0., 1., 0.]]);
     m.set_face_vertex_counts(&mut edit, &[3]);
     m.set_face_vertex_indices(&mut edit, &[0, 1, 2]);
     PhysicsCollisionApi::apply(&mut edit, mesh).unwrap();
-    let p = Points::define(&mut edit, points);
+    let p = Points::define(&mut edit, points).expect("outside any instance");
     p.set_points(&mut edit, &[[0., 0., 0.], [1., 1., 1.]]);
     p.set_widths(&mut edit, &[2., 4.]);
     PhysicsCollisionApi::apply(&mut edit, points).unwrap();
-    edit.define_prim(material, "Material");
+    edit.define_prim(material, "Material")
+        .expect("outside any instance");
     PhysicsMaterialApi::apply(&mut edit, material)
         .unwrap()
         .set_density(&mut edit, 5.);
@@ -406,14 +417,14 @@ fn mesh_points_group_and_material_capture_are_owned_and_checked() {
             &[TargetPath::Prim(material)],
         );
     }
-    PhysicsCollisionGroup::define(&mut edit, group);
+    PhysicsCollisionGroup::define(&mut edit, group).expect("outside any instance");
     CollectionApi::apply(&mut edit, group, "colliders")
         .unwrap()
         .set_includes(
             &mut edit,
             &[TargetPath::Prim(mesh), TargetPath::Prim(points)],
         );
-    let b = Mesh::define(&mut edit, bad);
+    let b = Mesh::define(&mut edit, bad).expect("outside any instance");
     b.set_points(&mut edit, &[[0.; 3]]);
     b.set_face_vertex_counts(&mut edit, &[3]);
     b.set_face_vertex_indices(&mut edit, &[0]);
@@ -491,7 +502,7 @@ fn mixed_material_api_order_matches_native_parser_classification() {
     let material_first = store.path("/MaterialFirst");
     let mut edit = SchemaEdit::new(stage.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
     for path in [body_first, material_first] {
-        Sphere::define(&mut edit, path);
+        Sphere::define(&mut edit, path).expect("outside any instance");
         if path == material_first {
             PhysicsMaterialApi::apply(&mut edit, path).unwrap();
         }
@@ -548,25 +559,25 @@ fn world_scaled_shape_dimension_overflow_is_explicit() {
     let capsule = store.path("/Capsule");
     let points = store.path("/Points");
     let mut edit = SchemaEdit::new(stage.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-    let s = Sphere::define(&mut edit, sphere);
+    let s = Sphere::define(&mut edit, sphere).expect("outside any instance");
     s.set_radius(&mut edit, 1e30);
     s.add_scale_op(&mut edit, XformOpPrecision::Double)
         .unwrap()
         .set(&mut edit, [1e20; 3])
         .unwrap();
-    let c = Cube::define(&mut edit, cube);
+    let c = Cube::define(&mut edit, cube).expect("outside any instance");
     c.set_size(&mut edit, 1e30);
     c.add_scale_op(&mut edit, XformOpPrecision::Double)
         .unwrap()
         .set(&mut edit, [1e20; 3])
         .unwrap();
-    let c = Capsule::define(&mut edit, capsule);
+    let c = Capsule::define(&mut edit, capsule).expect("outside any instance");
     c.set_radius(&mut edit, 1e30);
     c.add_scale_op(&mut edit, XformOpPrecision::Double)
         .unwrap()
         .set(&mut edit, [1e20; 3])
         .unwrap();
-    let p = Points::define(&mut edit, points);
+    let p = Points::define(&mut edit, points).expect("outside any instance");
     p.set_points(&mut edit, &[[0.; 3]]);
     p.set_widths(&mut edit, &[1e30]);
     p.add_scale_op(&mut edit, XformOpPrecision::Double)
@@ -606,8 +617,12 @@ fn large_finite_rotation_and_gravity_are_normalized_without_overflow() {
     let physics = store.path("/Scene");
     let joint = store.path("/Joint");
     let mut edit = SchemaEdit::new(stage.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-    PhysicsScene::define(&mut edit, physics).set_gravity_direction(&mut edit, [1e30, 0., 0.]);
-    PhysicsFixedJoint::define(&mut edit, joint).set_local_rot0(&mut edit, [1e30, 0., 0., 0.]);
+    PhysicsScene::define(&mut edit, physics)
+        .expect("outside any instance")
+        .set_gravity_direction(&mut edit, [1e30, 0., 0.]);
+    PhysicsFixedJoint::define(&mut edit, joint)
+        .expect("outside any instance")
+        .set_local_rot0(&mut edit, [1e30, 0., 0., 0.]);
     let transaction = edit.finish();
     stage.apply(&mut store, &transaction).unwrap();
     let snapshot = PhysicsSceneSnapshot::capture(
@@ -639,7 +654,7 @@ fn units_that_underflow_physics_descriptor_precision_are_errors() {
     let (mut store, mut stage) = setup_with_units(1e-100);
     let physics = store.path("/Scene");
     let mut edit = SchemaEdit::new(stage.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-    PhysicsScene::define(&mut edit, physics);
+    PhysicsScene::define(&mut edit, physics).expect("outside any instance");
     let transaction = edit.finish();
     stage.apply(&mut store, &transaction).unwrap();
     let snapshot = PhysicsSceneSnapshot::capture(
@@ -668,17 +683,19 @@ fn articulation_joint_root_ties_use_lexical_body_order_and_errors_survive_owners
     let ja = store.path("/Root/JA");
     let ab = store.path("/Root/AB");
     let mut edit = SchemaEdit::new(stage.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-    Xform::define(&mut edit, root);
+    Xform::define(&mut edit, root).expect("outside any instance");
     // Namespace traversal encounters B first; C++ ordered map chooses A's joint.
     for path in [b, a] {
-        Xform::define(&mut edit, path);
+        Xform::define(&mut edit, path).expect("outside any instance");
         PhysicsRigidBodyApi::apply(&mut edit, path).unwrap();
     }
     PhysicsArticulationRootApi::apply(&mut edit, root).unwrap();
     for (path, body) in [(jb, b), (ja, a)] {
-        PhysicsFixedJoint::define(&mut edit, path).set_body0(&mut edit, &[TargetPath::Prim(body)]);
+        PhysicsFixedJoint::define(&mut edit, path)
+            .expect("outside any instance")
+            .set_body0(&mut edit, &[TargetPath::Prim(body)]);
     }
-    let j = PhysicsFixedJoint::define(&mut edit, ab);
+    let j = PhysicsFixedJoint::define(&mut edit, ab).expect("outside any instance");
     j.set_body0(&mut edit, &[TargetPath::Prim(a)]);
     j.set_body1(&mut edit, &[TargetPath::Prim(b)]);
     let transaction = edit.finish();
@@ -748,9 +765,10 @@ fn custom_joint_types_are_reported_when_named() {
     let joint = store.path("/World/Hinge");
     let fixed = store.path("/World/Fixed");
     let mut edit = SchemaEdit::new(stage.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-    Xform::define(&mut edit, root);
-    edit.define_prim(joint, "HostHingeJoint");
-    PhysicsFixedJoint::define(&mut edit, fixed);
+    Xform::define(&mut edit, root).expect("outside any instance");
+    edit.define_prim(joint, "HostHingeJoint")
+        .expect("outside any instance");
+    PhysicsFixedJoint::define(&mut edit, fixed).expect("outside any instance");
     let transaction = edit.finish();
     stage.apply(&mut store, &transaction).unwrap();
     let scene = Scene::new(stage.stage(), &store);

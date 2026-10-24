@@ -171,7 +171,9 @@ impl ProducerPublisher<Output> for Publisher {
                 let existing =
                     PointInstancer::new(&Scene::new(stage, store), site).map(|view| view.edit());
                 let mut edit = SchemaEdit::new(stage, store, target);
-                let instancer = existing.unwrap_or_else(|| PointInstancer::define(&mut edit, site));
+                let instancer = existing.unwrap_or_else(|| {
+                    PointInstancer::define(&mut edit, site).expect("outside any instance")
+                });
                 instancer.set_positions_shared(&mut edit, positions.clone());
                 instancer.set_proto_indices_shared(&mut edit, indices.clone());
                 instancer.set_prototypes(&mut edit, &[TargetPath::Prim(terrain)]);

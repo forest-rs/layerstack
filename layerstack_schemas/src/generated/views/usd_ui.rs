@@ -22,7 +22,7 @@ use core::ops::Deref;
 
 use layerstack::{CannotApply, PathId};
 
-use crate::{InstanceEdit, InstanceView, PrimEdit, PrimView, Scene, SchemaEdit};
+use crate::{CannotDefine, InstanceEdit, InstanceView, PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "The tokens `accessibility:<instance>:priority` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum AccessibilityApiPriority {
@@ -421,15 +421,20 @@ impl<'a> Backdrop<'a> {
         BackdropEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def Backdrop` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `Backdrop`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `Backdrop` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdUIBackdrop::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> BackdropEdit {
-        BackdropEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<BackdropEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(BackdropEdit::from_prim)
     }
 
     /// The USD name of [`Self::description`].

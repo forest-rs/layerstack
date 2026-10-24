@@ -44,9 +44,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     let target = EditTarget::for_layer(layer);
     let mut edit = SchemaEdit::new(live.stage(), &mut store, target.clone());
-    Material::define(&mut edit, material_path);
-    Material::define(&mut edit, accent_path);
-    let mesh = Mesh::define(&mut edit, mesh_path);
+    Material::define(&mut edit, material_path)?;
+    Material::define(&mut edit, accent_path)?;
+    let mesh = Mesh::define(&mut edit, mesh_path)?;
     mesh.set_points(
         &mut edit,
         &[[0., 0., 0.], [1., 0., 0.], [1., 1., 0.], [0., 1., 0.]],
@@ -62,13 +62,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "faceVarying",
         1,
     )?;
-    let subset = GeomSubset::define(&mut edit, subset_path);
+    let subset = GeomSubset::define(&mut edit, subset_path)?;
     subset.set_element_type(&mut edit, GeomSubsetElementType::Face);
     subset.set_family_name(&mut edit, "materialBind");
     subset.set_indices(&mut edit, &[1]);
     MaterialBindingApi::apply(&mut edit, mesh_path)?;
     MaterialBindingApi::apply(&mut edit, subset_path)?;
-    let instances = PointInstancer::define(&mut edit, instance_path);
+    let instances = PointInstancer::define(&mut edit, instance_path)?;
     instances.set_prototypes(&mut edit, &[TargetPath::Prim(mesh_path)]);
     instances.set_proto_indices(&mut edit, &[0, 0, 0]);
     instances.set_positions(&mut edit, &[[0., 0., 0.], [2., 0., 0.], [4., 0., 0.]]);

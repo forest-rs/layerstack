@@ -22,9 +22,9 @@
 //! let mut live = LiveStage::compose(&mut store, layer,
 //!     StageOptions { schemas: Some(schemas), ..Default::default() });
 //! let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(layer));
-//! Xform::define(&mut edit, world).create_primvar(&mut edit, "tint",
+//! Xform::define(&mut edit, world)?.create_primvar(&mut edit, "tint",
 //!     PropertyType::parse("float").unwrap())?.set(&mut edit, Value::Float(0.7))?;
-//! Mesh::define(&mut edit, path).create_indexed_primvar(&mut edit, "weight",
+//! Mesh::define(&mut edit, path)?.create_indexed_primvar(&mut edit, "weight",
 //!     PropertyType::parse("float[]").unwrap(),
 //!     Value::array(vec![Value::Float(0.25), Value::Float(0.75)]), &[1, 0], "vertex", 1)?;
 //! let transaction = edit.finish();

@@ -140,7 +140,7 @@ struct Indexed {
 /// let flint = store.path("/Parts/Stones/Flint");
 /// let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
 /// for prim in [parts, stones, flint] {
-///     edit.define_prim(prim, "Scope");
+///     edit.define_prim(prim, "Scope").expect("outside any instance");
 /// }
 /// CollectionApi::apply(&mut edit, parts, "stones")
 ///     .expect("applies")

@@ -22,7 +22,7 @@ use core::ops::Deref;
 
 use layerstack::{CannotApply, PathId};
 
-use crate::{InstanceEdit, InstanceView, PrimEdit, PrimView, Scene, SchemaEdit};
+use crate::{CannotDefine, InstanceEdit, InstanceView, PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "The tokens `backPlate:<instance>:plateVisibility` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum BackPlateApiPlateVisibility {
@@ -1033,15 +1033,23 @@ impl<'a> BasisCurves<'a> {
         BasisCurvesEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def BasisCurves` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `BasisCurves`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `BasisCurves` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdGeomBasisCurves::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> BasisCurvesEdit {
-        BasisCurvesEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(
+        edit: &mut SchemaEdit<'_>,
+        path: PathId,
+    ) -> Result<BasisCurvesEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(BasisCurvesEdit::from_prim)
     }
 
     /// The USD name of [`Self::basis`].
@@ -1495,15 +1503,20 @@ impl<'a> Camera<'a> {
         CameraEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def Camera` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `Camera`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `Camera` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdGeomCamera::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> CameraEdit {
-        CameraEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<CameraEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(CameraEdit::from_prim)
     }
 
     /// The USD name of [`Self::clipping_planes`].
@@ -2444,15 +2457,20 @@ impl<'a> Capsule<'a> {
         CapsuleEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def Capsule` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `Capsule`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `Capsule` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdGeomCapsule::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> CapsuleEdit {
-        CapsuleEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<CapsuleEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(CapsuleEdit::from_prim)
     }
 
     /// The USD name of [`Self::axis`].
@@ -2698,15 +2716,20 @@ impl<'a> Capsule1<'a> {
         Capsule1Edit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def Capsule_1` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `Capsule_1`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `Capsule_1` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdGeomCapsule_1::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Capsule1Edit {
-        Capsule1Edit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<Capsule1Edit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(Capsule1Edit::from_prim)
     }
 
     /// The USD name of [`Self::axis`].
@@ -2990,15 +3013,20 @@ impl<'a> Cone<'a> {
         ConeEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def Cone` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `Cone`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `Cone` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdGeomCone::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> ConeEdit {
-        ConeEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<ConeEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(ConeEdit::from_prim)
     }
 
     /// The USD name of [`Self::axis`].
@@ -3189,15 +3217,20 @@ impl<'a> Cube<'a> {
         CubeEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def Cube` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `Cube`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `Cube` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdGeomCube::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> CubeEdit {
-        CubeEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<CubeEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(CubeEdit::from_prim)
     }
 
     /// The USD name of [`Self::size`].
@@ -3676,15 +3709,20 @@ impl<'a> Cylinder<'a> {
         CylinderEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def Cylinder` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `Cylinder`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `Cylinder` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdGeomCylinder::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> CylinderEdit {
-        CylinderEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<CylinderEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(CylinderEdit::from_prim)
     }
 
     /// The USD name of [`Self::axis`].
@@ -3930,15 +3968,20 @@ impl<'a> Cylinder1<'a> {
         Cylinder1Edit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def Cylinder_1` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `Cylinder_1`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `Cylinder_1` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdGeomCylinder_1::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Cylinder1Edit {
-        Cylinder1Edit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<Cylinder1Edit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(Cylinder1Edit::from_prim)
     }
 
     /// The USD name of [`Self::axis`].
@@ -4926,15 +4969,20 @@ impl<'a> GeomSubset<'a> {
         GeomSubsetEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def GeomSubset` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `GeomSubset`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `GeomSubset` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdGeomSubset::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> GeomSubsetEdit {
-        GeomSubsetEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<GeomSubsetEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(GeomSubsetEdit::from_prim)
     }
 
     /// The USD name of [`Self::element_type`].
@@ -5598,15 +5646,23 @@ impl<'a> HermiteCurves<'a> {
         HermiteCurvesEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def HermiteCurves` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `HermiteCurves`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `HermiteCurves` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdGeomHermiteCurves::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> HermiteCurvesEdit {
-        HermiteCurvesEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(
+        edit: &mut SchemaEdit<'_>,
+        path: PathId,
+    ) -> Result<HermiteCurvesEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(HermiteCurvesEdit::from_prim)
     }
 
     /// The USD name of [`Self::tangents`].
@@ -6350,15 +6406,20 @@ impl<'a> Mesh<'a> {
         MeshEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def Mesh` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `Mesh`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `Mesh` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdGeomMesh::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> MeshEdit {
-        MeshEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<MeshEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(MeshEdit::from_prim)
     }
 
     /// The USD name of [`Self::corner_indices`].
@@ -7743,15 +7804,23 @@ impl<'a> NurbsCurves<'a> {
         NurbsCurvesEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def NurbsCurves` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `NurbsCurves`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `NurbsCurves` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdGeomNurbsCurves::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> NurbsCurvesEdit {
-        NurbsCurvesEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(
+        edit: &mut SchemaEdit<'_>,
+        path: PathId,
+    ) -> Result<NurbsCurvesEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(NurbsCurvesEdit::from_prim)
     }
 
     /// The USD name of [`Self::knots`].
@@ -8355,15 +8424,20 @@ impl<'a> NurbsPatch<'a> {
         NurbsPatchEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def NurbsPatch` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `NurbsPatch`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `NurbsPatch` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdGeomNurbsPatch::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> NurbsPatchEdit {
-        NurbsPatchEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<NurbsPatchEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(NurbsPatchEdit::from_prim)
     }
 
     /// The USD name of [`Self::point_weights`].
@@ -9785,15 +9859,20 @@ impl<'a> Plane<'a> {
         PlaneEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def Plane` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `Plane`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `Plane` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdGeomPlane::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> PlaneEdit {
-        PlaneEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<PlaneEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(PlaneEdit::from_prim)
     }
 
     /// The USD name of [`Self::axis`].
@@ -10495,15 +10574,23 @@ impl<'a> PointInstancer<'a> {
         PointInstancerEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def PointInstancer` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `PointInstancer`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `PointInstancer` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdGeomPointInstancer::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> PointInstancerEdit {
-        PointInstancerEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(
+        edit: &mut SchemaEdit<'_>,
+        path: PathId,
+    ) -> Result<PointInstancerEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(PointInstancerEdit::from_prim)
     }
 
     /// The USD name of [`Self::accelerations`].
@@ -11652,15 +11739,20 @@ impl<'a> Points<'a> {
         PointsEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def Points` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `Points`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `Points` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdGeomPoints::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> PointsEdit {
-        PointsEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<PointsEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(PointsEdit::from_prim)
     }
 
     /// The USD name of [`Self::ids`].
@@ -11945,15 +12037,20 @@ impl<'a> Scope<'a> {
         ScopeEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def Scope` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `Scope`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `Scope` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdGeomScope::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> ScopeEdit {
-        ScopeEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<ScopeEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(ScopeEdit::from_prim)
     }
 }
 
@@ -12040,15 +12137,20 @@ impl<'a> Sphere<'a> {
         SphereEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def Sphere` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `Sphere`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `Sphere` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdGeomSphere::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> SphereEdit {
-        SphereEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<SphereEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(SphereEdit::from_prim)
     }
 
     /// The USD name of [`Self::radius`].
@@ -12174,15 +12276,20 @@ impl<'a> TetMesh<'a> {
         TetMeshEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def TetMesh` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `TetMesh`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `TetMesh` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdGeomTetMesh::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> TetMeshEdit {
-        TetMeshEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<TetMeshEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(TetMeshEdit::from_prim)
     }
 
     /// The USD name of [`Self::surface_face_vertex_indices`].
@@ -12858,15 +12965,20 @@ impl<'a> Xform<'a> {
         XformEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def Xform` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `Xform`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `Xform` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdGeomXform::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> XformEdit {
-        XformEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<XformEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(XformEdit::from_prim)
     }
 }
 

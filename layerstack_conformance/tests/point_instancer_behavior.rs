@@ -261,7 +261,7 @@ fn failed_retained_bounds_recover_when_an_external_prototype_is_created() {
         Some(vec![missing])
     );
     let mut edit = session.edit(EditTarget::for_layer(LayerId(1)));
-    Cube::define(&mut edit, missing);
+    Cube::define(&mut edit, missing).expect("outside any instance");
     let transaction = edit.finish();
     session.apply(&transaction).unwrap();
     let result = session.poll(query).unwrap();

@@ -65,7 +65,8 @@ fn builtin_particle_apis_author_read_and_change_precision_with_undo() {
         &mut store,
         layerstack::edit::EditTarget::for_layer(layerstack::LayerId(1)),
     );
-    let handle = ParticleField3DGaussianSplat::define(&mut edit, path);
+    let handle =
+        ParticleField3DGaussianSplat::define(&mut edit, path).expect("outside any instance");
     handle
         .particle_field_position_attribute_api()
         .set_positionsh(&mut edit, &[[1., 2., 3.]]);

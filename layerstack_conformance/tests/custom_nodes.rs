@@ -23,7 +23,7 @@ fn inherited_ports_compile_and_author_through_the_public_api() {
     let path = store.path("/Paint");
     let before = store.layer(LayerId(1)).unwrap().clone();
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-    let node = custom::StudioWetPaint::define(&mut edit, path);
+    let node = custom::StudioWetPaint::define(&mut edit, path).expect("outside any instance");
     node.set_tint(&mut edit, custom::StudioWetPaint::tint_default())
         .unwrap();
     node.set_weights(&mut edit, &custom::StudioWetPaint::weights_default())
@@ -68,9 +68,10 @@ fn selected_materialx_interfaces_author_usd_without_loading_implementations() {
     let rgba = store.path("/Rgba");
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
     materialx::NdRgba::define(&mut edit, rgba)
+        .expect("outside any instance")
         .create_out_output(&mut edit)
         .unwrap();
-    let node = materialx::NdPaint::define(&mut edit, path);
+    let node = materialx::NdPaint::define(&mut edit, path).expect("outside any instance");
     node.set_gain(&mut edit, materialx::NdPaint::gain_default())
         .unwrap();
     node.set_file(&mut edit, &materialx::NdPaint::file_default())
@@ -123,7 +124,7 @@ fn user_literals_compile_and_round_trip_without_rust_path_rewriting() {
     );
     let path = store.path("/Literal");
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-    let node = custom::CrateLiteral::define(&mut edit, path);
+    let node = custom::CrateLiteral::define(&mut edit, path).expect("outside any instance");
     node.set_label(&mut edit, &custom::CrateLiteral::label_default())
         .unwrap();
     node.set_mode(&mut edit, custom::CrateLiteral::mode_default())

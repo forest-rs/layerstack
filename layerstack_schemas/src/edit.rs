@@ -14,6 +14,42 @@ use layerstack::{
     Specifier, Stage, TargetPath, TokenId, TokenInterner, Value,
 };
 
+#[cfg(test)]
+mod tests;
+
+/// Why [`SchemaEdit::define_prim`] defines no prim. Nothing is
+/// authored.
+///
+/// OpenUSD: `UsdStage::DefinePrim` refuses both with a coding error
+/// (`_ValidateEditPrim`, `_ValidateEditPrimAtPath`), when the edit target
+/// is a local layer that maps the path to itself.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CannotDefine {
+    /// The path is beneath the native instance `instance`. Its descendants
+    /// are instance proxies, composed from its prototype, so a prim
+    /// authored beneath it would not be on the stage.
+    ///
+    /// Spec: AOUSD Core §11.3.3 (scene-graph instancing).
+    BeneathInstance {
+        /// The instance.
+        instance: PathId,
+    },
+    /// The path is in an instancing prototype: its root prim's name starts
+    /// with `__Prototype_`, as OpenUSD names its prototypes.
+    InPrototype,
+}
+
+impl fmt::Display for CannotDefine {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::BeneathInstance { .. } => "the path is beneath an instance",
+            Self::InPrototype => "the path is in an instancing prototype",
+        })
+    }
+}
+
+impl core::error::Error for CannotDefine {}
+
 /// Collects schema edits into a [`Transaction`] for one [`EditTarget`].
 ///
 /// Edit handles (`MeshEdit`, `ShapingApiEdit`, …) author through it;
@@ -42,7 +78,7 @@ use layerstack::{
 /// let path = store.path("/Key");
 ///
 /// let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-/// let light = SphereLight::define(&mut edit, path);
+/// let light = SphereLight::define(&mut edit, path).expect("outside any instance");
 /// light.light_api().set_intensity(&mut edit, 500.0);
 /// let shaping = ShapingApi::apply(&mut edit, path).expect("any prim may be shaped");
 /// shaping.set_shaping_cone_angle(&mut edit, 30.0);
@@ -60,6 +96,8 @@ pub struct SchemaEdit<'s> {
     transaction: Transaction,
     /// Prims this edit defines, with their type.
     defined: Vec<(PathId, String)>,
+    /// Prims this edit gives the `def` specifier, typed or not.
+    specified: Vec<PathId>,
     /// Applied schema names this edit adds, by prim.
     applied: Vec<(PathId, TokenId)>,
     /// Properties this edit creates, with an attribute's type name.
@@ -108,6 +146,7 @@ impl<'s> SchemaEdit<'s> {
             target,
             transaction: Transaction::new(),
             defined: Vec::new(),
+            specified: Vec::new(),
             applied: Vec::new(),
             created: Vec::new(),
             defaults: Vec::new(),
@@ -166,25 +205,136 @@ impl<'s> SchemaEdit<'s> {
         Ok(crate::PrimEdit::from_path_unchecked(path))
     }
 
-    /// Defines `path` as a new `def` prim spec of the typed schema named
-    /// `schema` in the edit's target, and returns the handle authoring it.
-    /// The schema need not have a generated Rust type; a concrete schema's
-    /// `define` (`Mesh::define`) is this with its name.
+    /// Defines the prim at `path` as the typed schema named `schema`, and
+    /// its undefined ancestors, as OpenUSD's `UsdStage::DefinePrim` does,
+    /// and returns the handle authoring it. The schema need not have a
+    /// generated Rust type; a concrete schema's `define` (`Mesh::define`) is
+    /// this with its name. An empty `schema` defines the prim without giving
+    /// it a type.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim`, for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// Walking from the root prim down to `path`, each ancestor that is
+    /// not defined, on the edit's stage or earlier in this edit, gets the
+    /// `def` specifier in the edit target, and no type. The prim itself
+    /// gets `def` and the type when it is not defined or `schema` is not
+    /// its type name (the composed one, or the last this edit gives it);
+    /// otherwise nothing is authored. A spec the target lacks is created,
+    /// its missing ancestor specs as `over`s, and an existing one, such as
+    /// an `over`, is changed in place. So `/A/B` with `/A` undefined
+    /// authors `def "A" { def Xform "B" {} }`, and a prim already defined
+    /// as `schema`, in any layer, authors nothing. The pseudo-root (`/`)
+    /// is never authored.
     ///
-    /// Spec: AOUSD Core §7.6 (specifier field), §13.3.1 (typed schemas).
+    /// The prim is authored beneath an inactive or unloaded ancestor too,
+    /// as OpenUSD authors it; it stays off the stage until the ancestor is
+    /// active and loaded (OpenUSD then reports that it failed to define
+    /// it).
+    ///
+    /// # Errors
+    ///
+    /// [`CannotDefine::BeneathInstance`] for a path beneath an instance,
+    /// and [`CannotDefine::InPrototype`] for one in a prototype, when the
+    /// target is a layer of the stage's local layer stack that maps `path`
+    /// to itself, as OpenUSD refuses them with a coding error; through
+    /// another target the edit is the caller's choice. A refusal authors
+    /// nothing.
+    ///
+    /// OpenUSD: `UsdStage::DefinePrim`, `_DefinePrim`,
+    /// `_IsValidPathForCreatingPrim` (`pxr/usd/usd/stage.cpp`).
+    ///
+    /// Spec: AOUSD Core §7.6 (specifier field), §11.3.3 (instancing),
+    /// §11.5 (defined prims), §12.2.1 (specifier resolution), §13.3.1
+    /// (typed schemas).
     #[doc(alias = "DefinePrim")]
     #[doc(alias = "UsdStage::DefinePrim")]
-    pub fn define_prim(&mut self, path: PathId, schema: &str) -> crate::PrimEdit {
-        let type_name = self.store.tokens_mut().intern(schema);
+    pub fn define_prim(
+        &mut self,
+        path: PathId,
+        schema: &str,
+    ) -> Result<crate::PrimEdit, CannotDefine> {
+        self.check_definable(path)?;
+        let type_name = (!schema.is_empty()).then(|| self.store.tokens_mut().intern(schema));
+        // `path` and its ancestors below the pseudo-root, root prim first.
+        let paths = self.store.paths();
+        let mut lineage: Vec<PathId> =
+            core::iter::successors(Some(path), |at| paths.parent(*at)).collect();
+        lineage.pop();
+        lineage.reverse();
+        if let Some((&prim, ancestors)) = lineage.split_last() {
+            for &ancestor in ancestors {
+                if !self.is_defined(ancestor) {
+                    self.author_def(ancestor, None);
+                }
+            }
+            let retyped = type_name.is_some_and(|ty| self.type_name(prim) != Some(ty));
+            if !self.is_defined(prim) || retyped {
+                self.author_def(prim, type_name);
+                if type_name.is_some() {
+                    self.defined.push((prim, schema.into()));
+                }
+            }
+        }
+        Ok(crate::PrimEdit::from_path_unchecked(path))
+    }
+
+    /// Refuses a path beneath an instance or in a prototype, when the edit
+    /// target is a local layer mapping `path` to itself.
+    ///
+    /// OpenUSD: `UsdStage::_ValidateEditPrim`, `_ValidateEditPrimAtPath`,
+    /// `Usd_InstanceCache::IsPathInPrototype`.
+    fn check_definable(&mut self, path: PathId) -> Result<(), CannotDefine> {
+        if !self.stage.has_local_layer(self.target.layer())
+            || self.target.map_to_spec_path(path, self.store.paths_mut())
+                != Some(layerstack::SpecPath::from_prim_path(path))
+        {
+            return Ok(());
+        }
+        let paths = self.store.paths();
+        let root_name = paths.resolve(path).segments().first().copied();
+        if root_name.is_some_and(|name| {
+            self.store
+                .tokens()
+                .resolve(name)
+                .starts_with("__Prototype_")
+        }) {
+            return Err(CannotDefine::InPrototype);
+        }
+        let mut ancestors: Vec<PathId> =
+            core::iter::successors(paths.parent(path), |at| paths.parent(*at)).collect();
+        ancestors.reverse();
+        match ancestors.into_iter().find(|&at| {
+            self.stage_prim(at)
+                .is_some_and(layerstack::Prim::is_instance)
+        }) {
+            Some(instance) => Err(CannotDefine::BeneathInstance { instance }),
+            None => Ok(()),
+        }
+    }
+
+    /// Whether the prim at `path` resolves a defining specifier (`def` or
+    /// `class`) on the edit's stage, or this edit gives it `def`. Its
+    /// ancestors' specifiers are not considered: defining a prim defines
+    /// them first.
+    ///
+    /// Spec: AOUSD Core §11.5, §12.2.1.
+    fn is_defined(&self, path: PathId) -> bool {
+        self.specified.contains(&path)
+            || self
+                .stage_prim(path)
+                .is_some_and(|prim| matches!(prim.specifier(), Specifier::Def | Specifier::Class))
+    }
+
+    /// Gives the prim at `path` the `def` specifier and, if given, the type
+    /// `type_name` in the edit target, creating its spec if needed.
+    ///
+    /// OpenUSD: `SdfCreatePrimInLayer`, `SdfPrimSpec::SetSpecifier`,
+    /// `SetTypeName`.
+    fn author_def(&mut self, path: PathId, type_name: Option<TokenId>) {
         let at = self.target.prim(path);
-        self.transaction
-            .create_prim(at, Specifier::Def, Some(type_name));
-        self.defined.push((path, schema.into()));
-        crate::PrimEdit::from_path_unchecked(path)
+        self.transaction.set_specifier(at.clone(), Specifier::Def);
+        if let Some(type_name) = type_name {
+            self.transaction.set_type_name(at, type_name);
+        }
+        self.specified.push(path);
     }
 
     /// Collects a fallible child group. Success appends its transaction; an error
@@ -201,6 +351,7 @@ impl<'s> SchemaEdit<'s> {
             target: self.target.clone(),
             transaction: Transaction::new(),
             defined: self.defined.clone(),
+            specified: self.specified.clone(),
             applied: self.applied.clone(),
             created: self.created.clone(),
             defaults: self.defaults.clone(),
@@ -214,6 +365,7 @@ impl<'s> SchemaEdit<'s> {
         let result = collect(&mut child)?;
         self.transaction.append(child.transaction);
         self.defined = child.defined;
+        self.specified = child.specified;
         self.applied = child.applied;
         self.created = child.created;
         self.defaults = child.defaults;
@@ -352,7 +504,7 @@ impl<'s> SchemaEdit<'s> {
     ///
     /// OpenUSD: authoring through an invalid `UsdPrim` fails.
     pub(crate) fn exists(&self, path: PathId) -> bool {
-        self.stage_prim(path).is_some() || self.defined.iter().any(|(p, _)| *p == path)
+        self.stage_prim(path).is_some() || self.specified.contains(&path)
     }
 
     /// The prim at `path` on the edit's stage, as it was before this edit.

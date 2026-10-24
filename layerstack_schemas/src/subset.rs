@@ -34,6 +34,9 @@ impl SubsetFamilyType {
 /// A subset edit could not be collected; its child group remains unchanged.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SubsetAuthoringError {
+    /// The subset cannot be defined at its path, beneath an instance or in
+    /// a prototype ([`SchemaEdit::define_prim`](crate::SchemaEdit::define_prim)).
+    CannotDefine(crate::CannotDefine),
     /// The name must be a nonempty, single prim identifier.
     InvalidName,
     /// Geometry or its topology is absent, incompatible, or unreadable.
@@ -58,6 +61,7 @@ impl core::error::Error for SubsetAuthoringError {
     fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
         match self {
             Self::Geometry(error) => Some(error),
+            Self::CannotDefine(error) => Some(error),
             _ => None,
         }
     }
@@ -65,6 +69,11 @@ impl core::error::Error for SubsetAuthoringError {
 impl From<SubsetError> for SubsetAuthoringError {
     fn from(value: SubsetError) -> Self {
         Self::Geometry(value)
+    }
+}
+impl From<crate::CannotDefine> for SubsetAuthoringError {
+    fn from(value: crate::CannotDefine) -> Self {
+        Self::CannotDefine(value)
     }
 }
 
@@ -95,7 +104,7 @@ impl crate::usd_geom::GeomSubsetEdit {
             let path = edit
                 .unique_child_path(parent, name)
                 .ok_or(SubsetAuthoringError::InvalidName)?;
-            let subset = Subset::define(edit, path);
+            let subset = Subset::define(edit, path)?;
             subset
                 .set_element_type(edit, element)
                 .set_family_name(edit, family)
@@ -133,7 +142,7 @@ impl crate::usd_geom::GeomSubsetEdit {
                 }
                 Self::from_prim(crate::PrimEdit::from_path_unchecked(path))
             } else {
-                Subset::define(edit, path)
+                Subset::define(edit, path)?
             };
             subset
                 .set_element_type(edit, element)

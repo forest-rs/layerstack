@@ -261,287 +261,379 @@ pub(crate) const PRIMS: &[&str] = &[
 /// Defines every prim and applies every applied schema, then authors
 /// through every setter.
 pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
-    usd_geom::Scope::define(edit, h.path("/Fallback_CollectionAPI"));
+    usd_geom::Scope::define(edit, h.path("/Fallback_CollectionAPI")).expect("outside any instance");
     usd::CollectionApi::apply(edit, h.path("/Fallback_CollectionAPI"), "a")
         .expect("CollectionAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Authored_CollectionAPI"));
+    usd_geom::Scope::define(edit, h.path("/Authored_CollectionAPI")).expect("outside any instance");
     usd::CollectionApi::apply(edit, h.path("/Authored_CollectionAPI"), "a")
         .expect("CollectionAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Fallback_ColorSpaceAPI"));
+    usd_geom::Scope::define(edit, h.path("/Fallback_ColorSpaceAPI")).expect("outside any instance");
     usd::ColorSpaceApi::apply(edit, h.path("/Fallback_ColorSpaceAPI"))
         .expect("ColorSpaceAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Authored_ColorSpaceAPI"));
+    usd_geom::Scope::define(edit, h.path("/Authored_ColorSpaceAPI")).expect("outside any instance");
     usd::ColorSpaceApi::apply(edit, h.path("/Authored_ColorSpaceAPI"))
         .expect("ColorSpaceAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Fallback_ColorSpaceDefinitionAPI"));
+    usd_geom::Scope::define(edit, h.path("/Fallback_ColorSpaceDefinitionAPI"))
+        .expect("outside any instance");
     usd::ColorSpaceDefinitionApi::apply(edit, h.path("/Fallback_ColorSpaceDefinitionAPI"), "a")
         .expect("ColorSpaceDefinitionAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Authored_ColorSpaceDefinitionAPI"));
+    usd_geom::Scope::define(edit, h.path("/Authored_ColorSpaceDefinitionAPI"))
+        .expect("outside any instance");
     usd::ColorSpaceDefinitionApi::apply(edit, h.path("/Authored_ColorSpaceDefinitionAPI"), "a")
         .expect("ColorSpaceDefinitionAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Fallback_BackPlateAPI"));
+    usd_geom::Scope::define(edit, h.path("/Fallback_BackPlateAPI")).expect("outside any instance");
     usd_geom::BackPlateApi::apply(edit, h.path("/Fallback_BackPlateAPI"), "a")
         .expect("BackPlateAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Authored_BackPlateAPI"));
+    usd_geom::Scope::define(edit, h.path("/Authored_BackPlateAPI")).expect("outside any instance");
     usd_geom::BackPlateApi::apply(edit, h.path("/Authored_BackPlateAPI"), "a")
         .expect("BackPlateAPI applies to a Scope");
-    usd_geom::BasisCurves::define(edit, h.path("/Fallback_BasisCurves"));
-    usd_geom::BasisCurves::define(edit, h.path("/Authored_BasisCurves"));
-    usd_geom::Camera::define(edit, h.path("/Fallback_Camera"));
-    usd_geom::Camera::define(edit, h.path("/Authored_Camera"));
-    usd_geom::Capsule::define(edit, h.path("/Fallback_Capsule"));
-    usd_geom::Capsule::define(edit, h.path("/Authored_Capsule"));
-    usd_geom::Capsule1::define(edit, h.path("/Fallback_Capsule_1"));
-    usd_geom::Capsule1::define(edit, h.path("/Authored_Capsule_1"));
-    usd_geom::Cone::define(edit, h.path("/Fallback_Cone"));
-    usd_geom::Cone::define(edit, h.path("/Authored_Cone"));
-    usd_geom::Cube::define(edit, h.path("/Fallback_Cube"));
-    usd_geom::Cube::define(edit, h.path("/Authored_Cube"));
-    usd_geom::Cylinder::define(edit, h.path("/Fallback_Cylinder"));
-    usd_geom::Cylinder::define(edit, h.path("/Authored_Cylinder"));
-    usd_geom::Cylinder1::define(edit, h.path("/Fallback_Cylinder_1"));
-    usd_geom::Cylinder1::define(edit, h.path("/Authored_Cylinder_1"));
-    usd_geom::Scope::define(edit, h.path("/Fallback_GeomModelAPI"));
+    usd_geom::BasisCurves::define(edit, h.path("/Fallback_BasisCurves"))
+        .expect("outside any instance");
+    usd_geom::BasisCurves::define(edit, h.path("/Authored_BasisCurves"))
+        .expect("outside any instance");
+    usd_geom::Camera::define(edit, h.path("/Fallback_Camera")).expect("outside any instance");
+    usd_geom::Camera::define(edit, h.path("/Authored_Camera")).expect("outside any instance");
+    usd_geom::Capsule::define(edit, h.path("/Fallback_Capsule")).expect("outside any instance");
+    usd_geom::Capsule::define(edit, h.path("/Authored_Capsule")).expect("outside any instance");
+    usd_geom::Capsule1::define(edit, h.path("/Fallback_Capsule_1")).expect("outside any instance");
+    usd_geom::Capsule1::define(edit, h.path("/Authored_Capsule_1")).expect("outside any instance");
+    usd_geom::Cone::define(edit, h.path("/Fallback_Cone")).expect("outside any instance");
+    usd_geom::Cone::define(edit, h.path("/Authored_Cone")).expect("outside any instance");
+    usd_geom::Cube::define(edit, h.path("/Fallback_Cube")).expect("outside any instance");
+    usd_geom::Cube::define(edit, h.path("/Authored_Cube")).expect("outside any instance");
+    usd_geom::Cylinder::define(edit, h.path("/Fallback_Cylinder")).expect("outside any instance");
+    usd_geom::Cylinder::define(edit, h.path("/Authored_Cylinder")).expect("outside any instance");
+    usd_geom::Cylinder1::define(edit, h.path("/Fallback_Cylinder_1"))
+        .expect("outside any instance");
+    usd_geom::Cylinder1::define(edit, h.path("/Authored_Cylinder_1"))
+        .expect("outside any instance");
+    usd_geom::Scope::define(edit, h.path("/Fallback_GeomModelAPI")).expect("outside any instance");
     usd_geom::GeomModelApi::apply(edit, h.path("/Fallback_GeomModelAPI"))
         .expect("GeomModelAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Authored_GeomModelAPI"));
+    usd_geom::Scope::define(edit, h.path("/Authored_GeomModelAPI")).expect("outside any instance");
     usd_geom::GeomModelApi::apply(edit, h.path("/Authored_GeomModelAPI"))
         .expect("GeomModelAPI applies to a Scope");
-    usd_geom::GeomSubset::define(edit, h.path("/Fallback_GeomSubset"));
-    usd_geom::GeomSubset::define(edit, h.path("/Authored_GeomSubset"));
-    usd_geom::HermiteCurves::define(edit, h.path("/Fallback_HermiteCurves"));
-    usd_geom::HermiteCurves::define(edit, h.path("/Authored_HermiteCurves"));
-    usd_geom::Mesh::define(edit, h.path("/Fallback_Mesh"));
-    usd_geom::Mesh::define(edit, h.path("/Authored_Mesh"));
-    usd_geom::Scope::define(edit, h.path("/Fallback_MotionAPI"));
+    usd_geom::GeomSubset::define(edit, h.path("/Fallback_GeomSubset"))
+        .expect("outside any instance");
+    usd_geom::GeomSubset::define(edit, h.path("/Authored_GeomSubset"))
+        .expect("outside any instance");
+    usd_geom::HermiteCurves::define(edit, h.path("/Fallback_HermiteCurves"))
+        .expect("outside any instance");
+    usd_geom::HermiteCurves::define(edit, h.path("/Authored_HermiteCurves"))
+        .expect("outside any instance");
+    usd_geom::Mesh::define(edit, h.path("/Fallback_Mesh")).expect("outside any instance");
+    usd_geom::Mesh::define(edit, h.path("/Authored_Mesh")).expect("outside any instance");
+    usd_geom::Scope::define(edit, h.path("/Fallback_MotionAPI")).expect("outside any instance");
     usd_geom::MotionApi::apply(edit, h.path("/Fallback_MotionAPI"))
         .expect("MotionAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Authored_MotionAPI"));
+    usd_geom::Scope::define(edit, h.path("/Authored_MotionAPI")).expect("outside any instance");
     usd_geom::MotionApi::apply(edit, h.path("/Authored_MotionAPI"))
         .expect("MotionAPI applies to a Scope");
-    usd_geom::NurbsCurves::define(edit, h.path("/Fallback_NurbsCurves"));
-    usd_geom::NurbsCurves::define(edit, h.path("/Authored_NurbsCurves"));
-    usd_geom::NurbsPatch::define(edit, h.path("/Fallback_NurbsPatch"));
-    usd_geom::NurbsPatch::define(edit, h.path("/Authored_NurbsPatch"));
-    usd_geom::Plane::define(edit, h.path("/Fallback_Plane"));
-    usd_geom::Plane::define(edit, h.path("/Authored_Plane"));
-    usd_geom::PointInstancer::define(edit, h.path("/Fallback_PointInstancer"));
-    usd_geom::PointInstancer::define(edit, h.path("/Authored_PointInstancer"));
-    usd_geom::Points::define(edit, h.path("/Fallback_Points"));
-    usd_geom::Points::define(edit, h.path("/Authored_Points"));
-    usd_geom::Scope::define(edit, h.path("/Fallback_Scope"));
-    usd_geom::Scope::define(edit, h.path("/Authored_Scope"));
-    usd_geom::Sphere::define(edit, h.path("/Fallback_Sphere"));
-    usd_geom::Sphere::define(edit, h.path("/Authored_Sphere"));
-    usd_geom::TetMesh::define(edit, h.path("/Fallback_TetMesh"));
-    usd_geom::TetMesh::define(edit, h.path("/Authored_TetMesh"));
-    usd_geom::BasisCurves::define(edit, h.path("/Fallback_VisibilityAPI"));
+    usd_geom::NurbsCurves::define(edit, h.path("/Fallback_NurbsCurves"))
+        .expect("outside any instance");
+    usd_geom::NurbsCurves::define(edit, h.path("/Authored_NurbsCurves"))
+        .expect("outside any instance");
+    usd_geom::NurbsPatch::define(edit, h.path("/Fallback_NurbsPatch"))
+        .expect("outside any instance");
+    usd_geom::NurbsPatch::define(edit, h.path("/Authored_NurbsPatch"))
+        .expect("outside any instance");
+    usd_geom::Plane::define(edit, h.path("/Fallback_Plane")).expect("outside any instance");
+    usd_geom::Plane::define(edit, h.path("/Authored_Plane")).expect("outside any instance");
+    usd_geom::PointInstancer::define(edit, h.path("/Fallback_PointInstancer"))
+        .expect("outside any instance");
+    usd_geom::PointInstancer::define(edit, h.path("/Authored_PointInstancer"))
+        .expect("outside any instance");
+    usd_geom::Points::define(edit, h.path("/Fallback_Points")).expect("outside any instance");
+    usd_geom::Points::define(edit, h.path("/Authored_Points")).expect("outside any instance");
+    usd_geom::Scope::define(edit, h.path("/Fallback_Scope")).expect("outside any instance");
+    usd_geom::Scope::define(edit, h.path("/Authored_Scope")).expect("outside any instance");
+    usd_geom::Sphere::define(edit, h.path("/Fallback_Sphere")).expect("outside any instance");
+    usd_geom::Sphere::define(edit, h.path("/Authored_Sphere")).expect("outside any instance");
+    usd_geom::TetMesh::define(edit, h.path("/Fallback_TetMesh")).expect("outside any instance");
+    usd_geom::TetMesh::define(edit, h.path("/Authored_TetMesh")).expect("outside any instance");
+    usd_geom::BasisCurves::define(edit, h.path("/Fallback_VisibilityAPI"))
+        .expect("outside any instance");
     usd_geom::VisibilityApi::apply(edit, h.path("/Fallback_VisibilityAPI"))
         .expect("VisibilityAPI applies to a BasisCurves");
-    usd_geom::BasisCurves::define(edit, h.path("/Authored_VisibilityAPI"));
+    usd_geom::BasisCurves::define(edit, h.path("/Authored_VisibilityAPI"))
+        .expect("outside any instance");
     usd_geom::VisibilityApi::apply(edit, h.path("/Authored_VisibilityAPI"))
         .expect("VisibilityAPI applies to a BasisCurves");
-    usd_geom::Xform::define(edit, h.path("/Fallback_Xform"));
-    usd_geom::Xform::define(edit, h.path("/Authored_Xform"));
-    usd_geom::Scope::define(edit, h.path("/Fallback_CoordSysAPI"));
+    usd_geom::Xform::define(edit, h.path("/Fallback_Xform")).expect("outside any instance");
+    usd_geom::Xform::define(edit, h.path("/Authored_Xform")).expect("outside any instance");
+    usd_geom::Scope::define(edit, h.path("/Fallback_CoordSysAPI")).expect("outside any instance");
     usd_shade::CoordSysApi::apply(edit, h.path("/Fallback_CoordSysAPI"), "a")
         .expect("CoordSysAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Authored_CoordSysAPI"));
+    usd_geom::Scope::define(edit, h.path("/Authored_CoordSysAPI")).expect("outside any instance");
     usd_shade::CoordSysApi::apply(edit, h.path("/Authored_CoordSysAPI"), "a")
         .expect("CoordSysAPI applies to a Scope");
-    usd_shade::Material::define(edit, h.path("/Fallback_Material"));
-    usd_shade::Material::define(edit, h.path("/Authored_Material"));
-    usd_geom::Scope::define(edit, h.path("/Fallback_MaterialBindingAPI"));
+    usd_shade::Material::define(edit, h.path("/Fallback_Material")).expect("outside any instance");
+    usd_shade::Material::define(edit, h.path("/Authored_Material")).expect("outside any instance");
+    usd_geom::Scope::define(edit, h.path("/Fallback_MaterialBindingAPI"))
+        .expect("outside any instance");
     usd_shade::MaterialBindingApi::apply(edit, h.path("/Fallback_MaterialBindingAPI"))
         .expect("MaterialBindingAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Authored_MaterialBindingAPI"));
+    usd_geom::Scope::define(edit, h.path("/Authored_MaterialBindingAPI"))
+        .expect("outside any instance");
     usd_shade::MaterialBindingApi::apply(edit, h.path("/Authored_MaterialBindingAPI"))
         .expect("MaterialBindingAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Fallback_NodeDefAPI"));
+    usd_geom::Scope::define(edit, h.path("/Fallback_NodeDefAPI")).expect("outside any instance");
     usd_shade::NodeDefApi::apply(edit, h.path("/Fallback_NodeDefAPI"))
         .expect("NodeDefAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Authored_NodeDefAPI"));
+    usd_geom::Scope::define(edit, h.path("/Authored_NodeDefAPI")).expect("outside any instance");
     usd_shade::NodeDefApi::apply(edit, h.path("/Authored_NodeDefAPI"))
         .expect("NodeDefAPI applies to a Scope");
-    usd_shade::NodeGraph::define(edit, h.path("/Fallback_NodeGraph"));
-    usd_shade::NodeGraph::define(edit, h.path("/Authored_NodeGraph"));
-    usd_shade::Shader::define(edit, h.path("/Fallback_Shader"));
-    usd_shade::Shader::define(edit, h.path("/Authored_Shader"));
-    usd_lux::CylinderLight::define(edit, h.path("/Fallback_CylinderLight"));
-    usd_lux::CylinderLight::define(edit, h.path("/Authored_CylinderLight"));
-    usd_lux::DiskLight::define(edit, h.path("/Fallback_DiskLight"));
-    usd_lux::DiskLight::define(edit, h.path("/Authored_DiskLight"));
-    usd_lux::DistantLight::define(edit, h.path("/Fallback_DistantLight"));
-    usd_lux::DistantLight::define(edit, h.path("/Authored_DistantLight"));
-    usd_lux::DomeLight::define(edit, h.path("/Fallback_DomeLight"));
-    usd_lux::DomeLight::define(edit, h.path("/Authored_DomeLight"));
-    usd_lux::DomeLight1::define(edit, h.path("/Fallback_DomeLight_1"));
-    usd_lux::DomeLight1::define(edit, h.path("/Authored_DomeLight_1"));
-    usd_lux::GeometryLight::define(edit, h.path("/Fallback_GeometryLight"));
-    usd_lux::GeometryLight::define(edit, h.path("/Authored_GeometryLight"));
-    usd_geom::Scope::define(edit, h.path("/Fallback_LightAPI"));
+    usd_shade::NodeGraph::define(edit, h.path("/Fallback_NodeGraph"))
+        .expect("outside any instance");
+    usd_shade::NodeGraph::define(edit, h.path("/Authored_NodeGraph"))
+        .expect("outside any instance");
+    usd_shade::Shader::define(edit, h.path("/Fallback_Shader")).expect("outside any instance");
+    usd_shade::Shader::define(edit, h.path("/Authored_Shader")).expect("outside any instance");
+    usd_lux::CylinderLight::define(edit, h.path("/Fallback_CylinderLight"))
+        .expect("outside any instance");
+    usd_lux::CylinderLight::define(edit, h.path("/Authored_CylinderLight"))
+        .expect("outside any instance");
+    usd_lux::DiskLight::define(edit, h.path("/Fallback_DiskLight")).expect("outside any instance");
+    usd_lux::DiskLight::define(edit, h.path("/Authored_DiskLight")).expect("outside any instance");
+    usd_lux::DistantLight::define(edit, h.path("/Fallback_DistantLight"))
+        .expect("outside any instance");
+    usd_lux::DistantLight::define(edit, h.path("/Authored_DistantLight"))
+        .expect("outside any instance");
+    usd_lux::DomeLight::define(edit, h.path("/Fallback_DomeLight")).expect("outside any instance");
+    usd_lux::DomeLight::define(edit, h.path("/Authored_DomeLight")).expect("outside any instance");
+    usd_lux::DomeLight1::define(edit, h.path("/Fallback_DomeLight_1"))
+        .expect("outside any instance");
+    usd_lux::DomeLight1::define(edit, h.path("/Authored_DomeLight_1"))
+        .expect("outside any instance");
+    usd_lux::GeometryLight::define(edit, h.path("/Fallback_GeometryLight"))
+        .expect("outside any instance");
+    usd_lux::GeometryLight::define(edit, h.path("/Authored_GeometryLight"))
+        .expect("outside any instance");
+    usd_geom::Scope::define(edit, h.path("/Fallback_LightAPI")).expect("outside any instance");
     usd_lux::LightApi::apply(edit, h.path("/Fallback_LightAPI"))
         .expect("LightAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Authored_LightAPI"));
+    usd_geom::Scope::define(edit, h.path("/Authored_LightAPI")).expect("outside any instance");
     usd_lux::LightApi::apply(edit, h.path("/Authored_LightAPI"))
         .expect("LightAPI applies to a Scope");
-    usd_lux::LightFilter::define(edit, h.path("/Fallback_LightFilter"));
-    usd_lux::LightFilter::define(edit, h.path("/Authored_LightFilter"));
-    usd_geom::Scope::define(edit, h.path("/Fallback_LightListAPI"));
+    usd_lux::LightFilter::define(edit, h.path("/Fallback_LightFilter"))
+        .expect("outside any instance");
+    usd_lux::LightFilter::define(edit, h.path("/Authored_LightFilter"))
+        .expect("outside any instance");
+    usd_geom::Scope::define(edit, h.path("/Fallback_LightListAPI")).expect("outside any instance");
     usd_lux::LightListApi::apply(edit, h.path("/Fallback_LightListAPI"))
         .expect("LightListAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Authored_LightListAPI"));
+    usd_geom::Scope::define(edit, h.path("/Authored_LightListAPI")).expect("outside any instance");
     usd_lux::LightListApi::apply(edit, h.path("/Authored_LightListAPI"))
         .expect("LightListAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Fallback_ListAPI"));
+    usd_geom::Scope::define(edit, h.path("/Fallback_ListAPI")).expect("outside any instance");
     usd_lux::ListApi::apply(edit, h.path("/Fallback_ListAPI")).expect("ListAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Authored_ListAPI"));
+    usd_geom::Scope::define(edit, h.path("/Authored_ListAPI")).expect("outside any instance");
     usd_lux::ListApi::apply(edit, h.path("/Authored_ListAPI")).expect("ListAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Fallback_MeshLightAPI"));
+    usd_geom::Scope::define(edit, h.path("/Fallback_MeshLightAPI")).expect("outside any instance");
     usd_lux::MeshLightApi::apply(edit, h.path("/Fallback_MeshLightAPI"))
         .expect("MeshLightAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Authored_MeshLightAPI"));
+    usd_geom::Scope::define(edit, h.path("/Authored_MeshLightAPI")).expect("outside any instance");
     usd_lux::MeshLightApi::apply(edit, h.path("/Authored_MeshLightAPI"))
         .expect("MeshLightAPI applies to a Scope");
-    usd_lux::PluginLight::define(edit, h.path("/Fallback_PluginLight"));
-    usd_lux::PluginLight::define(edit, h.path("/Authored_PluginLight"));
-    usd_lux::PluginLightFilter::define(edit, h.path("/Fallback_PluginLightFilter"));
-    usd_lux::PluginLightFilter::define(edit, h.path("/Authored_PluginLightFilter"));
-    usd_lux::PortalLight::define(edit, h.path("/Fallback_PortalLight"));
-    usd_lux::PortalLight::define(edit, h.path("/Authored_PortalLight"));
-    usd_lux::RectLight::define(edit, h.path("/Fallback_RectLight"));
-    usd_lux::RectLight::define(edit, h.path("/Authored_RectLight"));
-    usd_geom::Scope::define(edit, h.path("/Fallback_ShadowAPI"));
+    usd_lux::PluginLight::define(edit, h.path("/Fallback_PluginLight"))
+        .expect("outside any instance");
+    usd_lux::PluginLight::define(edit, h.path("/Authored_PluginLight"))
+        .expect("outside any instance");
+    usd_lux::PluginLightFilter::define(edit, h.path("/Fallback_PluginLightFilter"))
+        .expect("outside any instance");
+    usd_lux::PluginLightFilter::define(edit, h.path("/Authored_PluginLightFilter"))
+        .expect("outside any instance");
+    usd_lux::PortalLight::define(edit, h.path("/Fallback_PortalLight"))
+        .expect("outside any instance");
+    usd_lux::PortalLight::define(edit, h.path("/Authored_PortalLight"))
+        .expect("outside any instance");
+    usd_lux::RectLight::define(edit, h.path("/Fallback_RectLight")).expect("outside any instance");
+    usd_lux::RectLight::define(edit, h.path("/Authored_RectLight")).expect("outside any instance");
+    usd_geom::Scope::define(edit, h.path("/Fallback_ShadowAPI")).expect("outside any instance");
     usd_lux::ShadowApi::apply(edit, h.path("/Fallback_ShadowAPI"))
         .expect("ShadowAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Authored_ShadowAPI"));
+    usd_geom::Scope::define(edit, h.path("/Authored_ShadowAPI")).expect("outside any instance");
     usd_lux::ShadowApi::apply(edit, h.path("/Authored_ShadowAPI"))
         .expect("ShadowAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Fallback_ShapingAPI"));
+    usd_geom::Scope::define(edit, h.path("/Fallback_ShapingAPI")).expect("outside any instance");
     usd_lux::ShapingApi::apply(edit, h.path("/Fallback_ShapingAPI"))
         .expect("ShapingAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Authored_ShapingAPI"));
+    usd_geom::Scope::define(edit, h.path("/Authored_ShapingAPI")).expect("outside any instance");
     usd_lux::ShapingApi::apply(edit, h.path("/Authored_ShapingAPI"))
         .expect("ShapingAPI applies to a Scope");
-    usd_lux::SphereLight::define(edit, h.path("/Fallback_SphereLight"));
-    usd_lux::SphereLight::define(edit, h.path("/Authored_SphereLight"));
-    usd_geom::Scope::define(edit, h.path("/Fallback_VolumeLightAPI"));
+    usd_lux::SphereLight::define(edit, h.path("/Fallback_SphereLight"))
+        .expect("outside any instance");
+    usd_lux::SphereLight::define(edit, h.path("/Authored_SphereLight"))
+        .expect("outside any instance");
+    usd_geom::Scope::define(edit, h.path("/Fallback_VolumeLightAPI"))
+        .expect("outside any instance");
     usd_lux::VolumeLightApi::apply(edit, h.path("/Fallback_VolumeLightAPI"))
         .expect("VolumeLightAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Authored_VolumeLightAPI"));
+    usd_geom::Scope::define(edit, h.path("/Authored_VolumeLightAPI"))
+        .expect("outside any instance");
     usd_lux::VolumeLightApi::apply(edit, h.path("/Authored_VolumeLightAPI"))
         .expect("VolumeLightAPI applies to a Scope");
-    usd_skel::BlendShape::define(edit, h.path("/Fallback_BlendShape"));
-    usd_skel::BlendShape::define(edit, h.path("/Authored_BlendShape"));
-    usd_skel::SkelAnimation::define(edit, h.path("/Fallback_SkelAnimation"));
-    usd_skel::SkelAnimation::define(edit, h.path("/Authored_SkelAnimation"));
-    usd_geom::Scope::define(edit, h.path("/Fallback_SkelBindingAPI"));
+    usd_skel::BlendShape::define(edit, h.path("/Fallback_BlendShape"))
+        .expect("outside any instance");
+    usd_skel::BlendShape::define(edit, h.path("/Authored_BlendShape"))
+        .expect("outside any instance");
+    usd_skel::SkelAnimation::define(edit, h.path("/Fallback_SkelAnimation"))
+        .expect("outside any instance");
+    usd_skel::SkelAnimation::define(edit, h.path("/Authored_SkelAnimation"))
+        .expect("outside any instance");
+    usd_geom::Scope::define(edit, h.path("/Fallback_SkelBindingAPI"))
+        .expect("outside any instance");
     usd_skel::SkelBindingApi::apply(edit, h.path("/Fallback_SkelBindingAPI"))
         .expect("SkelBindingAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Authored_SkelBindingAPI"));
+    usd_geom::Scope::define(edit, h.path("/Authored_SkelBindingAPI"))
+        .expect("outside any instance");
     usd_skel::SkelBindingApi::apply(edit, h.path("/Authored_SkelBindingAPI"))
         .expect("SkelBindingAPI applies to a Scope");
-    usd_skel::SkelRoot::define(edit, h.path("/Fallback_SkelRoot"));
-    usd_skel::SkelRoot::define(edit, h.path("/Authored_SkelRoot"));
-    usd_skel::Skeleton::define(edit, h.path("/Fallback_Skeleton"));
-    usd_skel::Skeleton::define(edit, h.path("/Authored_Skeleton"));
-    usd_geom::Scope::define(edit, h.path("/Fallback_PhysicsArticulationRootAPI"));
+    usd_skel::SkelRoot::define(edit, h.path("/Fallback_SkelRoot")).expect("outside any instance");
+    usd_skel::SkelRoot::define(edit, h.path("/Authored_SkelRoot")).expect("outside any instance");
+    usd_skel::Skeleton::define(edit, h.path("/Fallback_Skeleton")).expect("outside any instance");
+    usd_skel::Skeleton::define(edit, h.path("/Authored_Skeleton")).expect("outside any instance");
+    usd_geom::Scope::define(edit, h.path("/Fallback_PhysicsArticulationRootAPI"))
+        .expect("outside any instance");
     usd_physics::PhysicsArticulationRootApi::apply(
         edit,
         h.path("/Fallback_PhysicsArticulationRootAPI"),
     )
     .expect("PhysicsArticulationRootAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Authored_PhysicsArticulationRootAPI"));
+    usd_geom::Scope::define(edit, h.path("/Authored_PhysicsArticulationRootAPI"))
+        .expect("outside any instance");
     usd_physics::PhysicsArticulationRootApi::apply(
         edit,
         h.path("/Authored_PhysicsArticulationRootAPI"),
     )
     .expect("PhysicsArticulationRootAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Fallback_PhysicsCollisionAPI"));
+    usd_geom::Scope::define(edit, h.path("/Fallback_PhysicsCollisionAPI"))
+        .expect("outside any instance");
     usd_physics::PhysicsCollisionApi::apply(edit, h.path("/Fallback_PhysicsCollisionAPI"))
         .expect("PhysicsCollisionAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Authored_PhysicsCollisionAPI"));
+    usd_geom::Scope::define(edit, h.path("/Authored_PhysicsCollisionAPI"))
+        .expect("outside any instance");
     usd_physics::PhysicsCollisionApi::apply(edit, h.path("/Authored_PhysicsCollisionAPI"))
         .expect("PhysicsCollisionAPI applies to a Scope");
-    usd_physics::PhysicsCollisionGroup::define(edit, h.path("/Fallback_PhysicsCollisionGroup"));
-    usd_physics::PhysicsCollisionGroup::define(edit, h.path("/Authored_PhysicsCollisionGroup"));
-    usd_physics::PhysicsDistanceJoint::define(edit, h.path("/Fallback_PhysicsDistanceJoint"));
-    usd_physics::PhysicsDistanceJoint::define(edit, h.path("/Authored_PhysicsDistanceJoint"));
-    usd_geom::Scope::define(edit, h.path("/Fallback_PhysicsDriveAPI"));
+    usd_physics::PhysicsCollisionGroup::define(edit, h.path("/Fallback_PhysicsCollisionGroup"))
+        .expect("outside any instance");
+    usd_physics::PhysicsCollisionGroup::define(edit, h.path("/Authored_PhysicsCollisionGroup"))
+        .expect("outside any instance");
+    usd_physics::PhysicsDistanceJoint::define(edit, h.path("/Fallback_PhysicsDistanceJoint"))
+        .expect("outside any instance");
+    usd_physics::PhysicsDistanceJoint::define(edit, h.path("/Authored_PhysicsDistanceJoint"))
+        .expect("outside any instance");
+    usd_geom::Scope::define(edit, h.path("/Fallback_PhysicsDriveAPI"))
+        .expect("outside any instance");
     usd_physics::PhysicsDriveApi::apply(edit, h.path("/Fallback_PhysicsDriveAPI"), "a")
         .expect("PhysicsDriveAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Authored_PhysicsDriveAPI"));
+    usd_geom::Scope::define(edit, h.path("/Authored_PhysicsDriveAPI"))
+        .expect("outside any instance");
     usd_physics::PhysicsDriveApi::apply(edit, h.path("/Authored_PhysicsDriveAPI"), "a")
         .expect("PhysicsDriveAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Fallback_PhysicsFilteredPairsAPI"));
+    usd_geom::Scope::define(edit, h.path("/Fallback_PhysicsFilteredPairsAPI"))
+        .expect("outside any instance");
     usd_physics::PhysicsFilteredPairsApi::apply(edit, h.path("/Fallback_PhysicsFilteredPairsAPI"))
         .expect("PhysicsFilteredPairsAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Authored_PhysicsFilteredPairsAPI"));
+    usd_geom::Scope::define(edit, h.path("/Authored_PhysicsFilteredPairsAPI"))
+        .expect("outside any instance");
     usd_physics::PhysicsFilteredPairsApi::apply(edit, h.path("/Authored_PhysicsFilteredPairsAPI"))
         .expect("PhysicsFilteredPairsAPI applies to a Scope");
-    usd_physics::PhysicsFixedJoint::define(edit, h.path("/Fallback_PhysicsFixedJoint"));
-    usd_physics::PhysicsFixedJoint::define(edit, h.path("/Authored_PhysicsFixedJoint"));
-    usd_physics::PhysicsJoint::define(edit, h.path("/Fallback_PhysicsJoint"));
-    usd_physics::PhysicsJoint::define(edit, h.path("/Authored_PhysicsJoint"));
-    usd_geom::Scope::define(edit, h.path("/Fallback_PhysicsLimitAPI"));
+    usd_physics::PhysicsFixedJoint::define(edit, h.path("/Fallback_PhysicsFixedJoint"))
+        .expect("outside any instance");
+    usd_physics::PhysicsFixedJoint::define(edit, h.path("/Authored_PhysicsFixedJoint"))
+        .expect("outside any instance");
+    usd_physics::PhysicsJoint::define(edit, h.path("/Fallback_PhysicsJoint"))
+        .expect("outside any instance");
+    usd_physics::PhysicsJoint::define(edit, h.path("/Authored_PhysicsJoint"))
+        .expect("outside any instance");
+    usd_geom::Scope::define(edit, h.path("/Fallback_PhysicsLimitAPI"))
+        .expect("outside any instance");
     usd_physics::PhysicsLimitApi::apply(edit, h.path("/Fallback_PhysicsLimitAPI"), "a")
         .expect("PhysicsLimitAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Authored_PhysicsLimitAPI"));
+    usd_geom::Scope::define(edit, h.path("/Authored_PhysicsLimitAPI"))
+        .expect("outside any instance");
     usd_physics::PhysicsLimitApi::apply(edit, h.path("/Authored_PhysicsLimitAPI"), "a")
         .expect("PhysicsLimitAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Fallback_PhysicsMassAPI"));
+    usd_geom::Scope::define(edit, h.path("/Fallback_PhysicsMassAPI"))
+        .expect("outside any instance");
     usd_physics::PhysicsMassApi::apply(edit, h.path("/Fallback_PhysicsMassAPI"))
         .expect("PhysicsMassAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Authored_PhysicsMassAPI"));
+    usd_geom::Scope::define(edit, h.path("/Authored_PhysicsMassAPI"))
+        .expect("outside any instance");
     usd_physics::PhysicsMassApi::apply(edit, h.path("/Authored_PhysicsMassAPI"))
         .expect("PhysicsMassAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Fallback_PhysicsMaterialAPI"));
+    usd_geom::Scope::define(edit, h.path("/Fallback_PhysicsMaterialAPI"))
+        .expect("outside any instance");
     usd_physics::PhysicsMaterialApi::apply(edit, h.path("/Fallback_PhysicsMaterialAPI"))
         .expect("PhysicsMaterialAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Authored_PhysicsMaterialAPI"));
+    usd_geom::Scope::define(edit, h.path("/Authored_PhysicsMaterialAPI"))
+        .expect("outside any instance");
     usd_physics::PhysicsMaterialApi::apply(edit, h.path("/Authored_PhysicsMaterialAPI"))
         .expect("PhysicsMaterialAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Fallback_PhysicsMeshCollisionAPI"));
+    usd_geom::Scope::define(edit, h.path("/Fallback_PhysicsMeshCollisionAPI"))
+        .expect("outside any instance");
     usd_physics::PhysicsMeshCollisionApi::apply(edit, h.path("/Fallback_PhysicsMeshCollisionAPI"))
         .expect("PhysicsMeshCollisionAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Authored_PhysicsMeshCollisionAPI"));
+    usd_geom::Scope::define(edit, h.path("/Authored_PhysicsMeshCollisionAPI"))
+        .expect("outside any instance");
     usd_physics::PhysicsMeshCollisionApi::apply(edit, h.path("/Authored_PhysicsMeshCollisionAPI"))
         .expect("PhysicsMeshCollisionAPI applies to a Scope");
-    usd_physics::PhysicsPrismaticJoint::define(edit, h.path("/Fallback_PhysicsPrismaticJoint"));
-    usd_physics::PhysicsPrismaticJoint::define(edit, h.path("/Authored_PhysicsPrismaticJoint"));
-    usd_physics::PhysicsRevoluteJoint::define(edit, h.path("/Fallback_PhysicsRevoluteJoint"));
-    usd_physics::PhysicsRevoluteJoint::define(edit, h.path("/Authored_PhysicsRevoluteJoint"));
-    usd_geom::Scope::define(edit, h.path("/Fallback_PhysicsRigidBodyAPI"));
+    usd_physics::PhysicsPrismaticJoint::define(edit, h.path("/Fallback_PhysicsPrismaticJoint"))
+        .expect("outside any instance");
+    usd_physics::PhysicsPrismaticJoint::define(edit, h.path("/Authored_PhysicsPrismaticJoint"))
+        .expect("outside any instance");
+    usd_physics::PhysicsRevoluteJoint::define(edit, h.path("/Fallback_PhysicsRevoluteJoint"))
+        .expect("outside any instance");
+    usd_physics::PhysicsRevoluteJoint::define(edit, h.path("/Authored_PhysicsRevoluteJoint"))
+        .expect("outside any instance");
+    usd_geom::Scope::define(edit, h.path("/Fallback_PhysicsRigidBodyAPI"))
+        .expect("outside any instance");
     usd_physics::PhysicsRigidBodyApi::apply(edit, h.path("/Fallback_PhysicsRigidBodyAPI"))
         .expect("PhysicsRigidBodyAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Authored_PhysicsRigidBodyAPI"));
+    usd_geom::Scope::define(edit, h.path("/Authored_PhysicsRigidBodyAPI"))
+        .expect("outside any instance");
     usd_physics::PhysicsRigidBodyApi::apply(edit, h.path("/Authored_PhysicsRigidBodyAPI"))
         .expect("PhysicsRigidBodyAPI applies to a Scope");
-    usd_physics::PhysicsScene::define(edit, h.path("/Fallback_PhysicsScene"));
-    usd_physics::PhysicsScene::define(edit, h.path("/Authored_PhysicsScene"));
-    usd_physics::PhysicsSphericalJoint::define(edit, h.path("/Fallback_PhysicsSphericalJoint"));
-    usd_physics::PhysicsSphericalJoint::define(edit, h.path("/Authored_PhysicsSphericalJoint"));
-    usd_vol::Field3DAsset::define(edit, h.path("/Fallback_Field3DAsset"));
-    usd_vol::Field3DAsset::define(edit, h.path("/Authored_Field3DAsset"));
-    usd_vol::OpenVDBAsset::define(edit, h.path("/Fallback_OpenVDBAsset"));
-    usd_vol::OpenVDBAsset::define(edit, h.path("/Authored_OpenVDBAsset"));
-    usd_vol::ParticleField::define(edit, h.path("/Fallback_ParticleField"));
-    usd_vol::ParticleField::define(edit, h.path("/Authored_ParticleField"));
+    usd_physics::PhysicsScene::define(edit, h.path("/Fallback_PhysicsScene"))
+        .expect("outside any instance");
+    usd_physics::PhysicsScene::define(edit, h.path("/Authored_PhysicsScene"))
+        .expect("outside any instance");
+    usd_physics::PhysicsSphericalJoint::define(edit, h.path("/Fallback_PhysicsSphericalJoint"))
+        .expect("outside any instance");
+    usd_physics::PhysicsSphericalJoint::define(edit, h.path("/Authored_PhysicsSphericalJoint"))
+        .expect("outside any instance");
+    usd_vol::Field3DAsset::define(edit, h.path("/Fallback_Field3DAsset"))
+        .expect("outside any instance");
+    usd_vol::Field3DAsset::define(edit, h.path("/Authored_Field3DAsset"))
+        .expect("outside any instance");
+    usd_vol::OpenVDBAsset::define(edit, h.path("/Fallback_OpenVDBAsset"))
+        .expect("outside any instance");
+    usd_vol::OpenVDBAsset::define(edit, h.path("/Authored_OpenVDBAsset"))
+        .expect("outside any instance");
+    usd_vol::ParticleField::define(edit, h.path("/Fallback_ParticleField"))
+        .expect("outside any instance");
+    usd_vol::ParticleField::define(edit, h.path("/Authored_ParticleField"))
+        .expect("outside any instance");
     usd_vol::ParticleField3DGaussianSplat::define(
         edit,
         h.path("/Fallback_ParticleField3DGaussianSplat"),
-    );
+    )
+    .expect("outside any instance");
     usd_vol::ParticleField3DGaussianSplat::define(
         edit,
         h.path("/Authored_ParticleField3DGaussianSplat"),
-    );
-    usd_geom::Scope::define(edit, h.path("/Fallback_ParticleFieldKernelBaseAPI"));
+    )
+    .expect("outside any instance");
+    usd_geom::Scope::define(edit, h.path("/Fallback_ParticleFieldKernelBaseAPI"))
+        .expect("outside any instance");
     usd_vol::ParticleFieldKernelBaseApi::apply(
         edit,
         h.path("/Fallback_ParticleFieldKernelBaseAPI"),
     )
     .expect("ParticleFieldKernelBaseAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Authored_ParticleFieldKernelBaseAPI"));
+    usd_geom::Scope::define(edit, h.path("/Authored_ParticleFieldKernelBaseAPI"))
+        .expect("outside any instance");
     usd_vol::ParticleFieldKernelBaseApi::apply(
         edit,
         h.path("/Authored_ParticleFieldKernelBaseAPI"),
@@ -550,7 +642,8 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     usd_vol::ParticleField::define(
         edit,
         h.path("/Fallback_ParticleFieldKernelConstantSurfletAPI"),
-    );
+    )
+    .expect("outside any instance");
     usd_vol::ParticleFieldKernelConstantSurfletApi::apply(
         edit,
         h.path("/Fallback_ParticleFieldKernelConstantSurfletAPI"),
@@ -559,7 +652,8 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     usd_vol::ParticleField::define(
         edit,
         h.path("/Authored_ParticleFieldKernelConstantSurfletAPI"),
-    );
+    )
+    .expect("outside any instance");
     usd_vol::ParticleFieldKernelConstantSurfletApi::apply(
         edit,
         h.path("/Authored_ParticleFieldKernelConstantSurfletAPI"),
@@ -568,7 +662,8 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     usd_vol::ParticleField::define(
         edit,
         h.path("/Fallback_ParticleFieldKernelGaussianEllipsoidAPI"),
-    );
+    )
+    .expect("outside any instance");
     usd_vol::ParticleFieldKernelGaussianEllipsoidApi::apply(
         edit,
         h.path("/Fallback_ParticleFieldKernelGaussianEllipsoidAPI"),
@@ -577,7 +672,8 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     usd_vol::ParticleField::define(
         edit,
         h.path("/Authored_ParticleFieldKernelGaussianEllipsoidAPI"),
-    );
+    )
+    .expect("outside any instance");
     usd_vol::ParticleFieldKernelGaussianEllipsoidApi::apply(
         edit,
         h.path("/Authored_ParticleFieldKernelGaussianEllipsoidAPI"),
@@ -586,7 +682,8 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     usd_vol::ParticleField::define(
         edit,
         h.path("/Fallback_ParticleFieldKernelGaussianSurfletAPI"),
-    );
+    )
+    .expect("outside any instance");
     usd_vol::ParticleFieldKernelGaussianSurfletApi::apply(
         edit,
         h.path("/Fallback_ParticleFieldKernelGaussianSurfletAPI"),
@@ -595,19 +692,22 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     usd_vol::ParticleField::define(
         edit,
         h.path("/Authored_ParticleFieldKernelGaussianSurfletAPI"),
-    );
+    )
+    .expect("outside any instance");
     usd_vol::ParticleFieldKernelGaussianSurfletApi::apply(
         edit,
         h.path("/Authored_ParticleFieldKernelGaussianSurfletAPI"),
     )
     .expect("ParticleFieldKernelGaussianSurfletAPI applies to a ParticleField");
-    usd_vol::ParticleField::define(edit, h.path("/Fallback_ParticleFieldOpacityAttributeAPI"));
+    usd_vol::ParticleField::define(edit, h.path("/Fallback_ParticleFieldOpacityAttributeAPI"))
+        .expect("outside any instance");
     usd_vol::ParticleFieldOpacityAttributeApi::apply(
         edit,
         h.path("/Fallback_ParticleFieldOpacityAttributeAPI"),
     )
     .expect("ParticleFieldOpacityAttributeAPI applies to a ParticleField");
-    usd_vol::ParticleField::define(edit, h.path("/Authored_ParticleFieldOpacityAttributeAPI"));
+    usd_vol::ParticleField::define(edit, h.path("/Authored_ParticleFieldOpacityAttributeAPI"))
+        .expect("outside any instance");
     usd_vol::ParticleFieldOpacityAttributeApi::apply(
         edit,
         h.path("/Authored_ParticleFieldOpacityAttributeAPI"),
@@ -616,7 +716,8 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     usd_vol::ParticleField::define(
         edit,
         h.path("/Fallback_ParticleFieldOrientationAttributeAPI"),
-    );
+    )
+    .expect("outside any instance");
     usd_vol::ParticleFieldOrientationAttributeApi::apply(
         edit,
         h.path("/Fallback_ParticleFieldOrientationAttributeAPI"),
@@ -625,55 +726,64 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     usd_vol::ParticleField::define(
         edit,
         h.path("/Authored_ParticleFieldOrientationAttributeAPI"),
-    );
+    )
+    .expect("outside any instance");
     usd_vol::ParticleFieldOrientationAttributeApi::apply(
         edit,
         h.path("/Authored_ParticleFieldOrientationAttributeAPI"),
     )
     .expect("ParticleFieldOrientationAttributeAPI applies to a ParticleField");
-    usd_vol::ParticleField::define(edit, h.path("/Fallback_ParticleFieldPositionAttributeAPI"));
+    usd_vol::ParticleField::define(edit, h.path("/Fallback_ParticleFieldPositionAttributeAPI"))
+        .expect("outside any instance");
     usd_vol::ParticleFieldPositionAttributeApi::apply(
         edit,
         h.path("/Fallback_ParticleFieldPositionAttributeAPI"),
     )
     .expect("ParticleFieldPositionAttributeAPI applies to a ParticleField");
-    usd_vol::ParticleField::define(edit, h.path("/Authored_ParticleFieldPositionAttributeAPI"));
+    usd_vol::ParticleField::define(edit, h.path("/Authored_ParticleFieldPositionAttributeAPI"))
+        .expect("outside any instance");
     usd_vol::ParticleFieldPositionAttributeApi::apply(
         edit,
         h.path("/Authored_ParticleFieldPositionAttributeAPI"),
     )
     .expect("ParticleFieldPositionAttributeAPI applies to a ParticleField");
-    usd_geom::Scope::define(edit, h.path("/Fallback_ParticleFieldPositionBaseAPI"));
+    usd_geom::Scope::define(edit, h.path("/Fallback_ParticleFieldPositionBaseAPI"))
+        .expect("outside any instance");
     usd_vol::ParticleFieldPositionBaseApi::apply(
         edit,
         h.path("/Fallback_ParticleFieldPositionBaseAPI"),
     )
     .expect("ParticleFieldPositionBaseAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Authored_ParticleFieldPositionBaseAPI"));
+    usd_geom::Scope::define(edit, h.path("/Authored_ParticleFieldPositionBaseAPI"))
+        .expect("outside any instance");
     usd_vol::ParticleFieldPositionBaseApi::apply(
         edit,
         h.path("/Authored_ParticleFieldPositionBaseAPI"),
     )
     .expect("ParticleFieldPositionBaseAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Fallback_ParticleFieldRadianceBaseAPI"));
+    usd_geom::Scope::define(edit, h.path("/Fallback_ParticleFieldRadianceBaseAPI"))
+        .expect("outside any instance");
     usd_vol::ParticleFieldRadianceBaseApi::apply(
         edit,
         h.path("/Fallback_ParticleFieldRadianceBaseAPI"),
     )
     .expect("ParticleFieldRadianceBaseAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Authored_ParticleFieldRadianceBaseAPI"));
+    usd_geom::Scope::define(edit, h.path("/Authored_ParticleFieldRadianceBaseAPI"))
+        .expect("outside any instance");
     usd_vol::ParticleFieldRadianceBaseApi::apply(
         edit,
         h.path("/Authored_ParticleFieldRadianceBaseAPI"),
     )
     .expect("ParticleFieldRadianceBaseAPI applies to a Scope");
-    usd_vol::ParticleField::define(edit, h.path("/Fallback_ParticleFieldScaleAttributeAPI"));
+    usd_vol::ParticleField::define(edit, h.path("/Fallback_ParticleFieldScaleAttributeAPI"))
+        .expect("outside any instance");
     usd_vol::ParticleFieldScaleAttributeApi::apply(
         edit,
         h.path("/Fallback_ParticleFieldScaleAttributeAPI"),
     )
     .expect("ParticleFieldScaleAttributeAPI applies to a ParticleField");
-    usd_vol::ParticleField::define(edit, h.path("/Authored_ParticleFieldScaleAttributeAPI"));
+    usd_vol::ParticleField::define(edit, h.path("/Authored_ParticleFieldScaleAttributeAPI"))
+        .expect("outside any instance");
     usd_vol::ParticleFieldScaleAttributeApi::apply(
         edit,
         h.path("/Authored_ParticleFieldScaleAttributeAPI"),
@@ -682,7 +792,8 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     usd_vol::ParticleField::define(
         edit,
         h.path("/Fallback_ParticleFieldSphericalHarmonicsAttributeAPI"),
-    );
+    )
+    .expect("outside any instance");
     usd_vol::ParticleFieldSphericalHarmonicsAttributeApi::apply(
         edit,
         h.path("/Fallback_ParticleFieldSphericalHarmonicsAttributeAPI"),
@@ -691,120 +802,155 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     usd_vol::ParticleField::define(
         edit,
         h.path("/Authored_ParticleFieldSphericalHarmonicsAttributeAPI"),
-    );
+    )
+    .expect("outside any instance");
     usd_vol::ParticleFieldSphericalHarmonicsAttributeApi::apply(
         edit,
         h.path("/Authored_ParticleFieldSphericalHarmonicsAttributeAPI"),
     )
     .expect("ParticleFieldSphericalHarmonicsAttributeAPI applies to a ParticleField");
-    usd_vol::Volume::define(edit, h.path("/Fallback_Volume"));
-    usd_vol::Volume::define(edit, h.path("/Authored_Volume"));
-    usd_render::RenderPass::define(edit, h.path("/Fallback_RenderPass"));
-    usd_render::RenderPass::define(edit, h.path("/Authored_RenderPass"));
-    usd_render::RenderProduct::define(edit, h.path("/Fallback_RenderProduct"));
-    usd_render::RenderProduct::define(edit, h.path("/Authored_RenderProduct"));
-    usd_render::RenderSettings::define(edit, h.path("/Fallback_RenderSettings"));
-    usd_render::RenderSettings::define(edit, h.path("/Authored_RenderSettings"));
-    usd_render::RenderVar::define(edit, h.path("/Fallback_RenderVar"));
-    usd_render::RenderVar::define(edit, h.path("/Authored_RenderVar"));
-    usd_lod::LODDistanceHeuristic::define(edit, h.path("/Fallback_LODDistanceHeuristic"));
-    usd_lod::LODDistanceHeuristic::define(edit, h.path("/Authored_LODDistanceHeuristic"));
-    usd_geom::Scope::define(edit, h.path("/Fallback_LODOverrideAPI"));
+    usd_vol::Volume::define(edit, h.path("/Fallback_Volume")).expect("outside any instance");
+    usd_vol::Volume::define(edit, h.path("/Authored_Volume")).expect("outside any instance");
+    usd_render::RenderPass::define(edit, h.path("/Fallback_RenderPass"))
+        .expect("outside any instance");
+    usd_render::RenderPass::define(edit, h.path("/Authored_RenderPass"))
+        .expect("outside any instance");
+    usd_render::RenderProduct::define(edit, h.path("/Fallback_RenderProduct"))
+        .expect("outside any instance");
+    usd_render::RenderProduct::define(edit, h.path("/Authored_RenderProduct"))
+        .expect("outside any instance");
+    usd_render::RenderSettings::define(edit, h.path("/Fallback_RenderSettings"))
+        .expect("outside any instance");
+    usd_render::RenderSettings::define(edit, h.path("/Authored_RenderSettings"))
+        .expect("outside any instance");
+    usd_render::RenderVar::define(edit, h.path("/Fallback_RenderVar"))
+        .expect("outside any instance");
+    usd_render::RenderVar::define(edit, h.path("/Authored_RenderVar"))
+        .expect("outside any instance");
+    usd_lod::LODDistanceHeuristic::define(edit, h.path("/Fallback_LODDistanceHeuristic"))
+        .expect("outside any instance");
+    usd_lod::LODDistanceHeuristic::define(edit, h.path("/Authored_LODDistanceHeuristic"))
+        .expect("outside any instance");
+    usd_geom::Scope::define(edit, h.path("/Fallback_LODOverrideAPI"))
+        .expect("outside any instance");
     usd_lod::LODOverrideApi::apply(edit, h.path("/Fallback_LODOverrideAPI"))
         .expect("LODOverrideAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Authored_LODOverrideAPI"));
+    usd_geom::Scope::define(edit, h.path("/Authored_LODOverrideAPI"))
+        .expect("outside any instance");
     usd_lod::LODOverrideApi::apply(edit, h.path("/Authored_LODOverrideAPI"))
         .expect("LODOverrideAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Fallback_LODRootAPI"));
+    usd_geom::Scope::define(edit, h.path("/Fallback_LODRootAPI")).expect("outside any instance");
     usd_lod::LODRootApi::apply(edit, h.path("/Fallback_LODRootAPI"))
         .expect("LODRootAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Authored_LODRootAPI"));
+    usd_geom::Scope::define(edit, h.path("/Authored_LODRootAPI")).expect("outside any instance");
     usd_lod::LODRootApi::apply(edit, h.path("/Authored_LODRootAPI"))
         .expect("LODRootAPI applies to a Scope");
-    usd_lod::LODScreenSizeHeuristic::define(edit, h.path("/Fallback_LODScreenSizeHeuristic"));
-    usd_lod::LODScreenSizeHeuristic::define(edit, h.path("/Authored_LODScreenSizeHeuristic"));
-    usd_geom::Scope::define(edit, h.path("/Fallback_AccessibilityAPI"));
+    usd_lod::LODScreenSizeHeuristic::define(edit, h.path("/Fallback_LODScreenSizeHeuristic"))
+        .expect("outside any instance");
+    usd_lod::LODScreenSizeHeuristic::define(edit, h.path("/Authored_LODScreenSizeHeuristic"))
+        .expect("outside any instance");
+    usd_geom::Scope::define(edit, h.path("/Fallback_AccessibilityAPI"))
+        .expect("outside any instance");
     usd_ui::AccessibilityApi::apply(edit, h.path("/Fallback_AccessibilityAPI"), "a")
         .expect("AccessibilityAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Authored_AccessibilityAPI"));
+    usd_geom::Scope::define(edit, h.path("/Authored_AccessibilityAPI"))
+        .expect("outside any instance");
     usd_ui::AccessibilityApi::apply(edit, h.path("/Authored_AccessibilityAPI"), "a")
         .expect("AccessibilityAPI applies to a Scope");
-    usd_ui::Backdrop::define(edit, h.path("/Fallback_Backdrop"));
-    usd_ui::Backdrop::define(edit, h.path("/Authored_Backdrop"));
-    usd_geom::Scope::define(edit, h.path("/Fallback_NodeGraphNodeAPI"));
+    usd_ui::Backdrop::define(edit, h.path("/Fallback_Backdrop")).expect("outside any instance");
+    usd_ui::Backdrop::define(edit, h.path("/Authored_Backdrop")).expect("outside any instance");
+    usd_geom::Scope::define(edit, h.path("/Fallback_NodeGraphNodeAPI"))
+        .expect("outside any instance");
     usd_ui::NodeGraphNodeApi::apply(edit, h.path("/Fallback_NodeGraphNodeAPI"))
         .expect("NodeGraphNodeAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Authored_NodeGraphNodeAPI"));
+    usd_geom::Scope::define(edit, h.path("/Authored_NodeGraphNodeAPI"))
+        .expect("outside any instance");
     usd_ui::NodeGraphNodeApi::apply(edit, h.path("/Authored_NodeGraphNodeAPI"))
         .expect("NodeGraphNodeAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Fallback_SceneGraphPrimAPI"));
+    usd_geom::Scope::define(edit, h.path("/Fallback_SceneGraphPrimAPI"))
+        .expect("outside any instance");
     usd_ui::SceneGraphPrimApi::apply(edit, h.path("/Fallback_SceneGraphPrimAPI"))
         .expect("SceneGraphPrimAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Authored_SceneGraphPrimAPI"));
+    usd_geom::Scope::define(edit, h.path("/Authored_SceneGraphPrimAPI"))
+        .expect("outside any instance");
     usd_ui::SceneGraphPrimApi::apply(edit, h.path("/Authored_SceneGraphPrimAPI"))
         .expect("SceneGraphPrimAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Fallback_RiMaterialAPI"));
+    usd_geom::Scope::define(edit, h.path("/Fallback_RiMaterialAPI")).expect("outside any instance");
     usd_ri::RiMaterialApi::apply(edit, h.path("/Fallback_RiMaterialAPI"))
         .expect("RiMaterialAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Authored_RiMaterialAPI"));
+    usd_geom::Scope::define(edit, h.path("/Authored_RiMaterialAPI")).expect("outside any instance");
     usd_ri::RiMaterialApi::apply(edit, h.path("/Authored_RiMaterialAPI"))
         .expect("RiMaterialAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Fallback_RiSplineAPI"));
+    usd_geom::Scope::define(edit, h.path("/Fallback_RiSplineAPI")).expect("outside any instance");
     usd_ri::RiSplineApi::apply(edit, h.path("/Fallback_RiSplineAPI"))
         .expect("RiSplineAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Authored_RiSplineAPI"));
+    usd_geom::Scope::define(edit, h.path("/Authored_RiSplineAPI")).expect("outside any instance");
     usd_ri::RiSplineApi::apply(edit, h.path("/Authored_RiSplineAPI"))
         .expect("RiSplineAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Fallback_StatementsAPI"));
+    usd_geom::Scope::define(edit, h.path("/Fallback_StatementsAPI")).expect("outside any instance");
     usd_ri::StatementsApi::apply(edit, h.path("/Fallback_StatementsAPI"))
         .expect("StatementsAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Authored_StatementsAPI"));
+    usd_geom::Scope::define(edit, h.path("/Authored_StatementsAPI")).expect("outside any instance");
     usd_ri::StatementsApi::apply(edit, h.path("/Authored_StatementsAPI"))
         .expect("StatementsAPI applies to a Scope");
-    usd_proc::GenerativeProcedural::define(edit, h.path("/Fallback_HydraGenerativeProceduralAPI"));
+    usd_proc::GenerativeProcedural::define(edit, h.path("/Fallback_HydraGenerativeProceduralAPI"))
+        .expect("outside any instance");
     usd_hydra::HydraGenerativeProceduralApi::apply(
         edit,
         h.path("/Fallback_HydraGenerativeProceduralAPI"),
     )
     .expect("HydraGenerativeProceduralAPI applies to a GenerativeProcedural");
-    usd_proc::GenerativeProcedural::define(edit, h.path("/Authored_HydraGenerativeProceduralAPI"));
+    usd_proc::GenerativeProcedural::define(edit, h.path("/Authored_HydraGenerativeProceduralAPI"))
+        .expect("outside any instance");
     usd_hydra::HydraGenerativeProceduralApi::apply(
         edit,
         h.path("/Authored_HydraGenerativeProceduralAPI"),
     )
     .expect("HydraGenerativeProceduralAPI applies to a GenerativeProcedural");
-    usd_render::RenderPass::define(edit, h.path("/Fallback_HydraRenderPassAPI"));
+    usd_render::RenderPass::define(edit, h.path("/Fallback_HydraRenderPassAPI"))
+        .expect("outside any instance");
     usd_hydra::HydraRenderPassApi::apply(edit, h.path("/Fallback_HydraRenderPassAPI"))
         .expect("HydraRenderPassAPI applies to a RenderPass");
-    usd_render::RenderPass::define(edit, h.path("/Authored_HydraRenderPassAPI"));
+    usd_render::RenderPass::define(edit, h.path("/Authored_HydraRenderPassAPI"))
+        .expect("outside any instance");
     usd_hydra::HydraRenderPassApi::apply(edit, h.path("/Authored_HydraRenderPassAPI"))
         .expect("HydraRenderPassAPI applies to a RenderPass");
-    usd_geom::Scope::define(edit, h.path("/Fallback_AssetPreviewsAPI"));
+    usd_geom::Scope::define(edit, h.path("/Fallback_AssetPreviewsAPI"))
+        .expect("outside any instance");
     usd_media::AssetPreviewsApi::apply(edit, h.path("/Fallback_AssetPreviewsAPI"))
         .expect("AssetPreviewsAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Authored_AssetPreviewsAPI"));
+    usd_geom::Scope::define(edit, h.path("/Authored_AssetPreviewsAPI"))
+        .expect("outside any instance");
     usd_media::AssetPreviewsApi::apply(edit, h.path("/Authored_AssetPreviewsAPI"))
         .expect("AssetPreviewsAPI applies to a Scope");
-    usd_media::SpatialAudio::define(edit, h.path("/Fallback_SpatialAudio"));
-    usd_media::SpatialAudio::define(edit, h.path("/Authored_SpatialAudio"));
-    usd_proc::GenerativeProcedural::define(edit, h.path("/Fallback_GenerativeProcedural"));
-    usd_proc::GenerativeProcedural::define(edit, h.path("/Authored_GenerativeProcedural"));
-    usd_geom::Scope::define(edit, h.path("/Fallback_SemanticsLabelsAPI"));
+    usd_media::SpatialAudio::define(edit, h.path("/Fallback_SpatialAudio"))
+        .expect("outside any instance");
+    usd_media::SpatialAudio::define(edit, h.path("/Authored_SpatialAudio"))
+        .expect("outside any instance");
+    usd_proc::GenerativeProcedural::define(edit, h.path("/Fallback_GenerativeProcedural"))
+        .expect("outside any instance");
+    usd_proc::GenerativeProcedural::define(edit, h.path("/Authored_GenerativeProcedural"))
+        .expect("outside any instance");
+    usd_geom::Scope::define(edit, h.path("/Fallback_SemanticsLabelsAPI"))
+        .expect("outside any instance");
     usd_semantics::SemanticsLabelsApi::apply(edit, h.path("/Fallback_SemanticsLabelsAPI"), "a")
         .expect("SemanticsLabelsAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Authored_SemanticsLabelsAPI"));
+    usd_geom::Scope::define(edit, h.path("/Authored_SemanticsLabelsAPI"))
+        .expect("outside any instance");
     usd_semantics::SemanticsLabelsApi::apply(edit, h.path("/Authored_SemanticsLabelsAPI"), "a")
         .expect("SemanticsLabelsAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Fallback_ClaimsAPI"));
+    usd_geom::Scope::define(edit, h.path("/Fallback_ClaimsAPI")).expect("outside any instance");
     usd_profiles::ClaimsApi::apply(edit, h.path("/Fallback_ClaimsAPI"))
         .expect("ClaimsAPI applies to a Scope");
-    usd_geom::Scope::define(edit, h.path("/Authored_ClaimsAPI"));
+    usd_geom::Scope::define(edit, h.path("/Authored_ClaimsAPI")).expect("outside any instance");
     usd_profiles::ClaimsApi::apply(edit, h.path("/Authored_ClaimsAPI"))
         .expect("ClaimsAPI applies to a Scope");
-    usd_shade::Material::define(edit, h.path("/Fallback_MaterialXConfigAPI"));
+    usd_shade::Material::define(edit, h.path("/Fallback_MaterialXConfigAPI"))
+        .expect("outside any instance");
     usd_mtlx::MaterialXConfigApi::apply(edit, h.path("/Fallback_MaterialXConfigAPI"))
         .expect("MaterialXConfigAPI applies to a Material");
-    usd_shade::Material::define(edit, h.path("/Authored_MaterialXConfigAPI"));
+    usd_shade::Material::define(edit, h.path("/Authored_MaterialXConfigAPI"))
+        .expect("outside any instance");
     usd_mtlx::MaterialXConfigApi::apply(edit, h.path("/Authored_MaterialXConfigAPI"))
         .expect("MaterialXConfigAPI applies to a Material");
     {

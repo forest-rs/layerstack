@@ -517,22 +517,32 @@ impl<'a> Iterator for Ancestors<'a> {
 /// [`token`](Self::token).
 #[derive(Debug)]
 pub struct TreeBuilder {
-    nodes: Vec<NodeData>,
+    /// The nodes so far: every closed node's subtree is complete.
+    tree: SyntaxTree,
     /// Stack of open interior nodes (indices into `nodes`).
     parent_stack: SmallVec<[u32; 16]>,
     /// For each open node, tracks how many direct children have been added.
     child_counts: SmallVec<[u32; 16]>,
-    source_len: u32,
+    /// The most nodes held at once (see [`Self::collapse`]).
+    peak: usize,
 }
 
 impl TreeBuilder {
     /// Creates a new builder for a source of the given length.
     pub fn new(source_len: u32) -> Self {
+        Self::with_capacity(source_len, 0)
+    }
+
+    /// Creates a builder with room for `nodes` nodes.
+    pub(crate) fn with_capacity(source_len: u32, nodes: usize) -> Self {
         Self {
-            nodes: Vec::new(),
+            tree: SyntaxTree {
+                nodes: Vec::with_capacity(nodes),
+                source_len,
+            },
             parent_stack: SmallVec::new(),
             child_counts: SmallVec::new(),
-            source_len,
+            peak: 0,
         }
     }
 
@@ -545,8 +555,8 @@ impl TreeBuilder {
             .map_or(NodeId::NONE, NodeId);
         let index_in_parent = self.child_counts.last().copied().unwrap_or(0);
 
-        let id = self.nodes.len() as u32;
-        self.nodes.push(NodeData {
+        let id = self.tree.nodes.len() as u32;
+        self.tree.nodes.push(NodeData {
             kind,
             span: Span::new(start, start), // end filled in by finish_node
             parent,
@@ -573,7 +583,7 @@ impl TreeBuilder {
             .map_or(NodeId::NONE, NodeId);
         let index_in_parent = self.child_counts.last().copied().unwrap_or(0);
 
-        self.nodes.push(NodeData {
+        self.tree.nodes.push(NodeData {
             kind,
             span,
             parent,
@@ -592,21 +602,49 @@ impl TreeBuilder {
         let child_count = self.child_counts.pop().expect("unbalanced finish_node");
         let id = self.parent_stack.pop().expect("unbalanced finish_node") as usize;
 
-        self.nodes[id].span.end = end;
-        self.nodes[id].child_count = child_count;
-
+        let nodes = &mut self.tree.nodes;
+        let len = nodes.len();
+        let node = &mut nodes[id];
+        node.span.end = end;
+        node.child_count = child_count;
         // subtree_len = total nodes from this node's index to current end.
-        self.nodes[id].subtree_len = (self.nodes.len() - id) as u32;
+        node.subtree_len = (len - id) as u32;
     }
 
     /// Returns the current number of nodes (for rollback support).
     pub fn node_count(&self) -> usize {
-        self.nodes.len()
+        self.tree.nodes.len()
     }
 
     /// Truncates back to `count` nodes (for rollback support).
     pub fn truncate(&mut self, count: usize) {
-        self.nodes.truncate(count);
+        self.tree.nodes.truncate(count);
+    }
+
+    /// The nodes so far, as a tree whose closed nodes can be walked.
+    pub(crate) fn tree(&self) -> &SyntaxTree {
+        &self.tree
+    }
+
+    /// Drops the descendants of the closed node `id`, which becomes a leaf
+    /// with its kind and span, so that a reader that has taken what it needs
+    /// from a subtree does not hold it. `id`'s subtree must end the tree.
+    pub(crate) fn collapse(&mut self, id: usize) {
+        let nodes = &mut self.tree.nodes;
+        debug_assert_eq!(
+            id + nodes[id].subtree_len as usize,
+            nodes.len(),
+            "only the last subtree collapses"
+        );
+        self.peak = self.peak.max(nodes.len());
+        nodes.truncate(id + 1);
+        nodes[id].child_count = 0;
+        nodes[id].subtree_len = 1;
+    }
+
+    /// The most nodes held at once.
+    pub(crate) fn peak(&self) -> usize {
+        self.peak.max(self.tree.nodes.len())
     }
 
     /// Consumes the builder and produces a [`SyntaxTree`].
@@ -620,10 +658,7 @@ impl TreeBuilder {
             "TreeBuilder has {} unclosed nodes",
             self.parent_stack.len()
         );
-        SyntaxTree {
-            nodes: self.nodes,
-            source_len: self.source_len,
-        }
+        self.tree
     }
 }
 

@@ -18,6 +18,7 @@ use crate::ast::ParseResult;
 use crate::cst::{CstParseResult, SyntaxKind, TreeBuilder};
 use crate::diagnostic::Diagnostic;
 use crate::lexer::{Token, TokenKind, tokenize};
+use crate::lower::PrimLowering;
 
 /// Parses a USDA source string into an AST through the shared CST grammar.
 ///
@@ -49,26 +50,60 @@ fn parse_tree<const LOSSLESS: bool>(source: &str) -> CstParseResult {
     }
 }
 
-pub(crate) fn parse_for_read(source: &str) -> (CstParseResult, crate::read::PreparedArrays, usize) {
+/// Room for the syntax nodes of a read: the layer's header and metadata,
+/// and the open prims' statements but not their closed child prims'.
+const READ_NODES: usize = 64;
+
+/// A layer parsed and lowered for import (see [`parse_for_read`]).
+pub(crate) struct ReadParse<'a> {
+    /// The lowered layer and the diagnostics of lowering.
+    pub lowered: ParseResult<'a>,
+    /// Syntax and recovery diagnostics.
+    pub diagnostics: Vec<Diagnostic>,
+    /// Numeric arrays converted as they were read.
+    pub arrays: crate::read::PreparedArrays,
+    /// The most tokens held at once.
+    pub tokens: usize,
+    /// The most syntax nodes held at once.
+    pub syntax_nodes: usize,
+}
+
+/// Parses and lowers `source` for import in one pass: tokens are lexed as
+/// the grammar asks and released once consumed, and each prim is lowered as
+/// it closes, its syntax then dropped, so the read holds a window of tokens
+/// and the syntax of the prims it is in rather than the whole file's.
+pub(crate) fn parse_for_read(source: &str) -> ReadParse<'_> {
     let mut parser = Parser::<false>::new(source, Vec::new());
     parser.tokens = crate::token_source::TokenSource::streaming(source);
     parser.direct_arrays = Some(crate::read::PreparedArrays::new());
+    parser.lowering = Some(PrimLowering::new(source));
+    // Holding the syntax of the open prims alone, a read rarely needs more.
+    parser.builder = TreeBuilder::with_capacity(source.len() as u32, READ_NODES);
     parser.parse_source_file();
     let arrays = parser
         .direct_arrays
         .take()
         .expect("read mode owns its arrays");
-    (
-        CstParseResult {
-            tree: parser.builder.finish(),
-            diagnostics: parser.diagnostics,
-        },
+    let lowering = parser.lowering.take().expect("read mode lowers prims");
+    let syntax_nodes = parser.builder.peak();
+    let tree = parser.builder.finish();
+    ReadParse {
+        lowered: lowering.finish(&tree),
+        diagnostics: parser.diagnostics,
         arrays,
-        parser.tokens.retained(),
-    )
+        tokens: parser.tokens.retained(),
+        syntax_nodes,
+    }
 }
 
 // ── Parser ─────────────────────────────────────────────────────────────
+
+/// Where a prim lowered as it closes was opened: its node, and where the
+/// prims lowered inside it start (see [`PrimLowering::mark`]).
+struct OpenPrim {
+    node: usize,
+    mark: usize,
+}
 
 struct Parser<'a, const LOSSLESS: bool> {
     source: &'a str,
@@ -77,6 +112,8 @@ struct Parser<'a, const LOSSLESS: bool> {
     diagnostics: Vec<Diagnostic>,
     builder: TreeBuilder,
     direct_arrays: Option<crate::read::PreparedArrays>,
+    /// In read mode, lowers each prim as it closes (see [`parse_for_read`]).
+    lowering: Option<PrimLowering<'a>>,
     /// Whether a line break was consumed since the last non-trivia token,
     /// so a property statement there has ended.
     line_break: bool,
@@ -96,6 +133,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
             diagnostics: Vec::new(),
             builder: TreeBuilder::new(source.len() as u32),
             direct_arrays: None,
+            lowering: None,
             line_break: false,
             speculating: false,
             release_at: crate::token_source::RELEASE_AFTER,
@@ -544,8 +582,27 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
 
     // ── Prim parsing ───────────────────────────────────────────────
 
+    /// In read mode, notes where a prim opens (see [`PrimLowering`]); call
+    /// before opening its node.
+    fn open_prim(&self) -> Option<OpenPrim> {
+        self.lowering.as_ref().map(|lowering| OpenPrim {
+            node: self.builder.node_count(),
+            mark: lowering.mark(),
+        })
+    }
+
+    /// In read mode, lowers the prim `opened` that has just closed, and
+    /// drops its syntax.
+    fn close_prim(&mut self, opened: Option<OpenPrim>) {
+        if let (Some(lowering), Some(opened)) = (&mut self.lowering, opened) {
+            lowering.close_prim(self.builder.tree(), opened.node as u32, opened.mark);
+            self.builder.collapse(opened.node);
+        }
+    }
+
     fn parse_prim(&mut self) {
         let start = self.current_span().start;
+        let opened = self.open_prim();
         self.builder.start_node(SyntaxKind::PrimDef, start);
 
         // Specifier: def/over/class.
@@ -575,6 +632,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
 
         let end = self.current_span().start;
         self.builder.finish_node(end);
+        self.close_prim(opened);
     }
 
     // ── Prim metadata ──────────────────────────────────────────────

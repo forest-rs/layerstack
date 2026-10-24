@@ -7,9 +7,11 @@
 //! `ComputeMaskAtTime`, and `usdGeom/samplingUtils.cpp`. Attribute sources,
 //! time offsets and interpolation follow AOUSD Core §12.3–12.5.
 use crate::{
-    Time, gf,
+    Time,
+    bounds::{BoundsCache, BoundsError, BoundsOptions, Range3d},
+    gf,
     motion_sampling::{aligned, anchor, rate},
-    usd_geom::PointInstancer,
+    usd_geom::{ImageablePurpose, PointInstancer},
 };
 use alloc::{boxed::Box, collections::BTreeSet, sync::Arc, vec::Vec};
 use core::num::NonZeroUsize;
@@ -977,6 +979,155 @@ impl PointInstancer<'_> {
                 .map(|v| v.map(Arc::new))
         }
     }
+}
+
+/// An `extent`: the minimum and maximum corners of an axis-aligned box, in
+/// single precision, as a boundable's `extent` attribute holds it.
+pub type Extent = [[f32; 3]; 2];
+
+impl PointInstancer<'_> {
+    /// The instancer's extent at `time`: the aligned box, in its own space
+    /// (or, with `transform`, in the space `transform` maps it to), around
+    /// every unmasked instance's prototype bounds.
+    ///
+    /// As OpenUSD's `ComputeExtentAtTime`: `protoIndices` and the mask are
+    /// read at `base_time`, prototype bounds are the default, proxy and
+    /// render purposes' untransformed bounds at `time`, and each instance's
+    /// box is carried through its transform (prototype transform included),
+    /// then `transform`, before its aligned range joins the extent. With no
+    /// instance left, the extent is the empty range (`f32::MAX` minimum,
+    /// `-f32::MAX` maximum). `base_time` anchors motion as for
+    /// [`Self::compute_instance_transforms`]. AOUSD Core §13 (point
+    /// instancing); OpenUSD `UsdGeomBoundable` (extent is local space).
+    ///
+    /// # Errors
+    /// [`BoundsError::InvalidPointInstancer`] for invalid instance data or a
+    /// prototype target that is not a prim, and the prototypes' own bounds
+    /// errors (a missing prototype prim is [`BoundsError::MissingPrim`]).
+    #[doc(alias = "UsdGeomPointInstancer::ComputeExtentAtTime")]
+    #[doc(alias = "ComputeExtentAtTime")]
+    pub fn compute_extent(
+        &self,
+        time: Time,
+        base_time: Time,
+        transform: Option<&[[f64; 4]; 4]>,
+    ) -> Result<Extent, BoundsError> {
+        self.compute_extent_at_times(&[time], base_time, transform)
+            .map(|extents| extents[0])
+    }
+    /// [`Self::compute_extent`] at each of `times`, in order, against one
+    /// base: the instance transforms are one batch, as for
+    /// [`Self::compute_instance_transforms_at_times`], and one bounds cache
+    /// serves every time. OpenUSD `ComputeExtentAtTimes`.
+    ///
+    /// # Errors
+    /// As [`Self::compute_extent`]; no partial batch is returned.
+    #[doc(alias = "UsdGeomPointInstancer::ComputeExtentAtTimes")]
+    #[doc(alias = "ComputeExtentAtTimes")]
+    pub fn compute_extent_at_times(
+        &self,
+        times: &[Time],
+        base_time: Time,
+        transform: Option<&[[f64; 4]; 4]>,
+    ) -> Result<Vec<Extent>, BoundsError> {
+        let prim = self.path();
+        let invalid = |source| BoundsError::InvalidPointInstancer { prim, source };
+        // `_ComputeExtentAtTimePreamble`: the indices at the base time itself,
+        // the mask, and a nonempty prototype list every index falls in.
+        let indices = read(
+            self,
+            "protoIndices",
+            base_time,
+            crate::value::read_int_array_shared,
+        )
+        .map_err(invalid)?
+        .ok_or(invalid(PointInstancerError::MissingAttribute(
+            "protoIndices",
+        )))?;
+        let mask = self.try_compute_mask(base_time).map_err(invalid)?;
+        if !mask.is_empty() && mask.len() != indices.len() {
+            return Err(invalid(PointInstancerError::LengthMismatch("mask")));
+        }
+        let prototypes = self
+            .prototypes()
+            .into_iter()
+            .map(|target| match target {
+                TargetPath::Prim(path) => Ok(path),
+                // `UsdGeomBBoxCache::ComputeUntransformedBound` refuses the
+                // invalid prim a property target names.
+                TargetPath::Property(_) => Err(invalid(PointInstancerError::InvalidPrototypes)),
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        if prototypes.is_empty() {
+            return Err(invalid(PointInstancerError::InvalidPrototypes));
+        }
+        for (instance, &index) in indices.iter().enumerate() {
+            if usize::try_from(index).map_or(true, |index| index >= prototypes.len()) {
+                return Err(invalid(PointInstancerError::InvalidPrototypeIndex {
+                    instance,
+                    index,
+                }));
+            }
+        }
+        let batch = self
+            .prepare_instance_transforms_at_times(
+                times,
+                base_time,
+                InstanceTransformOptions {
+                    include_prototype_transform: true,
+                    apply_mask: false,
+                },
+            )
+            .map_err(invalid)?;
+        let mut cache = BoundsCache::new(
+            times.first().copied().unwrap_or(base_time),
+            BoundsOptions {
+                included_purposes: alloc::vec![
+                    ImageablePurpose::Default,
+                    ImageablePurpose::Proxy,
+                    ImageablePurpose::Render,
+                ],
+                ..BoundsOptions::default()
+            },
+        );
+        let scene = self.scene();
+        let mut bounds = Vec::with_capacity(prototypes.len());
+        let mut extents = Vec::with_capacity(times.len());
+        for (&time, transforms) in times.iter().zip(&batch) {
+            cache.set_time(time);
+            bounds.clear();
+            for &prototype in &prototypes {
+                bounds.push(cache.untransformed_bound(&scene, prototype)?);
+            }
+            let mut range = Range3d::default();
+            for instance in transforms.iter() {
+                if !mask.is_empty() && !mask[instance.index] {
+                    continue;
+                }
+                // `GfBBox3d::Transform` twice: instance, then `transform`.
+                let mut bound = bounds[instance.prototype_index].transformed(&instance.matrix);
+                if let Some(transform) = transform {
+                    bound = bound.transformed(transform);
+                }
+                range.union_with(bound.aligned_range());
+            }
+            extents.push(single_precision(&range));
+        }
+        Ok(extents)
+    }
+}
+
+/// `range` as a `float3[]` extent, as `GfVec3f(GfRange3d::GetMin())` and
+/// `GetMax()` convert it; the empty range is `GfRange3d()`'s `FLT_MAX` pair.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "an extent is float3[], as OpenUSD publishes it"
+)]
+fn single_precision(range: &Range3d) -> Extent {
+    if range.is_empty() {
+        return [[f32::MAX; 3], [-f32::MAX; 3]];
+    }
+    [range.min.map(|v| v as f32), range.max.map(|v| v as f32)]
 }
 
 /// The time code of `time`, `None` for the default time, when `time` and

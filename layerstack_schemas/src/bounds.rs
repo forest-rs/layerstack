@@ -98,7 +98,7 @@ impl BoundingBox {
         result
     }
 
-    fn transformed(mut self, matrix: &gf::Matrix4) -> Self {
+    pub(crate) fn transformed(mut self, matrix: &gf::Matrix4) -> Self {
         self.matrix = gf::mul(&self.matrix, matrix);
         self
     }

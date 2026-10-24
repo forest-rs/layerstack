@@ -15,6 +15,11 @@ use crate::{
 };
 mod authoring;
 pub use authoring::{DecomposeError, RigidInfluenceError, decompose_joint_transforms};
+mod bake;
+pub use bake::{
+    BakeBinding, BakeDeformations, BakeProblem, BakeProblemReason, BakedPrim, RetypedRoot,
+    SkinningBake, SkinningBakeError, SkinningBakeReport,
+};
 mod bounds;
 mod cache;
 mod dual_quaternion;

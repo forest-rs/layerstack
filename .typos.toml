@@ -12,6 +12,8 @@ extend-ignore-re = ["\\b[0-9a-f]{8,40}\\b"]
 
 # Match Identifier - Case Sensitive
 [default.extend-identifiers]
+# OpenUSD's skinning bake options.
+UsdSkelBakeSkinningParms = "UsdSkelBakeSkinningParms"
 
 # Match Inside a Word - Case Insensitive
 [default.extend-words]

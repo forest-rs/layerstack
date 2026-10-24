@@ -807,6 +807,17 @@ joint-local ones. `normalize_joint_weights`, `sort_joint_influences` and
 follows its OpenUSD utility, refusals included, and leaves its arrays
 unchanged when it refuses.
 
+`SkinningBake` bakes skinning into layers, as `UsdSkelBakeSkinning` does:
+blend-shaped and skinned `points` and `normals`, and rigid prims'
+`xformOp:transform`, are written as time samples into each binding's layer at
+the times OpenUSD samples (animation, transform and input samples, and the
+stage's playback frames between them), `extent` and models' `extentsHint` are
+recomputed, and each `SkelRoot` becomes an `Xform`. `BakeDeformations`
+selects what is written. The bake applies its transactions to a `LiveStage`
+and returns a `SkinningBakeReport` naming every prim, time, layer and
+skipped input, with the applied transactions and their combined undo; saving
+the changed layers is the caller's step.
+
 
 `SkelCache::deformation_inputs` borrows retained binding values, shared rig-order
 matrices, mapped binding-order matrices, shape samples and evaluated inbetween

@@ -24,7 +24,7 @@
 
 use crate::shading::{Port, PortEdit, PortError};
 use crate::usd_shade::{NodeDefApiImplementationSource, Shader, ShaderEdit};
-use crate::{Scene, SchemaEdit};
+use crate::{CannotDefine, Scene, SchemaEdit};
 use core::ops::Deref;
 use layerstack::{PathId, PropertyType};
 
@@ -51,14 +51,21 @@ impl<'a> PreviewSurface<'a> {
             && definition.implementation_source() == Some(NodeDefApiImplementationSource::Id))
         .then_some(Self { shader })
     }
-    /// Defines a Shader with this node's `info:id`; inputs remain unauthored.
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> PreviewSurfaceEdit {
-        let shader = Shader::define(edit, path);
+    /// Defines a Shader with this node's `info:id`, as [`Shader::define`] does; inputs remain unauthored.
+    ///
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a prototype; nothing is authored.
+    pub fn define(
+        edit: &mut SchemaEdit<'_>,
+        path: PathId,
+    ) -> Result<PreviewSurfaceEdit, CannotDefine> {
+        let shader = Shader::define(edit, path)?;
         shader.node_def_api().set_id(edit, Self::ID);
         shader
             .node_def_api()
             .set_implementation_source(edit, NodeDefApiImplementationSource::Id);
-        PreviewSurfaceEdit { shader }
+        Ok(PreviewSurfaceEdit { shader })
     }
     /// An authoring handle for this validated node.
     #[must_use]
@@ -866,14 +873,21 @@ impl<'a> PrimvarReaderFloat<'a> {
             && definition.implementation_source() == Some(NodeDefApiImplementationSource::Id))
         .then_some(Self { shader })
     }
-    /// Defines a Shader with this node's `info:id`; inputs remain unauthored.
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> PrimvarReaderFloatEdit {
-        let shader = Shader::define(edit, path);
+    /// Defines a Shader with this node's `info:id`, as [`Shader::define`] does; inputs remain unauthored.
+    ///
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a prototype; nothing is authored.
+    pub fn define(
+        edit: &mut SchemaEdit<'_>,
+        path: PathId,
+    ) -> Result<PrimvarReaderFloatEdit, CannotDefine> {
+        let shader = Shader::define(edit, path)?;
         shader.node_def_api().set_id(edit, Self::ID);
         shader
             .node_def_api()
             .set_implementation_source(edit, NodeDefApiImplementationSource::Id);
-        PrimvarReaderFloatEdit { shader }
+        Ok(PrimvarReaderFloatEdit { shader })
     }
     /// An authoring handle for this validated node.
     #[must_use]
@@ -1022,14 +1036,21 @@ impl<'a> PrimvarReaderFloat2<'a> {
             && definition.implementation_source() == Some(NodeDefApiImplementationSource::Id))
         .then_some(Self { shader })
     }
-    /// Defines a Shader with this node's `info:id`; inputs remain unauthored.
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> PrimvarReaderFloat2Edit {
-        let shader = Shader::define(edit, path);
+    /// Defines a Shader with this node's `info:id`, as [`Shader::define`] does; inputs remain unauthored.
+    ///
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a prototype; nothing is authored.
+    pub fn define(
+        edit: &mut SchemaEdit<'_>,
+        path: PathId,
+    ) -> Result<PrimvarReaderFloat2Edit, CannotDefine> {
+        let shader = Shader::define(edit, path)?;
         shader.node_def_api().set_id(edit, Self::ID);
         shader
             .node_def_api()
             .set_implementation_source(edit, NodeDefApiImplementationSource::Id);
-        PrimvarReaderFloat2Edit { shader }
+        Ok(PrimvarReaderFloat2Edit { shader })
     }
     /// An authoring handle for this validated node.
     #[must_use]
@@ -1182,14 +1203,21 @@ impl<'a> PrimvarReaderFloat3<'a> {
             && definition.implementation_source() == Some(NodeDefApiImplementationSource::Id))
         .then_some(Self { shader })
     }
-    /// Defines a Shader with this node's `info:id`; inputs remain unauthored.
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> PrimvarReaderFloat3Edit {
-        let shader = Shader::define(edit, path);
+    /// Defines a Shader with this node's `info:id`, as [`Shader::define`] does; inputs remain unauthored.
+    ///
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a prototype; nothing is authored.
+    pub fn define(
+        edit: &mut SchemaEdit<'_>,
+        path: PathId,
+    ) -> Result<PrimvarReaderFloat3Edit, CannotDefine> {
+        let shader = Shader::define(edit, path)?;
         shader.node_def_api().set_id(edit, Self::ID);
         shader
             .node_def_api()
             .set_implementation_source(edit, NodeDefApiImplementationSource::Id);
-        PrimvarReaderFloat3Edit { shader }
+        Ok(PrimvarReaderFloat3Edit { shader })
     }
     /// An authoring handle for this validated node.
     #[must_use]
@@ -1342,14 +1370,21 @@ impl<'a> PrimvarReaderFloat4<'a> {
             && definition.implementation_source() == Some(NodeDefApiImplementationSource::Id))
         .then_some(Self { shader })
     }
-    /// Defines a Shader with this node's `info:id`; inputs remain unauthored.
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> PrimvarReaderFloat4Edit {
-        let shader = Shader::define(edit, path);
+    /// Defines a Shader with this node's `info:id`, as [`Shader::define`] does; inputs remain unauthored.
+    ///
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a prototype; nothing is authored.
+    pub fn define(
+        edit: &mut SchemaEdit<'_>,
+        path: PathId,
+    ) -> Result<PrimvarReaderFloat4Edit, CannotDefine> {
+        let shader = Shader::define(edit, path)?;
         shader.node_def_api().set_id(edit, Self::ID);
         shader
             .node_def_api()
             .set_implementation_source(edit, NodeDefApiImplementationSource::Id);
-        PrimvarReaderFloat4Edit { shader }
+        Ok(PrimvarReaderFloat4Edit { shader })
     }
     /// An authoring handle for this validated node.
     #[must_use]
@@ -1502,14 +1537,21 @@ impl<'a> PrimvarReaderInt<'a> {
             && definition.implementation_source() == Some(NodeDefApiImplementationSource::Id))
         .then_some(Self { shader })
     }
-    /// Defines a Shader with this node's `info:id`; inputs remain unauthored.
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> PrimvarReaderIntEdit {
-        let shader = Shader::define(edit, path);
+    /// Defines a Shader with this node's `info:id`, as [`Shader::define`] does; inputs remain unauthored.
+    ///
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a prototype; nothing is authored.
+    pub fn define(
+        edit: &mut SchemaEdit<'_>,
+        path: PathId,
+    ) -> Result<PrimvarReaderIntEdit, CannotDefine> {
+        let shader = Shader::define(edit, path)?;
         shader.node_def_api().set_id(edit, Self::ID);
         shader
             .node_def_api()
             .set_implementation_source(edit, NodeDefApiImplementationSource::Id);
-        PrimvarReaderIntEdit { shader }
+        Ok(PrimvarReaderIntEdit { shader })
     }
     /// An authoring handle for this validated node.
     #[must_use]
@@ -1658,14 +1700,21 @@ impl<'a> PrimvarReaderMatrix<'a> {
             && definition.implementation_source() == Some(NodeDefApiImplementationSource::Id))
         .then_some(Self { shader })
     }
-    /// Defines a Shader with this node's `info:id`; inputs remain unauthored.
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> PrimvarReaderMatrixEdit {
-        let shader = Shader::define(edit, path);
+    /// Defines a Shader with this node's `info:id`, as [`Shader::define`] does; inputs remain unauthored.
+    ///
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a prototype; nothing is authored.
+    pub fn define(
+        edit: &mut SchemaEdit<'_>,
+        path: PathId,
+    ) -> Result<PrimvarReaderMatrixEdit, CannotDefine> {
+        let shader = Shader::define(edit, path)?;
         shader.node_def_api().set_id(edit, Self::ID);
         shader
             .node_def_api()
             .set_implementation_source(edit, NodeDefApiImplementationSource::Id);
-        PrimvarReaderMatrixEdit { shader }
+        Ok(PrimvarReaderMatrixEdit { shader })
     }
     /// An authoring handle for this validated node.
     #[must_use]
@@ -1823,14 +1872,21 @@ impl<'a> PrimvarReaderNormal<'a> {
             && definition.implementation_source() == Some(NodeDefApiImplementationSource::Id))
         .then_some(Self { shader })
     }
-    /// Defines a Shader with this node's `info:id`; inputs remain unauthored.
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> PrimvarReaderNormalEdit {
-        let shader = Shader::define(edit, path);
+    /// Defines a Shader with this node's `info:id`, as [`Shader::define`] does; inputs remain unauthored.
+    ///
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a prototype; nothing is authored.
+    pub fn define(
+        edit: &mut SchemaEdit<'_>,
+        path: PathId,
+    ) -> Result<PrimvarReaderNormalEdit, CannotDefine> {
+        let shader = Shader::define(edit, path)?;
         shader.node_def_api().set_id(edit, Self::ID);
         shader
             .node_def_api()
             .set_implementation_source(edit, NodeDefApiImplementationSource::Id);
-        PrimvarReaderNormalEdit { shader }
+        Ok(PrimvarReaderNormalEdit { shader })
     }
     /// An authoring handle for this validated node.
     #[must_use]
@@ -1983,14 +2039,21 @@ impl<'a> PrimvarReaderPoint<'a> {
             && definition.implementation_source() == Some(NodeDefApiImplementationSource::Id))
         .then_some(Self { shader })
     }
-    /// Defines a Shader with this node's `info:id`; inputs remain unauthored.
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> PrimvarReaderPointEdit {
-        let shader = Shader::define(edit, path);
+    /// Defines a Shader with this node's `info:id`, as [`Shader::define`] does; inputs remain unauthored.
+    ///
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a prototype; nothing is authored.
+    pub fn define(
+        edit: &mut SchemaEdit<'_>,
+        path: PathId,
+    ) -> Result<PrimvarReaderPointEdit, CannotDefine> {
+        let shader = Shader::define(edit, path)?;
         shader.node_def_api().set_id(edit, Self::ID);
         shader
             .node_def_api()
             .set_implementation_source(edit, NodeDefApiImplementationSource::Id);
-        PrimvarReaderPointEdit { shader }
+        Ok(PrimvarReaderPointEdit { shader })
     }
     /// An authoring handle for this validated node.
     #[must_use]
@@ -2143,14 +2206,21 @@ impl<'a> PrimvarReaderString<'a> {
             && definition.implementation_source() == Some(NodeDefApiImplementationSource::Id))
         .then_some(Self { shader })
     }
-    /// Defines a Shader with this node's `info:id`; inputs remain unauthored.
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> PrimvarReaderStringEdit {
-        let shader = Shader::define(edit, path);
+    /// Defines a Shader with this node's `info:id`, as [`Shader::define`] does; inputs remain unauthored.
+    ///
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a prototype; nothing is authored.
+    pub fn define(
+        edit: &mut SchemaEdit<'_>,
+        path: PathId,
+    ) -> Result<PrimvarReaderStringEdit, CannotDefine> {
+        let shader = Shader::define(edit, path)?;
         shader.node_def_api().set_id(edit, Self::ID);
         shader
             .node_def_api()
             .set_implementation_source(edit, NodeDefApiImplementationSource::Id);
-        PrimvarReaderStringEdit { shader }
+        Ok(PrimvarReaderStringEdit { shader })
     }
     /// An authoring handle for this validated node.
     #[must_use]
@@ -2299,14 +2369,21 @@ impl<'a> PrimvarReaderVector<'a> {
             && definition.implementation_source() == Some(NodeDefApiImplementationSource::Id))
         .then_some(Self { shader })
     }
-    /// Defines a Shader with this node's `info:id`; inputs remain unauthored.
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> PrimvarReaderVectorEdit {
-        let shader = Shader::define(edit, path);
+    /// Defines a Shader with this node's `info:id`, as [`Shader::define`] does; inputs remain unauthored.
+    ///
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a prototype; nothing is authored.
+    pub fn define(
+        edit: &mut SchemaEdit<'_>,
+        path: PathId,
+    ) -> Result<PrimvarReaderVectorEdit, CannotDefine> {
+        let shader = Shader::define(edit, path)?;
         shader.node_def_api().set_id(edit, Self::ID);
         shader
             .node_def_api()
             .set_implementation_source(edit, NodeDefApiImplementationSource::Id);
-        PrimvarReaderVectorEdit { shader }
+        Ok(PrimvarReaderVectorEdit { shader })
     }
     /// An authoring handle for this validated node.
     #[must_use]
@@ -2459,14 +2536,21 @@ impl<'a> Transform2d<'a> {
             && definition.implementation_source() == Some(NodeDefApiImplementationSource::Id))
         .then_some(Self { shader })
     }
-    /// Defines a Shader with this node's `info:id`; inputs remain unauthored.
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Transform2dEdit {
-        let shader = Shader::define(edit, path);
+    /// Defines a Shader with this node's `info:id`, as [`Shader::define`] does; inputs remain unauthored.
+    ///
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a prototype; nothing is authored.
+    pub fn define(
+        edit: &mut SchemaEdit<'_>,
+        path: PathId,
+    ) -> Result<Transform2dEdit, CannotDefine> {
+        let shader = Shader::define(edit, path)?;
         shader.node_def_api().set_id(edit, Self::ID);
         shader
             .node_def_api()
             .set_implementation_source(edit, NodeDefApiImplementationSource::Id);
-        Transform2dEdit { shader }
+        Ok(Transform2dEdit { shader })
     }
     /// An authoring handle for this validated node.
     #[must_use]
@@ -2720,14 +2804,18 @@ impl<'a> UvTexture<'a> {
             && definition.implementation_source() == Some(NodeDefApiImplementationSource::Id))
         .then_some(Self { shader })
     }
-    /// Defines a Shader with this node's `info:id`; inputs remain unauthored.
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> UvTextureEdit {
-        let shader = Shader::define(edit, path);
+    /// Defines a Shader with this node's `info:id`, as [`Shader::define`] does; inputs remain unauthored.
+    ///
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a prototype; nothing is authored.
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<UvTextureEdit, CannotDefine> {
+        let shader = Shader::define(edit, path)?;
         shader.node_def_api().set_id(edit, Self::ID);
         shader
             .node_def_api()
             .set_implementation_source(edit, NodeDefApiImplementationSource::Id);
-        UvTextureEdit { shader }
+        Ok(UvTextureEdit { shader })
     }
     /// An authoring handle for this validated node.
     #[must_use]

@@ -15,7 +15,7 @@ use core::ops::Deref;
 use layerstack::{CannotApply, PathId, PropertyKind, SchemaKind, Value, Variability};
 
 use ::layerstack_schemas::table::{Property, Schema, SchemaTables, ValueType, fallback};
-use ::layerstack_schemas::{PrimEdit, PrimView, Scene, SchemaEdit};
+use ::layerstack_schemas::{CannotDefine, PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "What an instrument is mounted on."]
 #[doc = ""]
 #[doc = "The view of the `observatory` library's single-apply API schema `MountedOnAPI`. Get it with [`MountedOnApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
@@ -280,13 +280,18 @@ impl<'a> Telescope<'a> {
         TelescopeEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def Telescope` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `Telescope`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `Telescope` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> TelescopeEdit {
-        TelescopeEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<TelescopeEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(TelescopeEdit::from_prim)
     }
 
     /// The USD name of [`Self::telescope_aperture`].

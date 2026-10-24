@@ -149,7 +149,7 @@
 //! let path = store.path("/Ground");
 //!
 //! let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-//! Mesh::define(&mut edit, path)
+//! Mesh::define(&mut edit, path).expect("outside any instance")
 //!     .set_face_vertex_counts(&mut edit, &[4])
 //!     .set_points_at(&mut edit, 1.0, &[[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 0.0, 1.0], [0.0, 0.0, 1.0]]);
 //! let transaction = edit.finish();
@@ -188,7 +188,7 @@
 //! });
 //! let path = store.path("/Material/Surface");
 //! let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-//! let surface = PreviewSurface::define(&mut edit, path);
+//! let surface = PreviewSurface::define(&mut edit, path).expect("outside any instance");
 //! surface.set_roughness(&mut edit, 0.25).expect("typed input");
 //! let transaction = edit.finish();
 //! live.apply(&mut store, &transaction).expect("applies");
@@ -283,8 +283,8 @@
 //! let (group, ball) = (store.path("/Guides"), store.path("/Guides/Ball"));
 //!
 //! let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-//! Scope::define(&mut edit, group).set_purpose(&mut edit, ImageablePurpose::Guide);
-//! Sphere::define(&mut edit, ball);
+//! Scope::define(&mut edit, group).expect("outside any instance").set_purpose(&mut edit, ImageablePurpose::Guide);
+//! Sphere::define(&mut edit, ball).expect("outside any instance");
 //! let transaction = edit.finish();
 //! live.apply(&mut store, &transaction).expect("applies");
 //!
@@ -502,6 +502,7 @@ mod xform;
 mod xform_edit;
 #[cfg(feature = "usd-geom")]
 pub use common_xform::{CommonTransform, CommonTransformError, RotationOrder};
+pub use edit::CannotDefine;
 
 #[cfg(all(feature = "usd-geom", feature = "usd-shade"))]
 mod material_subsets;

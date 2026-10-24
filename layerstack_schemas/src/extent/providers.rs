@@ -613,7 +613,8 @@ mod tests {
             let instancer = f.store.path("/Instances");
             let target = EditTarget::for_layer(LayerId(1));
             let mut edit = crate::SchemaEdit::new(f.live.stage(), &mut f.store, target.clone());
-            let instances = crate::usd_geom::PointInstancer::define(&mut edit, instancer);
+            let instances = crate::usd_geom::PointInstancer::define(&mut edit, instancer)
+                .expect("outside any instance");
             instances.set_prototypes(&mut edit, &[layerstack::TargetPath::Prim(f.shape)]);
             instances.set_proto_indices(&mut edit, &[0]);
             instances.set_positions(&mut edit, &[[0.; 3]]);

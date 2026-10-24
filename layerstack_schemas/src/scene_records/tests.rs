@@ -117,7 +117,7 @@ fn material_assignment_edits_preserve_geometry_owners() {
     let geometry = observer.record_at(path).unwrap().mesh.clone().unwrap();
     let material = store.path("/Material");
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-    Material::define(&mut edit, material);
+    Material::define(&mut edit, material).expect("outside any instance");
     let transaction = edit.finish();
     live.apply(&mut store, &transaction).unwrap();
     let binding = store.property_path("/Mesh.material:binding");
@@ -225,7 +225,7 @@ fn point_instances_keep_ids_original_indices_and_masks() {
     let (mut store, mut live, mesh_path, _) = fixture();
     let point_path = store.path("/Scatter");
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-    let points = PointInstancer::define(&mut edit, point_path);
+    let points = PointInstancer::define(&mut edit, point_path).expect("outside any instance");
     points
         .set_prototypes(&mut edit, &[layerstack::TargetPath::Prim(mesh_path)])
         .set_proto_indices(&mut edit, &[0, 0])
@@ -466,7 +466,7 @@ fn inherited_appearance_and_missing_material_target_refresh_without_geometry_wor
         missing
     );
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-    Material::define(&mut edit, missing);
+    Material::define(&mut edit, missing).expect("outside any instance");
     let change = edit.finish();
     live.apply(&mut store, &change).unwrap();
     let changes = update(&mut observer, &mut live, &mut store);
@@ -517,7 +517,7 @@ fn changed_point_count_revalidates_primvars_atomically_before_retry() {
     let (mut store, mut live, mesh_path, _) = fixture();
     let path = store.path("/Scatter");
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-    let scatter = PointInstancer::define(&mut edit, path);
+    let scatter = PointInstancer::define(&mut edit, path).expect("outside any instance");
     scatter
         .set_prototypes(&mut edit, &[layerstack::TargetPath::Prim(mesh_path)])
         .set_positions(&mut edit, &[[0.; 3]; 2])
@@ -682,7 +682,7 @@ fn equivalent_point_inputs_at_new_time_preserve_snapshot_and_emit_no_delta() {
     let (mut store, mut live, mesh_path, _) = fixture();
     let path = store.path("/Scatter");
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-    let scatter = PointInstancer::define(&mut edit, path);
+    let scatter = PointInstancer::define(&mut edit, path).expect("outside any instance");
     scatter
         .set_prototypes(&mut edit, &[layerstack::TargetPath::Prim(mesh_path)])
         .set_positions(&mut edit, &[[0.; 3]; 2])
@@ -894,11 +894,11 @@ fn face_subsets_refresh_material_components_and_report_invalid_families() {
     let material = store.path("/Paint");
     let indices = Arc::new(vec![0]);
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-    let face = GeomSubset::define(&mut edit, subset);
+    let face = GeomSubset::define(&mut edit, subset).expect("outside any instance");
     face.set_element_type(&mut edit, GeomSubsetElementType::Face)
         .set_family_name(&mut edit, "materialBind")
         .set_indices_shared(&mut edit, indices.clone());
-    Material::define(&mut edit, material);
+    Material::define(&mut edit, material).expect("outside any instance");
     let transaction = edit.finish();
     live.apply(&mut store, &transaction).unwrap();
     let family = store.property_path("/Mesh.subsetFamily:materialBind:familyType");
@@ -962,7 +962,7 @@ fn motion_time_change_updates_point_snapshot_without_geometry_revalidation() {
     let (mut store, mut live, mesh, _) = fixture();
     let path = store.path("/Scatter");
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-    let scatter = PointInstancer::define(&mut edit, path);
+    let scatter = PointInstancer::define(&mut edit, path).expect("outside any instance");
     scatter
         .set_prototypes(&mut edit, &[layerstack::TargetPath::Prim(mesh)])
         .set_proto_indices(&mut edit, &[0])

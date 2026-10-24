@@ -294,7 +294,7 @@ fn failed_transactions_bounded_causes_and_nan_stability() {
     for i in 0..20 {
         let path = f.session.path(&format!("/World/New{i}")).unwrap();
         let mut edit = f.session.edit(EditTarget::for_layer(f.layer));
-        layerstack_schemas::usd_geom::Cube::define(&mut edit, path);
+        layerstack_schemas::usd_geom::Cube::define(&mut edit, path).expect("outside any instance");
         let transaction = edit.finish();
         f.session.apply(&transaction).unwrap();
     }

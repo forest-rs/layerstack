@@ -1,0 +1,52 @@
+#usda 1.0
+(
+    subLayers = [
+        @weak.usda@
+    ]
+)
+
+over "Over"
+{
+}
+
+over Xform "TypedOver"
+{
+}
+
+def "Inactive" (
+    active = false
+)
+{
+}
+
+over "G"
+{
+    over "H"
+    {
+    }
+}
+
+over "OverParent"
+{
+    def Xform "Kid"
+    {
+    }
+}
+
+class "Class"
+{
+}
+
+def Xform "Instance" (
+    instanceable = true
+    prepend references = </Prototype>
+)
+{
+}
+
+def Xform "Prototype"
+{
+    def Xform "Child"
+    {
+    }
+}

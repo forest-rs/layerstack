@@ -32,7 +32,7 @@ pub(crate) const IDS: &[&str] = &[
     "UsdUVTexture",
 ];
 pub(crate) fn author(edit: &mut SchemaEdit<'_>, paths: &[PathId]) {
-    let node = PreviewSurface::define(edit, paths[0]);
+    let node = PreviewSurface::define(edit, paths[0]).expect("outside any instance");
     node.set_clearcoat(edit, PreviewSurface::clearcoat_default())
         .unwrap();
     node.set_clearcoat_roughness(edit, PreviewSurface::clearcoat_roughness_default())
@@ -64,67 +64,67 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, paths: &[PathId]) {
         .unwrap();
     node.create_displacement_output(edit).unwrap();
     node.create_surface_output(edit).unwrap();
-    let node = PrimvarReaderFloat::define(edit, paths[1]);
+    let node = PrimvarReaderFloat::define(edit, paths[1]).expect("outside any instance");
     node.set_fallback(edit, PrimvarReaderFloat::fallback_default())
         .unwrap();
     node.set_varname(edit, &PrimvarReaderFloat::varname_default())
         .unwrap();
     node.create_result_output(edit).unwrap();
-    let node = PrimvarReaderFloat2::define(edit, paths[2]);
+    let node = PrimvarReaderFloat2::define(edit, paths[2]).expect("outside any instance");
     node.set_fallback(edit, PrimvarReaderFloat2::fallback_default())
         .unwrap();
     node.set_varname(edit, &PrimvarReaderFloat2::varname_default())
         .unwrap();
     node.create_result_output(edit).unwrap();
-    let node = PrimvarReaderFloat3::define(edit, paths[3]);
+    let node = PrimvarReaderFloat3::define(edit, paths[3]).expect("outside any instance");
     node.set_fallback(edit, PrimvarReaderFloat3::fallback_default())
         .unwrap();
     node.set_varname(edit, &PrimvarReaderFloat3::varname_default())
         .unwrap();
     node.create_result_output(edit).unwrap();
-    let node = PrimvarReaderFloat4::define(edit, paths[4]);
+    let node = PrimvarReaderFloat4::define(edit, paths[4]).expect("outside any instance");
     node.set_fallback(edit, PrimvarReaderFloat4::fallback_default())
         .unwrap();
     node.set_varname(edit, &PrimvarReaderFloat4::varname_default())
         .unwrap();
     node.create_result_output(edit).unwrap();
-    let node = PrimvarReaderInt::define(edit, paths[5]);
+    let node = PrimvarReaderInt::define(edit, paths[5]).expect("outside any instance");
     node.set_fallback(edit, PrimvarReaderInt::fallback_default())
         .unwrap();
     node.set_varname(edit, &PrimvarReaderInt::varname_default())
         .unwrap();
     node.create_result_output(edit).unwrap();
-    let node = PrimvarReaderMatrix::define(edit, paths[6]);
+    let node = PrimvarReaderMatrix::define(edit, paths[6]).expect("outside any instance");
     node.set_fallback(edit, PrimvarReaderMatrix::fallback_default())
         .unwrap();
     node.set_varname(edit, &PrimvarReaderMatrix::varname_default())
         .unwrap();
     node.create_result_output(edit).unwrap();
-    let node = PrimvarReaderNormal::define(edit, paths[7]);
+    let node = PrimvarReaderNormal::define(edit, paths[7]).expect("outside any instance");
     node.set_fallback(edit, PrimvarReaderNormal::fallback_default())
         .unwrap();
     node.set_varname(edit, &PrimvarReaderNormal::varname_default())
         .unwrap();
     node.create_result_output(edit).unwrap();
-    let node = PrimvarReaderPoint::define(edit, paths[8]);
+    let node = PrimvarReaderPoint::define(edit, paths[8]).expect("outside any instance");
     node.set_fallback(edit, PrimvarReaderPoint::fallback_default())
         .unwrap();
     node.set_varname(edit, &PrimvarReaderPoint::varname_default())
         .unwrap();
     node.create_result_output(edit).unwrap();
-    let node = PrimvarReaderString::define(edit, paths[9]);
+    let node = PrimvarReaderString::define(edit, paths[9]).expect("outside any instance");
     node.set_fallback(edit, &PrimvarReaderString::fallback_default())
         .unwrap();
     node.set_varname(edit, &PrimvarReaderString::varname_default())
         .unwrap();
     node.create_result_output(edit).unwrap();
-    let node = PrimvarReaderVector::define(edit, paths[10]);
+    let node = PrimvarReaderVector::define(edit, paths[10]).expect("outside any instance");
     node.set_fallback(edit, PrimvarReaderVector::fallback_default())
         .unwrap();
     node.set_varname(edit, &PrimvarReaderVector::varname_default())
         .unwrap();
     node.create_result_output(edit).unwrap();
-    let node = Transform2d::define(edit, paths[11]);
+    let node = Transform2d::define(edit, paths[11]).expect("outside any instance");
     node.set_in_value(edit, Transform2d::in_value_default())
         .unwrap();
     node.set_rotation(edit, Transform2d::rotation_default())
@@ -133,7 +133,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, paths: &[PathId]) {
     node.set_translation(edit, Transform2d::translation_default())
         .unwrap();
     node.create_result_output(edit).unwrap();
-    let node = UvTexture::define(edit, paths[12]);
+    let node = UvTexture::define(edit, paths[12]).expect("outside any instance");
     node.set_bias(edit, UvTexture::bias_default()).unwrap();
     node.set_fallback(edit, UvTexture::fallback_default())
         .unwrap();

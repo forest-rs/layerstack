@@ -522,6 +522,11 @@ jobs:
       - name: check target list edits oracle
         run: python layerstack_conformance/scripts/target_list_edits_oracle.py --check
 
+      # The define prim oracle must be what OpenUSD's `UsdStage::DefinePrim`
+      # authors and refuses, call by call.
+      - name: check define prim oracle
+        run: python layerstack_conformance/scripts/define_prim_oracle.py --check
+
       - name: test saved variant set names against OpenUSD
         env:
           LAYERSTACK_USD_PYTHON: python

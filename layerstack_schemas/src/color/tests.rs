@@ -84,8 +84,10 @@ fn ancestors_custom_named_definition_and_unknown_assignment_stops_inheritance() 
     let child = store.path("/Parent/Child");
     let mut edit = SchemaEdit::new(stage.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
     // Typed is abstract; author ordinary prims through the base edit.
-    edit.define_prim(parent, "Scope");
-    edit.define_prim(child, "Scope");
+    edit.define_prim(parent, "Scope")
+        .expect("outside any instance");
+    edit.define_prim(child, "Scope")
+        .expect("outside any instance");
     ColorSpaceApi::apply(&mut edit, parent)
         .unwrap()
         .set_color_space_name(&mut edit, "named-custom");

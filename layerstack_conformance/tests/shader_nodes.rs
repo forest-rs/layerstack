@@ -64,8 +64,8 @@ fn identifier_checks_defaults_connections_samples_and_undo_are_explicit() {
     let missing = store.path("/Missing");
     let before = store.layer(LayerId(1)).unwrap().clone();
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-    PreviewSurface::define(&mut edit, surface);
-    UvTexture::define(&mut edit, texture);
+    PreviewSurface::define(&mut edit, surface).expect("outside any instance");
+    UvTexture::define(&mut edit, texture).expect("outside any instance");
     let transaction = edit.finish();
     let applied = live.apply(&mut store, &transaction).unwrap();
     let scene = Scene::new(live.stage(), &store);
@@ -135,7 +135,7 @@ fn incompatible_existing_port_is_rejected_without_appending_edits() {
     let (mut store, mut live) = scene();
     let path = store.path("/Surface");
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-    let node = PreviewSurface::define(&mut edit, path);
+    let node = PreviewSurface::define(&mut edit, path).expect("outside any instance");
     node.create_input(
         &mut edit,
         "roughness",
@@ -181,7 +181,7 @@ fn defining_a_node_overrides_a_weaker_source_asset_implementation() {
         },
     );
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-    PreviewSurface::define(&mut edit, path);
+    PreviewSurface::define(&mut edit, path).expect("outside any instance");
     let transaction = edit.finish();
     live.apply(&mut store, &transaction).unwrap();
     assert!(

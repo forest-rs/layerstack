@@ -319,11 +319,12 @@ fn setters_author_through_a_schema_edit() {
     .map(|p| store.path(p));
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
     Centrifuge::define(&mut edit, centrifuge)
+        .expect("outside any instance")
         .set_max_rpm(&mut edit, 9000.0)
         .set_max_rpm_at(&mut edit, 4.0, 12000.0)
         .set_centrifuge_refrigerated(&mut edit, true)
         .set_instrument_status(&mut edit, InstrumentInstrumentStatus::Running);
-    let spectrometer = Spectrometer::define(&mut edit, spectro);
+    let spectrometer = Spectrometer::define(&mut edit, spectro).expect("outside any instance");
     spectrometer.set_spectrometer_light_source(&mut edit, &[TargetPath::Prim(lamp)]);
     spectrometer
         .calibration_api()
@@ -340,7 +341,7 @@ fn setters_author_through_a_schema_edit() {
         "only an imaging spectrometer may have a red channel"
     );
     assert!(ChannelApi::apply(&mut edit, missing, "green").is_err());
-    let scope = Telescope::define(&mut edit, scope_path);
+    let scope = Telescope::define(&mut edit, scope_path).expect("outside any instance");
     scope
         .set_telescope_aperture(&mut edit, 0.75)
         .set_telescope_mount(&mut edit, TelescopeTelescopeMount::Fork);
@@ -355,7 +356,8 @@ fn setters_author_through_a_schema_edit() {
         Err(CannotApply::NoSuchPrim),
         "no edit authors an `over` for a prim that does not exist"
     );
-    edit.define_prim(rack, "Xform");
+    edit.define_prim(rack, "Xform")
+        .expect("outside any instance");
     MountedOnApi::apply(&mut edit, rack)
         .expect("an Xform may be mounted")
         .set_mount_telescope(&mut edit, &[TargetPath::Prim(scope_path)]);

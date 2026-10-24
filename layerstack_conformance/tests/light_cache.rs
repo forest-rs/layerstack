@@ -177,7 +177,8 @@ fn missing_external_filter_repair_and_removal_refresh_diagnostics() {
         &mut store,
         EditTarget::for_layer(LayerId(1)),
     );
-    layerstack_schemas::usd_lux::LightFilter::define(&mut edit, filter);
+    layerstack_schemas::usd_lux::LightFilter::define(&mut edit, filter)
+        .expect("outside any instance");
     let transaction = edit.finish();
     let applied = live.apply(&mut store, &transaction).unwrap();
     cache.apply_changes(&Scene::new(live.stage(), &store), &applied.changes);

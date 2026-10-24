@@ -70,7 +70,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
     );
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-    let key = SphereLight::define(&mut edit, light);
+    let key = SphereLight::define(&mut edit, light)?;
     key.set_radius(&mut edit, 0.25);
     key.light_api().set_intensity(&mut edit, 10.);
     ShapingApi::apply(&mut edit, light)
@@ -79,7 +79,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     ShadowApi::apply(&mut edit, light)
         .expect("existing light")
         .set_shadow_distance(&mut edit, -1.);
-    DomeLight::define(&mut edit, dome).set_texture_file(&mut edit, "./sky.exr");
+    DomeLight::define(&mut edit, dome)?.set_texture_file(&mut edit, "./sky.exr");
     let transaction = edit.finish();
     live.apply(&mut store, &transaction)?;
     let mut cache = LightCache::new(Time::Default, &["engine"]);

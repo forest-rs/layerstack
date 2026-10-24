@@ -807,6 +807,7 @@ pub(crate) fn module_items(
     Ok(Items {
         layerstack: used(&["CannotApply", "PathId"]),
         schemas: used(&[
+            "CannotDefine",
             "InstanceEdit",
             "InstanceView",
             "PrimEdit",
@@ -1283,12 +1284,15 @@ fn typed_view(
     );
     let mut define = if concrete {
         format!(
-            "    /// Defines `path` as a new `def {name}` prim spec in the edit's target.\n    \
-             ///\n    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not\n    \
-             /// author yet; defining a spec that exists is rejected when the\n    \
-             /// transaction applies.\n    \
-             pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> {edit} {{\n        \
-             {edit}::from_prim(edit.define_prim(path, Self::SCHEMA))\n    }}\n\n",
+            "    /// Defines the prim at `path` as a `{name}`, and its undefined\n    \
+             /// ancestors, through the edit's target, as OpenUSD's\n    \
+             /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim\n    \
+             /// already defined as a `{name}` is left as it is.\n    \
+             ///\n    /// # Errors\n    ///\n    \
+             /// [`CannotDefine`] for a path beneath an instance or in a\n    \
+             /// prototype, which OpenUSD refuses; nothing is authored.\n    \
+             pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<{edit}, CannotDefine> {{\n        \
+             edit.define_prim(path, Self::SCHEMA).map({edit}::from_prim)\n    }}\n\n",
             name = schema.name
         )
     } else {
@@ -1688,7 +1692,7 @@ impl TestTable {
                     for prim in [&fallback, &authored] {
                         let _ = writeln!(
                             structure,
-                            "    {}::define(edit, h.path({prim:?}));",
+                            "    {}::define(edit, h.path({prim:?})).expect(\"outside any instance\");",
                             path_of(host_type)
                         );
                         let instance_arg = instance
@@ -1712,7 +1716,7 @@ impl TestTable {
                     prims.push(prim.clone());
                     let _ = writeln!(
                         structure,
-                        "    {view_path}::define(edit, h.path({prim:?}));"
+                        "    {view_path}::define(edit, h.path({prim:?})).expect(\"outside any instance\");"
                     );
                 }
             } else if view.kind != SchemaKind::AbstractTyped {

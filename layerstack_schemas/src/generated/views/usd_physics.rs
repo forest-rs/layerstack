@@ -22,7 +22,7 @@ use core::ops::Deref;
 
 use layerstack::{CannotApply, PathId};
 
-use crate::{InstanceEdit, InstanceView, PrimEdit, PrimView, Scene, SchemaEdit};
+use crate::{CannotDefine, InstanceEdit, InstanceView, PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "PhysicsArticulationRootAPI can be applied to a scene graph node, and marks the subtree rooted here for inclusion in one or more reduced coordinate articulations."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's single-apply API schema `PhysicsArticulationRootAPI`. Get it with [`PhysicsArticulationRootApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
@@ -371,15 +371,23 @@ impl<'a> PhysicsCollisionGroup<'a> {
         PhysicsCollisionGroupEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def PhysicsCollisionGroup` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `PhysicsCollisionGroup`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `PhysicsCollisionGroup` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdPhysicsCollisionGroup::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> PhysicsCollisionGroupEdit {
-        PhysicsCollisionGroupEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(
+        edit: &mut SchemaEdit<'_>,
+        path: PathId,
+    ) -> Result<PhysicsCollisionGroupEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(PhysicsCollisionGroupEdit::from_prim)
     }
 
     /// The USD name of [`Self::filtered_groups`].
@@ -612,15 +620,23 @@ impl<'a> PhysicsDistanceJoint<'a> {
         PhysicsDistanceJointEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def PhysicsDistanceJoint` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `PhysicsDistanceJoint`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `PhysicsDistanceJoint` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdPhysicsDistanceJoint::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> PhysicsDistanceJointEdit {
-        PhysicsDistanceJointEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(
+        edit: &mut SchemaEdit<'_>,
+        path: PathId,
+    ) -> Result<PhysicsDistanceJointEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(PhysicsDistanceJointEdit::from_prim)
     }
 
     /// The USD name of [`Self::max_distance`].
@@ -1394,15 +1410,23 @@ impl<'a> PhysicsFixedJoint<'a> {
         PhysicsFixedJointEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def PhysicsFixedJoint` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `PhysicsFixedJoint`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `PhysicsFixedJoint` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdPhysicsFixedJoint::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> PhysicsFixedJointEdit {
-        PhysicsFixedJointEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(
+        edit: &mut SchemaEdit<'_>,
+        path: PathId,
+    ) -> Result<PhysicsFixedJointEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(PhysicsFixedJointEdit::from_prim)
     }
 }
 
@@ -1489,15 +1513,23 @@ impl<'a> PhysicsJoint<'a> {
         PhysicsJointEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def PhysicsJoint` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `PhysicsJoint`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `PhysicsJoint` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdPhysicsJoint::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> PhysicsJointEdit {
-        PhysicsJointEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(
+        edit: &mut SchemaEdit<'_>,
+        path: PathId,
+    ) -> Result<PhysicsJointEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(PhysicsJointEdit::from_prim)
     }
 
     /// The USD name of [`Self::body0`].
@@ -3115,15 +3147,23 @@ impl<'a> PhysicsPrismaticJoint<'a> {
         PhysicsPrismaticJointEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def PhysicsPrismaticJoint` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `PhysicsPrismaticJoint`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `PhysicsPrismaticJoint` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdPhysicsPrismaticJoint::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> PhysicsPrismaticJointEdit {
-        PhysicsPrismaticJointEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(
+        edit: &mut SchemaEdit<'_>,
+        path: PathId,
+    ) -> Result<PhysicsPrismaticJointEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(PhysicsPrismaticJointEdit::from_prim)
     }
 
     /// The USD name of [`Self::axis`].
@@ -3368,15 +3408,23 @@ impl<'a> PhysicsRevoluteJoint<'a> {
         PhysicsRevoluteJointEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def PhysicsRevoluteJoint` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `PhysicsRevoluteJoint`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `PhysicsRevoluteJoint` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdPhysicsRevoluteJoint::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> PhysicsRevoluteJointEdit {
-        PhysicsRevoluteJointEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(
+        edit: &mut SchemaEdit<'_>,
+        path: PathId,
+    ) -> Result<PhysicsRevoluteJointEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(PhysicsRevoluteJointEdit::from_prim)
     }
 
     /// The USD name of [`Self::axis`].
@@ -3918,15 +3966,23 @@ impl<'a> PhysicsScene<'a> {
         PhysicsSceneEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def PhysicsScene` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `PhysicsScene`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `PhysicsScene` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdPhysicsScene::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> PhysicsSceneEdit {
-        PhysicsSceneEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(
+        edit: &mut SchemaEdit<'_>,
+        path: PathId,
+    ) -> Result<PhysicsSceneEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(PhysicsSceneEdit::from_prim)
     }
 
     /// The USD name of [`Self::gravity_direction`].
@@ -4155,15 +4211,23 @@ impl<'a> PhysicsSphericalJoint<'a> {
         PhysicsSphericalJointEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def PhysicsSphericalJoint` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `PhysicsSphericalJoint`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `PhysicsSphericalJoint` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdPhysicsSphericalJoint::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> PhysicsSphericalJointEdit {
-        PhysicsSphericalJointEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(
+        edit: &mut SchemaEdit<'_>,
+        path: PathId,
+    ) -> Result<PhysicsSphericalJointEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(PhysicsSphericalJointEdit::from_prim)
     }
 
     /// The USD name of [`Self::axis`].

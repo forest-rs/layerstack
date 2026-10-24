@@ -342,7 +342,7 @@ fn path_expression_setters_author_what_getters_read() {
     let mut live = LiveStage::compose(&mut store, LayerId(1), options);
     let path = store.path("/Group");
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-    Scope::define(&mut edit, path);
+    Scope::define(&mut edit, path).expect("outside any instance");
     let collection = CollectionApi::apply(&mut edit, path, "lights").expect("applies to a scope");
     collection.set_membership_expression(&mut edit, "/World//Lights");
     let transaction = edit.finish();
@@ -560,10 +560,10 @@ fn missing_prims_are_not_authored() {
     assert!(CollectionApiEdit::new(&edit, missing, "lights").is_none());
     assert_eq!(edit.transaction(), &layerstack::edit::Transaction::new());
 
-    Xform::define(&mut edit, later);
+    Xform::define(&mut edit, later).expect("outside any instance");
     assert!(CollectionApi::apply(&mut edit, later, "lights").is_ok());
     assert!(MeshEdit::new(&edit, later).is_none(), "an Xform");
-    Mesh::define(&mut edit, missing);
+    Mesh::define(&mut edit, missing).expect("outside any instance");
     assert!(
         MeshEdit::new(&edit, missing).is_some(),
         "defined in the edit"
@@ -617,16 +617,16 @@ fn typed_edit_handles_by_path_check_the_type() {
 
     // Defined earlier in the edit, as the last `define` leaves it.
     assert!(XformEdit::new(&edit, moss).is_none(), "not there yet");
-    Xform::define(&mut edit, moss);
+    Xform::define(&mut edit, moss).expect("outside any instance");
     assert!(XformEdit::new(&edit, moss).is_some());
     assert!(XformableEdit::new(&edit, moss).is_some());
     assert!(MeshEdit::new(&edit, moss).is_none());
-    Xform::define(&mut edit, terrain);
+    Xform::define(&mut edit, terrain).expect("outside any instance");
     assert!(
         XformEdit::new(&edit, terrain).is_some(),
         "typed by the edit"
     );
-    Mesh::define(&mut edit, moss);
+    Mesh::define(&mut edit, moss).expect("outside any instance");
     assert!(MeshEdit::new(&edit, moss).is_some());
     assert!(XformEdit::new(&edit, moss).is_none(), "a Mesh now");
 }

@@ -314,7 +314,8 @@ fn edits_to_authored_shape_dimensions_invalidate_bounds_and_instancers() {
                 target,
             );
             let instances =
-                layerstack_schemas::usd_geom::PointInstancer::define(&mut edit, instancer);
+                layerstack_schemas::usd_geom::PointInstancer::define(&mut edit, instancer)
+                    .expect("outside any instance");
             instances.set_prototypes(&mut edit, &[layerstack::TargetPath::Prim(fixture.path)]);
             instances.set_proto_indices(&mut edit, &[0]);
             instances.set_positions(&mut edit, &[[10., 0., 0.]]);

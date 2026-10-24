@@ -27,8 +27,8 @@ fn main() {
         },
     );
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-    let material = Material::define(&mut edit, material);
-    let shader_handle = Shader::define(&mut edit, shader);
+    let material = Material::define(&mut edit, material).expect("outside any instance");
+    let shader_handle = Shader::define(&mut edit, shader).expect("outside any instance");
     let ty = PropertyType::parse("float").expect("a registered value type");
     let interface = material
         .create_input(&mut edit, "roughness", ty.clone())

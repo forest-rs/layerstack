@@ -22,7 +22,7 @@ use core::ops::Deref;
 
 use layerstack::{CannotApply, PathId};
 
-use crate::{PrimEdit, PrimView, Scene, SchemaEdit};
+use crate::{CannotDefine, PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "Field3D field primitive."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `Field3DAsset`, inheriting [`FieldAsset`]. Construct it with [`Field3DAsset::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
@@ -73,15 +73,23 @@ impl<'a> Field3DAsset<'a> {
         Field3DAssetEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def Field3DAsset` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `Field3DAsset`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `Field3DAsset` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdVolField3DAsset::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Field3DAssetEdit {
-        Field3DAssetEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(
+        edit: &mut SchemaEdit<'_>,
+        path: PathId,
+    ) -> Result<Field3DAssetEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(Field3DAssetEdit::from_prim)
     }
 
     /// The USD name of [`Self::field_purpose`].
@@ -433,15 +441,23 @@ impl<'a> OpenVDBAsset<'a> {
         OpenVDBAssetEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def OpenVDBAsset` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `OpenVDBAsset`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `OpenVDBAsset` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdVolOpenVDBAsset::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> OpenVDBAssetEdit {
-        OpenVDBAssetEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(
+        edit: &mut SchemaEdit<'_>,
+        path: PathId,
+    ) -> Result<OpenVDBAssetEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(OpenVDBAssetEdit::from_prim)
     }
 
     /// The USD name of [`Self::field_class`].
@@ -576,15 +592,23 @@ impl<'a> ParticleField<'a> {
         ParticleFieldEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def ParticleField` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `ParticleField`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `ParticleField` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdVolParticleField::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> ParticleFieldEdit {
-        ParticleFieldEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(
+        edit: &mut SchemaEdit<'_>,
+        path: PathId,
+    ) -> Result<ParticleFieldEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(ParticleFieldEdit::from_prim)
     }
 }
 
@@ -775,15 +799,23 @@ impl<'a> ParticleField3DGaussianSplat<'a> {
         ParticleField3DGaussianSplatEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def ParticleField3DGaussianSplat` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `ParticleField3DGaussianSplat`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `ParticleField3DGaussianSplat` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdVolParticleField3DGaussianSplat::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> ParticleField3DGaussianSplatEdit {
-        ParticleField3DGaussianSplatEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(
+        edit: &mut SchemaEdit<'_>,
+        path: PathId,
+    ) -> Result<ParticleField3DGaussianSplatEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(ParticleField3DGaussianSplatEdit::from_prim)
     }
 
     /// The USD name of [`Self::projection_mode_hint`].
@@ -3019,15 +3051,20 @@ impl<'a> Volume<'a> {
         VolumeEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
     }
 
-    /// Defines `path` as a new `def Volume` prim spec in the edit's target.
+    /// Defines the prim at `path` as a `Volume`, and its undefined
+    /// ancestors, through the edit's target, as OpenUSD's
+    /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
+    /// already defined as a `Volume` is left as it is.
     ///
-    /// OpenUSD: `UsdStage::DefinePrim` for a prim the target does not
-    /// author yet; defining a spec that exists is rejected when the
-    /// transaction applies.
+    /// # Errors
+    ///
+    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdVolVolume::Define")]
     #[doc(alias = "Define")]
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> VolumeEdit {
-        VolumeEdit::from_prim(edit.define_prim(path, Self::SCHEMA))
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<VolumeEdit, CannotDefine> {
+        edit.define_prim(path, Self::SCHEMA)
+            .map(VolumeEdit::from_prim)
     }
 }
 

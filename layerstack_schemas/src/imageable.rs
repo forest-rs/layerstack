@@ -42,8 +42,8 @@ use crate::{
 /// let mut live = LiveStage::compose(&mut store, layer,
 ///     StageOptions { schemas: Some(schemas), ..Default::default() });
 /// let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(layer));
-/// Xform::define(&mut edit, parent).set_visibility(&mut edit, ImageableVisibility::Invisible);
-/// Xform::define(&mut edit, child);
+/// Xform::define(&mut edit, parent)?.set_visibility(&mut edit, ImageableVisibility::Invisible);
+/// Xform::define(&mut edit, child)?;
 /// MotionApi::apply(&mut edit, parent)?.set_motion_blur_scale(&mut edit, 0.5);
 /// let transaction = edit.finish();
 /// live.apply(&mut store, &transaction).expect("valid authored transaction");

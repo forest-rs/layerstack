@@ -302,7 +302,7 @@ mod tests {
             let live = LiveStage::compose(&mut store, LayerId(1), options);
             let mut edit =
                 SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-            Xform::define(&mut edit, path);
+            Xform::define(&mut edit, path).expect("outside any instance");
             let xform = XformableEdit::new(&edit, path).unwrap();
             match case {
                 0 => {
@@ -352,7 +352,7 @@ mod tests {
         };
         let live = LiveStage::compose(&mut store, LayerId(1), options);
         let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-        Xform::define(&mut edit, path);
+        Xform::define(&mut edit, path).expect("outside any instance");
         let xform = XformableEdit::new(&edit, path).unwrap();
         xform
             .add_translate_op(&mut edit, XformOpPrecision::Half)

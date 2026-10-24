@@ -4956,6 +4956,45 @@ mod tests {
         assert!(!stage.property_might_be_time_varying(prim, field));
     }
 
+    /// An animation block hides weaker time samples and splines, not their
+    /// defaults, and the explanation says so (the value matrix's `absp_dbl`
+    /// covers splines): the weaker default answers
+    /// numeric times, as the read does (OpenUSD `UsdAttribute::BlockAnimation`;
+    /// `GetResolveInfo` names the default).
+    ///
+    /// Spec: AOUSD Core §12.3.
+    #[test]
+    fn explanations_follow_animation_blocks() {
+        let ty = PropertyType::parse("double").unwrap();
+        let block = PropertySpec::typed_attribute(ty.clone()).with_default(Value::AnimationBlock);
+        let sampled = PropertySpec::typed_attribute(ty.clone())
+            .with_default(Value::Double(1.5))
+            .with_time_samples(vec![(1.0, Value::Double(10.0)), (3.0, Value::Double(30.0))]);
+        let (stage, prim, field) = property_stack_fixture(vec![block, sampled]);
+        let property = PropertyPath::new(prim, field);
+        for time in [
+            Time::held(0.0),
+            Time::held(2.0),
+            Time::at(2.0),
+            Time::held(5.0),
+        ] {
+            let read = stage.resolve_property_path_at_time(property, time);
+            assert_eq!(read.map(|r| r.value), Some(Value::Double(1.5)));
+            let explained = stage.explain_property_value(property, time).unwrap();
+            assert_eq!(explained.value, Some(Value::Double(1.5)));
+            assert_eq!(explained.source, ValueSource::Default);
+            let contributors: Vec<_> = explained.contributors().collect();
+            assert_eq!(contributors.len(), 1);
+            assert_eq!(contributors[0].opinion.key.layer_strength, 1);
+            assert!(
+                contributors[0]
+                    .samples
+                    .iter()
+                    .all(|sample| !sample.time.is_finite())
+            );
+        }
+    }
+
     fn append_edit(value: i32) -> Value {
         Value::ArrayEdit(ArrayEdit {
             ops: vec![ArrayEditOp::Insert {

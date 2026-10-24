@@ -587,12 +587,16 @@ impl Stage {
         // A site composition culled, as it has no spec yet, is placed in
         // the prim's index composed without culling, as OpenUSD's resolve
         // targets are (`UsdPrim::_MakeResolveTargetFromEditTarget`).
+        // A site the graph holds but excludes stays excluded there: a culled
+        // occurrence of it would have the same specs, none.
         let placed =
             match self.target_site(store.paths(), prim, index, &mapped_prim, target.layer()) {
-                Some(site) => Some((site, None)),
-                None => {
+                Ok(site) => Some((site, None)),
+                Err(Unplaced::Excluded) => None,
+                Err(Unplaced::Absent) => {
                     let expanded = self.expanded_prim_index(store, prim);
                     self.target_site(store.paths(), prim, &expanded, &mapped_prim, target.layer())
+                        .ok()
                         .map(|site| (site, Some(expanded)))
                 }
             };
@@ -696,8 +700,22 @@ impl Stage {
         index: &PrimIndex,
         mapped_prim: &SpecPath,
         layer: LayerId,
-    ) -> Option<OpinionKey> {
+    ) -> Result<OpinionKey, Unplaced> {
+        // The namespace depths of the prim's instance ancestors, found by
+        // walking up rather than scanning the stage's instances.
+        let mut instance_depths = Vec::new();
+        let mut parent = paths.resolve(prim).parent();
+        while let Some(path) = parent {
+            if paths
+                .lookup(&path)
+                .is_some_and(|ancestor| self.instances.contains(&ancestor))
+            {
+                instance_depths.push(u16::try_from(path.depth()).unwrap_or(u16::MAX));
+            }
+            parent = path.parent();
+        }
         let mut sites = Vec::new();
+        let mut held = false;
         for (id, node) in index.graph.nodes() {
             if node.site() != mapped_prim
                 || node.arc_kind() == ArcKind::Relocates
@@ -708,17 +726,13 @@ impl Stage {
             let Some(layer_strength) = node.layer_strength(layer) else {
                 continue;
             };
+            held = true;
             // Instance descendants cannot regain occurrence-local opinions by
             // authoring a previously specless layer (AOUSD Core §11.3.3).
-            if self.instances.iter().any(|ancestor| {
-                *ancestor != prim
-                    && paths.resolve(*ancestor).is_prefix_of(paths.resolve(prim))
-                    && !index.graph.has_direct_dependency(
-                        paths,
-                        id,
-                        u16::try_from(paths.resolve(*ancestor).depth()).unwrap_or(u16::MAX),
-                    )
-            }) {
+            if instance_depths
+                .iter()
+                .any(|&depth| !index.graph.has_direct_dependency(paths, id, depth))
+            {
                 continue;
             }
             sites.push(OpinionKey {
@@ -745,8 +759,22 @@ impl Stage {
             sources.peek().is_none() || sources.any(|source| source.node == site.node)
         });
         index.graph.sort_keys(&mut sites);
-        sites.into_iter().next()
+        sites.into_iter().next().ok_or(if held {
+            Unplaced::Excluded
+        } else {
+            Unplaced::Absent
+        })
     }
+}
+
+/// Why a graph has no node a write through an edit target could author at.
+enum Unplaced {
+    /// No node of the graph has the target's site in a stack with its layer.
+    Absent,
+    /// Nodes have it, but none may take the write: an instance's
+    /// descendant's node outside its prototype, or a duplicate of the
+    /// occurrence composition selected.
+    Excluded,
 }
 
 /// The node of `expanded` that each node of `graph` is, by node index:

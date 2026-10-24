@@ -330,3 +330,43 @@ about 170 ns of the 229 ns; the 38 rule-map collections alone cost about 61 ns
 per prim. USDC retains no arrays here: retained loading covers numeric arrays,
 and `token[]` values decode during import. Without the `tags` arrays, both
 forms open in about 55 ms.
+
+## Point instancers
+
+`benches/point_instancer.rs` times what an engine does with a point instancer
+each frame, and what a procedural tool does to one, on in-memory instancers of
+100,000 and 1,000,000 instances (two prototypes, one in 100 IDs invisible and
+one in 1,000 inactive; `compute_mask_tenth_inactive` makes one in ten
+inactive). `tools/point_instancer_cpp_timing.py` builds the same scene with
+OpenUSD 26.08's Python bindings and times its `ComputeMaskAtTime`,
+`ComputeInstanceTransformsAtTime(s)` and `ComputeExtentAtTime`; set
+`PXR_WORK_THREAD_LIMIT=1` for one thread. OpenUSD parallelizes its per-instance
+loops; layerstack runs on the calling thread, and a host can split
+`InstanceTransforms::get` over `0..source_len()` across its own threads.
+
+```sh
+cargo bench -p wind_tunnel --bench point_instancer
+.local/usd-venv/bin/python wind_tunnel/tools/point_instancer_cpp_timing.py 1000000
+```
+
+Measured on an Apple M3 Max (16 cores), macOS 27.0.1, Rust 1.99.0, release
+profile, 2026-10-24, with other builds running (load average 9–25), one
+million instances, medians in ms:
+
+| Operation | Before | layerstack | OpenUSD, 1 thread | OpenUSD, 16 threads |
+|---|---:|---:|---:|---:|
+| `compute_mask` | 9.2 | 3.97 | 25.4 | 25.3 |
+| `compute_mask`, one in ten inactive | 410 | 13.5 | 51.1 | 50.1 |
+| `compute_instance_transforms` | 49.4 | 26.0 | 58.5 | 28.4 |
+| `prepare_instance_transforms`, iterated | 36.0 | 13.7 | | |
+| `compute_instance_transforms_at_times`, 3 samples with motion | 266 | 216 | 311 | 59.0 |
+| `compute_extent` | 147 | 29.4 | 99.7 | 30.8 |
+| `deactivate_ids` and `make_invisible`, 10,000 IDs | 17.1 | 0.23 | | |
+
+"Before" is the series before its hash-set masks, linear list operations and
+exact product shortcuts (a scale times a rotation scales the rotation's rows;
+identity prototype and bound matrices are not multiplied). Collected
+transforms write 152 bytes per instance; reusing the output vector
+(`compute_instance_transforms_into`) takes 16.2 ms. The three-sample motion
+batch is dominated by each instance's angular-velocity rotation (a sine,
+cosine and normalization per instance and sample, as OpenUSD computes it).

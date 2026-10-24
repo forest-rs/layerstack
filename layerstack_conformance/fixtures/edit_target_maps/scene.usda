@@ -24,11 +24,12 @@ def "Rock" (
     variants = {
         string look = "a"
     }
-    prepend variantSets = ["look"]
+    prepend variantSets = "look"
 )
 {
     variantSet "look" = {
         "a" {
+
         }
     }
 }

@@ -127,7 +127,8 @@ pub struct Document {
     /// field names (see the [module docs](self)).
     pub metadata: Vec<Metadatum>,
     /// Root prim ordering (`reorder rootPrims = [...]`, the pseudo-root's
-    /// `primOrder` field), or `None` when not authored.
+    /// `primOrder` field), or `None` when not authored. Written only when
+    /// it names two prims or more, as OpenUSD writes it.
     ///
     /// Spec: AOUSD Core §7.6.1 (layer spec fields), §16.2.18.
     pub prim_order: Option<Vec<String>>,
@@ -276,12 +277,14 @@ pub struct Prim {
     /// kinds (§7.3.3).
     pub properties: Vec<Property>,
     /// Property ordering (`reorder properties = [...]`, the
-    /// `propertyOrder` field), or `None` when not authored.
+    /// `propertyOrder` field), or `None` when not authored. Written only
+    /// when it names two properties or more, as OpenUSD writes it.
     ///
     /// Spec: AOUSD Core §7.6.2 (prim spec fields).
     pub property_order: Option<Vec<String>>,
     /// Child ordering (`reorder nameChildren = [...]`, the `primOrder`
-    /// field), or `None` when not authored.
+    /// field), or `None` when not authored. Written only when it names two
+    /// children or more, as OpenUSD writes it.
     ///
     /// Spec: AOUSD Core §7.6.2 (prim spec fields).
     pub prim_order: Option<Vec<String>>,
@@ -950,6 +953,14 @@ pub struct Reference {
     pub prim_path: Option<String>,
     /// The arc's layer offset.
     pub offset: LayerOffset,
+}
+
+impl Reference {
+    /// Whether the arc is written in brackets even alone: a reference with
+    /// custom data (`SingleItemRequiresBrackets`).
+    fn bracketed(&self) -> bool {
+        !self.custom_data.is_empty()
+    }
 }
 
 /// A `key = value` metadata entry on a layer, prim or attribute.
@@ -2450,7 +2461,7 @@ impl Writer<'_> {
             self.out.push_str(")\n");
         }
         if let Some(order) = &doc.prim_order
-            && !order.is_empty()
+            && order.len() > 1
         {
             self.out.push('\n');
             self.reorder("rootPrims", order, 0);
@@ -2597,16 +2608,44 @@ impl Writer<'_> {
                 PrimField::Metadatum(entry) => self.metadatum(entry, depth),
                 // §16.2.17.4, §16.2.17.5: arcs as list-op statements.
                 PrimField::Inherits(op) => {
-                    self.arc_statements("inherits", op, depth, |w, path| w.path(path));
+                    self.arc_statements(
+                        "inherits",
+                        op,
+                        depth,
+                        |_| false,
+                        |w, path, _| {
+                            w.path(path);
+                        },
+                    );
                 }
                 PrimField::Payloads(op) => {
-                    self.arc_statements("payload", op, depth, Self::reference);
+                    self.arc_statements(
+                        "payload",
+                        op,
+                        depth,
+                        Reference::bracketed,
+                        Self::reference,
+                    );
                 }
                 PrimField::References(op) => {
-                    self.arc_statements("references", op, depth, Self::reference);
+                    self.arc_statements(
+                        "references",
+                        op,
+                        depth,
+                        Reference::bracketed,
+                        Self::reference,
+                    );
                 }
                 PrimField::Specializes(op) => {
-                    self.arc_statements("specializes", op, depth, |w, path| w.path(path));
+                    self.arc_statements(
+                        "specializes",
+                        op,
+                        depth,
+                        |_| false,
+                        |w, path, _| {
+                            w.path(path);
+                        },
+                    );
                 }
                 PrimField::VariantSelections => {
                     // §16.2.17.3: `variants = { string set = "variant" }`, a
@@ -2622,7 +2661,12 @@ impl Writer<'_> {
                     self.out.push('\n');
                 }
                 PrimField::VariantSetNames(op) => {
-                    self.list_op("variantSets", op, depth, |w, s| w.string(s));
+                    // `WriteNameVector`: one name without brackets.
+                    self.list_op_statements(op, depth, |w, keyword, names| {
+                        w.out.push_str(keyword);
+                        w.out.push_str("variantSets = ");
+                        w.names(names);
+                    });
                 }
             }
         }
@@ -2631,11 +2675,11 @@ impl Writer<'_> {
     }
 
     /// The statements of a prim or variant body at `depth`, as
-    /// `Sdf_WritePrimBody` orders them: `reorder` statements; properties
-    /// sorted by name in [`dictionary_cmp`] order, an attribute before a
-    /// relationship of the same name (`_SortByNameThenType`); child prims
-    /// in document order (the `primChildren` field); then variant sets in
-    /// document order (`variantSetChildren`).
+    /// `Sdf_WritePrimBody` orders and spaces them: `reorder` statements;
+    /// properties sorted by name in [`dictionary_cmp`] order, an attribute
+    /// before a relationship of the same name (`_SortByNameThenType`);
+    /// child prims in document order (the `primChildren` field); then
+    /// variant sets in document order (`variantSetChildren`).
     fn prim_body(&mut self, prim: &Prim, depth: usize) {
         if let Some(order) = &prim.property_order {
             self.reorder("properties", order, depth);
@@ -2653,29 +2697,26 @@ impl Writer<'_> {
                 Property::Relationship(relationship) => self.relationship(relationship, depth),
             }
         }
-        let mut has_body = !prim.properties.is_empty()
-            || prim.property_order.is_some()
-            || prim.prim_order.is_some();
-        for child in &prim.children {
-            if has_body {
+        // A blank line between the properties and the children and
+        // between children; none before or between variant sets.
+        if !prim.properties.is_empty() && !prim.children.is_empty() {
+            self.out.push('\n');
+        }
+        for (i, child) in prim.children.iter().enumerate() {
+            if i > 0 {
                 self.out.push('\n');
             }
             self.prim(child, depth);
-            has_body = true;
         }
         for set in &prim.variant_sets {
-            if has_body {
-                self.out.push('\n');
-            }
             self.variant_set(set, depth);
-            has_body = true;
         }
     }
 
     /// §16.2.17: `variantSet "name" = { "variant" [( metadata )] { body }
-    /// ... }`, each variant with its prim spec's metadata and body, the
-    /// variants sorted by name in byte order, as `Sdf_WriteVariantSet`
-    /// sorts them.
+    /// ... }`, each variant with its prim spec's metadata and body, then a
+    /// blank line (`Sdf_WriteVariant`), the variants sorted by name in byte
+    /// order, as `Sdf_WriteVariantSet` sorts them.
     fn variant_set(&mut self, set: &VariantSet, depth: usize) {
         self.indent(depth);
         self.out.push_str("variantSet ");
@@ -2687,6 +2728,7 @@ impl Writer<'_> {
             self.prim_metadata(variant, depth + 1);
             self.out.push_str(" {\n");
             self.prim_body(variant, depth + 2);
+            self.out.push('\n');
             self.indent(depth + 1);
             self.out.push_str("}\n");
         }
@@ -2694,13 +2736,18 @@ impl Writer<'_> {
         self.out.push_str("}\n");
     }
 
-    /// `[op] key = item`, `[a, b]` or `None` per list-op statement.
+    /// `[op] key = item`, a list or `None` per list-op statement, as
+    /// `_WriteListOpList` (`pxr/usd/sdf/fileIO_Common.cpp`) writes a list of
+    /// paths, references or payloads: one item bare unless `bracketed`
+    /// says it needs brackets, otherwise one item per line. `item` writes
+    /// an item at the depth it is given.
     fn arc_statements<T>(
         &mut self,
         key: &str,
         op: &ListOp<T>,
         depth: usize,
-        mut item: impl FnMut(&mut Self, &T),
+        bracketed: impl Fn(&T) -> bool,
+        mut item: impl FnMut(&mut Self, &T, usize),
     ) {
         self.list_op_statements(op, depth, |w, keyword, items| {
             w.out.push_str(keyword);
@@ -2708,14 +2755,26 @@ impl Writer<'_> {
             w.out.push_str(" = ");
             match items {
                 [] => w.out.push_str("None"),
-                [one] => item(w, one),
-                _ => w.array(items, &mut item),
+                [one] if !bracketed(one) => item(w, one, depth),
+                _ => {
+                    w.out.push_str("[\n");
+                    for (i, one) in items.iter().enumerate() {
+                        w.indent(depth + 1);
+                        item(w, one, depth + 1);
+                        w.out
+                            .push_str(if i + 1 < items.len() { ",\n" } else { "\n" });
+                    }
+                    w.indent(depth);
+                    w.out.push(']');
+                }
             }
         });
     }
 
-    /// `@asset@<path> (offset = ...; scale = ...)`.
-    fn reference(&mut self, arc: &Reference) {
+    /// `@asset@<path> (offset = ...; scale = ...)`, or with custom data the
+    /// offset, scale and `customData` on lines of their own, as
+    /// `_ListOpWriter<SdfReference>` writes them; `depth` is the item's.
+    fn reference(&mut self, arc: &Reference, depth: usize) {
         if let Some(asset) = &arc.asset {
             self.asset(asset);
         }
@@ -2726,15 +2785,27 @@ impl Writer<'_> {
         }
         if arc.custom_data.is_empty() {
             self.layer_offset(arc.offset);
-        } else {
-            self.out.push_str(" (offset = ");
-            self.f64(arc.offset.offset);
-            self.out.push_str("; scale = ");
-            self.f64(arc.offset.scale);
-            self.out.push_str("; customData = ");
-            self.dictionary(&arc.custom_data, 1);
-            self.out.push(')');
+            return;
         }
+        self.out.push_str(" (\n");
+        if arc.offset.offset != 0.0 {
+            self.indent(depth + 1);
+            self.out.push_str("offset = ");
+            self.f64(arc.offset.offset);
+            self.out.push('\n');
+        }
+        if arc.offset.scale != 1.0 {
+            self.indent(depth + 1);
+            self.out.push_str("scale = ");
+            self.f64(arc.offset.scale);
+            self.out.push('\n');
+        }
+        self.indent(depth + 1);
+        self.out.push_str("customData = ");
+        self.dictionary(&arc.custom_data, depth + 1);
+        self.out.push('\n');
+        self.indent(depth);
+        self.out.push(')');
     }
 
     /// ` (offset = 10; scale = 2)`, leaving out identity parts; nothing for
@@ -2768,19 +2839,28 @@ impl Writer<'_> {
     }
 
     /// `reorder key = ["a", "b"]` (§16.2.17 for `nameChildren` and
-    /// `properties`, §16.2.18 for `rootPrims`). An empty order writes
-    /// nothing, as OpenUSD's writer leaves it out: the text format has no
-    /// spelling for it, since a name list takes at least one name.
+    /// `properties`, §16.2.18 for `rootPrims`). An order of fewer than two
+    /// names writes nothing, as `Sdf_WritePrimNamespaceReorders` and
+    /// `_WriteLayer` leave it out: it reorders nothing.
     fn reorder(&mut self, key: &str, names: &[String], depth: usize) {
-        if names.is_empty() {
+        if names.len() < 2 {
             return;
         }
         self.indent(depth);
         self.out.push_str("reorder ");
         self.out.push_str(key);
         self.out.push_str(" = ");
-        self.array(names, |w, s| w.string(s));
+        self.names(names);
         self.out.push('\n');
+    }
+
+    /// Names as `Sdf_FileIOUtility::WriteNameVector` writes them: one
+    /// quoted name alone, several in brackets.
+    fn names(&mut self, names: &[String]) {
+        match names {
+            [one] => self.string(one),
+            _ => self.array(names, |w, s| w.string(s)),
+        }
     }
 
     /// §16.2.16.1: `[custom] [uniform] type name [= value] [( metadata )]`,
@@ -2860,7 +2940,7 @@ impl Writer<'_> {
                 w.out.push_str(keyword);
                 w.attribute_head(attribute);
                 w.out.push_str(".connect = ");
-                w.targets(targets);
+                w.targets(targets, depth);
             });
         }
     }
@@ -2926,7 +3006,7 @@ impl Writer<'_> {
             self.out.push_str(&relationship.name);
             if let Some(targets) = explicit {
                 self.out.push_str(" = ");
-                self.targets(targets);
+                self.targets(targets, depth);
             }
             if !relationship.metadata.is_empty() {
                 self.out.push_str(" (\n");
@@ -2942,24 +3022,30 @@ impl Writer<'_> {
                 w.out.push_str("rel ");
                 w.out.push_str(&relationship.name);
                 w.out.push_str(" = ");
-                w.targets(targets);
+                w.targets(targets, depth);
             });
         }
     }
 
-    /// `<path>` for one target, `[<a>, <b>]` for several and `None` for
-    /// none. Validation guarantees each path is plain identifiers, so it
-    /// needs no escaping.
-    fn targets(&mut self, targets: &[String]) {
-        let path = |w: &mut Self, target: &String| {
-            w.out.push('<');
-            w.out.push_str(target);
-            w.out.push('>');
-        };
+    /// `<path>` for one target, `None` for none, and for several one per
+    /// line, each followed by a comma, as `Sdf_WriteRelationshipTargetList`
+    /// and `Sdf_WriteConnectionStatement` write them; `depth` is the
+    /// statement's. Validation guarantees each path is plain identifiers,
+    /// so it needs no escaping.
+    fn targets(&mut self, targets: &[String], depth: usize) {
         match targets {
             [] => self.out.push_str("None"),
-            [one] => path(self, one),
-            _ => self.array(targets, path),
+            [one] => self.path(one),
+            _ => {
+                self.out.push_str("[\n");
+                for target in targets {
+                    self.indent(depth + 1);
+                    self.path(target);
+                    self.out.push_str(",\n");
+                }
+                self.indent(depth);
+                self.out.push(']');
+            }
         }
     }
 
@@ -3844,7 +3930,10 @@ def Xform "Root"
     {
         rel exedra:blocked = None
         custom rel exedra:declared
-        rel exedra:many = [</Root/Mat>, </Root/Body.points>]
+        rel exedra:many = [
+            </Root/Mat>,
+            </Root/Body.points>,
+        ]
         rel material:binding = </Root/Mat>
         uniform token subsetFamily:materialBind:familyType = "partition"
     }
@@ -4103,16 +4192,17 @@ def Xform "Root"
         }
     }
 
-    /// An empty `primOrder` or `propertyOrder` writes no `reorder`
-    /// statement, as OpenUSD's writer leaves it out: a name list takes at
-    /// least one name, so `reorder nameChildren = []` would not read back.
+    /// An order of fewer than two names writes no `reorder` statement, as
+    /// OpenUSD's writer leaves it out (`Sdf_WritePrimNamespaceReorders`,
+    /// `_WriteLayer`): it reorders nothing, and a name list takes at least
+    /// one name, so `reorder nameChildren = []` would not read back.
     #[test]
-    fn empty_orders_write_nothing() {
+    fn short_orders_write_nothing() {
         let mut prim = Prim::def("Scope", "A");
         prim.prim_order = Some(Vec::new());
-        prim.property_order = Some(Vec::new());
+        prim.property_order = Some(vec!["x".into()]);
         let doc = Document {
-            prim_order: Some(Vec::new()),
+            prim_order: Some(vec!["A".into()]),
             prims: vec![prim],
             ..Document::new()
         };
@@ -4133,7 +4223,10 @@ def Xform "A"
     reorder properties = ["y", "x"]
     reorder nameChildren = ["D", "C"]
     delete rel r = </A/D>
-    prepend rel r = [</A/C>, </A.x>]
+    prepend rel r = [
+        </A/C>,
+        </A.x>,
+    ]
     custom rel s (
         doc = "s"
     )
@@ -4346,7 +4439,10 @@ def Xform "P" (
     kind = "group"
     prepend payload = @./p.usda@ (offset = 24; scale = 0.5)
     delete references = @./gone.usda@</G>
-    append references = [</C> (offset = 1), <> (scale = 2)]
+    append references = [
+        </C> (offset = 1),
+        <> (scale = 2)
+    ]
     specializes = None
 )
 {
@@ -4513,13 +4609,12 @@ def Xform "Tree" (
     variants = {
         string season = "summer"
     }
-    prepend variantSets = ["season"]
+    prepend variantSets = "season"
 )
 {
     def Scope "Trunk"
     {
     }
-
     variantSet "season" = {
         "summer" (
             kind = "component"
@@ -4527,21 +4622,23 @@ def Xform "Tree" (
             variants = {
                 string size = "tall"
             }
-            prepend variantSets = ["size"]
+            prepend variantSets = "size"
         ) {
             double height = 4
 
             def Mesh "Canopy"
             {
             }
-
             variantSet "size" = {
                 "tall" {
                     double height = 9
+
                 }
             }
+
         }
         "winter" {
+
         }
     }
 }

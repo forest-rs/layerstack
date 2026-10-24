@@ -350,7 +350,8 @@ def "Clay" (
     );
     let want = structure(&layer.layer);
     let usda = layer.save_usda().unwrap();
-    assert!(usda.contains("delete variantSets = [\"grain\"]"), "{usda}");
+    // One name without brackets, as OpenUSD writes it.
+    assert!(usda.contains("delete variantSets = \"grain\"\n"), "{usda}");
     let usdc = layer.save_usdc().unwrap();
     let from_usda = reimport_usda(&mut layer, &usda);
     assert_eq!(structure(&from_usda), want, "layer → USDA → layer");

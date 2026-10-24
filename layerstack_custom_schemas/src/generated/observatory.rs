@@ -456,6 +456,21 @@ pub fn registry(
     Ok(builder.build(tokens))
 }
 
+/// The kinds the library's `plugInfo.json` declares (`Kinds`), with their
+/// base kinds: each plugin's in name order, as OpenUSD reads them.
+pub const KINDS: &[(&str, Option<&str>)] = &[];
+
+/// Registers [`KINDS`] with `kinds`, as OpenUSD registers a plugin's
+/// `Kinds`: each that is not registered already. Returns those that are,
+/// which keep their first registration; `KindRegistry::issues` reports
+/// bases that are no kind and cycles.
+#[must_use = "the kinds that were not registered"]
+pub fn register_kinds(
+    kinds: &mut ::layerstack_schemas::kind::KindRegistry,
+) -> Vec<::layerstack_schemas::kind::KindError> {
+    kinds.register_all(KINDS.iter().copied())
+}
+
 static FLOAT: ValueType = ValueType { name: "float" };
 
 static TOKEN: ValueType = ValueType { name: "token" };

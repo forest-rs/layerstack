@@ -291,6 +291,7 @@ pub(crate) fn module_text(
             }
         }
     }
+    let plug_info_text = plug_info;
     let plug_info = plug_info
         .map(model::plug_info_text)
         .transpose()
@@ -308,6 +309,18 @@ pub(crate) fn module_text(
             crate::metadata::read(&plugin["Info"]["SdfMetadata"], &mut store.tokens)
                 .map_err(|e| error(format!("plugInfo.json: {e}")))?,
         );
+    }
+    // The plugins' `Kinds`, as OpenUSD's `KindRegistry` reads them; the
+    // module registers those it accepts, so any it refuses is an error.
+    let kinds = match plug_info_text {
+        Some(text) => crate::kinds::read([("plugInfo.json", text)])
+            .map_err(|e| error(format!("plugInfo.json: {}", e.message)))?,
+        None => crate::kinds::PluginKinds::default(),
+    };
+    if !kinds.rejected.is_empty() {
+        return Err(CompileError::Kinds {
+            rejected: kinds.rejected,
+        });
     }
     for (_, target) in &auto_applies {
         let target = target.split(':').next().unwrap_or(target);
@@ -389,9 +402,8 @@ pub(crate) fn module_text(
     if body.contains("Arc<") || body.contains("Arc::") || table.contains("Arc::from(") {
         out.push_str("use alloc::sync::Arc;\n");
     }
-    if body.contains("Vec<") {
-        out.push_str("use alloc::vec::Vec;\n");
-    }
+    // `register_kinds` returns a `Vec`.
+    out.push_str("use alloc::vec::Vec;\n");
     let mut layerstack: Vec<&str> = items.layerstack.clone();
     layerstack.extend(layerstack_items);
     layerstack.sort_unstable();
@@ -434,11 +446,25 @@ pub(crate) fn module_text(
          ) -> Result<::layerstack::SchemaRegistry, ::layerstack::MetadataConflict> {{\n    \
          let mut builder = ::layerstack::SchemaRegistry::builder();\n    \
          ::layerstack_schemas::register(&mut builder, DEPENDENCIES, tokens)?;\n    \
-         register(&mut builder, tokens)?;\n    Ok(builder.build(tokens))\n}}\n{statics}\n\
+         register(&mut builder, tokens)?;\n    Ok(builder.build(tokens))\n}}\n\n\
+         {kinds_table}\n\
+         /// Registers [`KINDS`] with `kinds`, as OpenUSD registers a plugin's\n\
+         /// `Kinds`: each that is not registered already. Returns those that are,\n\
+         /// which keep their first registration; `KindRegistry::issues` reports\n\
+         /// bases that are no kind and cycles.\n\
+         #[must_use = \"the kinds that were not registered\"]\n\
+         pub fn register_kinds(\n    kinds: &mut ::layerstack_schemas::kind::KindRegistry,\n\
+         ) -> Vec<::layerstack_schemas::kind::KindError> {{\n    \
+         kinds.register_all(KINDS.iter().copied())\n}}\n{statics}\n\
          #[allow(\n    clippy::unreadable_literal,\n    clippy::approx_constant,\n    \
          clippy::excessive_precision,\n    reason = \"values as the schema writes them\"\n)]\n\
          {table}",
         variants = variants.join(", "),
+        kinds_table = crate::kinds::table(
+            &kinds.accepted,
+            "/// The kinds the library's `plugInfo.json` declares (`Kinds`), with their\n\
+             /// base kinds: each plugin's in name order, as OpenUSD reads them.",
+        ),
     );
     Ok(out)
 }

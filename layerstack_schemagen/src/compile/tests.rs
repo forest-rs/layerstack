@@ -533,6 +533,72 @@ fn rust_modules_name_their_bases_and_dependencies() {
     assert!(module.contains("pub const LIBRARY: &str = \"fixture\";"));
 }
 
+/// The kinds an existing `plugInfo.json` declares become the module's
+/// `KINDS`; one OpenUSD's `KindRegistry` refuses fails the module, naming
+/// every refusal.
+#[test]
+fn rust_modules_register_the_plugin_s_kinds() {
+    use crate::kinds::{KindDeclarationError, KindRejection};
+
+    let compile_with = |kinds: &str| {
+        let directory = Directory::new();
+        let source = directory.0.join("schema.usda");
+        std::fs::write(
+            &source,
+            format!("{CODELESS}class Thing \"Thing\" (inherits = </Typed>) {{}}\n"),
+        )
+        .unwrap();
+        let existing =
+            format!(r#"{{"Plugins": [{{"Name": "fixture", "Info": {{"Kinds": {kinds}}}}}]}}"#);
+        compile(
+            &source,
+            &CompileOptions::new()
+                .with_search_path(&directory.0)
+                .with_existing_plug_info(existing),
+        )
+        .expect("the schema compiles")
+    };
+    let module = compile_with(r#"{"prop": {"baseKind": "component"}, "set": {}}"#)
+        .rust_module()
+        .unwrap();
+    assert!(
+        module.contains(
+            "pub const KINDS: &[(&str, Option<&str>)] = &[\n    (\"prop\", Some(\"component\")),\n    \
+             (\"set\", None),\n];"
+        ),
+        "{module}"
+    );
+    assert!(module.contains("pub fn register_kinds("));
+    let compiled = compile_with(r#"{"model": {}, "ok": {"baseKind": true}, "1st": {}}"#);
+    let Err(CompileError::Kinds { rejected }) = compiled.rust_module() else {
+        panic!("refused kinds fail the module");
+    };
+    let reasons: Vec<(Option<&str>, Option<&str>, &KindRejection)> = rejected
+        .iter()
+        .map(
+            |KindDeclarationError {
+                 kind,
+                 field,
+                 reason,
+                 ..
+             }| { (kind.as_deref(), *field, reason) },
+        )
+        .collect();
+    assert_eq!(
+        reasons,
+        [
+            (Some("1st"), None, &KindRejection::InvalidName),
+            (Some("model"), None, &KindRejection::BuiltIn),
+            (Some("ok"), Some("baseKind"), &KindRejection::BaseNotAString),
+        ]
+    );
+    let message = CompileError::Kinds { rejected }.to_string();
+    assert!(
+        message.contains("plugin `fixture`, kind `ok`, `baseKind`: not a string"),
+        "{message}"
+    );
+}
+
 #[test]
 fn rust_names_that_cannot_be_methods_or_types_fail() {
     let typed = |properties: &str| {

@@ -143,49 +143,49 @@ fn saves_an_edited_layer_as_authored() {
     let text = imported.save().unwrap();
     let expected = r#"#usda 1.0
 (
-    defaultPrim = "Asset"
     "Authored for the save tests."
-    doc = "Layer docs."
-    metersPerUnit = 0.01
     customLayerData = {
         string source = "./textures/a.png"
     }
+    defaultPrim = "Asset"
+    doc = "Layer docs."
+    metersPerUnit = 0.01
 )
 
 reorder rootPrims = ["Asset", "Other"]
 
 def Xform "Asset" (
     prepend apiSchemas = ["MaterialBindingAPI", "CollectionAPI:lod"]
-    kind = "component"
     customData = {
         dictionary profilesInfo = {
             string[] "vnd.example" = ["usd.geom.mesh"]
         }
     }
     instanceable = false
+    kind = "component"
 )
 {
     reorder properties = ["b", "a"]
     reorder nameChildren = ["Low", "High"]
-    rel material:binding = </Asset/Looks/M>
-    custom uniform token exedra:mode = "fast" (
-        allowedTokens = ["fast", "slow"]
-    )
     float a = 2.5 (
         limits = {
             dictionary soft = {
-                float min = 0
                 float max = 5
+                float min = 0
             }
         }
     )
     float b.connect = </Asset.a>
-    asset tex = @./textures/a.png@
-    string note = "/Asset/Looks/M"
+    double c = None
+    custom uniform token exedra:mode = "fast" (
+        allowedTokens = ["fast", "slow"]
+    )
     prepend rel exedra:targets = [</Asset/High>, </Asset.a>]
     int[] ids = [1, 2, 3]
+    rel material:binding = </Asset/Looks/M>
+    string note = "/Asset/Looks/M"
     point3f[] points = []
-    double c = None
+    asset tex = @./textures/a.png@
 
     def Scope "High"
     {
@@ -226,10 +226,10 @@ fn saves_native_text_arrays() {
 
 def "A"
 {
-    token[] t = ["x", "y z"]
-    string[] s = ["", 'a "b"', "c"]
     token[] e = []
     string[] f = []
+    string[] s = ["", 'a "b"', "c"]
+    token[] t = ["x", "y z"]
 }
 
 "#;
@@ -457,9 +457,9 @@ class "D"
 )
 
 def "A" (
-    kind = "group"
     delete inherits = </C>
     append inherits = </D>
+    kind = "group"
     payload = [@./p.usda@</P> (scale = 2), </A/B>]
     prepend references = [@./r.usda@ (offset = 3), <>]
     append references = @./r.usda@</R>
@@ -668,24 +668,24 @@ def "A"
 
 def "A"
 {
-    double x = 1
-    double x.timeSamples = {
-        0: 1,
-        1.5: None,
-        2: -0.25,
+    uniform timecode cue.timeSamples = {
+        3: 4.5,
     }
     int[] ids.timeSamples = {
         0: [1, 2],
         1: [],
     }
-    uniform timecode cue.timeSamples = {
-        3: 4.5,
-    }
-    float quiet.timeSamples = {
-    }
     custom token mode
     token mode.timeSamples = {
         0: "idle",
+    }
+    float quiet.timeSamples = {
+    }
+    double x = 1
+    double x.timeSamples = {
+        0: 1,
+        1.5: None,
+        2: -0.25,
     }
 }
 
@@ -734,25 +734,25 @@ def "A" (
 )
 {
     uchar c = 200
-    uint64 u = 18446744073709551615
-    half h = 0.1
-    half3 t = (1, 0.5, -0)
-    quatf q = (1, 0, 0.5, 0)
-    quatd d = (0.5, 0.5, 0.5, 0.5)
-    matrix2d m = ( (1, 0.5), (0, 1) )
-    matrix3d n = ( (1, 0, 0), (0, 1, 0), (0, 0, 1) )
     uchar[] cs = [0, 255]
-    uint64[] us = [1, 2]
-    half[] hs = [0, 0.5, 1]
-    color3h[] ts = [(0.25, 0.5, 1)]
-    quath[] qs = [(1, 0, 0, 0)]
+    quatd d = (0.5, 0.5, 0.5, 0.5)
     quatf[] fs = []
+    half h = 0.1
+    half[] hs = [0, 0.5, 1]
+    matrix2d m = ( (1, 0.5), (0, 1) )
     matrix4d[] ms = [( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (2, 3, 4, 1) )]
+    matrix3d n = ( (1, 0, 0), (0, 1, 0), (0, 0, 1) )
+    quatf q = (1, 0, 0.5, 0)
+    quath[] qs = [(1, 0, 0, 0)]
+    half3 t = (1, 0.5, -0)
+    color3h[] ts = [(0.25, 0.5, 1)]
+    uint64 u = 18446744073709551615
+    uint64[] us = [1, 2]
 }
 "#;
     let text = Imported::new(source).save().unwrap();
     // A half is written as the shortest decimal of its exact value, which
-    // reads back as the same half.
+    // reads back as the same half. Properties are in OpenUSD's order, and
     // OpenUSD ends a layer with a blank line.
     let expected = source.replace("half h = 0.1", "half h = 0.099975586") + "\n";
     assert_eq!(text, expected, "saved text");
@@ -1010,20 +1010,20 @@ fn saves_permissions_and_timecode_metadata() {
 )
 
 def "A" (
-    permission = private
     customData = {
         timecode cue = 12
         dictionary season = {
             timecode[] frost = [1, 9.5]
         }
     }
+    permission = private
 )
 {
-    double x = 1 (
-        permission = public
-    )
     rel r (
         permission = private
+    )
+    double x = 1 (
+        permission = public
     )
 }
 

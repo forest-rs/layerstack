@@ -34,7 +34,8 @@ use std::collections::BTreeSet;
 use std::fmt::Write as _;
 use std::sync::Arc;
 
-use layerstack::doc::{FieldValue, Layer, LayerId, Value};
+use layerstack::doc::{FieldEntry, FieldValue, Layer, LayerId, Value, VariantSpec};
+use layerstack::ident::dictionary_cmp;
 use layerstack::interner::TokenInterner;
 use layerstack::listop::ListOp;
 use layerstack::path::{Path, PathInterner, PropertyPath};
@@ -205,11 +206,7 @@ impl Imported {
     /// # Panics
     ///
     /// Panics if the prim spec has no such variant.
-    pub fn variant(
-        &mut self,
-        path: &str,
-        chain: &[(&str, &str)],
-    ) -> &mut layerstack::doc::VariantSpec {
+    pub fn variant(&mut self, path: &str, chain: &[(&str, &str)]) -> &mut VariantSpec {
         let chain: Vec<_> = chain
             .iter()
             .map(|(set, variant)| (self.tokens.intern(set), self.tokens.intern(variant)))
@@ -227,6 +224,77 @@ impl Imported {
     pub fn property(&mut self, path: &str) -> &mut layerstack::property::PropertySpec {
         let path = PropertyPath::parse(path, &self.tokens, &self.paths).expect("property path");
         self.layer.property_mut(path).expect("property spec")
+    }
+}
+
+/// Puts `layer` in the order a USDA round trip gives it, as OpenUSD's text
+/// writer orders a layer and its text parser reads it back: each prim
+/// and variant spec's metadata fields and properties, and each property's
+/// metadata, sorted by name in `TfDictionaryLessThan` order
+/// ([`dictionary_cmp`]); the layer's metadata fields in byte order; a
+/// `comment` first; dictionary entries in byte order. Children, list
+/// items and everything else keep their order.
+///
+/// Prim specs inside variant branches, which the layer offers no editing
+/// access to, keep theirs.
+///
+/// OpenUSD: `Sdf_WritePrimMetadata`, `Sdf_WritePrimProperties`,
+/// `Sdf_WriteAttribute` (`pxr/usd/sdf/fileIO_Common.h`), `_WriteLayer`
+/// (`pxr/usd/sdf/usdaFileFormat.cpp`).
+pub fn in_text_order(layer: &mut Layer, tokens: &TokenInterner) {
+    sort_fields(layer.metadata_fields_mut(), tokens, str::cmp);
+    for prim in layer.prims_mut().values_mut() {
+        sort_spec(&mut prim.fields, &mut prim.properties, tokens);
+        for set in prim.variant_sets.values_mut() {
+            set.variants
+                .values_mut()
+                .for_each(|v| sort_variant(v, tokens));
+        }
+    }
+}
+
+fn sort_variant(variant: &mut VariantSpec, tokens: &TokenInterner) {
+    sort_spec(&mut variant.fields, &mut variant.properties, tokens);
+    for set in variant.variant_sets.values_mut() {
+        set.variants
+            .values_mut()
+            .for_each(|v| sort_variant(v, tokens));
+    }
+}
+
+fn sort_spec(fields: &mut [FieldEntry], properties: &mut [PropertyEntry], tokens: &TokenInterner) {
+    sort_fields(fields, tokens, dictionary_cmp);
+    properties.sort_by(|a, b| dictionary_cmp(tokens.resolve(a.name), tokens.resolve(b.name)));
+    for entry in properties {
+        sort_fields(
+            Arc::make_mut(&mut entry.spec).metadata.make_mut(),
+            tokens,
+            dictionary_cmp,
+        );
+    }
+}
+
+/// Sorts `fields` by name with `order`, a `comment` first, and their
+/// dictionaries by key.
+fn sort_fields(
+    fields: &mut [FieldEntry],
+    tokens: &TokenInterner,
+    order: fn(&str, &str) -> core::cmp::Ordering,
+) {
+    fn dictionaries(value: &mut Value) {
+        if let Value::Dictionary(entries) = value {
+            entries.sort_by(|a, b| a.0.cmp(&b.0));
+            entries.iter_mut().for_each(|(_, v)| dictionaries(v));
+        }
+    }
+    fields.sort_by(|a, b| {
+        let (x, y) = (tokens.resolve(a.name), tokens.resolve(b.name));
+        (y == "comment").cmp(&(x == "comment")).then(order(x, y))
+    });
+    for field in fields {
+        if let FieldValue::Value(value) = &mut field.value {
+            dictionaries(value);
+        }
     }
 }
 

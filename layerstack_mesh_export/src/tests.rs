@@ -57,16 +57,16 @@ def Xform "Root" (
         )
         uniform token orientation = "rightHanded"
         point3f[] points = [(0, 0, 0), (2, 0, 0), (0, 1, -0.5)]
-        texCoord2f[] primvars:st = [(0, 0), (1, 0), (0, 1)] (
-            interpolation = "faceVarying"
-        )
         color3f[] primvars:displayColor = [(1, 0.5, 0.25)] (
             interpolation = "constant"
         )
+        texCoord2f[] primvars:st = [(0, 0), (1, 0), (0, 1)] (
+            interpolation = "faceVarying"
+        )
+        custom string site:path = "part/tri"
         uniform token subdivisionScheme = "none"
         matrix4d xformOp:transform = ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (1, 2, 3, 1) )
         uniform token[] xformOpOrder = ["xformOp:transform"]
-        custom string site:path = "part/tri"
     }
 }
 

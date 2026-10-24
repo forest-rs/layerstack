@@ -5,7 +5,11 @@
 //!
 //! The result is what OpenUSD's text parser stores for the USDA the same
 //! document writes (`Document::to_usda`), so both files describe one layer:
-//! the same specs, fields, field types and children order. In particular:
+//! the same specs, fields, field types and children order. Only the order
+//! of each spec's metadata fields and properties differs: the text writer
+//! sorts them by name, as OpenUSD's does, while the crate file keeps the
+//! document's order, as OpenUSD's crate writer keeps the layer's. In
+//! particular:
 //!
 //! - the pseudo-root holds `defaultPrim`, then the layer metadata in order,
 //!   then `subLayers` (a string vector of the authored asset paths) and

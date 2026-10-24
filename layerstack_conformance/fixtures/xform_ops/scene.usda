@@ -2,32 +2,32 @@
 
 def Xform "Pivoted"
 {
-    double3 xformOp:translate = (1, 2, 3)
-    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:translate:pivot", "xformOp:rotateXYZ", "xformOp:scale", "!invert!xformOp:translate:pivot"]
-    float3 xformOp:translate:pivot = (0.5, 0, -0.5)
     float3 xformOp:rotateXYZ = (10, 20, 30)
     float3 xformOp:rotateXYZ.timeSamples = {
         0: (0, 0, 0),
         10: (90, 0, 45),
     }
     half3 xformOp:scale = (2, 2, 0.5)
+    double3 xformOp:translate = (1, 2, 3)
+    float3 xformOp:translate:pivot = (0.5, 0, -0.5)
+    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:translate:pivot", "xformOp:rotateXYZ", "xformOp:scale", "!invert!xformOp:translate:pivot"]
 }
 
 def Xform "Oriented"
 {
     quatf xformOp:orient = (0.70710677, 0, 0.70710677, 0)
-    uniform token[] xformOpOrder = ["xformOp:orient", "xformOp:rotateX:tilt"]
     half xformOp:rotateX:tilt = 30
     half xformOp:rotateX:tilt.timeSamples = {
         10: 60,
     }
+    uniform token[] xformOpOrder = ["xformOp:orient", "xformOp:rotateX:tilt"]
 }
 
 def Xform "Matrix"
 {
+    double xformOp:scaleZ = 4
     matrix4d xformOp:transform = ( (0, 1, 0, 0), (-1, 0, 0, 0), (0, 0, 2, 0), (3, 4, 5, 1) )
     uniform token[] xformOpOrder = ["xformOp:transform", "!invert!xformOp:scaleZ"]
-    double xformOp:scaleZ = 4
 }
 
 def Xform "Reset"
@@ -38,9 +38,9 @@ def Xform "Reset"
 
 def Xform "Unreset"
 {
+    float3 xformOp:scale = (3, 3, 3)
     float3 xformOp:translate = (1, 0, 0)
     uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
-    float3 xformOp:scale = (3, 3, 3)
 }
 
 def Xform "Cleared"

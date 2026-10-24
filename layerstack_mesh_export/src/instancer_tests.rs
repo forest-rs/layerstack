@@ -102,9 +102,9 @@ fn golden_instancer() {
         quatf[] orientationsf = [(1, 0, 0, 0), (0.70710677, 0, 0, 0.70710677), (1, 0, 0, 0)]
         point3f[] positions = [(0, 0, 0), (10, 0, 0), (0, 5, 1)]
         int[] protoIndices = [0, 1, 0]
+        rel prototypes = [</Root/Field/Prototypes/Tri>, </Root/Field/Prototypes/Pair>]
         float3[] scales = [(1, 1, 1), (1, 1, 1), (2, 2, 1)]
         custom string site:set = "stones"
-        rel prototypes = [</Root/Field/Prototypes/Tri>, </Root/Field/Prototypes/Pair>]
 
         def Scope "Prototypes"
         {
@@ -757,9 +757,9 @@ fn references_replace_point_instancers() {
         int[] primvars:site:zone = [4] (
             interpolation = "constant"
         )
+        custom string site:set = "stones"
         matrix4d xformOp:transform = ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (100, 0, 0, 1) )
         uniform token[] xformOpOrder = ["xformOp:transform"]
-        custom string site:set = "stones"
 
         class "Prototypes"
         {

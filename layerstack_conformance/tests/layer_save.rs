@@ -12,7 +12,9 @@
 //! - its USDC reads back as the same layer as its USDA;
 //! - saving is stable: the saved USDA, imported and saved again, is
 //!   unchanged;
-//! - both saved files read back as the saved layer, spec by spec.
+//! - both saved files read back as the saved layer, spec by spec: the USDC
+//!   in the layer's order, the USDA in the order OpenUSD's text writer
+//!   gives fields and properties (`save_corpus::in_text_order`).
 //!
 //! A case about composition, saved in either format and composed with its
 //! assets, composes as its expected layer does.
@@ -27,7 +29,7 @@ use layerstack::doc::{Layer, LayerId, PrimSpec, Reference, SublayerEntry, Varian
 use layerstack::listop::ListOp;
 use layerstack::{InMemoryStore, Stage, StageOptions};
 use layerstack_conformance::save_corpus::{
-    AnyAsset, Imported, MISSING, Root, cases, composed, unsupported_cases,
+    AnyAsset, Imported, MISSING, Root, cases, composed, in_text_order, unsupported_cases,
 };
 use layerstack_usdc::writer::UsdcWriteError;
 
@@ -542,8 +544,16 @@ fn saved_layers_read_back_as_the_layer() {
         let want = structure(&layer.layer);
         let usda = layer.save_usda().unwrap();
         let usdc = layer.save_usdc().unwrap();
+        // The text sorts fields and properties as OpenUSD's does; the
+        // crate keeps the layer's order.
+        let mut sorted = layer.layer.clone();
+        in_text_order(&mut sorted, &layer.tokens);
         let from_usda = reimport_usda(&mut layer, &usda);
-        assert_eq!(structure(&from_usda), want, "{name}: layer → USDA → layer");
+        assert_eq!(
+            structure(&from_usda),
+            structure(&sorted),
+            "{name}: layer → USDA → layer"
+        );
         let from_usdc = reimport_usdc(&mut layer, &usdc);
         assert_eq!(structure(&from_usdc), want, "{name}: layer → USDC → layer");
     }

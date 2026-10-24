@@ -13,9 +13,30 @@
 //! states every one of those details explicitly.
 //!
 //! Output is deterministic: the same document always produces byte-identical
-//! text. Items are written in the order they appear in the document (nothing
-//! is sorted or deduplicated behind the caller's back); invalid input is
-//! rejected with a [`WriteError`] rather than silently repaired. Values are
+//! text, ordered as OpenUSD's text writer orders a layer
+//! (`pxr/usd/sdf/fileIO_Common.h`, `usdaFileFormat.cpp`), whatever order
+//! the document holds it in:
+//!
+//! - a `comment` first in each metadata section, then the other fields by
+//!   name: in a prim's or variant's section the metadata, arcs, variant
+//!   selections and `variantSets` together, and in a property's, in
+//!   `TfDictionaryLessThan` order ([`dictionary_cmp`]); in the layer's,
+//!   `defaultPrim`, the metadata and `subLayers` in byte order, then
+//!   `relocates`. A field is placed by its field name: `doc` as
+//!   `documentation`, `inherits` as `inheritPaths`, `variants` as
+//!   `variantSelection`, `variantSets` as `variantSetNames`;
+//! - properties by name in [`dictionary_cmp`] order, an attribute before a
+//!   relationship of the same name;
+//! - variants by name, dictionary entries (variant selections included) by
+//!   key, in byte order;
+//! - and in document order everything else: root and child prims,
+//!   variant sets, list-op items, sublayers, targets, connections and
+//!   time samples.
+//!
+//! The document's own order is kept for the crate writer, which, like
+//! OpenUSD's, stores a layer's fields and properties in their authored
+//! order. Nothing is deduplicated behind the caller's back; invalid input
+//! is rejected with a [`WriteError`] rather than silently repaired. Values are
 //! spelled as OpenUSD's `SdfLayer::ExportToString` spells them: strings in
 //! the quotes `Sdf_FileIOUtility::Quote` picks (single quotes around text
 //! with a double quote and no single quote, triple quotes around text with
@@ -76,11 +97,14 @@
 use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec::Vec;
+use core::cmp::Ordering;
 use core::fmt::{self, Write as _};
 
 use layerstack::array_edit::{ArrayIndex, Instruction, Operand};
+use layerstack::ident::dictionary_cmp;
 use layerstack::spline::SplineData;
 use layerstack::value_type::ValueType;
+use smallvec::SmallVec;
 
 pub use crate::ast::Specifier;
 
@@ -99,7 +123,8 @@ pub struct Document {
     /// Spec: AOUSD Core §7.6.1.2.3 (`defaultPrim`).
     pub default_prim: Option<String>,
     /// Further layer metadata (e.g. `upAxis`, `metersPerUnit`, `doc`),
-    /// written after `defaultPrim` in this order.
+    /// written with `defaultPrim` and `subLayers` in byte order of their
+    /// field names (see the [module docs](self)).
     pub metadata: Vec<Metadatum>,
     /// Root prim ordering (`reorder rootPrims = [...]`, the pseudo-root's
     /// `primOrder` field), or `None` when not authored.
@@ -243,10 +268,11 @@ pub struct Prim {
     pub type_name: Option<String>,
     /// Prim name; must be a valid identifier (§7.3.3).
     pub name: String,
-    /// Prim metadata (e.g. `kind`), in order.
+    /// Prim metadata (e.g. `kind`), in authored order; written sorted with
+    /// the prim's arcs and variant fields (see the [module docs](self)).
     pub metadata: Vec<Metadatum>,
     /// Attributes and relationships, in one authored order (the
-    /// `properties` children field). Names must be unique across both
+    /// `properties` children field); written sorted by name. Names must be unique across both
     /// kinds (§7.3.3).
     pub properties: Vec<Property>,
     /// Property ordering (`reorder properties = [...]`, the
@@ -276,8 +302,9 @@ pub struct Prim {
     /// Spec: AOUSD Core §10.3.2.4 (specializes).
     pub specializes: Option<ListOp<String>>,
     /// Variant selections (`variants = { string set = "variant" }`, the
-    /// `variantSelection` field): set name and selected variant, in order,
-    /// each set once. An empty variant name selects no variant.
+    /// `variantSelection` field): set name and selected variant, each set
+    /// once, written by set name in byte order. An empty variant name
+    /// selects no variant.
     ///
     /// Spec: AOUSD Core §7.6.2.3.4 (`variantSelection`), §10.3.2.5
     /// (variants).
@@ -305,7 +332,8 @@ pub struct Prim {
 pub struct VariantSet {
     /// Variant set name; must be a valid identifier (§7.3.3).
     pub name: String,
-    /// The variants, in order; at least one, each named once.
+    /// The variants; at least one, each named once. Written by name in
+    /// byte order.
     ///
     /// Each variant is the prim spec it holds, as OpenUSD's
     /// `SdfVariantSpec::GetPrimSpec` presents it: named after the variant,
@@ -653,7 +681,8 @@ pub struct Attribute {
     /// authors no connections; an explicit empty list blocks weaker ones
     /// (`.connect = None`).
     pub connections: Option<ListOp<String>>,
-    /// Attribute metadata (e.g. `interpolation`, `elementSize`), in order.
+    /// Attribute metadata (e.g. `interpolation`, `elementSize`), in
+    /// authored order; written sorted by name.
     pub metadata: Vec<Metadatum>,
 }
 
@@ -828,7 +857,8 @@ pub struct Relationship {
     /// targets authored); an explicit empty list writes `rel name = None`,
     /// which blocks weaker opinions.
     pub targets: Option<ListOp<String>>,
-    /// Relationship metadata (e.g. `bindMaterialAs`), in order.
+    /// Relationship metadata (e.g. `bindMaterialAs`), in authored order;
+    /// written sorted by name.
     pub metadata: Vec<Metadatum>,
 }
 
@@ -1105,8 +1135,9 @@ pub enum Value {
     Matrix3dArray(Vec<[[f64; 3]; 3]>),
     /// `matrix4d[]` (or `frame4d[]`).
     Matrix4dArray(Vec<[[f64; 4]; 4]>),
-    /// A dictionary: string keys to values, written in order with each
-    /// entry's canonical type name (§6.6.2).
+    /// A dictionary: string keys to values, written by key in byte order
+    /// with each entry's canonical type name (§6.6.2), as OpenUSD keeps a
+    /// `VtDictionary`.
     ///
     /// Dictionaries are *metadata* values (e.g. `customData`). They are not
     /// an attribute value type in USD (`Sdf` registers no `dictionary`
@@ -2264,15 +2295,81 @@ fn spline_text_version(prim: &Prim) -> u8 {
         .fold(own, u8::max)
 }
 
-fn canonical_custom_dictionary(entries: &[(String, Value)]) -> Value {
-    let mut entries = entries.to_vec();
-    entries.sort_by(|a, b| a.0.cmp(&b.0));
-    for (_, value) in &mut entries {
-        if let Value::Dictionary(nested) = value {
-            *value = canonical_custom_dictionary(nested);
+/// `items` in the order `cmp` gives, by reference. The sort is stable and
+/// costs one pass over items already in order.
+fn sorted_by<T>(items: &[T], cmp: impl FnMut(&&T, &&T) -> Ordering) -> SmallVec<[&T; 16]> {
+    let mut refs: SmallVec<[&T; 16]> = items.iter().collect();
+    refs.sort_by(cmp);
+    refs
+}
+
+/// The field a metadata key names, which decides where OpenUSD writes it:
+/// USDA spells the `documentation` field `doc`.
+fn field_name(key: &str) -> &str {
+    match key {
+        "doc" => "documentation",
+        key => key,
+    }
+}
+
+/// A field of a prim's or variant's metadata section, ordered as
+/// `Sdf_WritePrimMetadata` sorts them: by field name, in
+/// [`dictionary_cmp`] order.
+#[derive(Clone, Copy)]
+enum PrimField<'a> {
+    Metadatum(&'a Metadatum),
+    Inherits(&'a ListOp<String>),
+    Payloads(&'a ListOp<Reference>),
+    References(&'a ListOp<Reference>),
+    Specializes(&'a ListOp<String>),
+    VariantSelections,
+    VariantSetNames(&'a ListOp<String>),
+}
+
+impl PrimField<'_> {
+    /// The field name (`SdfFieldKeys`) the entry is sorted by.
+    fn name(&self) -> &str {
+        match self {
+            Self::Metadatum(entry) => field_name(&entry.key),
+            Self::Inherits(_) => "inheritPaths",
+            Self::Payloads(_) => "payload",
+            Self::References(_) => "references",
+            Self::Specializes(_) => "specializes",
+            Self::VariantSelections => "variantSelection",
+            Self::VariantSetNames(_) => "variantSetNames",
         }
     }
-    Value::Dictionary(entries)
+}
+
+/// A field of the layer's metadata section, ordered as `_WriteLayer`
+/// (`pxr/usd/sdf/usdaFileFormat.cpp`) sorts them: by field name, in byte
+/// order (`TfToken::operator<`).
+#[derive(Clone, Copy)]
+enum LayerField<'a> {
+    DefaultPrim(&'a str),
+    Metadatum(&'a Metadatum),
+    SubLayers(&'a [SubLayer]),
+}
+
+impl LayerField<'_> {
+    fn name(&self) -> &str {
+        match self {
+            Self::DefaultPrim(_) => "defaultPrim",
+            Self::Metadatum(entry) => field_name(&entry.key),
+            Self::SubLayers(_) => "subLayers",
+        }
+    }
+}
+
+/// The `comment` entry of a metadata list, which OpenUSD writes first, as
+/// a bare string.
+fn comment_of(entries: &[Metadatum]) -> Option<&str> {
+    entries
+        .iter()
+        .find_map(|entry| match (&*entry.key, &entry.value) {
+            ("comment", Value::String(text) | Value::Token(text)) => Some(text.as_str()),
+            _ => None,
+        })
 }
 
 /// Infallible text sink over a validated document.
@@ -2281,6 +2378,10 @@ struct Writer<'o> {
 }
 
 impl Writer<'_> {
+    /// The layer as `_WriteLayer` (`pxr/usd/sdf/usdaFileFormat.cpp`)
+    /// writes it: the header with the comment first, the other fields
+    /// sorted by name, then relocates; `reorder rootPrims`; the root prims
+    /// in document order.
     fn document(&mut self, doc: &Document) {
         // §16.2.18.1: the layer header.
         let minor = doc.prims.iter().map(spline_text_version).max().unwrap_or(0);
@@ -2291,13 +2392,47 @@ impl Writer<'_> {
             || !doc.relocates.is_empty()
         {
             self.out.push_str("(\n");
-            if let Some(name) = &doc.default_prim {
-                self.out.push_str(INDENT);
-                self.out.push_str("defaultPrim = ");
-                self.string(name);
-                self.out.push('\n');
+            if let Some(text) = comment_of(&doc.metadata) {
+                self.comment(text, 1);
             }
-            self.metadata_entries(&doc.metadata, 1);
+            let mut fields: SmallVec<[LayerField<'_>; 16]> = doc
+                .metadata
+                .iter()
+                .filter(|entry| entry.key != "comment")
+                .map(LayerField::Metadatum)
+                .collect();
+            fields.extend(doc.default_prim.as_deref().map(LayerField::DefaultPrim));
+            if !doc.sublayers.is_empty() {
+                fields.push(LayerField::SubLayers(&doc.sublayers));
+            }
+            fields.sort_by(|a, b| a.name().cmp(b.name()));
+            for field in fields {
+                match field {
+                    LayerField::DefaultPrim(name) => {
+                        self.out.push_str(INDENT);
+                        self.out.push_str("defaultPrim = ");
+                        self.string(name);
+                        self.out.push('\n');
+                    }
+                    LayerField::Metadatum(entry) => self.metadatum(entry, 1),
+                    LayerField::SubLayers(sublayers) => {
+                        // §16.2.18.3: `subLayers = [ @asset@ (offset = ...), ... ]`.
+                        self.out.push_str(INDENT);
+                        self.out.push_str("subLayers = [\n");
+                        for (i, sublayer) in sublayers.iter().enumerate() {
+                            self.indent(2);
+                            self.asset(&sublayer.asset);
+                            self.layer_offset(sublayer.offset);
+                            if i + 1 < sublayers.len() {
+                                self.out.push(',');
+                            }
+                            self.out.push('\n');
+                        }
+                        self.out.push_str(INDENT);
+                        self.out.push_str("]\n");
+                    }
+                }
+            }
             if !doc.relocates.is_empty() {
                 self.out.push_str("    relocates = {\n");
                 for (i, (source, target)) in doc.relocates.iter().enumerate() {
@@ -2311,22 +2446,6 @@ impl Writer<'_> {
                     self.out.push('\n');
                 }
                 self.out.push_str("    }\n");
-            }
-            if !doc.sublayers.is_empty() {
-                // §16.2.18.3: `subLayers = [ @asset@ (offset = ...), ... ]`.
-                self.out.push_str(INDENT);
-                self.out.push_str("subLayers = [\n");
-                for (i, sublayer) in doc.sublayers.iter().enumerate() {
-                    self.indent(2);
-                    self.asset(&sublayer.asset);
-                    self.layer_offset(sublayer.offset);
-                    if i + 1 < doc.sublayers.len() {
-                        self.out.push(',');
-                    }
-                    self.out.push('\n');
-                }
-                self.out.push_str(INDENT);
-                self.out.push_str("]\n");
             }
             self.out.push_str(")\n");
         }
@@ -2349,50 +2468,53 @@ impl Writer<'_> {
         }
     }
 
+    /// The metadata section of a property: the comment first, then the
+    /// other entries sorted by field name in [`dictionary_cmp`] order, as
+    /// `Sdf_WriteAttribute` and `Sdf_WriteRelationship` write them.
     fn metadata_entries(&mut self, entries: &[Metadatum], depth: usize) {
-        for entry in entries {
-            let key = entry.key.as_str();
-            match &entry.value {
-                Value::TokenListOp(op) | Value::StringListOp(op) => {
-                    self.list_op(key, op, depth, |w, s| w.string(s));
-                    continue;
-                }
-                Value::IntListOp(op) => {
-                    self.list_op(key, op, depth, |w, x| w.display(x));
-                    continue;
-                }
-                Value::UIntListOp(op) => {
-                    self.list_op(key, op, depth, |w, x| w.display(x));
-                    continue;
-                }
-                Value::Int64ListOp(op) => {
-                    self.list_op(key, op, depth, |w, x| w.display(x));
-                    continue;
-                }
-                Value::UInt64ListOp(op) => {
-                    self.list_op(key, op, depth, |w, x| w.display(x));
-                    continue;
-                }
-                _ => {}
-            }
-            self.indent(depth);
-            // §16.2.15: a bare string is the `comment` field.
-            if let ("comment", Value::String(text) | Value::Token(text)) =
-                (entry.key.as_str(), &entry.value)
-            {
-                self.string(text);
-                self.out.push('\n');
-                continue;
-            }
-            self.out.push_str(&entry.key);
-            self.out.push_str(" = ");
-            match (key, &entry.value) {
-                ("permission", Value::Token(v) | Value::String(v)) => self.out.push_str(v),
-                (_, Value::Bool(v)) => self.out.push_str(if *v { "true" } else { "false" }),
-                _ => self.value(&entry.value, depth),
-            }
-            self.out.push('\n');
+        if let Some(text) = comment_of(entries) {
+            self.comment(text, depth);
         }
+        let sorted = sorted_by(entries, |a, b| {
+            dictionary_cmp(field_name(&a.key), field_name(&b.key))
+        });
+        for entry in sorted {
+            if entry.key != "comment" {
+                self.metadatum(entry, depth);
+            }
+        }
+    }
+
+    /// §16.2.15: a bare string is the `comment` field.
+    fn comment(&mut self, text: &str, depth: usize) {
+        self.indent(depth);
+        self.string(text);
+        self.out.push('\n');
+    }
+
+    /// One `key = value` entry, or one statement per operation of a list
+    /// op.
+    fn metadatum(&mut self, entry: &Metadatum, depth: usize) {
+        let key = entry.key.as_str();
+        match &entry.value {
+            Value::TokenListOp(op) | Value::StringListOp(op) => {
+                return self.list_op(key, op, depth, |w, s| w.string(s));
+            }
+            Value::IntListOp(op) => return self.list_op(key, op, depth, |w, x| w.display(x)),
+            Value::UIntListOp(op) => return self.list_op(key, op, depth, |w, x| w.display(x)),
+            Value::Int64ListOp(op) => return self.list_op(key, op, depth, |w, x| w.display(x)),
+            Value::UInt64ListOp(op) => return self.list_op(key, op, depth, |w, x| w.display(x)),
+            _ => {}
+        }
+        self.indent(depth);
+        self.out.push_str(key);
+        self.out.push_str(" = ");
+        match (key, &entry.value) {
+            ("permission", Value::Token(v) | Value::String(v)) => self.out.push_str(v),
+            (_, Value::Bool(v)) => self.out.push_str(if *v { "true" } else { "false" }),
+            _ => self.value(&entry.value, depth),
+        }
+        self.out.push('\n');
     }
 
     /// §16.2.14: one `[op] key = [items]` statement per operation, in
@@ -2435,39 +2557,85 @@ impl Writer<'_> {
         self.out.push_str("}\n");
     }
 
-    /// ` ( metadata )` after a prim or variant name, when there is any:
-    /// the metadata, the arcs, then the variant selections and the
-    /// `variantSets` list op, the order OpenUSD writes those keys in.
+    /// ` ( metadata )` after a prim or variant name, when there is any, as
+    /// `Sdf_WritePrimMetadata` writes it: the comment first, then every
+    /// other field — metadata, arcs, variant selections and the
+    /// `variantSets` list op — sorted by field name in [`dictionary_cmp`]
+    /// order (`doc` as `documentation`, `inherits` as `inheritPaths`,
+    /// `variants` as `variantSelection`, `variantSets` as
+    /// `variantSetNames`).
     fn prim_metadata(&mut self, prim: &Prim, depth: usize) {
         if !prim.has_metadata() {
             return;
         }
         self.out.push_str(" (\n");
-        self.metadata_entries(&prim.metadata, depth + 1);
-        self.arcs(prim, depth + 1);
+        let depth = depth + 1;
+        if let Some(text) = comment_of(&prim.metadata) {
+            self.comment(text, depth);
+        }
+        let mut fields: SmallVec<[PrimField<'_>; 16]> = prim
+            .metadata
+            .iter()
+            .filter(|entry| entry.key != "comment")
+            .map(PrimField::Metadatum)
+            .collect();
+        fields.extend(prim.inherits.as_ref().map(PrimField::Inherits));
+        fields.extend(prim.payloads.as_ref().map(PrimField::Payloads));
+        fields.extend(prim.references.as_ref().map(PrimField::References));
+        fields.extend(prim.specializes.as_ref().map(PrimField::Specializes));
         if !prim.variant_selections.is_empty() {
-            // §16.2.17.3: `variants = { string set = "variant" }`, a
-            // dictionary of strings.
-            let selections = prim
-                .variant_selections
-                .iter()
-                .map(|(set, variant)| (set.clone(), Value::String(variant.clone())))
-                .collect();
-            self.indent(depth + 1);
-            self.out.push_str("variants = ");
-            self.value(&Value::Dictionary(selections), depth + 1);
-            self.out.push('\n');
+            fields.push(PrimField::VariantSelections);
         }
-        if let Some(op) = &prim.variant_set_names {
-            self.list_op("variantSets", op, depth + 1, |w, s| w.string(s));
+        fields.extend(
+            prim.variant_set_names
+                .as_ref()
+                .map(PrimField::VariantSetNames),
+        );
+        fields.sort_by(|a, b| dictionary_cmp(a.name(), b.name()));
+        for field in fields {
+            match field {
+                PrimField::Metadatum(entry) => self.metadatum(entry, depth),
+                // §16.2.17.4, §16.2.17.5: arcs as list-op statements.
+                PrimField::Inherits(op) => {
+                    self.arc_statements("inherits", op, depth, |w, path| w.path(path));
+                }
+                PrimField::Payloads(op) => {
+                    self.arc_statements("payload", op, depth, Self::reference);
+                }
+                PrimField::References(op) => {
+                    self.arc_statements("references", op, depth, Self::reference);
+                }
+                PrimField::Specializes(op) => {
+                    self.arc_statements("specializes", op, depth, |w, path| w.path(path));
+                }
+                PrimField::VariantSelections => {
+                    // §16.2.17.3: `variants = { string set = "variant" }`, a
+                    // dictionary of strings.
+                    let selections = prim
+                        .variant_selections
+                        .iter()
+                        .map(|(set, variant)| (set.clone(), Value::String(variant.clone())))
+                        .collect::<Vec<_>>();
+                    self.indent(depth);
+                    self.out.push_str("variants = ");
+                    self.dictionary(&selections, depth);
+                    self.out.push('\n');
+                }
+                PrimField::VariantSetNames(op) => {
+                    self.list_op("variantSets", op, depth, |w, s| w.string(s));
+                }
+            }
         }
-        self.indent(depth);
+        self.indent(depth - 1);
         self.out.push(')');
     }
 
-    /// The statements of a prim or variant body at `depth`: `reorder`
-    /// statements, properties, child prims, then variant sets, as
-    /// `Sdf_WritePrimBody` orders them.
+    /// The statements of a prim or variant body at `depth`, as
+    /// `Sdf_WritePrimBody` orders them: `reorder` statements; properties
+    /// sorted by name in [`dictionary_cmp`] order, an attribute before a
+    /// relationship of the same name (`_SortByNameThenType`); child prims
+    /// in document order (the `primChildren` field); then variant sets in
+    /// document order (`variantSetChildren`).
     fn prim_body(&mut self, prim: &Prim, depth: usize) {
         if let Some(order) = &prim.property_order {
             self.reorder("properties", order, depth);
@@ -2475,7 +2643,11 @@ impl Writer<'_> {
         if let Some(order) = &prim.prim_order {
             self.reorder("nameChildren", order, depth);
         }
-        for property in &prim.properties {
+        let kind = |p: &Property| matches!(p, Property::Relationship(_));
+        let properties = sorted_by(&prim.properties, |a, b| {
+            dictionary_cmp(a.name(), b.name()).then_with(|| kind(a).cmp(&kind(b)))
+        });
+        for property in properties {
             match property {
                 Property::Attribute(attribute) => self.attribute(attribute, depth),
                 Property::Relationship(relationship) => self.relationship(relationship, depth),
@@ -2501,13 +2673,15 @@ impl Writer<'_> {
     }
 
     /// §16.2.17: `variantSet "name" = { "variant" [( metadata )] { body }
-    /// ... }`, each variant with its prim spec's metadata and body.
+    /// ... }`, each variant with its prim spec's metadata and body, the
+    /// variants sorted by name in byte order, as `Sdf_WriteVariantSet`
+    /// sorts them.
     fn variant_set(&mut self, set: &VariantSet, depth: usize) {
         self.indent(depth);
         self.out.push_str("variantSet ");
         self.string(&set.name);
         self.out.push_str(" = {\n");
-        for variant in &set.variants {
+        for variant in sorted_by(&set.variants, |a, b| a.name.cmp(&b.name)) {
             self.indent(depth + 1);
             self.string(&variant.name);
             self.prim_metadata(variant, depth + 1);
@@ -2518,25 +2692,6 @@ impl Writer<'_> {
         }
         self.indent(depth);
         self.out.push_str("}\n");
-    }
-
-    /// The prim's composition arcs, in key order as OpenUSD writes them:
-    /// `inherits`, `payload`, `references`, `specializes` (§16.2.17.4,
-    /// §16.2.17.5), each
-    /// as list-op statements.
-    fn arcs(&mut self, prim: &Prim, depth: usize) {
-        if let Some(op) = &prim.inherits {
-            self.arc_statements("inherits", op, depth, |w, path| w.path(path));
-        }
-        if let Some(op) = &prim.payloads {
-            self.arc_statements("payload", op, depth, Self::reference);
-        }
-        if let Some(op) = &prim.references {
-            self.arc_statements("references", op, depth, Self::reference);
-        }
-        if let Some(op) = &prim.specializes {
-            self.arc_statements("specializes", op, depth, |w, path| w.path(path));
-        }
     }
 
     /// `[op] key = item`, `[a, b]` or `None` per list-op statement.
@@ -2577,7 +2732,7 @@ impl Writer<'_> {
             self.out.push_str("; scale = ");
             self.f64(arc.offset.scale);
             self.out.push_str("; customData = ");
-            self.value(&canonical_custom_dictionary(&arc.custom_data), 1);
+            self.dictionary(&arc.custom_data, 1);
             self.out.push(')');
         }
     }
@@ -2693,7 +2848,7 @@ impl Writer<'_> {
                     .find(|(t, _)| *t == time)
                 {
                     out.push_str("; ");
-                    Writer { out }.value(&canonical_custom_dictionary(entries), depth + 1);
+                    Writer { out }.dictionary(entries, depth + 1);
                 }
             };
             crate::spline_text::write(self.out, &indent, spline, &time, &value, &custom);
@@ -2942,22 +3097,27 @@ impl Writer<'_> {
             | Value::UInt64ListOp(_) => unreachable!("list ops are written as statements"),
             Value::Block => self.out.push_str("None"),
             Value::AnimationBlock => self.out.push_str("AnimationBlock"),
-            Value::Dictionary(entries) => {
-                // §6.6.2, §16.2.15: typed entries with quoted keys.
-                self.out.push_str("{\n");
-                for (key, v) in entries {
-                    self.indent(depth + 1);
-                    self.out.push_str(v.canonical_type_name());
-                    self.out.push(' ');
-                    self.key(key);
-                    self.out.push_str(" = ");
-                    self.value(v, depth + 1);
-                    self.out.push('\n');
-                }
-                self.indent(depth);
-                self.out.push('}');
-            }
+            Value::Dictionary(entries) => self.dictionary(entries, depth),
         }
+    }
+
+    /// §6.6.2, §16.2.15: `{ type key = value ... }`, typed entries with
+    /// keys quoted unless they are identifiers, sorted by key in byte
+    /// order, as `Sdf_FileIOUtility::WriteDictionary` writes the
+    /// `std::map` it builds.
+    fn dictionary(&mut self, entries: &[(String, Value)], depth: usize) {
+        self.out.push_str("{\n");
+        for (key, v) in sorted_by(entries, |a, b| a.0.cmp(&b.0)) {
+            self.indent(depth + 1);
+            self.out.push_str(v.canonical_type_name());
+            self.out.push(' ');
+            self.key(key);
+            self.out.push_str(" = ");
+            self.value(v, depth + 1);
+            self.out.push('\n');
+        }
+        self.indent(depth);
+        self.out.push('}');
     }
 
     fn edit_index(&mut self, index: ArrayIndex) {
@@ -3204,13 +3364,13 @@ def Xform "Root" (
 
     def Mesh "Tri"
     {
-        point3f[] points = [(0, 0, 0), (1, 0, 0), (0, 0.1, -0.0025)]
+        custom string exedra:label = 'say "hi"'
         int[] faceVertexCounts = [3]
+        point3f[] points = [(0, 0, 0), (1, 0, 0), (0, 0.1, -0.0025)]
         texCoord2f[] primvars:st = [(0, 0), (1, 0), (0, 1)] (
             interpolation = "vertex"
         )
         uniform token subdivisionScheme = "none"
-        custom string exedra:label = 'say "hi"'
     }
 }
 
@@ -3682,11 +3842,11 @@ def Xform "Root"
         prepend apiSchemas = ["MaterialBindingAPI"]
     )
     {
-        uniform token subsetFamily:materialBind:familyType = "partition"
-        rel material:binding = </Root/Mat>
+        rel exedra:blocked = None
         custom rel exedra:declared
         rel exedra:many = [</Root/Mat>, </Root/Body.points>]
-        rel exedra:blocked = None
+        rel material:binding = </Root/Mat>
+        uniform token subsetFamily:materialBind:familyType = "partition"
     }
 }
 
@@ -3728,14 +3888,14 @@ def Xform "Root"
         assert_eq!(
             rels,
             [
-                ("material:binding", false, Some(vec!["/Root/Mat"])),
+                ("exedra:blocked", false, Some(vec![])),
                 ("exedra:declared", true, None),
                 (
                     "exedra:many",
                     false,
                     Some(vec!["/Root/Mat", "/Root/Body.points"])
                 ),
-                ("exedra:blocked", false, Some(vec![])),
+                ("material:binding", false, Some(vec!["/Root/Mat"])),
             ],
             "relationships"
         );
@@ -3974,14 +4134,14 @@ def Xform "A"
     reorder nameChildren = ["D", "C"]
     delete rel r = </A/D>
     prepend rel r = [</A/C>, </A.x>]
-    float x = None
-    float y.connect = None
-    uniform float z = 1
-    append uniform float z.connect = </A.x>
     custom rel s (
         doc = "s"
     )
     prepend rel s = </A/C>
+    float x = None
+    float y.connect = None
+    uniform float z = 1
+    append uniform float z.connect = </A.x>
 
     def Scope "C"
     {
@@ -4182,8 +4342,8 @@ over "P" (
 )
 
 def Xform "P" (
-    kind = "group"
     inherits = </C>
+    kind = "group"
     prepend payload = @./p.usda@ (offset = 24; scale = 0.5)
     delete references = @./gone.usda@</G>
     append references = [</C> (offset = 1), <> (scale = 2)]
@@ -4522,6 +4682,7 @@ class "P" (
     customData = {
         bool b = 1
         string bs = "back\\slash"
+        int class = 1
         string ctl = "a\x01b\x7f"
         string m = """a
 b"""
@@ -4529,12 +4690,11 @@ b"""
 "b"'''
         string m3 = """a
 b'\""""
-        string s = "it's \"q\""
         string q = 'say "hi"'
+        string s = "it's \"q\""
         string tab = "a\tb"
         string u = "été"
         int "été" = 4
-        int class = 1
     }
     hidden = true
 )

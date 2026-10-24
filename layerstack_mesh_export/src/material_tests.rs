@@ -67,13 +67,13 @@ def Xform "Root"
         float3[] extent = [(0, 0, 0), (1, 1, 0)]
         int[] faceVertexCounts = [3]
         int[] faceVertexIndices = [0, 1, 2]
+        rel material:binding = </Root/Materials/Painted>
         uniform token orientation = "rightHanded"
         point3f[] points = [(0, 0, 0), (1, 0, 0), (0, 1, 0)]
         texCoord2f[] primvars:st = [(0, 0), (1, 0), (0, 1)] (
             interpolation = "vertex"
         )
         uniform token subdivisionScheme = "none"
-        rel material:binding = </Root/Materials/Painted>
     }
 
     def Scope "Materials"
@@ -101,40 +101,40 @@ def Xform "Root"
             {
                 uniform token info:id = "UsdUVTexture"
                 asset inputs:file = @textures/base.png@
-                float2 inputs:st.connect = </Root/Materials/Painted/TexCoordReader.outputs:result>
+                float4 inputs:scale = (1, 0.5, 0.5, 0.5)
                 token inputs:sourceColorSpace = "sRGB"
+                float2 inputs:st.connect = </Root/Materials/Painted/TexCoordReader.outputs:result>
                 token inputs:wrapS = "repeat"
                 token inputs:wrapT = "repeat"
-                float4 inputs:scale = (1, 0.5, 0.5, 0.5)
-                float3 outputs:rgb
                 float outputs:a
+                float3 outputs:rgb
             }
 
             def Shader "MetallicTexture"
             {
                 uniform token info:id = "UsdUVTexture"
+                float4 inputs:bias = (0.5, 0, 0, 0)
                 asset inputs:file = @textures/orm.png@
-                float2 inputs:st.connect = </Root/Materials/Painted/TexCoordReader.outputs:result>
+                float4 inputs:scale = (0.5, 0.8, 1, 1)
                 token inputs:sourceColorSpace = "raw"
+                float2 inputs:st.connect = </Root/Materials/Painted/TexCoordReader.outputs:result>
                 token inputs:wrapS = "clamp"
                 token inputs:wrapT = "mirror"
-                float4 inputs:scale = (0.5, 0.8, 1, 1)
-                float4 inputs:bias = (0.5, 0, 0, 0)
-                float outputs:r
-                float outputs:g
                 float outputs:b
+                float outputs:g
+                float outputs:r
             }
 
             def Shader "NormalTexture"
             {
                 uniform token info:id = "UsdUVTexture"
+                float4 inputs:bias = (-1, -1, -1, 0)
                 asset inputs:file = @textures/normal.png@
-                float2 inputs:st.connect = </Root/Materials/Painted/TexCoordReader.outputs:result>
+                float4 inputs:scale = (2, 2, 2, 1)
                 token inputs:sourceColorSpace = "raw"
+                float2 inputs:st.connect = </Root/Materials/Painted/TexCoordReader.outputs:result>
                 token inputs:wrapS = "repeat"
                 token inputs:wrapT = "repeat"
-                float4 inputs:scale = (2, 2, 2, 1)
-                float4 inputs:bias = (-1, -1, -1, 0)
                 float3 outputs:rgb
             }
 

@@ -32,10 +32,12 @@
 # available (`LAYERSTACK_USD_PYTHON`, default `python3`), every case of the
 # preservation corpus (`layerstack_conformance::save_corpus`) is imported
 # from USDA and from OpenUSD's USDC, edited through the `Layer` API and saved
-# in both formats; OpenUSD must read each saved file exactly as it reads the
-# expected layer (layer_snapshot.py), and each saved USDC must decode like
-# OpenUSD's USDC of the saved USDA. Without such a Python this is reported
-# as skipped.
+# in both formats; OpenUSD must read each saved USDC exactly as it reads the
+# expected layer, and each saved USDA as it reads its own USDA of the
+# expected layer, whose properties its text writer sorts
+# (layer_snapshot.py). Each saved USDC must also decode like OpenUSD's USDC
+# of the saved USDA, field and property order aside. Without such a Python
+# this is reported as skipped.
 #
 # Negative controls (a package with a missing asset, a normal map read as
 # sRGB, a Python-written archive with unaligned data, and a USDA-root

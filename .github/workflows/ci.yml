@@ -552,6 +552,11 @@ jobs:
       - name: check point instancer IDs oracle
         run: python layerstack_conformance/scripts/point_instancer_ids_oracle.py --check
 
+      # The point instancer transform oracle must be what OpenUSD's
+      # `ComputeInstanceTransformsAtTime(s)` compute for every option pair.
+      - name: check point instancer transforms oracle
+        run: python layerstack_conformance/scripts/point_instancer_transforms_oracle.py --check
+
       # The proxy edits oracle must be which authoring calls OpenUSD refuses
       # on instance proxies and prototype prims, and what the others author.
       - name: check proxy edits oracle

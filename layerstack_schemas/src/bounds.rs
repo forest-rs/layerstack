@@ -1048,17 +1048,18 @@ impl BoundsCache {
     ) -> Result<(PurposeBounds, bool), BoundsError> {
         let instancer = crate::usd_geom::PointInstancer::new(scene, path)
             .ok_or(BoundsError::MissingPrim(path))?;
-        let prototypes: Vec<_> = instancer
+        // UsdGeomBBoxCache refuses the invalid prim a property target names.
+        let prototypes = instancer
             .prototypes()
             .into_iter()
-            .filter_map(|target| {
-                if let layerstack::TargetPath::Prim(path) = target {
-                    Some(path)
-                } else {
-                    None
-                }
+            .map(|target| match target {
+                layerstack::TargetPath::Prim(path) => Ok(path),
+                layerstack::TargetPath::Property(_) => Err(BoundsError::InvalidPointInstancer {
+                    prim: path,
+                    source: crate::point_instancer::PointInstancerError::InvalidPrototypes,
+                }),
             })
-            .collect();
+            .collect::<Result<Vec<_>, _>>()?;
         self.instancer_prototypes.insert(path, prototypes.clone());
         let transforms = instancer
             .compute_instance_transforms(

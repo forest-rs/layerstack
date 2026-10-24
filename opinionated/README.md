@@ -27,9 +27,18 @@ and seeds.
 opinionated = "0.1"
 ```
 
-Requires Rust **1.89** or later. The crate uses `no_std` with `alloc`, has no
-dependencies, and has no feature flags. An allocator is required; there is no
-allocation-free mode.
+Requires Rust **1.89** or later. The crate uses `no_std` with `alloc`. An
+allocator is required; there is no allocation-free mode.
+
+### Features
+
+- `hash-tables` (default) depends on `hashbrown` to hash long lists, so list-op
+  edits take time linear in the lengths of the list and of its authored items.
+  A lookup scans while its scans make at most 1,024 comparisons, and hashes
+  beyond that. Without the feature every lookup scans: results are the same,
+  but an edit naming `k` items over `n` items takes `O(n * k)` time, quadratic
+  for long lists. The API does not change with the feature; list items need
+  `Hash` either way.
 
 ## Getting started
 

@@ -4,6 +4,9 @@
 //! Run-preserving ordering shared by list edits and host namespaces.
 
 use alloc::{vec, vec::Vec};
+use core::hash::Hash;
+
+use crate::list_edit::{Occurrence, Positions};
 
 /// Moves named items and their following unnamed items into `order`.
 ///
@@ -13,9 +16,11 @@ use alloc::{vec, vec::Vec};
 /// remaining runs keep their relative order ahead of the moved runs.
 ///
 /// Elements are moved without cloning, and the slice's allocation is retained.
-/// Uses `O(n + m)` scratch space and `O(n * m)` equality checks for `n` items
-/// and `m` names. For wide orders with sortable keys, use
-/// [`apply_list_order_by_key`].
+/// Uses `O(n + m)` scratch space and time for `n` items and `m` names: short
+/// lists are scanned and long ones hashed. Without the `hash-tables` feature
+/// the order is always scanned, taking `O(n * m)` time (see
+/// [Features](crate#features)). [`apply_list_order_by_key`] takes
+/// `O((n + m) * log(m + 1))` time either way, with sortable keys.
 ///
 /// Spec: AOUSD Core §12.4 (list ops). OpenUSD: `SdfApplyListOrdering` and
 /// `SdfListOp::_ReorderKeysHelper` in `pxr/usd/sdf/listOp.cpp`.
@@ -26,10 +31,20 @@ use alloc::{vec, vec::Vec};
 /// apply_list_order(&mut items, &["b", "a"]);
 /// assert_eq!(items, ["prefix", "b", "b-child", "a", "a-child"]);
 /// ```
-pub fn apply_list_order<T: Eq>(items: &mut [T], order: &[T]) {
-    order_runs(items, order.len(), |item| {
-        order.iter().position(|name| name == item)
-    });
+pub fn apply_list_order<T: Eq + Hash>(items: &mut [T], order: &[T]) {
+    if order.is_empty() || items.len() < 2 {
+        return;
+    }
+    // A repeated name ranks at its first occurrence, as in OpenUSD's
+    // `_ReorderKeysHelper`, which keeps the first copy of each name.
+    let ranks = Positions::new(order, Occurrence::First, items.len());
+    // One loop per lookup form, so a scan stays a tight loop.
+    match ranks.table() {
+        Some(table) => order_runs(items, order.len(), |item| table.get(item)),
+        None => order_runs(items, order.len(), |item| {
+            order.iter().position(|name| name == item)
+        }),
+    }
 }
 
 /// Applies [`apply_list_order`] using host keys instead of element equality.

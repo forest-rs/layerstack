@@ -7,7 +7,10 @@
 //! for arc-related fields (variants/references).
 
 use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
-use core::fmt;
+use core::{
+    fmt,
+    hash::{Hash, Hasher},
+};
 
 use hashbrown::HashMap;
 
@@ -859,6 +862,14 @@ impl PartialEq for LayerOffset {
 
 impl Eq for LayerOffset {}
 
+/// Hashes the bits [`PartialEq`] compares.
+impl Hash for LayerOffset {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.offset.to_bits().hash(state);
+        self.scale.to_bits().hash(state);
+    }
+}
+
 impl Default for LayerOffset {
     fn default() -> Self {
         Self::IDENTITY
@@ -1016,7 +1027,7 @@ impl From<LayerId> for SublayerEntry {
 }
 
 /// A composition reference arc.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum ReferenceTarget {
     /// Target a concrete prim path.
     Prim(PathId),
@@ -1149,6 +1160,20 @@ impl PartialEq for Reference {
     }
 }
 impl Eq for Reference {}
+
+/// Hashes what [`PartialEq`] compares, except custom data's entries, which
+/// it compares in any order: only their count is hashed. List ops hash
+/// long reference lists to apply them in linear time.
+impl Hash for Reference {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.layer.hash(state);
+        self.deferred.hash(state);
+        self.target.hash(state);
+        self.asset.hash(state);
+        self.layer_offset.hash(state);
+        self.custom_data.len().hash(state);
+    }
+}
 
 impl Reference {
     /// Where the arc leads: the layer it targets, or the asset path or

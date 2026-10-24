@@ -33,6 +33,7 @@
 //! splines), §12.3.6 (blocks), §13.3.2.4 (schema fallbacks).
 
 use alloc::{sync::Arc, vec, vec::Vec};
+use core::hash::Hash;
 
 use opinionated::{
     ChainOpinion, DictionaryEvent, FamilyEvent, IgnoreReason, OpinionOp, ResolutionEvent,
@@ -922,7 +923,7 @@ fn explain_field_list<'s>(
 ///
 /// `None` entries hold another kind of list op; the report names them
 /// incompatible. Event provenance is the position in `ops`.
-fn report_list_chain<'a, T: Clone + Eq + 'a>(
+fn report_list_chain<'a, T: Clone + Eq + Hash + 'a>(
     ops: impl Iterator<Item = Option<&'a ListOp<T>>>,
 ) -> (Vec<T>, Vec<ResolutionEvent<usize>>) {
     let ops: Vec<_> = ops.collect();
@@ -968,7 +969,7 @@ struct ReportLists {
 }
 
 impl ListChainer for ReportLists {
-    fn chain<'a, T: Clone + Eq + 'a>(
+    fn chain<'a, T: Clone + Eq + Hash + 'a>(
         &mut self,
         values: impl Iterator<Item = &'a FieldValue>,
         pick: impl Fn(&'a FieldValue) -> Option<&'a ListOp<T>>,

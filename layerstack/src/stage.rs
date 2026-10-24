@@ -58,6 +58,7 @@ use alloc::{
     sync::{Arc, Weak},
     vec::Vec,
 };
+use core::hash::Hash;
 
 use hashbrown::{HashMap, HashSet};
 
@@ -181,7 +182,7 @@ pub enum ResolvedValue {
 pub(crate) trait ListChainer {
     /// Chains the list ops `pick` selects from `values`, strongest first.
     /// Values `pick` rejects hold another kind of list op and are skipped.
-    fn chain<'a, T: Clone + Eq + 'a>(
+    fn chain<'a, T: Clone + Eq + Hash + 'a>(
         &mut self,
         values: impl Iterator<Item = &'a FieldValue>,
         pick: impl Fn(&'a FieldValue) -> Option<&'a ListOp<T>>,
@@ -193,7 +194,7 @@ struct LeanLists;
 
 impl ListChainer for LeanLists {
     #[inline(always)]
-    fn chain<'a, T: Clone + Eq + 'a>(
+    fn chain<'a, T: Clone + Eq + Hash + 'a>(
         &mut self,
         values: impl Iterator<Item = &'a FieldValue>,
         pick: impl Fn(&'a FieldValue) -> Option<&'a ListOp<T>>,

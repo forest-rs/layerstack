@@ -4,7 +4,7 @@
 //! Parity coverage: the in-crate family adapters over the family kernel produce
 //! results identical to [`resolve_ordered_chain`] for the existing chain shapes.
 
-use core::fmt::Debug;
+use core::{fmt::Debug, hash::Hash};
 
 use opinionated::{
     ChainOpinion, DictionaryFamily, FamilyResolution, ListFamily, ListOp, OpinionKind, OpinionOp,
@@ -31,7 +31,7 @@ fn to_resolution<T, V, I, K, P>(
 fn kernel_resolve<V, I, K, P>(chain: &[(OpinionOp<V, I, K>, P)]) -> Resolution<V, I, K, P>
 where
     V: Clone,
-    I: Clone + Eq,
+    I: Clone + Eq + Hash,
     K: Clone + Ord,
     P: Clone,
 {
@@ -61,7 +61,7 @@ where
 fn assert_parity<V, I, K, P>(chain: Vec<(OpinionOp<V, I, K>, P)>)
 where
     V: Clone + Debug + PartialEq,
-    I: Clone + Eq + Debug,
+    I: Clone + Eq + Debug + Hash,
     K: Clone + Ord + Debug,
     P: Clone + Debug + PartialEq,
 {

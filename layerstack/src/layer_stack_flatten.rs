@@ -19,6 +19,7 @@ use crate::{
     Specifier, TokenId, TokenInterner, Value, VariantSets, VariantSpec,
 };
 use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
+use core::hash::Hash;
 
 /// Evidence about a successful, exact layer-stack consolidation.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -721,31 +722,12 @@ fn unique<T: Clone + PartialEq>(strong: &mut Vec<T>, weak: &[T]) {
     }
 }
 /// Compose edits as functions on an arbitrary weaker list, without collapsing it.
-/// AOUSD Core §12.4; native `SdfListOp::ApplyOperations(listOp)`.
-fn list<T: Clone + Eq>(strong: &ListOp<T>, weak: &ListOp<T>) -> ListOp<T> {
-    if strong.explicit.is_some() {
-        return strong.clone();
-    }
-    if let Some(values) = &weak.explicit {
-        return ListOp::explicit(strong.apply_to(values));
-    }
-    let mut result = weak.clone();
-    for value in &strong.delete {
-        result.prepend.retain(|entry| entry != value);
-        result.append.retain(|entry| entry != value);
-        unique(&mut result.delete, core::slice::from_ref(value));
-    }
-    for value in strong.prepend.iter().chain(&strong.append) {
-        result.delete.retain(|entry| entry != value);
-        result.prepend.retain(|entry| entry != value);
-        result.append.retain(|entry| entry != value);
-    }
-    let mut prepend = strong.prepend.clone();
-    prepend.extend(result.prepend);
-    prepend.retain(|entry| !strong.append.contains(entry));
-    result.prepend = prepend;
-    result.append.extend_from_slice(&strong.append);
-    result
+/// AOUSD Core §12.4; native `SdfListOp::ApplyOperations(listOp)`. Preparation
+/// rejects added and reordered items (`validate_list`), so the edits compose.
+fn list<T: Clone + Eq + Hash>(strong: &ListOp<T>, weak: &ListOp<T>) -> ListOp<T> {
+    strong
+        .compose_over(weak)
+        .expect("prepared list ops have no added or reordered items")
 }
 fn merge_fields(strong: &mut Vec<FieldEntry>, weak: &[FieldEntry]) {
     for field in weak {

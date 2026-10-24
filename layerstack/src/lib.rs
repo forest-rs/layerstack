@@ -281,9 +281,10 @@ pub use property::{
 };
 pub use relocates::RelocationTable;
 pub use schema::{
-    AppliedSchema, CannotApply, InvalidBaseReason, MetadataConflict, MetadataDefinition,
-    MetadataTarget, PrimDefinition, PropertyDefinition, SchemaDefinition, SchemaIssue, SchemaKind,
-    SchemaRegistry, SchemaRegistryBuilder,
+    AppliedSchema, CannotApply, InvalidBaseReason, ListOpItem, MetadataConflict,
+    MetadataDefinition, MetadataField, MetadataOrigin, MetadataTarget, MetadataType,
+    PrimDefinition, PropertyDefinition, SchemaDefinition, SchemaIssue, SchemaKind, SchemaRegistry,
+    SchemaRegistryBuilder, is_spec_field,
 };
 pub use spec_path::{SpecComponent, SpecPath, SpecPathError};
 pub use spline::SplineData;

@@ -292,7 +292,7 @@ impl<'a> DynamicFormatContext<'a> {
     fn registered(&self, field: &str) -> Result<bool, UnregisteredField> {
         self.walk
             .registered_metadata(field)
-            .map(|definition| &*definition.type_name == "dictionary")
+            .map(|definition| definition.value_type() == crate::MetadataType::Dictionary)
             .ok_or_else(|| UnregisteredField {
                 field: field.to_string(),
             })

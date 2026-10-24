@@ -17,7 +17,7 @@ fn generated_metadata_retains_types_targets_and_defaults_without_creating_proper
     let render_type = registry
         .metadata(store.tokens.lookup("renderType").unwrap())
         .unwrap();
-    assert_eq!(&*render_type.type_name, "token");
+    assert_eq!(render_type.value_type.name(), "token");
     assert!(render_type.applies_to(MetadataTarget::Attribute));
     assert!(render_type.applies_to(MetadataTarget::Relationship));
     assert!(!render_type.applies_to(MetadataTarget::Prim));
@@ -36,16 +36,32 @@ fn generated_metadata_retains_types_targets_and_defaults_without_creating_proper
     );
     let mut builder = layerstack::SchemaRegistry::builder();
     builder
-        .register_metadata(layerstack::MetadataDefinition {
-            name: store.tokens.intern("connectability"),
-            type_name: "int".into(),
-            targets: vec![MetadataTarget::Attribute],
-            default: None,
-            documentation: "".into(),
-        })
+        .register_metadata(
+            layerstack::MetadataDefinition::new(
+                store.tokens.intern("colorSpaceHint"),
+                layerstack::MetadataType::parse("int").unwrap(),
+                [MetadataTarget::Attribute],
+            ),
+            &store.tokens,
+        )
         .unwrap();
+    // usdShade's own field, declared otherwise: refused, as OpenUSD keeps
+    // the first registration.
     assert!(
-        layerstack_schemas::register(&mut builder, &[Domain::UsdShade], &store.tokens).is_err()
+        builder
+            .register_metadata(
+                layerstack::MetadataDefinition::new(
+                    store.tokens.intern("connectability"),
+                    layerstack::MetadataType::parse("int").unwrap(),
+                    [MetadataTarget::Attribute],
+                ),
+                &store.tokens,
+            )
+            .is_err()
+    );
+    assert!(
+        layerstack_schemas::register(&mut builder, &[Domain::UsdShade], &store.tokens).is_ok(),
+        "usdShade's tables declare its fields as the built-in table does"
     );
 }
 

@@ -436,7 +436,8 @@ pub(crate) fn tables(
         let _ = writeln!(
             out,
             "        Metadata {{ name: {name:?}, type_name: {:?}, targets: &[{targets}], default: {default}, documentation: {:?} }},",
-            metadata.type_name, metadata.documentation
+            metadata.value_type.name(),
+            metadata.documentation
         );
     }
     out.push_str("    ],\n};\n");

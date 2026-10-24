@@ -1,0 +1,3145 @@
+{
+ "authoring": [
+  {
+   "field": "metaBool",
+   "reopened": true,
+   "spec": "prim",
+   "stored": true,
+   "type": "bool",
+   "value": true,
+   "written": "metaBool = true"
+  },
+  {
+   "field": "metaBool",
+   "reopened": true,
+   "spec": "attribute",
+   "stored": true,
+   "type": "bool",
+   "value": true,
+   "written": "metaBool = true"
+  },
+  {
+   "field": "metaUChar",
+   "reopened": true,
+   "spec": "prim",
+   "stored": 200,
+   "type": "uchar",
+   "value": 200,
+   "written": "metaUChar = 200"
+  },
+  {
+   "field": "metaInt",
+   "reopened": true,
+   "spec": "prim",
+   "stored": -7,
+   "type": "int",
+   "value": -7,
+   "written": "metaInt = -7"
+  },
+  {
+   "field": "metaInt",
+   "reopened": true,
+   "spec": "stage",
+   "stored": -7,
+   "type": "int",
+   "value": -7,
+   "written": "metaInt = -7"
+  },
+  {
+   "field": "metaUInt",
+   "reopened": true,
+   "spec": "prim",
+   "stored": 4000000000,
+   "type": "uint",
+   "value": 4000000000,
+   "written": "metaUInt = 4000000000"
+  },
+  {
+   "field": "metaInt64",
+   "reopened": true,
+   "spec": "prim",
+   "stored": -9000000000,
+   "type": "int64",
+   "value": -9000000000,
+   "written": "metaInt64 = -9000000000"
+  },
+  {
+   "field": "metaUInt64",
+   "reopened": true,
+   "spec": "prim",
+   "stored": 18446744073709551615,
+   "type": "uint64",
+   "value": 18446744073709551615,
+   "written": "metaUInt64 = 18446744073709551615"
+  },
+  {
+   "field": "metaHalf",
+   "reopened": true,
+   "spec": "attribute",
+   "stored": 0.5,
+   "type": "half",
+   "value": 0.5,
+   "written": "metaHalf = 0.5"
+  },
+  {
+   "field": "metaFloat",
+   "reopened": true,
+   "spec": "prim",
+   "stored": 0.25,
+   "type": "float",
+   "value": 0.25,
+   "written": "metaFloat = 0.25"
+  },
+  {
+   "field": "metaDouble",
+   "reopened": true,
+   "spec": "stage",
+   "stored": 2.5,
+   "type": "double",
+   "value": 2.5,
+   "written": "metaDouble = 2.5"
+  },
+  {
+   "field": "metaTimeCode",
+   "reopened": true,
+   "spec": "prim",
+   "stored": 12.5,
+   "type": "timecode",
+   "value": 12.5,
+   "written": "metaTimeCode = 12.5"
+  },
+  {
+   "field": "metaString",
+   "reopened": true,
+   "spec": "attribute",
+   "stored": "text",
+   "type": "string",
+   "value": "text",
+   "written": "metaString = \"text\""
+  },
+  {
+   "field": "metaString",
+   "reopened": true,
+   "spec": "relationship",
+   "stored": "text",
+   "type": "string",
+   "value": "text",
+   "written": "metaString = \"text\""
+  },
+  {
+   "field": "metaToken",
+   "reopened": true,
+   "spec": "relationship",
+   "stored": "medium",
+   "type": "token",
+   "value": "medium",
+   "written": "metaToken = \"medium\""
+  },
+  {
+   "field": "metaAsset",
+   "reopened": true,
+   "spec": "prim",
+   "stored": {
+    "asset": "a.usda"
+   },
+   "type": "asset",
+   "value": "a.usda",
+   "written": "metaAsset = @a.usda@"
+  },
+  {
+   "field": "metaExpression",
+   "reopened": true,
+   "spec": "prim",
+   "stored": {
+    "expression": "/A/**"
+   },
+   "type": "pathExpression",
+   "value": "/A/**",
+   "written": "metaExpression = \"/A/**\""
+  },
+  {
+   "field": "metaFloat3",
+   "reopened": true,
+   "spec": "prim",
+   "stored": [
+    1.0,
+    2.0,
+    3.0
+   ],
+   "type": "float3",
+   "value": [
+    1,
+    2,
+    3
+   ],
+   "written": "metaFloat3 = (1, 2, 3)"
+  },
+  {
+   "field": "metaColor",
+   "reopened": true,
+   "spec": "attribute",
+   "stored": [
+    0.5,
+    0.25,
+    1.0
+   ],
+   "type": "color3f",
+   "value": [
+    0.5,
+    0.25,
+    1
+   ],
+   "written": "metaColor = (0.5, 0.25, 1)"
+  },
+  {
+   "field": "metaQuat",
+   "reopened": true,
+   "spec": "prim",
+   "stored": [
+    1.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "type": "quatf",
+   "value": [
+    1,
+    0,
+    0,
+    0
+   ],
+   "written": "metaQuat = (1, 0, 0, 0)"
+  },
+  {
+   "field": "metaMatrix",
+   "reopened": true,
+   "spec": "prim",
+   "stored": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     2.0,
+     3.0,
+     4.0,
+     1.0
+    ]
+   ],
+   "type": "matrix4d",
+   "value": [
+    [
+     1,
+     0,
+     0,
+     0
+    ],
+    [
+     0,
+     1,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     1,
+     0
+    ],
+    [
+     2,
+     3,
+     4,
+     1
+    ]
+   ],
+   "written": "metaMatrix = ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (2, 3, 4, 1) )"
+  },
+  {
+   "field": "metaBools",
+   "reopened": true,
+   "spec": "prim",
+   "stored": [
+    true,
+    false
+   ],
+   "type": "bool[]",
+   "value": [
+    true,
+    false
+   ],
+   "written": "metaBools = [1, 0]"
+  },
+  {
+   "field": "metaInts",
+   "reopened": true,
+   "spec": "prim",
+   "stored": [
+    1,
+    2
+   ],
+   "type": "int[]",
+   "value": [
+    1,
+    2
+   ],
+   "written": "metaInts = [1, 2]"
+  },
+  {
+   "field": "metaTokens",
+   "reopened": true,
+   "spec": "prim",
+   "stored": [
+    "a",
+    "b"
+   ],
+   "type": "token[]",
+   "value": [
+    "a",
+    "b"
+   ],
+   "written": "metaTokens = [\"a\", \"b\"]"
+  },
+  {
+   "field": "metaStrings",
+   "reopened": true,
+   "spec": "prim",
+   "stored": [
+    "a"
+   ],
+   "type": "string[]",
+   "value": [
+    "a"
+   ],
+   "written": "metaStrings = [\"a\"]"
+  },
+  {
+   "field": "metaAssets",
+   "reopened": true,
+   "spec": "prim",
+   "stored": [
+    {
+     "asset": "a.usda"
+    },
+    {
+     "asset": "b.usda"
+    }
+   ],
+   "type": "asset[]",
+   "value": [
+    "a.usda",
+    "b.usda"
+   ],
+   "written": "metaAssets = [@a.usda@, @b.usda@]"
+  },
+  {
+   "field": "metaVectors",
+   "reopened": true,
+   "spec": "prim",
+   "stored": [
+    [
+     1.0,
+     2.0,
+     3.0
+    ]
+   ],
+   "type": "float3[]",
+   "value": [
+    [
+     1,
+     2,
+     3
+    ]
+   ],
+   "written": "metaVectors = [(1, 2, 3)]"
+  },
+  {
+   "field": "metaMatrices",
+   "reopened": true,
+   "spec": "prim",
+   "stored": [
+    [
+     [
+      1.0,
+      0.0
+     ],
+     [
+      0.0,
+      1.0
+     ]
+    ]
+   ],
+   "type": "matrix2d[]",
+   "value": [
+    [
+     [
+      1,
+      0
+     ],
+     [
+      0,
+      1
+     ]
+    ]
+   ],
+   "written": "metaMatrices = [( (1, 0), (0, 1) )]"
+  },
+  {
+   "field": "metaDictionary",
+   "reopened": true,
+   "spec": "prim",
+   "stored": {
+    "dictionary": {
+     "a": 1
+    }
+   },
+   "type": "dictionary",
+   "value": {
+    "a": {
+     "int": 1
+    }
+   },
+   "written": "metaDictionary = {\nint a = 1\n}"
+  },
+  {
+   "field": "metaDictionary",
+   "reopened": true,
+   "spec": "attribute",
+   "stored": {
+    "dictionary": {
+     "a": 1
+    }
+   },
+   "type": "dictionary",
+   "value": {
+    "a": {
+     "int": 1
+    }
+   },
+   "written": "metaDictionary = {\nint a = 1\n}"
+  },
+  {
+   "field": "metaTokenList",
+   "reopened": true,
+   "spec": "prim",
+   "stored": {
+    "list_op": {
+     "explicit": [
+      "a"
+     ]
+    }
+   },
+   "type": "tokenlistop",
+   "value": {
+    "deleted": [
+     "b"
+    ],
+    "prepended": [
+     "a"
+    ]
+   },
+   "written": "delete metaTokenList = [\"b\"]\nprepend metaTokenList = [\"a\"]"
+  },
+  {
+   "field": "metaStringList",
+   "reopened": true,
+   "spec": "prim",
+   "stored": {
+    "list_op": {
+     "explicit": [
+      "a"
+     ]
+    }
+   },
+   "type": "stringlistop",
+   "value": {
+    "explicit": [
+     "a"
+    ]
+   },
+   "written": "metaStringList = [\"a\"]"
+  },
+  {
+   "field": "metaIntList",
+   "reopened": true,
+   "spec": "prim",
+   "stored": {
+    "list_op": {
+     "explicit": [
+      -2147483648
+     ]
+    }
+   },
+   "type": "intlistop",
+   "value": {
+    "appended": [
+     -2147483648
+    ]
+   },
+   "written": "append metaIntList = [-2147483648]"
+  },
+  {
+   "field": "metaUIntList",
+   "reopened": true,
+   "spec": "prim",
+   "stored": {
+    "list_op": {
+     "explicit": [
+      4294967295
+     ]
+    }
+   },
+   "type": "uintlistop",
+   "value": {
+    "prepended": [
+     4294967295
+    ]
+   },
+   "written": "prepend metaUIntList = [4294967295]"
+  },
+  {
+   "field": "metaInt64List",
+   "reopened": true,
+   "spec": "prim",
+   "stored": {
+    "list_op": {
+     "explicit": [
+      -9223372036854775808
+     ]
+    }
+   },
+   "type": "int64listop",
+   "value": {
+    "explicit": [
+     -9223372036854775808
+    ]
+   },
+   "written": "metaInt64List = [-9223372036854775808]"
+  },
+  {
+   "field": "metaUInt64List",
+   "reopened": true,
+   "spec": "prim",
+   "stored": {
+    "list_op": {
+     "explicit": []
+    }
+   },
+   "type": "uint64listop",
+   "value": {
+    "deleted": [
+     18446744073709551615
+    ]
+   },
+   "written": "delete metaUInt64List = [18446744073709551615]"
+  },
+  {
+   "field": "metaAnywhere",
+   "reopened": true,
+   "spec": "stage",
+   "stored": "medium",
+   "type": "token",
+   "value": "medium",
+   "written": "metaAnywhere = \"medium\""
+  },
+  {
+   "field": "metaAnywhere",
+   "reopened": true,
+   "spec": "relationship",
+   "stored": "medium",
+   "type": "token",
+   "value": "medium",
+   "written": "metaAnywhere = \"medium\""
+  },
+  {
+   "field": "metaLoose",
+   "reopened": true,
+   "spec": "attribute",
+   "stored": -7,
+   "type": "int",
+   "value": -7,
+   "written": "metaLoose = -7"
+  },
+  {
+   "error": "Cannot set metadata. 'metaToken' is not registered as valid metadata for spec type SdfSpecTypePrim.",
+   "field": "metaToken",
+   "spec": "prim",
+   "type": "token",
+   "value": "medium"
+  },
+  {
+   "error": "Cannot set metadata. 'metaFloat' is not registered as valid metadata for spec type SdfSpecTypeAttribute.",
+   "field": "metaFloat",
+   "spec": "attribute",
+   "type": "float",
+   "value": 0.25
+  },
+  {
+   "error": "Cannot set metadata. 'metaString' is not registered as valid metadata for spec type SdfSpecTypePrim.",
+   "field": "metaString",
+   "spec": "prim",
+   "type": "string",
+   "value": "text"
+  },
+  {
+   "error": "Cannot set metadata. 'metaDouble' is not registered as valid metadata for spec type SdfSpecTypePrim.",
+   "field": "metaDouble",
+   "spec": "prim",
+   "type": "double",
+   "value": 2.5
+  },
+  {
+   "error": "Metadata 'metaBool' is not registered as valid Layer metadata",
+   "field": "metaBool",
+   "spec": "stage",
+   "type": "bool",
+   "value": true
+  },
+  {
+   "error": "Cannot set metadata. 'metaFloats' is not registered as valid metadata for spec type SdfSpecTypePrim.",
+   "field": "metaFloats",
+   "spec": "prim",
+   "type": "float[]",
+   "value": [
+    0.5,
+    1.5
+   ]
+  },
+  {
+   "error": "Cannot set metadata. 'metaVariantOnly' is not registered as valid metadata for spec type SdfSpecTypePrim.",
+   "field": "metaVariantOnly",
+   "spec": "prim",
+   "type": "int",
+   "value": -7
+  },
+  {
+   "error": "Cannot set metadata. 'metaNowhere' is not registered as valid metadata for spec type SdfSpecTypePrim.",
+   "field": "metaNowhere",
+   "spec": "prim",
+   "type": "int",
+   "value": -7
+  },
+  {
+   "error": "Invalid value (type 'string') for key 'metaFloat'. Expected type 'float'",
+   "field": "metaFloat",
+   "spec": "prim",
+   "type": "string",
+   "value": "wide"
+  },
+  {
+   "error": "Invalid value (type 'GfVec3f') for key 'metaToken'. Expected type 'TfToken'",
+   "field": "metaToken",
+   "spec": "relationship",
+   "type": "float3",
+   "value": [
+    1,
+    2,
+    3
+   ]
+  },
+  {
+   "error": "Invalid value (type 'VtArray<TfToken>') for key 'metaInts'. Expected type 'VtArray<int>'",
+   "field": "metaInts",
+   "spec": "prim",
+   "type": "token[]",
+   "value": [
+    "a"
+   ]
+  },
+  {
+   "error": "Invalid value (type 'string') for key 'metaBool'. Expected type 'bool'",
+   "field": "metaBool",
+   "spec": "prim",
+   "type": "string",
+   "value": "yes"
+  },
+  {
+   "error": "Invalid value (type 'SdfListOp<string>') for key 'metaTokenList'. Expected type 'SdfListOp<TfToken>'",
+   "field": "metaTokenList",
+   "spec": "prim",
+   "type": "stringlistop",
+   "value": {
+    "explicit": [
+     "a"
+    ]
+   }
+  },
+  {
+   "error": "Invalid value (type 'TfToken') for key 'metaDictionary'. Expected type 'VtDictionary'",
+   "field": "metaDictionary",
+   "spec": "prim",
+   "type": "token",
+   "value": "medium"
+  },
+  {
+   "error": "Unregistered metadata key: undeclaredField",
+   "field": "undeclaredField",
+   "spec": "prim",
+   "type": "int",
+   "value": 1
+  },
+  {
+   "field": "kind",
+   "reopened": true,
+   "spec": "prim",
+   "stored": "component",
+   "type": "token",
+   "value": "component",
+   "written": "kind = \"component\""
+  },
+  {
+   "field": "interpolation",
+   "reopened": true,
+   "spec": "attribute",
+   "stored": "vertex",
+   "type": "token",
+   "value": "vertex",
+   "written": "interpolation = \"vertex\""
+  },
+  {
+   "error": "Cannot set metadata. 'interpolation' is not registered as valid metadata for spec type SdfSpecTypePrim.",
+   "field": "interpolation",
+   "spec": "prim",
+   "type": "token",
+   "value": "vertex"
+  },
+  {
+   "field": "upAxis",
+   "reopened": true,
+   "spec": "stage",
+   "stored": "Z",
+   "type": "token",
+   "value": "Z",
+   "written": "upAxis = \"Z\""
+  },
+  {
+   "field": "weight",
+   "reopened": true,
+   "spec": "attribute",
+   "stored": 0.5,
+   "type": "float",
+   "value": 0.5,
+   "written": "weight = 0.5"
+  }
+ ],
+ "builtins": {
+  "active": {
+   "fallback": true,
+   "specs": [
+    "prim",
+    "variant"
+   ],
+   "type": "bool"
+  },
+  "allowedTokens": {
+   "fallback": [],
+   "specs": [
+    "attribute"
+   ],
+   "type": "token[]"
+  },
+  "apiSchemas": {
+   "fallback": {
+    "list_op": {}
+   },
+   "specs": [
+    "prim",
+    "variant"
+   ],
+   "type": "tokenlistop"
+  },
+  "arraySizeConstraint": {
+   "fallback": 0,
+   "specs": [
+    "attribute"
+   ],
+   "type": "int64"
+  },
+  "assetInfo": {
+   "fallback": {
+    "dictionary": {}
+   },
+   "specs": [
+    "prim",
+    "variant",
+    "attribute",
+    "relationship"
+   ],
+   "type": "dictionary"
+  },
+  "bindMaterialAs": {
+   "fallback": "",
+   "specs": [
+    "relationship"
+   ],
+   "type": "token"
+  },
+  "clipSets": {
+   "fallback": {
+    "list_op": {}
+   },
+   "specs": [
+    "prim",
+    "variant"
+   ],
+   "type": "stringlistop"
+  },
+  "clips": {
+   "fallback": {
+    "dictionary": {}
+   },
+   "specs": [
+    "prim",
+    "variant"
+   ],
+   "type": "dictionary"
+  },
+  "colorConfiguration": {
+   "fallback": {
+    "asset": ""
+   },
+   "specs": [
+    "layer"
+   ],
+   "type": "asset"
+  },
+  "colorManagementSystem": {
+   "fallback": "",
+   "specs": [
+    "layer"
+   ],
+   "type": "token"
+  },
+  "colorSpace": {
+   "fallback": "",
+   "specs": [
+    "attribute"
+   ],
+   "type": "token"
+  },
+  "connectability": {
+   "fallback": "full",
+   "specs": [
+    "attribute"
+   ],
+   "type": "token"
+  },
+  "constraintTargetIdentifier": {
+   "fallback": "",
+   "specs": [
+    "attribute"
+   ],
+   "type": "token"
+  },
+  "customData": {
+   "fallback": {
+    "dictionary": {}
+   },
+   "specs": [
+    "prim",
+    "variant",
+    "attribute",
+    "relationship"
+   ],
+   "type": "dictionary"
+  },
+  "customLayerData": {
+   "fallback": {
+    "dictionary": {}
+   },
+   "specs": [
+    "layer"
+   ],
+   "type": "dictionary"
+  },
+  "defaultPrim": {
+   "fallback": "",
+   "specs": [
+    "layer"
+   ],
+   "type": "token"
+  },
+  "displayGroup": {
+   "fallback": "",
+   "specs": [
+    "attribute",
+    "relationship"
+   ],
+   "type": "string"
+  },
+  "displayGroupOrder": {
+   "fallback": [],
+   "specs": [
+    "prim",
+    "variant"
+   ],
+   "type": "string[]"
+  },
+  "displayName": {
+   "fallback": "",
+   "specs": [
+    "prim",
+    "variant",
+    "attribute",
+    "relationship"
+   ],
+   "type": "string"
+  },
+  "documentation": {
+   "fallback": "",
+   "specs": [
+    "layer",
+    "prim",
+    "variant",
+    "attribute",
+    "relationship"
+   ],
+   "type": "string"
+  },
+  "elementSize": {
+   "fallback": 1,
+   "specs": [
+    "attribute"
+   ],
+   "type": "int"
+  },
+  "endFrame": {
+   "fallback": 0.0,
+   "specs": [
+    "layer"
+   ],
+   "type": "double"
+  },
+  "endTimeCode": {
+   "fallback": 0.0,
+   "specs": [
+    "layer"
+   ],
+   "type": "double"
+  },
+  "expressionVariables": {
+   "fallback": {
+    "dictionary": {}
+   },
+   "specs": [
+    "layer"
+   ],
+   "type": "dictionary"
+  },
+  "fallbackPrimTypes": {
+   "fallback": {
+    "dictionary": {}
+   },
+   "specs": [
+    "layer"
+   ],
+   "type": "dictionary"
+  },
+  "framePrecision": {
+   "fallback": 3,
+   "specs": [
+    "layer"
+   ],
+   "type": "int"
+  },
+  "framesPerSecond": {
+   "fallback": 24.0,
+   "specs": [
+    "layer"
+   ],
+   "type": "double"
+  },
+  "hasOwnedSubLayers": {
+   "fallback": false,
+   "specs": [
+    "layer"
+   ],
+   "type": "bool"
+  },
+  "hidden": {
+   "fallback": false,
+   "specs": [
+    "prim",
+    "variant",
+    "attribute",
+    "relationship"
+   ],
+   "type": "bool"
+  },
+  "inactiveIds": {
+   "fallback": {
+    "list_op": {}
+   },
+   "specs": [
+    "prim",
+    "variant"
+   ],
+   "type": "int64listop"
+  },
+  "instanceable": {
+   "fallback": false,
+   "specs": [
+    "prim",
+    "variant"
+   ],
+   "type": "bool"
+  },
+  "interpolation": {
+   "fallback": "constant",
+   "specs": [
+    "attribute"
+   ],
+   "type": "token"
+  },
+  "kilogramsPerUnit": {
+   "fallback": 1.0,
+   "specs": [
+    "layer"
+   ],
+   "type": "double"
+  },
+  "kind": {
+   "fallback": "",
+   "specs": [
+    "prim",
+    "variant"
+   ],
+   "type": "token"
+  },
+  "limits": {
+   "fallback": {
+    "dictionary": {}
+   },
+   "specs": [
+    "attribute"
+   ],
+   "type": "dictionary"
+  },
+  "metersPerUnit": {
+   "fallback": 0.01,
+   "specs": [
+    "layer"
+   ],
+   "type": "double"
+  },
+  "noLoadHint": {
+   "fallback": false,
+   "specs": [
+    "relationship"
+   ],
+   "type": "bool"
+  },
+  "outputName": {
+   "fallback": "",
+   "specs": [
+    "relationship"
+   ],
+   "type": "token"
+  },
+  "owner": {
+   "fallback": "",
+   "specs": [
+    "layer"
+   ],
+   "type": "string"
+  },
+  "payload": {
+   "specs": [
+    "prim",
+    "variant"
+   ],
+   "type": "payloadlistop"
+  },
+  "payloadAssetDependencies": {
+   "fallback": [],
+   "specs": [
+    "prim",
+    "variant"
+   ],
+   "type": "asset[]"
+  },
+  "permission": {
+   "specs": [
+    "prim",
+    "variant",
+    "attribute",
+    "relationship"
+   ],
+   "type": "permission"
+  },
+  "prefix": {
+   "fallback": "",
+   "specs": [
+    "prim",
+    "variant",
+    "attribute",
+    "relationship"
+   ],
+   "type": "string"
+  },
+  "prefixSubstitutions": {
+   "fallback": {
+    "dictionary": {}
+   },
+   "specs": [
+    "prim",
+    "variant"
+   ],
+   "type": "dictionary"
+  },
+  "renderSettingsPrimPath": {
+   "fallback": "",
+   "specs": [
+    "layer"
+   ],
+   "type": "string"
+  },
+  "renderType": {
+   "fallback": "",
+   "specs": [
+    "attribute",
+    "relationship"
+   ],
+   "type": "token"
+  },
+  "sdrMetadata": {
+   "fallback": {
+    "dictionary": {}
+   },
+   "specs": [
+    "prim",
+    "variant",
+    "attribute"
+   ],
+   "type": "dictionary"
+  },
+  "sessionOwner": {
+   "fallback": "",
+   "specs": [
+    "layer"
+   ],
+   "type": "string"
+  },
+  "startFrame": {
+   "fallback": 0.0,
+   "specs": [
+    "layer"
+   ],
+   "type": "double"
+  },
+  "startTimeCode": {
+   "fallback": 0.0,
+   "specs": [
+    "layer"
+   ],
+   "type": "double"
+  },
+  "suffix": {
+   "fallback": "",
+   "specs": [
+    "prim",
+    "variant",
+    "attribute",
+    "relationship"
+   ],
+   "type": "string"
+  },
+  "suffixSubstitutions": {
+   "fallback": {
+    "dictionary": {}
+   },
+   "specs": [
+    "prim",
+    "variant"
+   ],
+   "type": "dictionary"
+  },
+  "symmetricPeer": {
+   "fallback": "",
+   "specs": [
+    "prim",
+    "variant",
+    "attribute",
+    "relationship"
+   ],
+   "type": "string"
+  },
+  "symmetryArguments": {
+   "fallback": {
+    "dictionary": {}
+   },
+   "specs": [
+    "prim",
+    "variant",
+    "attribute",
+    "relationship"
+   ],
+   "type": "dictionary"
+  },
+  "symmetryFunction": {
+   "fallback": "",
+   "specs": [
+    "prim",
+    "variant",
+    "attribute",
+    "relationship"
+   ],
+   "type": "token"
+  },
+  "timeCodesPerSecond": {
+   "fallback": 24.0,
+   "specs": [
+    "layer"
+   ],
+   "type": "double"
+  },
+  "typeName": {
+   "fallback": "",
+   "specs": [
+    "prim",
+    "variant"
+   ],
+   "type": "token"
+  },
+  "uiHints": {
+   "fallback": {
+    "dictionary": {}
+   },
+   "specs": [
+    "prim",
+    "variant",
+    "attribute",
+    "relationship"
+   ],
+   "type": "dictionary"
+  },
+  "unauthoredValuesIndex": {
+   "fallback": -1,
+   "specs": [
+    "attribute"
+   ],
+   "type": "int"
+  },
+  "upAxis": {
+   "fallback": "Y",
+   "specs": [
+    "layer"
+   ],
+   "type": "token"
+  },
+  "weight": {
+   "fallback": 0.0,
+   "specs": [
+    "attribute"
+   ],
+   "type": "float"
+  }
+ },
+ "openusd_version": "0.26.8",
+ "reading": [
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "acceptScalarForArray = [1, 2]",
+   "value": [
+    1,
+    2
+   ],
+   "written": "acceptScalarForArray = [1, 2]"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "acceptScalarForArray = []",
+   "value": [],
+   "written": "acceptScalarForArray = []"
+  },
+  {
+   "error": "Type name has [] for non-shaped value!",
+   "spec": "prim",
+   "statement": "acceptScalarForArray = 1"
+  },
+  {
+   "reopened": true,
+   "spec": "layer",
+   "statement": "metaAnywhere = \"medium\"",
+   "value": "medium",
+   "written": "metaAnywhere = \"medium\""
+  },
+  {
+   "error": "Error parsing simple value: Failed to parse value (at sub-part 0 if there are multiple parts)",
+   "spec": "layer",
+   "statement": "metaAnywhere = 3"
+  },
+  {
+   "error": "Error parsing simple value: Failed to parse value (at sub-part 0 if there are multiple parts)",
+   "spec": "layer",
+   "statement": "metaAnywhere = @a.usda@"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "metaAsset = @a.usda@",
+   "value": {
+    "asset": "a.usda"
+   },
+   "written": "metaAsset = @a.usda@"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "metaAsset = \"a.usda\"",
+   "value": {
+    "asset": "a.usda"
+   },
+   "written": "metaAsset = @a.usda@"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "metaAssets = [@a.usda@, @b.usda@]",
+   "value": [
+    {
+     "asset": "a.usda"
+    },
+    {
+     "asset": "b.usda"
+    }
+   ],
+   "written": "metaAssets = [@a.usda@, @b.usda@]"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "metaAssets = []",
+   "value": [],
+   "written": "metaAssets = []"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "metaBool = true",
+   "value": true,
+   "written": "metaBool = true"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "metaBool = 0",
+   "value": false,
+   "written": "metaBool = false"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "metaBool = 2",
+   "value": true,
+   "written": "metaBool = true"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "metaBool = 1.5",
+   "value": true,
+   "written": "metaBool = true"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "metaBool = \"yes\"",
+   "value": true,
+   "written": "metaBool = true"
+  },
+  {
+   "error": "Error parsing simple value: Failed to parse value (at sub-part 0 if there are multiple parts)",
+   "spec": "prim",
+   "statement": "metaBool = \"off\""
+  },
+  {
+   "error": "Error parsing simple value: Failed to parse value (at sub-part 0 if there are multiple parts)",
+   "spec": "prim",
+   "statement": "metaBool = \"maybe\""
+  },
+  {
+   "error": "Type name missing [] for shaped value.",
+   "spec": "prim",
+   "statement": "metaBool = [true]"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "metaBools = [true, 0]",
+   "value": [
+    true,
+    false
+   ],
+   "written": "metaBools = [1, 0]"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "metaBools = []",
+   "value": [],
+   "written": "metaBools = []"
+  },
+  {
+   "error": "Type name has [] for non-shaped value!",
+   "spec": "prim",
+   "statement": "metaBools = true"
+  },
+  {
+   "reopened": true,
+   "spec": "attribute",
+   "statement": "metaColor = (0.5, 0.25, 1)",
+   "value": [
+    0.5,
+    0.25,
+    1.0
+   ],
+   "written": "metaColor = (0.5, 0.25, 1)"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "metaDictionary = { int a = 1 }",
+   "value": {
+    "dictionary": {
+     "a": 1
+    }
+   },
+   "written": "metaDictionary = {\nint a = 1\n}"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "metaDictionary = {\n}",
+   "value": {
+    "dictionary": {}
+   },
+   "written": "metaDictionary = {\n}"
+  },
+  {
+   "error": "Unrecognized type name ''",
+   "spec": "prim",
+   "statement": "metaDictionary = 1"
+  },
+  {
+   "reopened": true,
+   "spec": "layer",
+   "statement": "metaDouble = 2",
+   "value": 2.0,
+   "written": "metaDouble = 2"
+  },
+  {
+   "reopened": true,
+   "spec": "layer",
+   "statement": "metaDouble = 0.125",
+   "value": 0.125,
+   "written": "metaDouble = 0.125"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "metaExpression = \"/A/**\"",
+   "value": {
+    "expression": "/A/**"
+   },
+   "written": "metaExpression = \"/A/**\""
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "metaFloat = 1",
+   "value": 1.0,
+   "written": "metaFloat = 1"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "metaFloat = 0.25",
+   "value": 0.25,
+   "written": "metaFloat = 0.25"
+  },
+  {
+   "error": "Error parsing simple value: Failed to parse value (at sub-part 0 if there are multiple parts)",
+   "spec": "prim",
+   "statement": "metaFloat = \"x\""
+  },
+  {
+   "error": "Tuple nesting too deep! Should not be deeper than 0 for attribute of type float.",
+   "spec": "prim",
+   "statement": "metaFloat = (1, 2)"
+  },
+  {
+   "error": "invalid value for field \"metaFloat\"",
+   "spec": "prim",
+   "statement": "metaFloat = None"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "metaFloat3 = (1, 2, 3)",
+   "value": [
+    1.0,
+    2.0,
+    3.0
+   ],
+   "written": "metaFloat3 = (1, 2, 3)"
+  },
+  {
+   "error": "Tuple dimensions error for attribute of type float3.",
+   "spec": "prim",
+   "statement": "metaFloat3 = (1, 2)"
+  },
+  {
+   "error": "Not enough values to parse value of type Vec3f",
+   "spec": "prim",
+   "statement": "metaFloat3 = 1"
+  },
+  {
+   "error": "Type name missing [] for shaped value.",
+   "spec": "prim",
+   "statement": "metaFloat3 = [(1, 2, 3)]"
+  },
+  {
+   "reopened": true,
+   "spec": "variant",
+   "statement": "metaFloats = [0.5, 1]",
+   "value": {
+    "unregistered": "[0.5, 1]"
+   },
+   "written": "metaFloats = [0.5, 1]"
+  },
+  {
+   "reopened": true,
+   "spec": "attribute",
+   "statement": "metaHalf = 0.5",
+   "value": 0.5,
+   "written": "metaHalf = 0.5"
+  },
+  {
+   "reopened": true,
+   "spec": "attribute",
+   "statement": "metaHalf = 1",
+   "value": 1.0,
+   "written": "metaHalf = 1"
+  },
+  {
+   "reopened": true,
+   "spec": "layer",
+   "statement": "metaInt = -7",
+   "value": -7,
+   "written": "metaInt = -7"
+  },
+  {
+   "error": "Error parsing simple value: Failed to parse value (at sub-part 0 if there are multiple parts)",
+   "spec": "layer",
+   "statement": "metaInt = 2147483648"
+  },
+  {
+   "error": "Error parsing simple value: Failed to parse value (at sub-part 0 if there are multiple parts)",
+   "spec": "layer",
+   "statement": "metaInt = \"7\""
+  },
+  {
+   "reopened": true,
+   "spec": "layer",
+   "statement": "metaInt = 2.5",
+   "value": 2,
+   "written": "metaInt = 2"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "metaInt64 = -9223372036854775808",
+   "value": -9223372036854775808,
+   "written": "metaInt64 = -9223372036854775808"
+  },
+  {
+   "error": "Error parsing simple value: Failed to parse value (at sub-part 0 if there are multiple parts)",
+   "spec": "prim",
+   "statement": "metaInt64 = 9223372036854775808"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "metaInt64List = [-9223372036854775808, 9223372036854775807]",
+   "value": {
+    "list_op": {
+     "explicit": [
+      -9223372036854775808,
+      9223372036854775807
+     ]
+    }
+   },
+   "written": "metaInt64List = [-9223372036854775808, 9223372036854775807]"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "metaIntList = [-2147483648, 2147483647]",
+   "value": {
+    "list_op": {
+     "explicit": [
+      -2147483648,
+      2147483647
+     ]
+    }
+   },
+   "written": "metaIntList = [-2147483648, 2147483647]"
+  },
+  {
+   "error": "Error parsing shaped value: Failed to parse at element 0 (at sub-part 0 if there are multiple parts)",
+   "spec": "prim",
+   "statement": "metaIntList = [2147483648]"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "metaInts = [1, 2]",
+   "value": [
+    1,
+    2
+   ],
+   "written": "metaInts = [1, 2]"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "metaInts = []",
+   "value": [],
+   "written": "metaInts = []"
+  },
+  {
+   "error": "Type name has [] for non-shaped value!",
+   "spec": "prim",
+   "statement": "metaInts = 1"
+  },
+  {
+   "reopened": true,
+   "spec": "layer",
+   "statement": "metaLoose = -7",
+   "value": -7,
+   "written": "metaLoose = -7"
+  },
+  {
+   "error": "Error parsing simple value: Failed to parse value (at sub-part 0 if there are multiple parts)",
+   "spec": "layer",
+   "statement": "metaLoose = 2147483648"
+  },
+  {
+   "error": "Error parsing simple value: Failed to parse value (at sub-part 0 if there are multiple parts)",
+   "spec": "layer",
+   "statement": "metaLoose = \"7\""
+  },
+  {
+   "reopened": true,
+   "spec": "layer",
+   "statement": "metaLoose = 2.5",
+   "value": 2,
+   "written": "metaLoose = 2"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "metaMatrices = [((1, 0), (0, 1))]",
+   "value": [
+    [
+     [
+      1.0,
+      0.0
+     ],
+     [
+      0.0,
+      1.0
+     ]
+    ]
+   ],
+   "written": "metaMatrices = [( (1, 0), (0, 1) )]"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "metaMatrix = ((1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (2, 3, 4, 1))",
+   "value": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     2.0,
+     3.0,
+     4.0,
+     1.0
+    ]
+   ],
+   "written": "metaMatrix = ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (2, 3, 4, 1) )"
+  },
+  {
+   "error": "Tuple dimensions error for attribute of type matrix4d.",
+   "spec": "prim",
+   "statement": "metaMatrix = ((1, 0), (0, 1))"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "metaQuat = (1, 0, 0, 0)",
+   "value": [
+    1.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "written": "metaQuat = (1, 0, 0, 0)"
+  },
+  {
+   "reopened": true,
+   "spec": "attribute",
+   "statement": "metaString = \"text\"",
+   "value": "text",
+   "written": "metaString = \"text\""
+  },
+  {
+   "error": "Error parsing simple value: Failed to parse value (at sub-part 0 if there are multiple parts)",
+   "spec": "attribute",
+   "statement": "metaString = 3"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "metaStringList = [\"a\", \"b\"]",
+   "value": {
+    "list_op": {
+     "explicit": [
+      "a",
+      "b"
+     ]
+    }
+   },
+   "written": "metaStringList = [\"a\", \"b\"]"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "metaStrings = [\"a\"]",
+   "value": [
+    "a"
+   ],
+   "written": "metaStrings = [\"a\"]"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "metaTimeCode = 12",
+   "value": 12.0,
+   "written": "metaTimeCode = 12"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "metaTimeCode = 1.5",
+   "value": 1.5,
+   "written": "metaTimeCode = 1.5"
+  },
+  {
+   "reopened": true,
+   "spec": "relationship",
+   "statement": "metaToken = \"medium\"",
+   "value": "medium",
+   "written": "metaToken = \"medium\""
+  },
+  {
+   "error": "Error parsing simple value: Failed to parse value (at sub-part 0 if there are multiple parts)",
+   "spec": "relationship",
+   "statement": "metaToken = 3"
+  },
+  {
+   "error": "Error parsing simple value: Failed to parse value (at sub-part 0 if there are multiple parts)",
+   "spec": "relationship",
+   "statement": "metaToken = @a.usda@"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "metaTokenList = [\"a\", \"b\"]",
+   "value": {
+    "list_op": {
+     "explicit": [
+      "a",
+      "b"
+     ]
+    }
+   },
+   "written": "metaTokenList = [\"a\", \"b\"]"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "metaTokenList = []",
+   "value": {
+    "list_op": {
+     "explicit": []
+    }
+   },
+   "written": "metaTokenList = None"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "metaTokenList = None",
+   "value": {
+    "list_op": {
+     "explicit": []
+    }
+   },
+   "written": "metaTokenList = None"
+  },
+  {
+   "error": "Error parsing shaped value: Failed to parse at element 0 (at sub-part 0 if there are multiple parts)",
+   "spec": "prim",
+   "statement": "metaTokenList = [1]"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "metaTokens = [\"a\", \"b\"]",
+   "value": [
+    "a",
+    "b"
+   ],
+   "written": "metaTokens = [\"a\", \"b\"]"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "metaTokens = []",
+   "value": [],
+   "written": "metaTokens = []"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "metaUChar = 200",
+   "value": 200,
+   "written": "metaUChar = 200"
+  },
+  {
+   "error": "Error parsing simple value: Failed to parse value (at sub-part 0 if there are multiple parts)",
+   "spec": "prim",
+   "statement": "metaUChar = 300"
+  },
+  {
+   "error": "Error parsing simple value: Failed to parse value (at sub-part 0 if there are multiple parts)",
+   "spec": "prim",
+   "statement": "metaUChar = -1"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "metaUChar = 1.75",
+   "value": 1,
+   "written": "metaUChar = 1"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "metaUInt = 4294967295",
+   "value": 4294967295,
+   "written": "metaUInt = 4294967295"
+  },
+  {
+   "error": "Error parsing simple value: Failed to parse value (at sub-part 0 if there are multiple parts)",
+   "spec": "prim",
+   "statement": "metaUInt = -1"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "metaUInt64 = 18446744073709551615",
+   "value": 18446744073709551615,
+   "written": "metaUInt64 = 18446744073709551615"
+  },
+  {
+   "error": "Error parsing simple value: Failed to parse value (at sub-part 0 if there are multiple parts)",
+   "spec": "prim",
+   "statement": "metaUInt64 = -1"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "metaUInt64List = [18446744073709551615]",
+   "value": {
+    "list_op": {
+     "explicit": [
+      18446744073709551615
+     ]
+    }
+   },
+   "written": "metaUInt64List = [18446744073709551615]"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "metaUIntList = [4294967295]",
+   "value": {
+    "list_op": {
+     "explicit": [
+      4294967295
+     ]
+    }
+   },
+   "written": "metaUIntList = [4294967295]"
+  },
+  {
+   "error": "Error parsing shaped value: Failed to parse at element 0 (at sub-part 0 if there are multiple parts)",
+   "spec": "prim",
+   "statement": "metaUIntList = [-1]"
+  },
+  {
+   "reopened": true,
+   "spec": "variant",
+   "statement": "metaVariantOnly = -7",
+   "value": {
+    "unregistered": "-7"
+   },
+   "written": "metaVariantOnly = -7"
+  },
+  {
+   "reopened": true,
+   "spec": "variant",
+   "statement": "metaVariantOnly = 2147483648",
+   "value": {
+    "unregistered": "2147483648"
+   },
+   "written": "metaVariantOnly = 2147483648"
+  },
+  {
+   "reopened": true,
+   "spec": "variant",
+   "statement": "metaVariantOnly = \"7\"",
+   "value": {
+    "unregistered": "\"7\""
+   },
+   "written": "metaVariantOnly = \"7\""
+  },
+  {
+   "reopened": true,
+   "spec": "variant",
+   "statement": "metaVariantOnly = 2.5",
+   "value": {
+    "unregistered": "2.5"
+   },
+   "written": "metaVariantOnly = 2.5"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "metaVectors = [(1, 2, 3)]",
+   "value": [
+    [
+     1.0,
+     2.0,
+     3.0
+    ]
+   ],
+   "written": "metaVectors = [(1, 2, 3)]"
+  },
+  {
+   "error": "Tuple dimensions error for attribute of type float3[].",
+   "spec": "prim",
+   "statement": "metaVectors = [(1, 2)]"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "rejectIntFraction = -7",
+   "value": -7,
+   "written": "rejectIntFraction = -7"
+  },
+  {
+   "error": "Error parsing simple value: Failed to parse value (at sub-part 0 if there are multiple parts)",
+   "spec": "prim",
+   "statement": "rejectIntFraction = 2147483648"
+  },
+  {
+   "error": "Error parsing simple value: Failed to parse value (at sub-part 0 if there are multiple parts)",
+   "spec": "prim",
+   "statement": "rejectIntFraction = \"7\""
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "rejectIntFraction = 2.5",
+   "value": 2,
+   "written": "rejectIntFraction = 2"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "prepend metaTokenList = [\"a\"]",
+   "value": {
+    "list_op": {
+     "prepended": [
+      "a"
+     ]
+    }
+   },
+   "written": "prepend metaTokenList = [\"a\"]"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "append metaTokenList = [\"b\"]",
+   "value": {
+    "list_op": {
+     "appended": [
+      "b"
+     ]
+    }
+   },
+   "written": "append metaTokenList = [\"b\"]"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "delete metaTokenList = [\"c\"]",
+   "value": {
+    "list_op": {
+     "deleted": [
+      "c"
+     ]
+    }
+   },
+   "written": "delete metaTokenList = [\"c\"]"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "add metaTokenList = [\"d\"]",
+   "value": {
+    "list_op": {
+     "added": [
+      "d"
+     ]
+    }
+   },
+   "written": "add metaTokenList = [\"d\"]"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "reorder metaTokenList = [\"e\"]",
+   "value": {
+    "list_op": {
+     "ordered": [
+      "e"
+     ]
+    }
+   },
+   "written": "reorder metaTokenList = [\"e\"]"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "prepend metaStringList = [\"a\"]\n    append metaStringList = [\"b\"]",
+   "value": {
+    "list_op": {
+     "appended": [
+      "b"
+     ],
+     "prepended": [
+      "a"
+     ]
+    }
+   },
+   "written": "prepend metaStringList = [\"a\"]\nappend metaStringList = [\"b\"]"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "prepend metaIntList = [1, 2]",
+   "value": {
+    "list_op": {
+     "prepended": [
+      1,
+      2
+     ]
+    }
+   },
+   "written": "prepend metaIntList = [1, 2]"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "delete metaUInt64List = [3]",
+   "value": {
+    "list_op": {
+     "deleted": [
+      3
+     ]
+    }
+   },
+   "written": "delete metaUInt64List = [3]"
+  },
+  {
+   "error": "Type name missing [] for shaped value.",
+   "spec": "prim",
+   "statement": "prepend metaFloat = [1]"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "prepend metaInts = [1, 2]",
+   "value": [
+    1,
+    2
+   ],
+   "written": "metaInts = [1, 2]"
+  },
+  {
+   "error": "Type name missing [] for shaped value.",
+   "spec": "prim",
+   "statement": "delete metaBool = [1]"
+  },
+  {
+   "spec": "prim",
+   "statement": "metaToken = \"medium\"",
+   "unregistered": true,
+   "written": "metaToken = \"medium\""
+  },
+  {
+   "spec": "attribute",
+   "statement": "metaFloat = 1",
+   "unregistered": true,
+   "written": "metaFloat = 1"
+  },
+  {
+   "spec": "relationship",
+   "statement": "metaBool = 1",
+   "unregistered": true,
+   "written": "metaBool = 1"
+  },
+  {
+   "spec": "layer",
+   "statement": "metaUChar = 300",
+   "unregistered": true,
+   "written": "metaUChar = 300"
+  },
+  {
+   "spec": "prim",
+   "statement": "metaFloats = [0.5]",
+   "unregistered": true,
+   "written": "metaFloats = [0.5]"
+  },
+  {
+   "spec": "prim",
+   "statement": "metaVariantOnly = 1",
+   "unregistered": true,
+   "written": "metaVariantOnly = 1"
+  },
+  {
+   "reopened": true,
+   "spec": "variant",
+   "statement": "metaVariantOnly = 1",
+   "value": {
+    "unregistered": "1"
+   },
+   "written": "metaVariantOnly = 1"
+  },
+  {
+   "reopened": true,
+   "spec": "variant",
+   "statement": "metaFloats = [0.5]",
+   "value": {
+    "unregistered": "[0.5]"
+   },
+   "written": "metaFloats = [0.5]"
+  },
+  {
+   "reopened": true,
+   "spec": "variant",
+   "statement": "metaFloat = 1",
+   "value": 1.0,
+   "written": "metaFloat = 1"
+  },
+  {
+   "spec": "prim",
+   "statement": "metaNowhere = 1",
+   "unregistered": true,
+   "written": "metaNowhere = 1"
+  },
+  {
+   "spec": "prim",
+   "statement": "metaDouble = 2",
+   "unregistered": true,
+   "written": "metaDouble = 2"
+  },
+  {
+   "reopened": true,
+   "spec": "layer",
+   "statement": "metaInt = 7",
+   "value": 7,
+   "written": "metaInt = 7"
+  },
+  {
+   "reopened": true,
+   "spec": "layer",
+   "statement": "metaLoose = 7",
+   "value": 7,
+   "written": "metaLoose = 7"
+  },
+  {
+   "reopened": true,
+   "spec": "relationship",
+   "statement": "metaLoose = 7",
+   "value": 7,
+   "written": "metaLoose = 7"
+  },
+  {
+   "spec": "prim",
+   "statement": "undeclaredField = 1.50",
+   "unregistered": true,
+   "written": "undeclaredField = 1.5"
+  },
+  {
+   "spec": "prim",
+   "statement": "prepend undeclaredList = [\"a\"]",
+   "unregistered": true,
+   "written": "prepend undeclaredList = [\"a\"]"
+  },
+  {
+   "error": "Error parsing simple value: Failed to parse value (at sub-part 0 if there are multiple parts)",
+   "spec": "attribute",
+   "statement": "interpolation = 3"
+  },
+  {
+   "spec": "prim",
+   "statement": "interpolation = 3",
+   "unregistered": true,
+   "written": "interpolation = 3"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "instanceable = 0",
+   "value": false,
+   "written": "instanceable = false"
+  },
+  {
+   "reopened": true,
+   "spec": "layer",
+   "statement": "metersPerUnit = 1",
+   "value": 1.0,
+   "written": "metersPerUnit = 1"
+  },
+  {
+   "reopened": true,
+   "spec": "attribute",
+   "statement": "weight = 1",
+   "value": 1.0,
+   "written": "weight = 1"
+  },
+  {
+   "spec": "prim",
+   "statement": "weight = 1",
+   "unregistered": true,
+   "written": "weight = 1"
+  },
+  {
+   "reopened": true,
+   "spec": "relationship",
+   "statement": "noLoadHint = 1",
+   "value": true,
+   "written": "noLoadHint = true"
+  },
+  {
+   "spec": "attribute",
+   "statement": "noLoadHint = 1",
+   "unregistered": true,
+   "written": "noLoadHint = 1"
+  },
+  {
+   "error": "invalid value for field \"acceptOpaque\"",
+   "spec": "prim",
+   "statement": "acceptOpaque = None"
+  },
+  {
+   "error": "\"comment\" is registered as a non-metadata field",
+   "spec": "prim",
+   "statement": "comment = \"note\""
+  },
+  {
+   "error": "\"specifier\" is registered as a non-metadata field",
+   "spec": "prim",
+   "statement": "specifier = \"def\""
+  },
+  {
+   "error": "\"variability\" is registered as a non-metadata field",
+   "spec": "relationship",
+   "statement": "variability = \"uniform\""
+  },
+  {
+   "error": "\"primOrder\" is registered as a non-metadata field",
+   "spec": "layer",
+   "statement": "primOrder = [\"P\"]"
+  },
+  {
+   "reopened": true,
+   "spec": "prim",
+   "statement": "typeName = \"Scope\"",
+   "value": "Scope",
+   "written": ""
+  }
+ ],
+ "registration": {
+  "acceptOpaque": {
+   "fallback": {
+    "opaque": true
+   },
+   "specs": [
+    "prim",
+    "variant"
+   ],
+   "type": "opaque"
+  },
+  "acceptScalarForArray": {
+   "fallback": [
+    4
+   ],
+   "specs": [
+    "prim",
+    "variant"
+   ],
+   "type": "int[]"
+  },
+  "metaAnywhere": {
+   "fallback": "",
+   "specs": [
+    "layer",
+    "prim",
+    "variant",
+    "attribute",
+    "relationship"
+   ],
+   "type": "token"
+  },
+  "metaAsset": {
+   "fallback": {
+    "asset": "a.usda"
+   },
+   "specs": [
+    "prim",
+    "variant"
+   ],
+   "type": "asset"
+  },
+  "metaAssets": {
+   "fallback": [],
+   "specs": [
+    "prim",
+    "variant"
+   ],
+   "type": "asset[]"
+  },
+  "metaBool": {
+   "fallback": true,
+   "specs": [
+    "prim",
+    "variant",
+    "attribute"
+   ],
+   "type": "bool"
+  },
+  "metaBools": {
+   "fallback": [],
+   "specs": [
+    "prim",
+    "variant"
+   ],
+   "type": "bool[]"
+  },
+  "metaColor": {
+   "fallback": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "specs": [
+    "attribute"
+   ],
+   "type": "float3"
+  },
+  "metaDictionary": {
+   "fallback": {
+    "dictionary": {}
+   },
+   "specs": [
+    "prim",
+    "variant",
+    "attribute",
+    "relationship"
+   ],
+   "type": "dictionary"
+  },
+  "metaDouble": {
+   "fallback": 2.0,
+   "specs": [
+    "layer"
+   ],
+   "type": "double"
+  },
+  "metaExpression": {
+   "fallback": {
+    "expression": ""
+   },
+   "specs": [
+    "prim",
+    "variant"
+   ],
+   "type": "pathExpression"
+  },
+  "metaFloat": {
+   "fallback": 0.25,
+   "specs": [
+    "prim",
+    "variant"
+   ],
+   "type": "float"
+  },
+  "metaFloat3": {
+   "fallback": [
+    1.0,
+    2.0,
+    3.0
+   ],
+   "specs": [
+    "prim",
+    "variant"
+   ],
+   "type": "float3"
+  },
+  "metaFloats": {
+   "fallback": [
+    0.5,
+    1.5
+   ],
+   "specs": [
+    "variant"
+   ],
+   "type": "float[]"
+  },
+  "metaHalf": {
+   "fallback": 0.5,
+   "specs": [
+    "attribute"
+   ],
+   "type": "half"
+  },
+  "metaInt": {
+   "fallback": -7,
+   "specs": [
+    "layer",
+    "prim",
+    "variant"
+   ],
+   "type": "int"
+  },
+  "metaInt64": {
+   "fallback": -12,
+   "specs": [
+    "prim",
+    "variant"
+   ],
+   "type": "int64"
+  },
+  "metaInt64List": {
+   "fallback": {
+    "list_op": {}
+   },
+   "specs": [
+    "prim",
+    "variant"
+   ],
+   "type": "int64listop"
+  },
+  "metaIntList": {
+   "fallback": {
+    "list_op": {}
+   },
+   "specs": [
+    "prim",
+    "variant"
+   ],
+   "type": "intlistop"
+  },
+  "metaInts": {
+   "fallback": [
+    1,
+    2
+   ],
+   "specs": [
+    "prim",
+    "variant"
+   ],
+   "type": "int[]"
+  },
+  "metaLoose": {
+   "fallback": 0,
+   "specs": [
+    "layer",
+    "prim",
+    "variant",
+    "attribute",
+    "relationship"
+   ],
+   "type": "int"
+  },
+  "metaMatrices": {
+   "fallback": [],
+   "specs": [
+    "prim",
+    "variant"
+   ],
+   "type": "matrix2d[]"
+  },
+  "metaMatrix": {
+   "fallback": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ],
+   "specs": [
+    "prim",
+    "variant"
+   ],
+   "type": "matrix4d"
+  },
+  "metaNowhere": {
+   "specs": []
+  },
+  "metaQuat": {
+   "fallback": [
+    1.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "specs": [
+    "prim",
+    "variant"
+   ],
+   "type": "quatf"
+  },
+  "metaString": {
+   "fallback": "text",
+   "specs": [
+    "attribute",
+    "relationship"
+   ],
+   "type": "string"
+  },
+  "metaStringList": {
+   "fallback": {
+    "list_op": {}
+   },
+   "specs": [
+    "prim",
+    "variant"
+   ],
+   "type": "stringlistop"
+  },
+  "metaStrings": {
+   "fallback": [],
+   "specs": [
+    "prim",
+    "variant"
+   ],
+   "type": "string[]"
+  },
+  "metaTimeCode": {
+   "fallback": 12.0,
+   "specs": [
+    "prim",
+    "variant"
+   ],
+   "type": "timecode"
+  },
+  "metaToken": {
+   "fallback": "medium",
+   "specs": [
+    "relationship"
+   ],
+   "type": "token"
+  },
+  "metaTokenList": {
+   "fallback": {
+    "list_op": {}
+   },
+   "specs": [
+    "prim",
+    "variant"
+   ],
+   "type": "tokenlistop"
+  },
+  "metaTokens": {
+   "fallback": [
+    "a",
+    "b"
+   ],
+   "specs": [
+    "prim",
+    "variant"
+   ],
+   "type": "token[]"
+  },
+  "metaUChar": {
+   "fallback": 200,
+   "specs": [
+    "prim",
+    "variant"
+   ],
+   "type": "uchar"
+  },
+  "metaUInt": {
+   "fallback": 40000,
+   "specs": [
+    "prim",
+    "variant"
+   ],
+   "type": "uint"
+  },
+  "metaUInt64": {
+   "fallback": 0,
+   "specs": [
+    "prim",
+    "variant"
+   ],
+   "type": "uint64"
+  },
+  "metaUInt64List": {
+   "fallback": {
+    "list_op": {}
+   },
+   "specs": [
+    "prim",
+    "variant"
+   ],
+   "type": "uint64listop"
+  },
+  "metaUIntList": {
+   "fallback": {
+    "list_op": {}
+   },
+   "specs": [
+    "prim",
+    "variant"
+   ],
+   "type": "uintlistop"
+  },
+  "metaVariantOnly": {
+   "fallback": 0,
+   "specs": [
+    "variant"
+   ],
+   "type": "int"
+  },
+  "metaVectors": {
+   "fallback": [
+    [
+     1.0,
+     2.0,
+     3.0
+    ],
+    [
+     4.0,
+     5.0,
+     6.0
+    ]
+   ],
+   "specs": [
+    "prim",
+    "variant"
+   ],
+   "type": "float3[]"
+  },
+  "rejectBoolDefault": {
+   "specs": []
+  },
+  "rejectDictionaryArray": {
+   "specs": []
+  },
+  "rejectDictionaryDefault": {
+   "specs": []
+  },
+  "rejectFloatText": {
+   "specs": []
+  },
+  "rejectIntFraction": {
+   "fallback": 1,
+   "specs": [
+    "prim",
+    "variant"
+   ],
+   "type": "int"
+  },
+  "rejectListDefault": {
+   "specs": []
+  },
+  "rejectMissingType": {
+   "specs": []
+  },
+  "rejectMixedArray": {
+   "specs": []
+  },
+  "rejectNotObject": {
+   "specs": []
+  },
+  "rejectNumberType": {
+   "specs": []
+  },
+  "rejectObjectDefault": {
+   "specs": []
+  },
+  "rejectPathType": {
+   "specs": []
+  },
+  "rejectShortVector": {
+   "specs": []
+  },
+  "rejectTokenNumber": {
+   "specs": []
+  },
+  "rejectTypeCase": {
+   "specs": []
+  },
+  "rejectUCharRange": {
+   "specs": []
+  },
+  "rejectUnknownType": {
+   "specs": []
+  }
+ },
+ "registration_errors": [
+  "\"Float\" is not a registered value type",
+  "\"dictionary[]\" is not a registered value type",
+  "\"documentation\" is already a registered field",
+  "\"hostOpaque\" is not a registered value type",
+  "\"interpolation\" is already a registered field",
+  "\"metaFloat\" is already a registered field",
+  "\"path\" is not a registered value type",
+  "Could not parse default value: Failed to parse value (at sub-part -1 if there are multiple parts)",
+  "Could not parse default value: Failed to parse value (at sub-part 0 if there are multiple parts)",
+  "Could not parse default value: Failed to parse value (at sub-part 0 if there are multiple parts)",
+  "Could not parse default value: Failed to parse value (at sub-part 0 if there are multiple parts)",
+  "Could not parse default value: Value was not a string, an int, a double, or a vector of those types",
+  "Could not parse default value: Value was not a string, an int, a double, or a vector of those types",
+  "Could not parse default value: Value was not a string, an int, a double, or a vector of those types",
+  "Could not read a string for \"type\" (at \"rejectMissingType\"",
+  "Could not read a string for \"type\" (at \"rejectNumberType\"",
+  "Default values are not allowed on fields of type \"dictionary\", which will always default to an empty dictionary.",
+  "Default values are not allowed on fields of type \"tokenlistop\", which will alwaysdefault to an empty list op.",
+  "Error parsing default value for metadata (at \"rejectBoolDefault\"",
+  "Error parsing default value for metadata (at \"rejectDictionaryArray\"",
+  "Error parsing default value for metadata (at \"rejectDictionaryDefault\"",
+  "Error parsing default value for metadata (at \"rejectFloatText\"",
+  "Error parsing default value for metadata (at \"rejectListDefault\"",
+  "Error parsing default value for metadata (at \"rejectMixedArray\"",
+  "Error parsing default value for metadata (at \"rejectObjectDefault\"",
+  "Error parsing default value for metadata (at \"rejectPathType\"",
+  "Error parsing default value for metadata (at \"rejectShortVector\"",
+  "Error parsing default value for metadata (at \"rejectTokenNumber\"",
+  "Error parsing default value for metadata (at \"rejectTypeCase\"",
+  "Error parsing default value for metadata (at \"rejectUCharRange\"",
+  "Error parsing default value for metadata (at \"rejectUnknownType\"",
+  "Not enough values to parse value of type Vec3f",
+  "Tuple dimensions error for attribute of type float3.",
+  "Value must be a dictionary (at \"rejectNotObject\""
+ ],
+ "unauthored": [
+  {
+   "field": "acceptOpaque",
+   "has": false,
+   "has_authored": false,
+   "object": "prim",
+   "value": null
+  },
+  {
+   "field": "acceptScalarForArray",
+   "has": false,
+   "has_authored": false,
+   "object": "prim",
+   "value": null
+  },
+  {
+   "field": "metaAnywhere",
+   "has": false,
+   "has_authored": false,
+   "object": "prim",
+   "value": null
+  },
+  {
+   "field": "metaAsset",
+   "has": false,
+   "has_authored": false,
+   "object": "prim",
+   "value": null
+  },
+  {
+   "field": "metaAssets",
+   "has": false,
+   "has_authored": false,
+   "object": "prim",
+   "value": null
+  },
+  {
+   "field": "metaBool",
+   "has": false,
+   "has_authored": false,
+   "object": "prim",
+   "value": null
+  },
+  {
+   "field": "metaBools",
+   "has": false,
+   "has_authored": false,
+   "object": "prim",
+   "value": null
+  },
+  {
+   "field": "metaDictionary",
+   "has": false,
+   "has_authored": false,
+   "object": "prim",
+   "value": null
+  },
+  {
+   "field": "metaExpression",
+   "has": false,
+   "has_authored": false,
+   "object": "prim",
+   "value": null
+  },
+  {
+   "field": "metaFloat",
+   "has": false,
+   "has_authored": false,
+   "object": "prim",
+   "value": null
+  },
+  {
+   "field": "metaFloat3",
+   "has": false,
+   "has_authored": false,
+   "object": "prim",
+   "value": null
+  },
+  {
+   "field": "metaInt",
+   "has": false,
+   "has_authored": false,
+   "object": "prim",
+   "value": null
+  },
+  {
+   "field": "metaInt64",
+   "has": false,
+   "has_authored": false,
+   "object": "prim",
+   "value": null
+  },
+  {
+   "field": "metaInt64List",
+   "has": false,
+   "has_authored": false,
+   "object": "prim",
+   "value": null
+  },
+  {
+   "field": "metaIntList",
+   "has": false,
+   "has_authored": false,
+   "object": "prim",
+   "value": null
+  },
+  {
+   "field": "metaInts",
+   "has": false,
+   "has_authored": false,
+   "object": "prim",
+   "value": null
+  },
+  {
+   "field": "metaLoose",
+   "has": false,
+   "has_authored": false,
+   "object": "prim",
+   "value": null
+  },
+  {
+   "field": "metaMatrices",
+   "has": false,
+   "has_authored": false,
+   "object": "prim",
+   "value": null
+  },
+  {
+   "field": "metaMatrix",
+   "has": false,
+   "has_authored": false,
+   "object": "prim",
+   "value": null
+  },
+  {
+   "field": "metaQuat",
+   "has": false,
+   "has_authored": false,
+   "object": "prim",
+   "value": null
+  },
+  {
+   "field": "metaStringList",
+   "has": false,
+   "has_authored": false,
+   "object": "prim",
+   "value": null
+  },
+  {
+   "field": "metaStrings",
+   "has": false,
+   "has_authored": false,
+   "object": "prim",
+   "value": null
+  },
+  {
+   "field": "metaTimeCode",
+   "has": false,
+   "has_authored": false,
+   "object": "prim",
+   "value": null
+  },
+  {
+   "field": "metaTokenList",
+   "has": false,
+   "has_authored": false,
+   "object": "prim",
+   "value": null
+  },
+  {
+   "field": "metaTokens",
+   "has": false,
+   "has_authored": false,
+   "object": "prim",
+   "value": null
+  },
+  {
+   "field": "metaUChar",
+   "has": false,
+   "has_authored": false,
+   "object": "prim",
+   "value": null
+  },
+  {
+   "field": "metaUInt",
+   "has": false,
+   "has_authored": false,
+   "object": "prim",
+   "value": null
+  },
+  {
+   "field": "metaUInt64",
+   "has": false,
+   "has_authored": false,
+   "object": "prim",
+   "value": null
+  },
+  {
+   "field": "metaUInt64List",
+   "has": false,
+   "has_authored": false,
+   "object": "prim",
+   "value": null
+  },
+  {
+   "field": "metaUIntList",
+   "has": false,
+   "has_authored": false,
+   "object": "prim",
+   "value": null
+  },
+  {
+   "field": "metaVectors",
+   "has": false,
+   "has_authored": false,
+   "object": "prim",
+   "value": null
+  },
+  {
+   "field": "rejectIntFraction",
+   "has": false,
+   "has_authored": false,
+   "object": "prim",
+   "value": null
+  },
+  {
+   "field": "metaAnywhere",
+   "has": false,
+   "has_authored": false,
+   "object": "attribute",
+   "value": null
+  },
+  {
+   "field": "metaBool",
+   "has": false,
+   "has_authored": false,
+   "object": "attribute",
+   "value": null
+  },
+  {
+   "field": "metaColor",
+   "has": false,
+   "has_authored": false,
+   "object": "attribute",
+   "value": null
+  },
+  {
+   "field": "metaDictionary",
+   "has": false,
+   "has_authored": false,
+   "object": "attribute",
+   "value": null
+  },
+  {
+   "field": "metaHalf",
+   "has": false,
+   "has_authored": false,
+   "object": "attribute",
+   "value": null
+  },
+  {
+   "field": "metaLoose",
+   "has": false,
+   "has_authored": false,
+   "object": "attribute",
+   "value": null
+  },
+  {
+   "field": "metaString",
+   "has": false,
+   "has_authored": false,
+   "object": "attribute",
+   "value": null
+  },
+  {
+   "field": "metaAnywhere",
+   "has": false,
+   "has_authored": false,
+   "object": "relationship",
+   "value": null
+  },
+  {
+   "field": "metaDictionary",
+   "has": false,
+   "has_authored": false,
+   "object": "relationship",
+   "value": null
+  },
+  {
+   "field": "metaLoose",
+   "has": false,
+   "has_authored": false,
+   "object": "relationship",
+   "value": null
+  },
+  {
+   "field": "metaString",
+   "has": false,
+   "has_authored": false,
+   "object": "relationship",
+   "value": null
+  },
+  {
+   "field": "metaToken",
+   "has": false,
+   "has_authored": false,
+   "object": "relationship",
+   "value": null
+  },
+  {
+   "field": "metaAnywhere",
+   "has": true,
+   "has_authored": false,
+   "object": "stage",
+   "value": ""
+  },
+  {
+   "field": "metaDouble",
+   "has": true,
+   "has_authored": false,
+   "object": "stage",
+   "value": 2.0
+  },
+  {
+   "field": "metaInt",
+   "has": true,
+   "has_authored": false,
+   "object": "stage",
+   "value": -7
+  },
+  {
+   "field": "metaLoose",
+   "has": true,
+   "has_authored": false,
+   "object": "stage",
+   "value": 0
+  }
+ ]
+}

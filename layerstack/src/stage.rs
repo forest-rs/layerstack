@@ -940,9 +940,11 @@ impl Stage {
         self.root_layer
     }
 
-    /// Reads session/root metadata, using a registered layer default when absent.
-    /// Sublayer metadata does not participate. Blocks and incompatible field
-    /// representations do not resolve to a registered default.
+    /// Reads session/root metadata, using the field's fallback when absent:
+    /// its registered default, else its type's (`upAxis` reads `Y`, a
+    /// plugin's `int` field without a default `0`). Sublayer metadata does
+    /// not participate. Blocks and incompatible field representations do
+    /// not resolve to a fallback.
     ///
     /// Spec: AOUSD Core §12.2.7 (layer metadata resolution).
     /// OpenUSD: `UsdStage::GetMetadata`, `SdfSchema::GetFallback`.
@@ -978,15 +980,19 @@ impl Stage {
                 _ => break,
             }
         }
-        let fallback = self
-            .schemas()
-            .and_then(|s| s.metadata(key))
-            .filter(|d| d.applies_to(crate::MetadataTarget::Layer))
-            .and_then(|d| d.default.as_ref());
+        // The field's fallback, which an unauthored layer field reads as
+        // (`UsdStage::GetMetadata`): built in or registered, for layers.
+        let tokens = store.tokens();
+        let fallback = crate::MetadataField::lookup(tokens.resolve(key), self.schemas(), tokens)
+            .filter(|field| field.applies_to(crate::MetadataTarget::Layer))
+            .and_then(|field| match field.fallback(tokens)? {
+                FieldValue::Value(value) => Some(value),
+                _ => None,
+            });
         if dictionaries.is_empty() {
-            return fallback.cloned();
+            return fallback;
         }
-        if let Some(Value::Dictionary(entries)) = fallback {
+        if let Some(Value::Dictionary(entries)) = &fallback {
             dictionaries.push(entries.as_slice());
         }
         Some(Value::Dictionary(combine_dictionary_chain(dictionaries)))

@@ -1,0 +1,393 @@
+{
+ "dependencies": {
+  "assets": [
+   "models/tex/bark.1001.png",
+   "models/tex/bark.1005.png",
+   "shared/stone.1002.png",
+   "textures/a.1001.png",
+   "textures/a.1002.png",
+   "textures/arr.1001.png",
+   "textures/arr.1002.png",
+   "textures/b.1001.png",
+   "textures/color.1001.png",
+   "textures/color.1002.png",
+   "textures/color.1011.png",
+   "textures/gap.1001.png",
+   "textures/gap.1003.png",
+   "textures/gap.1100.png",
+   "tiles/1001/color.png",
+   "tiles/1002/color.png"
+  ],
+  "layers": [
+   "models/model.usda",
+   "scene.usda"
+  ],
+  "unresolved": 3,
+  "unresolved_properties": [
+   "/Root.bare",
+   "/Root.expression",
+   "/Root.missing"
+  ]
+ },
+ "openusd_version": "26.8",
+ "package": {
+  "layers": {
+   "models/model.usda": [
+    {
+     "property": "/Model.bark",
+     "tiles": {
+      "1001": "models/tex/bark.1001.png\n",
+      "1005": "models/tex/bark.1005.png\n"
+     },
+     "value": "./tex/bark.<UDIM>.png"
+    },
+    {
+     "property": "/Model.stone",
+     "tiles": {
+      "1002": "shared/stone.1002.png\n"
+     },
+     "value": "../shared/stone.<UDIM>.png"
+    }
+   ],
+   "root": [
+    {
+     "property": "/Root.array",
+     "tiles": {
+      "1001": "textures/arr.1001.png\n",
+      "1002": "textures/arr.1002.png\n"
+     },
+     "value": "./textures/arr.<UDIM>.png"
+    },
+    {
+     "property": "/Root.array",
+     "tiles": {
+      "1001": "textures/color.1001.png\n",
+      "1002": "textures/color.1002.png\n",
+      "1011": "textures/color.1011.png\n"
+     },
+     "value": "./textures/color.<UDIM>.png"
+    },
+    {
+     "property": "/Root.dotted",
+     "tiles": {
+      "1001": "textures/color.1001.png\n",
+      "1002": "textures/color.1002.png\n",
+      "1011": "textures/color.1011.png\n"
+     },
+     "value": "./textures/color.<UDIM>.png"
+    },
+    {
+     "property": "/Root.gap",
+     "tiles": {
+      "1001": "textures/gap.1001.png\n",
+      "1003": "textures/gap.1003.png\n",
+      "1100": "textures/gap.1100.png\n"
+     },
+     "value": "./textures/gap.<UDIM>.png"
+    },
+    {
+     "property": "/Root.parent",
+     "tiles": {
+      "1002": "shared/stone.1002.png\n"
+     },
+     "value": "./textures/../shared/stone.<UDIM>.png"
+    },
+    {
+     "property": "/Root.sampled",
+     "tiles": {
+      "1001": "textures/a.1001.png\n",
+      "1002": "textures/a.1002.png\n"
+     },
+     "value": "./textures/a.<UDIM>.png"
+    },
+    {
+     "property": "/Root.sampled",
+     "tiles": {
+      "1001": "textures/b.1001.png\n"
+     },
+     "value": "./textures/b.<UDIM>.png"
+    },
+    {
+     "property": "/Root.search",
+     "tiles": {
+      "1001": "textures/color.1001.png\n",
+      "1002": "textures/color.1002.png\n",
+      "1011": "textures/color.1011.png\n"
+     },
+     "value": "0/color.<UDIM>.png"
+    }
+   ]
+  },
+  "members": [
+   "package.usda",
+   "models/model.usda",
+   "0/color.1001.png",
+   "0/color.1002.png",
+   "0/color.1011.png",
+   "textures/color.1001.png",
+   "textures/color.1002.png",
+   "textures/color.1011.png",
+   "textures/gap.1001.png",
+   "textures/gap.1003.png",
+   "textures/gap.1100.png",
+   "shared/stone.1002.png",
+   "textures/a.1001.png",
+   "textures/a.1002.png",
+   "textures/b.1001.png",
+   "textures/arr.1001.png",
+   "textures/arr.1002.png",
+   "models/tex/bark.1001.png",
+   "models/tex/bark.1005.png"
+  ]
+ },
+ "spellings": [
+  {
+   "is_udim": true,
+   "path": "textures/color.<UDIM>.png",
+   "tile_1011": "textures/color.1011.png"
+  },
+  {
+   "is_udim": false,
+   "path": "<UDIM>",
+   "tile_1011": "<UDIM>"
+  },
+  {
+   "is_udim": true,
+   "path": "a<UDIM>",
+   "tile_1011": "a1011"
+  },
+  {
+   "is_udim": true,
+   "path": "<UDIM>b",
+   "tile_1011": "1011b"
+  },
+  {
+   "is_udim": true,
+   "path": "x.<UDIM>.<UDIM>.png",
+   "tile_1011": "x.1011.<UDIM>.png"
+  },
+  {
+   "is_udim": false,
+   "path": "<udim>.png",
+   "tile_1011": "<udim>.png"
+  },
+  {
+   "is_udim": true,
+   "path": "./tiles/<UDIM>/color.png",
+   "tile_1011": "./tiles/1011/color.png"
+  },
+  {
+   "is_udim": true,
+   "path": "`\"./textures/${NAME}.<UDIM>.png\"`",
+   "tile_1011": "`\"./textures/${NAME}.1011.png\"`"
+  },
+  {
+   "is_udim": false,
+   "path": "color.png",
+   "tile_1011": "color.png"
+  }
+ ],
+ "tiles": [
+  {
+   "layer": "scene.usda",
+   "pattern": "textures/color.<UDIM>.png",
+   "property": "/Root.search",
+   "resolved": "textures/color.<UDIM>.png",
+   "tiles": [
+    [
+     "textures/color.1001.png",
+     "1001"
+    ],
+    [
+     "textures/color.1002.png",
+     "1002"
+    ],
+    [
+     "textures/color.1011.png",
+     "1011"
+    ]
+   ]
+  },
+  {
+   "layer": "scene.usda",
+   "pattern": "./textures/color.<UDIM>.png",
+   "property": "/Root.dotted",
+   "resolved": "textures/color.<UDIM>.png",
+   "tiles": [
+    [
+     "textures/color.1001.png",
+     "1001"
+    ],
+    [
+     "textures/color.1002.png",
+     "1002"
+    ],
+    [
+     "textures/color.1011.png",
+     "1011"
+    ]
+   ]
+  },
+  {
+   "layer": "scene.usda",
+   "pattern": "./textures/gap.<UDIM>.png",
+   "property": "/Root.gap",
+   "resolved": "textures/gap.<UDIM>.png",
+   "tiles": [
+    [
+     "textures/gap.1001.png",
+     "1001"
+    ],
+    [
+     "textures/gap.1003.png",
+     "1003"
+    ],
+    [
+     "textures/gap.1100.png",
+     "1100"
+    ]
+   ]
+  },
+  {
+   "layer": "scene.usda",
+   "pattern": "./textures/../shared/stone.<UDIM>.png",
+   "property": "/Root.parent",
+   "resolved": "shared/stone.<UDIM>.png",
+   "tiles": [
+    [
+     "shared/stone.1002.png",
+     "1002"
+    ]
+   ]
+  },
+  {
+   "layer": "scene.usda",
+   "pattern": "./textures/none.<UDIM>.png",
+   "property": "/Root.missing",
+   "resolved": "",
+   "tiles": []
+  },
+  {
+   "layer": "scene.usda",
+   "pattern": "<UDIM>",
+   "property": "/Root.bare",
+   "resolved": "",
+   "tiles": []
+  },
+  {
+   "layer": "scene.usda",
+   "pattern": "./tiles/<UDIM>/color.png",
+   "property": "/Root.folder",
+   "resolved": "tiles/<UDIM>/color.png",
+   "tiles": [
+    [
+     "tiles/1001/color.png",
+     "1001"
+    ],
+    [
+     "tiles/1002/color.png",
+     "1002"
+    ]
+   ]
+  },
+  {
+   "layer": "scene.usda",
+   "pattern": "./textures/a.<UDIM>.png",
+   "property": "/Root.sampled",
+   "resolved": "textures/a.<UDIM>.png",
+   "tiles": [
+    [
+     "textures/a.1001.png",
+     "1001"
+    ],
+    [
+     "textures/a.1002.png",
+     "1002"
+    ]
+   ]
+  },
+  {
+   "layer": "scene.usda",
+   "pattern": "./textures/b.<UDIM>.png",
+   "property": "/Root.sampled",
+   "resolved": "textures/b.<UDIM>.png",
+   "tiles": [
+    [
+     "textures/b.1001.png",
+     "1001"
+    ]
+   ]
+  },
+  {
+   "layer": "scene.usda",
+   "pattern": "./textures/arr.<UDIM>.png",
+   "property": "/Root.array",
+   "resolved": "textures/arr.<UDIM>.png",
+   "tiles": [
+    [
+     "textures/arr.1001.png",
+     "1001"
+    ],
+    [
+     "textures/arr.1002.png",
+     "1002"
+    ]
+   ]
+  },
+  {
+   "layer": "scene.usda",
+   "pattern": "./textures/color.<UDIM>.png",
+   "property": "/Root.array",
+   "resolved": "textures/color.<UDIM>.png",
+   "tiles": [
+    [
+     "textures/color.1001.png",
+     "1001"
+    ],
+    [
+     "textures/color.1002.png",
+     "1002"
+    ],
+    [
+     "textures/color.1011.png",
+     "1011"
+    ]
+   ]
+  },
+  {
+   "layer": "scene.usda",
+   "pattern": "`\"./textures/${NAME}.<UDIM>.png\"`",
+   "property": "/Root.expression",
+   "resolved": "",
+   "tiles": []
+  },
+  {
+   "layer": "models/model.usda",
+   "pattern": "./tex/bark.<UDIM>.png",
+   "property": "/Model.bark",
+   "resolved": "models/tex/bark.<UDIM>.png",
+   "tiles": [
+    [
+     "models/tex/bark.1001.png",
+     "1001"
+    ],
+    [
+     "models/tex/bark.1005.png",
+     "1005"
+    ]
+   ]
+  },
+  {
+   "layer": "models/model.usda",
+   "pattern": "../shared/stone.<UDIM>.png",
+   "property": "/Model.stone",
+   "resolved": "shared/stone.<UDIM>.png",
+   "tiles": [
+    [
+     "shared/stone.1002.png",
+     "1002"
+    ]
+   ]
+  }
+ ]
+}

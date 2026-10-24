@@ -1,0 +1,25 @@
+#usda 1.0
+(
+    expressionVariables = {
+        string NAME = "expr"
+    }
+)
+
+def "Root" (
+    references = @./models/model.usda@</Model>
+)
+{
+    asset search = @textures/color.<UDIM>.png@
+    asset dotted = @./textures/color.<UDIM>.png@
+    asset gap = @./textures/gap.<UDIM>.png@
+    asset parent = @./textures/../shared/stone.<UDIM>.png@
+    asset missing = @./textures/none.<UDIM>.png@
+    asset bare = @<UDIM>@
+    asset folder = @./tiles/<UDIM>/color.png@
+    asset sampled.timeSamples = {
+        1: @./textures/a.<UDIM>.png@,
+        2: @./textures/b.<UDIM>.png@,
+    }
+    asset[] array = [@./textures/arr.<UDIM>.png@, @./textures/color.<UDIM>.png@]
+    asset expression = @`"./textures/${NAME}.<UDIM>.png"`@
+}

@@ -311,9 +311,10 @@ value differs from the expected one. Any other difference from OpenUSD fails
 
 ## Explanations
 
-`Attribute::explain` (at a `Time`, default or numeric) and
-`Prim::explain_metadata` answer "why does this property or field have this
-value?". Each mirrors a read (`Attribute::get`, `Prim::metadata`) and returns its value, where the
+`Attribute::explain` (at a `Time`, default or numeric),
+`Prim::explain_metadata` and `Property::explain_metadata` answer "why does
+this property or field have this value?". Each mirrors a read
+(`Attribute::get`, `Prim::metadata`, `Property::metadata`) and returns its value, where the
 value comes from (a default, the time samples bracketing the query, a spline,
 the schema fallback, or nothing), and every consulted opinion with its layer,
 spec path, composition node and layer offset, and its part: a dense value, a

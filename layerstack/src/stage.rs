@@ -4901,7 +4901,14 @@ mod tests {
     /// A stage over one prim `/A` whose attribute `x` has `specs`, strongest
     /// first.
     fn property_stack_fixture(specs: Vec<PropertySpec>) -> (Stage, PathId, TokenId) {
-        let store = crate::doc::InMemoryStore::default();
+        property_stack_fixture_in(&crate::doc::InMemoryStore::default(), specs)
+    }
+
+    /// [`property_stack_fixture`] over `store`'s interners.
+    fn property_stack_fixture_in(
+        store: &crate::doc::InMemoryStore,
+        specs: Vec<PropertySpec>,
+    ) -> (Stage, PathId, TokenId) {
         let prim = store.path("/A");
         let field = store.tokens.intern("x");
         let mut index = PrimIndex::default();
@@ -5074,6 +5081,60 @@ mod tests {
             .unwrap();
         assert_eq!(explained.opinions[0].role, OpinionRole::Block);
         assert!(explained.opinions[0].samples.is_empty());
+    }
+
+    /// A property's metadata explanation reads as `Property::metadata` does,
+    /// and names the opinion, and so the layer, that supplied each entry of
+    /// a composed dictionary.
+    ///
+    /// Spec: AOUSD Core §12.2.5, §13.3.2.3.
+    #[test]
+    fn property_metadata_explanations_name_each_entry_supplier() {
+        let store = crate::doc::InMemoryStore::default();
+        let custom = store.tokens.intern("customData");
+        let entry = |key: &str, value: Value| (Arc::<str>::from(key), value);
+        let strong = PropertySpec::attribute().with_metadata(
+            custom,
+            Value::Dictionary(vec![entry("a", Value::String("strong".into()))]),
+        );
+        let weak = PropertySpec::attribute().with_metadata(
+            custom,
+            Value::Dictionary(vec![
+                entry("a", Value::String("weak".into())),
+                entry("p", Value::Asset("./weak.usda".into())),
+            ]),
+        );
+        let (stage, prim, field) = property_stack_fixture_in(&store, vec![strong, weak]);
+        let explained = stage
+            .explain_property_metadata(prim, field, custom)
+            .expect("authored");
+        assert_eq!(
+            explained.value,
+            stage
+                .resolve_property_metadata(prim, field, custom)
+                .map(|resolved| resolved.value)
+        );
+        let supplied: Vec<(u16, Vec<KeyPath>)> = explained
+            .contributors()
+            .map(|opinion| match &opinion.role {
+                OpinionRole::Contributed(Contribution::Dictionary(merge)) => {
+                    (opinion.opinion.key.layer_strength, merge.supplied.clone())
+                }
+                other => panic!("{other:?}"),
+            })
+            .collect();
+        assert_eq!(
+            supplied,
+            vec![
+                (0, vec![vec![Arc::from("a")]]),
+                (1, vec![vec![Arc::from("p")]])
+            ]
+        );
+        assert!(
+            stage
+                .explain_property_metadata(prim, field, store.tokens.intern("assetInfo"))
+                .is_none()
+        );
     }
 
     /// A block discards weaker authored opinions (AOUSD Core §12.3.6), but

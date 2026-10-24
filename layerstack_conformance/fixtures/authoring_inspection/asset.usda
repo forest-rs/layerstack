@@ -1,0 +1,15 @@
+#usda 1.0
+
+def "Asset"
+{
+    double local = 6
+    double sampled.timeSamples = {
+        0: 1,
+    }
+    double x = 5
+
+    def "Child"
+    {
+        double x = 5
+    }
+}

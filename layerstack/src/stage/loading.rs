@@ -14,6 +14,7 @@ use alloc::{
     collections::{BTreeMap, BTreeSet},
     vec::Vec,
 };
+use hashbrown::HashSet;
 
 /// Whether loading a prim also selects payloads below it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -337,6 +338,13 @@ impl super::Stage {
         self.options = options;
     }
 
+    /// Merges `partial`'s composition of the subtrees at `roots` (whose
+    /// ids `within` holds) into this stage, with the child lists of the
+    /// parents just outside them.
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "crate-internal merge step; the roots come as a list and as the set to test membership in"
+    )]
     pub(crate) fn merge_control_subtrees(
         &mut self,
         store: &dyn LayerStore,
@@ -344,26 +352,27 @@ impl super::Stage {
         affected: &[PathId],
         hierarchy: &[PathId],
         roots: &[PathId],
+        within: &HashSet<PathId>,
         options: super::StageOptions,
         child_index: &crate::prim_indexing::ChildIndex,
     ) -> super::BoundaryOrders {
+        // Membership walks a path's ancestors: an edit can resync as many
+        // sibling roots as prims reference what it changed.
         let within = |path: PathId| {
-            roots.iter().any(|root| {
-                store
-                    .paths()
-                    .resolve(*root)
-                    .is_prefix_of(store.paths().resolve(path))
-            })
+            let mut current = Some(path);
+            while let Some(at) = current {
+                if within.contains(&at) {
+                    return true;
+                }
+                current = store.paths().parent(at);
+            }
+            false
         };
         let mut boundaries = BTreeMap::new();
         for &root in roots {
-            if let Some(parent) = store
-                .paths()
-                .resolve(root)
-                .parent()
-                .and_then(|p| store.paths().lookup(&p))
-            {
-                if within(parent) {
+            if let Some(parent) = store.paths().parent(root) {
+                // Sibling roots share their parent: list its children once.
+                if boundaries.contains_key(&parent) || within(parent) {
                     continue;
                 }
                 if partial.has_boundary_children(parent) {

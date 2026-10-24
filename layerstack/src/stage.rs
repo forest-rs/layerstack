@@ -1665,16 +1665,12 @@ impl Stage {
     ) {
         let roots: HashSet<PathId> = composed_roots.iter().copied().collect();
         let complete = |path: PathId| {
-            let mut at = Some(store.paths().resolve(path).clone());
-            while let Some(path) = at {
-                if store
-                    .paths()
-                    .lookup(&path)
-                    .is_some_and(|id| roots.contains(&id))
-                {
+            let mut at = Some(path);
+            while let Some(id) = at {
+                if roots.contains(&id) {
                     return true;
                 }
-                at = path.parent();
+                at = store.paths().parent(id);
             }
             false
         };

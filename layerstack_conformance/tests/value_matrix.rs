@@ -52,8 +52,8 @@ use std::sync::Arc;
 
 use layerstack::asset::anchor_asset_path;
 use layerstack::{
-    ArcKind, AttributeQuery, ExplainedOpinion, InterpolationType, LayerId, OpinionRole, PrimNode,
-    PropertyPath, Stage, StageOptions, Time, Value, ValueExplanation, ValueSource,
+    ArcKind, AttributeQuery, ExplainedOpinion, InterpolationType, LayerId, OpinionRole, Prim,
+    PrimNode, PropertyPath, Stage, StageOptions, Time, Value, ValueExplanation, ValueSource,
 };
 use layerstack_conformance::usda_real::{LoadedStage, load_entry_usda};
 use layerstack_conformance::workspace_root;
@@ -91,18 +91,8 @@ const DIVERGENCES: &[(&str, &str)] = &[
 
 /// Mismatches a later change fixes: the kind of result, the attribute's
 /// name (a `*` in it matches any run of characters), and why it differs.
-const KNOWN: &[(&str, &str, &str)] = &[
-    ("source", "dbl", CLIP_NODES),
-    ("source", "arr", CLIP_NODES),
-    ("source", "tok", CLIP_NODES),
-    ("source", "asset", CLIP_NODES),
-    ("source", "tc", CLIP_NODES),
-    ("source", "gap", CLIP_NODES),
-    ("source", "radius", CLIP_NODES),
-    ("customData", "cd*_dbl", DICTIONARY_ASSETS),
-];
+const KNOWN: &[(&str, &str, &str)] = &[("customData", "cd*_dbl", DICTIONARY_ASSETS)];
 
-const CLIP_NODES: &str = "clip explanations do not name the clip set's node";
 const DICTIONARY_ASSETS: &str = "dictionary asset paths cannot be anchored";
 
 /// Whether `name` matches the [`KNOWN`] pattern `pattern`, in which one `*`
@@ -330,10 +320,17 @@ impl Composed {
     /// `source|arc|site|layer stack` of the opinion that decides the value,
     /// then those of the weaker opinions it composed, and `fallback|` when
     /// it composed over the schema fallback.
-    fn info(&self, explanation: Option<&ValueExplanation<'_, Value>>) -> String {
+    fn info(&self, prim: Prim<'_>, explanation: Option<&ValueExplanation<'_, Value>>) -> String {
         let Some(explanation) = explanation else {
             return "none|".into();
         };
+        // A clip value's node is the one whose site authors the clip set.
+        if let Some(clip) = &explanation.clip
+            && let Some(node) = prim.composition_graph().node(clip.node)
+            && explanation.source == ValueSource::ValueClips
+        {
+            return format!("clips|{}", self.node(node));
+        }
         let source = match explanation.source {
             ValueSource::None => {
                 // A sampled block in effect: OpenUSD names its samples.
@@ -597,7 +594,7 @@ fn check_attribute(
 
     for (row, (time, &index)) in times.iter().zip(&record.info).enumerate() {
         let at = time.map_or(Time::Default, Time::held);
-        let actual = composed.info(attribute.explain(at).as_ref());
+        let actual = composed.info(attribute.prim(), attribute.explain(at).as_ref());
         let expected = record
             .pin("info", "", row)
             .and_then(|pin| pin.3.as_str())

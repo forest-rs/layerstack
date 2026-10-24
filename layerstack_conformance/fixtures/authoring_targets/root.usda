@@ -1,0 +1,42 @@
+#usda 1.0
+def "Model" (
+    references = @./asset.usda@</Asset>
+)
+{
+    def "Local"
+    {
+        double x = 1
+    }
+    over "Child"
+    {
+    }
+    def "Bare"
+    {
+    }
+    def "Deep"
+    {
+        def "Leaf"
+        {
+            double x = 2
+        }
+    }
+}
+
+def "Pair" (
+    references = [@./asset.usda@</Asset>, @./other.usda@</Other>]
+)
+{
+    def "Spot"
+    {
+    }
+    def "Spot2"
+    {
+    }
+}
+
+def "Inst" (
+    instanceable = true
+    references = @./asset.usda@</Asset>
+)
+{
+}

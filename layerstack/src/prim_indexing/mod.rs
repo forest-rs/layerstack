@@ -1642,6 +1642,81 @@ fn finish(out: &mut Composition) {
     out.errors.retain(|error| seen.insert(error.clone()));
 }
 
+/// The index of the prim at `path`, composed as [`compose`] composes it but
+/// with no node culled, at the prim or at any of its ancestors: every node
+/// an arc reaches is kept, whether or not a layer of its stack has a spec
+/// at its site. Composition culls such nodes, so a site no spec is at yet
+/// has no node in a stage's index; this one places it with its strength.
+///
+/// Spec: AOUSD Core §10.4 (strength ordering). OpenUSD:
+/// `UsdPrim::ComputeExpandedPrimIndex`, `PcpComputePrimIndex` with
+/// `PcpPrimIndexInputs::Cull(false)`.
+pub(crate) fn expanded_prim_index(
+    store: &dyn LayerStore,
+    root: LayerId,
+    options: &StageOptions,
+    path: PathId,
+) -> PrimIndex {
+    let child_index = ChildIndex::default();
+    child_index.prepare(store);
+    let load_rules = options.load_rules.clone();
+    let include_payload = move |paths: &crate::path::PathInterner, path: PathId| {
+        load_rules.is_loaded(paths.resolve(path))
+    };
+    let mut ctx = Ctx {
+        store,
+        stacks: LayerStacks::default(),
+        child_index: &child_index,
+        fallbacks: &options.variant_fallbacks,
+        include_payload: &include_payload,
+        stage_stack: StackId(0),
+        root_path: store.paths().intern_segments(&[]),
+        dynamic_formats: &options.dynamic_formats,
+        schemas: options.schemas.as_deref(),
+        any_type: store.tokens().lookup("__AnyType__"),
+    };
+    let identifier = LayerStackIdentifier {
+        root,
+        session: options.session_layer,
+    };
+    ctx.stage_stack = ctx.stacks.find_or_compute(ctx.store, identifier, None);
+    // The prim and its ancestors, the pseudo-root first.
+    let mut chain = alloc::vec![path];
+    while let Some(parent) = store.paths().parent(*chain.last().expect("a path")) {
+        chain.push(parent);
+    }
+    let mut parent: Option<Graph> = None;
+    for &at in chain.iter().rev() {
+        let site = Site {
+            stack: ctx.stage_stack,
+            path: SpecPath::from_prim_path(at),
+        };
+        let mut outputs = Outputs::default();
+        build_prim_index(
+            &ctx,
+            &site,
+            &site,
+            true,
+            true,
+            true,
+            None,
+            parent.as_ref(),
+            &mut outputs,
+        );
+        let mut graph = core::mem::take(&mut outputs.graph);
+        graph.instanceable = at != ctx.root_path && is_instanceable(ctx.store, &ctx.stacks, &graph);
+        graph.finalize();
+        parent = Some(graph);
+    }
+    let graph = parent.expect("the prim's graph");
+    prim_index(
+        &ctx,
+        path,
+        &graph,
+        &mut crate::composition_checks::Findings::default(),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::{Scope, Selection};

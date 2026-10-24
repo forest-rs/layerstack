@@ -56,8 +56,8 @@ use layerstack::spec_path::VariantSelectionSite;
 use layerstack::variable_expression::is_expression;
 use layerstack::{
     ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex, AssetResolveError, AssetResolver,
-    MetadataTarget, PropertyType, ReferenceTarget, ResolvedAsset, SchemaRegistry, StringArray,
-    TypedArray,
+    MetadataTarget, PropertyType, ReferenceTarget, ResolvedAsset, SchemaRegistry, SharedVec,
+    StringArray, TypedArray,
 };
 use smallvec::SmallVec;
 
@@ -885,7 +885,7 @@ impl EmitCtx<'_> {
                 }
             }
         }
-        let mut metadata = Vec::new();
+        let mut metadata = Vec::with_capacity(attr.metadata.len());
         for entry in &attr.metadata {
             self.emit_metadata_entry(entry, &mut metadata, MetadataTarget::Attribute);
         }
@@ -906,9 +906,7 @@ impl EmitCtx<'_> {
         if attr.uniform {
             spec.variability = Variability::Uniform;
         }
-        for entry in metadata {
-            set_field_vec(spec.metadata.make_mut(), entry.name, entry.value);
-        }
+        set_fields(&mut spec.metadata, metadata);
         if let Some(listop) = connection {
             match spec.targets.as_mut() {
                 Some(existing) => existing.merge(listop),
@@ -974,7 +972,7 @@ impl EmitCtx<'_> {
             listop
         });
 
-        let mut metadata = Vec::new();
+        let mut metadata = Vec::with_capacity(rel.metadata.len());
         for entry in &rel.metadata {
             self.emit_metadata_entry(entry, &mut metadata, MetadataTarget::Relationship);
         }
@@ -989,9 +987,7 @@ impl EmitCtx<'_> {
             return;
         };
         spec.custom |= rel.custom;
-        for entry in metadata {
-            set_field_vec(spec.metadata.make_mut(), entry.name, entry.value);
-        }
+        set_fields(&mut spec.metadata, metadata);
         if let Some(listop) = listop {
             match spec.targets.as_mut() {
                 Some(existing) => existing.merge(listop),
@@ -1869,6 +1865,18 @@ impl EmitCtx<'_> {
                 Some(Value::Blocked)
             }
         }
+    }
+}
+
+/// Sets `fields`, each named once, in `metadata`: the vector itself when it
+/// has none yet.
+fn set_fields(metadata: &mut SharedVec<FieldEntry>, fields: Vec<FieldEntry>) {
+    if metadata.is_empty() {
+        *metadata = SharedVec::from(fields);
+        return;
+    }
+    for entry in fields {
+        set_field_vec(metadata.make_mut(), entry.name, entry.value);
     }
 }
 

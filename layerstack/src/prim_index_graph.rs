@@ -145,8 +145,8 @@ pub(crate) struct NodeArc {
 /// `_nodeSitePaths` in `pxr/usd/pcp/primIndex_Graph.h`).
 #[derive(Clone, Debug)]
 pub(crate) struct NodeShape {
-    parent: Option<NodeId>,
-    origin: Option<NodeId>,
+    parent: NodeLink,
+    origin: NodeLink,
     /// Most nodes have few children; they are kept inline.
     children: smallvec::SmallVec<[NodeId; 4]>,
     arc_kind: ArcKind,
@@ -155,9 +155,33 @@ pub(crate) struct NodeShape {
     sibling_index: u16,
     implied: bool,
     /// The offset from the layers of the node's layer stack to the stage,
-    /// before their sublayer offsets; `None` until composition records it.
-    layer_offset: Option<LayerOffset>,
+    /// before their sublayer offsets.
+    layer_offset: LayerOffset,
     stack_offsets: Arc<[(LayerId, LayerOffset)]>,
+}
+
+/// A node's parent or origin, or none, in the four bytes of a [`NodeId`]
+/// rather than an `Option`'s eight.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+struct NodeLink(u32);
+
+impl NodeLink {
+    /// No node: an index no graph reaches ([`NodeId::from_index`]).
+    const NONE: Self = Self(u32::MAX);
+
+    fn of(node: Option<NodeId>) -> Self {
+        node.map_or(Self::NONE, |node| Self(node.0))
+    }
+
+    fn get(self) -> Option<NodeId> {
+        (self != Self::NONE).then_some(NodeId(self.0))
+    }
+}
+
+impl core::fmt::Debug for NodeLink {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        self.get().fmt(f)
+    }
 }
 
 impl NodeShape {
@@ -180,11 +204,7 @@ impl NodeShape {
             && self.namespace_depth == other.namespace_depth
             && self.sibling_index == other.sibling_index
             && self.implied == other.implied
-            && match (&self.layer_offset, &other.layer_offset) {
-                (Some(a), Some(b)) => same_offset(a, b),
-                (None, None) => true,
-                _ => false,
-            }
+            && same_offset(&self.layer_offset, &other.layer_offset)
             && (Arc::ptr_eq(&self.stack_offsets, &other.stack_offsets)
                 || self.stack_offsets.len() == other.stack_offsets.len()
                     && self
@@ -327,8 +347,8 @@ pub struct PrimNode<'a> {
 impl core::fmt::Debug for PrimNode<'_> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("PrimNode")
-            .field("parent", &self.shape.parent)
-            .field("origin", &self.shape.origin)
+            .field("parent", &self.shape.parent.get())
+            .field("origin", &self.shape.origin.get())
             .field("children", &self.shape.children)
             .field("arc_kind", &self.shape.arc_kind)
             .field("layer_stack", &self.shape.layer_stack)
@@ -358,7 +378,7 @@ impl<'a> PrimNode<'a> {
     /// root.
     #[must_use]
     pub fn parent(self) -> Option<NodeId> {
-        self.shape.parent
+        self.shape.parent.get()
     }
 
     /// The node this one was implied from; `None` for a node whose arc is
@@ -374,7 +394,7 @@ impl<'a> PrimNode<'a> {
     /// arc.
     #[must_use]
     pub fn origin(self) -> Option<NodeId> {
-        self.shape.origin
+        self.shape.origin.get()
     }
 
     /// The nodes reached through arcs authored at this node's site, in the
@@ -490,7 +510,7 @@ impl<'a> PrimNode<'a> {
     /// Spec: AOUSD Core §10.3.1.1 (offsets concatenate along an arc
     /// chain), §12.3.2.1 (layer offset and scale).
     pub(crate) fn layer_offset(self) -> LayerOffset {
-        self.shape.layer_offset.unwrap_or(LayerOffset::IDENTITY)
+        self.shape.layer_offset
     }
 }
 
@@ -675,7 +695,7 @@ impl PrimIndexGraph {
     /// Adds `node` to `shape`, and to its parent's children.
     fn push(shape: &mut ShapeBuffer, node: NodeShape) {
         let id = NodeId::from_index(shape.len());
-        if let Some(parent) = node.parent {
+        if let Some(parent) = node.parent.get() {
             shape[parent.index()].children.push(id);
         }
         shape.push(node);
@@ -711,15 +731,15 @@ impl PrimIndexGraph {
             skips_duplicates: _,
         } = arc;
         let shape = NodeShape {
-            parent,
-            origin,
+            parent: NodeLink::of(parent),
+            origin: NodeLink::of(origin),
             children: smallvec::SmallVec::new(),
             arc_kind,
             layer_stack,
             namespace_depth,
             sibling_index,
             implied,
-            layer_offset: Some(layer_offset),
+            layer_offset,
             stack_offsets,
         };
         (shape, site)
@@ -773,9 +793,10 @@ impl PrimIndexGraph {
     fn is_propagated_specializes(&self, node: NodeId) -> bool {
         let entry = &self.shape[node.index()];
         entry.arc_kind == ArcKind::Specializes
-            && entry.parent == Some(NodeId::ROOT)
+            && entry.parent.get() == Some(NodeId::ROOT)
             && entry
                 .origin
+                .get()
                 .is_some_and(|origin| self.same_site(node, origin))
     }
 

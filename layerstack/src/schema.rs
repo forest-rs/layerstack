@@ -41,8 +41,8 @@ mod generated;
 mod metadata;
 
 pub use metadata::{
-    ListOpItem, MetadataConflict, MetadataDefinition, MetadataField, MetadataOrigin,
-    MetadataTarget, MetadataType, is_spec_field,
+    ListOpItem, MetadataConflict, MetadataDefinition, MetadataEditError, MetadataEditReason,
+    MetadataField, MetadataOrigin, MetadataTarget, MetadataType, is_spec_field,
 };
 
 pub use definition::{AppliedSchema, PrimDefinition};

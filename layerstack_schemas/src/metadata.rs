@@ -45,18 +45,18 @@ impl<'a> Scene<'a> {
 }
 
 impl<'a> PrimView<'a> {
-    /// A registered field's composed authored value. Dictionaries and list ops
+    /// A prim field's composed authored value: a field registered for
+    /// prims, built in or in the stage's schema registry
+    /// ([`layerstack::MetadataField::lookup`]). Dictionaries and list ops
     /// combine through the stage's ordinary metadata resolver.
     ///
     /// Spec: AOUSD Core §12.2 (metadata resolution).
     #[must_use]
     pub fn metadata_value(&self, name: &str) -> Option<Value> {
         let scene = self.scene();
-        let key = scene.store().tokens().lookup(name)?;
-        if !scene
-            .stage()
-            .schemas()?
-            .metadata(key)?
+        let tokens = scene.store().tokens();
+        let key = tokens.lookup(name)?;
+        if !layerstack::MetadataField::lookup(name, scene.stage().schemas(), tokens)?
             .applies_to(MetadataTarget::Prim)
         {
             return None;
@@ -124,18 +124,16 @@ impl<'a> PropertyMetadata<'a> {
         })
     }
 
-    /// A registered, applicable field's composed authored value.
+    /// A field's composed authored value, for a field registered for the
+    /// property's kind, built in or in the stage's schema registry.
     /// No value is synthesized from the field's registered default.
     ///
     /// Spec: AOUSD Core §12.2.5–12.2.6 (dictionary and list-op combining).
     #[must_use]
     pub fn value(&self, name: &str) -> Option<Value> {
-        let key = self.scene.store().tokens().lookup(name)?;
-        if !self
-            .scene
-            .stage()
-            .schemas()?
-            .metadata(key)?
+        let tokens = self.scene.store().tokens();
+        let key = tokens.lookup(name)?;
+        if !layerstack::MetadataField::lookup(name, self.scene.stage().schemas(), tokens)?
             .applies_to(self.target)
         {
             return None;

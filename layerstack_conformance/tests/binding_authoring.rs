@@ -20,7 +20,7 @@ use std::collections::BTreeMap;
 
 use layerstack::{EditTarget, InMemoryStore, LayerId, PathId, PropertyKind, Value};
 use layerstack_schemas::usd_shade::MaterialBindingApiEdit;
-use layerstack_schemas::{BindingStrength, MaterialPurpose, PropertyMetadataError, SchemaEdit};
+use layerstack_schemas::{BindingStrength, MaterialPurpose, MetadataError, SchemaEdit};
 use serde::Deserialize;
 
 const ORACLE: &str = include_str!("../fixtures/binding_authoring/oracle.json");
@@ -245,9 +245,11 @@ fn binding_strength_through_property_metadata() {
     .unwrap();
     assert_eq!(
         api.write_property_metadata(&mut edit, "doubleSided", "bindMaterialAs", stronger),
-        Err(PropertyMetadataError::NotValidForProperty(
-            PropertyKind::Attribute
-        ))
+        Err(MetadataError::Field(layerstack::MetadataEditError {
+            field: "bindMaterialAs".into(),
+            target: layerstack::MetadataTarget::Attribute,
+            reason: layerstack::MetadataEditReason::NotForSpec,
+        }))
     );
     let transaction = edit.finish();
     live.apply(&mut store, &transaction).unwrap();

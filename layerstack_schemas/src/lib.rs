@@ -543,7 +543,7 @@ pub use collection::{
 };
 #[cfg(feature = "usd-shade")]
 pub use coord_sys::{CoordSysBinding, CoordSysCache, CoordSysCacheStats, local_coord_sys_bindings};
-pub use edit::{PropertyMetadataError, SchemaEdit};
+pub use edit::{MetadataError, SchemaEdit};
 pub use generated::views::*;
 pub use generated::{Domain, OPENUSD_VERSION};
 #[cfg(feature = "usd-geom")]

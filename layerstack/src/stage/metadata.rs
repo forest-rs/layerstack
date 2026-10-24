@@ -15,6 +15,10 @@ pub enum StageMetadataError {
     InvalidKeyPath,
     /// The authored field or an intermediate dictionary key is not a dictionary.
     NotADictionary(TokenId),
+    /// The field cannot be authored as layer metadata, or the value is
+    /// not of its type: it is registered for no layer, or not at all
+    /// ([`crate::MetadataField::check_edit`]).
+    Field(crate::MetadataEditError),
     /// The underlying atomic transaction failed.
     Edit(EditError),
 }
@@ -33,6 +37,7 @@ impl core::fmt::Display for StageMetadataError {
                 f,
                 "metadata {key:?} contains a non-dictionary value along the key path"
             ),
+            Self::Field(error) => error.fmt(f),
             Self::Edit(error) => error.fmt(f),
         }
     }
@@ -152,6 +157,25 @@ impl Stage {
             _ => fallback,
         }
     }
+    /// Checks `key` as layer metadata, and `value` as a value of it.
+    /// `defaultPrim` is the layer's own member.
+    fn check_layer_field(
+        &self,
+        key: TokenId,
+        value: Option<&FieldValue>,
+        store: &dyn LayerStore,
+    ) -> Result<(), StageMetadataError> {
+        let tokens = store.tokens();
+        crate::MetadataField::check_edit(
+            tokens.resolve(key),
+            crate::MetadataTarget::Layer,
+            value,
+            self.schemas(),
+            tokens,
+        )
+        .map(|_| ())
+        .map_err(StageMetadataError::Field)
+    }
     fn check_metadata_layer(&self, layer: LayerId) -> Result<(), StageMetadataError> {
         if self.root_layer() == Some(layer) || self.session_layer() == Some(layer) {
             Ok(())
@@ -164,6 +188,11 @@ impl Stage {
 impl LiveStage {
     /// Sets stage metadata on the explicitly selected root or primary session layer.
     /// The atomic edit returns guarded undo and recomposes pending notifications.
+    ///
+    /// The field must be registered for layers, built in or in the stage's
+    /// schema registry, and `value` must be of its type, as OpenUSD's
+    /// `UsdStage::SetMetadata` requires
+    /// ([`crate::MetadataField::check_edit`]).
     pub fn set_stage_metadata(
         &mut self,
         store: &mut dyn LayerStore,
@@ -172,11 +201,13 @@ impl LiveStage {
         value: FieldValue,
     ) -> Result<Applied, StageMetadataError> {
         self.stage().check_metadata_layer(layer)?;
+        self.stage().check_layer_field(key, Some(&value), store)?;
         let mut edit = Transaction::new();
         edit.set_layer_metadata(layer, key, value);
         self.apply(store, &edit).map_err(StageMetadataError::Edit)
     }
-    /// Clears only the selected layer's authored stage metadata field.
+    /// Clears only the selected layer's authored stage metadata field, a
+    /// field registered for layers ([`Self::set_stage_metadata`]).
     pub fn clear_stage_metadata(
         &mut self,
         store: &mut dyn LayerStore,
@@ -184,6 +215,7 @@ impl LiveStage {
         key: TokenId,
     ) -> Result<Applied, StageMetadataError> {
         self.stage().check_metadata_layer(layer)?;
+        self.stage().check_layer_field(key, None, store)?;
         let mut edit = Transaction::new();
         edit.clear_layer_metadata(layer, key);
         self.apply(store, &edit).map_err(StageMetadataError::Edit)

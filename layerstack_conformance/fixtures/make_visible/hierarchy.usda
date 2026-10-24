@@ -1,0 +1,83 @@
+#usda 1.0
+
+def Xform "World"
+{
+    token visibility = "invisible"
+
+    def Xform "A"
+    {
+        token visibility = "invisible"
+
+        def Mesh "Target"
+        {
+            token visibility = "invisible"
+        }
+
+        def Mesh "Sibling"
+        {
+        }
+
+        def "Untyped"
+        {
+        }
+
+        def Mesh "Off" (
+            active = false
+        )
+        {
+        }
+
+        over Mesh "Undefined"
+        {
+        }
+    }
+
+    def Xform "B"
+    {
+        def Mesh "Leaf"
+        {
+        }
+
+        def Mesh "Sibling"
+        {
+        }
+    }
+
+    def "Group"
+    {
+        def Mesh "Deep"
+        {
+        }
+
+        def Mesh "Beside"
+        {
+        }
+    }
+}
+
+def Xform "Lit"
+{
+    def Mesh "Shown"
+    {
+    }
+
+    def Mesh "Other"
+    {
+    }
+}
+
+def Xform "Anim"
+{
+    token visibility.timeSamples = {
+        0: "inherited",
+        10: "invisible",
+    }
+
+    def Mesh "Kid"
+    {
+    }
+
+    def Mesh "Other"
+    {
+    }
+}

@@ -507,6 +507,31 @@ impl<'s> SchemaEdit<'s> {
         self.stage_prim(path).is_some() || self.specified.contains(&path)
     }
 
+    /// The parent of the prim at `path`; `None` for the pseudo-root.
+    #[cfg(feature = "usd-geom")]
+    pub(crate) fn parent(&self, path: PathId) -> Option<PathId> {
+        self.store.paths().parent(path)
+    }
+
+    /// The children of the prim at `path` as this edit leaves them: the
+    /// stage's, inactive ones included, in composed order, then those this
+    /// edit defines, in the order it defines them.
+    ///
+    /// OpenUSD: `UsdPrim::GetAllChildren`.
+    #[cfg(feature = "usd-geom")]
+    pub(crate) fn all_children(&self, path: PathId) -> Vec<PathId> {
+        let mut children: Vec<PathId> = self
+            .stage_prim(path)
+            .map(|prim| prim.all_children().map(layerstack::Prim::path).collect())
+            .unwrap_or_default();
+        for &defined in &self.specified {
+            if self.store.paths().parent(defined) == Some(path) && !children.contains(&defined) {
+                children.push(defined);
+            }
+        }
+        children
+    }
+
     /// The prim at `path` on the edit's stage, as it was before this edit.
     fn stage_prim(&self, path: PathId) -> Option<layerstack::Prim<'_>> {
         self.stage.prim(path, &*self.store)

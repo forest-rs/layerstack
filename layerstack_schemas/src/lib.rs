@@ -102,13 +102,19 @@
 //! target. [`SchemaEdit::apply_api`] applies registered API schemas by name,
 //! including runtime codeless schemas without generated Rust types.
 //! A handle is had only for a prim that exists, on the stage or
-//! defined earlier in the edit: from a view's `edit`, a concrete schema's
-//! `define`, an applied schema's `apply` (which fails with
-//! `CannotApply::NoSuchPrim` for a missing prim), or `new`, which returns
-//! `None` for one. A typed handle's `new` (`MeshEdit::new(&edit, path)`)
+//! defined earlier in the edit: from a concrete schema's `define`, an
+//! applied schema's `apply` (which fails with [`ApplyError::CannotApply`]
+//! for a missing prim), or `new`, which returns `Ok(None)` for one; a view
+//! reads, and its prim's handle is had from the edit by the same path. A typed handle's `new` (`MeshEdit::new(&edit, path)`)
 //! also requires the prim to be of the schema as the edit leaves it
 //! ([`SchemaEdit::is_a`]), as the view's `new` does; for an untyped prim,
-//! `MeshEdit::from_prim(PrimEdit::new(&edit, path)?)` still authors.
+//! `MeshEdit::from_prim` of a [`PrimEdit::new`] handle still authors.
+//! Each of these refuses, with [`CannotEdit`], a prim beneath a native
+//! instance or in a prototype when the edit target is a local layer that
+//! maps its path to itself, where OpenUSD refuses every authoring call
+//! with a coding error: the prim is checked once, when the handle is had,
+//! so a handle's setters never author an instance proxy and stay
+//! infallible. [`SchemaEdit::can_edit`] asks without authoring.
 //! No edit manufactures an `over` for a missing prim.
 //! Relationship targets are stage paths, mapped through the edit target
 //! (through a reference, `/Instance/Light` is authored as `/Asset/Light`);
@@ -126,10 +132,10 @@
 //! multiple-apply view an [`InstanceView`] with `from_instance_unchecked`),
 //! which skips the `IsA` or `HasAPI` check of its `new` or `get`; an edit
 //! handle wraps a [`PrimEdit`] with `from_prim` (or an [`InstanceEdit`]
-//! with `from_instance`). A [`PrimEdit`] is had for a prim that exists
-//! ([`PrimEdit::new`], [`SchemaEdit::define_prim`],
+//! with `from_instance`). A [`PrimEdit`] is had for a prim that exists and
+//! the edit may author ([`PrimEdit::new`], [`SchemaEdit::define_prim`],
 //! [`SchemaEdit::apply_api`]), or with [`PrimEdit::from_path_unchecked`],
-//! which does not check.
+//! which checks neither.
 //!
 //! ```
 //! use std::sync::Arc;
@@ -502,7 +508,7 @@ mod xform;
 mod xform_edit;
 #[cfg(feature = "usd-geom")]
 pub use common_xform::{CommonTransform, CommonTransformError, RotationOrder};
-pub use edit::CannotDefine;
+pub use edit::{ApplyError, CannotEdit};
 
 #[cfg(all(feature = "usd-geom", feature = "usd-shade"))]
 mod material_subsets;

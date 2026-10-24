@@ -20,9 +20,11 @@
 
 use core::ops::Deref;
 
-use layerstack::{CannotApply, PathId};
+use layerstack::PathId;
 
-use crate::{InstanceEdit, InstanceView, PrimEdit, PrimView, Scene, SchemaEdit};
+use crate::{
+    ApplyError, CannotEdit, InstanceEdit, InstanceView, PrimEdit, PrimView, Scene, SchemaEdit,
+};
 #[doc = "Application of labels for a prim for a taxonomy specified by the schema's instance name."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's multiple-apply API schema `SemanticsLabelsAPI`. Get it with [`SemanticsLabelsApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
@@ -103,15 +105,6 @@ impl<'a> SemanticsLabelsApi<'a> {
         Self { base: instance }
     }
 
-    /// An edit handle for this instance.
-    #[must_use]
-    pub fn edit(&self) -> SemanticsLabelsApiEdit {
-        SemanticsLabelsApiEdit::from_instance(InstanceEdit::new(
-            PrimEdit::from_path_unchecked(self.path()),
-            self.instance(),
-        ))
-    }
-
     /// Applies the instance `instance` of the schema to `path` (a `prepend
     /// apiSchemas` entry in the edit's target) if the prim may have it.
     ///
@@ -119,14 +112,15 @@ impl<'a> SemanticsLabelsApi<'a> {
     ///
     /// # Errors
     ///
-    /// Why the schema cannot be applied there.
+    /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
+    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdSemanticsLabelsAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
         instance: &str,
-    ) -> Result<SemanticsLabelsApiEdit, CannotApply> {
+    ) -> Result<SemanticsLabelsApiEdit, ApplyError> {
         let prim = edit.apply_api(path, Self::SCHEMA, Some(instance))?;
         Ok(SemanticsLabelsApiEdit::from_instance(InstanceEdit::new(
             prim, instance,
@@ -182,14 +176,20 @@ impl Deref for SemanticsLabelsApiEdit {
 impl SemanticsLabelsApiEdit {
     /// A handle authoring the instance `instance` on the prim at `path`
     /// through `edit`, if the prim exists: on the edit's stage, or defined
-    /// earlier in `edit`. Setters never create a prim that does not.
-    #[must_use]
+    /// earlier in `edit`; `Ok(None)` when it does not. Setters never
+    /// create a prim.
+    ///
+    /// # Errors
+    ///
+    /// [`CannotEdit`] for a path beneath an instance or in a prototype, as
+    /// [`PrimEdit::new`] refuses it; nothing is authored.
     pub fn new(
         edit: &SchemaEdit<'_>,
         path: impl ::layerstack::PrimPathArg,
         instance: &str,
-    ) -> Option<Self> {
-        PrimEdit::new(edit, path).map(|prim| Self::from_instance(InstanceEdit::new(prim, instance)))
+    ) -> Result<Option<Self>, CannotEdit> {
+        Ok(PrimEdit::new(edit, path)?
+            .map(|prim| Self::from_instance(InstanceEdit::new(prim, instance))))
     }
 
     /// A handle authoring the schema's properties for `instance`, whether

@@ -20,9 +20,9 @@
 
 use core::ops::Deref;
 
-use layerstack::{CannotApply, PathId};
+use layerstack::PathId;
 
-use crate::{CannotDefine, PrimEdit, PrimView, Scene, SchemaEdit};
+use crate::{ApplyError, CannotEdit, PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "AssetPreviewsAPI supports providing thumbnail previews for assets."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's single-apply API schema `AssetPreviewsAPI`. Get it with [`AssetPreviewsApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
@@ -67,12 +67,6 @@ impl<'a> AssetPreviewsApi<'a> {
         Self { base: prim }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> AssetPreviewsApiEdit {
-        AssetPreviewsApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
     /// edit's target) if the prim may have it.
     ///
@@ -80,13 +74,14 @@ impl<'a> AssetPreviewsApi<'a> {
     ///
     /// # Errors
     ///
-    /// Why the schema cannot be applied there.
+    /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
+    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdMediaAssetPreviewsAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<AssetPreviewsApiEdit, CannotApply> {
+    ) -> Result<AssetPreviewsApiEdit, ApplyError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(AssetPreviewsApiEdit::from_prim)
     }
@@ -108,11 +103,18 @@ impl Deref for AssetPreviewsApiEdit {
 
 impl AssetPreviewsApiEdit {
     /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+    /// exists: on the edit's stage, or defined earlier in `edit`; `Ok(None)`
+    /// when it does not. Setters never create a prim.
+    ///
+    /// # Errors
+    ///
+    /// [`CannotEdit`] for a path beneath an instance or in a prototype, as
+    /// [`PrimEdit::new`] refuses it; nothing is authored.
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        Ok(PrimEdit::new(edit, path)?.map(Self::from_prim))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -285,12 +287,6 @@ impl<'a> SpatialAudio<'a> {
         }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> SpatialAudioEdit {
-        SpatialAudioEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// Defines the prim at `path` as a `SpatialAudio`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
@@ -298,14 +294,11 @@ impl<'a> SpatialAudio<'a> {
     ///
     /// # Errors
     ///
-    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// [`CannotEdit`] for a path beneath an instance or in a
     /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdMediaSpatialAudio::Define")]
     #[doc(alias = "Define")]
-    pub fn define(
-        edit: &mut SchemaEdit<'_>,
-        path: PathId,
-    ) -> Result<SpatialAudioEdit, CannotDefine> {
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<SpatialAudioEdit, CannotEdit> {
         edit.define_prim(path, Self::SCHEMA)
             .map(SpatialAudioEdit::from_prim)
     }
@@ -430,12 +423,18 @@ impl Deref for SpatialAudioEdit {
 }
 
 impl SpatialAudioEdit {
-    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `SpatialAudio` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`SpatialAudio::define`] types it, and `SpatialAudioEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        let path = edit.prim_path(path)?;
-        edit.is_a(path, SpatialAudio::SCHEMA)
-            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `SpatialAudio` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`Ok(None)` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`SpatialAudio::define`] types it, and `SpatialAudioEdit::from_prim` of a [`PrimEdit::new`] handle authors the schema's properties on any prim that exists. Setters never create a prim.\n\n# Errors\n\n[`CannotEdit`] for a path beneath an instance or in a prototype, which OpenUSD refuses to author ([`SchemaEdit::can_edit`]); nothing is authored."]
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        let Some(path) = edit.prim_path(path) else {
+            return Ok(None);
+        };
+        edit.can_edit(path)?;
+        Ok(edit
+            .is_a(path, SpatialAudio::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path))))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`

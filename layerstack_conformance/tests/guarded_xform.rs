@@ -51,7 +51,9 @@ fn stronger_order_rejects_without_collecting_any_part_of_the_replacement() {
     );
     let original = store.layers().cloned().collect::<Vec<_>>();
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(2)));
-    let xform = XformableEdit::new(&edit, path).unwrap();
+    let xform = XformableEdit::new(&edit, path)
+        .expect("outside any instance")
+        .unwrap();
     xform
         .add_scale_op(&mut edit, layerstack_schemas::XformOpPrecision::Double)
         .unwrap();
@@ -83,7 +85,9 @@ fn sample_only_matrix_masks_numeric_replacement_but_not_default_replacement() {
         .with_time_samples(vec![(0., Value::Matrix4d(Box::new([0.; 16])))]);
     let (mut store, mut live, path) = fixture(None, Some(sampled));
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(2)));
-    let xform = XformableEdit::new(&edit, path).unwrap();
+    let xform = XformableEdit::new(&edit, path)
+        .expect("outside any instance")
+        .unwrap();
     let before = edit.transaction().clone();
     assert!(matches!(
         xform.set_matrix_transform_at(&mut edit, 1., identity()),
@@ -112,7 +116,9 @@ fn sample_only_matrix_masks_numeric_replacement_but_not_default_replacement() {
 fn replacement_at_strongest_site_is_atomic_and_rejects_invalid_inputs() {
     let (mut store, mut live, path) = fixture(None, None);
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-    let xform = XformableEdit::new(&edit, path).unwrap();
+    let xform = XformableEdit::new(&edit, path)
+        .expect("outside any instance")
+        .unwrap();
     let before = edit.transaction().clone();
     let mut invalid = identity();
     invalid[0][0] = f64::NAN;
@@ -179,7 +185,9 @@ fn referenced_matrix_replacement_maps_namespace_and_stage_time_together() {
         .0;
     let target = EditTarget::for_node(live.stage(), use_, node).unwrap();
     let mut edit = SchemaEdit::new(live.stage(), &mut store, target);
-    let xform = XformableEdit::new(&edit, use_).unwrap();
+    let xform = XformableEdit::new(&edit, use_)
+        .expect("outside any instance")
+        .unwrap();
     let mut matrix = identity();
     matrix[3][2] = 11.;
     xform
@@ -216,7 +224,9 @@ fn untyped_existing_matrix_rejects_before_collecting_edits() {
     );
     let original = store.layers().cloned().collect::<Vec<_>>();
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-    let xform = XformableEdit::new(&edit, path).unwrap();
+    let xform = XformableEdit::new(&edit, path)
+        .expect("outside any instance")
+        .unwrap();
     xform
         .add_scale_op(&mut edit, layerstack_schemas::XformOpPrecision::Double)
         .unwrap();

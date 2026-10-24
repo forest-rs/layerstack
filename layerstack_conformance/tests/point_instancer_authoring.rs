@@ -45,7 +45,9 @@ fn authored_id_sequence() -> (layerstack::InMemoryStore, layerstack::LiveStage) 
     );
     live.synchronize(&mut store);
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-    let point = PointInstancerEdit::new(&edit, path).unwrap();
+    let point = PointInstancerEdit::new(&edit, path)
+        .expect("outside any instance")
+        .unwrap();
     point.deactivate_ids(&mut edit, &[40, 10, 40]).unwrap();
     point.activate_ids(&mut edit, &[30, 90]).unwrap();
     point.make_invisible(&mut edit, &[20, 40, 20]).unwrap();
@@ -107,7 +109,9 @@ fn id_edits_preserve_future_weaker_opinions_and_group_rollback() {
         "legacy buckets are canonicalized"
     );
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-    let point = PointInstancerEdit::new(&edit, path).unwrap();
+    let point = PointInstancerEdit::new(&edit, path)
+        .expect("outside any instance")
+        .unwrap();
     point
         .activate_all_ids(&mut edit)
         .make_all_visible(&mut edit);
@@ -138,7 +142,9 @@ fn explicit_inactive_lists_keep_their_cutoff_after_id_edits() {
         );
     live.synchronize(&mut store);
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-    let point = PointInstancerEdit::new(&edit, path).unwrap();
+    let point = PointInstancerEdit::new(&edit, path)
+        .expect("outside any instance")
+        .unwrap();
     point.deactivate_ids(&mut edit, &[20, 10]).unwrap();
     point.activate_ids(&mut edit, &[30]).unwrap();
     let transaction = edit.finish();
@@ -190,7 +196,9 @@ fn variant_id_edits_read_only_the_mapped_target_site() {
     let variant = layerstack::SpecPath::parse("/P{mode=a}", &store.tokens, &store.paths).unwrap();
     let target = EditTarget::for_local_variant(LayerId(1), &variant);
     let mut edit = SchemaEdit::new(live.stage(), &mut store, target);
-    let point = PointInstancerEdit::new(&edit, path).unwrap();
+    let point = PointInstancerEdit::new(&edit, path)
+        .expect("outside any instance")
+        .unwrap();
     point.deactivate_ids(&mut edit, &[30]).unwrap();
     point.activate_ids(&mut edit, &[10]).unwrap();
     let transaction = edit.finish();
@@ -245,7 +253,9 @@ fn visibility_edits_preserve_decode_errors_and_prior_collected_operations() {
     );
     live.apply(&mut store, &corrupt).unwrap();
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-    let point = PointInstancerEdit::new(&edit, path).unwrap();
+    let point = PointInstancerEdit::new(&edit, path)
+        .expect("outside any instance")
+        .unwrap();
     point.deactivate_ids(&mut edit, &[10]).unwrap();
     let count = edit.transaction().len();
     assert_eq!(

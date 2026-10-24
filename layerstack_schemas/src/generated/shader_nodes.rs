@@ -24,7 +24,7 @@
 
 use crate::shading::{Port, PortEdit, PortError};
 use crate::usd_shade::{NodeDefApiImplementationSource, Shader, ShaderEdit};
-use crate::{CannotDefine, Scene, SchemaEdit};
+use crate::{CannotEdit, Scene, SchemaEdit};
 use core::ops::Deref;
 use layerstack::{PathId, PropertyType};
 
@@ -55,24 +55,17 @@ impl<'a> PreviewSurface<'a> {
     ///
     /// # Errors
     ///
-    /// [`CannotDefine`] for a path beneath an instance or in a prototype; nothing is authored.
+    /// [`CannotEdit`] for a path beneath an instance or in a prototype; nothing is authored.
     pub fn define(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<PreviewSurfaceEdit, CannotDefine> {
+    ) -> Result<PreviewSurfaceEdit, CannotEdit> {
         let shader = Shader::define(edit, path)?;
         shader.node_def_api().set_id(edit, Self::ID);
         shader
             .node_def_api()
             .set_implementation_source(edit, NodeDefApiImplementationSource::Id);
         Ok(PreviewSurfaceEdit { shader })
-    }
-    /// An authoring handle for this validated node.
-    #[must_use]
-    pub fn edit(&self) -> PreviewSurfaceEdit {
-        PreviewSurfaceEdit {
-            shader: self.shader.edit(),
-        }
     }
     #[doc = "The authored `inputs:clearcoat` port, if it exists. "]
     #[must_use]
@@ -398,6 +391,11 @@ impl Deref for PreviewSurfaceEdit {
     }
 }
 impl PreviewSurfaceEdit {
+    /// A handle authoring this node's inputs on the shader `shader` authors, whatever its `info:id`.
+    #[must_use]
+    pub fn from_shader(shader: ShaderEdit) -> Self {
+        Self { shader }
+    }
     /// Creates `inputs:clearcoat` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_clearcoat_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
@@ -877,24 +875,17 @@ impl<'a> PrimvarReaderFloat<'a> {
     ///
     /// # Errors
     ///
-    /// [`CannotDefine`] for a path beneath an instance or in a prototype; nothing is authored.
+    /// [`CannotEdit`] for a path beneath an instance or in a prototype; nothing is authored.
     pub fn define(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<PrimvarReaderFloatEdit, CannotDefine> {
+    ) -> Result<PrimvarReaderFloatEdit, CannotEdit> {
         let shader = Shader::define(edit, path)?;
         shader.node_def_api().set_id(edit, Self::ID);
         shader
             .node_def_api()
             .set_implementation_source(edit, NodeDefApiImplementationSource::Id);
         Ok(PrimvarReaderFloatEdit { shader })
-    }
-    /// An authoring handle for this validated node.
-    #[must_use]
-    pub fn edit(&self) -> PrimvarReaderFloatEdit {
-        PrimvarReaderFloatEdit {
-            shader: self.shader.edit(),
-        }
     }
     #[doc = "The authored `inputs:fallback` port, if it exists. "]
     #[must_use]
@@ -955,6 +946,11 @@ impl Deref for PrimvarReaderFloatEdit {
     }
 }
 impl PrimvarReaderFloatEdit {
+    /// A handle authoring this node's inputs on the shader `shader` authors, whatever its `info:id`.
+    #[must_use]
+    pub fn from_shader(shader: ShaderEdit) -> Self {
+        Self { shader }
+    }
     /// Creates `inputs:fallback` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_fallback_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
@@ -1040,24 +1036,17 @@ impl<'a> PrimvarReaderFloat2<'a> {
     ///
     /// # Errors
     ///
-    /// [`CannotDefine`] for a path beneath an instance or in a prototype; nothing is authored.
+    /// [`CannotEdit`] for a path beneath an instance or in a prototype; nothing is authored.
     pub fn define(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<PrimvarReaderFloat2Edit, CannotDefine> {
+    ) -> Result<PrimvarReaderFloat2Edit, CannotEdit> {
         let shader = Shader::define(edit, path)?;
         shader.node_def_api().set_id(edit, Self::ID);
         shader
             .node_def_api()
             .set_implementation_source(edit, NodeDefApiImplementationSource::Id);
         Ok(PrimvarReaderFloat2Edit { shader })
-    }
-    /// An authoring handle for this validated node.
-    #[must_use]
-    pub fn edit(&self) -> PrimvarReaderFloat2Edit {
-        PrimvarReaderFloat2Edit {
-            shader: self.shader.edit(),
-        }
     }
     #[doc = "The authored `inputs:fallback` port, if it exists. "]
     #[must_use]
@@ -1118,6 +1107,11 @@ impl Deref for PrimvarReaderFloat2Edit {
     }
 }
 impl PrimvarReaderFloat2Edit {
+    /// A handle authoring this node's inputs on the shader `shader` authors, whatever its `info:id`.
+    #[must_use]
+    pub fn from_shader(shader: ShaderEdit) -> Self {
+        Self { shader }
+    }
     /// Creates `inputs:fallback` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_fallback_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
@@ -1207,24 +1201,17 @@ impl<'a> PrimvarReaderFloat3<'a> {
     ///
     /// # Errors
     ///
-    /// [`CannotDefine`] for a path beneath an instance or in a prototype; nothing is authored.
+    /// [`CannotEdit`] for a path beneath an instance or in a prototype; nothing is authored.
     pub fn define(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<PrimvarReaderFloat3Edit, CannotDefine> {
+    ) -> Result<PrimvarReaderFloat3Edit, CannotEdit> {
         let shader = Shader::define(edit, path)?;
         shader.node_def_api().set_id(edit, Self::ID);
         shader
             .node_def_api()
             .set_implementation_source(edit, NodeDefApiImplementationSource::Id);
         Ok(PrimvarReaderFloat3Edit { shader })
-    }
-    /// An authoring handle for this validated node.
-    #[must_use]
-    pub fn edit(&self) -> PrimvarReaderFloat3Edit {
-        PrimvarReaderFloat3Edit {
-            shader: self.shader.edit(),
-        }
     }
     #[doc = "The authored `inputs:fallback` port, if it exists. "]
     #[must_use]
@@ -1285,6 +1272,11 @@ impl Deref for PrimvarReaderFloat3Edit {
     }
 }
 impl PrimvarReaderFloat3Edit {
+    /// A handle authoring this node's inputs on the shader `shader` authors, whatever its `info:id`.
+    #[must_use]
+    pub fn from_shader(shader: ShaderEdit) -> Self {
+        Self { shader }
+    }
     /// Creates `inputs:fallback` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_fallback_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
@@ -1374,24 +1366,17 @@ impl<'a> PrimvarReaderFloat4<'a> {
     ///
     /// # Errors
     ///
-    /// [`CannotDefine`] for a path beneath an instance or in a prototype; nothing is authored.
+    /// [`CannotEdit`] for a path beneath an instance or in a prototype; nothing is authored.
     pub fn define(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<PrimvarReaderFloat4Edit, CannotDefine> {
+    ) -> Result<PrimvarReaderFloat4Edit, CannotEdit> {
         let shader = Shader::define(edit, path)?;
         shader.node_def_api().set_id(edit, Self::ID);
         shader
             .node_def_api()
             .set_implementation_source(edit, NodeDefApiImplementationSource::Id);
         Ok(PrimvarReaderFloat4Edit { shader })
-    }
-    /// An authoring handle for this validated node.
-    #[must_use]
-    pub fn edit(&self) -> PrimvarReaderFloat4Edit {
-        PrimvarReaderFloat4Edit {
-            shader: self.shader.edit(),
-        }
     }
     #[doc = "The authored `inputs:fallback` port, if it exists. "]
     #[must_use]
@@ -1452,6 +1437,11 @@ impl Deref for PrimvarReaderFloat4Edit {
     }
 }
 impl PrimvarReaderFloat4Edit {
+    /// A handle authoring this node's inputs on the shader `shader` authors, whatever its `info:id`.
+    #[must_use]
+    pub fn from_shader(shader: ShaderEdit) -> Self {
+        Self { shader }
+    }
     /// Creates `inputs:fallback` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_fallback_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
@@ -1541,24 +1531,17 @@ impl<'a> PrimvarReaderInt<'a> {
     ///
     /// # Errors
     ///
-    /// [`CannotDefine`] for a path beneath an instance or in a prototype; nothing is authored.
+    /// [`CannotEdit`] for a path beneath an instance or in a prototype; nothing is authored.
     pub fn define(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<PrimvarReaderIntEdit, CannotDefine> {
+    ) -> Result<PrimvarReaderIntEdit, CannotEdit> {
         let shader = Shader::define(edit, path)?;
         shader.node_def_api().set_id(edit, Self::ID);
         shader
             .node_def_api()
             .set_implementation_source(edit, NodeDefApiImplementationSource::Id);
         Ok(PrimvarReaderIntEdit { shader })
-    }
-    /// An authoring handle for this validated node.
-    #[must_use]
-    pub fn edit(&self) -> PrimvarReaderIntEdit {
-        PrimvarReaderIntEdit {
-            shader: self.shader.edit(),
-        }
     }
     #[doc = "The authored `inputs:fallback` port, if it exists. "]
     #[must_use]
@@ -1619,6 +1602,11 @@ impl Deref for PrimvarReaderIntEdit {
     }
 }
 impl PrimvarReaderIntEdit {
+    /// A handle authoring this node's inputs on the shader `shader` authors, whatever its `info:id`.
+    #[must_use]
+    pub fn from_shader(shader: ShaderEdit) -> Self {
+        Self { shader }
+    }
     /// Creates `inputs:fallback` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_fallback_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
@@ -1704,24 +1692,17 @@ impl<'a> PrimvarReaderMatrix<'a> {
     ///
     /// # Errors
     ///
-    /// [`CannotDefine`] for a path beneath an instance or in a prototype; nothing is authored.
+    /// [`CannotEdit`] for a path beneath an instance or in a prototype; nothing is authored.
     pub fn define(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<PrimvarReaderMatrixEdit, CannotDefine> {
+    ) -> Result<PrimvarReaderMatrixEdit, CannotEdit> {
         let shader = Shader::define(edit, path)?;
         shader.node_def_api().set_id(edit, Self::ID);
         shader
             .node_def_api()
             .set_implementation_source(edit, NodeDefApiImplementationSource::Id);
         Ok(PrimvarReaderMatrixEdit { shader })
-    }
-    /// An authoring handle for this validated node.
-    #[must_use]
-    pub fn edit(&self) -> PrimvarReaderMatrixEdit {
-        PrimvarReaderMatrixEdit {
-            shader: self.shader.edit(),
-        }
     }
     #[doc = "The authored `inputs:fallback` port, if it exists. "]
     #[must_use]
@@ -1787,6 +1768,11 @@ impl Deref for PrimvarReaderMatrixEdit {
     }
 }
 impl PrimvarReaderMatrixEdit {
+    /// A handle authoring this node's inputs on the shader `shader` authors, whatever its `info:id`.
+    #[must_use]
+    pub fn from_shader(shader: ShaderEdit) -> Self {
+        Self { shader }
+    }
     /// Creates `inputs:fallback` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_fallback_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
@@ -1876,24 +1862,17 @@ impl<'a> PrimvarReaderNormal<'a> {
     ///
     /// # Errors
     ///
-    /// [`CannotDefine`] for a path beneath an instance or in a prototype; nothing is authored.
+    /// [`CannotEdit`] for a path beneath an instance or in a prototype; nothing is authored.
     pub fn define(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<PrimvarReaderNormalEdit, CannotDefine> {
+    ) -> Result<PrimvarReaderNormalEdit, CannotEdit> {
         let shader = Shader::define(edit, path)?;
         shader.node_def_api().set_id(edit, Self::ID);
         shader
             .node_def_api()
             .set_implementation_source(edit, NodeDefApiImplementationSource::Id);
         Ok(PrimvarReaderNormalEdit { shader })
-    }
-    /// An authoring handle for this validated node.
-    #[must_use]
-    pub fn edit(&self) -> PrimvarReaderNormalEdit {
-        PrimvarReaderNormalEdit {
-            shader: self.shader.edit(),
-        }
     }
     #[doc = "The authored `inputs:fallback` port, if it exists. "]
     #[must_use]
@@ -1954,6 +1933,11 @@ impl Deref for PrimvarReaderNormalEdit {
     }
 }
 impl PrimvarReaderNormalEdit {
+    /// A handle authoring this node's inputs on the shader `shader` authors, whatever its `info:id`.
+    #[must_use]
+    pub fn from_shader(shader: ShaderEdit) -> Self {
+        Self { shader }
+    }
     /// Creates `inputs:fallback` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_fallback_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
@@ -2043,24 +2027,17 @@ impl<'a> PrimvarReaderPoint<'a> {
     ///
     /// # Errors
     ///
-    /// [`CannotDefine`] for a path beneath an instance or in a prototype; nothing is authored.
+    /// [`CannotEdit`] for a path beneath an instance or in a prototype; nothing is authored.
     pub fn define(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<PrimvarReaderPointEdit, CannotDefine> {
+    ) -> Result<PrimvarReaderPointEdit, CannotEdit> {
         let shader = Shader::define(edit, path)?;
         shader.node_def_api().set_id(edit, Self::ID);
         shader
             .node_def_api()
             .set_implementation_source(edit, NodeDefApiImplementationSource::Id);
         Ok(PrimvarReaderPointEdit { shader })
-    }
-    /// An authoring handle for this validated node.
-    #[must_use]
-    pub fn edit(&self) -> PrimvarReaderPointEdit {
-        PrimvarReaderPointEdit {
-            shader: self.shader.edit(),
-        }
     }
     #[doc = "The authored `inputs:fallback` port, if it exists. "]
     #[must_use]
@@ -2121,6 +2098,11 @@ impl Deref for PrimvarReaderPointEdit {
     }
 }
 impl PrimvarReaderPointEdit {
+    /// A handle authoring this node's inputs on the shader `shader` authors, whatever its `info:id`.
+    #[must_use]
+    pub fn from_shader(shader: ShaderEdit) -> Self {
+        Self { shader }
+    }
     /// Creates `inputs:fallback` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_fallback_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
@@ -2210,24 +2192,17 @@ impl<'a> PrimvarReaderString<'a> {
     ///
     /// # Errors
     ///
-    /// [`CannotDefine`] for a path beneath an instance or in a prototype; nothing is authored.
+    /// [`CannotEdit`] for a path beneath an instance or in a prototype; nothing is authored.
     pub fn define(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<PrimvarReaderStringEdit, CannotDefine> {
+    ) -> Result<PrimvarReaderStringEdit, CannotEdit> {
         let shader = Shader::define(edit, path)?;
         shader.node_def_api().set_id(edit, Self::ID);
         shader
             .node_def_api()
             .set_implementation_source(edit, NodeDefApiImplementationSource::Id);
         Ok(PrimvarReaderStringEdit { shader })
-    }
-    /// An authoring handle for this validated node.
-    #[must_use]
-    pub fn edit(&self) -> PrimvarReaderStringEdit {
-        PrimvarReaderStringEdit {
-            shader: self.shader.edit(),
-        }
     }
     #[doc = "The authored `inputs:fallback` port, if it exists. "]
     #[must_use]
@@ -2288,6 +2263,11 @@ impl Deref for PrimvarReaderStringEdit {
     }
 }
 impl PrimvarReaderStringEdit {
+    /// A handle authoring this node's inputs on the shader `shader` authors, whatever its `info:id`.
+    #[must_use]
+    pub fn from_shader(shader: ShaderEdit) -> Self {
+        Self { shader }
+    }
     /// Creates `inputs:fallback` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_fallback_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
@@ -2373,24 +2353,17 @@ impl<'a> PrimvarReaderVector<'a> {
     ///
     /// # Errors
     ///
-    /// [`CannotDefine`] for a path beneath an instance or in a prototype; nothing is authored.
+    /// [`CannotEdit`] for a path beneath an instance or in a prototype; nothing is authored.
     pub fn define(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<PrimvarReaderVectorEdit, CannotDefine> {
+    ) -> Result<PrimvarReaderVectorEdit, CannotEdit> {
         let shader = Shader::define(edit, path)?;
         shader.node_def_api().set_id(edit, Self::ID);
         shader
             .node_def_api()
             .set_implementation_source(edit, NodeDefApiImplementationSource::Id);
         Ok(PrimvarReaderVectorEdit { shader })
-    }
-    /// An authoring handle for this validated node.
-    #[must_use]
-    pub fn edit(&self) -> PrimvarReaderVectorEdit {
-        PrimvarReaderVectorEdit {
-            shader: self.shader.edit(),
-        }
     }
     #[doc = "The authored `inputs:fallback` port, if it exists. "]
     #[must_use]
@@ -2451,6 +2424,11 @@ impl Deref for PrimvarReaderVectorEdit {
     }
 }
 impl PrimvarReaderVectorEdit {
+    /// A handle authoring this node's inputs on the shader `shader` authors, whatever its `info:id`.
+    #[must_use]
+    pub fn from_shader(shader: ShaderEdit) -> Self {
+        Self { shader }
+    }
     /// Creates `inputs:fallback` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_fallback_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
@@ -2540,24 +2518,14 @@ impl<'a> Transform2d<'a> {
     ///
     /// # Errors
     ///
-    /// [`CannotDefine`] for a path beneath an instance or in a prototype; nothing is authored.
-    pub fn define(
-        edit: &mut SchemaEdit<'_>,
-        path: PathId,
-    ) -> Result<Transform2dEdit, CannotDefine> {
+    /// [`CannotEdit`] for a path beneath an instance or in a prototype; nothing is authored.
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<Transform2dEdit, CannotEdit> {
         let shader = Shader::define(edit, path)?;
         shader.node_def_api().set_id(edit, Self::ID);
         shader
             .node_def_api()
             .set_implementation_source(edit, NodeDefApiImplementationSource::Id);
         Ok(Transform2dEdit { shader })
-    }
-    /// An authoring handle for this validated node.
-    #[must_use]
-    pub fn edit(&self) -> Transform2dEdit {
-        Transform2dEdit {
-            shader: self.shader.edit(),
-        }
     }
     #[doc = "The authored `inputs:in` port, if it exists. "]
     #[must_use]
@@ -2658,6 +2626,11 @@ impl Deref for Transform2dEdit {
     }
 }
 impl Transform2dEdit {
+    /// A handle authoring this node's inputs on the shader `shader` authors, whatever its `info:id`.
+    #[must_use]
+    pub fn from_shader(shader: ShaderEdit) -> Self {
+        Self { shader }
+    }
     /// Creates `inputs:in` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_in_value_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
@@ -2808,21 +2781,14 @@ impl<'a> UvTexture<'a> {
     ///
     /// # Errors
     ///
-    /// [`CannotDefine`] for a path beneath an instance or in a prototype; nothing is authored.
-    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<UvTextureEdit, CannotDefine> {
+    /// [`CannotEdit`] for a path beneath an instance or in a prototype; nothing is authored.
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<UvTextureEdit, CannotEdit> {
         let shader = Shader::define(edit, path)?;
         shader.node_def_api().set_id(edit, Self::ID);
         shader
             .node_def_api()
             .set_implementation_source(edit, NodeDefApiImplementationSource::Id);
         Ok(UvTextureEdit { shader })
-    }
-    /// An authoring handle for this validated node.
-    #[must_use]
-    pub fn edit(&self) -> UvTextureEdit {
-        UvTextureEdit {
-            shader: self.shader.edit(),
-        }
     }
     #[doc = "The authored `inputs:bias` port, if it exists. "]
     #[must_use]
@@ -3023,6 +2989,11 @@ impl Deref for UvTextureEdit {
     }
 }
 impl UvTextureEdit {
+    /// A handle authoring this node's inputs on the shader `shader` authors, whatever its `info:id`.
+    #[must_use]
+    pub fn from_shader(shader: ShaderEdit) -> Self {
+        Self { shader }
+    }
     /// Creates `inputs:bias` with its node-defined USD type for values or connections.
     /// Rejects existing ports of a different type before appending edits.
     pub fn create_bias_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {

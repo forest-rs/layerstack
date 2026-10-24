@@ -13,7 +13,7 @@ use layerstack::{
     InMemoryStore, Layer, LayerId, LiveStage, PrimSpec, Reference, Specifier, StageOptions,
 };
 
-use super::{CannotDefine, EditTarget, PathId, SchemaEdit};
+use super::{CannotEdit, EditTarget, PathId, SchemaEdit};
 
 const ROOT: LayerId = LayerId(1);
 
@@ -155,15 +155,108 @@ fn a_path_beneath_an_instance_or_in_a_prototype_is_refused() {
     for path in [proxy, beneath] {
         assert_eq!(
             edit.define_prim(path, "Xform").err(),
-            Some(CannotDefine::BeneathInstance { instance })
+            Some(CannotEdit::BeneathInstance { instance })
         );
     }
     assert_eq!(
         edit.define_prim(prototype, "Xform").err(),
-        Some(CannotDefine::InPrototype)
+        Some(CannotEdit::InPrototype)
     );
     assert!(edit.transaction().is_empty(), "a refusal authors nothing");
     edit.define_prim(instance, "Scope")
         .expect("the instance itself may be retyped");
+    assert!(!edit.transaction().is_empty());
+}
+
+/// Every route that names a prim by path refuses an instance proxy and a
+/// prototype prim through a local layer, before it authors anything; the
+/// instance itself and a target that maps the proxy elsewhere are allowed.
+#[cfg(feature = "usd-lux")]
+#[test]
+fn handles_and_applied_schemas_refuse_instance_proxies() {
+    use layerstack::CannotApply;
+    use layerstack::prim_index::ArcKind;
+
+    use crate::usd_geom::{Xform, XformEdit};
+    use crate::usd_lux::ShapingApi;
+    use crate::{ApplyError, PrimEdit};
+
+    let (mut store, live) = stage(|store, layer| {
+        let prototype = store.path("/Prototype");
+        let child = store.path("/Prototype/Child");
+        let instance = store.path("/Instance");
+        layer.define_prim(prototype, PrimSpec::def(), &store.paths);
+        layer.define_prim(
+            child,
+            PrimSpec::def().with_type_name(store.tokens.intern("Xform")),
+            &store.paths,
+        );
+        let spec = PrimSpec::def()
+            .with_instanceable(true)
+            .with_reference(Reference::new(ROOT, prototype));
+        layer.define_prim(instance, spec, &store.paths);
+    });
+    let instance = store.path("/Instance");
+    let proxy = store.path("/Instance/Child");
+    let missing = store.path("/Instance/New");
+    let prototype = store.path("/__Prototype_1/Child");
+    let nowhere = store.path("/Nowhere");
+    let beneath = CannotEdit::BeneathInstance { instance };
+
+    let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(ROOT));
+    for (path, refusal) in [
+        (proxy, beneath),
+        (missing, beneath),
+        (prototype, CannotEdit::InPrototype),
+    ] {
+        assert_eq!(edit.can_edit(path), Err(refusal));
+        assert_eq!(PrimEdit::new(&edit, path), Err(refusal));
+        assert_eq!(XformEdit::new(&edit, path), Err(refusal));
+        assert_eq!(
+            ShapingApi::apply(&mut edit, path).err(),
+            Some(ApplyError::CannotEdit(refusal))
+        );
+        assert_eq!(
+            edit.apply_api(path, "NoSuchAPI", None),
+            Err(ApplyError::CannotEdit(refusal)),
+            "checked before the schema"
+        );
+    }
+    assert!(edit.transaction().is_empty(), "a refusal authors nothing");
+    assert_eq!(
+        edit.apply_api(nowhere, "ShapingAPI", None),
+        Err(ApplyError::CannotApply(CannotApply::NoSuchPrim))
+    );
+    assert_eq!(edit.can_edit(instance), Ok(()));
+    PrimEdit::new(&edit, instance)
+        .expect("the instance itself may be edited")
+        .expect("a prim");
+    ShapingApi::apply(&mut edit, instance).expect("the instance itself may be edited");
+    assert!(!edit.transaction().is_empty());
+    drop(edit);
+
+    // Through the reference's node, the proxy maps to `/Prototype/Child`.
+    let graph = live
+        .stage()
+        .prim(instance, &store)
+        .expect("the instance")
+        .composition_graph();
+    let node = graph
+        .depth_first()
+        .into_iter()
+        .find(|id| {
+            graph
+                .node(*id)
+                .is_some_and(|node| node.arc_kind() == ArcKind::References)
+        })
+        .expect("the reference node");
+    let target = EditTarget::for_node(live.stage(), instance, node).expect("an edit target");
+    let mut edit = SchemaEdit::new(live.stage(), &mut store, target);
+    assert_eq!(edit.can_edit(proxy), Ok(()));
+    XformEdit::new(&edit, proxy)
+        .expect("a target that maps the proxy elsewhere may edit it")
+        .expect("an Xform")
+        .set_visibility(&mut edit, crate::usd_geom::ImageableVisibility::Invisible);
+    Xform::define(&mut edit, missing).expect("a new prim through the reference");
     assert!(!edit.transaction().is_empty());
 }

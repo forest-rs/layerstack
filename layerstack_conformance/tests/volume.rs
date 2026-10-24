@@ -91,7 +91,9 @@ fn field_edit_results_match_cpp_and_preserve_existing_custom_qualifier() {
     live.apply(&mut store, &setup).unwrap();
     for (i, row) in oracle().edits.into_iter().enumerate() {
         let mut edit = SchemaEdit::new(live.stage(), &mut store, target.clone());
-        let handle = layerstack_schemas::usd_vol::VolumeEdit::new(&edit, volume).unwrap();
+        let handle = layerstack_schemas::usd_vol::VolumeEdit::new(&edit, volume)
+            .expect("outside any instance")
+            .unwrap();
         let result = match i {
             0 => handle
                 .create_field_relationship(&mut edit, "new", TargetPath::Prim(field))
@@ -193,7 +195,9 @@ fn rejected_edits_and_absent_blocks_collect_no_operations() {
     let field = store.path("/Field");
     let root = store.path("/");
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-    let handle = layerstack_schemas::usd_vol::VolumeEdit::new(&edit, volume).unwrap();
+    let handle = layerstack_schemas::usd_vol::VolumeEdit::new(&edit, volume)
+        .expect("outside any instance")
+        .unwrap();
     for name in ["", "field:", "a::b", "1bad", "a.b"] {
         assert!(matches!(
             handle.create_field_relationship(&mut edit, name, TargetPath::Prim(field)),
@@ -227,7 +231,9 @@ fn weaker_custom_binding_is_blocked_without_losing_declaration_and_restored_by_u
     let path = store.path("/Instance");
     let name = store.tokens.intern("field:density");
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-    let handle = layerstack_schemas::usd_vol::VolumeEdit::new(&edit, path).unwrap();
+    let handle = layerstack_schemas::usd_vol::VolumeEdit::new(&edit, path)
+        .expect("outside any instance")
+        .unwrap();
     assert!(
         handle
             .block_field_relationship(&mut edit, "density")
@@ -278,7 +284,9 @@ fn variant_target_preserves_local_relationship_metadata_and_child_branch_specs()
             .and_then(|p| p.declaration())
             .unwrap();
         let mut edit = SchemaEdit::new(live.stage(), &mut store, target);
-        let handle = layerstack_schemas::usd_vol::VolumeEdit::new(&edit, path).unwrap();
+        let handle = layerstack_schemas::usd_vol::VolumeEdit::new(&edit, path)
+            .expect("outside any instance")
+            .unwrap();
         handle
             .create_field_relationship(&mut edit, "density", TargetPath::Prim(field))
             .unwrap();
@@ -330,7 +338,9 @@ fn reference_edit_target_maps_relationship_and_target_paths_and_undo() {
     let target = EditTarget::for_node(live.stage(), path, node).unwrap();
     let before = store.layer(LayerId(1)).unwrap().clone();
     let mut edit = SchemaEdit::new(live.stage(), &mut store, target);
-    let handle = layerstack_schemas::usd_vol::VolumeEdit::new(&edit, path).unwrap();
+    let handle = layerstack_schemas::usd_vol::VolumeEdit::new(&edit, path)
+        .expect("outside any instance")
+        .unwrap();
     handle
         .create_field_relationship(&mut edit, "density", TargetPath::Prim(field))
         .unwrap();

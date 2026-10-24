@@ -9,7 +9,7 @@ use layerstack::{LayerId, TargetPath, edit::EditTarget};
 use layerstack_schemas::{
     Scene, SchemaEdit,
     physics::{CollisionGroupError, compute_collision_group_table},
-    usd_physics::PhysicsCollisionGroup,
+    usd_physics::{PhysicsCollisionGroup, PhysicsCollisionGroupEdit},
 };
 #[test]
 fn filtering_matches_cpp_and_snapshots_follow_explicit_recomputation() {
@@ -49,8 +49,10 @@ fn filtering_matches_cpp_and_snapshots_follow_explicit_recomputation() {
             .is_included(&scene, TargetPath::Prim(collider))
             .is_included()
     );
-    let group = group.edit();
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
+    let group = PhysicsCollisionGroupEdit::new(&edit, a)
+        .expect("outside any instance")
+        .expect("a collision group");
     group.set_filtered_groups(&mut edit, &[]);
     let transaction = edit.finish();
     let applied = live.apply(&mut store, &transaction).unwrap();

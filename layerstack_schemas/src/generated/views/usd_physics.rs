@@ -20,9 +20,11 @@
 
 use core::ops::Deref;
 
-use layerstack::{CannotApply, PathId};
+use layerstack::PathId;
 
-use crate::{CannotDefine, InstanceEdit, InstanceView, PrimEdit, PrimView, Scene, SchemaEdit};
+use crate::{
+    ApplyError, CannotEdit, InstanceEdit, InstanceView, PrimEdit, PrimView, Scene, SchemaEdit,
+};
 #[doc = "PhysicsArticulationRootAPI can be applied to a scene graph node, and marks the subtree rooted here for inclusion in one or more reduced coordinate articulations."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's single-apply API schema `PhysicsArticulationRootAPI`. Get it with [`PhysicsArticulationRootApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
@@ -67,12 +69,6 @@ impl<'a> PhysicsArticulationRootApi<'a> {
         Self { base: prim }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> PhysicsArticulationRootApiEdit {
-        PhysicsArticulationRootApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
     /// edit's target) if the prim may have it.
     ///
@@ -80,13 +76,14 @@ impl<'a> PhysicsArticulationRootApi<'a> {
     ///
     /// # Errors
     ///
-    /// Why the schema cannot be applied there.
+    /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
+    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdPhysicsArticulationRootAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<PhysicsArticulationRootApiEdit, CannotApply> {
+    ) -> Result<PhysicsArticulationRootApiEdit, ApplyError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(PhysicsArticulationRootApiEdit::from_prim)
     }
@@ -108,11 +105,18 @@ impl Deref for PhysicsArticulationRootApiEdit {
 
 impl PhysicsArticulationRootApiEdit {
     /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+    /// exists: on the edit's stage, or defined earlier in `edit`; `Ok(None)`
+    /// when it does not. Setters never create a prim.
+    ///
+    /// # Errors
+    ///
+    /// [`CannotEdit`] for a path beneath an instance or in a prototype, as
+    /// [`PrimEdit::new`] refuses it; nothing is authored.
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        Ok(PrimEdit::new(edit, path)?.map(Self::from_prim))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -167,12 +171,6 @@ impl<'a> PhysicsCollisionApi<'a> {
         Self { base: prim }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> PhysicsCollisionApiEdit {
-        PhysicsCollisionApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
     /// edit's target) if the prim may have it.
     ///
@@ -180,13 +178,14 @@ impl<'a> PhysicsCollisionApi<'a> {
     ///
     /// # Errors
     ///
-    /// Why the schema cannot be applied there.
+    /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
+    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdPhysicsCollisionAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<PhysicsCollisionApiEdit, CannotApply> {
+    ) -> Result<PhysicsCollisionApiEdit, ApplyError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(PhysicsCollisionApiEdit::from_prim)
     }
@@ -242,11 +241,18 @@ impl Deref for PhysicsCollisionApiEdit {
 
 impl PhysicsCollisionApiEdit {
     /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+    /// exists: on the edit's stage, or defined earlier in `edit`; `Ok(None)`
+    /// when it does not. Setters never create a prim.
+    ///
+    /// # Errors
+    ///
+    /// [`CannotEdit`] for a path beneath an instance or in a prototype, as
+    /// [`PrimEdit::new`] refuses it; nothing is authored.
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        Ok(PrimEdit::new(edit, path)?.map(Self::from_prim))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -365,12 +371,6 @@ impl<'a> PhysicsCollisionGroup<'a> {
         }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> PhysicsCollisionGroupEdit {
-        PhysicsCollisionGroupEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// Defines the prim at `path` as a `PhysicsCollisionGroup`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
@@ -378,14 +378,14 @@ impl<'a> PhysicsCollisionGroup<'a> {
     ///
     /// # Errors
     ///
-    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// [`CannotEdit`] for a path beneath an instance or in a
     /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdPhysicsCollisionGroup::Define")]
     #[doc(alias = "Define")]
     pub fn define(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<PhysicsCollisionGroupEdit, CannotDefine> {
+    ) -> Result<PhysicsCollisionGroupEdit, CannotEdit> {
         edit.define_prim(path, Self::SCHEMA)
             .map(PhysicsCollisionGroupEdit::from_prim)
     }
@@ -464,12 +464,18 @@ impl Deref for PhysicsCollisionGroupEdit {
 }
 
 impl PhysicsCollisionGroupEdit {
-    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `PhysicsCollisionGroup` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`PhysicsCollisionGroup::define`] types it, and `PhysicsCollisionGroupEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        let path = edit.prim_path(path)?;
-        edit.is_a(path, PhysicsCollisionGroup::SCHEMA)
-            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `PhysicsCollisionGroup` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`Ok(None)` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`PhysicsCollisionGroup::define`] types it, and `PhysicsCollisionGroupEdit::from_prim` of a [`PrimEdit::new`] handle authors the schema's properties on any prim that exists. Setters never create a prim.\n\n# Errors\n\n[`CannotEdit`] for a path beneath an instance or in a prototype, which OpenUSD refuses to author ([`SchemaEdit::can_edit`]); nothing is authored."]
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        let Some(path) = edit.prim_path(path) else {
+            return Ok(None);
+        };
+        edit.can_edit(path)?;
+        Ok(edit
+            .is_a(path, PhysicsCollisionGroup::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path))))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -614,12 +620,6 @@ impl<'a> PhysicsDistanceJoint<'a> {
         }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> PhysicsDistanceJointEdit {
-        PhysicsDistanceJointEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// Defines the prim at `path` as a `PhysicsDistanceJoint`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
@@ -627,14 +627,14 @@ impl<'a> PhysicsDistanceJoint<'a> {
     ///
     /// # Errors
     ///
-    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// [`CannotEdit`] for a path beneath an instance or in a
     /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdPhysicsDistanceJoint::Define")]
     #[doc(alias = "Define")]
     pub fn define(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<PhysicsDistanceJointEdit, CannotDefine> {
+    ) -> Result<PhysicsDistanceJointEdit, CannotEdit> {
         edit.define_prim(path, Self::SCHEMA)
             .map(PhysicsDistanceJointEdit::from_prim)
     }
@@ -695,12 +695,18 @@ impl Deref for PhysicsDistanceJointEdit {
 }
 
 impl PhysicsDistanceJointEdit {
-    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `PhysicsDistanceJoint` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`PhysicsDistanceJoint::define`] types it, and `PhysicsDistanceJointEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        let path = edit.prim_path(path)?;
-        edit.is_a(path, PhysicsDistanceJoint::SCHEMA)
-            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `PhysicsDistanceJoint` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`Ok(None)` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`PhysicsDistanceJoint::define`] types it, and `PhysicsDistanceJointEdit::from_prim` of a [`PrimEdit::new`] handle authors the schema's properties on any prim that exists. Setters never create a prim.\n\n# Errors\n\n[`CannotEdit`] for a path beneath an instance or in a prototype, which OpenUSD refuses to author ([`SchemaEdit::can_edit`]); nothing is authored."]
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        let Some(path) = edit.prim_path(path) else {
+            return Ok(None);
+        };
+        edit.can_edit(path)?;
+        Ok(edit
+            .is_a(path, PhysicsDistanceJoint::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path))))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -881,15 +887,6 @@ impl<'a> PhysicsDriveApi<'a> {
         Self { base: instance }
     }
 
-    /// An edit handle for this instance.
-    #[must_use]
-    pub fn edit(&self) -> PhysicsDriveApiEdit {
-        PhysicsDriveApiEdit::from_instance(InstanceEdit::new(
-            PrimEdit::from_path_unchecked(self.path()),
-            self.instance(),
-        ))
-    }
-
     /// Applies the instance `instance` of the schema to `path` (a `prepend
     /// apiSchemas` entry in the edit's target) if the prim may have it.
     ///
@@ -897,14 +894,15 @@ impl<'a> PhysicsDriveApi<'a> {
     ///
     /// # Errors
     ///
-    /// Why the schema cannot be applied there.
+    /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
+    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdPhysicsDriveAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
         instance: &str,
-    ) -> Result<PhysicsDriveApiEdit, CannotApply> {
+    ) -> Result<PhysicsDriveApiEdit, ApplyError> {
         let prim = edit.apply_api(path, Self::SCHEMA, Some(instance))?;
         Ok(PhysicsDriveApiEdit::from_instance(InstanceEdit::new(
             prim, instance,
@@ -1051,14 +1049,20 @@ impl Deref for PhysicsDriveApiEdit {
 impl PhysicsDriveApiEdit {
     /// A handle authoring the instance `instance` on the prim at `path`
     /// through `edit`, if the prim exists: on the edit's stage, or defined
-    /// earlier in `edit`. Setters never create a prim that does not.
-    #[must_use]
+    /// earlier in `edit`; `Ok(None)` when it does not. Setters never
+    /// create a prim.
+    ///
+    /// # Errors
+    ///
+    /// [`CannotEdit`] for a path beneath an instance or in a prototype, as
+    /// [`PrimEdit::new`] refuses it; nothing is authored.
     pub fn new(
         edit: &SchemaEdit<'_>,
         path: impl ::layerstack::PrimPathArg,
         instance: &str,
-    ) -> Option<Self> {
-        PrimEdit::new(edit, path).map(|prim| Self::from_instance(InstanceEdit::new(prim, instance)))
+    ) -> Result<Option<Self>, CannotEdit> {
+        Ok(PrimEdit::new(edit, path)?
+            .map(|prim| Self::from_instance(InstanceEdit::new(prim, instance))))
     }
 
     /// A handle authoring the schema's properties for `instance`, whether
@@ -1250,12 +1254,6 @@ impl<'a> PhysicsFilteredPairsApi<'a> {
         Self { base: prim }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> PhysicsFilteredPairsApiEdit {
-        PhysicsFilteredPairsApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
     /// edit's target) if the prim may have it.
     ///
@@ -1263,13 +1261,14 @@ impl<'a> PhysicsFilteredPairsApi<'a> {
     ///
     /// # Errors
     ///
-    /// Why the schema cannot be applied there.
+    /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
+    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdPhysicsFilteredPairsAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<PhysicsFilteredPairsApiEdit, CannotApply> {
+    ) -> Result<PhysicsFilteredPairsApiEdit, ApplyError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(PhysicsFilteredPairsApiEdit::from_prim)
     }
@@ -1305,11 +1304,18 @@ impl Deref for PhysicsFilteredPairsApiEdit {
 
 impl PhysicsFilteredPairsApiEdit {
     /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+    /// exists: on the edit's stage, or defined earlier in `edit`; `Ok(None)`
+    /// when it does not. Setters never create a prim.
+    ///
+    /// # Errors
+    ///
+    /// [`CannotEdit`] for a path beneath an instance or in a prototype, as
+    /// [`PrimEdit::new`] refuses it; nothing is authored.
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        Ok(PrimEdit::new(edit, path)?.map(Self::from_prim))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -1404,12 +1410,6 @@ impl<'a> PhysicsFixedJoint<'a> {
         }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> PhysicsFixedJointEdit {
-        PhysicsFixedJointEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// Defines the prim at `path` as a `PhysicsFixedJoint`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
@@ -1417,14 +1417,14 @@ impl<'a> PhysicsFixedJoint<'a> {
     ///
     /// # Errors
     ///
-    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// [`CannotEdit`] for a path beneath an instance or in a
     /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdPhysicsFixedJoint::Define")]
     #[doc(alias = "Define")]
     pub fn define(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<PhysicsFixedJointEdit, CannotDefine> {
+    ) -> Result<PhysicsFixedJointEdit, CannotEdit> {
         edit.define_prim(path, Self::SCHEMA)
             .map(PhysicsFixedJointEdit::from_prim)
     }
@@ -1445,12 +1445,18 @@ impl Deref for PhysicsFixedJointEdit {
 }
 
 impl PhysicsFixedJointEdit {
-    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `PhysicsFixedJoint` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`PhysicsFixedJoint::define`] types it, and `PhysicsFixedJointEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        let path = edit.prim_path(path)?;
-        edit.is_a(path, PhysicsFixedJoint::SCHEMA)
-            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `PhysicsFixedJoint` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`Ok(None)` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`PhysicsFixedJoint::define`] types it, and `PhysicsFixedJointEdit::from_prim` of a [`PrimEdit::new`] handle authors the schema's properties on any prim that exists. Setters never create a prim.\n\n# Errors\n\n[`CannotEdit`] for a path beneath an instance or in a prototype, which OpenUSD refuses to author ([`SchemaEdit::can_edit`]); nothing is authored."]
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        let Some(path) = edit.prim_path(path) else {
+            return Ok(None);
+        };
+        edit.can_edit(path)?;
+        Ok(edit
+            .is_a(path, PhysicsFixedJoint::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path))))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -1507,12 +1513,6 @@ impl<'a> PhysicsJoint<'a> {
         }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> PhysicsJointEdit {
-        PhysicsJointEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// Defines the prim at `path` as a `PhysicsJoint`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
@@ -1520,14 +1520,11 @@ impl<'a> PhysicsJoint<'a> {
     ///
     /// # Errors
     ///
-    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// [`CannotEdit`] for a path beneath an instance or in a
     /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdPhysicsJoint::Define")]
     #[doc(alias = "Define")]
-    pub fn define(
-        edit: &mut SchemaEdit<'_>,
-        path: PathId,
-    ) -> Result<PhysicsJointEdit, CannotDefine> {
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<PhysicsJointEdit, CannotEdit> {
         edit.define_prim(path, Self::SCHEMA)
             .map(PhysicsJointEdit::from_prim)
     }
@@ -1750,12 +1747,18 @@ impl Deref for PhysicsJointEdit {
 }
 
 impl PhysicsJointEdit {
-    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `PhysicsJoint` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`PhysicsJoint::define`] types it, and `PhysicsJointEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        let path = edit.prim_path(path)?;
-        edit.is_a(path, PhysicsJoint::SCHEMA)
-            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `PhysicsJoint` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`Ok(None)` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`PhysicsJoint::define`] types it, and `PhysicsJointEdit::from_prim` of a [`PrimEdit::new`] handle authors the schema's properties on any prim that exists. Setters never create a prim.\n\n# Errors\n\n[`CannotEdit`] for a path beneath an instance or in a prototype, which OpenUSD refuses to author ([`SchemaEdit::can_edit`]); nothing is authored."]
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        let Some(path) = edit.prim_path(path) else {
+            return Ok(None);
+        };
+        edit.can_edit(path)?;
+        Ok(edit
+            .is_a(path, PhysicsJoint::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path))))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -2117,15 +2120,6 @@ impl<'a> PhysicsLimitApi<'a> {
         Self { base: instance }
     }
 
-    /// An edit handle for this instance.
-    #[must_use]
-    pub fn edit(&self) -> PhysicsLimitApiEdit {
-        PhysicsLimitApiEdit::from_instance(InstanceEdit::new(
-            PrimEdit::from_path_unchecked(self.path()),
-            self.instance(),
-        ))
-    }
-
     /// Applies the instance `instance` of the schema to `path` (a `prepend
     /// apiSchemas` entry in the edit's target) if the prim may have it.
     ///
@@ -2133,14 +2127,15 @@ impl<'a> PhysicsLimitApi<'a> {
     ///
     /// # Errors
     ///
-    /// Why the schema cannot be applied there.
+    /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
+    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdPhysicsLimitAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
         instance: &str,
-    ) -> Result<PhysicsLimitApiEdit, CannotApply> {
+    ) -> Result<PhysicsLimitApiEdit, ApplyError> {
         let prim = edit.apply_api(path, Self::SCHEMA, Some(instance))?;
         Ok(PhysicsLimitApiEdit::from_instance(InstanceEdit::new(
             prim, instance,
@@ -2209,14 +2204,20 @@ impl Deref for PhysicsLimitApiEdit {
 impl PhysicsLimitApiEdit {
     /// A handle authoring the instance `instance` on the prim at `path`
     /// through `edit`, if the prim exists: on the edit's stage, or defined
-    /// earlier in `edit`. Setters never create a prim that does not.
-    #[must_use]
+    /// earlier in `edit`; `Ok(None)` when it does not. Setters never
+    /// create a prim.
+    ///
+    /// # Errors
+    ///
+    /// [`CannotEdit`] for a path beneath an instance or in a prototype, as
+    /// [`PrimEdit::new`] refuses it; nothing is authored.
     pub fn new(
         edit: &SchemaEdit<'_>,
         path: impl ::layerstack::PrimPathArg,
         instance: &str,
-    ) -> Option<Self> {
-        PrimEdit::new(edit, path).map(|prim| Self::from_instance(InstanceEdit::new(prim, instance)))
+    ) -> Result<Option<Self>, CannotEdit> {
+        Ok(PrimEdit::new(edit, path)?
+            .map(|prim| Self::from_instance(InstanceEdit::new(prim, instance))))
     }
 
     /// A handle authoring the schema's properties for `instance`, whether
@@ -2305,12 +2306,6 @@ impl<'a> PhysicsMassApi<'a> {
         Self { base: prim }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> PhysicsMassApiEdit {
-        PhysicsMassApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
     /// edit's target) if the prim may have it.
     ///
@@ -2318,13 +2313,14 @@ impl<'a> PhysicsMassApi<'a> {
     ///
     /// # Errors
     ///
-    /// Why the schema cannot be applied there.
+    /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
+    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdPhysicsMassAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<PhysicsMassApiEdit, CannotApply> {
+    ) -> Result<PhysicsMassApiEdit, ApplyError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(PhysicsMassApiEdit::from_prim)
     }
@@ -2446,11 +2442,18 @@ impl Deref for PhysicsMassApiEdit {
 
 impl PhysicsMassApiEdit {
     /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+    /// exists: on the edit's stage, or defined earlier in `edit`; `Ok(None)`
+    /// when it does not. Setters never create a prim.
+    ///
+    /// # Errors
+    ///
+    /// [`CannotEdit`] for a path beneath an instance or in a prototype, as
+    /// [`PrimEdit::new`] refuses it; nothing is authored.
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        Ok(PrimEdit::new(edit, path)?.map(Self::from_prim))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -2615,12 +2618,6 @@ impl<'a> PhysicsMaterialApi<'a> {
         Self { base: prim }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> PhysicsMaterialApiEdit {
-        PhysicsMaterialApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
     /// edit's target) if the prim may have it.
     ///
@@ -2628,13 +2625,14 @@ impl<'a> PhysicsMaterialApi<'a> {
     ///
     /// # Errors
     ///
-    /// Why the schema cannot be applied there.
+    /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
+    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdPhysicsMaterialAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<PhysicsMaterialApiEdit, CannotApply> {
+    ) -> Result<PhysicsMaterialApiEdit, ApplyError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(PhysicsMaterialApiEdit::from_prim)
     }
@@ -2736,11 +2734,18 @@ impl Deref for PhysicsMaterialApiEdit {
 
 impl PhysicsMaterialApiEdit {
     /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+    /// exists: on the edit's stage, or defined earlier in `edit`; `Ok(None)`
+    /// when it does not. Setters never create a prim.
+    ///
+    /// # Errors
+    ///
+    /// [`CannotEdit`] for a path beneath an instance or in a prototype, as
+    /// [`PrimEdit::new`] refuses it; nothing is authored.
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        Ok(PrimEdit::new(edit, path)?.map(Self::from_prim))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -2954,12 +2959,6 @@ impl<'a> PhysicsMeshCollisionApi<'a> {
         Self { base: prim }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> PhysicsMeshCollisionApiEdit {
-        PhysicsMeshCollisionApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
     /// edit's target) if the prim may have it.
     ///
@@ -2967,13 +2966,14 @@ impl<'a> PhysicsMeshCollisionApi<'a> {
     ///
     /// # Errors
     ///
-    /// Why the schema cannot be applied there.
+    /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
+    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdPhysicsMeshCollisionAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<PhysicsMeshCollisionApiEdit, CannotApply> {
+    ) -> Result<PhysicsMeshCollisionApiEdit, ApplyError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(PhysicsMeshCollisionApiEdit::from_prim)
     }
@@ -3012,11 +3012,18 @@ impl Deref for PhysicsMeshCollisionApiEdit {
 
 impl PhysicsMeshCollisionApiEdit {
     /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+    /// exists: on the edit's stage, or defined earlier in `edit`; `Ok(None)`
+    /// when it does not. Setters never create a prim.
+    ///
+    /// # Errors
+    ///
+    /// [`CannotEdit`] for a path beneath an instance or in a prototype, as
+    /// [`PrimEdit::new`] refuses it; nothing is authored.
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        Ok(PrimEdit::new(edit, path)?.map(Self::from_prim))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -3141,12 +3148,6 @@ impl<'a> PhysicsPrismaticJoint<'a> {
         }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> PhysicsPrismaticJointEdit {
-        PhysicsPrismaticJointEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// Defines the prim at `path` as a `PhysicsPrismaticJoint`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
@@ -3154,14 +3155,14 @@ impl<'a> PhysicsPrismaticJoint<'a> {
     ///
     /// # Errors
     ///
-    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// [`CannotEdit`] for a path beneath an instance or in a
     /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdPhysicsPrismaticJoint::Define")]
     #[doc(alias = "Define")]
     pub fn define(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<PhysicsPrismaticJointEdit, CannotDefine> {
+    ) -> Result<PhysicsPrismaticJointEdit, CannotEdit> {
         edit.define_prim(path, Self::SCHEMA)
             .map(PhysicsPrismaticJointEdit::from_prim)
     }
@@ -3236,12 +3237,18 @@ impl Deref for PhysicsPrismaticJointEdit {
 }
 
 impl PhysicsPrismaticJointEdit {
-    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `PhysicsPrismaticJoint` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`PhysicsPrismaticJoint::define`] types it, and `PhysicsPrismaticJointEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        let path = edit.prim_path(path)?;
-        edit.is_a(path, PhysicsPrismaticJoint::SCHEMA)
-            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `PhysicsPrismaticJoint` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`Ok(None)` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`PhysicsPrismaticJoint::define`] types it, and `PhysicsPrismaticJointEdit::from_prim` of a [`PrimEdit::new`] handle authors the schema's properties on any prim that exists. Setters never create a prim.\n\n# Errors\n\n[`CannotEdit`] for a path beneath an instance or in a prototype, which OpenUSD refuses to author ([`SchemaEdit::can_edit`]); nothing is authored."]
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        let Some(path) = edit.prim_path(path) else {
+            return Ok(None);
+        };
+        edit.can_edit(path)?;
+        Ok(edit
+            .is_a(path, PhysicsPrismaticJoint::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path))))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -3402,12 +3409,6 @@ impl<'a> PhysicsRevoluteJoint<'a> {
         }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> PhysicsRevoluteJointEdit {
-        PhysicsRevoluteJointEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// Defines the prim at `path` as a `PhysicsRevoluteJoint`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
@@ -3415,14 +3416,14 @@ impl<'a> PhysicsRevoluteJoint<'a> {
     ///
     /// # Errors
     ///
-    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// [`CannotEdit`] for a path beneath an instance or in a
     /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdPhysicsRevoluteJoint::Define")]
     #[doc(alias = "Define")]
     pub fn define(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<PhysicsRevoluteJointEdit, CannotDefine> {
+    ) -> Result<PhysicsRevoluteJointEdit, CannotEdit> {
         edit.define_prim(path, Self::SCHEMA)
             .map(PhysicsRevoluteJointEdit::from_prim)
     }
@@ -3497,12 +3498,18 @@ impl Deref for PhysicsRevoluteJointEdit {
 }
 
 impl PhysicsRevoluteJointEdit {
-    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `PhysicsRevoluteJoint` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`PhysicsRevoluteJoint::define`] types it, and `PhysicsRevoluteJointEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        let path = edit.prim_path(path)?;
-        edit.is_a(path, PhysicsRevoluteJoint::SCHEMA)
-            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `PhysicsRevoluteJoint` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`Ok(None)` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`PhysicsRevoluteJoint::define`] types it, and `PhysicsRevoluteJointEdit::from_prim` of a [`PrimEdit::new`] handle authors the schema's properties on any prim that exists. Setters never create a prim.\n\n# Errors\n\n[`CannotEdit`] for a path beneath an instance or in a prototype, which OpenUSD refuses to author ([`SchemaEdit::can_edit`]); nothing is authored."]
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        let Some(path) = edit.prim_path(path) else {
+            return Ok(None);
+        };
+        edit.can_edit(path)?;
+        Ok(edit
+            .is_a(path, PhysicsRevoluteJoint::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path))))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -3609,12 +3616,6 @@ impl<'a> PhysicsRigidBodyApi<'a> {
         Self { base: prim }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> PhysicsRigidBodyApiEdit {
-        PhysicsRigidBodyApiEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
     /// edit's target) if the prim may have it.
     ///
@@ -3622,13 +3623,14 @@ impl<'a> PhysicsRigidBodyApi<'a> {
     ///
     /// # Errors
     ///
-    /// Why the schema cannot be applied there.
+    /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
+    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdPhysicsRigidBodyAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<PhysicsRigidBodyApiEdit, CannotApply> {
+    ) -> Result<PhysicsRigidBodyApiEdit, ApplyError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(PhysicsRigidBodyApiEdit::from_prim)
     }
@@ -3758,11 +3760,18 @@ impl Deref for PhysicsRigidBodyApiEdit {
 
 impl PhysicsRigidBodyApiEdit {
     /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`. Setters
-    /// never create a prim that does not.
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        PrimEdit::new(edit, path).map(Self::from_prim)
+    /// exists: on the edit's stage, or defined earlier in `edit`; `Ok(None)`
+    /// when it does not. Setters never create a prim.
+    ///
+    /// # Errors
+    ///
+    /// [`CannotEdit`] for a path beneath an instance or in a prototype, as
+    /// [`PrimEdit::new`] refuses it; nothing is authored.
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        Ok(PrimEdit::new(edit, path)?.map(Self::from_prim))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -3960,12 +3969,6 @@ impl<'a> PhysicsScene<'a> {
         }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> PhysicsSceneEdit {
-        PhysicsSceneEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// Defines the prim at `path` as a `PhysicsScene`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
@@ -3973,14 +3976,11 @@ impl<'a> PhysicsScene<'a> {
     ///
     /// # Errors
     ///
-    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// [`CannotEdit`] for a path beneath an instance or in a
     /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdPhysicsScene::Define")]
     #[doc(alias = "Define")]
-    pub fn define(
-        edit: &mut SchemaEdit<'_>,
-        path: PathId,
-    ) -> Result<PhysicsSceneEdit, CannotDefine> {
+    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<PhysicsSceneEdit, CannotEdit> {
         edit.define_prim(path, Self::SCHEMA)
             .map(PhysicsSceneEdit::from_prim)
     }
@@ -4041,12 +4041,18 @@ impl Deref for PhysicsSceneEdit {
 }
 
 impl PhysicsSceneEdit {
-    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `PhysicsScene` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`PhysicsScene::define`] types it, and `PhysicsSceneEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        let path = edit.prim_path(path)?;
-        edit.is_a(path, PhysicsScene::SCHEMA)
-            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `PhysicsScene` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`Ok(None)` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`PhysicsScene::define`] types it, and `PhysicsSceneEdit::from_prim` of a [`PrimEdit::new`] handle authors the schema's properties on any prim that exists. Setters never create a prim.\n\n# Errors\n\n[`CannotEdit`] for a path beneath an instance or in a prototype, which OpenUSD refuses to author ([`SchemaEdit::can_edit`]); nothing is authored."]
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        let Some(path) = edit.prim_path(path) else {
+            return Ok(None);
+        };
+        edit.can_edit(path)?;
+        Ok(edit
+            .is_a(path, PhysicsScene::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path))))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`
@@ -4205,12 +4211,6 @@ impl<'a> PhysicsSphericalJoint<'a> {
         }
     }
 
-    /// An edit handle for this prim.
-    #[must_use]
-    pub fn edit(&self) -> PhysicsSphericalJointEdit {
-        PhysicsSphericalJointEdit::from_prim(PrimEdit::from_path_unchecked(self.path()))
-    }
-
     /// Defines the prim at `path` as a `PhysicsSphericalJoint`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
@@ -4218,14 +4218,14 @@ impl<'a> PhysicsSphericalJoint<'a> {
     ///
     /// # Errors
     ///
-    /// [`CannotDefine`] for a path beneath an instance or in a
+    /// [`CannotEdit`] for a path beneath an instance or in a
     /// prototype, which OpenUSD refuses; nothing is authored.
     #[doc(alias = "UsdPhysicsSphericalJoint::Define")]
     #[doc(alias = "Define")]
     pub fn define(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<PhysicsSphericalJointEdit, CannotDefine> {
+    ) -> Result<PhysicsSphericalJointEdit, CannotEdit> {
         edit.define_prim(path, Self::SCHEMA)
             .map(PhysicsSphericalJointEdit::from_prim)
     }
@@ -4300,12 +4300,18 @@ impl Deref for PhysicsSphericalJointEdit {
 }
 
 impl PhysicsSphericalJointEdit {
-    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `PhysicsSphericalJoint` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`None` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`PhysicsSphericalJoint::define`] types it, and `PhysicsSphericalJointEdit::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties on any prim that exists. Setters never create a prim."]
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
-        let path = edit.prim_path(path)?;
-        edit.is_a(path, PhysicsSphericalJoint::SCHEMA)
-            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))
+    #[doc = "A handle authoring the prim at `path` through `edit`, if it is a `PhysicsSphericalJoint` or of a schema derived from it (`IsA`) as the edit leaves it: defined so earlier in `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n`Ok(None)` for a prim that is not there, or not typed so yet, such as an untyped `def` or an `over`: [`PhysicsSphericalJoint::define`] types it, and `PhysicsSphericalJointEdit::from_prim` of a [`PrimEdit::new`] handle authors the schema's properties on any prim that exists. Setters never create a prim.\n\n# Errors\n\n[`CannotEdit`] for a path beneath an instance or in a prototype, which OpenUSD refuses to author ([`SchemaEdit::can_edit`]); nothing is authored."]
+    pub fn new(
+        edit: &SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<Option<Self>, CannotEdit> {
+        let Some(path) = edit.prim_path(path) else {
+            return Ok(None);
+        };
+        edit.can_edit(path)?;
+        Ok(edit
+            .is_a(path, PhysicsSphericalJoint::SCHEMA)
+            .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path))))
     }
 
     /// A handle authoring the schema's properties on the prim `prim`

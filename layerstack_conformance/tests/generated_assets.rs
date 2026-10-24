@@ -13,7 +13,7 @@ use layerstack_schemas::{
     bounds::{BoundsCache, BoundsOptions},
     point_instancer::InstanceTransformOptions,
     primvar::Primvar,
-    usd_geom::{Mesh, PointInstancer},
+    usd_geom::{Mesh, MeshEdit, PointInstancer},
     usd_proc::GenerativeProcedural,
     usd_shade::Material,
 };
@@ -549,8 +549,6 @@ fn shared_sources_invalidate_native_and_point_instances_and_recover_after_recrea
 }
 
 fn animate(generated: &mut support::GeneratedScene) {
-    let scene = Scene::new(generated.live.stage(), &generated.store);
-    let mesh = Mesh::new(&scene, generated.source).unwrap().edit();
     let target = EditTarget::for_node_layer(
         generated.live.stage(),
         &generated.store,
@@ -565,6 +563,9 @@ fn animate(generated: &mut support::GeneratedScene) {
         "stage time maps through the source sublayer offset"
     );
     let mut edit = SchemaEdit::new(generated.live.stage(), &mut generated.store, target);
+    let mesh = MeshEdit::new(&edit, generated.source)
+        .expect("outside any instance")
+        .expect("a mesh");
     mesh.set_points_shared_at(&mut edit, 12., generated.geometry.points.clone());
     let mut animated_points = Vec::with_capacity(32);
     animated_points.extend([[0., 0., 0.], [1., 0., 0.], [1., 3., 0.], [0., 1., 0.]]);

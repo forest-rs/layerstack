@@ -144,7 +144,9 @@ fn invalid_inbetween_knots_are_skipped_and_reported() {
 #[test]
 fn blend_buffers_validate_before_mutation_and_snapshots_refresh_after_edits() {
     use layerstack::{LayerId, edit::EditTarget};
-    use layerstack_schemas::{SchemaEdit, skel::apply_blend_shape_in_place, usd_skel::BlendShape};
+    use layerstack_schemas::{
+        SchemaEdit, skel::apply_blend_shape_in_place, usd_skel::BlendShapeEdit,
+    };
     let original = [[1., 0., 0.], [0., 2., 0.]];
     let mut points = original;
     assert!(apply_blend_shape_in_place(1., &[[1.; 3]; 2], &[0, 8], &mut points).is_err());
@@ -183,10 +185,10 @@ fn blend_buffers_validate_before_mutation_and_snapshots_refresh_after_edits() {
         snapshot.deform_normals(&[1., 0.], &original).unwrap()
     );
 
-    let handle = BlendShape::new(&Scene::new(live.stage(), &store), shape)
-        .unwrap()
-        .edit();
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
+    let handle = BlendShapeEdit::new(&edit, shape)
+        .expect("outside any instance")
+        .expect("the prim");
     handle.set_offsets(&mut edit, &[[0., 8., 0.]]);
     let transaction = edit.finish();
     let applied = live.apply(&mut store, &transaction).unwrap();

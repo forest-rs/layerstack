@@ -13,7 +13,7 @@ use layerstack_schemas::{
         EvidenceApplyError, Procedural, ProceduralError, ProceduralEvaluator, ProceduralInputError,
         ProceduralInputs,
     },
-    usd_geom::PointInstancer,
+    usd_geom::PointInstancerEdit,
 };
 use std::sync::Arc;
 
@@ -601,10 +601,10 @@ def Scope "Recipes" {
             )
             .unwrap();
         live.apply(&mut store, &publication.transaction).unwrap();
-        let instancer = PointInstancer::new(&Scene::new(live.stage(), &store), scatter)
-            .unwrap()
-            .edit();
         let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(ROOT));
+        let instancer = PointInstancerEdit::new(&edit, scatter)
+            .expect("outside any instance")
+            .expect("the prim");
         instancer.set_proto_indices_owned(&mut edit, vec![0; count]);
         instancer.set_positions_owned(
             &mut edit,

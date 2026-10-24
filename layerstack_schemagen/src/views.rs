@@ -807,7 +807,8 @@ pub(crate) fn module_items(
     Ok(Items {
         layerstack: used(&["CannotApply", "PathId"]),
         schemas: used(&[
-            "CannotDefine",
+            "ApplyError",
+            "CannotEdit",
             "InstanceEdit",
             "InstanceView",
             "PrimEdit",
@@ -1289,9 +1290,9 @@ fn typed_view(
              /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim\n    \
              /// already defined as a `{name}` is left as it is.\n    \
              ///\n    /// # Errors\n    ///\n    \
-             /// [`CannotDefine`] for a path beneath an instance or in a\n    \
+             /// [`CannotEdit`] for a path beneath an instance or in a\n    \
              /// prototype, which OpenUSD refuses; nothing is authored.\n    \
-             pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<{edit}, CannotDefine> {{\n        \
+             pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<{edit}, CannotEdit> {{\n        \
              edit.define_prim(path, Self::SCHEMA).map({edit}::from_prim)\n    }}\n\n",
             name = schema.name
         )
@@ -1320,17 +1321,16 @@ fn typed_view(
          /// authors, and the schema's fallbacks only for a prim of the schema.\n    \
          /// For the view of a schema built on this one.\n    #[must_use]\n    \
          pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {{\n        Self {{\n            base: {wrap_base},\n        }}\n    }}\n\n    \
-         /// An edit handle for this prim.\n    #[must_use]\n    \
-         pub fn edit(&self) -> {edit} {{\n        {edit}::from_prim(PrimEdit::from_path_unchecked(self.path()))\n    }}\n\n\
          {define}{getters}}}\n\n\
          #[doc = {edit_doc:?}]\n#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]\npub struct {edit} {{\n    base: {base_edit},\n}}\n\n\
          impl Deref for {edit} {{\n    type Target = {base_edit};\n\n    \
          fn deref(&self) -> &Self::Target {{\n        &self.base\n    }}\n}}\n\n\
-         {allow}impl {edit} {{\n    #[doc = {new_edit_doc:?}]\n    #[must_use]\n    \
-         pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {{\n        \
-         let path = edit.prim_path(path)?;\n        \
-         edit.is_a(path, {view}::SCHEMA)\n            \
-         .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path)))\n    }}\n\n    \
+         {allow}impl {edit} {{\n    #[doc = {new_edit_doc:?}]\n    \
+         pub fn new(\n        edit: &SchemaEdit<'_>,\n        path: impl ::layerstack::PrimPathArg,\n    ) -> Result<Option<Self>, CannotEdit> {{\n        \
+         let Some(path) = edit.prim_path(path) else {{\n            return Ok(None);\n        }};\n        \
+         edit.can_edit(path)?;\n        \
+         Ok(edit\n            .is_a(path, {view}::SCHEMA)\n            \
+         .then(|| Self::from_prim(PrimEdit::from_path_unchecked(path))))\n    }}\n\n    \
          /// A handle authoring the schema's properties on the prim `prim`\n    \
          /// authors, whatever its type.\n    #[must_use]\n    \
          pub fn from_prim(prim: PrimEdit) -> Self {{\n        Self {{\n            base: {edit_base},\n        }}\n    }}\n\n\
@@ -1347,10 +1347,13 @@ fn typed_view(
             "A handle authoring the prim at `path` through `edit`, if it is a `{name}` or of a \
              schema derived from it (`IsA`) as the edit leaves it: defined so earlier in \
              `edit`, or so on the edit's stage ([`SchemaEdit::is_a`]).\n\n\
-             `None` for a prim that is not there, or not typed so yet, such as an untyped \
-             `def` or an `over`: {define_ref} types it, and \
-             `{edit}::from_prim(PrimEdit::new(edit, path)?)` authors the schema's properties \
-             on any prim that exists. Setters never create a prim.",
+             `Ok(None)` for a prim that is not there, or not typed so yet, such as an untyped \
+             `def` or an `over`: {define_ref} types it, and `{edit}::from_prim` of a \
+             [`PrimEdit::new`] handle authors the schema's properties on any prim that \
+             exists. Setters never create a prim.\n\n\
+             # Errors\n\n\
+             [`CannotEdit`] for a path beneath an instance or in a prototype, which \
+             OpenUSD refuses to author ([`SchemaEdit::can_edit`]); nothing is authored.",
             name = schema.name,
             define_ref = if concrete {
                 format!("[`{view}::define`]")
@@ -1433,14 +1436,13 @@ fn applied_view(
              /// fallbacks only for an applied instance.\n    #[must_use]\n    \
              pub fn from_instance_unchecked(instance: InstanceView<'a>) -> Self {{\n        \
              Self {{ base: instance }}\n    }}\n\n    \
-             /// An edit handle for this instance.\n    #[must_use]\n    \
-             pub fn edit(&self) -> {edit} {{\n        {edit}::from_instance(InstanceEdit::new(\n            \
-             PrimEdit::from_path_unchecked(self.path()),\n            self.instance(),\n        ))\n    }}\n\n    \
              /// Applies the instance `instance` of the schema to `path` (a `prepend\n    \
              /// apiSchemas` entry in the edit's target) if the prim may have it.\n    \
              ///\n    /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.\n    \
-             ///\n    /// # Errors\n    ///\n    /// Why the schema cannot be applied there.\n    \
-             pub fn apply(\n        edit: &mut SchemaEdit<'_>,\n        path: PathId,\n        instance: &str,\n    ) -> Result<{edit}, CannotApply> {{\n        \
+             ///\n    /// # Errors\n    ///\n    \
+             /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):\n    \
+             /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.\n    \
+             pub fn apply(\n        edit: &mut SchemaEdit<'_>,\n        path: PathId,\n        instance: &str,\n    ) -> Result<{edit}, ApplyError> {{\n        \
              let prim = edit.apply_api(path, Self::SCHEMA, Some(instance))?;\n        \
              Ok({edit}::from_instance(InstanceEdit::new(prim, instance)))\n    }}\n\n"
         )
@@ -1456,13 +1458,13 @@ fn applied_view(
              /// what the prim authors, and the schema's fallbacks only for a\n    \
              /// prim with the schema applied. For a built-in's view.\n    #[must_use]\n    \
              pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {{\n        Self {{ base: prim }}\n    }}\n\n    \
-             /// An edit handle for this prim.\n    #[must_use]\n    \
-             pub fn edit(&self) -> {edit} {{\n        {edit}::from_prim(PrimEdit::from_path_unchecked(self.path()))\n    }}\n\n    \
              /// Applies the schema to `path` (a `prepend apiSchemas` entry in the\n    \
              /// edit's target) if the prim may have it.\n    \
              ///\n    /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.\n    \
-             ///\n    /// # Errors\n    ///\n    /// Why the schema cannot be applied there.\n    \
-             pub fn apply(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<{edit}, CannotApply> {{\n        \
+             ///\n    /// # Errors\n    ///\n    \
+             /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):\n    \
+             /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.\n    \
+             pub fn apply(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<{edit}, ApplyError> {{\n        \
              edit.apply_api(path, Self::SCHEMA, None).map({edit}::from_prim)\n    }}\n\n"
         )
     };
@@ -1478,19 +1480,25 @@ fn applied_view(
     let new_edit = if multiple {
         "    /// A handle authoring the instance `instance` on the prim at `path`\n    \
          /// through `edit`, if the prim exists: on the edit's stage, or defined\n    \
-         /// earlier in `edit`. Setters never create a prim that does not.\n    \
-         #[must_use]\n    \
-         pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg, instance: &str) -> Option<Self> {\n        \
-         PrimEdit::new(edit, path).map(|prim| Self::from_instance(InstanceEdit::new(prim, instance)))\n    }\n\n    \
+         /// earlier in `edit`; `Ok(None)` when it does not. Setters never\n    \
+         /// create a prim.\n    \
+         ///\n    /// # Errors\n    ///\n    \
+         /// [`CannotEdit`] for a path beneath an instance or in a prototype, as\n    \
+         /// [`PrimEdit::new`] refuses it; nothing is authored.\n    \
+         pub fn new(\n        edit: &SchemaEdit<'_>,\n        path: impl ::layerstack::PrimPathArg,\n        instance: &str,\n    ) -> Result<Option<Self>, CannotEdit> {\n        \
+         Ok(PrimEdit::new(edit, path)?\n            .map(|prim| Self::from_instance(InstanceEdit::new(prim, instance))))\n    }\n\n    \
          /// A handle authoring the schema's properties for `instance`, whether\n    \
          /// or not the prim has it applied.\n    #[must_use]\n    \
          pub fn from_instance(instance: InstanceEdit) -> Self {\n        \
          Self { base: instance }\n    }\n\n"
             .to_string()
     } else {
-        "    /// A handle authoring the prim at `path` through `edit`, if the prim\n    /// exists: on the edit's stage, or defined earlier in `edit`. Setters\n    /// never create a prim that does not.\n    #[must_use]\n    \
-         pub fn new(edit: &SchemaEdit<'_>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {\n        \
-         PrimEdit::new(edit, path).map(Self::from_prim)\n    }\n\n    \
+        "    /// A handle authoring the prim at `path` through `edit`, if the prim\n    /// exists: on the edit's stage, or defined earlier in `edit`; `Ok(None)`\n    /// when it does not. Setters never create a prim.\n    \
+         ///\n    /// # Errors\n    ///\n    \
+         /// [`CannotEdit`] for a path beneath an instance or in a prototype, as\n    \
+         /// [`PrimEdit::new`] refuses it; nothing is authored.\n    \
+         pub fn new(\n        edit: &SchemaEdit<'_>,\n        path: impl ::layerstack::PrimPathArg,\n    ) -> Result<Option<Self>, CannotEdit> {\n        \
+         Ok(PrimEdit::new(edit, path)?.map(Self::from_prim))\n    }\n\n    \
          /// A handle authoring the schema's properties on the prim `prim`\n    \
          /// authors, whether or not it has the schema applied.\n    #[must_use]\n    \
          pub fn from_prim(prim: PrimEdit) -> Self {\n        Self { base: prim }\n    }\n\n"
@@ -1734,7 +1742,7 @@ impl TestTable {
             if !getters.is_empty() {
                 let _ = writeln!(
                     values,
-                    "    {{\n        let e = {view_path}Edit::new(edit, h.path({authored:?}){instance_arg})\n            .expect(\"the prim is defined\");"
+                    "    {{\n        let e = {view_path}Edit::new(edit, h.path({authored:?}){instance_arg})\n            .expect(\"outside any instance\")\n            .expect(\"the prim is defined\");"
                 );
             }
             for (method, _, getter) in &getters {
@@ -1795,10 +1803,17 @@ impl TestTable {
                 None => format!("{view_path}::get(scene, h.path(prim))"),
                 Some(i) => format!("{view_path}::get(scene, h.path(prim), {i:?})"),
             };
+            // A view with nothing to read is only checked to be there.
+            let binding = if instance.is_some() || !view.built_ins.is_empty() || !getters.is_empty()
+            {
+                "v"
+            } else {
+                "_"
+            };
             let _ = writeln!(
                 reads,
                 "    for prim in [{fallback:?}, {authored:?}] {{\n        \
-                 let v = {get}.expect(\"a {} at the prim\");\n        let _ = v.edit();",
+                 let {binding} = {get}.expect(\"a {} at the prim\");",
                 view.schema
             );
             if let Some(i) = &instance {

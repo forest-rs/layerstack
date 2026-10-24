@@ -955,6 +955,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
         .expect("MaterialXConfigAPI applies to a Material");
     {
         let e = usd::CollectionApiEdit::new(edit, h.path("/Authored_CollectionAPI"), "a")
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_excludes(edit, h.targets());
         e.set_expansion_rule(
@@ -967,6 +968,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     }
     {
         let e = usd::ColorSpaceApiEdit::new(edit, h.path("/Authored_ColorSpaceAPI"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_color_space_name(edit, "token1");
     }
@@ -976,6 +978,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
             h.path("/Authored_ColorSpaceDefinitionAPI"),
             "a",
         )
+        .expect("outside any instance")
         .expect("the prim is defined");
         e.set_blue_chroma(edit, [1.5, 2.5]);
         e.set_blue_chroma_at(edit, 2.0, [2.5, 3.5]);
@@ -993,6 +996,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     }
     {
         let e = usd_geom::BackPlateApiEdit::new(edit, h.path("/Authored_BackPlateAPI"), "a")
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_alpha_image(edit, "asset1.usda");
         e.set_alpha_image_at(edit, 2.0, "asset2.usda");
@@ -1030,6 +1034,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     }
     {
         let e = usd_geom::BasisCurvesEdit::new(edit, h.path("/Authored_BasisCurves"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_basis(edit, usd_geom::BasisCurvesBasis::from_token("bspline"));
         e.set_curve_type(edit, usd_geom::BasisCurvesCurveType::from_token("cubic"));
@@ -1037,12 +1042,14 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     }
     {
         let e = usd_geom::BoundableEdit::new(edit, h.path("/Authored_BasisCurves"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_extent(edit, &[[1.5, 2.5, 3.5], [2.5, 3.5, 4.5]]);
         e.set_extent_at(edit, 2.0, &[[2.5, 3.5, 4.5], [3.5, 4.5, 5.5]]);
     }
     {
         let e = usd_geom::CameraEdit::new(edit, h.path("/Authored_Camera"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_clipping_planes(edit, &[[1.5, 2.5, 3.5, 4.5], [2.5, 3.5, 4.5, 5.5]]);
         e.set_clipping_planes_at(edit, 2.0, &[[2.5, 3.5, 4.5, 5.5], [3.5, 4.5, 5.5, 6.5]]);
@@ -1086,6 +1093,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     }
     {
         let e = usd_geom::CapsuleEdit::new(edit, h.path("/Authored_Capsule"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_axis(edit, usd_geom::CapsuleAxis::from_token("Y"));
         e.set_height(edit, 1.5);
@@ -1095,6 +1103,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     }
     {
         let e = usd_geom::Capsule1Edit::new(edit, h.path("/Authored_Capsule_1"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_axis(edit, usd_geom::Capsule1Axis::from_token("Y"));
         e.set_height(edit, 1.5);
@@ -1105,8 +1114,9 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
         e.set_radius_top_at(edit, 2.0, 2.5);
     }
     {
-        let e =
-            usd_geom::ConeEdit::new(edit, h.path("/Authored_Cone")).expect("the prim is defined");
+        let e = usd_geom::ConeEdit::new(edit, h.path("/Authored_Cone"))
+            .expect("outside any instance")
+            .expect("the prim is defined");
         e.set_axis(edit, usd_geom::ConeAxis::from_token("Y"));
         e.set_height(edit, 1.5);
         e.set_height_at(edit, 2.0, 2.5);
@@ -1114,13 +1124,15 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
         e.set_radius_at(edit, 2.0, 2.5);
     }
     {
-        let e =
-            usd_geom::CubeEdit::new(edit, h.path("/Authored_Cube")).expect("the prim is defined");
+        let e = usd_geom::CubeEdit::new(edit, h.path("/Authored_Cube"))
+            .expect("outside any instance")
+            .expect("the prim is defined");
         e.set_size(edit, 1.5);
         e.set_size_at(edit, 2.0, 2.5);
     }
     {
         let e = usd_geom::CurvesEdit::new(edit, h.path("/Authored_BasisCurves"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_curve_vertex_counts(edit, &[3, 4]);
         e.set_curve_vertex_counts_at(edit, 2.0, &[4, 5]);
@@ -1129,6 +1141,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     }
     {
         let e = usd_geom::CylinderEdit::new(edit, h.path("/Authored_Cylinder"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_axis(edit, usd_geom::CylinderAxis::from_token("Y"));
         e.set_height(edit, 1.5);
@@ -1138,6 +1151,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     }
     {
         let e = usd_geom::Cylinder1Edit::new(edit, h.path("/Authored_Cylinder_1"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_axis(edit, usd_geom::Cylinder1Axis::from_token("Y"));
         e.set_height(edit, 1.5);
@@ -1149,6 +1163,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     }
     {
         let e = usd_geom::GeomModelApiEdit::new(edit, h.path("/Authored_GeomModelAPI"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_model_apply_draw_mode(edit, true);
         e.set_model_card_geometry(
@@ -1179,6 +1194,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     }
     {
         let e = usd_geom::GeomSubsetEdit::new(edit, h.path("/Authored_GeomSubset"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_element_type(edit, usd_geom::GeomSubsetElementType::from_token("point"));
         e.set_family_name(edit, "token1");
@@ -1187,6 +1203,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     }
     {
         let e = usd_geom::GprimEdit::new(edit, h.path("/Authored_BasisCurves"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_double_sided(edit, true);
         e.set_orientation(edit, usd_geom::GprimOrientation::from_token("leftHanded"));
@@ -1197,12 +1214,14 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     }
     {
         let e = usd_geom::HermiteCurvesEdit::new(edit, h.path("/Authored_HermiteCurves"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_tangents(edit, &[[1.5, 2.5, 3.5], [2.5, 3.5, 4.5]]);
         e.set_tangents_at(edit, 2.0, &[[2.5, 3.5, 4.5], [3.5, 4.5, 5.5]]);
     }
     {
         let e = usd_geom::ImageableEdit::new(edit, h.path("/Authored_BasisCurves"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_proxy_prim(edit, h.targets());
         e.set_purpose(edit, usd_geom::ImageablePurpose::from_token("render"));
@@ -1214,8 +1233,9 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
         );
     }
     {
-        let e =
-            usd_geom::MeshEdit::new(edit, h.path("/Authored_Mesh")).expect("the prim is defined");
+        let e = usd_geom::MeshEdit::new(edit, h.path("/Authored_Mesh"))
+            .expect("outside any instance")
+            .expect("the prim is defined");
         e.set_corner_indices(edit, &[3, 4]);
         e.set_corner_indices_at(edit, 2.0, &[4, 5]);
         e.set_corner_sharpnesses(edit, &[1.5, 2.5]);
@@ -1263,6 +1283,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     }
     {
         let e = usd_geom::MotionApiEdit::new(edit, h.path("/Authored_MotionAPI"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_motion_blur_scale(edit, 1.5);
         e.set_motion_blur_scale_at(edit, 2.0, 2.5);
@@ -1273,6 +1294,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     }
     {
         let e = usd_geom::NurbsCurvesEdit::new(edit, h.path("/Authored_NurbsCurves"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_knots(edit, &[1.5, 2.5]);
         e.set_knots_at(edit, 2.0, &[2.5, 3.5]);
@@ -1285,6 +1307,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     }
     {
         let e = usd_geom::NurbsPatchEdit::new(edit, h.path("/Authored_NurbsPatch"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_point_weights(edit, &[1.5, 2.5]);
         e.set_point_weights_at(edit, 2.0, &[2.5, 3.5]);
@@ -1320,8 +1343,9 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
         e.set_v_vertex_count_at(edit, 2.0, 4);
     }
     {
-        let e =
-            usd_geom::PlaneEdit::new(edit, h.path("/Authored_Plane")).expect("the prim is defined");
+        let e = usd_geom::PlaneEdit::new(edit, h.path("/Authored_Plane"))
+            .expect("outside any instance")
+            .expect("the prim is defined");
         e.set_axis(edit, usd_geom::PlaneAxis::from_token("Y"));
         e.set_length(edit, 1.5);
         e.set_length_at(edit, 2.0, 2.5);
@@ -1330,6 +1354,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     }
     {
         let e = usd_geom::PointBasedEdit::new(edit, h.path("/Authored_BasisCurves"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_accelerations(edit, &[[1.5, 2.5, 3.5], [2.5, 3.5, 4.5]]);
         e.set_accelerations_at(edit, 2.0, &[[2.5, 3.5, 4.5], [3.5, 4.5, 5.5]]);
@@ -1342,6 +1367,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     }
     {
         let e = usd_geom::PointInstancerEdit::new(edit, h.path("/Authored_PointInstancer"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_accelerations(edit, &[[1.5, 2.5, 3.5], [2.5, 3.5, 4.5]]);
         e.set_accelerations_at(edit, 2.0, &[[2.5, 3.5, 4.5], [3.5, 4.5, 5.5]]);
@@ -1367,6 +1393,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     }
     {
         let e = usd_geom::PointsEdit::new(edit, h.path("/Authored_Points"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_ids(edit, &[3, 4]);
         e.set_ids_at(edit, 2.0, &[4, 5]);
@@ -1375,12 +1402,14 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     }
     {
         let e = usd_geom::SphereEdit::new(edit, h.path("/Authored_Sphere"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_radius(edit, 1.5);
         e.set_radius_at(edit, 2.0, 2.5);
     }
     {
         let e = usd_geom::TetMeshEdit::new(edit, h.path("/Authored_TetMesh"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_surface_face_vertex_indices(edit, &[[3, 4, 5], [4, 5, 6]]);
         e.set_surface_face_vertex_indices_at(edit, 2.0, &[[4, 5, 6], [5, 6, 7]]);
@@ -1389,6 +1418,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     }
     {
         let e = usd_geom::VisibilityApiEdit::new(edit, h.path("/Authored_VisibilityAPI"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_guide_visibility(
             edit,
@@ -1405,16 +1435,19 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     }
     {
         let e = usd_geom::XformableEdit::new(edit, h.path("/Authored_BasisCurves"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_xform_op_order(edit, &["token1", "token2"]);
     }
     {
         let e = usd_shade::CoordSysApiEdit::new(edit, h.path("/Authored_CoordSysAPI"), "a")
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_binding(edit, h.targets());
     }
     {
         let e = usd_shade::MaterialEdit::new(edit, h.path("/Authored_Material"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_displacement(edit, "token1");
         e.set_displacement_at(edit, 2.0, "token2");
@@ -1425,6 +1458,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     }
     {
         let e = usd_shade::NodeDefApiEdit::new(edit, h.path("/Authored_NodeDefAPI"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_id(edit, "token1");
         e.set_implementation_source(
@@ -1434,6 +1468,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     }
     {
         let e = usd_lux::CylinderLightEdit::new(edit, h.path("/Authored_CylinderLight"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_length(edit, 1.5);
         e.set_length_at(edit, 2.0, 2.5);
@@ -1444,18 +1479,21 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     }
     {
         let e = usd_lux::DiskLightEdit::new(edit, h.path("/Authored_DiskLight"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_radius(edit, 1.5);
         e.set_radius_at(edit, 2.0, 2.5);
     }
     {
         let e = usd_lux::DistantLightEdit::new(edit, h.path("/Authored_DistantLight"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_angle(edit, 1.5);
         e.set_angle_at(edit, 2.0, 2.5);
     }
     {
         let e = usd_lux::DomeLightEdit::new(edit, h.path("/Authored_DomeLight"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_guide_radius(edit, 1.5);
         e.set_guide_radius_at(edit, 2.0, 2.5);
@@ -1471,6 +1509,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     }
     {
         let e = usd_lux::DomeLight1Edit::new(edit, h.path("/Authored_DomeLight_1"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_guide_radius(edit, 1.5);
         e.set_guide_radius_at(edit, 2.0, 2.5);
@@ -1490,11 +1529,13 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     }
     {
         let e = usd_lux::GeometryLightEdit::new(edit, h.path("/Authored_GeometryLight"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_geometry(edit, h.targets());
     }
     {
         let e = usd_lux::LightApiEdit::new(edit, h.path("/Authored_LightAPI"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_color(edit, [1.5, 2.5, 3.5]);
         e.set_color_at(edit, 2.0, [2.5, 3.5, 4.5]);
@@ -1521,11 +1562,13 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     }
     {
         let e = usd_lux::LightFilterEdit::new(edit, h.path("/Authored_LightFilter"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_shader_id(edit, "token1");
     }
     {
         let e = usd_lux::LightListApiEdit::new(edit, h.path("/Authored_LightListAPI"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_light_list(edit, h.targets());
         e.set_light_list_cache_behavior(
@@ -1540,6 +1583,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     }
     {
         let e = usd_lux::ListApiEdit::new(edit, h.path("/Authored_ListAPI"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_light_list(edit, h.targets());
         e.set_light_list_cache_behavior(
@@ -1554,6 +1598,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     }
     {
         let e = usd_lux::PortalLightEdit::new(edit, h.path("/Authored_PortalLight"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_height(edit, 1.5);
         e.set_height_at(edit, 2.0, 2.5);
@@ -1562,6 +1607,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     }
     {
         let e = usd_lux::RectLightEdit::new(edit, h.path("/Authored_RectLight"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_height(edit, 1.5);
         e.set_height_at(edit, 2.0, 2.5);
@@ -1572,6 +1618,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     }
     {
         let e = usd_lux::ShadowApiEdit::new(edit, h.path("/Authored_ShadowAPI"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_shadow_color(edit, [1.5, 2.5, 3.5]);
         e.set_shadow_color_at(edit, 2.0, [2.5, 3.5, 4.5]);
@@ -1586,6 +1633,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     }
     {
         let e = usd_lux::ShapingApiEdit::new(edit, h.path("/Authored_ShapingAPI"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_shaping_cone_angle(edit, 1.5);
         e.set_shaping_cone_angle_at(edit, 2.0, 2.5);
@@ -1604,6 +1652,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     }
     {
         let e = usd_lux::SphereLightEdit::new(edit, h.path("/Authored_SphereLight"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_radius(edit, 1.5);
         e.set_radius_at(edit, 2.0, 2.5);
@@ -1612,6 +1661,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     }
     {
         let e = usd_skel::BlendShapeEdit::new(edit, h.path("/Authored_BlendShape"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_normal_offsets(edit, &[[1.5, 2.5, 3.5], [2.5, 3.5, 4.5]]);
         e.set_offsets(edit, &[[1.5, 2.5, 3.5], [2.5, 3.5, 4.5]]);
@@ -1619,6 +1669,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     }
     {
         let e = usd_skel::SkelAnimationEdit::new(edit, h.path("/Authored_SkelAnimation"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_blend_shapes(edit, &["token1", "token2"]);
         e.set_blend_shape_weights(edit, &[1.5, 2.5]);
@@ -1633,6 +1684,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     }
     {
         let e = usd_skel::SkelBindingApiEdit::new(edit, h.path("/Authored_SkelBindingAPI"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_geom_bind_transform(
             edit,
@@ -1669,6 +1721,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     }
     {
         let e = usd_skel::SkeletonEdit::new(edit, h.path("/Authored_Skeleton"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_bind_transforms(
             edit,
@@ -1712,6 +1765,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
             edit,
             h.path("/Authored_PhysicsCollisionAPI"),
         )
+        .expect("outside any instance")
         .expect("the prim is defined");
         e.set_collision_enabled(edit, true);
         e.set_collision_enabled_at(edit, 2.0, false);
@@ -1722,6 +1776,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
             edit,
             h.path("/Authored_PhysicsCollisionGroup"),
         )
+        .expect("outside any instance")
         .expect("the prim is defined");
         e.set_filtered_groups(edit, h.targets());
         e.set_invert_filtered_groups(edit, true);
@@ -1734,6 +1789,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
             edit,
             h.path("/Authored_PhysicsDistanceJoint"),
         )
+        .expect("outside any instance")
         .expect("the prim is defined");
         e.set_max_distance(edit, 1.5);
         e.set_max_distance_at(edit, 2.0, 2.5);
@@ -1743,6 +1799,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     {
         let e =
             usd_physics::PhysicsDriveApiEdit::new(edit, h.path("/Authored_PhysicsDriveAPI"), "a")
+                .expect("outside any instance")
                 .expect("the prim is defined");
         e.set_damping(edit, 1.5);
         e.set_damping_at(edit, 2.0, 2.5);
@@ -1764,11 +1821,13 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
             edit,
             h.path("/Authored_PhysicsFilteredPairsAPI"),
         )
+        .expect("outside any instance")
         .expect("the prim is defined");
         e.set_filtered_pairs(edit, h.targets());
     }
     {
         let e = usd_physics::PhysicsJointEdit::new(edit, h.path("/Authored_PhysicsJoint"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_body0(edit, h.targets());
         e.set_body1(edit, h.targets());
@@ -1793,6 +1852,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     {
         let e =
             usd_physics::PhysicsLimitApiEdit::new(edit, h.path("/Authored_PhysicsLimitAPI"), "a")
+                .expect("outside any instance")
                 .expect("the prim is defined");
         e.set_high(edit, 1.5);
         e.set_high_at(edit, 2.0, 2.5);
@@ -1801,6 +1861,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     }
     {
         let e = usd_physics::PhysicsMassApiEdit::new(edit, h.path("/Authored_PhysicsMassAPI"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_center_of_mass(edit, [1.5, 2.5, 3.5]);
         e.set_center_of_mass_at(edit, 2.0, [2.5, 3.5, 4.5]);
@@ -1816,6 +1877,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     {
         let e =
             usd_physics::PhysicsMaterialApiEdit::new(edit, h.path("/Authored_PhysicsMaterialAPI"))
+                .expect("outside any instance")
                 .expect("the prim is defined");
         e.set_density(edit, 1.5);
         e.set_density_at(edit, 2.0, 2.5);
@@ -1831,6 +1893,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
             edit,
             h.path("/Authored_PhysicsMeshCollisionAPI"),
         )
+        .expect("outside any instance")
         .expect("the prim is defined");
         e.set_approximation(
             edit,
@@ -1842,6 +1905,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
             edit,
             h.path("/Authored_PhysicsPrismaticJoint"),
         )
+        .expect("outside any instance")
         .expect("the prim is defined");
         e.set_axis(
             edit,
@@ -1857,6 +1921,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
             edit,
             h.path("/Authored_PhysicsRevoluteJoint"),
         )
+        .expect("outside any instance")
         .expect("the prim is defined");
         e.set_axis(edit, usd_physics::PhysicsRevoluteJointAxis::from_token("Y"));
         e.set_lower_limit(edit, 1.5);
@@ -1869,6 +1934,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
             edit,
             h.path("/Authored_PhysicsRigidBodyAPI"),
         )
+        .expect("outside any instance")
         .expect("the prim is defined");
         e.set_angular_velocity(edit, [1.5, 2.5, 3.5]);
         e.set_angular_velocity_at(edit, 2.0, [2.5, 3.5, 4.5]);
@@ -1883,6 +1949,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     }
     {
         let e = usd_physics::PhysicsSceneEdit::new(edit, h.path("/Authored_PhysicsScene"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_gravity_direction(edit, [1.5, 2.5, 3.5]);
         e.set_gravity_direction_at(edit, 2.0, [2.5, 3.5, 4.5]);
@@ -1894,6 +1961,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
             edit,
             h.path("/Authored_PhysicsSphericalJoint"),
         )
+        .expect("outside any instance")
         .expect("the prim is defined");
         e.set_axis(
             edit,
@@ -1906,12 +1974,14 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     }
     {
         let e = usd_vol::Field3DAssetEdit::new(edit, h.path("/Authored_Field3DAsset"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_field_purpose(edit, "token1");
         e.set_field_purpose_at(edit, 2.0, "token2");
     }
     {
         let e = usd_vol::OpenVDBAssetEdit::new(edit, h.path("/Authored_OpenVDBAsset"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_field_class(
             edit,
@@ -1928,6 +1998,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
             edit,
             h.path("/Authored_ParticleField3DGaussianSplat"),
         )
+        .expect("outside any instance")
         .expect("the prim is defined");
         e.set_projection_mode_hint(
             edit,
@@ -1943,6 +2014,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
             edit,
             h.path("/Authored_ParticleFieldOpacityAttributeAPI"),
         )
+        .expect("outside any instance")
         .expect("the prim is defined");
         e.set_opacities(edit, &[1.5, 2.5]);
         e.set_opacities_at(edit, 2.0, &[2.5, 3.5]);
@@ -1954,6 +2026,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
             edit,
             h.path("/Authored_ParticleFieldOrientationAttributeAPI"),
         )
+        .expect("outside any instance")
         .expect("the prim is defined");
         e.set_orientations(edit, &[[1.5, 2.5, 3.5, 4.5], [2.5, 3.5, 4.5, 5.5]]);
         e.set_orientations_at(edit, 2.0, &[[2.5, 3.5, 4.5, 5.5], [3.5, 4.5, 5.5, 6.5]]);
@@ -1965,6 +2038,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
             edit,
             h.path("/Authored_ParticleFieldPositionAttributeAPI"),
         )
+        .expect("outside any instance")
         .expect("the prim is defined");
         e.set_positions(edit, &[[1.5, 2.5, 3.5], [2.5, 3.5, 4.5]]);
         e.set_positions_at(edit, 2.0, &[[2.5, 3.5, 4.5], [3.5, 4.5, 5.5]]);
@@ -1976,6 +2050,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
             edit,
             h.path("/Authored_ParticleFieldScaleAttributeAPI"),
         )
+        .expect("outside any instance")
         .expect("the prim is defined");
         e.set_scales(edit, &[[1.5, 2.5, 3.5], [2.5, 3.5, 4.5]]);
         e.set_scales_at(edit, 2.0, &[[2.5, 3.5, 4.5], [3.5, 4.5, 5.5]]);
@@ -1987,6 +2062,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
             edit,
             h.path("/Authored_ParticleFieldSphericalHarmonicsAttributeAPI"),
         )
+        .expect("outside any instance")
         .expect("the prim is defined");
         e.set_radiance_spherical_harmonics_coefficients(edit, &[[1.5, 2.5, 3.5], [2.5, 3.5, 4.5]]);
         e.set_radiance_spherical_harmonics_coefficients_at(
@@ -2004,6 +2080,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     }
     {
         let e = usd_vol::VolumeFieldAssetEdit::new(edit, h.path("/Authored_Field3DAsset"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_field_data_type(edit, "token1");
         e.set_field_data_type_at(edit, 2.0, "token2");
@@ -2025,6 +2102,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     }
     {
         let e = usd_render::RenderPassEdit::new(edit, h.path("/Authored_RenderPass"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_command(edit, &["text1", "text2"]);
         e.set_file_name(edit, "asset1.usda");
@@ -2034,6 +2112,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     }
     {
         let e = usd_render::RenderProductEdit::new(edit, h.path("/Authored_RenderProduct"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_ordered_vars(edit, h.targets());
         e.set_product_name(edit, "token1");
@@ -2045,6 +2124,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     }
     {
         let e = usd_render::RenderSettingsEdit::new(edit, h.path("/Authored_RenderSettings"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_included_purposes(edit, &["token1", "token2"]);
         e.set_material_binding_purposes(edit, &["token1", "token2"]);
@@ -2053,6 +2133,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     }
     {
         let e = usd_render::RenderSettingsBaseEdit::new(edit, h.path("/Authored_RenderProduct"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_aspect_ratio_conform_policy(
             edit,
@@ -2068,6 +2149,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     }
     {
         let e = usd_render::RenderVarEdit::new(edit, h.path("/Authored_RenderVar"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_data_type(edit, "token1");
         e.set_source_name(edit, "text1");
@@ -2076,6 +2158,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     {
         let e =
             usd_lod::LODDistanceHeuristicEdit::new(edit, h.path("/Authored_LODDistanceHeuristic"))
+                .expect("outside any instance")
                 .expect("the prim is defined");
         e.set_blend_thresholds(edit, &[1.5, 2.5]);
         e.set_bounding_volume(edit, h.targets());
@@ -2085,11 +2168,13 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     }
     {
         let e = usd_lod::LODHeuristicEdit::new(edit, h.path("/Authored_LODDistanceHeuristic"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_lod_domain(edit, "token1");
     }
     {
         let e = usd_lod::LODOverrideApiEdit::new(edit, h.path("/Authored_LODOverrideAPI"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_lod_override_index(edit, 1.5);
         e.set_lod_override_index_at(edit, 2.0, 2.5);
@@ -2105,6 +2190,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     }
     {
         let e = usd_lod::LODRootApiEdit::new(edit, h.path("/Authored_LODRootAPI"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_lod_default_index(edit, 3);
         e.set_lod_default_index_at(edit, 2.0, 4);
@@ -2115,6 +2201,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
             edit,
             h.path("/Authored_LODScreenSizeHeuristic"),
         )
+        .expect("outside any instance")
         .expect("the prim is defined");
         e.set_blend_thresholds(edit, &[1.5, 2.5]);
         e.set_bounding_volume(edit, h.targets());
@@ -2128,6 +2215,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     }
     {
         let e = usd_ui::AccessibilityApiEdit::new(edit, h.path("/Authored_AccessibilityAPI"), "a")
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_description(edit, "text1");
         e.set_description_at(edit, 2.0, "text2");
@@ -2145,11 +2233,13 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     }
     {
         let e = usd_ui::BackdropEdit::new(edit, h.path("/Authored_Backdrop"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_description(edit, "token1");
     }
     {
         let e = usd_ui::NodeGraphNodeApiEdit::new(edit, h.path("/Authored_NodeGraphNodeAPI"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_display_color(edit, [1.5, 2.5, 3.5]);
         e.set_doc_uri(edit, "text1");
@@ -2164,12 +2254,14 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     }
     {
         let e = usd_ui::SceneGraphPrimApiEdit::new(edit, h.path("/Authored_SceneGraphPrimAPI"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_display_group(edit, "token1");
         e.set_display_name(edit, "token1");
     }
     {
         let e = usd_ri::RiMaterialApiEdit::new(edit, h.path("/Authored_RiMaterialAPI"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_displacement(edit, "token1");
         e.set_displacement_at(edit, 2.0, "token2");
@@ -2183,6 +2275,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
             edit,
             h.path("/Authored_HydraGenerativeProceduralAPI"),
         )
+        .expect("outside any instance")
         .expect("the prim is defined");
         e.set_procedural_type(edit, "token1");
         e.set_procedural_type_at(edit, 2.0, "token2");
@@ -2192,11 +2285,13 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     {
         let e =
             usd_hydra::HydraRenderPassApiEdit::new(edit, h.path("/Authored_HydraRenderPassAPI"))
+                .expect("outside any instance")
                 .expect("the prim is defined");
         e.set_hydra_renderer_name(edit, "token1");
     }
     {
         let e = usd_media::SpatialAudioEdit::new(edit, h.path("/Authored_SpatialAudio"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_aural_mode(
             edit,
@@ -2216,6 +2311,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
     {
         let e =
             usd_proc::GenerativeProceduralEdit::new(edit, h.path("/Authored_GenerativeProcedural"))
+                .expect("outside any instance")
                 .expect("the prim is defined");
         e.set_procedural_system(edit, "token1");
         e.set_procedural_system_at(edit, 2.0, "token2");
@@ -2226,12 +2322,14 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, h: &Harness) {
             h.path("/Authored_SemanticsLabelsAPI"),
             "a",
         )
+        .expect("outside any instance")
         .expect("the prim is defined");
         e.set_labels(edit, &["token1", "token2"]);
         e.set_labels_at(edit, 2.0, &["token2", "token3"]);
     }
     {
         let e = usd_mtlx::MaterialXConfigApiEdit::new(edit, h.path("/Authored_MaterialXConfigAPI"))
+            .expect("outside any instance")
             .expect("the prim is defined");
         e.set_config_mtlx_version(edit, "text1");
         e.set_config_mtlx_version_at(edit, 2.0, "text2");
@@ -2243,7 +2341,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     for prim in ["/Fallback_CollectionAPI", "/Authored_CollectionAPI"] {
         let v =
             usd::CollectionApi::get(scene, h.path(prim), "a").expect("a CollectionAPI at the prim");
-        let _ = v.edit();
         assert!(
             usd::CollectionApi::instances(scene, h.path(prim))
                 .iter()
@@ -2281,7 +2378,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     }
     for prim in ["/Fallback_ColorSpaceAPI", "/Authored_ColorSpaceAPI"] {
         let v = usd::ColorSpaceApi::get(scene, h.path(prim)).expect("a ColorSpaceAPI at the prim");
-        let _ = v.edit();
         r.value(prim, "colorSpace:name", When::Default, v.color_space_name());
     }
     for prim in [
@@ -2290,7 +2386,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     ] {
         let v = usd::ColorSpaceDefinitionApi::get(scene, h.path(prim), "a")
             .expect("a ColorSpaceDefinitionAPI at the prim");
-        let _ = v.edit();
         assert!(
             usd::ColorSpaceDefinitionApi::instances(scene, h.path(prim))
                 .iter()
@@ -2372,13 +2467,11 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         );
     }
     for prim in ["/Fallback_BasisCurves", "/Authored_BasisCurves"] {
-        let v = usd::Typed::new(scene, h.path(prim)).expect("a Typed at the prim");
-        let _ = v.edit();
+        let _ = usd::Typed::new(scene, h.path(prim)).expect("a Typed at the prim");
     }
     for prim in ["/Fallback_BackPlateAPI", "/Authored_BackPlateAPI"] {
         let v = usd_geom::BackPlateApi::get(scene, h.path(prim), "a")
             .expect("a BackPlateAPI at the prim");
-        let _ = v.edit();
         assert!(
             usd_geom::BackPlateApi::instances(scene, h.path(prim))
                 .iter()
@@ -2538,7 +2631,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     }
     for prim in ["/Fallback_BasisCurves", "/Authored_BasisCurves"] {
         let v = usd_geom::BasisCurves::new(scene, h.path(prim)).expect("a BasisCurves at the prim");
-        let _ = v.edit();
         r.value(
             prim,
             "basis",
@@ -2565,13 +2657,11 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     }
     for prim in ["/Fallback_BasisCurves", "/Authored_BasisCurves"] {
         let v = usd_geom::Boundable::new(scene, h.path(prim)).expect("a Boundable at the prim");
-        let _ = v.edit();
         r.value(prim, "extent", When::Default, v.extent());
         r.value(prim, "extent", When::Sample, v.extent_at(Time::held(2.0)));
     }
     for prim in ["/Fallback_Camera", "/Authored_Camera"] {
         let v = usd_geom::Camera::new(scene, h.path(prim)).expect("a Camera at the prim");
-        let _ = v.edit();
         r.value(prim, "clippingPlanes", When::Default, v.clipping_planes());
         r.value(
             prim,
@@ -2733,7 +2823,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     }
     for prim in ["/Fallback_Capsule", "/Authored_Capsule"] {
         let v = usd_geom::Capsule::new(scene, h.path(prim)).expect("a Capsule at the prim");
-        let _ = v.edit();
         r.value(
             prim,
             "axis",
@@ -2748,7 +2837,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     }
     for prim in ["/Fallback_Capsule_1", "/Authored_Capsule_1"] {
         let v = usd_geom::Capsule1::new(scene, h.path(prim)).expect("a Capsule_1 at the prim");
-        let _ = v.edit();
         r.value(
             prim,
             "axis",
@@ -2775,7 +2863,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     }
     for prim in ["/Fallback_Cone", "/Authored_Cone"] {
         let v = usd_geom::Cone::new(scene, h.path(prim)).expect("a Cone at the prim");
-        let _ = v.edit();
         r.value(
             prim,
             "axis",
@@ -2790,13 +2877,11 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     }
     for prim in ["/Fallback_Cube", "/Authored_Cube"] {
         let v = usd_geom::Cube::new(scene, h.path(prim)).expect("a Cube at the prim");
-        let _ = v.edit();
         r.value(prim, "size", When::Default, v.size());
         r.value(prim, "size", When::Sample, v.size_at(Time::held(2.0)));
     }
     for prim in ["/Fallback_BasisCurves", "/Authored_BasisCurves"] {
         let v = usd_geom::Curves::new(scene, h.path(prim)).expect("a Curves at the prim");
-        let _ = v.edit();
         r.value(
             prim,
             "curveVertexCounts",
@@ -2814,7 +2899,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     }
     for prim in ["/Fallback_Cylinder", "/Authored_Cylinder"] {
         let v = usd_geom::Cylinder::new(scene, h.path(prim)).expect("a Cylinder at the prim");
-        let _ = v.edit();
         r.value(
             prim,
             "axis",
@@ -2829,7 +2913,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     }
     for prim in ["/Fallback_Cylinder_1", "/Authored_Cylinder_1"] {
         let v = usd_geom::Cylinder1::new(scene, h.path(prim)).expect("a Cylinder_1 at the prim");
-        let _ = v.edit();
         r.value(
             prim,
             "axis",
@@ -2857,7 +2940,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     for prim in ["/Fallback_GeomModelAPI", "/Authored_GeomModelAPI"] {
         let v =
             usd_geom::GeomModelApi::get(scene, h.path(prim)).expect("a GeomModelAPI at the prim");
-        let _ = v.edit();
         r.value(
             prim,
             "model:applyDrawMode",
@@ -2984,7 +3066,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     }
     for prim in ["/Fallback_GeomSubset", "/Authored_GeomSubset"] {
         let v = usd_geom::GeomSubset::new(scene, h.path(prim)).expect("a GeomSubset at the prim");
-        let _ = v.edit();
         r.value(
             prim,
             "elementType",
@@ -3000,7 +3081,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     }
     for prim in ["/Fallback_BasisCurves", "/Authored_BasisCurves"] {
         let v = usd_geom::Gprim::new(scene, h.path(prim)).expect("a Gprim at the prim");
-        let _ = v.edit();
         r.value(prim, "doubleSided", When::Default, v.double_sided());
         r.value(
             prim,
@@ -3039,7 +3119,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     for prim in ["/Fallback_HermiteCurves", "/Authored_HermiteCurves"] {
         let v =
             usd_geom::HermiteCurves::new(scene, h.path(prim)).expect("a HermiteCurves at the prim");
-        let _ = v.edit();
         r.value(prim, "tangents", When::Default, v.tangents());
         r.value(
             prim,
@@ -3050,7 +3129,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     }
     for prim in ["/Fallback_BasisCurves", "/Authored_BasisCurves"] {
         let v = usd_geom::Imageable::new(scene, h.path(prim)).expect("a Imageable at the prim");
-        let _ = v.edit();
         r.targets(prim, "proxyPrim", &v.proxy_prim());
         r.value(
             prim,
@@ -3079,7 +3157,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     }
     for prim in ["/Fallback_Mesh", "/Authored_Mesh"] {
         let v = usd_geom::Mesh::new(scene, h.path(prim)).expect("a Mesh at the prim");
-        let _ = v.edit();
         r.value(prim, "cornerIndices", When::Default, v.corner_indices());
         r.value(
             prim,
@@ -3235,7 +3312,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     }
     for prim in ["/Fallback_MotionAPI", "/Authored_MotionAPI"] {
         let v = usd_geom::MotionApi::get(scene, h.path(prim)).expect("a MotionAPI at the prim");
-        let _ = v.edit();
         r.value(
             prim,
             "motion:blurScale",
@@ -3275,7 +3351,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     }
     for prim in ["/Fallback_NurbsCurves", "/Authored_NurbsCurves"] {
         let v = usd_geom::NurbsCurves::new(scene, h.path(prim)).expect("a NurbsCurves at the prim");
-        let _ = v.edit();
         r.value(prim, "knots", When::Default, v.knots());
         r.value(prim, "knots", When::Sample, v.knots_at(Time::held(2.0)));
         r.value(prim, "order", When::Default, v.order());
@@ -3292,7 +3367,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     }
     for prim in ["/Fallback_NurbsPatch", "/Authored_NurbsPatch"] {
         let v = usd_geom::NurbsPatch::new(scene, h.path(prim)).expect("a NurbsPatch at the prim");
-        let _ = v.edit();
         r.value(prim, "pointWeights", When::Default, v.point_weights());
         r.value(
             prim,
@@ -3410,7 +3484,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     }
     for prim in ["/Fallback_Plane", "/Authored_Plane"] {
         let v = usd_geom::Plane::new(scene, h.path(prim)).expect("a Plane at the prim");
-        let _ = v.edit();
         r.value(
             prim,
             "axis",
@@ -3425,7 +3498,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     }
     for prim in ["/Fallback_BasisCurves", "/Authored_BasisCurves"] {
         let v = usd_geom::PointBased::new(scene, h.path(prim)).expect("a PointBased at the prim");
-        let _ = v.edit();
         r.value(prim, "accelerations", When::Default, v.accelerations());
         r.value(
             prim,
@@ -3448,7 +3520,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     for prim in ["/Fallback_PointInstancer", "/Authored_PointInstancer"] {
         let v = usd_geom::PointInstancer::new(scene, h.path(prim))
             .expect("a PointInstancer at the prim");
-        let _ = v.edit();
         r.value(prim, "accelerations", When::Default, v.accelerations());
         r.value(
             prim,
@@ -3518,25 +3589,21 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     }
     for prim in ["/Fallback_Points", "/Authored_Points"] {
         let v = usd_geom::Points::new(scene, h.path(prim)).expect("a Points at the prim");
-        let _ = v.edit();
         r.value(prim, "ids", When::Default, v.ids());
         r.value(prim, "ids", When::Sample, v.ids_at(Time::held(2.0)));
         r.value(prim, "widths", When::Default, v.widths());
         r.value(prim, "widths", When::Sample, v.widths_at(Time::held(2.0)));
     }
     for prim in ["/Fallback_Scope", "/Authored_Scope"] {
-        let v = usd_geom::Scope::new(scene, h.path(prim)).expect("a Scope at the prim");
-        let _ = v.edit();
+        let _ = usd_geom::Scope::new(scene, h.path(prim)).expect("a Scope at the prim");
     }
     for prim in ["/Fallback_Sphere", "/Authored_Sphere"] {
         let v = usd_geom::Sphere::new(scene, h.path(prim)).expect("a Sphere at the prim");
-        let _ = v.edit();
         r.value(prim, "radius", When::Default, v.radius());
         r.value(prim, "radius", When::Sample, v.radius_at(Time::held(2.0)));
     }
     for prim in ["/Fallback_TetMesh", "/Authored_TetMesh"] {
         let v = usd_geom::TetMesh::new(scene, h.path(prim)).expect("a TetMesh at the prim");
-        let _ = v.edit();
         r.value(
             prim,
             "surfaceFaceVertexIndices",
@@ -3565,7 +3632,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     for prim in ["/Fallback_VisibilityAPI", "/Authored_VisibilityAPI"] {
         let v =
             usd_geom::VisibilityApi::get(scene, h.path(prim)).expect("a VisibilityAPI at the prim");
-        let _ = v.edit();
         r.value(
             prim,
             "guideVisibility",
@@ -3607,18 +3673,15 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         );
     }
     for prim in ["/Fallback_Xform", "/Authored_Xform"] {
-        let v = usd_geom::Xform::new(scene, h.path(prim)).expect("a Xform at the prim");
-        let _ = v.edit();
+        let _ = usd_geom::Xform::new(scene, h.path(prim)).expect("a Xform at the prim");
     }
     for prim in ["/Fallback_BasisCurves", "/Authored_BasisCurves"] {
         let v = usd_geom::Xformable::new(scene, h.path(prim)).expect("a Xformable at the prim");
-        let _ = v.edit();
         r.value(prim, "xformOpOrder", When::Default, v.xform_op_order());
     }
     for prim in ["/Fallback_CoordSysAPI", "/Authored_CoordSysAPI"] {
         let v = usd_shade::CoordSysApi::get(scene, h.path(prim), "a")
             .expect("a CoordSysAPI at the prim");
-        let _ = v.edit();
         assert!(
             usd_shade::CoordSysApi::instances(scene, h.path(prim))
                 .iter()
@@ -3629,7 +3692,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     }
     for prim in ["/Fallback_Material", "/Authored_Material"] {
         let v = usd_shade::Material::new(scene, h.path(prim)).expect("a Material at the prim");
-        let _ = v.edit();
         r.value(
             prim,
             "outputs:displacement",
@@ -3661,13 +3723,11 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         "/Fallback_MaterialBindingAPI",
         "/Authored_MaterialBindingAPI",
     ] {
-        let v = usd_shade::MaterialBindingApi::get(scene, h.path(prim))
+        let _ = usd_shade::MaterialBindingApi::get(scene, h.path(prim))
             .expect("a MaterialBindingAPI at the prim");
-        let _ = v.edit();
     }
     for prim in ["/Fallback_NodeDefAPI", "/Authored_NodeDefAPI"] {
         let v = usd_shade::NodeDefApi::get(scene, h.path(prim)).expect("a NodeDefAPI at the prim");
-        let _ = v.edit();
         r.value(prim, "info:id", When::Default, v.id());
         r.value(
             prim,
@@ -3684,24 +3744,20 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         );
     }
     for prim in ["/Fallback_NodeGraph", "/Authored_NodeGraph"] {
-        let v = usd_shade::NodeGraph::new(scene, h.path(prim)).expect("a NodeGraph at the prim");
-        let _ = v.edit();
+        let _ = usd_shade::NodeGraph::new(scene, h.path(prim)).expect("a NodeGraph at the prim");
     }
     for prim in ["/Fallback_Shader", "/Authored_Shader"] {
         let v = usd_shade::Shader::new(scene, h.path(prim)).expect("a Shader at the prim");
-        let _ = v.edit();
         let _ = v.node_def_api();
     }
     for prim in ["/Fallback_CylinderLight", "/Authored_CylinderLight"] {
         let v = usd_lux::BoundableLightBase::new(scene, h.path(prim))
             .expect("a BoundableLightBase at the prim");
-        let _ = v.edit();
         let _ = v.light_api();
     }
     for prim in ["/Fallback_CylinderLight", "/Authored_CylinderLight"] {
         let v =
             usd_lux::CylinderLight::new(scene, h.path(prim)).expect("a CylinderLight at the prim");
-        let _ = v.edit();
         r.value(prim, "inputs:length", When::Default, v.length());
         r.value(
             prim,
@@ -3726,7 +3782,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     }
     for prim in ["/Fallback_DiskLight", "/Authored_DiskLight"] {
         let v = usd_lux::DiskLight::new(scene, h.path(prim)).expect("a DiskLight at the prim");
-        let _ = v.edit();
         r.value(prim, "inputs:radius", When::Default, v.radius());
         r.value(
             prim,
@@ -3738,7 +3793,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     for prim in ["/Fallback_DistantLight", "/Authored_DistantLight"] {
         let v =
             usd_lux::DistantLight::new(scene, h.path(prim)).expect("a DistantLight at the prim");
-        let _ = v.edit();
         r.value(prim, "inputs:angle", When::Default, v.angle());
         r.value(
             prim,
@@ -3749,7 +3803,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     }
     for prim in ["/Fallback_DomeLight", "/Authored_DomeLight"] {
         let v = usd_lux::DomeLight::new(scene, h.path(prim)).expect("a DomeLight at the prim");
-        let _ = v.edit();
         r.value(prim, "guideRadius", When::Default, v.guide_radius());
         r.value(
             prim,
@@ -3789,7 +3842,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     }
     for prim in ["/Fallback_DomeLight_1", "/Authored_DomeLight_1"] {
         let v = usd_lux::DomeLight1::new(scene, h.path(prim)).expect("a DomeLight_1 at the prim");
-        let _ = v.edit();
         r.value(prim, "guideRadius", When::Default, v.guide_radius());
         r.value(
             prim,
@@ -3839,12 +3891,10 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     for prim in ["/Fallback_GeometryLight", "/Authored_GeometryLight"] {
         let v =
             usd_lux::GeometryLight::new(scene, h.path(prim)).expect("a GeometryLight at the prim");
-        let _ = v.edit();
         r.targets(prim, "geometry", &v.geometry());
     }
     for prim in ["/Fallback_LightAPI", "/Authored_LightAPI"] {
         let v = usd_lux::LightApi::get(scene, h.path(prim)).expect("a LightAPI at the prim");
-        let _ = v.edit();
         r.value(prim, "inputs:color", When::Default, v.color());
         r.value(
             prim,
@@ -3929,13 +3979,11 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     }
     for prim in ["/Fallback_LightFilter", "/Authored_LightFilter"] {
         let v = usd_lux::LightFilter::new(scene, h.path(prim)).expect("a LightFilter at the prim");
-        let _ = v.edit();
         r.value(prim, "lightFilter:shaderId", When::Default, v.shader_id());
     }
     for prim in ["/Fallback_LightListAPI", "/Authored_LightListAPI"] {
         let v =
             usd_lux::LightListApi::get(scene, h.path(prim)).expect("a LightListAPI at the prim");
-        let _ = v.edit();
         r.targets(prim, "lightList", &v.light_list());
         r.value(
             prim,
@@ -3961,7 +4009,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     }
     for prim in ["/Fallback_ListAPI", "/Authored_ListAPI"] {
         let v = usd_lux::ListApi::get(scene, h.path(prim)).expect("a ListAPI at the prim");
-        let _ = v.edit();
         r.targets(prim, "lightList", &v.light_list());
         r.value(
             prim,
@@ -3986,31 +4033,26 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         );
     }
     for prim in ["/Fallback_MeshLightAPI", "/Authored_MeshLightAPI"] {
-        let v =
+        let _ =
             usd_lux::MeshLightApi::get(scene, h.path(prim)).expect("a MeshLightAPI at the prim");
-        let _ = v.edit();
     }
     for prim in ["/Fallback_DistantLight", "/Authored_DistantLight"] {
         let v = usd_lux::NonboundableLightBase::new(scene, h.path(prim))
             .expect("a NonboundableLightBase at the prim");
-        let _ = v.edit();
         let _ = v.light_api();
     }
     for prim in ["/Fallback_PluginLight", "/Authored_PluginLight"] {
         let v = usd_lux::PluginLight::new(scene, h.path(prim)).expect("a PluginLight at the prim");
-        let _ = v.edit();
         let _ = v.node_def_api();
         let _ = v.light_api();
     }
     for prim in ["/Fallback_PluginLightFilter", "/Authored_PluginLightFilter"] {
         let v = usd_lux::PluginLightFilter::new(scene, h.path(prim))
             .expect("a PluginLightFilter at the prim");
-        let _ = v.edit();
         let _ = v.node_def_api();
     }
     for prim in ["/Fallback_PortalLight", "/Authored_PortalLight"] {
         let v = usd_lux::PortalLight::new(scene, h.path(prim)).expect("a PortalLight at the prim");
-        let _ = v.edit();
         r.value(prim, "inputs:height", When::Default, v.height());
         r.value(
             prim,
@@ -4028,7 +4070,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     }
     for prim in ["/Fallback_RectLight", "/Authored_RectLight"] {
         let v = usd_lux::RectLight::new(scene, h.path(prim)).expect("a RectLight at the prim");
-        let _ = v.edit();
         r.value(prim, "inputs:height", When::Default, v.height());
         r.value(
             prim,
@@ -4053,7 +4094,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     }
     for prim in ["/Fallback_ShadowAPI", "/Authored_ShadowAPI"] {
         let v = usd_lux::ShadowApi::get(scene, h.path(prim)).expect("a ShadowAPI at the prim");
-        let _ = v.edit();
         r.value(prim, "inputs:shadow:color", When::Default, v.shadow_color());
         r.value(
             prim,
@@ -4112,7 +4152,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     }
     for prim in ["/Fallback_ShapingAPI", "/Authored_ShapingAPI"] {
         let v = usd_lux::ShapingApi::get(scene, h.path(prim)).expect("a ShapingAPI at the prim");
-        let _ = v.edit();
         r.value(
             prim,
             "inputs:shaping:cone:angle",
@@ -4200,7 +4239,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     }
     for prim in ["/Fallback_SphereLight", "/Authored_SphereLight"] {
         let v = usd_lux::SphereLight::new(scene, h.path(prim)).expect("a SphereLight at the prim");
-        let _ = v.edit();
         r.value(prim, "inputs:radius", When::Default, v.radius());
         r.value(
             prim,
@@ -4217,13 +4255,11 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         );
     }
     for prim in ["/Fallback_VolumeLightAPI", "/Authored_VolumeLightAPI"] {
-        let v = usd_lux::VolumeLightApi::get(scene, h.path(prim))
+        let _ = usd_lux::VolumeLightApi::get(scene, h.path(prim))
             .expect("a VolumeLightAPI at the prim");
-        let _ = v.edit();
     }
     for prim in ["/Fallback_BlendShape", "/Authored_BlendShape"] {
         let v = usd_skel::BlendShape::new(scene, h.path(prim)).expect("a BlendShape at the prim");
-        let _ = v.edit();
         r.value(prim, "normalOffsets", When::Default, v.normal_offsets());
         r.value(prim, "offsets", When::Default, v.offsets());
         r.value(prim, "pointIndices", When::Default, v.point_indices());
@@ -4231,7 +4267,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     for prim in ["/Fallback_SkelAnimation", "/Authored_SkelAnimation"] {
         let v =
             usd_skel::SkelAnimation::new(scene, h.path(prim)).expect("a SkelAnimation at the prim");
-        let _ = v.edit();
         r.value(prim, "blendShapes", When::Default, v.blend_shapes());
         r.value(
             prim,
@@ -4266,7 +4301,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     for prim in ["/Fallback_SkelBindingAPI", "/Authored_SkelBindingAPI"] {
         let v = usd_skel::SkelBindingApi::get(scene, h.path(prim))
             .expect("a SkelBindingAPI at the prim");
-        let _ = v.edit();
         r.value(
             prim,
             "primvars:skel:geomBindTransform",
@@ -4323,12 +4357,10 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         r.targets(prim, "skel:skeleton", &v.skeleton());
     }
     for prim in ["/Fallback_SkelRoot", "/Authored_SkelRoot"] {
-        let v = usd_skel::SkelRoot::new(scene, h.path(prim)).expect("a SkelRoot at the prim");
-        let _ = v.edit();
+        let _ = usd_skel::SkelRoot::new(scene, h.path(prim)).expect("a SkelRoot at the prim");
     }
     for prim in ["/Fallback_Skeleton", "/Authored_Skeleton"] {
         let v = usd_skel::Skeleton::new(scene, h.path(prim)).expect("a Skeleton at the prim");
-        let _ = v.edit();
         r.value(prim, "bindTransforms", When::Default, v.bind_transforms());
         r.value(prim, "jointNames", When::Default, v.joint_names());
         r.value(prim, "joints", When::Default, v.joints());
@@ -4338,9 +4370,8 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         "/Fallback_PhysicsArticulationRootAPI",
         "/Authored_PhysicsArticulationRootAPI",
     ] {
-        let v = usd_physics::PhysicsArticulationRootApi::get(scene, h.path(prim))
+        let _ = usd_physics::PhysicsArticulationRootApi::get(scene, h.path(prim))
             .expect("a PhysicsArticulationRootAPI at the prim");
-        let _ = v.edit();
     }
     for prim in [
         "/Fallback_PhysicsCollisionAPI",
@@ -4348,7 +4379,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     ] {
         let v = usd_physics::PhysicsCollisionApi::get(scene, h.path(prim))
             .expect("a PhysicsCollisionAPI at the prim");
-        let _ = v.edit();
         r.value(
             prim,
             "physics:collisionEnabled",
@@ -4369,7 +4399,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     ] {
         let v = usd_physics::PhysicsCollisionGroup::new(scene, h.path(prim))
             .expect("a PhysicsCollisionGroup at the prim");
-        let _ = v.edit();
         r.targets(prim, "physics:filteredGroups", &v.filtered_groups());
         r.value(
             prim,
@@ -4402,7 +4431,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     ] {
         let v = usd_physics::PhysicsDistanceJoint::new(scene, h.path(prim))
             .expect("a PhysicsDistanceJoint at the prim");
-        let _ = v.edit();
         r.value(prim, "physics:maxDistance", When::Default, v.max_distance());
         r.value(
             prim,
@@ -4421,7 +4449,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     for prim in ["/Fallback_PhysicsDriveAPI", "/Authored_PhysicsDriveAPI"] {
         let v = usd_physics::PhysicsDriveApi::get(scene, h.path(prim), "a")
             .expect("a PhysicsDriveAPI at the prim");
-        let _ = v.edit();
         assert!(
             usd_physics::PhysicsDriveApi::instances(scene, h.path(prim))
                 .iter()
@@ -4503,18 +4530,15 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     ] {
         let v = usd_physics::PhysicsFilteredPairsApi::get(scene, h.path(prim))
             .expect("a PhysicsFilteredPairsAPI at the prim");
-        let _ = v.edit();
         r.targets(prim, "physics:filteredPairs", &v.filtered_pairs());
     }
     for prim in ["/Fallback_PhysicsFixedJoint", "/Authored_PhysicsFixedJoint"] {
-        let v = usd_physics::PhysicsFixedJoint::new(scene, h.path(prim))
+        let _ = usd_physics::PhysicsFixedJoint::new(scene, h.path(prim))
             .expect("a PhysicsFixedJoint at the prim");
-        let _ = v.edit();
     }
     for prim in ["/Fallback_PhysicsJoint", "/Authored_PhysicsJoint"] {
         let v = usd_physics::PhysicsJoint::new(scene, h.path(prim))
             .expect("a PhysicsJoint at the prim");
-        let _ = v.edit();
         r.targets(prim, "physics:body0", &v.body0());
         r.targets(prim, "physics:body1", &v.body1());
         r.value(prim, "physics:breakForce", When::Default, v.break_force());
@@ -4593,7 +4617,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     for prim in ["/Fallback_PhysicsLimitAPI", "/Authored_PhysicsLimitAPI"] {
         let v = usd_physics::PhysicsLimitApi::get(scene, h.path(prim), "a")
             .expect("a PhysicsLimitAPI at the prim");
-        let _ = v.edit();
         assert!(
             usd_physics::PhysicsLimitApi::instances(scene, h.path(prim))
                 .iter()
@@ -4618,7 +4641,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     for prim in ["/Fallback_PhysicsMassAPI", "/Authored_PhysicsMassAPI"] {
         let v = usd_physics::PhysicsMassApi::get(scene, h.path(prim))
             .expect("a PhysicsMassAPI at the prim");
-        let _ = v.edit();
         r.value(
             prim,
             "physics:centerOfMass",
@@ -4676,7 +4698,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     ] {
         let v = usd_physics::PhysicsMaterialApi::get(scene, h.path(prim))
             .expect("a PhysicsMaterialAPI at the prim");
-        let _ = v.edit();
         r.value(prim, "physics:density", When::Default, v.density());
         r.value(
             prim,
@@ -4722,7 +4743,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     ] {
         let v = usd_physics::PhysicsMeshCollisionApi::get(scene, h.path(prim))
             .expect("a PhysicsMeshCollisionAPI at the prim");
-        let _ = v.edit();
         r.value(
             prim,
             "physics:approximation",
@@ -4743,7 +4763,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     ] {
         let v = usd_physics::PhysicsPrismaticJoint::new(scene, h.path(prim))
             .expect("a PhysicsPrismaticJoint at the prim");
-        let _ = v.edit();
         r.value(
             prim,
             "physics:axis",
@@ -4778,7 +4797,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     ] {
         let v = usd_physics::PhysicsRevoluteJoint::new(scene, h.path(prim))
             .expect("a PhysicsRevoluteJoint at the prim");
-        let _ = v.edit();
         r.value(
             prim,
             "physics:axis",
@@ -4813,7 +4831,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     ] {
         let v = usd_physics::PhysicsRigidBodyApi::get(scene, h.path(prim))
             .expect("a PhysicsRigidBodyAPI at the prim");
-        let _ = v.edit();
         r.value(
             prim,
             "physics:angularVelocity",
@@ -4868,7 +4885,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     for prim in ["/Fallback_PhysicsScene", "/Authored_PhysicsScene"] {
         let v = usd_physics::PhysicsScene::new(scene, h.path(prim))
             .expect("a PhysicsScene at the prim");
-        let _ = v.edit();
         r.value(
             prim,
             "physics:gravityDirection",
@@ -4900,7 +4916,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     ] {
         let v = usd_physics::PhysicsSphericalJoint::new(scene, h.path(prim))
             .expect("a PhysicsSphericalJoint at the prim");
-        let _ = v.edit();
         r.value(
             prim,
             "physics:axis",
@@ -4942,7 +4957,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     for prim in ["/Fallback_Field3DAsset", "/Authored_Field3DAsset"] {
         let v =
             usd_vol::Field3DAsset::new(scene, h.path(prim)).expect("a Field3DAsset at the prim");
-        let _ = v.edit();
         r.value(prim, "fieldPurpose", When::Default, v.field_purpose());
         r.value(
             prim,
@@ -4952,17 +4966,14 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         );
     }
     for prim in ["/Fallback_Field3DAsset", "/Authored_Field3DAsset"] {
-        let v = usd_vol::FieldAsset::new(scene, h.path(prim)).expect("a FieldAsset at the prim");
-        let _ = v.edit();
+        let _ = usd_vol::FieldAsset::new(scene, h.path(prim)).expect("a FieldAsset at the prim");
     }
     for prim in ["/Fallback_Field3DAsset", "/Authored_Field3DAsset"] {
-        let v = usd_vol::FieldBase::new(scene, h.path(prim)).expect("a FieldBase at the prim");
-        let _ = v.edit();
+        let _ = usd_vol::FieldBase::new(scene, h.path(prim)).expect("a FieldBase at the prim");
     }
     for prim in ["/Fallback_OpenVDBAsset", "/Authored_OpenVDBAsset"] {
         let v =
             usd_vol::OpenVDBAsset::new(scene, h.path(prim)).expect("a OpenVDBAsset at the prim");
-        let _ = v.edit();
         r.value(
             prim,
             "fieldClass",
@@ -4982,9 +4993,8 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         );
     }
     for prim in ["/Fallback_ParticleField", "/Authored_ParticleField"] {
-        let v =
+        let _ =
             usd_vol::ParticleField::new(scene, h.path(prim)).expect("a ParticleField at the prim");
-        let _ = v.edit();
     }
     for prim in [
         "/Fallback_ParticleField3DGaussianSplat",
@@ -4992,7 +5002,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     ] {
         let v = usd_vol::ParticleField3DGaussianSplat::new(scene, h.path(prim))
             .expect("a ParticleField3DGaussianSplat at the prim");
-        let _ = v.edit();
         let _ = v.particle_field_position_attribute_api();
         let _ = v.particle_field_orientation_attribute_api();
         let _ = v.particle_field_scale_attribute_api();
@@ -5030,33 +5039,29 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         "/Fallback_ParticleFieldKernelBaseAPI",
         "/Authored_ParticleFieldKernelBaseAPI",
     ] {
-        let v = usd_vol::ParticleFieldKernelBaseApi::get(scene, h.path(prim))
+        let _ = usd_vol::ParticleFieldKernelBaseApi::get(scene, h.path(prim))
             .expect("a ParticleFieldKernelBaseAPI at the prim");
-        let _ = v.edit();
     }
     for prim in [
         "/Fallback_ParticleFieldKernelConstantSurfletAPI",
         "/Authored_ParticleFieldKernelConstantSurfletAPI",
     ] {
-        let v = usd_vol::ParticleFieldKernelConstantSurfletApi::get(scene, h.path(prim))
+        let _ = usd_vol::ParticleFieldKernelConstantSurfletApi::get(scene, h.path(prim))
             .expect("a ParticleFieldKernelConstantSurfletAPI at the prim");
-        let _ = v.edit();
     }
     for prim in [
         "/Fallback_ParticleFieldKernelGaussianEllipsoidAPI",
         "/Authored_ParticleFieldKernelGaussianEllipsoidAPI",
     ] {
-        let v = usd_vol::ParticleFieldKernelGaussianEllipsoidApi::get(scene, h.path(prim))
+        let _ = usd_vol::ParticleFieldKernelGaussianEllipsoidApi::get(scene, h.path(prim))
             .expect("a ParticleFieldKernelGaussianEllipsoidAPI at the prim");
-        let _ = v.edit();
     }
     for prim in [
         "/Fallback_ParticleFieldKernelGaussianSurfletAPI",
         "/Authored_ParticleFieldKernelGaussianSurfletAPI",
     ] {
-        let v = usd_vol::ParticleFieldKernelGaussianSurfletApi::get(scene, h.path(prim))
+        let _ = usd_vol::ParticleFieldKernelGaussianSurfletApi::get(scene, h.path(prim))
             .expect("a ParticleFieldKernelGaussianSurfletAPI at the prim");
-        let _ = v.edit();
     }
     for prim in [
         "/Fallback_ParticleFieldOpacityAttributeAPI",
@@ -5064,7 +5069,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     ] {
         let v = usd_vol::ParticleFieldOpacityAttributeApi::get(scene, h.path(prim))
             .expect("a ParticleFieldOpacityAttributeAPI at the prim");
-        let _ = v.edit();
         r.value(prim, "opacities", When::Default, v.opacities());
         r.value(
             prim,
@@ -5086,7 +5090,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     ] {
         let v = usd_vol::ParticleFieldOrientationAttributeApi::get(scene, h.path(prim))
             .expect("a ParticleFieldOrientationAttributeAPI at the prim");
-        let _ = v.edit();
         r.value(prim, "orientations", When::Default, v.orientations());
         r.value(
             prim,
@@ -5108,7 +5111,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     ] {
         let v = usd_vol::ParticleFieldPositionAttributeApi::get(scene, h.path(prim))
             .expect("a ParticleFieldPositionAttributeAPI at the prim");
-        let _ = v.edit();
         r.value(prim, "positions", When::Default, v.positions());
         r.value(
             prim,
@@ -5128,17 +5130,15 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         "/Fallback_ParticleFieldPositionBaseAPI",
         "/Authored_ParticleFieldPositionBaseAPI",
     ] {
-        let v = usd_vol::ParticleFieldPositionBaseApi::get(scene, h.path(prim))
+        let _ = usd_vol::ParticleFieldPositionBaseApi::get(scene, h.path(prim))
             .expect("a ParticleFieldPositionBaseAPI at the prim");
-        let _ = v.edit();
     }
     for prim in [
         "/Fallback_ParticleFieldRadianceBaseAPI",
         "/Authored_ParticleFieldRadianceBaseAPI",
     ] {
-        let v = usd_vol::ParticleFieldRadianceBaseApi::get(scene, h.path(prim))
+        let _ = usd_vol::ParticleFieldRadianceBaseApi::get(scene, h.path(prim))
             .expect("a ParticleFieldRadianceBaseAPI at the prim");
-        let _ = v.edit();
     }
     for prim in [
         "/Fallback_ParticleFieldScaleAttributeAPI",
@@ -5146,7 +5146,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     ] {
         let v = usd_vol::ParticleFieldScaleAttributeApi::get(scene, h.path(prim))
             .expect("a ParticleFieldScaleAttributeAPI at the prim");
-        let _ = v.edit();
         r.value(prim, "scales", When::Default, v.scales());
         r.value(prim, "scales", When::Sample, v.scales_at(Time::held(2.0)));
         r.value(prim, "scalesh", When::Default, v.scalesh());
@@ -5158,7 +5157,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     ] {
         let v = usd_vol::ParticleFieldSphericalHarmonicsAttributeApi::get(scene, h.path(prim))
             .expect("a ParticleFieldSphericalHarmonicsAttributeAPI at the prim");
-        let _ = v.edit();
         r.value(
             prim,
             "radiance:sphericalHarmonicsCoefficients",
@@ -5191,13 +5189,11 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         );
     }
     for prim in ["/Fallback_Volume", "/Authored_Volume"] {
-        let v = usd_vol::Volume::new(scene, h.path(prim)).expect("a Volume at the prim");
-        let _ = v.edit();
+        let _ = usd_vol::Volume::new(scene, h.path(prim)).expect("a Volume at the prim");
     }
     for prim in ["/Fallback_Field3DAsset", "/Authored_Field3DAsset"] {
         let v = usd_vol::VolumeFieldAsset::new(scene, h.path(prim))
             .expect("a VolumeFieldAsset at the prim");
-        let _ = v.edit();
         r.value(prim, "fieldDataType", When::Default, v.field_data_type());
         r.value(
             prim,
@@ -5249,13 +5245,11 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         );
     }
     for prim in ["/Fallback_Field3DAsset", "/Authored_Field3DAsset"] {
-        let v = usd_vol::VolumeFieldBase::new(scene, h.path(prim))
+        let _ = usd_vol::VolumeFieldBase::new(scene, h.path(prim))
             .expect("a VolumeFieldBase at the prim");
-        let _ = v.edit();
     }
     for prim in ["/Fallback_RenderPass", "/Authored_RenderPass"] {
         let v = usd_render::RenderPass::new(scene, h.path(prim)).expect("a RenderPass at the prim");
-        let _ = v.edit();
         r.value(prim, "command", When::Default, v.command());
         r.value(prim, "fileName", When::Default, v.file_name());
         r.targets(prim, "inputPasses", &v.input_passes());
@@ -5265,7 +5259,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     for prim in ["/Fallback_RenderProduct", "/Authored_RenderProduct"] {
         let v = usd_render::RenderProduct::new(scene, h.path(prim))
             .expect("a RenderProduct at the prim");
-        let _ = v.edit();
         r.targets(prim, "orderedVars", &v.ordered_vars());
         r.value(prim, "productName", When::Default, v.product_name());
         r.value(
@@ -5291,7 +5284,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     for prim in ["/Fallback_RenderSettings", "/Authored_RenderSettings"] {
         let v = usd_render::RenderSettings::new(scene, h.path(prim))
             .expect("a RenderSettings at the prim");
-        let _ = v.edit();
         r.value(
             prim,
             "includedPurposes",
@@ -5315,7 +5307,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     for prim in ["/Fallback_RenderProduct", "/Authored_RenderProduct"] {
         let v = usd_render::RenderSettingsBase::new(scene, h.path(prim))
             .expect("a RenderSettingsBase at the prim");
-        let _ = v.edit();
         r.value(
             prim,
             "aspectRatioConformPolicy",
@@ -5359,7 +5350,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     }
     for prim in ["/Fallback_RenderVar", "/Authored_RenderVar"] {
         let v = usd_render::RenderVar::new(scene, h.path(prim)).expect("a RenderVar at the prim");
-        let _ = v.edit();
         r.value(prim, "dataType", When::Default, v.data_type());
         r.value(prim, "sourceName", When::Default, v.source_name());
         r.value(
@@ -5378,7 +5368,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     ] {
         let v = usd_lod::LODDistanceHeuristic::new(scene, h.path(prim))
             .expect("a LODDistanceHeuristic at the prim");
-        let _ = v.edit();
         r.value(prim, "blendThresholds", When::Default, v.blend_thresholds());
         r.targets(prim, "boundingVolume", &v.bounding_volume());
         r.value(prim, "center", When::Default, v.center());
@@ -5391,13 +5380,11 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     ] {
         let v =
             usd_lod::LODHeuristic::new(scene, h.path(prim)).expect("a LODHeuristic at the prim");
-        let _ = v.edit();
         r.value(prim, "lod:domain", When::Default, v.lod_domain());
     }
     for prim in ["/Fallback_LODOverrideAPI", "/Authored_LODOverrideAPI"] {
         let v = usd_lod::LODOverrideApi::get(scene, h.path(prim))
             .expect("a LODOverrideAPI at the prim");
-        let _ = v.edit();
         r.value(
             prim,
             "lod:override:index",
@@ -5434,7 +5421,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     }
     for prim in ["/Fallback_LODRootAPI", "/Authored_LODRootAPI"] {
         let v = usd_lod::LODRootApi::get(scene, h.path(prim)).expect("a LODRootAPI at the prim");
-        let _ = v.edit();
         r.value(
             prim,
             "lod:default:index",
@@ -5455,7 +5441,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     ] {
         let v = usd_lod::LODScreenSizeHeuristic::new(scene, h.path(prim))
             .expect("a LODScreenSizeHeuristic at the prim");
-        let _ = v.edit();
         r.value(prim, "blendThresholds", When::Default, v.blend_thresholds());
         r.targets(prim, "boundingVolume", &v.bounding_volume());
         r.value(prim, "extent", When::Default, v.extent());
@@ -5478,7 +5463,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     for prim in ["/Fallback_AccessibilityAPI", "/Authored_AccessibilityAPI"] {
         let v = usd_ui::AccessibilityApi::get(scene, h.path(prim), "a")
             .expect("a AccessibilityAPI at the prim");
-        let _ = v.edit();
         assert!(
             usd_ui::AccessibilityApi::instances(scene, h.path(prim))
                 .iter()
@@ -5528,13 +5512,11 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     }
     for prim in ["/Fallback_Backdrop", "/Authored_Backdrop"] {
         let v = usd_ui::Backdrop::new(scene, h.path(prim)).expect("a Backdrop at the prim");
-        let _ = v.edit();
         r.value(prim, "ui:description", When::Default, v.description());
     }
     for prim in ["/Fallback_NodeGraphNodeAPI", "/Authored_NodeGraphNodeAPI"] {
         let v = usd_ui::NodeGraphNodeApi::get(scene, h.path(prim))
             .expect("a NodeGraphNodeAPI at the prim");
-        let _ = v.edit();
         r.value(
             prim,
             "ui:nodegraph:node:displayColor",
@@ -5568,14 +5550,12 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     for prim in ["/Fallback_SceneGraphPrimAPI", "/Authored_SceneGraphPrimAPI"] {
         let v = usd_ui::SceneGraphPrimApi::get(scene, h.path(prim))
             .expect("a SceneGraphPrimAPI at the prim");
-        let _ = v.edit();
         r.value(prim, "ui:displayGroup", When::Default, v.display_group());
         r.value(prim, "ui:displayName", When::Default, v.display_name());
     }
     for prim in ["/Fallback_RiMaterialAPI", "/Authored_RiMaterialAPI"] {
         let v =
             usd_ri::RiMaterialApi::get(scene, h.path(prim)).expect("a RiMaterialAPI at the prim");
-        let _ = v.edit();
         r.value(
             prim,
             "outputs:ri:displacement",
@@ -5604,13 +5584,11 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         );
     }
     for prim in ["/Fallback_RiSplineAPI", "/Authored_RiSplineAPI"] {
-        let v = usd_ri::RiSplineApi::get(scene, h.path(prim)).expect("a RiSplineAPI at the prim");
-        let _ = v.edit();
+        let _ = usd_ri::RiSplineApi::get(scene, h.path(prim)).expect("a RiSplineAPI at the prim");
     }
     for prim in ["/Fallback_StatementsAPI", "/Authored_StatementsAPI"] {
-        let v =
+        let _ =
             usd_ri::StatementsApi::get(scene, h.path(prim)).expect("a StatementsAPI at the prim");
-        let _ = v.edit();
     }
     for prim in [
         "/Fallback_HydraGenerativeProceduralAPI",
@@ -5618,7 +5596,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     ] {
         let v = usd_hydra::HydraGenerativeProceduralApi::get(scene, h.path(prim))
             .expect("a HydraGenerativeProceduralAPI at the prim");
-        let _ = v.edit();
         r.value(
             prim,
             "primvars:hdGp:proceduralType",
@@ -5650,7 +5627,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     ] {
         let v = usd_hydra::HydraRenderPassApi::get(scene, h.path(prim))
             .expect("a HydraRenderPassAPI at the prim");
-        let _ = v.edit();
         r.value(
             prim,
             "hydra:rendererName",
@@ -5659,14 +5635,12 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         );
     }
     for prim in ["/Fallback_AssetPreviewsAPI", "/Authored_AssetPreviewsAPI"] {
-        let v = usd_media::AssetPreviewsApi::get(scene, h.path(prim))
+        let _ = usd_media::AssetPreviewsApi::get(scene, h.path(prim))
             .expect("a AssetPreviewsAPI at the prim");
-        let _ = v.edit();
     }
     for prim in ["/Fallback_SpatialAudio", "/Authored_SpatialAudio"] {
         let v =
             usd_media::SpatialAudio::new(scene, h.path(prim)).expect("a SpatialAudio at the prim");
-        let _ = v.edit();
         r.value(
             prim,
             "auralMode",
@@ -5702,7 +5676,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     ] {
         let v = usd_proc::GenerativeProcedural::new(scene, h.path(prim))
             .expect("a GenerativeProcedural at the prim");
-        let _ = v.edit();
         r.value(
             prim,
             "proceduralSystem",
@@ -5722,7 +5695,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     ] {
         let v = usd_semantics::SemanticsLabelsApi::get(scene, h.path(prim), "a")
             .expect("a SemanticsLabelsAPI at the prim");
-        let _ = v.edit();
         assert!(
             usd_semantics::SemanticsLabelsApi::instances(scene, h.path(prim))
                 .iter()
@@ -5738,8 +5710,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         );
     }
     for prim in ["/Fallback_ClaimsAPI", "/Authored_ClaimsAPI"] {
-        let v = usd_profiles::ClaimsApi::get(scene, h.path(prim)).expect("a ClaimsAPI at the prim");
-        let _ = v.edit();
+        let _ = usd_profiles::ClaimsApi::get(scene, h.path(prim)).expect("a ClaimsAPI at the prim");
     }
     for prim in [
         "/Fallback_MaterialXConfigAPI",
@@ -5747,7 +5718,6 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     ] {
         let v = usd_mtlx::MaterialXConfigApi::get(scene, h.path(prim))
             .expect("a MaterialXConfigAPI at the prim");
-        let _ = v.edit();
         r.value(
             prim,
             "config:mtlx:version",

@@ -88,7 +88,9 @@ fn storing_invalidating_and_undoing_cache_matches_cpp() {
     let child = TargetPath::Prim(store.path("/World/Ignored/Child"));
     let outside = TargetPath::Prim(store.path("/Outside"));
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-    let api = LightListApiEdit::new(&edit, root).unwrap();
+    let api = LightListApiEdit::new(&edit, root)
+        .expect("outside any instance")
+        .unwrap();
     api.store_light_list(&mut edit, &[outside, child, child])
         .unwrap();
     let transaction = edit.finish();
@@ -107,7 +109,9 @@ fn storing_invalidating_and_undoing_cache_matches_cpp() {
         oracle.behavior
     );
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-    let handle = LightListApiEdit::new(&edit, root).unwrap();
+    let handle = LightListApiEdit::new(&edit, root)
+        .expect("outside any instance")
+        .unwrap();
     handle.invalidate_light_list(&mut edit).unwrap();
     let transaction = edit.finish();
     let invalidation = live.apply(&mut store, &transaction).unwrap();
@@ -146,12 +150,16 @@ fn cache_edits_declare_unapplied_properties_and_reject_type_conflicts() {
     let bad = store.path("/Bad");
     let target = TargetPath::Prim(root);
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-    let api = LightListApiEdit::new(&edit, bad).unwrap();
+    let api = LightListApiEdit::new(&edit, bad)
+        .expect("outside any instance")
+        .unwrap();
     assert_eq!(
         api.store_light_list(&mut edit, &[target]),
         Err(layerstack_schemas::light::LightListError::WrongPropertyType)
     );
-    let api = LightListApiEdit::new(&edit, root).unwrap();
+    let api = LightListApiEdit::new(&edit, root)
+        .expect("outside any instance")
+        .unwrap();
     api.store_light_list(&mut edit, &[target]).unwrap();
     let transaction = edit.finish();
     live.apply(&mut store, &transaction).unwrap();

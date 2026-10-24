@@ -11,7 +11,7 @@ use layerstack_schemas::{
     bounds::{BoundsCache, BoundsOptions},
     point_instancer::{InstanceTransformOptions, PointInstancerError},
     retained::{Query, QueryAnswer, QuerySession},
-    usd_geom::{Cube, PointInstancer},
+    usd_geom::{Cube, CubeEdit, PointInstancer},
 };
 use std::sync::Arc;
 const SOURCE: &str = include_str!("../fixtures/point_instancer_behavior.usda");
@@ -139,10 +139,10 @@ fn computed_bounds_match_cpp_and_follow_external_prototype_edits() {
             .aligned_range();
         assert_eq!(serde_json::json!([bounds.min, bounds.max]), expected[label]);
     }
-    let cube = Cube::new(&Scene::new(live.stage(), &store), prototype)
-        .unwrap()
-        .edit();
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
+    let cube = CubeEdit::new(&edit, prototype)
+        .expect("outside any instance")
+        .expect("the prim");
     cube.set_size(&mut edit, 4.);
     let transaction = edit.finish();
     let applied = live.apply(&mut store, &transaction).unwrap();
@@ -184,8 +184,10 @@ fn retained_bounds_route_prototype_changes_outside_the_query_namespace() {
                 QueryAnswer::WorldBound(Ok(_))
             ));
             assert!(!session.poll(query).unwrap().evaluated);
-            let cube = Cube::new(&session.scene(), prototype).unwrap().edit();
             let mut edit = session.edit(EditTarget::for_layer(LayerId(1)));
+            let cube = CubeEdit::new(&edit, prototype)
+                .expect("outside any instance")
+                .expect("a cube");
             cube.set_size(&mut edit, 6.);
             let transaction = edit.finish();
             session.apply(&transaction).unwrap();
@@ -309,8 +311,10 @@ def Cube "Cube" {}
     let mut expected = vec![inner, cube];
     expected.sort_unstable();
     assert_eq!(deps, expected);
-    let cube = Cube::new(&session.scene(), cube).unwrap().edit();
     let mut edit = session.edit(EditTarget::for_layer(LayerId(1)));
+    let cube = CubeEdit::new(&edit, cube)
+        .expect("outside any instance")
+        .expect("a cube");
     cube.set_size(&mut edit, 6.);
     let transaction = edit.finish();
     session.apply(&transaction).unwrap();
@@ -345,10 +349,10 @@ fn prototype_extent_policies_are_independent_of_caller_policies() {
                 .aligned_range();
             assert_eq!(serde_json::json!([bounds.min, bounds.max]), *expected);
         }
-        let cube = Cube::new(&Scene::new(live.stage(), &store), prototype)
-            .unwrap()
-            .edit();
         let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
+        let cube = CubeEdit::new(&edit, prototype)
+            .expect("outside any instance")
+            .expect("the prim");
         cube.set_size(&mut edit, 8.);
         let transaction = edit.finish();
         let applied = live.apply(&mut store, &transaction).unwrap();

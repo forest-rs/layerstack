@@ -113,11 +113,13 @@ fn make_visible_agrees_with_openusd_call_by_call() {
                     }
                     "make_visible" => {
                         ImageableEdit::new(&edit, path)
+                            .expect("outside any instance")
                             .expect("an imageable prim")
                             .make_visible(&mut edit, time);
                     }
                     "make_invisible" => {
                         ImageableEdit::new(&edit, path)
+                            .expect("outside any instance")
                             .expect("an imageable prim")
                             .make_invisible(&mut edit, time);
                     }

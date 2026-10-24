@@ -59,7 +59,9 @@ fn common_stack_authoring_matches_cpp_and_undoes_exactly() {
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
     for (record, &path) in oracle.records.iter().zip(&paths) {
         Xform::define(&mut edit, path).expect("outside any instance");
-        let xform = XformableEdit::new(&edit, path).unwrap();
+        let xform = XformableEdit::new(&edit, path)
+            .expect("outside any instance")
+            .unwrap();
         match record.setup.as_str() {
             "scale" => {
                 xform

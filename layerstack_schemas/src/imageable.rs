@@ -551,10 +551,14 @@ mod tests {
         live.apply(&mut store, &transaction).expect("applies");
 
         let mut edit = SchemaEdit::new(live.stage(), &mut store, target.clone());
-        let handle = ImageableEdit::new(&edit, shown).expect("a mesh");
+        let handle = ImageableEdit::new(&edit, shown)
+            .expect("outside any instance")
+            .expect("a mesh");
         handle.make_visible(&mut edit, Time::Default);
         // `make_invisible` of a prim this edit just hid authors nothing more.
-        let other_handle = ImageableEdit::new(&edit, other).expect("a mesh");
+        let other_handle = ImageableEdit::new(&edit, other)
+            .expect("outside any instance")
+            .expect("a mesh");
         let before = edit.transaction().len();
         other_handle.make_invisible(&mut edit, Time::Default);
         assert_eq!(edit.transaction().len(), before, "already invisible");

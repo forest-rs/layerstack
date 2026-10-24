@@ -3,8 +3,8 @@
 
 use super::*;
 use crate::{
-    GeneratedMesh, Scene, SchemaEdit,
-    usd_geom::{Mesh, PointInstancer},
+    GeneratedMesh, SchemaEdit,
+    usd_geom::{MeshEdit, PointInstancer, PointInstancerEdit},
     usd_shade::Material,
 };
 use alloc::{sync::Arc, vec};
@@ -16,10 +16,10 @@ use layerstack::{
 #[test]
 fn transform_only_update_keeps_mesh_and_primvar_components() {
     let (mut store, mut live, path, _) = fixture();
-    let mesh = Mesh::new(&Scene::new(live.stage(), &store), path)
-        .unwrap()
-        .edit();
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
+    let mesh = MeshEdit::new(&edit, path)
+        .expect("outside any instance")
+        .expect("the prim");
     let op = mesh
         .add_translate_op(&mut edit, crate::XformOpPrecision::Double)
         .unwrap();
@@ -246,9 +246,10 @@ fn point_instances_keep_ids_original_indices_and_masks() {
     let all: vec::Vec<_> = instances.transforms.iter().collect();
     assert_eq!(all[0].id, 42);
     let geometry = observer.record_at(mesh_path).unwrap().mesh.clone().unwrap();
-    let scene = Scene::new(live.stage(), &store);
-    let scatter = PointInstancer::new(&scene, point_path).unwrap().edit();
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
+    let scatter = PointInstancerEdit::new(&edit, point_path)
+        .expect("outside any instance")
+        .expect("the prim");
     scatter.set_invisible_ids(&mut edit, &[]);
     let transaction = edit.finish();
     live.apply(&mut store, &transaction).unwrap();
@@ -730,10 +731,10 @@ fn equivalent_point_inputs_at_new_time_preserve_snapshot_and_emit_no_delta() {
             .as_ref()
             .unwrap()
     ));
-    let prototype = Mesh::new(&Scene::new(live.stage(), &store), mesh_path)
-        .unwrap()
-        .edit();
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
+    let prototype = MeshEdit::new(&edit, mesh_path)
+        .expect("outside any instance")
+        .expect("the prim");
     let op = prototype
         .add_translate_op(&mut edit, crate::XformOpPrecision::Double)
         .unwrap();
@@ -1064,10 +1065,10 @@ fn external_primvar_id_forwarding_refreshes_when_empty_or_missing_targets_change
         layerstack::PropertySpec::relationship(),
     );
     live.apply(&mut store, &transaction).unwrap();
-    let mesh_edit = Mesh::new(&Scene::new(live.stage(), &store), mesh)
-        .unwrap()
-        .edit();
     let mut edit = SchemaEdit::new(live.stage(), &mut store, target.clone());
+    let mesh_edit = MeshEdit::new(&edit, mesh)
+        .expect("outside any instance")
+        .expect("the prim");
     let id = mesh_edit
         .create_primvar(
             &mut edit,

@@ -28,7 +28,7 @@ use layerstack::{
     Time, TokenId, TokenInterner, Value,
 };
 
-use crate::edit::SchemaEdit;
+use crate::edit::{CannotEdit, SchemaEdit};
 use crate::kind::KindRegistry;
 
 /// A composed stage and the store it was composed from: what every schema
@@ -519,17 +519,30 @@ pub struct PrimEdit {
 
 impl PrimEdit {
     /// A handle authoring the prim at `path` through `edit`, if the prim
-    /// exists: on the edit's stage, or defined earlier in `edit`.
-    #[must_use]
-    pub fn new(edit: &SchemaEdit<'_>, path: impl PrimPathArg) -> Option<Self> {
-        let path = edit.prim_path(path)?;
-        edit.exists(path).then_some(Self { path })
+    /// exists: on the edit's stage, or defined earlier in `edit`. `Ok(None)`
+    /// when no prim is there, or for text the store has not interned. The
+    /// handle's setters are infallible for instancing: it is checked here,
+    /// once, with [`SchemaEdit::can_edit`].
+    ///
+    /// # Errors
+    ///
+    /// [`CannotEdit`] for a path beneath an instance or in a prototype,
+    /// through a local layer that maps it to itself, as OpenUSD refuses
+    /// every authoring call there; checked before the prim's existence.
+    pub fn new(edit: &SchemaEdit<'_>, path: impl PrimPathArg) -> Result<Option<Self>, CannotEdit> {
+        let Some(path) = edit.prim_path(path) else {
+            return Ok(None);
+        };
+        edit.can_edit(path)?;
+        Ok(edit.exists(path).then_some(Self { path }))
     }
 
-    /// A handle authoring the prim at `path`, without checking that it
-    /// exists: a setter on a prim that does not authors an `over` for it,
-    /// which [`Self::new`] never lets happen. For a prim known to exist,
-    /// such as the prim of a schema view had from its `new` or `get`.
+    /// A handle authoring the prim at `path`, checking neither that it
+    /// exists nor that the edit may author it ([`SchemaEdit::can_edit`]):
+    /// a setter on a prim that does not exist authors an `over` for it, and
+    /// one on an instance proxy an opinion the stage does not compose,
+    /// which [`Self::new`] never lets happen. For a prim the caller has
+    /// already checked.
     #[must_use]
     pub fn from_path_unchecked(path: PathId) -> Self {
         Self { path }

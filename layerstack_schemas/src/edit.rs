@@ -17,17 +17,34 @@ use layerstack::{
 #[cfg(test)]
 mod tests;
 
-/// Why [`SchemaEdit::define_prim`] defines no prim. Nothing is
-/// authored.
+/// Why a [`SchemaEdit`] may not author a prim: no prim is defined, no
+/// schema applied and no edit handle had for it. Nothing is authored.
 ///
-/// OpenUSD: `UsdStage::DefinePrim` refuses both with a coding error
-/// (`_ValidateEditPrim`, `_ValidateEditPrimAtPath`), when the edit target
-/// is a local layer that maps the path to itself.
+/// It is the one checkpoint of instancing for every edit: a handle's
+/// setters author only for a prim it was had for, so each [`SchemaEdit`]
+/// route that names a prim by path checks it once, when it defines the
+/// prim ([`SchemaEdit::define_prim`], `<Schema>::define`), applies a schema
+/// ([`SchemaEdit::apply_api`], `<Api>::apply`) or gives a handle
+/// ([`crate::PrimEdit::new`], `<Schema>Edit::new`, `UiHintsEdit::prim`,
+/// `PortEdit::get`), and [`SchemaEdit::can_edit`] asks it
+/// without authoring. A view reads the stage; its prim's handle is had
+/// from the edit, by the same path. A handle answers for the edit it was
+/// had from: had through one target, it is not checked again for another.
+///
+/// OpenUSD: `UsdStage::_ValidateEditPrim` and `_ValidateEditPrimAtPath`
+/// (`pxr/usd/usd/stage.cpp`) refuse both with a coding error before any
+/// prim or property spec is created or cleared, so for `DefinePrim`,
+/// `ApplyAPI`, `CreateAttribute`, `UsdAttribute::Set`, `SetMetadata`,
+/// `UsdRelationship::SetTargets` and every schema setter built on them,
+/// when the edit target is a local layer that maps the prim's path to
+/// itself. Through another target, such as a reference's node, the edit is
+/// the caller's choice and is allowed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum CannotDefine {
-    /// The path is beneath the native instance `instance`. Its descendants
-    /// are instance proxies, composed from its prototype, so a prim
-    /// authored beneath it would not be on the stage.
+pub enum CannotEdit {
+    /// The path is beneath the native instance `instance` (the outermost
+    /// one): its descendants are instance proxies, composed from its
+    /// prototype, so an opinion authored at their paths would not be on
+    /// the stage. The instance itself may be edited.
     ///
     /// Spec: AOUSD Core §11.3.3 (scene-graph instancing).
     BeneathInstance {
@@ -39,7 +56,7 @@ pub enum CannotDefine {
     InPrototype,
 }
 
-impl fmt::Display for CannotDefine {
+impl fmt::Display for CannotEdit {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
             Self::BeneathInstance { .. } => "the path is beneath an instance",
@@ -48,7 +65,49 @@ impl fmt::Display for CannotDefine {
     }
 }
 
-impl core::error::Error for CannotDefine {}
+impl core::error::Error for CannotEdit {}
+
+/// Why [`SchemaEdit::apply_api`], or an `<Api>::apply`, applies no schema.
+/// Nothing is authored.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ApplyError {
+    /// The edit may not author the prim, beneath an instance or in a
+    /// prototype; checked first, as OpenUSD's `ApplyAPI` refuses it.
+    CannotEdit(CannotEdit),
+    /// The schema cannot be applied to the prim: no prim is there, or the
+    /// schema, its instance name or the prim's type does not allow it.
+    CannotApply(CannotApply),
+}
+
+impl fmt::Display for ApplyError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::CannotEdit(error) => error.fmt(f),
+            Self::CannotApply(error) => error.fmt(f),
+        }
+    }
+}
+
+impl core::error::Error for ApplyError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            Self::CannotEdit(error) => Some(error),
+            Self::CannotApply(error) => Some(error),
+        }
+    }
+}
+
+impl From<CannotEdit> for ApplyError {
+    fn from(value: CannotEdit) -> Self {
+        Self::CannotEdit(value)
+    }
+}
+
+impl From<CannotApply> for ApplyError {
+    fn from(value: CannotApply) -> Self {
+        Self::CannotApply(value)
+    }
+}
 
 /// Collects schema edits into a [`Transaction`] for one [`EditTarget`].
 ///
@@ -193,6 +252,12 @@ impl<'s> SchemaEdit<'s> {
     /// finished transaction explicitly. This shares the generated `…Api::apply`
     /// path, so newly applied properties also participate in this edit's schema
     /// overlay. AOUSD Core §13.2.1.2, §13.3.2; OpenUSD `UsdPrim::ApplyAPI`.
+    ///
+    /// # Errors
+    ///
+    /// [`ApplyError::CannotEdit`] when [`Self::can_edit`] refuses `path`,
+    /// checked first; else [`ApplyError::CannotApply`] when no prim is
+    /// there or the schema may not be applied to it.
     #[doc(alias = "ApplyAPI")]
     #[doc(alias = "UsdPrim::ApplyAPI")]
     pub fn apply_api(
@@ -200,9 +265,60 @@ impl<'s> SchemaEdit<'s> {
         path: PathId,
         schema: &str,
         instance: Option<&str>,
-    ) -> Result<crate::PrimEdit, CannotApply> {
+    ) -> Result<crate::PrimEdit, ApplyError> {
         self.apply(path, schema, instance)?;
         Ok(crate::PrimEdit::from_path_unchecked(path))
+    }
+
+    /// Whether this edit may author the prim at `path`: `Ok` unless the
+    /// edit target is a layer of the stage's local layer stack that maps
+    /// `path` to itself and the path is beneath an instance or in a
+    /// prototype. The prim need not exist. Every route that names a prim
+    /// by path checks this first (see [`CannotEdit`]); a host can ask it
+    /// before offering an edit. It walks `path`'s ancestors once and
+    /// authors nothing.
+    ///
+    /// # Errors
+    ///
+    /// [`CannotEdit::BeneathInstance`] with the outermost instance above
+    /// `path`, or [`CannotEdit::InPrototype`].
+    ///
+    /// OpenUSD: `UsdStage::_ValidateEditPrim`, `_ValidateEditPrimAtPath`,
+    /// `Usd_InstanceCache::IsPathInPrototype`.
+    ///
+    /// Spec: AOUSD Core §11.3.3 (scene-graph instancing).
+    pub fn can_edit(&self, path: PathId) -> Result<(), CannotEdit> {
+        let paths = self.store.paths();
+        if !self.stage.has_local_layer(self.target.layer())
+            || !self.target.maps_to_itself(path, paths)
+        {
+            return Ok(());
+        }
+        let root_name = paths.resolve(path).segments().first().copied();
+        if root_name.is_some_and(|name| {
+            self.store
+                .tokens()
+                .resolve(name)
+                .starts_with("__Prototype_")
+        }) {
+            return Err(CannotEdit::InPrototype);
+        }
+        // The last instance found walking up is the outermost.
+        let mut instance = None;
+        let mut at = paths.parent(path);
+        while let Some(ancestor) = at {
+            if self
+                .stage_prim(ancestor)
+                .is_some_and(layerstack::Prim::is_instance)
+            {
+                instance = Some(ancestor);
+            }
+            at = paths.parent(ancestor);
+        }
+        match instance {
+            Some(instance) => Err(CannotEdit::BeneathInstance { instance }),
+            None => Ok(()),
+        }
     }
 
     /// Defines the prim at `path` as the typed schema named `schema`, and
@@ -231,12 +347,12 @@ impl<'s> SchemaEdit<'s> {
     ///
     /// # Errors
     ///
-    /// [`CannotDefine::BeneathInstance`] for a path beneath an instance,
-    /// and [`CannotDefine::InPrototype`] for one in a prototype, when the
-    /// target is a layer of the stage's local layer stack that maps `path`
-    /// to itself, as OpenUSD refuses them with a coding error; through
-    /// another target the edit is the caller's choice. A refusal authors
-    /// nothing.
+    /// What [`Self::can_edit`] refuses: [`CannotEdit::BeneathInstance`]
+    /// for a path beneath an instance, and [`CannotEdit::InPrototype`] for
+    /// one in a prototype, when the target is a layer of the stage's local
+    /// layer stack that maps `path` to itself, as OpenUSD refuses them with
+    /// a coding error; through another target the edit is the caller's
+    /// choice. A refusal authors nothing.
     ///
     /// OpenUSD: `UsdStage::DefinePrim`, `_DefinePrim`,
     /// `_IsValidPathForCreatingPrim` (`pxr/usd/usd/stage.cpp`).
@@ -250,8 +366,8 @@ impl<'s> SchemaEdit<'s> {
         &mut self,
         path: PathId,
         schema: &str,
-    ) -> Result<crate::PrimEdit, CannotDefine> {
-        self.check_definable(path)?;
+    ) -> Result<crate::PrimEdit, CannotEdit> {
+        self.can_edit(path)?;
         let type_name = (!schema.is_empty()).then(|| self.store.tokens_mut().intern(schema));
         // `path` and its ancestors below the pseudo-root, root prim first.
         let paths = self.store.paths();
@@ -274,40 +390,6 @@ impl<'s> SchemaEdit<'s> {
             }
         }
         Ok(crate::PrimEdit::from_path_unchecked(path))
-    }
-
-    /// Refuses a path beneath an instance or in a prototype, when the edit
-    /// target is a local layer mapping `path` to itself.
-    ///
-    /// OpenUSD: `UsdStage::_ValidateEditPrim`, `_ValidateEditPrimAtPath`,
-    /// `Usd_InstanceCache::IsPathInPrototype`.
-    fn check_definable(&mut self, path: PathId) -> Result<(), CannotDefine> {
-        if !self.stage.has_local_layer(self.target.layer())
-            || self.target.map_to_spec_path(path, self.store.paths_mut())
-                != Some(layerstack::SpecPath::from_prim_path(path))
-        {
-            return Ok(());
-        }
-        let paths = self.store.paths();
-        let root_name = paths.resolve(path).segments().first().copied();
-        if root_name.is_some_and(|name| {
-            self.store
-                .tokens()
-                .resolve(name)
-                .starts_with("__Prototype_")
-        }) {
-            return Err(CannotDefine::InPrototype);
-        }
-        let mut ancestors: Vec<PathId> =
-            core::iter::successors(paths.parent(path), |at| paths.parent(*at)).collect();
-        ancestors.reverse();
-        match ancestors.into_iter().find(|&at| {
-            self.stage_prim(at)
-                .is_some_and(layerstack::Prim::is_instance)
-        }) {
-            Some(instance) => Err(CannotDefine::BeneathInstance { instance }),
-            None => Ok(()),
-        }
     }
 
     /// Whether the prim at `path` resolves a defining specifier (`def` or
@@ -1429,15 +1511,17 @@ impl<'s> SchemaEdit<'s> {
     /// type: the type this edit defines it with, else its composed type.
     ///
     /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`, both of
-    /// which fail for an invalid prim.
+    /// which fail for an invalid prim; `ApplyAPI` refuses an instance proxy
+    /// or prototype prim (`AddAppliedSchema`, `_CreatePrimSpecForEditing`).
     pub(crate) fn apply(
         &mut self,
         path: PathId,
         schema: &str,
         instance: Option<&str>,
-    ) -> Result<(), CannotApply> {
+    ) -> Result<(), ApplyError> {
+        self.can_edit(path)?;
         if !self.exists(path) {
-            return Err(CannotApply::NoSuchPrim);
+            return Err(CannotApply::NoSuchPrim.into());
         }
         let registry = self
             .stage

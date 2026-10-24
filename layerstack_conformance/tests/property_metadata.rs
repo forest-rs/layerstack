@@ -140,12 +140,10 @@ fn property_metadata_authoring_matches_openusd_call_by_call() {
         );
         let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
         let value = value(&call.ty, &call.value, edit.tokens());
-        let result = PrimEdit::new(&edit, prim).unwrap().write_property_metadata(
-            &mut edit,
-            &call.property,
-            &call.key,
-            value,
-        );
+        let result = PrimEdit::new(&edit, prim)
+            .expect("outside any instance")
+            .unwrap()
+            .write_property_metadata(&mut edit, &call.property, &call.key, value);
         if result.is_err() {
             assert!(
                 edit.transaction().is_empty(),
@@ -216,7 +214,9 @@ fn property_metadata_clears_only_target_specs() {
     let (mut store, mut live) = support::scene(SCENE);
     let prim = store.path("/P");
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-    let handle = PrimEdit::new(&edit, prim).unwrap();
+    let handle = PrimEdit::new(&edit, prim)
+        .expect("outside any instance")
+        .unwrap();
     handle
         .write_property_metadata(&mut edit, "a", "displayName", Value::string("A"))
         .unwrap();

@@ -58,7 +58,9 @@ fn layered_connections_match_cpp_and_undo_authored_absence() {
     let mut inverses = Vec::new();
     for record in oracle["records"].as_array().unwrap() {
         let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-        let handle = PortEdit::get(&mut edit, path).unwrap();
+        let handle = PortEdit::get(&mut edit, path)
+            .expect("outside any instance")
+            .expect("a port");
         match record["name"].as_str().unwrap() {
             "inherited" => {}
             "disconnected" => {
@@ -174,7 +176,10 @@ fn port_preflight_rejects_invalid_names_relationships_and_types_without_edits() 
         Err(PortError::InvalidAttribute { .. })
     ));
     assert_eq!(edit.transaction(), &before);
-    assert!(PortEdit::get(&mut edit, PropertyPath::new(path, relationship)).is_none());
+    assert_eq!(
+        PortEdit::get(&mut edit, PropertyPath::new(path, relationship)),
+        Ok(None)
+    );
     assert!(matches!(
         shader.create_input(&mut edit, "value", PropertyType::parse("double").unwrap()),
         Err(PortError::TypeMismatch { .. })

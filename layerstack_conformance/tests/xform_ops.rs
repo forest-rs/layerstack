@@ -64,8 +64,7 @@ fn stage() -> (InMemoryStore, LiveStage) {
 /// Authors the scene through the op API.
 fn author(edit: &mut SchemaEdit<'_>, paths: &BTreeMap<&str, PathId>) {
     let xform = |edit: &mut SchemaEdit<'_>, name: &str| -> XformableEdit {
-        Xform::define(edit, paths[name]).expect("outside any instance");
-        XformableEdit::new(edit, paths[name]).expect("defined")
+        *Xform::define(edit, paths[name]).expect("outside any instance")
     };
 
     let pivoted = xform(edit, "/Pivoted");
@@ -490,7 +489,9 @@ fn authored_ops_read_and_add_as_in_openusd() {
         let context = format!("{call:?}");
         let before = store.layer(LayerId(1)).unwrap().clone();
         let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-        let handle = XformableEdit::new(&edit, path).expect("on the stage");
+        let handle = XformableEdit::new(&edit, path)
+            .expect("outside any instance")
+            .expect("on the stage");
         let untouched = edit.transaction().clone();
         let (accepted, op_precision) = match kind {
             "add" => match handle.add_op(

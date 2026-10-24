@@ -4,7 +4,7 @@
 //! Named shading attributes and source-opinion authoring.
 
 use super::{ConnectedSources, ShaderSources, ValueSources, shading_kind};
-use crate::{PrimEdit, PrimView, Scene, SchemaEdit, Time};
+use crate::{CannotEdit, PrimEdit, PrimView, Scene, SchemaEdit, Time};
 use alloc::{format, string::String, vec::Vec};
 use layerstack::{ListOp, PathId, PropertyPath, PropertyType, TargetPath, Value};
 
@@ -30,7 +30,7 @@ impl PortKind {
 
 /// An existing input or output attribute. Its prim need not be a Shader.
 ///
-/// The view inspects composed state; [`Self::edit`] authors source opinions.
+/// The view inspects composed state; [`PortEdit::get`] authors source opinions.
 /// It does not validate renderer support or plugin-defined connectability.
 #[derive(Clone, Copy, Debug)]
 pub struct Port<'a> {
@@ -101,19 +101,6 @@ impl<'a> Port<'a> {
     /// Does not author the connection or check renderer/type support.
     pub fn can_connect(&self, source: PropertyPath) -> Result<(), super::ConnectionError> {
         self.scene.validate_shading_connection(self.path, source)
-    }
-    /// An edit handle for this attribute.
-    #[must_use]
-    pub fn edit(&self) -> PortEdit {
-        PortEdit {
-            prim: self.path.prim_path(),
-            name: self
-                .scene
-                .store()
-                .tokens()
-                .resolve(self.path.property())
-                .into(),
-        }
     }
 }
 
@@ -202,16 +189,21 @@ pub struct PortEdit {
 }
 impl PortEdit {
     /// Gets an existing typed shading attribute, including one created earlier
-    /// in this edit. Returns `None` for absent prims, relationships or bad names.
-    #[must_use]
-    pub fn get(edit: &mut SchemaEdit<'_>, path: PropertyPath) -> Option<Self> {
+    /// in this edit. Returns `Ok(None)` for absent prims, relationships or bad
+    /// names.
+    ///
+    /// # Errors
+    ///
+    /// [`CannotEdit`] when the edit may not author the prim, beneath an
+    /// instance or in a prototype ([`SchemaEdit::can_edit`]).
+    pub fn get(edit: &mut SchemaEdit<'_>, path: PropertyPath) -> Result<Option<Self>, CannotEdit> {
+        edit.can_edit(path.prim_path())?;
         let name = String::from(edit.tokens().resolve(path.property()));
         let result = Self {
             prim: path.prim_path(),
             name,
         };
-        result.validate(edit).ok()?;
-        Some(result)
+        Ok(result.validate(edit).is_ok().then_some(result))
     }
     /// The owning prim.
     #[must_use]

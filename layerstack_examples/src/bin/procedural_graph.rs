@@ -15,7 +15,7 @@ use layerstack_schemas::{
         ProceduralEvaluator, ProceduralInputs,
         graph::{ProceduralGraph, ProducerPublisher, ProducerSpec, ResourceRevisions},
     },
-    usd_geom::PointInstancer,
+    usd_geom::{PointInstancer, PointInstancerEdit},
 };
 use std::{
     collections::BTreeMap,
@@ -168,12 +168,11 @@ impl ProducerPublisher<Output> for Publisher {
                     .layer(ROOT)
                     .ok_or("missing output layer")?
                     .generation();
-                let existing =
-                    PointInstancer::new(&Scene::new(stage, store), site).map(|view| view.edit());
                 let mut edit = SchemaEdit::new(stage, store, target);
-                let instancer = existing.unwrap_or_else(|| {
-                    PointInstancer::define(&mut edit, site).expect("outside any instance")
-                });
+                let instancer = match PointInstancerEdit::new(&edit, site)? {
+                    Some(existing) => existing,
+                    None => PointInstancer::define(&mut edit, site)?,
+                };
                 instancer.set_positions_shared(&mut edit, positions.clone());
                 instancer.set_proto_indices_shared(&mut edit, indices.clone());
                 instancer.set_prototypes(&mut edit, &[TargetPath::Prim(terrain)]);

@@ -21,8 +21,10 @@
 //! instead: the Python named by `LAYERSTACK_USD_PYTHON`, or `python3`, when
 //! it imports `pxr`, under the same version rule.
 
+use std::cell::RefCell;
+use std::io::{BufRead as _, BufReader, Write as _};
 use std::path::Path;
-use std::process::Command;
+use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 
 use layerstack_conformance::export_fixtures::{
     Expect, OpenUsdRelease, documents, minimum_openusd, parse_openusd_release, write_all,
@@ -622,17 +624,73 @@ fn snapshot_script() -> &'static str {
     concat!(env!("CARGO_MANIFEST_DIR"), "/scripts/layer_snapshot.py")
 }
 
-/// Runs `layer_snapshot.py` with `args`, returning its standard output.
-fn layer_snapshot(python: &str, args: &[&Path]) -> Result<String, String> {
-    let out = Command::new(python)
-        .arg(snapshot_script())
-        .args(args)
-        .output()
-        .map_err(|e| e.to_string())?;
-    if out.status.success() {
-        Ok(String::from_utf8_lossy(&out.stdout).into_owned())
-    } else {
-        Err(String::from_utf8_lossy(&out.stderr).into_owned())
+/// `layer_snapshot.py serve`, one Python process answering every command of
+/// a test, so the corpus starts Python and loads `pxr` once rather than for
+/// each of its hundreds of commands. A command reads its files from disk
+/// as a process of its own would (see the script).
+struct LayerSnapshot {
+    process: RefCell<Served>,
+}
+
+/// The running script and its two pipes.
+struct Served {
+    child: Child,
+    commands: ChildStdin,
+    answers: BufReader<ChildStdout>,
+}
+
+impl LayerSnapshot {
+    fn start(python: &str) -> Self {
+        let mut child = Command::new(python)
+            .arg(snapshot_script())
+            .arg("serve")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            // OpenUSD's warnings, such as crate version upgrades; a failed
+            // command answers with its error.
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("layer_snapshot.py starts");
+        let commands = child.stdin.take().expect("piped stdin");
+        let answers = BufReader::new(child.stdout.take().expect("piped stdout"));
+        let process = RefCell::new(Served {
+            child,
+            commands,
+            answers,
+        });
+        Self { process }
+    }
+
+    /// Runs the script's command `args`, returning what it prints.
+    fn run(&self, args: &[&Path]) -> Result<String, String> {
+        let served = &mut *self.process.borrow_mut();
+        let args: Vec<&str> = args
+            .iter()
+            .map(|arg| arg.to_str().expect("UTF-8 argument"))
+            .collect();
+        let command = serde_json::to_string(&args).unwrap();
+        writeln!(served.commands, "{command}").map_err(|e| e.to_string())?;
+        served.commands.flush().map_err(|e| e.to_string())?;
+        let mut answer = String::new();
+        served
+            .answers
+            .read_line(&mut answer)
+            .map_err(|e| e.to_string())?;
+        let answer: serde_json::Value = serde_json::from_str(&answer)
+            .map_err(|e| format!("layer_snapshot.py answered {answer:?}: {e}"))?;
+        match (answer["out"].as_str(), answer["error"].as_str()) {
+            (Some(out), None) => Ok(out.into()),
+            (None, Some(error)) => Err(error.into()),
+            _ => Err(format!("layer_snapshot.py answered {answer}")),
+        }
+    }
+}
+
+impl Drop for LayerSnapshot {
+    fn drop(&mut self) {
+        let served = self.process.get_mut();
+        let _ = served.child.kill();
+        let _ = served.child.wait();
     }
 }
 
@@ -658,6 +716,7 @@ fn saved_layers_round_trip_through_openusd() {
         return;
     };
     eprintln!("OpenUSD {version} via {python}");
+    let oracle = LayerSnapshot::start(&python);
     let release = parse_openusd_release(&version);
     let dir = scratch_dir("layer-save");
     let _ = std::fs::remove_dir_all(&dir);
@@ -693,7 +752,7 @@ fn saved_layers_round_trip_through_openusd() {
         let compose = |layer: &Path| {
             let mut args = vec![Path::new("compose"), layer];
             args.extend(times.iter().map(|t| t.as_path()));
-            layer_snapshot(&python, &args)
+            oracle.run(&args)
         };
         let want_composed = case.composition.map(|_| {
             compose(&expected).unwrap_or_else(|e| {
@@ -708,14 +767,16 @@ fn saved_layers_round_trip_through_openusd() {
         let snapshot = |layer: &Path| {
             let args = snapshot_args(layer);
             let args: Vec<&Path> = args.iter().map(|a| a.as_path()).collect();
-            layer_snapshot(&python, &args)
+            oracle.run(&args)
         };
-        layer_snapshot(&python, &[Path::new("convert"), &source, &source_usdc])
+        oracle
+            .run(&[Path::new("convert"), &source, &source_usdc])
             .unwrap_or_else(|e| panic!("{name}: OpenUSD cannot convert the source: {e}"));
         let want = snapshot(&expected)
             .unwrap_or_else(|e| panic!("{name}: OpenUSD cannot read the expected layer: {e}"));
         let expected_text = dir.join(format!("{name}.expected.openusd.usda"));
-        layer_snapshot(&python, &[Path::new("convert"), &expected, &expected_text])
+        oracle
+            .run(&[Path::new("convert"), &expected, &expected_text])
             .unwrap_or_else(|e| panic!("{name}: OpenUSD cannot save the expected layer: {e}"));
         let want_text = snapshot(&expected_text)
             .unwrap_or_else(|e| panic!("{name}: OpenUSD cannot read its USDA: {e}"));
@@ -798,7 +859,7 @@ fn saved_layers_round_trip_through_openusd() {
                 }
             }
             let reference = dir.join(format!("{name}.from-{from}.openusd.usdc"));
-            if let Err(e) = layer_snapshot(&python, &[Path::new("convert"), &usda, &reference]) {
+            if let Err(e) = oracle.run(&[Path::new("convert"), &usda, &reference]) {
                 failures.push(format!("{name}: OpenUSD cannot convert our USDA: {e}"));
                 continue;
             }

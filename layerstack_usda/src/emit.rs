@@ -343,11 +343,23 @@ impl EmitCtx<'_> {
         let root_path_id = self.paths.intern(root_path);
 
         // Collect root children for a pseudo root prim if needed.
-        let mut root_children = Vec::new();
+        let mut root_children = Vec::with_capacity(ast.prims.len());
+        // The text of the path of the prim being emitted, which anchors the
+        // relative paths it authors: each prim's name is pushed while it is.
+        let mut prim_path = String::new();
         for prim in &ast.prims {
             let name_tok = self.tokens.intern(prim.name);
             root_children.push(name_tok);
-            self.emit_prim(prim, &format!("/{}", prim.name), &[], &mut layer);
+            self.emit_prim(
+                prim,
+                PrimPlace {
+                    parent: root_path_id,
+                    name: name_tok,
+                },
+                &mut prim_path,
+                &[],
+                &mut layer,
+            );
         }
 
         // If there are root prims, create a root prim spec to hold children
@@ -381,15 +393,27 @@ impl EmitCtx<'_> {
 
     // ── Prims ────────────────────────────────────────────────────────
 
+    /// Emits `prim`, the child `place` of its parent, whose path's text
+    /// `prim_path` holds; `prim_path` holds the prim's while it is emitted.
     fn emit_prim(
         &mut self,
         prim: &ast::Prim<'_>,
-        prim_path: &str,
+        place: PrimPlace,
+        prim_path: &mut String,
         outer_variant_sites: &[VariantSelectionSite],
         layer: &mut Layer,
     ) {
-        let path = Path::parse_absolute(prim_path, self.tokens).expect("valid prim path");
-        let path_id = self.paths.intern(path);
+        let parent_len = prim_path.len();
+        prim_path.push('/');
+        prim_path.push_str(prim.name);
+        // A name that is no path segment (empty, or holding `/`) is placed
+        // where its path's text parses to, as it always was.
+        let path_id = if prim.name.is_empty() || prim.name.contains('/') {
+            let path = Path::parse_absolute(prim_path, self.tokens).expect("valid prim path");
+            self.paths.intern(path)
+        } else {
+            self.paths.intern_child(place.parent, place.name)
+        };
 
         let mut spec = PrimSpec {
             specifier: Some(convert_specifier(prim.specifier)),
@@ -399,7 +423,7 @@ impl EmitCtx<'_> {
         };
 
         // Process prim metadata.
-        self.emit_prim_metadata(&prim.metadata, prim_path, &mut spec);
+        self.emit_prim_metadata(&prim.metadata, prim_path, outer_variant_sites, &mut spec);
 
         // Process prim body children.
         for child in &prim.children {
@@ -420,8 +444,11 @@ impl EmitCtx<'_> {
                     if !spec.authored_children.contains(&child_name) {
                         spec.authored_children.push(child_name);
                     }
-                    let child_path = format!("{}/{}", prim_path, child_prim.name);
-                    self.emit_prim(child_prim, &child_path, outer_variant_sites, layer);
+                    let place = PrimPlace {
+                        parent: path_id,
+                        name: child_name,
+                    };
+                    self.emit_prim(child_prim, place, prim_path, outer_variant_sites, layer);
                 }
                 ast::PrimChild::VariantSet(vs) => {
                     self.emit_variant_set(
@@ -446,6 +473,7 @@ impl EmitCtx<'_> {
         }
 
         layer.insert_prim(path_id, spec);
+        prim_path.truncate(parent_len);
     }
 
     fn variant_site(
@@ -463,13 +491,15 @@ impl EmitCtx<'_> {
 
     // ── Prim metadata ───────────────────────────────────────────────
 
+    /// Emits `metadata` of the prim at `prim_path` into `spec`, the prim
+    /// spec inside the variant branches `sites`.
     fn emit_prim_metadata(
         &mut self,
         metadata: &[ast::PrimMeta<'_>],
         prim_path: &str,
+        sites: &[VariantSelectionSite],
         spec: &mut PrimSpec,
     ) {
-        let sites = spec.outer_variant_sites.clone();
         for meta in metadata {
             match meta {
                 ast::PrimMeta::References(arc) => {
@@ -491,13 +521,13 @@ impl EmitCtx<'_> {
                 ast::PrimMeta::Inherits(paths) => {
                     spec.inherits
                         .make_mut()
-                        .merge(self.emit_path_listop(paths, prim_path, &sites, "Inherit"));
+                        .merge(self.emit_path_listop(paths, prim_path, sites, "Inherit"));
                 }
                 ast::PrimMeta::Specializes(paths) => {
                     spec.specializes.make_mut().merge(self.emit_path_listop(
                         paths,
                         prim_path,
-                        &sites,
+                        sites,
                         "Specializes",
                     ));
                 }
@@ -1026,7 +1056,7 @@ impl EmitCtx<'_> {
         &mut self,
         vs: &ast::VariantSet<'_>,
         prim_path_id: PathId,
-        prim_path: &str,
+        prim_path: &mut String,
         enclosing: &[VariantSelectionSite],
         sets: &mut VariantSets,
         layer: &mut Layer,
@@ -1076,8 +1106,11 @@ impl EmitCtx<'_> {
                         //
                         // Spec: AOUSD Core §7.3.6 (variant specs contain prim
                         // specs).
-                        let child_path = format!("{}/{}", prim_path, child_prim.name);
-                        self.emit_prim(child_prim, &child_path, &branch_context, layer);
+                        let place = PrimPlace {
+                            parent: prim_path_id,
+                            name: child_tok,
+                        };
+                        self.emit_prim(child_prim, place, prim_path, &branch_context, layer);
                     }
                     ast::PrimChild::VariantSet(nested_vs) => {
                         self.emit_variant_set(
@@ -1817,6 +1850,14 @@ impl EmitCtx<'_> {
             }
         }
     }
+}
+
+/// Where a prim being emitted sits: the child `name` of the prim at
+/// `parent`.
+#[derive(Clone, Copy)]
+struct PrimPlace {
+    parent: PathId,
+    name: TokenId,
 }
 
 // ── Specifier conversion ────────────────────────────────────────────────

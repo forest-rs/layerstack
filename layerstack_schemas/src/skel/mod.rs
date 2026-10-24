@@ -13,6 +13,8 @@ use crate::{
     PrimView, Scene, Time, gf,
     usd_skel::{SkelAnimation, SkelBindingApi, Skeleton},
 };
+mod authoring;
+pub use authoring::{DecomposeError, RigidInfluenceError, decompose_joint_transforms};
 mod bounds;
 mod cache;
 mod dual_quaternion;

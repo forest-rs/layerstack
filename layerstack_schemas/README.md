@@ -797,6 +797,16 @@ expose sparse/dense point and normal offsets in contribution order, including
 inbetweens. `validate_point_count` checks all samples before a complete buffer
 upload, while CPU evaluation continues to validate only active samples.
 
+Rigs are authored with `SkelBindingApiEdit::create_joint_indices_primvar`,
+`create_joint_weights_primvar` and `set_rigid_joint_influence`, and joint
+animation from matrices with `SkelAnimationEdit::set_transforms(_at)`, which
+decomposes them as `UsdSkelDecomposeTransforms` (`decompose_joint_transforms`).
+`JointTopology::compute_local_transforms` turns skeleton-space poses into
+joint-local ones. `normalize_joint_weights`, `sort_joint_influences` and
+`resize_joint_indices`/`resize_joint_weights` prepare influence blocks; each
+follows its OpenUSD utility, refusals included, and leaves its arrays
+unchanged when it refuses.
+
 
 `SkelCache::deformation_inputs` borrows retained binding values, shared rig-order
 matrices, mapped binding-order matrices, shape samples and evaluated inbetween

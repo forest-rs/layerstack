@@ -103,14 +103,19 @@ fn normalized(v: [f64; 3]) -> [f64; 3] {
     let n = libm::sqrt(dot(v, v)).max(1e-10);
     v.map(|x| x / n)
 }
-pub(crate) fn orthonormalize(mut rows: Matrix3) -> Matrix3 {
+pub(crate) fn orthonormalize(rows: Matrix3) -> Matrix3 {
+    orthonormalize_checked(rows).0
+}
+/// `GfMatrix4d::Orthonormalize`: the rows, and whether `GfOrthogonalizeBasis`
+/// converged (collinear rows and 20 iterations without converging do not).
+pub(crate) fn orthonormalize_checked(mut rows: Matrix3) -> (Matrix3, bool) {
     rows = rows.map(normalized);
     let close = |a: [f64; 3], b: [f64; 3]| {
         let d = core::array::from_fn(|i| a[i] - b[i]);
         dot(d, d) <= 1e-12
     };
     if close(rows[0], rows[1]) || close(rows[0], rows[2]) || close(rows[1], rows[2]) {
-        return rows;
+        return (rows, false);
     }
     for _ in 0..20 {
         let next = core::array::from_fn(|i| {
@@ -132,11 +137,11 @@ pub(crate) fn orthonormalize(mut rows: Matrix3) -> Matrix3 {
             })
             .sum::<f64>();
         if error < 1e-12 {
-            break;
+            return (rows, true);
         }
         rows = next;
     }
-    rows
+    (rows, false)
 }
 pub(crate) fn determinant(matrix: &Matrix3) -> f64 {
     matrix[0][0] * (matrix[1][1] * matrix[2][2] - matrix[1][2] * matrix[2][1])

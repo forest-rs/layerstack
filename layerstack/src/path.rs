@@ -365,6 +365,10 @@ impl Path {
             .copied()
             .zip(other.segments.iter().copied())
         {
+            // One id is one string: shared ancestors need no string reads.
+            if a == b {
+                continue;
+            }
             let seg = tokens.resolve(a).cmp(tokens.resolve(b));
             if seg != Ordering::Equal {
                 return seg;
@@ -586,7 +590,16 @@ impl PathInterner {
         if a == b {
             return Ordering::Equal;
         }
-        self.resolve(a).cmp_with_tokens(self.resolve(b), tokens)
+        let (a, b) = (self.entry(a), self.entry(b));
+        // Siblings, the common case in a sorted list, differ only in their
+        // last segment.
+        if a.parent.is_some()
+            && a.parent == b.parent
+            && let (Some(x), Some(y)) = (a.path.segments.last(), b.path.segments.last())
+        {
+            return tokens.resolve(*x).cmp(tokens.resolve(*y));
+        }
+        a.path.cmp_with_tokens(&b.path, tokens)
     }
 
     /// Sorts `ids` in namespace order ([`Self::cmp_paths`]) and removes

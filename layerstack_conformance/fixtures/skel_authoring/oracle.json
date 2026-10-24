@@ -1,0 +1,1355 @@
+{
+ "openusd_version": "26.8",
+ "calls": [
+  {
+   "prim": "/Rigid",
+   "op": "set_rigid_joint_influence",
+   "args": {
+    "joint": 2,
+    "weight": 0.25
+   },
+   "accepted": true,
+   "changed_when_refused": false,
+   "prim_after": {
+    "primvars:skel:jointIndices": {
+     "type": "int[]",
+     "interpolation": "constant",
+     "elementSize": 1,
+     "default": [
+      2
+     ],
+     "timeSamples": {}
+    },
+    "primvars:skel:jointWeights": {
+     "type": "float[]",
+     "interpolation": "constant",
+     "elementSize": 1,
+     "default": [
+      0.25
+     ],
+     "timeSamples": {}
+    }
+   }
+  },
+  {
+   "prim": "/Rigid",
+   "op": "set_rigid_joint_influence",
+   "args": {
+    "joint": -1,
+    "weight": 1.0
+   },
+   "accepted": false,
+   "changed_when_refused": false,
+   "prim_after": {
+    "primvars:skel:jointIndices": {
+     "type": "int[]",
+     "interpolation": "constant",
+     "elementSize": 1,
+     "default": [
+      2
+     ],
+     "timeSamples": {}
+    },
+    "primvars:skel:jointWeights": {
+     "type": "float[]",
+     "interpolation": "constant",
+     "elementSize": 1,
+     "default": [
+      0.25
+     ],
+     "timeSamples": {}
+    }
+   }
+  },
+  {
+   "prim": "/Rigid",
+   "op": "set_rigid_joint_influence",
+   "args": {
+    "joint": 0,
+    "weight": 1.0
+   },
+   "accepted": true,
+   "changed_when_refused": false,
+   "prim_after": {
+    "primvars:skel:jointIndices": {
+     "type": "int[]",
+     "interpolation": "constant",
+     "elementSize": 1,
+     "default": [
+      0
+     ],
+     "timeSamples": {}
+    },
+    "primvars:skel:jointWeights": {
+     "type": "float[]",
+     "interpolation": "constant",
+     "elementSize": 1,
+     "default": [
+      1.0
+     ],
+     "timeSamples": {}
+    }
+   }
+  },
+  {
+   "prim": "/Fresh",
+   "op": "set_rigid_joint_influence",
+   "args": {
+    "joint": -3,
+    "weight": 1.0
+   },
+   "accepted": false,
+   "changed_when_refused": true,
+   "prim_after": {
+    "primvars:skel:jointIndices": {
+     "type": "int[]",
+     "interpolation": "constant",
+     "elementSize": 1,
+     "default": null,
+     "timeSamples": {}
+    },
+    "primvars:skel:jointWeights": {
+     "type": "float[]",
+     "interpolation": "constant",
+     "elementSize": 1,
+     "default": null,
+     "timeSamples": {}
+    }
+   }
+  },
+  {
+   "prim": "/Skinned",
+   "op": "create_joint_indices_primvar",
+   "args": {
+    "constant": false,
+    "element_size": null
+   },
+   "accepted": true,
+   "changed_when_refused": false,
+   "prim_after": {
+    "primvars:skel:jointIndices": {
+     "type": "int[]",
+     "interpolation": "vertex",
+     "elementSize": null,
+     "default": null,
+     "timeSamples": {}
+    }
+   }
+  },
+  {
+   "prim": "/Skinned",
+   "op": "create_joint_indices_primvar",
+   "args": {
+    "constant": true,
+    "element_size": 3
+   },
+   "accepted": true,
+   "changed_when_refused": false,
+   "prim_after": {
+    "primvars:skel:jointIndices": {
+     "type": "int[]",
+     "interpolation": "constant",
+     "elementSize": 3,
+     "default": null,
+     "timeSamples": {}
+    }
+   }
+  },
+  {
+   "prim": "/Skinned",
+   "op": "create_joint_weights_primvar",
+   "args": {
+    "constant": false,
+    "element_size": 0
+   },
+   "accepted": true,
+   "changed_when_refused": false,
+   "prim_after": {
+    "primvars:skel:jointIndices": {
+     "type": "int[]",
+     "interpolation": "constant",
+     "elementSize": 3,
+     "default": null,
+     "timeSamples": {}
+    },
+    "primvars:skel:jointWeights": {
+     "type": "float[]",
+     "interpolation": "vertex",
+     "elementSize": null,
+     "default": null,
+     "timeSamples": {}
+    }
+   }
+  },
+  {
+   "prim": "/Skinned",
+   "op": "create_joint_weights_primvar",
+   "args": {
+    "constant": false,
+    "element_size": -1
+   },
+   "accepted": true,
+   "changed_when_refused": false,
+   "prim_after": {
+    "primvars:skel:jointIndices": {
+     "type": "int[]",
+     "interpolation": "constant",
+     "elementSize": 3,
+     "default": null,
+     "timeSamples": {}
+    },
+    "primvars:skel:jointWeights": {
+     "type": "float[]",
+     "interpolation": "vertex",
+     "elementSize": null,
+     "default": null,
+     "timeSamples": {}
+    }
+   }
+  },
+  {
+   "prim": "/Skinned",
+   "op": "create_joint_weights_primvar",
+   "args": {
+    "constant": false,
+    "element_size": 4
+   },
+   "accepted": true,
+   "changed_when_refused": false,
+   "prim_after": {
+    "primvars:skel:jointIndices": {
+     "type": "int[]",
+     "interpolation": "constant",
+     "elementSize": 3,
+     "default": null,
+     "timeSamples": {}
+    },
+    "primvars:skel:jointWeights": {
+     "type": "float[]",
+     "interpolation": "vertex",
+     "elementSize": 4,
+     "default": null,
+     "timeSamples": {}
+    }
+   }
+  },
+  {
+   "prim": "/Typed",
+   "op": "create_joint_weights_primvar",
+   "args": {
+    "constant": false,
+    "element_size": 2
+   },
+   "accepted": false,
+   "changed_when_refused": true,
+   "prim_after": {
+    "primvars:skel:jointWeights": {
+     "type": "double",
+     "interpolation": "vertex",
+     "elementSize": 2,
+     "default": null,
+     "timeSamples": {}
+    }
+   }
+  },
+  {
+   "prim": "/Anim",
+   "op": "set_transforms",
+   "args": {
+    "time": null,
+    "transforms": [
+     [
+      [
+       0,
+       2,
+       0,
+       0
+      ],
+      [
+       -1,
+       0,
+       0,
+       0
+      ],
+      [
+       0,
+       0,
+       0.5,
+       0
+      ],
+      [
+       1,
+       2,
+       3,
+       1
+      ]
+     ],
+     [
+      [
+       1,
+       0,
+       0,
+       0
+      ],
+      [
+       0,
+       0.8660254,
+       0.5,
+       0
+      ],
+      [
+       0,
+       -0.5,
+       0.8660254,
+       0
+      ],
+      [
+       0,
+       0,
+       0,
+       1
+      ]
+     ],
+     [
+      [
+       -1,
+       0,
+       0,
+       0
+      ],
+      [
+       0,
+       1,
+       0,
+       0
+      ],
+      [
+       0,
+       0,
+       1,
+       0
+      ],
+      [
+       0,
+       0.25,
+       0,
+       1
+      ]
+     ]
+    ]
+   },
+   "accepted": true,
+   "changed_when_refused": false,
+   "prim_after": {
+    "translations": {
+     "type": "float3[]",
+     "interpolation": null,
+     "elementSize": null,
+     "default": [
+      [
+       1.0,
+       2.0,
+       3.0
+      ],
+      [
+       0.0,
+       0.0,
+       0.0
+      ],
+      [
+       0.0,
+       0.25,
+       0.0
+      ]
+     ],
+     "timeSamples": {}
+    },
+    "rotations": {
+     "type": "quatf[]",
+     "interpolation": null,
+     "elementSize": null,
+     "default": [
+      [
+       0.0,
+       0.0,
+       0.7071067690849304,
+       0.7071067690849304
+      ],
+      [
+       0.258819043636322,
+       0.0,
+       0.0,
+       0.9659258127212524
+      ],
+      [
+       1.0,
+       0.0,
+       0.0,
+       0.0
+      ]
+     ],
+     "timeSamples": {}
+    },
+    "scales": {
+     "type": "half3[]",
+     "interpolation": null,
+     "elementSize": null,
+     "default": [
+      [
+       2.0,
+       1.0,
+       0.5
+      ],
+      [
+       1.0,
+       1.0,
+       1.0
+      ],
+      [
+       -1.0,
+       -1.0,
+       -1.0
+      ]
+     ],
+     "timeSamples": {}
+    }
+   }
+  },
+  {
+   "prim": "/Anim",
+   "op": "set_transforms",
+   "args": {
+    "time": 1.0,
+    "transforms": [
+     [
+      [
+       1,
+       0.5,
+       0,
+       0
+      ],
+      [
+       0,
+       1,
+       0,
+       0
+      ],
+      [
+       0,
+       0,
+       1,
+       0
+      ],
+      [
+       0,
+       0,
+       0,
+       1
+      ]
+     ],
+     [
+      [
+       1,
+       0,
+       0,
+       0
+      ],
+      [
+       0,
+       0.8660254,
+       0.5,
+       0
+      ],
+      [
+       0,
+       -0.5,
+       0.8660254,
+       0
+      ],
+      [
+       0,
+       0,
+       0,
+       1
+      ]
+     ],
+     [
+      [
+       0,
+       2,
+       0,
+       0
+      ],
+      [
+       -1,
+       0,
+       0,
+       0
+      ],
+      [
+       0,
+       0,
+       0.5,
+       0
+      ],
+      [
+       1,
+       2,
+       3,
+       1
+      ]
+     ]
+    ]
+   },
+   "accepted": true,
+   "changed_when_refused": false,
+   "prim_after": {
+    "translations": {
+     "type": "float3[]",
+     "interpolation": null,
+     "elementSize": null,
+     "default": [
+      [
+       1.0,
+       2.0,
+       3.0
+      ],
+      [
+       0.0,
+       0.0,
+       0.0
+      ],
+      [
+       0.0,
+       0.25,
+       0.0
+      ]
+     ],
+     "timeSamples": {
+      "1.0": [
+       [
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        1.0,
+        2.0,
+        3.0
+       ]
+      ]
+     }
+    },
+    "rotations": {
+     "type": "quatf[]",
+     "interpolation": null,
+     "elementSize": null,
+     "default": [
+      [
+       0.0,
+       0.0,
+       0.7071067690849304,
+       0.7071067690849304
+      ],
+      [
+       0.258819043636322,
+       0.0,
+       0.0,
+       0.9659258127212524
+      ],
+      [
+       1.0,
+       0.0,
+       0.0,
+       0.0
+      ]
+     ],
+     "timeSamples": {
+      "1.0": [
+       [
+        0.0,
+        0.0,
+        0.12218326330184937,
+        0.9925075769424438
+       ],
+       [
+        0.258819043636322,
+        0.0,
+        0.0,
+        0.9659258127212524
+       ],
+       [
+        0.0,
+        0.0,
+        0.7071067690849304,
+        0.7071067690849304
+       ]
+      ]
+     }
+    },
+    "scales": {
+     "type": "half3[]",
+     "interpolation": null,
+     "elementSize": null,
+     "default": [
+      [
+       2.0,
+       1.0,
+       0.5
+      ],
+      [
+       1.0,
+       1.0,
+       1.0
+      ],
+      [
+       -1.0,
+       -1.0,
+       -1.0
+      ]
+     ],
+     "timeSamples": {
+      "1.0": [
+       [
+        1.28125,
+        0.78076171875,
+        1.0
+       ],
+       [
+        1.0,
+        1.0,
+        1.0
+       ],
+       [
+        2.0,
+        1.0,
+        0.5
+       ]
+      ]
+     }
+    }
+   }
+  },
+  {
+   "prim": "/Anim",
+   "op": "set_transforms",
+   "args": {
+    "time": 2.0,
+    "transforms": [
+     [
+      [
+       1,
+       0,
+       0,
+       0
+      ],
+      [
+       0,
+       0.8660254,
+       0.5,
+       0
+      ],
+      [
+       0,
+       -0.5,
+       0.8660254,
+       0
+      ],
+      [
+       0,
+       0,
+       0,
+       1
+      ]
+     ],
+     [
+      [
+       1,
+       0,
+       0,
+       0
+      ],
+      [
+       0,
+       0,
+       0,
+       0
+      ],
+      [
+       0,
+       0,
+       1,
+       0
+      ],
+      [
+       0,
+       0,
+       0,
+       1
+      ]
+     ],
+     [
+      [
+       1,
+       0,
+       0,
+       0
+      ],
+      [
+       0,
+       0.8660254,
+       0.5,
+       0
+      ],
+      [
+       0,
+       -0.5,
+       0.8660254,
+       0
+      ],
+      [
+       0,
+       0,
+       0,
+       1
+      ]
+     ]
+    ]
+   },
+   "accepted": false,
+   "changed_when_refused": false,
+   "prim_after": {
+    "translations": {
+     "type": "float3[]",
+     "interpolation": null,
+     "elementSize": null,
+     "default": [
+      [
+       1.0,
+       2.0,
+       3.0
+      ],
+      [
+       0.0,
+       0.0,
+       0.0
+      ],
+      [
+       0.0,
+       0.25,
+       0.0
+      ]
+     ],
+     "timeSamples": {
+      "1.0": [
+       [
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        1.0,
+        2.0,
+        3.0
+       ]
+      ]
+     }
+    },
+    "rotations": {
+     "type": "quatf[]",
+     "interpolation": null,
+     "elementSize": null,
+     "default": [
+      [
+       0.0,
+       0.0,
+       0.7071067690849304,
+       0.7071067690849304
+      ],
+      [
+       0.258819043636322,
+       0.0,
+       0.0,
+       0.9659258127212524
+      ],
+      [
+       1.0,
+       0.0,
+       0.0,
+       0.0
+      ]
+     ],
+     "timeSamples": {
+      "1.0": [
+       [
+        0.0,
+        0.0,
+        0.12218326330184937,
+        0.9925075769424438
+       ],
+       [
+        0.258819043636322,
+        0.0,
+        0.0,
+        0.9659258127212524
+       ],
+       [
+        0.0,
+        0.0,
+        0.7071067690849304,
+        0.7071067690849304
+       ]
+      ]
+     }
+    },
+    "scales": {
+     "type": "half3[]",
+     "interpolation": null,
+     "elementSize": null,
+     "default": [
+      [
+       2.0,
+       1.0,
+       0.5
+      ],
+      [
+       1.0,
+       1.0,
+       1.0
+      ],
+      [
+       -1.0,
+       -1.0,
+       -1.0
+      ]
+     ],
+     "timeSamples": {
+      "1.0": [
+       [
+        1.28125,
+        0.78076171875,
+        1.0
+       ],
+       [
+        1.0,
+        1.0,
+        1.0
+       ],
+       [
+        2.0,
+        1.0,
+        0.5
+       ]
+      ]
+     }
+    }
+   }
+  },
+  {
+   "prim": "/Anim",
+   "op": "set_transforms",
+   "args": {
+    "time": 3.0,
+    "transforms": []
+   },
+   "accepted": true,
+   "changed_when_refused": false,
+   "prim_after": {
+    "translations": {
+     "type": "float3[]",
+     "interpolation": null,
+     "elementSize": null,
+     "default": [
+      [
+       1.0,
+       2.0,
+       3.0
+      ],
+      [
+       0.0,
+       0.0,
+       0.0
+      ],
+      [
+       0.0,
+       0.25,
+       0.0
+      ]
+     ],
+     "timeSamples": {
+      "1.0": [
+       [
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        1.0,
+        2.0,
+        3.0
+       ]
+      ],
+      "3.0": []
+     }
+    },
+    "rotations": {
+     "type": "quatf[]",
+     "interpolation": null,
+     "elementSize": null,
+     "default": [
+      [
+       0.0,
+       0.0,
+       0.7071067690849304,
+       0.7071067690849304
+      ],
+      [
+       0.258819043636322,
+       0.0,
+       0.0,
+       0.9659258127212524
+      ],
+      [
+       1.0,
+       0.0,
+       0.0,
+       0.0
+      ]
+     ],
+     "timeSamples": {
+      "1.0": [
+       [
+        0.0,
+        0.0,
+        0.12218326330184937,
+        0.9925075769424438
+       ],
+       [
+        0.258819043636322,
+        0.0,
+        0.0,
+        0.9659258127212524
+       ],
+       [
+        0.0,
+        0.0,
+        0.7071067690849304,
+        0.7071067690849304
+       ]
+      ],
+      "3.0": []
+     }
+    },
+    "scales": {
+     "type": "half3[]",
+     "interpolation": null,
+     "elementSize": null,
+     "default": [
+      [
+       2.0,
+       1.0,
+       0.5
+      ],
+      [
+       1.0,
+       1.0,
+       1.0
+      ],
+      [
+       -1.0,
+       -1.0,
+       -1.0
+      ]
+     ],
+     "timeSamples": {
+      "1.0": [
+       [
+        1.28125,
+        0.78076171875,
+        1.0
+       ],
+       [
+        1.0,
+        1.0,
+        1.0
+       ],
+       [
+        2.0,
+        1.0,
+        0.5
+       ]
+      ],
+      "3.0": []
+     }
+    }
+   }
+  }
+ ],
+ "local_transforms": {
+  "joints": [
+   "A",
+   "A/B",
+   "A/B/C",
+   "D"
+  ],
+  "skeleton_space": [
+   [
+    [
+     0,
+     2,
+     0,
+     0
+    ],
+    [
+     -1,
+     0,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0.5,
+     0
+    ],
+    [
+     1,
+     2,
+     3,
+     1
+    ]
+   ],
+   [
+    [
+     1,
+     0,
+     0,
+     0
+    ],
+    [
+     0,
+     0.8660254,
+     0.5,
+     0
+    ],
+    [
+     0,
+     -0.5,
+     0.8660254,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     1
+    ]
+   ],
+   [
+    [
+     -1,
+     0,
+     0,
+     0
+    ],
+    [
+     0,
+     1,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     1,
+     0
+    ],
+    [
+     0,
+     0.25,
+     0,
+     1
+    ]
+   ],
+   [
+    [
+     1,
+     0.5,
+     0,
+     0
+    ],
+    [
+     0,
+     1,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     1,
+     0
+    ],
+    [
+     0,
+     0,
+     0,
+     1
+    ]
+   ]
+  ],
+  "root_inverse": [
+   [
+    1,
+    0,
+    0,
+    0
+   ],
+   [
+    0,
+    1,
+    0,
+    0
+   ],
+   [
+    0,
+    0,
+    1,
+    0
+   ],
+   [
+    0,
+    -5,
+    0,
+    1
+   ]
+  ],
+  "local": [
+   [
+    [
+     0.0,
+     2.0,
+     0.0,
+     0.0
+    ],
+    [
+     -1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.5,
+     0.0
+    ],
+    [
+     1.0,
+     2.0,
+     3.0,
+     1.0
+    ]
+   ],
+   [
+    [
+     0.0,
+     -1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.4330127,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     -0.25,
+     0.0,
+     1.7320508,
+     0.0
+    ],
+    [
+     -1.0,
+     1.0,
+     -6.0,
+     1.0
+    ]
+   ],
+   [
+    [
+     -1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.8660254056766581,
+     -0.5000000032774201,
+     0.0
+    ],
+    [
+     0.0,
+     0.5000000032774201,
+     0.8660254056766581,
+     0.0
+    ],
+    [
+     0.0,
+     0.21650635141916452,
+     -0.12500000081935503,
+     1.0
+    ]
+   ],
+   [
+    [
+     1.0,
+     0.5,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ]
+  ],
+  "rooted": [
+   [
+    [
+     0.0,
+     2.0,
+     0.0,
+     0.0
+    ],
+    [
+     -1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.5,
+     0.0
+    ],
+    [
+     1.0,
+     -3.0,
+     3.0,
+     1.0
+    ]
+   ],
+   [
+    [
+     0.0,
+     -1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.4330127,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     -0.25,
+     0.0,
+     1.7320508,
+     0.0
+    ],
+    [
+     -1.0,
+     1.0,
+     -6.0,
+     1.0
+    ]
+   ],
+   [
+    [
+     -1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.8660254056766581,
+     -0.5000000032774201,
+     0.0
+    ],
+    [
+     0.0,
+     0.5000000032774201,
+     0.8660254056766581,
+     0.0
+    ],
+    [
+     0.0,
+     0.21650635141916452,
+     -0.12500000081935503,
+     1.0
+    ]
+   ],
+   [
+    [
+     1.0,
+     0.5,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     -5.0,
+     0.0,
+     1.0
+    ]
+   ]
+  ]
+ }
+}

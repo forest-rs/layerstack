@@ -18,6 +18,7 @@ use crate::{
     composition_checks::{
         Findings, drop_inconsistent_property_kinds, drop_instance_targets, target_error_applies,
     },
+    dependency_map::DependencyRecords,
     doc::{LayerId, LayerStore},
     expression_variables::{SiteContext, read_selections, site_selections},
     interner::TokenId,
@@ -30,12 +31,16 @@ use crate::{
 };
 
 /// A composed stage, with what composition found for the prototype
-/// inventory ([`Stage::prepare_prototypes`]) to start from.
+/// inventory ([`Stage::prepare_prototypes`]) to start from, and for its
+/// dependency maps to be built from.
 pub(crate) struct Composed {
-    /// The stage.
+    /// The stage, without its dependency maps.
     pub(crate) stage: Stage,
     /// The key part of each instance root composition indexed itself.
     pub(crate) instance_keys: InstanceIndexKeys,
+    /// What the stage's prims depend on, when the composition records it
+    /// ([`StageOptions::with_dependencies`]).
+    pub(crate) dependencies: Option<DependencyRecords>,
 }
 
 /// Shares opinion composition and finalization with local namespace updates.
@@ -133,9 +138,9 @@ fn compose_indexed(
     errors.extend(check_errors);
     let mut reads_all = core::mem::take(&mut composed.reads);
     reads_all.extend(reads);
-    let dependencies = composed.deps.take().map(|mut builder| {
-        builder.add_expression_variable_reads(reads_all);
-        builder.finish()
+    let dependencies = composed.deps.take().map(|mut records| {
+        records.add_expression_variable_reads(reads_all);
+        records
     });
     let errors = errors
         .into_iter()
@@ -148,31 +153,27 @@ fn compose_indexed(
         .filter(|request| prims.contains_key(&request.prim))
         .collect();
     let used_layers = composed.used_layers.into_iter().collect();
-    let stage = Stage::from_parts(
-        prims,
-        composed.children,
-        options.with_provenance,
-        dependencies,
-    )
-    .with_loadable(composed.loadable)
-    .with_layer_inventory(
-        composed.local_layers,
-        used_layers,
-        composed.used_layer_sites,
-    )
-    .with_inactive(composed.inactive, composed.inactive_children)
-    .with_composition_work(crate::stage::CompositionWork {
-        composed_prim_indexes: composed.composed_prim_indexes,
-        reused_prim_indexes: composed.reused_prim_indexes,
-    })
-    .with_composition_errors(store, errors)
-    .with_asset_requests(asset_requests)
-    .with_instances(composed.instances)
-    .with_boundary_children(composed.boundary_children)
-    .with_variant_fallbacks(options.variant_fallbacks.clone());
+    let stage = Stage::from_parts(prims, composed.children, options.with_provenance, None)
+        .with_loadable(composed.loadable)
+        .with_layer_inventory(
+            composed.local_layers,
+            used_layers,
+            composed.used_layer_sites,
+        )
+        .with_inactive(composed.inactive, composed.inactive_children)
+        .with_composition_work(crate::stage::CompositionWork {
+            composed_prim_indexes: composed.composed_prim_indexes,
+            reused_prim_indexes: composed.reused_prim_indexes,
+        })
+        .with_composition_errors(store, errors)
+        .with_asset_requests(asset_requests)
+        .with_instances(composed.instances)
+        .with_boundary_children(composed.boundary_children)
+        .with_variant_fallbacks(options.variant_fallbacks.clone());
     Composed {
         stage,
         instance_keys: composed.instance_keys,
+        dependencies,
     }
 }
 

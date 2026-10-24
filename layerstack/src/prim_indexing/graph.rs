@@ -178,7 +178,8 @@ impl Graph {
 
     /// `node` and every node beneath it, in strength order.
     pub(crate) fn subtree(&self, node: NodeIndex) -> Vec<NodeIndex> {
-        let mut out = Vec::new();
+        // Room for every node, so the list never grows as it is filled.
+        let mut out = Vec::with_capacity(self.nodes.len());
         self.push_subtree(node, &mut out);
         out
     }

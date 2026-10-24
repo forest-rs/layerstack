@@ -110,7 +110,7 @@ pub(crate) fn drop_inconsistent_property_kinds(
         if range.len() < 2 {
             continue;
         }
-        let opinions = &index.opinions[range.clone()];
+        let opinions = index.opinions_in(range);
         let FieldKey::Property(property) = *field else {
             continue;
         };
@@ -396,7 +396,7 @@ pub(crate) fn drop_instance_targets(
         }
         let prim_path = paths.resolve(prim);
         for (field, range) in &index.fields {
-            let opinions = &index.opinions[range.clone()];
+            let opinions = index.opinions_in(range);
             let FieldKey::Property(property) = *field else {
                 continue;
             };

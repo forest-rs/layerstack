@@ -1471,6 +1471,15 @@ fn prim_index(
         )
     });
     let mut index = PrimIndex::new(PrimIndexGraph::from_ordered(nodes));
+    // At most one source per layer of each contributing node's stack.
+    index.reserve_sources(
+        graph
+            .nodes
+            .iter()
+            .filter(|node| node.can_contribute_specs() && node.has_specs)
+            .map(|node| ctx.stacks.get(node.site.stack).layers.len())
+            .sum(),
+    );
     for (at, node) in graph.nodes.iter().enumerate() {
         if !node.can_contribute_specs() || !node.has_specs {
             continue;
@@ -1544,6 +1553,9 @@ fn prim_index(
             }));
         }
     }
+    // Most prims have one source, which a vector grown by pushes would
+    // give room for four; the rest give back what their records outgrew.
+    index.trim();
     index.finalize();
     index
 }

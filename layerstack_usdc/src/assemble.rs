@@ -1543,9 +1543,11 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
                     }
                 }
                 "relocates" => {
-                    // Prim relocates are legacy scene description that
-                    // OpenUSD ignores when composing a USD stage; only
+                    // Prim relocates are legacy scene description; only
                     // `layerRelocates` is composed (AOUSD Core §10.3.2.6).
+                    // OpenUSD 26.11 removed the field from Sdf's schema, yet
+                    // its crate reader keeps it as an unregistered field and
+                    // composes without it, as this reader does.
                     self.report(
                         spec_path,
                         Some(name),

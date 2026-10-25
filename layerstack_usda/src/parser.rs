@@ -679,10 +679,49 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
             if self.eat_statement_separator() {
                 continue;
             }
+            if self.peek() == Some(TokenKind::Ident) && self.current_text() == "relocates" {
+                self.parse_prim_relocates();
+                continue;
+            }
             self.parse_prim_meta_entry();
         }
 
         self.expect(TokenKind::RightParen);
+        let end = self.current_span().start;
+        self.builder.finish_node(end);
+    }
+
+    /// Refuses a prim's or variant's `relocates` statement, reading past it
+    /// as an error node that lowering skips.
+    ///
+    /// OpenUSD 26.11 removed prim relocates from Sdf: `PrimMetadataItem` no
+    /// longer accepts `RelocatesMetadata` (`pxr/usd/sdf/textFileFormatParser.h`),
+    /// so a layer with one fails to parse ("Expected )" at the statement).
+    /// Only layer metadata holds relocates.
+    /// Spec: AOUSD Core §7.6.1.2.4 (`layerRelocates`), §10.3.2.6.
+    fn parse_prim_relocates(&mut self) {
+        let start = self.current_span().start;
+        self.builder.start_node(SyntaxKind::ErrorNode, start);
+        let keyword = self.current_span();
+        self.error(
+            keyword,
+            "relocates are layer metadata; a prim or variant cannot author them",
+        );
+        self.eat_keyword("relocates");
+        self.expect(TokenKind::Equals);
+        self.eat_trivia();
+        if self.peek() == Some(TokenKind::LeftBrace) {
+            self.bump();
+            loop {
+                self.eat_trivia();
+                if self.peek() == Some(TokenKind::RightBrace) || self.current().is_none() {
+                    break;
+                }
+                self.parse_relocate_entry();
+                self.eat(TokenKind::Comma);
+            }
+            self.expect(TokenKind::RightBrace);
+        }
         let end = self.current_span().start;
         self.builder.finish_node(end);
     }
@@ -2179,6 +2218,38 @@ fn is_trivia(kind: TokenKind) -> bool {
 mod tests {
     use super::*;
     use crate::ast::*;
+
+    #[test]
+    fn prim_and_variant_relocates_are_refused() {
+        // OpenUSD 26.11 parses relocates only as layer metadata.
+        for source in [
+            "#usda 1.0\ndef \"A\" (\n    relocates = {\n        <B>: <D>\n    }\n    kind = \"group\"\n)\n{\n    def \"B\" {}\n}\n",
+            "#usda 1.0\ndef \"A\" (\n    relocates = {\n    }\n    kind = \"group\"\n)\n{\n    def \"B\" {}\n}\n",
+            "#usda 1.0\nover \"A\" {\n    variantSet \"v\" = {\n        \"x\" (\n            relocates = { <B>: <C> }\n        ) {}\n    }\n    def \"B\" {}\n}\n",
+        ] {
+            let result = parse(source);
+            let [diagnostic] = result.diagnostics.as_slice() else {
+                panic!("{source}: {:?}", result.diagnostics);
+            };
+            assert_eq!(diagnostic.span.text(source), "relocates", "{source}");
+            let prim = &result.layer.prims[0];
+            assert!(
+                prim.metadata.iter().all(|entry| !matches!(
+                    entry,
+                    PrimMeta::Custom(MetadataEntry {
+                        key: "relocates",
+                        ..
+                    })
+                )),
+                "{source}: {:?}",
+                prim.metadata
+            );
+            assert!(!prim.children.is_empty(), "{source}");
+        }
+        // Layer relocates still parse.
+        let layer = parse("#usda 1.0\n(\n    relocates = {\n        </A/B>: </A/C>\n    }\n)\n");
+        assert!(layer.diagnostics.is_empty(), "{:?}", layer.diagnostics);
+    }
 
     #[test]
     fn byte_order_mark_is_the_one_header_error() {

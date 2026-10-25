@@ -160,6 +160,16 @@ fn frusta_placed_from_scaled_sheared_and_reflected_transforms_match_openusd() {
         );
         assert_eq!(frustum.window(), row.window);
         assert_eq!(frustum.clipping_range(), row.clipping_range);
+        // OpenUSD's own view and projection matrices rebuild the frustum.
+        let rebuilt =
+            PreparedFrustum::from_view_and_projection(&row.view, &row.projection_matrix).unwrap();
+        assert_eq!(rebuilt.projection(), frustum.projection());
+        close(rebuilt.window(), row.window);
+        close(rebuilt.clipping_range(), row.clipping_range);
+        close(
+            rebuilt.view_matrix().iter().flatten().copied(),
+            row.view.into_iter().flatten(),
+        );
         match row.perspective {
             Some(pair) => {
                 for (axis, expected) in [

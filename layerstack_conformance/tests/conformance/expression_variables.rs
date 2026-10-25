@@ -45,9 +45,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use layerstack::{
     CompositionError, ExpressionContext, LayerStack, LiveStage, Stage, StageOptions, Value,
-    variable_expression::{
-        ExpressionValue, ExpressionVariables, VariableExpression, VariableValue,
-    },
+    variable_expression::{ExpressionValue, VariableValue},
 };
 use layerstack_conformance::{
     usda_real::{LoadedStage, load_entry_usda},
@@ -538,6 +536,7 @@ fn live_stage_recomposes_referenced_sublayers() {
 /// than its fallback, string, integer, boolean and list fallbacks, empty
 /// ones, fallbacks in quoted strings and in variables' own expressions,
 /// and the fallbacks the grammar refuses.
+#[cfg(not(target_arch = "wasm32"))]
 const FALLBACK_CASES: &[&str] = &[
     "`${SET:'fallback'}`",
     "`${UNSET:'fallback'}`",
@@ -570,11 +569,13 @@ const FALLBACK_CASES: &[&str] = &[
 ];
 
 /// The variables [`FALLBACK_CASES`] are evaluated with, as a Python dict.
+#[cfg(not(target_arch = "wasm32"))]
 const FALLBACK_VARIABLES: &str =
     r#"{"SET": "set", "INT": 3, "NONE": "`None`", "NESTED": "`${UNSET:'nested'}`"}"#;
 
 /// For each expression on stdin (one per line), its value and errors as
 /// OpenUSD evaluates it.
+#[cfg(not(target_arch = "wasm32"))]
 const FALLBACK_ORACLE: &str = r#"
 import json, sys
 from pxr import Sdf
@@ -588,7 +589,10 @@ for line in sys.stdin.read().splitlines():
 "#;
 
 /// The value and errors of `expression`, in the oracle's JSON shape.
+#[cfg(not(target_arch = "wasm32"))]
 fn fallback_evaluation(expression: &str) -> serde_json::Value {
+    use layerstack::variable_expression::{ExpressionVariables, VariableExpression};
+
     let mut variables = ExpressionVariables::new();
     let string = |s: &str| VariableValue::Value(ExpressionValue::String(s.into()));
     variables.insert("SET", string("set"));

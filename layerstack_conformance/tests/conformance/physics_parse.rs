@@ -4,9 +4,12 @@
 //! The physics scene parse against OpenUSD's `LoadUsdPhysicsFromRange`.
 //!
 //! `scripts/physics_parse_oracle.py` parses each scene in
-//! `fixtures/physics_parse` with C++ 26.08 and records rigid bodies, shapes
+//! `fixtures/physics_parse` with C++ 26.11 and records rigid bodies, shapes
 //! (kind, custom token, body, collision groups, materials), joints and
-//! collision groups (merged groups, filters, inversion). `custom.usda` is
+//! collision groups (merged groups, filters, inversion), and each joint's
+//! bodies and local positions. `disabled_bodies.usda` covers OpenUSD 26.11
+//! passing over a rigid body whose `physics:rigidBodyEnabled` is false, for
+//! collider ownership and joint bodies alike. `custom.usda` is
 //! parsed twice, the second time with custom tokens for a shape API, a
 //! shape type and an instancer type, as `CustomPhysicsTypes` takes them.
 //! The test captures each scene with `PhysicsSceneSnapshot::capture` and
@@ -152,7 +155,8 @@ fn parse(scene_name: &str) -> BTreeMap<String, BTreeMap<String, Value>> {
         );
     }
     for joint in &snapshot.joints {
-        let kind = match &joint.descriptor.as_ref().unwrap().kind {
+        let desc = joint.descriptor.as_ref().unwrap();
+        let kind = match &desc.kind {
             JointKind::Fixed => "fixed",
             JointKind::Revolute { .. } => "revolute",
             JointKind::Prismatic { .. } => "prismatic",
@@ -161,9 +165,15 @@ fn parse(scene_name: &str) -> BTreeMap<String, BTreeMap<String, Value>> {
             JointKind::Custom => "custom",
             JointKind::D6 { .. } => "d6",
         };
-        out.get_mut("joints")
-            .unwrap()
-            .insert(text(joint.path), json!({ "kind": kind }));
+        let rounded = |p: [f32; 3]| p.map(|v| (f64::from(v) * 1000.).round() / 1000.);
+        out.get_mut("joints").unwrap().insert(
+            text(joint.path),
+            json!({
+                "kind": kind,
+                "bodies": desc.bodies.map(|b| b.map(text)),
+                "local_positions": desc.local_poses.map(|pose| rounded(pose.position)),
+            }),
+        );
     }
     out
 }

@@ -9,7 +9,11 @@ Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.11`.
 Runs `UsdPhysics.LoadUsdPhysicsFromRange` over each scene in
 `fixtures/physics_parse` and records rigid bodies, shapes (kind, custom
 geometry token, body, collision groups and materials), joints and
-collision groups (merged groups and filters). `custom.usda` is parsed
+collision groups (merged groups and filters), and for each joint the
+bodies its relationships resolve to and its local positions relative to
+them. `disabled_bodies.usda` holds rigid bodies whose
+`physics:rigidBodyEnabled` is false, which OpenUSD 26.11 passes over as
+though `PhysicsRigidBodyAPI` were not applied. `custom.usda` is parsed
 twice: plain, and with custom tokens naming the shape API `MyConvexAPI`,
 the shape type `MyShape` and the instancer type `MyInstancer`.
 
@@ -90,7 +94,14 @@ def parse(path, custom):
                     "materials": [str(m) for m in desc.materials],
                 }
             elif key in JOINTS:
-                out["joints"][prim] = {"kind": JOINTS[key]}
+                out["joints"][prim] = {
+                    "kind": JOINTS[key],
+                    "bodies": [str(desc.body0) or None, str(desc.body1) or None],
+                    "local_positions": [
+                        [round(v, 3) for v in desc.localPose0Position],
+                        [round(v, 3) for v in desc.localPose1Position],
+                    ],
+                }
             elif key == Kind.CollisionGroup:
                 out["collision_groups"][prim] = {
                     "merged_groups": paths(desc.mergedGroups),

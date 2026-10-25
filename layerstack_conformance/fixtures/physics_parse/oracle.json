@@ -106,6 +106,125 @@
         }
       }
     },
+    "disabled_bodies.usda": {
+      "collision_groups": {},
+      "joints": {
+        "/ToChild": {
+          "bodies": [
+            "/Lone/Child",
+            "/Outer"
+          ],
+          "kind": "revolute",
+          "local_positions": [
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ]
+          ]
+        },
+        "/ToLone": {
+          "bodies": [
+            "/Lone/Box",
+            null
+          ],
+          "kind": "fixed",
+          "local_positions": [
+            [
+              0.5,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              5.0
+            ]
+          ]
+        },
+        "/ToNested": {
+          "bodies": [
+            "/Outer",
+            "/Outer"
+          ],
+          "kind": "fixed",
+          "local_positions": [
+            [
+              0.5,
+              2.0,
+              3.0
+            ],
+            [
+              0.0,
+              2.5,
+              0.0
+            ]
+          ]
+        }
+      },
+      "rigid_bodies": {
+        "/Lone": {
+          "collisions": [],
+          "mass": 0.001
+        },
+        "/Lone/Child": {
+          "collisions": [
+            "/Lone/Child/Box"
+          ],
+          "mass": 0.001
+        },
+        "/Outer": {
+          "collisions": [
+            "/Outer/Inner/Box",
+            "/Outer/SelfCollider"
+          ],
+          "mass": 0.002
+        },
+        "/Outer/Inner": {
+          "collisions": [],
+          "mass": 0.001
+        },
+        "/Outer/SelfCollider": {
+          "collisions": [],
+          "mass": 0.001
+        }
+      },
+      "shapes": {
+        "/Lone/Box": {
+          "collision_groups": [],
+          "kind": "cube",
+          "materials": [],
+          "rigid_body": null,
+          "token": null
+        },
+        "/Lone/Child/Box": {
+          "collision_groups": [],
+          "kind": "cube",
+          "materials": [],
+          "rigid_body": "/Lone/Child",
+          "token": null
+        },
+        "/Outer/Inner/Box": {
+          "collision_groups": [],
+          "kind": "cube",
+          "materials": [],
+          "rigid_body": "/Outer",
+          "token": null
+        },
+        "/Outer/SelfCollider": {
+          "collision_groups": [],
+          "kind": "sphere",
+          "materials": [],
+          "rigid_body": "/Outer",
+          "token": null
+        }
+      }
+    },
     "groups.usda": {
       "collision_groups": {
         "/World/G0": {

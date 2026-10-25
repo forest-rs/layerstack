@@ -3,8 +3,11 @@
 
 //! Owned default-time physics descriptors, without a simulation backend.
 //!
-//! Discovery, ownership and scene defaults follow OpenUSD 26.08
-//! `usdPhysics/parseUtils.cpp` and `parsingUtils.dox`. Includes traverse active,
+//! Discovery, ownership and scene defaults follow OpenUSD 26.11
+//! `usdPhysics/parseUtils.cpp` and `parsingUtils.dox`. A rigid body whose
+//! `physics:rigidBodyEnabled` is false is passed over as though its API were
+//! not applied: colliders and joint relationships beneath it resolve to the
+//! nearest enabled body above, and a collider with none is static. Includes traverse active,
 //! defined, concrete instance proxies. Encountering an excluded path or a point
 //! instancer prunes that traversal; a separate include below an excluded ancestor
 //! remains permitted, as in OpenUSD. Overlapping includes are deduplicated. Owner filters retain bodies
@@ -677,10 +680,18 @@ fn shape(
     let scene = api.scene();
     let world_matrix = world(&api, xforms)?;
     let world_transform = transform(&world_matrix)?;
+    // The nearest enabled rigid body at or above the collider owns it; a
+    // disabled one is passed over as though its API were not applied, and
+    // with none the collider is static. A body whose capture failed still
+    // claims it, so its error surfaces. OpenUSD 26.11: `_GetRigidBody` and
+    // `_HasDynamicBodyParent` (`usdPhysics/parseUtils.cpp`).
     let mut current = Some(api.path());
     let mut body = None;
     while let Some(path) = current {
-        if let Some(found) = bodies.iter().find(|b| b.path == path) {
+        if let Some(found) = bodies
+            .iter()
+            .find(|b| b.path == path && b.descriptor.as_ref().map_or(true, |d| d.enabled))
+        {
             body = Some(found);
             break;
         }

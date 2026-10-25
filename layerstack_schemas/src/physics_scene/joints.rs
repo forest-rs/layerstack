@@ -202,11 +202,20 @@ fn pose(
             },
         ));
     };
+    // The nearest enabled rigid body at or above the target, else the
+    // farthest collider: a disabled body is passed over as though its API
+    // were not applied, and an unreadable flag counts as enabled, as C++
+    // leaves the flag it passes to `Get`. OpenUSD 26.11: `_GetBodyPrim`
+    // (`usdPhysics/parseUtils.cpp`).
     let mut current = Some(target);
     let mut body = None;
     let mut collision = None;
     while let Some(path) = current {
-        if scene.has_api(path, "PhysicsRigidBodyAPI", None) {
+        if scene.has_api(path, "PhysicsRigidBodyAPI", None)
+            && PrimView::new(*scene, path)
+                .read_value("physics:rigidBodyEnabled", crate::value::read_bool)
+                .unwrap_or(true)
+        {
             body = Some(path);
             break;
         }

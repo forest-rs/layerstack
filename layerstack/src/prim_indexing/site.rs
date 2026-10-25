@@ -298,7 +298,20 @@ pub(crate) fn references(
         return Vec::new();
     }
     let mut result: Vec<Reference> = Vec::new();
-    let mut sources: Vec<(Reference, usize)> = Vec::new();
+    let site_arc = |arc, strength: usize| SiteArc {
+        source_layer: stack.layers[strength],
+        source_offset: stack.offset_at(strength),
+        arc,
+    };
+    // Most sites author their arcs in one layer, which then authors each.
+    if let [(strength, id, op)] = authored[..] {
+        crate::arcs::anchor_internal_arcs(store, op, id, anchor).apply_in_place(&mut result);
+        return result
+            .into_iter()
+            .map(|arc| site_arc(arc, strength))
+            .collect();
+    }
+    let mut sources = ArcStrengths::Few(Vec::new());
     for (strength, id, op) in authored.into_iter().rev() {
         let op = crate::arcs::anchor_internal_arcs(store, op, id, anchor);
         for item in op
@@ -310,27 +323,70 @@ pub(crate) fn references(
             .chain(&op.append)
             .chain(&op.reorder)
         {
-            match sources.iter_mut().find(|(arc, _)| arc == item) {
-                Some(entry) => entry.1 = strength,
-                None => sources.push((item.clone(), strength)),
-            }
+            sources.record(item, strength);
         }
         op.apply_in_place(&mut result);
     }
     result
         .into_iter()
         .map(|arc| {
-            let strength = sources
-                .iter()
-                .find(|(item, _)| *item == arc)
-                .map_or(0, |(_, strength)| *strength);
-            SiteArc {
-                source_layer: stack.layers[strength],
-                source_offset: stack.offset_at(strength),
-                arc,
-            }
+            let strength = sources.strength(&arc);
+            site_arc(arc, strength)
         })
         .collect()
+}
+
+/// The strongest layer authoring each arc of a site's reference or
+/// payload list ops ([`references`]), by its strength in the layer stack:
+/// compared pairwise while the arcs are few, as most sites author one to
+/// three, and hashed beyond, so that a site authoring many arcs costs time
+/// linear in them.
+enum ArcStrengths {
+    Few(Vec<(Reference, usize)>),
+    Many(HashMap<Reference, usize>),
+}
+
+impl ArcStrengths {
+    /// The most arcs compared pairwise.
+    const PAIRWISE: usize = 16;
+
+    /// Records that the layer of `strength` authors `item`. The layers are
+    /// recorded weakest first, so the last one recorded for an arc is the
+    /// strongest authoring it.
+    fn record(&mut self, item: &Reference, strength: usize) {
+        match self {
+            Self::Few(few) => {
+                if let Some(entry) = few.iter_mut().find(|(arc, _)| arc == item) {
+                    entry.1 = strength;
+                } else if few.len() < Self::PAIRWISE {
+                    few.push((item.clone(), strength));
+                } else {
+                    let mut many: HashMap<Reference, usize> =
+                        core::mem::take(few).into_iter().collect();
+                    many.insert(item.clone(), strength);
+                    *self = Self::Many(many);
+                }
+            }
+            Self::Many(many) => match many.get_mut(item) {
+                Some(entry) => *entry = strength,
+                None => {
+                    many.insert(item.clone(), strength);
+                }
+            },
+        }
+    }
+
+    /// The strength recorded for `arc`: the strongest layer's, `0`, for an
+    /// arc none recorded.
+    fn strength(&self, arc: &Reference) -> usize {
+        match self {
+            Self::Few(few) => few
+                .iter()
+                .find(|(item, _)| item == arc)
+                .map_or(0, |(_, strength)| *strength),
+            Self::Many(many) => many.get(arc).copied().unwrap_or(0),
+        }
+    }
 }
 
 /// The inherits (or specializes, when `specializes`) composed across
@@ -1188,6 +1244,40 @@ mod tests {
         StageOptions, SublayerEntry, TokenId, Value, VariantSetSpec, VariantSpec,
         spec_path::VariantSelectionSite,
     };
+
+    /// The strongest layer authoring each arc is the same whether a site's
+    /// arcs are few enough to compare pairwise or are hashed: the last
+    /// layer recorded, weakest first, for each.
+    #[test]
+    fn arc_strengths_hash_many_arcs_to_the_strongest_layer() {
+        use super::ArcStrengths;
+        use crate::Reference;
+        let store = InMemoryStore::default();
+        let arcs: Vec<Reference> = (0..40)
+            .map(|i| Reference::new(LayerId(2), store.path(&alloc::format!("/Target{i}"))))
+            .collect();
+        let other = Reference::new(LayerId(2), store.path("/Other"));
+        for count in [3, ArcStrengths::PAIRWISE, 40] {
+            let mut strengths = ArcStrengths::Few(Vec::new());
+            // The weaker layer, 2, authors every arc; the stronger, 1, every
+            // third; layer 0 authors none.
+            for arc in &arcs[..count] {
+                strengths.record(arc, 2);
+            }
+            for arc in arcs[..count].iter().step_by(3) {
+                strengths.record(arc, 1);
+            }
+            assert_eq!(
+                matches!(strengths, ArcStrengths::Many(_)),
+                count > ArcStrengths::PAIRWISE
+            );
+            for (at, arc) in arcs[..count].iter().enumerate() {
+                let expected = if at % 3 == 0 { 1 } else { 2 };
+                assert_eq!(strengths.strength(arc), expected, "{at} of {count}");
+            }
+            assert_eq!(strengths.strength(&other), 0);
+        }
+    }
 
     /// A site evaluates the variant sets its layers' `variantSetNames` list
     /// ops give, weakest first: a stronger `delete` removes a weaker

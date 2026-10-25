@@ -660,6 +660,7 @@ fn composition_site(error: &CompositionError) -> ValidationSite {
     let layer = match error {
         CompositionError::SublayerCycle(e) => Some(e.layer),
         CompositionError::UnresolvedSublayer(e) => Some(e.layer),
+        CompositionError::InvalidSublayerAndOffsetCount(e) => Some(e.layer),
         CompositionError::InvalidAuthoredRelocation(e) => Some(e.layer),
         CompositionError::InvalidConflictingRelocation(e) => Some(e.layer),
         CompositionError::VariableExpressionError(e) => Some(e.layer),

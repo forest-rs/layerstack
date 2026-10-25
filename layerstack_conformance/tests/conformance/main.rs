@@ -175,6 +175,7 @@ mod specializes_propagation;
 mod stage_api;
 mod stage_controls;
 mod stage_notices;
+mod sublayer_offset_counts;
 mod subset_authoring;
 mod subsets;
 mod target_explanations;

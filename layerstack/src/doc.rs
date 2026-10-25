@@ -3139,6 +3139,9 @@ pub struct Layer {
     pub(crate) id: LayerId,
     /// Ordered sublayer includes. The layer itself is always stronger than its sublayers.
     pub(crate) sublayers: Vec<SublayerEntry>,
+    /// How many `subLayerOffsets` the layer was read with, when that is
+    /// not its number of sublayers (see [`Layer::unpaired_sublayer_offsets`]).
+    pub(crate) unpaired_sublayer_offsets: Option<usize>,
     /// The authored `defaultPrim` token: the prim that references and
     /// payloads with no authored prim path target in this layer.
     ///
@@ -3223,6 +3226,7 @@ impl PartialEq for Layer {
         let Self {
             id,
             sublayers,
+            unpaired_sublayer_offsets,
             default_prim,
             metadata,
             prims,
@@ -3235,6 +3239,7 @@ impl PartialEq for Layer {
         } = self;
         *id == other.id
             && *sublayers == other.sublayers
+            && *unpaired_sublayer_offsets == other.unpaired_sublayer_offsets
             && *default_prim == other.default_prim
             && *metadata == other.metadata
             && *prims == other.prims
@@ -3303,6 +3308,7 @@ impl Layer {
         Self {
             id,
             sublayers: Vec::new(),
+            unpaired_sublayer_offsets: None,
             default_prim: None,
             metadata: Vec::new(),
             relocates: Vec::new(),
@@ -3380,9 +3386,40 @@ impl Layer {
     ///
     /// Records a structural change of the whole layer (see
     /// [`Layer::structural_generation`]): sublayers change the layer stack.
+    /// Each sublayer then has its own offset again, so this clears
+    /// [`Layer::unpaired_sublayer_offsets`].
     pub fn sublayers_mut(&mut self) -> &mut Vec<SublayerEntry> {
         self.touch_structure();
+        self.unpaired_sublayer_offsets = None;
         &mut self.sublayers
+    }
+
+    /// How many `subLayerOffsets` the layer was read with, when that is
+    /// not its number of sublayers; `None` when they pair.
+    ///
+    /// Only a USDC layer can author the two fields apart. OpenUSD 26.11
+    /// then gives every sublayer the identity offset and reports
+    /// `PcpErrorInvalidSublayerAndOffsetCount` (`_BuildLayerStack`,
+    /// `pxr/usd/pcp/layerStack.cpp`); a reader does the same here, and
+    /// composition reports [`InvalidSublayerAndOffsetCount`] for each layer
+    /// stack holding the layer.
+    ///
+    /// Spec: AOUSD Core §7.6.1.2.2 (`subLayerOffsets` parallels
+    /// `subLayers`), §12.3.2.1 (sublayer offsets).
+    ///
+    /// [`InvalidSublayerAndOffsetCount`]: crate::InvalidSublayerAndOffsetCount
+    #[must_use]
+    pub fn unpaired_sublayer_offsets(&self) -> Option<usize> {
+        self.unpaired_sublayer_offsets
+    }
+
+    /// Records how many `subLayerOffsets` a reader found for this layer's
+    /// sublayers, when that is not their number (see
+    /// [`Layer::unpaired_sublayer_offsets`]); `None` when they pair.
+    pub fn set_unpaired_sublayer_offsets(&mut self, offsets: Option<usize>) -> &mut Self {
+        self.touch_structure();
+        self.unpaired_sublayer_offsets = offsets;
+        self
     }
 
     /// Returns the authored `defaultPrim` token: the prim that references

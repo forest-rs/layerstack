@@ -2684,6 +2684,7 @@ mod tests {
 
         let mut layer = Layer {
             id: LayerId(1),
+            unpaired_sublayer_offsets: None,
             sublayers: vec![],
             default_prim: None,
             metadata: Vec::new(),
@@ -2716,6 +2717,7 @@ mod tests {
 
         let mut layer = Layer {
             id: LayerId(1),
+            unpaired_sublayer_offsets: None,
             sublayers: vec![],
             default_prim: None,
             metadata: Vec::new(),
@@ -2743,6 +2745,7 @@ mod tests {
 
         let mut layer = Layer {
             id: LayerId(1),
+            unpaired_sublayer_offsets: None,
             sublayers: vec![],
             default_prim: None,
             metadata: Vec::new(),
@@ -2818,6 +2821,7 @@ mod tests {
 
         let mut layer = Layer {
             id: LayerId(1),
+            unpaired_sublayer_offsets: None,
             sublayers: vec![],
             default_prim: None,
             metadata: Vec::new(),
@@ -2901,6 +2905,7 @@ mod tests {
         // P references Q via LayerId(2).
         let mut root = Layer {
             id: LayerId(1),
+            unpaired_sublayer_offsets: None,
             sublayers: vec![],
             default_prim: None,
             metadata: Vec::new(),
@@ -2919,6 +2924,7 @@ mod tests {
 
         let mut ref_layer = Layer {
             id: LayerId(2),
+            unpaired_sublayer_offsets: None,
             sublayers: vec![],
             default_prim: None,
             metadata: Vec::new(),
@@ -2971,6 +2977,7 @@ mod tests {
         // Layer 2 is a sublayer of layer 1. Layer 1 is stronger.
         let mut layer2 = Layer {
             id: LayerId(2),
+            unpaired_sublayer_offsets: None,
             sublayers: vec![],
             default_prim: None,
             metadata: Vec::new(),
@@ -2989,6 +2996,7 @@ mod tests {
 
         let mut layer1 = Layer {
             id: LayerId(1),
+            unpaired_sublayer_offsets: None,
             sublayers: vec![SublayerEntry::new(LayerId(2))],
             default_prim: None,
             metadata: Vec::new(),
@@ -3052,6 +3060,7 @@ mod tests {
 
         let mut layer = Layer {
             id: LayerId(1),
+            unpaired_sublayer_offsets: None,
             sublayers: vec![],
             default_prim: None,
             metadata: Vec::new(),
@@ -3112,6 +3121,7 @@ mod tests {
         // Two independent prims across two layers.
         let mut layer1 = Layer {
             id: LayerId(1),
+            unpaired_sublayer_offsets: None,
             sublayers: vec![SublayerEntry::new(LayerId(2))],
             default_prim: None,
             metadata: Vec::new(),
@@ -3130,6 +3140,7 @@ mod tests {
 
         let mut layer2 = Layer {
             id: LayerId(2),
+            unpaired_sublayer_offsets: None,
             sublayers: vec![],
             default_prim: None,
             metadata: Vec::new(),
@@ -3185,6 +3196,7 @@ mod tests {
 
         let mut layer = Layer {
             id: LayerId(1),
+            unpaired_sublayer_offsets: None,
             sublayers: vec![],
             default_prim: None,
             metadata: Vec::new(),
@@ -3233,6 +3245,7 @@ mod tests {
         // P references Q.
         let mut root = Layer {
             id: LayerId(1),
+            unpaired_sublayer_offsets: None,
             sublayers: vec![],
             default_prim: None,
             metadata: Vec::new(),
@@ -3252,6 +3265,7 @@ mod tests {
 
         let mut ref_layer = Layer {
             id: LayerId(2),
+            unpaired_sublayer_offsets: None,
             sublayers: vec![],
             default_prim: None,
             metadata: Vec::new(),
@@ -3299,6 +3313,7 @@ mod tests {
 
         let mut layer = Layer {
             id: LayerId(1),
+            unpaired_sublayer_offsets: None,
             sublayers: vec![],
             default_prim: None,
             metadata: Vec::new(),
@@ -3355,6 +3370,7 @@ mod tests {
         // Both prims in layer 1.
         let mut layer = Layer {
             id: LayerId(1),
+            unpaired_sublayer_offsets: None,
             sublayers: vec![],
             default_prim: None,
             metadata: Vec::new(),
@@ -3414,6 +3430,7 @@ mod tests {
         // Prim A in layer 1, prim B in layer 2.
         let mut layer1 = Layer {
             id: LayerId(1),
+            unpaired_sublayer_offsets: None,
             sublayers: vec![SublayerEntry::new(LayerId(2))],
             default_prim: None,
             metadata: Vec::new(),
@@ -3432,6 +3449,7 @@ mod tests {
 
         let mut layer2 = Layer {
             id: LayerId(2),
+            unpaired_sublayer_offsets: None,
             sublayers: vec![],
             default_prim: None,
             metadata: Vec::new(),
@@ -3470,6 +3488,7 @@ mod tests {
 
         let mut layer = Layer {
             id: LayerId(1),
+            unpaired_sublayer_offsets: None,
             sublayers: vec![],
             default_prim: None,
             metadata: Vec::new(),

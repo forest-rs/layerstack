@@ -1318,7 +1318,7 @@ mod tests {
 
         let mut library = Layer::new(LayerId(5));
         let mut pebble_spec = PrimSpec::def().with_property(spin, sampled(5.0));
-        let mut variants = crate::HashMap::new();
+        let mut variants = crate::Variants::new();
         variants.insert(
             jagged,
             VariantSpec {

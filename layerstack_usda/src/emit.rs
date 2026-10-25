@@ -1030,6 +1030,9 @@ impl EmitCtx<'_> {
         // (AOUSD Core §7.6.2.3.5), and a `variantSet` block does not list
         // its set, as OpenUSD's text parser does not.
         let set_tok = self.tokens.intern(vs.name);
+        // A set's variants keep the order their blocks first introduce them
+        // (OpenUSD's `variantChildren`); a block naming a variant again
+        // adds to it in place.
         let set_spec = sets.get_or_insert_default(set_tok);
         set_spec.variants.reserve(vs.branches.len());
         // The branch sites of each branch in turn: the enclosing ones, then
@@ -1038,7 +1041,7 @@ impl EmitCtx<'_> {
 
         for branch in &vs.branches {
             let branch_tok = self.tokens.intern(branch.name);
-            let mut variant_spec = set_spec.variants.remove(&branch_tok).unwrap_or_default();
+            let variant_spec = set_spec.variants.get_or_insert_default(branch_tok);
             branch_context.clear();
             branch_context.extend_from_slice(enclosing);
             branch_context.push(self.variant_site(prim_path_id, set_tok, branch_tok));
@@ -1048,7 +1051,7 @@ impl EmitCtx<'_> {
                 &branch.metadata,
                 prim_path,
                 &branch_context,
-                &mut variant_spec,
+                variant_spec,
             );
 
             // Process branch children.
@@ -1099,9 +1102,9 @@ impl EmitCtx<'_> {
                     ast::PrimChild::ReorderNameChildren(_) => {}
                 }
             }
-
-            set_spec.variants.insert(branch_tok, variant_spec);
         }
+        // Blocks naming a variant twice leave room the set does not use.
+        set_spec.variants.shrink_to_fit();
     }
 
     /// Emit metadata arcs on a variant branch header into a [`VariantSpec`].
@@ -3682,6 +3685,43 @@ def Xform \"A\" (
         assert_eq!(
             spec.property_order(),
             Some(&[tokens.intern("x"), tokens.intern("y")][..])
+        );
+    }
+
+    /// A set's variants keep the order their blocks introduce them, as
+    /// OpenUSD's text parser creates `variantChildren`; a block naming a
+    /// variant again adds to it in place.
+    #[test]
+    fn emit_variants_in_block_order() {
+        let src = "\
+#usda 1.0
+def \"A\"
+{
+    variantSet \"v\" = {
+        \"zeta\" {
+            int x = 1
+        }
+        \"alpha\" {
+        }
+    }
+    variantSet \"v\" = {
+        \"mid\" {
+        }
+        \"zeta\" {
+            int y = 2
+        }
+    }
+}
+";
+        let (result, tokens, paths) = emit_source(src);
+        let spec = prim(&result, &tokens, &paths, "/A");
+        let variants = &spec.variant_sets()[&tokens.intern("v")].variants;
+        let names: Vec<&str> = variants.keys().map(|name| tokens.resolve(*name)).collect();
+        assert_eq!(names, ["zeta", "alpha", "mid"]);
+        assert_eq!(variants[&tokens.intern("zeta")].properties.len(), 2);
+        assert_eq!(
+            variants.allocation_size(),
+            3 * size_of::<(TokenId, VariantSpec)>()
         );
     }
 

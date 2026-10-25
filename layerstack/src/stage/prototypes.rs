@@ -1182,7 +1182,7 @@ mod early_reuse_tests {
         spec.rare_mut().variant_sets.insert(
             mode,
             VariantSetSpec {
-                variants: HashMap::from([(
+                variants: crate::Variants::from([(
                     selected,
                     VariantSpec {
                         fields: vec![FieldEntry {

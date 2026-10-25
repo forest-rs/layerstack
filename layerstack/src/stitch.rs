@@ -366,7 +366,7 @@ fn variant_sets(
         let target = strong.get_or_insert_default(set);
         for (&name, source) in &source.variants {
             variant(
-                target.variants.entry(name).or_default(),
+                target.variants.get_or_insert_default(name),
                 source,
                 tokens,
                 report,
@@ -631,8 +631,7 @@ mod tests {
             .variant_sets
             .get_or_insert_default(set)
             .variants
-            .entry(high)
-            .or_default()
+            .get_or_insert_default(high)
             .properties
             .push(PropertyEntry {
                 name: x,
@@ -647,8 +646,7 @@ mod tests {
             .variant_sets
             .get_or_insert_default(set)
             .variants
-            .entry(high)
-            .or_default()
+            .get_or_insert_default(high)
             .properties
             .push(PropertyEntry {
                 name: y,
@@ -658,8 +656,7 @@ mod tests {
             .variant_sets
             .get_or_insert_default(set)
             .variants
-            .entry(low)
-            .or_default();
+            .get_or_insert_default(low);
         weak.insert_prim(host, prim);
         for (variant, value) in [(high, 10), (low, 20)] {
             let mut child_spec = PrimSpec::def()

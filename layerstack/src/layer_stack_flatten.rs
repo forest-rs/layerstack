@@ -819,7 +819,7 @@ fn merge_variants(
     for (&set, variants) in weak {
         let target = strong.get_or_insert_default(set);
         for (&variant, source) in &variants.variants {
-            let target = target.variants.entry(variant).or_default();
+            let target = target.variants.get_or_insert_default(variant);
             merge_variant(target, source)?;
         }
     }

@@ -1768,8 +1768,259 @@ pub(crate) fn composed_entries<'a>(
 /// A variant set: a named collection of variants.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct VariantSetSpec {
-    /// Variants keyed by variant name.
-    pub variants: HashMap<TokenId, VariantSpec>,
+    /// Variants keyed by variant name, in the order they were added.
+    pub variants: Variants,
+}
+
+/// The variant specs of a variant set, keyed by variant name, in the order
+/// they were added: a new variant goes last, a replaced one keeps its
+/// place, and a removed one leaves the others in order.
+///
+/// This is OpenUSD's `variantChildren`, the order
+/// `SdfVariantSetSpec::GetVariants` lists (`pxr/usd/sdf/variantSetSpec.cpp`):
+/// a text layer's variants as its `variantSet` block lists them, a crate
+/// file's as its `variantChildren` holds them. Writers sort variants by
+/// name, as `Sdf_WriteVariantSet` does (`pxr/usd/sdf/fileIO_Common.h`), and
+/// two sets holding the same variants compare equal whatever their order.
+///
+/// The variants are held in one vector, sized exactly by the readers:
+/// lookups are linear, as a set has few variants.
+///
+/// Spec: AOUSD Core §7.6.6 (variant set specs), §7.6.7 (variant specs).
+#[derive(Clone, Debug, Default)]
+pub struct Variants {
+    variants: Vec<(TokenId, VariantSpec)>,
+}
+
+impl Variants {
+    /// No variants.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            variants: Vec::new(),
+        }
+    }
+
+    /// No variants, with room for `capacity` of them.
+    #[must_use]
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            variants: Vec::with_capacity(capacity),
+        }
+    }
+
+    /// The number of variants.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.variants.len()
+    }
+
+    /// Whether there are no variants.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.variants.is_empty()
+    }
+
+    /// Makes room for `additional` more variants.
+    pub fn reserve(&mut self, additional: usize) {
+        self.variants.reserve_exact(additional);
+    }
+
+    /// Drops spare room, as a reader does once a set is complete.
+    pub fn shrink_to_fit(&mut self) {
+        self.variants.shrink_to_fit();
+    }
+
+    /// The place of the variant named `name` among the variants.
+    #[must_use]
+    pub fn index_of(&self, name: &TokenId) -> Option<usize> {
+        self.variants
+            .iter()
+            .position(|(variant, _)| variant == name)
+    }
+
+    /// The variant named `name`.
+    #[must_use]
+    pub fn get(&self, name: &TokenId) -> Option<&VariantSpec> {
+        self.index_of(name).map(|i| &self.variants[i].1)
+    }
+
+    /// The variant named `name`, mutably.
+    #[must_use]
+    pub fn get_mut(&mut self, name: &TokenId) -> Option<&mut VariantSpec> {
+        self.index_of(name).map(|i| &mut self.variants[i].1)
+    }
+
+    /// Whether a variant is named `name`.
+    #[must_use]
+    pub fn contains_key(&self, name: &TokenId) -> bool {
+        self.index_of(name).is_some()
+    }
+
+    /// Sets the variant named `name` to `variant`, in its place when there
+    /// is one (returning it) and last otherwise.
+    pub fn insert(&mut self, name: TokenId, variant: VariantSpec) -> Option<VariantSpec> {
+        match self.index_of(&name) {
+            Some(i) => Some(core::mem::replace(&mut self.variants[i].1, variant)),
+            None => {
+                self.variants.push((name, variant));
+                None
+            }
+        }
+    }
+
+    /// Adds the variant `variant` named `name` at `index` among the
+    /// variants, which must not have one of that name.
+    ///
+    /// # Panics
+    ///
+    /// When `index` is past the last variant, or a variant is named `name`.
+    pub fn insert_at(&mut self, index: usize, name: TokenId, variant: VariantSpec) {
+        assert!(!self.contains_key(&name), "a variant of that name");
+        self.variants.insert(index, (name, variant));
+    }
+
+    /// The variant named `name`, added last, empty, when there is none.
+    pub fn get_or_insert_default(&mut self, name: TokenId) -> &mut VariantSpec {
+        let i = self.index_of(&name).unwrap_or_else(|| {
+            self.variants.push((name, VariantSpec::default()));
+            self.variants.len() - 1
+        });
+        &mut self.variants[i].1
+    }
+
+    /// Removes the variant named `name`, keeping the others in order.
+    pub fn remove(&mut self, name: &TokenId) -> Option<VariantSpec> {
+        self.index_of(name).map(|i| self.variants.remove(i).1)
+    }
+
+    /// Keeps the variants `keep` accepts, in order.
+    pub fn retain(&mut self, mut keep: impl FnMut(&TokenId, &mut VariantSpec) -> bool) {
+        self.variants
+            .retain_mut(|(name, variant)| keep(name, variant));
+    }
+
+    /// Removes every variant.
+    pub fn clear(&mut self) {
+        self.variants.clear();
+    }
+
+    /// The variants with their names, in order.
+    pub fn iter(&self) -> VariantsIter<'_> {
+        self.into_iter()
+    }
+
+    /// The variants with their names, mutably, in order.
+    pub fn iter_mut(&mut self) -> VariantsIterMut<'_> {
+        self.into_iter()
+    }
+
+    /// The variant names, in order.
+    pub fn keys(&self) -> impl ExactSizeIterator<Item = &TokenId> + DoubleEndedIterator {
+        self.variants.iter().map(|(name, _)| name)
+    }
+
+    /// The variants, in order.
+    pub fn values(&self) -> impl ExactSizeIterator<Item = &VariantSpec> + DoubleEndedIterator {
+        self.variants.iter().map(|(_, variant)| variant)
+    }
+
+    /// The variants, mutably, in order.
+    pub fn values_mut(
+        &mut self,
+    ) -> impl ExactSizeIterator<Item = &mut VariantSpec> + DoubleEndedIterator {
+        self.variants.iter_mut().map(|(_, variant)| variant)
+    }
+
+    /// The bytes the variants' vector holds, spare room included.
+    #[must_use]
+    pub fn allocation_size(&self) -> usize {
+        self.variants.capacity() * size_of::<(TokenId, VariantSpec)>()
+    }
+}
+
+/// Two sets of variants are equal when they hold the same variants by
+/// name, whatever their order: writers sort variants by name.
+impl PartialEq for Variants {
+    fn eq(&self, other: &Self) -> bool {
+        self.len() == other.len()
+            && self
+                .iter()
+                .all(|(name, variant)| other.get(name) == Some(variant))
+    }
+}
+
+/// The variants of a [`Variants`] with their names, in order.
+pub type VariantsIter<'a> = core::iter::Map<
+    core::slice::Iter<'a, (TokenId, VariantSpec)>,
+    fn(&'a (TokenId, VariantSpec)) -> (&'a TokenId, &'a VariantSpec),
+>;
+
+/// The variants of a [`Variants`] with their names, mutably, in order.
+pub type VariantsIterMut<'a> = core::iter::Map<
+    core::slice::IterMut<'a, (TokenId, VariantSpec)>,
+    fn(&'a mut (TokenId, VariantSpec)) -> (&'a TokenId, &'a mut VariantSpec),
+>;
+
+impl<'a> IntoIterator for &'a Variants {
+    type Item = (&'a TokenId, &'a VariantSpec);
+    type IntoIter = VariantsIter<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.variants.iter().map(|(name, variant)| (name, variant))
+    }
+}
+
+impl<'a> IntoIterator for &'a mut Variants {
+    type Item = (&'a TokenId, &'a mut VariantSpec);
+    type IntoIter = VariantsIterMut<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.variants
+            .iter_mut()
+            .map(|(name, variant)| (&*name, variant))
+    }
+}
+
+impl IntoIterator for Variants {
+    type Item = (TokenId, VariantSpec);
+    type IntoIter = alloc::vec::IntoIter<(TokenId, VariantSpec)>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.variants.into_iter()
+    }
+}
+
+impl FromIterator<(TokenId, VariantSpec)> for Variants {
+    fn from_iter<I: IntoIterator<Item = (TokenId, VariantSpec)>>(variants: I) -> Self {
+        let mut all = Self::new();
+        all.extend(variants);
+        all
+    }
+}
+
+impl<const N: usize> From<[(TokenId, VariantSpec); N]> for Variants {
+    fn from(variants: [(TokenId, VariantSpec); N]) -> Self {
+        let mut all = Self::with_capacity(N);
+        all.extend(variants);
+        all
+    }
+}
+
+impl Extend<(TokenId, VariantSpec)> for Variants {
+    fn extend<I: IntoIterator<Item = (TokenId, VariantSpec)>>(&mut self, variants: I) {
+        for (name, variant) in variants {
+            self.insert(name, variant);
+        }
+    }
+}
+
+impl core::ops::Index<&TokenId> for Variants {
+    type Output = VariantSpec;
+
+    fn index(&self, name: &TokenId) -> &VariantSpec {
+        self.get(name).expect("no variant of that name")
+    }
 }
 
 /// The variant set specs of a prim spec or variant spec, keyed by set
@@ -4391,6 +4642,37 @@ impl LayerStore for InMemoryStore {
 mod tests {
     use super::*;
     use alloc::boxed::Box;
+
+    /// Variants keep the order they were added, a replaced one in place,
+    /// and compare equal by name whatever their order.
+    #[test]
+    fn variants_keep_their_order_and_compare_by_name() {
+        let store = InMemoryStore::default();
+        let [a, b, c] = ["a", "b", "c"].map(|name| store.tokens.intern(name));
+        let marked = |name: TokenId| VariantSpec {
+            authored_children: vec![name],
+            ..VariantSpec::default()
+        };
+        let mut variants = Variants::from([(c, VariantSpec::default()), (a, marked(a))]);
+        variants.insert(b, VariantSpec::default());
+        assert_eq!(variants.insert(c, marked(c)), Some(VariantSpec::default()));
+        assert_eq!(variants.keys().copied().collect::<Vec<_>>(), [c, a, b]);
+        assert_eq!(variants[&c], marked(c));
+        variants.insert_at(0, store.tokens.intern("d"), VariantSpec::default());
+        assert_eq!(
+            variants.remove(&store.tokens.intern("d")),
+            Some(VariantSpec::default())
+        );
+        let reordered: Variants = [(b, VariantSpec::default()), (a, marked(a)), (c, marked(c))]
+            .into_iter()
+            .collect();
+        assert_eq!(variants, reordered);
+        assert_ne!(variants, Variants::from([(a, marked(a)), (c, marked(c))]));
+        assert_ne!(
+            variants,
+            Variants::from([(a, marked(a)), (b, marked(b)), (c, marked(c))])
+        );
+    }
 
     /// A prim spec authoring no rare field allocates none, reads each as
     /// unauthored, and compares equal to one whose rare fields were

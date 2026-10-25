@@ -1822,6 +1822,10 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
             key(a).cmp(&key(b)).then_with(|| a.cmp(b))
         });
 
+        // Each set's `variantChildren`, by its path up to the `=` its
+        // variants' paths share (`/P{v=`): its variants keep that order,
+        // as `SdfVariantSetSpec::GetVariants` lists them, and it sizes them.
+        let mut variant_children: HashMap<&str, Vec<TokenId>> = HashMap::new();
         for (i, path_str) in specs {
             let is_set = self.sections.specs[i].form == SpecForm::VariantSet;
             let placed = split_trailing_selections(path_str)
@@ -1847,7 +1851,14 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
                 .collect();
             let ((set, variant), enclosing) = chain.split_last().expect("a selection");
             self.collect_spec_fields(i, decoded, fields)?;
+            let set_key = path_str.rfind('=').map_or(path_str, |at| &path_str[..=at]);
             let variant_spec = if is_set {
+                if let Some((_, children)) =
+                    fields.iter().find(|(name, _)| *name == "variantChildren")
+                {
+                    let names = self.extract_token_names(children);
+                    variant_children.insert(set_key, names);
+                }
                 None
             } else {
                 Some(self.build_variant_spec(path_str, fields, &mut variant_properties)?)
@@ -1868,8 +1879,27 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
             // The set spec alone: only `variantSetNames` lists a set
             // (AOUSD Core §7.6.2.3.5).
             let set_spec = sets.get_or_insert_default(*set);
-            if let Some(variant_spec) = variant_spec {
-                set_spec.variants.insert(*variant, variant_spec);
+            let children = variant_children.get(set_key).map_or(&[][..], Vec::as_slice);
+            match variant_spec {
+                None => set_spec.variants.reserve(children.len()),
+                Some(variant_spec) if !set_spec.variants.contains_key(variant) => {
+                    // A variant `variantChildren` does not list goes last.
+                    let rank = |name: &TokenId| {
+                        children
+                            .iter()
+                            .position(|child| child == name)
+                            .unwrap_or(usize::MAX)
+                    };
+                    let at = set_spec
+                        .variants
+                        .keys()
+                        .take_while(|name| rank(name) <= rank(variant))
+                        .count();
+                    set_spec.variants.insert_at(at, *variant, variant_spec);
+                }
+                Some(variant_spec) => {
+                    set_spec.variants.insert(*variant, variant_spec);
+                }
             }
         }
 

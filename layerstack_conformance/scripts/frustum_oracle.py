@@ -1,7 +1,7 @@
 # Copyright 2026 the LayerStack Authors
 # SPDX-License-Identifier: Apache-2.0 OR MIT
 """Pin `GfFrustum` picking and intersection: pick rays through window and
-world points, narrowed frusta, point intersection,
+world points, narrowed frusta, point/segment/triangle intersection,
 `SetPerspective`/`GetPerspective`, and conformance of scaled, sheared and
 reflected placements, for perspective and orthographic frusta.
 
@@ -160,6 +160,10 @@ def record():
                                  if f.ComputeViewMatrix().Transform(Gf.Vec3d(*p))[2] < 0 else None}
                                 for p, s in around],
             "points": [{"point": p, "inside": f.Intersects(Gf.Vec3d(*p))} for p in points],
+            "segments": [{"points": s, "intersects": f.Intersects(Gf.Vec3d(*s[0]), Gf.Vec3d(*s[1]))}
+                         for s in segments],
+            "triangles": [{"points": t, "intersects": f.Intersects(*(Gf.Vec3d(*p) for p in t))}
+                          for t in triangles],
         }
         if projection == Gf.Frustum.Perspective:
             row["perspective"] = {axis: list(f.GetPerspective(axis == "vertical"))

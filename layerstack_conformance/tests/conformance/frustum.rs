@@ -31,6 +31,8 @@ struct FrustumRow {
     narrowed: Vec<NarrowedRow>,
     narrowed_around: Vec<NarrowedAroundRow>,
     points: Vec<PointRow>,
+    segments: Vec<SegmentRow>,
+    triangles: Vec<TriangleRow>,
     perspective: Option<PerspectivePair>,
 }
 
@@ -66,6 +68,18 @@ struct NarrowedAroundRow {
 struct PointRow {
     point: [f64; 3],
     inside: bool,
+}
+
+#[derive(Deserialize)]
+struct SegmentRow {
+    points: [[f64; 3]; 2],
+    intersects: bool,
+}
+
+#[derive(Deserialize)]
+struct TriangleRow {
+    points: [[f64; 3]; 3],
+    intersects: bool,
 }
 
 #[derive(Deserialize)]
@@ -204,7 +218,7 @@ fn narrowed_frusta_match_openusd_including_clamped_and_behind_eye_regions() {
 }
 
 #[test]
-fn point_intersections_match_openusd_including_the_boundary() {
+fn point_segment_and_triangle_intersections_match_openusd() {
     for (f, row) in oracle().frusta.iter().enumerate() {
         let frustum = frustum(row);
         for (i, point) in row.points.iter().enumerate() {
@@ -212,6 +226,21 @@ fn point_intersections_match_openusd_including_the_boundary() {
                 frustum.contains_world_point(point.point),
                 point.inside,
                 "frustum {f} point {i}"
+            );
+        }
+        for (i, segment) in row.segments.iter().enumerate() {
+            let [p0, p1] = segment.points;
+            assert_eq!(
+                frustum.intersects_segment(p0, p1),
+                segment.intersects,
+                "frustum {f} segment {i}"
+            );
+        }
+        for (i, triangle) in row.triangles.iter().enumerate() {
+            assert_eq!(
+                frustum.intersects_triangle(triangle.points),
+                triangle.intersects,
+                "frustum {f} triangle {i}"
             );
         }
     }

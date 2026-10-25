@@ -362,12 +362,12 @@ def "Belltower" (
 }
 
 # `kiln.usda` relocates `/Kiln/Chamber/Tray`, which its reference to
-# `clay.usda` brings, to `/Kiln/Shelf`, and authors opinions at the source
+# `clay.usda` brings, to `/Kiln/Tier`, and authors opinions at the source
 # inside the variant branch `/Kiln/Chamber` selects, while its reference
 # on `/Kiln/Chamber` brings more ancestral opinions of the source. Each
 # arc reaching the relocated tray composes them: `/Oven` references
 # `/Kiln`, `/Forge` references `/Oven`, `/Stove` payloads `/Kiln`, and
-# `/Rack` references the relocated `/Kiln/Shelf` itself.
+# `/Rack` references the relocated `/Kiln/Tier` itself.
 def "Oven" (
     references = @./kiln.usda@</Kiln>
 )
@@ -387,7 +387,7 @@ def "Stove" (
 }
 
 def "Rack" (
-    references = @./kiln.usda@</Kiln/Shelf>
+    references = @./kiln.usda@</Kiln/Tier>
 )
 {
 }

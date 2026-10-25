@@ -544,15 +544,15 @@
     ]
    ],
    "children": [
-    "Shelf"
+    "Tier"
    ]
   },
   {
-   "path": "/Kiln/Shelf",
+   "path": "/Kiln/Tier",
    "prim_stack": [
     [
      "root.usda",
-     "/Kiln/Shelf"
+     "/Kiln/Tier"
     ],
     [
      "root.usda",
@@ -560,7 +560,7 @@
     ],
     [
      "root.usda",
-     "/Kiln{heat=high}Shelf"
+     "/Kiln{heat=high}Tier"
     ],
     [
      "root.usda",
@@ -702,11 +702,11 @@
     ]
    ],
    "children": [
-    "Shelf"
+    "Tier"
    ]
   },
   {
-   "path": "/Studio/Shelf",
+   "path": "/Studio/Tier",
    "prim_stack": [
     [
      "root.usda",
@@ -718,7 +718,7 @@
     ],
     [
      "kiln.usda",
-     "/Kiln/Shelf"
+     "/Kiln/Tier"
     ],
     [
      "kiln.usda",
@@ -726,7 +726,7 @@
     ],
     [
      "kiln.usda",
-     "/Kiln{heat=high}Shelf"
+     "/Kiln{heat=high}Tier"
     ],
     [
      "kiln.usda",
@@ -948,10 +948,10 @@
   "/Kiln.slip": 1.0,
   "/Kiln.smoke": 1.0,
   "/Kiln.vent": 1.0,
-  "/Kiln/Shelf.board": 1.0,
-  "/Kiln/Shelf.rack": 1.0,
-  "/Kiln/Shelf.rim": 1.0,
-  "/Kiln/Shelf.tray": 1.0,
+  "/Kiln/Tier.board": 1.0,
+  "/Kiln/Tier.rack": 1.0,
+  "/Kiln/Tier.rim": 1.0,
+  "/Kiln/Tier.tray": 1.0,
   "/_class_Fire.fire": 1.0,
   "/_class_Smoke.smoke": 1.0,
   "/_base_Kiln.base": 1.0,
@@ -966,10 +966,10 @@
   "/Studio.slip": 1.0,
   "/Studio.smoke": 1.0,
   "/Studio.vent": 1.0,
-  "/Studio/Shelf.board": 1.0,
-  "/Studio/Shelf.rack": 1.0,
-  "/Studio/Shelf.rim": 1.0,
-  "/Studio/Shelf.tray": 1.0,
+  "/Studio/Tier.board": 1.0,
+  "/Studio/Tier.rack": 1.0,
+  "/Studio/Tier.rim": 1.0,
+  "/Studio/Tier.tray": 1.0,
   "/Loom/Frame.clay": 1.0,
   "/Loom/Frame.glaze": 1.0,
   "/Loom/Frame.loom": 1.0,
@@ -1046,10 +1046,10 @@
    "/Kiln.slip": 1.0,
    "/Kiln.smoke": 1.0,
    "/Kiln.vent": 1.0,
-   "/Kiln/Shelf.board": 1.0,
-   "/Kiln/Shelf.rack": 1.0,
-   "/Kiln/Shelf.rim": 1.0,
-   "/Kiln/Shelf.tray": 1.0,
+   "/Kiln/Tier.board": 1.0,
+   "/Kiln/Tier.rack": 1.0,
+   "/Kiln/Tier.rim": 1.0,
+   "/Kiln/Tier.tray": 1.0,
    "/_class_Fire.fire": 1.0,
    "/_class_Smoke.smoke": 1.0,
    "/_base_Kiln.base": 1.0,
@@ -1064,10 +1064,10 @@
    "/Studio.slip": 1.0,
    "/Studio.smoke": 1.0,
    "/Studio.vent": 1.0,
-   "/Studio/Shelf.board": 1.0,
-   "/Studio/Shelf.rack": 1.0,
-   "/Studio/Shelf.rim": 1.0,
-   "/Studio/Shelf.tray": 1.0,
+   "/Studio/Tier.board": 1.0,
+   "/Studio/Tier.rack": 1.0,
+   "/Studio/Tier.rim": 1.0,
+   "/Studio/Tier.tray": 1.0,
    "/Loom/Frame.clay": 1.0,
    "/Loom/Frame.glaze": 1.0,
    "/Loom/Frame.loom": 1.0,
@@ -1143,10 +1143,10 @@
    "/Kiln.slip": 1.0,
    "/Kiln.smoke": 1.0,
    "/Kiln.vent": 1.0,
-   "/Kiln/Shelf.board": 1.0,
-   "/Kiln/Shelf.rack": 1.0,
-   "/Kiln/Shelf.rim": 1.0,
-   "/Kiln/Shelf.tray": 1.0,
+   "/Kiln/Tier.board": 1.0,
+   "/Kiln/Tier.rack": 1.0,
+   "/Kiln/Tier.rim": 1.0,
+   "/Kiln/Tier.tray": 1.0,
    "/_class_Fire.fire": 1.0,
    "/_class_Smoke.smoke": 1.0,
    "/_base_Kiln.base": 1.0,
@@ -1161,10 +1161,10 @@
    "/Studio.slip": 1.0,
    "/Studio.smoke": 1.0,
    "/Studio.vent": 1.0,
-   "/Studio/Shelf.board": 1.0,
-   "/Studio/Shelf.rack": 1.0,
-   "/Studio/Shelf.rim": 1.0,
-   "/Studio/Shelf.tray": 1.0,
+   "/Studio/Tier.board": 1.0,
+   "/Studio/Tier.rack": 1.0,
+   "/Studio/Tier.rim": 1.0,
+   "/Studio/Tier.tray": 1.0,
    "/Loom/Frame.clay": 1.0,
    "/Loom/Frame.glaze": 1.0,
    "/Loom/Frame.loom": 1.0,
@@ -1240,10 +1240,10 @@
    "/Kiln.slip": 1.0,
    "/Kiln.smoke": 1.0,
    "/Kiln.vent": 1.0,
-   "/Kiln/Shelf.board": 1.0,
-   "/Kiln/Shelf.rack": 1.0,
-   "/Kiln/Shelf.rim": 1.0,
-   "/Kiln/Shelf.tray": 1.0,
+   "/Kiln/Tier.board": 1.0,
+   "/Kiln/Tier.rack": 1.0,
+   "/Kiln/Tier.rim": 1.0,
+   "/Kiln/Tier.tray": 1.0,
    "/_class_Fire.fire": 1.0,
    "/_class_Smoke.smoke": 1.0,
    "/_base_Kiln.base": 1.0,
@@ -1258,10 +1258,10 @@
    "/Studio.slip": 1.0,
    "/Studio.smoke": 1.0,
    "/Studio.vent": 1.0,
-   "/Studio/Shelf.board": 1.0,
-   "/Studio/Shelf.rack": 1.0,
-   "/Studio/Shelf.rim": 1.0,
-   "/Studio/Shelf.tray": 1.0,
+   "/Studio/Tier.board": 1.0,
+   "/Studio/Tier.rack": 1.0,
+   "/Studio/Tier.rim": 1.0,
+   "/Studio/Tier.tray": 1.0,
    "/Loom/Frame.clay": 1.0,
    "/Loom/Frame.glaze": 1.0,
    "/Loom/Frame.loom": 1.0,

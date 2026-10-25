@@ -427,7 +427,7 @@ fn layers_loaded_beneath_a_referenced_ancestor_count_as_used() {
         ),
         (
             "set.usda",
-            "#usda 1.0\ndef \"Set\" {\n def \"Shelf\" {\n def \"Model\" (references = @model.usda@</Model>) {}\n }\n}\n",
+            "#usda 1.0\ndef \"Set\" {\n def \"Tier\" {\n def \"Model\" (references = @model.usda@</Model>) {}\n }\n}\n",
         ),
         ("model.usda", MODEL),
         ("a.usda", &a),
@@ -436,7 +436,7 @@ fn layers_loaded_beneath_a_referenced_ancestor_count_as_used() {
     let mut doc = StageDocument::open(backend, "root.usda", StageOptions::default()).unwrap();
     assert!(!read(&doc, "b.usda"));
     let root = doc.stage.stage().root_layer().unwrap();
-    let prim = doc.store.path("/Set/Shelf/Model");
+    let prim = doc.store.path("/Set/Tier/Model");
     let set = doc.store.tokens.intern("look");
     let variant = doc.store.tokens.intern("b");
     let mut edit = Transaction::new();
@@ -445,7 +445,7 @@ fn layers_loaded_beneath_a_referenced_ancestor_count_as_used() {
     stage.apply(store, &edit).unwrap();
     let report = doc.load_requested_assets().unwrap();
     assert_eq!(report.layers.len(), 1);
-    assert_eq!(name(&doc, "/Set/Shelf/Model"), Some(Value::string("b")));
+    assert_eq!(name(&doc, "/Set/Tier/Model"), Some(Value::string("b")));
     assert!(!doc.stage.recomposition_work().full_rebuild);
     let fresh = layerstack::Stage::compose(&mut doc.store, root, StageOptions::default());
     assert_eq!(doc.stage.stage().used_layers(true), fresh.used_layers(true));

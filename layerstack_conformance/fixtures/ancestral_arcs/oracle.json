@@ -430,11 +430,11 @@
    ]
   },
   {
-   "path": "/Hut/Loft/Shelf",
+   "path": "/Hut/Loft/Tier",
    "prim_stack": [
     [
      "loft.usda",
-     "/Hut/Shelf"
+     "/Hut/Tier"
     ],
     [
      "loft.usda",
@@ -443,7 +443,7 @@
    ]
   },
   {
-   "path": "/Hut/Loft/Shelf/Cap",
+   "path": "/Hut/Loft/Tier/Cap",
    "prim_stack": [
     [
      "loft.usda",
@@ -658,11 +658,11 @@
   "/Hut/Loft.radius": [
    "/Hut/Loft/Halo.size"
   ],
-  "/Hut/Loft/Shelf.lid": [
-   "/Hut/Loft/Shelf/Cap"
+  "/Hut/Loft/Tier.lid": [
+   "/Hut/Loft/Tier/Cap"
   ],
-  "/Hut/Loft/Shelf.stray": [],
-  "/Hut/Loft/Shelf.wick": [
+  "/Hut/Loft/Tier.stray": [],
+  "/Hut/Loft/Tier.wick": [
    "/Hut/Loft/Wick"
   ],
   "/Hut/Loft/Stool.seat": [
@@ -675,7 +675,7 @@
    "/Hut/Loft/_proto_Jar/Cap"
   ],
   "/Hut/Loft/_proto_Jar.stray": [
-   "/Hut/Loft/Shelf/Cap"
+   "/Hut/Loft/Tier/Cap"
   ],
   "/Hut/Loft/_proto_Jar.wick": [
    "/Hut/Loft/Wick"

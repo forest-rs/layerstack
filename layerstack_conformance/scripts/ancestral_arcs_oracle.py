@@ -166,7 +166,7 @@ def "Vineyard" (
 # classes it inherits, one from the `lit` branch of its variant set, which
 # is added once the prim index is complete, of the reference that branch
 # authors, and those of the class its `Stool` specializes and of the prim
-# its `Shelf` references internally, map once, into `/Hut/Loft`.
+# its `Tier` references internally, map once, into `/Hut/Loft`.
 def "Hut"
 {
     def "Loft" (
@@ -183,8 +183,8 @@ def "Hut"
 # (a class inherited eagerly or from the `lit` branch, a specialized
 # class, an internal reference), then through the reference; or through
 # the reference to `shade.usda` the `lit` branch authors alone. `stray`
-# lies beneath `Shelf`, the internal reference's destination, which that
-# reference does not map back: `Shelf` drops it, `_proto_Jar` keeps it.
+# lies beneath `Tier`, the internal reference's destination, which that
+# reference does not map back: `Tier` drops it, `_proto_Jar` keeps it.
 def "Hut" (
     inherits = </_class_Beam>
     variantSets = "lamp"
@@ -200,7 +200,7 @@ def "Hut" (
         int flame = 1
     }
 
-    def "Shelf" (
+    def "Tier" (
         references = </Hut/_proto_Jar>
     )
     {
@@ -216,7 +216,7 @@ def "Hut" (
     {
         rel lid = </Hut/_proto_Jar/Cap>
         rel wick = </Hut/Wick>
-        rel stray = </Hut/Shelf/Cap>
+        rel stray = </Hut/Tier/Cap>
 
         def "Cap"
         {

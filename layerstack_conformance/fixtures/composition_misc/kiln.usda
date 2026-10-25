@@ -11,7 +11,7 @@ def "Kiln" (
     }
 )
 {
-    def "Shelf" (
+    def "Tier" (
         inherits = </_class_Rack>
         references = @./clay.usda@</Board>
     )
@@ -25,7 +25,7 @@ def "Kiln" (
             references = @./clay.usda@</Slip>
             payload = @./clay.usda@</Ash>
         ) {
-            over "Shelf" (
+            over "Tier" (
                 inherits = </_class_Tray>
                 references = @./clay.usda@</Rim>
             )

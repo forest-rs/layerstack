@@ -2336,19 +2336,19 @@ mod tests {
         asset.insert_prim(
             set,
             PrimSpec::def().with_children(vec![
-                store.tokens.intern("Shelf"),
+                store.tokens.intern("Tier"),
                 store.tokens.intern("Side"),
             ]),
         );
-        let shelf = p(&mut store, "/Set/Shelf");
-        asset.insert_prim(shelf, PrimSpec::def().with_children(children));
+        let tier = p(&mut store, "/Set/Tier");
+        asset.insert_prim(tier, PrimSpec::def().with_children(children));
         for name in ["Other", "Last"] {
-            let path = p(&mut store, &alloc::format!("/Set/Shelf/{name}"));
+            let path = p(&mut store, &alloc::format!("/Set/Tier/{name}"));
             asset.insert_prim(path, PrimSpec::def().with_property(value, attr(0)));
         }
         let side = p(&mut store, "/Set/Side");
         asset.insert_prim(side, PrimSpec::def().with_property(value, attr(0)));
-        let model = p(&mut store, "/Set/Shelf/Model");
+        let model = p(&mut store, "/Set/Tier/Model");
         let branch = |v: i64| VariantSpec {
             properties: vec![crate::property::PropertyEntry {
                 name: value,
@@ -2379,12 +2379,12 @@ mod tests {
         edit.set_variant_selection(EditTarget::for_layer(LayerId(1)).prim(model), look, Some(b));
         let applied = live.apply(&mut store, &edit).unwrap();
         assert!(
-            store.layers[&LayerId(1)].prims.contains_key(&shelf),
-            "an over supports /Set/Shelf/Model"
+            store.layers[&LayerId(1)].prims.contains_key(&tier),
+            "an over supports /Set/Tier/Model"
         );
         let work = live.recomposition_work();
         assert!(!work.full_rebuild, "{work:?}");
-        for sibling in ["/Set/Side", "/Set/Shelf/Other", "/Set/Shelf/Last"] {
+        for sibling in ["/Set/Side", "/Set/Tier/Other", "/Set/Tier/Last"] {
             let sibling = p(&mut store, sibling);
             assert!(
                 !applied.recomposed.contains(&sibling),
@@ -2393,21 +2393,21 @@ mod tests {
             );
         }
         assert_eq!(applied.changes.resynced, [model]);
-        assert_eq!(applied.changes.changed_info_only, [shelf]);
+        assert_eq!(applied.changes.changed_info_only, [tier]);
         assert_fresh(&live, &mut store, value);
         // The stronger `over` lists only `Model`; the composed order stays
         // the weaker layer's, as in OpenUSD 26.08.
         let order: Vec<_> = names
             .iter()
-            .map(|n| p(&mut store, &alloc::format!("/Set/Shelf/{n}")))
+            .map(|n| p(&mut store, &alloc::format!("/Set/Tier/{n}")))
             .collect();
-        assert_eq!(live.stage().children_of(shelf), Some(order.as_slice()));
+        assert_eq!(live.stage().children_of(tier), Some(order.as_slice()));
 
         // Undoing removes the supporting `over` again.
         let undone = live.apply(&mut store, &applied.inverse).unwrap();
-        assert!(!store.layers[&LayerId(1)].prims.contains_key(&shelf));
+        assert!(!store.layers[&LayerId(1)].prims.contains_key(&tier));
         assert!(!live.recomposition_work().full_rebuild);
-        for sibling in ["/Set/Side", "/Set/Shelf/Other", "/Set/Shelf/Last"] {
+        for sibling in ["/Set/Side", "/Set/Tier/Other", "/Set/Tier/Last"] {
             let sibling = p(&mut store, sibling);
             assert!(
                 !undone.recomposed.contains(&sibling),

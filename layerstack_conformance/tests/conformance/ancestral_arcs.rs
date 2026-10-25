@@ -256,7 +256,7 @@ fn targets_match_openusd() {
     );
 
     // The one path OpenUSD drops is reported.
-    let shelf = loaded.store.path("/Hut/Loft/Shelf");
+    let tier = loaded.store.path("/Hut/Loft/Tier");
     let stray = loaded.store.tokens.intern("stray");
     let dropped: Vec<_> = stage
         .composition_errors()
@@ -268,7 +268,7 @@ fn targets_match_openusd() {
             _ => None,
         })
         .collect();
-    assert_eq!(dropped, [(shelf, stray)]);
+    assert_eq!(dropped, [(tier, stray)]);
 }
 
 #[test]

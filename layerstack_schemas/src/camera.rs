@@ -14,8 +14,8 @@ use layerstack::{TokenInterner, Value};
 mod frustum;
 mod ray;
 
-pub use frustum::PreparedFrustum;
-use frustum::{ConformedView, FrustumProjection, contains_planes, intersects_planes};
+use frustum::{ConformedView, contains_planes, intersects_planes};
+pub use frustum::{FieldOfViewAxis, FrustumProjection, Perspective, PreparedFrustum};
 pub use ray::{PlaneHit, Ray, RayInterval, TriangleHit};
 type Matrix = [[f64; 4]; 4];
 /// Invalid camera parameters or transform; computations return no partial camera.
@@ -181,9 +181,15 @@ impl ComputedCamera {
     #[must_use]
     #[inline]
     pub fn prepare_frustum(&self) -> PreparedFrustum {
-        PreparedFrustum {
-            planes: self.frustum_planes(),
-        }
+        PreparedFrustum::from_view(
+            ConformedView {
+                view: self.view,
+                view_inverse: self.view_inverse,
+            },
+            self.window,
+            self.clipping_range,
+            self.frustum_projection(),
+        )
     }
     /// The frustum projection; cameras only compute the two `GfFrustum` has.
     fn frustum_projection(&self) -> FrustumProjection {

@@ -89,6 +89,12 @@ impl Default for TokenInterner {
     }
 }
 
+/// The text of `s` before its first NUL, a token's identity
+/// ([`TokenInterner::intern`]).
+fn before_nul(s: &str) -> &str {
+    s.find('\0').map_or(s, |end| &s[..end])
+}
+
 #[cfg(test)]
 impl TokenInterner {
     /// How many strings are interned.
@@ -140,9 +146,14 @@ impl TokenInterner {
     }
 
     /// Interns a string, returning its stable [`TokenId`].
+    ///
+    /// A token is the text before any NUL in `s`: `"a\0b"` and `"a"` are one
+    /// token, which resolves to `"a"`. OpenUSD 26.11 gives `TfToken` that
+    /// identity however it is created (`pxr/base/tf/token.h`), so a USDA
+    /// `token` value with an escaped NUL reads as its prefix.
     #[must_use]
     pub fn intern(&self, s: impl AsRef<str>) -> TokenId {
-        let s = s.as_ref();
+        let s = before_nul(s.as_ref());
         let (id, new) = self.strings.intern(s, || Box::from(s));
         if new && crate::variable_expression::is_expression(s) {
             self.expressions.store(true, Ordering::Release);
@@ -153,7 +164,7 @@ impl TokenInterner {
     /// Returns the [`TokenId`] of `s` if it has been interned.
     #[must_use]
     pub fn lookup(&self, s: &str) -> Option<TokenId> {
-        self.strings.find(s).map(TokenId)
+        self.strings.find(before_nul(s)).map(TokenId)
     }
 
     /// Resolves a [`TokenId`] back to its string.
@@ -181,6 +192,17 @@ pub(crate) struct TokenMark {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_token_ends_at_its_first_nul() {
+        // OpenUSD 26.11: `TfToken(std::string("a\0b", 3))` is `TfToken("a")`.
+        let tokens = TokenInterner::default();
+        let a = tokens.intern("a");
+        assert_eq!(tokens.intern("a\0b"), a);
+        assert_eq!(tokens.resolve(tokens.intern("x\0")), "x");
+        assert_eq!(tokens.lookup("a\0z"), Some(a));
+        assert_eq!(tokens.intern("\0b"), TokenId::EMPTY);
+    }
 
     #[test]
     fn every_interner_starts_with_the_empty_token() {

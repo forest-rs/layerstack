@@ -186,6 +186,7 @@ mod temporal_sparse;
 mod text_arrays;
 mod threaded_composition;
 mod threaded_usdc_read;
+mod token_order;
 mod transform_queries;
 mod typed_reads;
 mod udim_tiles;

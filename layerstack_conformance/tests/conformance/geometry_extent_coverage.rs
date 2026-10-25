@@ -96,15 +96,13 @@ fn registered_shapes_have_intrinsic_fallback_extents() {
 #[test]
 fn shape_axes_and_signed_dimensions_match_cpp() {
     // OpenUSD 26.8 plugin results: retain signed parameters rather than abs().
+    // `intrinsic_bounds` checks `Capsule_1`, whose extent OpenUSD 26.11
+    // computes differently, against its oracle.
     for (schema, maxima) in [
         ("Plane", [[0., 5., -3.], [-3., 0., 5.], [-3., 5., 0.]]),
         (
             "Cylinder_1",
             [[-2., -1., -1.], [-1., -2., -1.], [-1., -1., -2.]],
-        ),
-        (
-            "Capsule_1",
-            [[-3., -1., -1.], [-1., -3., -1.], [-1., -1., -3.]],
         ),
     ] {
         for (axis, max) in ["X", "Y", "Z"].into_iter().zip(maxima) {
@@ -148,12 +146,9 @@ fn shape_axes_and_signed_dimensions_match_cpp() {
                 ("Plane", "X") => [0., 5., 3.],
                 ("Plane", "Y") => [3., 0., 5.],
                 ("Plane", _) => [3., 5., 0.],
-                ("Cylinder_1", "X") => [2., 3., 3.],
-                ("Cylinder_1", "Y") => [3., 2., 3.],
-                ("Cylinder_1", _) => [3., 3., 2.],
-                (_, "X") => [5., 3., 3.],
-                (_, "Y") => [3., 5., 3.],
-                _ => [3., 3., 5.],
+                (_, "X") => [2., 3., 3.],
+                (_, "Y") => [3., 2., 3.],
+                _ => [3., 3., 2.],
             };
             assert_eq!(
                 positive.query(&mut cache(Time::Default)).unwrap(),
@@ -174,11 +169,25 @@ fn shape_axes_and_signed_dimensions_match_cpp() {
 
 #[test]
 fn double_shape_parameters_round_once_to_float_extents() {
-    // Exact half-ULP inputs, independently evaluated with OpenUSD 26.8.
-    for (schema, max) in [
-        ("Plane", [1., 3., 0.]),
-        ("Cylinder_1", [1.; 3]),
-        ("Capsule_1", [1., 1., 2.]),
+    // Exact half-ULP inputs, independently evaluated with OpenUSD 26.8, and
+    // with 26.11 for `Capsule_1`, whose ends sit where its slanted side
+    // meets them.
+    for (schema, min, max) in [
+        ("Plane", [-1., -3., 0.], [1., 3., 0.]),
+        ("Cylinder_1", [-1.; 3], [1.; 3]),
+        (
+            "Capsule_1",
+            [
+                -1.096_585_631_370_544_4,
+                -1.096_585_631_370_544_4,
+                -1.064_658_641_815_185_5,
+            ],
+            [
+                1.096_585_631_370_544_4,
+                1.096_585_631_370_544_4,
+                2.546_585_798_263_55,
+            ],
+        ),
     ] {
         let fixture = Fixture::new(
             schema,
@@ -192,20 +201,43 @@ fn double_shape_parameters_round_once_to_float_extents() {
         );
         assert_eq!(
             fixture.query(&mut cache(Time::Default)).unwrap(),
-            Range3d {
-                min: max.map(|v| -v),
-                max
-            }
+            Range3d { min, max }
         );
     }
 }
 
 #[test]
 fn shape_samples_refresh_cached_bounds_and_authored_extents_win() {
-    for (schema, input, first, second) in [
-        ("Plane", "width", [1., 1., 0.], [3., 1., 0.]),
-        ("Cylinder_1", "radiusTop", [2., 2., 1.], [6., 6., 1.]),
-        ("Capsule_1", "radiusTop", [2., 2., 2.5], [6., 6., 6.5]),
+    // OpenUSD 26.11 for `Capsule_1`, whose extent is not linear in its
+    // radii.
+    for (schema, input, first, middle, second) in [
+        ("Plane", "width", [1., 1., 0.], [2., 1., 0.], [3., 1., 0.]),
+        (
+            "Cylinder_1",
+            "radiusTop",
+            [2., 2., 1.],
+            [4., 4., 1.],
+            [6., 6., 1.],
+        ),
+        (
+            "Capsule_1",
+            "radiusTop",
+            [
+                3.605_551_242_828_369,
+                3.605_551_242_828_369,
+                7.105_551_242_828_369,
+            ],
+            [
+                14.560_219_764_709_473,
+                14.560_219_764_709_473,
+                29.060_220_718_383_79,
+            ],
+            [
+                33.541_019_439_697_266,
+                33.541_019_439_697_266,
+                67.041_023_254_394_53,
+            ],
+        ),
     ] {
         // Plane intentionally resolves requested time (AOUSD Core §12.3–12.5).
         // OpenUSD 26.8's Plane plugin omits time; these values instead match its
@@ -223,7 +255,6 @@ fn shape_samples_refresh_cached_bounds_and_authored_extents_win() {
         cached.set_time(Time::at(2.));
         assert_eq!(fixture.query(&mut cached).unwrap().max, second);
         cached.set_time(Time::at(1.));
-        let middle = std::array::from_fn(|i| (first[i] + second[i]) * 0.5);
         assert_eq!(fixture.query(&mut cached).unwrap().max, middle);
         fixture.edit(
             &mut cached,
@@ -238,7 +269,14 @@ fn shape_samples_refresh_cached_bounds_and_authored_extents_win() {
         } else if schema == "Cylinder_1" {
             ("height", [4., 4., 4.])
         } else {
-            ("height", [4., 4., 8.])
+            (
+                "height",
+                [
+                    4.366_062_164_306_641,
+                    4.366_062_164_306_641,
+                    10.116_062_164_306_64,
+                ],
+            )
         };
         fixture.edit(&mut cached, dimension, Value::Double(8.));
         assert_eq!(fixture.query(&mut cached).unwrap().max, maximum);
@@ -292,13 +330,28 @@ fn edits_to_authored_shape_dimensions_invalidate_bounds_and_instancers() {
         ("Plane", "length", 2., [1., 1., 0.], [1., 4., 0.]),
         ("Cylinder_1", "radiusTop", 1., [1.; 3], [8., 8., 1.]),
         ("Cylinder_1", "radiusBottom", 1., [1.; 3], [8., 8., 1.]),
-        ("Capsule_1", "radiusTop", 0.5, [0.5, 0.5, 1.], [8., 8., 8.5]),
+        // OpenUSD 26.11: the wider end's sphere sits beyond the height.
+        (
+            "Capsule_1",
+            "radiusTop",
+            0.5,
+            [0.5, 0.5, 1.],
+            [
+                60.530_982_971_191_406,
+                60.530_982_971_191_406,
+                121.030_982_971_191_4,
+            ],
+        ),
         (
             "Capsule_1",
             "radiusBottom",
             0.5,
             [0.5, 0.5, 1.],
-            [8., 8., 8.5],
+            [
+                60.530_982_971_191_406,
+                60.530_982_971_191_406,
+                0.533_186_495_304_107_7,
+            ],
         ),
     ] {
         for ignore_visibility in [false, true] {

@@ -283,14 +283,27 @@ pub(crate) fn compute_intrinsic(
             _ => return None,
         };
         (max, &["width", "length", "axis"])
+    } else if scene.is_a(path, "Capsule_1") {
+        let height = number("height")?;
+        let top = number("radiusTop")?;
+        let bottom = number("radiusBottom")?;
+        let axis = read(&prim, "axis", time, crate::value::read_token)?;
+        let (min, max) = capsule_1_extent(height, top, bottom, axis)?;
+        return Some((
+            Range3d {
+                min: min.map(f64::from),
+                max: max.map(f64::from),
+            },
+            varying(&["height", "radiusTop", "radiusBottom", "axis"]),
+        ));
     } else {
-        let capsule = scene.is_a(path, "Capsule") || scene.is_a(path, "Capsule_1");
-        let separate_radii = scene.is_a(path, "Cylinder_1") || scene.is_a(path, "Capsule_1");
+        let capsule = scene.is_a(path, "Capsule");
+        let separate_radii = scene.is_a(path, "Cylinder_1");
         if !capsule && !separate_radii && !scene.is_a(path, "Cylinder") && !scene.is_a(path, "Cone")
         {
             return None;
         }
-        // UsdGeom{Cylinder,Cone,Capsule} (including _1)::_ComputeExtentMax. Match the float
+        // UsdGeom{Cylinder,Cone,Capsule} (and Cylinder_1)::_ComputeExtentMax. Match the float
         // extent rounding and signed dimensions; do not silently take abs().
         let radius = if separate_radii {
             let top = number("radiusTop")?;
@@ -324,6 +337,56 @@ pub(crate) fn compute_intrinsic(
         },
         varying(inputs),
     ))
+}
+
+/// The extent of a `Capsule_1`, as `(min, max)`: the ends are spheres whose
+/// centers sit inward of the height's ends so the slanted side meets both
+/// tangentially, which makes the box asymmetric along the axis when the
+/// radii differ. `None` for a negative dimension or an unknown axis.
+///
+/// OpenUSD 26.11: `_ComputeExtentMax` (`usdGeom/capsule_1.cpp`), computed
+/// in double and rounded to float once per component.
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "OpenUSD rounds the double extent to float"
+)]
+fn capsule_1_extent(
+    height: f64,
+    top: f64,
+    bottom: f64,
+    axis: &str,
+) -> Option<([f32; 3], [f32; 3])> {
+    if height < 0.0 || top < 0.0 || bottom < 0.0 {
+        return None;
+    }
+    let half = 0.5 * height;
+    let slope = if height > 0.0 {
+        (bottom - top) / height
+    } else {
+        0.0
+    };
+    let secant = libm::sqrt(slope * slope + 1.0);
+    let top_radius = top * secant;
+    let bottom_radius = bottom * secant;
+    let max_along = (half - slope * top + top_radius) as f32;
+    let min_along = (-half - slope * bottom - bottom_radius) as f32;
+    // `std::max`: the first argument for ties and NaNs.
+    let radius = if top_radius < bottom_radius {
+        bottom_radius
+    } else {
+        top_radius
+    } as f32;
+    let index = match axis {
+        "X" => 0,
+        "Y" => 1,
+        "Z" => 2,
+        _ => return None,
+    };
+    let mut min = [-radius; 3];
+    let mut max = [radius; 3];
+    min[index] = min_along;
+    max[index] = max_along;
+    Some((min, max))
 }
 
 // UsdLux extent providers call UsdAttribute::Get<float>. At default time an
@@ -450,12 +513,13 @@ mod tests {
 
     #[test]
     fn shape_provider_preserves_signed_cpp_endpoints_before_aggregation() {
-        // OpenUSD 26.8 ComputeExtentFromPlugins, Z axis. BBoxCache discards
+        // OpenUSD 26.11 ComputeExtentFromPlugins, Z axis. BBoxCache discards
         // these empty inverted ranges; the intrinsic formula must not abs().
+        // `Capsule_1` computes no extent from a negative dimension.
         for (schema, max) in [
-            ("Plane", [-3., 5., 0.]),
-            ("Cylinder_1", [-1., -1., -2.]),
-            ("Capsule_1", [-1., -1., -3.]),
+            ("Plane", Some([-3., 5., 0.])),
+            ("Cylinder_1", Some([-1., -1., -2.])),
+            ("Capsule_1", None),
         ] {
             let mut store = InMemoryStore::default();
             let path = store.path("/Shape");
@@ -486,7 +550,7 @@ mod tests {
             );
             assert_eq!(
                 checked_compute(&Scene::new(&stage, &store), path, Time::Default),
-                Ok(Some((
+                Ok(max.map(|max: [f64; 3]| (
                     Range3d {
                         min: max.map(|v| -v),
                         max

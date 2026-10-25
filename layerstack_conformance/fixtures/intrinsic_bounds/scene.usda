@@ -195,6 +195,99 @@ def Capsule "CapsuleNegative"
     double radius = -2
 }
 
+def Capsule_1 "Capsule_1Default"
+{
+}
+
+def Capsule_1 "Capsule_1X"
+{
+    uniform token axis = "X"
+    double height = 4
+    double radiusBottom = 3
+    double radiusTop = 1
+}
+
+def Capsule_1 "Capsule_1Y"
+{
+    uniform token axis = "Y"
+    double height = 4
+    double radiusBottom = 3
+    double radiusTop = 1
+}
+
+def Capsule_1 "Capsule_1Z"
+{
+    uniform token axis = "Z"
+    double height = 4
+    double radiusBottom = 3
+    double radiusTop = 1
+}
+
+def Capsule_1 "Capsule_1Narrowing"
+{
+    uniform token axis = "Z"
+    double height = 2
+    double radiusBottom = 0.1
+    double radiusTop = 1
+}
+
+def Capsule_1 "Capsule_1Wide"
+{
+    uniform token axis = "Y"
+    double height = 1
+    double radiusBottom = 0.5
+    double radiusTop = 2
+}
+
+def Capsule_1 "Capsule_1Flat"
+{
+    uniform token axis = "Z"
+    double height = 0
+    double radiusBottom = 2
+    double radiusTop = 1
+}
+
+def Capsule_1 "Capsule_1Point"
+{
+    uniform token axis = "X"
+    double height = 2
+    double radiusBottom = 1
+    double radiusTop = 0
+}
+
+def Capsule_1 "Capsule_1NegativeHeight"
+{
+    uniform token axis = "Z"
+    double height = -4
+    double radiusBottom = 3
+    double radiusTop = 1
+}
+
+def Capsule_1 "Capsule_1NegativeRadius"
+{
+    uniform token axis = "Z"
+    double height = 4
+    double radiusBottom = -3
+    double radiusTop = 1
+}
+
+def Capsule_1 "Capsule_1invalid"
+{
+    uniform token axis = "invalid"
+    double height = 4
+    double radiusBottom = 3
+    double radiusTop = 1
+}
+
+def Capsule_1 "Capsule_1Animated"
+{
+    double radiusTop = 0.25
+    double radiusTop.timeSamples = {
+        0: 0.75,
+        2: 2.5,
+    }
+}
+
 def Cube "CubeAuthored"
 {
     float3[] extent = [(-8, -9, -10), (8, 9, 10)]

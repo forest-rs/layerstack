@@ -29,6 +29,31 @@ for schema in (UsdGeom.Cube, UsdGeom.Sphere, UsdGeom.Cylinder, UsdGeom.Cone, Usd
         negative.CreateSizeAttr(-2)
     else:
         negative.CreateRadiusAttr(-2)
+# Capsule_1: OpenUSD 26.11 sets each end sphere where the slanted side meets
+# it tangentially, so unequal radii give a box asymmetric along the axis, and
+# a negative dimension gives no extent (issue 3787).
+UsdGeom.Capsule_1.Define(stage, "/Capsule_1Default")
+for name, height, top, bottom, axis in (
+    ("X", 4, 1, 3, "X"),
+    ("Y", 4, 1, 3, "Y"),
+    ("Z", 4, 1, 3, "Z"),
+    ("Narrowing", 2, 1, 0.1, "Z"),
+    ("Wide", 1, 2, 0.5, "Y"),
+    ("Flat", 0, 1, 2, "Z"),
+    ("Point", 2, 0, 1, "X"),
+    ("NegativeHeight", -4, 1, 3, "Z"),
+    ("NegativeRadius", 4, 1, -3, "Z"),
+    ("invalid", 4, 1, 3, "invalid"),
+):
+    obj = UsdGeom.Capsule_1.Define(stage, "/Capsule_1" + name)
+    obj.CreateHeightAttr(height)
+    obj.CreateRadiusTopAttr(top)
+    obj.CreateRadiusBottomAttr(bottom)
+    obj.CreateAxisAttr(axis)
+obj = UsdGeom.Capsule_1.Define(stage, "/Capsule_1Animated")
+obj.CreateRadiusTopAttr(0.25)
+obj.GetRadiusTopAttr().Set(0.75, 0)
+obj.GetRadiusTopAttr().Set(2.5, 2)
 for name, value in (("Authored", [(-8, -9, -10), (8, 9, 10)]), ("Malformed", [(1, 2, 3)]), ("Blocked", Sdf.ValueBlock())):
     obj = UsdGeom.Cube.Define(stage, "/Cube" + name)
     obj.CreateSizeAttr(12)

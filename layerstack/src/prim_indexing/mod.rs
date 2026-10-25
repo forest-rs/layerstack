@@ -1606,7 +1606,7 @@ fn prim_index(
                             prim,
                             property: field,
                             layer: layer_id,
-                            spec: node.site.path.with_property(field),
+                            prim_spec: &node.site.path,
                         },
                         checks,
                     );

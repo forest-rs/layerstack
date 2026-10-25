@@ -197,7 +197,7 @@ impl Number {
         }
     }
 
-    /// The `double` (or `timecode`) a number converts to.
+    /// The `double` (or `timecode` or `duration`) a number converts to.
     pub(crate) fn to_double(self) -> f64 {
         self.as_f64()
     }
@@ -246,8 +246,9 @@ impl Number {
 ///   included), or a string `Sdf_BoolFromString` accepts;
 /// - an integer type takes an integer in its range, or a finite number whose
 ///   value truncated toward zero is;
-/// - `half`, `float`, `double` and `timecode` take any number (a `half`
-///   narrows through `float`), or the strings `"inf"`, `"-inf"` and `"nan"`.
+/// - `half`, `float`, `double`, `timecode` and `duration` take any number
+///   (a `half` narrows through `float`), or the strings `"inf"`, `"-inf"`
+///   and `"nan"`.
 ///
 /// Returns `None` when `ty` is not one of these types, and for a value
 /// block, an array or an array edit, whose elements convert one by one.
@@ -266,6 +267,7 @@ pub(crate) fn convert_scalar(value: &ast::Value<'_>, ty: &str) -> Option<Result<
             | "float"
             | "double"
             | "timecode"
+            | "duration"
     ) || matches!(
         value,
         ast::Value::Blocked
@@ -275,7 +277,7 @@ pub(crate) fn convert_scalar(value: &ast::Value<'_>, ty: &str) -> Option<Result<
     ) {
         return None;
     }
-    let floating = matches!(ty, "half" | "float" | "double" | "timecode");
+    let floating = matches!(ty, "half" | "float" | "double" | "timecode" | "duration");
     let number = match value {
         ast::Value::Int(_) | ast::Value::UInt(_) | ast::Value::Number(_) => {
             Number::of(value).expect("a number literal")
@@ -314,6 +316,9 @@ fn convert_number(number: Number, ty: &str) -> Result<Value, String> {
         "float" => Value::Float(number.to_float()),
         "double" => Value::Double(number.to_double()),
         "timecode" => Value::TimeCode(number.to_double()),
+        // `MakeScalarValueImpl(GfDuration *)` (OpenUSD 26.11
+        // `pxr/usd/sdf/parserHelpers.cpp`) reads a double, as for a time code.
+        "duration" => Value::Duration(number.to_double()),
         _ => unreachable!("`convert_scalar` passes numeric types only"),
     })
 }

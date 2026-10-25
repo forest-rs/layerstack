@@ -153,7 +153,7 @@ mod tests {
         }
         // Patch levels are forward compatible.
         assert!(parse_header(&header_with_version(0, 15, 3)).is_ok());
-        for (major, minor) in [(0, 6), (0, 16), (0, 255), (1, 0)] {
+        for (major, minor) in [(0, 6), (0, 17), (0, 255), (1, 0)] {
             assert_eq!(
                 parse_header(&header_with_version(major, minor, 0)),
                 Err(UsdcError::UnsupportedVersion {

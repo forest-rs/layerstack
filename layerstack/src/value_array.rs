@@ -326,6 +326,7 @@ array_types! {
     Float, f32, as_float, Value::Float, |v: &Value| if let Value::Float(v) = v { Some(*v) } else { None }, |a: &f32, b: &f32| a.to_bits() == b.to_bits();
     Double, f64, as_double, Value::Double, |v: &Value| if let Value::Double(v) = v { Some(*v) } else { None }, |a: &f64, b: &f64| a.to_bits() == b.to_bits();
     TimeCode, f64, as_timecode, Value::TimeCode, |v: &Value| if let Value::TimeCode(v) = v { Some(*v) } else { None }, |a: &f64, b: &f64| a.to_bits() == b.to_bits();
+    Duration, f64, as_duration, Value::Duration, |v: &Value| if let Value::Duration(v) = v { Some(*v) } else { None }, |a: &f64, b: &f64| a.to_bits() == b.to_bits();
     Vec2f, [f32; 2], as_vec2f, Value::Vec2f, |v: &Value| if let Value::Vec2f(v) = v { Some(*v) } else { None }, |a: &[f32; 2], b: &[f32; 2]| a.iter().zip(b).all(|(a,b)| a.to_bits() == b.to_bits());
     Vec3f, [f32; 3], as_vec3f, Value::Vec3f, |v: &Value| if let Value::Vec3f(v) = v { Some(*v) } else { None }, |a: &[f32; 3], b: &[f32; 3]| a.iter().zip(b).all(|(a,b)| a.to_bits() == b.to_bits());
     Vec4f, [f32; 4], as_vec4f, Value::Vec4f, |v: &Value| if let Value::Vec4f(v) = v { Some(*v) } else { None }, |a: &[f32; 4], b: &[f32; 4]| a.iter().zip(b).all(|(a,b)| a.to_bits() == b.to_bits());

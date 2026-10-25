@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 //! layerstack's value type table (`layerstack::ValueType`) is OpenUSD
-//! 26.08's value type registry.
+//! 26.11's value type registry, which adds `duration` (`GfDuration`).
 //!
 //! `scripts/value_types_oracle.py` records every name `Sdf.ValueTypeNames`
 //! registers, with its array-ness, scalar and array forms, role, C++ type

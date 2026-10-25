@@ -49,8 +49,9 @@
 //! (`DEFAULT_NEW_VERSION`, `USD_WRITE_NEW_USDC_FILES_AS_VERSION`), and
 //! upgraded only when a value needs a newer one, as OpenUSD's
 //! `RequestWriteVersionUpgrade` does: `timecode` values require 0.9.0
-//! ([`CrateVersion::TIMECODES`]) and splines require 0.12.0
-//! ([`CrateVersion::SPLINES`]). Consumers must support the version required
+//! ([`CrateVersion::TIMECODES`]), splines require 0.12.0
+//! ([`CrateVersion::SPLINES`]) and `duration` values 0.16.0
+//! ([`CrateVersion::DURATIONS`]). Consumers must support the version required
 //! by the authored values; accepting older crate files does not establish
 //! support for splines.
 //!
@@ -246,6 +247,8 @@ pub enum Value {
     Double(f64),
     /// `SdfTimeCode`; requires crate version 0.9.0.
     TimeCode(f64),
+    /// `GfDuration`; requires crate version 0.16.0.
+    Duration(f64),
     String(String),
     Token(String),
     /// `SdfAssetPath`.
@@ -296,6 +299,8 @@ pub enum Value {
     DoubleArray(Vec<f64>),
     /// `SdfTimeCode[]`; requires crate version 0.9.0.
     TimeCodeArray(Vec<f64>),
+    /// `GfDuration[]`; requires crate version 0.16.0.
+    DurationArray(Vec<f64>),
     StringArray(Vec<String>),
     TokenArray(Vec<String>),
     AssetArray(Vec<String>),
@@ -391,8 +396,10 @@ pub fn write_crate(specs: &[Spec]) -> Result<Vec<u8>, UsdcWriteError> {
 }
 
 /// The crate version [`write_crate`] writes for `specs`:
-/// [`CrateVersion::NEW_FILE_DEFAULT`], or [`CrateVersion::TIMECODES`] when a
-/// field holds a `timecode` value.
+/// [`CrateVersion::NEW_FILE_DEFAULT`], or the newer version a field's value
+/// needs: [`CrateVersion::TIMECODES`] for a `timecode` value,
+/// [`CrateVersion::DURATIONS`] for a `duration` value, and the versions of
+/// splines, path expressions, relocates and array edits.
 pub fn required_version(specs: &[Spec]) -> CrateVersion {
     encode::required_version(specs)
 }

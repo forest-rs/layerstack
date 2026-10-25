@@ -32,6 +32,7 @@ fn numeric_type_matches(name: &str, array: &TypedArray) -> bool {
         TypedArray::Float(_) => name == "float",
         TypedArray::Double(_) => name == "double",
         TypedArray::TimeCode(_) => name == "timecode",
+        TypedArray::Duration(_) => name == "duration",
         TypedArray::Vec2f(_) => matches!(name, "float2" | "texCoord2f"),
         TypedArray::Vec2d(_) => matches!(name, "double2" | "texCoord2d"),
         TypedArray::Vec2h(_) => matches!(name, "half2" | "texCoord2h"),

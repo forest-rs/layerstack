@@ -581,6 +581,7 @@ pub(crate) fn numeric_kind(kind: ValueType) -> Option<Value> {
         ValueType::Float => Value::Float(0.0),
         ValueType::Double => Value::Double(0.0),
         ValueType::TimeCode => Value::TimeCode(0.0),
+        ValueType::Duration => Value::Duration(0.0),
         ValueType::Vec2f => Value::Vec2f(Default::default()),
         ValueType::Vec3f => Value::Vec3f(Default::default()),
         ValueType::Vec4f => Value::Vec4f(Default::default()),

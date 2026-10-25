@@ -15,6 +15,7 @@ pub(crate) fn float_array(array: FloatArray) -> layerstack::TypedArray {
         FloatArray::Float(values) => A::Float(Arc::new(values)),
         FloatArray::Double(values) => A::Double(Arc::new(values)),
         FloatArray::TimeCode(values) => A::TimeCode(Arc::new(values)),
+        FloatArray::Duration(values) => A::Duration(Arc::new(values)),
     }
 }
 

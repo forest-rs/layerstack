@@ -561,6 +561,7 @@ fn primitive(ty: &str, tokens: &mut TokenInterner) -> Result<Value, String> {
         "float" => Value::Float(0.),
         "double" => Value::Double(0.),
         "timecode" => Value::TimeCode(0.),
+        "duration" => Value::Duration(0.),
         "string" => Value::string(""),
         "token" => Value::Token(tokens.intern("")),
         "asset" => Value::Asset("".into()),

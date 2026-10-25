@@ -1,5 +1,5 @@
 {
- "openusd_version": "26.8",
+ "openusd_version": "26.11",
  "types": [
   {
    "aliases": [],
@@ -236,6 +236,24 @@
    "role": "",
    "scalar": "double",
    "type": "VtArray<double>"
+  },
+  {
+   "aliases": [],
+   "array": "duration[]",
+   "is_array": false,
+   "name": "duration",
+   "role": "",
+   "scalar": "duration",
+   "type": "GfDuration"
+  },
+  {
+   "aliases": [],
+   "array": "duration[]",
+   "is_array": true,
+   "name": "duration[]",
+   "role": "",
+   "scalar": "duration",
+   "type": "VtArray<GfDuration>"
   },
   {
    "aliases": [],

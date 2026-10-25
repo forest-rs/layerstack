@@ -126,9 +126,9 @@ impl Same for Value {
         }
         match (self, other) {
             (Self::Float(a), Self::Float(b)) => a.same(b),
-            (Self::Double(a), Self::Double(b)) | (Self::TimeCode(a), Self::TimeCode(b)) => {
-                a.same(b)
-            }
+            (Self::Double(a), Self::Double(b))
+            | (Self::TimeCode(a), Self::TimeCode(b))
+            | (Self::Duration(a), Self::Duration(b)) => a.same(b),
             (Self::Vec2d(a), Self::Vec2d(b)) => a.same(b),
             (Self::Vec3d(a), Self::Vec3d(b)) => a.same(b),
             (Self::Vec4d(a), Self::Vec4d(b)) | (Self::Quatd(a), Self::Quatd(b)) => a.same(b),

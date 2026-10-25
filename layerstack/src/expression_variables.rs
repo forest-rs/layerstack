@@ -180,6 +180,7 @@ fn value_type_name(value: &Value) -> &'static str {
         Value::Token(_) => "token",
         Value::Asset(_) => "asset",
         Value::TimeCode(_) => "timecode",
+        Value::Duration(_) => "duration",
         Value::Dictionary(_) => "dictionary",
         _ => "value",
     }

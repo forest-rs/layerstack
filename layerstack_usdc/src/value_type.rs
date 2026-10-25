@@ -135,6 +135,10 @@ pub enum ValueType {
     Spline = 59,
     /// Blocks animation while permitting weaker defaults.
     AnimationBlock = 60,
+    /// Duration (`GfDuration`, crate 0.16 and later): a length of time in
+    /// time codes, stored as a double like [`Self::TimeCode`]. OpenUSD
+    /// 26.11 `pxr/usd/sdf/crateDataTypes.h`.
+    Duration = 61,
 }
 
 impl ValueType {
@@ -213,6 +217,7 @@ impl TryFrom<u8> for ValueType {
             58 => Ok(Self::Relocates),
             59 => Ok(Self::Spline),
             60 => Ok(Self::AnimationBlock),
+            61 => Ok(Self::Duration),
             _ => Err(UsdcError::UnknownValueType { type_byte: value }),
         }
     }

@@ -1026,6 +1026,10 @@ pub enum Value {
     /// `timecode` may hold a [`Self::Double`] too; a dictionary entry needs
     /// this to be typed `timecode`.
     TimeCode(f64),
+    /// `duration`: a length of time in time codes (`GfDuration`, OpenUSD
+    /// 26.11), written like a [`Self::TimeCode`]. An attribute declared
+    /// `duration` may hold a [`Self::Double`] too.
+    Duration(f64),
     /// `string`.
     String(String),
     /// `token`.
@@ -1106,6 +1110,8 @@ pub enum Value {
     DoubleArray(Vec<f64>),
     /// `timecode[]`, as [`Self::TimeCode`] is to [`Self::Double`].
     TimeCodeArray(Vec<f64>),
+    /// `duration[]`, as [`Self::Duration`] is to [`Self::Double`].
+    DurationArray(Vec<f64>),
     /// `string[]`.
     StringArray(Vec<String>),
     /// `token[]`.
@@ -1994,7 +2000,7 @@ fn parse_type_name(type_name: &str) -> Option<Shape> {
         ValueType::UInt64 => (Elem::UInt64, 1),
         ValueType::Half => (Elem::Half, 1),
         ValueType::Float => (Elem::Float, 1),
-        ValueType::Double | ValueType::TimeCode => (Elem::Double, 1),
+        ValueType::Double | ValueType::TimeCode | ValueType::Duration => (Elem::Double, 1),
         ValueType::String => (Elem::String, 1),
         ValueType::Token => (Elem::Token, 1),
         ValueType::Asset => (Elem::Asset, 1),
@@ -2048,6 +2054,9 @@ impl Value {
     pub(crate) fn empty_array_of(type_name: &str) -> Option<Self> {
         if type_name == "timecode[]" {
             return Some(Self::TimeCodeArray(Vec::new()));
+        }
+        if type_name == "duration[]" {
+            return Some(Self::DurationArray(Vec::new()));
         }
         let shape = parse_type_name(type_name).filter(|shape| shape.array)?;
         Some(match (shape.elem, shape.arity) {
@@ -2131,7 +2140,7 @@ impl Value {
             Self::UInt64(_) => (Elem::UInt64, 1, false),
             Self::Half(_) => (Elem::Half, 1, false),
             Self::Float(_) => (Elem::Float, 1, false),
-            Self::Double(_) | Self::TimeCode(_) => (Elem::Double, 1, false),
+            Self::Double(_) | Self::TimeCode(_) | Self::Duration(_) => (Elem::Double, 1, false),
             Self::String(_) => (Elem::String, 1, false),
             Self::Token(_) => (Elem::Token, 1, false),
             Self::Asset(_) => (Elem::Asset, 1, false),
@@ -2163,7 +2172,9 @@ impl Value {
             Self::UInt64Array(_) => (Elem::UInt64, 1, true),
             Self::HalfArray(_) => (Elem::Half, 1, true),
             Self::FloatArray(_) => (Elem::Float, 1, true),
-            Self::DoubleArray(_) | Self::TimeCodeArray(_) => (Elem::Double, 1, true),
+            Self::DoubleArray(_) | Self::TimeCodeArray(_) | Self::DurationArray(_) => {
+                (Elem::Double, 1, true)
+            }
             Self::StringArray(_) => (Elem::String, 1, true),
             Self::TokenArray(_) => (Elem::Token, 1, true),
             Self::AssetArray(_) => (Elem::Asset, 1, true),
@@ -2213,6 +2224,7 @@ impl Value {
             Self::Float(_) => "float",
             Self::Double(_) => "double",
             Self::TimeCode(_) => "timecode",
+            Self::Duration(_) => "duration",
             Self::String(_) => "string",
             Self::Token(_) => "token",
             Self::Asset(_) => "asset",
@@ -2246,6 +2258,7 @@ impl Value {
             Self::FloatArray(_) => "float[]",
             Self::DoubleArray(_) => "double[]",
             Self::TimeCodeArray(_) => "timecode[]",
+            Self::DurationArray(_) => "duration[]",
             Self::StringArray(_) => "string[]",
             Self::TokenArray(_) => "token[]",
             Self::AssetArray(_) => "asset[]",
@@ -2317,6 +2330,70 @@ fn spline_text_version(prim: &Prim) -> u8 {
         .chain(prim.variant_sets.iter().flat_map(|v| &v.variants))
         .map(spline_text_version)
         .fold(own, u8::max)
+}
+
+/// USDA 1.4 for a document that holds a `duration` value or declares a
+/// `duration` attribute, as OpenUSD 26.11 requests that version for a
+/// `GfDuration`, `VtArray<GfDuration>` or `VtArrayEdit<GfDuration>`
+/// (`_StringFromVtValueHelper`, `pxr/usd/sdf/fileIO_Common.cpp`); 0
+/// otherwise.
+fn duration_text_version(doc: &Document) -> u8 {
+    fn in_value(value: &Value) -> bool {
+        match value {
+            Value::Duration(_) | Value::DurationArray(_) => true,
+            Value::ArrayEdit { element, .. } => matches!(**element, Value::Duration(_)),
+            Value::Dictionary(entries) => entries.iter().any(|(_, v)| in_value(v)),
+            _ => false,
+        }
+    }
+    fn metadata(metadata: &[Metadatum]) -> bool {
+        metadata.iter().any(|m| in_value(&m.value))
+    }
+    fn references(list: Option<&ListOp<Reference>>) -> bool {
+        list.is_some_and(|list| {
+            [
+                list.explicit.as_deref().unwrap_or_default(),
+                &list.deleted,
+                &list.added,
+                &list.prepended,
+                &list.appended,
+                &list.reordered,
+            ]
+            .iter()
+            .any(|items| {
+                items
+                    .iter()
+                    .any(|r| r.custom_data.iter().any(|(_, v)| in_value(v)))
+            })
+        })
+    }
+    fn in_prim(prim: &Prim) -> bool {
+        metadata(&prim.metadata)
+            || references(prim.references.as_ref())
+            || references(prim.payloads.as_ref())
+            || prim.properties.iter().any(|p| match p {
+                Property::Attribute(a) => {
+                    matches!(a.type_name.as_str(), "duration" | "duration[]")
+                        || a.value.as_ref().is_some_and(in_value)
+                        || a.time_samples.iter().flatten().any(|(_, v)| in_value(v))
+                        || a.spline_custom_data
+                            .iter()
+                            .any(|(_, entries)| entries.iter().any(|(_, v)| in_value(v)))
+                        || metadata(&a.metadata)
+                }
+                Property::Relationship(r) => metadata(&r.metadata),
+            })
+            || prim
+                .children
+                .iter()
+                .chain(prim.variant_sets.iter().flat_map(|v| &v.variants))
+                .any(in_prim)
+    }
+    if metadata(&doc.metadata) || doc.prims.iter().any(in_prim) {
+        4
+    } else {
+        0
+    }
 }
 
 /// `items` in the order `cmp` gives, by reference. Items already in order,
@@ -2450,7 +2527,13 @@ impl Writer<'_> {
     /// in document order.
     fn document(&mut self, doc: &Document) {
         // §16.2.18.1: the layer header.
-        let minor = doc.prims.iter().map(spline_text_version).max().unwrap_or(0);
+        let minor = doc
+            .prims
+            .iter()
+            .map(spline_text_version)
+            .max()
+            .unwrap_or(0)
+            .max(duration_text_version(doc));
         self.out.push_str(&alloc::format!("#usda 1.{minor}\n"));
         if doc.default_prim.is_some()
             || !doc.metadata.is_empty()
@@ -3039,6 +3122,8 @@ impl Writer<'_> {
         match (attribute.type_name.as_str(), value) {
             ("timecode", Value::Double(v)) => self.time_code(*v),
             ("timecode[]", Value::DoubleArray(v)) => self.array(v, |w, x| w.time_code(*x)),
+            ("duration", Value::Double(v)) => self.time_code(*v),
+            ("duration[]", Value::DoubleArray(v)) => self.array(v, |w, x| w.time_code(*x)),
             _ => self.value(value, depth),
         }
     }
@@ -3216,7 +3301,9 @@ impl Writer<'_> {
             Value::Half(v) => self.half(*v),
             Value::Float(v) => self.f32(*v),
             Value::Double(v) => self.f64(*v),
-            Value::TimeCode(v) => self.time_code(*v),
+            // OpenUSD 26.11 streams a `GfDuration` as its double
+            // (`operator<<`, `pxr/base/gf/duration.cpp`), as a time code.
+            Value::TimeCode(v) | Value::Duration(v) => self.time_code(*v),
             Value::String(v) | Value::Token(v) | Value::PathExpression(v) => self.string(v),
             Value::Asset(v) => self.asset(v),
             Value::Float2(v) => self.tuple(v, Self::f32),
@@ -3248,7 +3335,9 @@ impl Writer<'_> {
             Value::HalfArray(v) => self.array(v, |w, x| w.half(*x)),
             Value::FloatArray(v) => self.array(v, |w, x| w.f32(*x)),
             Value::DoubleArray(v) => self.array(v, |w, x| w.f64(*x)),
-            Value::TimeCodeArray(v) => self.array(v, |w, x| w.time_code(*x)),
+            Value::TimeCodeArray(v) | Value::DurationArray(v) => {
+                self.array(v, |w, x| w.time_code(*x));
+            }
             Value::StringArray(v) | Value::TokenArray(v) | Value::PathExpressionArray(v) => {
                 self.array(v, |w, s| w.string(s));
             }

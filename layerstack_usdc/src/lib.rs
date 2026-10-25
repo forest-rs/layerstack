@@ -7,7 +7,7 @@
 //! structures compatible with the layerstack composition engine. The
 //! [`writer`] module writes crate files from explicitly authored specs.
 //!
-//! Crate versions 0.7 through 0.15 are readable, following OpenUSD v26.08 for
+//! Crate versions 0.7 through 0.16 are readable, following OpenUSD v26.11 for
 //! the versions after AOUSD Core 1.0.1. The [`version`] module lists what each
 //! version adds, and which errors report versions and features this reader
 //! does not support.

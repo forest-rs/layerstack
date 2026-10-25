@@ -10,9 +10,9 @@
 //! newer version than the file declares is rejected with
 //! [`UsdcError::FeatureRequiresVersion`].
 //!
-//! The version history below is OpenUSD's (`pxr/usd/sdf/crateFile.cpp:384`,
-//! v26.08). Versions after 0.12 postdate AOUSD Core 1.0.1; the reader follows
-//! the OpenUSD v26.08 encoding for them.
+//! The version history below is OpenUSD's (`pxr/usd/sdf/crateFile.cpp:393`,
+//! v26.11). Versions after 0.12 postdate AOUSD Core 1.0.1; the reader follows
+//! the OpenUSD v26.11 encoding for them.
 //!
 //! | Version | Adds | Reader support |
 //! |---------|------|----------------|
@@ -25,6 +25,7 @@
 //! | 0.13 | spline tangent algorithms (Ts binary format 2) | yes; algorithms and stored tangents are preserved |
 //! | 0.14 | native array edits (`VtArrayEdit`) | yes, as [`Value::TypedArrayEdit`] |
 //! | 0.15 | spline `loopBoundaryTime` and `GfTimeCode`-valued splines (Ts binary format 3) | yes; boundary times and `TimeCode` values are preserved |
+//! | 0.16 | `duration` and `duration[]` values (value type 61); `GfDuration`-valued splines (Ts binary format 4) | values yes; format 4 splines are rejected ([`UsdcError::UnsupportedFeature`]) |
 //!
 //! Value type 60 (`SdfAnimationBlock`) is not tied to a version: OpenUSD
 //! v26.08 writes it without raising the file version. It is read
@@ -56,8 +57,8 @@ pub struct CrateVersion {
 impl CrateVersion {
     /// The oldest version this reader accepts, 0.7.0.
     pub const OLDEST_READABLE: Self = Self::new(0, 7, 0);
-    /// The newest version this reader accepts, 0.15 (any patch level).
-    pub const NEWEST_READABLE: Self = Self::new(0, 15, 0);
+    /// The newest version this reader accepts, 0.16 (any patch level).
+    pub const NEWEST_READABLE: Self = Self::new(0, 16, 0);
 
     /// Version 0.8.0, OpenUSD's version for newly created files
     /// (`DEFAULT_NEW_VERSION`, `USD_WRITE_NEW_USDC_FILES_AS_VERSION` in
@@ -76,6 +77,9 @@ impl CrateVersion {
     /// Version 0.15.0, which introduced spline `loopBoundaryTime` and
     /// `GfTimeCode`-valued splines.
     pub const SPLINE_LOOP_BOUNDARY_AND_TIMECODE: Self = Self::new(0, 15, 0);
+    /// Version 0.16.0, which introduced `duration` and `duration[]` values
+    /// (`Write(GfDuration)` in OpenUSD 26.11 `crateFile.cpp`).
+    pub const DURATIONS: Self = Self::new(0, 16, 0);
 
     /// Creates a version from its components.
     #[must_use]
@@ -96,9 +100,9 @@ impl CrateVersion {
     /// ```
     /// use layerstack_usdc::version::CrateVersion;
     ///
-    /// assert!(CrateVersion::new(0, 15, 0).is_readable());
-    /// assert!(CrateVersion::new(0, 15, 1).is_readable());
-    /// assert!(!CrateVersion::new(0, 16, 0).is_readable());
+    /// assert!(CrateVersion::new(0, 16, 0).is_readable());
+    /// assert!(CrateVersion::new(0, 16, 1).is_readable());
+    /// assert!(!CrateVersion::new(0, 17, 0).is_readable());
     /// assert!(!CrateVersion::new(0, 6, 0).is_readable());
     /// assert!(!CrateVersion::new(1, 0, 0).is_readable());
     /// ```

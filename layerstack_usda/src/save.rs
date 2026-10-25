@@ -902,6 +902,7 @@ impl Lowering<'_> {
             // Elsewhere (a metadata value or a dictionary entry) the value
             // carries the type.
             L::TimeCode(v) => Value::TimeCode(*v),
+            L::Duration(v) => Value::Duration(*v),
             L::String(v) => Value::String(String::from(&**v)),
             L::Token(v) => Value::Token(self.name(*v)),
             L::Asset(v) => Value::Asset(String::from(&**v)),
@@ -1075,6 +1076,7 @@ fn typed_array(array: &layerstack::TypedArray) -> Value {
         A::Float(items) => Value::FloatArray(items.as_ref().clone()),
         A::Double(items) => Value::DoubleArray(items.as_ref().clone()),
         A::TimeCode(items) => Value::TimeCodeArray(items.as_ref().clone()),
+        A::Duration(items) => Value::DurationArray(items.as_ref().clone()),
         A::Vec2f(items) => Value::Float2Array(items.as_ref().clone()),
         A::Vec3f(items) => Value::Float3Array(items.as_ref().clone()),
         A::Vec4f(items) => Value::Float4Array(items.as_ref().clone()),
@@ -1165,6 +1167,9 @@ fn empty_array_like(element: &Value) -> Option<Value> {
     if matches!(element, Value::TimeCode(_)) {
         return Some(Value::TimeCodeArray(Vec::new()));
     }
+    if matches!(element, Value::Duration(_)) {
+        return Some(Value::DurationArray(Vec::new()));
+    }
     Value::empty_array_of(&format!("{}[]", element.canonical_type_name()))
 }
 
@@ -1195,6 +1200,7 @@ pub(crate) fn push_element(array: &mut Value, element: Value) -> bool {
         (Value::FloatArray(a), Value::Float(v)) => a.push(v),
         (Value::DoubleArray(a), Value::Double(v)) => a.push(v),
         (Value::TimeCodeArray(a), Value::TimeCode(v)) => a.push(v),
+        (Value::DurationArray(a), Value::Duration(v)) => a.push(v),
         (Value::StringArray(a), Value::String(v)) => a.push(v),
         (Value::TokenArray(a), Value::Token(v)) => a.push(v),
         (Value::AssetArray(a), Value::Asset(v)) => a.push(v),

@@ -1065,6 +1065,39 @@ def "A" (
     assert_eq!(Imported::new(&text).layer, Imported::new(source).layer);
 }
 
+/// `duration` and `duration[]` values (OpenUSD 26.11 `GfDuration`) save
+/// as authored, with the `#usda 1.4` header OpenUSD writes for them
+/// (`_StringFromVtValueHelper`, `pxr/usd/sdf/fileIO_Common.cpp`), and
+/// read back the same. The text is the one usd-core 26.11 writes for this
+/// layer.
+#[test]
+fn saves_durations_with_usda_1_4() {
+    let source = r#"#usda 1.4
+
+def "P" (
+    customData = {
+        duration dur = 4
+        dictionary nested = {
+            duration[] spans = [1, 0.0999756]
+        }
+    }
+)
+{
+    custom duration d = 2.5
+    duration d.timeSamples = {
+        3: -1,
+    }
+    custom duration[] ds = [1, 0.125, 1e+300, -0, inf]
+    custom duration small = 24
+}
+
+"#;
+    let imported = Imported::new(&source.replace("#usda 1.4", "#usda 1.0"));
+    let text = imported.save().unwrap();
+    assert_eq!(text, source, "saved text");
+    assert_eq!(Imported::new(&text).layer, imported.layer);
+}
+
 /// A property spec added through the API, a relationship between
 /// attributes, lands where it was authored.
 #[test]

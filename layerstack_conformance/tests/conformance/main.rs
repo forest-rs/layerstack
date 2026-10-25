@@ -57,6 +57,7 @@ mod custom_nodes;
 mod dangling_targets;
 mod default_prim;
 mod define_prim;
+mod dictionary_writing;
 mod durations;
 mod edit_target_maps;
 mod edit_targets;

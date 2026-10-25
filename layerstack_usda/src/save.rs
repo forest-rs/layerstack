@@ -130,12 +130,36 @@ pub fn layer_document(
     tokens: &TokenInterner,
     paths: &PathInterner,
 ) -> Result<Document, SaveError> {
-    let doc = Lowering { tokens, paths }.layer(layer)?;
+    lower(layer, tokens, paths, false)
+}
+
+/// Lowers `layer`, skipping dictionary entries with no value when
+/// `skip_empty_entries` is set (the USDA writer) and refusing them
+/// otherwise.
+fn lower(
+    layer: &Layer,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
+    skip_empty_entries: bool,
+) -> Result<Document, SaveError> {
+    let doc = Lowering {
+        tokens,
+        paths,
+        skip_empty_entries,
+    }
+    .layer(layer)?;
     doc.validate().map_err(SaveError::Document)?;
     Ok(doc)
 }
 
-/// Saves an authored layer as USDA text, through [`layer_document`].
+/// Saves an authored layer as USDA text, as [`layer_document`] lowers it
+/// except that a dictionary entry with no value ([`LayerValue::Null`]) is
+/// left out rather than refused.
+///
+/// OpenUSD 26.11's USDA writer skips such an entry with a warning, where
+/// 26.08 wrote `key =` (`Sdf_FileIOUtility::_WriteDictionary`,
+/// `pxr/usd/sdf/fileIO_Common.cpp`); its USDC writer refuses it, as
+/// [`layer_document`] does. Spec: AOUSD Core §6.6.2 (dictionaries).
 ///
 /// # Errors
 ///
@@ -145,7 +169,7 @@ pub fn save_usda(
     tokens: &TokenInterner,
     paths: &PathInterner,
 ) -> Result<String, SaveError> {
-    layer_document(layer, tokens, paths)?
+    lower(layer, tokens, paths, true)?
         .to_usda()
         .map_err(SaveError::Document)
 }
@@ -273,6 +297,8 @@ impl fmt::Display for Invalid {
 struct Lowering<'a> {
     tokens: &'a TokenInterner,
     paths: &'a PathInterner,
+    /// Leave out dictionary entries with no value instead of refusing them.
+    skip_empty_entries: bool,
 }
 
 fn unsupported<T>(path: impl Into<String>, feature: Unsupported) -> Result<T, SaveError> {
@@ -932,6 +958,7 @@ impl Lowering<'_> {
             L::Dictionary(entries) => Value::Dictionary(
                 entries
                     .iter()
+                    .filter(|(_, v)| !(self.skip_empty_entries && matches!(v, L::Null)))
                     .map(|(k, v)| {
                         let path = format!("{path}/{k}");
                         Ok((String::from(&**k), self.metadata_value(v, "", &path)?))

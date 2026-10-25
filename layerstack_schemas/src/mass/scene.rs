@@ -72,6 +72,13 @@ fn center(
 fn diagonal(v: [f32; 3]) -> Matrix3 {
     [[v[0], 0., 0.], [0., v[1], 0.], [0., 0., v[2]]]
 }
+/// The enabled `PhysicsCollisionAPI` prims of `root`'s body subtree.
+///
+/// As OpenUSD 26.11's `UsdPhysicsRigidBodyAPI::ComputeMassProperties`
+/// (`pxr/usd/usdPhysics/rigidBodyAPI.cpp:490`): a nested rigid body owns its
+/// subtree only while `physics:rigidBodyEnabled` is true, so a disabled one's
+/// colliders belong to `root`; a collider whose `physics:collisionEnabled` is
+/// false contributes no mass, though its descendants are still visited.
 fn colliders(scene: Scene<'_>, root: PathId) -> Vec<PathId> {
     let mut result = Vec::new();
     let mut ancestor = scene.parent(root);
@@ -91,23 +98,36 @@ fn colliders(scene: Scene<'_>, root: PathId) -> Vec<PathId> {
         if !prim.is_defined()
             || prim.is_abstract()
             || PrimView::new(scene, path).metadata_value("active") == Some(Value::Bool(false))
-            || (path != root && scene.has_api(path, "PhysicsRigidBodyAPI", None))
+            || (path != root
+                && scene.has_api(path, "PhysicsRigidBodyAPI", None)
+                && enabled(scene, path, "physics:rigidBodyEnabled"))
         {
             continue;
         }
-        if scene.has_api(path, "PhysicsCollisionAPI", None) {
+        if scene.has_api(path, "PhysicsCollisionAPI", None)
+            && enabled(scene, path, "physics:collisionEnabled")
+        {
             result.push(path);
         }
         pending.extend(prim.child_paths().iter().rev().copied());
     }
     result
 }
+/// Whether the `bool` attribute `name` of `path` reads true at default time,
+/// true when it cannot be read, as C++ leaves the flag it passes to `Get`.
+fn enabled(scene: Scene<'_>, path: PathId, name: &str) -> bool {
+    PrimView::new(scene, path)
+        .read_value(name, crate::value::read_bool)
+        .unwrap_or(true)
+}
 impl<'a> PhysicsRigidBodyApi<'a> {
     /// Computes this body's mass, inertia and center at default time.
     ///
     /// `collider` supplies scaled volume, unit-density inertia and placement for
     /// every `PhysicsCollisionAPI` prim in the body subtree, including instance
-    /// proxies and collision-disabled shapes. Nested rigid bodies are excluded.
+    /// proxies, except shapes whose `physics:collisionEnabled` is false. The
+    /// subtrees of enabled nested rigid bodies are excluded; a disabled nested
+    /// body's colliders count toward this body (OpenUSD 26.11).
     /// Density precedence is collider, body, bound physics material, then the
     /// unit-adjusted default 1000 kg/m³. Authored body mass overrides the total;
     /// collider/body inertia, centers and axes follow OpenUSD's override rules.

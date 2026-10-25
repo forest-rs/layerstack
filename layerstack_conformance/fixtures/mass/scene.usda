@@ -248,6 +248,30 @@ def Xform "Nested" (prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI
 }
 
 }
+def Xform "DisabledNestedBody" (prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]) {
+ float physics:density = 5
+ def Cube "Own" (prepend apiSchemas = ["PhysicsCollisionAPI"]) {
+ custom float test:volume = 2
+ custom float3 test:inertia = (1,2,3)
+ custom float3 test:center = (0,0,0)
+ custom float3 test:position = (0,0,0)
+ custom quatf test:orientation = (1,0,0,0)
+ 
+}
+def Xform "Nested" (prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]) {
+ float physics:density = 100
+ bool physics:rigidBodyEnabled = false
+ def Cube "Other" (prepend apiSchemas = ["PhysicsCollisionAPI"]) {
+ custom float test:volume = 2
+ custom float3 test:inertia = (1,2,3)
+ custom float3 test:center = (0,0,0)
+ custom float3 test:position = (0,0,0)
+ custom quatf test:orientation = (1,0,0,0)
+ 
+}
+}
+
+}
 def Xform "DisabledCollider" (prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]) {
  float physics:density = 5
  def Cube "Shape" (prepend apiSchemas = ["PhysicsCollisionAPI"]) {

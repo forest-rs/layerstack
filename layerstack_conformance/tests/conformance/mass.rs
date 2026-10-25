@@ -52,20 +52,26 @@ fn rigid_body_mass_matches_openusd_callback_evaluation() {
         let scene = Scene::new(live.stage(), &store);
         let body = PhysicsRigidBodyApi::get(&scene, path).unwrap();
         let mut called = Vec::new();
-        let actual = body
-            .compute_mass_properties(|prim| {
-                let path = store.paths.display(prim.path(), &store.tokens);
-                let input = row.inputs.iter().find(|i| i.path == path).unwrap();
-                called.push(path);
-                Ok(CollisionMassInformation {
-                    volume: input.volume,
-                    inertia: input.inertia,
-                    center_of_mass: input.center,
-                    local_position: input.position,
-                    local_orientation: input.orientation,
-                })
+        let result = body.compute_mass_properties(|prim| {
+            let path = store.paths.display(prim.path(), &store.tokens);
+            let input = row.inputs.iter().find(|i| i.path == path).unwrap();
+            called.push(path);
+            Ok(CollisionMassInformation {
+                volume: input.volume,
+                inertia: input.inertia,
+                center_of_mass: input.center,
+                local_position: input.position,
+                local_orientation: input.orientation,
             })
-            .unwrap();
+        });
+        if row.mass < 0. {
+            // C++ reports a zero aggregate mass (here every collider is
+            // disabled) and returns -1; we return the error instead.
+            assert_eq!(result, Err(MassError::InvalidMass), "{}", row.path);
+            assert!(row.inputs.is_empty() && called.is_empty(), "{}", row.path);
+            continue;
+        }
+        let actual = result.unwrap();
         close(actual.mass, row.mass, &row.path);
         for i in 0..3 {
             close(actual.center_of_mass[i], row.center[i], &row.path);

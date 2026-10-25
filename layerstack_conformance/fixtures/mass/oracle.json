@@ -1104,9 +1104,9 @@
         0.0
       ],
       "inertia": [
-        5.0,
         10.0,
-        15.0
+        20.0,
+        30.0
       ],
       "inputs": [
         {
@@ -1138,7 +1138,44 @@
             0.0,
             1.0
           ],
-          "path": "/DisabledCollider/Shape",
+          "path": "/DisabledNestedBody/Own",
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "volume": 2.0
+        },
+        {
+          "center": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "inertia": [
+            [
+              1.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              2.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              3.0
+            ]
+          ],
+          "orientation": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "path": "/DisabledNestedBody/Nested/Other",
           "position": [
             0.0,
             0.0,
@@ -1147,7 +1184,23 @@
           "volume": 2.0
         }
       ],
-      "mass": 10.0,
+      "mass": 20.0,
+      "path": "/DisabledNestedBody"
+    },
+    {
+      "axes": null,
+      "center": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "inertia": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "inputs": [],
+      "mass": -1.0,
       "path": "/DisabledCollider"
     },
     {

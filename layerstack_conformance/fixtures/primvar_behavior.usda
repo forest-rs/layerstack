@@ -22,6 +22,20 @@ def Xform "Root" {
             int[] primvars:empty:indices = []
             float[] primvars:invalid = [1]
             int[] primvars:invalid:indices = [-1]
+            asset[] primvars:tex = [@a.png@, @b.png@] (interpolation = "vertex")
+            int[] primvars:tex:indices = [1, 0, 1]
+            token[] primvars:tag = ["a", "b"] (interpolation = "vertex")
+            int[] primvars:tag:indices = [1, 1, 0]
+            bool[] primvars:flag = [0, 1]
+            int[] primvars:flag:indices = [1, 0, 0]
+            uchar[] primvars:byte = [7, 255]
+            int[] primvars:byte:indices = [1, 0]
+            int64[] primvars:wide = [9000000000, -3]
+            int[] primvars:wide:indices = [1, 0]
+            uint64[] primvars:huge = [18000000000000000000, 1]
+            int[] primvars:huge:indices = [0, 0, 1]
+            timecode[] primvars:when = [1.5, 2]
+            int[] primvars:when:indices = [1, 1]
         }
     }
 }

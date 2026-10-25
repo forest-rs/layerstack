@@ -19,6 +19,18 @@ for name in ["packed", "scalar", "animated", "blockedIndices", "empty"]:
     result[name] = {"interpolation": str(var.GetInterpolation()),
                     "elementSize": var.GetElementSize(),
                     "indexed": var.IsIndexed(), "default": value}
+# OpenUSD 26.11 flattens indexed primvars of every Sdf value type (PR 3806);
+# 26.08 flattened only some numeric, vector, matrix and string arrays.
+def element(value):
+    if hasattr(value, "path"):
+        return value.path
+    if isinstance(value, (bool, int, float, str)):
+        return value
+    return float(value)
+result["typed"] = {
+    name: [element(v) for v in api.GetPrimvar(name).ComputeFlattened()]
+    for name in ["tex", "tag", "flag", "byte", "wide", "huge", "when"]
+}
 result["animated"]["at1"] = list(api.GetPrimvar("animated").ComputeFlattened(1))
 result["inheritedNames"] = sorted(str(v.GetBaseName()) for v in api.FindPrimvarsWithInheritance())
 (fixtures / "primvar_behavior.json").write_text(json.dumps(result, indent=2) + "\n")

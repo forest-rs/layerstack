@@ -67,6 +67,7 @@ use crate::layer_stack::LayerStackIdentifier;
 
 use alloc::sync::Arc;
 use alloc::vec::Vec;
+use core::borrow::Borrow;
 use core::cmp::Ordering;
 use core::hash::{BuildHasher, Hash, Hasher};
 
@@ -144,8 +145,12 @@ pub(crate) struct NodeArc {
 /// ([`GraphShapes`]). OpenUSD shares a graph's nodes the same way, apart
 /// from their site paths (`PcpPrimIndex_Graph::_SharedData` and
 /// `_nodeSitePaths` in `pxr/usd/pcp/primIndex_Graph.h`).
+///
+/// While a graph is built, its nodes borrow their stacks' offsets
+/// (`NodeShape<&StackOffsets>`): most graphs turn out to be one that is
+/// held already, and only a new one takes counts of the offsets.
 #[derive(Clone, Debug)]
-pub(crate) struct NodeShape {
+pub(crate) struct NodeShape<O = StackOffsets> {
     parent: NodeLink,
     origin: NodeLink,
     /// Most nodes have few children; they are kept inline.
@@ -158,8 +163,12 @@ pub(crate) struct NodeShape {
     /// The offset from the layers of the node's layer stack to the stage,
     /// before their sublayer offsets.
     layer_offset: LayerOffset,
-    stack_offsets: Arc<[(LayerId, LayerOffset)]>,
+    stack_offsets: O,
 }
+
+/// The resident layers of a node's layer stack, strongest first, with
+/// their offsets.
+pub(crate) type StackOffsets = Arc<[(LayerId, LayerOffset)]>;
 
 /// A node's parent or origin, or none, in the four bytes of a [`NodeId`]
 /// rather than an `Option`'s eight.
@@ -185,16 +194,17 @@ impl core::fmt::Debug for NodeLink {
     }
 }
 
-impl NodeShape {
+impl<O: Borrow<StackOffsets>> NodeShape<O> {
     /// Whether `self` and `other` are the same in every respect, their
     /// offsets bit for bit: whether a graph may read one for the other.
-    fn same(&self, other: &Self) -> bool {
+    fn same<P: Borrow<StackOffsets>>(&self, other: &NodeShape<P>) -> bool {
         self.children == other.children && self.same_but_children(other)
     }
 
     /// [`Self::same`] but for the children, which the same parents of the
     /// same number of nodes, in order, give two graphs alike.
-    fn same_but_children(&self, other: &Self) -> bool {
+    fn same_but_children<P: Borrow<StackOffsets>>(&self, other: &NodeShape<P>) -> bool {
+        let (offsets, other_offsets) = (self.stack_offsets.borrow(), other.stack_offsets.borrow());
         let same_offset = |a: &LayerOffset, b: &LayerOffset| {
             a.offset.to_bits() == b.offset.to_bits() && a.scale.to_bits() == b.scale.to_bits()
         };
@@ -206,12 +216,11 @@ impl NodeShape {
             && self.sibling_index == other.sibling_index
             && self.implied == other.implied
             && same_offset(&self.layer_offset, &other.layer_offset)
-            && (Arc::ptr_eq(&self.stack_offsets, &other.stack_offsets)
-                || self.stack_offsets.len() == other.stack_offsets.len()
-                    && self
-                        .stack_offsets
+            && (Arc::ptr_eq(offsets, other_offsets)
+                || offsets.len() == other_offsets.len()
+                    && offsets
                         .iter()
-                        .zip(other.stack_offsets.iter())
+                        .zip(other_offsets.iter())
                         .all(|((a, x), (b, y))| a == b && same_offset(x, y)))
     }
 
@@ -224,6 +233,40 @@ impl NodeShape {
         self.layer_stack.root.hash(state);
         self.namespace_depth.hash(state);
         self.sibling_index.hash(state);
+    }
+
+    /// This node, without children, borrowing its offsets.
+    fn borrowed(&self) -> NodeShape<&StackOffsets> {
+        NodeShape {
+            parent: self.parent,
+            origin: self.origin,
+            children: smallvec::SmallVec::new(),
+            arc_kind: self.arc_kind,
+            layer_stack: self.layer_stack,
+            namespace_depth: self.namespace_depth,
+            sibling_index: self.sibling_index,
+            implied: self.implied,
+            layer_offset: self.layer_offset,
+            stack_offsets: self.stack_offsets.borrow(),
+        }
+    }
+}
+
+impl NodeShape<&StackOffsets> {
+    /// This node, holding a count of its offsets.
+    fn into_held(self) -> NodeShape {
+        NodeShape {
+            parent: self.parent,
+            origin: self.origin,
+            children: self.children,
+            arc_kind: self.arc_kind,
+            layer_stack: self.layer_stack,
+            namespace_depth: self.namespace_depth,
+            sibling_index: self.sibling_index,
+            implied: self.implied,
+            layer_offset: self.layer_offset,
+            stack_offsets: Arc::clone(self.stack_offsets),
+        }
     }
 }
 
@@ -243,21 +286,22 @@ impl core::ops::Deref for GraphShape {
 }
 
 impl GraphShape {
-    fn of(nodes: ShapeBuffer) -> Arc<Self> {
+    fn of(nodes: ShapeBuffer<'_>) -> Arc<Self> {
         Arc::new(Self {
-            nodes: nodes.into_vec().into_boxed_slice(),
+            nodes: nodes.into_iter().map(NodeShape::into_held).collect(),
         })
     }
 }
 
 /// Whether two graphs' shapes are the same, node for node.
-fn same_shape(a: &[NodeShape], b: &[NodeShape]) -> bool {
+fn same_shape(a: &[NodeShape], b: &[NodeShape<&StackOffsets>]) -> bool {
     a.len() == b.len() && a.iter().zip(b).all(|(a, b)| a.same(b))
 }
 
 /// A graph's shape while it is built: most graphs have few nodes and
-/// share the shape of another, so it is built without allocating.
-type ShapeBuffer = smallvec::SmallVec<[NodeShape; 8]>;
+/// share the shape of another, so it is built without allocating, and
+/// without counting its stacks' offsets.
+type ShapeBuffer<'a> = smallvec::SmallVec<[NodeShape<&'a StackOffsets>; 8]>;
 
 /// The number of separately locked tables of a [`GraphShapes`]; a power of
 /// two.
@@ -292,7 +336,7 @@ impl core::fmt::Debug for GraphShapes {
 }
 
 impl GraphShapes {
-    fn hash(&self, shape: &[NodeShape]) -> u64 {
+    fn hash<O: Borrow<StackOffsets>>(&self, shape: &[NodeShape<O>]) -> u64 {
         let mut state = self.hasher.build_hasher();
         shape.len().hash(&mut state);
         for node in shape {
@@ -303,7 +347,7 @@ impl GraphShapes {
 
     /// The shape equal to `shape` that a graph already holds, `shape`
     /// itself if none does.
-    fn intern(&self, shape: ShapeBuffer) -> Arc<GraphShape> {
+    fn intern(&self, shape: ShapeBuffer<'_>) -> Arc<GraphShape> {
         let hash = self.hash(&shape);
         // The top bits pick the table; the table indexes by the low ones.
         #[allow(
@@ -515,13 +559,14 @@ impl<'a> PrimNode<'a> {
     }
 }
 
-/// One node for [`PrimIndexGraph::from_ordered_in`].
-pub(crate) type OrderedNode = (
+/// One node for [`PrimIndexGraph::from_ordered_in`], borrowing its stack's
+/// offsets.
+pub(crate) type OrderedNode<'a> = (
     Option<NodeId>,
     Option<NodeId>,
     NodeArc,
     LayerOffset,
-    Arc<[(LayerId, LayerOffset)]>,
+    &'a StackOffsets,
 );
 
 /// The composition graph of one composed prim.
@@ -626,7 +671,7 @@ impl PrimIndexGraph {
     /// the node's parent, origin, arc, layer offset, and the resident layers
     /// of its layer stack with their offsets.
     #[cfg(test)]
-    pub(crate) fn from_ordered(nodes: impl IntoIterator<Item = OrderedNode>) -> Self {
+    pub(crate) fn from_ordered<'a>(nodes: impl IntoIterator<Item = OrderedNode<'a>>) -> Self {
         let (shape, sites) = Self::split(nodes);
         Self {
             shape: GraphShape::of(shape),
@@ -638,10 +683,10 @@ impl PrimIndexGraph {
     /// builds one (in tests), its shape shared: `like`'s, when it is the
     /// same, as a child prim's often is its parent's, or else the one in
     /// `shapes` that is the same, if any is ([`NodeShape`]).
-    pub(crate) fn from_ordered_in(
-        nodes: impl IntoIterator<Item = OrderedNode>,
+    pub(crate) fn from_ordered_in<'a>(
+        nodes: impl IntoIterator<Item = OrderedNode<'a>>,
         shapes: &GraphShapes,
-        like: Option<&Arc<GraphShape>>,
+        like: Option<&'a Arc<GraphShape>>,
     ) -> Self {
         let nodes = nodes.into_iter();
         let mut sites: Vec<SpecPath> = Vec::with_capacity(nodes.size_hint().0);
@@ -649,7 +694,7 @@ impl PrimIndexGraph {
         // sites; the first that differs builds the shape, from `like`'s
         // nodes before it.
         let mut matched = 0;
-        let mut built: Option<ShapeBuffer> = None;
+        let mut built: Option<ShapeBuffer<'_>> = None;
         for node in nodes {
             let (node, site) = Self::shape_of(node);
             sites.push(site);
@@ -679,22 +724,16 @@ impl PrimIndexGraph {
 
     /// The first `len` nodes of `like` as a shape still being built: their
     /// children found again, as [`Self::push`] adds them.
-    fn prefix(like: Option<&Arc<GraphShape>>, len: usize) -> ShapeBuffer {
+    fn prefix(like: Option<&Arc<GraphShape>>, len: usize) -> ShapeBuffer<'_> {
         let mut shape = ShapeBuffer::new();
         for node in like.map_or(&[][..], |like| &like[..len]) {
-            Self::push(
-                &mut shape,
-                NodeShape {
-                    children: smallvec::SmallVec::new(),
-                    ..node.clone()
-                },
-            );
+            Self::push(&mut shape, node.borrowed());
         }
         shape
     }
 
     /// Adds `node` to `shape`, and to its parent's children.
-    fn push(shape: &mut ShapeBuffer, node: NodeShape) {
+    fn push<'a>(shape: &mut ShapeBuffer<'a>, node: NodeShape<&'a StackOffsets>) {
         let id = NodeId::from_index(shape.len());
         if let Some(parent) = node.parent.get() {
             shape[parent.index()].children.push(id);
@@ -704,9 +743,9 @@ impl PrimIndexGraph {
 
     /// The shapes and sites of `nodes`, apart.
     #[cfg(test)]
-    fn split(
-        nodes: impl IntoIterator<Item = OrderedNode>,
-    ) -> (ShapeBuffer, alloc::boxed::Box<[SpecPath]>) {
+    fn split<'a>(
+        nodes: impl IntoIterator<Item = OrderedNode<'a>>,
+    ) -> (ShapeBuffer<'a>, alloc::boxed::Box<[SpecPath]>) {
         let nodes = nodes.into_iter();
         let mut shape = ShapeBuffer::with_capacity(nodes.size_hint().0);
         let mut sites: Vec<SpecPath> = Vec::with_capacity(nodes.size_hint().0);
@@ -720,8 +759,8 @@ impl PrimIndexGraph {
 
     /// `node`'s shape, without children, and its site.
     fn shape_of(
-        (parent, origin, arc, layer_offset, stack_offsets): OrderedNode,
-    ) -> (NodeShape, SpecPath) {
+        (parent, origin, arc, layer_offset, stack_offsets): OrderedNode<'_>,
+    ) -> (NodeShape<&StackOffsets>, SpecPath) {
         let NodeArc {
             arc_kind,
             layer_stack,
@@ -922,13 +961,14 @@ impl PrimIndexGraph {
             implied: false,
             skips_duplicates: false,
         };
+        let offsets = StackOffsets::default();
         Self::from_ordered(
             core::iter::once((
                 None,
                 None,
                 arc(ArcKind::Local, namespace_depth),
                 LayerOffset::IDENTITY,
-                Arc::default(),
+                &offsets,
             ))
             .chain(arcs.into_iter().map(|(parent, arc_kind, depth)| {
                 (
@@ -936,7 +976,7 @@ impl PrimIndexGraph {
                     None,
                     arc(arc_kind, depth),
                     LayerOffset::IDENTITY,
-                    Arc::default(),
+                    &offsets,
                 )
             })),
         )
@@ -974,13 +1014,14 @@ mod tests {
     /// A graph with a root and the nodes `arcs`, each `(parent, origin,
     /// arc)`, in strength order. Node ids follow `arcs`, starting at 1.
     fn graph(arcs: Vec<(u32, Option<u32>, NodeArc)>) -> PrimIndexGraph {
+        let offsets = StackOffsets::default();
         PrimIndexGraph::from_ordered(
             core::iter::once((
                 None,
                 None,
                 arc(ArcKind::Local, 1, 0),
                 LayerOffset::IDENTITY,
-                Arc::default(),
+                &offsets,
             ))
             .chain(arcs.into_iter().map(|(parent, origin, arc)| {
                 (
@@ -988,7 +1029,7 @@ mod tests {
                     origin.map(NodeId),
                     arc,
                     LayerOffset::IDENTITY,
-                    Arc::default(),
+                    &offsets,
                 )
             })),
         )
@@ -1066,27 +1107,28 @@ mod tests {
         };
         // `/Grove/Oak/Canopy/Acorn` (depth 4): `/Grove/Oak` references
         // `/Tree`, whose `/Tree/Canopy/Acorn` references `/Acorn`.
+        let offsets = StackOffsets::default();
         let graph = PrimIndexGraph::from_ordered([
             (
                 None,
                 None,
                 node(site("/Grove/Oak/Canopy/Acorn"), 0),
                 LayerOffset::IDENTITY,
-                Arc::default(),
+                &offsets,
             ),
             (
                 Some(NodeId::ROOT),
                 None,
                 node(site("/Tree/Canopy/Acorn"), 2),
                 LayerOffset::IDENTITY,
-                Arc::default(),
+                &offsets,
             ),
             (
                 Some(NodeId(1)),
                 None,
                 node(site("/Acorn"), 3),
                 LayerOffset::IDENTITY,
-                Arc::default(),
+                &offsets,
             ),
         ]);
         assert!(!graph.has_direct_dependency(&paths, NodeId(1), 4));

@@ -1527,7 +1527,9 @@ fn prim_index(
             implied: is_class_based(node.arc_kind) && node.origin != node.parent,
             skips_duplicates: false,
         };
-        let stack_offsets = ctx.stacks.get(node.site.stack).layer_offsets.clone();
+        // Borrowed: most graphs' shapes are held already, and only a new
+        // one takes a count of its stacks' offsets.
+        let stack_offsets = &ctx.stacks.get(node.site.stack).layer_offsets;
         (
             to_id(node.parent),
             origin,

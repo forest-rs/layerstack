@@ -1,11 +1,11 @@
 # Copyright 2026 the LayerStack Authors
 # SPDX-License-Identifier: Apache-2.0 OR MIT
-"""Pin inherited/indexed influences and CPU LBS to OpenUSD 26.8."""
+"""Pin inherited/indexed influences and CPU LBS to OpenUSD 26.11."""
 import json
 import pathlib
 from pxr import Usd, UsdSkel, UsdGeom
 
-assert Usd.GetVersion() == (0, 26, 8)
+assert Usd.GetVersion() == (0, 26, 11)
 fixtures = pathlib.Path(__file__).resolve().parents[1] / "fixtures"
 stage = Usd.Stage.Open(str(fixtures / "skel_skinning.usda"))
 cache = UsdSkel.Cache()

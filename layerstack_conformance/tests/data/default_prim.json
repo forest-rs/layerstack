@@ -1,6 +1,6 @@
 {
  "generator": "layerstack_conformance/scripts/default_prim_oracle.py",
- "openusd_version": "0.26.8",
+ "openusd_version": "0.26.11",
  "formats": [
   "usda",
   "usdc"

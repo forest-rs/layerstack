@@ -1,6 +1,6 @@
 {
  "generator": "layerstack_conformance/scripts/prim_index_graph_oracle.py",
- "openusd_version": "0.26.8",
+ "openusd_version": "0.26.11",
  "root": "root.usda",
  "prims": [
   {

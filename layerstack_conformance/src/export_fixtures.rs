@@ -973,7 +973,7 @@ pub type OpenUsdRelease = (u32, u32);
 
 /// The OpenUSD release the writers target: they store metadata with the
 /// types its registry (`SdfSchema` and the plugin metadata) declares.
-pub const TARGET_OPENUSD: OpenUsdRelease = (26, 8);
+pub const TARGET_OPENUSD: OpenUsdRelease = (26, 11);
 
 /// Reads an OpenUSD release from a tool's version output, such as `Apple
 /// USD Tools (0.25.11)` or `0.26.8`: the last `0.YY.MM` or `YY.MM` number.

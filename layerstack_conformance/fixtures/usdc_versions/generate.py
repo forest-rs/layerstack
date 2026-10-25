@@ -11,11 +11,11 @@ supplemental spec's `gen_splines.usdc`, which is read but not written here.
 `layerstack_conformance/tests/conformance/usdc_versions.rs` decodes the fixtures,
 composes them through `Stage`, and compares.
 
-Pinned oracle: `usd-core` 26.8 from PyPI (OpenUSD v26.08, which writes crate
+Pinned oracle: `usd-core` 26.11 from PyPI (OpenUSD v26.11, which writes crate
 0.15.0). The script refuses to run under any other OpenUSD version so the
 fixtures and the JSON can only be regenerated against that pin:
 
-    python3 -m venv venv && venv/bin/pip install usd-core==26.8
+    python3 -m venv venv && venv/bin/pip install usd-core==26.11
     venv/bin/python layerstack_conformance/fixtures/usdc_versions/generate.py
 
 Each `version_0_N.usdc` is written by a child process with
@@ -33,7 +33,7 @@ import sys
 
 from pxr import Gf, Sdf, Ts, Usd, Vt
 
-PINNED_USD_VERSION = (0, 26, 8)
+PINNED_USD_VERSION = (0, 26, 11)
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 # Query times used for every time-varying attribute.
@@ -491,7 +491,7 @@ def main():
         "generator": {
             "script": "layerstack_conformance/fixtures/usdc_versions/generate.py",
             "openusd": "%d.%d.%d" % Usd.GetVersion(),
-            "package": "usd-core==26.8 (PyPI)",
+            "package": "usd-core==26.11 (PyPI)",
             "python": sys.version.split()[0],
         },
         "fixtures": fixtures,

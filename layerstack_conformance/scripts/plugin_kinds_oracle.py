@@ -1,7 +1,7 @@
 # Copyright 2026 the LayerStack Authors
 # SPDX-License-Identifier: Apache-2.0 OR MIT
 """Records what OpenUSD's kind registry makes of plugin-declared kinds; run
-with usd-core 26.8.
+with usd-core 26.11.
 
 Usage: plugin_kinds_oracle.py [--check]
 

@@ -5,7 +5,7 @@
 //! --rust` writes for the observatory fixture today, as a downstream crate's CI
 //! checks with `compile --rust <file> --check`. `observatory` builds on OpenUSD's
 //! `Xformable`, so this needs `LAYERSTACK_OPENUSD_SOURCE` naming an OpenUSD
-//! 26.08 checkout, and `rustfmt`; without the checkout it is skipped.
+//! 26.11 checkout, and `rustfmt`; without the checkout it is skipped.
 
 #![cfg(not(target_arch = "wasm32"))]
 #![allow(missing_docs, reason = "integration tests")]
@@ -37,7 +37,7 @@ fn rustfmt(source: &str) -> String {
 #[test]
 fn the_observatory_module_is_current() {
     let Some(source) = std::env::var_os("LAYERSTACK_OPENUSD_SOURCE").map(PathBuf::from) else {
-        eprintln!("skipped: set LAYERSTACK_OPENUSD_SOURCE to an OpenUSD 26.08 checkout");
+        eprintln!("skipped: set LAYERSTACK_OPENUSD_SOURCE to an OpenUSD 26.11 checkout");
         return;
     };
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));

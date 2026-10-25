@@ -4,7 +4,7 @@
 
 Usage: udim_tiles_oracle.py [--check] [OUT_DIR]
 
-Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.8`.
+Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.11`.
 Writes, under `layerstack_conformance/fixtures/udim_tiles` by default:
 
 - the layers and tile files below, as authored; each tile's content is its

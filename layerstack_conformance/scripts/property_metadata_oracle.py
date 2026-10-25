@@ -4,7 +4,7 @@
 
 Usage: property_metadata_oracle.py [--check]
 
-Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.8`.
+Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.11`.
 
 On a new stage, a `Mesh` gets an attribute `a` (`float`), a non-custom
 relationship `r`, its schema attribute `doubleSided` (unauthored) and no

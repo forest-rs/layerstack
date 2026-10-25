@@ -1,6 +1,6 @@
 {
  "generator": "layerstack_conformance/scripts/composition_errors_oracle.py",
- "openusd_version": "0.26.8",
+ "openusd_version": "0.26.11",
  "compositions": [
   {
    "root": "root.usda",

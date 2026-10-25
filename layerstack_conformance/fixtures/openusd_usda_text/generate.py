@@ -43,10 +43,10 @@ OpenUSD's reading of it.
   OpenUSD to report the first as `PcpErrorInvalidSublayerPath` and to keep
   the second, from the USDA and from the USDC.
 
-Pinned oracle: `usd-core` 26.8 from PyPI (OpenUSD v26.08), as for the
+Pinned oracle: `usd-core` 26.11 from PyPI (OpenUSD v26.11), as for the
 `usdc_versions` fixtures:
 
-    python3 -m venv venv && venv/bin/pip install usd-core==26.8
+    python3 -m venv venv && venv/bin/pip install usd-core==26.11
     venv/bin/python layerstack_conformance/fixtures/openusd_usda_text/generate.py
 """
 
@@ -55,7 +55,7 @@ import sys
 
 from pxr import Gf, Pcp, Sdf, Usd, Vt
 
-PINNED_USD_VERSION = (0, 26, 8)
+PINNED_USD_VERSION = (0, 26, 11)
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 # Every ASCII control character but NUL (which OpenUSD's writer truncates

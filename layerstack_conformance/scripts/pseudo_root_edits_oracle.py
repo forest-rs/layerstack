@@ -4,7 +4,7 @@
 
 Usage: pseudo_root_edits_oracle.py [--check] [OUT_DIR]
 
-Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.8`.
+Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.11`.
 Writes, under `layerstack_conformance/fixtures/pseudo_root_edits` by default:
 
 - `scene.usda`, the layer every case edits;

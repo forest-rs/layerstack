@@ -1,6 +1,6 @@
 # Copyright 2026 the LayerStack Authors
 # SPDX-License-Identifier: Apache-2.0 OR MIT
-"""Record native authored layer-stack flatten output (usd-core 26.8)."""
+"""Record native authored layer-stack flatten output (usd-core 26.11)."""
 import argparse
 from pathlib import Path
 from pxr import Usd, UsdUtils

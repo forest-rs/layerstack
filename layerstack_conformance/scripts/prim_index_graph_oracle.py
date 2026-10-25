@@ -4,7 +4,7 @@
 
 Usage: prim_index_graph_oracle.py [OUT_DIR]
 
-Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.8`.
+Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.11`.
 Writes, under `layerstack_conformance/fixtures/prim_index_graph` by default:
 
 - `*.usda`: the layers below, as authored;

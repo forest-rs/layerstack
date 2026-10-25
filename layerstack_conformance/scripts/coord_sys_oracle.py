@@ -4,7 +4,7 @@
 
 Usage: coord_sys_oracle.py [--check]
 
-Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.8`.
+Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.11`.
 
 Opens `fixtures/coord_sys/scene.usda` and, for every prim, records
 `UsdShadeCoordSysAPI::GetLocalBindingsForPrim`,

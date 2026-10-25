@@ -5,7 +5,7 @@
 
 Usage: make_visible_oracle.py [--check] [OUT_DIR]
 
-Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.8`.
+Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.11`.
 Writes, under `layerstack_conformance/fixtures/make_visible` by default,
 the layers below as authored and `oracle.json`, which
 `tests/conformance/make_visible.rs` replays against layerstack's `ImageableEdit`.

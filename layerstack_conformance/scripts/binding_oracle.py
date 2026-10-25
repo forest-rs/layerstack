@@ -5,7 +5,7 @@
 Usage: binding_oracle.py [FIXTURES [OUT]]
        binding_oracle.py --check [FIXTURES]
 
-Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.8`.
+Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.11`.
 
 Opens `fixtures/binding/scene.usda` (which references `asset.usda`) and
 writes `oracle.json` beside it:

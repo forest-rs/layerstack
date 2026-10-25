@@ -14,10 +14,10 @@ what the read allocates to stay within what it charges to its
   inserts and writes each, plus a `MinSize` and a `SetSize` fill. OpenUSD
   stores the literal once in the edit's literal table.
 
-Pinned oracle: `usd-core` 26.8 from PyPI (OpenUSD v26.08), as for the
+Pinned oracle: `usd-core` 26.11 from PyPI (OpenUSD v26.11), as for the
 `usdc_versions` fixtures:
 
-    python3 -m venv venv && venv/bin/pip install usd-core==26.8
+    python3 -m venv venv && venv/bin/pip install usd-core==26.11
     venv/bin/python layerstack_conformance/fixtures/usdc_budget/generate.py
 """
 
@@ -26,7 +26,7 @@ import sys
 
 from pxr import Sdf, Usd, Vt
 
-PINNED_USD_VERSION = (0, 26, 8)
+PINNED_USD_VERSION = (0, 26, 11)
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 LITERAL = "x" * (64 * 1024)

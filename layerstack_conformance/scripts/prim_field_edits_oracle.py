@@ -4,7 +4,7 @@
 
 Usage: prim_field_edits_oracle.py [FIXTURES [OUT]]
 
-Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.8`.
+Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.11`.
 
 Each case opens `fixtures/prim_field_edits/scene.usda` afresh (it sublayers
 `sub.usda`, and `/R` references `asset.usda`'s `/Asset`), points the stage

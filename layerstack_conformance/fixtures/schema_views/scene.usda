@@ -101,16 +101,16 @@ def Scope "Authored_BackPlateAPI" (
     asset backPlate:a:image.timeSamples = {
         2: @asset2.usda@,
     }
-    float3 backPlate:a:luma:gain = (1.5, 2.5, 3.5)
-    float3 backPlate:a:luma:gain.timeSamples = {
+    float3 backPlate:a:luma:offset = (1.5, 2.5, 3.5)
+    float3 backPlate:a:luma:offset.timeSamples = {
         2: (2.5, 3.5, 4.5),
     }
-    float3 backPlate:a:luma:gamma = (1.5, 2.5, 3.5)
-    float3 backPlate:a:luma:gamma.timeSamples = {
+    float3 backPlate:a:luma:power = (1.5, 2.5, 3.5)
+    float3 backPlate:a:luma:power.timeSamples = {
         2: (2.5, 3.5, 4.5),
     }
-    float3 backPlate:a:luma:lift = (1.5, 2.5, 3.5)
-    float3 backPlate:a:luma:lift.timeSamples = {
+    float3 backPlate:a:luma:slope = (1.5, 2.5, 3.5)
+    float3 backPlate:a:luma:slope.timeSamples = {
         2: (2.5, 3.5, 4.5),
     }
     token backPlate:a:plateVisibility = "solo"
@@ -2113,6 +2113,19 @@ def GenerativeProcedural "Authored_HydraGenerativeProceduralAPI" (
     }
 }
 
+def Scope "Fallback_HydraPrimAPI" (
+    prepend apiSchemas = ["HydraPrimAPI"]
+)
+{
+}
+
+def Scope "Authored_HydraPrimAPI" (
+    prepend apiSchemas = ["HydraPrimAPI"]
+)
+{
+    uniform bool hydra:expandInstances = 1
+}
+
 def RenderPass "Fallback_HydraRenderPassAPI" (
     prepend apiSchemas = ["HydraRenderPassAPI"]
 )
@@ -2136,6 +2149,29 @@ def Scope "Authored_AssetPreviewsAPI" (
     prepend apiSchemas = ["AssetPreviewsAPI"]
 )
 {
+}
+
+def Scope "Fallback_AuthorshipAPI" (
+    prepend apiSchemas = ["AuthorshipAPI:a"]
+)
+{
+}
+
+def Scope "Authored_AuthorshipAPI" (
+    prepend apiSchemas = ["AuthorshipAPI:a"]
+)
+{
+    uniform string[] authorship:a:contact = ["text1", "text2"]
+    uniform string[] authorship:a:copyrightOwner = ["text1", "text2"]
+    uniform string authorship:a:created = "text1"
+    uniform string[] authorship:a:creator = ["text1", "text2"]
+    uniform string authorship:a:description = "text1"
+    uniform string authorship:a:digitalSourceType = "text1"
+    uniform string[] authorship:a:inputs = ["text1", "text2"]
+    uniform string authorship:a:instanceID = "text1"
+    uniform string authorship:a:softwarePackage = "text1"
+    uniform string authorship:a:softwareVersion = "text1"
+    uniform string authorship:a:usageTerms = "text1"
 }
 
 def SpatialAudio "Fallback_SpatialAudio"

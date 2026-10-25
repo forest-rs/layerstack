@@ -4,7 +4,7 @@
 
 Usage: skel_authoring_oracle.py [--check]
 
-Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.8`.
+Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.11`.
 
 On an in-memory stage, makes each call below in order and records whether
 it was accepted and what the call's prim then authors in the root layer:

@@ -4,7 +4,7 @@
 
 Usage: binding_authoring_oracle.py [--check]
 
-Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.8`.
+Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.11`.
 
 On a new stage with `/Set` (an `Xform` with `CollectionAPI:metal`
 including `/Set/Mesh`), `/Set/Mesh` and the materials `/Looks/A` and

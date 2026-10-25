@@ -1,5 +1,5 @@
 {
- "openusd_version": "0.26.8",
+ "openusd_version": "0.26.11",
  "registry_errors": [
   "Failed verification: ' schemaInfo ' -- Could not find schema info for base type 'SbMixin' of schema 'Gadget'",
   "Failed verification: ' schemaInfo ' -- Could not find schema info for base type 'SbNowhere' of schema 'Stray'"

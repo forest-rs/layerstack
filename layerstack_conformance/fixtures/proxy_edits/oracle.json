@@ -741,5 +741,5 @@
    "text": "#usda 1.0\n\ndef Mesh \"Asset\"\n{\n    int[] faceVertexCounts = [3]\n    int[] faceVertexIndices = [0, 1, 2]\n\n    def Mesh \"Child\"\n    {\n        int[] faceVertexCounts = [3]\n        int[] faceVertexIndices = [0, 1, 2]\n    }\n\n    def Material \"Mat\"\n    {\n    }\n}\n\ndef Material \"Looks\"\n{\n    def Shader \"Surface\"\n    {\n        uniform token info:id = \"UsdPreviewSurface\"\n        float inputs:roughness = 0.25\n    }\n}\n\n"
   }
  ],
- "openusd_version": "26.8"
+ "openusd_version": "26.11"
 }

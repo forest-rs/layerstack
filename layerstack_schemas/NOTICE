@@ -1,9 +1,9 @@
 layerstack_schemas
 
 The tables and views in `src/generated` are generated from the schema definitions of
-OpenUSD 26.8 (the `generatedSchema.usda`, `plugInfo.json` and standard
+OpenUSD 26.11 (the `generatedSchema.usda`, `plugInfo.json` and standard
 `usdShaders/shaders/shaderDefs.usda` files of the
-usd-core 26.8 wheel), which are distributed under the Tomorrow Open Source
+usd-core 26.11 wheel), which are distributed under the Tomorrow Open Source
 Technology License 1.0; see `LICENSE-TOST-1.0`.
 
 `src/gf/decomposition.rs` adapts OpenUSD's Gf matrix factorization,

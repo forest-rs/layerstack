@@ -14,7 +14,7 @@
    "/Instance/Light.intensity"
   ]
  },
- "openusd_version": "26.8",
+ "openusd_version": "26.11",
  "properties": {
   "/Authored_AccessibilityAPI.accessibility:a:description": {
    "default": "text1",
@@ -32,6 +32,74 @@
    ],
    "default": "standard",
    "sample": "high"
+  },
+  "/Authored_AuthorshipAPI.authorship:a:contact": {
+   "default": [
+    "text1",
+    "text2"
+   ],
+   "sample": [
+    "text1",
+    "text2"
+   ]
+  },
+  "/Authored_AuthorshipAPI.authorship:a:copyrightOwner": {
+   "default": [
+    "text1",
+    "text2"
+   ],
+   "sample": [
+    "text1",
+    "text2"
+   ]
+  },
+  "/Authored_AuthorshipAPI.authorship:a:created": {
+   "default": "text1",
+   "sample": "text1"
+  },
+  "/Authored_AuthorshipAPI.authorship:a:creator": {
+   "default": [
+    "text1",
+    "text2"
+   ],
+   "sample": [
+    "text1",
+    "text2"
+   ]
+  },
+  "/Authored_AuthorshipAPI.authorship:a:description": {
+   "default": "text1",
+   "sample": "text1"
+  },
+  "/Authored_AuthorshipAPI.authorship:a:digitalSourceType": {
+   "default": "text1",
+   "sample": "text1"
+  },
+  "/Authored_AuthorshipAPI.authorship:a:inputs": {
+   "default": [
+    "text1",
+    "text2"
+   ],
+   "sample": [
+    "text1",
+    "text2"
+   ]
+  },
+  "/Authored_AuthorshipAPI.authorship:a:instanceID": {
+   "default": "text1",
+   "sample": "text1"
+  },
+  "/Authored_AuthorshipAPI.authorship:a:softwarePackage": {
+   "default": "text1",
+   "sample": "text1"
+  },
+  "/Authored_AuthorshipAPI.authorship:a:softwareVersion": {
+   "default": "text1",
+   "sample": "text1"
+  },
+  "/Authored_AuthorshipAPI.authorship:a:usageTerms": {
+   "default": "text1",
+   "sample": "text1"
   },
   "/Authored_BackPlateAPI.backPlate:a:alpha:image": {
    "default": "asset1.usda",
@@ -57,7 +125,7 @@
    "default": "asset1.usda",
    "sample": "asset2.usda"
   },
-  "/Authored_BackPlateAPI.backPlate:a:luma:gain": {
+  "/Authored_BackPlateAPI.backPlate:a:luma:offset": {
    "default": [
     1.5,
     2.5,
@@ -69,7 +137,7 @@
     4.5
    ]
   },
-  "/Authored_BackPlateAPI.backPlate:a:luma:gamma": {
+  "/Authored_BackPlateAPI.backPlate:a:luma:power": {
    "default": [
     1.5,
     2.5,
@@ -81,7 +149,7 @@
     4.5
    ]
   },
-  "/Authored_BackPlateAPI.backPlate:a:luma:lift": {
+  "/Authored_BackPlateAPI.backPlate:a:luma:slope": {
    "default": [
     1.5,
     2.5,
@@ -1014,6 +1082,10 @@
   "/Authored_HydraGenerativeProceduralAPI.proceduralSystem": {
    "default": "token1",
    "sample": "token2"
+  },
+  "/Authored_HydraPrimAPI.hydra:expandInstances": {
+   "default": true,
+   "sample": true
   },
   "/Authored_HydraRenderPassAPI.hydra:rendererName": {
    "default": "token1",
@@ -3421,6 +3493,50 @@
    "default": "standard",
    "sample": "standard"
   },
+  "/Fallback_AuthorshipAPI.authorship:a:contact": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_AuthorshipAPI.authorship:a:copyrightOwner": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_AuthorshipAPI.authorship:a:created": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_AuthorshipAPI.authorship:a:creator": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_AuthorshipAPI.authorship:a:description": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_AuthorshipAPI.authorship:a:digitalSourceType": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_AuthorshipAPI.authorship:a:inputs": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_AuthorshipAPI.authorship:a:instanceID": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_AuthorshipAPI.authorship:a:softwarePackage": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_AuthorshipAPI.authorship:a:softwareVersion": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_AuthorshipAPI.authorship:a:usageTerms": {
+   "default": null,
+   "sample": null
+  },
   "/Fallback_BackPlateAPI.backPlate:a:alpha:image": {
    "default": "",
    "sample": ""
@@ -3445,7 +3561,19 @@
    "default": "",
    "sample": ""
   },
-  "/Fallback_BackPlateAPI.backPlate:a:luma:gain": {
+  "/Fallback_BackPlateAPI.backPlate:a:luma:offset": {
+   "default": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "sample": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  "/Fallback_BackPlateAPI.backPlate:a:luma:power": {
    "default": [
     1.0,
     1.0,
@@ -3457,7 +3585,7 @@
     1.0
    ]
   },
-  "/Fallback_BackPlateAPI.backPlate:a:luma:gamma": {
+  "/Fallback_BackPlateAPI.backPlate:a:luma:slope": {
    "default": [
     1.0,
     1.0,
@@ -3467,18 +3595,6 @@
     1.0,
     1.0,
     1.0
-   ]
-  },
-  "/Fallback_BackPlateAPI.backPlate:a:luma:lift": {
-   "default": [
-    0.0,
-    0.0,
-    0.0
-   ],
-   "sample": [
-    0.0,
-    0.0,
-    0.0
    ]
   },
   "/Fallback_BackPlateAPI.backPlate:a:plateVisibility": {
@@ -4128,6 +4244,10 @@
   "/Fallback_HydraGenerativeProceduralAPI.proceduralSystem": {
    "default": "hydraGenerativeProcedural",
    "sample": "hydraGenerativeProcedural"
+  },
+  "/Fallback_HydraPrimAPI.hydra:expandInstances": {
+   "default": false,
+   "sample": false
   },
   "/Fallback_HydraRenderPassAPI.hydra:rendererName": {
    "default": null,

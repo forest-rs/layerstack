@@ -211,7 +211,7 @@ fn native_with_interpolation(
     let script = r#"import json,sys
 from pxr import Usd
 s=Usd.Stage.Open(sys.argv[1]);a=s.GetAttributeAtPath(sys.argv[2])
-assert Usd.GetVersion()==(0,26,8), Usd.GetVersion()
+assert Usd.GetVersion()==(0,26,11), Usd.GetVersion()
 if sys.argv[4]=="held": s.SetInterpolationType(Usd.InterpolationTypeHeld)
 q=json.loads(sys.argv[3])
 print(json.dumps({'values':[None if a.Get(t) is None else list(a.Get(t)) for t in q], 'samples':a.GetTimeSamples()}))

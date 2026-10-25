@@ -4,7 +4,7 @@
 
 Usage: variant_specs_oracle.py [OUT_DIR]
 
-Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.8`.
+Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.11`.
 Writes, under `layerstack_conformance/fixtures/variant_specs` by default:
 
 - `*.usda`: the layers below, as authored;

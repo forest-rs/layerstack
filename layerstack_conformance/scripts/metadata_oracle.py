@@ -1,12 +1,12 @@
 # Copyright 2026 the LayerStack Authors
 # SPDX-License-Identifier: Apache-2.0 OR MIT
-"""Plugin metadata semantics from the pinned OpenUSD 26.8 runtime."""
+"""Plugin metadata semantics from the pinned OpenUSD 26.11 runtime."""
 import json
 import sys
 from pathlib import Path
 from pxr import Sdf, Usd, UsdGeom, UsdShade, UsdPhysics
 
-assert Usd.GetVersion() == (0, 26, 8)
+assert Usd.GetVersion() == (0, 26, 11)
 weak = Sdf.Layer.CreateAnonymous()
 root = Sdf.Layer.CreateAnonymous()
 root.subLayerPaths = [weak.identifier]
@@ -15,7 +15,7 @@ mesh = UsdGeom.Mesh.Define(stage, "/Mesh")
 attribute = mesh.CreateNormalsAttr()
 relationship = mesh.GetPrim().CreateRelationship("binding")
 keys = ["metersPerUnit", "upAxis", "kilogramsPerUnit", "renderSettingsPrimPath"]
-result = {"version": "26.8", "stage_defaults": {key: stage.GetMetadata(key) for key in keys},
+result = {"version": "26.11", "stage_defaults": {key: stage.GetMetadata(key) for key in keys},
     "property_defaults": {key: attribute.GetMetadata(key) for key in ["interpolation", "elementSize", "unauthoredValuesIndex"]}}
 weak.pseudoRoot.SetInfo("metersPerUnit", 10.0)
 result["sublayer_does_not_override"] = stage.GetMetadata("metersPerUnit")

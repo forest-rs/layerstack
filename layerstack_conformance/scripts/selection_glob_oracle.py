@@ -4,7 +4,7 @@
 
 Usage: selection_glob_oracle.py [FIXTURES [OUT]]
 
-Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.8`.
+Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.11`.
 
 Opens `fixtures/path_expression/selections.usda` (a prim per selection of
 the `color` set, and one selecting nothing) and, for each selection glob

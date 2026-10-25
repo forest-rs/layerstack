@@ -4,7 +4,7 @@
 
 Usage: namespace_deletes_oracle.py [FIXTURES [OUT]]
 
-Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.8`.
+Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.11`.
 
 Each case opens `fixtures/namespace_deletes/scene.usda` afresh (its root
 layer stack is `scene.usda` over `sub.usda`; `/R` references `asset.usda`)

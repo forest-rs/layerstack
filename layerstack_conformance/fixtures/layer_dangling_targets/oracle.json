@@ -5,7 +5,7 @@
   "scope_strong.usda": 1,
   "scope_weak.usda": 4
  },
- "openusd_version": "26.8",
+ "openusd_version": "26.11",
  "reads": [
   [
    "planter.usda",

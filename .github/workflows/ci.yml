@@ -406,7 +406,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: PixarAnimationStudios/OpenUSD
-          ref: v26.08
+          ref: v26.11.1
           path: openusd
           fetch-depth: 1
           sparse-checkout-cone-mode: false
@@ -435,7 +435,7 @@ jobs:
           python-version: "3.12"
 
       - name: install usd-core
-        run: python -m pip install usd-core==26.8
+        run: python -m pip install usd-core==26.11
 
       - name: restore cache
         uses: Swatinem/rust-cache@v2

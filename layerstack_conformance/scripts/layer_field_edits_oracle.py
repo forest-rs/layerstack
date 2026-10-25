@@ -4,7 +4,7 @@
 
 Usage: layer_field_edits_oracle.py [FIXTURES [OUT]]
 
-Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.8`.
+Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.11`.
 
 Each case opens `fixtures/layer_field_edits/scene.usda` afresh (it
 sublayers `s1.usda`; `s2.usda` and `s3.usda` are loaded through

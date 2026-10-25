@@ -5,7 +5,7 @@
 //! (`layerstack_custom_schemas::fields`), authored and read on a stage as a
 //! downstream crate would, and saved as OpenUSD writes the same calls: the
 //! expected lines are those `layerstack_conformance`'s
-//! `scripts/registry_metadata_oracle.py` records for usd-core 26.8
+//! `scripts/registry_metadata_oracle.py` records for usd-core 26.11
 //! (`fixtures/registry_metadata/oracle.json`, `authoring`).
 
 #![allow(missing_docs, reason = "integration tests")]

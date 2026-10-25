@@ -4,7 +4,7 @@
 
 Usage: authoring_targets_oracle.py [OUT_DIR]
 
-Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.8`.
+Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.11`.
 Writes, under `layerstack_conformance/fixtures/authoring_targets` by default:
 
 - `root.usda`, `asset.usda`, `other.usda`: the layers below, as authored;
@@ -28,7 +28,7 @@ from pathlib import Path
 
 from pxr import Sdf, Usd
 
-assert Usd.GetVersion() == (0, 26, 8)
+assert Usd.GetVersion() == (0, 26, 11)
 out = Path(sys.argv[1]) if len(sys.argv) > 1 else (
     Path(__file__).resolve().parent.parent / "fixtures" / "authoring_targets")
 out.mkdir(parents=True, exist_ok=True)
@@ -144,4 +144,4 @@ for holder, source, prop in CASES:
         "stronger_value": query.Get() if query.HasAuthoredValue() else None,
     })
 (out / "oracle.json").write_text(json.dumps(
-    {"openusd_version": "26.8", "root": "root.usda", "cases": cases}, indent=1) + "\n")
+    {"openusd_version": "26.11", "root": "root.usda", "cases": cases}, indent=1) + "\n")

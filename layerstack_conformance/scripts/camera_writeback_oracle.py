@@ -1,6 +1,6 @@
 # Copyright 2026 the LayerStack Authors
 # SPDX-License-Identifier: Apache-2.0 OR MIT
-"""Pin SetFromCamera world/parent conversion and lens fields with OpenUSD 26.8."""
+"""Pin SetFromCamera world/parent conversion and lens fields with OpenUSD 26.11."""
 import json
 import pathlib
 import sys

@@ -1,5 +1,5 @@
 {
- "openusd_version": "26.8",
+ "openusd_version": "26.11",
  "prims": {
   "/Animated": {
    "purpose": {"authored_on":null,"inheritable":false,"purpose":"default"},

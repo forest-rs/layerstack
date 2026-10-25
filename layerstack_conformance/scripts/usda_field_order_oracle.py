@@ -5,7 +5,7 @@ orders, and for a scrambled file read back.
 
 Usage: usda_field_order_oracle.py [--check] [OUT_DIR]
 
-Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.8`.
+Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.11`.
 Writes, under `layerstack_conformance/fixtures/usda_field_order` by
 default, the files of `FILES` (`scrambled.usda`, `scrambled.usdc`, ...)
 and `oracle.json`, which `tests/conformance/usda_field_order.rs` replays against

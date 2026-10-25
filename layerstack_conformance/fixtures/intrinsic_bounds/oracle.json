@@ -1,4 +1,4 @@
-{"openusd_version": "26.8","records":[
+{"openusd_version": "26.11","records":[
 {"path":"/CubeDefault","time":null,"bounds":{"empty":false,"min":[-1.0,-1.0,-1.0],"max":[1.0,1.0,1.0]}},
 {"path":"/CubeZ","time":null,"bounds":{"empty":false,"min":[-3.625,-3.625,-3.625],"max":[3.625,3.625,3.625]}},
 {"path":"/CubeNegative","time":null,"bounds":{"empty":true}},

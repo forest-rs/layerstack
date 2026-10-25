@@ -6,7 +6,7 @@ them.
 
 Usage: target_list_edits_oracle.py [--check] [OUT_DIR]
 
-Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.8`.
+Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.11`.
 Writes, under `layerstack_conformance/fixtures/target_list_edits` by
 default, the layers below as authored and `oracle.json`, which
 `tests/conformance/target_list_edits.rs` replays against layerstack.

@@ -80,7 +80,7 @@ fn state(rules: &PayloadLoadRules, paths: &[String], store: &InMemoryStore) -> S
 #[test]
 fn load_rule_edits_and_minimizing_match_openusd() {
     let oracle: Oracle = serde_json::from_str(ORACLE).expect("oracle.json");
-    assert_eq!(oracle.openusd_version, "26.8");
+    assert_eq!(oracle.openusd_version, layerstack_schemas::OPENUSD_VERSION);
     let store = InMemoryStore::default();
     for (index, case) in oracle.cases.iter().enumerate() {
         let mut rules = match case.start.as_str() {

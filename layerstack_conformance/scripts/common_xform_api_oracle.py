@@ -4,7 +4,7 @@
 
 Usage: common_xform_api_oracle.py [--check]
 
-Needs OpenUSD through Python `pxr` (`pip install usd-core==26.8`).
+Needs OpenUSD through Python `pxr` (`pip install usd-core==26.11`).
 
 Opens `fixtures/common_xform_api/scene.usda` with `weak.usda` as its
 sublayer and records:

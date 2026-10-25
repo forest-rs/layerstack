@@ -1,7 +1,7 @@
 # Copyright 2026 the LayerStack Authors
 # SPDX-License-Identifier: Apache-2.0 OR MIT
 """Records how OpenUSD types plugin-registered metadata fields; run with
-usd-core 26.8.
+usd-core 26.11.
 
 Usage: registry_metadata_oracle.py [--check]
 

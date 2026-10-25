@@ -4,7 +4,7 @@
 
 Usage: skel_extents_oracle.py [--check]
 
-Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.8`.
+Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.11`.
 
 Opens `fixtures/skel_extents/scene.usda` and, at default time and times 0
 and 1, records `UsdGeomBoundable::ComputeExtentFromPlugins` for every

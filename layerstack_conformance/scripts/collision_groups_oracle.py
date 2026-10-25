@@ -1,11 +1,11 @@
 # Copyright 2026 the LayerStack Authors
 # SPDX-License-Identifier: Apache-2.0 OR MIT
-"""Record collision policy with OpenUSD 26.8; run from the repository root."""
+"""Record collision policy with OpenUSD 26.11; run from the repository root."""
 import json
 from pathlib import Path
 from pxr import Usd, UsdPhysics
 fixtures = Path("layerstack_conformance/fixtures")
-assert Usd.GetVersion() == (0, 26, 8)
+assert Usd.GetVersion() == (0, 26, 11)
 stage = Usd.Stage.Open(str(fixtures / "collision_groups.usda"))
 table = UsdPhysics.CollisionGroup.ComputeCollisionGroupTable(stage)
 groups = table.GetGroups()

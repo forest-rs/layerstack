@@ -1,11 +1,11 @@
 # Copyright 2026 the LayerStack Authors
 # SPDX-License-Identifier: Apache-2.0 OR MIT
-"""Pin built-in point and curve extents to OpenUSD 26.8."""
+"""Pin built-in point and curve extents to OpenUSD 26.11."""
 import json
 import pathlib
 from pxr import Usd, UsdGeom
 
-assert Usd.GetVersion() == (0, 26, 8)
+assert Usd.GetVersion() == (0, 26, 11)
 fixtures = pathlib.Path(__file__).resolve().parents[1] / "fixtures"
 stage = Usd.Stage.Open(str(fixtures / "point_curve_bounds.usda"))
 rows = []

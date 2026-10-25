@@ -1249,7 +1249,7 @@
    "type": "float"
   }
  },
- "openusd_version": "0.26.8",
+ "openusd_version": "0.26.11",
  "reading": [
   {
    "reopened": true,

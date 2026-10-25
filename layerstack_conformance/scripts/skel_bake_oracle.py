@@ -4,7 +4,7 @@
 
 Usage: skel_bake_oracle.py [--check]
 
-Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.8`.
+Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.11`.
 
 Opens `fixtures/skel_bake/scene.usda` and bakes it with
 `UsdSkel.BakeSkinning`, once over every SkelRoot of the stage

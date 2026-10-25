@@ -4,7 +4,7 @@
 
 Usage: edit_target_maps_oracle.py [FIXTURES [OUT]]
 
-Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.8`.
+Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.11`.
 
 `tests/conformance/edit_target_maps.rs` saves the scene it edits as
 `fixtures/edit_target_maps/scene.usda` (with `asset.usda`, which `/Ref`

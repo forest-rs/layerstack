@@ -5,7 +5,7 @@
 Usage: path_expression_oracle.py [FIXTURES [OUT]]
        path_expression_oracle.py --check [FIXTURES]
 
-Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.8`.
+Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.11`.
 
 Opens `fixtures/path_expression/scene.usda` (with its sublayer `weak.usda`
 and a reference to `asset.usda`) and writes `oracle.json` beside it:

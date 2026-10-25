@@ -1,11 +1,11 @@
 # Copyright 2026 the LayerStack Authors
 # SPDX-License-Identifier: Apache-2.0 OR MIT
-"""Pin independent prototype and caller bounds policies to OpenUSD 26.8."""
+"""Pin independent prototype and caller bounds policies to OpenUSD 26.11."""
 import json
 import pathlib
 from pxr import Usd, UsdGeom
 
-assert Usd.GetVersion() == (0, 26, 8)
+assert Usd.GetVersion() == (0, 26, 11)
 fixtures = pathlib.Path(__file__).resolve().parents[1] / "fixtures"
 stage = Usd.Stage.Open(str(fixtures / "instancer_bounds_policies.usda"))
 rows = []

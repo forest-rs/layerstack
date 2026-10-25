@@ -130,6 +130,7 @@ mod property_fidelity;
 mod property_metadata;
 mod proxy_edits;
 mod pseudo_root_edits;
+mod ray;
 mod registered_metadata_ingestion;
 mod registry_metadata;
 mod relocates;

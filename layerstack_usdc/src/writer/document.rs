@@ -291,7 +291,12 @@ fn lower_body(
 fn lower_attribute(attribute: &mut Attribute, prim: &str) -> Result<Spec, UsdcWriteError> {
     let path = alloc::format!("{prim}.{}", attribute.name);
     let type_name = core::mem::take(&mut attribute.type_name);
-    let is_timecode = type_name.strip_suffix("[]").unwrap_or(&type_name) == "timecode";
+    let scalar = type_name.strip_suffix("[]").unwrap_or(&type_name);
+    let declared = match scalar {
+        "timecode" => Declared::TimeCode,
+        "duration" => Declared::Duration,
+        _ => Declared::Other,
+    };
     let mut spec = Spec::new(path.clone(), SpecForm::Attribute)
         .with_field("custom", Value::Bool(attribute.custom))
         .with_field("typeName", Value::Token(type_name))
@@ -303,7 +308,7 @@ fn lower_attribute(attribute: &mut Attribute, prim: &str) -> Result<Spec, UsdcWr
             }),
         );
     if let Some(value) = &mut attribute.value {
-        spec = spec.with_field("default", attribute_value(is_timecode, value));
+        spec = spec.with_field("default", attribute_value(declared, value));
     }
     for entry in &mut attribute.metadata {
         spec.fields.push(metadatum(Owner::Attribute, &path, entry)?);
@@ -314,7 +319,7 @@ fn lower_attribute(attribute: &mut Attribute, prim: &str) -> Result<Spec, UsdcWr
     if let Some(samples) = &mut attribute.time_samples {
         let samples = samples
             .iter_mut()
-            .map(|(time, value)| (*time, attribute_value(is_timecode, value)))
+            .map(|(time, value)| (*time, attribute_value(declared, value)))
             .collect();
         spec = spec.with_field("timeSamples", Value::TimeSamples(samples));
     }
@@ -342,12 +347,25 @@ fn lower_attribute(attribute: &mut Attribute, prim: &str) -> Result<Spec, UsdcWr
     Ok(spec)
 }
 
-/// An attribute default or time sample: a `timecode` / `timecode[]` value is
-/// an `SdfTimeCode`; every other value keeps its own type.
-fn attribute_value(is_timecode: bool, value: &mut UsdaValue) -> Value {
-    match (is_timecode, value) {
-        (true, UsdaValue::Double(v)) => Value::TimeCode(*v),
-        (true, UsdaValue::DoubleArray(v)) => Value::TimeCodeArray(core::mem::take(v)),
+/// The declared attribute types whose values a document may hold as
+/// doubles.
+#[derive(Clone, Copy)]
+enum Declared {
+    TimeCode,
+    Duration,
+    Other,
+}
+
+/// An attribute default or time sample: a double of a `timecode` /
+/// `timecode[]` attribute is an `SdfTimeCode`, of a `duration` /
+/// `duration[]` attribute a `GfDuration`; every other value keeps its own
+/// type.
+fn attribute_value(declared: Declared, value: &mut UsdaValue) -> Value {
+    match (declared, value) {
+        (Declared::TimeCode, UsdaValue::Double(v)) => Value::TimeCode(*v),
+        (Declared::TimeCode, UsdaValue::DoubleArray(v)) => Value::TimeCodeArray(core::mem::take(v)),
+        (Declared::Duration, UsdaValue::Double(v)) => Value::Duration(*v),
+        (Declared::Duration, UsdaValue::DoubleArray(v)) => Value::DurationArray(core::mem::take(v)),
         (_, v) => natural(v),
     }
 }
@@ -421,6 +439,7 @@ fn natural(value: &mut UsdaValue) -> Value {
         U::Float(v) => Value::Float(*v),
         U::Double(v) => Value::Double(*v),
         U::TimeCode(v) => Value::TimeCode(*v),
+        U::Duration(v) => Value::Duration(*v),
         U::String(v) => Value::String(core::mem::take(v)),
         U::Token(v) => Value::Token(core::mem::take(v)),
         U::Asset(v) => Value::Asset(core::mem::take(v)),
@@ -454,6 +473,7 @@ fn natural(value: &mut UsdaValue) -> Value {
         U::FloatArray(v) => Value::FloatArray(core::mem::take(v)),
         U::DoubleArray(v) => Value::DoubleArray(core::mem::take(v)),
         U::TimeCodeArray(v) => Value::TimeCodeArray(core::mem::take(v)),
+        U::DurationArray(v) => Value::DurationArray(core::mem::take(v)),
         U::StringArray(v) => Value::StringArray(core::mem::take(v)),
         U::TokenArray(v) => Value::TokenArray(core::mem::take(v)),
         U::AssetArray(v) => Value::AssetArray(core::mem::take(v)),

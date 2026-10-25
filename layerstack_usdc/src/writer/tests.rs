@@ -181,6 +181,7 @@ fn from_crate(ty: ValueType, is_array: bool, v: &CrateValue) -> Value {
             T::Float => Value::FloatArray(scalars!(FloatArray, Float)),
             T::Double => Value::DoubleArray(scalars!(DoubleArray, Double)),
             T::TimeCode => Value::TimeCodeArray(scalars!(TimeCodeArray, TimeCode)),
+            T::Duration => Value::DurationArray(scalars!(DurationArray, Duration)),
             T::String => Value::StringArray(strings(items)),
             T::Token => Value::TokenArray(strings(items)),
             T::AssetPath => Value::AssetArray(strings(items)),
@@ -216,6 +217,7 @@ fn from_crate(ty: ValueType, is_array: bool, v: &CrateValue) -> Value {
         (_, CrateValue::Half(x)) => Value::Half(*x),
         (_, CrateValue::Float(x)) => Value::Float(*x),
         (T::TimeCode, CrateValue::TimeCode(x)) => Value::TimeCode(*x),
+        (T::Duration, CrateValue::Duration(x)) => Value::Duration(*x),
         (_, CrateValue::Double(x)) => Value::Double(*x),
         (_, CrateValue::String(x)) => Value::String(x.clone()),
         (_, CrateValue::Token(x)) => Value::Token(x.clone()),
@@ -937,6 +939,48 @@ fn version_is_upgraded_only_for_timecodes() {
         file.value("/Root.t", "default"),
         Value::TimeCode(24.0),
         "value"
+    );
+}
+
+/// `Write(GfDuration)` (OpenUSD 26.11 `crateFile.cpp`): a `duration` value
+/// or array needs crate 0.16.0, stored out of line as a double under value
+/// type 61 like a `timecode`, and reads back as itself.
+#[test]
+fn version_is_upgraded_for_durations() {
+    for value in [
+        Value::Duration(2.5),
+        Value::DurationArray(vec![1.0, -0.0]),
+        Value::Dictionary(vec![("d".into(), Value::Duration(1.0))]),
+        Value::TimeSamples(vec![(1.0, Value::Duration(24.0))]),
+    ] {
+        let specs = layer_with(&[("d", value)]);
+        assert_eq!(
+            required_version(&specs),
+            CrateVersion::DURATIONS,
+            "duration needs 0.16.0"
+        );
+        let file = Decoded::new(write_crate(&specs).unwrap());
+        assert_eq!(file.version(), CrateVersion::DURATIONS, "header version");
+    }
+    let file = Decoded::new(write_crate(&layer_with(&[("d", Value::Duration(2.5))])).unwrap());
+    let rep = file.rep("/Root.d", "default");
+    assert_eq!(rep.value_type().unwrap(), ValueType::Duration, "type 61");
+    assert!(!rep.is_inlined(), "out of line, as a timecode");
+    assert_eq!(file.value("/Root.d", "default"), Value::Duration(2.5));
+    let durations = vec![1.0, 0.125, -0.0, f64::INFINITY];
+    let file = Decoded::new(
+        write_crate(&layer_with(&[(
+            "d",
+            Value::DurationArray(durations.clone()),
+        )]))
+        .unwrap(),
+    );
+    let Value::DurationArray(read) = file.value("/Root.d", "default") else {
+        panic!("duration[]");
+    };
+    assert_eq!(
+        read.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+        durations.iter().map(|v| v.to_bits()).collect::<Vec<_>>()
     );
 }
 

@@ -1424,6 +1424,7 @@ fn linearly_interpolatable(kind: &Value) -> bool {
             | Value::Float(_)
             | Value::Double(_)
             | Value::TimeCode(_)
+            | Value::Duration(_)
             | Value::Vec2h(_)
             | Value::Vec3h(_)
             | Value::Vec4h(_)
@@ -1529,6 +1530,7 @@ fn lerp_typed(
         Float => |a: &f32, b: &f32| lerp_f32(*a,*b,alpha),
         Double => |a: &f64, b: &f64| gf_lerp(*a,*b,alpha),
         TimeCode => |a: &f64, b: &f64| gf_lerp(*a,*b,alpha),
+        Duration => |a: &f64, b: &f64| gf_lerp(*a,*b,alpha),
         Vec2h => |a,b| lerp_halves(a,b,alpha),
         Vec3h => |a,b| lerp_halves(a,b,alpha),
         Vec4h => |a,b| lerp_halves(a,b,alpha),
@@ -1721,6 +1723,7 @@ fn lerp_element(a: &Value, b: &Value, alpha: f64) -> Option<Value> {
         (Value::Float(a), Value::Float(b)) => Value::Float(lerp_f32(*a, *b, alpha)),
         (Value::Double(a), Value::Double(b)) => Value::Double(gf_lerp(*a, *b, alpha)),
         (Value::TimeCode(a), Value::TimeCode(b)) => Value::TimeCode(gf_lerp(*a, *b, alpha)),
+        (Value::Duration(a), Value::Duration(b)) => Value::Duration(gf_lerp(*a, *b, alpha)),
         (Value::Vec2f(a), Value::Vec2f(b)) => Value::Vec2f(lerp_f32s(a, b, alpha)),
         (Value::Vec3f(a), Value::Vec3f(b)) => Value::Vec3f(lerp_f32s(a, b, alpha)),
         (Value::Vec4f(a), Value::Vec4f(b)) => Value::Vec4f(lerp_f32s(a, b, alpha)),

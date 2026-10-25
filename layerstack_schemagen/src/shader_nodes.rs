@@ -162,7 +162,7 @@ fn default_literal(
         Value::UInt(number) => format!("{number}_u32"),
         Value::Int64(number) => format!("{number}_i64"),
         Value::UInt64(number) => format!("{number}_u64"),
-        Value::TimeCode(number) => format!("{number:?}_f64"),
+        Value::TimeCode(number) | Value::Duration(number) => format!("{number:?}_f64"),
         Value::Half(bits) => format!("{:?}_f32", layerstack::half::to_f32(*bits)),
         Value::Vec2f(vector) => format!("{vector:?}"),
         Value::Vec3f(vector) => format!("{vector:?}"),
@@ -598,7 +598,7 @@ fn matrix_literal(matrix: &[f64], width: usize) -> String {
 fn finite_default(value: &Value) -> bool {
     match value {
         Value::Float(v) => v.is_finite(),
-        Value::Double(v) | Value::TimeCode(v) => v.is_finite(),
+        Value::Double(v) | Value::TimeCode(v) | Value::Duration(v) => v.is_finite(),
         Value::Half(v) => layerstack::half::to_f32(*v).is_finite(),
         Value::Vec2f(v) => v.iter().all(|v| v.is_finite()),
         Value::Vec3f(v) => v.iter().all(|v| v.is_finite()),

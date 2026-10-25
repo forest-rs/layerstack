@@ -44,9 +44,9 @@ const MAX_PAYLOAD: u64 = (1 << 48) - 1;
 fn same_metadata_value(a: &Value, b: &Value) -> bool {
     match (a, b) {
         (Value::Float(a), Value::Float(b)) => a.to_bits() == b.to_bits(),
-        (Value::Double(a), Value::Double(b)) | (Value::TimeCode(a), Value::TimeCode(b)) => {
-            a.to_bits() == b.to_bits()
-        }
+        (Value::Double(a), Value::Double(b))
+        | (Value::TimeCode(a), Value::TimeCode(b))
+        | (Value::Duration(a), Value::Duration(b)) => a.to_bits() == b.to_bits(),
         (a, b)
             if matches!(
                 a,
@@ -355,6 +355,9 @@ impl<'a> Packer<'a> {
                 None => self.blob(T::Double, 0, v.to_le_bytes(), false)?,
             },
             Value::TimeCode(v) => self.blob(T::TimeCode, 0, v.to_le_bytes(), false)?,
+            // `Write(GfDuration)` writes the double out of line, as for a
+            // `GfTimeCode` (OpenUSD 26.11 `crateFile.cpp`).
+            Value::Duration(v) => self.blob(T::Duration, 0, v.to_le_bytes(), false)?,
             Value::String(v) => {
                 site.check_text(v)?;
                 inlined(T::String, self.string(v)?)
@@ -471,6 +474,10 @@ impl<'a> Packer<'a> {
             // `GfTimeCode` arrays have no compressed form.
             Value::TimeCodeArray(v) => {
                 self.math_array(T::TimeCode, v.len(), v, f64::to_le_bytes)?
+            }
+            // Nor do `GfDuration` arrays.
+            Value::DurationArray(v) => {
+                self.math_array(T::Duration, v.len(), v, f64::to_le_bytes)?
             }
             Value::StringArray(v) => {
                 let indexes = self.text_indexes(v, site, Self::string)?;
@@ -1486,8 +1493,21 @@ fn has_timecode(value: &Value) -> bool {
     }
 }
 
+/// Whether `value` (or anything nested in it) is a `duration`.
+fn has_duration(value: &Value) -> bool {
+    match value {
+        Value::Duration(_) | Value::DurationArray(_) => true,
+        Value::ArrayEdit { literals, .. } => has_duration(literals),
+        Value::Dictionary(entries) => entries.iter().any(|(_, v)| has_duration(v)),
+        Value::UnregisteredValue(inner) => has_duration(inner),
+        Value::TimeSamples(samples) => samples.iter().any(|(_, v)| has_duration(v)),
+        _ => false,
+    }
+}
+
 /// `RequestWriteVersionUpgrade`: start from OpenUSD's default and move to
-/// the version a value needs (`Write(GfTimeCode)`, `Write(TsSpline)`).
+/// the version a value needs (`Write(GfTimeCode)`, `Write(GfDuration)`,
+/// `Write(TsSpline)`).
 pub(super) fn required_version(specs: &[Spec]) -> CrateVersion {
     let mut version = CrateVersion::NEW_FILE_DEFAULT;
     for field in specs.iter().flat_map(|s| &s.fields) {
@@ -1519,6 +1539,9 @@ pub(super) fn required_version(specs: &[Spec]) -> CrateVersion {
         if has_timecode(&field.value) {
             version = version.max(CrateVersion::TIMECODES);
         }
+        if has_duration(&field.value) {
+            version = version.max(CrateVersion::DURATIONS);
+        }
     }
     version
 }
@@ -1535,7 +1558,7 @@ fn array_len(value: &Value) -> Option<usize> {
         Value::HalfArray(v) => v.len(),
         Value::FloatArray(v) => v.len(),
         Value::DoubleArray(v) => v.len(),
-        Value::TimeCodeArray(v) => v.len(),
+        Value::TimeCodeArray(v) | Value::DurationArray(v) => v.len(),
         Value::StringArray(v) => v.len(),
         Value::TokenArray(v) => v.len(),
         Value::AssetArray(v) => v.len(),

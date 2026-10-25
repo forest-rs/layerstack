@@ -125,6 +125,19 @@ pub enum Value {
     ///
     /// Spec: §6.2.
     TimeCode(f64),
+    /// A length of time in time codes (`duration`, `GfDuration`).
+    ///
+    /// Held as a plain number: composition maps it through no layer offset,
+    /// and no arithmetic relates it to [`Value::TimeCode`]. OpenUSD 26.11
+    /// scales durations by a layer offset's scale without its offset
+    /// (`SdfLayerOffset::operator*(GfDuration)`,
+    /// `Usd_ApplyLayerOffsetToValue` in `pxr/usd/usd/valueUtils.h`) and
+    /// gives `GfTimeCode - GfTimeCode` a `GfDuration` (`pxr/base/gf/timeCode.h`);
+    /// layerstack does neither yet.
+    ///
+    /// Spec: AOUSD Core §6.2 lists no duration type; this is an OpenUSD
+    /// extension (`pxr/base/gf/duration.h`, `SdfValueTypeNames->Duration`).
+    Duration(f64),
 
     // ── Vectors (§6.3) ─────────────────────────────────────────────────
     //
@@ -279,6 +292,7 @@ impl PartialEq for Value {
             (Self::Asset(a), Self::Asset(b)) => a == b,
             (Self::PathExpression(a), Self::PathExpression(b)) => a == b,
             (Self::TimeCode(a), Self::TimeCode(b)) => a == b,
+            (Self::Duration(a), Self::Duration(b)) => a == b,
             (Self::Vec2f(a), Self::Vec2f(b)) => a == b,
             (Self::Vec3f(a), Self::Vec3f(b)) => a == b,
             (Self::Vec4f(a), Self::Vec4f(b)) => a == b,
@@ -332,7 +346,7 @@ impl fmt::Display for Value {
             Self::Token(v) => write!(f, "token({v:?})"),
             Self::Asset(v) => write!(f, "@{v}@"),
             Self::PathExpression(v) => write!(f, "pathExpression({v:?})"),
-            Self::TimeCode(v) => write!(f, "{v}"),
+            Self::TimeCode(v) | Self::Duration(v) => write!(f, "{v}"),
             // Vectors
             Self::Vec2d(v) => write!(f, "({}, {})", v[0], v[1]),
             Self::Vec3d(v) => write!(f, "({}, {}, {})", v[0], v[1], v[2]),

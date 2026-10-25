@@ -253,6 +253,19 @@ plain!(
     try_read_timecode_array_shared
 );
 plain!(
+    read_duration,
+    write_duration,
+    f64,
+    Duration,
+    read_duration_array,
+    write_duration_array,
+    borrow_duration_array,
+    read_duration_array_shared,
+    write_duration_array_owned,
+    write_duration_array_shared,
+    try_read_duration_array_shared
+);
+plain!(
     read_float2,
     write_float2,
     [f32; 2],

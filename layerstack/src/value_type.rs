@@ -148,6 +148,7 @@ value_types! {
     Float = "float", Some("float[]"), None, Float;
     Double = "double", Some("double[]"), None, Double;
     TimeCode = "timecode", Some("timecode[]"), None, TimeCode;
+    Duration = "duration", Some("duration[]"), None, Duration;
     String = "string", Some("string[]"), None, String;
     Token = "token", Some("token[]"), None, Token;
     Asset = "asset", Some("asset[]"), None, Asset;
@@ -232,6 +233,7 @@ impl ValueType {
             Self::Float => Value::Float(0.0),
             Self::Double => Value::Double(0.0),
             Self::TimeCode => Value::TimeCode(0.0),
+            Self::Duration => Value::Duration(0.0),
             Self::String => Value::String(Arc::from("")),
             Self::Token => Value::Token(TokenId::EMPTY),
             Self::Asset => Value::Asset(Arc::from("")),
@@ -273,6 +275,7 @@ impl ValueType {
             Self::Float => &Value::Float(0.0),
             Self::Double => &Value::Double(0.0),
             Self::TimeCode => &Value::TimeCode(0.0),
+            Self::Duration => &Value::Duration(0.0),
             Self::Token => &Value::Token(TokenId::EMPTY),
             Self::Int2 => &Value::Vec2i([0; 2]),
             Self::Int3 => &Value::Vec3i([0; 3]),
@@ -380,7 +383,7 @@ mod tests {
 
     #[test]
     fn names_parse_back_to_their_types() {
-        assert_eq!(ValueType::ALL.len(), 56);
+        assert_eq!(ValueType::ALL.len(), 57);
         for &ty in ValueType::ALL {
             assert_eq!(ValueType::parse(ty.name()), Some((ty, false)), "{ty}");
             if let Some(array) = ty.array_name() {

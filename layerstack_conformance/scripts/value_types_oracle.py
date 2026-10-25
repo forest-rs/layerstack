@@ -4,7 +4,7 @@
 
 Usage: value_types_oracle.py [--check] [OUT]
 
-Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.8`.
+Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.11`.
 Writes `layerstack_conformance/fixtures/value_types/oracle.json` by default,
 which `tests/conformance/value_types.rs` checks layerstack's value type table
 (`layerstack::ValueType`) against.

@@ -202,7 +202,7 @@ pub(crate) struct PreparedValue {
 pub(crate) fn numeric_width(name: &str) -> Option<usize> {
     match crate::numeric::storage_name(name) {
         "bool" | "uchar" | "int" | "uint" | "int64" | "uint64" | "half" | "float" | "double"
-        | "timecode" => Some(0),
+        | "timecode" | "duration" => Some(0),
         "int2" | "half2" | "float2" | "double2" => Some(2),
         "int3" | "half3" | "float3" | "double3" => Some(3),
         "int4" | "half4" | "float4" | "double4" | "quath" | "quatf" | "quatd" => Some(4),
@@ -468,6 +468,7 @@ enum Layout {
     Float,
     Double,
     TimeCode,
+    Duration,
     Vec2i,
     Vec3i,
     Vec4i,
@@ -501,6 +502,7 @@ impl Layout {
                 "float" => Self::Float,
                 "double" => Self::Double,
                 "timecode" => Self::TimeCode,
+                "duration" => Self::Duration,
                 _ => return None,
             }
         } else {
@@ -665,6 +667,7 @@ fn native_array(elements: &mut Elements<'_>, layout: Layout) -> Option<NativeArr
         Layout::Float => native!(Float, |c| Some(c[0].number()?.to_float())),
         Layout::Double => native!(Double, |c| Some(c[0].number()?.to_double())),
         Layout::TimeCode => native!(TimeCode, |c| Some(c[0].number()?.to_double())),
+        Layout::Duration => native!(Duration, |c| Some(c[0].number()?.to_double())),
         Layout::Vec2i => native!(Vec2i, |c| tuple::<_, 2>(c, component::int)),
         Layout::Vec3i => native!(Vec3i, |c| tuple::<_, 3>(c, component::int)),
         Layout::Vec4i => native!(Vec4i, |c| tuple::<_, 4>(c, component::int)),
@@ -697,8 +700,9 @@ fn compact_buffer(value: &mut layerstack::Value) {
         }};
     }
     compact!(
-        Bool, UChar, Int, UInt, Int64, UInt64, Half, Float, Double, TimeCode, Vec2d, Vec3d, Vec4d,
-        Vec2f, Vec3f, Vec4f, Vec2h, Vec3h, Vec4h, Vec2i, Vec3i, Vec4i, Quatd, Quatf, Quath
+        Bool, UChar, Int, UInt, Int64, UInt64, Half, Float, Double, TimeCode, Duration, Vec2d,
+        Vec3d, Vec4d, Vec2f, Vec3f, Vec4f, Vec2h, Vec3h, Vec4h, Vec2i, Vec3i, Vec4i, Quatd, Quatf,
+        Quath
     );
 }
 
@@ -770,7 +774,7 @@ mod tests {
     fn direct_numeric_arrays_match_the_ast_emitter() {
         for ty in [
             "bool", "uchar", "int", "uint", "int64", "uint64", "half", "float", "double",
-            "timecode",
+            "timecode", "duration",
         ] {
             assert_eq!(
                 compare(&format!(
@@ -848,6 +852,7 @@ mod tests {
                 "[0.1, -0, 9223372036854775808, -9223372036854775809, 1e308]",
             ),
             ("timecode", "[1, 2.5, -inf]"),
+            ("duration", "[1, -0, 2.5, -inf, nan]"),
             ("int2", "[(1, -2), (2.9, -2.9)]"),
             ("int4", "[(1, 2, 3, 4)]"),
             ("half3", "[(0.1, 1, 65519), (-0, 2, 3)]"),

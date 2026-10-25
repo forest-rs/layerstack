@@ -2100,6 +2100,9 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
                 FloatArray::TimeCode(values) => {
                     layerstack::TypedArray::TimeCode(Arc::new(values.clone()))
                 }
+                FloatArray::Duration(values) => {
+                    layerstack::TypedArray::Duration(Arc::new(values.clone()))
+                }
             }),
             DecodedField::MathArray(array) => convert_math_array(array),
             // List ops are not plain values.
@@ -2166,6 +2169,7 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
             CrateValue::Float(v) => Value::Float(*v),
             CrateValue::Double(v) => Value::Double(*v),
             CrateValue::TimeCode(v) => Value::TimeCode(*v),
+            CrateValue::Duration(v) => Value::Duration(*v),
             CrateValue::String(s) => Value::String(Arc::from(s.as_str())),
             CrateValue::Token(t) => Value::Token(self.tokens.intern(t)),
             CrateValue::AssetPath(p) => Value::Asset(Arc::from(p.as_str())),
@@ -3693,6 +3697,7 @@ fn array_edit_element_name(value_type: ValueType) -> &'static str {
         ValueType::Vec4h => "half4",
         ValueType::Vec4i => "int4",
         ValueType::TimeCode => "timecode",
+        ValueType::Duration => "duration",
         ValueType::PathExpression => "pathExpression",
         // decode_array_edit rejects these before a CrateArrayEdit is built.
         _ => unreachable!("decoded array edit has an array element type"),

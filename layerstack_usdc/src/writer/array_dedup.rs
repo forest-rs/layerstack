@@ -136,6 +136,7 @@ impl<'a> Array<'a> {
             Value::FloatArray(v) => (ValueType::Float, Components::F32(v)),
             Value::DoubleArray(v) => (ValueType::Double, Components::F64(v)),
             Value::TimeCodeArray(v) => (ValueType::TimeCode, Components::F64(v)),
+            Value::DurationArray(v) => (ValueType::Duration, Components::F64(v)),
             Value::StringArray(v) => (ValueType::String, Components::Text(v)),
             Value::TokenArray(v) => (ValueType::Token, Components::Text(v)),
             Value::AssetArray(v) => (ValueType::AssetPath, Components::Text(v)),

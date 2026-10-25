@@ -553,6 +553,7 @@ pub(crate) fn expr(value: &Value, tokens: &TokenInterner) -> Result<String, Stri
         Value::Asset(v) => format!("Value::Asset(Arc::from({:?}))", &**v),
         Value::PathExpression(v) => format!("Value::PathExpression(Arc::from({:?}))", &**v),
         Value::TimeCode(v) => format!("Value::TimeCode({})", f64_lit(*v)),
+        Value::Duration(v) => format!("Value::Duration({})", f64_lit(*v)),
         Value::Vec2d(v) => format!("Value::Vec2d({})", list(v, |x| f64_lit(*x))),
         Value::Vec3d(v) => format!("Value::Vec3d({})", list(v, |x| f64_lit(*x))),
         Value::Vec4d(v) => format!("Value::Vec4d({})", list(v, |x| f64_lit(*x))),

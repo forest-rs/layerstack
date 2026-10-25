@@ -214,6 +214,7 @@ pub(crate) fn shared_array(zero: &Value) -> bool {
             | Value::Float(_)
             | Value::Double(_)
             | Value::TimeCode(_)
+            | Value::Duration(_)
             | Value::Vec2f(_)
             | Value::Vec3f(_)
             | Value::Vec4f(_)
@@ -254,6 +255,7 @@ pub(crate) fn rust_type_in(
         Value::Float(_) => ("f32", "f32", "float"),
         Value::Double(_) => ("f64", "f64", "double"),
         Value::TimeCode(_) => ("f64", "f64", "timecode"),
+        Value::Duration(_) => ("f64", "f64", "duration"),
         Value::String(_) => (arc_str.as_str(), "&str", "string"),
         Value::Asset(_) => (arc_str.as_str(), "&str", "asset"),
         Value::PathExpression(_) => (arc_str.as_str(), "&str", "path_expression"),
@@ -450,7 +452,7 @@ fn usd_text(value: &Value, tokens: &TokenInterner) -> String {
         Value::UInt64(v) => v.to_string(),
         Value::UChar(v) => v.to_string(),
         Value::Float(v) => format!("{v:?}"),
-        Value::Double(v) | Value::TimeCode(v) => format!("{v:?}"),
+        Value::Double(v) | Value::TimeCode(v) | Value::Duration(v) => format!("{v:?}"),
         Value::Half(bits) => format!("{:?}", layerstack::half::to_f32(*bits)),
         Value::String(v) | Value::Asset(v) | Value::PathExpression(v) => format!("{:?}", &**v),
         Value::Token(v) => format!("{:?}", tokens.resolve(*v)),
@@ -1973,7 +1975,11 @@ fn literal(zero: &Value, is_array: bool, k: u32) -> Result<String, String> {
         Value::UChar(_) | Value::Int(_) | Value::UInt(_) | Value::Int64(_) | Value::UInt64(_) => {
             (k + 2).to_string()
         }
-        Value::Half(_) | Value::Float(_) | Value::Double(_) | Value::TimeCode(_) => float(k),
+        Value::Half(_)
+        | Value::Float(_)
+        | Value::Double(_)
+        | Value::TimeCode(_)
+        | Value::Duration(_) => float(k),
         Value::String(_) => format!("\"text{k}\""),
         Value::Token(_) => format!("\"token{k}\""),
         Value::Asset(_) => format!("\"asset{k}.usda\""),

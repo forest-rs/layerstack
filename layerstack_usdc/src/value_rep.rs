@@ -140,6 +140,8 @@ pub enum CrateValue {
     Double(f64),
     /// A time code (`SdfTimeCode`, crate 0.9 and later).
     TimeCode(f64),
+    /// A duration (`GfDuration`, crate 0.16 and later).
+    Duration(f64),
     /// String value (resolved from STRINGS section).
     String(String),
     /// Token value (resolved from TOKENS section).
@@ -611,7 +613,11 @@ pub(crate) fn decode_field_within<'a>(
             }
             if matches!(
                 vtype,
-                ValueType::Half | ValueType::Float | ValueType::Double | ValueType::TimeCode
+                ValueType::Half
+                    | ValueType::Float
+                    | ValueType::Double
+                    | ValueType::TimeCode
+                    | ValueType::Duration
             ) {
                 return decode_float_array(rep, data, vtype, budget).map(DecodedField::FloatArray);
             }
@@ -850,9 +856,11 @@ fn decode_one(
         ValueType::UInt => decode_integer_u32(rep, data, budget),
         ValueType::Int64 => decode_integer_i64(rep, data, budget),
         ValueType::UInt64 => decode_integer_u64(rep, data, budget),
-        ValueType::Half | ValueType::Float | ValueType::Double | ValueType::TimeCode => {
-            decode_float(rep, data, vtype, budget)
-        }
+        ValueType::Half
+        | ValueType::Float
+        | ValueType::Double
+        | ValueType::TimeCode
+        | ValueType::Duration => decode_float(rep, data, vtype, budget),
         ValueType::String => decode_string(rep, data, sections, budget, mode),
         ValueType::Token => decode_token(rep, data, sections, budget, mode),
         ValueType::AssetPath => decode_asset_path(rep, data, sections, budget),
@@ -1186,6 +1194,8 @@ fn decode_float(
         }),
         ValueType::Double => (8, CrateValue::Double),
         ValueType::TimeCode => (8, CrateValue::TimeCode),
+        // `Read<GfDuration>` reads a double (OpenUSD 26.11 `crateFile.cpp`).
+        ValueType::Duration => (8, CrateValue::Duration),
         _ => {
             return Err(UsdcError::Inconsistent {
                 message: "not a floating-point type",
@@ -1234,6 +1244,7 @@ pub(crate) enum FloatArray {
     Float(Vec<f32>),
     Double(Vec<f64>),
     TimeCode(Vec<f64>),
+    Duration(Vec<f64>),
 }
 
 #[allow(
@@ -1266,7 +1277,7 @@ fn decode_float_array(
             |v| v as f64 as f32,
         )
         .map(FloatArray::Float),
-        ValueType::Double | ValueType::TimeCode => {
+        ValueType::Double | ValueType::TimeCode | ValueType::Duration => {
             let values = read_float_array(
                 rep,
                 data,
@@ -1275,10 +1286,10 @@ fn decode_float_array(
                 |bytes| Ok(f64::from_le_bytes(bytes.try_into().unwrap())),
                 |v| v as f64,
             )?;
-            Ok(if vtype == ValueType::Double {
-                FloatArray::Double(values)
-            } else {
-                FloatArray::TimeCode(values)
+            Ok(match vtype {
+                ValueType::Double => FloatArray::Double(values),
+                ValueType::TimeCode => FloatArray::TimeCode(values),
+                _ => FloatArray::Duration(values),
             })
         }
         _ => unreachable!("float array types are selected by decode_field_within"),
@@ -3186,9 +3197,9 @@ mod tests {
                                     .map(|value| match value {
                                         CrateValue::Half(v) => u64::from(*v),
                                         CrateValue::Float(v) => u64::from(v.to_bits()),
-                                        CrateValue::Double(v) | CrateValue::TimeCode(v) => {
-                                            v.to_bits()
-                                        }
+                                        CrateValue::Double(v)
+                                        | CrateValue::TimeCode(v)
+                                        | CrateValue::Duration(v) => v.to_bits(),
                                         _ => panic!("floating element"),
                                     })
                                     .collect();
@@ -3202,7 +3213,9 @@ mod tests {
                                     FloatArray::Float(values) => {
                                         values.into_iter().map(|v| u64::from(v.to_bits())).collect()
                                     }
-                                    FloatArray::Double(values) | FloatArray::TimeCode(values) => {
+                                    FloatArray::Double(values)
+                                    | FloatArray::TimeCode(values)
+                                    | FloatArray::Duration(values) => {
                                         values.into_iter().map(f64::to_bits).collect()
                                     }
                                 };

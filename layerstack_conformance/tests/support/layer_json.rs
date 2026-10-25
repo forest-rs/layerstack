@@ -25,7 +25,7 @@ pub(crate) fn value(value: &Value, store: &InMemoryStore) -> Json {
         Value::UChar(v) => json!(v),
         Value::Half(bits) => json!(f64::from(half::to_f32(*bits))),
         Value::Float(v) => json!(f64::from(*v)),
-        Value::Double(v) | Value::TimeCode(v) => json!(v),
+        Value::Double(v) | Value::TimeCode(v) | Value::Duration(v) => json!(v),
         Value::Token(token) => json!(store.tokens.resolve(*token)),
         Value::String(text) | Value::Asset(text) => json!(&**text),
         Value::Vec2f(v) => floats(v.map(f64::from)),

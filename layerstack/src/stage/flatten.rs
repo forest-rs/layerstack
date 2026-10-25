@@ -314,6 +314,12 @@ struct Flattener<'a, 'r> {
     report: FlattenReport,
 }
 
+/// The instances sharing one [`InstanceKey`], in traversal order.
+struct PrototypeGroup {
+    key: InstanceKey,
+    instances: Vec<PathId>,
+}
+
 impl Flattener<'_, '_> {
     /// The flattened layer, or the refusal when a requirement is unmet.
     fn finish(self) -> Result<Flattened, FlattenError> {
@@ -499,41 +505,94 @@ impl Flattener<'_, '_> {
         }
     }
 
-    /// Groups the stage's instances by [`InstanceKey`], in traversal order,
-    /// and names a prototype for each group: `/Flattened_Prototype_N`,
-    /// skipping names the stage uses. Returns each prototype with the first
-    /// instance of its group, whose descendants it copies.
+    /// Groups the stage's instances by [`InstanceKey`] and names a prototype
+    /// for each group: `/Flattened_Prototype_N`, skipping names the stage
+    /// uses. Returns each prototype with the first instance of its group in
+    /// traversal order, whose descendants it copies.
     ///
-    /// OpenUSD: `_GenerateFlattenedPrototypePath` in `pxr/usd/usd/stage.cpp`.
+    /// The numbering is OpenUSD 26.11's with
+    /// `USD_ASSIGN_PROTOTYPES_DETERMINISTICALLY` set, the only one stable
+    /// across its runs. Its instance cache numbers `/__Prototype_N` by the
+    /// least path, in `SdfPath` order, of the prim indexes sharing each key
+    /// (`Usd_InstanceCache::ProcessChanges`, `pxr/usd/usd/instanceCache.cpp`).
+    /// An instance inside another is known by its path under the outer
+    /// prototype's source instance; OpenUSD picks that source in composition
+    /// order, so this takes the least of them, which agrees whenever the
+    /// outer key has one instance. `UsdStage::Flatten` then names a flattened prototype for
+    /// each of `GetPrototypes`, which sorts them by path, so
+    /// `/__Prototype_10` comes before `/__Prototype_2`
+    /// (`_GenerateFlattenedPrototypePath`, `pxr/usd/usd/stage.cpp`).
+    ///
+    /// Spec: AOUSD Core §11.3.3 (instances share a prototype).
     fn find_prototypes(&mut self, pseudo_root: PathId) -> Vec<(PathId, PathId)> {
-        let mut found = Vec::new();
-        let mut next = 1_usize;
         let instances: Vec<PathId> = self
             .stage
             .traverse(pseudo_root)
             .filter(|prim| self.stage.instances.contains(prim))
             .collect();
-        for instance in instances {
+        let mut groups: Vec<PrototypeGroup> = Vec::new();
+        let mut group_of: HashMap<PathId, usize> = HashMap::new();
+        let mut by_key: HashMap<InstanceKey, usize> = HashMap::new();
+        for &instance in &instances {
             let key = self.stage.instance_key(instance, self.store);
-            let prototype = if let Some(&prototype) = self.prototypes.get(&key) {
-                prototype
-            } else {
-                let prototype = loop {
-                    let name = self
-                        .store
-                        .tokens_mut()
-                        .intern(format!("Flattened_Prototype_{next}"));
-                    next += 1;
-                    let path = self.store.paths_mut().intern(Path::root().join(&[name]));
-                    if !self.stage.has_prim(path) {
-                        break path;
-                    }
-                };
-                self.prototypes.insert(key, prototype);
-                found.push((instance, prototype));
-                prototype
+            let group = *by_key.entry(key.clone()).or_insert_with(|| {
+                groups.push(PrototypeGroup {
+                    key,
+                    instances: Vec::new(),
+                });
+                groups.len() - 1
+            });
+            groups[group].instances.push(instance);
+            group_of.insert(instance, group);
+        }
+        // `/__Prototype_N` by least instance path, then `GetPrototypes`
+        // order: by that name as a path.
+        let paths = self.store.paths();
+        let tokens = self.store.tokens();
+        let least: Vec<PathId> = groups
+            .iter()
+            .map(|group| {
+                group
+                    .instances
+                    .iter()
+                    .copied()
+                    .min_by(|a, b| paths.cmp_paths(*a, *b, tokens))
+                    .expect("a group has an instance")
+            })
+            .collect();
+        let mut numbered: Vec<usize> = (0..groups.len()).collect();
+        numbered.sort_by(|&a, &b| paths.cmp_paths(least[a], least[b], tokens));
+        let mut order: Vec<(String, usize)> = numbered
+            .into_iter()
+            .enumerate()
+            .map(|(number, index)| (format!("__Prototype_{}", number + 1), index))
+            .collect();
+        order.sort();
+        let mut found = Vec::new();
+        let mut name = 1_usize;
+        let mut prototype_of_group = alloc::vec![None; groups.len()];
+        for (_, index) in order {
+            let prototype = loop {
+                let token = self
+                    .store
+                    .tokens_mut()
+                    .intern(format!("Flattened_Prototype_{name}"));
+                name += 1;
+                let path = self.store.paths_mut().intern(Path::root().join(&[token]));
+                if !self.stage.has_prim(path) {
+                    break path;
+                }
             };
+            prototype_of_group[index] = Some(prototype);
+            found.push((groups[index].instances[0], prototype));
+        }
+        for (&instance, &group) in &group_of {
+            let prototype = prototype_of_group[group].expect("every group is named");
             self.prototype_of.insert(instance, prototype);
+        }
+        for (group, prototype) in groups.into_iter().zip(prototype_of_group) {
+            self.prototypes
+                .insert(group.key, prototype.expect("every group is named"));
         }
         found
     }

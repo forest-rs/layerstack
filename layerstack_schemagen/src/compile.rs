@@ -459,7 +459,9 @@ pub struct SchemaClass {
     /// `apiSchemaAutoApplyTo`: the schemas a single-apply schema applies
     /// itself to.
     pub auto_apply_to: Vec<String>,
-    /// `apiSchemaCanOnlyApplyTo`.
+    /// `apiSchemaCanOnlyApplyTo`: the typed schemas, and the applied ones
+    /// (`Name:instance` for one instance of a multiple-apply schema), a
+    /// prim must be or have, any one of them, to take this schema.
     pub can_only_apply_to: Vec<String>,
     /// `apiSchemaAllowedInstanceNames`.
     pub allowed_instance_names: Vec<String>,

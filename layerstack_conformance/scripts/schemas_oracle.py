@@ -50,6 +50,11 @@ The sets:
   authored value and by a default block, and where applied schemas may be
   applied (`apiSchemaCanOnlyApplyTo`, `apiSchemaAllowedInstanceNames` and a
   per-instance `apiSchemaCanOnlyApplyTo`);
+- `api_targets`: `apiSchemaCanOnlyApplyTo` naming applied schemas, as
+  OpenUSD 26.11 allows: a typed or an applied schema, one instance or any
+  instance of a multiple-apply schema, a built-in and an auto-applied
+  schema, and a per-instance list (a name that is no schema is left out:
+  OpenUSD raises a coding error checking `IsA` against it);
 - `openusd`: no plugin of its own but OpenUSD's own schemas, which
   `layerstack_schemas` ships: a mesh, a sphere, a material with a shader,
   a light, a prim applying `CollectionAPI:foo` and `MaterialBindingAPI`, a
@@ -464,6 +469,152 @@ def "CycleFromOne" (
 
 def "CycleFromTwo" (
     prepend apiSchemas = ["CycleTwoAPI"]
+)
+{
+}
+''',
+    },
+    "api_targets": {
+        "schemas": [
+            ("Shape", "abstractTyped", None, []),
+            ("Tile", "concreteTyped", "Shape", []),
+            ("Panel", "concreteTyped", "Tile", []),
+            ("SensorAPI", "singleApplyAPI", None, []),
+            ("StampAPI", "singleApplyAPI", None, ["Panel"]),
+            ("PortAPI", "multipleApplyAPI", None, []),
+            ("GaugeAPI", "singleApplyAPI", None, []),
+            ("ValveAPI", "singleApplyAPI", None, []),
+            ("MeterAPI", "singleApplyAPI", None, []),
+            ("SealAPI", "singleApplyAPI", None, []),
+            ("TapAPI", "multipleApplyAPI", None, []),
+        ],
+        "auto_apply": {},
+        "instance_probes": ["inlet", "outlet", "spare", "special"],
+        "apply": {
+            # A typed schema or an applied one, any of them.
+            "GaugeAPI": {"apiSchemaCanOnlyApplyTo": ["SensorAPI", "Tile"]},
+            # One instance of a multiple-apply schema.
+            "ValveAPI": {"apiSchemaCanOnlyApplyTo": ["PortAPI:inlet"]},
+            # Any instance of it.
+            "MeterAPI": {"apiSchemaCanOnlyApplyTo": ["PortAPI"]},
+            # An auto-applied schema.
+            "SealAPI": {"apiSchemaCanOnlyApplyTo": ["StampAPI"]},
+            # A multiple-apply schema's own and per-instance requirements.
+            "TapAPI": {
+                "apiSchemaCanOnlyApplyTo": ["SensorAPI"],
+                "apiSchemaInstances": {
+                    "special": {"apiSchemaCanOnlyApplyTo": ["PortAPI:outlet", "Panel"]},
+                },
+            },
+        },
+        "generated": '''
+class "Shape"
+{
+    int sides = 3
+}
+
+class Tile "Tile"
+{
+    int sides = 3
+}
+
+class Panel "Panel" (
+    apiSchemas = ["SensorAPI"]
+)
+{
+    int sensor:rate = 1
+    int sides = 3
+}
+
+class "SensorAPI"
+{
+    int sensor:rate = 1
+}
+
+class "StampAPI"
+{
+    token stamp:mark = "none"
+}
+
+class "PortAPI"
+{
+    float port:__INSTANCE_NAME__:flow = 0
+}
+
+class "GaugeAPI"
+{
+    float gauge:reading = 0
+}
+
+class "ValveAPI"
+{
+    bool valve:open = 0
+}
+
+class "MeterAPI"
+{
+    float meter:total = 0
+}
+
+class "SealAPI"
+{
+    bool seal:intact = 1
+}
+
+class "TapAPI"
+{
+    float tap:__INSTANCE_NAME__:rate = 0
+}
+''',
+        "scene": '''#usda 1.0
+
+def "Plain"
+{
+}
+
+def "Sensed" (
+    prepend apiSchemas = ["SensorAPI"]
+)
+{
+}
+
+def Tile "Tile"
+{
+}
+
+# `SensorAPI` is built in, `StampAPI` auto-applied.
+def Panel "Panel"
+{
+}
+
+def "Inlet" (
+    prepend apiSchemas = ["PortAPI:inlet"]
+)
+{
+}
+
+def "Outlet" (
+    prepend apiSchemas = ["PortAPI:outlet"]
+)
+{
+}
+
+def "Both" (
+    prepend apiSchemas = ["PortAPI:outlet", "SensorAPI"]
+)
+{
+}
+
+# An abstract type: typeless, though `Tile` derives from it.
+def Shape "Abstract" (
+    prepend apiSchemas = ["PortAPI:spare"]
+)
+{
+}
+
+# The applied schemas come through a reference.
+def "Composed" (
+    references = </Inlet>
 )
 {
 }

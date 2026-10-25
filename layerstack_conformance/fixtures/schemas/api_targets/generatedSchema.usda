@@ -1,0 +1,62 @@
+#usda 1.0
+(
+    "Test schemas for layerstack's prim definition oracle; written as usdGenSchema writes generatedSchema.usda."
+)
+
+class "Shape"
+{
+    int sides = 3
+}
+
+class Tile "Tile"
+{
+    int sides = 3
+}
+
+class Panel "Panel" (
+    apiSchemas = ["SensorAPI"]
+)
+{
+    int sensor:rate = 1
+    int sides = 3
+}
+
+class "SensorAPI"
+{
+    int sensor:rate = 1
+}
+
+class "StampAPI"
+{
+    token stamp:mark = "none"
+}
+
+class "PortAPI"
+{
+    float port:__INSTANCE_NAME__:flow = 0
+}
+
+class "GaugeAPI"
+{
+    float gauge:reading = 0
+}
+
+class "ValveAPI"
+{
+    bool valve:open = 0
+}
+
+class "MeterAPI"
+{
+    float meter:total = 0
+}
+
+class "SealAPI"
+{
+    bool seal:intact = 1
+}
+
+class "TapAPI"
+{
+    float tap:__INSTANCE_NAME__:rate = 0
+}

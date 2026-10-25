@@ -1692,9 +1692,12 @@ impl TestTable {
                                 .map(|(_, types)| types)
                         })
                         .unwrap_or(&schema.can_only_apply_to);
-                    let host_type = match restriction.first() {
-                        None => views.get("Scope").copied(),
-                        Some(ty) => concrete(ty),
+                    // The first typed schema the restriction names: one
+                    // naming only applied schemas has no host type here.
+                    let host_type = if restriction.is_empty() {
+                        views.get("Scope").copied()
+                    } else {
+                        restriction.iter().find_map(|name| concrete(name))
                     }
                     .ok_or_else(|| format!("{}: no prim type to apply it to", view.schema))?;
                     let fallback = format!("/Fallback_{}", view.schema);

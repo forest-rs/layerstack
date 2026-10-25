@@ -25,7 +25,11 @@
 //! built-ins by type and by named instance, override properties, auto-applies
 //! to an abstract base and to an API schema, an inclusion cycle, invalid
 //! `apiSchemas` entries, and fallbacks shadowed by authored values and
-//! blocks.
+//! blocks. The `api_targets` set covers OpenUSD 26.11's
+//! `apiSchemaCanOnlyApplyTo` naming applied schemas as well as typed ones:
+//! one instance or any instance of a multiple-apply schema, built-in and
+//! auto-applied schemas, applied schemas reached through a reference, and a
+//! per-instance list.
 //!
 //! The `openusd` set has no plugin: its scene (a mesh, a sphere, a material
 //! with a shader, a light, and a prim applying `CollectionAPI:foo` and
@@ -53,11 +57,12 @@ use layerstack_conformance::{usda_real::load_entry_usda, workspace_root};
 use serde::Deserialize;
 use serde_json::{Value as Json, json};
 
-const SETS: [&str; 5] = [
+const SETS: [&str; 6] = [
     "typed_and_applied",
     "inclusions",
     "fallback_order",
     "coverage",
+    "api_targets",
     "openusd",
 ];
 

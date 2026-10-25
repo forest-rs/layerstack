@@ -393,9 +393,11 @@ pub(crate) fn read(pxr: &Path, source: &Path) -> Result<Model, String> {
         for schema in &domain.schemas {
             named.extend(schema.parent.as_deref());
             named.extend(schema.built_ins.iter().map(|b| schema_part(b)));
-            named.extend(schema.can_only_apply_to.iter().map(String::as_str));
+            // OpenUSD 26.11 lets these name applied schemas, a
+            // multiple-apply one with an instance.
+            named.extend(schema.can_only_apply_to.iter().map(|n| schema_part(n)));
             for (_, types) in &schema.instance_can_only_apply_to {
-                named.extend(types.iter().map(String::as_str));
+                named.extend(types.iter().map(|n| schema_part(n)));
             }
         }
         for (schema, target) in &domain.auto_applies {

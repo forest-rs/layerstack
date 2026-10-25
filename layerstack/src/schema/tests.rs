@@ -197,8 +197,25 @@ fn additional_bases_give_c3_ancestry_but_no_properties() {
         .collect();
     assert_eq!(names, ["thing:size", "body:mass", "tag:mode"]);
     assert_eq!(applied_names(&definition, &t), ["TagAPI"]);
-    assert_eq!(registry.can_apply(Some(thing), only, None, &t), Ok(()));
-    assert!(registry.can_apply(Some(gadget), only, None, &t).is_ok());
+    assert_eq!(
+        registry.can_apply(
+            &registry.prim_definition(Some(thing), &[], &t),
+            only,
+            None,
+            &t
+        ),
+        Ok(())
+    );
+    assert!(
+        registry
+            .can_apply(
+                &registry.prim_definition(Some(gadget), &[], &t),
+                only,
+                None,
+                &t
+            )
+            .is_ok()
+    );
 
     // `Muddle` names `Body` before `Thing`, which names `Body` first: no
     // linearization, but it still is each ancestor.
@@ -777,30 +794,67 @@ fn can_apply_checks_instance_names_and_prim_types() {
         );
     let registry = builder.build(&t);
 
-    assert_eq!(registry.can_apply(Some(tile), label, None, &t), Ok(()));
     assert_eq!(
-        registry.can_apply(Some(other), label, None, &t),
-        Err(CannotApply::PrimType {
+        registry.can_apply(
+            &registry.prim_definition(Some(tile), &[], &t),
+            label,
+            None,
+            &t
+        ),
+        Ok(())
+    );
+    assert_eq!(
+        registry.can_apply(
+            &registry.prim_definition(Some(other), &[], &t),
+            label,
+            None,
+            &t
+        ),
+        Err(CannotApply::NotATarget {
             allowed: vec![shape]
         })
     );
-    assert!(registry.can_apply(None, label, None, &t).is_err());
+    assert!(
+        registry
+            .can_apply(&registry.prim_definition(None, &[], &t), label, None, &t)
+            .is_err()
+    );
     assert_eq!(
-        registry.can_apply(Some(tile), label, Some("x"), &t),
+        registry.can_apply(
+            &registry.prim_definition(Some(tile), &[], &t),
+            label,
+            Some("x"),
+            &t
+        ),
         Err(CannotApply::UnexpectedInstanceName)
     );
     assert_eq!(
-        registry.can_apply(Some(tile), slot, None, &t),
+        registry.can_apply(
+            &registry.prim_definition(Some(tile), &[], &t),
+            slot,
+            None,
+            &t
+        ),
         Err(CannotApply::MissingInstanceName)
     );
     assert_eq!(
-        registry.can_apply(Some(tile), tile, None, &t),
+        registry.can_apply(
+            &registry.prim_definition(Some(tile), &[], &t),
+            tile,
+            None,
+            &t
+        ),
         Err(CannotApply::NotAnAppliedSchema)
     );
 
     // Allowed instance names, and a per-instance type list.
     assert_eq!(
-        registry.can_apply(Some(tile), slot, Some("main"), &t),
+        registry.can_apply(
+            &registry.prim_definition(Some(tile), &[], &t),
+            slot,
+            Some("main"),
+            &t
+        ),
         Ok(())
     );
     // An empty instance list leaves the schema's in force; so does none.
@@ -821,24 +875,53 @@ fn can_apply_checks_instance_names_and_prim_types() {
             limits.can_only_apply_to(limited, Some(instance), &t),
             [tile]
         );
-        assert!(limits.can_apply(None, limited, Some(instance), &t).is_err());
+        assert!(
+            limits
+                .can_apply(
+                    &limits.prim_definition(None, &[], &t),
+                    limited,
+                    Some(instance),
+                    &t
+                )
+                .is_err()
+        );
         assert_eq!(
-            limits.can_apply(Some(tile), limited, Some(instance), &t),
+            limits.can_apply(
+                &limits.prim_definition(Some(tile), &[], &t),
+                limited,
+                Some(instance),
+                &t
+            ),
             Ok(())
         );
     }
     assert_eq!(limits.can_only_apply_to(limited, Some("open"), &t), [shape]);
     assert_eq!(
-        registry.can_apply(Some(tile), slot, Some("left"), &t),
+        registry.can_apply(
+            &registry.prim_definition(Some(tile), &[], &t),
+            slot,
+            Some("left"),
+            &t
+        ),
         Err(CannotApply::InstanceNameNotAllowed)
     );
     assert!(
         registry
-            .can_apply(Some(tile), slot, Some("right"), &t)
+            .can_apply(
+                &registry.prim_definition(Some(tile), &[], &t),
+                slot,
+                Some("right"),
+                &t
+            )
             .is_err()
     );
     assert_eq!(
-        registry.can_apply(Some(other), slot, Some("right"), &t),
+        registry.can_apply(
+            &registry.prim_definition(Some(other), &[], &t),
+            slot,
+            Some("right"),
+            &t
+        ),
         Ok(())
     );
     assert_eq!(registry.can_only_apply_to(slot, Some("right"), &t), [other]);
@@ -872,6 +955,79 @@ fn can_apply_checks_instance_names_and_prim_types() {
         );
     }
     assert!(!registry.is_allowed_instance_name(label, "free", &t));
+}
+
+/// `apiSchemaCanOnlyApplyTo` may name applied schemas, with or without an
+/// instance, as well as typed schemas; a prim matching any one name may
+/// take the schema.
+///
+/// OpenUSD 26.11: `UsdPrim::CanApplyAPI` (`_IsPrimValidApplyToTarget`).
+#[test]
+fn can_apply_accepts_a_prim_with_a_listed_applied_schema() {
+    let mut t = TokenInterner::default();
+    let [tile, panel, sensor, port, gauge, valve, meter, ghost] = [
+        "Tile",
+        "Panel",
+        "SensorAPI",
+        "PortAPI",
+        "GaugeAPI",
+        "ValveAPI",
+        "MeterAPI",
+        "GhostAPI",
+    ]
+    .map(|n| t.intern(n));
+    let [port_inlet, port_outlet] = ["PortAPI:inlet", "PortAPI:outlet"].map(|n| t.intern(n));
+    let missing = t.intern("MissingAPI");
+    let mut builder = SchemaRegistry::builder();
+    builder
+        .register(SchemaDefinition::typed(tile))
+        .register(SchemaDefinition::typed(panel).with_built_in(sensor))
+        .register(SchemaDefinition::api(sensor))
+        .register(
+            SchemaDefinition::new(port, SchemaKind::MultipleApplyApi).with_property(attr(
+                &mut t,
+                "port:__INSTANCE_NAME__:rate",
+                0,
+            )),
+        )
+        .register(
+            SchemaDefinition::api(gauge)
+                .with_can_only_apply_to(sensor)
+                .with_can_only_apply_to(tile),
+        )
+        .register(SchemaDefinition::api(valve).with_can_only_apply_to(port_inlet))
+        .register(SchemaDefinition::api(meter).with_can_only_apply_to(port))
+        .register(SchemaDefinition::api(ghost).with_can_only_apply_to(missing));
+    let registry = builder.build(&t);
+    let prim = |type_name: Option<TokenId>, applied: &[TokenId]| {
+        registry.intern_instance_names(applied, &t);
+        registry.prim_definition(type_name, applied, &t)
+    };
+    let can =
+        |definition: &PrimDefinition, schema| registry.can_apply(definition, schema, None, &t);
+
+    let plain = prim(None, &[]);
+    let sensed = prim(None, &[sensor]);
+    let inlet = prim(None, &[port_inlet]);
+    let outlet = prim(None, &[port_outlet]);
+    // By type, by an applied schema, by a built-in one.
+    assert_eq!(can(&prim(Some(tile), &[]), gauge), Ok(()));
+    assert_eq!(can(&sensed, gauge), Ok(()));
+    assert_eq!(can(&prim(Some(panel), &[]), gauge), Ok(()));
+    assert_eq!(
+        can(&plain, gauge),
+        Err(CannotApply::NotATarget {
+            allowed: vec![sensor, tile]
+        })
+    );
+    // A named instance, or any instance.
+    assert_eq!(can(&inlet, valve), Ok(()));
+    assert!(can(&outlet, valve).is_err());
+    assert_eq!(can(&inlet, meter), Ok(()));
+    assert_eq!(can(&outlet, meter), Ok(()));
+    assert!(can(&sensed, meter).is_err());
+    // A name that is no schema matches nothing.
+    assert!(can(&sensed, ghost).is_err());
 }
 
 #[test]

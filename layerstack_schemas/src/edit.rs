@@ -703,6 +703,15 @@ impl<'s> SchemaEdit<'s> {
     fn definition(&mut self, path: PathId, name: TokenId) -> Option<PropertyDefinition> {
         let registry = self.stage.schemas()?;
         let type_name = self.type_name(path);
+        let applied = self.applied_names(path);
+        registry.property_definition(type_name, &applied, name, self.store.tokens())
+    }
+
+    /// The prim's composed `apiSchemas` entries, then those this edit
+    /// applies to it.
+    ///
+    /// Spec: AOUSD Core §13.2.1.2 (`apiSchemas`).
+    fn applied_names(&self, path: PathId) -> Vec<TokenId> {
         let mut applied: Vec<TokenId> = match self
             .stage_prim(path)
             .and_then(|prim| prim.metadata("apiSchemas"))
@@ -717,7 +726,7 @@ impl<'s> SchemaEdit<'s> {
                 .filter(|(p, _)| *p == path)
                 .map(|(_, name)| *name),
         );
-        registry.property_definition(type_name, &applied, name, self.store.tokens())
+        applied
     }
 
     /// Authors `value` for the attribute `name` of `path`, at `time` or as
@@ -1619,7 +1628,9 @@ impl<'s> SchemaEdit<'s> {
     /// Applies the applied schema `schema` (with `instance` for a
     /// multiple-apply schema) to `path`, if a prim is there (see
     /// [`Self::exists`]) and the schema may be applied to it given its
-    /// type: the type this edit defines it with, else its composed type.
+    /// type (the type this edit defines it with, else its composed type) and
+    /// the applied schemas it has (its composed ones and those this edit
+    /// applies).
     ///
     /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`, both of
     /// which fail for an invalid prim; `ApplyAPI` refuses an instance proxy
@@ -1638,17 +1649,13 @@ impl<'s> SchemaEdit<'s> {
             .stage
             .schemas()
             .ok_or(CannotApply::NotAnAppliedSchema)?;
-        let stage_type = self
-            .stage_prim(path)
-            .and_then(layerstack::Prim::type_name_token);
+        let type_name = self.type_name(path);
+        let names = self.applied_names(path);
         let tokens = self.store.tokens_mut();
         let schema_token = tokens.intern(schema);
-        let type_name = match self.defined.iter().rev().find(|(p, _)| *p == path) {
-            Some((_, defined)) => Some(tokens.intern(defined)),
-            None => stage_type,
-        };
-        let tokens = self.store.tokens_mut();
-        registry.can_apply(type_name, schema_token, instance, tokens)?;
+        registry.intern_instance_names(&names, tokens);
+        let definition = registry.prim_definition(type_name, &names, tokens);
+        registry.can_apply(&definition, schema_token, instance, tokens)?;
         let applied = match instance {
             None => tokens.intern(schema),
             Some(instance) => {

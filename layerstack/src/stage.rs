@@ -4086,8 +4086,8 @@ impl Stage {
     }
 
     /// Whether the applied schema `schema`, with `instance` for a
-    /// multiple-apply schema, may be applied to `prim`, given its resolved
-    /// type name ([`SchemaRegistry::can_apply`]), and why not.
+    /// multiple-apply schema, may be applied to `prim`, given its composed
+    /// definition ([`SchemaRegistry::can_apply`]), and why not.
     ///
     /// # Errors
     ///
@@ -4110,12 +4110,9 @@ impl Stage {
             .schemas
             .as_deref()
             .ok_or(CannotApply::NotAnAppliedSchema)?;
-        let type_name = self
-            .prims
-            .get(&prim)
-            .and_then(|p| p.type_info.as_ref())
-            .and_then(|info| info.identity.mapped_type_name.or(info.identity.type_name));
-        schemas.can_apply(type_name, schema, instance, store.tokens())
+        let typeless = PrimDefinition::default();
+        let definition = self.prim_definition_ref(prim).unwrap_or(&typeless);
+        schemas.can_apply(definition, schema, instance, store.tokens())
     }
 
     /// The composed `apiSchemas` metadata of `prim`.

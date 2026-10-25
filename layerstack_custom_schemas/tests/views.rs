@@ -335,7 +335,7 @@ fn setters_author_through_a_schema_edit() {
         .set_mode(&mut edit, ChannelApiMode::Other("custom".into()));
     assert_eq!(
         ChannelApi::apply(&mut edit, spectro, "red").map(|_| ()),
-        Err(ApplyError::CannotApply(CannotApply::PrimType {
+        Err(ApplyError::CannotApply(CannotApply::NotATarget {
             allowed: vec![edit.tokens().intern("ImagingSpectrometer")]
         })),
         "only an imaging spectrometer may have a red channel"

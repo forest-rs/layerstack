@@ -133,7 +133,7 @@ fn rejected_runtime_application_adds_nothing_and_pending_definition_is_validated
     );
     assert!(matches!(
         edit.apply_api(sphere, "PipelineTintAPI", None),
-        Err(ApplyError::CannotApply(CannotApply::PrimType { .. }))
+        Err(ApplyError::CannotApply(CannotApply::NotATarget { .. }))
     ));
     assert_eq!(
         edit.apply_api(cube, "PipelineTintAPI", Some("main")),

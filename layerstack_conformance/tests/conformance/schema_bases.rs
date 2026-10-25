@@ -241,7 +241,7 @@ fn multiple_bases_answer_as_openusd_does() {
         check("IsA", format!("{sorted:?}"), format!("{:?}", recorded.is_a));
         for (api, allowed) in &recorded.can_apply {
             let ours = registry
-                .can_apply(prim.type_name(), tokens.intern(api), None, tokens)
+                .can_apply(&prim, tokens.intern(api), None, tokens)
                 .is_ok();
             check(
                 &format!("CanApplyAPI({api})"),

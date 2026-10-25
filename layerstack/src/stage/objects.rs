@@ -371,8 +371,8 @@ impl<'a> Prim<'a> {
         Some(&self.index.type_info.as_ref()?.definition)
     }
     /// Whether the applied schema `schema`, with `instance` for a
-    /// multiple-apply schema, may be applied to the prim, given its type,
-    /// and why not.
+    /// multiple-apply schema, may be applied to the prim, given its type and
+    /// the applied schemas it has, and why not.
     ///
     /// # Errors
     ///

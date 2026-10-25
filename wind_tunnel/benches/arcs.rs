@@ -15,8 +15,8 @@ extern crate alloc;
 
 use criterion::{BatchSize, BenchmarkId, Criterion, criterion_group, criterion_main};
 use layerstack::{
-    InMemoryStore, Layer, LayerId, LiveStage, PrimSpec, Reference, Stage, StageOptions, Value,
-    VariantSetSpec, VariantSpec,
+    InMemoryStore, Layer, LayerId, LiveStage, PrimSpec, Reference, Stage, StageOptions,
+    SublayerEntry, Value, VariantSetSpec, VariantSpec,
 };
 
 /// Builds a store whose root layer (`LayerId(1)`) holds `n` trees under
@@ -259,11 +259,62 @@ fn bench_subroot_references(c: &mut Criterion) {
     group.finish();
 }
 
+/// `/Hub` referencing `n` prims of an asset layer (`LayerId(3)`), each
+/// arc authored in the root layer's sublayer (`LayerId(2)`) and, when
+/// `restated`, every third again in the root layer (`LayerId(1)`): the
+/// composition finds the strongest layer authoring each arc.
+fn build_site_references(n: usize, restated: bool) -> InMemoryStore {
+    let mut store = InMemoryStore::default();
+    let hub = store.path("/Hub");
+    let mut asset = Layer::new(LayerId(3));
+    let mut weak = PrimSpec::def();
+    let mut strong = PrimSpec::def();
+    for i in 0..n {
+        let target = store.path(&format!("/Target{i}"));
+        asset.insert_prim(target, PrimSpec::def());
+        weak = weak.with_reference(Reference::new(LayerId(3), target));
+        if restated && i % 3 == 0 {
+            strong = strong.with_reference(Reference::new(LayerId(3), target));
+        }
+    }
+    store.insert_layer(asset);
+    let mut sublayer = Layer::new(LayerId(2));
+    sublayer.insert_prim(hub, weak);
+    store.insert_layer(sublayer);
+    let mut root = Layer::new(LayerId(1));
+    root.sublayers_mut().push(SublayerEntry::new(LayerId(2)));
+    root.insert_prim(hub, strong);
+    store.insert_layer(root);
+    store
+}
+
+/// One prim with `n` references, authored in one layer of the stage's
+/// layer stack (`one_layer`) or restated in a stronger one too
+/// (`restated`): composing the site's arcs, and the strongest layer
+/// authoring each, should cost time linear in them, not quadratic.
+fn bench_site_references(c: &mut Criterion) {
+    let mut group = c.benchmark_group("site_references");
+    for restated in [false, true] {
+        let name = if restated { "restated" } else { "one_layer" };
+        for n in [1, 3, 64, 1024, 4096] {
+            group.bench_function(BenchmarkId::new(name, n), |b| {
+                b.iter_batched(
+                    || build_site_references(n, restated),
+                    |mut store| Stage::compose(&mut store, LayerId(1), StageOptions::default()),
+                    BatchSize::LargeInput,
+                );
+            });
+        }
+    }
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_arcs,
     bench_arc_edits,
     bench_arc_payloads,
-    bench_subroot_references
+    bench_subroot_references,
+    bench_site_references
 );
 criterion_main!(benches);

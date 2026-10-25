@@ -110,7 +110,7 @@ fn sparse_samples_union_grids_but_dense_regions_and_blocks_mask_weaker_times() {
     }
 }
 #[test]
-fn sparse_edits_stop_at_intermediate_dense_sources_and_single_samples_are_constant() {
+fn sparse_edits_stop_at_intermediate_dense_sources() {
     for (middle, sparse, times, varying) in [
         (
             "float3[] translations = [(0,0,0),(0,0,0)]",
@@ -118,11 +118,14 @@ fn sparse_edits_stop_at_intermediate_dense_sources_and_single_samples_are_consta
             vec![1., 3.],
             true,
         ),
+        // A single array edit sample might vary, as usd-core 26.11's
+        // `JointTransformsMightBeTimeVarying` answers: OpenUSD asks whether
+        // a lone sample's type composes over weaker values.
         (
             "float3[] translations.timeSamples = {2: [(0,0,0),(0,0,0)]}",
             "float3[] translations.timeSamples = {0: edit [write (5,0,0) to [0]]}",
             vec![0., 2.],
-            false,
+            true,
         ),
     ] {
         let source = format!(

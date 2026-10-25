@@ -1447,7 +1447,10 @@ impl Stage {
     /// varying even when its values agree. Dense defaults and blocks mask weaker
     /// animation. Several contributing single-sample sources remain constant
     /// across numeric times, even when their combined sample grid has many knots.
-    /// Numeric values may still differ from the default-time value.
+    /// Numeric values may still differ from the default-time value. When the
+    /// strongest value is a sparse default composing over weaker sources, the
+    /// answer is [`Self::property_value_source_might_be_time_varying`]'s, as
+    /// OpenUSD's is: `true` over a single weaker time sample.
     #[must_use]
     pub(crate) fn property_might_be_time_varying(&self, prim: PathId, field: TokenId) -> bool {
         self.property_time_info(prim, field).1
@@ -1537,6 +1540,8 @@ impl Stage {
 
     // AOUSD Core §12.3.2: variability belongs to each contributing series;
     // merging differently timed single samples cannot create animation.
+    // OpenUSD still answers from the strongest source alone where it is a
+    // sparse default or a single sample that composes (`Strongest`).
     fn property_time_info(&self, prim: PathId, field: TokenId) -> (Vec<f64>, bool) {
         let Some(index) = self.prims.get(&prim) else {
             return (Vec::new(), false);
@@ -1566,7 +1571,31 @@ impl Stage {
         let mut times = Vec::new();
         let mut varying = false;
         let mut masking: Vec<Vec<(f64, bool)>> = Vec::new();
+        // OpenUSD answers from the strongest opinion offering a value, its
+        // resolve info source (`_ValueMightBeTimeVaryingFromResolveInfo`,
+        // `pxr/usd/usd/stage.cpp`): for a default, whether the source might
+        // vary, which a sparse default over a single weaker sample does; for
+        // a single time sample, whether its value's type composes over
+        // weaker values (`VtValueTypeCanComposeOver`).
+        let mut strongest = None;
         for (op, clip) in tagged {
+            let value = op.value();
+            if strongest.is_none() {
+                strongest = match (clip, value.time_samples(), value.spline()) {
+                    (Some(_), _, _) | (None, None, Some(_)) => Some(Strongest::Other),
+                    (None, Some(samples), _) => Some(match samples {
+                        [(_, sample)] if shows_weaker_samples(sample) => Strongest::ComposingSample,
+                        _ => Strongest::Other,
+                    }),
+                    (None, None, None) => value.default_value().map(|value| {
+                        if shows_weaker_samples(value) {
+                            Strongest::SparseDefault
+                        } else {
+                            Strongest::Other
+                        }
+                    }),
+                };
+            }
             let grid: Vec<_> = if let Some(entry) = clip {
                 self.clips.sample_kinds_for(prim, field, entry)
             } else if let Some(samples) = op.value().time_samples() {
@@ -1622,6 +1651,13 @@ impl Stage {
         }
         times.sort_by(f64::total_cmp);
         times.dedup_by(|a, b| *a == *b);
+        match strongest {
+            Some(Strongest::SparseDefault) => {
+                varying = self.property_value_source_might_be_time_varying(prim, field);
+            }
+            Some(Strongest::ComposingSample) => varying = true,
+            Some(Strongest::Other) | None => {}
+        }
         (times, varying)
     }
 
@@ -4350,6 +4386,17 @@ pub(crate) fn materialize_selected(value: &mut Value) -> Result<(), crate::Array
     Ok(())
 }
 
+/// What the strongest property opinion offering a value is, for
+/// [`Stage::property_might_be_time_varying`].
+enum Strongest {
+    /// A default that composes over weaker sources.
+    SparseDefault,
+    /// A single time sample whose value composes over weaker sources.
+    ComposingSample,
+    /// Anything else: dense defaults, several samples, splines and clips.
+    Other,
+}
+
 /// Whether a sample or default holding `value` lets weaker samples show
 /// through in the composed sample grid: a sparse array edit, or a path
 /// expression, whose type composes over a weaker one even without a `%_`
@@ -5085,6 +5132,36 @@ mod tests {
         let dense = PropertySpec::typed_attribute(ty).with_default(Value::Double(4.0));
         let (stage, prim, field) = property_stack_fixture(vec![dense, sample]);
         assert!(!stage.property_value_source_might_be_time_varying(prim, field));
+    }
+
+    /// A sparse default over a single weaker time sample might vary: OpenUSD
+    /// resolves its source as the default and asks whether the source might
+    /// vary, though every numeric time reads the same. A single sample of a
+    /// type that composes might vary too, as OpenUSD asks its type
+    /// (`_ValueMightBeTimeVaryingFromResolveInfo`, `pxr/usd/usd/stage.cpp`).
+    ///
+    /// Spec: AOUSD Core §12.3.2.
+    #[test]
+    fn sparse_defaults_and_composing_samples_might_vary() {
+        let ty = PropertyType::parse("pathExpression").unwrap();
+        let expression = |text: &str| Value::PathExpression(text.into());
+        let weak = PropertySpec::typed_attribute(ty.clone())
+            .with_time_samples(vec![(1.0, expression("/Weak"))]);
+        let sparse =
+            PropertySpec::typed_attribute(ty.clone()).with_default(expression("%_ /Other"));
+        let (stage, prim, field) = property_stack_fixture(vec![sparse, weak.clone()]);
+        assert!(stage.property_might_be_time_varying(prim, field));
+        assert_eq!(stage.property_sample_times(prim, field), vec![1.0]);
+        let sample = PropertySpec::typed_attribute(ty)
+            .with_time_samples(vec![(1.0, expression("%_ /Other"))]);
+        let (stage, prim, field) = property_stack_fixture(vec![sample.clone(), weak]);
+        assert!(stage.property_might_be_time_varying(prim, field));
+        let (stage, prim, field) = property_stack_fixture(vec![sample]);
+        assert!(stage.property_might_be_time_varying(prim, field));
+        let dense = PropertySpec::typed_attribute(PropertyType::parse("double").unwrap())
+            .with_time_samples(vec![(1.0, Value::Double(2.0))]);
+        let (stage, prim, field) = property_stack_fixture(vec![dense]);
+        assert!(!stage.property_might_be_time_varying(prim, field));
     }
 
     /// A path expression's type composes over a weaker one, so the sample

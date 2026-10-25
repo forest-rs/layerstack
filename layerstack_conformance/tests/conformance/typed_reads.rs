@@ -5,7 +5,7 @@
 
 use std::sync::Arc;
 
-use layerstack::{LayerId, Stage, StageOptions, Time, Value};
+use layerstack::{LayerId, Stage, StageOptions, Time, TimeSamples, Value};
 use layerstack_conformance::{
     usda_real::{LoadedStage, load_entry_usda},
     workspace_root,
@@ -96,7 +96,7 @@ fn fixture() -> (LoadedStage, Stage, LayerId) {
             .unwrap()
             .property_mut(property)
             .unwrap()
-            .time_samples = Some(samples.into());
+            .time_samples = samples.into();
     }
     for (path, default, samples) in [
         ("/MisdeclaredNumeric.value", Value::TimeCode(2.0), None),
@@ -117,7 +117,7 @@ fn fixture() -> (LoadedStage, Stage, LayerId) {
             .property_mut(property)
             .unwrap();
         spec.default = Some(default);
-        spec.time_samples = samples.map(Into::into);
+        spec.time_samples = samples.map_or_else(TimeSamples::none, Into::into);
     }
     for (layer, path, name) in [
         (loaded.root_layer, "/SparseMisdeclaredEdit.value", "double"),
@@ -149,7 +149,7 @@ fn fixture() -> (LoadedStage, Stage, LayerId) {
         .unwrap()
         .property_mut(upper)
         .unwrap();
-    spec.time_samples.as_mut().unwrap().make_mut()[1].1 = wrong;
+    spec.time_samples.get_mut().unwrap()[1].1 = wrong;
     let schemas = layerstack_schemas::openusd(&loaded.store.tokens);
     let stage = Stage::compose(
         &mut loaded.store,
@@ -488,7 +488,10 @@ fn empty_sample_maps_preserve_default_sources_when_flattened() {
     ] {
         let property = loaded.store.property_path(name);
         let spec = flat.layer.property(property).unwrap();
-        assert!(spec.time_samples.is_none(), "{name}: no sampled source");
+        assert!(
+            !spec.time_samples.is_authored(),
+            "{name}: no sampled source"
+        );
         assert_eq!(
             convert(spec.default.as_ref().unwrap(), "float[]"),
             Some(json!(expected))

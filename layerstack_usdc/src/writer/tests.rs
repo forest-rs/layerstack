@@ -1328,6 +1328,76 @@ fn variant_specs_round_trip() {
 
 /// Uncompressed components are stored verbatim, not converted through f64.
 /// AOUSD Core §16.3; OpenUSD `_WriteUncompressedArray`.
+/// A set's variants read back in its `variantChildren` order, as
+/// `SdfVariantSetSpec::GetVariants` lists them, whatever order the specs
+/// come in; an authored empty sample map reads back authored and empty.
+///
+/// Spec: AOUSD Core §7.6.6 (variant set specs), §7.6.4.2.2 (`timeSamples`).
+#[test]
+fn variants_follow_variant_children_and_empty_samples_stay_authored() {
+    use layerstack::doc::LayerId;
+    use layerstack::{AssetResolveError, AssetResolver, InMemoryStore, ResolvedAsset};
+
+    struct NoAssets;
+    impl AssetResolver for NoAssets {
+        fn resolve(
+            &mut self,
+            _: &str,
+            _: Option<LayerId>,
+            _: &layerstack::TokenInterner,
+            _: &layerstack::PathInterner,
+        ) -> Result<ResolvedAsset, AssetResolveError> {
+            Err(AssetResolveError::NotFound)
+        }
+        fn resolved_path(&self, _: LayerId) -> Option<&str> {
+            None
+        }
+    }
+
+    let tokens = |names: &[&str]| Value::TokenVector(names.iter().map(|n| n.to_string()).collect());
+    let specs = vec![
+        root(),
+        Spec::new("/Root", SpecForm::Prim)
+            .with_field("specifier", Value::Specifier(Specifier::Def))
+            .with_field("variantSetChildren", tokens(&["v"]))
+            .with_field("properties", tokens(&["quiet"])),
+        Spec::new("/Root{v=}", SpecForm::VariantSet)
+            .with_field("variantChildren", tokens(&["zeta", "alpha", "mid"])),
+        Spec::new("/Root{v=alpha}", SpecForm::Variant),
+        Spec::new("/Root{v=mid}", SpecForm::Variant),
+        Spec::new("/Root{v=zeta}", SpecForm::Variant),
+        Spec::new("/Root.quiet", SpecForm::Attribute)
+            .with_field("typeName", Value::Token("float".into()))
+            .with_field("timeSamples", Value::TimeSamples(Vec::new())),
+    ];
+    let bytes = write_crate(&specs).unwrap();
+    let store = InMemoryStore::default();
+    let result = crate::read_usdc(
+        &bytes,
+        LayerId(1),
+        &store.tokens,
+        &store.paths,
+        &mut NoAssets,
+    )
+    .unwrap();
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    let root_path = layerstack::path::Path::parse_absolute("/Root", &store.tokens).unwrap();
+    let prim = &result.layer.prims()[&store.paths.lookup(&root_path).unwrap()];
+    let variants = &prim.variant_sets()[&store.tokens.intern("v")].variants;
+    let names: Vec<&str> = variants
+        .keys()
+        .map(|name| store.tokens.resolve(*name))
+        .collect();
+    assert_eq!(names, ["zeta", "alpha", "mid"]);
+    assert_eq!(
+        variants.allocation_size(),
+        3 * size_of::<(layerstack::TokenId, layerstack::VariantSpec)>(),
+        "sized by `variantChildren`"
+    );
+    let quiet = prim.property(store.tokens.intern("quiet")).unwrap();
+    assert_eq!(quiet.time_samples.get(), Some(&[][..]));
+}
+
 #[test]
 fn uncompressed_math_arrays_preserve_component_bits() {
     let f32_bits = [0x8000_0000_u32, 0x7fc0_0123, 0x0000_0001];

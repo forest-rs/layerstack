@@ -641,7 +641,7 @@ impl Catalog {
             for (_, clip) in set.clips.iter().flatten() {
                 if let Some(props) = clip.at(clip_path) {
                     for (&name, spec) in props {
-                        let samples = spec.time_samples.as_ref().is_some_and(|s| !s.is_empty());
+                        let samples = spec.time_samples.get().is_some_and(|s| !s.is_empty());
                         if !samples && spec.spline.is_none() {
                             continue;
                         }
@@ -670,7 +670,7 @@ impl Catalog {
             {
                 continue;
             }
-            let spline_mode = manifest.spline.is_some() && manifest.time_samples.is_none();
+            let spline_mode = manifest.spline.is_some() && !manifest.time_samples.is_authored();
             let clips: Vec<Option<Arc<PropertySpec>>> = set
                 .clips
                 .iter()
@@ -685,12 +685,7 @@ impl Catalog {
             let has_sparse_samples = clips
                 .iter()
                 .flatten()
-                .flat_map(|property| {
-                    property
-                        .time_samples
-                        .iter()
-                        .flat_map(|samples| samples.iter())
-                })
+                .flat_map(|property| property.time_samples.get().into_iter().flatten())
                 .any(|(_, value)| value.array_edit_ref().is_some())
                 || manifest
                     .default
@@ -705,7 +700,7 @@ impl Catalog {
                         if spline_mode {
                             p.spline.is_some()
                         } else {
-                            p.time_samples.as_ref().is_some_and(|s| !s.is_empty())
+                            p.time_samples.get().is_some_and(|s| !s.is_empty())
                         }
                     }) {
                         layer.as_ref().map(|(id, _)| *id)
@@ -735,7 +730,7 @@ impl Catalog {
                 // The manifest clip has identity time mapping. Its exact
                 // authored activation blocks are stage times, independent of
                 // the metadata anchor offset (usd/clip.cpp::IsBlocked).
-                let blocked = if let Some(samples) = &manifest.time_samples {
+                let blocked = if let Some(samples) = manifest.time_samples.get() {
                     samples
                         .iter()
                         .filter_map(|(time, value)| {
@@ -903,7 +898,7 @@ impl Catalog {
             }
             let mut spec = PropertySpec::attribute();
             spec.type_name = entry.property_type.clone();
-            spec.time_samples = Some(samples.into());
+            spec.time_samples = samples.into();
             out.push(FlattenClip {
                 opinion: Opinion {
                     key: entry.key.clone(),
@@ -1052,7 +1047,7 @@ fn project_opinion(
             .collect::<Vec<_>>();
         let mut spec = PropertySpec::attribute();
         spec.type_name = entry.property_type.clone();
-        spec.time_samples = Some(samples.into());
+        spec.time_samples = samples.into();
         return Opinion {
             key: entry.key.clone(),
             field,
@@ -1066,7 +1061,7 @@ fn project_opinion(
         .unwrap_or(Value::Blocked);
     let mut spec = PropertySpec::attribute();
     spec.type_name = entry.property_type.clone();
-    spec.time_samples = Some(alloc::vec![(time, value)].into());
+    spec.time_samples = alloc::vec![(time, value)].into();
     Opinion {
         key: entry.key.clone(),
         field,
@@ -1359,7 +1354,7 @@ mod tests {
         let annotation = manifest.spline.as_ref().unwrap();
         assert_eq!(annotation.data_type, SplineDataType::Float);
         assert!(annotation.knots.is_empty());
-        assert!(manifest.default.is_none() && manifest.time_samples.is_none());
+        assert!(manifest.default.is_none() && !manifest.time_samples.is_authored());
         assert!(Arc::ptr_eq(&source, &shared_source));
         assert_eq!(source.spline.as_ref().unwrap().knots.len(), 1);
         assert!(auto_manifest_declaration(&source, true).spline.is_none());
@@ -1397,7 +1392,7 @@ mod tests {
         for (id, time) in [(LayerId(2), 0.), (LayerId(3), 2.)] {
             let mut layer = Layer::new(id);
             let mut property = PropertySpec::attribute();
-            property.time_samples = Some(vec![(time, Value::Double(time * 10.))].into());
+            property.time_samples = vec![(time, Value::Double(time * 10.))].into();
             layer
                 .prims
                 .insert(clip_path, PrimSpec::def().with_property(x, property));
@@ -1426,7 +1421,7 @@ mod tests {
         };
         let prepared = |name: &str, layer, times: Vec<(f64, Value)>| {
             let mut raw = PropertySpec::attribute();
-            raw.time_samples = Some(times.into());
+            raw.time_samples = times.into();
             ClipProperty {
                 owner: prim,
                 set_name: Arc::from(name),
@@ -1524,7 +1519,7 @@ mod tests {
         store.insert_layer(weaker);
         let mut clip = store.layer(LayerId(2)).unwrap().clone();
         let mut samples = PropertySpec::attribute();
-        samples.time_samples = Some(vec![(0., Value::Double(41.))].into());
+        samples.time_samples = vec![(0., Value::Double(41.))].into();
         clip.prims.insert(
             clip_child.prim_path(),
             PrimSpec::def().with_property(field, samples),

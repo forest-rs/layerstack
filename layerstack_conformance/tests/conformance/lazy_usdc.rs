@@ -141,7 +141,7 @@ fn retained_defaults_and_selected_endpoints_share_one_cache() {
         .prims()
         .values()
         .flat_map(|prim| &prim.properties)
-        .find_map(|property| property.spec.time_samples.as_ref())
+        .find_map(|property| property.spec.time_samples.get())
         .unwrap()
         .last()
         .unwrap();

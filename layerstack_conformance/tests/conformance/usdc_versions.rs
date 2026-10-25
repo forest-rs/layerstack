@@ -551,7 +551,10 @@ fn array_edits_decode_to_the_authored_instructions() {
     }
 
     // Time samples hold edits too.
-    match authored("array_edits_strong.usdc", "/BasicsSamples", "attr").time_samples {
+    match authored("array_edits_strong.usdc", "/BasicsSamples", "attr")
+        .time_samples
+        .into_vec()
+    {
         Some(samples) => {
             assert_eq!(samples.len(), 2);
             assert!(

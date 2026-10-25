@@ -41,7 +41,7 @@ use crate::{
 /// Authored animation slots, kept separate from declaration and metadata guards.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct AnimationState {
-    pub(crate) samples: Option<crate::SharedVec<crate::TimeSample>>,
+    pub(crate) samples: crate::TimeSamples,
     pub(crate) spline: Option<Box<crate::SplineData>>,
 }
 impl Same for AnimationState {
@@ -1376,10 +1376,13 @@ fn apply_op(
             let id = at.layer();
             if let Some(ty) = &spec.type_name {
                 check_registered(&path, ty)?;
-                let values = spec
-                    .default
-                    .iter()
-                    .chain(spec.time_samples.iter().flatten().map(|(_, value)| value));
+                let values = spec.default.iter().chain(
+                    spec.time_samples
+                        .get()
+                        .into_iter()
+                        .flatten()
+                        .map(|(_, value)| value),
+                );
                 for value in values {
                     check_type(&path, ty, value)?;
                 }
@@ -1432,7 +1435,7 @@ fn apply_op(
             let id = at.layer();
             let attr =
                 attribute_at(store, id, &loc, name, &path)?.expect("set_value ensured attribute");
-            if attr.time_samples.is_some() || attr.spline.is_some() {
+            if attr.time_samples.is_authored() || attr.spline.is_some() {
                 journal.run(
                     store,
                     Raw::Animation {
@@ -1495,7 +1498,7 @@ fn apply_op(
             let id = at.layer();
             let time = at.layer_time(*time);
             let has_sample = attribute_at(store, id, &loc, name, &path)?
-                .and_then(|attr| attr.time_samples.as_deref())
+                .and_then(|attr| attr.time_samples.get())
                 .is_some_and(|samples| samples.iter().any(|(t, _)| t.total_cmp(&time).is_eq()));
             if !has_sample {
                 return Ok(());
@@ -1781,7 +1784,7 @@ fn set_value(
     spec.variability = declared.map_or(Variability::Varying, |(_, variability)| variability);
     match time {
         None => spec.default = Some(value.clone()),
-        Some(time) => spec.time_samples = Some(alloc::vec![(time, value.clone())].into()),
+        Some(time) => spec.time_samples = alloc::vec![(time, value.clone())].into(),
     }
     let index = properties_at(store, id, &loc)?.len();
     journal.run(
@@ -2689,15 +2692,15 @@ fn apply_raw(store: &mut dyn LayerStore, step: &Raw) -> Result<Raw, Rejection> {
 /// sample value and the `keep_empty` that undoes it; `None` when removing
 /// a sample that is not there.
 fn set_sample(
-    samples: &mut Option<crate::SharedVec<(f64, Value)>>,
+    samples: &mut crate::TimeSamples,
     time: f64,
     value: Option<Value>,
     keep_empty: bool,
 ) -> Option<(Option<Value>, bool)> {
-    let had_samples = samples.is_some();
+    let had_samples = samples.is_authored();
     match value {
         Some(value) => {
-            let list = samples.get_or_insert_with(crate::SharedVec::new).make_mut();
+            let list = samples.make_mut();
             match list.binary_search_by(|(t, _)| t.total_cmp(&time)) {
                 Ok(index) => Some((Some(core::mem::replace(&mut list[index].1, value)), true)),
                 Err(index) => {
@@ -2707,11 +2710,14 @@ fn set_sample(
             }
         }
         None => {
-            let list = samples.as_mut()?;
-            let index = list.binary_search_by(|(t, _)| t.total_cmp(&time)).ok()?;
-            let (_, old) = list.make_mut().remove(index);
+            let index = samples
+                .get()?
+                .binary_search_by(|(t, _)| t.total_cmp(&time))
+                .ok()?;
+            let list = samples.get_mut()?;
+            let (_, old) = list.remove(index);
             if list.is_empty() && !keep_empty {
-                *samples = None;
+                *samples = crate::TimeSamples::none();
             }
             Some((Some(old), false))
         }

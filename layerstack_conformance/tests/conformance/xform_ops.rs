@@ -346,7 +346,8 @@ fn authored_ops(store: &InMemoryStore, path: PathId) -> Json {
             } else if name.starts_with("xformOp:") {
                 let samples: serde_json::Map<String, Json> = spec
                     .time_samples
-                    .iter()
+                    .get()
+                    .into_iter()
                     .flatten()
                     .map(|(t, v)| (format!("{t:?}"), canon(v, tokens)))
                     .collect();

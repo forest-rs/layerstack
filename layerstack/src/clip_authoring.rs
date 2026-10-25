@@ -13,7 +13,8 @@
 use crate::stitch::{self, StitchError, StitchReport};
 use crate::{
     FieldEntry, FieldValue, Layer, LayerId, LayerOffset, PathId, PathInterner, PrimSpec,
-    PropertyKind, PropertyPath, PropertySpec, SublayerEntry, TokenInterner, Value, VariantSets,
+    PropertyKind, PropertyPath, PropertySpec, SublayerEntry, TimeSamples, TokenInterner, Value,
+    VariantSets,
 };
 use alloc::{boxed::Box, collections::BTreeMap, format, string::String, sync::Arc, vec::Vec};
 
@@ -126,7 +127,7 @@ fn animated(property: &PropertySpec) -> bool {
     property.kind == PropertyKind::Attribute
         && (property
             .time_samples
-            .as_ref()
+            .get()
             .is_some_and(|samples| !samples.is_empty())
             || property.spline.is_some())
 }
@@ -200,7 +201,7 @@ fn collect_manifest_properties(
     declarations: &mut BTreeMap<crate::SpecPath, PropertySpec>,
 ) -> Result<(), ClipAuthoringError> {
     for property in properties {
-        if let Some(samples) = &property.spec.time_samples
+        if let Some(samples) = property.spec.time_samples.get()
             && (samples.iter().any(|(time, _)| !time.is_finite())
                 || samples.windows(2).any(|p| p[0].0 >= p[1].0))
         {
@@ -220,7 +221,7 @@ fn collect_manifest_properties(
         let has_samples = property
             .spec
             .time_samples
-            .as_ref()
+            .get()
             .is_some_and(|samples| !samples.is_empty());
         if let Some(existing) = declarations.get_mut(&spec_path) {
             let previous = existing.type_name.as_ref().expect("manifest type");
@@ -229,14 +230,14 @@ fn collect_manifest_properties(
             }
             if has_samples {
                 existing.spline = None;
-                existing.time_samples = Some(Vec::new().into());
+                existing.time_samples = Vec::new().into();
             }
         } else {
             let mut declaration = PropertySpec::typed_attribute(ty);
             declaration.custom = false;
             declaration.variability = property.spec.variability;
             if has_samples {
-                declaration.time_samples = Some(Vec::new().into());
+                declaration.time_samples = Vec::new().into();
             } else {
                 declaration.spline = property
                     .spec
@@ -322,7 +323,7 @@ pub fn generate_clip_manifest_from_layers(
     }
     let mut transaction = crate::Transaction::new();
     for (at, mut property) in declarations {
-        property.time_samples = None;
+        property.time_samples = TimeSamples::none();
         transaction.create_property(crate::Address::spec(manifest_id, at), property);
     }
     let mut store = ManifestStore {
@@ -355,7 +356,7 @@ fn copy_variant_defaults(manifest: &mut VariantSets, source: &VariantSets) {
     }
 }
 fn valid_samples(property: &PropertySpec) -> Result<(), ClipAuthoringError> {
-    if let Some(samples) = &property.time_samples
+    if let Some(samples) = property.time_samples.get()
         && (samples.iter().any(|(time, _)| !time.is_finite())
             || samples.windows(2).any(|p| p[0].0 >= p[1].0))
     {
@@ -369,7 +370,7 @@ fn strip_variants(sets: &mut VariantSets) -> Result<(), ClipAuthoringError> {
             for property in &mut variant.properties {
                 let p = Arc::make_mut(&mut property.spec);
                 valid_samples(p)?;
-                p.time_samples = None;
+                p.time_samples = TimeSamples::none();
                 p.spline = None;
             }
             strip_variants(&mut variant.variant_sets)?;
@@ -387,7 +388,7 @@ fn static_layer(source: &Layer) -> Result<Layer, ClipAuthoringError> {
         for property in &mut prim.properties {
             let p = Arc::make_mut(&mut property.spec);
             valid_samples(p)?;
-            p.time_samples = None;
+            p.time_samples = TimeSamples::none();
             p.spline = None;
         }
         if let Some(rare) = prim.authored_rare_mut() {
@@ -665,7 +666,7 @@ mod tests {
             .property_mut(animated)
             .unwrap();
         attr.default = Some(Value::Float(9.));
-        attr.time_samples = Some(vec![(3., Value::Float(3.)), (4., Value::Float(4.))].into());
+        attr.time_samples = vec![(3., Value::Float(3.)), (4., Value::Float(4.))].into();
         let options = ClipBundleOptions {
             root_id: LayerId(10),
             topology_id: LayerId(11),
@@ -750,7 +751,7 @@ mod tests {
         let static_name = store.tokens.lookup("static").unwrap();
         let manifest = bundle.manifest.prims[&path].property(name).unwrap();
         assert_eq!(manifest.default, Some(Value::Float(7.)));
-        assert!(manifest.time_samples.is_none());
+        assert!(!manifest.time_samples.is_authored());
         assert!(!manifest.custom);
         assert!(bundle.manifest.prims[&path].property(static_name).is_none());
         assert_eq!(
@@ -765,6 +766,7 @@ mod tests {
                 .property(name)
                 .unwrap()
                 .time_samples
+                .get()
                 .is_none()
         );
         assert_eq!(a, before);
@@ -1005,7 +1007,7 @@ mod tests {
         let outside = store.path("/Outside");
         let attribute = store.tokens.intern("value");
         let mut property = PropertySpec::typed_attribute(PropertyType::parse("float").unwrap());
-        property.time_samples = Some(vec![(f64::NAN, Value::Float(1.))].into());
+        property.time_samples = vec![(f64::NAN, Value::Float(1.))].into();
         a.insert_prim(outside, PrimSpec::def().with_property(attribute, property));
         let source = ClipSource {
             layer: &a,
@@ -1053,7 +1055,7 @@ mod tests {
         let (mut store, path, mut a, b, options) = fixture();
         let name = store.tokens.lookup("animated").unwrap();
         let property = a.prims.get_mut(&path).unwrap().property_mut(name).unwrap();
-        property.time_samples = None;
+        property.time_samples = TimeSamples::none();
         property.spline = Some(Box::new(crate::spline::SplineData {
             pre_loop_boundary: None,
             post_loop_boundary: None,

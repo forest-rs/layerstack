@@ -327,7 +327,7 @@ fn reference_target_maps_all_camera_samples_and_matrix_together() {
             .property(name)
             .unwrap();
         assert_eq!(
-            property.time_samples.as_ref().unwrap()[0].0,
+            property.time_samples.get().unwrap()[0].0,
             2.,
             "all camera samples map through the edit target's time offset"
         );

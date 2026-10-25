@@ -680,7 +680,7 @@ impl Lowering<'_> {
                 };
                 // A blocked sample is a value block (§12.3.6), which
                 // `value` converts like any other value.
-                let time_samples = match &spec.time_samples {
+                let time_samples = match spec.time_samples.get() {
                     Some(samples) => Some(
                         samples
                             .iter()
@@ -724,7 +724,9 @@ impl Lowering<'_> {
                 })
             }
             PropertyKind::Relationship => {
-                if spec.type_name.is_some() || spec.default.is_some() || spec.time_samples.is_some()
+                if spec.type_name.is_some()
+                    || spec.default.is_some()
+                    || spec.time_samples.is_authored()
                 {
                     return invalid(path, Invalid::RelationshipValue);
                 }

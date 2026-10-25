@@ -112,7 +112,8 @@ fn main() {
                             property
                                 .spec
                                 .time_samples
-                                .iter()
+                                .get()
+                                .into_iter()
                                 .flat_map(|samples| samples.iter().map(|(_, value)| value)),
                         ) {
                             if let layerstack::Value::TypedArray(array) = value {

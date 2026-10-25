@@ -232,7 +232,7 @@ fn probe_keeps_every_authored_slot() {
     assert!(a_spec.custom);
     assert_eq!(a_spec.default, Some(Value::Float(1.0)));
     assert_eq!(
-        a_spec.time_samples.as_deref(),
+        a_spec.time_samples.get(),
         Some(&[(0.0, Value::Float(2.0)), (1.0, Value::Float(3.0))][..])
     );
     let b_spec = layer.property(b).expect("b authored");

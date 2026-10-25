@@ -2352,7 +2352,7 @@ def \"A\" {
         let a_id = paths.lookup(&a_path).unwrap();
         let spec = result.layer.prim(a_id).unwrap();
         let x_tok = tokens.intern("x");
-        if let Some(ts) = prop(&spec.properties, &x_tok).time_samples.as_ref() {
+        if let Some(ts) = prop(&spec.properties, &x_tok).time_samples.get() {
             assert_eq!(ts.len(), 2);
             assert!((ts[0].0 - 1.0).abs() < 1e-10);
             assert_eq!(ts[0].1, Value::Float(10.0));
@@ -2380,11 +2380,11 @@ def \"A\" {
         let a_id = paths.lookup(&a_path).unwrap();
         let spec = result.layer.prim(a_id).unwrap();
         let x_tok = tokens.intern("x");
-        let Some(ts) = prop(&spec.properties, &x_tok).time_samples.as_ref() else {
+        let Some(ts) = prop(&spec.properties, &x_tok).time_samples.get() else {
             panic!("expected TimeSamples");
         };
         assert_eq!(
-            ts.as_slice(),
+            ts,
             &vec![
                 (1.0, Value::Float(10.0)),
                 (2.0, Value::Blocked),
@@ -3348,7 +3348,7 @@ def \"A\" {
                 .or_else(|| {
                     property
                         .time_samples
-                        .as_ref()
+                        .get()
                         .and_then(|samples| samples.first().map(|(_, v)| v))
                 })
                 .unwrap();
@@ -3392,7 +3392,7 @@ def \"A\" {
                 (
                     String::from(tokens.resolve(entry.name)),
                     entry.spec.default.clone(),
-                    entry.spec.time_samples.as_deref().map(<[_]>::to_vec),
+                    entry.spec.time_samples.get().map(<[_]>::to_vec),
                 )
             })
             .collect();
@@ -3524,7 +3524,7 @@ def \"Root\" {
         assert!(a.custom);
         assert_eq!(a.default, Some(Value::Float(1.0)));
         assert_eq!(
-            a.time_samples.as_deref(),
+            a.time_samples.get(),
             Some(&[(0.0, Value::Float(2.0)), (1.0, Value::Blocked)][..])
         );
         let b = prop(&spec.properties, &tokens.intern("b"));

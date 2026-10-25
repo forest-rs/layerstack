@@ -115,7 +115,7 @@ impl<'a> PropertyMetadata<'a> {
                     "typeName" => p.type_name.is_some(),
                     "custom" | "variability" => true,
                     "default" => p.default.is_some(),
-                    "timeSamples" => p.time_samples.is_some(),
+                    "timeSamples" => p.time_samples.is_authored(),
                     "spline" => p.spline.is_some(),
                     "connectionPaths" => p.kind == PropertyKind::Attribute && p.targets.is_some(),
                     "targetPaths" => p.kind == PropertyKind::Relationship && p.targets.is_some(),

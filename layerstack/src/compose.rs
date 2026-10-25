@@ -1404,7 +1404,7 @@ mod property_snapshot_tests {
             first,
             &store.layers[&LayerId(1)].prims[&source].properties[0].spec
         ));
-        let samples = first.time_samples.as_ref().unwrap().as_ptr();
+        let samples = first.time_samples.get().unwrap().as_ptr();
         let metadata = first.metadata.as_ptr();
         let authored = store
             .layers
@@ -1413,15 +1413,15 @@ mod property_snapshot_tests {
             .property_mut(PropertyPath::new(source, name))
             .unwrap();
         authored.default = Some(Value::Int64(4));
-        assert_eq!(authored.time_samples.as_ref().unwrap().as_ptr(), samples);
+        assert_eq!(authored.time_samples.get().unwrap().as_ptr(), samples);
         assert_eq!(authored.metadata.as_ptr(), metadata);
         assert_eq!(
             stage.resolve_field_path(a_path).unwrap().value,
             Value::Int64(1)
         );
-        authored.time_samples.as_mut().unwrap().make_mut()[0].1 = Value::Int64(9);
+        authored.time_samples.get_mut().unwrap()[0].1 = Value::Int64(9);
         authored.set_metadata(doc, Value::string("Changed source"));
-        assert_eq!(first.time_samples.as_deref().unwrap()[0].1, Value::Int64(2));
+        assert_eq!(first.time_samples.get().unwrap()[0].1, Value::Int64(2));
         assert_eq!(
             second.metadata(doc),
             Some(&Value::string("Shared authored data").into())
@@ -1440,7 +1440,7 @@ mod property_snapshot_tests {
         );
         let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
         let before = payload(live.stage(), a_path);
-        let sample_buffer = before.time_samples.as_ref().unwrap().as_ptr();
+        let sample_buffer = before.time_samples.get().unwrap().as_ptr();
         let metadata_buffer = before.metadata.as_ptr();
         let target = EditTarget::for_layer(LayerId(1)).property(PropertyPath::new(source, name));
         let mut edit = Transaction::new();
@@ -1448,7 +1448,7 @@ mod property_snapshot_tests {
         let applied = live.apply(&mut store, &edit).unwrap();
         let after = payload(live.stage(), a_path);
         assert!(Arc::ptr_eq(after, payload(live.stage(), b_path)));
-        assert_eq!(after.time_samples.as_ref().unwrap().as_ptr(), sample_buffer);
+        assert_eq!(after.time_samples.get().unwrap().as_ptr(), sample_buffer);
         assert_eq!(after.metadata.as_ptr(), metadata_buffer);
         assert_eq!(after.default, Some(Value::Int64(5)));
         live.apply(&mut store, &applied.inverse).unwrap();
@@ -1462,21 +1462,17 @@ mod property_snapshot_tests {
             .property(PropertyPath::new(source, name))
             .unwrap();
         assert_eq!(
-            after.time_samples.as_ref().unwrap().as_ptr(),
-            authored.time_samples.as_ref().unwrap().as_ptr()
+            after.time_samples.get().unwrap().as_ptr(),
+            authored.time_samples.get().unwrap().as_ptr()
         );
         assert_eq!(after.metadata.as_ptr(), metadata_buffer);
         assert_eq!(
-            payload(&fresh, a_path).time_samples.as_deref().unwrap()[0].1,
+            payload(&fresh, a_path).time_samples.get().unwrap()[0].1,
             Value::Int64(9)
         );
         live.apply(&mut store, &applied.inverse).unwrap();
         assert_eq!(
-            payload(live.stage(), a_path)
-                .time_samples
-                .as_deref()
-                .unwrap()[0]
-                .1,
+            payload(live.stage(), a_path).time_samples.get().unwrap()[0].1,
             Value::Int64(9)
         );
     }

@@ -1074,7 +1074,7 @@ fn reroot_opinion_paths(store: &dyn LayerStore, index: &mut PrimIndex, from: Pat
                 || spec.default.as_ref().is_some_and(has_path_expression)
                 || spec
                     .time_samples
-                    .as_ref()
+                    .get()
                     .is_some_and(|samples| samples.iter().any(|(_, v)| has_path_expression(v)))
         }
         OpinionValue::Field(FieldValue::PathListOp(_)) => true,
@@ -1144,8 +1144,8 @@ fn reroot_opinion_paths(store: &dyn LayerStore, index: &mut PrimIndex, from: Pat
                 if let Some(value) = spec.default.as_mut() {
                     anchor_value_with(value, &[], &mut reroot_names);
                 }
-                if let Some(samples) = spec.time_samples.as_mut() {
-                    for (_, value) in samples.make_mut() {
+                if let Some(samples) = spec.time_samples.get_mut() {
+                    for (_, value) in samples {
                         if has_path_expression(value) {
                             anchor_value_with(value, &[], &mut reroot_names);
                         }
@@ -1706,7 +1706,7 @@ fn map_path_expressions(
     let (default, samples) = match &*value {
         crate::prim_index::OpinionValue::Field(crate::doc::FieldValue::Value(v)) => (Some(v), None),
         crate::prim_index::OpinionValue::Property(spec) => {
-            (spec.default.as_ref(), spec.time_samples.as_ref())
+            (spec.default.as_ref(), spec.time_samples.get())
         }
         crate::prim_index::OpinionValue::Field(_) => return,
     };
@@ -1749,8 +1749,8 @@ fn map_path_expressions(
             if default_changes && let Some(v) = spec.default.as_mut() {
                 anchor_value_with(v, &anchor, &mut map);
             }
-            if samples_change && let Some(samples) = spec.time_samples.as_mut() {
-                for (_, v) in samples.make_mut() {
+            if samples_change && let Some(samples) = spec.time_samples.get_mut() {
+                for (_, v) in samples {
                     if has_path_expression(v) {
                         anchor_value_with(v, &anchor, &mut map);
                     }

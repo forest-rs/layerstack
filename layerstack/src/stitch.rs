@@ -12,7 +12,7 @@
 use crate::listop::append_unique;
 use crate::{
     FieldEntry, FieldValue, HashMap, Layer, ListOp, PrimSpec, PropertyEntry, PropertySpec,
-    Specifier, TokenId, TokenInterner, Value, VariantSets, VariantSpec,
+    Specifier, TimeSamples, TokenId, TokenInterner, Value, VariantSets, VariantSpec,
 };
 use alloc::{boxed::Box, sync::Arc, vec::Vec};
 use core::hash::Hash;
@@ -150,7 +150,7 @@ fn map_missing<T: Clone>(strong: &mut HashMap<TokenId, T>, weak: &HashMap<TokenI
     }
 }
 fn validate_property(property: &PropertySpec) -> Result<(), StitchError> {
-    if let Some(samples) = &property.time_samples
+    if let Some(samples) = property.time_samples.get()
         && (samples.iter().any(|(t, _)| !t.is_finite())
             || samples.windows(2).any(|s| s[0].0 >= s[1].0))
     {
@@ -292,7 +292,7 @@ fn property(
     fill(&mut strong.spline, &weak.spline);
     for samples in [&strong.time_samples, &weak.time_samples]
         .into_iter()
-        .flatten()
+        .filter_map(TimeSamples::get)
     {
         if samples.iter().any(|(t, _)| !t.is_finite())
             || samples.windows(2).any(|s| s[0].0 >= s[1].0)
@@ -300,8 +300,8 @@ fn property(
             return Err(StitchError::InvalidTimeSamples);
         }
     }
-    if let Some(weak_samples) = &weak.time_samples {
-        let strong_samples = strong.time_samples.as_deref().unwrap_or(&[]);
+    if let Some(weak_samples) = weak.time_samples.get() {
+        let strong_samples = strong.time_samples.get().unwrap_or(&[]);
         let mut merged = Vec::with_capacity(strong_samples.len() + weak_samples.len());
         let (mut a, mut b) = (0, 0);
         while a < strong_samples.len() && b < weak_samples.len() {
@@ -318,7 +318,7 @@ fn property(
         }
         merged.extend_from_slice(&strong_samples[a..]);
         merged.extend_from_slice(&weak_samples[b..]);
-        strong.time_samples = Some(merged.into());
+        strong.time_samples = merged.into();
     }
     if let Some(weak_targets) = &weak.targets {
         strong.targets = Some(strong.targets.as_ref().map_or_else(
@@ -502,7 +502,7 @@ mod tests {
         let prop = strong.prims[&p].property(a).unwrap();
         assert_eq!(prop.default, Some(Value::Double(1.)));
         assert_eq!(
-            prop.time_samples.as_ref().unwrap().as_slice(),
+            prop.time_samples.get().unwrap(),
             &[
                 (0., Value::Double(1.)),
                 (1., Value::Double(8.)),

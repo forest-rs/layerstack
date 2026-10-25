@@ -160,7 +160,7 @@ fn render_properties(
         if let Some(value) = &spec.default {
             out.push(format!("{inner}default = {}", render_value(value, names)));
         }
-        if let Some(samples) = &spec.time_samples {
+        if let Some(samples) = spec.time_samples.get() {
             let samples: Vec<_> = samples
                 .iter()
                 .map(|(t, v)| format!("{t}: {}", render_value(v, names)))

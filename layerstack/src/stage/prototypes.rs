@@ -38,8 +38,8 @@ impl Hash for RecordBucket<'_> {
                         if let Some(value) = &spec.default {
                             hash_expression_paths(value, state);
                         }
-                        if let Some(samples) = &spec.time_samples {
-                            for (_, value) in samples.as_slice() {
+                        if let Some(samples) = spec.time_samples.get() {
+                            for (_, value) in samples {
                                 hash_expression_paths(value, state);
                             }
                         }

@@ -399,8 +399,8 @@ fn property_names_paths(entry: &PropertyEntry) -> bool {
         || spec.default.as_ref().is_some_and(value_names_paths)
         || spec
             .time_samples
-            .as_ref()
-            .is_some_and(|samples| samples.as_slice().iter().any(|(_, v)| value_names_paths(v)))
+            .get()
+            .is_some_and(|samples| samples.iter().any(|(_, v)| value_names_paths(v)))
         || fields_name_paths(&spec.metadata)
 }
 

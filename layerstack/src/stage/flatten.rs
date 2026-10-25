@@ -855,7 +855,7 @@ impl Flattener<'_, '_> {
                     {
                         if let crate::OpinionValue::Property(spec) = &mut opinion.value {
                             let spec = Arc::make_mut(spec);
-                            let mut samples = spec.time_samples.as_deref().unwrap_or(&[]).to_vec();
+                            let mut samples = spec.time_samples.get().unwrap_or(&[]).to_vec();
                             for ((_, value), anchor) in samples.iter_mut().zip(anchors) {
                                 if let Some(layer) = anchor
                                     && let Some(anchored) = self.anchor_value(value, layer)
@@ -863,7 +863,7 @@ impl Flattener<'_, '_> {
                                     *value = anchored;
                                 }
                             }
-                            spec.time_samples = Some(samples.into());
+                            spec.time_samples = samples.into();
                         }
                         animation.push(opinion);
                     }
@@ -917,10 +917,9 @@ impl Flattener<'_, '_> {
             } else if let Some(samples) =
                 composed_samples(&opinions[position..], spec.type_name.as_ref())
             {
-                spec.time_samples = Some(
-                    self.stage_samples(&path, source, samples, &finding_source)
-                        .into(),
-                );
+                spec.time_samples = self
+                    .stage_samples(&path, source, samples, &finding_source)
+                    .into();
             }
         }
 

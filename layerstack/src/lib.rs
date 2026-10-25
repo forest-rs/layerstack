@@ -277,7 +277,8 @@ pub use prim_index_graph::{NodeId, PrimIndexGraph, PrimNode};
 pub use shared_vec::SharedVec;
 
 pub use property::{
-    PropertyEntry, PropertyKind, PropertySpec, PropertyType, Time, TimeSample, Variability,
+    PropertyEntry, PropertyKind, PropertySpec, PropertyType, Time, TimeSample, TimeSamples,
+    Variability,
 };
 pub use relocates::RelocationTable;
 pub use schema::{

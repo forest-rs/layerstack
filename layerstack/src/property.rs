@@ -320,6 +320,84 @@ pub enum Variability {
 /// (AOUSD Core §12.3.6).
 pub type TimeSample = (f64, Value);
 
+/// An attribute's authored time samples, sorted by time: not authored, or
+/// authored with zero or more samples.
+///
+/// An authored empty sample map (`timeSamples = {}` in USDA) contributes no
+/// value, yet is an opinion a layer keeps and writes back; one never
+/// authored is none. Clones share the samples: [`Self::make_mut`] edits
+/// them, copying them first only when they are shared.
+///
+/// Unlike [`SharedVec`], whose empty sequence is the unauthored one, an
+/// empty vector converts to authored, empty samples here; [`Self::none`]
+/// (the default) is unauthored.
+///
+/// Spec: AOUSD Core §7.6.4.2.2 (`timeSamples`).
+#[derive(Clone, Default)]
+pub struct TimeSamples(Option<Arc<Vec<TimeSample>>>);
+
+impl TimeSamples {
+    /// No authored samples.
+    #[must_use]
+    pub const fn none() -> Self {
+        Self(None)
+    }
+
+    /// The authored samples, sorted by time: `None` when none are
+    /// authored, and an empty slice for an authored empty sample map.
+    #[inline]
+    #[must_use]
+    pub fn get(&self) -> Option<&[TimeSample]> {
+        self.0.as_deref().map(Vec::as_slice)
+    }
+
+    /// Whether samples are authored, an empty sample map included.
+    #[inline]
+    #[must_use]
+    pub fn is_authored(&self) -> bool {
+        self.0.is_some()
+    }
+
+    /// The authored samples to edit in place, copying them first when they
+    /// are shared: `None`, authoring nothing, when none are authored.
+    pub fn get_mut(&mut self) -> Option<&mut Vec<TimeSample>> {
+        self.0.as_mut().map(Arc::make_mut)
+    }
+
+    /// The samples to edit, authoring an empty sample map first when none
+    /// is authored and copying the samples first when they are shared.
+    /// Callers keep them sorted by time.
+    pub fn make_mut(&mut self) -> &mut Vec<TimeSample> {
+        Arc::make_mut(self.0.get_or_insert_with(|| Arc::new(Vec::new())))
+    }
+
+    /// The authored samples, moved out (copied when shared), or `None`.
+    #[must_use]
+    pub fn into_vec(self) -> Option<Vec<TimeSample>> {
+        self.0.map(Arc::unwrap_or_clone)
+    }
+}
+
+/// Authors `samples`, which must be sorted by time; an empty vector
+/// authors an empty sample map.
+impl From<Vec<TimeSample>> for TimeSamples {
+    fn from(samples: Vec<TimeSample>) -> Self {
+        Self(Some(Arc::new(samples)))
+    }
+}
+
+impl PartialEq for TimeSamples {
+    fn eq(&self, other: &Self) -> bool {
+        self.get() == other.get()
+    }
+}
+
+impl core::fmt::Debug for TimeSamples {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        self.get().fmt(f)
+    }
+}
+
 /// An authored property spec: identity and kind, plus independently stored
 /// authored slots and metadata.
 ///
@@ -333,7 +411,7 @@ pub type TimeSample = (f64, Value);
 ///     .with_default(Value::Float(1.0))
 ///     .with_time_samples(vec![(0.0, Value::Float(2.0))]);
 /// spec.default = None;
-/// assert_eq!(spec.time_samples.as_deref(), Some(&[(0.0, Value::Float(2.0))][..]));
+/// assert_eq!(spec.time_samples.get(), Some(&[(0.0, Value::Float(2.0))][..]));
 /// ```
 ///
 /// Which slot answers a value query is decided at query time, not here:
@@ -364,13 +442,13 @@ pub struct PropertySpec {
     /// Spec: AOUSD Core §7.6.4.2.1 (`default`).
     pub default: Option<Value>,
     /// Authored time samples, sorted by time. Clones share the buffer; use
-    /// [`SharedVec::make_mut`](crate::SharedVec::make_mut) to edit it.
+    /// [`TimeSamples::make_mut`] to edit it.
     ///
-    /// `Some(SharedVec::new())` records an explicitly authored empty sample map, which
+    /// An authored empty sample map is kept apart from none authored, and
     /// contributes no value.
     ///
     /// Spec: AOUSD Core §7.6.4.2.2 (`timeSamples`).
-    pub time_samples: Option<SharedVec<TimeSample>>,
+    pub time_samples: TimeSamples,
     /// Authored spline, boxed: few attributes author one.
     ///
     /// Spec: AOUSD Core §7.6.4.2.4 (`spline`).
@@ -481,7 +559,7 @@ impl PropertySpec {
     /// Samples are sorted by time; for equal times the last one wins.
     #[must_use]
     pub fn with_time_samples(mut self, samples: Vec<TimeSample>) -> Self {
-        self.time_samples = Some(sort_samples(samples).into());
+        self.time_samples = sort_samples(samples).into();
         self
     }
 
@@ -530,7 +608,7 @@ impl PropertySpec {
     #[must_use]
     pub fn has_value(&self) -> bool {
         self.default.is_some()
-            || self.time_samples.as_ref().is_some_and(|s| !s.is_empty())
+            || self.time_samples.get().is_some_and(|s| !s.is_empty())
             || self.spline.is_some()
     }
 }
@@ -690,12 +768,12 @@ mod tests {
             .with_time_samples(vec![(1.0, Value::Float(3.0)), (0.0, Value::Float(2.0))]);
         assert!(spec.has_value());
         assert_eq!(
-            spec.time_samples.as_deref(),
+            spec.time_samples.get(),
             Some(&[(0.0, Value::Float(2.0)), (1.0, Value::Float(3.0))][..]),
             "samples are kept sorted by time"
         );
 
-        spec.time_samples = None;
+        spec.time_samples = TimeSamples::none();
         assert_eq!(spec.default, Some(Value::Float(1.0)));
         spec.default = None;
         assert!(!spec.has_value());
@@ -711,10 +789,33 @@ mod tests {
         assert_eq!(samples, vec![(0.0, Value::Int(0)), (1.0, Value::Int(2))]);
     }
 
+    /// Clones share samples until one is edited; editing unauthored
+    /// samples in place authors nothing, `make_mut` authors them.
+    #[test]
+    fn time_samples_share_until_edited() {
+        let first: TimeSamples = vec![(0.0, Value::Int(1))].into();
+        let mut second = first.clone();
+        assert_eq!(
+            first.get().unwrap().as_ptr(),
+            second.get().unwrap().as_ptr()
+        );
+        second.get_mut().unwrap()[0].1 = Value::Int(2);
+        assert_eq!(first.get(), Some(&[(0.0, Value::Int(1))][..]));
+        assert_eq!(second.get(), Some(&[(0.0, Value::Int(2))][..]));
+
+        let mut none = TimeSamples::none();
+        assert!(none.get_mut().is_none() && !none.is_authored());
+        none.make_mut();
+        assert!(none.is_authored());
+        assert_eq!(none.into_vec(), Some(Vec::new()));
+    }
+
     #[test]
     fn empty_samples_are_not_a_value() {
         let spec = PropertySpec::attribute().with_time_samples(Vec::new());
-        assert!(spec.time_samples.is_some());
+        assert!(spec.time_samples.is_authored());
+        assert_eq!(spec.time_samples.get(), Some(&[][..]));
+        assert_ne!(spec.time_samples, TimeSamples::none());
         assert!(!spec.has_value());
     }
 

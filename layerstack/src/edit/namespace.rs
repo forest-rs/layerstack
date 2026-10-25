@@ -975,8 +975,8 @@ fn repair_properties(
         if let Some(value) = &mut spec.default {
             repair_value(store, value, local, entry_anchor, entry_moves)?;
         }
-        if let Some(samples) = &mut spec.time_samples {
-            for (_, value) in samples.make_mut() {
+        if let Some(samples) = spec.time_samples.get_mut() {
+            for (_, value) in samples {
                 repair_value(store, value, local, entry_anchor, entry_moves)?;
             }
         }

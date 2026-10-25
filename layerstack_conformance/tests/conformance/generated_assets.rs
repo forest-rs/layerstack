@@ -382,8 +382,8 @@ fn material_publication_uses_owned_opinions_and_rejects_partial_updates() {
     assert!(
         local
             .time_samples
-            .as_ref()
-            .is_none_or(|samples| samples.as_slice().is_empty())
+            .get()
+            .is_none_or(|samples| samples.is_empty())
     );
     assert_eq!(
         generated

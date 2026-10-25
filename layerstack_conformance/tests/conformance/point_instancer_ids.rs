@@ -158,7 +158,8 @@ fn authored_invisible(store: &InMemoryStore, path: PathId) -> Option<InvisibleRe
         default: property.default.as_ref().map(read),
         samples: property
             .time_samples
-            .iter()
+            .get()
+            .into_iter()
             .flat_map(|samples| samples.iter())
             .map(|(time, value)| (format!("{time:?}"), read(value)))
             .collect(),

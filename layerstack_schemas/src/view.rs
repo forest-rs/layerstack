@@ -399,7 +399,7 @@ impl<'a> PrimView<'a> {
                 spec.spline.is_some()
                     || spec
                         .time_samples
-                        .as_ref()
+                        .get()
                         .is_some_and(|samples| !samples.is_empty())
             })
         })
@@ -476,7 +476,7 @@ impl<'a> PrimView<'a> {
             .iter()
             .filter_map(|o| o.value.as_property())
         {
-            if spec.spline.is_some() || spec.time_samples.as_ref().is_some_and(|s| !s.is_empty()) {
+            if spec.spline.is_some() || spec.time_samples.get().is_some_and(|s| !s.is_empty()) {
                 return true;
             }
             match &spec.default {

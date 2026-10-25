@@ -265,7 +265,7 @@ fn edits_write_through_targets_and_undo_exactly() {
     let samples = |store: &InMemoryStore| {
         store.layers[&ROCK]
             .property_at(&spin)
-            .and_then(|p| p.time_samples.as_deref().map(<[_]>::to_vec))
+            .and_then(|p| p.time_samples.get().map(<[_]>::to_vec))
     };
     assert_eq!(
         samples(&store),
@@ -314,7 +314,7 @@ fn a_sample_inverse_touches_only_its_key() {
     assert_eq!(
         store.layers[&ROCK]
             .property_at(&path)
-            .and_then(|p| p.time_samples.as_deref().map(<[_]>::to_vec)),
+            .and_then(|p| p.time_samples.get().map(<[_]>::to_vec)),
         Some(vec![
             (0.0, Value::Double(0.0)),
             (5.0, Value::Double(50.0)),
@@ -333,7 +333,7 @@ fn a_sample_inverse_touches_only_its_key() {
     assert_eq!(
         store.layers[&ROCK]
             .property_at(&path)
-            .map(|p| p.time_samples.as_deref().map(<[_]>::to_vec)),
+            .map(|p| p.time_samples.get().map(<[_]>::to_vec)),
         Some(None),
         "removing the last sample removes the field"
     );
@@ -1128,7 +1128,7 @@ fn an_inverse_applies_after_unrelated_edits() {
     assert_eq!(
         store.layers[&ROCK]
             .property_at(&spin_path)
-            .and_then(|p| p.time_samples.as_deref().map(<[_]>::to_vec)),
+            .and_then(|p| p.time_samples.get().map(<[_]>::to_vec)),
         Some(vec![
             (0.0, Value::Double(0.0)),
             (5.0, Value::Double(50.0)),
@@ -2439,7 +2439,7 @@ fn attribute_block_clears_animation_and_preserves_unrelated_edits_on_undo() {
     let inverse = block.apply(&mut store).unwrap();
     let attr = store.layers[&ROCK].property_at(&path).unwrap();
     assert_eq!(attr.default, Some(Value::Blocked));
-    assert!(attr.time_samples.is_none() && attr.spline.is_none());
+    assert!(!attr.time_samples.is_authored() && attr.spline.is_none());
     let note = store.tokens.intern("annotation");
     let mut later = Transaction::new();
     later.set_metadata(spin.clone(), note, FieldValue::Value(Value::string("keep")));
@@ -2475,7 +2475,7 @@ fn attribute_block_preserves_empty_sample_fields_and_splines_on_undo() {
     let path = spec(&mut store, "/Rock.animated");
     let at = Address::spec(ROCK, path.clone());
     let mut attr = attr(1.);
-    attr.time_samples = Some(vec![].into());
+    attr.time_samples = vec![].into();
     attr.spline = Some(Box::new(SplineData {
         pre_loop_boundary: None,
         post_loop_boundary: None,
@@ -2493,7 +2493,7 @@ fn attribute_block_preserves_empty_sample_fields_and_splines_on_undo() {
     block.block_attribute(at);
     let inverse = block.apply(&mut store).unwrap();
     let blocked = store.layers[&ROCK].property_at(&path).unwrap();
-    assert!(blocked.time_samples.is_none() && blocked.spline.is_none());
+    assert!(!blocked.time_samples.is_authored() && blocked.spline.is_none());
     inverse.apply(&mut store).unwrap();
     let restored = store.layers[&ROCK].property_at(&path).unwrap();
     assert!(

@@ -718,7 +718,12 @@ fn authored_assets(layer: &layerstack::Layer) -> Vec<String> {
         }
         for property in &spec.properties {
             let spec = &property.spec;
-            let samples = spec.time_samples.iter().flatten().map(|(_, value)| value);
+            let samples = spec
+                .time_samples
+                .get()
+                .into_iter()
+                .flatten()
+                .map(|(_, value)| value);
             for value in spec.default.iter().chain(samples) {
                 visit(value, &mut out);
             }

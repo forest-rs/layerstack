@@ -180,19 +180,17 @@ fn snapshot_subset_query_does_not_decode_unselected_topology_samples() {
         .unwrap()
         .property_mut(counts)
         .unwrap();
-    spec.time_samples = Some(
-        vec![
-            (
-                0.,
-                Value::TypedArray(TypedArray::Deferred(Arc::new(Cold {
-                    calls: calls.clone(),
-                    error: ArrayReadError::BudgetExceeded { limit: 0 },
-                }))),
-            ),
-            (1., Value::from(vec![3_i32, 3])),
-        ]
-        .into(),
-    );
+    spec.time_samples = vec![
+        (
+            0.,
+            Value::TypedArray(TypedArray::Deferred(Arc::new(Cold {
+                calls: calls.clone(),
+                error: ArrayReadError::BudgetExceeded { limit: 0 },
+            }))),
+        ),
+        (1., Value::from(vec![3_i32, 3])),
+    ]
+    .into();
     let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
     let live = layerstack::LiveStage::compose(
         &mut store,
@@ -262,7 +260,7 @@ fn material_subsets_preserve_decode_failure_paths() {
             if time == Time::Default {
                 attribute.default = Some(value);
             } else {
-                attribute.time_samples = Some(vec![(1., value.clone()), (2., value)].into());
+                attribute.time_samples = vec![(1., value.clone()), (2., value)].into();
             }
             let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
             let live = layerstack::LiveStage::compose(

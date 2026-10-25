@@ -1291,7 +1291,7 @@ pub(crate) fn authored(
         Slot::TimeSample(time) => {
             let time = at.layer_time(*time);
             property
-                .and_then(|p| p.time_samples.as_deref())
+                .and_then(|p| p.time_samples.get())
                 .and_then(|samples| samples.iter().find(|(t, _)| t.total_cmp(&time).is_eq()))
                 .map(|(_, value)| Authored::Value(value.clone()))
         }

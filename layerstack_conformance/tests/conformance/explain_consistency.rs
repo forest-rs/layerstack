@@ -115,7 +115,7 @@ fn names(store: &InMemoryStore) -> Names {
                 let array = spec.default.as_ref().is_some_and(is_array)
                     || spec
                         .time_samples
-                        .as_ref()
+                        .get()
                         .is_some_and(|samples| samples.iter().any(|(_, v)| is_array(v)));
                 *names.properties.entry(property.name).or_default() |= array;
             }

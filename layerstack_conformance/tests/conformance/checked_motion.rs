@@ -48,7 +48,7 @@ fn point_motion_preserves_required_and_optional_decode_failures() {
                 .property_mut(token)
                 .unwrap();
             spec.default = Some(failed.clone());
-            spec.time_samples = Some(vec![(1., failed.clone()), (2., failed)].into());
+            spec.time_samples = vec![(1., failed.clone()), (2., failed)].into();
             let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
             let live = layerstack::LiveStage::compose(
                 &mut store,
@@ -105,7 +105,7 @@ fn instancer_transform_and_mask_queries_preserve_decode_failures() {
                 .property_mut(token)
                 .unwrap();
             spec.default = Some(failed.clone());
-            spec.time_samples = Some(vec![(1., failed.clone()), (2., failed)].into());
+            spec.time_samples = vec![(1., failed.clone()), (2., failed)].into();
             let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
             let live = layerstack::LiveStage::compose(
                 &mut store,

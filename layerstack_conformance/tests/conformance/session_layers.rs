@@ -231,7 +231,7 @@ fn session_time_domains_include_authoring_offsets_and_root_default_prim() {
         let root_rate = root_tcps.or(root_fps).unwrap_or(24.0);
         let x = store.tokens.intern("animated");
         let mut prop = PropertySpec::typed_attribute(PropertyType::parse("double").unwrap());
-        prop.time_samples = Some(vec![(root_rate, Value::Double(2.0))].into());
+        prop.time_samples = vec![(root_rate, Value::Double(2.0))].into();
         let asset = store.path("/Asset");
         store
             .layer_mut(LayerId(1))

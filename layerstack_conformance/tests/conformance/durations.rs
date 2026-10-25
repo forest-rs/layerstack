@@ -8,8 +8,10 @@
 //! OpenUSD writes a duration as its double: in USDA with `#usda 1.4`
 //! (`_StringFromVtValueHelper`, `pxr/usd/sdf/fileIO_Common.cpp`), in USDC
 //! as value type 61 with crate version 0.16.0 (`Write(GfDuration)`,
-//! `pxr/usd/sdf/crateFile.cpp`). `time_values` reads them through layer
-//! offsets and value clips.
+//! `pxr/usd/sdf/crateFile.cpp`); a `duration` spline is Ts binary format 4
+//! (`GetBinaryFormatVersion`, `pxr/base/ts/binary.cpp`), which also needs
+//! crate 0.16.0. `time_values` reads them through layer offsets and value
+//! clips.
 #![cfg(not(target_arch = "wasm32"))]
 
 use std::path::{Path, PathBuf};
@@ -37,6 +39,14 @@ def "P" (
     }
     custom duration[] ds = [1, 0.125, 1e+300, -0, inf]
     custom duration small = 24
+    custom duration spl
+    duration spl.spline = {
+        bezier,
+        pre: linear,
+        post: sloped(0.5),
+        0: 2; pre (0, 0); post curve (1, 0.5),
+        10: 6 & 7; pre (2, 1); post held,
+    }
 }
 
 "#;

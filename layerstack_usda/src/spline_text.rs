@@ -186,7 +186,10 @@ fn quantize(v: f64, data_type: SplineDataType) -> f64 {
     match data_type {
         SplineDataType::Float => f64::from(v as f32),
         SplineDataType::Half => f64::from(layerstack::half::to_f32(layerstack::half::from_f64(v))),
-        SplineDataType::Double | SplineDataType::TimeCode | SplineDataType::Unspecified => v,
+        SplineDataType::Double
+        | SplineDataType::TimeCode
+        | SplineDataType::Duration
+        | SplineDataType::Unspecified => v,
     }
 }
 

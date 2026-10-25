@@ -1155,7 +1155,12 @@ impl<'a> Attribute<'a> {
     }
     /// Conservative whether a numeric-time query can vary with time: a
     /// contributing source with several samples, or a spline, counts as
-    /// varying even when its values agree.
+    /// varying even when its values agree. When the strongest value is a
+    /// sparse edit composing over weaker sources it is
+    /// [`Self::value_source_might_be_time_varying`], as in OpenUSD, so a
+    /// sparse edit over a single weaker time sample might vary.
+    ///
+    /// Spec: AOUSD Core §12.3.2 (value sources).
     #[doc(alias = "UsdAttribute::ValueMightBeTimeVarying")]
     #[doc(alias = "ValueMightBeTimeVarying")]
     pub fn might_be_time_varying(self) -> bool {

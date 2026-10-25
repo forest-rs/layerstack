@@ -10,7 +10,12 @@
 //! a single time sample (`UsdResolveInfo::ValueSourceMightBeTimeVarying`,
 //! `pxr/usd/usd/resolveInfo.h`). The scene covers defaults, blocks,
 //! animation blocks, empty, single and several samples, splines, sparse
-//! edits over weaker sources and value clips.
+//! edits over weaker sources and value clips. Where the strongest value is
+//! a sparse default, OpenUSD's `ValueMightBeTimeVarying` gives the source
+//! answer, so a sparse edit over a single weaker sample might vary; a single
+//! sample whose type composes over weaker values (a path expression, an
+//! array edit) might vary too, alone or over anything
+//! (`_ValueMightBeTimeVaryingFromResolveInfo`, `pxr/usd/usd/stage.cpp`).
 //!
 //! Spec: AOUSD Core §12.3.2 (value sources), §12.3.4 (value clips),
 //! §12.3.6 (blocks).
@@ -47,6 +52,11 @@ def "P" (
     float[] edit_over_dflt = edit [append 9]
     double anim_over = AnimationBlock
     double one_over.timeSamples = { 1: 2 }
+    pathExpression expr_one.timeSamples = { 1: "/A" }
+    pathExpression expr_over_one.timeSamples = { 1: "%_ /B" }
+    pathExpression expr_dflt_over_one = "%_ /B"
+    float[] edit_sample_over_one.timeSamples = { 1: edit [append 9] }
+    float[] edit_sample_over_dflt.timeSamples = { 1: edit [append 9] }
 }
 
 def "C" (
@@ -77,6 +87,10 @@ def "W"
     float[] edit_over_dflt = [1]
     double anim_over.timeSamples = { 1: 2, 2: 3 }
     double one_over.timeSamples = { 1: 2, 2: 3 }
+    pathExpression expr_over_one.timeSamples = { 1: "/A" }
+    pathExpression expr_dflt_over_one.timeSamples = { 1: "/A" }
+    float[] edit_sample_over_one.timeSamples = { 1: [1] }
+    float[] edit_sample_over_dflt = [1]
 }
 "#,
     ),
@@ -109,6 +123,11 @@ const ATTRIBUTES: &[&str] = &[
     "/P.edit_over_dflt",
     "/P.anim_over",
     "/P.one_over",
+    "/P.expr_one",
+    "/P.expr_over_one",
+    "/P.expr_dflt_over_one",
+    "/P.edit_sample_over_one",
+    "/P.edit_sample_over_dflt",
     "/C.one",
     "/C.two",
     "/C.dflt_over",
@@ -196,15 +215,6 @@ fn oracle() -> Option<Json> {
     Some(serde_json::from_slice(&output.stdout).unwrap())
 }
 
-/// Where layerstack's `might_be_time_varying` knowingly answers otherwise:
-/// for a sparse default over one weaker sample, OpenUSD defers to the source
-/// question (`_ValueMightBeTimeVaryingFromResolveInfo`,
-/// `pxr/usd/usd/stage.cpp:9748`) and answers `true`, though every numeric
-/// time reads the same; layerstack answers whether numeric-time reads can
-/// differ, as it does for several single-sample sources (AOUSD Core
-/// §12.3.2).
-const NUMERIC_TIME_DIVERGENCES: &[&str] = &["/P.edit_over_one"];
-
 /// Layerstack answers both questions as usd-core does.
 #[test]
 fn time_varying_queries_answer_as_openusd_does() {
@@ -228,14 +238,10 @@ fn time_varying_queries_answer_as_openusd_does() {
     let mut mismatches = Vec::new();
     for path in ATTRIBUTES {
         let attribute = view.attribute(*path).unwrap();
-        let mut got = json!([
+        let got = json!([
             attribute.might_be_time_varying(),
             attribute.value_source_might_be_time_varying()
         ]);
-        if NUMERIC_TIME_DIVERGENCES.contains(path) {
-            assert_ne!(got[0], want[*path][0], "{path} no longer diverges");
-            got[0] = want[*path][0].clone();
-        }
         if got != want[*path] {
             mismatches.push(format!("{path}: {got} != {}", want[*path]));
         }

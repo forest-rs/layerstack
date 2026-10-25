@@ -330,6 +330,9 @@ struct Indexer<'c, 's, 'f> {
     /// the prim's index to start from.
     parent: Option<&'c Graph>,
     outputs: &'c mut Outputs,
+    /// The open tasks, a heap with the highest priority task first
+    /// ([`Indexer::higher_priority`]): a prim with thousands of arcs has
+    /// a task for each node they add.
     tasks: Vec<Task>,
     unique: HashSet<Task>,
 }
@@ -412,28 +415,58 @@ impl Indexer<'_, '_, '_> {
 
     // ── Tasks ──────────────────────────────────────────────────────────
 
+    /// Adds `task` to the heap of open tasks. OpenUSD: `AddTask`, which
+    /// keeps its tasks in a heap too (`push_heap`).
     fn add_task(&mut self, task: Task) {
         if !task.is_implied() || self.unique.insert(task.clone()) {
             self.tasks.push(task);
+            self.sift_up(self.tasks.len() - 1);
         }
     }
 
-    /// Removes and returns the highest priority task.
+    /// Removes and returns the highest priority task. OpenUSD: `PopTask`.
     fn pop_task(&mut self) -> Option<Task> {
         if self.tasks.is_empty() {
             return None;
         }
-        let mut best = 0;
-        for at in 1..self.tasks.len() {
-            if self.higher_priority(&self.tasks[at], &self.tasks[best]) {
-                best = at;
-            }
-        }
-        let task = self.tasks.swap_remove(best);
+        let task = self.tasks.swap_remove(0);
+        self.sift_down(0);
         if task.is_implied() {
             self.unique.remove(&task);
         }
         Some(task)
+    }
+
+    /// Moves the task at `at` toward the top of the heap while it has a
+    /// higher priority than its parent.
+    fn sift_up(&mut self, mut at: usize) {
+        while at > 0 {
+            let parent = (at - 1) / 2;
+            if !self.higher_priority(&self.tasks[at], &self.tasks[parent]) {
+                break;
+            }
+            self.tasks.swap(at, parent);
+            at = parent;
+        }
+    }
+
+    /// Moves the task at `at` toward the bottom of the heap while a child
+    /// has a higher priority.
+    fn sift_down(&mut self, mut at: usize) {
+        let len = self.tasks.len();
+        loop {
+            let mut best = at;
+            for child in [2 * at + 1, 2 * at + 2] {
+                if child < len && self.higher_priority(&self.tasks[child], &self.tasks[best]) {
+                    best = child;
+                }
+            }
+            if best == at {
+                return;
+            }
+            self.tasks.swap(at, best);
+            at = best;
+        }
     }
 
     /// Whether `a` runs before `b`. OpenUSD: `Task::PriorityOrder`.
@@ -484,17 +517,20 @@ impl Indexer<'_, '_, '_> {
         }
     }
 
+    /// Promotes the variant tasks that found no authored selection to
+    /// look for one again. A promoted task runs sooner: it moves up the
+    /// heap. OpenUSD: `RetryVariantTasks`.
     fn retry_variant_tasks(&mut self) {
-        for task in &mut self.tasks {
-            match task.kind {
-                TaskKind::VariantFallback | TaskKind::VariantNoneFound => {
-                    task.kind = TaskKind::VariantAuthored;
-                }
+        for at in 0..self.tasks.len() {
+            let task = &mut self.tasks[at];
+            task.kind = match task.kind {
+                TaskKind::VariantFallback | TaskKind::VariantNoneFound => TaskKind::VariantAuthored,
                 TaskKind::AncestralVariantFallback | TaskKind::AncestralVariantNoneFound => {
-                    task.kind = TaskKind::AncestralVariantAuthored;
+                    TaskKind::AncestralVariantAuthored
                 }
-                _ => {}
-            }
+                _ => continue,
+            };
+            self.sift_up(at);
         }
     }
 

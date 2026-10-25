@@ -133,6 +133,7 @@ mod primvars;
 mod property_discovery;
 mod property_fidelity;
 mod property_metadata;
+mod prototype_order;
 mod proxy_edits;
 mod pseudo_root_edits;
 mod ray;

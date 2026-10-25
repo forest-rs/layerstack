@@ -245,6 +245,7 @@ fn switching_branches_recomposes_like_a_full_compose() {
             .layer_mut(root)
             .and_then(|layer| layer.prim_mut(prim))
             .expect("prim spec")
+            .rare_mut()
             .variant_selections
             .insert(set, variant);
         live.notify_layer_prim_edits(root, &[prim]);
@@ -265,6 +266,7 @@ fn switching_branches_recomposes_like_a_full_compose() {
             .layer_mut(root)
             .and_then(|layer| layer.prim_mut(prim))
             .expect("prim spec")
+            .rare_mut()
             .variant_selections
             .insert(set, variant);
         live.notify_layer_prim_edits(root, &[prim]);

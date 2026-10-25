@@ -245,7 +245,10 @@ pub fn in_text_order(layer: &mut Layer, tokens: &TokenInterner) {
     sort_fields(layer.metadata_fields_mut(), tokens, str::cmp);
     for prim in layer.prims_mut().values_mut() {
         sort_spec(&mut prim.fields, &mut prim.properties, tokens);
-        for set in prim.variant_sets.values_mut() {
+        let Some(rare) = prim.authored_rare_mut() else {
+            continue;
+        };
+        for set in rare.variant_sets.values_mut() {
             set.variants
                 .values_mut()
                 .for_each(|v| sort_variant(v, tokens));
@@ -617,6 +620,7 @@ pub fn cases() -> Vec<SaveCase> {
                 let accent = layer.paths.intern(accent);
                 layer
                     .prim("/Item")
+                    .rare_mut()
                     .inherits
                     .make_mut()
                     .explicit

@@ -432,7 +432,7 @@ impl Verifier<'_> {
                 active = active.or(spec.active);
                 instanceable = instanceable.or(spec.instanceable);
                 if prim_order.is_none() {
-                    prim_order.clone_from(&spec.prim_order);
+                    prim_order = spec.prim_order().map(<[TokenId]>::to_vec);
                 }
             }
         }

@@ -76,11 +76,16 @@ fn build_and_compose(n_prims: usize, n_variants: usize) -> Stage {
         }
 
         let mut spec = PrimSpec::def();
-        spec.variant_sets
+        spec.rare_mut()
+            .variant_sets
             .insert(vs_name, VariantSetSpec { variants });
-        spec.variant_set_names.make_mut().prepend.push(vs_name);
+        spec.rare_mut()
+            .variant_set_names
+            .make_mut()
+            .prepend
+            .push(vs_name);
         if let Some(sel) = selected {
-            spec.variant_selections.insert(vs_name, sel);
+            spec.rare_mut().variant_selections.insert(vs_name, sel);
         }
         layer.insert_prim(prim_path, spec);
     }

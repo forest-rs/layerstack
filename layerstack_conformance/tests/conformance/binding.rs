@@ -392,6 +392,7 @@ fn binding_caches_follow_edits() {
         .layer_mut(layer)
         .and_then(|layer| layer.prim_mut(ordered))
         .expect("the `/Ordered` spec")
+        .rare_mut()
         .property_order = Some(vec![a, z]);
     live.notify_layer_prim_edits(layer, &[ordered]);
     live.recompose(store);

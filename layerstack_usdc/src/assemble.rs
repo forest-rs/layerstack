@@ -23,8 +23,8 @@ use layerstack::parallel::Threads;
 use hashbrown::{HashMap, HashSet};
 
 use layerstack::doc::{
-    FieldValue, Layer, LayerId, LayerOffset, PrimSpec, Reference, Specifier, SublayerEntry, Value,
-    VariantSets, VariantSpec, set_field_vec,
+    FieldValue, Layer, LayerId, LayerOffset, PrimSpec, RarePrimFields, Reference, Specifier,
+    SublayerEntry, Value, VariantSets, VariantSpec, set_field_vec,
 };
 use layerstack::interner::{TokenId, TokenInterner};
 use layerstack::listop::ListOp;
@@ -884,7 +884,7 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
         for (path_str, mut prim) in branched {
             let namespace = match split_branch_path(path_str) {
                 Some((namespace, sites)) => {
-                    prim.outer_variant_sites = self.branch_sites(&namespace, &sites)?;
+                    prim.rare_mut().outer_variant_sites = self.branch_sites(&namespace, &sites)?;
                     Cow::Owned(namespace)
                 }
                 None => Cow::Borrowed(path_str),
@@ -1431,11 +1431,10 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
         if !root_children.is_empty() || prim_order.is_some() {
             let root_path = Path::root();
             let root_path_id = self.paths.intern(root_path);
-            let root_spec = PrimSpec {
-                authored_children: root_children,
-                prim_order,
-                ..PrimSpec::default()
-            };
+            let mut root_spec = PrimSpec::default().with_children(root_children);
+            if let Some(order) = prim_order {
+                root_spec = root_spec.with_prim_order(order);
+            }
             layer.insert_prim(root_path_id, root_spec);
         }
 
@@ -1478,7 +1477,7 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
                     spec.authored_children = self.extract_token_names(value);
                 }
                 "primOrder" => {
-                    spec.prim_order = Some(self.extract_token_names(value));
+                    spec.rare_mut().prim_order = Some(self.extract_token_names(value));
                 }
                 // `SdfChildrenKeys->PropertyChildren` is spelled `properties`
                 // (`pxr/usd/sdf/schema.h`).
@@ -1486,13 +1485,13 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
                     property_children = Some(self.extract_token_names(value));
                 }
                 "propertyOrder" => {
-                    spec.property_order = Some(self.extract_token_names(value));
+                    spec.rare_mut().property_order = Some(self.extract_token_names(value));
                 }
                 // The set specs, read from their own specs, in this order
                 // (see `declare_variant_sets`).
                 "variantSetChildren" => {
                     let names = self.extract_token_names(value);
-                    declare_variant_sets(&mut spec.variant_sets, &names);
+                    declare_variant_sets(&mut spec.rare_mut().variant_sets, &names);
                 }
                 "references" => {
                     if let Some(CrateValue::ListOp(listop)) = value.value() {
@@ -1510,13 +1509,13 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
                 "inheritPaths" => {
                     if let Some(CrateValue::ListOp(listop)) = value.value() {
                         let converted = self.convert_path_listop(listop)?;
-                        spec.inherits.make_mut().merge(converted);
+                        spec.rare_mut().inherits.make_mut().merge(converted);
                     }
                 }
                 "specializes" => {
                     if let Some(CrateValue::ListOp(listop)) = value.value() {
                         let converted = self.convert_path_listop(listop)?;
-                        spec.specializes.make_mut().merge(converted);
+                        spec.rare_mut().specializes.make_mut().merge(converted);
                     }
                 }
                 "variantSelection" => {
@@ -1524,12 +1523,14 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
                         for (set_name, branch_name) in pairs {
                             let set_tok = self.tokens.intern(set_name);
                             let branch_tok = self.tokens.intern(branch_name);
-                            spec.variant_selections.insert(set_tok, branch_tok);
+                            spec.rare_mut()
+                                .variant_selections
+                                .insert(set_tok, branch_tok);
                         }
                     }
                 }
                 "variantSetNames" => {
-                    spec.variant_set_names = self.variant_set_names(value).into();
+                    spec.rare_mut().variant_set_names = self.variant_set_names(value).into();
                 }
                 "instanceable" if matches!(value.value(), Some(CrateValue::Bool(_))) => {
                     if let Some(CrateValue::Bool(b)) = value.value() {
@@ -1855,7 +1856,7 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
                 .get_mut(self.prim_key_of_text(owner))
                 .expect("owner checked above");
             let holder = if enclosing.is_empty() {
-                Some(&mut prim.variant_sets)
+                Some(&mut prim.rare_mut().variant_sets)
             } else {
                 prim.variant_spec_mut(enclosing)
                     .map(|spec| &mut spec.variant_sets)
@@ -3350,25 +3351,29 @@ fn copy_prim(spec: &PrimSpec) -> PrimSpec {
     fn vec<T: Clone>(vec: &[T]) -> Vec<T> {
         vec.to_vec()
     }
-    PrimSpec {
-        specifier: spec.specifier,
-        type_name: spec.type_name,
-        fields: vec(&spec.fields),
-        properties: vec(&spec.properties),
-        property_order: spec.property_order.clone(),
-        outer_variant_sites: vec(&spec.outer_variant_sites),
-        authored_children: vec(&spec.authored_children),
-        variant_selections: map(&spec.variant_selections),
-        variant_sets: spec.variant_sets.clone(),
-        variant_set_names: list(&spec.variant_set_names).into(),
-        references: list(&spec.references).into(),
-        inherits: list(&spec.inherits).into(),
-        specializes: list(&spec.specializes).into(),
-        payloads: list(&spec.payloads).into(),
-        prim_order: spec.prim_order.clone(),
-        instanceable: spec.instanceable,
-        active: spec.active,
+    let mut copy = PrimSpec::default();
+    copy.specifier = spec.specifier;
+    copy.type_name = spec.type_name;
+    copy.fields = vec(&spec.fields);
+    copy.properties = vec(&spec.properties);
+    copy.authored_children = vec(&spec.authored_children);
+    copy.references = list(&spec.references).into();
+    copy.payloads = list(&spec.payloads).into();
+    copy.instanceable = spec.instanceable;
+    copy.active = spec.active;
+    if let Some(rare) = spec.rare() {
+        *copy.rare_mut() = RarePrimFields {
+            inherits: list(&rare.inherits).into(),
+            specializes: list(&rare.specializes).into(),
+            variant_selections: map(&rare.variant_selections),
+            variant_sets: rare.variant_sets.clone(),
+            variant_set_names: list(&rare.variant_set_names).into(),
+            property_order: rare.property_order.clone(),
+            prim_order: rare.prim_order.clone(),
+            outer_variant_sites: vec(&rare.outer_variant_sites),
+        };
     }
+    copy
 }
 
 /// Declares the variant sets a spec's `variantSetChildren` names, in its
@@ -4589,7 +4594,7 @@ def "T" {}
                 prim.field(tokens.intern("customArray")),
                 Some(&FieldValue::Value(expected.clone()))
             );
-            let variant = &prim.variant_sets[&tokens.intern("v")].variants[&tokens.intern("x")];
+            let variant = &prim.variant_sets()[&tokens.intern("v")].variants[&tokens.intern("x")];
             assert_eq!(variant.properties[0].spec.default, Some(expected.clone()));
             assert_eq!(variant.fields[0].value, FieldValue::Value(expected));
         }

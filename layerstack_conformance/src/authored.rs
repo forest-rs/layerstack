@@ -269,7 +269,7 @@ fn render_prim(out: &mut Vec<String>, path: PathId, spec: &PrimSpec, names: Name
         .map_or(String::from("-"), |s| format!("{s:?}").to_lowercase());
     let type_name = spec.type_name.map_or("", |t| names.token(t));
     let branch: String = spec
-        .outer_variant_sites
+        .outer_variant_sites()
         .iter()
         .map(|site| {
             format!(
@@ -298,7 +298,7 @@ fn render_prim(out: &mut Vec<String>, path: PathId, spec: &PrimSpec, names: Name
             render_names(&spec.authored_children, names)
         ));
     }
-    if let Some(order) = &spec.prim_order {
+    if let Some(order) = &spec.prim_order() {
         out.push(format!(
             "{indent}primOrder = {}",
             render_names(order, names)
@@ -314,7 +314,7 @@ fn render_prim(out: &mut Vec<String>, path: PathId, spec: &PrimSpec, names: Name
         out,
         indent,
         [&spec.references, &spec.payloads],
-        [&spec.inherits, &spec.specializes],
+        [spec.inherits(), spec.specializes()],
         names,
     );
     render_prim_like(
@@ -322,7 +322,7 @@ fn render_prim(out: &mut Vec<String>, path: PathId, spec: &PrimSpec, names: Name
         indent,
         &spec.fields,
         &spec.properties,
-        spec.property_order.as_deref(),
+        spec.property_order(),
         names,
     );
     // Every variant spec, nested ones included, by its path on the prim

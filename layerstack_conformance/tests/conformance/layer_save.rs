@@ -341,11 +341,11 @@ def "Clay" (
     let (loam, clay) = (path("/Loam"), path("/Clay"));
     let spec = |layer: &Layer, path| layer.prim(path).expect("prim").clone();
     assert_eq!(
-        spec(&layer.layer, loam).variant_set_names,
+        *spec(&layer.layer, loam).variant_set_names(),
         ListOp::deleted(vec![grain])
     );
     assert_eq!(
-        spec(&layer.layer, clay).variant_set_names,
+        *spec(&layer.layer, clay).variant_set_names(),
         ListOp::prepended(vec![grain])
     );
     let want = structure(&layer.layer);
@@ -485,22 +485,18 @@ fn structure(layer: &Layer) -> String {
             type_name,
             fields,
             properties,
-            property_order,
-            outer_variant_sites,
             authored_children,
-            variant_selections,
-            // Walked by `PrimSpec::variant_branches` below.
-            variant_sets: _,
-            variant_set_names,
             references,
-            inherits,
-            specializes,
             payloads,
-            prim_order,
             instanceable,
             active,
+            ..
         } = spec;
-        let selections: BTreeMap<_, _> = variant_selections.iter().collect();
+        let (property_order, prim_order) = (spec.property_order(), spec.prim_order());
+        let (inherits, specializes) = (spec.inherits(), spec.specializes());
+        let variant_set_names = spec.variant_set_names();
+        let outer_variant_sites = spec.outer_variant_sites();
+        let selections: BTreeMap<_, _> = spec.variant_selections().into_iter().flatten().collect();
         let mut text = format!(
             "  {specifier:?} {type_name:?}\n  fields {fields:?}\n  properties {properties:?}\n  \
              property order {property_order:?}\n  children {authored_children:?}\n  prim order \
@@ -523,7 +519,7 @@ fn structure(layer: &Layer) -> String {
                 variant_structure(variant)
             );
         }
-        sorted.insert((*path, outer_variant_sites.clone()), text);
+        sorted.insert((*path, outer_variant_sites.to_vec()), text);
     }
     for ((path, sites), text) in sorted {
         let _ = write!(out, "prim {path:?} in {sites:?}\n{text}");

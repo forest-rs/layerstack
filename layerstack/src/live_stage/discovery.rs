@@ -63,7 +63,7 @@ impl LayerReads {
                 .filter(|(path, spec)| {
                     !spec.references.is_empty()
                         || !spec.payloads.is_empty()
-                        || !spec.variant_sets.is_empty()
+                        || !spec.variant_sets().is_empty()
                         || layer.variant_prims.contains_key(*path)
                 })
                 .map(|(&path, _)| (path, ArcReads::at(store, layer, path)))

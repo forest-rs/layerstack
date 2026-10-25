@@ -217,7 +217,7 @@ fn root_prim_order(store: &InMemoryStore, layer: LayerId, root: PathId) -> Vec<S
         .layer(layer)
         .unwrap()
         .prim(root)
-        .and_then(|spec| spec.prim_order.as_ref());
+        .and_then(|spec| spec.prim_order());
     order
         .into_iter()
         .flatten()

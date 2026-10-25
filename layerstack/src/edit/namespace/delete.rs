@@ -20,7 +20,7 @@ use super::coordinated::Overlay;
 use super::*;
 use crate::prim_indexing::Boundaries;
 use crate::{
-    HashMap, HashSet, Relocate, VariantSets,
+    HashMap, HashSet, Relocate, SparseListOp, VariantSets,
     stage::preparation::{PreparationIndex, layer_links},
 };
 
@@ -325,7 +325,7 @@ fn remove_specs(store: &mut dyn LayerStore, layer: &mut Layer, object: TargetPat
     }
     let root = store.paths().resolve(prim).clone();
     let owned = |store: &dyn LayerStore, spec: &PrimSpec| {
-        spec.outer_variant_sites
+        spec.outer_variant_sites()
             .iter()
             .all(|site| root.is_prefix_of(store.paths().resolve(site.host_path)))
     };
@@ -345,14 +345,14 @@ fn remove_specs(store: &mut dyn LayerStore, layer: &mut Layer, object: TargetPat
             && let Some(spec) = layer.prims.remove(&path)
             && path == prim
         {
-            removed_roots.push(spec.outer_variant_sites);
+            removed_roots.push(spec.outer_variant_sites().to_vec());
         }
         if let Some(branches) = layer.variant_prims.get_mut(&path) {
             let mut kept = Vec::new();
             for spec in core::mem::take(branches) {
                 if owned(store, &spec) {
                     if path == prim {
-                        removed_roots.push(spec.outer_variant_sites);
+                        removed_roots.push(spec.outer_variant_sites().to_vec());
                     }
                 } else {
                     kept.push(spec);
@@ -486,6 +486,13 @@ fn repair_prim(
     author: LayerId,
     object: TargetPath,
 ) -> Result<(), NamespaceError> {
+    // A spec authoring no inherits or specializes has nothing in them to
+    // repair: it lends empty ones rather than allocating its rare fields.
+    let (mut no_inherits, mut no_specializes) = (SparseListOp::new(), SparseListOp::new());
+    let (inherits, specializes) = match spec.rare.as_deref_mut() {
+        Some(rare) => (&mut rare.inherits, &mut rare.specializes),
+        None => (&mut no_inherits, &mut no_specializes),
+    };
     repair_owner(
         store,
         Owner {
@@ -493,14 +500,17 @@ fn repair_prim(
             fields: &mut spec.fields,
             references: &mut spec.references,
             payloads: &mut spec.payloads,
-            inherits: &mut spec.inherits,
-            specializes: &mut spec.specializes,
+            inherits,
+            specializes,
         },
         path,
         author,
         object,
     )?;
-    repair_variant_sets(store, &mut spec.variant_sets, path, author, object)
+    match spec.authored_rare_mut() {
+        Some(rare) => repair_variant_sets(store, &mut rare.variant_sets, path, author, object),
+        None => Ok(()),
+    }
 }
 
 fn repair_variant_sets(
@@ -536,10 +546,10 @@ fn repair_variant_sets(
 struct Owner<'a> {
     properties: &'a mut Vec<PropertyEntry>,
     fields: &'a mut Vec<FieldEntry>,
-    references: &'a mut crate::SparseListOp<Reference>,
-    payloads: &'a mut crate::SparseListOp<Reference>,
-    inherits: &'a mut crate::SparseListOp<PathId>,
-    specializes: &'a mut crate::SparseListOp<PathId>,
+    references: &'a mut SparseListOp<Reference>,
+    payloads: &'a mut SparseListOp<Reference>,
+    inherits: &'a mut SparseListOp<PathId>,
+    specializes: &'a mut SparseListOp<PathId>,
 }
 
 fn repair_owner(

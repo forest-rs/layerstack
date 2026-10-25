@@ -68,10 +68,19 @@ fn build_forest(n: usize) -> InMemoryStore {
         .with_inherit(wood_class)
         .with_reference(Reference::new(LayerId(3), bark));
     tree_spec
+        .rare_mut()
         .variant_sets
         .insert(season, VariantSetSpec { variants });
-    tree_spec.variant_set_names.make_mut().prepend.push(season);
-    tree_spec.variant_selections.insert(season, summer);
+    tree_spec
+        .rare_mut()
+        .variant_set_names
+        .make_mut()
+        .prepend
+        .push(season);
+    tree_spec
+        .rare_mut()
+        .variant_selections
+        .insert(season, summer);
     asset.insert_prim(tree, tree_spec);
     asset.insert_prim(
         tree_trunk,
@@ -110,7 +119,7 @@ fn build_forest(n: usize) -> InMemoryStore {
             .with_inherit(tree_class)
             .with_specialize(base_tree);
         if i % 7 == 0 {
-            spec.variant_selections.insert(season, autumn);
+            spec.rare_mut().variant_selections.insert(season, autumn);
         }
         root.insert_prim(path, spec);
     }
@@ -184,16 +193,21 @@ fn bench_arc_payloads(c: &mut Criterion) {
                             let season = store.tokens.intern("season");
                             let winter = store.tokens.intern("winter");
                             let spec = store.layer_mut(LayerId(2)).unwrap().prim_mut(tree).unwrap();
-                            spec.variant_sets.get_mut(&season).unwrap().variants.insert(
-                                winter,
-                                VariantSpec {
-                                    fields: vec![layerstack::FieldEntry {
-                                        name: points,
-                                        value: value.into(),
-                                    }],
-                                    ..VariantSpec::default()
-                                },
-                            );
+                            spec.rare_mut()
+                                .variant_sets
+                                .get_mut(&season)
+                                .unwrap()
+                                .variants
+                                .insert(
+                                    winter,
+                                    VariantSpec {
+                                        fields: vec![layerstack::FieldEntry {
+                                            name: points,
+                                            value: value.into(),
+                                        }],
+                                        ..VariantSpec::default()
+                                    },
+                                );
                         } else {
                             let unrelated = store.path("/Unrelated");
                             store

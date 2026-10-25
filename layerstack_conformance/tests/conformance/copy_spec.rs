@@ -151,7 +151,7 @@ fn dump(loaded: &LoadedStage, layer: &Layer) -> Json {
             }
             text.push_str(store.tokens.resolve(*name));
             let host = layerstack::Path::root().join(&segments[..=depth]);
-            for site in &spec.outer_variant_sites {
+            for site in spec.outer_variant_sites() {
                 if *store.paths.resolve(site.host_path) == host {
                     text.push_str(&format!(
                         "{{{}={}}}",
@@ -168,14 +168,14 @@ fn dump(loaded: &LoadedStage, layer: &Layer) -> Json {
         arcs(
             &mut record,
             &spec.references,
-            &spec.inherits,
-            &spec.specializes,
+            spec.inherits(),
+            spec.specializes(),
             &spec.properties,
         );
         if let Some(name) = spec.type_name {
             record.insert("typeName".into(), json!(store.tokens.resolve(name)));
         }
-        for (set, variants) in &spec.variant_sets {
+        for (set, variants) in spec.variant_sets() {
             for (variant, branch) in &variants.variants {
                 let mut record = serde_json::Map::new();
                 arcs(

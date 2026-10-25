@@ -34,7 +34,7 @@ use crate::{
 /// The `variantSetNames` of the prim or variant spec `spec`.
 fn names(spec: SpecRef<'_>) -> &ListOp<TokenId> {
     match spec {
-        SpecRef::Prim(spec) => &spec.variant_set_names,
+        SpecRef::Prim(spec) => spec.variant_set_names(),
         SpecRef::Variant(spec) => &spec.variant_set_names,
     }
 }

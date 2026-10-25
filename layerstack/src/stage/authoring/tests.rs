@@ -167,9 +167,13 @@ fn variant_targets_participate_only_when_the_branch_is_selected() {
     let selected = store.tokens.intern("selected");
     let hidden = store.tokens.intern("hidden");
     let mut prim = PrimSpec::def();
-    prim.variant_set_names.make_mut().prepend.push(mode);
-    prim.variant_selections.insert(mode, selected);
-    prim.variant_sets.insert(
+    prim.rare_mut()
+        .variant_set_names
+        .make_mut()
+        .prepend
+        .push(mode);
+    prim.rare_mut().variant_selections.insert(mode, selected);
+    prim.rare_mut().variant_sets.insert(
         mode,
         crate::VariantSetSpec {
             variants: crate::HashMap::from([

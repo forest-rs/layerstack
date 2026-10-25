@@ -74,10 +74,19 @@ fn grove() -> (InMemoryStore, Stage) {
         },
     );
     tree_spec
+        .rare_mut()
         .variant_sets
         .insert(season, VariantSetSpec { variants });
-    tree_spec.variant_set_names.make_mut().prepend.push(season);
-    tree_spec.variant_selections.insert(season, summer);
+    tree_spec
+        .rare_mut()
+        .variant_set_names
+        .make_mut()
+        .prepend
+        .push(season);
+    tree_spec
+        .rare_mut()
+        .variant_selections
+        .insert(season, summer);
     asset.insert_prim(tree, tree_spec);
     asset.insert_prim(
         tree_leaves,
@@ -249,6 +258,7 @@ fn variant_selections_report_the_strongest_opinion() {
         .layer_mut(LayerId(1))
         .and_then(|layer| layer.prim_mut(grove))
         .expect("grove spec")
+        .rare_mut()
         .variant_selections
         .insert(season, winter);
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());

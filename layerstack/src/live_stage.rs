@@ -2361,14 +2361,18 @@ mod tests {
             ..VariantSpec::default()
         };
         let mut spec = PrimSpec::def();
-        spec.variant_sets.insert(
+        spec.rare_mut().variant_sets.insert(
             look,
             VariantSetSpec {
                 variants: [(a, branch(1)), (b, branch(2))].into_iter().collect(),
             },
         );
-        spec.variant_set_names.make_mut().prepend.push(look);
-        spec.variant_selections.insert(look, a);
+        spec.rare_mut()
+            .variant_set_names
+            .make_mut()
+            .prepend
+            .push(look);
+        spec.rare_mut().variant_selections.insert(look, a);
         asset.insert_prim(model, spec);
         store.insert_layer(asset);
         let mut root = Layer::new(LayerId(1));
@@ -4043,17 +4047,21 @@ mod tests {
                 },
             );
         }
-        model_spec.variant_sets.insert(lod, set);
-        model_spec.variant_set_names.make_mut().prepend.push(lod);
-        model_spec.variant_selections.insert(lod, high);
+        model_spec.rare_mut().variant_sets.insert(lod, set);
+        model_spec
+            .rare_mut()
+            .variant_set_names
+            .make_mut()
+            .prepend
+            .push(lod);
+        model_spec.rare_mut().variant_selections.insert(lod, high);
         layer.insert_prim(model, model_spec);
         for (variant, value) in [(high, 1_i64), (low, 2_i64)] {
             layer.insert_prim(
                 geom,
-                PrimSpec {
-                    outer_variant_sites: vec![site(variant)],
-                    ..PrimSpec::def().with_property(field_x, attr(value))
-                },
+                PrimSpec::def()
+                    .with_property(field_x, attr(value))
+                    .with_outer_variant_sites(vec![site(variant)]),
             );
         }
         layer.insert_prim(other, PrimSpec::def().with_property(field_x, attr(5)));
@@ -4083,7 +4091,7 @@ mod tests {
                 .get_mut(&geom)
                 .into_iter()
                 .chain(layer.variant_prims.get_mut(&geom).into_iter().flatten())
-                .find(|spec| spec.outer_variant_sites == [site(variant)])
+                .find(|spec| spec.outer_variant_sites() == [site(variant)])
                 .unwrap();
             spec.set_property(field_x, attr(value));
         };
@@ -4135,19 +4143,23 @@ mod tests {
                 },
             );
         }
-        model_spec.variant_sets.insert(lod, set);
-        model_spec.variant_set_names.make_mut().prepend.push(lod);
-        model_spec.variant_selections.insert(lod, high);
+        model_spec.rare_mut().variant_sets.insert(lod, set);
+        model_spec
+            .rare_mut()
+            .variant_set_names
+            .make_mut()
+            .prepend
+            .push(lod);
+        model_spec.rare_mut().variant_selections.insert(lod, high);
         model_spec.authored_children.push(geom_tok);
         layer.insert_prim(model, model_spec);
         layer.insert_prim(geom, PrimSpec::def());
         for (variant, value) in [(high, 1_i64), (low, 2_i64)] {
             layer.insert_prim(
                 geom,
-                PrimSpec {
-                    outer_variant_sites: vec![site(variant)],
-                    ..PrimSpec::over().with_property(field_x, attr(value))
-                },
+                PrimSpec::over()
+                    .with_property(field_x, attr(value))
+                    .with_outer_variant_sites(vec![site(variant)]),
             );
         }
         layer.insert_prim(other, PrimSpec::def().with_property(field_x, attr(5)));
@@ -4174,6 +4186,7 @@ mod tests {
                 .prims
                 .get_mut(&model)
                 .unwrap()
+                .rare_mut()
                 .variant_selections
                 .insert(lod, variant);
             live.notify_layer_prim_edits(LayerId(1), &[model]);
@@ -4591,6 +4604,7 @@ mod tests {
             .prims
             .get_mut(&parent)
             .unwrap()
+            .rare_mut()
             .prim_order = Some(vec![b_tok, a_tok]);
         live.notify_prim_edit(parent);
         live.recompose(&mut store);
@@ -4625,6 +4639,7 @@ mod tests {
             .prims
             .get_mut(&parent)
             .unwrap()
+            .rare_mut()
             .prim_order = Some(vec![b_tok, a_tok]);
         live.notify_prim_edit(parent);
         live.recompose(&mut store);
@@ -4739,7 +4754,7 @@ mod tests {
         let mut layer = Layer::new(LayerId(1));
         let mut parent = PrimSpec::def();
         parent.authored_children = vec![a, b, c];
-        parent.prim_order = Some(vec![c, a]);
+        parent.rare_mut().prim_order = Some(vec![c, a]);
         layer.insert_prim(world, parent);
         layer.insert_prim(path(&mut store, "A"), PrimSpec::def());
         layer.insert_prim(path(&mut store, "B"), PrimSpec::def().with_active(false));
@@ -4822,22 +4837,23 @@ mod tests {
                 ..VariantSpec::default()
             },
         );
-        spec.variant_sets.insert(shape, set);
-        spec.variant_set_names.make_mut().prepend.push(shape);
-        spec.variant_selections.insert(shape, smooth);
+        spec.rare_mut().variant_sets.insert(shape, set);
+        spec.rare_mut()
+            .variant_set_names
+            .make_mut()
+            .prepend
+            .push(shape);
+        spec.rare_mut().variant_selections.insert(shape, smooth);
         spec.authored_children = vec![stone];
-        spec.prim_order = Some(vec![moss, stone]);
+        spec.rare_mut().prim_order = Some(vec![moss, stone]);
         layer.insert_prim(rock, spec);
         layer.insert_prim(
             p(&mut store, "/Rock/Moss"),
-            PrimSpec {
-                outer_variant_sites: vec![VariantSelectionSite {
-                    host_path: rock,
-                    set: shape,
-                    variant: smooth,
-                }],
-                ..PrimSpec::def()
-            },
+            PrimSpec::def().with_outer_variant_sites(vec![VariantSelectionSite {
+                host_path: rock,
+                set: shape,
+                variant: smooth,
+            }]),
         );
         layer.insert_prim(p(&mut store, "/Rock/Stone"), PrimSpec::def());
         store.insert_layer(layer);
@@ -5205,7 +5221,7 @@ mod tests {
         let mut weak = Layer::new(LayerId(2));
         let mut weak_parent = PrimSpec::def();
         weak_parent.authored_children = vec![a.0, b.0, c.0];
-        weak_parent.prim_order = Some(vec![c.0, b.0, a.0]);
+        weak_parent.rare_mut().prim_order = Some(vec![c.0, b.0, a.0]);
         weak.insert_prim(parent, weak_parent);
         for (_, child) in [a, b, c] {
             weak.insert_prim(child, PrimSpec::def());
@@ -5217,7 +5233,7 @@ mod tests {
         strong.sublayers = vec![SublayerEntry::new(LayerId(2))];
         let mut strong_parent = PrimSpec::over();
         strong_parent.authored_children = vec![d.0];
-        strong_parent.prim_order = Some(vec![a.0, d.0]);
+        strong_parent.rare_mut().prim_order = Some(vec![a.0, d.0]);
         strong.insert_prim(parent, strong_parent);
         strong.insert_prim(d.1, PrimSpec::def());
         store.insert_layer(strong);
@@ -5236,7 +5252,7 @@ mod tests {
         weak.insert_prim(e.1, PrimSpec::def());
         let weak_parent = weak.prims.get_mut(&parent).unwrap();
         weak_parent.authored_children.push(e.0);
-        weak_parent.prim_order = Some(vec![e.0, a.0, b.0]);
+        weak_parent.rare_mut().prim_order = Some(vec![e.0, a.0, b.0]);
         live.notify_layer_prim_edits(LayerId(2), &[parent, e.1]);
         live.recompose(&mut store);
         assert_matches_fresh(&live, &mut store, &[]);

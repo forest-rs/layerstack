@@ -250,8 +250,8 @@ pub use dependency_map::{ArcDependency, LayerDependencyStorage};
 pub use doc::{
     AssetAvailability, FieldEntry, FieldValue, InMemoryStore, InterpolationType, Layer, LayerId,
     LayerOffset, LayerPrims, LayerPrimsIntoIter, LayerPrimsIter, LayerPrimsIterMut, LayerStore,
-    MaybeSync, PrimSpec, Reference, ReferenceSource, ReferenceTarget, Relocate, Specifier,
-    SublayerEntry, Value, VariantBranch, VariantBranches, VariantPrims, VariantSetSpec,
+    MaybeSync, PrimSpec, RarePrimFields, Reference, ReferenceSource, ReferenceTarget, Relocate,
+    Specifier, SublayerEntry, Value, VariantBranch, VariantBranches, VariantPrims, VariantSetSpec,
     VariantSets, VariantSetsIter, VariantSetsIterMut, VariantSpec, combine_dictionaries,
     combine_dictionary_chain, get_field, get_field_mut, insert_field_if_absent, remove_field,
     set_field_vec,

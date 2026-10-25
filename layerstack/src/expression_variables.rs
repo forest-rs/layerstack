@@ -693,7 +693,7 @@ fn authored_source_selections<'s>(
     })?;
     let chain = source.spec_path.variant_chain();
     if chain.is_empty() {
-        Some(&spec.variant_selections)
+        spec.variant_selections()
     } else {
         spec.variant_spec(&chain)
             .map(|branch| &branch.variant_selections)

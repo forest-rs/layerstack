@@ -600,7 +600,7 @@ fn for_each_target_spec<'l>(
             .flat_map(|(path, specs)| specs.iter().map(move |spec| (path, spec))),
     );
     for (&path, spec) in prim_specs {
-        let outer = &spec.outer_variant_sites;
+        let outer = spec.outer_variant_sites();
         visit_all(
             &|| SpecPath::from_variant_selection_sites(path, outer, paths),
             &spec.properties,

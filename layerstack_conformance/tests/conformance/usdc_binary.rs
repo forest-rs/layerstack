@@ -328,8 +328,8 @@ fn gen_variants_parses() {
     let foo = parsed.store.tokens.intern("foo");
     let eggs = parsed.store.tokens.intern("eggs");
     let spam = parsed.store.tokens.intern("spam");
-    assert_eq!(root.variant_selections.get(&foo), Some(&eggs));
-    let set = root.variant_sets.get(&foo).expect("variant set `foo`");
+    assert_eq!(root.variant_selection(foo), Some(eggs));
+    let set = root.variant_sets().get(&foo).expect("variant set `foo`");
     assert!(set.variants.contains_key(&eggs));
     assert!(set.variants.contains_key(&spam));
 }
@@ -657,7 +657,7 @@ fn inherits_and_payloads_are_read_from_their_fields() {
     let sym_rig = rig.path_id("/Model/SymRig");
     let left_rig = rig.prim("/Model/LeftRig");
     // The file authors the inherit as a legacy `add`.
-    assert_eq!(left_rig.inherits.add, [sym_rig]);
+    assert_eq!(left_rig.inherits().add, [sym_rig]);
     let inherit_paths = rig.store.tokens.intern("inheritPaths");
     assert!(left_rig.field(inherit_paths).is_none());
 
@@ -674,9 +674,9 @@ fn inherits_and_payloads_are_read_from_their_fields() {
 fn variant_set_names_read_as_authored() {
     let mut layer = read_composition_asset("TrickyVariantWeakerSelection2_root", "root.usd");
     let prim = layer.prim("/_class_geotype");
-    assert!(prim.variant_set_names.explicit.is_none());
+    assert!(prim.variant_set_names().explicit.is_none());
     let names: Vec<&str> = prim
-        .variant_set_names
+        .variant_set_names()
         .add
         .iter()
         .map(|name| layer.store.tokens.resolve(*name))

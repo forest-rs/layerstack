@@ -185,13 +185,13 @@ pub fn flatten_layer_stack(
                 let mut spec = source.clone();
                 let key = Site {
                     path,
-                    outer: spec.outer_variant_sites.clone(),
+                    outer: spec.outer_variant_sites().to_vec(),
                     nested: Vec::new(),
                 };
                 context.prepare_prim(&mut spec, &key, id, offset)?;
                 let old = result
                     .prim_specs(path)
-                    .find(|old| old.outer_variant_sites == spec.outer_variant_sites)
+                    .find(|old| old.outer_variant_sites() == spec.outer_variant_sites())
                     .cloned();
                 if let Some(mut old) = old {
                     merge_prim(&mut old, &spec)?;
@@ -205,7 +205,7 @@ pub fn flatten_layer_stack(
     for (&path, spec) in &mut result.prims {
         let key = Site {
             path,
-            outer: spec.outer_variant_sites.clone(),
+            outer: spec.outer_variant_sites().to_vec(),
             nested: Vec::new(),
         };
         context.finish_prim(spec, &key);
@@ -214,7 +214,7 @@ pub fn flatten_layer_stack(
         for spec in specs {
             let key = Site {
                 path,
-                outer: spec.outer_variant_sites.clone(),
+                outer: spec.outer_variant_sites().to_vec(),
                 nested: Vec::new(),
             };
             context.finish_prim(spec, &key);
@@ -572,10 +572,13 @@ impl<F: FnMut(LayerId, &str) -> Option<String>> Context<'_, F> {
         if let Some(op) = spec.payloads.get_mut() {
             self.arcs(op, site, true, layer, offset)?;
         }
-        validate_list(&spec.inherits, layer)?;
-        validate_list(&spec.specializes, layer)?;
-        validate_list(&spec.variant_set_names, layer)?;
-        self.prepare_variants(&mut spec.variant_sets, site, layer, offset)
+        validate_list(spec.inherits(), layer)?;
+        validate_list(spec.specializes(), layer)?;
+        validate_list(spec.variant_set_names(), layer)?;
+        match spec.authored_rare_mut() {
+            Some(rare) => self.prepare_variants(&mut rare.variant_sets, site, layer, offset),
+            None => Ok(()),
+        }
     }
     fn prepare_variants(
         &mut self,
@@ -648,19 +651,19 @@ impl<F: FnMut(LayerId, &str) -> Option<String>> Context<'_, F> {
             let Some(prim) = self.store.layer(*layer).and_then(|layer| {
                 layer
                     .prim_specs(site.path)
-                    .find(|spec| spec.outer_variant_sites == site.outer)
+                    .find(|spec| spec.outer_variant_sites() == site.outer)
             }) else {
                 continue;
             };
             if site.nested.is_empty() {
                 append_unique(&mut children, &prim.authored_children);
-                if let Some(order) = &prim.prim_order {
+                if let Some(order) = prim.prim_order() {
                     children = ListOp::default()
-                        .with_reordered(order.clone())
+                        .with_reordered(order.to_vec())
                         .apply_to(&children);
                 }
             } else {
-                let mut sets = &prim.variant_sets;
+                let mut sets = prim.variant_sets();
                 let mut found = None;
                 for (set, variant) in &site.nested {
                     found = sets.get(set).and_then(|set| set.variants.get(variant));
@@ -685,7 +688,9 @@ impl<F: FnMut(LayerId, &str) -> Option<String>> Context<'_, F> {
         if let Some(op) = spec.payloads.get_mut() {
             self.finish_arcs(op, site, true);
         }
-        self.finish_variants(&mut spec.variant_sets, site);
+        if let Some(rare) = spec.authored_rare_mut() {
+            self.finish_variants(&mut rare.variant_sets, site);
+        }
     }
     fn finish_variants(&self, sets: &mut VariantSets, site: &Site) {
         for (&set, variants) in sets {
@@ -842,14 +847,18 @@ fn merge_prim(a: &mut PrimSpec, b: &PrimSpec) -> Result<(), LayerStackFlattenErr
     }
     fill(&mut a.active, &b.active);
     fill(&mut a.instanceable, &b.instanceable);
-    fill(&mut a.property_order, &b.property_order);
-    fill(&mut a.prim_order, &b.prim_order);
     merge_fields(&mut a.fields, &b.fields);
     merge_properties(&mut a.properties, &b.properties)?;
     append_unique(&mut a.authored_children, &b.authored_children);
-    a.variant_set_names = list(&a.variant_set_names, &b.variant_set_names).into();
     a.references = list(&a.references, &b.references).into();
     a.payloads = list(&a.payloads, &b.payloads).into();
+    let Some(b) = b.rare() else {
+        return Ok(());
+    };
+    let a = a.rare_mut();
+    fill(&mut a.property_order, &b.property_order);
+    fill(&mut a.prim_order, &b.prim_order);
+    a.variant_set_names = list(&a.variant_set_names, &b.variant_set_names).into();
     a.inherits = list(&a.inherits, &b.inherits).into();
     a.specializes = list(&a.specializes, &b.specializes).into();
     merge_selections(&mut a.variant_selections, &b.variant_selections);
@@ -910,7 +919,8 @@ mod tests {
                         .with_time_samples(vec![(0., Value::Float(1.)), (2., Value::Float(2.))]),
                 ),
         );
-        weak.prims.get_mut(&path).unwrap().inherits = ListOp::prepended(vec![class]).into();
+        weak.prims.get_mut(&path).unwrap().rare_mut().inherits =
+            ListOp::prepended(vec![class]).into();
         let mut variant = VariantSpec::default();
         variant.properties.push(PropertyEntry {
             name: x,
@@ -919,6 +929,7 @@ mod tests {
         weak.prims
             .get_mut(&path)
             .unwrap()
+            .rare_mut()
             .variant_sets
             .get_or_insert_default(v)
             .variants
@@ -946,6 +957,7 @@ mod tests {
             .prims
             .get_mut(&path)
             .unwrap()
+            .rare_mut()
             .variant_sets
             .get_or_insert_default(v)
             .variants
@@ -959,8 +971,8 @@ mod tests {
         assert!(result.layer.sublayers.is_empty());
         let spec = &result.layer.prims[&path];
         assert_eq!(spec.specifier, Some(Specifier::Def));
-        assert_eq!(spec.inherits.prepend, vec![class]);
-        assert_eq!(spec.variant_sets[&v].variants.len(), 2);
+        assert_eq!(spec.inherits().prepend, vec![class]);
+        assert_eq!(spec.variant_sets()[&v].variants.len(), 2);
         assert_eq!(result.layer.prims[&child].active, Some(false));
         let properties = &spec.properties;
         assert!(
@@ -1072,7 +1084,7 @@ mod tests {
         let target = store.path("/Class");
         let mut layer = Layer::new(LayerId(1));
         let mut spec = PrimSpec::def();
-        spec.inherits.make_mut().add.push(target);
+        spec.rare_mut().inherits.make_mut().add.push(target);
         layer.insert_prim(path, spec);
         store.insert_layer(layer);
         assert!(matches!(

@@ -80,7 +80,7 @@ pub(crate) fn apply_variant_fallbacks(
         filled.insert(set);
         let chosen = fallbacks[&set].iter().copied().find(|variant| {
             specs.iter().any(|(spec, _)| {
-                let own = core::iter::once(&spec.variant_sets);
+                let own = core::iter::once(spec.variant_sets());
                 let nested = spec
                     .selected_variant_branches(selections)
                     .map(|branch| &branch.spec.variant_sets);
@@ -181,10 +181,15 @@ mod tests {
             };
             set.variants.insert(store.tokens.intern(name), variant);
         }
-        spec.variant_sets.insert(shape, set);
-        spec.variant_set_names.make_mut().prepend.push(shape);
+        spec.rare_mut().variant_sets.insert(shape, set);
+        spec.rare_mut()
+            .variant_set_names
+            .make_mut()
+            .prepend
+            .push(shape);
         if let Some(name) = authored {
-            spec.variant_selections
+            spec.rare_mut()
+                .variant_selections
                 .insert(shape, store.tokens.intern(name));
         }
         let mut layer = Layer::new(LayerId(1));
@@ -252,14 +257,15 @@ mod tests {
             };
             sizes.variants.insert(name, variant);
         }
-        spec.variant_sets.insert(shape, shapes);
-        spec.variant_sets.insert(size, sizes);
-        spec.variant_set_names = crate::listop::ListOp::prepended(if size_declared_first {
-            vec![size, shape]
-        } else {
-            vec![shape, size]
-        })
-        .into();
+        spec.rare_mut().variant_sets.insert(shape, shapes);
+        spec.rare_mut().variant_sets.insert(size, sizes);
+        spec.rare_mut().variant_set_names =
+            crate::listop::ListOp::prepended(if size_declared_first {
+                vec![size, shape]
+            } else {
+                vec![shape, size]
+            })
+            .into();
         let mut layer = Layer::new(LayerId(1));
         layer.insert_prim(mast, spec);
         store.insert_layer(layer);

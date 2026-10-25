@@ -94,7 +94,7 @@ fn normalize(spec: &mut PrimSpec, output: LayerId) {
 
     arcs(spec.references.make_mut(), output);
     arcs(spec.payloads.make_mut(), output);
-    variants(&mut spec.variant_sets, output);
+    variants(&mut spec.rare_mut().variant_sets, output);
 }
 
 #[test]
@@ -158,7 +158,7 @@ fn raw_consolidation_matches_native_and_keeps_composed_stage_values() {
         for mut actual in actual {
             let mut expected = expected
                 .iter()
-                .find(|expected| expected.outer_variant_sites == actual.outer_variant_sites)
+                .find(|expected| expected.outer_variant_sites() == actual.outer_variant_sites())
                 .unwrap()
                 .clone();
             normalize(&mut actual, output);

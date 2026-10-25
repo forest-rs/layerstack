@@ -273,7 +273,7 @@ impl<'a> VariantSite<'a> {
         context: SiteContext<'_>,
     ) -> Self {
         let authored = if branch.is_empty() {
-            Some(&spec.variant_selections)
+            spec.variant_selections()
         } else {
             spec.variant_spec(&branch)
                 .map(|variant| &variant.variant_selections)
@@ -484,8 +484,11 @@ fn authored_composed_variant_selections(
         else {
             continue;
         };
+        let Some(authored) = spec.variant_selections() else {
+            continue;
+        };
         let context = SiteContext::Node(graph, source.node);
-        let authored = site_selections(store, &spec.variant_selections, context);
+        let authored = site_selections(store, authored, context);
         for (set, variant) in authored.iter() {
             selections.entry(*set).or_insert(*variant);
         }
@@ -571,9 +574,14 @@ mod child_order_tests {
             ..VariantSpec::default()
         };
         let mut parent = PrimSpec::def();
-        parent.variant_selections.insert(mode, a);
-        parent.variant_set_names.make_mut().prepend.push(mode);
-        parent.variant_sets.insert(
+        parent.rare_mut().variant_selections.insert(mode, a);
+        parent
+            .rare_mut()
+            .variant_set_names
+            .make_mut()
+            .prepend
+            .push(mode);
+        parent.rare_mut().variant_sets.insert(
             mode,
             VariantSetSpec {
                 variants: HashMap::from([(a, branch(1)), (b, branch(2))]),
@@ -654,13 +662,7 @@ mod child_order_tests {
         let (a_tok, b_tok, c_tok) = (name(&store, a), name(&store, b), name(&store, c));
 
         let mut weak = Layer::new(LayerId(2));
-        weak.insert_prim(
-            p,
-            PrimSpec {
-                prim_order: Some(vec![b_tok, a_tok]),
-                ..PrimSpec::def()
-            },
-        );
+        weak.insert_prim(p, PrimSpec::def().with_prim_order(vec![b_tok, a_tok]));
         weak.insert_prim(a, PrimSpec::def());
         weak.insert_prim(b, PrimSpec::def());
         store.insert_layer(weak);
@@ -670,13 +672,7 @@ mod child_order_tests {
         // A stronger layer adds `C` and moves it first.
         let mut strong = Layer::new(LayerId(1));
         strong.sublayers = vec![crate::SublayerEntry::new(LayerId(2))];
-        strong.insert_prim(
-            p,
-            PrimSpec {
-                prim_order: Some(vec![c_tok, b_tok]),
-                ..PrimSpec::over()
-            },
-        );
+        strong.insert_prim(p, PrimSpec::over().with_prim_order(vec![c_tok, b_tok]));
         strong.insert_prim(c, PrimSpec::def());
         store.insert_layer(strong);
         let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
@@ -740,7 +736,7 @@ mod child_order_tests {
                     } else {
                         PrimSpec::def()
                     };
-                    parent.prim_order = (!order.is_empty()).then_some(order);
+                    parent.rare_mut().prim_order = (!order.is_empty()).then_some(order);
                     if explicit {
                         parent.authored_children.clone_from(&names);
                     }
@@ -1657,7 +1653,7 @@ mod deferred_arc_tests {
             references: crate::ListOp::prepended(vec![deferred("./never.usda")]).into(),
             ..VariantSpec::default()
         };
-        host.variant_sets.insert(
+        host.rare_mut().variant_sets.insert(
             set,
             VariantSetSpec {
                 variants: [(x, branch), (y, VariantSpec::default())]
@@ -1665,8 +1661,12 @@ mod deferred_arc_tests {
                     .collect(),
             },
         );
-        host.variant_set_names.make_mut().prepend.push(set);
-        host.variant_selections.insert(set, y);
+        host.rare_mut()
+            .variant_set_names
+            .make_mut()
+            .prepend
+            .push(set);
+        host.rare_mut().variant_selections.insert(set, y);
 
         let mut root = Layer::new(ROOT);
         for (path, spec) in [

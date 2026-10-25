@@ -656,7 +656,7 @@ fn validate_authored_subtree(
                     layer: id,
                     spec: Loc::Prim {
                         path,
-                        sites: spec.outer_variant_sites.clone(),
+                        sites: spec.outer_variant_sites().to_vec(),
                     }
                     .spec_path(store.paths()),
                 });
@@ -736,7 +736,7 @@ fn reachable_layers(stage: &Stage, store: &dyn LayerStore, root: LayerId) -> Vec
             for refs in [&spec.references, &spec.payloads] {
                 collect_ref_layers(store, refs, &mut pending);
             }
-            collect_variant_layers(store, &spec.variant_sets, &mut pending);
+            collect_variant_layers(store, spec.variant_sets(), &mut pending);
         }
     }
     found.sort_unstable();
@@ -848,7 +848,10 @@ pub(super) fn move_specs(
         .and_then(|s| s.authored_children.iter().position(|n| *n == old_name));
     if let Some(s) = layer.prims.get_mut(&source_parent) {
         s.authored_children.retain(|n| *n != old_name);
-        if let Some(order) = &mut s.prim_order {
+        if let Some(order) = s
+            .authored_rare_mut()
+            .and_then(|rare| rare.prim_order.as_mut())
+        {
             order.retain(|n| *n != old_name);
         }
     }
@@ -870,7 +873,10 @@ pub(super) fn move_specs(
         .values_mut()
         .chain(layer.variant_prims.values_mut().flatten())
     {
-        for site in &mut spec.outer_variant_sites {
+        let Some(rare) = spec.authored_rare_mut() else {
+            continue;
+        };
+        for site in &mut rare.outer_variant_sites {
             site.host_path = path_move.prim(store, site.host_path);
         }
     }
@@ -1090,17 +1096,20 @@ pub(super) fn repair_prim(
     if let Some(op) = spec.payloads.get_mut() {
         repair_refs(store, op, author, edited, local, source)?;
     }
+    let Some(rare) = spec.authored_rare_mut() else {
+        return Ok(());
+    };
     if let Some(mapping) = local {
-        if let Some(op) = spec.inherits.get_mut() {
+        if let Some(op) = rare.inherits.get_mut() {
             map_list(op, |p| *p = mapping.prim(store, *p));
         }
-        if let Some(op) = spec.specializes.get_mut() {
+        if let Some(op) = rare.specializes.get_mut() {
             map_list(op, |p| *p = mapping.prim(store, *p));
         }
     }
     repair_variants(
         store,
-        &mut spec.variant_sets,
+        &mut rare.variant_sets,
         author,
         edited,
         local,

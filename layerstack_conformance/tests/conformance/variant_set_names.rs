@@ -118,7 +118,7 @@ enum Spec<'a> {
 impl Spec<'_> {
     fn record(self, tokens: &TokenInterner) -> Json {
         match self {
-            Self::Prim(spec) => spec_record(&spec.variant_set_names, &spec.variant_sets, tokens),
+            Self::Prim(spec) => spec_record(spec.variant_set_names(), spec.variant_sets(), tokens),
             Self::Variant(spec) => spec_record(&spec.variant_set_names, &spec.variant_sets, tokens),
         }
     }
@@ -351,7 +351,7 @@ fn list_op_forms_read_and_save_as_authored() {
 #[test]
 fn an_empty_explicit_list_saves_only_as_usdc() {
     let mut imported = Imported::usda("#usda 1.0\ndef \"Rock\"\n{\n}\n");
-    imported.prim("/Rock").variant_set_names = ListOp::explicit(Vec::new()).into();
+    imported.prim("/Rock").rare_mut().variant_set_names = ListOp::explicit(Vec::new()).into();
     let error = imported.save_usda().expect_err("USDA refuses it");
     assert!(
         error.to_string().contains("empty explicit variantSets"),
@@ -360,7 +360,7 @@ fn an_empty_explicit_list_saves_only_as_usdc() {
     let bytes = imported.save_usdc().expect("USDC holds it");
     let mut again = Imported::usdc(&bytes);
     assert_eq!(
-        again.prim("/Rock").variant_set_names,
+        *again.prim("/Rock").variant_set_names(),
         ListOp::explicit(Vec::new())
     );
 }

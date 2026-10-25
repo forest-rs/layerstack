@@ -388,10 +388,10 @@ fn leftover_arcs(layer: &Layer, store: &InMemoryStore) -> Vec<String> {
             && internal
             && spec.authored_children.is_empty();
         let arcs = spec.payloads != ListOp::default()
-            || spec.inherits != ListOp::default()
-            || spec.specializes != ListOp::default()
-            || !spec.variant_sets.is_empty()
-            || !spec.variant_selections.is_empty()
+            || *spec.inherits() != ListOp::default()
+            || *spec.specializes() != ListOp::default()
+            || !spec.variant_sets().is_empty()
+            || spec.variant_selections().is_some()
             || (spec.references != ListOp::default() && !prototype);
         if arcs {
             found.push(store.paths.display(path, &store.tokens));

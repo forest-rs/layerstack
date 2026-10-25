@@ -22,7 +22,10 @@ use hashbrown::HashMap;
 
 use crate::{
     array_edit::{ArrayEditOp, ArrayEditOperand},
-    doc::{FieldEntry, FieldValue, PrimSpec, Value, VariantSetSpec, VariantSets, VariantSpec},
+    doc::{
+        FieldEntry, FieldValue, PrimSpec, RarePrimFields, Value, VariantSetSpec, VariantSets,
+        VariantSpec,
+    },
     property::{PropertyEntry, PropertySpec, PropertyType},
     spline::{Extrapolation, Knot, LoopParams, SplineData},
 };
@@ -340,37 +343,51 @@ impl Same for PrimSpec {
             type_name,
             fields,
             properties,
-            property_order,
-            outer_variant_sites,
             authored_children,
-            variant_selections,
-            variant_sets,
-            variant_set_names,
             references,
-            inherits,
-            specializes,
             payloads,
-            prim_order,
             instanceable,
             active,
+            rare,
         } = self;
+        let rare_same = match (rare.as_deref(), other.rare()) {
+            (Some(a), Some(b)) => a.same(b),
+            (Some(only), None) | (None, Some(only)) => only.is_empty(),
+            (None, None) => true,
+        };
         *specifier == other.specifier
             && *type_name == other.type_name
             && fields.same(&other.fields)
             && properties.same(&other.properties)
-            && *property_order == other.property_order
-            && *outer_variant_sites == other.outer_variant_sites
             && *authored_children == other.authored_children
+            && *references == other.references
+            && *payloads == other.payloads
+            && *instanceable == other.instanceable
+            && *active == other.active
+            && rare_same
+    }
+}
+
+impl Same for RarePrimFields {
+    fn same(&self, other: &Self) -> bool {
+        let Self {
+            inherits,
+            specializes,
+            variant_selections,
+            variant_sets,
+            variant_set_names,
+            property_order,
+            prim_order,
+            outer_variant_sites,
+        } = self;
+        *inherits == other.inherits
+            && *specializes == other.specializes
             && *variant_selections == other.variant_selections
             && variant_sets.same(&other.variant_sets)
             && *variant_set_names == other.variant_set_names
-            && *references == other.references
-            && *inherits == other.inherits
-            && *specializes == other.specializes
-            && *payloads == other.payloads
+            && *property_order == other.property_order
             && *prim_order == other.prim_order
-            && *instanceable == other.instanceable
-            && *active == other.active
+            && *outer_variant_sites == other.outer_variant_sites
     }
 }
 

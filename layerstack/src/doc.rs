@@ -1971,7 +1971,15 @@ impl core::ops::Index<&TokenId> for VariantSets {
 }
 
 /// Opinions for a prim at a path.
-#[derive(Clone, Debug, Default, PartialEq)]
+///
+/// The fields most prim specs author are held inline. Those few author
+/// (inherits and specializes, variant sets and selections, reorder
+/// statements and the variant branch a spec is authored in) are held out
+/// of line in a [`RarePrimFields`], allocated once one of them is
+/// authored: read them through the accessors of the same names, which
+/// read as empty when none is authored, and author them through
+/// [`PrimSpec::rare_mut`].
+#[derive(Clone, Debug, Default)]
 #[doc(alias = "SdfPrimSpec")]
 pub struct PrimSpec {
     /// The prim specifier (`def`, `over`, or `class`).
@@ -1997,19 +2005,6 @@ pub struct PrimSpec {
     ///
     /// Spec: AOUSD Core §7.6.2.2.2 (`propertyChildren`), §7.3.7.
     pub properties: Vec<PropertyEntry>,
-    /// Authored property ordering (`reorder properties = [...]`).
-    ///
-    /// OpenUSD sorts composed property names and then applies the strongest
-    /// `propertyOrder` opinion (`UsdPrim::ApplyPropertyOrder` in
-    /// `pxr/usd/usd/prim.cpp`).
-    pub property_order: Option<Vec<TokenId>>,
-    /// Variant selections required to reach this concrete prim spec in its
-    /// defining layer.
-    ///
-    /// This preserves composed provenance for prims authored beneath variant
-    /// branches so descendant local opinions can retain their variant-qualified
-    /// source identity.
-    pub outer_variant_sites: Vec<VariantSelectionSite>,
     /// Authored child prim names in this layer, in file order.
     ///
     /// This is used as a deterministic baseline for child ordering. Child
@@ -2019,6 +2014,61 @@ pub struct PrimSpec {
     /// Spec: AOUSD Core §11 (stage population) and supplemental suite child
     /// ordering tests (e.g. `BasicListEditingWithInherits_root`).
     pub authored_children: Vec<TokenId>,
+    /// References arcs (a `ListOp` chain across the layer stack).
+    pub references: SparseListOp<Reference>,
+    /// Payloads arcs (a `ListOp` chain across the layer stack).
+    ///
+    /// Payloads are structurally identical to references but support deferred
+    /// loading. When loaded, they behave like references with the same namespace
+    /// mapping. Their position in LIVERPS is between References and Specializes.
+    ///
+    /// Spec: AOUSD Core §10 (payloads arc, §5.1.22).
+    pub payloads: SparseListOp<Reference>,
+    /// Whether this prim is instanceable.
+    ///
+    /// When `true` and the prim has composition arcs (references, payloads),
+    /// descendant local opinions are stripped — only opinions from composition
+    /// arc targets survive. This enables prototype sharing for identical
+    /// composition structures.
+    ///
+    /// Spec: AOUSD Core §11 (instancing), §5.1.14 (instanceable).
+    pub instanceable: Option<bool>,
+    /// Whether this prim is active.
+    ///
+    /// When `false`, the prim and all its namespace descendants are excluded
+    /// from the composed stage. The strongest opinion wins.
+    ///
+    /// Spec: AOUSD Core §7.6 (active metadata), §11 (stage population).
+    pub active: Option<bool>,
+    /// The rarely authored fields, `None` until one is authored. Crate
+    /// code borrows it directly where it needs another field mutably at
+    /// the same time.
+    pub(crate) rare: Option<Box<RarePrimFields>>,
+}
+
+/// The fields of a [`PrimSpec`] few prim specs author, held out of line
+/// so that a prim spec authoring none of them does not carry their
+/// storage.
+///
+/// A spec allocates them once one is authored ([`PrimSpec::rare_mut`]);
+/// fields emptied again stay allocated and read, and compare, as
+/// unauthored.
+///
+/// Spec: AOUSD Core §7.6.2 (prim spec fields).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct RarePrimFields {
+    /// Inherits arcs (a `ListOp` chain across the layer stack).
+    ///
+    /// Spec: AOUSD Core §10 (inherits arc), with ordering via §12.4 (`ListOps`).
+    pub inherits: SparseListOp<PathId>,
+    /// Specializes arcs (a `ListOp` chain across the layer stack).
+    ///
+    /// Specializes is similar to inherits but sits at the weakest position in
+    /// LIVERPS. Unlike references, specializes propagates through all levels of
+    /// referencing.
+    ///
+    /// Spec: AOUSD Core §10 (specializes arc, §5.1.33), with ordering via §12.4 (`ListOps`).
+    pub specializes: SparseListOp<PathId>,
     /// Authored variant selections (set -> chosen variant).
     pub variant_selections: HashMap<TokenId, TokenId>,
     /// Authored variant sets of this prim spec (`/P{v=}`), keyed by set
@@ -2042,28 +2092,12 @@ pub struct PrimSpec {
     /// §10.5 (variant selection). OpenUSD: `PcpComposeSiteVariantSets` in
     /// `pxr/usd/pcp/composeSite.cpp`.
     pub variant_set_names: SparseListOp<TokenId>,
-    /// References arcs (a `ListOp` chain across the layer stack).
-    pub references: SparseListOp<Reference>,
-    /// Inherits arcs (a `ListOp` chain across the layer stack).
+    /// Authored property ordering (`reorder properties = [...]`).
     ///
-    /// Spec: AOUSD Core §10 (inherits arc), with ordering via §12.4 (`ListOps`).
-    pub inherits: SparseListOp<PathId>,
-    /// Specializes arcs (a `ListOp` chain across the layer stack).
-    ///
-    /// Specializes is similar to inherits but sits at the weakest position in
-    /// LIVERPS. Unlike references, specializes propagates through all levels of
-    /// referencing.
-    ///
-    /// Spec: AOUSD Core §10 (specializes arc, §5.1.33), with ordering via §12.4 (`ListOps`).
-    pub specializes: SparseListOp<PathId>,
-    /// Payloads arcs (a `ListOp` chain across the layer stack).
-    ///
-    /// Payloads are structurally identical to references but support deferred
-    /// loading. When loaded, they behave like references with the same namespace
-    /// mapping. Their position in LIVERPS is between References and Specializes.
-    ///
-    /// Spec: AOUSD Core §10 (payloads arc, §5.1.22).
-    pub payloads: SparseListOp<Reference>,
+    /// OpenUSD sorts composed property names and then applies the strongest
+    /// `propertyOrder` opinion (`UsdPrim::ApplyPropertyOrder` in
+    /// `pxr/usd/usd/prim.cpp`).
+    pub property_order: Option<Vec<TokenId>>,
     /// Optional child ordering (aka `primOrder` in the supplemental suite).
     ///
     /// This is used during stage population to produce deterministic, authored
@@ -2072,22 +2106,228 @@ pub struct PrimSpec {
     /// Spec: AOUSD Core §11 (stage population), plus the supplemental
     /// parser’s `primOrder` field (`reorder nameChildren = [...]`).
     pub prim_order: Option<Vec<TokenId>>,
-    /// Whether this prim is instanceable.
+    /// Variant selections required to reach this concrete prim spec in its
+    /// defining layer.
     ///
-    /// When `true` and the prim has composition arcs (references, payloads),
-    /// descendant local opinions are stripped — only opinions from composition
-    /// arc targets survive. This enables prototype sharing for identical
-    /// composition structures.
+    /// This preserves composed provenance for prims authored beneath variant
+    /// branches so descendant local opinions can retain their variant-qualified
+    /// source identity.
+    pub outer_variant_sites: Vec<VariantSelectionSite>,
+}
+
+/// Compares the authored opinions: rare fields allocated but emptied
+/// compare equal to rare fields never authored.
+impl PartialEq for PrimSpec {
+    fn eq(&self, other: &Self) -> bool {
+        let Self {
+            specifier,
+            type_name,
+            fields,
+            properties,
+            authored_children,
+            references,
+            payloads,
+            instanceable,
+            active,
+            rare,
+        } = self;
+        let rare_eq = match (rare.as_deref(), other.rare.as_deref()) {
+            (Some(a), Some(b)) => a == b,
+            (Some(only), None) | (None, Some(only)) => only.is_empty(),
+            (None, None) => true,
+        };
+        *specifier == other.specifier
+            && *type_name == other.type_name
+            && *fields == other.fields
+            && *properties == other.properties
+            && *authored_children == other.authored_children
+            && *references == other.references
+            && *payloads == other.payloads
+            && *instanceable == other.instanceable
+            && *active == other.active
+            && rare_eq
+    }
+}
+
+impl RarePrimFields {
+    /// Whether none of the fields is authored: each reads as it does on a
+    /// prim spec that never allocated them.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        let Self {
+            inherits,
+            specializes,
+            variant_selections,
+            variant_sets,
+            variant_set_names,
+            property_order,
+            prim_order,
+            outer_variant_sites,
+        } = self;
+        inherits.is_empty()
+            && specializes.is_empty()
+            && variant_selections.is_empty()
+            && variant_sets.is_empty()
+            && variant_set_names.is_empty()
+            && property_order.is_none()
+            && prim_order.is_none()
+            && outer_variant_sites.is_empty()
+    }
+}
+
+/// No variant sets, for a prim spec authoring none.
+static NO_VARIANT_SETS: VariantSets = VariantSets::new();
+
+/// An empty path list op, for a prim spec authoring no inherits or
+/// specializes.
+const NO_PATHS: &ListOp<PathId> = &ListOp::new();
+
+/// An empty token list op, for a prim spec authoring no `variantSetNames`.
+const NO_TOKENS: &ListOp<TokenId> = &ListOp::new();
+
+impl PrimSpec {
+    /// The rarely authored fields, if this spec has allocated them: `None`
+    /// when it authors none of them (see [`RarePrimFields`]).
+    #[inline]
+    #[must_use]
+    pub fn rare(&self) -> Option<&RarePrimFields> {
+        self.rare.as_deref()
+    }
+
+    /// The rarely authored fields to author into, allocated first if this
+    /// spec has none.
+    #[inline]
+    pub fn rare_mut(&mut self) -> &mut RarePrimFields {
+        self.rare.get_or_insert_with(Box::default)
+    }
+
+    /// The rarely authored fields to edit in place, if this spec has
+    /// allocated them: `None`, and no allocation, otherwise. Edits that
+    /// only remove or rewrite opinions use this rather than
+    /// [`Self::rare_mut`].
+    #[inline]
+    pub fn authored_rare_mut(&mut self) -> Option<&mut RarePrimFields> {
+        self.rare.as_deref_mut()
+    }
+
+    /// Inherits arcs (a `ListOp` chain across the layer stack), empty when
+    /// none is authored.
     ///
-    /// Spec: AOUSD Core §11 (instancing), §5.1.14 (instanceable).
-    pub instanceable: Option<bool>,
-    /// Whether this prim is active.
+    /// Spec: AOUSD Core §10 (inherits arc), with ordering via §12.4 (`ListOps`).
+    #[inline]
+    #[must_use]
+    pub fn inherits(&self) -> &ListOp<PathId> {
+        self.rare.as_deref().map_or(NO_PATHS, |rare| &rare.inherits)
+    }
+
+    /// Specializes arcs (a `ListOp` chain across the layer stack), empty
+    /// when none is authored.
     ///
-    /// When `false`, the prim and all its namespace descendants are excluded
-    /// from the composed stage. The strongest opinion wins.
+    /// Spec: AOUSD Core §10 (specializes arc, §5.1.33), with ordering via §12.4 (`ListOps`).
+    #[inline]
+    #[must_use]
+    pub fn specializes(&self) -> &ListOp<PathId> {
+        self.rare
+            .as_deref()
+            .map_or(NO_PATHS, |rare| &rare.specializes)
+    }
+
+    /// The authored variant selections (set -> chosen variant), `None` when
+    /// none is authored.
     ///
-    /// Spec: AOUSD Core §7.6 (active metadata), §11 (stage population).
-    pub active: Option<bool>,
+    /// Unlike the other accessors this does not read as an empty map: a
+    /// hash map has no empty value to borrow without allocating one.
+    #[inline]
+    #[must_use]
+    pub fn variant_selections(&self) -> Option<&HashMap<TokenId, TokenId>> {
+        self.rare
+            .as_deref()
+            .map(|rare| &rare.variant_selections)
+            .filter(|selections| !selections.is_empty())
+    }
+
+    /// The variant authored as selected in `set`, if any.
+    #[inline]
+    #[must_use]
+    pub fn variant_selection(&self, set: TokenId) -> Option<TokenId> {
+        self.rare
+            .as_deref()
+            .and_then(|rare| rare.variant_selections.get(&set).copied())
+    }
+
+    /// The variant sets of this prim spec (see
+    /// [`RarePrimFields::variant_sets`]), empty when none is authored.
+    ///
+    /// Spec: AOUSD Core §7.3.6 (prim specs contain variant set specs).
+    #[inline]
+    #[must_use]
+    pub fn variant_sets(&self) -> &VariantSets {
+        self.rare
+            .as_deref()
+            .map_or(&NO_VARIANT_SETS, |rare| &rare.variant_sets)
+    }
+
+    /// The `variantSetNames` list op of this prim spec (see
+    /// [`RarePrimFields::variant_set_names`]), empty when none is authored.
+    ///
+    /// Spec: AOUSD Core §7.6.2.3.5 (`variantSetNames`).
+    #[inline]
+    #[must_use]
+    pub fn variant_set_names(&self) -> &ListOp<TokenId> {
+        self.rare
+            .as_deref()
+            .map_or(NO_TOKENS, |rare| &rare.variant_set_names)
+    }
+
+    /// The authored property ordering (`reorder properties = [...]`), if
+    /// any.
+    ///
+    /// OpenUSD sorts composed property names and then applies the strongest
+    /// `propertyOrder` opinion (`UsdPrim::ApplyPropertyOrder` in
+    /// `pxr/usd/usd/prim.cpp`).
+    #[inline]
+    #[must_use]
+    pub fn property_order(&self) -> Option<&[TokenId]> {
+        self.rare.as_deref()?.property_order.as_deref()
+    }
+
+    /// The authored child ordering (`reorder nameChildren = [...]`), if
+    /// any.
+    ///
+    /// Spec: AOUSD Core §11 (stage population), plus the supplemental
+    /// parser’s `primOrder` field.
+    #[inline]
+    #[must_use]
+    pub fn prim_order(&self) -> Option<&[TokenId]> {
+        self.rare.as_deref()?.prim_order.as_deref()
+    }
+
+    /// The variant selections required to reach this prim spec in its
+    /// defining layer, outermost first: empty for a spec outside variant
+    /// branches (see [`RarePrimFields::outer_variant_sites`]).
+    #[inline]
+    #[must_use]
+    pub fn outer_variant_sites(&self) -> &[VariantSelectionSite] {
+        self.rare
+            .as_deref()
+            .map_or(&[], |rare| &rare.outer_variant_sites)
+    }
+
+    /// Sets the authored child ordering (`reorder nameChildren`; builder,
+    /// consuming); see [`Self::prim_order`].
+    pub fn with_prim_order(mut self, order: Vec<TokenId>) -> Self {
+        self.rare_mut().prim_order = Some(order);
+        self
+    }
+
+    /// Sets the variant branch this prim spec is authored in (builder,
+    /// consuming); see [`Self::outer_variant_sites`].
+    pub fn with_outer_variant_sites(mut self, sites: Vec<VariantSelectionSite>) -> Self {
+        if !sites.is_empty() || self.rare.is_some() {
+            self.rare_mut().outer_variant_sites = sites;
+        }
+        self
+    }
 }
 
 impl PrimSpec {
@@ -2184,13 +2424,13 @@ impl PrimSpec {
 
     /// Appends an inherit arc.
     pub fn add_inherit(&mut self, path: PathId) -> &mut Self {
-        self.inherits.make_mut().append.push(path);
+        self.rare_mut().inherits.make_mut().append.push(path);
         self
     }
 
     /// Appends an inherit arc (builder, consuming).
     pub fn with_inherit(mut self, path: PathId) -> Self {
-        self.inherits.make_mut().append.push(path);
+        self.rare_mut().inherits.make_mut().append.push(path);
         self
     }
 
@@ -2208,13 +2448,13 @@ impl PrimSpec {
 
     /// Appends a specialize arc.
     pub fn add_specialize(&mut self, path: PathId) -> &mut Self {
-        self.specializes.make_mut().append.push(path);
+        self.rare_mut().specializes.make_mut().append.push(path);
         self
     }
 
     /// Appends a specialize arc (builder, consuming).
     pub fn with_specialize(mut self, path: PathId) -> Self {
-        self.specializes.make_mut().append.push(path);
+        self.rare_mut().specializes.make_mut().append.push(path);
         self
     }
 
@@ -2248,7 +2488,7 @@ impl PrimSpec {
     /// Spec: AOUSD Core §7.3.6 (variant specs may contain variant set
     /// specs).
     pub fn variant_branches(&self) -> VariantBranches<'_> {
-        VariantBranches::new(&self.variant_sets, None)
+        VariantBranches::new(self.variant_sets(), None)
     }
 
     /// Iterates the variant specs `selections` (set → variant) selects:
@@ -2261,7 +2501,7 @@ impl PrimSpec {
         &'a self,
         selections: &'a HashMap<TokenId, TokenId>,
     ) -> VariantBranches<'a> {
-        VariantBranches::new(&self.variant_sets, Some(selections))
+        VariantBranches::new(self.variant_sets(), Some(selections))
     }
 
     /// Returns the variant spec at `chain` (outermost first) below this
@@ -2269,13 +2509,13 @@ impl PrimSpec {
     /// empty chain or one this prim spec does not author.
     #[must_use]
     pub fn variant_spec(&self, chain: &[(TokenId, TokenId)]) -> Option<&VariantSpec> {
-        variant_spec_in(&self.variant_sets, chain)
+        variant_spec_in(self.variant_sets(), chain)
     }
 
     /// Returns the variant spec at `chain` mutably (see
     /// [`PrimSpec::variant_spec`]).
     pub fn variant_spec_mut(&mut self, chain: &[(TokenId, TokenId)]) -> Option<&mut VariantSpec> {
-        variant_spec_in_mut(&mut self.variant_sets, chain)
+        variant_spec_in_mut(&mut self.authored_rare_mut()?.variant_sets, chain)
     }
 
     /// Returns the variant sets held at `chain` below this prim spec, with
@@ -2288,7 +2528,7 @@ impl PrimSpec {
         chain: &[(TokenId, TokenId)],
     ) -> Option<(&VariantSets, &ListOp<TokenId>)> {
         if chain.is_empty() {
-            return Some((&self.variant_sets, &self.variant_set_names));
+            return Some((self.variant_sets(), self.variant_set_names()));
         }
         let spec = self.variant_spec(chain)?;
         Some((&spec.variant_sets, &spec.variant_set_names))
@@ -2787,7 +3027,9 @@ impl Layer {
             if let Some(op) = spec.payloads.get_mut() {
                 arcs(op, &map);
             }
-            variant_sets(&mut spec.variant_sets, &map);
+            if let Some(rare) = spec.authored_rare_mut() {
+                variant_sets(&mut rare.variant_sets, &map);
+            }
         }
     }
 
@@ -2849,7 +3091,7 @@ impl Layer {
         self.prims
             .values()
             .chain(self.variant_prims.values().flatten())
-            .any(|spec| arcs(&spec.references, &spec.payloads) || in_sets(&spec.variant_sets))
+            .any(|spec| arcs(&spec.references, &spec.payloads) || in_sets(spec.variant_sets()))
     }
 
     /// Returns this layer's stable identifier in its store.
@@ -3045,7 +3287,7 @@ impl Layer {
             )
             .collect();
         let site = |spec: &PrimSpec| {
-            spec.outer_variant_sites
+            spec.outer_variant_sites()
                 .iter()
                 .map(|s| {
                     (
@@ -3296,9 +3538,9 @@ impl Layer {
             }
             hashbrown::hash_map::Entry::Occupied(slot) => slot,
         };
-        if slot.get().outer_variant_sites == spec.outer_variant_sites {
+        if slot.get().outer_variant_sites() == spec.outer_variant_sites() {
             slot.insert(spec);
-        } else if !spec.outer_variant_sites.is_empty() {
+        } else if !spec.outer_variant_sites().is_empty() {
             insert_branch_spec(self.variant_prims.entry(path).or_default(), *spec);
         } else {
             let displaced = slot.insert(spec);
@@ -3458,7 +3700,7 @@ impl Layer {
     #[must_use]
     pub fn prim_spec_in(&self, path: PathId, sites: &[VariantSelectionSite]) -> Option<&PrimSpec> {
         self.prim_specs(path)
-            .find(|spec| spec.outer_variant_sites == sites)
+            .find(|spec| spec.outer_variant_sites() == sites)
     }
 
     /// Returns the prim specs at `path` authored directly inside the
@@ -3478,7 +3720,7 @@ impl Layer {
         branch: VariantSelectionSite,
     ) -> impl Iterator<Item = &PrimSpec> {
         self.prim_specs(path)
-            .filter(move |spec| spec.outer_variant_sites.last() == Some(&branch))
+            .filter(move |spec| spec.outer_variant_sites().last() == Some(&branch))
     }
 
     /// Returns the prim specs at `path` authored directly in a branch of
@@ -3504,11 +3746,11 @@ impl Layer {
         selections: &'a HashMap<TokenId, TokenId>,
     ) -> impl Iterator<Item = &'a PrimSpec> {
         self.prim_specs(path).filter(move |spec| {
-            spec.outer_variant_sites
+            spec.outer_variant_sites()
                 .last()
                 .is_some_and(|site| site.host_path == host)
                 && spec
-                    .outer_variant_sites
+                    .outer_variant_sites()
                     .iter()
                     .filter(|site| site.host_path == host)
                     .all(|site| selections.get(&site.set) == Some(&site.variant))
@@ -3686,7 +3928,7 @@ impl Layer {
 fn insert_branch_spec(specs: &mut Vec<PrimSpec>, spec: PrimSpec) {
     match specs
         .iter_mut()
-        .find(|existing| existing.outer_variant_sites == spec.outer_variant_sites)
+        .find(|existing| existing.outer_variant_sites() == spec.outer_variant_sites())
     {
         Some(existing) => *existing = spec,
         None => specs.push(spec),
@@ -4150,6 +4392,46 @@ mod tests {
     use super::*;
     use alloc::boxed::Box;
 
+    /// A prim spec authoring no rare field allocates none, reads each as
+    /// unauthored, and compares equal to one whose rare fields were
+    /// allocated and emptied again.
+    #[test]
+    fn rare_prim_fields_read_as_unauthored_until_authored() {
+        let store = InMemoryStore::default();
+        let base = store.path("/Base");
+        let (set, variant) = (store.tokens.intern("set"), store.tokens.intern("variant"));
+        let plain = PrimSpec::def().with_outer_variant_sites(Vec::new());
+        assert!(
+            plain.rare().is_none(),
+            "nothing authored, nothing allocated"
+        );
+        assert!(plain.inherits().is_empty() && plain.specializes().is_empty());
+        assert!(plain.variant_sets().is_empty() && plain.variant_set_names().is_empty());
+        assert_eq!(plain.variant_selections(), None);
+        assert_eq!(plain.variant_selection(set), None);
+        assert_eq!((plain.property_order(), plain.prim_order()), (None, None));
+        assert!(plain.outer_variant_sites().is_empty());
+
+        let mut authored = PrimSpec::def().with_inherit(base);
+        authored.rare_mut().variant_selections.insert(set, variant);
+        assert_eq!(authored.inherits().prepend, []);
+        assert_eq!(authored.inherits().append, [base]);
+        assert_eq!(authored.variant_selection(set), Some(variant));
+        assert_ne!(authored, plain);
+
+        let rare = authored.authored_rare_mut().expect("allocated");
+        rare.inherits = SparseListOp::new();
+        rare.variant_selections.clear();
+        assert!(authored.rare().is_some_and(RarePrimFields::is_empty));
+        assert_eq!(
+            authored.variant_selections(),
+            None,
+            "an emptied map reads as none"
+        );
+        assert_eq!(authored, plain);
+        assert_eq!(plain, authored);
+    }
+
     /// Sets keep their order: a new one last, a replaced one in place, a
     /// removed one leaving the others in order; `insert_at` places one.
     #[test]
@@ -4333,7 +4615,7 @@ mod tests {
         let (a, b) = (store.path("/A"), store.path("/A/B"));
         let (set, variant) = (store.tokens.intern("look"), store.tokens.intern("red"));
         let mut branch = PrimSpec::over();
-        branch.outer_variant_sites = vec![VariantSelectionSite {
+        branch.rare_mut().outer_variant_sites = vec![VariantSelectionSite {
             host_path: a,
             set,
             variant,
@@ -4944,8 +5226,8 @@ mod tests {
         );
         let ay = variant(4, vec![(b, y, variant(5, vec![]))]);
         let mut prim = PrimSpec::def();
-        prim.variant_set_names = ListOp::prepended(vec![a]).into();
-        let set = prim.variant_sets.get_or_insert_default(a);
+        prim.rare_mut().variant_set_names = ListOp::prepended(vec![a]).into();
+        let set = prim.rare_mut().variant_sets.get_or_insert_default(a);
         set.variants.insert(x, ax);
         set.variants.insert(y, ay);
         let mut layer = Layer::new(LayerId(1));

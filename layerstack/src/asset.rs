@@ -180,7 +180,9 @@ pub fn resolve_selected_deferred_arcs(
                     }),
             );
         };
-        add(&spec.variant_selections);
+        if let Some(selections) = spec.variant_selections() {
+            add(selections);
+        }
         for branch in spec.variant_branches() {
             add(&branch.spec.variant_selections);
         }
@@ -229,7 +231,7 @@ pub fn resolve_selected_deferred_arcs(
         );
     for (path, spec) in specs {
         if !spec
-            .outer_variant_sites
+            .outer_variant_sites()
             .iter()
             .all(|site| selected.contains(site))
         {
@@ -241,7 +243,9 @@ pub fn resolve_selected_deferred_arcs(
         if let Some(op) = spec.payloads.get_mut() {
             resolve(op, true);
         }
-        resolve_branch_arcs(&mut spec.variant_sets, path, &selected, &mut resolve);
+        if let Some(rare) = spec.authored_rare_mut() {
+            resolve_branch_arcs(&mut rare.variant_sets, path, &selected, &mut resolve);
+        }
     }
     resolved_layers
 }

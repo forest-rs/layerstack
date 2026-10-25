@@ -1294,10 +1294,10 @@ fn variant_specs_round_trip() {
     let root_path = layerstack::path::Path::parse_absolute("/Root", &store.tokens).unwrap();
     let root_id = store.paths.lookup(&root_path).unwrap();
     let prim = &layer.prims()[&root_id];
-    assert_eq!(prim.variant_set_names.prepend, [season], "set names");
-    assert_eq!(prim.variant_selections.get(&season), Some(&winter));
-    assert_eq!(prim.variant_selections.get(&age), Some(&old));
-    let branch = &prim.variant_sets[&season].variants[&winter];
+    assert_eq!(prim.variant_set_names().prepend, [season], "set names");
+    assert_eq!(prim.variant_selection(season), Some(winter));
+    assert_eq!(prim.variant_selection(age), Some(old));
+    let branch = &prim.variant_sets()[&season].variants[&winter];
     assert_eq!(branch.authored_children, [snow_name], "branch children");
     assert_eq!(
         branch.properties[0].spec.default,
@@ -1305,7 +1305,7 @@ fn variant_specs_round_trip() {
         "branch property"
     );
     assert!(
-        !prim.variant_sets.contains_key(&age),
+        !prim.variant_sets().contains_key(&age),
         "not on the prim spec"
     );
     assert_eq!(branch.variant_set_names.prepend, [age], "nested set names");

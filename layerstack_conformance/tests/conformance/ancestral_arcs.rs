@@ -351,6 +351,7 @@ fn select(
         .layer_mut(layer)
         .and_then(|layer| layer.prim_mut(prim))
         .expect("prim spec")
+        .rare_mut()
         .variant_selections
         .insert(set, variant);
     if adds_children {

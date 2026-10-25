@@ -162,7 +162,7 @@ impl<'a> SpecRef<'a> {
 
     pub(crate) fn variant_selection(self, set: TokenId) -> Option<TokenId> {
         match self {
-            Self::Prim(spec) => spec.variant_selections.get(&set).copied(),
+            Self::Prim(spec) => spec.variant_selection(set),
             Self::Variant(spec) => spec.variant_selections.get(&set).copied(),
         }
     }
@@ -171,7 +171,7 @@ impl<'a> SpecRef<'a> {
     /// in a variant spec.
     pub(crate) fn variant_sets(self) -> &'a VariantSets {
         match self {
-            Self::Prim(spec) => &spec.variant_sets,
+            Self::Prim(spec) => spec.variant_sets(),
             Self::Variant(spec) => &spec.variant_sets,
         }
     }
@@ -208,7 +208,7 @@ impl<'a> SpecMut<'a> {
 
     pub(crate) fn variant_selections(&mut self) -> &mut HashMap<TokenId, TokenId> {
         match self {
-            Self::Prim(spec) => &mut spec.variant_selections,
+            Self::Prim(spec) => &mut spec.rare_mut().variant_selections,
             Self::Variant(spec) => &mut spec.variant_selections,
         }
     }
@@ -216,7 +216,7 @@ impl<'a> SpecMut<'a> {
     /// The variant sets this spec holds (see [`SpecRef::variant_sets`]).
     pub(crate) fn into_variant_sets(self) -> &'a mut VariantSets {
         match self {
-            Self::Prim(spec) => &mut spec.variant_sets,
+            Self::Prim(spec) => &mut spec.rare_mut().variant_sets,
             Self::Variant(spec) => &mut spec.variant_sets,
         }
     }
@@ -260,7 +260,7 @@ pub(crate) fn prim_spec_mut<'a>(
     if layer
         .prims
         .get(&path)
-        .is_some_and(|spec| spec.outer_variant_sites == sites)
+        .is_some_and(|spec| spec.outer_variant_sites() == sites)
     {
         return layer.prims.get_mut(&path);
     }
@@ -268,7 +268,7 @@ pub(crate) fn prim_spec_mut<'a>(
         .variant_prims
         .get_mut(&path)?
         .iter_mut()
-        .find(|spec| spec.outer_variant_sites == sites)
+        .find(|spec| spec.outer_variant_sites() == sites)
 }
 
 /// Returns `true` when `value` can be the value of an attribute declared

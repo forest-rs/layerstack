@@ -116,7 +116,7 @@ fn prepare_with(
                     layer
                         .prims
                         .get(path)
-                        .is_some_and(|p| !p.variant_sets.is_empty())
+                        .is_some_and(|p| !p.variant_sets().is_empty())
                 });
             if branched {
                 return Err(NamespaceError::UnsupportedComposition(
@@ -130,7 +130,7 @@ fn prepare_with(
             continue;
         }
         if !layer.variant_prims.is_empty()
-            || layer.prims.values().any(|p| !p.variant_sets.is_empty())
+            || layer.prims.values().any(|p| !p.variant_sets().is_empty())
         {
             return Err(NamespaceError::UnsupportedComposition(
                 "dormant variant composition requires explicit dependency coordination",
@@ -713,7 +713,7 @@ fn validate_authored(
         if !relevant {
             continue;
         }
-        if !spec.outer_variant_sites.is_empty() || !spec.variant_sets.is_empty() {
+        if !spec.outer_variant_sites().is_empty() || !spec.variant_sets().is_empty() {
             return Err(NamespaceError::UnsupportedComposition(
                 "namespace moves containing dormant variant branches are not supported",
             ));

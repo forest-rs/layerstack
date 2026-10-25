@@ -286,16 +286,16 @@ fn fields(loaded: &LoadedStage, spec: Spec<'_>) -> Json {
             if let Some(instanceable) = spec.instanceable {
                 out.insert("instanceable".into(), json!(instanceable));
             }
-            if let Some(order) = &spec.prim_order {
+            if let Some(order) = spec.prim_order() {
                 out.insert("primOrder".into(), names(order));
             }
             (
                 &spec.fields,
                 &spec.references,
                 &spec.payloads,
-                &spec.inherits,
-                &spec.specializes,
-                &spec.property_order,
+                spec.inherits(),
+                spec.specializes(),
+                spec.property_order(),
             )
         }
         Spec::Variant(spec) => {
@@ -305,9 +305,9 @@ fn fields(loaded: &LoadedStage, spec: Spec<'_>) -> Json {
                 &spec.fields,
                 &spec.references,
                 &spec.payloads,
-                &spec.inherits,
-                &spec.specializes,
-                &spec.property_order,
+                &*spec.inherits,
+                &*spec.specializes,
+                spec.property_order.as_deref(),
             )
         }
     };

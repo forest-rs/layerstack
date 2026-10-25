@@ -35,8 +35,7 @@ fn snapshot(
             .unwrap_or_default();
         names.sort_unstable();
         let order: Vec<_> = store.layer(root_layer).unwrap().prims()[&prim]
-            .property_order
-            .as_deref()
+            .property_order()
             .unwrap_or_default()
             .iter()
             .map(|n| store.tokens.resolve(*n))

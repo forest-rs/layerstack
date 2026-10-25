@@ -77,10 +77,16 @@ fn rocks() -> InMemoryStore {
         );
     }
     rock_spec
+        .rare_mut()
         .variant_sets
         .insert(shape, VariantSetSpec { variants });
-    rock_spec.variant_set_names.make_mut().prepend.push(shape);
-    rock_spec.variant_selections.insert(shape, round);
+    rock_spec
+        .rare_mut()
+        .variant_set_names
+        .make_mut()
+        .prepend
+        .push(shape);
+    rock_spec.rare_mut().variant_selections.insert(shape, round);
     asset.insert_prim(rock, rock_spec);
     store.insert_layer(asset);
 
@@ -570,7 +576,7 @@ fn prims_variants_and_selections_are_created_and_removed() {
         Some(jagged)
     );
     let rock = store.path("/Rock");
-    let set = &store.layers[&ROCK].prims[&rock].variant_sets[&shape];
+    let set = &store.layers[&ROCK].prims[&rock].variant_sets()[&shape];
     assert!(
         set.variants[&smooth]
             .authored_children
@@ -1436,6 +1442,7 @@ fn live_stage_edits_a_branch_selected_by_a_fallback() {
         .get_mut(&ROCK)
         .and_then(|layer| layer.prims.get_mut(&rock))
         .expect("/Rock")
+        .rare_mut()
         .variant_selections
         .clear();
     let options = StageOptions {
@@ -1528,7 +1535,7 @@ fn live_stage_edits_a_variant_spec_nested_in_a_branch() {
 
     let rock_spec = &store.layers[&ROCK].prims[&rock];
     assert!(
-        !rock_spec.variant_sets.contains_key(&size),
+        !rock_spec.variant_sets().contains_key(&size),
         "the set is nested, not on the prim spec"
     );
     let outer = rock_spec
@@ -1590,7 +1597,7 @@ fn variant_sets_compose_only_where_listed() {
             .map(|resolved| resolved.value)
     };
     let names_at =
-        |store: &InMemoryStore| store.layers[&ROCK].prims[&rock].variant_set_names.clone();
+        |store: &InMemoryStore| store.layers[&ROCK].prims[&rock].variant_set_names().clone();
 
     // Clearing the names leaves `shape` authored but unlisted.
     let mut clear = Transaction::new();
@@ -1630,7 +1637,7 @@ fn variant_sets_compose_only_where_listed() {
     let removed = live.apply(&mut store, &remove).expect("removes");
     assert!(
         !store.layers[&ROCK].prims[&rock]
-            .variant_sets
+            .variant_sets()
             .contains_key(&look)
     );
     assert_eq!(
@@ -1674,7 +1681,7 @@ fn variant_sets_keep_creation_order_through_undo() {
     let [shape, look, age] = ["shape", "look", "age"].map(|name| store.tokens.intern(name));
     let sets = |store: &InMemoryStore| -> Vec<TokenId> {
         let prim = &store.layers[&ROCK].prims[&rock];
-        prim.variant_sets.keys().copied().collect()
+        prim.variant_sets().keys().copied().collect()
     };
     let mut add = Transaction::new();
     add.add_variant_set(at.clone(), look, ListPosition::FrontOfPrepend)
@@ -2032,7 +2039,7 @@ fn targets_map_through_the_edit_target() {
     );
     let round = store.tokens.intern("round");
     let shape = store.tokens.intern("shape");
-    let in_variant = rock_spec.variant_sets[&shape].variants[&round]
+    let in_variant = rock_spec.variant_sets()[&shape].variants[&round]
         .properties
         .iter()
         .find(|entry| entry.name == look)
@@ -2110,7 +2117,7 @@ fn local_variant_targets_keep_paths_outside_the_branch() {
     let undo = edit.apply(&mut store).expect("every target maps");
     let shape = store.tokens.intern("shape");
     let jagged_name = store.tokens.intern("jagged");
-    let authored = store.layers[&ROCK].prims[&rock].variant_sets[&shape].variants[&jagged_name]
+    let authored = store.layers[&ROCK].prims[&rock].variant_sets()[&shape].variants[&jagged_name]
         .properties
         .iter()
         .find(|entry| entry.name == look)
@@ -2510,7 +2517,7 @@ fn prim_field_inverses_guard_their_field_alone() {
     other.apply(&mut store).unwrap();
     undo.apply(&mut store).unwrap();
     let spec = &store.layers[&SCENE].prims[&rock_a];
-    assert_eq!(spec.inherits, crate::ListOp::default());
+    assert_eq!(*spec.inherits(), crate::ListOp::default());
     assert_eq!(spec.active, Some(false));
 
     // A later edit of the same field does.
@@ -2635,8 +2642,8 @@ fn prim_field_edits_reject_what_they_cannot_author() {
     txn.set_prim_order(layer.prim(root), vec![world]);
     let undo = txn.apply(&mut store).expect("the root prim order");
     assert_eq!(
-        store.layers[&SCENE].prim(root).unwrap().prim_order,
-        Some(vec![world])
+        store.layers[&SCENE].prim(root).unwrap().prim_order(),
+        Some(&[world][..])
     );
     undo.apply(&mut store).unwrap();
 

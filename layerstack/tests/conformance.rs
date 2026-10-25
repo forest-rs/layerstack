@@ -473,13 +473,19 @@ fn variants_selection_is_strength_ordered() {
     let mut root_layer = Layer::new(LayerId(1));
     *root_layer.sublayers_mut() = vec![SublayerEntry::new(LayerId(2))];
     let mut root_spec = PrimSpec::default();
-    root_spec.variant_selections.insert(set_v, variant_a);
+    root_spec
+        .rare_mut()
+        .variant_selections
+        .insert(set_v, variant_a);
     root_layer.insert_prim(prim, root_spec);
     store.insert_layer(root_layer);
 
     let mut sub_layer = Layer::new(LayerId(2));
     let mut sub_spec = PrimSpec::default();
-    sub_spec.variant_selections.insert(set_v, variant_b);
+    sub_spec
+        .rare_mut()
+        .variant_selections
+        .insert(set_v, variant_b);
 
     let mut set_spec = VariantSetSpec::default();
     set_spec.variants.insert(
@@ -504,8 +510,13 @@ fn variants_selection_is_strength_ordered() {
         },
     );
 
-    sub_spec.variant_sets.insert(set_v, set_spec);
-    sub_spec.variant_set_names.make_mut().prepend.push(set_v);
+    sub_spec.rare_mut().variant_sets.insert(set_v, set_spec);
+    sub_spec
+        .rare_mut()
+        .variant_set_names
+        .make_mut()
+        .prepend
+        .push(set_v);
     sub_layer.insert_prim(prim, sub_spec);
     store.insert_layer(sub_layer);
 
@@ -651,21 +662,17 @@ fn child_order_reorder_name_children_matches_supplemental_fixture() {
         SublayerEntry::new(LayerId(2)),
         SublayerEntry::new(LayerId(3)),
     ];
-    let root_spec = PrimSpec {
-        authored_children: vec![f],
-        prim_order: Some(vec![z, f, y]),
-        ..PrimSpec::default()
-    };
+    let root_spec = PrimSpec::default()
+        .with_children(vec![f])
+        .with_prim_order(vec![z, f, y]);
     root_layer.insert_prim(prim_a, root_spec);
     root_layer.insert_prim(a_f, PrimSpec::default());
     store.insert_layer(root_layer);
 
     let mut sub1_layer = Layer::new(LayerId(2));
-    let sub1_spec = PrimSpec {
-        authored_children: vec![a, b, c],
-        prim_order: Some(vec![z, x, b]),
-        ..PrimSpec::default()
-    };
+    let sub1_spec = PrimSpec::default()
+        .with_children(vec![a, b, c])
+        .with_prim_order(vec![z, x, b]);
     sub1_layer.insert_prim(prim_a, sub1_spec);
     sub1_layer.insert_prim(a_a, PrimSpec::default());
     sub1_layer.insert_prim(a_b, PrimSpec::default());
@@ -673,10 +680,7 @@ fn child_order_reorder_name_children_matches_supplemental_fixture() {
     store.insert_layer(sub1_layer);
 
     let mut sub2_layer = Layer::new(LayerId(3));
-    let sub2_spec = PrimSpec {
-        authored_children: vec![x, y, z],
-        ..PrimSpec::default()
-    };
+    let sub2_spec = PrimSpec::default().with_children(vec![x, y, z]);
     sub2_layer.insert_prim(prim_a, sub2_spec);
     sub2_layer.insert_prim(a_x, PrimSpec::default());
     sub2_layer.insert_prim(a_y, PrimSpec::default());
@@ -2208,7 +2212,7 @@ fn property_names_apply_reorder_properties() {
         .with_property(alpha, PropertySpec::attribute().custom().with_default(1))
         .with_property(beta, PropertySpec::attribute().custom().with_default(2))
         .with_property(gamma, PropertySpec::attribute().custom().with_default(3));
-    spec.property_order = Some(vec![gamma, absent, beta]);
+    spec.rare_mut().property_order = Some(vec![gamma, absent, beta]);
     let mut layer = Layer::new(LayerId(1));
     layer.insert_prim(p, spec);
     store.insert_layer(layer);
@@ -2983,7 +2987,7 @@ fn specializes_inside_reference_populates_class_children() {
     model_spec.authored_children = vec![c_tok, cls_tok];
     lib.insert_prim(model, model_spec);
     let mut c_spec = PrimSpec::def();
-    c_spec.specializes = ListOp::prepended(vec![model_cls]).into();
+    c_spec.rare_mut().specializes = ListOp::prepended(vec![model_cls]).into();
     lib.insert_prim(model_c, c_spec);
     let mut cls_spec = PrimSpec::default().with_field(field_x, 10_i64);
     cls_spec.specifier = Some(layerstack::Specifier::Class);

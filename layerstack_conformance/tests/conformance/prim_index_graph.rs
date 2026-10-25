@@ -125,9 +125,9 @@ fn sources_name_the_nodes_openusd_provides_them_from() {
             .expect("composed prim")
         {
             let source = Source {
-                layer: layer_name(&loaded, key.layer_id),
-                site: display(&loaded, &key.spec_path),
-                arc_path: arc_path(&loaded, graph, key.node),
+                layer: layer_name(&loaded, key.key.layer_id),
+                site: display(&loaded, &key.key.spec_path),
+                arc_path: arc_path(&loaded, graph, key.key.node),
             };
             sources.push(source);
         }

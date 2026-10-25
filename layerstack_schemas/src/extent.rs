@@ -335,7 +335,7 @@ fn lux_dimension_blocked(prim: &PrimView<'_>, name: &str) -> bool {
         return false;
     };
     let opinions = property.opinions();
-    for value in opinions.iter().filter_map(|o| o.value.default_value()) {
+    for value in opinions.iter().filter_map(|o| o.value().default_value()) {
         if matches!(value, Value::Blocked) {
             return true;
         }

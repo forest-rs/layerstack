@@ -48,7 +48,7 @@ fn connections(
     attribute
         .opinions()
         .iter()
-        .any(|opinion| opinion.value.targets().is_some())
+        .any(|opinion| opinion.value().targets().is_some())
         .then(|| attribute.connections())
 }
 use layerstack_conformance::authored::{Names, dump_layer, render_value};

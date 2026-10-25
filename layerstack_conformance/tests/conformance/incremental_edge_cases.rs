@@ -147,6 +147,7 @@ fn replacing_an_anchored_asset_mapping_replaces_its_scene_and_provenance() {
                 .unwrap()
                 .last()
                 .unwrap()
+                .key
                 .layer_id,
             id
         );

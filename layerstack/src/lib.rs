@@ -272,7 +272,10 @@ pub use path::{
     TargetPathError,
 };
 pub use path_expression::PathExpression;
-pub use prim_index::{ArcKind, Opinion, OpinionKey, OpinionValue};
+pub use prim_index::{
+    ArcKind, Opinion, OpinionIter, OpinionKey, OpinionRef, OpinionSource, OpinionValue, Opinions,
+    SourceId,
+};
 pub use prim_index_graph::{NodeId, PrimIndexGraph, PrimNode};
 pub use shared_vec::SharedVec;
 

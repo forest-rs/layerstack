@@ -245,7 +245,13 @@ impl ComposedEvidence {
     /// removes them when it is no longer composed.
     fn reindex(&mut self, paths: &PathInterner, prim: PathId, index: Option<&PrimIndex>) {
         let mut layers: Vec<LayerId> = index
-            .map(|index| index.sources.iter().map(|key| key.layer_id).collect())
+            .map(|index| {
+                index
+                    .sources
+                    .iter()
+                    .map(|source| source.key.layer_id)
+                    .collect()
+            })
             .unwrap_or_default();
         layers.sort_unstable();
         layers.dedup();

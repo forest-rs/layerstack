@@ -13,11 +13,11 @@ mod demand;
 mod eval;
 mod instance_key;
 mod template;
-use crate::prim_index::PrimIndex;
+use crate::prim_index::{OpinionSource, PrimIndex, SourcedOpinion};
 use crate::{
     AssetAvailability, FieldValue, HashMap, HashSet, InterpolationType, LayerId, LayerOffset,
-    LayerStore, ListOp, NodeId, Opinion, OpinionKey, OpinionValue, Path, PathId, PropertyPath,
-    PropertySpec, PropertyType, SpecPath, TokenId, Value, Variability,
+    LayerStore, ListOp, NodeId, OpinionKey, OpinionValue, Path, PathId, PropertyPath, PropertySpec,
+    PropertyType, SpecPath, TokenId, Value, Variability,
 };
 use alloc::{boxed::Box, collections::BTreeMap, sync::Arc, vec::Vec};
 pub(crate) use demand::AuthoringClipSet;
@@ -102,7 +102,7 @@ pub struct ClipIssue {
 }
 /// One fully projected discrete clip source and its per-sample asset anchors.
 pub(crate) struct FlattenClip {
-    pub(crate) opinion: Opinion,
+    pub(crate) opinion: SourcedOpinion,
     pub(crate) anchors: Vec<Option<LayerId>>,
 }
 /// Actual source of one bracketing clip sample.
@@ -216,6 +216,17 @@ struct ClipProperty {
     property_type: Option<PropertyType>,
     evaluator: Arc<PreparedClipProperty>,
 }
+impl ClipProperty {
+    /// The source of the clip's opinions: the set's metadata anchor, at
+    /// the node of the prim the set applies to. Clip times are mapped by
+    /// the clip set itself, so the source maps none (AOUSD Core §12.5).
+    fn source(&self) -> OpinionSource {
+        OpinionSource {
+            key: self.key.clone(),
+            layer_offset: LayerOffset::IDENTITY,
+        }
+    }
+}
 /// Immutable prepared state, kept private to stage integration.
 #[derive(Clone, Debug, Default)]
 pub(crate) struct Catalog {
@@ -300,7 +311,7 @@ impl Catalog {
                 out.sites
                     .entry(owner)
                     .or_default()
-                    .insert((source.key.layer_id, source.key.lookup_path));
+                    .insert((source.layer_id(), source.source().key.lookup_path));
             }
             let definitions = definitions(owner, index, store, &mut out.issues);
             for definition in definitions {
@@ -785,7 +796,7 @@ impl Catalog {
         time: f64,
         interp: InterpolationType,
         sample_queries: &[f64],
-    ) -> Vec<Opinion> {
+    ) -> Vec<SourcedOpinion> {
         self.properties
             .get(&(prim, field))
             .into_iter()
@@ -801,7 +812,7 @@ impl Catalog {
         time: f64,
         interp: InterpolationType,
         sample_queries: &[f64],
-    ) -> Option<Opinion> {
+    ) -> Option<SourcedOpinion> {
         let entry = self.properties.get(&(prim, field))?.get(entry_index)?;
         Some(project_opinion(entry, field, time, interp, sample_queries))
     }
@@ -900,12 +911,11 @@ impl Catalog {
             spec.type_name = entry.property_type.clone();
             spec.time_samples = samples.into();
             out.push(FlattenClip {
-                opinion: Opinion {
-                    key: entry.key.clone(),
+                opinion: SourcedOpinion::new(
+                    entry.source(),
                     field,
-                    value: OpinionValue::Property(Arc::new(spec)),
-                    layer_offset: LayerOffset::IDENTITY,
-                },
+                    OpinionValue::Property(Arc::new(spec)),
+                ),
                 anchors,
             });
         }
@@ -1008,7 +1018,7 @@ fn project_opinion(
     time: f64,
     interp: InterpolationType,
     sample_queries: &[f64],
-) -> Opinion {
+) -> SourcedOpinion {
     // A selected clip remains a dense opinion when a numeric
     // evaluation fails. Diagnostics are queried separately, rather
     // than exposing a weaker ordinary or schema fallback.
@@ -1048,12 +1058,11 @@ fn project_opinion(
         let mut spec = PropertySpec::attribute();
         spec.type_name = entry.property_type.clone();
         spec.time_samples = samples.into();
-        return Opinion {
-            key: entry.key.clone(),
+        return SourcedOpinion::new(
+            entry.source(),
             field,
-            value: OpinionValue::Property(Arc::new(spec)),
-            layer_offset: LayerOffset::IDENTITY,
-        };
+            OpinionValue::Property(Arc::new(spec)),
+        );
     }
     let value = evaluated
         .ok()
@@ -1062,12 +1071,11 @@ fn project_opinion(
     let mut spec = PropertySpec::attribute();
     spec.type_name = entry.property_type.clone();
     spec.time_samples = alloc::vec![(time, value)].into();
-    Opinion {
-        key: entry.key.clone(),
+    SourcedOpinion::new(
+        entry.source(),
         field,
-        value: OpinionValue::Property(Arc::new(spec)),
-        layer_offset: LayerOffset::IDENTITY,
-    }
+        OpinionValue::Property(Arc::new(spec)),
+    )
 }
 fn entry_evaluation(
     entry: &ClipProperty,
@@ -1203,23 +1211,23 @@ fn definitions(
         let mut layers: Vec<_> = clips
             .iter()
             .chain(orders)
-            .filter(|o| o.key.node == node)
+            .filter(|o| o.node() == node)
             .collect();
         // Weakest layer first. The sort is stable and a layer's opinions
         // compare equal, so each layer's `clips` come before its
         // `clipSets`, which reorder the sets those `clips` add.
-        layers.sort_by(|a, b| index.graph.cmp_keys(&b.key, &a.key));
+        layers.sort_by(|a, b| index.graph.cmp_keys(&b.source().key, &a.source().key));
         let mut node_sets: BTreeMap<Arc<str>, Definition> = BTreeMap::new();
         let mut names = Vec::new();
         for opinion in layers {
-            if store.tokens().resolve(opinion.field) == "clipSets" {
-                if let OpinionValue::Field(FieldValue::StringListOp(op)) = &opinion.value {
+            if store.tokens().resolve(opinion.field()) == "clipSets" {
+                if let OpinionValue::Field(FieldValue::StringListOp(op)) = opinion.value() {
                     names = op.apply_to(&names);
                 }
                 continue;
             }
             let OpinionValue::Field(FieldValue::Value(Value::Dictionary(dictionary))) =
-                &opinion.value
+                opinion.value()
             else {
                 continue;
             };
@@ -1229,8 +1237,8 @@ fn definitions(
                     issues.push(ClipIssue {
                         owner,
                         set_name: name.clone(),
-                        anchor: opinion.key.layer_id,
-                        source: opinion.key.spec_path.clone(),
+                        anchor: opinion.layer_id(),
+                        source: opinion.spec_path(),
                         kind: ClipIssueKind::InvalidMetadata("clips"),
                     });
                     continue;
@@ -1244,9 +1252,9 @@ fn definitions(
                         && let Some(values) = pairs(Some(value))
                     {
                         *value = Value::array_from_iter(
-                            values
-                                .into_iter()
-                                .map(|(a, b)| Value::Vec2d([external(opinion.layer_offset, a), b])),
+                            values.into_iter().map(|(a, b)| {
+                                Value::Vec2d([external(opinion.layer_offset(), a), b])
+                            }),
                             None,
                         );
                     }
@@ -1256,8 +1264,8 @@ fn definitions(
                 let entry = node_sets.entry(name.clone()).or_insert_with(|| Definition {
                     owner,
                     name: name.clone(),
-                    anchor: opinion.key.clone(),
-                    offset: opinion.layer_offset,
+                    anchor: opinion.key(),
+                    offset: opinion.layer_offset(),
                     dictionary: Vec::new(),
                     order: usize::MAX,
                     sources: Vec::new(),
@@ -1265,14 +1273,14 @@ fn definitions(
                 // An unanchored definition remains mergeable, but cannot create a
                 // runtime set until a typed asset-path opinion supplies an anchor.
                 if anchor {
-                    entry.anchor = opinion.key.clone();
-                    entry.offset = opinion.layer_offset;
+                    entry.anchor = opinion.key();
+                    entry.offset = opinion.layer_offset();
                     entry.order = 0;
                 }
                 entry.dictionary = over(&transformed, &entry.dictionary);
                 entry
                     .sources
-                    .push((opinion.key.layer_id, opinion.key.lookup_path));
+                    .push((opinion.layer_id(), opinion.source().key.lookup_path));
                 added.push(name.clone());
             }
             added.sort();
@@ -1457,12 +1465,12 @@ mod tests {
             ],
         );
         let initial = catalog.opinions(prim, field, 5., InterpolationType::Linear, &[]);
-        assert_eq!(initial[0].key, initial[1].key);
+        assert_eq!(initial[0].source, initial[1].source);
         let second = catalog
             .opinion_for(prim, field, 1, 5., InterpolationType::Linear, &[])
             .unwrap();
         assert_eq!(
-            second.value.time_samples().unwrap()[0].1,
+            second.opinion.value.time_samples().unwrap()[0].1,
             Value::Double(25.)
         );
         let source = catalog

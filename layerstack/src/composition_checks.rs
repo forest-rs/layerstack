@@ -23,7 +23,7 @@ use crate::{
     doc::{FieldValue, LayerId, LayerStore},
     interner::TokenId,
     path::{Path, PathId, PropertyPath, TargetPath},
-    prim_index::{ArcKind, FieldKey, OpinionKey, OpinionValue, PrimIndex},
+    prim_index::{ArcKind, FieldKey, OpinionRef, OpinionValue, PrimIndex, SourceId},
     spec_path::SpecPath,
 };
 
@@ -114,42 +114,41 @@ pub(crate) fn drop_inconsistent_property_kinds(
         let FieldKey::Property(property) = *field else {
             continue;
         };
-        let mut specs = opinions.iter().filter_map(|opinion| {
-            opinion
-                .value
-                .as_property()
-                .map(|spec| (&opinion.key, spec.kind))
-        });
+        let mut specs = opinions
+            .iter()
+            .filter_map(|opinion| Some((opinion, opinion.value().as_property()?.kind)));
         let Some((defining, defining_kind)) = specs.next() else {
             continue;
         };
-        let conflicting: Vec<OpinionKey> = specs
+        let conflicting: Vec<OpinionRef<'_>> = specs
             .filter(|(_, kind)| *kind != defining_kind)
-            .map(|(key, _)| key.clone())
+            .map(|(opinion, _)| opinion)
             .collect();
-        for key in &conflicting {
+        for opinion in &conflicting {
             findings.report(CompositionError::InconsistentPropertyType(
                 InconsistentPropertyType {
                     prim,
                     property,
-                    defining_layer: defining.layer_id,
-                    defining_spec: defining.spec_path.clone(),
+                    defining_layer: defining.layer_id(),
+                    defining_spec: defining.spec_path(),
                     defining_kind,
-                    conflicting_layer: key.layer_id,
-                    conflicting_spec: key.spec_path.clone(),
+                    conflicting_layer: opinion.layer_id(),
+                    conflicting_spec: opinion.spec_path(),
                 },
             ));
         }
-        if conflicting.is_empty() {
-            continue;
-        }
-        removed.extend(conflicting.into_iter().map(|key| (*field, key)));
+        // A source authors one opinion of a field.
+        removed.extend(
+            conflicting
+                .into_iter()
+                .map(|opinion| (*field, opinion.opinion().source)),
+        );
     }
     if !removed.is_empty() {
-        index.retain_opinions(|_, opinion| {
+        index.retain_opinions(|opinion| {
             !removed
                 .iter()
-                .any(|(field, key)| *field == FieldKey::of(opinion) && key == &opinion.key)
+                .any(|(field, source)| *field == FieldKey::of(opinion) && *source == opinion.source)
         });
     }
 }
@@ -343,10 +342,10 @@ pub(crate) fn target_error_applies(
         return true;
     };
     for opinion in opinions {
-        let Some(targets) = opinion.value.targets() else {
+        let Some(targets) = opinion.value().targets() else {
             continue;
         };
-        if opinion.key.layer_id == layer && opinion.key.spec_path == *spec {
+        if opinion.layer_id() == layer && opinion.spec_path() == *spec {
             return true;
         }
         if targets.explicit.is_some() {
@@ -361,7 +360,11 @@ pub(crate) fn target_error_applies(
 struct InstanceTarget {
     prim: PathId,
     property: TokenId,
-    key: OpinionKey,
+    /// The source of the opinion authoring the target.
+    source: SourceId,
+    /// The opinion's layer and spec path.
+    layer: LayerId,
+    spec: SpecPath,
     target: TargetPath,
 }
 
@@ -401,11 +404,14 @@ pub(crate) fn drop_instance_targets(
                 continue;
             };
             for opinion in opinions {
-                let Some(targets) = opinion.value.as_property().and_then(|s| s.targets.as_ref())
+                let Some(targets) = opinion
+                    .value()
+                    .as_property()
+                    .and_then(|s| s.targets.as_ref())
                 else {
                     continue;
                 };
-                let Some(node) = index.graph.node(opinion.key.node) else {
+                let Some(node) = index.graph.node(opinion.node()) else {
                     continue;
                 };
                 if node.arc_kind() != ArcKind::Inherits {
@@ -437,7 +443,9 @@ pub(crate) fn drop_instance_targets(
                         found.push(InstanceTarget {
                             prim,
                             property,
-                            key: opinion.key.clone(),
+                            source: opinion.opinion().source,
+                            layer: opinion.layer_id(),
+                            spec: opinion.spec_path(),
                             target: *target,
                         });
                     }
@@ -448,14 +456,16 @@ pub(crate) fn drop_instance_targets(
     for InstanceTarget {
         prim,
         property,
-        key,
+        source,
+        layer,
+        spec: spec_path,
         target,
     } in found
     {
         let Some(opinion) = prims
             .get_mut(&prim)
             .and_then(|index| index.field_opinions_mut(FieldKey::Property(property)))
-            .and_then(|opinions| opinions.iter_mut().find(|opinion| opinion.key == key))
+            .and_then(|opinions| opinions.iter_mut().find(|opinion| opinion.source == source))
         else {
             continue;
         };
@@ -473,8 +483,8 @@ pub(crate) fn drop_instance_targets(
                 prim,
                 property,
                 target,
-                spec: key.spec_path.clone(),
-                layer: key.layer_id,
+                spec: spec_path,
+                layer,
             },
         ));
     }
@@ -559,7 +569,7 @@ mod tests {
             .explain_prim(stone)
             .expect("composed")
             .iter()
-            .map(|key| key.lookup_path)
+            .map(|source| source.key.lookup_path)
             .collect();
         assert_eq!(sites, [stone, pebble]);
     }
@@ -605,7 +615,7 @@ mod tests {
                 .explain_property_path(PropertyPath::new(lantern, name))
                 .expect("composed property")
                 .iter()
-                .map(|opinion| opinion.key.layer_id)
+                .map(|opinion| opinion.layer_id())
                 .collect()
         };
         assert_eq!(stack(glow), [ROOT]);

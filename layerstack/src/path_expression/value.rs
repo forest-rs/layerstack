@@ -36,7 +36,7 @@ use super::{Expr, PathExpression, RefPath};
 use crate::{
     doc::{InterpolationType, LayerStore, Value},
     path::PathId,
-    prim_index::{ArcKind, Opinion},
+    prim_index::{ArcKind, Opinion, Opinions},
     prim_index_graph::{NodeId, PrimIndexGraph},
     spec_path::SpecPath,
     stage::value_at_time,
@@ -494,7 +494,7 @@ pub(crate) fn fold_default(opinions: &[Opinion], fallback: Option<&Value>) -> Op
 ///
 /// Spec: AOUSD Core §12.3.2.
 pub(crate) fn fold_at_time(
-    opinions: &[Opinion],
+    opinions: Opinions<'_>,
     time: f64,
     interp: InterpolationType,
     fallback: Option<&Value>,
@@ -502,6 +502,7 @@ pub(crate) fn fold_at_time(
     // Decide from the strongest answering opinion's authored kind, without
     // sampling or cloning anything, whether this is a path expression query.
     let strongest_is_expression = opinions
+        .records()
         .iter()
         .find_map(answers_with_expression)
         .unwrap_or(matches!(fallback, Some(Value::PathExpression(_))));
@@ -769,6 +770,7 @@ mod tests {
             doc::LayerOffset,
             interner::TokenInterner,
             path::PathInterner,
+            prim_index::{OpinionKey, OpinionList, OpinionSource, SourcedOpinion},
             property::PropertySpec,
             spline::{CurveType, Extrapolation, SplineData, SplineDataType},
         };
@@ -777,28 +779,34 @@ mod tests {
         let spec_path = SpecPath::parse("/A", &tokens, &paths).expect("spec path");
         let lookup_path = paths.intern(crate::path::Path::root());
         let field = tokens.intern("x");
-        let opinion = |strength: u16, spec: PropertySpec| Opinion {
-            key: crate::prim_index::OpinionKey {
-                node: NodeId::ROOT,
-                layer_strength: strength,
-                layer_id: crate::doc::LayerId(1),
-                lookup_path,
-                spec_path: spec_path.clone(),
-            },
-            field,
-            value: spec.into(),
-            layer_offset: LayerOffset::IDENTITY,
+        let opinion = |strength: u16, spec: PropertySpec| {
+            SourcedOpinion::new(
+                OpinionSource {
+                    key: OpinionKey {
+                        node: NodeId::ROOT,
+                        layer_strength: strength,
+                        layer_id: crate::doc::LayerId(1),
+                        lookup_path,
+                        spec_path: spec_path.clone(),
+                    },
+                    layer_offset: LayerOffset::IDENTITY,
+                },
+                field,
+                spec.into(),
+            )
         };
         let expression = |text: &str| Value::PathExpression(text.into());
         let weaker = opinion(1, PropertySpec::attribute().with_default(expression("/W")));
-        let chain = |strongest: PropertySpec| [opinion(0, strongest), weaker.clone()];
-        let at_time = |opinions: &[Opinion]| {
-            fold_at_time(opinions, 1.0, InterpolationType::Held, None).and_then(|fold| fold.value)
+        let chain =
+            |strongest: PropertySpec| OpinionList::chain(&[opinion(0, strongest), weaker.clone()]);
+        let at_time = |opinions: &OpinionList| {
+            fold_at_time(opinions.view(), 1.0, InterpolationType::Held, None)
+                .and_then(|fold| fold.value)
         };
 
         let array =
             chain(PropertySpec::attribute().with_default(Value::Array(Vec::from([Value::Int(1)]))));
-        assert_eq!(fold_default(&array, None), None);
+        assert_eq!(fold_default(&array.records, None), None);
         assert_eq!(at_time(&array), None);
         let spline = chain(PropertySpec::attribute().with_spline(SplineData {
             pre_loop_boundary: None,
@@ -819,8 +827,13 @@ mod tests {
         assert_eq!(at_time(&sampled), Some(expression("/S /W")));
         // No opinion answers: the schema fallback decides.
         assert_eq!(
-            fold_at_time(&[], 1.0, InterpolationType::Held, Some(&expression("/F")))
-                .and_then(|fold| fold.value),
+            fold_at_time(
+                Opinions::default(),
+                1.0,
+                InterpolationType::Held,
+                Some(&expression("/F"))
+            )
+            .and_then(|fold| fold.value),
             Some(expression("/F"))
         );
     }

@@ -16,7 +16,7 @@ use crate::{
     OpinionKey, OpinionValue, PathId, PathInterner, PrimIndexGraph, PropertyKind, PropertyPath,
     SpecPath, Stage, Time, TimeSample, TokenId, Value,
     edit::EditTarget,
-    prim_index::PrimIndex,
+    prim_index::{OpinionRef, OpinionSource, PrimIndex},
     value_clips::{AuthoringClipSet, ClipAssetRequest},
     value_resolution::sample_bracket,
 };
@@ -749,14 +749,17 @@ impl Stage {
         // no specs at the same namespace path yet.
         sites.retain(|site| {
             let node = index.graph.node(site.node).expect("candidate graph node");
-            let matching_source = |source: &&OpinionKey| {
-                index.graph.node(source.node).is_some_and(|source_node| {
-                    source_node.site() == node.site()
-                        && source_node.layer_stack_identifier() == node.layer_stack_identifier()
-                })
+            let matching_source = |source: &&OpinionSource| {
+                index
+                    .graph
+                    .node(source.key.node)
+                    .is_some_and(|source_node| {
+                        source_node.site() == node.site()
+                            && source_node.layer_stack_identifier() == node.layer_stack_identifier()
+                    })
             };
             let mut sources = index.sources.iter().filter(matching_source).peekable();
-            sources.peek().is_none() || sources.any(|source| source.node == site.node)
+            sources.peek().is_none() || sources.any(|source| source.key.node == site.node)
         });
         index.graph.sort_keys(&mut sites);
         sites.into_iter().next().ok_or(if held {
@@ -827,7 +830,7 @@ enum Place {
 struct Group<'a> {
     key: OpinionKey,
     place: Place,
-    opinion: Option<&'a Opinion>,
+    opinion: Option<OpinionRef<'a>>,
     clips: Vec<usize>,
 }
 
@@ -884,11 +887,14 @@ impl<'a> Resolution<'a> {
             .property_opinions(field)
             .unwrap_or_default()
             .iter()
-            .map(|opinion| Group {
-                key: opinion.key.clone(),
-                place: place(&opinion.key),
-                opinion: Some(opinion),
-                clips: Vec::new(),
+            .map(|opinion| {
+                let key = opinion.key();
+                Group {
+                    place: place(&key),
+                    key,
+                    opinion: Some(opinion),
+                    clips: Vec::new(),
+                }
             })
             .collect();
         let sets = stage.clips.authoring_sets(prim, field);
@@ -1101,15 +1107,15 @@ impl<'a> Resolution<'a> {
             });
         };
         let opinion = group.opinion;
-        let samples = opinion.and_then(|opinion| opinion.value.time_samples());
-        let spline = opinion.is_some_and(|opinion| opinion.value.spline().is_some());
+        let samples = opinion.and_then(|opinion| opinion.value().time_samples());
+        let spline = opinion.is_some_and(|opinion| opinion.value().spline().is_some());
         let When::At(code) = when else {
             // The default time reads defaults only; an animation block
             // there is passed over (`ProcessLayerAtDefault`).
             if written.is_some() {
                 push(Slot::Written, SourceComposability::Dense, None);
             } else if let Some(opinion) = opinion {
-                match default_slot(opinion) {
+                match default_slot(opinion.opinion()) {
                     DefaultSlot::Value(shape) => push(Slot::Default, shape, None),
                     DefaultSlot::Block => push(Slot::Block, SourceComposability::Dense, None),
                     DefaultSlot::None | DefaultSlot::AnimationBlock => {}
@@ -1142,7 +1148,7 @@ impl<'a> Resolution<'a> {
                 found = true;
                 push(Slot::Spline, SourceComposability::Dense, None);
             } else {
-                match default_slot(opinion) {
+                match default_slot(opinion.opinion()) {
                     DefaultSlot::Value(shape) => {
                         found = true;
                         push(Slot::Default, shape, None);
@@ -1185,11 +1191,11 @@ impl<'a> Resolution<'a> {
     /// `code`, and which samples are read there.
     fn read_samples(
         &self,
-        opinion: &Opinion,
+        opinion: OpinionRef<'_>,
         samples: &[TimeSample],
         code: f64,
     ) -> (SourceComposability, Option<SampleBracket>) {
-        let offset = opinion.layer_offset;
+        let offset = opinion.layer_offset();
         let Some((lower, upper)) =
             sample_bracket(samples, offset.map_time(code), self.query.interpolation)
         else {
@@ -1220,16 +1226,13 @@ impl<'a> Resolution<'a> {
             let Some(opinion) = group.opinion else {
                 continue;
             };
-            let Some(samples) = opinion.value.time_samples() else {
+            let Some(samples) = opinion.value().time_samples() else {
                 continue;
             };
             let first = shape(&samples[0].1);
             if samples.iter().any(|(_, value)| shape(value) != first) {
-                cuts.extend(
-                    samples
-                        .iter()
-                        .map(|(time, _)| stage_time(opinion.layer_offset, *time)),
-                );
+                let offset = opinion.layer_offset();
+                cuts.extend(samples.iter().map(|(time, _)| stage_time(offset, *time)));
             }
         }
         for set in &self.sets {

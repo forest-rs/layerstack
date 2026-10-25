@@ -16,12 +16,14 @@ struct RecordBucket<'a>(&'a PrimIndexData);
 impl Hash for RecordBucket<'_> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.0.fields.hash(state);
-        self.0.sources.hash(state);
+        for source in &self.0.sources {
+            source.key.hash(state);
+            source.layer_offset.offset.to_bits().hash(state);
+            source.layer_offset.scale.to_bits().hash(state);
+        }
         for opinion in &self.0.opinions {
-            opinion.key.hash(state);
+            opinion.source.hash(state);
             opinion.field.hash(state);
-            opinion.layer_offset.offset.to_bits().hash(state);
-            opinion.layer_offset.scale.to_bits().hash(state);
             match &opinion.value {
                 OpinionValue::Property(spec) => {
                     if let Some(targets) = &spec.targets {

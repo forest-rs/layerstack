@@ -395,7 +395,7 @@ impl<'a> PrimView<'a> {
             return true;
         }
         attribute.opinions().iter().any(|opinion| {
-            opinion.value.as_property().is_some_and(|spec| {
+            opinion.value().as_property().is_some_and(|spec| {
                 spec.spline.is_some()
                     || spec
                         .time_samples
@@ -474,7 +474,7 @@ impl<'a> PrimView<'a> {
         for spec in property
             .opinions()
             .iter()
-            .filter_map(|o| o.value.as_property())
+            .filter_map(|o| o.value().as_property())
         {
             if spec.spline.is_some() || spec.time_samples.get().is_some_and(|s| !s.is_empty()) {
                 return true;

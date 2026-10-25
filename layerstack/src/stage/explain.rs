@@ -50,7 +50,7 @@ use crate::{
     interner::TokenId,
     listop::ListOp,
     path::PathId,
-    prim_index::{ArcKind, Opinion, OpinionValue, PrimIndex},
+    prim_index::{ArcKind, Opinion, OpinionList, OpinionRef, OpinionValue, Opinions, PrimIndex},
     prim_index_graph::PrimNode,
     property::{PropertySpec, PropertyType, Time},
     spec_path::SpecPath,
@@ -173,10 +173,10 @@ pub enum ValueSource {
 /// the same graph node (by identity), and play the same part.
 #[derive(Clone, Debug)]
 pub struct ExplainedOpinion<'s> {
-    /// The opinion: its layer, spec path and composition node
-    /// ([`Opinion::key`]), the layer offset its arcs apply
-    /// ([`Opinion::layer_offset`]), and what it authors.
-    pub opinion: &'s Opinion,
+    /// The opinion with its source: its layer, spec path and composition
+    /// node, the layer offset its arcs apply
+    /// ([`OpinionRef::layer_offset`]), and what it authors.
+    pub opinion: OpinionRef<'s>,
     /// The node of the prim's composition graph the opinion was read from
     /// ([`Prim::composition_graph`](crate::Prim::composition_graph)): its
     /// arc kind and site.
@@ -210,13 +210,14 @@ impl ExplainedOpinion<'_> {
     /// identifiers with [`crate::AssetResolver::resolved_path`].
     #[must_use]
     pub fn layer(&self) -> LayerId {
-        self.opinion.key.layer_id
+        self.opinion.layer_id()
     }
 
-    /// The spec path the opinion is authored at in its layer.
+    /// The spec path the opinion is authored at in its layer
+    /// ([`OpinionRef::spec_path`]).
     #[must_use]
-    pub fn spec_path(&self) -> &SpecPath {
-        &self.opinion.key.spec_path
+    pub fn spec_path(&self) -> SpecPath {
+        self.opinion.spec_path()
     }
 
     /// The kind of arc that reaches the opinion's node.
@@ -230,7 +231,7 @@ impl ExplainedOpinion<'_> {
     /// Spec: AOUSD Core §12.3.2.1.
     #[must_use]
     pub fn layer_offset(&self) -> LayerOffset {
-        self.opinion.layer_offset
+        self.opinion.layer_offset()
     }
 }
 
@@ -402,14 +403,16 @@ impl Stage {
         key: TokenId,
     ) -> Option<ValueExplanation<'_, ResolvedValue>> {
         let index = self.prims.get(&prim)?;
-        let opinions = index.property_opinions(property).unwrap_or(&[]);
+        let opinions = index.property_opinions(property).unwrap_or_default();
         let fallback = self
             .property_definition_ref(prim, property)
             .and_then(|definition| definition.metadata(key));
-        // Each opinion as its `key` field, position for position; one that
-        // does not author it authors nothing the explanation reads.
+        // Each opinion as its `key` field, position for position, read from
+        // its source; one that does not author it authors nothing the
+        // explanation reads.
         let nothing = OpinionValue::from(PropertySpec::attribute());
         let fields: Vec<Opinion> = opinions
+            .records()
             .iter()
             .map(|opinion| Opinion {
                 value: opinion
@@ -420,21 +423,22 @@ impl Stage {
                         || nothing.clone(),
                         |field| OpinionValue::Field(field.clone()),
                     ),
-                ..opinion.clone()
+                ..*opinion
             })
             .collect();
+        let as_fields = opinions.with_records(&fields);
         let authored = fields.iter().find_map(|opinion| opinion.value.as_field());
         if authored.is_none() && fallback.is_none() {
             return None;
         }
         let explained = match authored {
-            Some(list) if list.is_list_op() => explain_field_list(index, &fields, list),
+            Some(list) if list.is_list_op() => explain_field_list(index, as_fields, list),
             _ => {
                 let fallback = match fallback {
                     Some(FieldValue::Value(value)) => Some(value),
                     _ => None,
                 };
-                self.explain_default(index, key, &fields, None, fallback)
+                self.explain_default(index, key, as_fields, None, fallback)
             }
         };
         let mut explained = rebind(index, opinions, &fields, explained);
@@ -473,7 +477,7 @@ impl Stage {
         let prim = property_path.prim_path();
         let name = property_path.property();
         let index = self.prims.get(&prim)?;
-        let opinions = index.property_opinions(name).unwrap_or(&[]);
+        let opinions = index.property_opinions(name).unwrap_or_default();
         if opinions.is_empty() && self.property_definition_ref(prim, name).is_none() {
             return None;
         }
@@ -493,11 +497,11 @@ impl Stage {
 
         let mut explained = None;
         if let (Some(index), Some(opinions)) = (index, authored) {
+            let strongest = opinions.first()?.value();
             let is_value_field = matches!(
-                opinions.first()?.value,
+                strongest,
                 OpinionValue::Field(FieldValue::Value(_)) | OpinionValue::Property(_)
-            ) && !opinions[0]
-                .value
+            ) && !strongest
                 .as_property()
                 .is_some_and(PropertySpec::is_relationship);
             let explanation = if is_value_field {
@@ -561,7 +565,7 @@ impl Stage {
                 prim,
                 index,
                 field,
-                index.property_opinions(field).unwrap_or(&[]),
+                index.property_opinions(field).unwrap_or_default(),
                 time,
                 interp,
                 seed,
@@ -596,7 +600,7 @@ impl Stage {
     ) -> Option<ValueExplanation<'_, ResolvedValue>> {
         let (index, opinions) = self.opinions(prim, field, lookup)?;
         let strongest = opinions.first()?;
-        match &strongest.value {
+        match strongest.value() {
             OpinionValue::Property(spec) if spec.is_relationship() => {
                 return Some(explain_targets(index, opinions));
             }
@@ -626,7 +630,7 @@ impl Stage {
         &self,
         index: &'s PrimIndex,
         field: TokenId,
-        opinions: &'s [Opinion],
+        opinions: Opinions<'s>,
         property_type: Option<&PropertyType>,
         fallback: Option<&Value>,
     ) -> ValueExplanation<'s, ResolvedValue> {
@@ -646,14 +650,14 @@ impl Stage {
     fn explain_default_as_authored<'s>(
         &self,
         index: &'s PrimIndex,
-        opinions: &'s [Opinion],
+        opinions: Opinions<'s>,
         property_type: Option<&PropertyType>,
         fallback: Option<&Value>,
     ) -> ValueExplanation<'s, ResolvedValue> {
         let mut roles = Roles::new(index, opinions);
         let reads = |opinion: &Opinion| opinion.value.has_default_value();
 
-        if let Some(fold) = crate::path_expression::fold_default(opinions, fallback) {
+        if let Some(fold) = crate::path_expression::fold_default(opinions.records(), fallback) {
             let seeded = roles.apply_expression_fold(&fold, reads);
             let source = match (&fold.value, fold.contributors.first()) {
                 (None, _) => ValueSource::None,
@@ -679,6 +683,7 @@ impl Stage {
         }
 
         let Some(strongest) = opinions
+            .records()
             .iter()
             .find_map(|opinion| opinion.value.default_value())
         else {
@@ -724,18 +729,20 @@ impl Stage {
         prim: PathId,
         index: &'s PrimIndex,
         field: TokenId,
-        opinions: &'s [Opinion],
+        opinions: Opinions<'s>,
         time: f64,
         interp: InterpolationType,
         fallback: Option<&Value>,
     ) -> ValueExplanation<'s, Value> {
         let mut explained = self.explain_at_time(index, field, opinions, time, interp, fallback);
         let super::ClipPlan {
-            opinions: planned,
+            ordinary,
+            merged,
             source: clip,
             selected,
             kinds,
         } = self.clip_time_opinions(prim, field, index, time, interp);
+        let planned = merged.as_ref().map_or(ordinary, OpinionList::view);
         if selected.is_some() {
             let classify = |opinion: &Opinion, sample_time| {
                 kinds.entry(opinion).and_then(|entry| {
@@ -748,7 +755,7 @@ impl Stage {
             let folded = self.explain_at_time_with_composability(
                 index,
                 field,
-                &planned,
+                planned,
                 time,
                 interp,
                 fallback,
@@ -756,8 +763,8 @@ impl Stage {
             );
             for ordinary in &mut explained.opinions {
                 if let Some(actual) = folded.opinions.iter().find(|entry| {
-                    entry.opinion.key == ordinary.opinion.key
-                        && entry.opinion.value == ordinary.opinion.value
+                    entry.opinion.key() == ordinary.opinion.key()
+                        && entry.opinion.value() == ordinary.opinion.value()
                 }) {
                     ordinary.role = actual.role.clone();
                     ordinary.samples.clone_from(&actual.samples);
@@ -775,7 +782,7 @@ impl Stage {
         &self,
         index: &'s PrimIndex,
         field: TokenId,
-        opinions: &'s [Opinion],
+        opinions: Opinions<'s>,
         time: f64,
         interp: InterpolationType,
         fallback: Option<&Value>,
@@ -789,7 +796,7 @@ impl Stage {
         &self,
         index: &'s PrimIndex,
         field: TokenId,
-        opinions: &'s [Opinion],
+        opinions: Opinions<'s>,
         time: f64,
         interp: InterpolationType,
         fallback: Option<&Value>,
@@ -799,7 +806,7 @@ impl Stage {
         // samples and splines, not weaker defaults). Explain the fold the
         // read runs (`Stage::resolve_at_time_with_source`), over the masked
         // opinions, and report it against the authored ones.
-        let animation = super::stage_time::animation_opinions(opinions);
+        let animation = super::stage_time::animation_opinions(opinions.records());
         let mut explained = match &animation {
             Cow::Borrowed(_) => self.explain_at_time_as_authored(
                 index,
@@ -817,7 +824,7 @@ impl Stage {
                 self.explain_at_time_as_authored(
                     index,
                     field,
-                    masked,
+                    opinions.with_records(masked),
                     time,
                     interp,
                     fallback,
@@ -850,7 +857,7 @@ impl Stage {
         &self,
         index: &'s PrimIndex,
         field: TokenId,
-        opinions: &'s [Opinion],
+        opinions: Opinions<'s>,
         time: f64,
         interp: InterpolationType,
         fallback: Option<&Value>,
@@ -872,7 +879,7 @@ impl Stage {
             for &position in fold.contributors.iter().flatten() {
                 let used = roles.record_samples(position, time, interp);
                 source.get_or_insert_with(|| {
-                    let winner = &opinions[position];
+                    let winner = &opinions.records()[position];
                     if let Some((lower, upper)) = used {
                         ValueSource::TimeSamples {
                             lower,
@@ -920,9 +927,10 @@ impl Stage {
 
         // The strongest opinion that authors samples, a spline or a default
         // answers; every weaker one is hidden behind it.
-        let Some((winner, value)) = opinions
-            .iter()
-            .find_map(|opinion| Some((opinion, value_at_time(opinion, time, interp)?)))
+        let Some((position, winner, value)) =
+            opinions.iter().enumerate().find_map(|(position, opinion)| {
+                Some((position, opinion, value_at_time(opinion, time, interp)?))
+            })
         else {
             return roles.finish(None, ValueSource::None, false);
         };
@@ -930,11 +938,7 @@ impl Stage {
         roles.record_blocks(time);
         let source = if value.is_none() {
             ValueSource::None
-        } else if let Some((lower, upper)) = opinions
-            .iter()
-            .position(|o| core::ptr::eq(o, winner))
-            .and_then(|position| roles.record_samples(position, time, interp))
-        {
+        } else if let Some((lower, upper)) = roles.record_samples(position, time, interp) {
             ValueSource::TimeSamples {
                 lower,
                 upper,
@@ -942,7 +946,7 @@ impl Stage {
                 lower_seeded_by_fallback: false,
                 upper_seeded_by_fallback: false,
             }
-        } else if winner.value.spline().is_some() {
+        } else if winner.value().spline().is_some() {
             ValueSource::Spline
         } else {
             ValueSource::Default
@@ -960,9 +964,10 @@ impl Stage {
 /// connections).
 fn explain_targets<'s>(
     index: &'s PrimIndex,
-    opinions: &'s [Opinion],
+    opinions: Opinions<'s>,
 ) -> ValueExplanation<'s, ResolvedValue> {
     let mut roles = Roles::new(index, opinions);
+    let opinions = opinions.records();
     let with_targets: Vec<usize> = (0..opinions.len())
         .filter(|&i| opinions[i].value.targets().is_some())
         .collect();
@@ -989,10 +994,11 @@ fn explain_targets<'s>(
 /// Mirrors `resolve_field_list` over the same selection.
 fn explain_field_list<'s>(
     index: &'s PrimIndex,
-    opinions: &'s [Opinion],
+    opinions: Opinions<'s>,
     strongest: &FieldValue,
 ) -> ValueExplanation<'s, ResolvedValue> {
     let mut roles = Roles::new(index, opinions);
+    let opinions = opinions.records();
     let fields: Vec<usize> = (0..opinions.len())
         .filter(|&i| opinions[i].value.as_field().is_some())
         .collect();
@@ -1076,7 +1082,7 @@ impl ListChainer for ReportLists {
 /// authored opinions `masked` copies position for position.
 fn rebind<'s, T>(
     index: &'s PrimIndex,
-    opinions: &'s [Opinion],
+    opinions: Opinions<'s>,
     masked: &[Opinion],
     explained: ValueExplanation<'_, T>,
 ) -> ValueExplanation<'s, T> {
@@ -1092,12 +1098,14 @@ fn rebind<'s, T>(
         .map(|entry| {
             let position = masked
                 .iter()
-                .position(|opinion| core::ptr::eq(opinion, entry.opinion))
+                .position(|opinion| core::ptr::eq(opinion, entry.opinion.opinion()))
                 .expect("an explained opinion is one of the masked ones");
-            let opinion = &opinions[position];
+            let opinion = opinions
+                .get(position)
+                .expect("masked opinions copy the authored ones position for position");
             ExplainedOpinion {
                 opinion,
-                node: index.graph.node(opinion.key.node),
+                node: index.graph.node(opinion.node()),
                 role: entry.role,
                 samples: entry.samples,
             }
@@ -1186,16 +1194,20 @@ fn chain_role(event: &ResolutionEvent<usize>) -> (usize, OpinionRole) {
 /// Collects each opinion's role while an explanation is built.
 struct Roles<'s> {
     index: &'s PrimIndex,
-    opinions: &'s [Opinion],
+    /// The opinions explained, with their sources.
+    opinions: Opinions<'s>,
+    /// The opinions' records, `opinions.records()`.
+    records: &'s [Opinion],
     roles: Vec<Option<OpinionRole>>,
     samples: Vec<Vec<SampleUse>>,
 }
 
 impl<'s> Roles<'s> {
-    fn new(index: &'s PrimIndex, opinions: &'s [Opinion]) -> Self {
+    fn new(index: &'s PrimIndex, opinions: Opinions<'s>) -> Self {
         Self {
             index,
             opinions,
+            records: opinions.records(),
             roles: vec![None; opinions.len()],
             samples: vec![Vec::new(); opinions.len()],
         }
@@ -1217,8 +1229,8 @@ impl<'s> Roles<'s> {
     ///
     /// Spec: AOUSD Core §12.2 (the strongest opinion wins), §12.3.6.
     fn apply_strongest_wins(&mut self, reads: impl Fn(&Opinion) -> bool, blocks: bool) {
-        let members: Vec<usize> = (0..self.opinions.len())
-            .filter(|&i| reads(&self.opinions[i]))
+        let members: Vec<usize> = (0..self.records.len())
+            .filter(|&i| reads(&self.records[i]))
             .collect();
         // Only the strongest member's kind matters: every weaker member is
         // shadowed by a value or cut off by a block.
@@ -1249,17 +1261,17 @@ impl<'s> Roles<'s> {
     ///
     /// Spec: AOUSD Core §12.3.6 (individual time samples can be blocked).
     fn record_blocks(&mut self, time: f64) {
-        for position in 0..self.opinions.len() {
+        for position in 0..self.records.len() {
             if !matches!(self.roles[position], Some(OpinionRole::Block))
                 || !self.samples[position].is_empty()
             {
                 continue;
             }
-            let opinion = &self.opinions[position];
+            let opinion = &self.records[position];
             let Some(samples) = opinion.value.time_samples().filter(|s| !s.is_empty()) else {
                 continue;
             };
-            let offset = opinion.layer_offset;
+            let offset = self.opinions.source(opinion).layer_offset;
             let Some((held, _)) =
                 sample_bracket(samples, offset.map_time(time), InterpolationType::Held)
             else {
@@ -1283,12 +1295,12 @@ impl<'s> Roles<'s> {
         time: f64,
         interp: InterpolationType,
     ) -> Option<(f64, f64)> {
-        let opinion = &self.opinions[position];
+        let opinion = &self.records[position];
         let samples = opinion
             .value
             .time_samples()
             .filter(|samples| !samples.is_empty())?;
-        let offset = opinion.layer_offset;
+        let offset = self.opinions.source(opinion).layer_offset;
         let to_stage = |index: usize| samples[index].0 * offset.scale + offset.offset;
         let (lower, upper) =
             sample_bracket(samples, offset.map_time(time), interp).unwrap_or_default();
@@ -1323,8 +1335,8 @@ impl<'s> Roles<'s> {
             Some((Some(position), Stop::Block)) => Some(position),
             _ => None,
         };
-        for position in 0..self.opinions.len() {
-            if !reads(&self.opinions[position]) {
+        for position in 0..self.records.len() {
+            if !reads(&self.records[position]) {
                 continue;
             }
             let role = if fold.contributors.contains(&Some(position)) {
@@ -1360,7 +1372,7 @@ impl<'s> Roles<'s> {
         for fold in folds {
             for event in &fold.events {
                 let (pos, role) = family_role(event);
-                if !reads(&self.opinions[pos.opinion]) {
+                if !reads(&self.records[pos.opinion]) {
                     continue;
                 }
                 if at_time {
@@ -1378,7 +1390,7 @@ impl<'s> Roles<'s> {
         let cut_off = folds.first().is_some_and(|fold| {
             matches!(fold.events.last(), Some(FamilyEvent::StoppedByBlock { .. }))
         });
-        for (position, opinion) in self.opinions.iter().enumerate() {
+        for (position, opinion) in self.records.iter().enumerate() {
             if self.roles[position].is_some() || !reads(opinion) {
                 continue;
             }
@@ -1406,11 +1418,11 @@ impl<'s> Roles<'s> {
         // ordered chain's dictionary rule: blocks cut off, other values are
         // incompatible.
         self.apply_strongest_wins_dictionary();
-        let chain = dictionary_chain(self.opinions)
+        let chain = dictionary_chain(self.records)
             .map(|(position, entries)| (entries, Some(position)))
             .chain(seed.map(|seed| (seed, None)));
         let report = combine_dictionary_chain_report(&ValueDictionaries, chain);
-        let mut merges: Vec<Option<DictionaryMerge>> = vec![None; self.opinions.len()];
+        let mut merges: Vec<Option<DictionaryMerge>> = vec![None; self.records.len()];
         let mut seeded = false;
         for event in report.events {
             let (provenance, key_path, list): (
@@ -1451,12 +1463,12 @@ impl<'s> Roles<'s> {
     /// others do not, through the ordered chain's dictionary rule: a block
     /// cuts off weaker opinions, other values are incompatible.
     fn apply_strongest_wins_dictionary(&mut self) {
-        let members: Vec<usize> = (0..self.opinions.len())
-            .filter(|&i| self.opinions[i].value.has_default_value())
+        let members: Vec<usize> = (0..self.records.len())
+            .filter(|&i| self.records[i].value.has_default_value())
             .collect();
         let ops: Vec<OpinionOp<(), (), ()>> = members
             .iter()
-            .map(|&i| match self.opinions[i].value.default_value() {
+            .map(|&i| match self.records[i].value.default_value() {
                 Some(Value::Blocked) => OpinionOp::Block,
                 Some(Value::Dictionary(_)) => OpinionOp::Dictionary(Vec::new()),
                 _ => OpinionOp::Set(()),
@@ -1557,7 +1569,7 @@ impl<'s> Roles<'s> {
             .filter_map(|((opinion, role), samples)| {
                 Some(ExplainedOpinion {
                     opinion,
-                    node: graph.node(opinion.key.node),
+                    node: graph.node(opinion.node()),
                     role: role?,
                     samples,
                 })

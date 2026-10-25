@@ -78,8 +78,8 @@ fn render_store(
             writeln!(out, "  child {child}").unwrap();
         }
         for key in prim.sources() {
-            let layer = layer_names.get(&key.layer_id).cloned();
-            let site = key.spec_path.display(paths, tokens);
+            let layer = layer_names.get(&key.key.layer_id).cloned();
+            let site = key.key.spec_path.display(paths, tokens);
             writeln!(out, "  site {} {site}", layer.unwrap_or_default()).unwrap();
         }
         for name in prim.property_names() {

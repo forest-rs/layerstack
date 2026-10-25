@@ -6,7 +6,7 @@
 use std::path::{Path, PathBuf};
 
 use layerstack::{
-    ArcKind, CompositionError, InMemoryStore, LayerId, LayerStack, Opinion, PathId, PropertyPath,
+    ArcKind, CompositionError, InMemoryStore, LayerId, LayerStack, Opinions, PathId, PropertyPath,
     Stage, StageOptions, SublayerCycle, TargetPath, Value,
 };
 
@@ -24,7 +24,7 @@ fn opinions<'a>(
     stage: &'a Stage,
     store: &'a InMemoryStore,
     path: PropertyPath,
-) -> Option<&'a [Opinion]> {
+) -> Option<Opinions<'a>> {
     stage
         .view(store)
         .property(path)
@@ -48,7 +48,7 @@ fn target_list(
     let attribute = property.as_attribute()?;
     opinions
         .iter()
-        .any(|opinion| opinion.value.targets().is_some())
+        .any(|opinion| opinion.value().targets().is_some())
         .then(|| attribute.connections())
 }
 
@@ -264,8 +264,7 @@ fn assert_pcp_composing_except(loaded: &mut LoadedStage, pcp_path: &Path, skippe
 
                     assert!(
                         opinions.iter().any(|op| {
-                            op.key.layer_id == expected_layer
-                                && op.key.spec_path == expected_spec_path
+                            op.layer_id() == expected_layer && op.spec_path() == expected_spec_path
                         }),
                         "missing stack entry for {prop_path}: expected {layer_name} {expected_spec}"
                     );

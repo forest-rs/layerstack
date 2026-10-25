@@ -24,7 +24,7 @@ use crate::{
     interner::TokenId,
     layer_stack::LayerStack,
     path::PathId,
-    prim_index::{OpinionKey, PrimIndex},
+    prim_index::{OpinionSource, PrimIndex},
     prim_index_graph::{NodeId, PrimIndexGraph},
     prim_indexing::{Boundaries, ChildIndex},
     stage::{InstanceIndexKeys, Stage, StageOptions},
@@ -216,7 +216,7 @@ pub(crate) fn strength_ordered_variant_selections(
 fn authored_strength_ordered_variant_selections(
     store: &dyn LayerStore,
     graph: &PrimIndexGraph,
-    sources: &[OpinionKey],
+    sources: &[OpinionSource],
 ) -> HashMap<TokenId, TokenId> {
     // Each node lists its sets once, on its strongest source.
     let mut listed: HashMap<NodeId, Vec<TokenId>> =
@@ -224,15 +224,15 @@ fn authored_strength_ordered_variant_selections(
     let sites: Vec<VariantSite<'_>> = sources
         .iter()
         .filter_map(|source| {
-            let spec = store.layer(source.layer_id).and_then(|layer| {
-                layer.source_prim_spec(source.lookup_path, &source.spec_path, store.paths())
+            let spec = store.layer(source.key.layer_id).and_then(|layer| {
+                layer.source_prim_spec(source.key.lookup_path, &source.key.spec_path, store.paths())
             })?;
-            let context = SiteContext::Node(graph, source.node);
+            let context = SiteContext::Node(graph, source.key.node);
             Some(VariantSite::of_spec(
                 store,
                 spec,
-                source.spec_path.variant_chain(),
-                listed.remove(&source.node).unwrap_or_default(),
+                source.key.spec_path.variant_chain(),
+                listed.remove(&source.key.node).unwrap_or_default(),
                 context,
             ))
         })
@@ -311,21 +311,21 @@ impl<'a> VariantSite<'a> {
 /// `pxr/usd/pcp/primIndex.cpp` call it.
 pub(crate) fn node_variant_set_names(
     store: &dyn LayerStore,
-    sources: &[OpinionKey],
+    sources: &[OpinionSource],
 ) -> Vec<(NodeId, Vec<TokenId>)> {
     let mut nodes: Vec<(NodeId, Vec<&crate::listop::ListOp<TokenId>>)> = Vec::new();
     for source in sources {
         let op = store
-            .layer(source.layer_id)
+            .layer(source.key.layer_id)
             .and_then(|layer| {
-                layer.source_prim_spec(source.lookup_path, &source.spec_path, store.paths())
+                layer.source_prim_spec(source.key.lookup_path, &source.key.spec_path, store.paths())
             })
-            .and_then(|spec| spec.variant_sets_in(&source.spec_path.variant_chain()))
+            .and_then(|spec| spec.variant_sets_in(&source.key.spec_path.variant_chain()))
             .map(|(_, names)| names);
-        let ops = match nodes.iter_mut().find(|(node, _)| *node == source.node) {
+        let ops = match nodes.iter_mut().find(|(node, _)| *node == source.key.node) {
             Some((_, ops)) => ops,
             None => {
-                nodes.push((source.node, Vec::new()));
+                nodes.push((source.key.node, Vec::new()));
                 &mut nodes.last_mut().expect("just pushed").1
             }
         };
@@ -427,17 +427,17 @@ fn apply_fallbacks_at(
     fallbacks: &VariantFallbacks,
     selections: &mut HashMap<TokenId, TokenId>,
     graph: &PrimIndexGraph,
-    sources: &[OpinionKey],
+    sources: &[OpinionSource],
     sites: &[(&LayerStack, PathId)],
 ) {
     if fallbacks.is_empty() {
         return;
     }
     let source_specs = sources.iter().filter_map(|source| {
-        let spec = store.layer(source.layer_id).and_then(|layer| {
-            layer.source_prim_spec(source.lookup_path, &source.spec_path, store.paths())
+        let spec = store.layer(source.key.layer_id).and_then(|layer| {
+            layer.source_prim_spec(source.key.lookup_path, &source.key.spec_path, store.paths())
         })?;
-        Some((spec, SiteContext::Node(graph, source.node)))
+        Some((spec, SiteContext::Node(graph, source.key.node)))
     });
     let site_specs = sites.iter().flat_map(|(stack, prim)| {
         stack
@@ -456,8 +456,8 @@ fn apply_fallbacks_at(
         .map(|(node, names)| ListedSets {
             branch: sources
                 .iter()
-                .find(|source| source.node == node)
-                .map(|source| source.spec_path.variant_chain())
+                .find(|source| source.key.node == node)
+                .map(|source| source.key.spec_path.variant_chain())
                 .unwrap_or_default(),
             names,
         })
@@ -472,22 +472,22 @@ fn apply_fallbacks_at(
 fn authored_composed_variant_selections(
     store: &dyn LayerStore,
     graph: &PrimIndexGraph,
-    sources: &[OpinionKey],
+    sources: &[OpinionSource],
 ) -> HashMap<TokenId, TokenId> {
     let mut selections: HashMap<TokenId, TokenId> = HashMap::new();
     for source in sources {
-        let Some(layer) = store.layer(source.layer_id) else {
+        let Some(layer) = store.layer(source.key.layer_id) else {
             continue;
         };
         let Some(spec) =
-            layer.source_prim_spec(source.lookup_path, &source.spec_path, store.paths())
+            layer.source_prim_spec(source.key.lookup_path, &source.key.spec_path, store.paths())
         else {
             continue;
         };
         let Some(authored) = spec.variant_selections() else {
             continue;
         };
-        let context = SiteContext::Node(graph, source.node);
+        let context = SiteContext::Node(graph, source.key.node);
         let authored = site_selections(store, authored, context);
         for (set, variant) in authored.iter() {
             selections.entry(*set).or_insert(*variant);
@@ -498,15 +498,17 @@ fn authored_composed_variant_selections(
     loop {
         let mut new_sels = HashMap::new();
         for source in sources {
-            let Some(layer) = store.layer(source.layer_id) else {
+            let Some(layer) = store.layer(source.key.layer_id) else {
                 continue;
             };
-            let Some(spec) =
-                layer.source_prim_spec(source.lookup_path, &source.spec_path, store.paths())
-            else {
+            let Some(spec) = layer.source_prim_spec(
+                source.key.lookup_path,
+                &source.key.spec_path,
+                store.paths(),
+            ) else {
                 continue;
             };
-            let context = SiteContext::Node(graph, source.node);
+            let context = SiteContext::Node(graph, source.key.node);
             for branch in spec.selected_variant_branches(&selections) {
                 let inner = site_selections(store, &branch.spec.variant_selections, context);
                 for (inner_set, inner_variant) in inner.iter() {
@@ -638,7 +640,7 @@ mod child_order_tests {
                     .explain_prim(path)
                     .unwrap()
                     .iter()
-                    .all(|source| { !source.spec_path.has_variant_selections() }),
+                    .all(|source| { !source.key.spec_path.has_variant_selections() }),
                 "no variant spec is added to the prim stack"
             );
             assert_eq!(stage.resolve_field(path, marker), None);
@@ -944,14 +946,14 @@ mod instancing_tests {
             .explain_property_path(PropertyPath::new(c, x))
             .expect("x has opinions")
             .iter()
-            .map(|opinion| (opinion.key.layer_id, opinion.key.lookup_path))
+            .map(|opinion| (opinion.layer_id(), opinion.source().key.lookup_path))
             .collect();
         assert_eq!(stack, [(LayerId(3), asset_c)], "only the asset contributes");
         let sources: Vec<_> = stage
             .explain_prim(c)
             .expect("C is composed")
             .iter()
-            .map(|key| (key.layer_id, key.lookup_path))
+            .map(|source| (source.key.layer_id, source.key.lookup_path))
             .collect();
         assert_eq!(sources, [(LayerId(3), asset_c)]);
         assert_eq!(
@@ -1055,7 +1057,7 @@ mod default_prim_tests {
             .explain_prim(prim)
             .expect("prim is composed")
             .iter()
-            .map(|key| (key.layer_id, key.lookup_path))
+            .map(|source| (source.key.layer_id, source.key.lookup_path))
             .collect()
     }
 
@@ -1362,7 +1364,7 @@ mod property_snapshot_tests {
     use alloc::{sync::Arc, vec};
 
     fn payload(stage: &Stage, path: PropertyPath) -> &Arc<PropertySpec> {
-        match &stage.explain_property_path(path).unwrap()[0].value {
+        match &stage.explain_property_path(path).unwrap().records()[0].value {
             OpinionValue::Property(spec) => spec,
             OpinionValue::Field(_) => panic!("property opinion"),
         }

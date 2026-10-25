@@ -811,10 +811,10 @@ impl<'s> SchemaEdit<'s> {
                 .into_iter()
                 .flatten()
                 .filter(|op| {
-                    !(op.key.layer_id == self.target.layer()
-                        && mapped.as_ref() == Some(&op.key.spec_path))
+                    !(op.layer_id() == self.target.layer()
+                        && mapped.as_ref() == Some(&op.spec_path()))
                 })
-                .filter_map(|op| op.value.as_property()?.default.as_ref())
+                .filter_map(|op| op.value().as_property()?.default.as_ref())
                 .next()
             {
                 return Some(value.materialized().clone());
@@ -928,10 +928,9 @@ impl<'s> SchemaEdit<'s> {
         let mut specs = opinions
             .iter()
             .filter(|op| {
-                !(op.key.layer_id == self.target.layer()
-                    && mapped.as_ref() == Some(&op.key.spec_path))
+                !(op.layer_id() == self.target.layer() && mapped.as_ref() == Some(&op.spec_path()))
             })
-            .filter_map(|op| op.value.as_property());
+            .filter_map(|op| op.value().as_property());
         let strongest = specs.next()?;
         let mut declaration = PropertyDeclaration {
             kind: strongest.kind,
@@ -1308,10 +1307,10 @@ impl<'s> SchemaEdit<'s> {
                     .into_iter()
                     .flatten()
                     .filter(|op| {
-                        !(op.key.layer_id == self.target.layer()
-                            && mapped.as_ref() == Some(&op.key.spec_path))
+                        !(op.layer_id() == self.target.layer()
+                            && mapped.as_ref() == Some(&op.spec_path()))
                     })
-                    .filter_map(|op| op.value.as_property()?.metadata(key))
+                    .filter_map(|op| op.value().as_property()?.metadata(key))
                     .peekable();
                 // Spec: AOUSD Core §12.2.5: dictionaries combine through
                 // weaker opinions, stopping at a block. Removed specs never

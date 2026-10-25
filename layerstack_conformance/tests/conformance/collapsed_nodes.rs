@@ -45,7 +45,7 @@ fn sources<'a>(
     stage: &'a Stage,
     store: &'a layerstack::InMemoryStore,
     path: PathId,
-) -> Option<&'a [layerstack::OpinionKey]> {
+) -> Option<&'a [layerstack::OpinionSource]> {
     stage.prim(path, store).map(|prim| prim.sources())
 }
 
@@ -55,7 +55,7 @@ fn opinions<'a>(
     stage: &'a Stage,
     store: &'a layerstack::InMemoryStore,
     path: layerstack::PropertyPath,
-) -> Option<&'a [layerstack::Opinion]> {
+) -> Option<layerstack::Opinions<'a>> {
     stage
         .view(store)
         .property(path)
@@ -176,8 +176,9 @@ fn prim_stacks_repeat_each_occurrence_of_a_site() {
             .iter()
             .map(|key| {
                 (
-                    layer_name(&loaded, key.layer_id),
-                    key.spec_path
+                    layer_name(&loaded, key.key.layer_id),
+                    key.key
+                        .spec_path
                         .display(&loaded.store.paths, &loaded.store.tokens),
                 )
             })
@@ -212,13 +213,13 @@ fn each_occurrence_keeps_its_own_layer_offset() {
             .iter()
             .map(|opinion| {
                 (
-                    layer_name(&loaded, opinion.key.layer_id),
+                    layer_name(&loaded, opinion.layer_id()),
                     opinion
-                        .key
+                        .key()
                         .spec_path
                         .display(&loaded.store.paths, &loaded.store.tokens),
-                    opinion.layer_offset.offset,
-                    opinion.layer_offset.scale,
+                    opinion.layer_offset().offset,
+                    opinion.layer_offset().scale,
                 )
             })
             .collect();
@@ -304,8 +305,9 @@ fn snapshot(loaded: &mut LoadedStage, stage: &Stage) -> Vec<String> {
             .map(|key| {
                 format!(
                     "{} {}",
-                    layer_name(loaded, key.layer_id),
-                    key.spec_path
+                    layer_name(loaded, key.key.layer_id),
+                    key.key
+                        .spec_path
                         .display(&loaded.store.paths, &loaded.store.tokens)
                 )
             })
@@ -320,8 +322,8 @@ fn snapshot(loaded: &mut LoadedStage, stage: &Stage) -> Vec<String> {
             .map(|opinion| {
                 format!(
                     "{} {:?}",
-                    layer_name(loaded, opinion.key.layer_id),
-                    opinion.layer_offset
+                    layer_name(loaded, opinion.layer_id()),
+                    opinion.layer_offset()
                 )
             })
             .collect();

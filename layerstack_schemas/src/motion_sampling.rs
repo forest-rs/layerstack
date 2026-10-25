@@ -4,7 +4,7 @@
 //! Shared motion sample anchoring; composed value resolution stays in Stage.
 use crate::{PrimView, Scene, Time};
 use alloc::vec::Vec;
-use layerstack::{TokenInterner, Value};
+use layerstack::{Opinions, TokenInterner, Value};
 
 pub(crate) fn read<'a, T>(
     prim: &PrimView<'a>,
@@ -43,22 +43,18 @@ pub(crate) fn anchor(
         attribute.is_some_and(|attribute| attribute.clip_source(Time::held(code)).is_some());
     let opinions = match property {
         Some(property) if !clip_selected => property.opinions(),
-        _ => &[][..],
+        _ => Opinions::default(),
     };
     let mut times = match attribute {
         Some(attribute) if clip_selected => attribute.sample_times(),
         _ => Vec::new(),
     };
     for opinion in opinions {
-        if let Some(samples) = opinion.value.time_samples().filter(|s| !s.is_empty()) {
+        if let Some(samples) = opinion.value().time_samples().filter(|s| !s.is_empty()) {
+            let offset = opinion.layer_offset();
             let mut mapped: Vec<_> = samples
                 .iter()
-                .map(|(t, v)| {
-                    (
-                        t * opinion.layer_offset.scale + opinion.layer_offset.offset,
-                        v,
-                    )
-                })
+                .map(|(t, v)| (t * offset.scale + offset.offset, v))
                 .collect();
             mapped.sort_by(|a, b| a.0.total_cmp(&b.0));
             times.extend(mapped.iter().map(|&(t, _)| t));
@@ -70,11 +66,11 @@ pub(crate) fn anchor(
             if active.array_edit_ref().is_none() {
                 break;
             }
-        } else if opinion.value.spline().is_some() {
+        } else if opinion.value().spline().is_some() {
             // USD splines are scalar-valued, so an array motion source cannot
             // be anchored as discrete point/rotation samples.
             return Err(name);
-        } else if let Some(value) = opinion.value.default_value()
+        } else if let Some(value) = opinion.value().default_value()
             && value.array_edit_ref().is_none()
         {
             break;

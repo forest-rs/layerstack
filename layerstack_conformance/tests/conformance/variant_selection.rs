@@ -15,7 +15,7 @@ use layerstack::{
     AssetResolveError, AssetResolver, InMemoryStore, LayerId, PathInterner, PropertyPath, Stage,
     StageOptions, TokenInterner, Value,
 };
-use layerstack::{Layer, Opinion, PathId, Resolved, ResolvedAsset};
+use layerstack::{Layer, Opinions, PathId, Resolved, ResolvedAsset};
 use layerstack_usda::{emit, lower, parser::parse_cst};
 
 /// Whether the stage composes a prim at `path`.
@@ -37,7 +37,7 @@ fn opinions<'a>(
     stage: &'a Stage,
     store: &'a InMemoryStore,
     path: PropertyPath,
-) -> Option<&'a [Opinion]> {
+) -> Option<Opinions<'a>> {
     stage
         .view(store)
         .property(path)
@@ -140,7 +140,7 @@ fn resolve(store: &mut InMemoryStore, stage: &Stage, prop: &str) -> (Value, Vec<
         .value;
     let mut stack = Vec::new();
     for op in opinions(stage, store, path).expect("opinions") {
-        if let Some(v) = op.value.default_value()
+        if let Some(v) = op.value().default_value()
             && !stack.contains(v)
         {
             stack.push(v.clone());
@@ -271,9 +271,9 @@ def "SelectsA" (
             .iter()
             .map(|op| {
                 (
-                    op.key.layer_id,
-                    op.key.spec_path.display(&store.paths, &store.tokens),
-                    op.value.default_value().cloned(),
+                    op.layer_id(),
+                    op.spec_path().display(&store.paths, &store.tokens),
+                    op.value().default_value().cloned(),
                 )
             })
             .collect();
@@ -420,9 +420,9 @@ class "ClassB"
             let prop = PropertyPath::parse(&format!("{prim}.x"), &store.tokens, &store.paths)
                 .expect("path");
             let stack: Vec<_> = opinions(&stage, &store, prop)
-                .unwrap_or(&[])
+                .unwrap_or_default()
                 .iter()
-                .filter_map(|op| op.value.default_value().cloned())
+                .filter_map(|op| op.value().default_value().cloned())
                 .collect();
             let expected = vec![Value::Double(2.0)];
             if stack != expected {
@@ -569,7 +569,7 @@ fn same_named_variant_sets_on_different_hosts_do_not_alias() {
                 .expect("path");
             assert!(has_prim(stage, store, x.prim_path()), "{prim} exists");
             assert_eq!(
-                opinions(stage, store, x).map(<[_]>::len),
+                opinions(stage, store, x).map(Opinions::len),
                 None,
                 "{prim} has no `lod` selection, so no branch may contribute"
             );
@@ -975,8 +975,8 @@ fn matrix_cell(outer: MatrixArc, inner: MatrixArc, selection: MatrixSelection) -
         // from an outer inherit/specialize of a prim that is also composed
         // on the stage are a separate, pre-existing issue.)
         let mut stack: Vec<Value> = Vec::new();
-        for op in opinions(&stage, &store, prop).unwrap_or(&[]) {
-            if let Some(value) = op.value.default_value()
+        for op in opinions(&stage, &store, prop).unwrap_or_default() {
+            if let Some(value) = op.value().default_value()
                 && !stack.contains(value)
             {
                 stack.push(value.clone());

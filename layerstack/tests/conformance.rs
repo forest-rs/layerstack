@@ -722,8 +722,8 @@ fn explain_field_returns_sorted_opinion_stack() {
     assert_eq!(stack.len(), 2);
 
     // Strongest-first means the root layer's opinion comes first.
-    assert_eq!(stack[0].key.layer_id, LayerId(1));
-    assert_eq!(stack[1].key.layer_id, LayerId(2));
+    let layers: Vec<LayerId> = stack.iter().map(|opinion| opinion.layer_id()).collect();
+    assert_eq!(layers, [LayerId(1), LayerId(2)]);
 
     assert_eq!(
         stage
@@ -2890,12 +2890,12 @@ fn nested_reference_is_weaker_than_referenced_site_opinions() {
         .expect("graph");
     assert_eq!(opinions.len(), 2, "both opinions participate");
     assert_eq!(
-        arc_path(graph, opinions[0].key.node),
+        arc_path(graph, opinions.first().expect("strongest").node()),
         [ArcKind::References],
         "direct referenced opinion is strongest"
     );
     assert_eq!(
-        arc_path(graph, opinions[1].key.node),
+        arc_path(graph, opinions.get(1).expect("weaker").node()),
         [ArcKind::References, ArcKind::References],
         "nested reference stays beneath the outer reference"
     );
@@ -2950,7 +2950,7 @@ fn reference_nested_in_payload_is_weaker_than_payload_site() {
     assert!(
         opinions
             .iter()
-            .all(|op| arc_path(graph, op.key.node).first() == Some(&ArcKind::Payloads)),
+            .all(|op| arc_path(graph, op.node()).first() == Some(&ArcKind::Payloads)),
         "everything under the payload stays at payload strength"
     );
 }
@@ -3085,7 +3085,7 @@ fn prim_metadata_and_property_with_one_name_stay_separate() {
                 .property(attribute)
                 .map(|property| property.opinions())
                 .filter(|opinions| !opinions.is_empty())
-                .is_some_and(|ops| ops.iter().all(|op| op.value.as_property().is_some())),
+                .is_some_and(|ops| ops.iter().all(|op| op.value().as_property().is_some())),
             "the attribute's stack holds only property opinions ({split:?})"
         );
     }

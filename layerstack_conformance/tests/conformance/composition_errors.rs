@@ -236,7 +236,7 @@ fn stacks_targets_and_values_match_openusd() {
                 .map(|p| p.sources())
                 .expect("composed prim")
                 .iter()
-                .map(|key| site(&loaded, key.layer_id, &key.spec_path))
+                .map(|key| site(&loaded, key.key.layer_id, &key.key.spec_path))
                 .collect();
             if stack != prim.prim_stack {
                 mismatches.push(format!(
@@ -254,7 +254,7 @@ fn stacks_targets_and_values_match_openusd() {
                     .map(|p| p.opinions())
                     .unwrap_or_default()
                     .iter()
-                    .map(|opinion| site(&loaded, opinion.key.layer_id, &opinion.key.spec_path))
+                    .map(|opinion| site(&loaded, opinion.layer_id(), &opinion.spec_path()))
                     .collect();
                 if stack != property.stack {
                     mismatches.push(format!(
@@ -353,8 +353,9 @@ fn selection_snapshot(loaded: &LoadedStage, stage: &Stage) -> Vec<String> {
                 .iter()
                 .map(|key| {
                     (
-                        layer_name(loaded, key.layer_id),
-                        key.spec_path
+                        layer_name(loaded, key.key.layer_id),
+                        key.key
+                            .spec_path
                             .display(&loaded.store.paths, &loaded.store.tokens),
                     )
                 })

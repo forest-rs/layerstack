@@ -27,7 +27,7 @@ fn opinions<'a>(
     stage: &'a Stage,
     store: &'a InMemoryStore,
     path: PropertyPath,
-) -> Option<&'a [layerstack::Opinion]> {
+) -> Option<layerstack::Opinions<'a>> {
     stage
         .view(store)
         .property(path)

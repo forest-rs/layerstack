@@ -59,18 +59,18 @@ impl ArcKind {
     }
 }
 
-/// Identifies one authored opinion of a composed prim and ranks it.
+/// Identifies the site a composed prim's opinions are read from and ranks
+/// it.
 ///
-/// The opinion's arc path lives in the prim's [`PrimIndexGraph`]: `node`
-/// names the site the opinion was read from, and the node, then
-/// `layer_strength` within the node's layer stack, rank the opinion
-/// against the prim's other opinions. The remaining fields identify the
-/// authored spec.
+/// The site's arc path lives in the prim's [`PrimIndexGraph`]: `node`
+/// names the node the site belongs to, and the node, then
+/// `layer_strength` within the node's layer stack, rank the site against
+/// the prim's other sites. The remaining fields identify the authored spec.
 ///
 /// Spec: AOUSD Core §10.4 (strength ordering).
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct OpinionKey {
-    /// The node of the prim's [`PrimIndexGraph`] this opinion belongs to
+    /// The node of the prim's [`PrimIndexGraph`] this site belongs to
     /// (see [`crate::Prim::composition_graph`]).
     pub node: NodeId,
     /// Strength position within the node's layer stack (0 is strongest).
@@ -79,7 +79,9 @@ pub struct OpinionKey {
     pub layer_id: LayerId,
     /// Concrete prim path used to look up the authored `PrimSpec`.
     pub lookup_path: PathId,
-    /// Source spec path identity used for composed provenance.
+    /// Source spec path identity used for composed provenance: the prim
+    /// spec of a source, or the property or field of one opinion
+    /// ([`OpinionRef::key`]).
     pub spec_path: SpecPath,
 }
 
@@ -93,18 +95,406 @@ impl OpinionKey {
     }
 }
 
-/// An authored opinion for a destination prim+field, with a strength key.
+/// A site a composed prim's opinions are read from: one layer of the layer
+/// stack of one node of the prim's composition graph, and the offset that
+/// maps the layer's times into stage time.
+///
+/// A prim lists its sources strongest first ([`crate::Prim::sources`]),
+/// and each of its [`Opinion`]s names the one it was read from by its
+/// [`SourceId`]: the opinions read from one spec share its key and offset.
+///
+/// OpenUSD: an entry of `PcpPrimIndex`'s prim stack (`Pcp_CompressedSdSite`,
+/// a node and a layer of its layer stack), whose node and layer give its
+/// strength and offset.
+///
+/// Spec: AOUSD Core §10.4 (strength ordering), §12.3.2.1 (layer offset and
+/// scale).
+#[derive(Clone, Debug, PartialEq)]
+pub struct OpinionSource {
+    /// The site and its strength. Its spec path names the prim spec the
+    /// source's opinions are read from.
+    pub key: OpinionKey,
+    /// The offset from the source layer's times to stage times: the
+    /// offsets of every arc leading to the source's node composed with the
+    /// layer's own offset in the node's layer stack (§12.3.2.1).
+    pub layer_offset: LayerOffset,
+}
+
+/// The position of an opinion's source among the sources of its prim,
+/// which are strongest first: of two opinions of one prim, the one whose
+/// source comes first is the stronger.
+///
+/// It indexes the sources of the list the opinion was read from
+/// ([`Opinions::sources`], [`crate::Prim::sources`]).
+///
+/// Spec: AOUSD Core §10.4 (strength ordering).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct SourceId(u32);
+
+impl SourceId {
+    /// The id of the source at `position`.
+    pub(crate) fn at(position: usize) -> Self {
+        Self(u32::try_from(position).expect("prim index source count overflow"))
+    }
+
+    /// The source's position in the sources it indexes.
+    #[must_use]
+    pub const fn index(self) -> usize {
+        self.0 as usize
+    }
+}
+
+/// What one source of a composed prim authors for one of its fields: a
+/// metadata field or a property.
+///
+/// The opinion names its source, whose key and layer offset it shares with
+/// the other opinions read from it; [`Opinions`] pairs each opinion with
+/// its source ([`OpinionRef`]). Two opinions are equal when they name the
+/// same source position and author the same value; compare
+/// [`OpinionRef`]s to compare opinions of different prims.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Opinion {
-    /// Strength key used for sorting.
-    pub key: OpinionKey,
+    /// The source the opinion was read from (see [`Opinions::source`]).
+    pub source: SourceId,
     /// The field token being authored: a prim metadata field name or a
     /// property name.
     pub field: TokenId,
     /// The authored content this opinion contributes.
     pub value: OpinionValue,
-    /// Accumulated layer offset from all arcs leading to this opinion (§12.3.2.1).
-    pub layer_offset: LayerOffset,
+}
+
+/// Opinions of a composed prim, strongest first, with the sources they
+/// were read from: the opinions of one field
+/// ([`crate::Property::opinions`], [`crate::Prim::metadata_opinions`]).
+///
+/// Iterating yields each opinion with its source ([`OpinionRef`]).
+///
+/// OpenUSD: `UsdProperty::GetPropertyStackWithLayerOffsets`.
+///
+/// Spec: AOUSD Core §10.4 (strength ordering), §12.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Opinions<'a> {
+    records: &'a [Opinion],
+    sources: &'a [OpinionSource],
+}
+
+impl<'a> Opinions<'a> {
+    /// `records`, whose sources `sources` holds.
+    pub(crate) fn new(records: &'a [Opinion], sources: &'a [OpinionSource]) -> Self {
+        debug_assert!(
+            records
+                .iter()
+                .all(|opinion| opinion.source.index() < sources.len()),
+            "every opinion's source is one of the sources"
+        );
+        Self { records, sources }
+    }
+
+    /// The number of opinions.
+    #[must_use]
+    pub fn len(self) -> usize {
+        self.records.len()
+    }
+
+    /// Whether there are no opinions.
+    #[must_use]
+    pub fn is_empty(self) -> bool {
+        self.records.is_empty()
+    }
+
+    /// The opinion at `position` (0 is the strongest), with its source.
+    #[must_use]
+    pub fn get(self, position: usize) -> Option<OpinionRef<'a>> {
+        self.records.get(position).map(|opinion| self.pair(opinion))
+    }
+
+    /// The strongest opinion, with its source.
+    #[must_use]
+    pub fn first(self) -> Option<OpinionRef<'a>> {
+        self.get(0)
+    }
+
+    /// The opinions, strongest first, each with its source.
+    pub fn iter(self) -> OpinionIter<'a> {
+        OpinionIter {
+            records: self.records.iter(),
+            sources: self.sources,
+        }
+    }
+
+    /// The opinion records, strongest first, without their sources.
+    #[must_use]
+    pub fn records(self) -> &'a [Opinion] {
+        self.records
+    }
+
+    /// The sources the opinions index: every source of their prim, those
+    /// that author none of these opinions included.
+    #[must_use]
+    pub fn sources(self) -> &'a [OpinionSource] {
+        self.sources
+    }
+
+    /// The source `opinion`, one of these opinions, was read from.
+    #[must_use]
+    pub fn source(self, opinion: &Opinion) -> &'a OpinionSource {
+        &self.sources[opinion.source.index()]
+    }
+
+    /// The opinions from `start` on.
+    #[must_use]
+    pub(crate) fn from(self, start: usize) -> Self {
+        Self {
+            records: &self.records[start..],
+            sources: self.sources,
+        }
+    }
+
+    /// `records`, opinions read from these opinions' sources (copies of
+    /// some of them, with other values), with those sources.
+    pub(crate) fn with_records<'b>(self, records: &'b [Opinion]) -> Opinions<'b>
+    where
+        'a: 'b,
+    {
+        Opinions::new(records, self.sources)
+    }
+
+    /// `opinion`, one of these opinions, with its source.
+    pub(crate) fn pair(self, opinion: &'a Opinion) -> OpinionRef<'a> {
+        OpinionRef {
+            opinion,
+            source: self.source(opinion),
+        }
+    }
+}
+
+/// Two lists are equal when they hold equal opinions ([`OpinionRef`]) in
+/// the same order.
+impl PartialEq for Opinions<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.len() == other.len() && self.iter().eq(other.iter())
+    }
+}
+
+impl<'a> IntoIterator for Opinions<'a> {
+    type Item = OpinionRef<'a>;
+    type IntoIter = OpinionIter<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
+/// An iterator over [`Opinions`], strongest first.
+#[derive(Clone, Debug)]
+pub struct OpinionIter<'a> {
+    records: core::slice::Iter<'a, Opinion>,
+    sources: &'a [OpinionSource],
+}
+
+impl<'a> OpinionIter<'a> {
+    fn pair(&self, opinion: &'a Opinion) -> OpinionRef<'a> {
+        OpinionRef {
+            opinion,
+            source: &self.sources[opinion.source.index()],
+        }
+    }
+}
+
+impl<'a> Iterator for OpinionIter<'a> {
+    type Item = OpinionRef<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let opinion = self.records.next()?;
+        Some(self.pair(opinion))
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.records.size_hint()
+    }
+}
+
+impl DoubleEndedIterator for OpinionIter<'_> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        let opinion = self.records.next_back()?;
+        Some(self.pair(opinion))
+    }
+}
+
+impl ExactSizeIterator for OpinionIter<'_> {}
+
+/// One opinion with the source it was read from.
+///
+/// Two are equal when they author the same value for the same field from
+/// sources with the same key and layer offset.
+#[derive(Clone, Copy, Debug)]
+pub struct OpinionRef<'a> {
+    opinion: &'a Opinion,
+    source: &'a OpinionSource,
+}
+
+impl<'a> OpinionRef<'a> {
+    /// The opinion record.
+    #[must_use]
+    pub fn opinion(self) -> &'a Opinion {
+        self.opinion
+    }
+
+    /// The field the opinion authors: a prim metadata field name or a
+    /// property name.
+    #[must_use]
+    pub fn field(self) -> TokenId {
+        self.opinion.field
+    }
+
+    /// What the opinion authors.
+    #[must_use]
+    pub fn value(self) -> &'a OpinionValue {
+        &self.opinion.value
+    }
+
+    /// The source the opinion was read from.
+    #[must_use]
+    pub fn source(self) -> &'a OpinionSource {
+        self.source
+    }
+
+    /// The node of the prim's composition graph the opinion was read from.
+    #[must_use]
+    pub fn node(self) -> NodeId {
+        self.source.key.node
+    }
+
+    /// The layer that authors the opinion.
+    #[must_use]
+    pub fn layer_id(self) -> LayerId {
+        self.source.key.layer_id
+    }
+
+    /// The offset from the opinion's layer times to stage times, its
+    /// source's.
+    ///
+    /// Spec: AOUSD Core §12.3.2.1 (layer offset and scale).
+    #[must_use]
+    pub fn layer_offset(self) -> LayerOffset {
+        self.source.layer_offset
+    }
+
+    /// The spec path the opinion is authored at: its source's prim spec
+    /// with the opinion's field as the property (`/World.radius`). A
+    /// metadata field is named the same way (`/World.kind`). A source whose
+    /// spec path already names a property or field names the opinion's
+    /// spec as it is.
+    #[must_use]
+    pub fn spec_path(self) -> SpecPath {
+        let path = &self.source.key.spec_path;
+        // Only a value clip's opinions, whose source is the clip set's
+        // `clips` metadata opinion, have such a source.
+        if path.property().is_some() {
+            path.clone()
+        } else {
+            path.with_property(self.opinion.field)
+        }
+    }
+
+    /// The opinion's key: its source's, with [`Self::spec_path`] as the
+    /// spec path.
+    #[must_use]
+    pub fn key(self) -> OpinionKey {
+        self.source.key.with_spec_path(self.spec_path())
+    }
+}
+
+impl PartialEq for OpinionRef<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.opinion.field == other.opinion.field
+            && self.opinion.value == other.opinion.value
+            && self.source.layer_offset == other.source.layer_offset
+            && self.key() == other.key()
+    }
+}
+
+/// An opinion with its source, owned: one no prim index keeps, such as a
+/// value clip's, whose source is the clip set's metadata anchor.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct SourcedOpinion {
+    pub(crate) source: OpinionSource,
+    /// The opinion, naming [`Self::source`] as its first source.
+    pub(crate) opinion: Opinion,
+}
+
+impl SourcedOpinion {
+    /// An opinion of `field` authoring `value`, read from `source`.
+    pub(crate) fn new(source: OpinionSource, field: TokenId, value: OpinionValue) -> Self {
+        Self {
+            source,
+            opinion: Opinion {
+                source: SourceId(0),
+                field,
+                value,
+            },
+        }
+    }
+
+    /// The opinion with its source.
+    pub(crate) fn as_ref(&self) -> OpinionRef<'_> {
+        OpinionRef {
+            opinion: &self.opinion,
+            source: &self.source,
+        }
+    }
+}
+
+/// Opinions with the sources they index, owned: a chain no prim index
+/// keeps, such as a property's opinions merged with value clip opinions.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct OpinionList {
+    pub(crate) records: Vec<Opinion>,
+    pub(crate) sources: Vec<OpinionSource>,
+}
+
+impl OpinionList {
+    /// The opinions and their sources.
+    pub(crate) fn view(&self) -> Opinions<'_> {
+        Opinions::new(&self.records, &self.sources)
+    }
+
+    /// The id of a source equal to `source`, added when there is none.
+    pub(crate) fn source_id(&mut self, source: &OpinionSource) -> SourceId {
+        let at = match self.sources.iter().position(|known| known == source) {
+            Some(at) => at,
+            None => {
+                self.sources.push(source.clone());
+                self.sources.len() - 1
+            }
+        };
+        SourceId::at(at)
+    }
+
+    /// Appends an opinion of `field` authoring `value`, read from `source`.
+    pub(crate) fn push(&mut self, source: &OpinionSource, field: TokenId, value: OpinionValue) {
+        let source = self.source_id(source);
+        self.records.push(Opinion {
+            source,
+            field,
+            value,
+        });
+    }
+
+    /// Appends `opinion`, read from its source.
+    pub(crate) fn push_ref(&mut self, opinion: OpinionRef<'_>) {
+        self.push(opinion.source, opinion.field(), opinion.value().clone());
+    }
+
+    /// A list of `opinions`, in order, each source once.
+    #[cfg(test)]
+    pub(crate) fn chain<'a>(opinions: impl IntoIterator<Item = &'a SourcedOpinion>) -> Self {
+        let mut list = Self::default();
+        for opinion in opinions {
+            list.push_ref(opinion.as_ref());
+        }
+        list
+    }
 }
 
 /// The authored content one [`Opinion`] contributes.
@@ -291,30 +681,36 @@ pub(crate) struct PrimIndex {
 
 #[derive(Clone, Debug, Default)]
 pub(crate) struct PrimIndexData {
+    /// Every opinion, each naming one of [`Self::sources`].
     pub(crate) opinions: Vec<Opinion>,
     /// Each field's opinions, a range of [`Self::opinions`]
     /// ([`Self::opinions_in`]), sorted by field.
     pub(crate) fields: Vec<(FieldKey, Range<u32>)>,
-    pub(crate) sources: Vec<OpinionKey>,
+    /// The sites the opinions are read from, strongest first once
+    /// finalized ([`PrimIndex::finalize`]).
+    pub(crate) sources: Vec<OpinionSource>,
 }
 
 impl PrimIndexData {
     /// The opinions of one of [`Self::fields`]' ranges.
-    pub(crate) fn opinions_in(&self, range: &Range<u32>) -> &[Opinion] {
-        &self.opinions[span(range)]
+    pub(crate) fn opinions_in(&self, range: &Range<u32>) -> Opinions<'_> {
+        Opinions::new(&self.opinions[span(range)], &self.sources)
     }
 
     /// Exact record identity for sharing; public value equality stays IEEE.
     pub(crate) fn same_records(&self, other: &Self) -> bool {
         use crate::edit::same::Same;
         self.fields == other.fields
-            && self.sources == other.sources
-            && self.opinions.len() == other.opinions.len()
-            && self.opinions.iter().zip(&other.opinions).all(|(a, b)| {
+            && self.sources.len() == other.sources.len()
+            && self.sources.iter().zip(&other.sources).all(|(a, b)| {
                 a.key == b.key
-                    && a.field == b.field
                     && a.layer_offset.offset.to_bits() == b.layer_offset.offset.to_bits()
                     && a.layer_offset.scale.to_bits() == b.layer_offset.scale.to_bits()
+            })
+            && self.opinions.len() == other.opinions.len()
+            && self.opinions.iter().zip(&other.opinions).all(|(a, b)| {
+                a.source == b.source
+                    && a.field == b.field
                     && match (&a.value, &b.value) {
                         (OpinionValue::Property(a), OpinionValue::Property(b)) => {
                             Arc::ptr_eq(a, b) || a.as_ref().same(b)
@@ -398,12 +794,12 @@ impl PrimIndex {
     }
 
     /// The opinions of the property `name`.
-    pub(crate) fn property_opinions(&self, name: TokenId) -> Option<&[Opinion]> {
+    pub(crate) fn property_opinions(&self, name: TokenId) -> Option<Opinions<'_>> {
         self.field_opinions(FieldKey::Property(name))
     }
 
     /// The opinions of the prim metadata field `key`.
-    pub(crate) fn metadata_opinions(&self, key: TokenId) -> Option<&[Opinion]> {
+    pub(crate) fn metadata_opinions(&self, key: TokenId) -> Option<Opinions<'_>> {
         self.field_opinions(FieldKey::Metadata(key))
     }
 
@@ -415,8 +811,9 @@ impl PrimIndex {
         Some(span(&self.fields[slot].1))
     }
 
-    fn field_opinions(&self, field: FieldKey) -> Option<&[Opinion]> {
-        Some(&self.opinions[self.field_range(field)?])
+    fn field_opinions(&self, field: FieldKey) -> Option<Opinions<'_>> {
+        let range = self.field_range(field)?;
+        Some(Opinions::new(&self.opinions[range], &self.sources))
     }
 
     pub(crate) fn field_opinions_mut(&mut self, field: FieldKey) -> Option<&mut [Opinion]> {
@@ -508,21 +905,47 @@ impl PrimIndex {
         }
     }
 
-    pub(crate) fn retain_opinions(
-        &mut self,
-        mut keep: impl FnMut(&PrimIndexGraph, &Opinion) -> bool,
-    ) {
+    /// Keeps the opinions `keep` accepts; the sources stay.
+    pub(crate) fn retain_opinions(&mut self, keep: impl FnMut(&Opinion) -> bool) {
         let before = self.opinions.len();
-        Arc::make_mut(&mut self.data)
-            .opinions
-            .retain(|opinion| keep(&self.graph, opinion));
+        Arc::make_mut(&mut self.data).opinions.retain(keep);
         if self.opinions.len() != before && !self.fields.is_empty() {
             self.index_fields();
         }
     }
 
-    pub(crate) fn add_source(&mut self, key: OpinionKey) {
-        self.sources.push(key);
+    /// Adds a source for opinions to name, returning its id.
+    pub(crate) fn add_source(&mut self, source: OpinionSource) -> SourceId {
+        let id = SourceId::at(self.sources.len());
+        self.sources.push(source);
+        id
+    }
+
+    /// Adds an opinion read from the site `key` through `layer_offset`,
+    /// adding a source for them unless the index has one: `key`'s spec path
+    /// names the opinion's property or field, its source's the prim spec.
+    #[cfg(test)]
+    pub(crate) fn add_keyed(
+        &mut self,
+        key: OpinionKey,
+        layer_offset: LayerOffset,
+        field: TokenId,
+        value: OpinionValue,
+    ) {
+        let spec_path = key.spec_path.prim_spec();
+        let source = OpinionSource {
+            key: key.with_spec_path(spec_path),
+            layer_offset,
+        };
+        let source = match self.sources.iter().position(|known| *known == source) {
+            Some(at) => SourceId::at(at),
+            None => self.add_source(source),
+        };
+        self.add_opinion(Opinion {
+            source,
+            field,
+            value,
+        });
     }
 
     /// Makes room for `layers` sources, unless there is room for some
@@ -538,20 +961,46 @@ impl PrimIndex {
     /// Stage queries read finalized opinions, already strongest first.
     pub(crate) fn property_type_for(&self, field: &TokenId) -> Option<&PropertyType> {
         self.property_opinions(*field)?
+            .records()
             .iter()
             .find_map(|opinion| opinion.value.as_property()?.type_name.as_ref())
     }
 
-    /// Groups opinions by field, sorting each stack and the sources
-    /// strongest first by [`PrimIndexGraph::cmp_keys`].
+    /// Groups opinions by field, sorting the sources strongest first by
+    /// [`PrimIndexGraph::cmp_keys`] and then each field's opinions by their
+    /// sources, so that equally strong opinions keep their insertion order.
     pub(crate) fn finalize(&mut self) {
         self.group_by_field();
         let graph = &self.graph;
         let data = Arc::make_mut(&mut self.data);
-        for (_, range) in &data.fields {
-            data.opinions[span(range)].sort_by(|a, b| graph.cmp_keys(&a.key, &b.key));
+        if !data
+            .sources
+            .is_sorted_by(|a, b| graph.cmp_keys(&a.key, &b.key).is_le())
+        {
+            // `order[new]` is the source that moves to `new`; `moved[old]`
+            // the position the source at `old` moves to. The sort is
+            // stable, so equally strong sources keep their order.
+            let mut order: Vec<usize> = (0..data.sources.len()).collect();
+            order.sort_by(|&a, &b| graph.cmp_keys(&data.sources[a].key, &data.sources[b].key));
+            let mut moved = alloc::vec![0; order.len()];
+            for (new, &old) in order.iter().enumerate() {
+                moved[old] = new;
+            }
+            for opinion in &mut data.opinions {
+                opinion.source = SourceId::at(moved[opinion.source.index()]);
+            }
+            // Each swap puts one source in its place.
+            for at in 0..moved.len() {
+                while moved[at] != at {
+                    let to = moved[at];
+                    data.sources.swap(at, to);
+                    moved.swap(at, to);
+                }
+            }
         }
-        data.sources.sort_by(|a, b| graph.cmp_keys(a, b));
+        for (_, range) in &data.fields {
+            data.opinions[span(range)].sort_by_key(|opinion| opinion.source);
+        }
     }
 }
 
@@ -567,19 +1016,22 @@ mod tests {
         let field = store.tokens.intern("value");
         let site = SpecPath::from_prim_path(prim);
         let mut index = PrimIndex::new(PrimIndexGraph::from_arcs(&site, 1, []));
-        let opinion = |value| Opinion {
+        let source = index.add_source(OpinionSource {
             key: OpinionKey {
                 node: NodeId::ROOT,
                 layer_strength: 0,
                 layer_id: LayerId(1),
                 lookup_path: prim,
-                spec_path: site.with_property(field),
+                spec_path: site.clone(),
             },
+            layer_offset: LayerOffset::IDENTITY,
+        });
+        let opinion = |value| Opinion {
+            source,
             field,
             value: PropertySpec::attribute()
                 .with_default(Value::Int(value))
                 .into(),
-            layer_offset: LayerOffset::IDENTITY,
         };
         index.add_opinion(opinion(1));
         let mut snapshot = index.clone();
@@ -591,7 +1043,7 @@ mod tests {
                 .property_opinions(field)
                 .unwrap()
                 .iter()
-                .map(|op| op.value.as_property().unwrap().default.clone())
+                .map(|op| op.value().as_property().unwrap().default.clone())
                 .collect::<Vec<_>>()
         };
         assert_eq!(values(&snapshot), alloc::vec![Some(Value::Int(1))]);
@@ -640,26 +1092,21 @@ mod tests {
                 OpinionValue::from(PropertySpec::attribute().with_default(Value::Int(4))),
             ),
         ] {
-            index.add_opinion(Opinion {
-                key: key(strength),
-                field,
-                value,
-                layer_offset: LayerOffset::IDENTITY,
-            });
+            index.add_keyed(key(strength), LayerOffset::IDENTITY, field, value);
         }
         // A deep stack also exercises grouping without moving large payloads
         // at every comparison, including a repeated key whose order matters.
         for strength in 0..40 {
-            index.add_opinion(Opinion {
-                key: key(strength),
-                field: b,
-                value: PropertySpec::attribute().with_default(Value::Int(9)).into(),
-                layer_offset: LayerOffset::IDENTITY,
-            });
+            index.add_keyed(
+                key(strength),
+                LayerOffset::IDENTITY,
+                b,
+                PropertySpec::attribute().with_default(Value::Int(9)).into(),
+            );
         }
         index.finalize();
         assert_eq!(
-            index.property_opinions(b).unwrap()[0]
+            index.property_opinions(b).unwrap().records()[0]
                 .value
                 .as_property()
                 .unwrap()
@@ -673,7 +1120,14 @@ mod tests {
             "both layers contribute to a"
         );
         assert_eq!(
-            index.property_opinions(a).unwrap()[0].key.layer_strength,
+            index
+                .property_opinions(a)
+                .unwrap()
+                .first()
+                .unwrap()
+                .source()
+                .key
+                .layer_strength,
             0,
             "strong layer comes first"
         );
@@ -682,17 +1136,19 @@ mod tests {
             1,
             "metadata stays separate"
         );
-        index.retain_opinions(|_, opinion| {
+        let strongest = index.sources[0].key.clone();
+        assert_eq!(strongest.layer_strength, 0, "sources are strongest first");
+        index.retain_opinions(|opinion| {
             !(opinion.field == b
                 || FieldKey::of(opinion) == FieldKey::Property(a)
-                    && opinion.key.layer_strength == 0)
+                    && opinion.source == SourceId::at(0))
         });
         assert!(
             index.property_opinions(b).is_none(),
             "removed fields disappear"
         );
         assert_eq!(
-            index.property_opinions(a).unwrap()[0]
+            index.property_opinions(a).unwrap().records()[0]
                 .value
                 .as_property()
                 .unwrap()
@@ -701,7 +1157,7 @@ mod tests {
             "removing the winner exposes the weaker property"
         );
         assert_eq!(
-            index.metadata_opinions(a).unwrap()[0].value,
+            index.metadata_opinions(a).unwrap().records()[0].value,
             OpinionValue::Field(FieldValue::Value(Value::Int(3))),
             "a property removal preserves metadata with the same token and key"
         );

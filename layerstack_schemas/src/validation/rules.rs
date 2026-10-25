@@ -262,8 +262,8 @@ fn property_site(scene: &Scene<'_>, prim: PathId, property: TokenId) -> Validati
         .property(PropertyPath::new(prim, property))
         .and_then(|property| property.opinions().first())
         .map(|op| ValidationSource {
-            layer: op.key.layer_id,
-            spec: Some(op.key.spec_path.clone()),
+            layer: op.layer_id(),
+            spec: Some(op.spec_path()),
         });
     ValidationSite {
         prim: Some(prim),
@@ -410,7 +410,7 @@ fn prim_rule(scene: &Scene<'_>, prim: PathId, rule: BuiltinRule, out: &mut Valid
                 let schema_type = type_name(schema.and_then(|s| s.type_name.as_ref()));
                 let expected = schema_type.clone().or_else(|| declared.clone());
                 for op in handle.opinions() {
-                    if let Some(spec) = op.value.as_property() {
+                    if let Some(spec) = op.value().as_property() {
                         out.work.property_specs += 1;
                         let authored = type_name(spec.type_name.as_ref());
                         if authored != expected {
@@ -421,8 +421,8 @@ fn prim_rule(scene: &Scene<'_>, prim: PathId, rule: BuiltinRule, out: &mut Valid
                                     prim: Some(prim),
                                     property: Some(property),
                                     source: Some(ValidationSource {
-                                        layer: op.key.layer_id,
-                                        spec: Some(op.key.spec_path.clone()),
+                                        layer: op.layer_id(),
+                                        spec: Some(op.spec_path()),
                                     }),
                                 },
                                 None,

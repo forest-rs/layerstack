@@ -25,7 +25,7 @@ use crate::{
     array_edit::{apply_in_place, apply_to_array},
     doc::{InterpolationType, Value, combine_dictionary_chain},
     half::{from_f32 as f32_to_half, to_f32 as half_to_f32},
-    prim_index::{Opinion, OpinionValue},
+    prim_index::{Opinion, OpinionRef, OpinionValue, Opinions},
     property::PropertyType,
 };
 
@@ -331,7 +331,7 @@ impl OpinionFamily<Opinion> for ArrayFamily<'_> {
 /// Time queries compose the bracketing samples of the chain before
 /// interpolating; see [`resolve_array_at_time`].
 pub(crate) fn resolve_sparse_value(
-    opinions: &[Opinion],
+    opinions: Opinions<'_>,
     query: SparseQuery<'_>,
     property_type: Option<&PropertyType>,
 ) -> SparseResolveResult {
@@ -340,12 +340,12 @@ pub(crate) fn resolve_sparse_value(
 
 /// The ordinary entry point with exact source sample metadata overrides.
 pub(crate) fn resolve_sparse_value_with_composability(
-    opinions: &[Opinion],
+    opinions: Opinions<'_>,
     query: SparseQuery<'_>,
     property_type: Option<&PropertyType>,
     composability: Option<&SampleComposability<'_>>,
 ) -> SparseResolveResult {
-    let Some(family) = SparseValueFamily::for_query(opinions, query) else {
+    let Some(family) = SparseValueFamily::for_query(opinions.records(), query) else {
         return SparseResolveResult::NotApplicable;
     };
     family.resolve(opinions, query, property_type, composability, &mut Lean)
@@ -566,7 +566,7 @@ fn compose_edits(
 /// proposal, "Composing and Evaluating Time-Varying Sparse Opinions".
 #[cfg(test)]
 pub(crate) fn resolve_sparse_at_time_matching(
-    opinions: &[Opinion],
+    opinions: Opinions<'_>,
     property_type: Option<&PropertyType>,
     time: f64,
     interp: InterpolationType,
@@ -586,7 +586,7 @@ pub(crate) fn resolve_sparse_at_time_matching(
 
 /// The ordinary entry point with exact source sample metadata overrides.
 pub(crate) fn resolve_sparse_at_time_matching_with_composability(
-    opinions: &[Opinion],
+    opinions: Opinions<'_>,
     property_type: Option<&PropertyType>,
     time: f64,
     interp: InterpolationType,
@@ -595,7 +595,7 @@ pub(crate) fn resolve_sparse_at_time_matching_with_composability(
     composability: Option<&SampleComposability<'_>>,
 ) -> SparseResolveResult {
     if SparseValueFamily::for_query(
-        opinions,
+        opinions.records(),
         SparseQuery::AtTime {
             time,
             interp,
@@ -626,7 +626,7 @@ pub(crate) fn resolve_sparse_at_time_matching_with_composability(
 /// [`resolve_family_chain`], over the same chains, so the result is the one
 /// resolution produces. This path allocates and is meant for diagnostics.
 pub(crate) fn explain_sparse_value(
-    opinions: &[Opinion],
+    opinions: Opinions<'_>,
     query: SparseQuery<'_>,
     property_type: Option<&PropertyType>,
 ) -> SparseExplanation {
@@ -635,13 +635,14 @@ pub(crate) fn explain_sparse_value(
 
 /// The ordinary entry point with exact source sample metadata overrides.
 pub(crate) fn explain_sparse_value_with_composability(
-    opinions: &[Opinion],
+    opinions: Opinions<'_>,
     query: SparseQuery<'_>,
     property_type: Option<&PropertyType>,
     composability: Option<&SampleComposability<'_>>,
 ) -> SparseExplanation {
     if let SparseQuery::Default { fallback } = query
         && opinions
+            .records()
             .iter()
             .find_map(|opinion| opinion.value.default_value())
             .is_some_and(|value| value.array_edit_type().is_some())
@@ -649,7 +650,7 @@ pub(crate) fn explain_sparse_value_with_composability(
         let mut events = Vec::new();
         let mut base = FamilyBase::Absent;
         let (result, _) = resolve_sparse_default_matching_impl(
-            opinions,
+            opinions.records(),
             property_type,
             fallback,
             |_| true,
@@ -697,7 +698,7 @@ pub(crate) fn explain_sparse_value_with_composability(
             }],
         };
     }
-    let Some(family) = SparseValueFamily::for_query(opinions, query) else {
+    let Some(family) = SparseValueFamily::for_query(opinions.records(), query) else {
         return SparseExplanation {
             result: SparseResolveResult::NotApplicable,
             folds: Vec::new(),
@@ -788,7 +789,7 @@ impl SparseValueFamily {
 
     fn resolve(
         self,
-        opinions: &[Opinion],
+        opinions: Opinions<'_>,
         query: SparseQuery<'_>,
         property_type: Option<&PropertyType>,
         composability: Option<&SampleComposability<'_>>,
@@ -807,6 +808,7 @@ impl SparseValueFamily {
                     fold_array_chain(
                         &family,
                         opinions
+                            .records()
                             .iter()
                             .take_while(|opinion| !is_foreign_default(&opinion.value)),
                         folder,
@@ -948,7 +950,7 @@ impl<'o> Bracket<'o> {
     /// Spec: AOUSD Core §12.3.2.1 (layer offset and scale), §12.3.2.2 (time
     /// samples), §12.5 (interpolation).
     fn of(
-        opinion: &'o Opinion,
+        opinion: OpinionRef<'o>,
         (index, position): (usize, usize),
         query: f64,
         interp: InterpolationType,
@@ -965,12 +967,12 @@ impl<'o> Bracket<'o> {
         // §12.3.2; OpenUSD `ProcessLayerAtTime`). An empty sample map
         // supplies no samples, so a same-layer default still participates.
         if let Some(samples) = opinion
-            .value
+            .value()
             .time_samples()
             .filter(|samples| !samples.is_empty())
         {
             {
-                let offset = opinion.layer_offset;
+                let offset = opinion.layer_offset();
                 let to_stage = |index: usize| {
                     let (local, ref value) = samples[index];
                     (local * offset.scale + offset.offset, Some(value))
@@ -1002,11 +1004,11 @@ impl<'o> Bracket<'o> {
                     upper: to_stage(upper),
                 })
             }
-        } else if opinion.value.spline().is_some() {
+        } else if opinion.value().spline().is_some() {
             single(f64::NEG_INFINITY, None)
         } else {
             opinion
-                .value
+                .value()
                 .default_value()
                 .and_then(|value| single(f64::NEG_INFINITY, Some(value)))
         }
@@ -1085,7 +1087,7 @@ struct BracketPlan<'o> {
 /// (`docs/generic-sparse-composition.md`, "Divergences From OpenUSD").
 #[cfg(test)]
 fn plan_brackets<'o>(
-    opinions: impl IntoIterator<Item = &'o Opinion>,
+    opinions: impl IntoIterator<Item = OpinionRef<'o>>,
     time: f64,
     interp: InterpolationType,
     accepts: Option<&dyn Fn(&Value) -> bool>,
@@ -1094,7 +1096,7 @@ fn plan_brackets<'o>(
 }
 
 fn plan_brackets_recording<'o>(
-    opinions: impl IntoIterator<Item = &'o Opinion>,
+    opinions: impl IntoIterator<Item = OpinionRef<'o>>,
     time: f64,
     interp: InterpolationType,
     accepts: Option<&dyn Fn(&Value) -> bool>,
@@ -1194,13 +1196,13 @@ fn plan_brackets_recording<'o>(
         }
         if let Some(payload) = &mut payload_planner {
             payload.push(
-                bracket.planning_sample(Pick::Lower, opinion, None),
-                bracket.planning_sample(Pick::Upper, opinion, None),
+                bracket.planning_sample(Pick::Lower, opinion.opinion(), None),
+                bracket.planning_sample(Pick::Upper, opinion.opinion(), None),
             );
         }
         planner.push(
-            bracket.planning_sample(Pick::Lower, opinion, composability),
-            bracket.planning_sample(Pick::Upper, opinion, composability),
+            bracket.planning_sample(Pick::Lower, opinion.opinion(), composability),
+            bracket.planning_sample(Pick::Upper, opinion.opinion(), composability),
         );
         brackets.push(bracket);
     }
@@ -1219,7 +1221,7 @@ fn plan_brackets_recording<'o>(
 /// entire timeline. No value payloads are cloned by this planning pass.
 #[cfg(test)]
 pub(crate) fn query_time_for_weaker_source(
-    prefix: &[Opinion],
+    prefix: Opinions<'_>,
     time: f64,
     interp: InterpolationType,
 ) -> Option<f64> {
@@ -1228,7 +1230,7 @@ pub(crate) fn query_time_for_weaker_source(
 
 /// The ordinary entry point with exact source sample metadata overrides.
 pub(crate) fn query_time_for_weaker_source_with_composability(
-    prefix: &[Opinion],
+    prefix: Opinions<'_>,
     time: f64,
     interp: InterpolationType,
     composability: Option<&SampleComposability<'_>>,
@@ -1290,7 +1292,7 @@ impl<'o> OpinionFamily<Bracket<'o>> for PickedArrayFamily<'_> {
 /// §12.5 (interpolation); sparse-array-edits proposal, "Composing and
 /// Evaluating Time-Varying Sparse Opinions".
 fn resolve_array_at_time(
-    opinions: &[Opinion],
+    opinions: Opinions<'_>,
     time: f64,
     interp: InterpolationType,
     array: ArrayFamily<'_>,
@@ -1808,7 +1810,7 @@ mod tests {
         array_edit::{ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex},
         interner::TokenInterner,
         path::{Path, PathId, PathInterner},
-        prim_index::Opinion,
+        prim_index::{Opinion, OpinionList, OpinionSource, SourcedOpinion},
     };
     use alloc::vec;
 
@@ -1847,16 +1849,23 @@ mod tests {
         field: TokenId,
         value: impl Into<OpinionValue>,
         layer_strength: u16,
-    ) -> Opinion {
-        Opinion {
-            key: OpinionKey {
-                layer_strength,
-                ..test_key(LayerId(1), spec_path)
+    ) -> SourcedOpinion {
+        SourcedOpinion::new(
+            OpinionSource {
+                key: OpinionKey {
+                    layer_strength,
+                    ..test_key(LayerId(1), spec_path)
+                },
+                layer_offset: LayerOffset::IDENTITY,
             },
             field,
-            value: value.into(),
-            layer_offset: LayerOffset::IDENTITY,
-        }
+            value.into(),
+        )
+    }
+
+    /// `opinions` as one list, each source once.
+    fn chain(opinions: &[SourcedOpinion]) -> OpinionList {
+        OpinionList::chain(opinions)
     }
 
     /// Test-only opinion payload: a property authoring only time samples.
@@ -1897,7 +1906,7 @@ mod tests {
         ];
 
         let resolved = resolve_sparse_value(
-            &opinions,
+            chain(&opinions).view(),
             SparseQuery::Default { fallback: None },
             Some(&int_array_type()),
         );
@@ -1924,7 +1933,7 @@ mod tests {
         )];
 
         let resolved = resolve_sparse_value(
-            &opinions,
+            chain(&opinions).view(),
             SparseQuery::Default {
                 fallback: Some(&array_value(&[1, 2])),
             },
@@ -1962,7 +1971,7 @@ mod tests {
         ];
 
         let resolved = resolve_sparse_value(
-            &opinions,
+            chain(&opinions).view(),
             SparseQuery::AtTime {
                 time: 1.0,
                 interp: InterpolationType::Held,
@@ -1986,7 +1995,7 @@ mod tests {
         ];
 
         let resolved = resolve_sparse_value(
-            &opinions,
+            chain(&opinions).view(),
             SparseQuery::AtTime {
                 time: 1.0,
                 interp: InterpolationType::Held,
@@ -2021,7 +2030,7 @@ mod tests {
         ];
 
         let resolved = resolve_sparse_value(
-            &opinions,
+            chain(&opinions).view(),
             SparseQuery::Default { fallback: None },
             Some(&int_array_type()),
         );
@@ -2075,12 +2084,12 @@ mod tests {
         ];
 
         let full = resolve_sparse_value(
-            &full_chain,
+            chain(&full_chain).view(),
             SparseQuery::Default { fallback: None },
             Some(&int_array_type()),
         );
         let grouped = resolve_sparse_value(
-            &grouped_chain,
+            chain(&grouped_chain).view(),
             SparseQuery::Default { fallback: None },
             Some(&int_array_type()),
         );
@@ -2118,15 +2127,20 @@ mod tests {
                 1,
             ),
         ];
-        let classify = |op: &Opinion, time| (op.key.layer_strength == 0).then_some(time != 5.);
+        // The strongest opinion's source is the chain's first.
+        let classify = |op: &Opinion, time| (op.source.index() == 0).then_some(time != 5.);
         assert_eq!(
-            query_time_for_weaker_source(&opinions[..1], 7., InterpolationType::Linear),
+            query_time_for_weaker_source(
+                chain(&opinions[..1]).view(),
+                7.,
+                InterpolationType::Linear
+            ),
             Some(7.)
         );
         for interp in [InterpolationType::Linear, InterpolationType::Held] {
             assert_eq!(
                 query_time_for_weaker_source_with_composability(
-                    &opinions[..1],
+                    chain(&opinions[..1]).view(),
                     7.,
                     interp,
                     Some(&classify)
@@ -2149,7 +2163,7 @@ mod tests {
                     fallback: None,
                 };
                 let resolved = resolve_sparse_value_with_composability(
-                    &opinions,
+                    chain(&opinions).view(),
                     query,
                     Some(&ty),
                     Some(&classify),
@@ -2160,7 +2174,7 @@ mod tests {
                     "time {time}, {interp:?}"
                 );
                 let explained = explain_sparse_value_with_composability(
-                    &opinions,
+                    chain(&opinions).view(),
                     query,
                     Some(&ty),
                     Some(&classify),
@@ -2183,24 +2197,29 @@ mod tests {
     /// opinions the kernel pulled (and therefore classified or sampled).
     fn fold_counting(
         family: &ArrayFamily<'_>,
-        opinions: &[Opinion],
+        opinions: &[SourcedOpinion],
     ) -> (SparseResolveResult, usize) {
         let mut visited = 0;
-        let resolved =
-            fold_array_chain(family, opinions.iter().inspect(|_| visited += 1), &mut Lean);
+        let list = chain(opinions);
+        let resolved = fold_array_chain(
+            family,
+            list.records.iter().inspect(|_| visited += 1),
+            &mut Lean,
+        );
         (resolved, visited)
     }
 
     /// Plans a time query and reports how many opinions the walk visited
     /// (and therefore bracketed).
     fn plan_counting(
-        opinions: &[Opinion],
+        opinions: &[SourcedOpinion],
         time: f64,
         interp: InterpolationType,
     ) -> (Vec<f64>, usize) {
         let mut visited = 0;
+        let list = chain(opinions);
         let plan = plan_brackets(
-            opinions.iter().inspect(|_| visited += 1),
+            list.view().iter().inspect(|_| visited += 1),
             time,
             interp,
             None,
@@ -2301,12 +2320,12 @@ mod tests {
     }
 
     fn resolve_at(
-        opinions: &[Opinion],
+        opinions: &[SourcedOpinion],
         time: f64,
         interp: InterpolationType,
     ) -> SparseResolveResult {
         resolve_sparse_value(
-            opinions,
+            chain(opinions).view(),
             SparseQuery::AtTime {
                 time,
                 interp,
@@ -2390,7 +2409,7 @@ mod tests {
             0,
         );
         // Stage time 11 maps to layer time 1, the block sample.
-        strong.layer_offset = LayerOffset {
+        strong.source.layer_offset = LayerOffset {
             offset: 10.0,
             scale: 1.0,
         };
@@ -2425,7 +2444,7 @@ mod tests {
         ];
 
         let resolved = resolve_sparse_value(
-            &opinions,
+            chain(&opinions).view(),
             SparseQuery::Default {
                 fallback: Some(&array_value(&[5, 6])),
             },
@@ -2510,13 +2529,18 @@ mod tests {
                 array_opinion(path, field, FieldValue::Value(float_array(&[1.0])), 2),
             ];
             assert_eq!(
-                resolve_sparse_default_matching(&opinions, Some(&ty), Some(&fallback), accepts),
+                resolve_sparse_default_matching(
+                    &chain(&opinions).records,
+                    Some(&ty),
+                    Some(&fallback),
+                    accepts
+                ),
                 SparseResolveResult::Resolved(float_array(&[1.0, 4.0])),
             );
             for interpolation in [InterpolationType::Held, InterpolationType::Linear] {
                 assert_eq!(
                     resolve_sparse_at_time_matching(
-                        &opinions,
+                        chain(&opinions).view(),
                         Some(&ty),
                         9.0,
                         interpolation,
@@ -2528,7 +2552,7 @@ mod tests {
                 );
                 assert_eq!(
                     resolve_sparse_at_time_matching(
-                        &opinions[1..],
+                        chain(&opinions[1..]).view(),
                         Some(&ty),
                         9.0,
                         interpolation,
@@ -2555,7 +2579,7 @@ mod tests {
         )];
         let checked = core::cell::Cell::new(0);
         let resolved = resolve_sparse_at_time_matching(
-            &opinions,
+            chain(&opinions).view(),
             Some(&ty),
             9.0,
             InterpolationType::Linear,
@@ -2596,13 +2620,13 @@ mod tests {
     }
 
     fn resolve_float_at(
-        opinions: &[Opinion],
+        opinions: &[SourcedOpinion],
         time: f64,
         interp: InterpolationType,
         fallback: Option<&Value>,
     ) -> SparseResolveResult {
         resolve_sparse_value(
-            opinions,
+            chain(opinions).view(),
             SparseQuery::AtTime {
                 time,
                 interp,
@@ -2799,9 +2823,9 @@ mod tests {
         let (spec_path, field) = test_ids();
         let fallback = float3_array(&[[-1.0; 3], [1.0; 3]]);
         let float3_type = PropertyType::parse("float3[]").unwrap();
-        let resolve = |opinions: &[Opinion], time: f64, interp| {
+        let resolve = |opinions: &[SourcedOpinion], time: f64, interp| {
             resolve_sparse_value(
-                opinions,
+                chain(opinions).view(),
                 SparseQuery::AtTime {
                     time,
                     interp,
@@ -2897,12 +2921,13 @@ mod tests {
 
         /// The opinion's interpolating samples at stage time `query`.
         fn interpolating(
-            opinion: &Opinion,
+            opinion: &SourcedOpinion,
             query: f64,
             interp: InterpolationType,
         ) -> Option<Series> {
-            let offset = opinion.layer_offset;
-            let samples = match (opinion.value.time_samples(), opinion.value.default_value()) {
+            let offset = opinion.source.layer_offset;
+            let value = &opinion.opinion.value;
+            let samples = match (value.time_samples(), value.default_value()) {
                 (Some(samples), _) => samples,
                 (None, Some(value)) => return Some(vec![(f64::NEG_INFINITY, sample(value))]),
                 (None, None) => return None,
@@ -2999,7 +3024,7 @@ mod tests {
         }
 
         pub(super) fn evaluate(
-            opinions: &[Opinion],
+            opinions: &[SourcedOpinion],
             time: f64,
             interp: InterpolationType,
             ty: &PropertyType,
@@ -3118,7 +3143,7 @@ mod tests {
         spacing: Spacing,
         spec_path: PathId,
         field: TokenId,
-    ) -> Vec<Opinion> {
+    ) -> Vec<SourcedOpinion> {
         let count = 1 + rng.below(4);
         (0..count)
             .map(|strength| {
@@ -3153,7 +3178,7 @@ mod tests {
                     (Spacing::NearCoincident, 1) => (5e-7, 1e-7),
                     (Spacing::NearCoincident, _) => (0.0, 10.0),
                 };
-                opinion.layer_offset = LayerOffset { offset, scale };
+                opinion.source.layer_offset = LayerOffset { offset, scale };
                 opinion
             })
             .collect()
@@ -3182,7 +3207,7 @@ mod tests {
             for &time in &times {
                 for interp in [InterpolationType::Held, InterpolationType::Linear] {
                     let actual = resolve_array_at_time(
-                        &opinions,
+                        chain(&opinions).view(),
                         time,
                         interp,
                         ArrayFamily {
@@ -3227,10 +3252,10 @@ mod tests {
                 }
             }
             for query in queries {
-                let explained = explain_sparse_value(&opinions, query, Some(&ty));
+                let explained = explain_sparse_value(chain(&opinions).view(), query, Some(&ty));
                 assert_eq!(
                     explained.result,
-                    resolve_sparse_value(&opinions, query, Some(&ty)),
+                    resolve_sparse_value(chain(&opinions).view(), query, Some(&ty)),
                     "{query:?}: {opinions:#?}"
                 );
                 // A result no fold drew from the fallback is the same
@@ -3248,7 +3273,8 @@ mod tests {
                             fallback: None,
                         },
                     };
-                    let without = resolve_sparse_value(&opinions, unseeded, Some(&ty));
+                    let without =
+                        resolve_sparse_value(chain(&opinions).view(), unseeded, Some(&ty));
                     let applies = |result: &SparseResolveResult| {
                         !matches!(result, SparseResolveResult::NotApplicable)
                     };

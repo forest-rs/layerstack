@@ -105,14 +105,15 @@ impl LiveStage {
                     let dests: Vec<PathId> = self.source_share(layer).prims(id).copied().collect();
                     if !dests.is_empty() {
                         let suffix = source_path.strip_prefix(&path).expect("ancestor");
-                        for dest in dests {
-                            let mut mapped_path = store.paths().resolve(dest).clone();
-                            for &name in suffix {
-                                mapped_path = mapped_path.join(&[name]);
-                            }
-                            self.structural_roots
-                                .push(store.paths_mut().intern(mapped_path));
-                        }
+                        // Each destination's path is read, not copied: an
+                        // edit to a prim as many prims reference maps to
+                        // as many roots.
+                        let paths = store.paths();
+                        self.structural_roots.extend(
+                            dests
+                                .into_iter()
+                                .map(|dest| paths.intern_joined(dest, suffix)),
+                        );
                         mapped = true;
                         break;
                     }

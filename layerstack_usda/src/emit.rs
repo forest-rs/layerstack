@@ -215,6 +215,7 @@ pub(crate) fn emit_with_arrays(
         arrays,
         registry,
         emitted_arcs: false,
+        property_types: Vec::new(),
     };
     let layer = ctx.emit_layer(ast);
     EmitResult {
@@ -246,7 +247,17 @@ struct EmitCtx<'a> {
     rejected: bool,
     /// Whether a prim or variant spec authors a reference or payload.
     emitted_arcs: bool,
+    /// The attribute types the layer has declared so far, each built once
+    /// and shared by the attributes declaring it (a text or matrix type
+    /// keeps its zero in an allocation; see [`PropertyType`]); at most
+    /// [`PROPERTY_TYPES_SHARED`].
+    property_types: Vec<PropertyType>,
 }
+
+/// How many attribute types one layer's attributes share
+/// ([`EmitCtx::property_types`]): layers declare a few dozen at most, and a
+/// layer declaring more builds the rest per attribute.
+const PROPERTY_TYPES_SHARED: usize = 64;
 
 impl EmitCtx<'_> {
     /// Reports scene description OpenUSD's text parser rejects, which
@@ -815,7 +826,7 @@ impl EmitCtx<'_> {
         anchor: &str,
     ) {
         let name_tok = self.tokens.intern(attr.name);
-        let property_type = Self::declared_property_type(attr.type_name, attr.is_array);
+        let property_type = self.declared_property_type(attr.type_name, attr.is_array);
         let connection = attr
             .connection
             .as_ref()
@@ -1529,9 +1540,24 @@ impl EmitCtx<'_> {
 
     /// The type an attribute declares, `type_hint` its element type name;
     /// a name the value type table lacks is kept, as OpenUSD's text reader
-    /// keeps it.
-    fn declared_property_type(type_hint: &str, is_array: bool) -> PropertyType {
+    /// keeps it. Attributes declaring one type share it
+    /// ([`EmitCtx::property_types`]).
+    fn declared_property_type(&mut self, type_hint: &str, is_array: bool) -> PropertyType {
         let base = type_hint.strip_suffix("[]").unwrap_or(type_hint);
+        let declared = |name: &str| {
+            if is_array {
+                name.strip_suffix("[]") == Some(base)
+            } else {
+                name == base
+            }
+        };
+        if let Some(shared) = self
+            .property_types
+            .iter()
+            .find(|shared| declared(shared.type_name()))
+        {
+            return shared.clone();
+        }
         let parsed = if is_array {
             // The array type's name, spelled where a type name fits.
             let mut name = SmallVec::<[u8; 64]>::new();
@@ -1541,7 +1567,11 @@ impl EmitCtx<'_> {
         } else {
             PropertyType::parse(base)
         };
-        parsed.unwrap_or_else(PropertyType::unregistered)
+        let property_type = parsed.unwrap_or_else(PropertyType::unregistered);
+        if self.property_types.len() < PROPERTY_TYPES_SHARED {
+            self.property_types.push(property_type.clone());
+        }
+        property_type
     }
 
     // ── Value conversion ────────────────────────────────────────────
@@ -1665,7 +1695,7 @@ impl EmitCtx<'_> {
             }
             ast::Value::ArrayEdit(edit) => {
                 let element_hint = type_hint.strip_suffix("[]").unwrap_or(type_hint);
-                let value_type = Self::declared_property_type(element_hint, true);
+                let value_type = self.declared_property_type(element_hint, true);
                 Value::typed_array_edit(self.convert_array_edit(edit, element_hint), value_type)
             }
         }
@@ -3240,6 +3270,25 @@ def \"A\" {
     }
 
     #[test]
+    fn attributes_declaring_one_type_share_it() {
+        let src = "#usda 1.0\ndef \"A\" {\n    notatype a = 1\n    notatype b\n    \
+                   notatype[] c\n    float d\n}\n";
+        let (result, tokens, paths) = emit_source(src);
+        let a_path = Path::parse_absolute("/A", &tokens).unwrap();
+        let spec = result.layer.prim(paths.lookup(&a_path).unwrap()).unwrap();
+        let declared = |name: &str| {
+            let entry = prop(&spec.properties, &tokens.intern(name));
+            entry.type_name.clone().expect("a declared type")
+        };
+        let (a, b, c) = (declared("a"), declared("b"), declared("c"));
+        assert_eq!(a.type_name(), "notatype");
+        assert_eq!(a.type_name().as_ptr(), b.type_name().as_ptr());
+        assert_eq!(c.type_name(), "notatype[]");
+        assert!(c.is_array() && !a.is_array());
+        assert_eq!(declared("d"), PropertyType::parse("float").unwrap());
+    }
+
+    #[test]
     fn emit_array_edit_value() {
         let src =
             "#usda 1.0\ndef \"A\" {\n    int[] x = edit [write 3 to [0]; append 4; resize 3]\n}\n";
@@ -3788,6 +3837,7 @@ def \"A\" (
             rejections: Vec::new(),
             rejected: false,
             emitted_arcs: false,
+            property_types: Vec::new(),
         };
         for text in [
             "/", "/A/B/C", "/A", "/A/B", "/A//B", "/A/X/", "//Y", "Z", "", "/A.b", "/D/E/F/G",

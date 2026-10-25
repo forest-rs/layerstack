@@ -161,7 +161,7 @@ impl RawLayer {
             properties: layer
                 .prims
                 .iter()
-                .filter(|(_, spec)| spec.outer_variant_sites.is_empty())
+                .filter(|(_, spec)| spec.outer_variant_sites().is_empty())
                 .map(|(&path, spec)| {
                     let attributes = spec
                         .properties
@@ -1497,9 +1497,14 @@ mod tests {
             fields: core::mem::take(&mut owner.fields),
             ..VariantSpec::default()
         };
-        owner.variant_selections.insert(mode, a);
-        owner.variant_set_names.make_mut().prepend.push(mode);
-        owner.variant_sets.insert(
+        owner.rare_mut().variant_selections.insert(mode, a);
+        owner
+            .rare_mut()
+            .variant_set_names
+            .make_mut()
+            .prepend
+            .push(mode);
+        owner.rare_mut().variant_sets.insert(
             mode,
             VariantSetSpec {
                 variants: [(a, variant)].into_iter().collect(),

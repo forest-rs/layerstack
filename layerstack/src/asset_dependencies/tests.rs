@@ -42,7 +42,7 @@ fn reference_custom_data_assets_cover_inactive_buckets_and_unselected_variants()
     let mut prim = PrimSpec::def();
     prim.references = custom_data_arcs(LayerId(1), target, "references").into();
     prim.payloads = custom_data_arcs(LayerId(1), target, "payloads").into();
-    prim.variant_sets.insert(
+    prim.rare_mut().variant_sets.insert(
         mode,
         VariantSetSpec {
             variants: crate::HashMap::from([(
@@ -158,7 +158,7 @@ fn recursive_inventory_visits_unselected_variants_and_reports_partial_resolution
         ),
     });
     let mut prim = PrimSpec::def();
-    prim.variant_sets.insert(
+    prim.rare_mut().variant_sets.insert(
         mode,
         VariantSetSpec {
             variants: crate::HashMap::from([(hidden, variant)]),
@@ -393,7 +393,7 @@ fn unselected_variant_identities_are_scoped_to_prim_metadata() {
         value,
     };
     let mut prim = PrimSpec::def();
-    prim.variant_sets.insert(
+    prim.rare_mut().variant_sets.insert(
         set,
         VariantSetSpec {
             variants: crate::HashMap::from([(

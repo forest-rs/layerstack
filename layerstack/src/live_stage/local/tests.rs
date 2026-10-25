@@ -221,7 +221,7 @@ fn authored_child_order_survives_delete_and_exact_undo() {
     layer.insert_prim(c, PrimSpec::def());
     let parent = layer.prims.get_mut(&world).unwrap();
     parent.authored_children = alloc::vec![cn, an, bn];
-    parent.prim_order = Some(alloc::vec![bn, cn, an]);
+    parent.rare_mut().prim_order = Some(alloc::vec![bn, cn, an]);
     let mut live = LiveStage::compose(&mut store, ROOT, StageOptions::default());
     assert_eq!(live.stage().children_of(world).unwrap(), [b, c, a]);
     let mut txn = Transaction::new();
@@ -319,6 +319,7 @@ fn masks_arcs_variants_and_instanceable_use_general_composition() {
                 .prims
                 .get_mut(&a)
                 .unwrap()
+                .rare_mut()
                 .inherits
                 .make_mut()
                 .prepend
@@ -331,6 +332,7 @@ fn masks_arcs_variants_and_instanceable_use_general_composition() {
                     .prims
                     .get_mut(&a)
                     .unwrap()
+                    .rare_mut()
                     .variant_sets
                     .insert(variant, crate::VariantSetSpec::default());
             }
@@ -411,9 +413,13 @@ fn scoped_variant_change_resyncs_even_when_unqualified_source_sites_are_equal() 
         .prims
         .get_mut(&owner)
         .unwrap();
-    spec.variant_sets.insert(choice, set);
-    spec.variant_set_names.make_mut().prepend.push(choice);
-    spec.variant_selections.insert(choice, first);
+    spec.rare_mut().variant_sets.insert(choice, set);
+    spec.rare_mut()
+        .variant_set_names
+        .make_mut()
+        .prepend
+        .push(choice);
+    spec.rare_mut().variant_selections.insert(choice, first);
     let mut live = LiveStage::compose(&mut store, ROOT, StageOptions::default());
     let mut before = live.stage().source_sites(owner);
     before.sort_unstable();
@@ -423,6 +429,7 @@ fn scoped_variant_change_resyncs_even_when_unqualified_source_sites_are_equal() 
         .prims
         .get_mut(&owner)
         .unwrap()
+        .rare_mut()
         .variant_selections
         .insert(choice, second);
     live.notify_layer_prim_edits(ROOT, &[owner]);
@@ -453,19 +460,22 @@ fn undo_restoring_variant_specs_leaves_the_local_fast_path() {
     );
     let layer = store.layer_mut(ROOT).unwrap();
     let host = layer.prims.get_mut(&world).unwrap();
-    host.variant_sets.insert(set_name, set);
-    host.variant_set_names.make_mut().prepend.push(set_name);
-    host.variant_selections.insert(set_name, choice);
+    host.rare_mut().variant_sets.insert(set_name, set);
+    host.rare_mut()
+        .variant_set_names
+        .make_mut()
+        .prepend
+        .push(set_name);
+    host.rare_mut().variant_selections.insert(set_name, choice);
     layer.insert_prim(
         a,
-        PrimSpec {
-            outer_variant_sites: alloc::vec![crate::spec_path::VariantSelectionSite {
+        PrimSpec::def().with_outer_variant_sites(alloc::vec![
+            crate::spec_path::VariantSelectionSite {
                 host_path: world,
                 set: set_name,
                 variant: choice,
-            }],
-            ..PrimSpec::def()
-        },
+            }
+        ]),
     );
     let mut live = LiveStage::compose(&mut store, ROOT, StageOptions::default());
     assert!(live.local_index(&store).is_none());
@@ -497,6 +507,7 @@ fn deep_edits_retain_ancestor_siblings_and_inactive_context() {
         .prims
         .get_mut(&world)
         .unwrap()
+        .rare_mut()
         .prim_order = Some(alloc::vec![bn, an]);
     store
         .layer_mut(ROOT)
@@ -525,9 +536,9 @@ fn external_arc_edits_expire_the_local_composition_proof() {
         let b = store.path("/World/B");
         let mut spec = store.layer(ROOT).unwrap().prims[&a].clone();
         if specializes {
-            spec.specializes.make_mut().prepend.push(b);
+            spec.rare_mut().specializes.make_mut().prepend.push(b);
         } else {
-            spec.inherits.make_mut().prepend.push(b);
+            spec.rare_mut().inherits.make_mut().prepend.push(b);
         }
         store.layer_mut(ROOT).unwrap().insert_prim(a, spec);
         // No explicit notification: the changed generation must invalidate
@@ -561,7 +572,7 @@ fn boundary_order_keeps_inactive_names_until_after_reordering() {
         } else if sparse == 2 {
             parent.authored_children.clear();
         }
-        parent.prim_order = Some(
+        parent.rare_mut().prim_order = Some(
             ["Ghost", "D", "B"]
                 .map(|name| store.tokens.intern(name))
                 .to_vec(),

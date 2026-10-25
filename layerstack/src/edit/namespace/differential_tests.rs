@@ -284,14 +284,18 @@ fn variants_scene() -> InMemoryStore {
     let round = store.tokens.intern("round");
     let mut layer = store.layers[&ROOT].clone();
     let mut spec = PrimSpec::def();
-    spec.variant_sets.insert(
+    spec.rare_mut().variant_sets.insert(
         shape,
         VariantSetSpec {
             variants: [(round, VariantSpec::default())].into_iter().collect(),
         },
     );
-    spec.variant_set_names.make_mut().prepend.push(shape);
-    spec.variant_selections.insert(shape, round);
+    spec.rare_mut()
+        .variant_set_names
+        .make_mut()
+        .prepend
+        .push(shape);
+    spec.rare_mut().variant_selections.insert(shape, round);
     author(&mut store, &mut layer, "/Varied", spec);
     store.insert_layer(layer);
     store

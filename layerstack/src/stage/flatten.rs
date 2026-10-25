@@ -213,12 +213,12 @@ impl Stage {
         let root_order = session
             .and_then(|id| store.layer(id))
             .and_then(|layer| layer.prims.get(&pseudo_root))
-            .and_then(|spec| spec.prim_order.clone())
+            .and_then(|spec| spec.prim_order().map(<[TokenId]>::to_vec))
             .or_else(|| {
                 store
                     .layer(root)
                     .and_then(|layer| layer.prims.get(&pseudo_root))
-                    .and_then(|spec| spec.prim_order.clone())
+                    .and_then(|spec| spec.prim_order().map(<[TokenId]>::to_vec))
             });
         let mut flattener = Flattener {
             stage: self,
@@ -289,7 +289,9 @@ impl Stage {
             root_children.extend(name);
         }
         let mut pseudo_root_spec = PrimSpec::default().with_children(root_children);
-        pseudo_root_spec.prim_order = root_order;
+        if root_order.is_some() {
+            pseudo_root_spec.rare_mut().prim_order = root_order;
+        }
         flattener.out.insert_prim(pseudo_root, pseudo_root_spec);
         flattener.report.preserved.prims += 1;
         flattener.finish()
@@ -676,11 +678,16 @@ impl Flattener<'_, '_> {
                 };
                 spec.active = spec.active.or(authored.active);
                 spec.instanceable = spec.instanceable.or(authored.instanceable);
-                if spec.prim_order.is_none() {
-                    spec.prim_order.clone_from(&authored.prim_order);
+                if spec.prim_order().is_none()
+                    && let Some(order) = authored.prim_order()
+                {
+                    spec.rare_mut().prim_order = Some(order.to_vec());
                 }
             }
-            spec.property_order = stage.resolve_property_order(prim, store);
+            let order = stage.resolve_property_order(prim, store);
+            if order.is_some() || spec.property_order().is_some() {
+                spec.rare_mut().property_order = order;
+            }
         }
 
         let mut keys: Vec<TokenId> = index

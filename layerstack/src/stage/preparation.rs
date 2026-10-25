@@ -386,9 +386,9 @@ pub(crate) fn slot_names_paths(layer: &Layer, path: PathId) -> bool {
 fn spec_names_paths(spec: &PrimSpec) -> bool {
     !spec.references.is_empty()
         || !spec.payloads.is_empty()
-        || !spec.inherits.is_empty()
-        || !spec.specializes.is_empty()
-        || !spec.variant_sets.is_empty()
+        || !spec.inherits().is_empty()
+        || !spec.specializes().is_empty()
+        || !spec.variant_sets().is_empty()
         || fields_name_paths(&spec.fields)
         || spec.properties.iter().any(property_names_paths)
 }

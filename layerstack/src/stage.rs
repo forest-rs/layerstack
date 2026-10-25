@@ -2854,7 +2854,7 @@ impl Stage {
             )?;
             let chain = source.spec_path.variant_chain();
             if chain.is_empty() {
-                spec.property_order.clone()
+                spec.property_order().map(<[TokenId]>::to_vec)
             } else {
                 spec.variant_spec(&chain)?.property_order.clone()
             }

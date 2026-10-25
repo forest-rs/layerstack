@@ -264,8 +264,8 @@ fn a_stronger_selection_masks_a_weaker_expression_error_after_edits() {
     let x = store.tokens.intern("x");
     let mut weak = Layer::new(LayerId(2));
     let mut spec = PrimSpec::def();
-    spec.variant_set_names.make_mut().prepend.push(v);
-    spec.variant_selections.insert(v, missing);
+    spec.rare_mut().variant_set_names.make_mut().prepend.push(v);
+    spec.rare_mut().variant_selections.insert(v, missing);
     let branch = VariantSpec {
         properties: PrimSpec::def()
             .with_property(x, PropertySpec::attribute().with_default(7))
@@ -274,7 +274,7 @@ fn a_stronger_selection_masks_a_weaker_expression_error_after_edits() {
     };
     let mut set = VariantSetSpec::default();
     set.variants.insert(a, branch);
-    spec.variant_sets.insert(v, set);
+    spec.rare_mut().variant_sets.insert(v, set);
     weak.insert_prim(prim, spec);
     store.insert_layer(weak);
     let root = |selected: bool| {
@@ -282,7 +282,7 @@ fn a_stronger_selection_masks_a_weaker_expression_error_after_edits() {
         root.sublayers_mut().push(SublayerEntry::new(LayerId(2)));
         let mut spec = PrimSpec::over();
         if selected {
-            spec.variant_selections.insert(v, a);
+            spec.rare_mut().variant_selections.insert(v, a);
         }
         root.insert_prim(prim, spec);
         root

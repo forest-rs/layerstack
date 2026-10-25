@@ -26,12 +26,12 @@ use crate::{
 pub(crate) fn is_local_spec(spec: &PrimSpec) -> bool {
     spec.references.is_empty()
         && spec.payloads.is_empty()
-        && spec.inherits.is_empty()
-        && spec.specializes.is_empty()
-        && spec.outer_variant_sites.is_empty()
-        && spec.variant_sets.is_empty()
-        && spec.variant_selections.is_empty()
-        && spec.variant_set_names.is_empty()
+        && spec.inherits().is_empty()
+        && spec.specializes().is_empty()
+        && spec.outer_variant_sites().is_empty()
+        && spec.variant_sets().is_empty()
+        && spec.variant_selections().is_none()
+        && spec.variant_set_names().is_empty()
 }
 
 /// Returns `true` when `reference`, authored in `layer`, is internal: it

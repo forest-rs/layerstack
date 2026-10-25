@@ -1330,10 +1330,19 @@ mod tests {
             },
         );
         pebble_spec
+            .rare_mut()
             .variant_sets
             .insert(shape, VariantSetSpec { variants });
-        pebble_spec.variant_set_names.make_mut().prepend.push(shape);
-        pebble_spec.variant_selections.insert(shape, jagged);
+        pebble_spec
+            .rare_mut()
+            .variant_set_names
+            .make_mut()
+            .prepend
+            .push(shape);
+        pebble_spec
+            .rare_mut()
+            .variant_selections
+            .insert(shape, jagged);
         library.insert_prim(pebble, pebble_spec);
         store.insert_layer(library);
 

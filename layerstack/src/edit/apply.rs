@@ -1362,9 +1362,9 @@ fn apply_op(
             let spec = PrimSpec {
                 specifier: Some(*specifier),
                 type_name: *type_name,
-                outer_variant_sites: loc.sites().to_vec(),
                 ..PrimSpec::default()
-            };
+            }
+            .with_outer_variant_sites(loc.sites().to_vec());
             insert_prim_spec(store, id, loc.prim_path(), spec, journal)?;
             add_child(store, id, &parent, name, journal)
         }
@@ -2019,9 +2019,9 @@ pub(super) fn ensure(
             }
             let spec = PrimSpec {
                 specifier: parent.is_some().then_some(Specifier::Over),
-                outer_variant_sites: sites.clone(),
                 ..PrimSpec::default()
-            };
+            }
+            .with_outer_variant_sites(sites.clone());
             insert_prim_spec(store, id, *path, spec, journal)?;
             match parent {
                 Some((parent, name)) => add_child(store, id, &parent, name, journal),
@@ -2078,7 +2078,7 @@ pub(super) fn insert_prim_spec(
     let mut branches = found.variant_prims.get(&path).cloned();
     match main.take() {
         None => main = Some(spec),
-        Some(existing) if !spec.outer_variant_sites.is_empty() => {
+        Some(existing) if !spec.outer_variant_sites().is_empty() => {
             main = Some(existing);
             branches.get_or_insert_with(Vec::new).push(spec);
         }
@@ -2162,9 +2162,9 @@ pub(super) fn remove_subtree(
             return false;
         };
         if rel.is_empty() {
-            return own && spec.outer_variant_sites == sites;
+            return own && spec.outer_variant_sites() == sites;
         }
-        let inner = spec.outer_variant_sites.strip_prefix(sites);
+        let inner = spec.outer_variant_sites().strip_prefix(sites);
         inner.is_some_and(|inner| {
             inner.iter().all(|site: &VariantSelectionSite| {
                 paths.resolve(site.host_path).depth() >= root_depth

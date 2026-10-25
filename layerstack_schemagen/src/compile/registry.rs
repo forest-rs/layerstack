@@ -394,8 +394,8 @@ fn check_api_metadata(
         .collect();
     for (key, present) in [
         ("typeName", spec.type_name.is_some()),
-        ("propertyOrder", spec.property_order.is_some()),
-        ("primOrder", spec.prim_order.is_some()),
+        ("propertyOrder", spec.property_order().is_some()),
+        ("primOrder", spec.prim_order().is_some()),
         ("active", spec.active.is_some()),
         ("instanceable", spec.instanceable.is_some()),
     ] {

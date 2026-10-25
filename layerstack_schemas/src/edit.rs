@@ -573,7 +573,7 @@ impl<'s> SchemaEdit<'s> {
                 .find(|spec| {
                     layerstack::SpecPath::from_variant_selection_sites(
                         mapped.prim_path(),
-                        &spec.outer_variant_sites,
+                        spec.outer_variant_sites(),
                         self.store.paths(),
                     ) == mapped
                 })?
@@ -1545,7 +1545,7 @@ impl<'s> SchemaEdit<'s> {
                 .find(|spec| {
                     layerstack::SpecPath::from_variant_selection_sites(
                         mapped.prim_path(),
-                        &spec.outer_variant_sites,
+                        spec.outer_variant_sites(),
                         self.store.paths(),
                     ) == mapped
                 })

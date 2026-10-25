@@ -74,7 +74,7 @@ fn layer_specs(loaded: &LoadedStage, layer: &Layer) -> Vec<String> {
             }
             text.push_str(name);
             let host = Path::root().join(&store.paths.resolve(path).segments()[..=depth]);
-            for site in &spec.outer_variant_sites {
+            for site in spec.outer_variant_sites() {
                 if store.paths.resolve(site.host_path) == &host {
                     text.push_str(&format!(
                         "{{{}={}}}",
@@ -103,7 +103,7 @@ fn layer_specs(loaded: &LoadedStage, layer: &Layer) -> Vec<String> {
                 }
             }
         }
-        variant_paths(store, &text, &spec.variant_sets, &mut out);
+        variant_paths(store, &text, spec.variant_sets(), &mut out);
     };
     for (path, spec) in layer.prims() {
         add(*path, spec);
@@ -165,8 +165,8 @@ fn snapshot(loaded: &LoadedStage, stage: &Stage) -> Json {
         })
     };
     let mut watch = json!({
-        "inheritPaths": list_op(&spec.inherits, |p| json!(path(*p))),
-        "specializes": list_op(&spec.specializes, |p| json!(path(*p))),
+        "inheritPaths": list_op(spec.inherits(), |p| json!(path(*p))),
+        "specializes": list_op(spec.specializes(), |p| json!(path(*p))),
         "references": list_op(&spec.references, arc),
         "look": list_op(property("look").targets.as_ref().unwrap(), |t| json!(target(t))),
         "connections": property("z").targets.as_ref().map(|t| list_op(t, |t| json!(target(t)))),

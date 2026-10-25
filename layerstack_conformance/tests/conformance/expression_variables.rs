@@ -445,6 +445,7 @@ fn live_stage_reports_a_selection_once_its_branch_is_selected() {
         .expect("root")
         .prim_mut(orchard)
         .expect("/Orchard")
+        .rare_mut()
         .variant_selections
         .insert(season, winter);
     live.notify_structural_change();

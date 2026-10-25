@@ -393,6 +393,7 @@ fn edit_selection(
         .layer_mut(layer)
         .and_then(|layer| layer.prim_mut(prim))
         .expect("prim spec")
+        .rare_mut()
         .variant_selections;
     match variant {
         Some(variant) => selections.insert(set, variant),

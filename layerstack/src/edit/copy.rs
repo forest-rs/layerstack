@@ -97,14 +97,14 @@ fn copy_prim(
     let Some(root) = src
         .prims
         .get(&from)
-        .filter(|s| s.outer_variant_sites.is_empty())
+        .filter(|s| s.outer_variant_sites().is_empty())
     else {
         return Err(Rejection::NoSuchSpec(SpecPath::from_prim_path(from)));
     };
     // The specs of the copied namespace: the prim's and every spec beneath
     // it, outside its ancestors' variant branches.
     let owned = |spec: &PrimSpec| {
-        spec.outer_variant_sites
+        spec.outer_variant_sites()
             .iter()
             .all(|site| source.is_prefix_of(paths.resolve(site.host_path)))
     };
@@ -153,7 +153,7 @@ fn copy_prim(
     copies.sort_by_key(|(path, spec)| {
         (
             store.paths().resolve(*path).depth(),
-            spec.outer_variant_sites.len(),
+            spec.outer_variant_sites().len(),
         )
     });
 
@@ -203,7 +203,9 @@ fn reanchor_internal_arcs(spec: &mut PrimSpec, from: LayerId, to: LayerId) {
     if let Some(op) = spec.payloads.get_mut() {
         arcs(op, from, to);
     }
-    variants(&mut spec.variant_sets, from, to);
+    if let Some(rare) = spec.authored_rare_mut() {
+        variants(&mut rare.variant_sets, from, to);
+    }
 }
 
 fn copy_property(

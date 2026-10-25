@@ -100,35 +100,38 @@ impl<'a> SpecRef<'a> {
 
     pub(crate) fn inherits(self) -> &'a ListOp<PathId> {
         match self {
-            Self::Prim(spec) => &spec.inherits,
+            Self::Prim(spec) => spec.inherits(),
             Self::Variant(spec) => &spec.inherits,
         }
     }
 
     pub(crate) fn specializes(self) -> &'a ListOp<PathId> {
         match self {
-            Self::Prim(spec) => &spec.specializes,
+            Self::Prim(spec) => spec.specializes(),
             Self::Variant(spec) => &spec.specializes,
         }
     }
 
-    pub(crate) fn variant_selections(self) -> &'a HashMap<TokenId, TokenId> {
+    /// The authored variant selections, `None` when there are none.
+    pub(crate) fn variant_selections(self) -> Option<&'a HashMap<TokenId, TokenId>> {
         match self {
-            Self::Prim(spec) => &spec.variant_selections,
-            Self::Variant(spec) => &spec.variant_selections,
+            Self::Prim(spec) => spec.variant_selections(),
+            Self::Variant(spec) => {
+                Some(&spec.variant_selections).filter(|selections| !selections.is_empty())
+            }
         }
     }
 
     pub(crate) fn variant_sets(self) -> &'a VariantSets {
         match self {
-            Self::Prim(spec) => &spec.variant_sets,
+            Self::Prim(spec) => spec.variant_sets(),
             Self::Variant(spec) => &spec.variant_sets,
         }
     }
 
     pub(crate) fn variant_set_names(self) -> &'a ListOp<TokenId> {
         match self {
-            Self::Prim(spec) => &spec.variant_set_names,
+            Self::Prim(spec) => spec.variant_set_names(),
             Self::Variant(spec) => &spec.variant_set_names,
         }
     }
@@ -142,7 +145,7 @@ impl<'a> SpecRef<'a> {
 
     pub(crate) fn prim_order(self) -> Option<&'a [TokenId]> {
         match self {
-            Self::Prim(spec) => spec.prim_order.as_deref(),
+            Self::Prim(spec) => spec.prim_order(),
             Self::Variant(_) => None,
         }
     }
@@ -150,7 +153,7 @@ impl<'a> SpecRef<'a> {
     /// Whether the spec authors an arc or a variant selection, the fields
     /// a newly added site can bring stronger variant selections through.
     pub(crate) fn may_introduce_selections(self) -> bool {
-        !self.variant_selections().is_empty()
+        self.variant_selections().is_some()
             || !self.references().is_empty()
             || !self.payloads().is_empty()
             || !self.inherits().is_empty()
@@ -178,7 +181,7 @@ pub(crate) fn spec_at<'a>(
     if entries.is_empty() {
         let spec = layer.prims.get(&prim)?;
         return spec
-            .outer_variant_sites
+            .outer_variant_sites()
             .is_empty()
             .then_some(SpecRef::Prim(spec));
     }
@@ -188,12 +191,12 @@ pub(crate) fn spec_at<'a>(
         layer
             .prims
             .get(&prim)
-            .filter(|spec| spec.outer_variant_sites.is_empty())?
+            .filter(|spec| spec.outer_variant_sites().is_empty())?
     } else {
         layer.prim_specs(prim).find(|spec| {
-            spec.outer_variant_sites.len() == enclosing
+            spec.outer_variant_sites().len() == enclosing
                 && spec
-                    .outer_variant_sites
+                    .outer_variant_sites()
                     .iter()
                     .zip(&entries[..enclosing])
                     .all(|(a, (_, b))| a == b)
@@ -202,7 +205,7 @@ pub(crate) fn spec_at<'a>(
     if enclosing == entries.len() {
         return Some(SpecRef::Prim(spec));
     }
-    let mut sets = &spec.variant_sets;
+    let mut sets = spec.variant_sets();
     let mut branch = None;
     for (_, selection) in &entries[enclosing..] {
         let variant = sets.get(&selection.set)?.variants.get(&selection.variant)?;
@@ -461,7 +464,7 @@ pub(crate) fn has_variant_selections(
     stack: &ComputedStack<'_>,
     site: &SpecPath,
 ) -> bool {
-    specs(store, stack, site).any(|(_, _, spec)| !spec.variant_selections().is_empty())
+    specs(store, stack, site).any(|(_, _, spec)| spec.variant_selections().is_some())
 }
 
 /// The variant selections for `set` authored at `site`, strongest first,
@@ -474,7 +477,7 @@ pub(crate) fn authored_selections(
     set: TokenId,
 ) -> Vec<TokenId> {
     specs(store, stack, site)
-        .filter_map(|(_, _, spec)| spec.variant_selections().get(&set).copied())
+        .filter_map(|(_, _, spec)| spec.variant_selections()?.get(&set).copied())
         .collect()
 }
 
@@ -585,10 +588,10 @@ fn has_child_spec(store: &dyn LayerStore, layer: &Layer, site: &SpecPath, name: 
         return layer
             .prims
             .get(&child)
-            .is_some_and(|spec| spec.outer_variant_sites.is_empty());
+            .is_some_and(|spec| spec.outer_variant_sites().is_empty());
     }
     layer.prim_specs(child).any(|spec| {
-        spec.outer_variant_sites
+        spec.outer_variant_sites()
             .iter()
             .copied()
             .eq(site.variant_selection_sites())
@@ -785,7 +788,7 @@ impl ChildIndex {
                 && layer
                     .prims
                     .get(&path)
-                    .is_none_or(|spec| spec.outer_variant_sites.is_empty())
+                    .is_none_or(|spec| spec.outer_variant_sites().is_empty())
         };
         let mut overrides = HashMap::new();
         let mut bases = Vec::new();
@@ -971,7 +974,7 @@ fn projected_children(
         layer
             .prims
             .get(&path)
-            .is_some_and(|spec| spec.outer_variant_sites.is_empty())
+            .is_some_and(|spec| spec.outer_variant_sites().is_empty())
     };
     // Whether the projected layer authors a spec at or beneath `path`. A
     // child path not interned is neither a spec's path nor an ancestor of
@@ -1066,7 +1069,7 @@ fn listings_hold(
                 find_name(names, name, tokens).is_err()
                     || layer
                         .prim_specs(path)
-                        .any(|spec| spec.outer_variant_sites == *sites)
+                        .any(|spec| spec.outer_variant_sites() == *sites)
             })
     })
 }
@@ -1081,14 +1084,14 @@ fn add_specs(store: &dyn LayerStore, layer: &Layer, index: &mut LayerChildren, c
     let mut grown: HashMap<(PathId, usize), usize> = HashMap::new();
     for &path in changed {
         for spec in layer.prim_specs(path) {
-            let outer = &spec.outer_variant_sites;
+            let outer = spec.outer_variant_sites();
             // An unchanged ancestor spec is listed already.
             for (parent, name) in listings(paths, layer, path, outer) {
                 let branches = index.entry(parent).or_default();
                 let at = match branches.iter().position(|(sites, _)| sites == outer) {
                     Some(at) => at,
                     None => {
-                        branches.push((outer.clone(), Vec::new()));
+                        branches.push((outer.to_vec(), Vec::new()));
                         branches.len() - 1
                     }
                 };
@@ -1147,7 +1150,7 @@ fn listings<'a>(
             && !layer
                 .prims
                 .get(&parent)
-                .is_some_and(|spec| spec.outer_variant_sites.is_empty()))
+                .is_some_and(|spec| spec.outer_variant_sites().is_empty()))
         .then_some(parent);
         Some((parent, prim_name(paths, child)))
     })
@@ -1188,7 +1191,7 @@ fn index_layer(store: &dyn LayerStore, layer: &Layer) -> LayerChildren {
             list(
                 &mut index,
                 parent,
-                &spec.outer_variant_sites,
+                spec.outer_variant_sites(),
                 prim_name(paths, path),
             );
         }
@@ -1208,7 +1211,7 @@ fn index_layer(store: &dyn LayerStore, layer: &Layer) -> LayerChildren {
         if layer
             .prims
             .get(&path)
-            .is_some_and(|spec| spec.outer_variant_sites.is_empty())
+            .is_some_and(|spec| spec.outer_variant_sites().is_empty())
         {
             continue;
         }
@@ -1309,20 +1312,24 @@ mod tests {
             variants: [(variant, spec)].into_iter().collect(),
         };
         let mut weak = PrimSpec::def();
-        weak.variant_sets.insert(look, set(wet, branch(shine, 1.0)));
-        weak.variant_sets
+        weak.rare_mut()
+            .variant_sets
+            .insert(look, set(wet, branch(shine, 1.0)));
+        weak.rare_mut()
+            .variant_sets
             .insert(size, set(big, branch(height, 2.0)));
-        weak.variant_sets
+        weak.rare_mut()
+            .variant_sets
             .insert(finish, set(matte, branch(gloss, 3.0)));
-        weak.variant_set_names = ListOp::prepended(vec![look, size]).into();
-        weak.variant_selections = [(look, wet), (size, big), (finish, matte)]
+        weak.rare_mut().variant_set_names = ListOp::prepended(vec![look, size]).into();
+        weak.rare_mut().variant_selections = [(look, wet), (size, big), (finish, matte)]
             .into_iter()
             .collect();
         let mut sub = Layer::new(LayerId(2));
         sub.insert_prim(rock, weak);
         store.insert_layer(sub);
         let mut strong = PrimSpec::over();
-        strong.variant_set_names = ListOp::deleted(vec![look]).into();
+        strong.rare_mut().variant_set_names = ListOp::deleted(vec![look]).into();
         let mut root = Layer::new(LayerId(1));
         root.sublayers.push(SublayerEntry::new(LayerId(2)));
         root.insert_prim(rock, strong);
@@ -1396,7 +1403,7 @@ mod tests {
         // A spec only inside a variant branch of `/A`: `/A/V` has no spec
         // outside the branches, so `/A/V/W/X` lists `V` under `/A` too.
         let mut inside = PrimSpec::def();
-        inside.outer_variant_sites = vec![VariantSelectionSite {
+        inside.rare_mut().outer_variant_sites = vec![VariantSelectionSite {
             host_path: a,
             set: size,
             variant: big,
@@ -1458,7 +1465,7 @@ mod tests {
         layer.insert_prim(plant, PrimSpec::def());
         layer.insert_prim(hill, PrimSpec::def());
         let mut branch = PrimSpec::def();
-        branch.outer_variant_sites = vec![VariantSelectionSite {
+        branch.rare_mut().outer_variant_sites = vec![VariantSelectionSite {
             host_path: world,
             set: size,
             variant: big,

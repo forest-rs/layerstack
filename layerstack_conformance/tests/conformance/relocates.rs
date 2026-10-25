@@ -624,6 +624,7 @@ fn switching_variants_applies_only_the_selected_branch_relocates() {
             .layer_mut(root_layer)
             .and_then(|layer| layer.prim_mut(pebble))
             .expect("/Pebble spec")
+            .rare_mut()
             .variant_selections
             .insert(cut, selection);
         live.notify_layer_prim_edits(root_layer, &[pebble]);

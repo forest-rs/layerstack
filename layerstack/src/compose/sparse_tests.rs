@@ -93,7 +93,7 @@ fn local_stack_matches_general_population_with_sessions_offsets_ordering_and_act
         ..SublayerEntry::new(LayerId(2))
     });
     let mut world = PrimSpec::over();
-    world.prim_order = Some(vec![a, b]);
+    world.rare_mut().prim_order = Some(vec![a, b]);
     root.insert_prim(paths[1], world);
     root.insert_prim(
         paths[4],

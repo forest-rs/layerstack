@@ -66,7 +66,7 @@ pub(super) fn reachable_layers(
                 for refs in [&spec.references, &spec.payloads] {
                     collect_ref_layers(store, refs, &mut pending);
                 }
-                collect_variant_layers(store, &spec.variant_sets, &mut pending);
+                collect_variant_layers(store, spec.variant_sets(), &mut pending);
             }
         }
     }
@@ -188,10 +188,15 @@ pub(super) struct LayerEdit {
 /// Whether `before` and `after` differ in their child lists or child order
 /// only.
 fn children_only(before: &PrimSpec, after: &PrimSpec) -> bool {
-    let without_children = |spec: &PrimSpec| PrimSpec {
-        authored_children: Vec::new(),
-        prim_order: None,
-        ..spec.clone()
+    let without_children = |spec: &PrimSpec| {
+        let mut spec = PrimSpec {
+            authored_children: Vec::new(),
+            ..spec.clone()
+        };
+        if let Some(rare) = spec.authored_rare_mut() {
+            rare.prim_order = None;
+        }
+        spec
     };
     without_children(before).same(&without_children(after))
 }

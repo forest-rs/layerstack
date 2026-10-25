@@ -991,6 +991,7 @@ mod early_reuse_tests {
             .prims
             .get_mut(&right)
             .unwrap()
+            .rare_mut()
             .prim_order = Some(vec![hidden, a]);
         let stage = assert_matches_full(&mut store, 4);
         for (name, value) in [("Left", 1), ("Right", 2)] {
@@ -1172,9 +1173,13 @@ mod early_reuse_tests {
         let mode = store.tokens.intern("mode");
         let selected = store.tokens.intern("selected");
         let mut spec = PrimSpec::def();
-        spec.variant_selections.insert(mode, selected);
-        spec.variant_set_names.make_mut().prepend.push(mode);
-        spec.variant_sets.insert(
+        spec.rare_mut().variant_selections.insert(mode, selected);
+        spec.rare_mut()
+            .variant_set_names
+            .make_mut()
+            .prepend
+            .push(mode);
+        spec.rare_mut().variant_sets.insert(
             mode,
             VariantSetSpec {
                 variants: HashMap::from([(

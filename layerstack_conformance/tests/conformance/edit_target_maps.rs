@@ -50,9 +50,15 @@ fn with_variant(store: &mut InMemoryStore, spec: PrimSpec, set: &str, variant: &
     let mut spec = spec;
     let mut variants = hashbrown::HashMap::new();
     variants.insert(variant, VariantSpec::default());
-    spec.variant_sets.insert(set, VariantSetSpec { variants });
-    spec.variant_set_names.make_mut().prepend.push(set);
-    spec.variant_selections.insert(set, variant);
+    spec.rare_mut()
+        .variant_sets
+        .insert(set, VariantSetSpec { variants });
+    spec.rare_mut()
+        .variant_set_names
+        .make_mut()
+        .prepend
+        .push(set);
+    spec.rare_mut().variant_selections.insert(set, variant);
     spec
 }
 
@@ -126,7 +132,7 @@ fn edit_target(store: &mut InMemoryStore, stage: &Stage, prim: PathId, arc: &str
 fn authored_targets(store: &InMemoryStore, layer: LayerId, path: &SpecPath) -> Option<Vec<String>> {
     let prim = &store.layer(layer).unwrap().prims()[&path.prim_path()];
     let properties = match path.variant_chain().last() {
-        Some((set, variant)) => &prim.variant_sets[set].variants[variant].properties,
+        Some((set, variant)) => &prim.variant_sets()[set].variants[variant].properties,
         _ => &prim.properties,
     };
     let name = path.property()?;

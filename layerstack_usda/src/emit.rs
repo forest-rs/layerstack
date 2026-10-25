@@ -382,14 +382,11 @@ impl EmitCtx<'_> {
         // If there are root prims, create a root prim spec to hold children
         // and any root ordering.
         if !root_children.is_empty() || ast.root_prim_order.is_some() {
-            let root_spec = PrimSpec {
-                authored_children: root_children,
-                prim_order: ast
-                    .root_prim_order
-                    .as_ref()
-                    .map(|order| order.iter().map(|n| self.tokens.intern(n)).collect()),
-                ..PrimSpec::default()
-            };
+            let mut root_spec = PrimSpec::default().with_children(root_children);
+            if let Some(order) = &ast.root_prim_order {
+                root_spec = root_spec
+                    .with_prim_order(order.iter().map(|n| self.tokens.intern(n)).collect());
+            }
             layer.insert_prim(root_path_id, root_spec);
         }
 
@@ -432,12 +429,9 @@ impl EmitCtx<'_> {
             self.paths.intern_child(place.parent, place.name)
         };
 
-        let mut spec = PrimSpec {
-            specifier: Some(convert_specifier(prim.specifier)),
-            type_name: prim.type_name.map(|t| self.tokens.intern(t)),
-            outer_variant_sites: outer_variant_sites.to_vec(),
-            ..PrimSpec::default()
-        };
+        let mut spec = PrimSpec::default().with_outer_variant_sites(outer_variant_sites.to_vec());
+        spec.specifier = Some(convert_specifier(prim.specifier));
+        spec.type_name = prim.type_name.map(|t| self.tokens.intern(t));
 
         // Process prim metadata.
         self.emit_prim_metadata(&prim.metadata, prim_path, outer_variant_sites, &mut spec);
@@ -473,17 +467,18 @@ impl EmitCtx<'_> {
                         path_id,
                         prim_path,
                         outer_variant_sites,
-                        &mut spec.variant_sets,
+                        &mut spec.rare_mut().variant_sets,
                         layer,
                     );
                 }
                 ast::PrimChild::ReorderNameChildren(names) => {
-                    spec.prim_order = Some(names.iter().map(|n| self.tokens.intern(n)).collect());
+                    spec.rare_mut().prim_order =
+                        Some(names.iter().map(|n| self.tokens.intern(n)).collect());
                 }
                 ast::PrimChild::ReorderProperties(names) => {
                     // Spec: AOUSD Core §7.6.2.2.2 (`propertyChildren`); the
                     // `reorder properties` statement authors `propertyOrder`.
-                    spec.property_order =
+                    spec.rare_mut().property_order =
                         Some(names.iter().map(|n| self.tokens.intern(n)).collect());
                 }
             }
@@ -559,29 +554,30 @@ impl EmitCtx<'_> {
                     ));
                 }
                 ast::PrimMeta::Inherits(paths) => {
-                    spec.inherits
+                    spec.rare_mut()
+                        .inherits
                         .make_mut()
                         .merge(self.emit_path_listop(paths, prim_path, sites, "Inherit"));
                 }
                 ast::PrimMeta::Specializes(paths) => {
-                    spec.specializes.make_mut().merge(self.emit_path_listop(
-                        paths,
-                        prim_path,
-                        sites,
-                        "Specializes",
-                    ));
+                    spec.rare_mut()
+                        .specializes
+                        .make_mut()
+                        .merge(self.emit_path_listop(paths, prim_path, sites, "Specializes"));
                 }
                 ast::PrimMeta::Variants(selections) => {
                     for sel in selections {
                         let set_tok = self.tokens.intern(sel.set_name);
                         let branch_tok = self.tokens.intern(sel.branch_name);
-                        spec.variant_selections.insert(set_tok, branch_tok);
+                        spec.rare_mut()
+                            .variant_selections
+                            .insert(set_tok, branch_tok);
                     }
                 }
                 ast::PrimMeta::VariantSets(listop) => {
                     let names = self.emit_name_listop(listop);
-                    declare_listed_sets(&names, &mut spec.variant_sets);
-                    spec.variant_set_names.make_mut().merge(names);
+                    declare_listed_sets(&names, &mut spec.rare_mut().variant_sets);
+                    spec.rare_mut().variant_set_names.make_mut().merge(names);
                 }
                 // `instanceable` and `active` have members of their own,
                 // and `typeName` is the spec's type; each reads as its
@@ -2105,16 +2101,16 @@ def \"Q\" (
         };
         let [a, b, c, d, e] = ["a", "b", "c", "d", "e"].map(|name| tokens.intern(name));
         let (p, q) = (spec("/P"), spec("/Q"));
-        assert_eq!(p.variant_set_names, ListOp::explicit(vec![a]));
+        assert_eq!(*p.variant_set_names(), ListOp::explicit(vec![a]));
         assert_eq!(
-            q.variant_set_names,
+            *q.variant_set_names(),
             ListOp::added(vec![b])
                 .with_prepended(vec![c])
                 .with_appended(vec![d])
                 .with_deleted(vec![e])
         );
-        assert!(p.variant_sets[&a].variants.is_empty());
-        let mut declared: Vec<_> = q.variant_sets.keys().copied().collect();
+        assert!(p.variant_sets()[&a].variants.is_empty());
+        let mut declared: Vec<_> = q.variant_sets().keys().copied().collect();
         declared.sort();
         assert_eq!(declared, [b]);
     }
@@ -2204,10 +2200,10 @@ def \"A\" {
         let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = paths.lookup(&a_path).unwrap();
         let spec = result.layer.prim(a_id).unwrap();
-        assert!(spec.inherits.explicit.is_some());
+        assert!(spec.inherits().explicit.is_some());
         let b_path = Path::parse_absolute("/B", &tokens).unwrap();
         let b_id = paths.lookup(&b_path).expect("/B");
-        assert_eq!(spec.inherits.explicit.as_ref().unwrap(), &[b_id]);
+        assert_eq!(spec.inherits().explicit.as_ref().unwrap(), &[b_id]);
     }
 
     #[test]
@@ -2260,7 +2256,7 @@ def \"A\" (
         let spec = result.layer.prim(a_id).unwrap();
         let shade_tok = tokens.intern("shade");
         let red_tok = tokens.intern("red");
-        assert_eq!(spec.variant_selections.get(&shade_tok), Some(&red_tok));
+        assert_eq!(spec.variant_selection(shade_tok), Some(red_tok));
     }
 
     #[test]
@@ -2280,7 +2276,7 @@ def \"A\" (
         let spec = result.layer.prim(a_id).unwrap();
         let shade_tok = tokens.intern("shade");
         let red_tok = tokens.intern("red");
-        assert_eq!(spec.variant_selections.get(&shade_tok), Some(&red_tok));
+        assert_eq!(spec.variant_selection(shade_tok), Some(red_tok));
     }
 
     #[test]
@@ -2303,8 +2299,8 @@ def \"A\" {
         let a_id = paths.lookup(&a_path).unwrap();
         let spec = result.layer.prim(a_id).unwrap();
         let color_tok = tokens.intern("color");
-        assert!(spec.variant_sets.contains_key(&color_tok));
-        let vs = spec.variant_sets.get(&color_tok).unwrap();
+        assert!(spec.variant_sets().contains_key(&color_tok));
+        let vs = spec.variant_sets().get(&color_tok).unwrap();
         let red_tok = tokens.intern("red");
         let blue_tok = tokens.intern("blue");
         assert!(vs.variants.contains_key(&red_tok));
@@ -2334,7 +2330,7 @@ def \"A\" {
         let spec = result.layer.prim(a_id).unwrap();
         let b = tokens.intern("B");
         let c = tokens.intern("C");
-        assert_eq!(spec.prim_order, Some(vec![b, c]));
+        assert_eq!(spec.prim_order(), Some(&[b, c][..]));
     }
 
     #[test]
@@ -2667,8 +2663,8 @@ def Scope "D" (
 
         // The prim spec holds `standin`; `shadingVariant` is nested in the
         // `anim` branch's variant spec (`/D{standin=anim}{shadingVariant=}`).
-        assert_eq!(d_spec.variant_set_names.add, [standin_tok]);
-        assert!(!d_spec.variant_sets.contains_key(&shading_tok));
+        assert_eq!(d_spec.variant_set_names().add, [standin_tok]);
+        assert!(!d_spec.variant_sets().contains_key(&shading_tok));
         let anim_variant = d_spec
             .variant_spec(&[(standin_tok, anim_tok)])
             .expect("anim variant");
@@ -2702,7 +2698,7 @@ def Scope "D" (
             let specs: Vec<_> = result
                 .layer
                 .prim_specs(paths.lookup(&path).unwrap())
-                .map(|spec| spec.outer_variant_sites.clone())
+                .map(|spec| spec.outer_variant_sites().to_vec())
                 .collect();
             specs
         };
@@ -2806,7 +2802,11 @@ def Scope "D" (
                 .collect::<Vec<_>>()
         };
 
-        assert_eq!(d_spec.variant_set_names.add, [standin], "prim spec's sets");
+        assert_eq!(
+            d_spec.variant_set_names().add,
+            [standin],
+            "prim spec's sets"
+        );
 
         // Every branch is a variant spec of its own: the inner
         // `{standin=anim}` does not merge into the outer one, and the two
@@ -2853,7 +2853,7 @@ def Scope "D" (
             let specs: Vec<_> = result
                 .layer
                 .prim_specs(paths.lookup(&path).unwrap())
-                .map(|spec| spec.outer_variant_sites.clone())
+                .map(|spec| spec.outer_variant_sites().to_vec())
                 .collect();
             specs
         };
@@ -3680,8 +3680,8 @@ def Xform \"A\" (
             Some(&FieldValue::Value(Value::string("The A")))
         );
         assert_eq!(
-            spec.property_order,
-            Some(vec![tokens.intern("x"), tokens.intern("y")])
+            spec.property_order(),
+            Some(&[tokens.intern("x"), tokens.intern("y")][..])
         );
     }
 
@@ -3790,7 +3790,7 @@ def \"A\" (
 ";
         let (result, tokens, paths) = emit_source(src);
         let spec = prim(&result, &tokens, &paths, "/A");
-        let branch = &spec.variant_sets[&tokens.intern("v")].variants[&tokens.intern("one")];
+        let branch = &spec.variant_sets()[&tokens.intern("v")].variants[&tokens.intern("one")];
         let group = tokens.intern("group");
         assert_eq!(
             get_field(&branch.fields, &tokens.intern("kind")),

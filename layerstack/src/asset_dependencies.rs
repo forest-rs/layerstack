@@ -426,7 +426,7 @@ fn extract_prim(
     tokens: &TokenInterner,
     out: &mut Vec<AssetDependency>,
 ) {
-    let spec = SpecPath::from_variant_selection_sites(path, &prim.outer_variant_sites, paths);
+    let spec = SpecPath::from_variant_selection_sites(path, prim.outer_variant_sites(), paths);
     for field in &prim.fields {
         extract_prim_field(field, layer, &spec, tokens, out);
     }
@@ -446,7 +446,7 @@ fn extract_prim(
         out,
     );
     for branch in prim.variant_branches() {
-        let sites = branch.sites(&prim.outer_variant_sites, path);
+        let sites = branch.sites(prim.outer_variant_sites(), path);
         let at = SpecPath::from_variant_selection_sites(path, &sites, paths);
         for field in &branch.spec.fields {
             extract_prim_field(field, layer, &at, tokens, out);
@@ -821,7 +821,7 @@ fn rewrite_prim(
     tokens: &TokenInterner,
     map: &Replacements,
 ) {
-    let at = SpecPath::from_variant_selection_sites(path, &prim.outer_variant_sites, paths);
+    let at = SpecPath::from_variant_selection_sites(path, prim.outer_variant_sites(), paths);
     for field in &mut prim.fields {
         rewrite_prim_field(field, layer, &at, tokens, map);
     }
@@ -840,15 +840,17 @@ fn rewrite_prim(
         &at,
         map,
     );
-    rewrite_sets(
-        &mut prim.variant_sets,
-        &prim.outer_variant_sites,
-        path,
-        layer,
-        paths,
-        tokens,
-        map,
-    );
+    if let Some(rare) = prim.authored_rare_mut() {
+        rewrite_sets(
+            &mut rare.variant_sets,
+            &rare.outer_variant_sites,
+            path,
+            layer,
+            paths,
+            tokens,
+            map,
+        );
+    }
 }
 
 #[cfg(test)]

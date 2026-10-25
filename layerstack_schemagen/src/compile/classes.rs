@@ -340,7 +340,7 @@ impl<'s> Parser<'s> {
     /// no inherited opinion can be stronger than a local one.
     fn inherits(&self, path: PathId) -> Option<&'s ListOp<PathId>> {
         self.stage.layer_stack().into_iter().find_map(|layer| {
-            let inherits = &*self.spec(layer, path)?.inherits;
+            let inherits = self.spec(layer, path)?.inherits();
             is_authored(inherits).then_some(inherits)
         })
     }
@@ -862,9 +862,9 @@ impl<'s> Parser<'s> {
         for (key, authored) in [
             ("references", is_authored(&spec.references)),
             ("payload", is_authored(&spec.payloads)),
-            ("specializes", is_authored(&spec.specializes)),
-            ("variantSelection", !spec.variant_selections.is_empty()),
-            ("variantSetNames", !spec.variant_set_names.is_empty()),
+            ("specializes", is_authored(spec.specializes())),
+            ("variantSelection", spec.variant_selections().is_some()),
+            ("variantSetNames", !spec.variant_set_names().is_empty()),
             ("active", spec.active.is_some()),
             ("instanceable", spec.instanceable.is_some()),
         ] {

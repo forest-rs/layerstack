@@ -306,13 +306,13 @@ pub fn generate_clip_manifest_from_layers(
             collect_manifest_properties(
                 &spec.properties,
                 path,
-                &spec.outer_variant_sites,
+                spec.outer_variant_sites(),
                 paths,
                 &mut declarations,
             )?;
-            let mut sites = spec.outer_variant_sites.clone();
+            let mut sites = spec.outer_variant_sites().to_vec();
             collect_manifest_variants(
-                &spec.variant_sets,
+                spec.variant_sets(),
                 path,
                 &mut sites,
                 paths,
@@ -390,7 +390,9 @@ fn static_layer(source: &Layer) -> Result<Layer, ClipAuthoringError> {
             p.time_samples = None;
             p.spline = None;
         }
-        strip_variants(&mut prim.variant_sets)?;
+        if let Some(rare) = prim.authored_rare_mut() {
+            strip_variants(&mut rare.variant_sets)?;
+        }
     }
     Ok(result)
 }
@@ -531,9 +533,11 @@ pub fn stitch_clip_sequence(
             .iter_mut()
             .flat_map(|(path, prims)| prims.iter_mut().map(move |prim| (path, prim))),
     ) {
-        if let Some(source) = topology.prim_spec_in(path, &prim.outer_variant_sites) {
+        if let Some(source) = topology.prim_spec_in(path, prim.outer_variant_sites()) {
             copy_property_defaults(&mut prim.properties, &source.properties);
-            copy_variant_defaults(&mut prim.variant_sets, &source.variant_sets);
+            if let Some(rare) = prim.authored_rare_mut() {
+                copy_variant_defaults(&mut rare.variant_sets, source.variant_sets());
+            }
         }
     }
     let clips = tokens.intern("clips");
@@ -922,10 +926,12 @@ mod tests {
         a.prims
             .get_mut(&path)
             .unwrap()
+            .rare_mut()
             .variant_sets
             .insert(set, VariantSetSpec { variants: branches });
         let mut child_spec = PrimSpec::def().with_property(y, animated());
         child_spec
+            .rare_mut()
             .outer_variant_sites
             .push(crate::spec_path::VariantSelectionSite {
                 host_path: path,
@@ -942,10 +948,10 @@ mod tests {
         )
         .unwrap();
         let parent = &manifest.prims[&path];
-        assert!(parent.variant_sets[&set].variants.contains_key(&branch));
-        assert!(!parent.variant_sets[&set].variants.contains_key(&unused));
+        assert!(parent.variant_sets()[&set].variants.contains_key(&branch));
+        assert!(!parent.variant_sets()[&set].variants.contains_key(&unused));
         assert!(
-            parent.variant_sets[&set].variants[&branch]
+            parent.variant_sets()[&set].variants[&branch]
                 .properties
                 .iter()
                 .any(|p| p.name == x)
@@ -977,7 +983,7 @@ mod tests {
         let bundle =
             stitch_clip_sequence(&sources, &options, &mut store.tokens, &mut store.paths).unwrap();
         assert_eq!(
-            bundle.manifest.prims[&path].variant_sets[&set].variants[&branch].properties[0]
+            bundle.manifest.prims[&path].variant_sets()[&set].variants[&branch].properties[0]
                 .spec
                 .default,
             Some(Value::Float(21.))

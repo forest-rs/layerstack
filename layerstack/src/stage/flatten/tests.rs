@@ -603,7 +603,7 @@ fn the_flattened_layer_verifies_against_the_stage() {
     // Nor does one whose property order or active state differs.
     let mut edited = flat.layer.clone();
     let spec = edited.prims.get_mut(&height.prim_path()).unwrap();
-    spec.property_order = Some(vec![height.property()]);
+    spec.rare_mut().property_order = Some(vec![height.property()]);
     spec.active = Some(true);
     store.insert_layer(edited);
     let flattened = Stage::compose(&mut store, LayerId(9), StageOptions::default());
@@ -708,7 +708,7 @@ fn properties_are_flattened_in_name_order_with_their_order_kept() {
         .with_property(b, PropertySpec::typed_attribute(double()))
         .with_property(c, PropertySpec::typed_attribute(double()))
         .with_property(a, PropertySpec::typed_attribute(double()));
-    spec.property_order = Some(vec![b, a]);
+    spec.rare_mut().property_order = Some(vec![b, a]);
     let mut root = Layer::new(LayerId(1));
     root.insert_prim(prim, spec);
     store.insert_layer(root);
@@ -718,8 +718,8 @@ fn properties_are_flattened_in_name_order_with_their_order_kept() {
     let names: Vec<TokenId> = flattened.properties.iter().map(|p| p.name).collect();
     assert_eq!(names, [a, b, c], "dictionary order, ignoring case");
     assert_eq!(
-        flattened.property_order,
-        Some(vec![b, a]),
+        flattened.property_order(),
+        Some(&[b, a][..]),
         "the order is kept"
     );
 

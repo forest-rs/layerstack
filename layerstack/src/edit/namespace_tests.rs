@@ -180,8 +180,8 @@ fn move_subtree_repairs_dependent_targets_expressions_and_arcs_then_undoes() {
         layer.prims[&payload].payloads.explicit.as_ref().unwrap()[0].target,
         ReferenceTarget::Prim(new)
     );
-    assert_eq!(layer.prims[&inherit].inherits.apply_to(&[]), &[new]);
-    assert_eq!(layer.prims[&specialize].specializes.apply_to(&[]), &[new]);
+    assert_eq!(layer.prims[&inherit].inherits().apply_to(&[]), &[new]);
+    assert_eq!(layer.prims[&specialize].specializes().apply_to(&[]), &[new]);
     assert!(live.stage().has_prim(store.path("/Reference/Child")));
     live.apply(&mut store, &applied.inverse).unwrap();
     assert_eq!(store.layers[&ROOT], before);
@@ -222,6 +222,7 @@ fn property_move_repairs_every_list_bucket_and_preserves_authored_property_order
         .prims
         .get_mut(&a)
         .unwrap()
+        .rare_mut()
         .property_order = Some(vec![source.property()]);
     let before = store.layers[&ROOT].clone();
     let mut live = LiveStage::compose(&mut store, ROOT, StageOptions::default());
@@ -236,8 +237,8 @@ fn property_move_repairs_every_list_bucket_and_preserves_authored_property_order
     assert!(!live.stage().has_property_path(source));
     assert!(live.stage().has_property_path(dest));
     assert_eq!(
-        store.layers[&ROOT].prims[&a].property_order,
-        Some(vec![source.property()])
+        store.layers[&ROOT].prims[&a].property_order(),
+        Some(&[source.property()][..])
     );
     let op = store.layers[&ROOT]
         .property(PropertyPath::new(watch, rel))
@@ -565,6 +566,7 @@ fn dormant_weak_specs_are_rejected_even_when_they_are_not_populated() {
     let mut weak = Layer::new(ASSET);
     let mut dormant = PrimSpec::over();
     dormant
+        .rare_mut()
         .outer_variant_sites
         .push(crate::spec_path::VariantSelectionSite {
             host_path: host,

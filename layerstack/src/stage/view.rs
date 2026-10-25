@@ -1080,7 +1080,7 @@ mod tests {
         layer.insert_prim(b, PrimSpec::def());
         layer.insert_prim(a_child, PrimSpec::def());
         let mut branch = PrimSpec::def();
-        branch.outer_variant_sites = vec![VariantSelectionSite {
+        branch.rare_mut().outer_variant_sites = vec![VariantSelectionSite {
             host_path: a,
             set,
             variant: x,
@@ -1093,7 +1093,7 @@ mod tests {
             .map(|(path, spec)| {
                 (
                     store.paths.display(path, &store.tokens),
-                    spec.outer_variant_sites.len(),
+                    spec.outer_variant_sites().len(),
                 )
             })
             .collect();

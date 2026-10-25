@@ -348,7 +348,7 @@ impl Lowering<'_> {
             if !is_children_only(spec) {
                 return invalid("/", Invalid::PseudoRootOpinions);
             }
-            doc.prim_order = spec.prim_order.as_ref().map(|o| self.names(o));
+            doc.prim_order = spec.prim_order().map(|o| self.names(o));
             for &child in &spec.authored_children {
                 let parent = Parent {
                     path: &Path::root(),
@@ -371,8 +371,10 @@ impl Lowering<'_> {
                     .iter()
                     .flat_map(|(path, specs)| specs.iter().map(move |spec| (path, spec))),
             )
-            .filter(|(path, spec)| !visited.contains(&(**path, spec.outer_variant_sites.clone())))
-            .map(|(path, spec)| self.spec_display(*path, &spec.outer_variant_sites))
+            .filter(|(path, spec)| {
+                !visited.contains(&(**path, spec.outer_variant_sites().to_vec()))
+            })
+            .map(|(path, spec)| self.spec_display(*path, spec.outer_variant_sites()))
             .collect();
         unlisted.sort();
         if let Some(path) = unlisted.into_iter().next() {
@@ -456,13 +458,15 @@ impl Lowering<'_> {
         let arcs = Arcs {
             references: &spec.references,
             payloads: &spec.payloads,
-            inherits: &spec.inherits,
-            specializes: &spec.specializes,
+            inherits: spec.inherits(),
+            specializes: spec.specializes(),
         };
         self.arcs(layer, arcs, &mut prim, &shown)?;
-        prim.variant_selections = self.selections(&spec.variant_selections);
-        prim.property_order = spec.property_order.as_ref().map(|o| self.names(o));
-        prim.prim_order = spec.prim_order.as_ref().map(|o| self.names(o));
+        if let Some(selections) = spec.variant_selections() {
+            prim.variant_selections = self.selections(selections);
+        }
+        prim.property_order = spec.property_order().map(|o| self.names(o));
+        prim.prim_order = spec.prim_order().map(|o| self.names(o));
         for entry in &spec.properties {
             prim.properties.push(self.property(entry, &shown)?);
         }
@@ -478,8 +482,8 @@ impl Lowering<'_> {
         (prim.variant_set_names, prim.variant_sets) = self.variant_sets(
             layer,
             id,
-            &spec.variant_sets,
-            &spec.variant_set_names,
+            spec.variant_sets(),
+            spec.variant_set_names(),
             here,
             visited,
         )?;
@@ -1097,17 +1101,17 @@ fn is_children_only(spec: &PrimSpec) -> bool {
         && spec.type_name.is_none()
         && spec.fields.is_empty()
         && spec.properties.is_empty()
-        && spec.property_order.is_none()
-        && spec.variant_selections.is_empty()
-        && spec.variant_sets.is_empty()
-        && !is_authored(&spec.variant_set_names)
+        && spec.property_order().is_none()
+        && spec.variant_selections().is_none()
+        && spec.variant_sets().is_empty()
+        && !is_authored(spec.variant_set_names())
         && !is_authored(&spec.references)
         && !is_authored(&spec.payloads)
-        && !is_authored(&spec.inherits)
-        && !is_authored(&spec.specializes)
+        && !is_authored(spec.inherits())
+        && !is_authored(spec.specializes())
         && spec.active.is_none()
         && spec.instanceable.is_none()
-        && spec.outer_variant_sites.is_empty()
+        && spec.outer_variant_sites().is_empty()
 }
 
 /// The prim specs reached so far, by path and branch context.

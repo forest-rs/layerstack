@@ -385,7 +385,7 @@ fn spec_fields<'a>(
         "variant" => {
             let prim = &layer.prims()[&prim];
             let set = prim
-                .variant_sets
+                .variant_sets()
                 .get(&store.tokens.lookup("v").unwrap())
                 .unwrap();
             &set.variants[&store.tokens.lookup("x").unwrap()].fields

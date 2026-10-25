@@ -93,15 +93,12 @@ pub fn stitch_layers(
         for source in weak.prim_specs(path) {
             let existing = result
                 .prim_specs(path)
-                .find(|p| p.outer_variant_sites == source.outer_variant_sites)
+                .find(|p| p.outer_variant_sites() == source.outer_variant_sites())
                 .cloned();
             let Some(mut merged) = existing else {
                 result.insert_prim(path, source.clone());
                 continue;
             };
-            merged
-                .outer_variant_sites
-                .clone_from(&source.outer_variant_sites);
             prim(&mut merged, source, tokens, &mut report, true)?;
             result.insert_prim(path, merged);
         }
@@ -181,7 +178,7 @@ fn validate_layer(layer: &Layer) -> Result<(), StitchError> {
         for property in &spec.properties {
             validate_property(&property.spec)?;
         }
-        validate_variants(&spec.variant_sets)?;
+        validate_variants(spec.variant_sets())?;
     }
     Ok(())
 }
@@ -410,22 +407,41 @@ fn prim(
     fill(&mut strong.type_name, &weak.type_name);
     fill(&mut strong.active, &weak.active);
     fill(&mut strong.instanceable, &weak.instanceable);
-    fill(&mut strong.property_order, &weak.property_order);
-    fill(&mut strong.prim_order, &weak.prim_order);
+    // A weak spec authoring none of the rare fields leaves the strong
+    // spec's as they are, so they are merged only when it authors some.
+    let weak_rare = weak.rare();
+    if let Some(weak) = weak_rare {
+        let strong = strong.rare_mut();
+        fill(&mut strong.property_order, &weak.property_order);
+        fill(&mut strong.prim_order, &weak.prim_order);
+    }
     fields(&mut strong.fields, &weak.fields, tokens, report, false);
     strong.references = arc(&strong.references, &weak.references, report).into();
-    strong.inherits = arc(&strong.inherits, &weak.inherits, report).into();
-    strong.specializes = arc(&strong.specializes, &weak.specializes, report).into();
+    if let Some(weak) = weak_rare {
+        let strong = strong.rare_mut();
+        strong.inherits = arc(&strong.inherits, &weak.inherits, report).into();
+        strong.specializes = arc(&strong.specializes, &weak.specializes, report).into();
+    }
     strong.payloads = arc(&strong.payloads, &weak.payloads, report).into();
-    map_missing(&mut strong.variant_selections, &weak.variant_selections);
-    // AOUSD Core §7.6.2.3.5, §12.4: `variantSetNames` combines as the
-    // other list ops do.
-    strong.variant_set_names =
-        arc(&strong.variant_set_names, &weak.variant_set_names, report).into();
+    if let Some(weak) = weak_rare {
+        let strong = strong.rare_mut();
+        map_missing(&mut strong.variant_selections, &weak.variant_selections);
+        // AOUSD Core §7.6.2.3.5, §12.4: `variantSetNames` combines as the
+        // other list ops do.
+        strong.variant_set_names =
+            arc(&strong.variant_set_names, &weak.variant_set_names, report).into();
+    }
     if children {
         append_unique(&mut strong.authored_children, &weak.authored_children);
         properties(&mut strong.properties, &weak.properties, tokens, report)?;
-        variant_sets(&mut strong.variant_sets, &weak.variant_sets, tokens, report)?;
+        if let Some(weak) = weak_rare {
+            variant_sets(
+                &mut strong.rare_mut().variant_sets,
+                &weak.variant_sets,
+                tokens,
+                report,
+            )?;
+        }
     }
     Ok(())
 }
@@ -610,8 +626,9 @@ mod tests {
         let mut strong = Layer::new(LayerId(1));
         let mut weak = Layer::new(LayerId(2));
         let mut prim = PrimSpec::def();
-        prim.inherits = ListOp::prepended(vec![base]).into();
-        prim.variant_sets
+        prim.rare_mut().inherits = ListOp::prepended(vec![base]).into();
+        prim.rare_mut()
+            .variant_sets
             .get_or_insert_default(set)
             .variants
             .entry(high)
@@ -623,10 +640,11 @@ mod tests {
             });
         strong.insert_prim(host, prim);
         let mut prim = PrimSpec::over();
-        prim.inherits = ListOp::appended(vec![other]).into();
+        prim.rare_mut().inherits = ListOp::appended(vec![other]).into();
         let mut targets = PropertySpec::relationship();
         targets.targets = Some(Box::new(ListOp::added(vec![crate::TargetPath::Prim(base)])));
-        prim.variant_sets
+        prim.rare_mut()
+            .variant_sets
             .get_or_insert_default(set)
             .variants
             .entry(high)
@@ -636,7 +654,8 @@ mod tests {
                 name: y,
                 spec: Arc::new(targets.clone()),
             });
-        prim.variant_sets
+        prim.rare_mut()
+            .variant_sets
             .get_or_insert_default(set)
             .variants
             .entry(low)
@@ -645,19 +664,19 @@ mod tests {
         for (variant, value) in [(high, 10), (low, 20)] {
             let mut child_spec = PrimSpec::def()
                 .with_property(x, PropertySpec::attribute().with_default(Value::Int(value)));
-            child_spec
-                .outer_variant_sites
-                .push(crate::spec_path::VariantSelectionSite {
+            child_spec.rare_mut().outer_variant_sites.push(
+                crate::spec_path::VariantSelectionSite {
                     host_path: host,
                     set,
                     variant,
-                });
+                },
+            );
             weak.insert_prim(child, child_spec);
         }
         let report = stitch_layers(&mut strong, &weak, &store.tokens).unwrap();
         assert_eq!(report.approximated_list_ops, 0);
-        assert_eq!(strong.prims[&host].inherits.apply_to(&[]), [base, other]);
-        let branch = &strong.prims[&host].variant_sets[&set].variants[&high];
+        assert_eq!(strong.prims[&host].inherits().apply_to(&[]), [base, other]);
+        let branch = &strong.prims[&host].variant_sets()[&set].variants[&high];
         assert_eq!(branch.properties.len(), 2);
         assert_eq!(
             *branch.properties[1].spec, targets,
@@ -667,7 +686,7 @@ mod tests {
         for (variant, value) in [(high, 10), (low, 20)] {
             let p = strong
                 .prim_specs(child)
-                .find(|p| p.outer_variant_sites[0].variant == variant)
+                .find(|p| p.outer_variant_sites()[0].variant == variant)
                 .unwrap();
             assert_eq!(p.property(x).unwrap().default, Some(Value::Int(value)));
         }

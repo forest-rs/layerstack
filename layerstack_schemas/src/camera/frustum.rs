@@ -346,6 +346,66 @@ impl PreparedFrustum {
         )
     }
 
+    /// A frustum recovered from an engine's world-to-eye and eye-to-clip
+    /// matrices, inverting [`Self::projection_matrix`] in double precision.
+    /// A projection whose `[2][3]` is below `-0.5` is perspective, otherwise
+    /// orthographic, and the window and near/far follow from its scale and
+    /// offset terms, as `GfCamera::SetFromViewAndProjectionMatrix` derives
+    /// them (which then rounds them through single-precision apertures and
+    /// clipping range). The view's inverse places the frustum as in
+    /// [`Self::new`].
+    ///
+    /// # Errors
+    ///
+    /// [`CameraError::InvalidAttribute`]`("projection")` when `[2][3]` is not
+    /// within `1e-6` of `-1` (perspective) or `0` (orthographic), where
+    /// OpenUSD warns and proceeds; [`CameraError::InvalidTransform`] for a
+    /// singular view; otherwise as [`Self::new`].
+    #[doc(alias = "SetFromViewAndProjectionMatrix")]
+    pub fn from_view_and_projection(
+        view: &Matrix,
+        projection: &Matrix,
+    ) -> Result<Self, CameraError> {
+        let p = projection;
+        let perspective = p[2][3] < -0.5;
+        let expected = if perspective { -1. } else { 0. };
+        let error = (p[2][3] - expected).abs();
+        if error.is_nan() || error >= 1e-6 {
+            return Err(CameraError::InvalidAttribute("projection"));
+        }
+        let width = 2. / p[0][0];
+        let height = 2. / p[1][1];
+        let (center, clipping_range, kind) = if perspective {
+            (
+                [0.5 * width * p[2][0], 0.5 * height * p[2][1]],
+                [p[3][2] / (p[2][2] - 1.), p[3][2] / (p[2][2] + 1.)],
+                FrustumProjection::Perspective,
+            )
+        } else {
+            let near_minus_far_half = 1. / p[2][2];
+            let near_plus_far_half = near_minus_far_half * p[3][2];
+            (
+                [-0.5 * width * p[3][0], -0.5 * height * p[3][1]],
+                [
+                    near_plus_far_half + near_minus_far_half,
+                    near_plus_far_half - near_minus_far_half,
+                ],
+                FrustumProjection::Orthographic,
+            )
+        };
+        let (camera_to_world, det) = gf::inverse(view);
+        if det == 0. || !det.is_finite() {
+            return Err(CameraError::InvalidTransform);
+        }
+        let window = [
+            center[0] - 0.5 * width,
+            center[1] - 0.5 * height,
+            center[0] + 0.5 * width,
+            center[1] + 0.5 * height,
+        ];
+        Self::new(&camera_to_world, window, clipping_range, kind)
+    }
+
     /// The perspective parameters along `axis`, as
     /// `GfFrustum::GetPerspective`: the field of view spans the window's
     /// extent at depth 1, so an off-center window reports its full extent.
@@ -703,6 +763,40 @@ mod tests {
         assert!(!frustum.intersects_triangle(beside));
         let collinear = [[-50., 0., -5.], [0., 0., -5.], [50., 0., -5.]];
         assert!(frustum.intersects_triangle(collinear));
+    }
+
+    #[test]
+    fn projection_matrices_round_trip_and_reject_malformed_ones() {
+        for projection in [
+            FrustumProjection::Perspective,
+            FrustumProjection::Orthographic,
+        ] {
+            let frustum = PreparedFrustum::new(
+                &gf::IDENTITY,
+                [-0.5, -0.25, 1., 0.75],
+                [2., 50.],
+                projection,
+            )
+            .unwrap();
+            let rebuilt = PreparedFrustum::from_view_and_projection(
+                frustum.view_matrix(),
+                &frustum.projection_matrix(),
+            )
+            .unwrap();
+            assert_eq!(rebuilt.projection(), projection);
+            for (a, b) in rebuilt.window().into_iter().zip(frustum.window()) {
+                assert!((a - b).abs() < 1e-12, "{a} != {b}");
+            }
+            for (a, b) in rebuilt.clipping_range().into_iter().zip([2., 50.]) {
+                assert!((a - b).abs() < 1e-12, "{a} != {b}");
+            }
+            let mut malformed = frustum.projection_matrix();
+            malformed[2][3] = -0.25;
+            assert_eq!(
+                PreparedFrustum::from_view_and_projection(&gf::IDENTITY, &malformed).unwrap_err(),
+                super::CameraError::InvalidAttribute("projection")
+            );
+        }
     }
 
     #[test]

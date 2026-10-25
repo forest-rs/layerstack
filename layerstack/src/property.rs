@@ -97,15 +97,45 @@ impl Time {
 /// assert!(PropertyType::parse("float5").is_err());
 /// ```
 ///
+/// A registered type whose zero owns no allocation is a few bytes naming
+/// its table entry, as OpenUSD's handle into its registry is; any other
+/// type keeps its name and zero in one allocation its clones share.
+///
 /// OpenUSD: `SdfValueTypeName`, which `SdfSchema::FindType` looks up.
 ///
 /// Spec: AOUSD Core §6.2 (value types), §7.6.4.1.1 (`typeName`).
-#[derive(Clone, Debug, PartialEq)]
-pub struct PropertyType {
-    type_name: Arc<str>,
-    value_type: Option<ValueType>,
+#[derive(Clone)]
+pub struct PropertyType(TypeRepr);
+
+/// How a [`PropertyType`] is held.
+#[derive(Clone)]
+enum TypeRepr {
+    /// A registered type whose zero is a constant
+    /// ([`ValueType::constant_zero`]): its name and zero come from the
+    /// value type table.
+    Registered {
+        value_type: ValueType,
+        is_array: bool,
+        zero: &'static Value,
+    },
+    /// Any other type, with its zero beside it.
+    Kept(Arc<KeptType>),
+}
+
+/// A [`PropertyType`] that keeps its zero: a registered text or matrix
+/// type, or a name no registered type has.
+struct KeptType {
+    of: KeptOf,
     is_array: bool,
     default_scalar: Value,
+}
+
+/// What a [`KeptType`] is a type of.
+enum KeptOf {
+    /// A registered type, whose name the value type table holds.
+    Registered(ValueType),
+    /// A name no registered type has.
+    Unregistered(Arc<str>),
 }
 
 impl PropertyType {
@@ -132,46 +162,70 @@ impl PropertyType {
     #[must_use]
     pub fn unregistered(unknown: UnknownValueType) -> Self {
         let type_name = unknown.into_type_name();
-        Self {
+        Self(TypeRepr::Kept(Arc::new(KeptType {
             is_array: type_name.ends_with("[]"),
-            type_name,
-            value_type: None,
+            of: KeptOf::Unregistered(type_name),
             default_scalar: Value::Null,
-        }
+        })))
     }
 
     /// The registered type `value_type`, its array form when `is_array`
     /// (which the caller checks it has).
     pub(crate) fn registered(value_type: ValueType, is_array: bool) -> Self {
-        let name = match value_type.array_name() {
-            Some(array) if is_array => array,
-            _ => value_type.name(),
-        };
-        Self {
-            type_name: Arc::from(name),
-            value_type: Some(value_type),
-            is_array,
-            default_scalar: value_type.zero(),
-        }
+        Self(match value_type.constant_zero() {
+            Some(zero) => TypeRepr::Registered {
+                value_type,
+                is_array,
+                zero,
+            },
+            None => TypeRepr::Kept(Arc::new(KeptType {
+                of: KeptOf::Registered(value_type),
+                is_array,
+                default_scalar: value_type.zero(),
+            })),
+        })
     }
 
     /// The type name, as a layer writes it: `color3f[]` for an array.
     #[must_use]
     pub fn type_name(&self) -> &str {
-        &self.type_name
+        let (value_type, is_array) = match &self.0 {
+            TypeRepr::Registered {
+                value_type,
+                is_array,
+                ..
+            } => (*value_type, *is_array),
+            TypeRepr::Kept(kept) => match &kept.of {
+                KeptOf::Registered(value_type) => (*value_type, kept.is_array),
+                KeptOf::Unregistered(name) => return name,
+            },
+        };
+        match value_type.array_name() {
+            Some(array) if is_array => array,
+            _ => value_type.name(),
+        }
     }
 
     /// The registered value type, of one element for an array; `None` for
     /// an [unregistered](Self::unregistered) type.
     #[must_use]
     pub fn value_type(&self) -> Option<ValueType> {
-        self.value_type
+        match &self.0 {
+            TypeRepr::Registered { value_type, .. } => Some(*value_type),
+            TypeRepr::Kept(kept) => match kept.of {
+                KeptOf::Registered(value_type) => Some(value_type),
+                KeptOf::Unregistered(_) => None,
+            },
+        }
     }
 
     /// Whether the type is an array type.
     #[must_use]
     pub fn is_array(&self) -> bool {
-        self.is_array
+        match &self.0 {
+            TypeRepr::Registered { is_array, .. } => *is_array,
+            TypeRepr::Kept(kept) => kept.is_array,
+        }
     }
 
     /// The zero value of one element ([`ValueType::zero`]), which sparse
@@ -179,23 +233,47 @@ impl PropertyType {
     /// [`Value::Null`] for an unregistered type.
     #[must_use]
     pub fn default_scalar(&self) -> &Value {
-        &self.default_scalar
+        match &self.0 {
+            TypeRepr::Registered { zero, .. } => zero,
+            TypeRepr::Kept(kept) => &kept.default_scalar,
+        }
     }
 
     /// Returns the declared default value for the whole property.
     #[must_use]
     pub fn default_property_value(&self) -> Value {
-        if self.is_array {
-            Value::array_with_element(Vec::default(), Some(&self.default_scalar))
+        if self.is_array() {
+            Value::array_with_element(Vec::default(), Some(self.default_scalar()))
         } else {
-            self.default_scalar.clone()
+            self.default_scalar().clone()
         }
     }
 
     /// Returns the default scalar element for an array property.
     #[must_use]
     pub fn default_array_element(&self) -> Option<Value> {
-        self.is_array.then(|| self.default_scalar.clone())
+        self.is_array().then(|| self.default_scalar().clone())
+    }
+}
+
+impl PartialEq for PropertyType {
+    /// Types are equal when their names are: a name settles the value
+    /// type, the array form and the zero.
+    fn eq(&self, other: &Self) -> bool {
+        self.type_name() == other.type_name()
+            && self.value_type() == other.value_type()
+            && self.is_array() == other.is_array()
+    }
+}
+
+impl core::fmt::Debug for PropertyType {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("PropertyType")
+            .field("type_name", &self.type_name())
+            .field("value_type", &self.value_type())
+            .field("is_array", &self.is_array())
+            .field("default_scalar", self.default_scalar())
+            .finish()
     }
 }
 
@@ -566,6 +644,29 @@ mod tests {
             let unknown = PropertyType::parse(name).unwrap_err();
             assert_eq!(unknown.type_name(), name);
         }
+    }
+
+    #[test]
+    fn every_registered_type_reads_back_from_its_handle() {
+        // A property spec keeps one per attribute: two words, whatever
+        // the type.
+        assert_eq!(size_of::<Option<PropertyType>>(), 2 * size_of::<usize>());
+        for &ty in ValueType::ALL {
+            let names = [Some(ty.name()), ty.array_name()];
+            for (is_array, name) in [false, true].into_iter().zip(names) {
+                let Some(name) = name else { continue };
+                let parsed = PropertyType::parse(name).unwrap();
+                assert_eq!(parsed.type_name(), name);
+                assert_eq!(parsed.value_type(), Some(ty));
+                assert_eq!(parsed.is_array(), is_array);
+                assert_eq!(parsed.default_scalar(), &ty.zero(), "{name}");
+                assert_eq!(parsed, parsed.clone());
+            }
+        }
+        let text = PropertyType::parse("asset[]").unwrap();
+        assert_eq!(text.default_scalar(), &Value::Asset(Arc::from("")));
+        assert_ne!(text, PropertyType::parse("asset").unwrap());
+        assert_ne!(text, PropertyType::parse("string[]").unwrap());
     }
 
     #[test]

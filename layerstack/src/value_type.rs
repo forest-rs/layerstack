@@ -257,6 +257,47 @@ impl ValueType {
             _ => Value::Null,
         }
     }
+
+    /// [`Self::zero`] as a constant, for the types whose zero owns no
+    /// allocation; `None` for the text types (`string`, `asset`,
+    /// `pathExpression`) and the matrices, whose zeros own their contents.
+    pub(crate) fn constant_zero(self) -> Option<&'static Value> {
+        Some(match self.storage() {
+            Self::Bool => &Value::Bool(false),
+            Self::UChar => &Value::UChar(0),
+            Self::Int => &Value::Int(0),
+            Self::UInt => &Value::UInt(0),
+            Self::Int64 => &Value::Int64(0),
+            Self::UInt64 => &Value::UInt64(0),
+            Self::Half => &Value::Half(0),
+            Self::Float => &Value::Float(0.0),
+            Self::Double => &Value::Double(0.0),
+            Self::TimeCode => &Value::TimeCode(0.0),
+            Self::Token => &Value::Token(TokenId::EMPTY),
+            Self::Int2 => &Value::Vec2i([0; 2]),
+            Self::Int3 => &Value::Vec3i([0; 3]),
+            Self::Int4 => &Value::Vec4i([0; 4]),
+            Self::Half2 => &Value::Vec2h([0; 2]),
+            Self::Half3 => &Value::Vec3h([0; 3]),
+            Self::Half4 => &Value::Vec4h([0; 4]),
+            Self::Float2 => &Value::Vec2f([0.0; 2]),
+            Self::Float3 => &Value::Vec3f([0.0; 3]),
+            Self::Float4 => &Value::Vec4f([0.0; 4]),
+            Self::Double2 => &Value::Vec2d([0.0; 2]),
+            Self::Double3 => &Value::Vec3d([0.0; 3]),
+            Self::Double4 => &Value::Vec4d([0.0; 4]),
+            Self::Quath => &Value::Quath([0; 4]),
+            Self::Quatf => &Value::Quatf([0.0; 4]),
+            Self::Quatd => &Value::Quatd([0.0; 4]),
+            Self::String
+            | Self::Asset
+            | Self::PathExpression
+            | Self::Matrix2d
+            | Self::Matrix3d
+            | Self::Matrix4d => return None,
+            _ => &Value::Null,
+        })
+    }
 }
 
 /// The name of the role-less type `value` is a value of (`double`,
@@ -348,6 +389,27 @@ mod tests {
             }
             assert_eq!(ty.storage().role(), None, "{ty}");
             assert_eq!(ty.storage().storage(), ty.storage(), "{ty}");
+        }
+    }
+
+    #[test]
+    fn constant_zeros_are_the_zeros() {
+        for &ty in ValueType::ALL {
+            match ty.constant_zero() {
+                Some(zero) => assert_eq!(zero, &ty.zero(), "{ty}"),
+                None => assert!(
+                    matches!(
+                        ty.zero(),
+                        Value::String(_)
+                            | Value::Asset(_)
+                            | Value::PathExpression(_)
+                            | Value::Matrix2d(_)
+                            | Value::Matrix3d(_)
+                            | Value::Matrix4d(_)
+                    ),
+                    "{ty}"
+                ),
+            }
         }
     }
 

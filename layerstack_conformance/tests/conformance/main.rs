@@ -41,6 +41,7 @@ mod checked_skel;
 mod checked_subsets;
 mod clip_authoring;
 mod clip_consumers;
+mod clip_offsets;
 mod clip_sparse;
 mod codeless_api;
 mod collapsed_nodes;

@@ -183,11 +183,28 @@ impl RawLayer {
 struct Definition {
     owner: PathId,
     name: Arc<str>,
+    /// The strongest site authoring asset paths or a template.
     anchor: OpinionKey,
+    /// The clip set's offset to the stage: that of the strongest layer of
+    /// the anchor's node authoring `active`, or of the asset paths or
+    /// template when no stronger layer authors `active`.
     offset: LayerOffset,
+    /// The offset of the layer `times` was read in, when it is not the
+    /// layer [`Self::offset`] belongs to (OpenUSD 26.11 `timesOffset`).
+    times_offset: Option<LayerOffset>,
+    /// The composed clip metadata, `active` and `times` in stage time.
     dictionary: Vec<(Arc<str>, Value)>,
     order: usize,
     sources: Vec<(LayerId, PathId)>,
+}
+/// Where a node's clip set takes its offsets from, as OpenUSD 26.11's
+/// `_RecordAnchorInfo` (`clipSetDefinition.cpp:365`) records them: the
+/// layer of the offset and the layer `times` was read in, each with its
+/// offset to the stage.
+#[derive(Clone, Debug)]
+struct OffsetLayers {
+    offset: (OpinionKey, LayerOffset),
+    times: (OpinionKey, LayerOffset),
 }
 #[derive(Clone, Debug)]
 struct ReadySet {
@@ -526,8 +543,17 @@ impl Catalog {
                 let mut times = Vec::new();
                 let mut identifiers = Vec::new();
                 let mut unresolved = false;
+                // Derived times are in the template's layer time, re-expressed
+                // like authored `times` when a stronger layer authors those
+                // (OpenUSD 26.11 `clipSetDefinition.cpp:670`).
+                let stage_time = |time: f64| {
+                    let time = def
+                        .times_offset
+                        .map_or(time, |times| reanchor(def.offset, times, time));
+                    external(def.offset, time)
+                };
                 if let Some(time) = template.front {
-                    times.push((external(def.offset, time), time));
+                    times.push((stage_time(time), time));
                 }
                 for (time, identifier) in template.candidates {
                     let availability = store.asset_availability(def.anchor.layer_id, &identifier);
@@ -549,12 +575,12 @@ impl Catalog {
                         external(def.offset, time + template.active_offset),
                         clips.len(),
                     ));
-                    times.push((external(def.offset, time), time));
+                    times.push((stage_time(time), time));
                     clips.push(layer);
                     identifiers.push(Arc::from(identifier));
                 }
                 if let Some(time) = template.back {
-                    times.push((external(def.offset, time), time));
+                    times.push((stage_time(time), time));
                 }
                 if unresolved {
                     self.issue(&def, ClipIssueKind::UnresolvedTemplate);
@@ -1194,6 +1220,24 @@ fn pairs(value: Option<&Value>) -> Option<Vec<(f64, f64)>> {
 fn external(offset: LayerOffset, time: f64) -> f64 {
     time * offset.scale + offset.offset
 }
+/// A `times` entry read in the layer whose offset is `times`, re-expressed
+/// for a clip set whose offset is `offset`: OpenUSD 26.11 bakes
+/// `timesOffset * offset.GetInverse()` into it (`_ApplyOffsetToTimes`,
+/// `clipSetDefinition.cpp:69`), so the stage reads it at
+/// `offset * timesOffset * offset.GetInverse() * time`. The two orders agree
+/// unless one offset scales and the other shifts.
+fn reanchor(offset: LayerOffset, times: LayerOffset, time: f64) -> f64 {
+    external(times, offset.map_time(time))
+}
+/// `values`' first components mapped by `map`; `None` when `value` holds no
+/// time pairs.
+fn map_pairs(value: &Value, map: impl Fn(f64) -> f64) -> Option<Value> {
+    let values = pairs(Some(value))?;
+    Some(Value::array_from_iter(
+        values.into_iter().map(|(a, b)| Value::Vec2d([map(a), b])),
+        None,
+    ))
+}
 fn over(strong: &[(Arc<str>, Value)], weak: &[(Arc<str>, Value)]) -> Vec<(Arc<str>, Value)> {
     let mut result: BTreeMap<_, _> = weak.iter().cloned().collect();
     for (name, value) in strong {
@@ -1233,6 +1277,7 @@ fn definitions(
         // `clipSets`, which reorder the sets those `clips` add.
         layers.sort_by(|a, b| index.graph.cmp_keys(&b.source().key, &a.source().key));
         let mut node_sets: BTreeMap<Arc<str>, Definition> = BTreeMap::new();
+        let mut offsets: BTreeMap<Arc<str>, OffsetLayers> = BTreeMap::new();
         let mut names = Vec::new();
         for opinion in layers {
             if store.tokens().resolve(opinion.field()) == "clipSets" {
@@ -1261,19 +1306,6 @@ fn definitions(
                 if name.is_empty() {
                     continue;
                 }
-                let mut transformed = value.clone();
-                for (field, value) in &mut transformed {
-                    if (&**field == "active" || &**field == "times")
-                        && let Some(values) = pairs(Some(value))
-                    {
-                        *value = Value::array_from_iter(
-                            values.into_iter().map(|(a, b)| {
-                                Value::Vec2d([external(opinion.layer_offset(), a), b])
-                            }),
-                            None,
-                        );
-                    }
-                }
                 let anchor = assets(get(value, "assetPaths")).is_some()
                     || matches!(get(value, "templateAssetPath"), Some(Value::String(_)));
                 let entry = node_sets.entry(name.clone()).or_insert_with(|| Definition {
@@ -1281,18 +1313,45 @@ fn definitions(
                     name: name.clone(),
                     anchor: opinion.key(),
                     offset: opinion.layer_offset(),
+                    times_offset: None,
                     dictionary: Vec::new(),
                     order: usize::MAX,
                     sources: Vec::new(),
                 });
+                // OpenUSD 26.11 `_RecordAnchorInfo`: asset paths anchor the
+                // set and reset both offset layers; a stronger `active`
+                // moves the offset unless a weaker layer authors a template,
+                // and a stronger `times` moves the layer it is read in.
+                let here = (opinion.key(), opinion.layer_offset());
+                if anchor {
+                    offsets.insert(
+                        name.clone(),
+                        OffsetLayers {
+                            offset: here.clone(),
+                            times: here.clone(),
+                        },
+                    );
+                }
+                if let Some(layers) = offsets.get_mut(name) {
+                    if pairs(get(value, "active")).is_some()
+                        && !matches!(
+                            get(&entry.dictionary, "templateAssetPath"),
+                            Some(Value::String(_))
+                        )
+                    {
+                        layers.offset = here.clone();
+                    }
+                    if pairs(get(value, "times")).is_some() {
+                        layers.times = here;
+                    }
+                }
                 // An unanchored definition remains mergeable, but cannot create a
                 // runtime set until a typed asset-path opinion supplies an anchor.
                 if anchor {
                     entry.anchor = opinion.key();
-                    entry.offset = opinion.layer_offset();
                     entry.order = 0;
                 }
-                entry.dictionary = over(&transformed, &entry.dictionary);
+                entry.dictionary = over(value, &entry.dictionary);
                 entry
                     .sources
                     .push((opinion.layer_id(), opinion.source().key.lookup_path));
@@ -1307,12 +1366,31 @@ fn definitions(
             };
             let anchored = definition.order != usize::MAX;
             definition.order = if anchored { order } else { usize::MAX };
+            // The node's offset, and `times` re-expressed for it when read in
+            // another layer (OpenUSD 26.11 `_ResolveClipSetsInNode`,
+            // `clipSetDefinition.cpp:510`).
+            if let Some(layers) = offsets.get(&name).filter(|_| anchored) {
+                definition.offset = layers.offset.1;
+                if layers.offset.0 != layers.times.0 {
+                    let (offset, times) = (layers.offset.1, layers.times.1);
+                    definition.times_offset = Some(times);
+                    for (field, value) in &mut definition.dictionary {
+                        if &**field == "times"
+                            && let Some(mapped) =
+                                map_pairs(value, |time| reanchor(offset, times, time))
+                        {
+                            *value = mapped;
+                        }
+                    }
+                }
+            }
             if let Some(strong) = composed.get_mut(&name) {
                 strong.dictionary = over(&strong.dictionary, &definition.dictionary);
                 strong.sources.extend(definition.sources);
                 if strong.order == usize::MAX && anchored {
                     strong.anchor = definition.anchor;
                     strong.offset = definition.offset;
+                    strong.times_offset = definition.times_offset;
                     strong.order = order;
                 }
             } else {
@@ -1320,9 +1398,22 @@ fn definitions(
             }
         }
     }
+    // `active` and `times` are in the clip set's layer time; the stage reads
+    // them through its offset (OpenUSD 26.11 `toStageOffset`, `clipSetDefinition.cpp:613`).
     let mut result: Vec<_> = composed
         .into_values()
         .filter(|d| d.order != usize::MAX)
+        .map(|mut definition| {
+            let offset = definition.offset;
+            for (field, value) in &mut definition.dictionary {
+                if (&**field == "active" || &**field == "times")
+                    && let Some(mapped) = map_pairs(value, |time| external(offset, time))
+                {
+                    *value = mapped;
+                }
+            }
+            definition
+        })
         .collect();
     result.sort_by(|a, b| {
         index

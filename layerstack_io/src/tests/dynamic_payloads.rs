@@ -208,8 +208,10 @@ impl FileFormat for TestDynamic {
             source.paths,
         );
         layer.set_default_prim(Some(token("Root")));
+        // OpenUSD 26.11 appends the reference and the payloads below (26.08
+        // added them), so the generated layers write `append` list ops.
         let mut geom = PrimSpec::def();
-        geom.references.make_mut().add.push(Reference::deferred(
+        geom.references.make_mut().append.push(Reference::deferred(
             source.layer,
             path,
             ReferenceTarget::DefaultPrim,
@@ -267,7 +269,7 @@ impl FileFormat for TestDynamic {
                         .with(PAYLOAD_ID, payload_id)
                         .identifier(path)
                 };
-                spec.payloads.make_mut().add.push(Reference::deferred(
+                spec.payloads.make_mut().append.push(Reference::deferred(
                     source.layer,
                     asset,
                     ReferenceTarget::DefaultPrim,

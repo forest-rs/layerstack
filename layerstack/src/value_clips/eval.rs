@@ -364,6 +364,10 @@ impl PreparedClipProperty {
                 // clamped query is a regular one (clip.cpp
                 // `_TranslateTimeToInternalDualValued`).
                 Value::TimeCode(self.map_time_value(time, pre && !exterior, v))
+            } else if spline.data_type == crate::spline::SplineDataType::Duration {
+                // A duration scales by the segment's slope alone (clip.cpp
+                // `Usd_Clip::QuerySpline`, `_ConvertValueForTime`).
+                Value::Duration(v * self.duration_scale(time, pre && !exterior))
             } else {
                 spline_value_type(spline.data_type, v)
             }
@@ -799,6 +803,7 @@ fn spline_value_type(kind: crate::spline::SplineDataType, value: f64) -> Value {
     match kind {
         crate::spline::SplineDataType::Float => Value::Float(value as f32),
         crate::spline::SplineDataType::TimeCode => Value::TimeCode(value),
+        crate::spline::SplineDataType::Duration => Value::Duration(value),
         crate::spline::SplineDataType::Half => Value::Half(crate::half::from_f64(value)),
         crate::spline::SplineDataType::Double | crate::spline::SplineDataType::Unspecified => {
             Value::Double(value)

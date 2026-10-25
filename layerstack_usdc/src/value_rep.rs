@@ -2824,12 +2824,13 @@ fn decode_spline(
     Ok(CrateValue::Spline(spline, custom_data))
 }
 
-/// Parses Ts binary spline data in formats 1 to 3 from `data[pos..]`.
+/// Parses Ts binary spline data in formats 1 to 4 from `data[pos..]`.
 ///
-/// Follows `Ts_BinaryDataAccess::_ParseV1_3` (`pxr/base/ts/binary.cpp`,
-/// OpenUSD v26.08). Format 2 (crate 0.13) adds authored tangent algorithms;
-/// format 3 (crate 0.15) adds `TimeCode` values and loop boundary times. All are
-/// retained. The data must be consumed exactly.
+/// Follows `Ts_BinaryDataAccess::_ParseV1_4` (`pxr/base/ts/binary.cpp`,
+/// OpenUSD v26.11). Format 2 (crate 0.13) adds authored tangent algorithms;
+/// format 3 (crate 0.15) adds `TimeCode` values and loop boundary times;
+/// format 4 (crate 0.16) adds `Duration` values (value type 5) and is
+/// otherwise format 3. All are retained. The data must be consumed exactly.
 ///
 /// The declared knots are charged to `budget` before any is read, so a
 /// spline that fails to parse later has still paid for what it allocated.
@@ -2853,6 +2854,7 @@ fn parse_ts_spline(
         1 => CrateVersion::SPLINES,
         2 => CrateVersion::SPLINE_TANGENT_ALGORITHMS,
         3 => CrateVersion::SPLINE_LOOP_BOUNDARY_AND_TIMECODE,
+        4 => CrateVersion::DURATIONS,
         0 => {
             return Err(UsdcError::Inconsistent {
                 message: "spline data has format 0",
@@ -2860,7 +2862,7 @@ fn parse_ts_spline(
         }
         _ => {
             return Err(UsdcError::UnsupportedFeature {
-                feature: "spline binary format newer than 3",
+                feature: "spline binary format newer than 4",
             });
         }
     };
@@ -2884,6 +2886,7 @@ fn parse_ts_spline(
         2 => SplineDataType::Float,
         3 => SplineDataType::Half,
         4 => SplineDataType::TimeCode,
+        5 => SplineDataType::Duration,
         _ => {
             return Err(UsdcError::Inconsistent {
                 message: "unknown spline value type",
@@ -3091,9 +3094,10 @@ fn read_u32_le(data: &[u8], pos: &mut usize) -> Result<u32, UsdcError> {
 /// Read a value in the spline's data type, converting to `f64`.
 fn read_typed_value(data: &[u8], pos: &mut usize, dt: SplineDataType) -> Result<f64, UsdcError> {
     match dt {
-        SplineDataType::Double | SplineDataType::TimeCode | SplineDataType::Unspecified => {
-            read_f64_le(data, pos)
-        }
+        SplineDataType::Double
+        | SplineDataType::TimeCode
+        | SplineDataType::Duration
+        | SplineDataType::Unspecified => read_f64_le(data, pos),
         SplineDataType::Float => Ok(f64::from(read_f32_le(data, pos)?)),
         SplineDataType::Half => Ok(half_to_f64(u16::from_le_bytes(read_bytes(data, pos)?))),
     }
@@ -3852,11 +3856,27 @@ mod tests {
             parse(&legacy_time_valued, newest).unwrap().data_type,
             SplineDataType::TimeCode
         );
-        let mut future = ts_blob(3, 0, 0);
-        future[0] = (future[0] & 0xF0) | 4;
+        let mut durations = ts_blob(3, 0, 0);
+        durations[0] = 4 | (5 << 4);
         assert_eq!(
-            parse(&future, newest).err(),
-            unsupported("spline binary format newer than 3")
+            parse(&durations, CrateVersion::DURATIONS)
+                .unwrap()
+                .data_type,
+            SplineDataType::Duration
+        );
+        assert_eq!(
+            parse(&durations, newest).err(),
+            Some(UsdcError::FeatureRequiresVersion {
+                feature: "spline binary format",
+                required: CrateVersion::DURATIONS,
+                found: newest,
+            })
+        );
+        let mut future = ts_blob(3, 0, 0);
+        future[0] = (future[0] & 0xF0) | 5;
+        assert_eq!(
+            parse(&future, CrateVersion::DURATIONS).err(),
+            unsupported("spline binary format newer than 4")
         );
     }
 

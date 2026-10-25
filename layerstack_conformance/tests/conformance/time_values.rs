@@ -23,7 +23,8 @@ use std::process::Command;
 use std::sync::Arc;
 
 use layerstack::{
-    FlattenRequirements, InMemoryStore, LayerId, ResolvedValue, Stage, StageOptions, Time, Value,
+    FlattenError, FlattenRequirements, InMemoryStore, LayerId, ResolvedValue, Stage, StageOptions,
+    Time, Value,
 };
 use layerstack_io::{IoError, IoErrorKind, StageDocument, Storage};
 use serde_json::{Map, Value as Json, json};
@@ -83,6 +84,19 @@ def "P"
     duration[] de = edit [append 9]
     custom timecode t = 3
     custom timecode[] ts = [1, -2]
+    custom duration spl
+    duration spl.spline = {
+        pre: linear,
+        post: sloped(0.5),
+        0: 2; post curve (1, 0.5),
+        10: 6 & 7; pre (2, 1),
+    }
+    custom timecode tspl
+    timecode tspl.spline = {
+        post: sloped(0.5),
+        0: 2,
+        10: 6 & 7,
+    }
 }
 "#,
     ),
@@ -112,6 +126,7 @@ def "C" (
     custom duration c
     custom duration[] ca
     custom timecode tc
+    custom duration cs
 }
 
 def "N" (
@@ -127,6 +142,7 @@ def "N" (
     custom duration c
     custom duration[] ca
     custom timecode tc
+    custom duration cs
 }
 "#,
     ),
@@ -150,6 +166,12 @@ def "P"
         0: 1,
         20: 7,
     }
+    custom duration cs
+    duration cs.spline = {
+        post: linear,
+        0: 2,
+        20: 4,
+    }
 }
 "#,
     ),
@@ -157,8 +179,8 @@ def "P"
 
 /// The attributes read, by path.
 const ATTRIBUTES: &[&str] = &[
-    "/R.d", "/R.s", "/R.ds", "/R.de", "/R.t", "/R.ts", "/C.c", "/C.ca", "/C.tc", "/N.c", "/N.ca",
-    "/N.tc",
+    "/R.d", "/R.s", "/R.ds", "/R.de", "/R.t", "/R.ts", "/R.spl", "/R.tspl", "/C.c", "/C.ca",
+    "/C.tc", "/C.cs", "/N.c", "/N.ca", "/N.tc", "/N.cs",
 ];
 
 /// The numeric times each attribute is read at, besides the default time.
@@ -377,10 +399,20 @@ fn flattened_time_values_read_as_composed() {
     let (store, stage) = document.parts_mut();
     let root = stage.stage().root_layer().unwrap();
     let flat_id = LayerId(1000);
-    let flat = stage
-        .stage()
-        .flatten(store, root, flat_id, &FlattenRequirements::default())
-        .unwrap();
+    // A clip's spline cannot be baked; it is reported and left out.
+    let requirements = FlattenRequirements::default();
+    let flat = match stage.stage().flatten(store, root, flat_id, &requirements) {
+        Err(FlattenError::Refused(refusal)) => stage
+            .stage()
+            .flatten(
+                store,
+                root,
+                flat_id,
+                &requirements.accepting(&refusal.unmet),
+            )
+            .unwrap(),
+        flat => flat.unwrap(),
+    };
     store.insert_layer(flat.layer);
     let flattened = Stage::compose(store, flat_id, StageOptions::default());
     let referenced: Vec<&str> = ATTRIBUTES

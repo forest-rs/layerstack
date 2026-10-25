@@ -4202,10 +4202,14 @@ pub(crate) fn value_at_time(
         interpolate_samples(samples, mapped_time, interp)
     } else if let Some(spline) = opinion.value().spline() {
         // A spline that evaluates to nothing (block extrapolation or a
-        // blocked segment) yields no value.
-        spline
-            .evaluate(mapped_time)
-            .map(|value| spline_to_value(spline, value))
+        // blocked segment) yields no value. A time-valued result maps to the
+        // stage as a sampled one does: OpenUSD 26.11 passes it through
+        // `xfValueToStage` (`stage.cpp:7928`), so a time code scales and
+        // shifts and a duration only scales.
+        spline.evaluate(mapped_time).map(|value| {
+            let value = spline_to_value(spline, value);
+            stage_time::retime_value(&value, opinion.layer_offset()).unwrap_or(value)
+        })
     } else {
         Some(opinion.value().default_value()?.clone())
     };
@@ -4226,6 +4230,7 @@ fn spline_to_value(spline: &SplineData, val: f64) -> Value {
         SplineDataType::Float => Value::Float(val as f32),
         SplineDataType::Half => Value::Half(crate::half::from_f64(val)),
         SplineDataType::TimeCode => Value::TimeCode(val),
+        SplineDataType::Duration => Value::Duration(val),
     }
 }
 

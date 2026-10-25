@@ -79,6 +79,20 @@ pub enum SplineDataType {
     Float = 2,
     /// 16-bit half.
     Half = 3,
+    /// Duration values (OpenUSD 26.11 `GfDuration`): lengths of time, so
+    /// a layer offset scales them without shifting them and their slopes
+    /// remain unchanged.
+    Duration = 5,
+}
+
+impl SplineDataType {
+    /// Whether the spline's values are times or lengths of time
+    /// ([`Self::TimeCode`] or [`Self::Duration`]), whose slopes, in time
+    /// per time, a layer offset leaves unchanged.
+    #[must_use]
+    pub fn is_time_valued(self) -> bool {
+        matches!(self, Self::TimeCode | Self::Duration)
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -87,6 +101,13 @@ pub enum SplineDataType {
 
 /// Authored inner-loop parameters (§12.5). These are independent of
 /// extrapolation loops. Evaluation uses virtual echoes; baking is explicitly bounded.
+///
+/// OpenUSD 26.11 deprecates inner looping (`TsLoopParams` is
+/// `[[deprecated]]`, `pxr/base/ts/types.h:179`) and warns, once per
+/// process, when its API sets, reads or bakes them (`pxr/base/ts/spline.cpp`).
+/// Layerstack still reads, evaluates and writes them as authored; to stop
+/// depending on them, [`SplineData::bake_inner_loops`] replaces them with
+/// the knots they echo.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[doc(alias = "TsLoopParams")]
 pub struct LoopParams {
@@ -215,13 +236,14 @@ impl SplineData {
     /// the retimed spline at that time. Knot times and inner-loop
     /// prototype times are mapped; tangent widths scale; slopes, of the
     /// knots and of sloped extrapolation, divide by the scale. Values are
-    /// unchanged, except `TimeCode` values also scale and shift; their slopes do
-    /// not change. Metadata and tangent algorithms remain authored. `None` for a scale that is not positive, which would
-    /// reverse the spline.
+    /// unchanged, except that `TimeCode` values also scale and shift and
+    /// `Duration` values scale; the slopes of both do not change. Metadata
+    /// and tangent algorithms remain authored. `None` for a scale that is not
+    /// positive, which would reverse the spline.
     ///
-    /// OpenUSD: `Ts_TypedSplineData::ApplyOffsetAndScale`
-    /// (`pxr/base/ts/splineData.h`), which OpenUSD's flatten applies to a
-    /// spline read through a layer offset.
+    /// OpenUSD 26.11: `Ts_TypedSplineData::ApplyOffsetAndScale`
+    /// (`pxr/base/ts/splineData.h:715`), which OpenUSD's flatten applies to
+    /// a spline read through a layer offset.
     ///
     /// Spec: AOUSD Core §12.3.2.1 (layer offset and scale), §12.3.3
     /// (splines).
@@ -232,17 +254,23 @@ impl SplineData {
             return None;
         }
         let time = |t: f64| t * scale + shift;
+        let time_valued = self.data_type.is_time_valued();
+        // A knot value: a time code maps as a time, a duration scales as a
+        // length of time, and anything else is unchanged.
+        let value = |v: f64| match self.data_type {
+            SplineDataType::TimeCode => time(v),
+            SplineDataType::Duration => v * scale,
+            _ => v,
+        };
         let slope = |e: Extrapolation| match e {
-            Extrapolation::Sloped(s) if self.data_type != SplineDataType::TimeCode => {
-                Extrapolation::Sloped(s / scale)
-            }
+            Extrapolation::Sloped(s) if !time_valued => Extrapolation::Sloped(s / scale),
             other => other,
         };
         let loop_params = self.loop_params.map(|mut lp| {
             if lp.proto_end > lp.proto_start {
                 lp.proto_start = time(lp.proto_start);
                 lp.proto_end = time(lp.proto_end);
-                if self.data_type == SplineDataType::TimeCode {
+                if time_valued {
                     lp.value_offset *= scale;
                 }
             }
@@ -255,24 +283,14 @@ impl SplineData {
                 time: time(knot.time),
                 pre_tan_width: knot.pre_tan_width * scale,
                 post_tan_width: knot.post_tan_width * scale,
-                value: if self.data_type == SplineDataType::TimeCode {
-                    time(knot.value)
-                } else {
-                    knot.value
-                },
-                pre_value: knot.pre_value.map(|v| {
-                    if self.data_type == SplineDataType::TimeCode {
-                        time(v)
-                    } else {
-                        v
-                    }
-                }),
-                pre_tan_slope: if self.data_type == SplineDataType::TimeCode {
+                value: value(knot.value),
+                pre_value: knot.pre_value.map(value),
+                pre_tan_slope: if time_valued {
                     knot.pre_tan_slope
                 } else {
                     knot.pre_tan_slope / scale
                 },
-                post_tan_slope: if self.data_type == SplineDataType::TimeCode {
+                post_tan_slope: if time_valued {
                     knot.post_tan_slope
                 } else {
                     knot.post_tan_slope / scale
@@ -673,6 +691,7 @@ impl fmt::Display for SplineDataType {
             Self::Float => f.write_str("Float"),
             Self::Half => f.write_str("Half"),
             Self::TimeCode => f.write_str("TimeCode"),
+            Self::Duration => f.write_str("Duration"),
         }
     }
 }

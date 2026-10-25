@@ -1515,18 +1515,11 @@ pub(super) fn required_version(specs: &[Spec]) -> CrateVersion {
             version = version.max(CrateVersion::ARRAY_EDITS);
         }
         if let Value::Spline(s, _) = &field.value {
-            let required = if s.pre_loop_boundary.is_some()
-                || s.post_loop_boundary.is_some()
-                || s.data_type == layerstack::spline::SplineDataType::TimeCode
-            {
-                CrateVersion::SPLINE_LOOP_BOUNDARY_AND_TIMECODE
-            } else if s.knots.iter().any(|k| {
-                k.pre_tan_algorithm != layerstack::spline::TangentAlgorithm::None
-                    || k.post_tan_algorithm != layerstack::spline::TangentAlgorithm::None
-            }) {
-                CrateVersion::SPLINE_TANGENT_ALGORITHMS
-            } else {
-                CrateVersion::SPLINES
+            let required = match ts_format(s) {
+                4 => CrateVersion::DURATIONS,
+                3 => CrateVersion::SPLINE_LOOP_BOUNDARY_AND_TIMECODE,
+                2 => CrateVersion::SPLINE_TANGENT_ALGORITHMS,
+                _ => CrateVersion::SPLINES,
             };
             version = version.max(required);
         }
@@ -1627,9 +1620,31 @@ fn no_loops() -> layerstack::spline::LoopParams {
     }
 }
 
-/// Encodes the smallest Ts binary format that retains the authored features:
-/// format 1 for basic splines, 2 for tangent algorithms, 3 for loop boundary
-/// times and `TimeCode` values. OpenUSD `ts/binary.cpp::GetBinaryData`.
+/// The smallest Ts binary format that retains the authored features: 4 for
+/// `Duration` values, 3 for `TimeCode` values and loop boundary times, 2
+/// for tangent algorithms and 1 otherwise. OpenUSD 26.11
+/// `Ts_BinaryDataAccess::GetBinaryFormatVersion` (`ts/binary.cpp:138`).
+fn ts_format(spline: &layerstack::spline::SplineData) -> u8 {
+    use layerstack::spline::{SplineDataType, TangentAlgorithm};
+    if spline.data_type == SplineDataType::Duration {
+        4
+    } else if spline.pre_loop_boundary.is_some()
+        || spline.post_loop_boundary.is_some()
+        || spline.data_type == SplineDataType::TimeCode
+    {
+        3
+    } else if spline.knots.iter().any(|k| {
+        k.pre_tan_algorithm != TangentAlgorithm::None
+            || k.post_tan_algorithm != TangentAlgorithm::None
+    }) {
+        2
+    } else {
+        1
+    }
+}
+
+/// Encodes a spline in its [`ts_format`]. OpenUSD
+/// `ts/binary.cpp::GetBinaryData`.
 fn ts_spline_data(spline: &layerstack::spline::SplineData) -> Vec<u8> {
     use layerstack::spline::{CurveType, Extrapolation, KnotInterp, SplineDataType};
     let mode = |e: Extrapolation| -> u8 {
@@ -1649,30 +1664,19 @@ fn ts_spline_data(spline: &layerstack::spline::SplineData) -> Vec<u8> {
         SplineDataType::Float => 2,
         SplineDataType::Half => 3,
         SplineDataType::TimeCode => 4,
+        SplineDataType::Duration => 5,
     };
     let hermite = spline.default_curve_type == CurveType::Hermite;
     let loops = spline.loop_params.filter(|lp| *lp != no_loops());
     let mut out = Vec::new();
-    let format = if spline.pre_loop_boundary.is_some()
-        || spline.post_loop_boundary.is_some()
-        || spline.data_type == SplineDataType::TimeCode
-    {
-        3
-    } else if spline.knots.iter().any(|k| {
-        k.pre_tan_algorithm != layerstack::spline::TangentAlgorithm::None
-            || k.post_tan_algorithm != layerstack::spline::TangentAlgorithm::None
-    }) {
-        2
-    } else {
-        1
-    };
+    let format = ts_format(spline);
     out.push(format | (descriptor << 4) | (u8::from(hermite) << 7));
     out.push(
         mode(spline.pre_extrapolation)
             | (mode(spline.post_extrapolation) << 3)
             | (u8::from(loops.is_some()) << 6),
     );
-    if format == 3 {
+    if format > 2 {
         out.push(
             u8::from(spline.pre_loop_boundary.is_some())
                 | (u8::from(spline.post_loop_boundary.is_some()) << 1),
@@ -1700,7 +1704,10 @@ fn ts_spline_data(spline: &layerstack::spline::SplineData) -> Vec<u8> {
         return out;
     }
     let value = |out: &mut Vec<u8>, v: f64| match spline.data_type {
-        SplineDataType::Double | SplineDataType::TimeCode | SplineDataType::Unspecified => {
+        SplineDataType::Double
+        | SplineDataType::TimeCode
+        | SplineDataType::Duration
+        | SplineDataType::Unspecified => {
             out.extend_from_slice(&v.to_le_bytes());
         }
         #[allow(clippy::cast_possible_truncation, reason = "a float spline's values")]

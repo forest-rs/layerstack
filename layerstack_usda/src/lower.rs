@@ -692,6 +692,8 @@ impl<'a> LowerCtx<'a> {
             ("float", false) => SplineDataType::Float,
             ("half", false) => SplineDataType::Half,
             ("timecode", false) => SplineDataType::TimeCode,
+            // OpenUSD 26.11 `Ts_GetTypeFromTypeName` (`ts/typeHelpers.cpp`).
+            ("duration", false) => SplineDataType::Duration,
             _ => {
                 self.error(
                     span,

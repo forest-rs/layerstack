@@ -822,7 +822,7 @@ impl Attribute {
             }
             let scalar = matches!(
                 self.type_name.as_str(),
-                "double" | "float" | "half" | "timecode"
+                "double" | "float" | "half" | "timecode" | "duration"
             );
             let increasing = spline
                 .knots

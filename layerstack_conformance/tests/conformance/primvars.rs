@@ -16,6 +16,43 @@ use crate::support::schema_scene as support;
 fn scene() -> (InMemoryStore, LiveStage) {
     support::scene(include_str!("../../fixtures/primvar_behavior.usda"))
 }
+/// Indexed primvars of every value type flatten, as OpenUSD 26.11's
+/// `UsdGeomPrimvar::ComputeFlattened` does for all `SDF_VALUE_TYPES`
+/// (`usdGeom/primvar.cpp`, PR 3806): assets, tokens, bools, bytes, 64-bit
+/// integers and time codes among them.
+#[test]
+fn every_value_type_flattens_as_cpp_does() {
+    let expected: serde_json::Value =
+        serde_json::from_str(include_str!("../../fixtures/primvar_behavior.json")).unwrap();
+    let (store, live) = scene();
+    let path = store.path("/Root/Group/Mesh");
+    let scene = Scene::new(live.stage(), &store);
+    let typed = expected["typed"].as_object().unwrap();
+    assert_eq!(typed.len(), 7);
+    for (name, want) in typed {
+        let value = Primvar::new(&scene, path, name)
+            .unwrap()
+            .compute_flattened(Time::Default)
+            .unwrap()
+            .unwrap();
+        let elements: Vec<serde_json::Value> = value
+            .array_ref()
+            .unwrap()
+            .iter()
+            .map(|element| match &*element {
+                Value::Asset(path) => serde_json::json!(&**path),
+                Value::Token(token) => serde_json::json!(store.tokens.resolve(*token)),
+                Value::Bool(v) => serde_json::json!(v),
+                Value::UChar(v) => serde_json::json!(v),
+                Value::Int64(v) => serde_json::json!(v),
+                Value::UInt64(v) => serde_json::json!(v),
+                Value::TimeCode(v) => serde_json::json!(v),
+                other => panic!("{name}: {other:?}"),
+            })
+            .collect();
+        assert_eq!(&serde_json::Value::from(elements), want, "{name}");
+    }
+}
 #[test]
 fn inheritance_flattening_and_animation_match_cpp() {
     let expected: serde_json::Value =

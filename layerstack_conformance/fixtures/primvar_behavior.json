@@ -44,13 +44,54 @@
     "indexed": true,
     "default": []
   },
+  "typed": {
+    "tex": [
+      "b.png",
+      "a.png",
+      "b.png"
+    ],
+    "tag": [
+      "b",
+      "b",
+      "a"
+    ],
+    "flag": [
+      true,
+      false,
+      false
+    ],
+    "byte": [
+      255,
+      7
+    ],
+    "wide": [
+      -3,
+      9000000000
+    ],
+    "huge": [
+      18000000000000000000,
+      18000000000000000000,
+      1
+    ],
+    "when": [
+      2.0,
+      2.0
+    ]
+  },
   "inheritedNames": [
     "animated",
     "blockedIndices",
+    "byte",
     "empty",
+    "flag",
+    "huge",
     "invalid",
     "packed",
     "scalar",
-    "tint"
+    "tag",
+    "tex",
+    "tint",
+    "when",
+    "wide"
   ]
 }

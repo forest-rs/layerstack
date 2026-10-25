@@ -229,6 +229,11 @@ pub(super) fn intersects_planes(planes: &[[f64; 4]; 6], bound: &BoundingBox) -> 
     })
 }
 
+/// All six plane bits: the point is inside every plane.
+const INSIDE: u32 = 0x3f;
+const NEAR_BIT: u32 = 1 << 4;
+const FAR_BIT: u32 = 1 << 5;
+
 /// An immutable viewing frustum with its planes prepared for repeated
 /// world-space culling and picking queries, as `GfFrustum` with its planes
 /// cached.
@@ -445,6 +450,90 @@ impl PreparedFrustum {
         !bound.range.is_empty() && intersects_planes(&self.planes, bound)
     }
 
+    /// One bit per plane, set when the point is inside it.
+    fn plane_mask(&self, point: [f64; 3]) -> u32 {
+        self.planes.iter().enumerate().fold(0, |mask, (i, plane)| {
+            mask | (u32::from(signed_distance(plane, point) >= 0.) << i)
+        })
+    }
+
+    /// `GfFrustum::_SegmentIntersects`: clips the segment against each
+    /// plane its ends straddle.
+    fn segment_masks_intersect(&self, p0: [f64; 3], mask0: u32, p1: [f64; 3], mask1: u32) -> bool {
+        if mask0 | mask1 != INSIDE {
+            return false;
+        }
+        if mask0 == INSIDE || mask1 == INSIDE {
+            return true;
+        }
+        let v = [p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]];
+        let mut t0 = 0.;
+        let mut t1 = 1.;
+        for (i, plane) in self.planes.iter().enumerate() {
+            let bit = 1 << i;
+            let inside0 = mask0 & bit != 0;
+            if inside0 == (mask1 & bit != 0) {
+                continue;
+            }
+            let t =
+                -signed_distance(plane, p0) / (plane[0] * v[0] + plane[1] * v[1] + plane[2] * v[2]);
+            if inside0 {
+                if t < t1 {
+                    t1 = t;
+                }
+            } else if t > t0 {
+                t0 = t;
+            }
+            if t0 > t1 {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// Whether the segment `p0`–`p1` meets the frustum, boundary included,
+    /// as `GfFrustum::Intersects(GfVec3d, GfVec3d)`: exact, not conservative.
+    #[must_use]
+    #[doc(alias = "Intersects")]
+    pub fn intersects_segment(&self, p0: [f64; 3], p1: [f64; 3]) -> bool {
+        self.segment_masks_intersect(p0, self.plane_mask(p0), p1, self.plane_mask(p1))
+    }
+
+    /// Whether the triangle `p0, p1, p2` meets the frustum, as
+    /// `GfFrustum::Intersects(GfVec3d, GfVec3d, GfVec3d)`: a vertex inside,
+    /// an edge crossing, or the triangle spanning the frustum, detected by
+    /// the corner pick rays (one when every vertex is between near and far,
+    /// all four otherwise) hitting it. A degenerate triangle is tested by its
+    /// edges only.
+    #[must_use]
+    #[doc(alias = "Intersects")]
+    pub fn intersects_triangle(&self, [p0, p1, p2]: [[f64; 3]; 3]) -> bool {
+        let masks = [p0, p1, p2].map(|p| self.plane_mask(p));
+        if masks[0] | masks[1] | masks[2] != INSIDE {
+            return false;
+        }
+        if masks.contains(&INSIDE) {
+            return true;
+        }
+        if self.segment_masks_intersect(p0, masks[0], p1, masks[1])
+            || self.segment_masks_intersect(p1, masks[1], p2, masks[2])
+            || self.segment_masks_intersect(p2, masks[2], p0, masks[0])
+        {
+            return true;
+        }
+        let between = masks.iter().all(|m| m & NEAR_BIT != 0 && m & FAR_BIT != 0);
+        let corners: &[[f64; 2]] = if between {
+            &[[-1., -1.]]
+        } else {
+            &[[-1., -1.], [-1., 1.], [1., 1.], [1., -1.]]
+        };
+        corners.iter().any(|&corner| {
+            self.pick_ray(corner)
+                .intersect_triangle([p0, p1, p2])
+                .is_some()
+        })
+    }
+
     /// `GfFrustum::_WindowNormalizedToPoint`.
     fn window_point(&self, window_point: [f64; 2]) -> [f64; 2] {
         let [l, b, r, t] = self.window;
@@ -600,6 +689,20 @@ mod tests {
         assert_eq!(around.window(), [0.4, -0.1, 0.6, 0.1]);
         assert!(frustum.narrowed_around([0., 0., 1.], [0.1, 0.1]).is_none());
         assert!(frustum.narrowed_around([0.; 3], [0.1, 0.1]).is_none());
+    }
+
+    #[test]
+    fn segments_and_triangles_meet_the_frustum_through_edges_and_spans() {
+        let frustum = frustum(FrustumProjection::Perspective);
+        assert!(frustum.intersects_segment([-50., 0., -5.], [50., 0., -5.]));
+        assert!(!frustum.intersects_segment([-50., 0., 5.], [50., 0., 5.]));
+        assert!(frustum.intersects_segment([0., 0., -5.], [0., 0., -5.]));
+        let spanning = [[-100., -100., -5.], [100., -100., -5.], [0., 100., -5.]];
+        assert!(frustum.intersects_triangle(spanning));
+        let beside = [[20., 0., -5.], [30., 0., -5.], [25., 5., -5.]];
+        assert!(!frustum.intersects_triangle(beside));
+        let collinear = [[-50., 0., -5.], [0., 0., -5.], [50., 0., -5.]];
+        assert!(frustum.intersects_triangle(collinear));
     }
 
     #[test]

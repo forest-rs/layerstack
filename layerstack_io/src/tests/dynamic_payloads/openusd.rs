@@ -8,7 +8,7 @@
 //! OpenUSD runs it with `TEST_PCP_DYNAMIC_FILE_FORMAT_TOKENS_USE_ATTRIBUTE_INPUTS`
 //! unset and set.
 //!
-//! The fixtures are read from the OpenUSD 26.08 checkout
+//! The fixtures are read from the OpenUSD 26.11 checkout
 //! `LAYERSTACK_OPENUSD_SOURCE` names; without one, each test prints that it
 //! is skipped.
 //!
@@ -26,7 +26,7 @@ use std::path::PathBuf;
 /// `LAYERSTACK_OPENUSD_SOURCE` names an OpenUSD checkout.
 fn fixtures() -> Option<String> {
     let Some(source) = std::env::var_os("LAYERSTACK_OPENUSD_SOURCE").map(PathBuf::from) else {
-        std::eprintln!("skipped: set LAYERSTACK_OPENUSD_SOURCE to an OpenUSD 26.08 checkout");
+        std::eprintln!("skipped: set LAYERSTACK_OPENUSD_SOURCE to an OpenUSD 26.11 checkout");
         return None;
     };
     let dir = source.join("pxr/usd/pcp/testenv/testPcpDynamicFileFormatPlugin.testenv");

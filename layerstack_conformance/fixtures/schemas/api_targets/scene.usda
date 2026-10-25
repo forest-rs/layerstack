@@ -1,0 +1,52 @@
+#usda 1.0
+
+def "Plain"
+{
+}
+
+def "Sensed" (
+    prepend apiSchemas = ["SensorAPI"]
+)
+{
+}
+
+def Tile "Tile"
+{
+}
+
+# `SensorAPI` is built in, `StampAPI` auto-applied.
+def Panel "Panel"
+{
+}
+
+def "Inlet" (
+    prepend apiSchemas = ["PortAPI:inlet"]
+)
+{
+}
+
+def "Outlet" (
+    prepend apiSchemas = ["PortAPI:outlet"]
+)
+{
+}
+
+def "Both" (
+    prepend apiSchemas = ["PortAPI:outlet", "SensorAPI"]
+)
+{
+}
+
+# An abstract type: typeless, though `Tile` derives from it.
+def Shape "Abstract" (
+    prepend apiSchemas = ["PortAPI:spare"]
+)
+{
+}
+
+# The applied schemas come through a reference.
+def "Composed" (
+    references = </Inlet>
+)
+{
+}

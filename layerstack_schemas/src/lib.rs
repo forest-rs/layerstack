@@ -658,12 +658,22 @@ mod tests {
         );
         assert!(
             volumes
-                .can_apply(Some(field), radius_api, None, &tokens)
+                .can_apply(
+                    &volumes.prim_definition(Some(field), &[], &tokens),
+                    radius_api,
+                    None,
+                    &tokens,
+                )
                 .is_ok()
         );
         assert!(
             volumes
-                .can_apply(Some(mesh), radius_api, None, &tokens)
+                .can_apply(
+                    &volumes.prim_definition(Some(mesh), &[], &tokens),
+                    radius_api,
+                    None,
+                    &tokens,
+                )
                 .is_err()
         );
     }

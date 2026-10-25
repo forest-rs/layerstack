@@ -303,9 +303,11 @@ pub struct SchemaDefinition {
     ///
     /// Spec: AOUSD Core §13.3.2.2 (override properties).
     pub overrides: Vec<PropertyDefinition>,
-    /// For an applied schema: the typed schemas a prim's type must be, or
-    /// derive from, for the schema to be applied to it; empty when it may be
-    /// applied to any prim.
+    /// For an applied schema: the typed schemas a prim's type may be, or
+    /// derive from, and the applied schemas the prim may have, for the
+    /// schema to be applied to it; empty when it may be applied to any
+    /// prim. A multiple-apply schema named with an instance
+    /// (`SlotAPI:main`) requires that instance; named alone, any instance.
     ///
     /// This restricts authoring ([`SchemaRegistry::can_apply`]), never
     /// composition: a prim whose `apiSchemas` apply the schema anyway has
@@ -402,11 +404,13 @@ impl SchemaDefinition {
         self
     }
 
-    /// Adds a typed schema this applied schema may be applied to
+    /// Adds a typed schema this applied schema may be applied to, or an
+    /// applied schema (with an instance, as `Name:instance`, for a
+    /// multiple-apply one) a prim it is applied to may have
     /// ([`SchemaDefinition::can_only_apply_to`]) (builder).
     #[must_use]
-    pub fn with_can_only_apply_to(mut self, type_name: TokenId) -> Self {
-        self.can_only_apply_to.push(type_name);
+    pub fn with_can_only_apply_to(mut self, name: TokenId) -> Self {
+        self.can_only_apply_to.push(name);
         self
     }
 
@@ -436,10 +440,13 @@ pub enum CannotApply {
     /// The instance name is not one the schema allows
     /// ([`SchemaRegistry::is_allowed_instance_name`]).
     InstanceNameNotAllowed,
-    /// The prim is typeless, or its type is none of these typed schemas and
-    /// derives from none of them ([`SchemaRegistry::can_only_apply_to`]).
-    PrimType {
-        /// The typed schemas the schema can only be applied to.
+    /// The prim's type is none of the typed schemas named here and derives
+    /// from none of them (a typeless prim's never does), and the prim has
+    /// none of the applied schemas named here
+    /// ([`SchemaRegistry::can_only_apply_to`]).
+    NotATarget {
+        /// The typed and applied schemas the schema requires, any one of
+        /// them.
         allowed: Vec<TokenId>,
     },
 }
@@ -452,7 +459,9 @@ impl core::fmt::Display for CannotApply {
             Self::MissingInstanceName => "a multiple-apply schema needs an instance name",
             Self::UnexpectedInstanceName => "a single-apply schema takes no instance name",
             Self::InstanceNameNotAllowed => "the schema does not allow this instance name",
-            Self::PrimType { .. } => "the prim's type is not one the schema can apply to",
+            Self::NotATarget { .. } => {
+                "the prim has neither a type nor an applied schema the schema can apply to"
+            }
         })
     }
 }
@@ -795,12 +804,14 @@ impl SchemaRegistry {
         &self.issues
     }
 
-    /// The typed schemas a prim's type must be, or derive from, for the
-    /// applied schema `schema` to be applied to it with `instance`: the
-    /// instance's own list when the schema gives a non-empty one, otherwise
-    /// the schema's. An empty instance list leaves the schema's in force, as
-    /// OpenUSD reads `apiSchemaInstances`. Empty when it may be applied to any prim, or `schema` is not
-    /// registered.
+    /// The typed schemas a prim's type may be, or derive from, and the
+    /// applied schemas the prim may have, for the applied schema `schema`
+    /// to be applied to it with `instance`
+    /// ([`SchemaDefinition::can_only_apply_to`]): the instance's own list
+    /// when the schema gives a non-empty one, otherwise the schema's. An
+    /// empty instance list leaves the schema's in force, as OpenUSD reads
+    /// `apiSchemaInstances`. Empty when it may be applied to any prim, or
+    /// `schema` is not registered.
     ///
     /// OpenUSD: `UsdSchemaRegistry::GetAPISchemaCanOnlyApplyToTypeNames`.
     #[must_use]
@@ -872,14 +883,19 @@ impl SchemaRegistry {
     }
 
     /// Whether the applied schema `schema`, with `instance` for a
-    /// multiple-apply schema, may be applied to a prim whose resolved type
-    /// name is `type_name`, and why not.
+    /// multiple-apply schema, may be applied to a prim whose definition is
+    /// `prim` ([`SchemaRegistry::prim_definition`]), and why not.
     ///
     /// The instance name must be allowed
     /// ([`SchemaRegistry::is_allowed_instance_name`]), and when the schema
-    /// can only be applied to some typed schemas
-    /// ([`SchemaRegistry::can_only_apply_to`]) the prim's type must be one
-    /// of them or derive from one; a typeless prim is none.
+    /// names what it can only be applied to
+    /// ([`SchemaRegistry::can_only_apply_to`]) the prim must match one of
+    /// those names: its type is that typed schema or derives from it (a
+    /// typeless prim's never does), or it has that applied schema, built-in
+    /// and auto-applied ones included. A multiple-apply schema named with an
+    /// instance (`SlotAPI:main`) matches only that instance, and named
+    /// alone, any instance. A name that is no registered schema matches
+    /// nothing.
     ///
     /// These restrict authoring only; composition applies whatever
     /// `apiSchemas` lists (AOUSD Core §13.3.2).
@@ -891,7 +907,7 @@ impl SchemaRegistry {
     /// OpenUSD: `UsdPrim::CanApplyAPI`.
     pub fn can_apply(
         &self,
-        type_name: Option<TokenId>,
+        prim: &PrimDefinition,
         schema: TokenId,
         instance: Option<&str>,
         tokens: &TokenInterner,
@@ -919,15 +935,41 @@ impl SchemaRegistry {
         }
         let allowed = self.can_only_apply_to(schema, instance, tokens);
         if allowed.is_empty()
-            || self
-                .typed(type_name)
-                .is_some_and(|typed| allowed.iter().any(|allowed| typed.is_a(*allowed)))
+            || allowed
+                .iter()
+                .any(|&name| self.is_target(prim, name, tokens))
         {
             return Ok(());
         }
-        Err(CannotApply::PrimType {
+        Err(CannotApply::NotATarget {
             allowed: allowed.to_vec(),
         })
+    }
+
+    /// Whether `prim` matches the name `name` of a
+    /// [`SchemaRegistry::can_only_apply_to`] list: it has the applied schema
+    /// `name` names (the instance after its first `:`, if any), or else its
+    /// type is the typed schema `name` or derives from it.
+    ///
+    /// Spec: AOUSD Core §13.3.1 (a prim's type), §13.3.2 (applied schemas
+    /// and instance names). OpenUSD 26.11: `_IsPrimValidApplyToTarget`
+    /// (`usd/prim.cpp`), which splits the name with
+    /// `UsdSchemaRegistry::GetTypeNameAndInstance`.
+    fn is_target(&self, prim: &PrimDefinition, name: TokenId, tokens: &TokenInterner) -> bool {
+        let (schema_name, instance) = split_instance(tokens.resolve(name));
+        let instance = instance.filter(|instance| !instance.is_empty());
+        let applied = tokens.lookup(schema_name).filter(|schema| {
+            self.schemas
+                .get(schema)
+                .is_some_and(|s| s.kind.is_applied())
+        });
+        match (applied, instance) {
+            (Some(schema), None) => prim.has_api(schema),
+            (Some(schema), Some(instance)) => tokens
+                .lookup(instance)
+                .is_some_and(|instance| prim.has_api_instance(schema, instance)),
+            (None, _) => prim.is_a(name),
+        }
     }
 
     /// Whether the typed schema `type_name` is `schema` or inherits from it,

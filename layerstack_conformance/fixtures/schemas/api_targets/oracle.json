@@ -1,0 +1,1282 @@
+{
+ "allowed_instance_names": [
+  [
+   "PortAPI",
+   "inlet",
+   true
+  ],
+  [
+   "PortAPI",
+   "outlet",
+   true
+  ],
+  [
+   "PortAPI",
+   "spare",
+   true
+  ],
+  [
+   "PortAPI",
+   "special",
+   true
+  ],
+  [
+   "TapAPI",
+   "inlet",
+   true
+  ],
+  [
+   "TapAPI",
+   "outlet",
+   true
+  ],
+  [
+   "TapAPI",
+   "spare",
+   true
+  ],
+  [
+   "TapAPI",
+   "special",
+   true
+  ]
+ ],
+ "can_only_apply_to": [
+  [
+   "SensorAPI",
+   "",
+   []
+  ],
+  [
+   "StampAPI",
+   "",
+   []
+  ],
+  [
+   "GaugeAPI",
+   "",
+   [
+    "SensorAPI",
+    "Tile"
+   ]
+  ],
+  [
+   "ValveAPI",
+   "",
+   [
+    "PortAPI:inlet"
+   ]
+  ],
+  [
+   "MeterAPI",
+   "",
+   [
+    "PortAPI"
+   ]
+  ],
+  [
+   "SealAPI",
+   "",
+   [
+    "StampAPI"
+   ]
+  ],
+  [
+   "PortAPI",
+   "inlet",
+   []
+  ],
+  [
+   "PortAPI",
+   "outlet",
+   []
+  ],
+  [
+   "PortAPI",
+   "spare",
+   []
+  ],
+  [
+   "PortAPI",
+   "special",
+   []
+  ],
+  [
+   "TapAPI",
+   "inlet",
+   [
+    "SensorAPI"
+   ]
+  ],
+  [
+   "TapAPI",
+   "outlet",
+   [
+    "SensorAPI"
+   ]
+  ],
+  [
+   "TapAPI",
+   "spare",
+   [
+    "SensorAPI"
+   ]
+  ],
+  [
+   "TapAPI",
+   "special",
+   [
+    "PortAPI:outlet",
+    "Panel"
+   ]
+  ]
+ ],
+ "openusd_version": "0.26.11",
+ "prims": [
+  {
+   "applied_schemas": [],
+   "can_apply": [
+    [
+     "SensorAPI",
+     "",
+     true
+    ],
+    [
+     "StampAPI",
+     "",
+     true
+    ],
+    [
+     "GaugeAPI",
+     "",
+     false
+    ],
+    [
+     "ValveAPI",
+     "",
+     false
+    ],
+    [
+     "MeterAPI",
+     "",
+     false
+    ],
+    [
+     "SealAPI",
+     "",
+     false
+    ],
+    [
+     "PortAPI",
+     "inlet",
+     true
+    ],
+    [
+     "PortAPI",
+     "outlet",
+     true
+    ],
+    [
+     "PortAPI",
+     "spare",
+     true
+    ],
+    [
+     "PortAPI",
+     "special",
+     true
+    ],
+    [
+     "TapAPI",
+     "inlet",
+     false
+    ],
+    [
+     "TapAPI",
+     "outlet",
+     false
+    ],
+    [
+     "TapAPI",
+     "spare",
+     false
+    ],
+    [
+     "TapAPI",
+     "special",
+     false
+    ]
+   ],
+   "has_api": {
+    "GaugeAPI": false,
+    "MeterAPI": false,
+    "PortAPI": false,
+    "SealAPI": false,
+    "SensorAPI": false,
+    "StampAPI": false,
+    "TapAPI": false,
+    "ValveAPI": false
+   },
+   "has_api_instance": [
+    [
+     "PortAPI",
+     "absent",
+     false
+    ],
+    [
+     "TapAPI",
+     "absent",
+     false
+    ]
+   ],
+   "is_a": {
+    "Panel": false,
+    "Shape": false,
+    "Tile": false
+   },
+   "path": "/Plain",
+   "properties": {},
+   "property_names": [],
+   "schema_type": "",
+   "type_name": ""
+  },
+  {
+   "applied_schemas": [
+    "SensorAPI"
+   ],
+   "can_apply": [
+    [
+     "SensorAPI",
+     "",
+     true
+    ],
+    [
+     "StampAPI",
+     "",
+     true
+    ],
+    [
+     "GaugeAPI",
+     "",
+     true
+    ],
+    [
+     "ValveAPI",
+     "",
+     false
+    ],
+    [
+     "MeterAPI",
+     "",
+     false
+    ],
+    [
+     "SealAPI",
+     "",
+     false
+    ],
+    [
+     "PortAPI",
+     "inlet",
+     true
+    ],
+    [
+     "PortAPI",
+     "outlet",
+     true
+    ],
+    [
+     "PortAPI",
+     "spare",
+     true
+    ],
+    [
+     "PortAPI",
+     "special",
+     true
+    ],
+    [
+     "TapAPI",
+     "inlet",
+     true
+    ],
+    [
+     "TapAPI",
+     "outlet",
+     true
+    ],
+    [
+     "TapAPI",
+     "spare",
+     true
+    ],
+    [
+     "TapAPI",
+     "special",
+     false
+    ]
+   ],
+   "has_api": {
+    "GaugeAPI": false,
+    "MeterAPI": false,
+    "PortAPI": false,
+    "SealAPI": false,
+    "SensorAPI": true,
+    "StampAPI": false,
+    "TapAPI": false,
+    "ValveAPI": false
+   },
+   "has_api_instance": [
+    [
+     "PortAPI",
+     "absent",
+     false
+    ],
+    [
+     "TapAPI",
+     "absent",
+     false
+    ]
+   ],
+   "is_a": {
+    "Panel": false,
+    "Shape": false,
+    "Tile": false
+   },
+   "path": "/Sensed",
+   "properties": {
+    "sensor:rate": {
+     "defined": true,
+     "fallback": 1,
+     "kind": "attribute",
+     "type_name": "int",
+     "value": 1,
+     "variability": "varying"
+    }
+   },
+   "property_names": [
+    "sensor:rate"
+   ],
+   "schema_type": "",
+   "type_name": ""
+  },
+  {
+   "applied_schemas": [],
+   "can_apply": [
+    [
+     "SensorAPI",
+     "",
+     true
+    ],
+    [
+     "StampAPI",
+     "",
+     true
+    ],
+    [
+     "GaugeAPI",
+     "",
+     true
+    ],
+    [
+     "ValveAPI",
+     "",
+     false
+    ],
+    [
+     "MeterAPI",
+     "",
+     false
+    ],
+    [
+     "SealAPI",
+     "",
+     false
+    ],
+    [
+     "PortAPI",
+     "inlet",
+     true
+    ],
+    [
+     "PortAPI",
+     "outlet",
+     true
+    ],
+    [
+     "PortAPI",
+     "spare",
+     true
+    ],
+    [
+     "PortAPI",
+     "special",
+     true
+    ],
+    [
+     "TapAPI",
+     "inlet",
+     false
+    ],
+    [
+     "TapAPI",
+     "outlet",
+     false
+    ],
+    [
+     "TapAPI",
+     "spare",
+     false
+    ],
+    [
+     "TapAPI",
+     "special",
+     false
+    ]
+   ],
+   "has_api": {
+    "GaugeAPI": false,
+    "MeterAPI": false,
+    "PortAPI": false,
+    "SealAPI": false,
+    "SensorAPI": false,
+    "StampAPI": false,
+    "TapAPI": false,
+    "ValveAPI": false
+   },
+   "has_api_instance": [
+    [
+     "PortAPI",
+     "absent",
+     false
+    ],
+    [
+     "TapAPI",
+     "absent",
+     false
+    ]
+   ],
+   "is_a": {
+    "Panel": false,
+    "Shape": true,
+    "Tile": true
+   },
+   "path": "/Tile",
+   "properties": {
+    "sides": {
+     "defined": true,
+     "fallback": 3,
+     "kind": "attribute",
+     "type_name": "int",
+     "value": 3,
+     "variability": "varying"
+    }
+   },
+   "property_names": [
+    "sides"
+   ],
+   "schema_type": "Tile",
+   "type_name": "Tile"
+  },
+  {
+   "applied_schemas": [
+    "SensorAPI",
+    "StampAPI"
+   ],
+   "can_apply": [
+    [
+     "SensorAPI",
+     "",
+     true
+    ],
+    [
+     "StampAPI",
+     "",
+     true
+    ],
+    [
+     "GaugeAPI",
+     "",
+     true
+    ],
+    [
+     "ValveAPI",
+     "",
+     false
+    ],
+    [
+     "MeterAPI",
+     "",
+     false
+    ],
+    [
+     "SealAPI",
+     "",
+     true
+    ],
+    [
+     "PortAPI",
+     "inlet",
+     true
+    ],
+    [
+     "PortAPI",
+     "outlet",
+     true
+    ],
+    [
+     "PortAPI",
+     "spare",
+     true
+    ],
+    [
+     "PortAPI",
+     "special",
+     true
+    ],
+    [
+     "TapAPI",
+     "inlet",
+     true
+    ],
+    [
+     "TapAPI",
+     "outlet",
+     true
+    ],
+    [
+     "TapAPI",
+     "spare",
+     true
+    ],
+    [
+     "TapAPI",
+     "special",
+     true
+    ]
+   ],
+   "has_api": {
+    "GaugeAPI": false,
+    "MeterAPI": false,
+    "PortAPI": false,
+    "SealAPI": false,
+    "SensorAPI": true,
+    "StampAPI": true,
+    "TapAPI": false,
+    "ValveAPI": false
+   },
+   "has_api_instance": [
+    [
+     "PortAPI",
+     "absent",
+     false
+    ],
+    [
+     "TapAPI",
+     "absent",
+     false
+    ]
+   ],
+   "is_a": {
+    "Panel": true,
+    "Shape": true,
+    "Tile": true
+   },
+   "path": "/Panel",
+   "properties": {
+    "sensor:rate": {
+     "defined": true,
+     "fallback": 1,
+     "kind": "attribute",
+     "type_name": "int",
+     "value": 1,
+     "variability": "varying"
+    },
+    "sides": {
+     "defined": true,
+     "fallback": 3,
+     "kind": "attribute",
+     "type_name": "int",
+     "value": 3,
+     "variability": "varying"
+    },
+    "stamp:mark": {
+     "defined": true,
+     "fallback": "none",
+     "kind": "attribute",
+     "type_name": "token",
+     "value": "none",
+     "variability": "varying"
+    }
+   },
+   "property_names": [
+    "sensor:rate",
+    "sides",
+    "stamp:mark"
+   ],
+   "schema_type": "Panel",
+   "type_name": "Panel"
+  },
+  {
+   "applied_schemas": [
+    "PortAPI:inlet"
+   ],
+   "can_apply": [
+    [
+     "SensorAPI",
+     "",
+     true
+    ],
+    [
+     "StampAPI",
+     "",
+     true
+    ],
+    [
+     "GaugeAPI",
+     "",
+     false
+    ],
+    [
+     "ValveAPI",
+     "",
+     true
+    ],
+    [
+     "MeterAPI",
+     "",
+     true
+    ],
+    [
+     "SealAPI",
+     "",
+     false
+    ],
+    [
+     "PortAPI",
+     "inlet",
+     true
+    ],
+    [
+     "PortAPI",
+     "outlet",
+     true
+    ],
+    [
+     "PortAPI",
+     "spare",
+     true
+    ],
+    [
+     "PortAPI",
+     "special",
+     true
+    ],
+    [
+     "TapAPI",
+     "inlet",
+     false
+    ],
+    [
+     "TapAPI",
+     "outlet",
+     false
+    ],
+    [
+     "TapAPI",
+     "spare",
+     false
+    ],
+    [
+     "TapAPI",
+     "special",
+     false
+    ]
+   ],
+   "has_api": {
+    "GaugeAPI": false,
+    "MeterAPI": false,
+    "PortAPI": true,
+    "SealAPI": false,
+    "SensorAPI": false,
+    "StampAPI": false,
+    "TapAPI": false,
+    "ValveAPI": false
+   },
+   "has_api_instance": [
+    [
+     "PortAPI",
+     "absent",
+     false
+    ],
+    [
+     "PortAPI",
+     "inlet",
+     true
+    ],
+    [
+     "TapAPI",
+     "absent",
+     false
+    ],
+    [
+     "TapAPI",
+     "inlet",
+     false
+    ]
+   ],
+   "is_a": {
+    "Panel": false,
+    "Shape": false,
+    "Tile": false
+   },
+   "path": "/Inlet",
+   "properties": {
+    "port:inlet:flow": {
+     "defined": true,
+     "fallback": 0.0,
+     "kind": "attribute",
+     "type_name": "float",
+     "value": 0.0,
+     "variability": "varying"
+    }
+   },
+   "property_names": [
+    "port:inlet:flow"
+   ],
+   "schema_type": "",
+   "type_name": ""
+  },
+  {
+   "applied_schemas": [
+    "PortAPI:outlet"
+   ],
+   "can_apply": [
+    [
+     "SensorAPI",
+     "",
+     true
+    ],
+    [
+     "StampAPI",
+     "",
+     true
+    ],
+    [
+     "GaugeAPI",
+     "",
+     false
+    ],
+    [
+     "ValveAPI",
+     "",
+     false
+    ],
+    [
+     "MeterAPI",
+     "",
+     true
+    ],
+    [
+     "SealAPI",
+     "",
+     false
+    ],
+    [
+     "PortAPI",
+     "inlet",
+     true
+    ],
+    [
+     "PortAPI",
+     "outlet",
+     true
+    ],
+    [
+     "PortAPI",
+     "spare",
+     true
+    ],
+    [
+     "PortAPI",
+     "special",
+     true
+    ],
+    [
+     "TapAPI",
+     "inlet",
+     false
+    ],
+    [
+     "TapAPI",
+     "outlet",
+     false
+    ],
+    [
+     "TapAPI",
+     "spare",
+     false
+    ],
+    [
+     "TapAPI",
+     "special",
+     true
+    ]
+   ],
+   "has_api": {
+    "GaugeAPI": false,
+    "MeterAPI": false,
+    "PortAPI": true,
+    "SealAPI": false,
+    "SensorAPI": false,
+    "StampAPI": false,
+    "TapAPI": false,
+    "ValveAPI": false
+   },
+   "has_api_instance": [
+    [
+     "PortAPI",
+     "absent",
+     false
+    ],
+    [
+     "PortAPI",
+     "outlet",
+     true
+    ],
+    [
+     "TapAPI",
+     "absent",
+     false
+    ],
+    [
+     "TapAPI",
+     "outlet",
+     false
+    ]
+   ],
+   "is_a": {
+    "Panel": false,
+    "Shape": false,
+    "Tile": false
+   },
+   "path": "/Outlet",
+   "properties": {
+    "port:outlet:flow": {
+     "defined": true,
+     "fallback": 0.0,
+     "kind": "attribute",
+     "type_name": "float",
+     "value": 0.0,
+     "variability": "varying"
+    }
+   },
+   "property_names": [
+    "port:outlet:flow"
+   ],
+   "schema_type": "",
+   "type_name": ""
+  },
+  {
+   "applied_schemas": [
+    "PortAPI:outlet",
+    "SensorAPI"
+   ],
+   "can_apply": [
+    [
+     "SensorAPI",
+     "",
+     true
+    ],
+    [
+     "StampAPI",
+     "",
+     true
+    ],
+    [
+     "GaugeAPI",
+     "",
+     true
+    ],
+    [
+     "ValveAPI",
+     "",
+     false
+    ],
+    [
+     "MeterAPI",
+     "",
+     true
+    ],
+    [
+     "SealAPI",
+     "",
+     false
+    ],
+    [
+     "PortAPI",
+     "inlet",
+     true
+    ],
+    [
+     "PortAPI",
+     "outlet",
+     true
+    ],
+    [
+     "PortAPI",
+     "spare",
+     true
+    ],
+    [
+     "PortAPI",
+     "special",
+     true
+    ],
+    [
+     "TapAPI",
+     "inlet",
+     true
+    ],
+    [
+     "TapAPI",
+     "outlet",
+     true
+    ],
+    [
+     "TapAPI",
+     "spare",
+     true
+    ],
+    [
+     "TapAPI",
+     "special",
+     true
+    ]
+   ],
+   "has_api": {
+    "GaugeAPI": false,
+    "MeterAPI": false,
+    "PortAPI": true,
+    "SealAPI": false,
+    "SensorAPI": true,
+    "StampAPI": false,
+    "TapAPI": false,
+    "ValveAPI": false
+   },
+   "has_api_instance": [
+    [
+     "PortAPI",
+     "absent",
+     false
+    ],
+    [
+     "PortAPI",
+     "outlet",
+     true
+    ],
+    [
+     "TapAPI",
+     "absent",
+     false
+    ],
+    [
+     "TapAPI",
+     "outlet",
+     false
+    ]
+   ],
+   "is_a": {
+    "Panel": false,
+    "Shape": false,
+    "Tile": false
+   },
+   "path": "/Both",
+   "properties": {
+    "port:outlet:flow": {
+     "defined": true,
+     "fallback": 0.0,
+     "kind": "attribute",
+     "type_name": "float",
+     "value": 0.0,
+     "variability": "varying"
+    },
+    "sensor:rate": {
+     "defined": true,
+     "fallback": 1,
+     "kind": "attribute",
+     "type_name": "int",
+     "value": 1,
+     "variability": "varying"
+    }
+   },
+   "property_names": [
+    "port:outlet:flow",
+    "sensor:rate"
+   ],
+   "schema_type": "",
+   "type_name": ""
+  },
+  {
+   "applied_schemas": [
+    "PortAPI:spare"
+   ],
+   "can_apply": [
+    [
+     "SensorAPI",
+     "",
+     true
+    ],
+    [
+     "StampAPI",
+     "",
+     true
+    ],
+    [
+     "GaugeAPI",
+     "",
+     false
+    ],
+    [
+     "ValveAPI",
+     "",
+     false
+    ],
+    [
+     "MeterAPI",
+     "",
+     true
+    ],
+    [
+     "SealAPI",
+     "",
+     false
+    ],
+    [
+     "PortAPI",
+     "inlet",
+     true
+    ],
+    [
+     "PortAPI",
+     "outlet",
+     true
+    ],
+    [
+     "PortAPI",
+     "spare",
+     true
+    ],
+    [
+     "PortAPI",
+     "special",
+     true
+    ],
+    [
+     "TapAPI",
+     "inlet",
+     false
+    ],
+    [
+     "TapAPI",
+     "outlet",
+     false
+    ],
+    [
+     "TapAPI",
+     "spare",
+     false
+    ],
+    [
+     "TapAPI",
+     "special",
+     false
+    ]
+   ],
+   "has_api": {
+    "GaugeAPI": false,
+    "MeterAPI": false,
+    "PortAPI": true,
+    "SealAPI": false,
+    "SensorAPI": false,
+    "StampAPI": false,
+    "TapAPI": false,
+    "ValveAPI": false
+   },
+   "has_api_instance": [
+    [
+     "PortAPI",
+     "absent",
+     false
+    ],
+    [
+     "PortAPI",
+     "spare",
+     true
+    ],
+    [
+     "TapAPI",
+     "absent",
+     false
+    ],
+    [
+     "TapAPI",
+     "spare",
+     false
+    ]
+   ],
+   "is_a": {
+    "Panel": false,
+    "Shape": false,
+    "Tile": false
+   },
+   "path": "/Abstract",
+   "properties": {
+    "port:spare:flow": {
+     "defined": true,
+     "fallback": 0.0,
+     "kind": "attribute",
+     "type_name": "float",
+     "value": 0.0,
+     "variability": "varying"
+    }
+   },
+   "property_names": [
+    "port:spare:flow"
+   ],
+   "schema_type": "",
+   "type_name": "Shape"
+  },
+  {
+   "applied_schemas": [
+    "PortAPI:inlet"
+   ],
+   "can_apply": [
+    [
+     "SensorAPI",
+     "",
+     true
+    ],
+    [
+     "StampAPI",
+     "",
+     true
+    ],
+    [
+     "GaugeAPI",
+     "",
+     false
+    ],
+    [
+     "ValveAPI",
+     "",
+     true
+    ],
+    [
+     "MeterAPI",
+     "",
+     true
+    ],
+    [
+     "SealAPI",
+     "",
+     false
+    ],
+    [
+     "PortAPI",
+     "inlet",
+     true
+    ],
+    [
+     "PortAPI",
+     "outlet",
+     true
+    ],
+    [
+     "PortAPI",
+     "spare",
+     true
+    ],
+    [
+     "PortAPI",
+     "special",
+     true
+    ],
+    [
+     "TapAPI",
+     "inlet",
+     false
+    ],
+    [
+     "TapAPI",
+     "outlet",
+     false
+    ],
+    [
+     "TapAPI",
+     "spare",
+     false
+    ],
+    [
+     "TapAPI",
+     "special",
+     false
+    ]
+   ],
+   "has_api": {
+    "GaugeAPI": false,
+    "MeterAPI": false,
+    "PortAPI": true,
+    "SealAPI": false,
+    "SensorAPI": false,
+    "StampAPI": false,
+    "TapAPI": false,
+    "ValveAPI": false
+   },
+   "has_api_instance": [
+    [
+     "PortAPI",
+     "absent",
+     false
+    ],
+    [
+     "PortAPI",
+     "inlet",
+     true
+    ],
+    [
+     "TapAPI",
+     "absent",
+     false
+    ],
+    [
+     "TapAPI",
+     "inlet",
+     false
+    ]
+   ],
+   "is_a": {
+    "Panel": false,
+    "Shape": false,
+    "Tile": false
+   },
+   "path": "/Composed",
+   "properties": {
+    "port:inlet:flow": {
+     "defined": true,
+     "fallback": 0.0,
+     "kind": "attribute",
+     "type_name": "float",
+     "value": 0.0,
+     "variability": "varying"
+    }
+   },
+   "property_names": [
+    "port:inlet:flow"
+   ],
+   "schema_type": "",
+   "type_name": ""
+  }
+ ],
+ "set": "api_targets"
+}

@@ -194,13 +194,19 @@ impl ArcPathMap<'_> {
 
 /// The property spec a set of target paths is authored on: `property` of
 /// the composed prim `prim`, from `layer`.
-#[derive(Clone, Debug)]
-pub(crate) struct TargetOwner {
+///
+/// It names the spec by its prim's path, borrowed: the spec's own path is
+/// built only for an error, which few opinions report. OpenUSD 26.11
+/// likewise builds the site of a property indexing error only when it
+/// reports one (`Pcp_PropertyIndexer::_GetPropSite`).
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct TargetOwner<'a> {
     pub(crate) prim: PathId,
     pub(crate) property: TokenId,
     pub(crate) layer: LayerId,
-    /// The spec's path in the property's stack.
-    pub(crate) spec: SpecPath,
+    /// The path, in the property's stack, of the prim spec holding the
+    /// property spec.
+    pub(crate) prim_spec: &'a SpecPath,
 }
 
 /// Maps the relationship targets or attribute connections of `value`, a
@@ -219,7 +225,7 @@ pub(crate) fn map_arc_targets(
     store: &dyn LayerStore,
     value: &mut OpinionValue,
     map: ArcPathMap<'_>,
-    owner: TargetOwner,
+    owner: TargetOwner<'_>,
     findings: &mut Findings,
 ) {
     let list = match value {
@@ -246,7 +252,7 @@ pub(crate) fn map_arc_targets(
                 prim: owner.prim,
                 property: owner.property,
                 target,
-                spec: owner.spec.clone(),
+                spec: owner.prim_spec.with_property(owner.property),
                 arc: map.arc,
                 layer: owner.layer,
             },

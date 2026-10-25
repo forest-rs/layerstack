@@ -105,7 +105,7 @@ def "Canyon" (
 }
 
 # Substituted into a string, a variable that is not set leaves its name:
-# `./MISSING.usda` does not resolve.
+# `./${MISSING}.usda` (OpenUSD 26.11 keeps an unset variable in place) does not resolve.
 def "Hollow" (
     references = @`"./${MISSING}.usda"`@
 )

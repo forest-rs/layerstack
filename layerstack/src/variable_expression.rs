@@ -17,6 +17,10 @@
 //! - variables: `${NAME}` on its own, and substituted into a quoted string
 //!   (`"${NAME}_suffix"`), where a variable whose value is a string
 //!   expression is evaluated in turn;
+//! - variable fallbacks (OpenUSD 26.11): `${NAME:FALLBACK}` evaluates to
+//!   `FALLBACK` when `NAME` is not set, where `FALLBACK` is an integer, a
+//!   boolean, a quoted string without variable references, or a list of
+//!   those;
 //! - lists of scalars of one type: `["a", "b"]`, `[1, 2]`;
 //! - the functions `if`, `eq`, `neq`, `lt`, `leq`, `gt`, `geq`, `and`, `or`,
 //!   `not`, `contains`, `at`, `len` and `defined`.
@@ -285,7 +289,15 @@ impl VariableExpression {
 #[derive(Clone, Debug)]
 enum Part {
     Text(String),
-    Variable(String),
+    Variable(Variable),
+}
+
+/// A variable reference: `${NAME}` or `${NAME:FALLBACK}`.
+#[derive(Clone, Debug)]
+struct Variable {
+    name: String,
+    /// The literal evaluated in place of a variable that is not set.
+    fallback: Option<Box<Node>>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -325,7 +337,7 @@ impl Comparison {
 #[derive(Clone, Debug)]
 enum Node {
     String(Vec<Part>),
-    Variable(String),
+    Variable(Variable),
     Int(i64),
     Bool(bool),
     None,
@@ -425,26 +437,19 @@ impl<'a> Parser<'a> {
     }
 
     fn scalar(&mut self) -> Result<Option<Syntax>, ParseError> {
-        if let Some(name) = self.variable()? {
-            return Ok(Some(Syntax::Node(Node::Variable(name))));
+        if let Some(variable) = self.variable()? {
+            return Ok(Some(Syntax::Node(Node::Variable(variable))));
         }
         for quote in *b"\"'" {
-            if let Some(parts) = self.quoted(quote)? {
+            if let Some(parts) = self.quoted(quote, true)? {
                 return Ok(Some(Syntax::Node(Node::String(parts))));
             }
         }
         if let Some(value) = self.integer()? {
             return Ok(Some(Syntax::Node(Node::Int(value))));
         }
-        for (word, value) in [
-            ("True", true),
-            ("true", true),
-            ("False", false),
-            ("false", false),
-        ] {
-            if self.keyword(word) {
-                return Ok(Some(Syntax::Node(Node::Bool(value))));
-            }
+        if let Some(value) = self.boolean() {
+            return Ok(Some(Syntax::Node(Node::Bool(value))));
         }
         if self.keyword("None") || self.keyword("none") {
             return Ok(Some(Syntax::Node(Node::None)));
@@ -452,18 +457,89 @@ impl<'a> Parser<'a> {
         self.function()
     }
 
-    /// `${NAME}`: once `${` matches, the name and `}` must follow.
-    fn variable(&mut self) -> Result<Option<String>, ParseError> {
+    /// `${NAME}` or `${NAME:FALLBACK}`: once `${` matches, the name, any
+    /// fallback and `}` must follow, and once `:` matches, a fallback value.
+    ///
+    /// OpenUSD 26.11: `VariableImpl` and `VariableFallback`.
+    fn variable(&mut self) -> Result<Option<Variable>, ParseError> {
         if !self.eat("${") {
             return Ok(None);
         }
         let name = self
             .identifier()
             .ok_or_else(|| ("Variables must be a C identifier".into(), self.pos))?;
+        let fallback = if self.eat(":") {
+            let value = self
+                .fallback_value()?
+                .ok_or_else(|| ("Expected a fallback value after ':'".into(), self.pos))?;
+            Some(Box::new(value))
+        } else {
+            None
+        };
         if !self.eat("}") {
             return Err(("Missing ending '}'".into(), self.pos));
         }
-        Ok(Some(name))
+        Ok(Some(Variable { name, fallback }))
+    }
+
+    /// A fallback value: an integer, a boolean, a quoted string without
+    /// variable references, or a list of those, in OpenUSD's order.
+    ///
+    /// OpenUSD 26.11: `VariableFallbackValue`.
+    fn fallback_value(&mut self) -> Result<Option<Node>, ParseError> {
+        if let Some(value) = self.integer()? {
+            return Ok(Some(Node::Int(value)));
+        }
+        if let Some(value) = self.boolean() {
+            return Ok(Some(Node::Bool(value)));
+        }
+        for quote in *b"'\"" {
+            if let Some(parts) = self.quoted(quote, false)? {
+                return Ok(Some(Node::String(parts)));
+            }
+        }
+        if !self.eat("[") {
+            return Ok(None);
+        }
+        let elements = self.separated(|parser| {
+            for quote in *b"\"'" {
+                if let Some(parts) = parser.quoted(quote, false)? {
+                    return Ok(Some(Syntax::Node(Node::String(parts))));
+                }
+            }
+            if let Some(value) = parser.integer()? {
+                return Ok(Some(Syntax::Node(Node::Int(value))));
+            }
+            Ok(parser
+                .boolean()
+                .map(|value| Syntax::Node(Node::Bool(value))))
+        })?;
+        if elements.is_empty() {
+            self.spaces();
+        }
+        if !self.eat("]") {
+            return Err(("Missing ending ']'".into(), self.pos));
+        }
+        let elements = elements
+            .into_iter()
+            .map(|element| match element {
+                Syntax::Node(node) => node,
+                _ => unreachable!("fallback list elements are literals"),
+            })
+            .collect();
+        Ok(Some(Node::List(elements)))
+    }
+
+    /// `True`, `true`, `False` or `false`.
+    fn boolean(&mut self) -> Option<bool> {
+        [
+            ("True", true),
+            ("true", true),
+            ("False", false),
+            ("false", false),
+        ]
+        .into_iter()
+        .find_map(|(word, value)| self.keyword(word).then_some(value))
     }
 
     /// A C identifier: `[A-Za-z_][A-Za-z0-9_]*`.
@@ -516,17 +592,25 @@ impl<'a> Parser<'a> {
     }
 
     /// A string in `quote`s: runs of text, with `\` escaping a backtick,
-    /// `$`, `\` or the quote, and `${NAME}` substitutions. Once the opening
-    /// quote matches, the closing one must follow.
-    fn quoted(&mut self, quote: u8) -> Result<Option<Vec<Part>>, ParseError> {
+    /// `$`, `\` or the quote, and `${NAME}` substitutions where `variables`
+    /// allows them (a fallback string does not: OpenUSD 26.11's
+    /// `FallbackQuotedString`). Once the opening quote matches, the closing
+    /// one must follow.
+    fn quoted(&mut self, quote: u8, variables: bool) -> Result<Option<Vec<Part>>, ParseError> {
         if self.peek() != Some(quote) {
             return Ok(None);
         }
         self.pos += 1;
         let mut parts = Vec::new();
         loop {
-            if let Some(name) = self.variable()? {
-                parts.push(Part::Variable(name));
+            if !variables && self.at("${") {
+                return Err((
+                    "Variable references are not allowed in fallback string values".into(),
+                    self.pos,
+                ));
+            }
+            if let Some(variable) = self.variable()? {
+                parts.push(Part::Variable(variable));
                 continue;
             }
             let start = self.pos;
@@ -851,9 +935,14 @@ impl Node {
             Self::Bool(value) => Ok(Some(ExpressionValue::Bool(*value))),
             Self::None => Ok(None),
             Self::String(parts) => evaluate_string(ctx, parts),
-            Self::Variable(name) => ctx
-                .variable(name)
-                .unwrap_or_else(|| Err(vec![format!("No value for variable '{name}'")])),
+            Self::Variable(Variable { name, fallback }) => match ctx.variable(name) {
+                Some(value) => value,
+                // OpenUSD 26.11: `VariableNode::Evaluate`.
+                None => match fallback {
+                    Some(fallback) => fallback.evaluate(ctx),
+                    None => Err(vec![format!("No value for variable '{name}'")]),
+                },
+            },
             Self::List(elements) => evaluate_list(ctx, elements),
             Self::If(condition, value, other) => {
                 evaluate_if(ctx, condition, value, other.as_deref())
@@ -932,17 +1021,25 @@ impl Node {
 }
 
 /// Concatenates the parts of a quoted string. A variable that is not set is
-/// replaced by its name; one with no value by nothing; one of another type
-/// than string is an error.
+/// replaced by its fallback, or left in place as `${NAME}` without one; one
+/// with no value by nothing; one of another type than string is an error.
 ///
-/// OpenUSD: `StringNode::Evaluate`.
+/// OpenUSD 26.11: `StringNode::Evaluate` (26.08 replaced a variable that
+/// is not set by its bare name).
 fn evaluate_string(ctx: &mut Context<'_>, parts: &[Part]) -> Eval {
     let mut out = String::new();
     for part in parts {
         match part {
             Part::Text(text) => out.push_str(text),
-            Part::Variable(name) => match ctx.variable(name) {
-                None => out.push_str(name),
+            Part::Variable(Variable { name, fallback }) => match ctx
+                .variable(name)
+                .or_else(|| fallback.as_ref().map(|fallback| fallback.evaluate(ctx)))
+            {
+                None => {
+                    out.push_str("${");
+                    out.push_str(name);
+                    out.push('}');
+                }
                 Some(Err(errors)) => return Err(errors),
                 Some(Ok(None)) => {}
                 Some(Ok(Some(ExpressionValue::String(s)))) => out.push_str(&s),
@@ -1245,16 +1342,19 @@ mod tests {
             ),
             ("ASSET", VariableValue::Unsupported("SdfAssetPath".into())),
             ("FLOATV", VariableValue::Unsupported("double".into())),
+            ("FBEXPR", s("`${UNDEF:'deep'}`")),
         ] {
             vars.insert(name, value);
         }
         vars
     }
 
-    /// Each expression evaluates as OpenUSD 26.8's `SdfVariableExpression`
+    /// Each expression evaluates as OpenUSD 26.11's `SdfVariableExpression`
     /// does with the same variables: value, errors (verbatim) and used
     /// variables (not compared where `defined` looks names up, which
-    /// OpenUSD does not report). Generated with usd-core 26.8.
+    /// OpenUSD does not report). Generated with usd-core 26.8; the
+    /// substitutions of a variable that is not set and the fallback cases
+    /// with usd-core 26.11.
     #[test]
     fn evaluation_matches_openusd() {
         /// An expression, its value, its errors and its used variables.
@@ -1268,8 +1368,54 @@ mod tests {
         let table: &[Case] = &[
         ("`\"./${STR}.usd\"`", S("./abc.usd"), &[], Some(&["STR"])),
         ("`'${STR}_sel'`", S("abc_sel"), &[], Some(&["STR"])),
-        ("`\"${UNDEF}\"`", S("UNDEF"), &[], Some(&["UNDEF"])),
-        ("`\"a${UNDEF}b\"`", S("aUNDEFb"), &[], Some(&["UNDEF"])),
+        ("`\"${UNDEF}\"`", S("${UNDEF}"), &[], Some(&["UNDEF"])),
+        ("`\"a${UNDEF}b\"`", S("a${UNDEF}b"), &[], Some(&["UNDEF"])),
+        // Variable fallbacks (OpenUSD 26.11).
+        ("`${STR:'x'}`", S("abc"), &[], Some(&["STR"])),
+        ("`${UNDEF:'x'}`", S("x"), &[], Some(&["UNDEF"])),
+        ("`${UNDEF:\"dq\"}`", S("dq"), &[], Some(&["UNDEF"])),
+        ("`${UNDEF:12}`", I(12), &[], Some(&["UNDEF"])),
+        ("`${UNDEF:-4}`", I(-4), &[], Some(&["UNDEF"])),
+        ("`${UNDEF:true}`", B(true), &[], Some(&["UNDEF"])),
+        ("`${UNDEF:False}`", B(false), &[], Some(&["UNDEF"])),
+        ("`${UNDEF:[1, 2]}`", Is(&[1, 2]), &[], Some(&["UNDEF"])),
+        ("`${UNDEF:['a','b']}`", Ss(&["a", "b"]), &[], Some(&["UNDEF"])),
+        ("`${UNDEF:[true , false]}`", Bs(&[true, false]), &[], Some(&["UNDEF"])),
+        ("`${UNDEF:[]}`", Empty, &[], Some(&["UNDEF"])),
+        ("`${UNDEF:[ ]}`", Empty, &[], Some(&["UNDEF"])),
+        ("`${UNDEF:''}`", S(""), &[], Some(&["UNDEF"])),
+        ("`${UNDEF:}`", N, &["Expected a fallback value after ':' at character 9"], Some(&[])),
+        ("`${UNDEF:None}`", N, &["Expected a fallback value after ':' at character 9"], Some(&[])),
+        ("`${UNDEF:${STR}}`", N, &["Expected a fallback value after ':' at character 9"], Some(&[])),
+        ("`${UNDEF:'${STR}'}`", N, &["Variable references are not allowed in fallback string values at character 10"], Some(&[])),
+        ("`${UNDEF:\"a${STR}\"}`", N, &["Variable references are not allowed in fallback string values at character 11"], Some(&[])),
+        ("`${UNDEF:'a\\${STR}'}`", S("a${STR}"), &[], Some(&["UNDEF"])),
+        ("`${UNDEF:[ '${STR}' ]}`", N, &["Missing ending ']' at character 11"], Some(&[])),
+        ("`${UNDEF:['${STR}']}`", N, &["Variable references are not allowed in fallback string values at character 11"], Some(&[])),
+        ("`${INT:'x'}`", I(7), &[], Some(&["INT"])),
+        ("`${STR:5}`", S("abc"), &[], Some(&["STR"])),
+        ("`${NONEEXPR:1}`", N, &[], Some(&["NONEEXPR"])),
+        ("`${ASSET:1}`", N, &["Variable 'ASSET' has unsupported type SdfAssetPath"], Some(&["ASSET"])),
+        ("`${BADSUB:1}`", N, &["Variables must be a C identifier at character 4 (in variable 'BADSUB')"], Some(&["BADSUB"])),
+        ("`\"a${UNDEF:'b'}c\"`", S("abc"), &[], Some(&["UNDEF"])),
+        ("`\"a${UNDEF:5}c\"`", N, &["String value required for substituting variable 'UNDEF', got int."], Some(&["UNDEF"])),
+        ("`\"a${STR:'q'}c\"`", S("aabcc"), &[], Some(&["STR"])),
+        ("`\"a${UNDEF:''}c\"`", S("ac"), &[], Some(&["UNDEF"])),
+        ("`${UNDEF:1 }`", N, &["Missing ending '}' at character 10"], Some(&[])),
+        ("`${UNDEF: 1}`", N, &["Expected a fallback value after ':' at character 9"], Some(&[])),
+        ("`${UNDEF:[1,true]}`", N, &["Unexpected value of type bool in list at element 1"], Some(&["UNDEF"])),
+        ("`${UNDEF:x}`", N, &["Expected a fallback value after ':' at character 9"], Some(&[])),
+        ("`${FBEXPR}`", S("deep"), &[], Some(&["FBEXPR", "UNDEF"])),
+        ("`\"${FBEXPR}\"`", S("deep"), &[], Some(&["FBEXPR", "UNDEF"])),
+        ("`if(defined(\"UNDEF\"), 1, ${UNDEF:2})`", I(2), &[], Some(&["UNDEF"])),
+        ("`${UNDEF:'it\\'s'}`", S("it's"), &[], Some(&["UNDEF"])),
+        ("`len(${UNDEF:[1,2,3]})`", I(3), &[], Some(&["UNDEF"])),
+        ("`\"${UNDEF:\"in\"}\"`", S("in"), &[], Some(&["UNDEF"])),
+        ("`${UNDEF:[1,2}`", N, &["Missing ending ']' at character 13"], Some(&[])),
+        ("`${UNDEF:'a`", N, &["Missing ending \"'\" at character 12"], Some(&[])),
+        ("`${UNDEF:99999999999999999999}`", N, &["Integer 99999999999999999999 out of range. at character 9"], Some(&[])),
+        ("`${UNDEF:-}`", N, &["Expected a fallback value after ':' at character 9"], Some(&[])),
+        ("`${UNDEF:[None]}`", N, &["Missing ending ']' at character 10"], Some(&[])),
         ("`${STR}`", S("abc"), &[], Some(&["STR"])),
         ("`${UNDEF}`", N, &["No value for variable 'UNDEF'"], Some(&["UNDEF"])),
         ("`${INT}`", I(7), &[], Some(&["INT"])),

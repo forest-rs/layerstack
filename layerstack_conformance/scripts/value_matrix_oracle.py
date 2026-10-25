@@ -4,8 +4,8 @@
 
 Usage: value_matrix_oracle.py [--check] [OUT_DIR]
 
-Needs OpenUSD 26.08 through Python `pxr`, for example
-`pip install usd-core==26.8`. Writes, under
+Needs OpenUSD 26.11 through Python `pxr`, for example
+`pip install usd-core==26.11`. Writes, under
 `layerstack_conformance/fixtures/value_matrix` by default, one directory of
 USDA layers per composition arc (`root.usda` is each stage's root) and
 `oracle.json`, which `tests/conformance/value_matrix.rs` replays against layerstack.
@@ -90,7 +90,7 @@ import temporal_sparse_oracle
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_OUT = os.path.normpath(os.path.join(HERE, "..", "fixtures", "value_matrix"))
-OPENUSD = "0.26.8"
+OPENUSD = "0.26.11"
 
 # The named divergences the matrix shows: results Layerstack resolves
 # differently from OpenUSD on purpose, recorded as in
@@ -112,7 +112,7 @@ DIVERGENCES.update({
             "the empty array."
         ),
         "openusd_source": (
-            "pxr/usd/usd/stage.cpp:7261 and :7272 "
+            "pxr/usd/usd/stage.cpp:7271 and :7282 "
             "(`Usd_AttrGetValueHelper::GetValue` composes the `default` field "
             "as metadata and clears the block)"
         ),
@@ -158,7 +158,7 @@ DIVERGENCES.update({
             "vary."
         ),
         "openusd_source": (
-            "pxr/usd/usd/stage.cpp:9769 "
+            "pxr/usd/usd/stage.cpp:9771 "
             "(`_ValueMightBeTimeVaryingFromResolveInfo` looks clips up by the "
             "proxy's path, which the clip cache does not hold)"
         ),
@@ -179,7 +179,7 @@ DIVERGENCES.update({
             "changes there."
         ),
         "openusd_source": (
-            "pxr/usd/usd/stage.cpp:8362 "
+            "pxr/usd/usd/stage.cpp:8352 "
             "(`_BracketingSamplesResolver::ProcessLayerAtTime` passes the "
             "stage-time `lower` to `_GetSampleComposability`)"
         ),
@@ -200,7 +200,7 @@ DIVERGENCES.update({
             "before the jump and the value there differs."
         ),
         "openusd_source": (
-            "pxr/usd/usd/clipSet.cpp:681 "
+            "pxr/usd/usd/clipSet.cpp:743 "
             "(`GetBracketingTimeSamplesForPath` uses the earlier clip's "
             "bracket at the query time)"
         ),

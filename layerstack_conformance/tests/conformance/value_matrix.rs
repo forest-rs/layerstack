@@ -70,24 +70,24 @@ const ORACLE: &str = include_str!("../../fixtures/value_matrix/oracle.json");
 const DIVERGENCES: &[(&str, &str)] = &[
     // Before the first composed sample, hold it instead of OpenUSD's NaN
     // (AOUSD Core 12.5.1).
-    ("nan-before-first-sample", "0.26.8"),
+    ("nan-before-first-sample", "0.26.11"),
     // A held sampled block resolves the schema fallback (AOUSD Core 12.3.6,
     // 16.2.16.3).
-    ("sampled-block-drops-fallback", "0.26.8"),
+    ("sampled-block-drops-fallback", "0.26.11"),
     // A default block resolves the schema fallback at the default time too
     // (AOUSD Core 12.3.6, 16.2.16.2).
-    ("default-time-block-hides-fallback", "0.26.8"),
+    ("default-time-block-hides-fallback", "0.26.11"),
     // Edits over a default block compose over the empty array at the
     // default time too (AOUSD Core 12.3.6).
-    ("default-time-edits-over-block", "0.26.8"),
+    ("default-time-edits-over-block", "0.26.11"),
     // Sampled path expressions anchor at the authoring prim, as defaults do.
-    ("sampled-path-expression-anchoring", "0.26.8"),
+    ("sampled-path-expression-anchoring", "0.26.11"),
     // An instance proxy's clip values vary as its prototype's do.
-    ("instance-proxy-clips-not-varying", "0.26.8"),
+    ("instance-proxy-clips-not-varying", "0.26.11"),
     // Brackets follow the composed sample grid behind layer offsets.
-    ("bracketing-composability-in-stage-time", "0.26.8"),
+    ("bracketing-composability-in-stage-time", "0.26.11"),
     // A missing clip value holds the last composed sample across a jump.
-    ("missing-clip-values-across-jump", "0.26.8"),
+    ("missing-clip-values-across-jump", "0.26.11"),
 ];
 
 /// Mismatches a later change fixes: the kind of result, the attribute's
@@ -756,7 +756,7 @@ fn oracle() -> Oracle {
 #[test]
 fn value_matrix_matches_openusd() {
     let oracle = oracle();
-    assert_eq!(oracle.openusd_version, "26.8");
+    assert_eq!(oracle.openusd_version, layerstack_schemas::OPENUSD_VERSION);
     let mut failures = Failures::default();
     let mut checked = 0;
     for case in &oracle.cases {

@@ -45,7 +45,9 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use layerstack::{
     CompositionError, ExpressionContext, LayerStack, LiveStage, Stage, StageOptions, Value,
-    variable_expression::{ExpressionValue, VariableValue},
+    variable_expression::{
+        ExpressionValue, ExpressionVariables, VariableExpression, VariableValue,
+    },
 };
 use layerstack_conformance::{
     usda_real::{LoadedStage, load_entry_usda},
@@ -529,4 +531,142 @@ fn live_stage_recomposes_referenced_sublayers() {
         prim_stacks(&mut loaded, live.stage()),
         prim_stacks(&mut loaded, &full)
     );
+}
+
+/// Variable fallbacks (`${NAME:FALLBACK}`, OpenUSD 26.11) evaluated with
+/// [`FALLBACK_VARIABLES`]: the variable set, not set and of another type
+/// than its fallback, string, integer, boolean and list fallbacks, empty
+/// ones, fallbacks in quoted strings and in variables' own expressions,
+/// and the fallbacks the grammar refuses.
+const FALLBACK_CASES: &[&str] = &[
+    "`${SET:'fallback'}`",
+    "`${UNSET:'fallback'}`",
+    "`${UNSET:\"double\"}`",
+    "`${UNSET:-4}`",
+    "`${UNSET:True}`",
+    "`${INT:'fallback'}`",
+    "`${NONE:1}`",
+    "`${UNSET:[1, 2]}`",
+    "`${UNSET:['a' , \"b\"]}`",
+    "`${UNSET:[false]}`",
+    "`${UNSET:[1, true]}`",
+    "`${UNSET:[]}`",
+    "`${UNSET:''}`",
+    "`${UNSET:}`",
+    "`${UNSET:None}`",
+    "`${UNSET:${SET}}`",
+    "`${UNSET:'${SET}'}`",
+    "`${UNSET:['${SET}']}`",
+    "`${UNSET:'\\${SET}'}`",
+    "`${UNSET:1 }`",
+    "`\"./${UNSET:'model'}.usda\"`",
+    "`\"./${SET:'model'}.usda\"`",
+    "`\"./${UNSET}.usda\"`",
+    "`\"./${UNSET:7}.usda\"`",
+    "`${NESTED}`",
+    "`\"${NESTED}\"`",
+    "`if(defined(\"UNSET\"), \"a\", ${UNSET:\"b\"})`",
+    "`len(${UNSET:[1, 2, 3]})`",
+];
+
+/// The variables [`FALLBACK_CASES`] are evaluated with, as a Python dict.
+const FALLBACK_VARIABLES: &str =
+    r#"{"SET": "set", "INT": 3, "NONE": "`None`", "NESTED": "`${UNSET:'nested'}`"}"#;
+
+/// For each expression on stdin (one per line), its value and errors as
+/// OpenUSD evaluates it.
+const FALLBACK_ORACLE: &str = r#"
+import json, sys
+from pxr import Sdf
+variables = json.loads(sys.argv[1])
+for line in sys.stdin.read().splitlines():
+    result = Sdf.VariableExpression(line).Evaluate(variables)
+    value = result.value
+    if value is not None and not isinstance(value, (bool, int, str)):
+        value = list(value)
+    print(json.dumps({"value": value, "errors": list(result.errors)}))
+"#;
+
+/// The value and errors of `expression`, in the oracle's JSON shape.
+fn fallback_evaluation(expression: &str) -> serde_json::Value {
+    let mut variables = ExpressionVariables::new();
+    let string = |s: &str| VariableValue::Value(ExpressionValue::String(s.into()));
+    variables.insert("SET", string("set"));
+    variables.insert("INT", VariableValue::Value(ExpressionValue::Int(3)));
+    variables.insert("NONE", string("`None`"));
+    variables.insert("NESTED", string("`${UNSET:'nested'}`"));
+    let evaluation = VariableExpression::parse(expression).evaluate(&variables);
+    let value = match evaluation.value {
+        None => serde_json::Value::Null,
+        Some(ExpressionValue::String(s)) => s.into(),
+        Some(ExpressionValue::Int(n)) => n.into(),
+        Some(ExpressionValue::Bool(b)) => b.into(),
+        Some(ExpressionValue::StringList(l)) => l.into(),
+        Some(ExpressionValue::IntList(l)) => l.into(),
+        Some(ExpressionValue::BoolList(l)) => l.into(),
+        Some(ExpressionValue::EmptyList) => serde_json::Value::Array(Vec::new()),
+    };
+    serde_json::json!({ "value": value, "errors": evaluation.errors })
+}
+
+/// Each fallback case evaluates as usd-core 26.11 evaluates it: the same
+/// value, or the same errors verbatim.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn variable_fallbacks_match_openusd() {
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+
+    let ours: Vec<serde_json::Value> = FALLBACK_CASES
+        .iter()
+        .map(|expression| fallback_evaluation(expression))
+        .collect();
+    assert_eq!(ours[1]["value"], "fallback");
+    assert_eq!(ours[22]["value"], "./${UNSET}.usda");
+
+    let explicit_python = std::env::var("LAYERSTACK_USD_PYTHON").ok();
+    let python = explicit_python.as_deref().unwrap_or("python3");
+    let available = Command::new(python)
+        .args([
+            "-c",
+            "from pxr import Sdf; Sdf.VariableExpression.MakeVariable",
+        ])
+        .output()
+        .is_ok_and(|output| output.status.success());
+    assert!(
+        available || explicit_python.is_none(),
+        "explicit LAYERSTACK_USD_PYTHON cannot import pxr"
+    );
+    if !available {
+        eprintln!("skipped variable fallback oracle: set LAYERSTACK_USD_PYTHON");
+        return;
+    }
+    let mut child = Command::new(python)
+        .args(["-c", FALLBACK_ORACLE, FALLBACK_VARIABLES])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(FALLBACK_CASES.join("\n").as_bytes())
+        .unwrap();
+    let output = child.wait_with_output().unwrap();
+    assert!(
+        output.status.success(),
+        "OpenUSD failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let theirs: Vec<serde_json::Value> = String::from_utf8(output.stdout)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    assert_eq!(theirs.len(), FALLBACK_CASES.len());
+    for ((expression, ours), theirs) in FALLBACK_CASES.iter().zip(&ours).zip(&theirs) {
+        assert_eq!(ours, theirs, "{expression}");
+    }
 }

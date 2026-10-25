@@ -1453,6 +1453,59 @@ impl Stage {
         self.property_time_info(prim, field).1
     }
 
+    /// Whether the property's value source might vary with time: the
+    /// strongest source that offers a value, over any sparse defaults that
+    /// compose over weaker sources, is time samples (even a single one), a
+    /// spline or value clips. Unlike [`Self::property_might_be_time_varying`]
+    /// it answers `true` where a numeric-time read and a default-time read
+    /// may differ.
+    ///
+    /// OpenUSD 26.11: `UsdAttributeQuery::ValueSourceMightBeTimeVarying`,
+    /// which asks `UsdResolveInfo::ValueSourceMightBeTimeVarying`
+    /// (`pxr/usd/usd/resolveInfo.h:136`).
+    ///
+    /// Spec: AOUSD Core §12.3.2 (time samples, then splines, then the
+    /// default), §12.3.4 (value clips), §12.3.6 (blocks).
+    #[must_use]
+    pub(crate) fn property_value_source_might_be_time_varying(
+        &self,
+        prim: PathId,
+        field: TokenId,
+    ) -> bool {
+        let Some(index) = self.prims.get(&prim) else {
+            return false;
+        };
+        let authored = index.property_opinions(field).unwrap_or_default();
+        let animation = stage_time::animation_opinions(authored.records());
+        let ordinary = authored.with_records(&animation);
+        let clip_opinions =
+            self.clip_opinions_after_authored(prim, field, ordinary, 0.0, InterpolationType::Held);
+        let mut tagged: Vec<_> = ordinary.iter().map(|op| (op, false)).collect();
+        tagged.extend(
+            clip_opinions
+                .iter()
+                .map(|clip| (clip.opinion.as_ref(), true)),
+        );
+        if !clip_opinions.is_empty() {
+            tagged.sort_by(|(a, _), (b, _)| index.graph.cmp_keys(&a.source().key, &b.source().key));
+        }
+        for (op, clip) in tagged {
+            if clip || op.value().time_samples().is_some() || op.value().spline().is_some() {
+                return true;
+            }
+            // A default ends the search unless it composes over weaker
+            // sources; a block or an animation block is a default too.
+            if op
+                .value()
+                .default_value()
+                .is_some_and(|value| !shows_weaker_samples(value))
+            {
+                return false;
+            }
+        }
+        false
+    }
+
     /// Sorted, unique stage-time samples of the effective property sources.
     ///
     /// Dense defaults and blocks mask weaker animation. Sparse array edits and
@@ -5016,6 +5069,25 @@ mod tests {
         }
         let stage = Stage::from_parts(HashMap::from([(prim, index)]), HashMap::new(), false, None);
         (stage, prim, field)
+    }
+
+    /// A single time sample is a time-varying source although every
+    /// numeric time reads the same value: the default-time read differs.
+    /// A dense default over it is not. OpenUSD 26.11
+    /// `UsdResolveInfo::ValueSourceMightBeTimeVarying`.
+    ///
+    /// Spec: AOUSD Core §12.3.2.
+    #[test]
+    fn single_sample_is_a_time_varying_source() {
+        let ty = PropertyType::parse("double").unwrap();
+        let sample = PropertySpec::typed_attribute(ty.clone())
+            .with_time_samples(vec![(1.0, Value::Double(2.0))]);
+        let (stage, prim, field) = property_stack_fixture(vec![sample.clone()]);
+        assert!(!stage.property_might_be_time_varying(prim, field));
+        assert!(stage.property_value_source_might_be_time_varying(prim, field));
+        let dense = PropertySpec::typed_attribute(ty).with_default(Value::Double(4.0));
+        let (stage, prim, field) = property_stack_fixture(vec![dense, sample]);
+        assert!(!stage.property_value_source_might_be_time_varying(prim, field));
     }
 
     /// A path expression's type composes over a weaker one, so the sample

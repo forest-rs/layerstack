@@ -1164,6 +1164,24 @@ impl<'a> Attribute<'a> {
             .stage
             .property_might_be_time_varying(path.prim_path(), path.property())
     }
+    /// Conservative whether the attribute's value source might vary with
+    /// time: time samples (even one), a spline or value clips supply its
+    /// value, directly or under sparse edits that compose over them. Unlike
+    /// [`Self::might_be_time_varying`] it is `true` whenever a numeric-time
+    /// read and a [`Time::Default`] read may differ, such as for a single
+    /// time sample; `false` means the value is certainly the same at every
+    /// time, the default time included.
+    ///
+    /// Spec: AOUSD Core §12.3.2, §12.3.4 (value clips).
+    #[doc(alias = "UsdAttributeQuery::ValueSourceMightBeTimeVarying")]
+    #[doc(alias = "UsdResolveInfo::ValueSourceMightBeTimeVarying")]
+    #[doc(alias = "ValueSourceMightBeTimeVarying")]
+    pub fn value_source_might_be_time_varying(self) -> bool {
+        let path = self.property.path;
+        self.property
+            .stage
+            .property_value_source_might_be_time_varying(path.prim_path(), path.property())
+    }
     /// The value clip that supplies the value at `time`, with its mapped
     /// bracketing samples; `None` when source selection ends before clips,
     /// no manifest makes the attribute eligible, or at [`Time::Default`]

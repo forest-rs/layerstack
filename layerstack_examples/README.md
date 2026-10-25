@@ -89,7 +89,7 @@ Run an example with `cargo run -p layerstack_examples --example NAME`.
 | --- | --- |
 | `typed_schema` | Typed mesh, light and collection authoring, fallbacks and inherited properties |
 | `world_transforms` | Animated transforms, inherited visibility and purpose through `XformCache` |
-| `camera_frustum` | Sampled projection and frustum culling of moving point instances |
+| `camera_frustum` | Sampled projection, frustum culling and picking of moving point instances |
 | `morph_animation` | Retained morph definitions and weights with cached geometry outputs |
 | `deformation_inputs` | Renderer-owned binding buffers and shared rig palettes for GPU deformation |
 | `light_rig_slots` | Sparse slot edits using `opinionated` alone |

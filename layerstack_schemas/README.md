@@ -691,12 +691,23 @@ observe later changes. Numeric calls replace one sample; default calls retain
 existing numeric slots.
 
 For repeated culling, call `camera.prepare_frustum()` once and reuse its owned
-`camera::PreparedFrustum` for `contains_world_point` and `intersects_world_bound`.
-It retains six normalized world planes without allocations or scene borrows.
-Prepare again after recomputing the camera; retained frusta keep their original
+`camera::PreparedFrustum` for `contains_world_point`, `intersects_world_bound`,
+`intersects_segment` and `intersects_triangle`. It retains six normalized world
+planes and its conformed view without allocations or scene borrows. Prepare
+again after recomputing the camera; retained frusta keep their original
 snapshot. Bound intersection remains conservative, and additional authored
-clipping planes remain consumer-owned. The `wind_tunnel` `camera_frustum`
-benchmark separates one-shot queries, preparation, and plane reuse.
+clipping planes remain consumer-owned. `PreparedFrustum::new` and
+`from_perspective` build frusta from an engine's own camera-to-world matrix,
+window or field of view, conformed as `GfFrustum` conforms them.
+
+For picking, `pick_ray` and `pick_ray_through` return a `camera::Ray` through a
+normalized window point or toward a world point, and `narrowed` and
+`narrowed_around` return a frustum around a picking region, as
+`GfFrustum::ComputePickRay` and `ComputeNarrowedFrustum`. `Ray` intersects
+triangles (with barycentrics and facing), planes, `Range3d`, `BoundingBox`,
+spheres, cylinders and cones as `GfRay` does. The `wind_tunnel`
+`camera_frustum` benchmark separates one-shot queries, preparation, plane
+reuse and picking.
 
 Retained computed queries are available in `retained` with `usd-geom` and
 `usd-shade`. Caller-owned `RetainedQueries` observe a host-owned `LiveStage`, retaining world

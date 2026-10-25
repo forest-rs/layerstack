@@ -1,0 +1,94 @@
+#usda 1.0
+(
+    "Rigid bodies whose `physics:rigidBodyEnabled` is false, which OpenUSD 26.11 parses as though `PhysicsRigidBodyAPI` were not applied."
+)
+
+def PhysicsScene "physicsScene"
+{
+}
+
+# A disabled body nested in an enabled one: the colliders beneath it belong
+# to the enabled body, and it owns none.
+def Xform "Outer" (
+    prepend apiSchemas = ["PhysicsRigidBodyAPI"]
+)
+{
+    double3 xformOp:translate = (1, 0, 0)
+    uniform token[] xformOpOrder = ["xformOp:translate"]
+
+    def Xform "Inner" (
+        prepend apiSchemas = ["PhysicsRigidBodyAPI"]
+    )
+    {
+        bool physics:rigidBodyEnabled = 0
+        double3 xformOp:translate = (0, 2, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+
+        def Cube "Box" (
+            prepend apiSchemas = ["PhysicsCollisionAPI"]
+        )
+        {
+            double3 xformOp:translate = (0, 0, 3)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+    }
+
+    # A disabled body that is its own collider.
+    def Sphere "SelfCollider" (
+        prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsCollisionAPI"]
+    )
+    {
+        bool physics:rigidBodyEnabled = 0
+    }
+}
+
+# A disabled body with no enabled body above it: its collider is static.
+def Xform "Lone" (
+    prepend apiSchemas = ["PhysicsRigidBodyAPI"]
+)
+{
+    bool physics:rigidBodyEnabled = 0
+    double3 xformOp:translate = (0, 0, 5)
+    uniform token[] xformOpOrder = ["xformOp:translate"]
+
+    def Cube "Box" (
+        prepend apiSchemas = ["PhysicsCollisionAPI"]
+    )
+    {
+    }
+
+    # An enabled body below the disabled one keeps its own colliders.
+    def Xform "Child" (
+        prepend apiSchemas = ["PhysicsRigidBodyAPI"]
+    )
+    {
+        def Cube "Box" (
+            prepend apiSchemas = ["PhysicsCollisionAPI"]
+        )
+        {
+        }
+    }
+}
+
+# Joint body relationships resolve to the nearest enabled body above their
+# target, or, with none, to the farthest collider above it.
+def PhysicsFixedJoint "ToNested"
+{
+    rel physics:body0 = </Outer/Inner/Box>
+    rel physics:body1 = </Outer/Inner>
+    point3f physics:localPos0 = (0.5, 0, 0)
+    point3f physics:localPos1 = (0, 0.5, 0)
+}
+
+def PhysicsFixedJoint "ToLone"
+{
+    rel physics:body0 = </Lone/Box>
+    rel physics:body1 = </Lone>
+    point3f physics:localPos0 = (0.5, 0, 0)
+}
+
+def PhysicsRevoluteJoint "ToChild"
+{
+    rel physics:body0 = </Lone/Child/Box>
+    rel physics:body1 = </Outer/SelfCollider>
+}

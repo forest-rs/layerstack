@@ -11,8 +11,11 @@ use crate::{
 use alloc::vec::Vec;
 use layerstack::{TokenInterner, Value};
 
+mod frustum;
 mod ray;
 
+pub use frustum::PreparedFrustum;
+use frustum::{ConformedView, FrustumProjection, contains_planes, intersects_planes};
 pub use ray::{PlaneHit, Ray, RayInterval, TriangleHit};
 type Matrix = [[f64; 4]; 4];
 /// Invalid camera parameters or transform; computations return no partial camera.
@@ -41,35 +44,6 @@ fn read<'a, T>(
 ) -> Option<T> {
     prim.read_value_at(name, time, decode)
 }
-fn transform(point: [f64; 3], matrix: &Matrix) -> [f64; 3] {
-    core::array::from_fn(|j| {
-        point[0] * matrix[0][j] + point[1] * matrix[1][j] + point[2] * matrix[2][j] + matrix[3][j]
-    })
-}
-
-#[inline]
-fn contains_planes(planes: &[[f64; 4]; 6], point: [f64; 3]) -> bool {
-    planes
-        .iter()
-        .all(|p| p[0] * point[0] + p[1] * point[1] + p[2] * point[2] + p[3] >= 0.)
-}
-
-#[inline]
-fn intersects_planes(planes: &[[f64; 4]; 6], bound: &BoundingBox) -> bool {
-    planes.iter().all(|plane| {
-        (0..8).any(|corner| {
-            let point = core::array::from_fn(|i| {
-                if corner & (1 << i) == 0 {
-                    bound.range.min[i]
-                } else {
-                    bound.range.max[i]
-                }
-            });
-            let point = transform(point, &bound.matrix);
-            plane[0] * point[0] + plane[1] * point[1] + plane[2] * point[2] + plane[3] >= 0.
-        })
-    })
-}
 /// Sampled camera parameters and primary viewing frustum, detached from the scene.
 /// Matrices use USD row vectors, right-handed eye space looking down `-Z`, and
 /// OpenGL NDC depth `[-1,1]`. Rebuild after camera/ancestor edits. The view conforms
@@ -92,42 +66,6 @@ pub struct ComputedCamera {
     f_stop: f32,
     focus_distance: f32,
     shutter_offsets: [f64; 2],
-}
-
-/// Immutable primary-frustum planes prepared for repeated world-space queries.
-///
-/// Owns its six normalized planes without scene borrows or allocations. Prepare
-/// from a [`ComputedCamera`] with [`ComputedCamera::prepare_frustum`], then reuse
-/// across points and bounds. It does not observe camera, time or scene changes;
-/// prepare again from the recomputed camera after such changes. Additional
-/// authored clipping planes are excluded, as in the one-shot camera helpers.
-#[derive(Clone, Debug)]
-pub struct PreparedFrustum {
-    planes: [[f64; 4]; 6],
-}
-
-impl PreparedFrustum {
-    /// Normalized inward world-space planes `[a,b,c,d]`: left, right,
-    /// bottom, top, near, far. Nonnegative signed distance is inside.
-    #[must_use]
-    pub fn planes(&self) -> &[[f64; 4]; 6] {
-        &self.planes
-    }
-
-    /// Whether a finite world point lies inside all six primary planes.
-    #[must_use]
-    pub fn contains_world_point(&self, point: [f64; 3]) -> bool {
-        point.iter().all(|v| v.is_finite()) && contains_planes(&self.planes, point)
-    }
-
-    /// Conservative intersection with an oriented world bound. Rejects a box
-    /// wholly outside any primary plane; crossing boxes can be false positives.
-    /// Empty bounds do not intersect. Uses the same transformed-corner test as
-    /// [`ComputedCamera::intersects_world_bound`], without rebuilding the planes.
-    #[must_use]
-    pub fn intersects_world_bound(&self, bound: &BoundingBox) -> bool {
-        !bound.range.is_empty() && intersects_planes(&self.planes, bound)
-    }
 }
 
 impl ComputedCamera {
@@ -219,61 +157,23 @@ impl ComputedCamera {
     /// lower-right, upper-left, upper-right order, as `GfFrustum::ComputeCorners`.
     #[must_use]
     pub fn frustum_corners(&self) -> [[f64; 3]; 8] {
-        core::array::from_fn(|i| {
-            let distance = self.clipping_range[i / 4];
-            let scale = if self.projection == CameraProjection::Perspective {
-                distance
-            } else {
-                1.
-            };
-            transform(
-                [
-                    self.window[if i % 2 == 0 { 0 } else { 2 }] * scale,
-                    self.window[if i % 4 < 2 { 1 } else { 3 }] * scale,
-                    -distance,
-                ],
-                &self.view_inverse,
-            )
-        })
+        frustum::corners(
+            &self.view_inverse,
+            self.window,
+            self.clipping_range,
+            self.frustum_projection(),
+        )
     }
     /// Six normalized inward world-space planes `[a,b,c,d]`: left, right,
     /// bottom, top, near, far. Nonnegative signed distance is inside.
     #[must_use]
     pub fn frustum_planes(&self) -> [[f64; 4]; 6] {
-        let [l, b, r, t] = self.window;
-        let [n, f] = self.clipping_range;
-        // Derive from the window rather than subtracting projection columns:
-        // large far/near ratios can round the far plane's normal to zero.
-        let eye = if self.projection == CameraProjection::Perspective {
-            [
-                [1., 0., l, 0.],
-                [-1., 0., -r, 0.],
-                [0., 1., b, 0.],
-                [0., -1., -t, 0.],
-                [0., 0., -1., -n],
-                [0., 0., 1., f],
-            ]
-        } else {
-            [
-                [1., 0., 0., -l],
-                [-1., 0., 0., r],
-                [0., 1., 0., -b],
-                [0., -1., 0., t],
-                [0., 0., -1., -n],
-                [0., 0., 1., f],
-            ]
-        };
-        eye.map(|p| {
-            let length = libm::sqrt(p[0] * p[0] + p[1] * p[1] + p[2] * p[2]);
-            let p = p.map(|v| v / length);
-            // Row-vector world-to-eye transform acts on plane coefficients
-            // as a matrix times a column vector.
-            let world: [f64; 4] =
-                core::array::from_fn(|i| (0..4).map(|j| self.view[i][j] * p[j]).sum());
-            let length =
-                libm::sqrt(world[0] * world[0] + world[1] * world[1] + world[2] * world[2]);
-            world.map(|v| v / length)
-        })
+        frustum::planes(
+            &self.view,
+            self.window,
+            self.clipping_range,
+            self.frustum_projection(),
+        )
     }
     /// Prepare the primary world-space planes once for repeated point and bound
     /// queries. The owned result retains this camera snapshot's planes; it does
@@ -283,6 +183,14 @@ impl ComputedCamera {
     pub fn prepare_frustum(&self) -> PreparedFrustum {
         PreparedFrustum {
             planes: self.frustum_planes(),
+        }
+    }
+    /// The frustum projection; cameras only compute the two `GfFrustum` has.
+    fn frustum_projection(&self) -> FrustumProjection {
+        if self.projection == CameraProjection::Orthographic {
+            FrustumProjection::Orthographic
+        } else {
+            FrustumProjection::Perspective
         }
     }
     /// Whether a finite world point lies inside the six primary frustum planes.
@@ -352,39 +260,8 @@ impl Camera<'_> {
         let camera_to_world = xforms
             .local_to_world(&self.scene(), self.path())
             .ok_or(CameraError::InvalidTransform)?;
-        if camera_to_world.iter().flatten().any(|v| !v.is_finite()) {
-            return Err(CameraError::InvalidTransform);
-        }
-        let mut linear = gf::IDENTITY;
-        for i in 0..3 {
-            linear[i][..3].copy_from_slice(&camera_to_world[i][..3]);
-        }
-        let (_, det) = gf::inverse(&linear);
-        if !det.is_finite() || det == 0. {
-            return Err(CameraError::InvalidTransform);
-        }
-        if det < 0. {
-            linear[0] = linear[0].map(|v| -v);
-        }
-        let rows = core::array::from_fn(|i| core::array::from_fn(|j| linear[i][j]));
-        let q = gf::decomposition::quaternion(&gf::decomposition::orthonormalize(rows));
-        let rotation = gf::Rotation::from_quat([q[1], q[2], q[3], q[0]]);
-        let w = camera_to_world[3][3];
-        let position = core::array::from_fn(|i| {
-            if w != 1. && w.abs() > 1e-10 {
-                camera_to_world[3][i] / w
-            } else {
-                camera_to_world[3][i]
-            }
-        });
-        let view = gf::mul(
-            &gf::translate(position.map(|v| -v)),
-            &rotation.inverse().matrix(),
-        );
-        let (view_inverse, det) = gf::inverse(&view);
-        if det == 0. || view.iter().flatten().any(|v| !v.is_finite()) {
-            return Err(CameraError::InvalidTransform);
-        }
+        let ConformedView { view, view_inverse } =
+            frustum::conform(&camera_to_world).ok_or(CameraError::InvalidTransform)?;
         // GfCamera halves authored float apertures before widening to double.
         let half = aperture.map(|v| f64::from(v / 2.));
         let offset = aperture_offset.map(f64::from);
@@ -398,27 +275,15 @@ impl Camera<'_> {
         if projection == CameraProjection::Perspective && focal_length != 0. {
             window = window.map(|v| v / (f64::from(focal_length) * 0.1));
         }
-        let [l, b, r, t] = window;
-        let [n, f] = clipping_range;
-        let rl = r - l;
-        let tb = t - b;
-        let fn_ = f - n;
-        let mut projection_matrix = gf::IDENTITY;
-        projection_matrix[0][0] = 2. / rl;
-        projection_matrix[1][1] = 2. / tb;
-        if projection == CameraProjection::Orthographic {
-            projection_matrix[2][2] = -2. / fn_;
-            projection_matrix[3][0] = -(r + l) / rl;
-            projection_matrix[3][1] = -(t + b) / tb;
-            projection_matrix[3][2] = -(f + n) / fn_;
-        } else {
-            projection_matrix[2][2] = -(f + n) / fn_;
-            projection_matrix[2][0] = (r + l) / rl;
-            projection_matrix[2][1] = (t + b) / tb;
-            projection_matrix[3][2] = -2. * n * f / fn_;
-            projection_matrix[2][3] = -1.;
-            projection_matrix[3][3] = 0.;
-        }
+        let projection_matrix = frustum::projection_matrix(
+            window,
+            clipping_range,
+            if projection == CameraProjection::Orthographic {
+                FrustumProjection::Orthographic
+            } else {
+                FrustumProjection::Perspective
+            },
+        );
         if gf::mul(&view, &projection_matrix)
             .iter()
             .flatten()

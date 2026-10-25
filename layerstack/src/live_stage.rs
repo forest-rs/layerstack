@@ -31,6 +31,7 @@ use crate::{
     edit::{Applied, Changes, EditError, Transaction},
     expression_variables::VariableReads,
     path::PathId,
+    prim_indexing::Boundaries,
     stage::{PopulationMask, Stage, StageOptions},
 };
 
@@ -824,7 +825,10 @@ impl LiveStage {
         // keeps its retained index, which a sibling added or removed does
         // not change; the partial composition composes its child names
         // once, for its whole child list.
-        let boundaries: HashSet<PathId> = parents.iter().copied().collect();
+        let boundaries = Boundaries {
+            parents: parents.iter().copied().collect(),
+            retained: false,
+        };
         let mut seed: BTreeSet<PathId> = affected.iter().copied().collect();
         for &path in &affected {
             let mut current = store.paths().resolve(path).parent();
@@ -1851,7 +1855,7 @@ impl LiveStage {
             self.root,
             scoped_opts,
             true,
-            &HashSet::new(),
+            &Boundaries::default(),
             &self.child_index,
         )
     }
@@ -5131,7 +5135,9 @@ mod tests {
     /// On a stage whose arcs keep it off the local path, creating and
     /// removing prims, root prims among them, reports each parent whose
     /// child list gained or lost the prim as changed info, as the local
-    /// path does, whether or not its spec changed.
+    /// path does, whether or not its spec changed. A parent beneath the
+    /// pseudo-root keeps its index: only the prim and the pseudo-root's are
+    /// replaced.
     ///
     /// Spec: AOUSD Core §11.3.1 (child order). OpenUSD:
     /// `UsdNotice::ObjectsChanged::GetChangedInfoOnlyPaths`.
@@ -5157,8 +5163,8 @@ mod tests {
         let mut undo = Vec::new();
         for (remove, path, work, info) in [
             (true, "/Rock", (1, 2, false), "/"),
-            (true, "/World/A/X", (3, 2, false), "/World/A"),
-            (false, "/World/B", (3, 2, false), "/World"),
+            (true, "/World/A/X", (3, 1, false), "/World/A"),
+            (false, "/World/B", (3, 1, false), "/World"),
             (false, "/Plant", (2, 2, false), "/"),
         ] {
             let mut txn = Transaction::new();

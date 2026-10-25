@@ -7,6 +7,7 @@
 //! `UsdNamespaceEditor::_ProcessPrimEdit` / `PcpGatherDependentNamespaceEdits`.
 
 use super::*;
+use crate::prim_indexing::Boundaries;
 use crate::{
     ArcKind, HashMap, HashSet, NodeId, Relocate, prim_indexing::ChildIndex,
     stage::preparation::PreparationIndex,
@@ -1009,7 +1010,7 @@ impl ProjectionScope<'_> {
                 stage.root_layer()?,
                 options,
                 false,
-                &HashSet::new(),
+                &Boundaries::default(),
                 children,
             );
             if partial.composes_instances() {

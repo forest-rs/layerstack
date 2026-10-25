@@ -26,7 +26,7 @@ use crate::{
     path::PathId,
     prim_index::{OpinionKey, PrimIndex},
     prim_index_graph::{NodeId, PrimIndexGraph},
-    prim_indexing::ChildIndex,
+    prim_indexing::{Boundaries, ChildIndex},
     stage::{InstanceIndexKeys, Stage, StageOptions},
 };
 
@@ -54,7 +54,7 @@ pub(crate) fn compose_stage_with_paths(
     root: LayerId,
     options: StageOptions,
     populated: Option<BTreeSet<PathId>>,
-    boundaries: &HashSet<PathId>,
+    boundaries: &Boundaries,
     child_index: &ChildIndex,
 ) -> Composed {
     compose_stage_retained(
@@ -77,7 +77,7 @@ pub(crate) fn compose_stage_retained(
     options: StageOptions,
     populated: Option<BTreeSet<PathId>>,
     exact_mask: bool,
-    boundaries: &HashSet<PathId>,
+    boundaries: &Boundaries,
     child_index: &ChildIndex,
 ) -> Composed {
     let listed: Option<HashSet<PathId>> = populated.map(|paths| paths.into_iter().collect());
@@ -101,7 +101,7 @@ fn compose_indexed(
     options: StageOptions,
     exact_mask: bool,
     listed: Option<&HashSet<PathId>>,
-    boundaries: &HashSet<PathId>,
+    boundaries: &Boundaries,
     child_index: &ChildIndex,
 ) -> Composed {
     let scope = match (listed, options.mask.as_ref()) {

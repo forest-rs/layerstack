@@ -785,7 +785,7 @@ mod tests {
             StageOptions::default(),
             None,
             false,
-            &HashSet::new(),
+            &Boundaries::default(),
             &crate::prim_indexing::ChildIndex::default(),
         );
         // Every outer root is indexed; only the first one's descendants

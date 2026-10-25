@@ -65,6 +65,7 @@ use hashbrown::{HashMap, HashSet};
 use invalidation::InvalidationGraph;
 
 pub(crate) use crate::ident::dictionary_cmp;
+use crate::prim_indexing::Boundaries;
 use crate::variant_fallbacks::VariantFallbacks;
 use crate::{
     composition_error::{CompositionError, order_errors},
@@ -569,7 +570,7 @@ impl Stage {
             root,
             options,
             exact_mask,
-            &HashSet::new(),
+            &Boundaries::default(),
             &child_index,
         )
     }
@@ -583,7 +584,7 @@ impl Stage {
         root: LayerId,
         options: StageOptions,
         exact_mask: bool,
-        boundaries: &HashSet<PathId>,
+        boundaries: &Boundaries,
         child_index: &crate::prim_indexing::ChildIndex,
     ) -> Self {
         Self::compose_retained_with(
@@ -612,7 +613,7 @@ impl Stage {
             root,
             options,
             false,
-            &HashSet::new(),
+            &Boundaries::default(),
             child_index,
             false,
         )
@@ -625,7 +626,7 @@ impl Stage {
         root: LayerId,
         mut options: StageOptions,
         exact_mask: bool,
-        boundaries: &HashSet<PathId>,
+        boundaries: &Boundaries,
         child_index: &crate::prim_indexing::ChildIndex,
         arc_metadata: bool,
     ) -> Self {
@@ -730,7 +731,7 @@ impl Stage {
         root: LayerId,
         options: StageOptions,
         paths: alloc::collections::BTreeSet<PathId>,
-        boundaries: &HashSet<PathId>,
+        boundaries: &Boundaries,
         child_index: &crate::prim_indexing::ChildIndex,
     ) -> Self {
         let mut options = options;
@@ -757,6 +758,12 @@ impl Stage {
         stage.schemas = schemas;
         stage.prepare(store, instance_keys, dependencies);
         stage
+    }
+
+    /// The prim index of `prim`, if the stage holds it.
+    #[cfg(test)]
+    pub(crate) fn index_of(&self, prim: PathId) -> Option<&PrimIndex> {
+        self.prims.get(&prim)
     }
 
     /// Whether this partial composition composed the whole child list of

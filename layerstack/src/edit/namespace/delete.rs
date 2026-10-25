@@ -18,6 +18,7 @@
 
 use super::coordinated::Overlay;
 use super::*;
+use crate::prim_indexing::Boundaries;
 use crate::{
     HashMap, HashSet, Relocate, VariantSets,
     stage::preparation::{PreparationIndex, layer_links},
@@ -279,7 +280,7 @@ fn composes(
             root,
             options.clone(),
             false,
-            &HashSet::new(),
+            &Boundaries::default(),
             &children,
         );
         let found = exists(&partial);

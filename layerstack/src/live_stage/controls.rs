@@ -265,6 +265,24 @@ impl LiveStage {
         Some((roots, refreshed))
     }
 
+    /// Checks that each boundary parent of `retained`, whose index an edit
+    /// beneath it kept, has the index a fresh composition gives it.
+    #[cfg(test)]
+    fn check_retained_boundaries(&self, store: &mut dyn LayerStore, retained: &[PathId]) {
+        if retained.is_empty() {
+            return;
+        }
+        let fresh = Stage::compose(store, self.root, self.options.clone());
+        for parent in retained {
+            let kept = self.stage.index_of(*parent).expect("retained index");
+            let composed = fresh.index_of(*parent).expect("composed index");
+            assert!(
+                kept.data.same_records(&composed.data),
+                "{parent:?} keeps {kept:?}, composes {composed:?}"
+            );
+        }
+    }
+
     pub(super) fn recompose_controls(
         &mut self,
         store: &mut dyn LayerStore,
@@ -275,6 +293,11 @@ impl LiveStage {
             .iter()
             .chain(&self.support_sources)
             .any(|(l, _)| *l == self.root);
+        // An edit beneath a boundary parent leaves the parent's own index
+        // as it is, unless the edit also authored a spec only supporting
+        // the new ones (an `over` above them), which the parent may draw
+        // on through an arc: then the parents' indexes are composed again.
+        let retain_boundaries = self.support_sources.is_empty();
         let Some((mut roots, mut refreshed)) = self.control_roots(store) else {
             return self.full_rebuild(store, changes);
         };
@@ -319,11 +342,14 @@ impl LiveStage {
             // ancestor walk in this set: an edit can resync as many sibling
             // roots as prims reference what it changed.
             let mut within: HashSet<PathId> = roots.iter().copied().collect();
-            let boundaries: HashSet<PathId> = roots
-                .iter()
-                .filter_map(|root| store.paths().parent(*root))
-                .filter(|parent| !is_beneath_set(store, *parent, &within))
-                .collect();
+            let boundaries = Boundaries {
+                parents: roots
+                    .iter()
+                    .filter_map(|root| store.paths().parent(*root))
+                    .filter(|parent| !is_beneath_set(store, *parent, &within))
+                    .collect(),
+                retained: retain_boundaries,
+            };
             let partial = Stage::compose_retained(
                 store,
                 self.root,
@@ -353,7 +379,7 @@ impl LiveStage {
                 .filter_map(|root| store.paths().resolve(*root).parent())
                 .filter(|parent| parent != &crate::Path::root())
                 .filter_map(|parent| store.paths().lookup(&parent))
-                .filter(|parent| self.stage.has_prim(*parent) && !partial.has_prim(*parent))
+                .filter(|parent| self.stage.has_prim(*parent) && !indexed(&partial, *parent))
                 .collect();
             if !missing_parents.is_empty() {
                 roots.extend(missing_parents);
@@ -418,15 +444,21 @@ impl LiveStage {
         }
         let mut affected: Vec<_> = old.union(&new).copied().collect();
         let hierarchy = affected.clone();
-        // Structural authoring also changes source provenance/child-order at
-        // boundary parents. Refresh their indexes while preserving full lists.
+        // Structural authoring changes the child lists of the boundary
+        // parents, whose full lists the partial composition composed. Their
+        // indexes are replaced only when it composed them again.
         let mut lists_changed = Vec::new();
+        let mut retained = Vec::new();
         for &root in &roots {
             if let Some(parent) = store.paths().parent(root)
-                && partial.has_prim(parent)
+                && indexed(&partial, parent)
                 && !is_beneath_set(store, parent, &within)
             {
-                affected.push(parent);
+                if partial.has_prim(parent) {
+                    affected.push(parent);
+                } else {
+                    retained.push(parent);
+                }
                 // A child that came or went changed the parent's child list.
                 if self.stage.has_prim(root) != partial.has_prim(root) {
                     lists_changed.push(parent);
@@ -434,9 +466,6 @@ impl LiveStage {
             }
         }
         affected.extend(refreshed.iter().copied());
-        // In namespace order, the order they are reported in: the change
-        // lists below are filtered from it, so each is sorted already and
-        // publishing them, and returning these, sorts in one pass.
         store.paths().sort_paths(&mut affected, store.tokens());
         self.work.replaced_prim_indexes = affected.len();
         let deps = partial.take_deps().unwrap_or_default();
@@ -461,6 +490,12 @@ impl LiveStage {
         if local_structure_changed {
             self.local_namespace = local::LocalSlot::pending(store, self.root, &self.options);
         }
+        #[cfg(test)]
+        self.check_retained_boundaries(store, &retained);
+        // The boundary parents whose child lists changed are reported with
+        // the prims recomposed, in namespace order: the change lists below
+        // are filtered from them, so each is sorted already.
+        let affected = merge_sorted(store, affected, retained);
         if let Some(changes) = changes {
             let filtered = |keep: &dyn Fn(PathId) -> bool| -> Vec<PathId> {
                 affected.iter().copied().filter(|p| keep(*p)).collect()
@@ -480,6 +515,38 @@ impl LiveStage {
         }
         affected
     }
+}
+
+/// Whether the partial composition `partial` indexed `prim`: it holds the
+/// prim's index, or the whole child list of a boundary parent it indexed
+/// for its children only ([`Boundaries::retained`]).
+fn indexed(partial: &Stage, prim: PathId) -> bool {
+    partial.has_prim(prim) || partial.has_boundary_children(prim)
+}
+
+/// The paths of `sorted`, in namespace order, and those of `more`, sorted
+/// here, in one list in namespace order, each once.
+fn merge_sorted(store: &dyn LayerStore, sorted: Vec<PathId>, mut more: Vec<PathId>) -> Vec<PathId> {
+    if more.is_empty() {
+        return sorted;
+    }
+    let (paths, tokens) = (store.paths(), store.tokens());
+    paths.sort_paths(&mut more, tokens);
+    let mut merged = Vec::with_capacity(sorted.len() + more.len());
+    let (mut a, mut b) = (sorted.into_iter().peekable(), more.into_iter().peekable());
+    while let (Some(&x), Some(&y)) = (a.peek(), b.peek()) {
+        match paths.cmp_paths(x, y, tokens) {
+            core::cmp::Ordering::Less => merged.extend(a.next()),
+            core::cmp::Ordering::Greater => merged.extend(b.next()),
+            core::cmp::Ordering::Equal => {
+                merged.extend(a.next());
+                b.next();
+            }
+        }
+    }
+    merged.extend(a);
+    merged.extend(b);
+    merged
 }
 
 /// Inserts the strict ancestors of `path` into `set`, stopping at the first
@@ -666,6 +733,119 @@ mod tests {
             }
         }
         assert_fresh_edges(&live, &mut store);
+    }
+
+    /// A child spec authored beneath a prim that siblings reference leaves
+    /// the siblings' own indexes as they are: only the new children are
+    /// composed into the stage.
+    ///
+    /// Spec: AOUSD Core §10.3.2 (references), §11 (stage population).
+    #[test]
+    fn child_specs_keep_their_parents_indexes() {
+        let mut store = InMemoryStore::default();
+        let proto = store.path("/Proto");
+        let mut layer = Layer::new(LayerId(1));
+        layer.insert_prim(proto, PrimSpec::def());
+        let siblings: alloc::vec::Vec<_> = (0..4)
+            .map(|i| store.path(&alloc::format!("/World/I{i}")))
+            .collect();
+        for &sibling in &siblings {
+            layer.insert_prim(
+                sibling,
+                PrimSpec::def().with_reference(Reference::new(LayerId(1), proto)),
+            );
+        }
+        store.insert_layer(layer);
+        let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+        let kept = live
+            .stage()
+            .index_of(siblings[0])
+            .expect("index")
+            .data
+            .clone();
+        let mut create = Transaction::new();
+        let added = store.path("/Proto/Added");
+        create.create_prim(
+            EditTarget::for_layer(LayerId(1)).prim(added),
+            Specifier::Def,
+            None,
+        );
+        live.apply(&mut store, &create).expect("edit applies");
+        let work = live.recomposition_work();
+        assert!(!work.full_rebuild);
+        // `/Proto/Added` and the four new children; no sibling.
+        assert_eq!(work.replaced_prim_indexes, 5, "{work:?}");
+        let index = live.stage().index_of(siblings[0]).expect("index");
+        assert!(alloc::sync::Arc::ptr_eq(&kept, &index.data));
+        assert_prim_stacks_match_fresh(&live, &mut store);
+    }
+
+    /// A child spec authored in a layer that had no spec of its parent also
+    /// authors an `over` of the parent there, which only supports the
+    /// child. A prim referencing the parent draws on that `over` too: its
+    /// index is composed again, though the edit adds a child beneath it,
+    /// and its prim stack gains the layer.
+    ///
+    /// Spec: AOUSD Core §10.3.2 (references), §11 (stage population).
+    #[test]
+    fn an_over_supporting_a_child_spec_recomposes_the_parents_drawing_on_it() {
+        use crate::SublayerEntry;
+        let mut store = InMemoryStore::default();
+        let asset = store.path("/Asset");
+        let copy = store.path("/Copy");
+        let mut root = Layer::new(LayerId(1));
+        root.insert_prim(asset, PrimSpec::def());
+        root.insert_prim(
+            copy,
+            PrimSpec::def().with_reference(Reference::new(LayerId(1), asset)),
+        );
+        store.insert_layer(root);
+        store.insert_layer(Layer::new(LayerId(2)));
+        let mut session = Layer::new(LayerId(3));
+        session.sublayers.push(SublayerEntry::new(LayerId(2)));
+        store.insert_layer(session);
+        let options = StageOptions {
+            session_layer: Some(LayerId(3)),
+            ..StageOptions::default()
+        };
+        // One stage authors the edit; another reads it from the layer's
+        // history, which records the `over` as only supporting the child.
+        let mut author = LiveStage::compose(&mut store, LayerId(1), options.clone());
+        let mut reader = LiveStage::compose(&mut store, LayerId(1), options);
+        let leaf = store.path("/Asset/New/Leaf");
+        let mut create = Transaction::new();
+        create.create_prim(
+            EditTarget::for_layer(LayerId(2)).prim(leaf),
+            Specifier::Def,
+            None,
+        );
+        author.apply(&mut store, &create).expect("edit applies");
+        reader.synchronize(&mut store);
+        for live in [&author, &reader] {
+            assert!(!live.recomposition_work().full_rebuild);
+            assert!(live.stage().has_prim(store.path("/Copy/New/Leaf")));
+            let stack = live.stage().prim_stack(copy).expect("prim stack");
+            assert!(
+                stack.iter().any(|(layer, _)| *layer == LayerId(2)),
+                "{stack:?}"
+            );
+            assert_prim_stacks_match_fresh(live, &mut store);
+        }
+    }
+
+    /// The prim stack of every prim of `live` matches that of a fresh
+    /// composition with its options.
+    fn assert_prim_stacks_match_fresh(live: &LiveStage, store: &mut InMemoryStore) {
+        let fresh = crate::Stage::compose(store, LayerId(1), live.options().clone());
+        let prims: alloc::vec::Vec<_> = fresh.prim_paths().collect();
+        assert_eq!(prims.len(), live.stage().prim_paths().count());
+        for prim in prims {
+            assert_eq!(
+                live.stage().prim_stack(prim),
+                fresh.prim_stack(prim),
+                "{prim:?}"
+            );
+        }
     }
 
     /// The edges of every prim of `live` match those of a fresh composition

@@ -81,6 +81,9 @@ pub(crate) struct Composition {
     records: HashMap<PathId, PrimDependencies>,
     /// The layer stacks whose errors a prim has reported.
     reported_stacks: HashSet<StackId>,
+    /// The parents of the boundary parents indexed only for their children
+    /// ([`Boundaries::retained`]), whose child lists name prims not kept.
+    graph_only_parents: HashSet<PathId>,
     /// Whether a prim's index reads each layer stack, by [`StackId`]: the
     /// stacks whose layers are `used_layers`.
     used_stacks: Vec<bool>,
@@ -213,6 +216,33 @@ impl<'m> Scope<'m> {
     }
 }
 
+/// The boundary parents of a partial composition: the prims just outside
+/// the subtrees it recomposes, whose whole child lists it keeps
+/// ([`Composition::boundary_children`]).
+#[derive(Debug, Default)]
+pub(crate) struct Boundaries {
+    /// The parents.
+    pub(crate) parents: HashSet<PathId>,
+    /// Whether the caller keeps the parents' own indexes, which an edit
+    /// beneath them leaves as they are: the composition then indexes each
+    /// only for its children to start from and for its child list, and
+    /// keeps no index of it. An instance is indexed whole all the same.
+    ///
+    /// OpenUSD keeps the parent's cached index too, starting a new child's
+    /// from a copy of its graph (`_BuildInitialPrimIndexFromAncestor` in
+    /// `pxr/usd/pcp/primIndex.cpp`), and composes only the parent's child
+    /// names again (`UsdStage::_ComposeChildren`); a live stage keeps no
+    /// indexing graph, so the parent's is built again here.
+    pub(crate) retained: bool,
+}
+
+impl Boundaries {
+    /// Whether `path` is a parent whose index the caller keeps.
+    fn retains(&self, path: PathId) -> bool {
+        self.retained && self.parents.contains(&path)
+    }
+}
+
 /// Composes the stage rooted at `root`, reading the child specs of layers
 /// that do not list them from `child_index`.
 ///
@@ -227,7 +257,7 @@ pub(crate) fn compose(
     root: LayerId,
     options: &StageOptions,
     scope: Scope<'_>,
-    boundaries: &HashSet<PathId>,
+    boundaries: &Boundaries,
     child_index: &ChildIndex,
     checks: &mut crate::composition_checks::Findings,
 ) -> Composition {
@@ -463,6 +493,9 @@ struct Indexed {
     /// The errors, asset requests and variable reads it reported, if any.
     reports: Option<Box<Reports>>,
     active: bool,
+    /// Whether it is a boundary parent indexed only for its children
+    /// ([`Boundaries::retained`]): `index` is empty, and it is not kept.
+    graph_only: bool,
     /// The key of an active instance, while instances share prototypes.
     key: Option<InstanceKey>,
     /// The prototype key part of an active instance
@@ -543,7 +576,7 @@ struct Reports {
 fn index_prim(
     ctx: &Ctx<'_>,
     scope: &Scope<'_>,
-    boundaries: &HashSet<PathId>,
+    boundaries: &Boundaries,
     claims: &Claims,
     with_dependencies: bool,
     (path, parent): Pending,
@@ -578,20 +611,28 @@ fn index_prim(
 
     let names = child_names(ctx, &graph);
     let mut findings = crate::composition_checks::Findings::default();
-    let mut index = prim_index(ctx, path, &graph, like, &mut findings);
-    if let Some(parent) = parent.as_deref() {
-        parent.child_shape.offer(index.graph.shape());
-    }
+    // A boundary parent whose index the caller keeps is indexed for its
+    // graph alone, which its children start from.
+    let graph_only = !graph.instanceable && path != ctx.root_path && boundaries.retains(path);
+    let index = if graph_only {
+        PrimIndex::default()
+    } else {
+        let mut index = prim_index(ctx, path, &graph, like, &mut findings);
+        if let Some(parent) = parent.as_deref() {
+            parent.child_shape.offer(index.graph.shape());
+        }
+        // Found here, on the thread indexing the prim, for the stage's type
+        // info to read.
+        index.type_name = Some(crate::Stage::source_type_name(
+            &index,
+            ctx.store,
+            ctx.any_type,
+        ));
+        let dynamic = core::mem::take(&mut outputs.dynamic);
+        index.dynamic = (!dynamic.is_empty()).then(|| Arc::new(dynamic));
+        index
+    };
     drop(parent);
-    // Found here, on the thread indexing the prim, for the stage's type
-    // info to read.
-    index.type_name = Some(crate::Stage::source_type_name(
-        &index,
-        ctx.store,
-        ctx.any_type,
-    ));
-    let dynamic = core::mem::take(&mut outputs.dynamic);
-    index.dynamic = (!dynamic.is_empty()).then(|| Arc::new(dynamic));
     let active = path == ctx.root_path || is_active(ctx, &graph);
     // Found here, while the index is at hand, rather than for every
     // instance on one thread once the walk is done.
@@ -611,6 +652,7 @@ fn index_prim(
     let mut children = Vec::with_capacity(names.len());
     let mut composed_children = Vec::with_capacity(names.len());
     let mut boundary_children = boundaries
+        .parents
         .contains(&path)
         .then(|| Vec::with_capacity(names.len()));
     for name in names {
@@ -638,10 +680,11 @@ fn index_prim(
             arc_stacks.push(node.site.stack);
         }
     }
-    let record = with_dependencies.then(|| prim_record(ctx, &graph, &index, &mut outputs));
+    let record =
+        (with_dependencies && !graph_only).then(|| prim_record(ctx, &graph, &index, &mut outputs));
     let (has_payloads, instanceable) = (graph.has_payloads, graph.instanceable);
     // Only the children of the prim read its shape from its graph.
-    if !composed_children.is_empty() {
+    if !graph_only && !composed_children.is_empty() {
         graph.shape = Some(Arc::clone(index.graph.shape()));
     }
     let graph = Arc::new(graph);
@@ -685,6 +728,7 @@ fn index_prim(
         index,
         reports,
         active,
+        graph_only,
         key,
         index_key,
         descended,
@@ -804,6 +848,7 @@ impl Walk<'_, '_, '_> {
             index,
             reports,
             active,
+            graph_only,
             key,
             index_key,
             descended,
@@ -868,7 +913,10 @@ impl Walk<'_, '_, '_> {
                 }
             }
         }
-        let keep = self.scope.keeps(ctx.store.paths(), path);
+        let keep = !graph_only && self.scope.keeps(ctx.store.paths(), path);
+        if graph_only && let Some(parent) = ctx.store.paths().parent(path) {
+            out.graph_only_parents.insert(parent);
+        }
         if keep {
             out.prims.insert(path, index);
             if let Some(index_key) = index_key {
@@ -1739,6 +1787,12 @@ fn record_errors(out: &mut Composition, ctx: &Ctx<'_>, errors: Vec<Recorded>) {
 /// specs: names come from the sites of the parent's index, or from a
 /// relocation, as OpenUSD populates them (`UsdStage::_ComposeChildren`).
 fn finish(out: &mut Composition) {
+    // A child list names only the prims kept.
+    for parent in core::mem::take(&mut out.graph_only_parents) {
+        if let Some(list) = out.children.get_mut(&parent) {
+            list.retain(|child| out.prims.contains_key(child));
+        }
+    }
     // Inactive children are listed apart.
     let inactive = &out.inactive;
     for (parent, list) in out.children.iter_mut() {

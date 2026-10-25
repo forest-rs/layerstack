@@ -65,6 +65,7 @@ mod export_interop;
 mod expression_variables;
 mod extents_hint;
 mod flatten;
+mod frustum;
 mod generated_assets;
 mod geometry_extent_coverage;
 mod guarded_xform;

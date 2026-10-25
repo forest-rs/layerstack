@@ -181,7 +181,7 @@ impl OpinionValue {
     #[must_use]
     pub fn time_samples(&self) -> Option<&[TimeSample]> {
         match self {
-            Self::Property(spec) => spec.time_samples.as_deref().filter(|s| !s.is_empty()),
+            Self::Property(spec) => spec.time_samples.get().filter(|s| !s.is_empty()),
             Self::Field(_) => None,
         }
     }

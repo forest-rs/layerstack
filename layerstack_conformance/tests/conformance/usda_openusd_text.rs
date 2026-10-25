@@ -236,7 +236,7 @@ fn values_openusd_rejects_are_reported() {
                         && entry
                             .spec
                             .time_samples
-                            .as_ref()
+                            .get()
                             .is_none_or(|samples| samples.is_empty()),
                     "{statement}: a value was imported"
                 );

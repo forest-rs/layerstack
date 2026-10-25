@@ -2467,11 +2467,11 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
             match (*name, value.value()) {
                 ("default", _) => spec.default = Some(self.convert_field_value(value)),
                 ("timeSamples", Some(CrateValue::TimeSamples(samples))) => {
-                    let samples = samples
+                    let samples: Vec<_> = samples
                         .iter()
                         .map(|(tc, v)| (*tc, self.convert_crate_value(v)))
                         .collect();
-                    spec.time_samples = Some(samples);
+                    spec.time_samples = samples.into();
                 }
                 ("spline", Some(CrateValue::Spline(spline, dictionaries))) => {
                     let mut spline = spline.clone();
@@ -2514,8 +2514,8 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
             if let Some(value) = spec.default.as_mut() {
                 compact(value);
             }
-            if let Some(samples) = spec.time_samples.as_mut() {
-                for (_, value) in samples.make_mut() {
+            if let Some(samples) = spec.time_samples.get_mut() {
+                for (_, value) in samples {
                     compact(value);
                 }
             }

@@ -262,7 +262,7 @@ mod tests {
         let property_spec = store.layers[&LayerId(1)].property(property).unwrap();
         assert_eq!(property_spec.default, None);
         assert_eq!(
-            property_spec.time_samples.as_ref().unwrap().as_slice(),
+            property_spec.time_samples.get().unwrap(),
             &[
                 (1., Value::Float(0.)),
                 (2., Value::Float(2.)),
@@ -291,7 +291,7 @@ mod tests {
         let spec = store.layers[&LayerId(1)].property(property).unwrap();
         assert_eq!(spec.default, None);
         assert_eq!(
-            spec.time_samples.as_ref().unwrap().as_slice(),
+            spec.time_samples.get().unwrap(),
             &[(1., Value::Float(1.5e-6))]
         );
 

@@ -1269,7 +1269,7 @@ fn live_raw_clip_and_manifest_edits_refresh_descendants_but_preserve_snapshots()
         .unwrap()
         .property_mut(raw)
         .unwrap()
-        .time_samples = Some(vec![(0., Value::Double(0.)), (10., Value::Double(50.))].into());
+        .time_samples = vec![(0., Value::Double(0.)), (10., Value::Double(50.))].into();
     assert_eq!(
         at(&snapshot, &store, property, 5.),
         Some(5.),
@@ -1592,7 +1592,7 @@ fn live_newly_selected_resident_clip_is_watched_on_the_next_edit() {
         .unwrap()
         .property_mut(raw)
         .unwrap()
-        .time_samples = Some(vec![(0., Value::Double(3.))].into());
+        .time_samples = vec![(0., Value::Double(3.))].into();
     // The root edit recorded through `prim_mut` is reported too: the
     // explicit prim notification above does not consume its generation.
     assert_eq!(

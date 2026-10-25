@@ -370,7 +370,7 @@ fn properties(
         if let Some(value) = &prop.spec.default {
             values(value, layer, Some(&at), Some(prop.name), out, false);
         }
-        if let Some(samples) = &prop.spec.time_samples {
+        if let Some(samples) = prop.spec.time_samples.get() {
             for (_, value) in samples.iter() {
                 values(value, layer, Some(&at), Some(prop.name), out, false);
             }
@@ -667,7 +667,7 @@ fn rewrite_properties(
             rewrite_value(value, layer, Some(&at), Some(prop.name), map, false);
         }
         let mut samples = Vec::new();
-        if let Some(values) = &prop.spec.time_samples {
+        if let Some(values) = prop.spec.time_samples.get() {
             for (index, (_, value)) in values.iter().enumerate() {
                 let mut copy = value.clone();
                 rewrite_value(&mut copy, layer, Some(&at), Some(prop.name), map, false);
@@ -691,10 +691,10 @@ fn rewrite_properties(
             property.metadata.make_mut()[index] = field;
         }
         if !samples.is_empty()
-            && let Some(values) = &mut property.time_samples
+            && let Some(values) = property.time_samples.get_mut()
         {
             for (index, value) in samples {
-                values.make_mut()[index].1 = value;
+                values[index].1 = value;
             }
         }
     }

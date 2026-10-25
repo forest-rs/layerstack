@@ -723,8 +723,8 @@ def Scope "Recipes" {
                     .transaction
                     .set_default(target.property(file), desired);
             }
-            if let Some(samples) = &local.time_samples {
-                for (time, _) in samples.as_slice() {
+            if let Some(samples) = local.time_samples.get() {
+                for (time, _) in samples {
                     // for_layer has an identity time map; these are authored times.
                     update
                         .transaction

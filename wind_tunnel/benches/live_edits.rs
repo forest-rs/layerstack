@@ -37,13 +37,11 @@ fn build(
         leaf = path;
         let mut rotation = PropertySpec::typed_attribute(PropertyType::parse("float3").unwrap());
         if i % 97 == 0 {
-            rotation.time_samples = Some(
-                vec![
-                    (0.0, Value::Vec3f([0.0; 3])),
-                    (10.0, Value::Vec3f([90.0; 3])),
-                ]
-                .into(),
-            );
+            rotation.time_samples = vec![
+                (0.0, Value::Vec3f([0.0; 3])),
+                (10.0, Value::Vec3f([90.0; 3])),
+            ]
+            .into();
         } else {
             rotation.default = Some(Value::Vec3f([0.0; 3]));
         }

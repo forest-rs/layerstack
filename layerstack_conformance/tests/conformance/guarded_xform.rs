@@ -198,7 +198,7 @@ fn referenced_matrix_replacement_maps_namespace_and_stage_time_together() {
     let spec = store.layer(LayerId(2)).unwrap().prims()[&asset]
         .property(transform)
         .unwrap();
-    assert_eq!(spec.time_samples.as_ref().unwrap()[0].0, 2.);
+    assert_eq!(spec.time_samples.get().unwrap()[0].0, 2.);
     let scene = Scene::new(live.stage(), &store);
     assert_eq!(
         XformCache::new(Time::at(14.))

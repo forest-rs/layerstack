@@ -35,7 +35,7 @@
 //! ```
 //! use layerstack::{
 //!     ArcKind, EditTarget, InMemoryStore, Layer, LayerId, LiveStage, PrimSpec, PropertySpec,
-//!     PropertyType, Reference, StageOptions, Time, Transaction, Value,
+//!     PropertyType, Reference, StageOptions, Time, TimeSamples, Transaction, Value,
 //! };
 //!
 //! // `/World/Rock` references `/Rock` of a rock asset, 10 frames later.
@@ -73,13 +73,13 @@
 //! let samples = |store: &InMemoryStore| {
 //!     store.layer(LayerId(2)).unwrap().property(asset_spin).unwrap().time_samples.clone()
 //! };
-//! assert_eq!(samples(&store), Some(vec![(4.0, Value::Double(70.0))].into()));
+//! assert_eq!(samples(&store), vec![(4.0, Value::Double(70.0))].into());
 //! let spin = live.view(&store).attribute(spin_path).unwrap();
 //! assert_eq!(spin.value::<f64>(Time::at(14.0)), Some(70.0));
 //!
 //! // The inverse removes the sample it created.
 //! live.apply(&mut store, &applied.inverse).unwrap();
-//! assert_eq!(samples(&store), None);
+//! assert_eq!(samples(&store), TimeSamples::none());
 //! ```
 //!
 //! OpenUSD: `UsdEditTarget`, `UsdEditContext` and `UsdStage::SetEditTarget`

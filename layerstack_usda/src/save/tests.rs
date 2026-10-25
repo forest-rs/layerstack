@@ -603,7 +603,7 @@ fn rejects_invalid_layers() {
     );
 
     let mut imported = Imported::new("#usda 1.0\ndef \"A\"\n{\n    rel r\n}\n");
-    imported.property("/A.r").time_samples = Some(vec![(0.0, LayerValue::Bool(true))].into());
+    imported.property("/A.r").time_samples = vec![(0.0, LayerValue::Bool(true))].into();
     assert_eq!(
         imported.save(),
         Err(SaveError::Invalid {
@@ -727,13 +727,11 @@ def "A"
     assert_eq!(text, expected, "saved text");
     assert_eq!(Imported::new(&text).save().unwrap(), text, "stable");
 
-    imported.property("/A.x").time_samples = Some(
-        vec![
-            (1.0, LayerValue::Double(1.0)),
-            (0.0, LayerValue::Double(2.0)),
-        ]
-        .into(),
-    );
+    imported.property("/A.x").time_samples = vec![
+        (1.0, LayerValue::Double(1.0)),
+        (0.0, LayerValue::Double(2.0)),
+    ]
+    .into();
     assert_eq!(
         imported.save(),
         Err(SaveError::Document(WriteError::InvalidTimeSamples {
@@ -741,7 +739,7 @@ def "A"
         })),
         "unordered sample times"
     );
-    imported.property("/A.x").time_samples = Some(vec![(0.0, LayerValue::Float(1.0))].into());
+    imported.property("/A.x").time_samples = vec![(0.0, LayerValue::Float(1.0))].into();
     assert_eq!(
         imported.save(),
         Err(SaveError::Document(WriteError::TypeMismatch {

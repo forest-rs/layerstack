@@ -53,7 +53,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 );
                 if shape == "animated" {
                     property.time_samples =
-                        Some(vec![(0., values.clone()), (10., values.clone())].into());
+                        vec![(0., values.clone()), (10., values.clone())].into();
                 } else {
                     property.default = Some(values.clone());
                 }

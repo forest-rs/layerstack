@@ -68,6 +68,7 @@ pub(crate) use crate::ident::dictionary_cmp;
 use crate::prim_indexing::Boundaries;
 use crate::variant_fallbacks::VariantFallbacks;
 use crate::{
+    TimeSamples,
     composition_error::{CompositionError, order_errors},
     dependency_map::{ArcDependency, CompositionDeps},
     doc::{
@@ -1937,7 +1938,7 @@ impl Stage {
                         .chain(
                             samples
                                 .iter()
-                                .flatten()
+                                .filter_map(TimeSamples::get)
                                 .flat_map(|samples| samples.iter().map(|(_, value)| value)),
                         )
                         .any(crate::path_expression::value::has_path_expression);
@@ -1949,10 +1950,13 @@ impl Stage {
                         default.iter_mut().flatten().chain(
                             samples
                                 .iter_mut()
-                                .flatten()
                                 .filter(|samples| {
-                                    samples.iter().any(|(_, value)| {
-                                        crate::path_expression::value::has_path_expression(value)
+                                    samples.get().is_some_and(|samples| {
+                                        samples.iter().any(|(_, value)| {
+                                            crate::path_expression::value::has_path_expression(
+                                                value,
+                                            )
+                                        })
                                     })
                                 })
                                 .flat_map(|samples| samples.make_mut().iter_mut())
@@ -4581,7 +4585,7 @@ mod tests {
     /// Test-only opinion payload: a property authoring only time samples.
     fn samples(samples: Vec<(f64, Value)>) -> OpinionValue {
         OpinionValue::from(PropertySpec {
-            time_samples: Some(samples.into()),
+            time_samples: samples.into(),
             ..PropertySpec::default()
         })
     }

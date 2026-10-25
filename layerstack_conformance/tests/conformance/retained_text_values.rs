@@ -223,7 +223,7 @@ fn assert_reads_agree(name: &str, eager: &Layer, lazy: &Layer) {
                     same(e.spec.default.as_ref(), l.spec.default.as_ref()),
                     "{at}: default"
                 );
-                let samples = |spec: &PropertySpec| spec.time_samples.clone();
+                let samples = |spec: &PropertySpec| spec.time_samples.clone().into_vec();
                 match (samples(&e.spec), samples(&l.spec)) {
                     (Some(a), Some(b)) => {
                         assert_eq!(a.len(), b.len(), "{at}: samples");

@@ -262,7 +262,7 @@ fn probe(stage: &Stage, store: &mut InMemoryStore) -> BTreeMap<String, Probe> {
         .layer(ROCK)
         .unwrap()
         .property_at(&spin)
-        .and_then(|p| p.time_samples.clone())
+        .and_then(|p| p.time_samples.clone().into_vec())
         .unwrap_or_default()
         .iter()
         .map(|(t, v)| match num(v) {

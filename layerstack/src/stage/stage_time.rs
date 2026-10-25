@@ -16,6 +16,7 @@
 use alloc::{borrow::Cow, vec::Vec};
 
 use crate::{
+    TimeSamples,
     array_edit::{ArrayEdit, ArrayEditOp, ArrayEditOperand},
     doc::{FieldEntry, FieldValue, LayerOffset, Value},
     prim_index::{Opinion, OpinionValue},
@@ -192,7 +193,7 @@ fn map_property(
         .default
         .as_ref()
         .and_then(|value| map_leaves(value, leaf));
-    let samples = spec.time_samples.as_ref().and_then(|samples| {
+    let samples = spec.time_samples.get().and_then(|samples| {
         // Copied only from the first sample that maps.
         let mut out: Option<Vec<(f64, Value)>> = None;
         for (i, (time, value)) in samples.iter().enumerate() {
@@ -231,8 +232,8 @@ fn map_property(
     if default.is_some() {
         spec.default = default;
     }
-    if samples.is_some() {
-        spec.time_samples = samples.map(Into::into);
+    if let Some(samples) = samples {
+        spec.time_samples = samples.into();
     }
     spec.metadata = metadata.into();
     Some(spec)
@@ -300,7 +301,8 @@ fn needs_retiming(opinion: &Opinion) -> bool {
                 || spec.default.as_ref().is_some_and(holds_timecode)
                 || spec
                     .time_samples
-                    .iter()
+                    .get()
+                    .into_iter()
                     .flatten()
                     .any(|(_, v)| holds_timecode(v))
         }
@@ -344,7 +346,7 @@ pub(crate) fn animation_opinions(opinions: &[Opinion]) -> Cow<'_, [Opinion]> {
     for opinion in &mut out[block + 1..] {
         if let OpinionValue::Property(spec) = &mut opinion.value {
             let spec = alloc::sync::Arc::make_mut(spec);
-            spec.time_samples = None;
+            spec.time_samples = TimeSamples::none();
             spec.spline = None;
         }
     }

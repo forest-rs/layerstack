@@ -400,6 +400,15 @@ impl Same for RarePrimFields {
     }
 }
 
+impl Same for crate::TimeSamples {
+    fn same(&self, other: &Self) -> bool {
+        match (self.get(), other.get()) {
+            (Some(a), Some(b)) => a.same(b),
+            (a, b) => a.is_none() && b.is_none(),
+        }
+    }
+}
+
 impl<T: Same> Same for crate::SharedVec<T> {
     fn same(&self, other: &Self) -> bool {
         self.as_slice().same(other.as_slice())

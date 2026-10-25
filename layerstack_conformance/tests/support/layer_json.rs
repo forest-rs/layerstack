@@ -80,7 +80,8 @@ pub(crate) fn time_key(time: f64) -> String {
 pub(crate) fn attribute(spec: &PropertySpec, store: &InMemoryStore) -> Json {
     let samples: Map<String, Json> = spec
         .time_samples
-        .iter()
+        .get()
+        .into_iter()
         .flat_map(|samples| samples.iter())
         .map(|(time, v)| (time_key(*time), value(v, store)))
         .collect();

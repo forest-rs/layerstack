@@ -246,11 +246,8 @@ fn text_arrays_round_trip_through_usda_and_usdc() {
             );
             assert_eq!(got_default, want_default, "{form} {name}");
             assert!(got_default.is_none_or(native_text), "{form} {name}");
-            let samples = |spec: &layerstack::PropertySpec| {
-                spec.time_samples
-                    .as_ref()
-                    .map(|samples| samples.iter().cloned().collect::<Vec<_>>())
-            };
+            let samples =
+                |spec: &layerstack::PropertySpec| spec.time_samples.get().map(<[_]>::to_vec);
             assert_eq!(samples(got), samples(want), "{form} {name} samples");
             if let Some(samples) = samples(got) {
                 assert!(

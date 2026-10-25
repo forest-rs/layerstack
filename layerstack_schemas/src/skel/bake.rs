@@ -1236,7 +1236,8 @@ impl<'a> Target<'a> {
                         return None;
                     }
                     spec.time_samples
-                        .iter()
+                        .get()
+                        .into_iter()
                         .flat_map(|samples| samples.iter().map(|(t, _)| *t))
                         .collect()
                 }
@@ -1858,7 +1859,7 @@ fn clear_value(
     if spec.default.is_some() {
         transaction.clear_default(at.clone());
     }
-    for (time, _) in spec.time_samples.iter().flat_map(|samples| samples.iter()) {
+    for (time, _) in spec.time_samples.get().into_iter().flatten() {
         transaction.remove_time_sample(at.clone(), *time);
     }
 }

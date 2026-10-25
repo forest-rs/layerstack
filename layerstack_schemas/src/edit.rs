@@ -755,7 +755,7 @@ impl<'s> SchemaEdit<'s> {
                             value: value.clone(),
                         });
                         let time = self.target.map_to_spec_time(time);
-                        spec.time_samples = Some(alloc::vec![(time, value)].into());
+                        spec.time_samples = alloc::vec![(time, value)].into();
                     }
                 }
                 if time.is_none() {

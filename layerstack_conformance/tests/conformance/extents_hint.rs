@@ -178,7 +178,8 @@ fn hint_authoring_accepts_refuses_and_authors_as_cpp() {
             default: property.default.as_ref().map(read),
             samples: property
                 .time_samples
-                .iter()
+                .get()
+                .into_iter()
                 .flat_map(|samples| samples.iter())
                 .map(|(time, value)| (format!("{time:?}"), read(value)))
                 .collect(),

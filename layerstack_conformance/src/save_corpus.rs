@@ -684,9 +684,9 @@ pub fn cases() -> Vec<SaveCase> {
                 let samples = layer
                     .property("/Rig.intensity")
                     .time_samples
-                    .as_mut()
+                    .get_mut()
                     .expect("intensity samples");
-                samples.make_mut().push((24.0, Value::Float(0.25)));
+                samples.push((24.0, Value::Float(0.25)));
             },
             expected: ANIMATED_EDITED,
             weaker: None,

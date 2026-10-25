@@ -198,7 +198,8 @@ fn authored(store: &InMemoryStore, layer: LayerId, path: PathId) -> Json {
         } else if name.starts_with("xformOp:") {
             let samples: serde_json::Map<String, Json> = property
                 .time_samples
-                .iter()
+                .get()
+                .into_iter()
                 .flat_map(|samples| samples.iter())
                 .map(|(time, value)| (format!("{time:?}"), json_value(value)))
                 .collect();

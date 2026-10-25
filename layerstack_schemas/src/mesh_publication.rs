@@ -487,8 +487,8 @@ impl GeneratedMesh {
                         desired.default.clone().expect("publication default"),
                     );
                 }
-                if let Some(samples) = &local.time_samples {
-                    for (time, _) in samples.as_slice() {
+                if let Some(samples) = local.time_samples.get() {
+                    for (time, _) in samples {
                         // Transactions take stage time; this authored sample is already in layer time.
                         transaction.remove_time_sample(
                             layerstack::edit::Address::spec(target.layer(), site.clone()),

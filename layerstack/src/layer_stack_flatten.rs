@@ -507,7 +507,7 @@ impl<F: FnMut(LayerId, &str) -> Option<String>> Context<'_, F> {
             if let Some(default) = &mut property.default {
                 self.value(default, layer, offset)?;
             }
-            if let Some(samples) = &mut property.time_samples {
+            if let Some(samples) = property.time_samples.get_mut() {
                 if samples.iter().any(|(time, _)| !time.is_finite())
                     || samples
                         .windows(2)
@@ -518,7 +518,7 @@ impl<F: FnMut(LayerId, &str) -> Option<String>> Context<'_, F> {
                 if samples.is_empty() {
                     return Err(unsupported(layer, "empty authored sample maps"));
                 }
-                for (time, value) in samples.make_mut() {
+                for (time, value) in samples.iter_mut() {
                     *time = *time * offset.scale + offset.offset;
                     if !time.is_finite() {
                         return Err(LayerStackFlattenError::InvalidSamples);
@@ -778,7 +778,7 @@ fn merge_properties(
             fill(&mut a.type_name, &b.type_name);
             // Flatten retains a complete strongest animation field; default
             // opinions mask weaker animation, unlike stitching's sample union.
-            if a.time_samples.is_none() && a.spline.is_none() && a.default.is_none() {
+            if !a.time_samples.is_authored() && a.spline.is_none() && a.default.is_none() {
                 a.time_samples.clone_from(&b.time_samples);
                 a.spline.clone_from(&b.spline);
             }
@@ -868,6 +868,7 @@ fn merge_prim(a: &mut PrimSpec, b: &PrimSpec) -> Result<(), LayerStackFlattenErr
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::TimeSamples;
     use crate::{InMemoryStore, PropertySpec, SublayerEntry};
     use alloc::vec;
 
@@ -982,6 +983,7 @@ mod tests {
                 .unwrap()
                 .spec
                 .time_samples
+                .get()
                 .is_none()
         );
         assert_eq!(
@@ -991,14 +993,14 @@ mod tests {
                 .unwrap()
                 .spec
                 .time_samples
-                .as_deref(),
+                .get(),
             Some(&[(1., Value::Float(8.))][..])
         );
         assert_eq!(
             store.layers[&LayerId(2)].prims[&path].properties[0]
                 .spec
                 .time_samples
-                .as_deref()
+                .get()
                 .unwrap()[0]
                 .0,
             0.
@@ -1241,7 +1243,7 @@ mod tests {
                         post_tan_slope: 0.,
                     });
                 }
-                property.time_samples = None;
+                property.time_samples = TimeSamples::none();
                 property.spline = Some(Box::new(spline));
             }
             weak.insert_prim(path, PrimSpec::over().with_property(name, property));

@@ -195,7 +195,7 @@ fn count_values(layer: &Layer) -> u64 {
             .map(|entry| {
                 let spec = &entry.spec;
                 1 + spec.default.as_ref().map_or(0, value)
-                    + spec.time_samples.as_ref().map_or(0, |samples| {
+                    + spec.time_samples.get().map_or(0, |samples| {
                         1 + samples.iter().map(|(_, v)| value(v)).sum::<u64>()
                     })
                     + spec.targets.as_deref().map_or(0, list)

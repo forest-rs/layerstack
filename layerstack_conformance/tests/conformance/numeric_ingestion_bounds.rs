@@ -85,7 +85,7 @@ fn numeric_import_preserves_integer_minimum_and_rejects_rounded_overflow() {
                 property
                     .spec
                     .time_samples
-                    .as_ref()
+                    .get()
                     .and_then(|samples| samples.first())
                     .map(|(_, value)| value)
             } else {

@@ -149,7 +149,7 @@ impl PreparedClipProperty {
             return Err(ClipEvalError::InvalidTimeMapping);
         }
         for prop in clips.iter().flatten() {
-            if let Some(samples) = &prop.time_samples
+            if let Some(samples) = prop.time_samples.get()
                 && (samples.iter().any(|(t, _)| !t.is_finite())
                     || samples
                         .windows(2)
@@ -177,7 +177,7 @@ impl PreparedClipProperty {
             let (start, asset) = self.active[index];
             let samples = self.clips[asset]
                 .as_ref()
-                .and_then(|p| p.time_samples.as_deref())
+                .and_then(|p| p.time_samples.get())
                 .unwrap_or(&[]);
             if self.interpolate_missing
                 && (samples.is_empty() || self.activation_blocked(index))
@@ -472,7 +472,7 @@ impl PreparedClipProperty {
         };
         let exact = self.clips[self.active_clip(time)]
             .as_ref()
-            .and_then(|p| p.time_samples.as_deref())
+            .and_then(|p| p.time_samples.get())
             .and_then(|samples| {
                 samples
                     .binary_search_by(|(t, _)| {
@@ -523,7 +523,7 @@ impl PreparedClipProperty {
         let internal = self.internal_time(time)?;
         let raw = self.clips[asset]
             .as_ref()
-            .and_then(|p| p.time_samples.as_deref())
+            .and_then(|p| p.time_samples.get())
             .filter(|s| !s.is_empty());
         let value = if let Some(samples) = raw {
             interpolate_samples(samples, internal, interp).map(|value| {
@@ -591,7 +591,7 @@ impl PreparedClipProperty {
         let internal = self.internal_time(lower)?;
         let raw = self.clips[self.active_clip(lower)]
             .as_ref()
-            .and_then(|p| p.time_samples.as_deref())
+            .and_then(|p| p.time_samples.get())
             .filter(|s| !s.is_empty());
         let value = if let Some(samples) = raw {
             let (at, _) = crate::value_resolution::sample_bracket(
@@ -864,9 +864,7 @@ mod tests {
                 vec![(0., 0)],
                 vec![],
                 vec![Some(Arc::new(PropertySpec {
-                    time_samples: Some(
-                        vec![(1., Value::Double(1.)), (0., Value::Double(0.))].into()
-                    ),
+                    time_samples: vec![(1., Value::Double(1.)), (0., Value::Double(0.))].into(),
                     ..PropertySpec::attribute()
                 }))],
                 None,

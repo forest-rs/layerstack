@@ -40,7 +40,7 @@ fn checked_schema_arrays_preserve_decode_errors_at_default_and_numeric_times() {
             spec.default = Some(failed.clone());
         } else {
             spec.time_samples =
-                Some(vec![(1., failed.clone()), (2., Value::from(vec![[2_f32; 3]]))].into());
+                vec![(1., failed.clone()), (2., Value::from(vec![[2_f32; 3]]))].into();
         }
         let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
         let live = layerstack::LiveStage::compose(

@@ -32,7 +32,7 @@ use std::collections::BTreeMap;
 use layerstack::edit::{EditError, EditTarget, Rejection, Transaction};
 use layerstack::{
     ArcKind, InMemoryStore, Layer, LayerId, ListOp, PathId, PrimSpec, PropertyPath, Reference,
-    SpecPath, Stage, StageOptions, TargetPath, VariantSetSpec, VariantSpec,
+    SpecPath, Stage, StageOptions, TargetPath, VariantSetSpec, VariantSpec, Variants,
 };
 use serde_json::{Value as Json, json};
 
@@ -48,8 +48,7 @@ const ASSET_LAYER: LayerId = LayerId(2);
 fn with_variant(store: &mut InMemoryStore, spec: PrimSpec, set: &str, variant: &str) -> PrimSpec {
     let (set, variant) = (store.tokens.intern(set), store.tokens.intern(variant));
     let mut spec = spec;
-    let mut variants = hashbrown::HashMap::new();
-    variants.insert(variant, VariantSpec::default());
+    let variants = Variants::from([(variant, VariantSpec::default())]);
     spec.rare_mut()
         .variant_sets
         .insert(set, VariantSetSpec { variants });

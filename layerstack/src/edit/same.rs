@@ -24,7 +24,7 @@ use crate::{
     array_edit::{ArrayEditOp, ArrayEditOperand},
     doc::{
         FieldEntry, FieldValue, PrimSpec, RarePrimFields, Value, VariantSetSpec, VariantSets,
-        VariantSpec,
+        VariantSpec, Variants,
     },
     property::{PropertyEntry, PropertySpec, PropertyType},
     spline::{Extrapolation, Knot, LoopParams, SplineData},
@@ -327,6 +327,15 @@ impl Same for VariantSets {
                 .iter()
                 .zip(other)
                 .all(|((a, a_set), (b, b_set))| a == b && a_set.same(b_set))
+    }
+}
+
+impl Same for Variants {
+    fn same(&self, other: &Self) -> bool {
+        self.len() == other.len()
+            && self
+                .iter()
+                .all(|(name, variant)| other.get(name).is_some_and(|o| variant.same(o)))
     }
 }
 

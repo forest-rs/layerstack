@@ -16,7 +16,7 @@ extern crate alloc;
 use criterion::{BatchSize, BenchmarkId, Criterion, criterion_group, criterion_main};
 use layerstack::{
     InMemoryStore, Layer, LayerId, LiveStage, PrimSpec, Reference, Stage, StageOptions,
-    SublayerEntry, Value, VariantSetSpec, VariantSpec,
+    SublayerEntry, Value, VariantSetSpec, VariantSpec, Variants,
 };
 
 /// Builds a store whose root layer (`LayerId(1)`) holds `n` trees under
@@ -53,7 +53,7 @@ fn build_forest(n: usize) -> InMemoryStore {
     let wood_class = store.path("/_class_Wood");
     let leaf_base = store.path("/LeafBase");
     let mut asset = Layer::new(LayerId(2));
-    let mut variants = hashbrown::HashMap::new();
+    let mut variants = Variants::new();
     for (name, color) in [(summer, "green"), (autumn, "orange")] {
         let mut branch = VariantSpec::default();
         branch.fields.push(layerstack::FieldEntry {

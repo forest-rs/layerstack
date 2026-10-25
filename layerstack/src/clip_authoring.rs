@@ -899,7 +899,7 @@ mod tests {
                 .with_default(Value::Float(21.))
                 .with_time_samples(vec![(1., Value::Float(2.))])
         };
-        let mut branches = crate::HashMap::new();
+        let mut branches = crate::Variants::new();
         branches.insert(
             branch,
             crate::VariantSpec {

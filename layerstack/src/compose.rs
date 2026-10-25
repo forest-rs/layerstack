@@ -584,7 +584,7 @@ mod child_order_tests {
         parent.rare_mut().variant_sets.insert(
             mode,
             VariantSetSpec {
-                variants: HashMap::from([(a, branch(1)), (b, branch(2))]),
+                variants: crate::Variants::from([(a, branch(1)), (b, branch(2))]),
             },
         );
         let mut model_layer = Layer::new(LayerId(2));

@@ -16,7 +16,7 @@ extern crate alloc;
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use layerstack::{
     InMemoryStore, Layer, LayerId, PrimSpec, Stage, StageOptions, Value, VariantSetSpec,
-    VariantSpec,
+    VariantSpec, Variants,
 };
 
 /// Build a scene with `n_prims` prims, each having a variant set with
@@ -41,7 +41,7 @@ fn build_and_compose(n_prims: usize, n_variants: usize) -> Stage {
         let prim_path = store.path(&alloc::format!("/Root/{prim_name}"));
 
         // Build variant set with n_variants branches.
-        let mut variants = hashbrown::HashMap::new();
+        let mut variants = Variants::new();
         let mut selected = None;
 
         for v in 0..n_variants {

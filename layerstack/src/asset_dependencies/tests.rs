@@ -45,7 +45,7 @@ fn reference_custom_data_assets_cover_inactive_buckets_and_unselected_variants()
     prim.rare_mut().variant_sets.insert(
         mode,
         VariantSetSpec {
-            variants: crate::HashMap::from([(
+            variants: crate::Variants::from([(
                 hidden,
                 VariantSpec {
                     references: custom_data_arcs(LayerId(1), target, "variant").into(),
@@ -161,7 +161,7 @@ fn recursive_inventory_visits_unselected_variants_and_reports_partial_resolution
     prim.rare_mut().variant_sets.insert(
         mode,
         VariantSetSpec {
-            variants: crate::HashMap::from([(hidden, variant)]),
+            variants: crate::Variants::from([(hidden, variant)]),
         },
     );
     let mut root = Layer::new(LayerId(1));
@@ -396,7 +396,7 @@ fn unselected_variant_identities_are_scoped_to_prim_metadata() {
     prim.rare_mut().variant_sets.insert(
         set,
         VariantSetSpec {
-            variants: crate::HashMap::from([(
+            variants: crate::Variants::from([(
                 hidden,
                 VariantSpec {
                     fields: vec![field.clone()],

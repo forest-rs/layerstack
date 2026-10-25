@@ -176,7 +176,7 @@ fn variant_targets_participate_only_when_the_branch_is_selected() {
     prim.rare_mut().variant_sets.insert(
         mode,
         crate::VariantSetSpec {
-            variants: crate::HashMap::from([
+            variants: crate::Variants::from([
                 (selected, crate::VariantSpec::default()),
                 (hidden, crate::VariantSpec::default()),
             ]),

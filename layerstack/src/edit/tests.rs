@@ -5,9 +5,9 @@ use alloc::{boxed::Box, string::ToString, vec, vec::Vec};
 
 use super::*;
 use crate::{
-    ArcKind, FieldValue, HashMap, InMemoryStore, Layer, LayerId, LayerOffset, NodeId, PathId,
-    PrimSpec, PropertySpec, PropertyType, Reference, SpecPath, Specifier, Stage, StageOptions,
-    SublayerEntry, TargetPath, Time, TokenId, Value, VariantSetSpec, VariantSpec,
+    ArcKind, FieldValue, InMemoryStore, Layer, LayerId, LayerOffset, NodeId, PathId, PrimSpec,
+    PropertySpec, PropertyType, Reference, SpecPath, Specifier, Stage, StageOptions, SublayerEntry,
+    TargetPath, Time, TokenId, Value, VariantSetSpec, VariantSpec,
 };
 
 const SCENE: LayerId = LayerId(1);
@@ -63,7 +63,7 @@ fn rocks() -> InMemoryStore {
                 (10.0, Value::Double(100.0)),
             ]),
         );
-    let mut variants = HashMap::new();
+    let mut variants = crate::Variants::new();
     for (name, value) in [(round, 0.1), (jagged, 0.9)] {
         variants.insert(
             name,

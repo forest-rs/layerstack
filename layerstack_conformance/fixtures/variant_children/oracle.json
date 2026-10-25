@@ -1,6 +1,6 @@
 {
  "generator": "layerstack_conformance/scripts/variant_children_oracle.py",
- "openusd_version": "0.26.8",
+ "openusd_version": "0.26.11",
  "root": "root.usda",
  "prims": [
   {

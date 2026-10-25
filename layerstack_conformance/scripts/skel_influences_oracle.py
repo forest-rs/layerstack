@@ -4,7 +4,7 @@
 
 Usage: skel_influences_oracle.py [--check]
 
-Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.8`.
+Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.11`.
 
 Runs `UsdSkel.NormalizeWeights`, `UsdSkel.SortInfluences` and
 `UsdSkel.ResizeInfluences` on each case below and records whether the call

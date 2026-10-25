@@ -4,7 +4,7 @@
 
 Usage: point_instancer_ids_oracle.py [--check]
 
-Needs OpenUSD through Python `pxr` (`pip install usd-core==26.8`).
+Needs OpenUSD through Python `pxr` (`pip install usd-core==26.11`).
 
 Opens `fixtures/point_instancer_ids/scene.usda` and makes each call in
 `CALLS`, in order, on one stage with OpenUSD's own API:

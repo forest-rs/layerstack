@@ -4,7 +4,7 @@
 
 Usage: define_prim_oracle.py [--check] [OUT_DIR]
 
-Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.8`.
+Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.11`.
 Writes, under `layerstack_conformance/fixtures/define_prim` by default, the
 layers below as OpenUSD exports them and `oracle.json`, which
 `tests/conformance/define_prim.rs` replays against layerstack's `SchemaEdit::define_prim`.

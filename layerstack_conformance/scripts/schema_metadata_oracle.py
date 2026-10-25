@@ -1,6 +1,6 @@
 # Copyright 2026 the LayerStack Authors
 # SPDX-License-Identifier: Apache-2.0 OR MIT
-"""Record native metadata and ColorAPI precedence; run with usd-core 26.8."""
+"""Record native metadata and ColorAPI precedence; run with usd-core 26.11."""
 import argparse
 import json
 from pathlib import Path

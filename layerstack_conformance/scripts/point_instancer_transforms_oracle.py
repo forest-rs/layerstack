@@ -4,7 +4,7 @@
 
 Usage: point_instancer_transforms_oracle.py [--check]
 
-Needs OpenUSD through Python `pxr` (`pip install usd-core==26.8`).
+Needs OpenUSD through Python `pxr` (`pip install usd-core==26.11`).
 
 Opens `fixtures/point_instancer_transforms/scene.usda` and records, for
 each case in `CASES`:

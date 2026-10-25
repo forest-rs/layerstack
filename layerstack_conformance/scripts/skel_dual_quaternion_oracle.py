@@ -1,10 +1,10 @@
 # Copyright 2026 the LayerStack Authors
 # SPDX-License-Identifier: Apache-2.0 OR MIT
-"""Pin DQS kernels and bound deformation to OpenUSD 26.8."""
+"""Pin DQS kernels and bound deformation to OpenUSD 26.11."""
 import json
 import pathlib
 from pxr import Usd, UsdGeom, UsdSkel, Gf, Vt
-assert Usd.GetVersion() == (0, 26, 8)
+assert Usd.GetVersion() == (0, 26, 11)
 fixtures = pathlib.Path(__file__).resolve().parents[1] / "fixtures"
 def rotate(axis, degrees, translation=(0,0,0)):
     matrix = Gf.Matrix4d(1).SetRotate(Gf.Rotation(Gf.Vec3d(*axis), degrees))

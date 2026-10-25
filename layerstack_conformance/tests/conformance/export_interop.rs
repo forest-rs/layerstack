@@ -9,7 +9,7 @@
 //! versions, `--arkit` validators, ZIP layout checks, a render) is
 //! `layerstack_conformance/scripts/export_interop.sh`.
 //!
-//! The writers target OpenUSD 26.08 (`export_fixtures::TARGET_OPENUSD`):
+//! The writers target OpenUSD 26.11 (`export_fixtures::TARGET_OPENUSD`):
 //! metadata is stored with the types that release registers. A fixture
 //! whose metadata an older release does not register (see
 //! `export_fixtures::minimum_openusd`) is compared only with a tool at

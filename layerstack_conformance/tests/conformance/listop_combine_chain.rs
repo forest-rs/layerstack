@@ -96,7 +96,7 @@ fn duplicate_list_inputs_match_openusd() {
             r#"
 import json, sys
 from pxr import Sdf, Usd
-assert Usd.GetVersion() == (0, 26, 8), Usd.GetVersion()
+assert Usd.GetVersion() == (0, 26, 11), Usd.GetVersion()
 rows = []
 for items in json.loads(sys.argv[1]):
     rows.append([

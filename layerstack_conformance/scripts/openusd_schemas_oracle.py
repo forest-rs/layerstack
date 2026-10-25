@@ -4,7 +4,7 @@
 
 Usage: openusd_schemas_oracle.py [OUT_JSON]
 
-Needs usd-core 26.8 through Python `pxr` (`pip install usd-core==26.8`), the
+Needs usd-core 26.11 through Python `pxr` (`pip install usd-core==26.11`), the
 release `layerstack_schemas` is generated from, and an OpenUSD checkout of
 that release in `LAYERSTACK_OPENUSD_SOURCE` for the schemas the wheel is
 built without (`usdMtlx`, loaded as a codeless plugin; see

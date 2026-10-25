@@ -327,7 +327,7 @@ The example keeps recipes under `/Recipes`, an editable source under `/Assets`
 and placements under `/World`;
 consumers select `/World` for placed scene content. Tests reopen all three authored
 layers as USDA and USDC and compare materials, seams, IDs/masks, transforms, bounds
-and offset samples with OpenUSD 26.8. The oracle also resolves sampled recipes,
+and offset samples with OpenUSD 26.11. The oracle also resolves sampled recipes,
 independently evaluates the example generator, and compares generated points,
 topology and material texture references. This proves the authored recipe and
 publication contract, not parity with Hydra's procedural execution runtime.

@@ -7,7 +7,7 @@ from pxr import Usd, UsdGeom
 
 fixtures = Path("layerstack_conformance/fixtures")
 version = ".".join(map(str, Usd.GetVersion()))
-assert version == "0.26.8", version
+assert version == "0.26.11", version
 stage = Usd.Stage.Open(str(fixtures / "primvar_behavior.usda"))
 api = UsdGeom.PrimvarsAPI(stage.GetPrimAtPath("/Root/Group/Mesh"))
 result = {"version": version}

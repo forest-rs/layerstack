@@ -5,7 +5,7 @@
 Usage: xform_oracle.py [FIXTURES [OUT]]
        xform_oracle.py --check [FIXTURES]
 
-Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.8`.
+Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.11`.
 
 Opens `fixtures/xform/scene.usda` (which references `asset.usda`) and
 writes `fixtures/xform/oracle.json` by default. For every prim, at the

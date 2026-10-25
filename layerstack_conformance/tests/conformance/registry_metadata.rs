@@ -219,7 +219,10 @@ pub(crate) fn encode_value(value: &Value, tokens: &TokenInterner) -> Json {
 #[test]
 fn builtin_fields_are_the_fields_usd_core_registers() {
     let oracle = oracle();
-    assert_eq!(oracle.openusd_version, "0.26.8");
+    assert_eq!(
+        oracle.openusd_version,
+        format!("0.{}", layerstack_schemas::OPENUSD_VERSION)
+    );
     let tokens = TokenInterner::default();
     for (name, builtin) in &oracle.builtins {
         if builtin.type_name == "permission" {

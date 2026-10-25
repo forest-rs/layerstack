@@ -4,7 +4,7 @@
 
 Usage: extents_hint_oracle.py [--check]
 
-Needs OpenUSD through Python `pxr` (`pip install usd-core==26.8`).
+Needs OpenUSD through Python `pxr` (`pip install usd-core==26.11`).
 
 Opens `fixtures/extents_hint/scene.usda` and records:
 

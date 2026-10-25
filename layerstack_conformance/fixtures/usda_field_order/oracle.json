@@ -1423,7 +1423,7 @@
    "type": "timecode[]"
   }
  ],
- "openusd_version": "26.8",
+ "openusd_version": "26.11",
  "round_trip": {
   "unregistered": "#usda 1.0\n(\n    Beta = \"2\"\n    _u = \"4\"\n    a10 = \"x\"\n    a9 = \"y\"\n    zeta = \"1\"\n)\n\ndef \"P\" (\n    _u = \"4\"\n    a9 = \"y\"\n    a10 = \"x\"\n    Beta = \"2\"\n    zeta = \"1\"\n)\n{\n}\n\n",
   "unregistered.usdc": "#usda 1.0\n(\n    Beta = \"2\"\n    _u = \"4\"\n    a10 = \"x\"\n    a9 = \"y\"\n    zeta = \"1\"\n)\n\ndef \"P\" (\n    _u = \"4\"\n    a9 = \"y\"\n    a10 = \"x\"\n    Beta = \"2\"\n    zeta = \"1\"\n)\n{\n}\n\n",

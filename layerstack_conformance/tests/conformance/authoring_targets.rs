@@ -52,7 +52,7 @@ struct Case {
 #[test]
 fn writes_to_culled_sites_are_placed_with_their_strength() {
     let oracle: Oracle = serde_json::from_str(ORACLE).expect("oracle.json");
-    assert_eq!(oracle.openusd_version, "26.8");
+    assert_eq!(oracle.openusd_version, layerstack_schemas::OPENUSD_VERSION);
     let mut loaded = load_entry_usda(
         &workspace_root()
             .join("layerstack_conformance/fixtures/authoring_targets")

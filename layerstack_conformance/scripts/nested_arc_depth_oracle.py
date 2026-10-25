@@ -4,7 +4,7 @@
 
 Usage: nested_arc_depth_oracle.py [OUT_DIR]
 
-Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.8`.
+Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.11`.
 Writes, under `layerstack_conformance/fixtures/nested_arc_depth` by default:
 
 - `*.usda`: the layers below, as authored;

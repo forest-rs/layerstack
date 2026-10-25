@@ -242,7 +242,7 @@ fn shows(verdict: AuthoringVerdict) -> bool {
 #[test]
 fn inspection_answers_as_openusd_resolves_before_and_after_each_write() {
     let oracle: Oracle = serde_json::from_str(ORACLE).expect("oracle.json");
-    assert_eq!(oracle.openusd_version, "26.8");
+    assert_eq!(oracle.openusd_version, layerstack_schemas::OPENUSD_VERSION);
     let mut loaded = load_entry_usda(
         &workspace_root()
             .join("layerstack_conformance/fixtures/authoring_inspection")

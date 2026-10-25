@@ -4,7 +4,7 @@
 
 Usage: copy_spec_oracle.py [FIXTURES [OUT]]
 
-Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.8`.
+Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.11`.
 
 Each case reloads `fixtures/copy_spec/src.usda` and `dst.usda` and makes
 one `Sdf.CopySpec` call, recording whether OpenUSD accepted it and then

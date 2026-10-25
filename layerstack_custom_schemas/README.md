@@ -23,7 +23,7 @@ public API alone.
   ```
 
   `tests/generated.rs` checks it is current when `LAYERSTACK_OPENUSD_SOURCE`
-  names an OpenUSD 26.08 checkout.
+  names an OpenUSD 26.11 checkout.
 
 `tests/views.rs` reads and authors every kind of generated view on a USDA
 stage, and `tests/metadata.rs` the metadata fields, saved as OpenUSD writes

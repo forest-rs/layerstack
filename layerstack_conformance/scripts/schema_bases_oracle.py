@@ -1,7 +1,7 @@
 # Copyright 2026 the LayerStack Authors
 # SPDX-License-Identifier: Apache-2.0 OR MIT
 """Records what OpenUSD's schema registry makes of typed schemas that declare
-more than one base; run with usd-core 26.8.
+more than one base; run with usd-core 26.11.
 
 Usage: schema_bases_oracle.py [--check]
 

@@ -13,7 +13,7 @@
 //!   schema registry reads from those files
 //!   (`scripts/schema_compiler_oracle.py`); layerstack's registry must read
 //!   the same.
-//! - With `LAYERSTACK_OPENUSD_SOURCE` set to an OpenUSD 26.08 checkout,
+//! - With `LAYERSTACK_OPENUSD_SOURCE` set to an OpenUSD 26.11 checkout,
 //!   every schema domain's `schema.usda` must compile to the
 //!   `generatedSchema.usda` OpenUSD checks in, byte for byte, and to its
 //!   `plugInfo.json`'s types; `testUsdGenSchema`'s schemas must compile to
@@ -48,7 +48,7 @@ fn read(path: &Path) -> String {
 fn openusd_source() -> Option<PathBuf> {
     let source = std::env::var_os("LAYERSTACK_OPENUSD_SOURCE").map(PathBuf::from);
     if source.is_none() {
-        eprintln!("skipped: set LAYERSTACK_OPENUSD_SOURCE to an OpenUSD 26.08 checkout");
+        eprintln!("skipped: set LAYERSTACK_OPENUSD_SOURCE to an OpenUSD 26.11 checkout");
     }
     source
 }
@@ -439,7 +439,7 @@ fn assert_matches_oracle(registry: &SchemaRegistry, tokens: &mut TokenInterner) 
     let oracle: Oracle =
         serde_json::from_str(&read(&fixture().join("oracle.json"))).expect("oracle.json");
     assert!(
-        oracle.openusd_version.starts_with("0.26.8"),
+        oracle.openusd_version == format!("0.{}", layerstack_schemas::OPENUSD_VERSION),
         "{}",
         oracle.openusd_version
     );

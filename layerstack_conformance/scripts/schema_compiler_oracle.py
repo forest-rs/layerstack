@@ -1,7 +1,7 @@
 # Copyright 2026 the LayerStack Authors
 # SPDX-License-Identifier: Apache-2.0 OR MIT
 """Records what OpenUSD's schema registry reads from the schema compiler's
-fixture plugins; run with usd-core 26.8.
+fixture plugins; run with usd-core 26.11.
 
 Usage: schema_compiler_oracle.py [--check]
 

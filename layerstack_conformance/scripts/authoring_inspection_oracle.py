@@ -4,7 +4,7 @@
 
 Usage: authoring_inspection_oracle.py [--check] [OUT_DIR]
 
-Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.8`.
+Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.11`.
 Writes, under `layerstack_conformance/fixtures/authoring_inspection` by
 default, the layers below and `oracle.json`, which
 `tests/conformance/authoring_inspection.rs` replays against
@@ -455,7 +455,7 @@ def main():
     parser.add_argument("--check", action="store_true")
     parser.add_argument("out", nargs="?", default=FIXTURES)
     args = parser.parse_args()
-    assert Usd.GetVersion() == (0, 26, 8)
+    assert Usd.GetVersion() == (0, 26, 11)
     if not args.check:
         write(args.out)
         return

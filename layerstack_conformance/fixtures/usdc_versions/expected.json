@@ -2973,9 +2973,9 @@
   }
  },
  "generator": {
-  "openusd": "0.26.8",
-  "package": "usd-core==26.8 (PyPI)",
-  "python": "3.14.7",
+  "openusd": "0.26.11",
+  "package": "usd-core==26.11 (PyPI)",
+  "python": "3.14.9",
   "script": "layerstack_conformance/fixtures/usdc_versions/generate.py"
  },
  "supplemental": {

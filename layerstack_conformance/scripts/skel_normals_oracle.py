@@ -1,10 +1,10 @@
 # Copyright 2026 the LayerStack Authors
 # SPDX-License-Identifier: Apache-2.0 OR MIT
-"""Pin normal skinning and rigid-frame rounding to OpenUSD 26.8."""
+"""Pin normal skinning and rigid-frame rounding to OpenUSD 26.11."""
 import json
 from pathlib import Path
 from pxr import Usd, UsdGeom, UsdSkel, Vt
-assert Usd.GetVersion() == (0, 26, 8)
+assert Usd.GetVersion() == (0, 26, 11)
 fixtures = Path(__file__).resolve().parents[1] / "fixtures"
 stage = Usd.Stage.Open(str(fixtures / "skel_normals.usda"))
 cache = UsdSkel.Cache()

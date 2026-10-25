@@ -4,7 +4,7 @@
 
 Usage: load_rules_oracle.py [OUT]
 
-Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.8`.
+Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.11`.
 Writes `layerstack_conformance/fixtures/load_rules/oracle.json` by default,
 which `tests/conformance/load_rules.rs` replays against `PayloadLoadRules`.
 
@@ -22,7 +22,7 @@ from pathlib import Path
 
 from pxr import Sdf, Usd
 
-assert Usd.GetVersion() == (0, 26, 8)
+assert Usd.GetVersion() == (0, 26, 11)
 Rules = Usd.StageLoadRules
 NAMES = {Rules.AllRule: "all", Rules.OnlyRule: "only", Rules.NoneRule: "none"}
 BY_NAME = {name: rule for rule, name in NAMES.items()}
@@ -68,4 +68,4 @@ for start in ["all", "none"] * 6:
 out = Path(sys.argv[1]) if len(sys.argv) > 1 else (
     Path(__file__).resolve().parent.parent / "fixtures" / "load_rules" / "oracle.json")
 out.parent.mkdir(parents=True, exist_ok=True)
-out.write_text(json.dumps({"openusd_version": "26.8", "paths": PATHS, "cases": cases}, separators=(",", ":")) + "\n")
+out.write_text(json.dumps({"openusd_version": "26.11", "paths": PATHS, "cases": cases}, separators=(",", ":")) + "\n")

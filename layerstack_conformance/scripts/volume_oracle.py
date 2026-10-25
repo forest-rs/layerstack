@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0 OR MIT
 """Replay the C++ oracle tool built from volume_oracle.cpp.
 
-Build the adjacent C++ source against OpenUSD 26.8's headers and libraries,
+Build the adjacent C++ source against OpenUSD 26.11's headers and libraries,
 then run this script with --binary PATH. The computation is not exposed by
 OpenUSD's Python bindings; this script only serializes the C++ result.
 """

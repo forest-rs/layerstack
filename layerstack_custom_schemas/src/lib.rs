@@ -17,7 +17,7 @@
 //! - [`observatory`](mod@observatory), telescopes, is checked in (`compile --rust`), since it
 //!   builds on OpenUSD's `Xformable` and needs OpenUSD's schema sources to
 //!   compile; `tests/generated.rs` checks it is current when
-//!   `LAYERSTACK_OPENUSD_SOURCE` names an OpenUSD 26.08 checkout.
+//!   `LAYERSTACK_OPENUSD_SOURCE` names an OpenUSD 26.11 checkout.
 //!
 //! The schemas are `layerstack_conformance`'s schema compiler fixtures
 //! (`fixtures/schema_compiler`), whose registry OpenUSD's is checked

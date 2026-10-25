@@ -7,7 +7,7 @@ from pxr import Usd, UsdGeom
 
 fixtures = Path("layerstack_conformance/fixtures")
 version = ".".join(map(str, Usd.GetVersion()))
-assert version == "0.26.8", version
+assert version == "0.26.11", version
 stage = Usd.Stage.Open(str(fixtures / "point_instancer_behavior.usda"))
 instancer = UsdGeom.PointInstancer(stage.GetPrimAtPath("/World/Instances"))
 result = {"version": version, "mask": list(instancer.ComputeMaskAtTime(Usd.TimeCode.Default()))}

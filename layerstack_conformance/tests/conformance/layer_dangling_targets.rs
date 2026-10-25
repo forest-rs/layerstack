@@ -189,7 +189,7 @@ fn reads(loaded: &LoadedStage, stage: &Stage, report: &LayerDanglingReport) -> V
 #[test]
 fn layer_reads_match_openusd() {
     let oracle: Oracle = serde_json::from_str(ORACLE).expect("the oracle parses");
-    assert_eq!(oracle.openusd_version, "26.8");
+    assert_eq!(oracle.openusd_version, layerstack_schemas::OPENUSD_VERSION);
     let (loaded, stage) = compose(&oracle.unloaded);
     let scene = Scene::new(&stage, &loaded.store);
     let report = LayerDanglingReport::compute(&scene, usize::MAX);

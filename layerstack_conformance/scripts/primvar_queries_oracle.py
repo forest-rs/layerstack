@@ -1,11 +1,11 @@
 # Copyright 2026 the LayerStack Authors
 # SPDX-License-Identifier: Apache-2.0 OR MIT
-"""Record ID targets, sample discovery and inheritance against OpenUSD 26.8."""
+"""Record ID targets, sample discovery and inheritance against OpenUSD 26.11."""
 from pathlib import Path
 import json
 from pxr import Usd, UsdGeom
 fixtures = Path("layerstack_conformance/fixtures")
-assert Usd.GetVersion() == (0, 26, 8), Usd.GetVersion()
+assert Usd.GetVersion() == (0, 26, 11), Usd.GetVersion()
 stage = Usd.Stage.Open(str(fixtures / "primvar_queries.usda"))
 api = UsdGeom.PrimvarsAPI(stage.GetPrimAtPath("/Root/Group/Mesh"))
 result = {"version": ".".join(map(str, Usd.GetVersion())), "idTargets": {}, "samples": {}, "inheritance": {}}

@@ -22,7 +22,7 @@
   "fixture",
   "outer:inner"
  ],
- "openusd_version": "0.26.8",
+ "openusd_version": "0.26.11",
  "schemas": [
   {
    "definitions": [],
@@ -259,6 +259,234 @@
    "definitions": [
     {
      "applied": [
+      "AuthorshipAPI:fixture"
+     ],
+     "applied_schemas": [
+      "AuthorshipAPI:fixture"
+     ],
+     "properties": {
+      "authorship:fixture:contact": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "string[]",
+       "variability": "uniform"
+      },
+      "authorship:fixture:copyrightOwner": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "string[]",
+       "variability": "uniform"
+      },
+      "authorship:fixture:created": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "string",
+       "variability": "uniform"
+      },
+      "authorship:fixture:creator": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "string[]",
+       "variability": "uniform"
+      },
+      "authorship:fixture:description": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "string",
+       "variability": "uniform"
+      },
+      "authorship:fixture:digitalSourceType": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "string",
+       "variability": "uniform"
+      },
+      "authorship:fixture:inputs": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "string[]",
+       "variability": "uniform"
+      },
+      "authorship:fixture:instanceID": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "string",
+       "variability": "uniform"
+      },
+      "authorship:fixture:softwarePackage": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "string",
+       "variability": "uniform"
+      },
+      "authorship:fixture:softwareVersion": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "string",
+       "variability": "uniform"
+      },
+      "authorship:fixture:usageTerms": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "string",
+       "variability": "uniform"
+      }
+     },
+     "type": ""
+    },
+    {
+     "applied": [
+      "AuthorshipAPI:outer:inner"
+     ],
+     "applied_schemas": [
+      "AuthorshipAPI:outer:inner"
+     ],
+     "properties": {
+      "authorship:outer:inner:contact": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "string[]",
+       "variability": "uniform"
+      },
+      "authorship:outer:inner:copyrightOwner": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "string[]",
+       "variability": "uniform"
+      },
+      "authorship:outer:inner:created": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "string",
+       "variability": "uniform"
+      },
+      "authorship:outer:inner:creator": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "string[]",
+       "variability": "uniform"
+      },
+      "authorship:outer:inner:description": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "string",
+       "variability": "uniform"
+      },
+      "authorship:outer:inner:digitalSourceType": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "string",
+       "variability": "uniform"
+      },
+      "authorship:outer:inner:inputs": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "string[]",
+       "variability": "uniform"
+      },
+      "authorship:outer:inner:instanceID": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "string",
+       "variability": "uniform"
+      },
+      "authorship:outer:inner:softwarePackage": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "string",
+       "variability": "uniform"
+      },
+      "authorship:outer:inner:softwareVersion": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "string",
+       "variability": "uniform"
+      },
+      "authorship:outer:inner:usageTerms": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "string",
+       "variability": "uniform"
+      }
+     },
+     "type": ""
+    }
+   ],
+   "family": "AuthorshipAPI",
+   "is_a": [],
+   "kind": "MultipleApplyAPI",
+   "name": "AuthorshipAPI",
+   "plugin": "usdMedia",
+   "version": 0
+  },
+  {
+   "allowed_instance_names": [
+    [
+     "fixture",
+     true
+    ],
+    [
+     "outer:inner",
+     true
+    ],
+    [
+     "lightLink",
+     true
+    ],
+    [
+     "transX",
+     true
+    ],
+    [
+     "rotX",
+     true
+    ],
+    [
+     "angular",
+     true
+    ],
+    [
+     "linear",
+     true
+    ],
+    [
+     "distance",
+     true
+    ],
+    [
+     "includes",
+     true
+    ],
+    [
+     "x:expansionRule",
+     true
+    ],
+    [
+     "expansionRule:x",
+     true
+    ],
+    [
+     "1st",
+     false
+    ]
+   ],
+   "can_only_apply_to": [
+    [
+     "",
+     []
+    ],
+    [
+     "fixture",
+     []
+    ],
+    [
+     "outer:inner",
+     []
+    ]
+   ],
+   "definitions": [
+    {
+     "applied": [
       "BackPlateAPI:fixture"
      ],
      "applied_schemas": [
@@ -301,31 +529,31 @@
        "type_name": "asset",
        "variability": "varying"
       },
-      "backPlate:fixture:luma:gain": {
-       "fallback": [
-        1.0,
-        1.0,
-        1.0
-       ],
-       "kind": "attribute",
-       "type_name": "float3",
-       "variability": "varying"
-      },
-      "backPlate:fixture:luma:gamma": {
-       "fallback": [
-        1.0,
-        1.0,
-        1.0
-       ],
-       "kind": "attribute",
-       "type_name": "float3",
-       "variability": "varying"
-      },
-      "backPlate:fixture:luma:lift": {
+      "backPlate:fixture:luma:offset": {
        "fallback": [
         0.0,
         0.0,
         0.0
+       ],
+       "kind": "attribute",
+       "type_name": "float3",
+       "variability": "varying"
+      },
+      "backPlate:fixture:luma:power": {
+       "fallback": [
+        1.0,
+        1.0,
+        1.0
+       ],
+       "kind": "attribute",
+       "type_name": "float3",
+       "variability": "varying"
+      },
+      "backPlate:fixture:luma:slope": {
+       "fallback": [
+        1.0,
+        1.0,
+        1.0
        ],
        "kind": "attribute",
        "type_name": "float3",
@@ -413,31 +641,31 @@
        "type_name": "asset",
        "variability": "varying"
       },
-      "backPlate:outer:inner:luma:gain": {
-       "fallback": [
-        1.0,
-        1.0,
-        1.0
-       ],
-       "kind": "attribute",
-       "type_name": "float3",
-       "variability": "varying"
-      },
-      "backPlate:outer:inner:luma:gamma": {
-       "fallback": [
-        1.0,
-        1.0,
-        1.0
-       ],
-       "kind": "attribute",
-       "type_name": "float3",
-       "variability": "varying"
-      },
-      "backPlate:outer:inner:luma:lift": {
+      "backPlate:outer:inner:luma:offset": {
        "fallback": [
         0.0,
         0.0,
         0.0
+       ],
+       "kind": "attribute",
+       "type_name": "float3",
+       "variability": "varying"
+      },
+      "backPlate:outer:inner:luma:power": {
+       "fallback": [
+        1.0,
+        1.0,
+        1.0
+       ],
+       "kind": "attribute",
+       "type_name": "float3",
+       "variability": "varying"
+      },
+      "backPlate:outer:inner:luma:slope": {
+       "fallback": [
+        1.0,
+        1.0,
+        1.0
        ],
        "kind": "attribute",
        "type_name": "float3",
@@ -4209,6 +4437,39 @@
    "is_a": [],
    "kind": "SingleApplyAPI",
    "name": "HydraGenerativeProceduralAPI",
+   "plugin": "usdHydra",
+   "version": 0
+  },
+  {
+   "can_only_apply_to": [
+    [
+     "",
+     []
+    ]
+   ],
+   "definitions": [
+    {
+     "applied": [
+      "HydraPrimAPI"
+     ],
+     "applied_schemas": [
+      "HydraPrimAPI"
+     ],
+     "properties": {
+      "hydra:expandInstances": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      }
+     },
+     "type": ""
+    }
+   ],
+   "family": "HydraPrimAPI",
+   "is_a": [],
+   "kind": "SingleApplyAPI",
+   "name": "HydraPrimAPI",
    "plugin": "usdHydra",
    "version": 0
   },

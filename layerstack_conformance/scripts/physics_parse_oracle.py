@@ -4,7 +4,7 @@
 
 Usage: physics_parse_oracle.py [--check]
 
-Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.8`.
+Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.11`.
 
 Runs `UsdPhysics.LoadUsdPhysicsFromRange` over each scene in
 `fixtures/physics_parse` and records rigid bodies, shapes (kind, custom

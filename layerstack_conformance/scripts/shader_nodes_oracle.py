@@ -1,12 +1,12 @@
 # Copyright 2026 the LayerStack Authors
 # SPDX-License-Identifier: Apache-2.0 OR MIT
-"""Composed standard shader definitions from the OpenUSD 26.8 wheel."""
+"""Composed standard shader definitions from the OpenUSD 26.11 wheel."""
 import json
 import sys
 from pathlib import Path
 from pxr import Sdf, Usd, Gf, Plug
 
-assert Usd.GetVersion() == (0, 26, 8)
+assert Usd.GetVersion() == (0, 26, 11)
 plugin = Plug.Registry().GetPluginWithName("usdShaders")
 source = Path(plugin.resourcePath) / "shaders/shaderDefs.usda"
 stage = Usd.Stage.Open(str(source))
@@ -26,4 +26,4 @@ for prim in stage.Traverse():
     assert identifier
     nodes[identifier] = {attr.GetName(): {"type": str(attr.GetTypeName()), "default": value(attr.Get())}
         for attr in prim.GetAttributes() if attr.GetName().startswith(("inputs:", "outputs:"))}
-Path(sys.argv[1]).write_text(json.dumps({"version": "26.8", "nodes": nodes}, indent=2, sort_keys=True) + "\n")
+Path(sys.argv[1]).write_text(json.dumps({"version": "26.11", "nodes": nodes}, indent=2, sort_keys=True) + "\n")

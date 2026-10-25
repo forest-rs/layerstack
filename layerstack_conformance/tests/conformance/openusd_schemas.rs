@@ -168,14 +168,14 @@ fn kind_of(name: &str) -> Option<SchemaKind> {
 fn openusd_schema_registry_matches() {
     let oracle: Oracle = serde_json::from_str(ORACLE).expect("registry.json");
     assert!(
-        oracle.openusd_version.starts_with("0.26.8"),
+        oracle.openusd_version == format!("0.{}", layerstack_schemas::OPENUSD_VERSION),
         "oracle from OpenUSD {}, layerstack_schemas from {}",
         oracle.openusd_version,
         layerstack_schemas::OPENUSD_VERSION
     );
     assert_eq!(
         layerstack_schemas::OPENUSD_VERSION,
-        "26.8",
+        "26.11",
         "the generated release"
     );
     assert_eq!(oracle.instances.len(), 2, "a plain and a nested instance");

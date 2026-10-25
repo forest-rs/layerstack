@@ -4,7 +4,7 @@
 
 Usage: schema_views_oracle.py [SCENE [OUT]]
 
-Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.8`,
+Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.11`,
 and an OpenUSD checkout of that release in `LAYERSTACK_OPENUSD_SOURCE` for
 the schemas the wheel is built without (see `openusd_source.py`).
 

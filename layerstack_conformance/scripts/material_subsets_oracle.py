@@ -4,7 +4,7 @@
 
 Usage: material_subsets_oracle.py [--check]
 
-Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.8`.
+Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.11`.
 
 Opens `fixtures/material_subsets/scene.usda` and, for every mesh, records
 `UsdShadeMaterialBindingAPI::GetMaterialBindSubsetsFamilyType`, the

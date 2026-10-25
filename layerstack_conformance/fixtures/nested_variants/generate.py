@@ -15,9 +15,9 @@ whether it exists, its child names, and the default of each attribute.
 `layerstack_conformance/tests/conformance/variant_selection.rs` composes the fixtures and
 compares.
 
-Pinned oracle: `usd-core` 26.8 from PyPI (OpenUSD v26.08):
+Pinned oracle: `usd-core` 26.11 from PyPI (OpenUSD v26.11):
 
-    python3 -m venv venv && venv/bin/pip install usd-core==26.8
+    python3 -m venv venv && venv/bin/pip install usd-core==26.11
     venv/bin/python layerstack_conformance/fixtures/nested_variants/generate.py
 """
 
@@ -120,7 +120,7 @@ def oracle(layer):
 
 
 def main():
-    assert Usd.GetVersion() == (0, 26, 8), Usd.GetVersion()
+    assert Usd.GetVersion() == (0, 26, 11), Usd.GetVersion()
     expected = {}
     for shape, levels in SHAPES.items():
         choices = [branches for _, branches in levels]
@@ -135,7 +135,7 @@ def main():
                 layer.Export(os.path.join(HERE, f"{case}.usdc"))
                 expected[case] = oracle(layer)
     expected = {
-        "generator": "usd-core 26.8 (OpenUSD v26.08)",
+        "generator": "usd-core 26.11 (OpenUSD v26.11)",
         "cases": expected,
     }
     with open(os.path.join(HERE, "expected.json"), "w") as f:

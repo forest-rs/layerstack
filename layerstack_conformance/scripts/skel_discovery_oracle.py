@@ -4,7 +4,7 @@
 
 Usage: skel_discovery_oracle.py [--check]
 
-Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.8`.
+Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.11`.
 
 Opens `fixtures/skel_discovery/scene.usda` and, for each SkelRoot,
 records every skinning target `ComputeSkelBindings` returns: its skeleton,

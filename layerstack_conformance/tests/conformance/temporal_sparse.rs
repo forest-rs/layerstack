@@ -42,19 +42,19 @@ const VECTORS: &str = include_str!("../data/temporal_sparse.json");
 const DIVERGENCES: &[(&str, &str)] = &[
     // Before the first composed sample, hold it instead of OpenUSD's NaN
     // (AOUSD Core 12.5.1).
-    ("nan-before-first-sample", "0.26.8"),
+    ("nan-before-first-sample", "0.26.11"),
     // Keep composing weaker series after the query moves to the upper
     // sample (sparse-array-edits proposal, `Evaluate`).
-    ("override-early-stop", "0.26.8"),
+    ("override-early-stop", "0.26.11"),
     // A held sampled block ends the fold (AOUSD Core 12.3.6).
-    ("transparent-sampled-block", "0.26.8"),
+    ("transparent-sampled-block", "0.26.11"),
     // A held sampled block resolves the schema fallback, and edits over it
     // compose over the fallback, as for a default block (AOUSD Core 12.3.6,
     // 16.2.16.3).
-    ("sampled-block-drops-fallback", "0.26.8"),
+    ("sampled-block-drops-fallback", "0.26.11"),
     // A default block resolves the schema fallback at the default time too
     // (AOUSD Core 12.3.6, 16.2.16.2).
-    ("default-time-block-hides-fallback", "0.26.8"),
+    ("default-time-block-hides-fallback", "0.26.11"),
 ];
 
 /// The attribute fallbacks of the schemas the cases use, as `layerstack`

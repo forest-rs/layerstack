@@ -14,6 +14,7 @@ mod eval;
 mod instance_key;
 mod template;
 use crate::prim_index::{OpinionSource, PrimIndex, SourcedOpinion};
+use crate::spline::KnotInterp;
 use crate::{
     AssetAvailability, FieldValue, HashMap, HashSet, InterpolationType, LayerId, LayerOffset,
     LayerStore, ListOp, NodeId, OpinionKey, OpinionValue, Path, PathId, PropertyPath, PropertySpec,
@@ -737,11 +738,16 @@ impl Catalog {
                     .map(|value| value.materialized().clone()),
                 set.interpolate_missing,
             )
+            .and_then(|prepared| prepared.with_anchor_offset(set.definition.offset))
             .and_then(|prepared| {
-                // The manifest clip has identity time mapping. Its exact
-                // authored activation blocks are stage times, independent of
-                // the metadata anchor offset (usd/clip.cpp::IsBlocked).
-                let blocked = if let Some(samples) = manifest.time_samples.get() {
+                // A manifest blocks an activation with a blocked sample, or
+                // a knot whose next segment is a value block, at the
+                // activation's authored time: the anchor's layer time, here
+                // mapped to the stage like the activations (OpenUSD 26.11
+                // `clipSet.cpp:623` `_ClipContainsAuthoredValueForAttribute`;
+                // AOUSD Core §12.3.4).
+                let anchor = set.definition.offset;
+                let blocked: Vec<f64> = if let Some(samples) = manifest.time_samples.get() {
                     samples
                         .iter()
                         .filter_map(|(time, value)| {
@@ -750,9 +756,18 @@ impl Catalog {
                         .collect()
                 } else {
                     manifest.spline.as_ref().map_or_else(Vec::new, |spline| {
-                        spline.knots.iter().map(|knot| knot.time).collect()
+                        spline
+                            .knots
+                            .iter()
+                            .filter(|knot| knot.next_interp == KnotInterp::Block)
+                            .map(|knot| knot.time)
+                            .collect()
                     })
                 };
+                let blocked = blocked
+                    .into_iter()
+                    .map(|time| external(anchor, time))
+                    .collect();
                 prepared.with_manifest_blocks(blocked)
             });
             let evaluator = match prepared {

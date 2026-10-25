@@ -5,7 +5,7 @@
 Usage: temporal_sparse_oracle.py [OUT_JSON]
 
 Needs OpenUSD 26.03 or newer (sparse array edits) through Python `pxr`, for
-example `pip install usd-core==26.8`. Writes
+example `pip install usd-core==26.11`. Writes
 `layerstack_conformance/tests/data/temporal_sparse.json` by default, which
 `tests/conformance/temporal_sparse.rs` replays against layerstack.
 
@@ -56,7 +56,7 @@ USED = set()
 # difference from OpenUSD is a failure.
 DIVERGENCES = {
     "nan-before-first-sample": {
-        "openusd": "0.26.8",
+        "openusd": "0.26.11",
         "openusd_behavior": (
             "Defaults and fallbacks become samples at time -inf. Before the "
             "first composed time sample the bracketing samples are (-inf, "
@@ -65,7 +65,7 @@ DIVERGENCES = {
             "interpolation."
         ),
         "openusd_source": (
-            "pxr/usd/usd/stage.cpp:8029 and :8054 "
+            "pxr/usd/usd/stage.cpp:8031 and :8056 "
             "(`_GetValueFromResolveInfoImpl` gives defaults and fallbacks time "
             "-inf); pxr/usd/usd/interpolators.cpp:125 (`Usd_Interpolate` alpha)"
         ),
@@ -79,7 +79,7 @@ DIVERGENCES = {
         ),
     },
     "override-early-stop": {
-        "openusd": "0.26.8",
+        "openusd": "0.26.11",
         "openusd_behavior": (
             "After a non-composing lower sample moves the query to the upper "
             "sample's time, the resolve-info walk stops at a weaker series "
@@ -89,7 +89,7 @@ DIVERGENCES = {
             "the upper sample's own time and from the flattened stage."
         ),
         "openusd_source": (
-            "pxr/usd/usd/stage.cpp:9032 "
+            "pxr/usd/usd/stage.cpp:9029 "
             "(`_ResolveInfoResolver::ProcessLayerAtTime`, "
             "`if (!_overrideTime || upperComposes)`)"
         ),
@@ -105,7 +105,7 @@ DIVERGENCES = {
         ),
     },
     "transparent-sampled-block": {
-        "openusd": "0.26.8",
+        "openusd": "0.26.11",
         "openusd_behavior": (
             "A sampled block that is a weaker series' lower bracketing "
             "sample, with a composing upper sample, contributes no samples "
@@ -116,7 +116,7 @@ DIVERGENCES = {
         "openusd_source": (
             "pxr/usd/usd/interpolators.cpp:163 and :180 "
             "(`_GetInterpolatingSamplesImpl` clears the samples of a blocked "
-            "lower sample); pxr/usd/usd/stage.cpp:9032 (the walk continues "
+            "lower sample); pxr/usd/usd/stage.cpp:9029 (the walk continues "
             "when the upper sample composes)"
         ),
         "layerstack": "Lets the block end the fold wherever it is held.",
@@ -126,7 +126,7 @@ DIVERGENCES = {
         ),
     },
     "sampled-block-drops-fallback": {
-        "openusd": "0.26.8",
+        "openusd": "0.26.11",
         "openusd_behavior": (
             "A held sampled block resolves to no value, even where the "
             "attribute has a schema fallback, and sparse edits stronger than "
@@ -134,9 +134,9 @@ DIVERGENCES = {
             "the fallback instead, for both."
         ),
         "openusd_source": (
-            "pxr/usd/usd/stage.cpp:9094 (`ProcessLayerAtTime` sends a default "
-            "block to `ProcessFallback`; time samples never reach it), :8066 "
-            "(edits compose over `VtBackground`) and :8078 "
+            "pxr/usd/usd/stage.cpp:9091 (`ProcessLayerAtTime` sends a default "
+            "block to `ProcessFallback`; time samples never reach it), :8068 "
+            "(edits compose over `VtBackground`) and :8080 "
             "(`Usd_ClearValueIfBlocked`)"
         ),
         "layerstack": (
@@ -150,7 +150,7 @@ DIVERGENCES = {
         ),
     },
     "default-time-block-hides-fallback": {
-        "openusd": "0.26.8",
+        "openusd": "0.26.11",
         "openusd_behavior": (
             "At the default time, a strongest default block resolves to no "
             "value even where the attribute has a schema fallback, although "
@@ -158,10 +158,10 @@ DIVERGENCES = {
             "numeric time resolves the fallback."
         ),
         "openusd_source": (
-            "pxr/usd/usd/stage.cpp:7262 and :7272 "
+            "pxr/usd/usd/stage.cpp:7272 and :7282 "
             "(`Usd_AttrGetValueHelper::GetValue` reads the strongest `default` "
             "field and clears a block without consulting the fallback), while "
-            ":9173 (`ProcessLayerAtDefault`) resolves to the fallback source"
+            ":9170 (`ProcessLayerAtDefault`) resolves to the fallback source"
         ),
         "layerstack": "Resolves the schema fallback, as at numeric times.",
         "authority": (

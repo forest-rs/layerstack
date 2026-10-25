@@ -85,6 +85,10 @@ pub(super) struct PreparedClipProperty {
     spline_mode: bool,
     interpolate_missing: bool,
     blocked_activations: Vec<f64>,
+    /// The clip set anchor's layer offset. Activations and mappings are
+    /// already stage times; without a mapping, clip time is the anchor's
+    /// layer time, which this maps to the stage.
+    anchor: LayerOffset,
 }
 impl PreparedClipProperty {
     /// Prepares a manifest-selected sample property. `active` indices address
@@ -167,6 +171,7 @@ impl PreparedClipProperty {
             spline_mode: false,
             interpolate_missing,
             blocked_activations: Vec::new(),
+            anchor: LayerOffset::IDENTITY,
         };
         result.prepare_sample_times()?;
         Ok(result)
@@ -195,8 +200,13 @@ impl PreparedClipProperty {
                 }
             }
             if self.times.is_empty() {
-                self.sample_times
-                    .extend(samples.iter().map(|(t, _)| *t).filter(|t| inside(*t)));
+                let anchor = self.anchor;
+                self.sample_times.extend(
+                    samples
+                        .iter()
+                        .map(|(t, _)| t * anchor.scale + anchor.offset)
+                        .filter(|t| inside(*t)),
+                );
             } else {
                 // clip.cpp::_ListTimeSamplesForPathFromClipLayer: invert every
                 // segment because looping/reversing maps can have many preimages.
@@ -350,12 +360,10 @@ impl PreparedClipProperty {
                 .as_ref()
                 .is_some_and(|t| t.type_name() == "timecode")
             {
-                let external = self.times.first().map_or(time, |a| time.max(a.external));
-                let external = self
-                    .times
-                    .last()
-                    .map_or(external, |b| external.min(b.external));
-                Value::TimeCode(v + external - internal)
+                // The mapping clamps the query to its range first, so a
+                // clamped query is a regular one (clip.cpp
+                // `_TranslateTimeToInternalDualValued`).
+                Value::TimeCode(self.map_time_value(time, pre && !exterior, v))
             } else {
                 spline_value_type(spline.data_type, v)
             }
@@ -485,6 +493,103 @@ impl PreparedClipProperty {
             .or(self.manifest_default.as_ref())
             .is_some_and(|v| v.array_edit_ref().is_some())
     }
+    /// Places the clip set in its anchor's layer time, `anchor` being that
+    /// layer's offset to the stage. OpenUSD 26.11 keeps clip metadata in
+    /// the anchor's layer time and maps queries and results through the
+    /// offset (`clipSetDefinition.cpp:613` `toStageOffset`, `stage.cpp:9198`
+    /// and `:8389`); AOUSD Core §12.3.4 places clip samples on the stage
+    /// timeline through the anchor's layer offset. So a jump's pre-time steps
+    /// back `CLIP_SAFE_STEP` in layer time (`clipSet.cpp:455`), and without
+    /// a mapping, clip time is the anchor's layer time and time-valued
+    /// values map to the stage by the offset.
+    pub(super) fn with_anchor_offset(mut self, anchor: LayerOffset) -> Result<Self, ClipEvalError> {
+        let step = CLIP_SAFE_STEP * anchor.scale;
+        if !(step.is_finite() && step > 0. && anchor.offset.is_finite()) {
+            return Err(ClipEvalError::InvalidTimeMapping);
+        }
+        if anchor.is_identity() {
+            return Ok(self);
+        }
+        self.anchor = anchor;
+        for i in 0..self.times.len() {
+            if !self.times[i].jump {
+                continue;
+            }
+            let before = self.times[i].authored - step;
+            if before >= self.times[i].authored || (i > 0 && before <= self.times[i - 1].external) {
+                return Err(ClipEvalError::InvalidTimeMapping);
+            }
+            self.times[i].external = before;
+        }
+        if !self.spline_mode {
+            self.prepare_sample_times()?;
+        }
+        Ok(self)
+    }
+    /// The time mapping segment whose linear map carries a time-valued clip
+    /// value at stage time `time` to the stage, or `None` for an absent
+    /// mapping. Follows OpenUSD 26.11 `clip.cpp` `_TranslateTimeToInternal`:
+    /// past a jump the real segment after it, at the mapping's ends the first
+    /// or last real segment, and a jump's authored time on its left side.
+    fn value_segment(&self, time: f64, pre: bool) -> Option<(Mapping, Mapping)> {
+        let times = &self.times;
+        if times.is_empty() {
+            return None;
+        }
+        // Index `i` of OpenUSD's mappings, which repeat the first and last
+        // entries as sentinels.
+        let n = times.len() + 2;
+        let at = |i: usize| times[i.clamp(1, n - 2) - 1];
+        let (i1, i2) = if time <= times[0].external {
+            (0, 1)
+        } else if time >= times[times.len() - 1].external {
+            (n - 2, n - 1)
+        } else {
+            let i2 = 1 + times.partition_point(|m| m.external < time);
+            (i2 - 1, i2)
+        };
+        let (m1, m2) = (at(i1), at(i2));
+        let authored = |m: Mapping, external: f64| Mapping { external, ..m };
+        if pre && m1.jump {
+            return Some(if i1 > 0 {
+                (at(i1 - 1), authored(m1, m2.external))
+            } else {
+                (m1, m2)
+            });
+        }
+        if m2.jump {
+            return Some((m1, authored(m2, at(i2 + 1).external)));
+        }
+        let (r1, r2) = if m1.jump && i2 + 1 < n {
+            (i2, i2 + 1)
+        } else if i1 == 0 {
+            (1, 2)
+        } else if i2 == n - 1 {
+            (n - 3, n - 2)
+        } else {
+            (i1, i2)
+        };
+        let mut b = at(r2);
+        if b.jump && r2 + 1 < n {
+            b = authored(b, at(r2 + 1).external);
+        }
+        Some((at(r1), b))
+    }
+    /// Time-valued clip value `value` at stage time `time`, mapped to the
+    /// stage (OpenUSD 26.11 `clip.cpp` `_TranslateTimeToExternalHelper`).
+    fn map_time_value(&self, time: f64, pre: bool, value: f64) -> f64 {
+        let Some((a, b)) = self.value_segment(time, pre) else {
+            return value * self.anchor.scale + self.anchor.offset;
+        };
+        if a.internal == b.internal || value == a.internal {
+            a.external
+        } else if value == b.internal {
+            b.external
+        } else {
+            (b.external - a.external) / (b.internal - a.internal) * (value - a.internal)
+                + a.external
+        }
+    }
     fn active_clip(&self, time: f64) -> usize {
         let at = self
             .active
@@ -494,7 +599,13 @@ impl PreparedClipProperty {
     }
     fn internal_time(&self, time: f64) -> Result<f64, ClipEvalError> {
         if self.times.is_empty() {
-            return Ok(time);
+            // `SdfLayerOffset::GetInverse() * time`, as `stage.cpp:9198`
+            // computes the clip set's layer time.
+            let (scale, offset) = (
+                1. / self.anchor.scale,
+                -self.anchor.offset / self.anchor.scale,
+            );
+            return Ok(time * scale + offset);
         }
         let upper = self.times.partition_point(|v| v.external < time);
         let mapped = if upper == 0 {
@@ -527,13 +638,26 @@ impl PreparedClipProperty {
             .filter(|s| !s.is_empty());
         let value = if let Some(samples) = raw {
             interpolate_samples(samples, internal, interp).map(|value| {
-                // Clip timecode payloads SHIFT by external-internal; they do not
-                // use the inverse affine map (clip.cpp::_ConvertValueForTime).
+                // Clip timecode payloads map through the time mapping
+                // segment the query uses, scale and offset alike (clip.cpp
+                // `_ConvertValueForTime`).
+                if let Value::TimeCode(v) = value {
+                    return Value::TimeCode(self.map_time_value(time, false, v));
+                }
+                let Some((a, b)) = self.value_segment(time, false) else {
+                    return crate::stage::stage_time::retime_value(&value, self.anchor)
+                        .unwrap_or(value);
+                };
+                let scale = if a.internal == b.internal {
+                    0.
+                } else {
+                    (b.external - a.external) / (b.internal - a.internal)
+                };
                 crate::stage::stage_time::retime_value(
                     &value,
                     LayerOffset {
-                        offset: time - internal,
-                        scale: 1.,
+                        offset: a.external - a.internal * scale,
+                        scale,
                     },
                 )
                 .unwrap_or(value)
@@ -779,7 +903,7 @@ mod tests {
         assert_eq!((e.lower_clip, e.upper_clip), (1, 0));
     }
     #[test]
-    fn jumps_reverse_constant_identity_and_timecode_shift() {
+    fn jumps_reverse_constant_identity_and_timecode_mapping() {
         let clips = vec![clip(&[(0., 0.), (10., 10.)])];
         let p = PreparedClipProperty::new(
             vec![(0., 0)],
@@ -792,6 +916,19 @@ mod tests {
         assert_eq!(p.sample_times(), &[0., 10. - CLIP_SAFE_STEP, 10., 20.]);
         assert_eq!(value(&p, 9.5), Some(Value::Double(9.5)));
         assert_eq!(value(&p, 10.), Some(Value::Double(0.)));
+        // Behind an anchor offset of scale 2 the step is taken in layer time.
+        let scaled = p
+            .clone()
+            .with_anchor_offset(LayerOffset {
+                offset: 0.,
+                scale: 2.,
+            })
+            .unwrap();
+        assert_eq!(
+            scaled.sample_times(),
+            &[0., 10. - 2. * CLIP_SAFE_STEP, 10., 20.]
+        );
+        assert_eq!(value(&scaled, 9.5), Some(Value::Double(9.5)));
         let p = PreparedClipProperty::new(
             vec![(0., 0)],
             vec![(20., 0.), (10., 10.), (0., 0.)],
@@ -825,7 +962,9 @@ mod tests {
             false,
         )
         .unwrap();
-        assert_eq!(value(&p, 5.), Some(Value::TimeCode(15.)));
+        // OpenUSD 26.11 maps the value 20 through the segment, scale and
+        // offset alike: 10, where 26.08 shifted it by `5 - 10` to 15.
+        assert_eq!(value(&p, 5.), Some(Value::TimeCode(10.)));
     }
     #[test]
     fn raw_defaults_ignored_and_invalid_inputs_reported() {
@@ -979,7 +1118,7 @@ mod tests {
         assert_eq!(value(&p, 15.), None);
     }
     #[test]
-    fn mapped_timecode_held_and_exterior_queries_shift_sample_endpoints() {
+    fn mapped_timecode_held_and_exterior_queries_map_through_the_segment() {
         let p = PreparedClipProperty::new(
             vec![(0., 0)],
             vec![(0., 100.), (10., 120.)],
@@ -993,11 +1132,13 @@ mod tests {
             false,
         )
         .unwrap();
+        // usd-core 26.11 maps each value through the segment's linear map
+        // (`(v - 100) / 2`), even outside the mapping's range.
         for (t, linear, held) in [
-            (-5., 900., 900.),
-            (2., 902., 900.),
-            (5., 905., 900.),
-            (15., 910., 910.),
+            (-5., 450., 450.),
+            (2., 452., 450.),
+            (5., 455., 450.),
+            (15., 460., 460.),
         ] {
             assert_eq!(value(&p, t), Some(Value::TimeCode(linear)));
             assert_eq!(

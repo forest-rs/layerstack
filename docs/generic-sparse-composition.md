@@ -170,7 +170,7 @@ capability, not for uniformity alone.
 ## Conformance With OpenUSD
 
 `layerstack_conformance/tests/conformance/temporal_sparse.rs` replays vectors recorded
-from OpenUSD 26.08 (`scripts/temporal_sparse_oracle.py`, including ports of
+from OpenUSD 26.11 (`scripts/temporal_sparse_oracle.py`, including ports of
 `testUsdAttributeArrayEdits.cpp`): mixed dense and sparse samples at differing
 times, held and linear interpolation, sublayer and reference offsets, sampled
 and default blocks, defaults under and over samples, element types of arrays
@@ -180,7 +180,7 @@ also checks that resolving the composed stage equals
 resolving OpenUSD's flattened layer.
 
 `layerstack_conformance/tests/conformance/value_matrix.rs` replays a second, broader
-matrix recorded from OpenUSD 26.08 (`scripts/value_matrix_oracle.py`, which
+matrix recorded from OpenUSD 26.11 (`scripts/value_matrix_oracle.py`, which
 also writes its layers under `fixtures/value_matrix`). Every value kind
 (numbers, time codes, arrays, tokens, strings, asset paths, path
 expressions and composed `customData`) meets every value form or source
@@ -224,19 +224,19 @@ value differs from the expected one. Any other difference from OpenUSD fails
 
 | Name | Confirmed with | OpenUSD | Layerstack | Authority |
 | --- | --- | --- | --- | --- |
-| `nan-before-first-sample` | 26.08 | NaN for interpolating types before the first composed sample | holds the first composed sample, as OpenUSD's flattened stage does | Core §12.5.1 |
-| `override-early-stop` | 26.08 | drops weaker opinions from the interpolated upper sample after the query moves to it | keeps composing weaker series at the upper sample's time | proposal's `Evaluate`; Core §12.3.2 |
-| `transparent-sampled-block` | 26.08 | a held sampled block in a weaker series lets opinions weaker than it show through | the block ends the fold | Core §12.3.6 |
-| `sampled-block-drops-fallback` | 26.08 | a held sampled block resolves no value despite a schema fallback, and edits over it compose over `[]` | the fallback resolves, and edits compose over it, as for a default block | Core §12.3.6, §16.2.16.3 |
-| `default-time-block-hides-fallback` | 26.08 | at the default time a default block resolves no value despite a schema fallback | the fallback resolves, as at numeric times | Core §12.3.6, §16.2.16.2 |
-| `default-time-edits-over-block` | 26.08 | at the default time sparse edits over a default block resolve no value | the edits compose over the empty array, as at numeric times | Core §12.3.6; proposal |
-| `sampled-path-expression-anchoring` | 26.08 | a sampled path expression's relative patterns stay unanchored, and drop out across arcs | every opinion's relative patterns anchor at the prim that authors it | OpenUSD's own anchoring of defaults |
-| `instance-proxy-clips-not-varying` | 26.08 | an instance proxy's clip-valued attribute is not time-varying | it varies as its prototype's does | Core §12.3.4, §11 |
-| `bracketing-composability-in-stage-time` | 26.08 | brackets behind a layer offset can end at a stronger sparse series | brackets follow the composed sample grid | Core §12.3.2.1 |
-| `missing-clip-values-across-jump` | 26.08 | a missing clip value after a jump holds the earlier clip's first sample | it holds the last composed sample | Core §12.3.4, §12.5 |
+| `nan-before-first-sample` | 26.11 | NaN for interpolating types before the first composed sample | holds the first composed sample, as OpenUSD's flattened stage does | Core §12.5.1 |
+| `override-early-stop` | 26.11 | drops weaker opinions from the interpolated upper sample after the query moves to it | keeps composing weaker series at the upper sample's time | proposal's `Evaluate`; Core §12.3.2 |
+| `transparent-sampled-block` | 26.11 | a held sampled block in a weaker series lets opinions weaker than it show through | the block ends the fold | Core §12.3.6 |
+| `sampled-block-drops-fallback` | 26.11 | a held sampled block resolves no value despite a schema fallback, and edits over it compose over `[]` | the fallback resolves, and edits compose over it, as for a default block | Core §12.3.6, §16.2.16.3 |
+| `default-time-block-hides-fallback` | 26.11 | at the default time a default block resolves no value despite a schema fallback | the fallback resolves, as at numeric times | Core §12.3.6, §16.2.16.2 |
+| `default-time-edits-over-block` | 26.11 | at the default time sparse edits over a default block resolve no value | the edits compose over the empty array, as at numeric times | Core §12.3.6; proposal |
+| `sampled-path-expression-anchoring` | 26.11 | a sampled path expression's relative patterns stay unanchored, and drop out across arcs | every opinion's relative patterns anchor at the prim that authors it | OpenUSD's own anchoring of defaults |
+| `instance-proxy-clips-not-varying` | 26.11 | an instance proxy's clip-valued attribute is not time-varying | it varies as its prototype's does | Core §12.3.4, §11 |
+| `bracketing-composability-in-stage-time` | 26.11 | brackets behind a layer offset can end at a stronger sparse series | brackets follow the composed sample grid | Core §12.3.2.1 |
+| `missing-clip-values-across-jump` | 26.11 | a missing clip value after a jump holds the earlier clip's first sample | it holds the last composed sample | Core §12.3.4, §12.5 |
 
 - **`nan-before-first-sample`.** A default or fallback under time samples is a
-  sample at `-inf` (`pxr/usd/usd/stage.cpp:8029` and `:8054`,
+  sample at `-inf` (`pxr/usd/usd/stage.cpp:8031` and `:8056`,
   `_GetValueFromResolveInfoImpl`), and `Usd_Interpolate` interpolates towards
   the first sample with `alpha = inf / inf`
   (`pxr/usd/usd/interpolators.cpp:125`), giving NaN for interpolating element
@@ -245,7 +245,7 @@ value differs from the expected one. Any other difference from OpenUSD fails
 - **`override-early-stop`.** After a dense lower sample moves the query to the
   upper sample, OpenUSD stops at a weaker series whose own upper sample is
   dense although its sample held at the query time is sparse
-  (`pxr/usd/usd/stage.cpp:9032`, `ProcessLayerAtTime`), so weaker opinions
+  (`pxr/usd/usd/stage.cpp:9029`, `ProcessLayerAtTime`), so weaker opinions
   drop out of the interpolated upper sample, which then differs from the value
   at that sample's own time. Layerstack keeps composing, as the proposal's
   `Evaluate` ("Evaluating a Strength-Ordering of Samples at a Specific Time")
@@ -258,23 +258,23 @@ value differs from the expected one. Any other difference from OpenUSD fails
   opinions, sampled ones included (Core §12.3.6), so Layerstack lets it end
   the fold.
 - **`sampled-block-drops-fallback`.** OpenUSD sends a default block on to the
-  schema fallback (`pxr/usd/usd/stage.cpp:9094`, `ProcessLayerAtTime`), but a
+  schema fallback (`pxr/usd/usd/stage.cpp:9091`, `ProcessLayerAtTime`), but a
   time-sample source never reaches it: edits stronger than a held sampled
-  block compose over `VtBackground`, the empty array (`:8066`), and a
-  strongest held sampled block resolves no value (`:8078`,
+  block compose over `VtBackground`, the empty array (`:8068`), and a
+  strongest held sampled block resolves no value (`:8080`,
   `Usd_ClearValueIfBlocked`). Core §12.3.6 resolves a blocked attribute to its
   fallback "at any time", and §16.2.16.3 gives blocked samples the semantics of
   a blocked default, so Layerstack treats both blocks alike.
 - **`default-time-block-hides-fallback`.** At the default time OpenUSD reads
   the strongest `default` field and clears a block without consulting the
-  fallback (`pxr/usd/usd/stage.cpp:7262` and `:7272`,
+  fallback (`pxr/usd/usd/stage.cpp:7272` and `:7282`,
   `Usd_AttrGetValueHelper::GetValue`), although its resolve info names the
-  fallback as the source (`:9173`) and numeric times resolve the fallback.
+  fallback as the source (`:9170`) and numeric times resolve the fallback.
   Core §12.3.6 and §16.2.16.2 ("`int x = None` ... only resolve to fallback")
   resolve the fallback.
 - **`default-time-edits-over-block`.** The same default-time read composes the
-  `default` field as metadata (`pxr/usd/usd/stage.cpp:7261`) and clears the
-  result when the weaker default is a block (`:7272`), so sparse edits
+  `default` field as metadata (`pxr/usd/usd/stage.cpp:7271`) and clears the
+  result when the weaker default is a block (`:7282`), so sparse edits
   stronger than a block resolve no value, while numeric times and
   `UsdAttributeQuery::Get` at the default time compose them over the empty
   array. A block discards weaker opinions only (Core §12.3.6), so Layerstack
@@ -291,12 +291,12 @@ value differs from the expected one. Any other difference from OpenUSD fails
   anchored.
 - **`instance-proxy-clips-not-varying`.** `ValueMightBeTimeVarying` looks
   value clips up by the attribute's prim path
-  (`pxr/usd/usd/stage.cpp:9769`), which for an instance proxy is not the
+  (`pxr/usd/usd/stage.cpp:9771`), which for an instance proxy is not the
   prototype's path the clip cache holds, so it answers `false` although the
   proxy's values vary. Layerstack answers as for the prototype.
 - **`bracketing-composability-in-stage-time`.** `GetBracketingTimeSamples`
   asks whether a series' lower sample composes at that sample's stage time
-  rather than its layer time (`pxr/usd/usd/stage.cpp:8362`,
+  rather than its layer time (`pxr/usd/usd/stage.cpp:8352`,
   `_BracketingSamplesResolver::ProcessLayerAtTime`), so behind a layer
   offset it can stop at a stronger sparse series and bracket with its last
   sample, although `GetTimeSamples` lists the weaker samples there and the
@@ -304,7 +304,7 @@ value differs from the expected one. Any other difference from OpenUSD fails
 - **`missing-clip-values-across-jump`.** With `interpolateMissingClipValues`,
   where the active clip lacks the attribute and no later clip has it,
   OpenUSD brackets with the earlier clip's samples at the query time
-  (`pxr/usd/usd/clipSet.cpp:681`), which a jump discontinuity maps to that
+  (`pxr/usd/usd/clipSet.cpp:743`), which a jump discontinuity maps to that
   clip's first sample, although `GetTimeSamples` ends with its last sample
   before the jump and the value there differs. Layerstack holds the last
   composed sample (Core §12.5).

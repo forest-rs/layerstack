@@ -758,12 +758,14 @@ fn clip_times_support_discontinuities_reversal_holds_and_timecode_values() {
         "",
         "timecode x",
     );
+    // OpenUSD 26.11 maps clip timecode values through the time mapping
+    // segment, scale and offset alike (`clip.cpp` `_ConvertValueForTime`).
     check(
-        "timecode-shift",
+        "timecode-mapping",
         layers,
         "/P.x",
         &[0., 10., 20.],
-        &[Some(100.), Some(110.), Some(120.)],
+        &[Some(200.), Some(210.), Some(220.)],
         None,
         &[0., 20.],
         false,
@@ -880,7 +882,11 @@ over "P" (
 }
 
 #[test]
-fn reference_offsets_map_authored_external_times_but_not_implicit_identity() {
+/// OpenUSD 26.11 keeps a clip set in its anchor's layer time, so the
+/// reference offset maps clip time whether or not `times` is authored; 26.08
+/// evaluated an unmapped set in stage time (`clipSetDefinition.cpp:613`,
+/// `stage.cpp:9198`; AOUSD Core §12.3.4).
+fn reference_offsets_map_clip_time_with_or_without_authored_times() {
     for authored_times in [false, true] {
         let times = if authored_times {
             "double2[] times = [(0,0),(10,10)]"
@@ -934,9 +940,9 @@ fn reference_offsets_map_authored_external_times_but_not_implicit_identity() {
                 layers,
                 "/World.x",
                 &[0., 5., 20., 30., 40.],
-                &[Some(0.), Some(5.), Some(10.), Some(10.), Some(10.)],
+                &[Some(0.), Some(0.), Some(0.), Some(5.), Some(10.)],
                 None,
-                &[0., 10., 20.],
+                &[20., 40.],
                 false,
                 false,
             );
@@ -1752,39 +1758,47 @@ def "P" (
 }
 
 #[test]
+/// OpenUSD 26.11 blocks a spline clip only where the manifest's knot at the
+/// activation starts a value-block segment; 26.08 blocked it at any manifest
+/// knot (`clipSet.cpp:623` `_ClipContainsAuthoredValueForAttribute`).
 fn review_manifest_blocked_spline_reports_manifest_default_source() {
     let metadata = clips("")
         .replace("[@a.usda@, @b.usda@]", "[@a.usda@]")
         .replace("[(0, 0), (10, 1)]", "[(0, 0)]");
-    let layers = basic(
-        &metadata,
-        "double x",
-        "double x.spline = {\n0:7; post held\n}",
-        "",
-        "double x = 42\ndouble x.spline = {\n0:0; post held\n}",
-    );
-    check(
-        "review-blocked-spline-source",
-        layers.clone(),
-        "/P.x",
-        &[5.],
-        &[Some(42.)],
-        None,
-        &[],
-        false,
-        false,
-    );
-    let (store, stage) = compose(&layers);
-    let property = store.property_path("/P.x");
-    let source = stage
-        .view(&store)
-        .attribute(layerstack::PropertyPath::new(
-            property.prim_path(),
-            property.property(),
-        ))
-        .and_then(|a| a.clip_source(Time::at(5.)))
-        .unwrap();
-    assert_eq!(source.lower.layer, Some(LayerId(4)));
+    for (name, post, value, layer) in [
+        ("review-held-spline-source", "held", 7., LayerId(2)),
+        ("review-blocked-spline-source", "none", 42., LayerId(4)),
+    ] {
+        let layers = basic(
+            &metadata,
+            "double x",
+            "double x.spline = {\n0:7; post held\n}",
+            "",
+            &format!("double x = 42\ndouble x.spline = {{\n0:0; post {post}\n}}"),
+        );
+        check(
+            name,
+            layers.clone(),
+            "/P.x",
+            &[5.],
+            &[Some(value)],
+            None,
+            &[],
+            false,
+            false,
+        );
+        let (store, stage) = compose(&layers);
+        let property = store.property_path("/P.x");
+        let source = stage
+            .view(&store)
+            .attribute(layerstack::PropertyPath::new(
+                property.prim_path(),
+                property.property(),
+            ))
+            .and_then(|a| a.clip_source(Time::at(5.)))
+            .unwrap();
+        assert_eq!(source.lower.layer, Some(layer), "{name}");
+    }
 }
 
 #[test]

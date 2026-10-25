@@ -398,7 +398,7 @@ impl Composed {
                 source
             } else if sampled(opinion) {
                 "samples"
-            } else if opinion.opinion.value.spline().is_some() {
+            } else if opinion.opinion.value().spline().is_some() {
                 "spline"
             } else {
                 "default"

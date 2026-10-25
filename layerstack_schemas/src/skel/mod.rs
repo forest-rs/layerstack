@@ -359,7 +359,7 @@ fn inherited_target_with_root(
                 property
                     .opinions()
                     .iter()
-                    .any(|o| o.value.as_property().is_some_and(|p| p.targets.is_some()))
+                    .any(|o| o.value().as_property().is_some_and(|p| p.targets.is_some()))
             });
             let targets = crate::view::forwarded_targets(scene, property);
             if authored || !targets.is_empty() {

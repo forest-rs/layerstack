@@ -372,8 +372,9 @@ fn specialized_target_uses_propagated_source_strength_not_its_inert_placeholder(
         .explain_prim(dest)
         .unwrap()
         .iter()
-        .find(|key| key.lookup_path == class && key.layer_id == LayerId(2))
+        .find(|source| source.key.lookup_path == class && source.key.layer_id == LayerId(2))
         .unwrap()
+        .key
         .node;
     for layer in [LayerId(2), LayerId(4)] {
         let target = EditTarget::for_node_layer(&stage, &store, dest, actual, layer).unwrap();

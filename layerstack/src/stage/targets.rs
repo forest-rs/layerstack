@@ -141,17 +141,17 @@ impl Stage {
         let mut replaced = false;
         let mut explained = Vec::new();
         for opinion in opinions {
-            let Some(mapped) = opinion.value.targets() else {
+            let Some(mapped) = opinion.value().targets() else {
                 continue;
             };
-            let (layer, spec) = (opinion.key.layer_id, &opinion.key.spec_path);
+            let (layer, spec) = (opinion.layer_id(), &opinion.spec_path());
             let authored = store
                 .layer(layer)
                 .and_then(|l| l.property_at(spec))
                 .and_then(|p| p.targets.clone())
                 .unwrap_or_default();
             let arc = graph
-                .and_then(|graph| graph.node(opinion.key.node))
+                .and_then(|graph| graph.node(opinion.node()))
                 .map(|node| node.arc_kind())
                 .filter(|kind| *kind != ArcKind::Local);
             let (kept, dropped) = if replaced {

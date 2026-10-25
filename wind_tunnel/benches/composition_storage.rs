@@ -253,7 +253,10 @@ fn check_default_edit(references: u32, samples: u32) {
             .property(path)
             .map(|p| p.opinions())
             .unwrap();
-        let authored_samples = opinions[0].value.time_samples().unwrap_or(&[]);
+        let authored_samples = opinions
+            .first()
+            .and_then(|opinion| opinion.value().time_samples())
+            .unwrap_or(&[]);
         assert_eq!(
             authored_samples.len(),
             samples as usize,

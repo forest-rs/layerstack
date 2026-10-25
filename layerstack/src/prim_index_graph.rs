@@ -9,8 +9,9 @@
 //! other node is a site reached through an arc from its parent node, and
 //! records the arc's kind, the layer stack and site it targets, the
 //! namespace depth at which it was introduced and its position among the
-//! arcs authored beside it. Every opinion of the prim names the node it came
-//! from ([`crate::OpinionKey::node`]).
+//! arcs authored beside it. Every source of the prim's opinions names the
+//! node it belongs to ([`crate::OpinionKey::node`] of its
+//! [`crate::OpinionSource`]).
 //!
 //! This is the counterpart of OpenUSD's `PcpPrimIndex` graph
 //! (`pxr/usd/pcp/primIndex_Graph.h`, `pxr/usd/pcp/node.h`), whose nodes carry
@@ -73,7 +74,7 @@ use hashbrown::HashTable;
 
 use crate::{
     doc::{LayerId, LayerOffset},
-    prim_index::{ArcKind, OpinionKey},
+    prim_index::{ArcKind, OpinionKey, OpinionSource},
     spec_path::SpecPath,
     sync::ReadLock,
 };
@@ -503,7 +504,7 @@ impl<'a> PrimNode<'a> {
     /// authors it (an arc is read on its authoring layer's timeline). A layer of the stack is read with this offset
     /// composed with its own sublayer offset
     /// ([`crate::LayerStack::offset_at`]), which is the
-    /// [`crate::Opinion::layer_offset`] of the node's opinions from it.
+    /// [`crate::OpinionSource::layer_offset`] of the node's sources in it.
     ///
     /// OpenUSD: the time offset of `PcpNodeRef::GetMapToRoot`.
     ///
@@ -611,12 +612,12 @@ impl PrimIndexGraph {
     pub(crate) fn instanceable_nodes<'a>(
         &'a self,
         paths: &'a crate::path::PathInterner,
-        sources: &'a [OpinionKey],
+        sources: &'a [OpinionSource],
         depth: u16,
     ) -> impl Iterator<Item = NodeId> + 'a {
         sources
             .iter()
-            .map(|source| source.node)
+            .map(|source| source.key.node)
             .filter(move |&node| self.has_direct_dependency(paths, node, depth))
     }
 
@@ -1016,12 +1017,15 @@ mod tests {
         ]);
         let sources: Vec<_> = [0, 1, 2, 3, 4, 7]
             .into_iter()
-            .map(|id| OpinionKey {
-                node: NodeId(id),
-                layer_strength: 0,
-                layer_id: LayerId(1),
-                lookup_path: PathId::from_raw(0),
-                spec_path: spec_path("/A"),
+            .map(|id| OpinionSource {
+                key: OpinionKey {
+                    node: NodeId(id),
+                    layer_strength: 0,
+                    layer_id: LayerId(1),
+                    lookup_path: PathId::from_raw(0),
+                    spec_path: spec_path("/A"),
+                },
+                layer_offset: LayerOffset::IDENTITY,
             })
             .collect();
         assert_eq!(
@@ -1383,18 +1387,19 @@ mod tests {
             .chain(grove_opinions.iter().map(|opinion| (grove_graph, opinion)))
             .chain(moved_opinions.iter().map(|opinion| (moved_graph, opinion)));
         for (graph, opinion) in checked {
-            let node = graph.node(opinion.key.node).expect("opinion node");
+            let key = &opinion.source().key;
+            let node = graph.node(key.node).expect("opinion node");
             let stack = LayerStack::gather(&store, node.layer_stack());
-            let index = usize::from(opinion.key.layer_strength);
+            let index = usize::from(key.layer_strength);
             assert_eq!(
-                stack.layers[index], opinion.key.layer_id,
+                stack.layers[index], key.layer_id,
                 "layer strength indexes the stack"
             );
             assert_eq!(
                 node.layer_offset().compose(stack.offset_at(index)),
-                opinion.layer_offset,
+                opinion.layer_offset(),
                 "opinion from layer {:?}",
-                opinion.key.layer_id
+                key.layer_id
             );
         }
     }

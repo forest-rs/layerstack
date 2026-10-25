@@ -761,7 +761,7 @@ impl PointInstancer<'_> {
         }
         let mut chain = Vec::new();
         for opinion in self.prim()?.metadata_opinions(key) {
-            let OpinionValue::Field(FieldValue::Int64ListOp(op)) = &opinion.value else {
+            let OpinionValue::Field(FieldValue::Int64ListOp(op)) = opinion.value() else {
                 return None;
             };
             chain.push(&**op);

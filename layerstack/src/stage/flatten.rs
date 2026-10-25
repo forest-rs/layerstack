@@ -110,7 +110,7 @@ use crate::{
     interner::TokenId,
     listop::ListOp,
     path::{Path, PathId, PropertyPath, TargetPath},
-    prim_index::{ArcKind, FieldKey, Opinion},
+    prim_index::{ArcKind, FieldKey, Opinion, OpinionList, OpinionRef, OpinionSource, Opinions},
     property::{PropertyEntry, PropertyKind, PropertySpec, PropertyType, Variability},
     spec_path::VariantSelectionSite,
 };
@@ -364,14 +364,15 @@ impl Flattener<'_, '_> {
     }
 
     /// The layer and spec of `opinion`, for a finding.
-    fn source(&self, opinion: &Opinion, property: bool) -> FindingSource {
+    fn source(&self, opinion: OpinionRef<'_>, property: bool) -> FindingSource {
+        let site = &opinion.source().key.spec_path;
         let spec = if property {
-            opinion.key.spec_path.with_property(opinion.field)
+            site.with_property(opinion.field())
         } else {
-            opinion.key.spec_path.prim_spec()
+            site.prim_spec()
         };
         FindingSource {
-            layer: opinion.key.layer_id,
+            layer: opinion.layer_id(),
             spec: spec.display(self.store.paths(), self.store.tokens()),
         }
     }
@@ -401,19 +402,19 @@ impl Flattener<'_, '_> {
     fn note_retimed(
         &mut self,
         path: &str,
-        opinion: &Opinion,
+        opinion: OpinionRef<'_>,
         source: Option<&FindingSource>,
     ) -> bool {
-        let Some(value) = opinion.value.default_value() else {
+        let Some(value) = opinion.value().default_value() else {
             return true;
         };
-        if retime_value(value, opinion.layer_offset).is_none() {
+        if retime_value(value, opinion.layer_offset()).is_none() {
             return true;
         }
         self.transformed(
             path.into(),
             Transformation::TimeCodesRetimed {
-                offset: opinion.layer_offset,
+                offset: opinion.layer_offset(),
             },
             source.cloned(),
         );
@@ -438,30 +439,32 @@ impl Flattener<'_, '_> {
     }
 
     /// `opinions` with the asset paths of each anchored to the layer that
-    /// authors it, when the requirements anchor them.
-    fn anchor_opinions<'o>(&mut self, opinions: &'o [Opinion]) -> Cow<'o, [Opinion]> {
+    /// authors it, when the requirements anchor them. The opinions keep
+    /// their sources (`opinions.with_records` reads them).
+    fn anchor_opinions<'o>(&mut self, opinions: Opinions<'o>) -> Cow<'o, [Opinion]> {
+        let records = opinions.records();
         let AssetPaths::Anchored(resolver) = self.requirements.asset_paths else {
-            return Cow::Borrowed(opinions);
+            return Cow::Borrowed(records);
         };
         let (anchored, unanchored) = (&mut self.anchored, &mut self.unanchored);
         let mut out: Option<Vec<Opinion>> = None;
         for (i, opinion) in opinions.iter().enumerate() {
-            let layer = opinion.key.layer_id;
-            let mapped = map_opinion(opinion, &mut |leaf| {
+            let layer = opinion.layer_id();
+            let mapped = map_opinion(opinion.opinion(), &mut |leaf| {
                 anchor_leaf(leaf, layer, resolver, anchored, unanchored)
             });
             match (mapped, &mut out) {
                 (Some(mapped), Some(out)) => out.push(mapped),
                 (Some(mapped), None) => {
-                    let mut started = opinions[..i].to_vec();
+                    let mut started = records[..i].to_vec();
                     started.push(mapped);
                     out = Some(started);
                 }
-                (None, Some(out)) => out.push(opinion.clone()),
+                (None, Some(out)) => out.push(opinion.opinion().clone()),
                 (None, None) => {}
             }
         }
-        out.map_or(Cow::Borrowed(opinions), Cow::Owned)
+        out.map_or(Cow::Borrowed(records), Cow::Owned)
     }
 
     /// Records each asset path in `value` as an external dependency, each
@@ -670,7 +673,7 @@ impl Flattener<'_, '_> {
         {
             let store: &dyn LayerStore = &*self.store;
             // The strongest source spec that authors each dedicated member.
-            for source in &index.sources {
+            for OpinionSource { key: source, .. } in &index.sources {
                 let Some(authored) = store.layer(source.layer_id).and_then(|layer| {
                     layer.source_prim_spec(source.lookup_path, &source.spec_path, store.paths())
                 }) else {
@@ -730,12 +733,17 @@ impl Flattener<'_, '_> {
                 }
                 continue;
             }
-            let authored = strongest.and_then(|opinion| opinion.value.as_field());
+            let authored = strongest.and_then(|opinion| opinion.value().as_field());
             let resolved = if authored.is_some_and(FieldValue::is_list_op) {
                 stage.resolve_value(prim, key)
             } else {
                 let anchored = self.anchor_opinions(opinions);
-                stage.resolve_default(key, &anchored, index.property_type_for(&key), None)
+                stage.resolve_default(
+                    key,
+                    opinions.with_records(&anchored),
+                    index.property_type_for(&key),
+                    None,
+                )
             };
             let Some(resolved) = resolved else {
                 continue;
@@ -776,7 +784,7 @@ impl Flattener<'_, '_> {
             .prims
             .get(&prim)?
             .property_opinions(name)
-            .unwrap_or(&[]);
+            .unwrap_or_default();
         let property = PropertyPath::new(prim, name);
         let path = self.property_display(prim, name);
         let mut spec = PropertySpec::of_kind(declaration.kind);
@@ -788,9 +796,9 @@ impl Flattener<'_, '_> {
             .map(|resolved| resolved.value)
             .unwrap_or_default();
         if !targets.is_empty() {
-            let strongest = opinions.iter().find(|op| op.value.targets().is_some());
+            let strongest = opinions.iter().find(|op| op.value().targets().is_some());
             if strongest
-                .and_then(|op| op.value.targets())
+                .and_then(|op| op.value().targets())
                 .is_some_and(|list| list.explicit.is_some())
             {
                 self.report.preserved.targets += targets.len();
@@ -826,15 +834,20 @@ impl Flattener<'_, '_> {
         };
         spec.type_name = Some(property_type);
         let anchored = self.anchor_opinions(opinions);
-        let default_opinions: &[Opinion] = &anchored;
-        let mut animation = anchored.to_vec();
+        let default_opinions = opinions.with_records(&anchored);
+        // The anchored opinions keep their sources' ids; each clip's source
+        // is its set's anchor.
+        let mut animation = OpinionList {
+            records: anchored.to_vec(),
+            sources: opinions.sources().to_vec(),
+        };
         let grid = stage.property_sample_times(prim, name);
         let mut selected = Vec::new();
         for time in core::iter::once(0.).chain(grid.iter().copied()) {
             for clip in stage.clip_opinions_after_authored(
                 prim,
                 name,
-                &anchored,
+                default_opinions,
                 time,
                 crate::InterpolationType::Linear,
             ) {
@@ -853,7 +866,7 @@ impl Flattener<'_, '_> {
                         anchors,
                     } in clips
                     {
-                        if let crate::OpinionValue::Property(spec) = &mut opinion.value {
+                        if let crate::OpinionValue::Property(spec) = &mut opinion.opinion.value {
                             let spec = Arc::make_mut(spec);
                             let mut samples = spec.time_samples.get().unwrap_or(&[]).to_vec();
                             for ((_, value), anchor) in samples.iter_mut().zip(anchors) {
@@ -865,44 +878,45 @@ impl Flattener<'_, '_> {
                             }
                             spec.time_samples = samples.into();
                         }
-                        animation.push(opinion);
+                        animation.push_ref(opinion.as_ref());
                     }
                     let graph = &stage.prims.get(&prim)?.graph;
                     // Stable sorting preserves clip-set order and puts an
                     // authored opinion before clips introduced at its site.
-                    animation.sort_by(|a, b| {
-                        graph
-                            .cmp_nodes(a.key.node, b.key.node)
-                            .then_with(|| a.key.layer_strength.cmp(&b.key.layer_strength))
+                    let OpinionList { records, sources } = &mut animation;
+                    records.sort_by(|a, b| {
+                        graph.cmp_keys(
+                            &sources[a.source.index()].key,
+                            &sources[b.source.index()].key,
+                        )
                     });
                     self.transformed(path.clone(), Transformation::ClipSamplesBaked, None);
                 }
                 Err(_) => self.lost(path.clone(), Loss::ValueClips, None),
             }
         }
-        let animation = super::stage_time::animation_opinions(&animation);
-        let opinions = animation.as_ref();
+        let masked = super::stage_time::animation_opinions(&animation.records);
+        let opinions = animation.view().with_records(&masked);
 
         // Spec: AOUSD Core §12.3.2 (per opinion, time samples, then a
         // spline, then the default).
-        let value_source = opinions.iter().position(|opinion| {
-            opinion
-                .value
+        let value_source = opinions.iter().enumerate().find(|(_, opinion)| {
+            let value = opinion.value();
+            value
                 .time_samples()
                 .is_some_and(|samples| !samples.is_empty())
-                || opinion.value.spline().is_some()
-                || opinion.value.has_default_value()
+                || value.spline().is_some()
+                || value.has_default_value()
         });
-        if let Some(position) = value_source {
-            let source = &opinions[position];
+        if let Some((position, source)) = value_source {
             let finding_source = self.source(source, true);
             if source
-                .value
+                .value()
                 .time_samples()
                 .is_none_or(|samples| samples.is_empty())
-                && let Some(spline) = source.value.spline()
+                && let Some(spline) = source.value().spline()
             {
-                let offset = source.layer_offset;
+                let offset = source.layer_offset();
                 if offset.is_identity() {
                     spec.spline = Some(Box::new(spline.clone()));
                     self.report.preserved.splines += 1;
@@ -915,7 +929,7 @@ impl Flattener<'_, '_> {
                     self.lost(path.clone(), Loss::RetimedSpline, Some(finding_source));
                 }
             } else if let Some(samples) =
-                composed_samples(&opinions[position..], spec.type_name.as_ref())
+                composed_samples(opinions.from(position), spec.type_name.as_ref())
             {
                 spec.time_samples = self
                     .stage_samples(&path, source, samples, &finding_source)
@@ -927,7 +941,7 @@ impl Flattener<'_, '_> {
         // OpenUSD writes the default whenever one is authored.
         if let Some(authored) = default_opinions.iter().find(|opinion| {
             opinion
-                .value
+                .value()
                 .as_property()
                 .is_some_and(|spec| spec.default.is_some())
         }) {
@@ -966,7 +980,7 @@ impl Flattener<'_, '_> {
         prim: PathId,
         name: TokenId,
         declaration: &super::PropertyDeclaration,
-        opinions: &[Opinion],
+        opinions: Opinions<'_>,
         spec: &mut PropertySpec,
         path: &str,
     ) {
@@ -986,6 +1000,7 @@ impl Flattener<'_, '_> {
             return;
         }
         spec.custom = opinions
+            .records()
             .iter()
             .rev()
             .find_map(|op| op.value.as_property())
@@ -1018,11 +1033,11 @@ impl Flattener<'_, '_> {
     fn stage_samples(
         &mut self,
         path: &str,
-        source: &Opinion,
+        source: OpinionRef<'_>,
         composed: ComposedSamples,
         finding_source: &FindingSource,
     ) -> Vec<(f64, Value)> {
-        let offset = source.layer_offset;
+        let offset = source.layer_offset();
         if composed.baked {
             self.transformed(
                 path.into(),
@@ -1058,12 +1073,12 @@ impl Flattener<'_, '_> {
     fn property_metadata(
         &mut self,
         name: TokenId,
-        opinions: &[Opinion],
+        opinions: Opinions<'_>,
         remap: Option<Remap>,
         path: &str,
     ) -> Vec<FieldEntry> {
         let mut keys: Vec<TokenId> = Vec::new();
-        for opinion in opinions {
+        for opinion in opinions.records() {
             if let Some(spec) = opinion.value.as_property() {
                 for entry in &spec.metadata {
                     if !keys.contains(&entry.name) {
@@ -1079,19 +1094,20 @@ impl Flattener<'_, '_> {
         let anchored = self.anchor_opinions(opinions);
         let mut out = Vec::new();
         for key in keys {
-            let Some(resolved) = self
-                .stage
-                .resolve_property_metadata_over(&anchored, name, key)
-            else {
+            let Some(resolved) = self.stage.resolve_property_metadata_over(
+                opinions.with_records(&anchored),
+                name,
+                key,
+            ) else {
                 continue;
             };
             let strongest = opinions
                 .iter()
-                .find_map(|opinion| Some((opinion, opinion.value.as_property()?.metadata(key)?)));
+                .find_map(|opinion| Some((opinion, opinion.value().as_property()?.metadata(key)?)));
             let source = strongest.map(|(opinion, _)| self.source(opinion, true));
             let authored = strongest.map(|(_, value)| value);
             let retimed = strongest.is_some_and(|(opinion, value)| {
-                matches!(value, FieldValue::Value(value) if retime_value(value, opinion.layer_offset).is_some())
+                matches!(value, FieldValue::Value(value) if retime_value(value, opinion.layer_offset()).is_some())
             });
             if authored.is_some_and(|value| !is_explicit(value)) {
                 let field = String::from(self.store.tokens().resolve(key));
@@ -1104,7 +1120,7 @@ impl Flattener<'_, '_> {
                 self.transformed(
                     path.into(),
                     Transformation::TimeCodesRetimed {
-                        offset: opinion.layer_offset,
+                        offset: opinion.layer_offset(),
                     },
                     source.clone(),
                 );
@@ -1239,22 +1255,22 @@ struct ComposedSamples {
 /// §12.3.6 (blocks); sparse array edits are an OpenUSD extension
 /// (`VtArrayEdit`).
 fn composed_samples(
-    opinions: &[Opinion],
+    opinions: Opinions<'_>,
     property_type: Option<&PropertyType>,
 ) -> Option<ComposedSamples> {
-    let animation = super::stage_time::animation_opinions(opinions);
-    let opinions = animation.as_ref();
+    let animation = super::stage_time::animation_opinions(opinions.records());
+    let opinions = opinions.with_records(&animation);
     let mut partial: Vec<(f64, Value)> = Vec::new();
     let mut partial_default: Option<Value> = None;
     let mut baked = false;
     let mut retimed_timecodes = false;
     for opinion in opinions {
         let can_compose = if let Some(samples) = opinion
-            .value
+            .value()
             .time_samples()
             .filter(|samples| !samples.is_empty())
         {
-            let offset = opinion.layer_offset;
+            let offset = opinion.layer_offset();
             let weaker: Vec<(f64, Value)> = samples
                 .iter()
                 .map(|(time, value)| {
@@ -1281,15 +1297,15 @@ fn composed_samples(
                 partial = compose_series(&partial, &weaker, property_type, &mut baked);
             }
             can_compose_over(&partial, partial_default.as_ref())
-        } else if opinion.value.spline().is_some() {
+        } else if opinion.value().spline().is_some() {
             break;
-        } else if let Some(default) = opinion.value.default_value() {
+        } else if let Some(default) = opinion.value().default_value() {
             if *default == Value::Blocked {
                 break;
             }
             // A default's `timecode` values are in its layer's time too
             // (`_FieldValueToStageXf` maps it before it composes).
-            let retimed = retime_value(default, opinion.layer_offset);
+            let retimed = retime_value(default, opinion.layer_offset());
             retimed_timecodes |= retimed.is_some();
             let default = retimed.as_ref().unwrap_or(default);
             if partial.is_empty() {

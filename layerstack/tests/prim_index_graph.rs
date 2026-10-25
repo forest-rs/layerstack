@@ -129,7 +129,7 @@ fn sources_name_the_node_of_their_arc_path() {
 
     let paths: Vec<_> = sources
         .iter()
-        .map(|source| arc_path(&store, graph, source.node))
+        .map(|source| arc_path(&store, graph, source.key.node))
         .collect();
     let local = (ArcKind::Local, LayerId(1), "/Grove".to_owned());
     let reference = (ArcKind::References, LayerId(2), "/Tree".to_owned());
@@ -156,7 +156,7 @@ fn sources_name_the_node_of_their_arc_path() {
         "local, reference, the class it inherits, then its variant (LIVERPS)"
     );
 
-    let reference_node = graph.node(sources[1].node).expect("reference node");
+    let reference_node = graph.node(sources[1].key.node).expect("reference node");
     assert_eq!(reference_node.namespace_depth(), 1);
     assert_eq!(reference_node.sibling_index(), 0);
     assert!(!reference_node.is_implied());
@@ -165,7 +165,7 @@ fn sources_name_the_node_of_their_arc_path() {
         reference_node
             .children()
             .iter()
-            .all(|child| graph.node(*child).expect("child").parent() == Some(sources[1].node)),
+            .all(|child| graph.node(*child).expect("child").parent() == Some(sources[1].key.node)),
         "children link back to their parent"
     );
 }
@@ -184,13 +184,13 @@ fn ancestral_arcs_add_nodes_to_descendants() {
     let (graph, sources) = (prim.composition_graph(), prim.sources());
     assert_eq!(sources.len(), 1, "only the referenced child has a spec");
     assert_eq!(
-        arc_path(&store, graph, sources[0].node),
+        arc_path(&store, graph, sources[0].key.node),
         [
             (ArcKind::Local, LayerId(1), "/Grove/Leaves".to_owned()),
             (ArcKind::References, LayerId(2), "/Tree/Leaves".to_owned()),
         ]
     );
-    let node = graph.node(sources[0].node).expect("reference node");
+    let node = graph.node(sources[0].key.node).expect("reference node");
     assert_eq!(node.namespace_depth(), 1, "the arc is authored on `/Grove`");
 }
 
@@ -215,7 +215,7 @@ fn opinion_order_follows_the_graphs_strength_order() {
         let ranks: Vec<usize> = handle
             .sources()
             .iter()
-            .map(|source| rank[&source.node])
+            .map(|source| rank[&source.key.node])
             .collect();
         assert!(
             ranks.is_sorted(),

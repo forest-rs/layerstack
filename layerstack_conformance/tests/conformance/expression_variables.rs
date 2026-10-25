@@ -163,8 +163,9 @@ fn prim_stacks(loaded: &mut LoadedStage, stage: &Stage) -> BTreeMap<String, Vec<
                 .iter()
                 .map(|key| {
                     (
-                        layer_name(loaded, key.layer_id),
-                        key.spec_path
+                        layer_name(loaded, key.key.layer_id),
+                        key.key
+                            .spec_path
                             .display(&loaded.store.paths, &loaded.store.tokens),
                     )
                 })

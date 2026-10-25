@@ -225,13 +225,13 @@ struct SpecReads<'s> {
 }
 
 /// A spec to look up read specs by, borrowed for the lookup alone: it
-/// hashes as the map's `(LayerId, &SpecPath)` keys do.
+/// hashes as the map's `(LayerId, SpecPath)` keys do.
 #[derive(Hash)]
 struct SpecKey<'a>(LayerId, &'a SpecPath);
 
-impl hashbrown::Equivalent<(LayerId, &SpecPath)> for SpecKey<'_> {
-    fn equivalent(&self, key: &(LayerId, &SpecPath)) -> bool {
-        self.0 == key.0 && self.1 == key.1
+impl hashbrown::Equivalent<(LayerId, SpecPath)> for SpecKey<'_> {
+    fn equivalent(&self, key: &(LayerId, SpecPath)) -> bool {
+        self.0 == key.0 && *self.1 == key.1
     }
 }
 
@@ -368,15 +368,15 @@ impl Stage {
     /// layer and spec it was read from: prims in stage order, each
     /// prim's properties by name, each property's opinions strongest
     /// first.
-    fn target_reads(&self, store: &dyn LayerStore) -> HashMap<(LayerId, &SpecPath), SpecReads<'_>> {
+    fn target_reads(&self, store: &dyn LayerStore) -> HashMap<(LayerId, SpecPath), SpecReads<'_>> {
         use crate::prim_index::FieldKey;
 
         let tokens = store.tokens();
-        let mut reads: HashMap<(LayerId, &SpecPath), SpecReads<'_>> = HashMap::new();
+        let mut reads: HashMap<(LayerId, SpecPath), SpecReads<'_>> = HashMap::new();
         let Some(root) = store.paths().lookup(&crate::Path::root()) else {
             return reads;
         };
-        let mut properties: Vec<(TokenId, &[crate::Opinion])> = Vec::new();
+        let mut properties: Vec<(TokenId, crate::Opinions<'_>)> = Vec::new();
         for prim in self.traverse_all(root) {
             let Some(index) = self.prims.get(&prim) else {
                 continue;
@@ -388,6 +388,7 @@ impl Stage {
                 };
                 let opinions = index.opinions_in(range);
                 if opinions
+                    .records()
                     .iter()
                     .any(|opinion| opinion.value.targets().is_some())
                 {
@@ -402,13 +403,16 @@ impl Stage {
             for &(name, opinions) in &properties {
                 let mut replaced = false;
                 for opinion in opinions {
-                    let Some(mapped) = opinion.value.as_property().and_then(|s| s.targets.as_ref())
+                    let Some(mapped) = opinion
+                        .value()
+                        .as_property()
+                        .and_then(|s| s.targets.as_ref())
                     else {
                         continue;
                     };
                     let next = u32::try_from(reads.len()).unwrap_or(u32::MAX);
                     reads
-                        .entry((opinion.key.layer_id, &opinion.key.spec_path))
+                        .entry((opinion.layer_id(), opinion.spec_path()))
                         .or_insert_with(|| SpecReads {
                             first: next,
                             reads: smallvec::SmallVec::new(),
@@ -416,7 +420,7 @@ impl Stage {
                         .reads
                         .push(Read {
                             source: PropertyPath::new(prim, name),
-                            node: opinion.key.node,
+                            node: opinion.node(),
                             mapped,
                             replaced,
                         });
@@ -453,7 +457,7 @@ impl Stage {
         self.prims
             .values()
             .flat_map(|index| index.sources.iter())
-            .map(|source| (source.layer_id, &source.spec_path))
+            .map(|source| (source.key.layer_id, &source.key.spec_path))
             .collect()
     }
 

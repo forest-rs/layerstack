@@ -88,6 +88,7 @@ impl Stage {
         }
         index
             .property_opinions(path.property())?
+            .records()
             .iter()
             .find_map(|opinion| opinion.value.as_property())
             .map(|spec| spec.kind)

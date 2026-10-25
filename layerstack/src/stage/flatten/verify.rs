@@ -16,7 +16,7 @@ use crate::{
     doc::{LayerStore, Value},
     interner::{TokenId, TokenInterner},
     path::{PathId, PathInterner, PropertyPath, TargetPath},
-    prim_index::FieldKey,
+    prim_index::{FieldKey, OpinionSource},
     property::{Time, Variability},
     stage::{ResolvedValue, Stage, stage_time::map_leaves},
 };
@@ -423,7 +423,7 @@ impl Verifier<'_> {
     fn dedicated(&self, stage: &Stage, prim: PathId) -> [(&'static str, String); 4] {
         let (mut active, mut instanceable, mut prim_order) = (None, None, None);
         if let Some(index) = stage.prims.get(&prim) {
-            for source in &index.sources {
+            for OpinionSource { key: source, .. } in &index.sources {
                 let Some(spec) = self.store.layer(source.layer_id).and_then(|layer| {
                     layer.source_prim_spec(source.lookup_path, &source.spec_path, self.paths)
                 }) else {
@@ -748,7 +748,7 @@ fn property_metadata_keys(
         .iter()
         .filter_map(|stage| stage.prims.get(&prim)?.property_opinions(name))
         .flatten()
-        .filter_map(|opinion| opinion.value.as_property())
+        .filter_map(|opinion| opinion.value().as_property())
         .flat_map(|spec| spec.metadata.iter().map(|entry| entry.name))
         .collect();
     keys.sort_unstable();
@@ -767,9 +767,9 @@ fn sample_times(stage: &Stage, property: PropertyPath) -> Vec<f64> {
         .unwrap_or_default()
         .iter()
         .flat_map(|opinion| {
-            let offset = opinion.layer_offset;
+            let offset = opinion.layer_offset();
             opinion
-                .value
+                .value()
                 .time_samples()
                 .unwrap_or_default()
                 .iter()

@@ -738,7 +738,7 @@ pub(crate) fn read_selections(
         let declared = declared_variant_sets(store, index);
         let mut decided: HashSet<TokenId> = HashSet::new();
         for source in &index.sources {
-            let Some(selections) = authored_source_selections(store, source) else {
+            let Some(selections) = authored_source_selections(store, &source.key) else {
                 continue;
             };
             let mut selections: Vec<_> = selections.iter().collect();
@@ -752,7 +752,7 @@ pub(crate) fn read_selections(
                     decided.insert(*set);
                     continue;
                 }
-                let chain = node_chain(&index.graph, source.node);
+                let chain = node_chain(&index.graph, source.key.node);
                 let variables = composed_variables(store, &chain);
                 let evaluation = VariableExpression::parse(expression).evaluate(&variables);
                 reads.record(store, &chain, &evaluation.used_variables);
@@ -762,7 +762,7 @@ pub(crate) fn read_selections(
                     }
                     Err(error) => errors.push(expression_error(
                         ExpressionContext::VariantSelection,
-                        source.layer_id,
+                        source.key.layer_id,
                         Some(prim),
                         expression,
                         error,

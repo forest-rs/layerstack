@@ -112,7 +112,7 @@ fn default_is_blocked(scene: &Scene<'_>, path: PropertyPath) -> bool {
         property
             .opinions()
             .iter()
-            .filter_map(|o| o.value.default_value())
+            .filter_map(|o| o.value().default_value())
             .next()
     }) == Some(&Value::Blocked)
 }

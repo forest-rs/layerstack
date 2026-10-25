@@ -795,7 +795,7 @@ impl<'s> Parser<'s> {
             let mut specs = handle
                 .opinions()
                 .iter()
-                .filter_map(|op| op.value.as_property());
+                .filter_map(|op| op.value().as_property());
             let is_override = |spec: &PropertySpec| match spec.metadata(self.custom_data) {
                 Some(FieldValue::Value(Value::Dictionary(entries))) => {
                     dict_get(entries, "apiSchemaOverride")

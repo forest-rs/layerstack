@@ -83,7 +83,7 @@ impl AssetReference {
             for value in attribute
                 .opinions()
                 .iter()
-                .filter_map(|o| o.value.default_value())
+                .filter_map(|o| o.value().default_value())
             {
                 if matches!(value, Value::Blocked) {
                     return Ok(None);

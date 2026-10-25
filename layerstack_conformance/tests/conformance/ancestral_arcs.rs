@@ -74,7 +74,7 @@ fn sources<'a>(
     stage: &'a Stage,
     store: &'a layerstack::InMemoryStore,
     path: layerstack::PathId,
-) -> Option<&'a [layerstack::OpinionKey]> {
+) -> Option<&'a [layerstack::OpinionSource]> {
     stage.prim(path, store).map(|prim| prim.sources())
 }
 
@@ -108,7 +108,7 @@ fn target_list(
     let attribute = property.as_attribute()?;
     opinions
         .iter()
-        .any(|opinion| opinion.value.targets().is_some())
+        .any(|opinion| opinion.value().targets().is_some())
         .then(|| attribute.connections())
 }
 
@@ -188,8 +188,9 @@ fn prim_stacks_include_the_ancestral_arcs_of_subroot_targets() {
             .iter()
             .map(|key| {
                 (
-                    layer_name(&loaded, key.layer_id),
-                    key.spec_path
+                    layer_name(&loaded, key.key.layer_id),
+                    key.key
+                        .spec_path
                         .display(&loaded.store.paths, &loaded.store.tokens),
                 )
             })
@@ -314,8 +315,9 @@ fn snapshot(loaded: &mut LoadedStage, stage: &Stage) -> Vec<String> {
             .map(|key| {
                 format!(
                     "{} {}",
-                    layer_name(loaded, key.layer_id),
-                    key.spec_path
+                    layer_name(loaded, key.key.layer_id),
+                    key.key
+                        .spec_path
                         .display(&loaded.store.paths, &loaded.store.tokens)
                 )
             })

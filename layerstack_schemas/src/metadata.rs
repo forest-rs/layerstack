@@ -110,7 +110,7 @@ impl<'a> PropertyMetadata<'a> {
             property
                 .opinions()
                 .iter()
-                .filter_map(|o| o.value.as_property())
+                .filter_map(|o| o.value().as_property())
                 .any(|p| match name {
                     "typeName" => p.type_name.is_some(),
                     "custom" | "variability" => true,

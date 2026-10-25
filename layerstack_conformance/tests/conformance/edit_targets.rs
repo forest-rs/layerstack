@@ -20,8 +20,8 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 use layerstack::{
-    EditTarget, InMemoryStore, LayerStack, Opinion, PathId, PropertyPath, Stage, StageOptions,
-    TokenId,
+    EditTarget, InMemoryStore, LayerOffset, LayerStack, OpinionKey, Opinions, PathId, PropertyPath,
+    Stage, StageOptions, TokenId,
 };
 use layerstack_conformance::{pcp_txt::load_pcp_txt, usda_real::load_entry_usda, workspace_root};
 
@@ -83,34 +83,42 @@ fn check_file(label: &str, entry: &std::path::Path, tally: &mut Tally) {
             .map(|name| (*name, true))
             .chain(fields.iter().map(|name| (*name, false)));
         for (name, is_property) in named {
+            // Each opinion's key and offset, copied out of the stage view.
+            let read = |opinions: Opinions<'_>| -> Vec<(OpinionKey, LayerOffset)> {
+                opinions
+                    .iter()
+                    .map(|opinion| (opinion.key(), opinion.layer_offset()))
+                    .collect()
+            };
             let opinions = if is_property {
                 stage
                     .view(store)
                     .property(PropertyPath::new(prim, name))
-                    .map(|property| property.opinions().to_vec())
+                    .map(|property| read(property.opinions()))
             } else {
                 stage
                     .prim(prim, store)
-                    .map(|prim| prim.metadata_opinions(name).to_vec())
+                    .map(|prim| read(prim.metadata_opinions(name)))
             };
-            for opinion in &opinions.unwrap_or_default() {
-                check_opinion(label, &stage, store, prim, name, opinion, tally);
+            for (key, layer_offset) in &opinions.unwrap_or_default() {
+                check_opinion(label, &stage, store, prim, name, key, *layer_offset, tally);
             }
         }
     }
 }
 
-/// Checks the target of one opinion's node and layer.
+/// Checks the target of one opinion's node and layer: the opinion's key
+/// and the layer offset it is read through.
 fn check_opinion(
     label: &str,
     stage: &Stage,
     store: &mut InMemoryStore,
     prim: PathId,
     name: TokenId,
-    opinion: &Opinion,
+    key: &OpinionKey,
+    layer_offset: LayerOffset,
     tally: &mut Tally,
 ) {
-    let key = &opinion.key;
     let context = format!(
         "{label} {} {} from layer {} at {}",
         store.paths.display(prim, &store.tokens),
@@ -140,11 +148,11 @@ fn check_opinion(
         return;
     };
     tally.offsets += 1;
-    if target.layer_offset() != opinion.layer_offset {
+    if target.layer_offset() != layer_offset {
         tally.failures.push(format!(
             "{context}: target offset {:?}, opinion offset {:?}",
             target.layer_offset(),
-            opinion.layer_offset
+            layer_offset
         ));
     }
     // Only opinions the node's own site authors, rather than ones copied

@@ -121,7 +121,7 @@ fn shader_token<'a>(prim: &PrimView<'a>, property: &str) -> Option<&'a str> {
             property
                 .opinions()
                 .iter()
-                .filter_map(|opinion| opinion.value.default_value())
+                .filter_map(|opinion| opinion.value().default_value())
                 .find(|value| matches!(value, Value::Token(_) | Value::Blocked))
         })
         == Some(&Value::Blocked);

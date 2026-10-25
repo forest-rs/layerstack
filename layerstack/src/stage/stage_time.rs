@@ -19,7 +19,7 @@ use crate::{
     TimeSamples,
     array_edit::{ArrayEdit, ArrayEditOp, ArrayEditOperand},
     doc::{FieldEntry, FieldValue, LayerOffset, Value},
-    prim_index::{Opinion, OpinionValue},
+    prim_index::{Opinion, OpinionRef, OpinionValue, Opinions},
     property::PropertySpec,
 };
 
@@ -289,12 +289,12 @@ fn holds_timecode(value: &Value) -> bool {
 /// values. Declarations are hints, not proof of the stored kind: low-level
 /// source data can contain time codes under a different declared type.
 /// Native non-timecode arrays answer this check without visiting elements.
-fn needs_retiming(opinion: &Opinion) -> bool {
-    if opinion.layer_offset.is_identity() {
+fn needs_retiming(opinion: OpinionRef<'_>) -> bool {
+    if opinion.layer_offset().is_identity() {
         return false;
     }
     let field = |value: &FieldValue| matches!(value, FieldValue::Value(v) if holds_timecode(v));
-    match &opinion.value {
+    match opinion.value() {
         OpinionValue::Field(value) => field(value),
         OpinionValue::Property(spec) => {
             spec.metadata.iter().any(|entry| field(&entry.value))
@@ -310,26 +310,27 @@ fn needs_retiming(opinion: &Opinion) -> bool {
 }
 
 /// The opinion's value in stage time; `None` when nothing changes.
-fn retime_opinion(opinion: &Opinion) -> Option<Opinion> {
-    let offset = opinion.layer_offset;
-    map_opinion(opinion, &mut |leaf| retime_leaf(leaf, offset))
+fn retime_opinion(opinion: OpinionRef<'_>) -> Option<Opinion> {
+    let offset = opinion.layer_offset();
+    map_opinion(opinion.opinion(), &mut |leaf| retime_leaf(leaf, offset))
 }
 
 /// `opinions` with every `timecode` value in stage time, borrowed, with
 /// nothing copied, when none needs mapping. Actual storage kinds determine
 /// whether values need mapping; native non-timecode arrays are not traversed.
+/// The opinions keep their sources: `opinions.with_records` reads them.
 ///
 /// Spec: AOUSD Core §12.3.2.1.
-pub(crate) fn opinions_in_stage_time(opinions: &[Opinion]) -> Cow<'_, [Opinion]> {
+pub(crate) fn opinions_in_stage_time(opinions: Opinions<'_>) -> Cow<'_, [Opinion]> {
     let Some(first) = opinions.iter().position(needs_retiming) else {
-        return Cow::Borrowed(opinions);
+        return Cow::Borrowed(opinions.records());
     };
-    let mut out = opinions[..first].to_vec();
-    out.extend(opinions[first..].iter().map(|opinion| {
+    let mut out = opinions.records()[..first].to_vec();
+    out.extend(opinions.iter().skip(first).map(|opinion| {
         if needs_retiming(opinion) {
-            retime_opinion(opinion).unwrap_or_else(|| opinion.clone())
+            retime_opinion(opinion).unwrap_or_else(|| opinion.opinion().clone())
         } else {
-            opinion.clone()
+            opinion.opinion().clone()
         }
     }));
     Cow::Owned(out)
@@ -365,28 +366,31 @@ mod tests {
         use crate::{
             doc::LayerId,
             path::{Path, PathInterner},
-            prim_index::OpinionKey,
+            prim_index::{OpinionKey, OpinionSource, SourceId},
             prim_index_graph::NodeId,
             property::PropertyType,
             spec_path::SpecPath,
         };
         let paths = PathInterner::default();
         let path = paths.intern(Path::root());
-        let key = OpinionKey {
-            node: NodeId::ROOT,
-            layer_strength: 0,
-            layer_id: LayerId(1),
-            lookup_path: path,
-            spec_path: SpecPath::from_prim_path(path),
-        };
-        let opinion = |spec: PropertySpec| Opinion {
-            key: key.clone(),
-            field: crate::interner::TokenInterner::default().intern("a"),
-            value: OpinionValue::from(spec),
+        let source = OpinionSource {
+            key: OpinionKey {
+                node: NodeId::ROOT,
+                layer_strength: 0,
+                layer_id: LayerId(1),
+                lookup_path: path,
+                spec_path: SpecPath::from_prim_path(path),
+            },
             layer_offset: LayerOffset {
                 offset: 5.0,
                 scale: 2.0,
             },
+        };
+        let sources = [source];
+        let opinion = |spec: PropertySpec| Opinion {
+            source: SourceId::at(0),
+            field: crate::interner::TokenInterner::default().intern("a"),
+            value: OpinionValue::from(spec),
         };
         let samples: Vec<(f64, Value)> = (0..10_000)
             .map(|i| (f64::from(i), Value::Double(0.5)))
@@ -395,18 +399,25 @@ mod tests {
         let typed = [opinion(
             PropertySpec::typed_attribute(doubles.clone()).with_time_samples(samples.clone()),
         )];
-        assert!(matches!(opinions_in_stage_time(&typed), Cow::Borrowed(_)));
+        let view = |records| Opinions::new(records, &sources);
+        assert!(matches!(
+            opinions_in_stage_time(view(&typed)),
+            Cow::Borrowed(_)
+        ));
         // An untyped over also retains its actual double values.
         let untyped = [opinion(
             PropertySpec::attribute().with_time_samples(samples),
         )];
-        assert!(matches!(opinions_in_stage_time(&untyped), Cow::Borrowed(_)));
+        assert!(matches!(
+            opinions_in_stage_time(view(&untyped)),
+            Cow::Borrowed(_)
+        ));
         // A `timecode` attribute is mapped.
         let timecode = PropertyType::parse("timecode").unwrap();
         let timecodes = [opinion(
             PropertySpec::typed_attribute(timecode).with_default(Value::TimeCode(1.0)),
         )];
-        let Cow::Owned(mapped) = opinions_in_stage_time(&timecodes) else {
+        let Cow::Owned(mapped) = opinions_in_stage_time(view(&timecodes)) else {
             panic!("mapped");
         };
         assert_eq!(mapped[0].value.default_value(), Some(&Value::TimeCode(7.0)));

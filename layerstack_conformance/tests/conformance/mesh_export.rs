@@ -39,7 +39,7 @@ fn target_list(
     let attribute = property.as_attribute()?;
     opinions
         .iter()
-        .any(|opinion| opinion.value.targets().is_some())
+        .any(|opinion| opinion.value().targets().is_some())
         .then(|| attribute.connections())
 }
 

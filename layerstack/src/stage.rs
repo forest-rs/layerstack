@@ -54,7 +54,6 @@ pub use flatten::{
 };
 
 use alloc::{
-    borrow::Cow,
     sync::{Arc, Weak},
     vec::Vec,
 };
@@ -78,7 +77,10 @@ use crate::{
     interner::TokenId,
     listop::{ListOp, resolve_list_chain},
     path::{Path, PathId, PropertyPath, TargetPath},
-    prim_index::{ArcKind, Opinion, OpinionKey, OpinionValue, PrimIndex},
+    prim_index::{
+        ArcKind, Opinion, OpinionKey, OpinionList, OpinionRef, OpinionSource, OpinionValue,
+        Opinions, PrimIndex, SourcedOpinion,
+    },
     prim_index_graph::{NodeId, PrimIndexGraph},
     property::{PropertyKind, PropertySpec, PropertyType, Time, Variability},
     schema::{CannotApply, PrimDefinition, PropertyDefinition, SchemaRegistry},
@@ -512,7 +514,7 @@ struct SelectedClip {
 #[derive(Clone, Debug)]
 struct ClipOpinion {
     entry: usize,
-    opinion: Opinion,
+    opinion: SourcedOpinion,
     query: f64,
     contributes: bool,
 }
@@ -540,7 +542,11 @@ impl ClipSampleKinds {
     }
 }
 struct ClipPlan<'s> {
-    opinions: Cow<'s, [Opinion]>,
+    /// The property's opinions.
+    ordinary: Opinions<'s>,
+    /// The property's opinions merged with its clips', strongest first;
+    /// `None` when no clip contributes.
+    merged: Option<OpinionList>,
     source: Option<crate::value_clips::ClipValueSource>,
     selected: Option<SelectedClip>,
     kinds: ClipSampleKinds,
@@ -1201,7 +1207,7 @@ impl Stage {
         &self,
         prim: PathId,
         field: TokenId,
-        ordinary: &[Opinion],
+        ordinary: Opinions<'_>,
         time: f64,
         interp: InterpolationType,
     ) -> Vec<ClipOpinion> {
@@ -1212,38 +1218,39 @@ impl Stage {
         if initial.is_empty() {
             return Vec::new();
         }
-        let mut tagged: Vec<_> = ordinary.iter().cloned().map(|op| (op, None)).collect();
-        tagged.extend(initial.into_iter().enumerate().filter_map(|(entry, clip)| {
+        let mut tagged: Vec<_> = ordinary.iter().map(|op| (op, None)).collect();
+        tagged.extend(initial.iter().enumerate().filter_map(|(entry, clip)| {
             // OpenUSD stage.cpp::_GetResolveInfoWithClipsImpl: an authored
             // source and a clip source cannot both occupy the same site.
+            let clip_key = &clip.source.key;
             let masked = ordinary.iter().any(|op| {
-                (op.value.blocks_animation()
-                    && index
-                        .graph
-                        .cmp_nodes(op.key.node, clip.key.node)
-                        .then_with(|| op.key.layer_strength.cmp(&clip.key.layer_strength))
-                        .is_le())
-                    || op.key.node == clip.key.node
-                        && op.key.layer_strength == clip.key.layer_strength
-                        && (op.value.time_samples().is_some()
-                            || op.value.spline().is_some()
-                            || op.value.has_default_value())
+                let (key, value) = (&op.source().key, op.value());
+                (value.blocks_animation() && index.graph.cmp_keys(key, clip_key).is_le())
+                    || key.node == clip_key.node
+                        && key.layer_strength == clip_key.layer_strength
+                        && (value.time_samples().is_some()
+                            || value.spline().is_some()
+                            || value.has_default_value())
             });
-            (!masked).then_some((clip, Some(entry)))
+            (!masked).then_some((clip.as_ref(), Some(entry)))
         }));
         tagged.sort_by(|(a, a_entry), (b, b_entry)| {
             index
                 .graph
-                .cmp_nodes(a.key.node, b.key.node)
-                .then_with(|| a.key.layer_strength.cmp(&b.key.layer_strength))
+                .cmp_keys(&a.source().key, &b.source().key)
                 .then_with(|| a_entry.cmp(b_entry))
         });
-        let mut prefix = Vec::new();
+        // The ordinary opinions keep their sources' ids; each clip's
+        // source is its set's anchor.
+        let mut prefix = OpinionList {
+            records: Vec::new(),
+            sources: ordinary.sources().to_vec(),
+        };
         let mut prefix_kinds = ClipSampleKinds::default();
         let mut clips = Vec::new();
         for (opinion, entry) in tagged {
             let Some(entry) = entry else {
-                prefix.push(opinion);
+                prefix.records.push(opinion.opinion().clone());
                 continue;
             };
             // The existing kernel owns query advancement. Earlier finalized
@@ -1255,12 +1262,12 @@ impl Stage {
                 })
             };
             let planned = crate::value_resolution::query_time_for_weaker_source_with_composability(
-                &prefix,
+                prefix.view(),
                 time,
                 interp,
                 Some(&classify),
             );
-            let sparse_at_query = prefix.iter().any(|op| {
+            let sparse_at_query = prefix.view().iter().any(|op| {
                 value_at_time(op, time, interp)
                     .flatten()
                     .is_some_and(|value| value.array_edit_ref().is_some())
@@ -1278,8 +1285,8 @@ impl Stage {
             else {
                 continue;
             };
-            prefix_kinds.insert(&opinion, entry);
-            prefix.push(opinion.clone());
+            prefix_kinds.insert(&opinion.opinion, entry);
+            prefix.push_ref(opinion.as_ref());
             clips.push(ClipOpinion {
                 entry,
                 opinion,
@@ -1300,10 +1307,11 @@ impl Stage {
         time: f64,
         interp: InterpolationType,
     ) -> ClipPlan<'s> {
-        let ordinary = index.property_opinions(field).unwrap_or(&[]);
+        let ordinary = index.property_opinions(field).unwrap_or_default();
         if ordinary.is_empty() && self.property_definition_ref(prim, field).is_none() {
             return ClipPlan {
-                opinions: Cow::Borrowed(ordinary),
+                ordinary,
+                merged: None,
                 source: None,
                 selected: None,
                 kinds: ClipSampleKinds::default(),
@@ -1312,7 +1320,8 @@ impl Stage {
         let clips = self.clip_opinions_after_authored(prim, field, ordinary, time, interp);
         if clips.is_empty() {
             return ClipPlan {
-                opinions: Cow::Borrowed(ordinary),
+                ordinary,
+                merged: None,
                 source: None,
                 selected: None,
                 kinds: ClipSampleKinds::default(),
@@ -1326,42 +1335,44 @@ impl Stage {
             .find(|clip| clip.contributes)
             .map(|clip| SelectedClip {
                 entry: clip.entry,
-                key: clip.opinion.key.clone(),
+                key: clip.opinion.as_ref().key(),
                 query: clip.query,
             });
-        let mut tagged: Vec<_> = ordinary.iter().cloned().map(|op| (op, None)).collect();
-        tagged.extend(clips.into_iter().map(|clip| {
-            let selected = SelectedClip {
-                entry: clip.entry,
-                key: clip.opinion.key.clone(),
-                query: clip.query,
-            };
-            (clip.opinion, Some(selected))
-        }));
-        tagged.sort_by(|(a, a_clip), (b, b_clip)| {
+        let mut tagged: Vec<_> = ordinary.iter().map(|op| (op, None)).collect();
+        tagged.extend(
+            clips
+                .iter()
+                .map(|clip| (clip.opinion.as_ref(), Some(clip.entry))),
+        );
+        tagged.sort_by(|(a, a_entry), (b, b_entry)| {
             index
                 .graph
-                .cmp_nodes(a.key.node, b.key.node)
-                .then_with(|| a.key.layer_strength.cmp(&b.key.layer_strength))
-                .then_with(|| {
-                    a_clip
-                        .as_ref()
-                        .map(|s| s.entry)
-                        .cmp(&b_clip.as_ref().map(|s| s.entry))
-                })
+                .cmp_keys(&a.source().key, &b.source().key)
+                .then_with(|| a_entry.cmp(b_entry))
         });
         let source = selected.as_ref().and_then(|selected| {
             self.clips
                 .evaluation_for(prim, field, selected.entry, selected.query, interp)
         });
         let mut kinds = ClipSampleKinds::default();
-        for (opinion, selected) in &tagged {
-            if let Some(selected) = selected {
-                kinds.insert(opinion, selected.entry);
+        // The ordinary opinions keep their sources' ids; each clip's
+        // source is its set's anchor.
+        let mut merged = OpinionList {
+            records: Vec::with_capacity(tagged.len()),
+            sources: ordinary.sources().to_vec(),
+        };
+        for (opinion, entry) in tagged {
+            match entry {
+                None => merged.records.push(opinion.opinion().clone()),
+                Some(entry) => {
+                    kinds.insert(opinion.opinion(), entry);
+                    merged.push_ref(opinion);
+                }
             }
         }
         ClipPlan {
-            opinions: Cow::Owned(tagged.into_iter().map(|(op, _)| op).collect()),
+            ordinary,
+            merged: Some(merged),
             source,
             selected,
             kinds,
@@ -1383,12 +1394,14 @@ impl Stage {
             return (None, false);
         };
         let ClipPlan {
-            opinions,
+            ordinary,
+            merged,
             source: clip,
             selected,
             kinds,
         } = self.clip_time_opinions(prim, field, index, time, interp);
-        let opinions = &opinions[self.below_start(&opinions, below)..];
+        let all = merged.as_ref().map_or(ordinary, OpinionList::view);
+        let opinions = all.from(self.below_start(all, below));
         let classify = |opinion: &Opinion, sample_time| {
             kinds.entry(opinion).and_then(|entry| {
                 self.clips
@@ -1475,9 +1488,9 @@ impl Stage {
         let Some(index) = self.prims.get(&prim) else {
             return (Vec::new(), false);
         };
-        let animation =
-            stage_time::animation_opinions(index.property_opinions(field).unwrap_or(&[]));
-        let ordinary = animation.as_ref();
+        let authored = index.property_opinions(field).unwrap_or_default();
+        let animation = stage_time::animation_opinions(authored.records());
+        let ordinary = authored.with_records(&animation);
         if ordinary.is_empty() && self.property_definition_ref(prim, field).is_none() {
             return (Vec::new(), false);
         }
@@ -1487,14 +1500,13 @@ impl Stage {
         tagged.extend(
             clip_opinions
                 .iter()
-                .map(|clip| (&clip.opinion, Some(clip.entry))),
+                .map(|clip| (clip.opinion.as_ref(), Some(clip.entry))),
         );
         if !clip_opinions.is_empty() {
             tagged.sort_by(|(a, a_clip), (b, b_clip)| {
                 index
                     .graph
-                    .cmp_nodes(a.key.node, b.key.node)
-                    .then_with(|| a.key.layer_strength.cmp(&b.key.layer_strength))
+                    .cmp_keys(&a.source().key, &b.source().key)
                     .then_with(|| a_clip.cmp(b_clip))
             });
         }
@@ -1504,23 +1516,24 @@ impl Stage {
         for (op, clip) in tagged {
             let grid: Vec<_> = if let Some(entry) = clip {
                 self.clips.sample_kinds_for(prim, field, entry)
-            } else if let Some(samples) = op.value.time_samples() {
+            } else if let Some(samples) = op.value().time_samples() {
+                let offset = op.layer_offset();
                 samples
                     .iter()
                     .map(|(time, value)| {
                         (
-                            op.layer_offset.offset + time * op.layer_offset.scale,
+                            offset.offset + time * offset.scale,
                             shows_weaker_samples(value),
                         )
                     })
                     .collect()
             } else {
-                if op.value.spline().is_some() {
+                if op.value().spline().is_some() {
                     varying = true;
                     break;
                 }
                 if op
-                    .value
+                    .value()
                     .default_value()
                     .is_some_and(|v| !shows_weaker_samples(v))
                 {
@@ -1908,7 +1921,7 @@ impl Stage {
                 let mut matched = false;
                 let mut sibling_branch = false;
                 for (position, opinion) in opinions.iter().enumerate() {
-                    let key = &opinion.key;
+                    let key = opinion.key();
                     if key.layer_id != edit.layer
                         || (key.lookup_path != edit.path.prim_path()
                             && key.spec_path.prim_path() != edit.path.prim_path())
@@ -1926,7 +1939,7 @@ impl Stage {
                         sibling_branch = true;
                         continue;
                     }
-                    if !matches!(opinion.value, OpinionValue::Property(_)) {
+                    if !matches!(opinion.value(), OpinionValue::Property(_)) {
                         return None;
                     }
                     matched = true;
@@ -2116,28 +2129,12 @@ impl Stage {
                 sites.push(spec);
             }
         };
-        // Sorted and deduplicated rather than hashed: a prim has few sites,
-        // each named by many of its keys. Its opinions are read from its
-        // sources' specs, so their keys nearly always name sites the
-        // sources do; only one naming another is added.
+        // Sorted and deduplicated rather than hashed: a prim has few sites.
+        // Its opinions are read from its sources' specs, so the sources
+        // name every site they do.
         let mut sites = Vec::with_capacity(2 * index.sources.len() + 2);
-        for key in &index.sources {
+        for OpinionSource { key, .. } in &index.sources {
             if let Some(lookup) = site(key.layer_id, key.lookup_path) {
-                push(&mut sites, lookup, key);
-            }
-        }
-        sites.sort_unstable();
-        sites.dedup();
-        let of_sources = sites.len();
-        for opinion in &index.opinions {
-            let key = &opinion.key;
-            let Some(lookup) = site(key.layer_id, key.lookup_path) else {
-                continue;
-            };
-            let named = |found: Option<T>| {
-                found.is_some_and(|found| sites[..of_sources].binary_search(&found).is_ok())
-            };
-            if !named(Some(lookup)) || !named(site(key.layer_id, key.spec_path.prim_path())) {
                 push(&mut sites, lookup, key);
             }
         }
@@ -2306,8 +2303,9 @@ impl Stage {
         lookup: Lookup,
     ) -> Option<Resolved<Vec<TargetPath>>> {
         let (_, opinions) = self.opinions(prim, field, lookup)?;
-        let strongest_with_targets = opinions.iter().find(|op| op.value.targets().is_some());
-        let is_relationship = opinions.iter().any(|op| {
+        let strongest_with_targets = opinions.iter().find(|op| op.value().targets().is_some());
+        let records = opinions.records();
+        let is_relationship = records.iter().any(|op| {
             op.value
                 .as_property()
                 .is_some_and(PropertySpec::is_relationship)
@@ -2315,10 +2313,12 @@ impl Stage {
         if strongest_with_targets.is_none() && !is_relationship {
             return None;
         }
-        let ops = opinions.iter().filter_map(|op| op.value.targets());
+        let ops = records.iter().filter_map(|op| op.value.targets());
         Some(Resolved {
             value: resolve_list_chain::<TargetPath>(&[], ops),
-            provenance: self.provenance_for(field, strongest_with_targets.unwrap_or(&opinions[0])),
+            provenance: strongest_with_targets
+                .or_else(|| opinions.first())
+                .and_then(|op| self.provenance_for(field, op)),
         })
     }
 
@@ -2367,7 +2367,7 @@ impl Stage {
         prim: PathId,
         name: TokenId,
         lookup: Lookup,
-    ) -> Option<(&PrimIndex, &[Opinion])> {
+    ) -> Option<(&PrimIndex, Opinions<'_>)> {
         let index = self.prims.get(&prim)?;
         let opinions = match lookup {
             Lookup::Property => index.property_opinions(name),
@@ -2385,7 +2385,7 @@ impl Stage {
         let (index, opinions) = self.opinions(prim, field, lookup)?;
         let strongest = opinions.first()?;
 
-        match &strongest.value {
+        match strongest.value() {
             OpinionValue::Property(spec) if spec.is_relationship() => {
                 let targets = self.resolve_targets_by(prim, field, lookup)?;
                 return Some(Resolved {
@@ -2401,7 +2401,10 @@ impl Stage {
                 });
             }
             OpinionValue::Field(list) if list.is_list_op() => {
-                let values = opinions.iter().filter_map(|op| op.value.as_field());
+                let values = opinions
+                    .records()
+                    .iter()
+                    .filter_map(|op| op.value.as_field());
                 return Some(Resolved {
                     value: resolve_field_list(list, values)?,
                     provenance: self.provenance_for(field, strongest),
@@ -2418,7 +2421,7 @@ impl Stage {
     fn resolve_default(
         &self,
         field: TokenId,
-        opinions: &[Opinion],
+        opinions: Opinions<'_>,
         property_type: Option<&PropertyType>,
         fallback: Option<&Value>,
     ) -> Option<Resolved<ResolvedValue>> {
@@ -2434,22 +2437,22 @@ impl Stage {
     fn resolve_default_with_source(
         &self,
         field: TokenId,
-        opinions: &[Opinion],
+        opinions: Opinions<'_>,
         property_type: Option<&PropertyType>,
         fallback: Option<&Value>,
         with_source: bool,
     ) -> Option<Resolved<ResolvedValue>> {
         // Spec: AOUSD Core §12.3.2.1 (`timecode` values are read in stage
         // time, through each opinion's layer offset).
-        let opinions = stage_time::opinions_in_stage_time(opinions);
-        let opinions: &[Opinion] = &opinions;
+        let mapped = stage_time::opinions_in_stage_time(opinions);
+        let opinions = opinions.with_records(&mapped);
         let strongest_default = opinions
             .iter()
-            .find(|opinion| opinion.value.has_default_value());
+            .find(|opinion| opinion.value().has_default_value());
 
         // Spec: AOUSD Core §12.3 (a path expression's `%_` composes over
         // the next weaker one).
-        if let Some(fold) = crate::path_expression::fold_default(opinions, fallback) {
+        if let Some(fold) = crate::path_expression::fold_default(opinions.records(), fallback) {
             return Some(Resolved {
                 value: ResolvedValue::Scalar(fold.value?),
                 provenance: strongest_default
@@ -2459,12 +2462,12 @@ impl Stage {
 
         if strongest_default.is_some_and(|opinion| {
             opinion
-                .value
+                .value()
                 .default_value()
                 .is_some_and(|value| value.array_edit_type().is_some())
         }) {
             let (result, source) = crate::value_resolution::resolve_sparse_default_matching_source(
-                opinions,
+                opinions.records(),
                 property_type,
                 fallback,
                 |_| true,
@@ -2473,7 +2476,8 @@ impl Stage {
                 SparseResolveResult::Resolved(value) => Some(Resolved {
                     value: ResolvedValue::Scalar(value),
                     provenance: source
-                        .and_then(|i| self.provenance_for_if(field, &opinions[i], with_source)),
+                        .and_then(|i| opinions.get(i))
+                        .and_then(|op| self.provenance_for_if(field, op, with_source)),
                 }),
                 _ => None,
             };
@@ -2492,13 +2496,13 @@ impl Stage {
         }
 
         let strongest_default = strongest_default?;
-        match strongest_default.value.default_value()? {
+        match strongest_default.value().default_value()? {
             // Value block: suppress all weaker opinions, return no value.
             // Spec: AOUSD Core §12.3.6 (blocked attributes).
             Value::Blocked => None,
             Value::Dictionary(_) => Some(Resolved {
                 value: ResolvedValue::Dictionary(resolve_dictionary_chain(
-                    opinions,
+                    opinions.records(),
                     fallback.and_then(|fallback| match fallback {
                         Value::Dictionary(seed) => Some(seed.as_slice()),
                         _ => None,
@@ -2604,7 +2608,7 @@ impl Stage {
     fn resolve_at_time_over(
         &self,
         field: TokenId,
-        opinions: &[Opinion],
+        opinions: Opinions<'_>,
         property_type: Option<&PropertyType>,
         time: f64,
         interp: InterpolationType,
@@ -2627,7 +2631,7 @@ impl Stage {
     fn resolve_at_time_with_source(
         &self,
         field: TokenId,
-        opinions: &[Opinion],
+        opinions: Opinions<'_>,
         property_type: Option<&PropertyType>,
         time: f64,
         interp: InterpolationType,
@@ -2638,9 +2642,9 @@ impl Stage {
     ) -> Option<Resolved<Value>> {
         // Spec: AOUSD Core §12.3.2.1 (`timecode` values are read in stage
         // time, through each opinion's layer offset).
-        let animation = stage_time::animation_opinions(opinions);
-        let opinions = stage_time::opinions_in_stage_time(&animation);
-        let opinions: &[Opinion] = &opinions;
+        let animation = stage_time::animation_opinions(opinions.records());
+        let mapped = stage_time::opinions_in_stage_time(opinions.with_records(&animation));
+        let opinions = opinions.with_records(&mapped);
 
         // Spec: AOUSD Core §12.3 (a path expression's `%_` composes over
         // the next weaker one at every time).
@@ -2649,7 +2653,8 @@ impl Stage {
             return Some(Resolved {
                 value: fold.value?,
                 provenance: strongest
-                    .and_then(|i| self.provenance_for_if(field, &opinions[i], with_source)),
+                    .and_then(|i| opinions.get(i))
+                    .and_then(|op| self.provenance_for_if(field, op, with_source)),
             });
         }
 
@@ -2683,12 +2688,12 @@ impl Stage {
                     provenance: opinions
                         .iter()
                         .find(|opinion| {
-                            opinion.value.has_default_value()
-                                || opinion
-                                    .value
+                            let value = opinion.value();
+                            value.has_default_value()
+                                || value
                                     .time_samples()
                                     .is_some_and(|samples| !samples.is_empty())
-                                || opinion.value.spline().is_some()
+                                || value.spline().is_some()
                         })
                         .and_then(|opinion| self.provenance_for_if(field, opinion, with_source)),
                 });
@@ -2723,7 +2728,7 @@ impl Stage {
         key: TokenId,
     ) -> Option<Resolved<ResolvedValue>> {
         let index = self.prims.get(&prim)?;
-        let opinions = index.property_opinions(property).unwrap_or(&[]);
+        let opinions = index.property_opinions(property).unwrap_or_default();
         let fallback = self
             .property_definition_ref(prim, property)
             .and_then(|p| p.metadata(key));
@@ -2749,7 +2754,7 @@ impl Stage {
     /// Authored-only resolution, also used by flattening layer opinions.
     fn resolve_property_metadata_over(
         &self,
-        opinions: &[Opinion],
+        opinions: Opinions<'_>,
         property: TokenId,
         key: TokenId,
     ) -> Option<Resolved<ResolvedValue>> {
@@ -2758,20 +2763,21 @@ impl Stage {
 
     fn resolve_property_metadata_with_fallback(
         &self,
-        opinions: &[Opinion],
+        opinions: Opinions<'_>,
         property: TokenId,
         key: TokenId,
         fallback: Option<&FieldValue>,
     ) -> Option<Resolved<ResolvedValue>> {
         // Spec: AOUSD Core §12.3.2.1 (`timecode` values in stage time).
-        let opinions = stage_time::opinions_in_stage_time(opinions);
-        let authored: Vec<(&Opinion, &FieldValue)> = opinions
+        let mapped = stage_time::opinions_in_stage_time(opinions);
+        let opinions = opinions.with_records(&mapped);
+        let authored: Vec<(OpinionRef<'_>, &FieldValue)> = opinions
             .iter()
-            .filter_map(|op| Some((op, op.value.as_property()?.metadata(key)?)))
+            .filter_map(|op| Some((op, op.value().as_property()?.metadata(key)?)))
             .collect();
         let provenance = authored
             .first()
-            .and_then(|(opinion, _)| self.provenance_for(property, opinion));
+            .and_then(|(opinion, _)| self.provenance_for(property, *opinion));
         let fields = authored.iter().map(|(_, value)| *value).chain(fallback);
         let strongest = authored.first().map(|(_, value)| *value).or(fallback)?;
         let value = match strongest {
@@ -2815,7 +2821,10 @@ impl Stage {
     ) -> Option<PropertyDeclaration> {
         let index = self.prims.get(&prim)?;
         let opinions = index.property_opinions(property)?;
-        let mut specs = opinions.iter().filter_map(|op| op.value.as_property());
+        let mut specs = opinions
+            .records()
+            .iter()
+            .filter_map(|op| op.value.as_property());
         let strongest = specs.next()?;
         let mut declaration = PropertyDeclaration {
             kind: strongest.kind,
@@ -2850,19 +2859,22 @@ impl Stage {
 
     /// [`Self::resolve_property_order`] of the prim whose index is `index`.
     fn property_order_of(index: &PrimIndex, store: &dyn LayerStore) -> Option<Vec<TokenId>> {
-        index.sources.iter().find_map(|source| {
-            let spec = store.layer(source.layer_id)?.source_prim_spec(
-                source.lookup_path,
-                &source.spec_path,
-                store.paths(),
-            )?;
-            let chain = source.spec_path.variant_chain();
-            if chain.is_empty() {
-                spec.property_order().map(<[TokenId]>::to_vec)
-            } else {
-                spec.variant_spec(&chain)?.property_order.clone()
-            }
-        })
+        index
+            .sources
+            .iter()
+            .find_map(|OpinionSource { key: source, .. }| {
+                let spec = store.layer(source.layer_id)?.source_prim_spec(
+                    source.lookup_path,
+                    &source.spec_path,
+                    store.paths(),
+                )?;
+                let chain = source.spec_path.variant_chain();
+                if chain.is_empty() {
+                    spec.property_order().map(<[TokenId]>::to_vec)
+                } else {
+                    spec.variant_spec(&chain)?.property_order.clone()
+                }
+            })
     }
 
     /// Returns the sorted opinion stack for `(prim, field)` (strongest-first).
@@ -2872,7 +2884,7 @@ impl Stage {
     ///
     /// Spec: AOUSD Core §12 (value resolution) and §10.4 (strength ordering).
     #[must_use]
-    pub(crate) fn explain_field(&self, prim: PathId, field: TokenId) -> Option<&[Opinion]> {
+    pub(crate) fn explain_field(&self, prim: PathId, field: TokenId) -> Option<Opinions<'_>> {
         self.opinions(prim, field, Lookup::Metadata)
             .map(|(_, opinions)| opinions)
     }
@@ -2960,7 +2972,10 @@ impl Stage {
 
     /// Returns the sorted opinion stack for a concrete property path.
     #[must_use]
-    pub(crate) fn explain_property_path(&self, property_path: PropertyPath) -> Option<&[Opinion]> {
+    pub(crate) fn explain_property_path(
+        &self,
+        property_path: PropertyPath,
+    ) -> Option<Opinions<'_>> {
         self.opinions(
             property_path.prim_path(),
             property_path.property(),
@@ -3195,14 +3210,14 @@ impl Stage {
     ///
     /// Spec: AOUSD Core §10.4 (strength ordering).
     #[must_use]
-    pub(crate) fn explain_prim(&self, prim: PathId) -> Option<&[OpinionKey]> {
+    pub(crate) fn explain_prim(&self, prim: PathId) -> Option<&[OpinionSource]> {
         self.prims.get(&prim).map(|index| index.sources.as_slice())
     }
 
     /// Returns the composition graph of `prim`: one node per arc expansion
     /// that contributes to it, with its arc kind, layer stack, site and
-    /// parent. Every [`OpinionKey::node`] of the prim's opinions and sources
-    /// names a node of this graph.
+    /// parent. Every [`OpinionKey::node`] of the prim's sources names a node
+    /// of this graph.
     ///
     /// This is an inspection API intended for conformance and debugging;
     /// see [`PrimIndexGraph`] for how the graph relates to strength order.
@@ -3232,7 +3247,7 @@ impl Stage {
         let index = self.prims.get(&prim)?;
         let mut out = Vec::new();
         let mut seen_pairs = HashSet::<(LayerId, SpecPath)>::new();
-        for key in &index.sources {
+        for OpinionSource { key, .. } in &index.sources {
             let pair = (key.layer_id, key.spec_path.clone());
             if seen_pairs.insert(pair.clone()) {
                 out.push(pair);
@@ -3377,7 +3392,7 @@ impl Stage {
 
         // Walk sources in strength order (strongest first) and find the
         // strongest defining opinion (def or class).
-        for key in &index.sources {
+        for OpinionSource { key, .. } in &index.sources {
             let Some(layer) = store.layer(key.layer_id) else {
                 continue;
             };
@@ -3474,7 +3489,7 @@ impl Stage {
         store: &dyn LayerStore,
         any_type: Option<TokenId>,
     ) -> Option<TokenId> {
-        for key in &index.sources {
+        for OpinionSource { key, .. } in &index.sources {
             let Some(layer) = store.layer(key.layer_id) else {
                 continue;
             };
@@ -3522,11 +3537,11 @@ impl Stage {
         let fallback = self.schema_fallback(prim, field);
 
         if let (Some(index), Some(opinions)) = (index, authored) {
+            let strongest = opinions.first()?.value();
             let is_value_field = matches!(
-                opinions.first()?.value,
+                strongest,
                 OpinionValue::Field(FieldValue::Value(_)) | OpinionValue::Property(_)
-            ) && !opinions[0]
-                .value
+            ) && !strongest
                 .as_property()
                 .is_some_and(PropertySpec::is_relationship);
             if is_value_field {
@@ -3685,7 +3700,7 @@ impl Stage {
 
     /// Where the opinions beneath `below` start in `opinions`, strongest
     /// first (see [`Stage::read_property_below`]); `0` for no cut.
-    fn below_start(&self, opinions: &[Opinion], below: Option<LayerId>) -> usize {
+    fn below_start(&self, opinions: Opinions<'_>, below: Option<LayerId>) -> usize {
         let Some(layer) = below else {
             return 0;
         };
@@ -3696,12 +3711,12 @@ impl Stage {
             let cut = &stack[..=at];
             opinions
                 .iter()
-                .rposition(|o| o.key.node == NodeId::ROOT && cut.contains(&o.key.layer_id))
+                .rposition(|o| o.node() == NodeId::ROOT && cut.contains(&o.layer_id()))
                 .map_or(0, |i| i + 1)
         } else {
             opinions
                 .iter()
-                .rposition(|o| o.key.layer_id == layer)
+                .rposition(|o| o.layer_id() == layer)
                 .map_or(0, |i| i + 1)
         }
     }
@@ -3792,9 +3807,9 @@ impl Stage {
     ) -> Result<Option<Resolved<T>>, crate::ArrayReadError> {
         let fallback = self.schema_fallback(prim, field);
         if let Some((index, opinions)) = self.opinions(prim, field, Lookup::Property) {
-            let opinions = &opinions[self.below_start(opinions, below)..];
+            let opinions = opinions.from(self.below_start(opinions, below));
             for (position, opinion) in opinions.iter().enumerate() {
-                let Some(value) = opinion.value.default_value() else {
+                let Some(value) = opinion.value().default_value() else {
                     continue;
                 };
                 // A selected value that does not decode answers the query
@@ -3814,10 +3829,12 @@ impl Stage {
                     break;
                 }
                 if matches!(value, Value::ArrayEdit(_) | Value::TypedArrayEdit(_)) {
-                    let mapped = stage_time::opinions_in_stage_time(&opinions[position..]);
+                    let weaker = opinions.from(position);
+                    let mapped = stage_time::opinions_in_stage_time(weaker);
+                    let mapped = weaker.with_records(&mapped);
                     let (resolved, source) =
                         crate::value_resolution::resolve_sparse_default_matching_source(
-                            &mapped,
+                            mapped.records(),
                             index.property_type_for(&field),
                             fallback,
                             |value| read(value).is_some(),
@@ -3827,9 +3844,9 @@ impl Stage {
                     {
                         return Ok(Some(Resolved {
                             value,
-                            provenance: source.and_then(|i| {
-                                self.provenance_for_if(field, &mapped[i], with_source)
-                            }),
+                            provenance: source
+                                .and_then(|i| mapped.get(i))
+                                .and_then(|op| self.provenance_for_if(field, op, with_source)),
                         }));
                     }
                     return Ok(None);
@@ -3839,7 +3856,7 @@ impl Stage {
                 if matches!(value, Value::Dictionary(_) | Value::PathExpression(_)) {
                     let Some(resolved) = self.resolve_default_with_source(
                         field,
-                        &opinions[position..],
+                        opinions.from(position),
                         index.property_type_for(&field),
                         fallback,
                         with_source,
@@ -3859,7 +3876,7 @@ impl Stage {
                     }
                     continue;
                 }
-                let mapped = stage_time::retime_value(value, opinion.layer_offset);
+                let mapped = stage_time::retime_value(value, opinion.layer_offset());
                 if let Some(value) = read(mapped.as_ref().unwrap_or(value)) {
                     return Ok(Some(Resolved {
                         value,
@@ -4061,19 +4078,19 @@ impl Stage {
             .unwrap_or_default()
     }
 
-    fn provenance_for(&self, field: TokenId, strongest: &Opinion) -> Option<Provenance> {
+    fn provenance_for(&self, field: TokenId, strongest: OpinionRef<'_>) -> Option<Provenance> {
         self.provenance_for_if(field, strongest, self.with_provenance)
     }
 
     fn provenance_for_if(
         &self,
         field: TokenId,
-        strongest: &Opinion,
+        strongest: OpinionRef<'_>,
         enabled: bool,
     ) -> Option<Provenance> {
-        enabled.then_some(Provenance {
-            layer: strongest.key.layer_id,
-            spec_path: strongest.key.spec_path.clone(),
+        enabled.then(|| Provenance {
+            layer: strongest.layer_id(),
+            spec_path: strongest.spec_path(),
             field,
         })
     }
@@ -4170,27 +4187,27 @@ impl Iterator for Traverse<'_> {
 /// Spec: AOUSD Core §12.3.2 (time samples, then splines, then the
 /// default), §12.3.2.1 (layer offsets), §12.3.6 (blocked attributes).
 pub(crate) fn value_at_time(
-    opinion: &Opinion,
+    opinion: OpinionRef<'_>,
     time: f64,
     interp: InterpolationType,
 ) -> Option<Option<Value>> {
     // Apply the opinion's accumulated layer offset to remap the query time
     // before sampling.
-    let mapped_time = opinion.layer_offset.map_time(time);
+    let mapped_time = opinion.layer_offset().map_time(time);
     let value = if let Some(samples) = opinion
-        .value
+        .value()
         .time_samples()
         .filter(|samples| !samples.is_empty())
     {
         interpolate_samples(samples, mapped_time, interp)
-    } else if let Some(spline) = opinion.value.spline() {
+    } else if let Some(spline) = opinion.value().spline() {
         // A spline that evaluates to nothing (block extrapolation or a
         // blocked segment) yields no value.
         spline
             .evaluate(mapped_time)
             .map(|value| spline_to_value(spline, value))
     } else {
-        Some(opinion.value.default_value()?.clone())
+        Some(opinion.value().default_value()?.clone())
     };
     // A block in effect at the query time, as a sample or a default,
     // resolves to no value.
@@ -4620,33 +4637,33 @@ mod tests {
 
         let mut index = PrimIndex::default();
         let key = test_key(LayerId(1), prim);
-        index.add_opinion(Opinion {
-            key: key.clone(),
+        index.add_keyed(
+            key.clone(),
+            LayerOffset::IDENTITY,
             field,
-            value: PropertySpec::typed_attribute(int_array_type()).into(),
-            layer_offset: LayerOffset::IDENTITY,
-        });
-        index.add_opinion(Opinion {
-            key: key.clone(),
+            PropertySpec::typed_attribute(int_array_type()).into(),
+        );
+        index.add_keyed(
+            key.clone(),
+            LayerOffset::IDENTITY,
             field,
-            value: FieldValue::Value(Value::ArrayEdit(ArrayEdit {
+            FieldValue::Value(Value::ArrayEdit(ArrayEdit {
                 ops: vec![ArrayEditOp::Write {
                     src: ArrayEditOperand::Literal(Value::Int(9)),
                     index: ArrayIndex::Position(0),
                 }],
             }))
             .into(),
-            layer_offset: LayerOffset::IDENTITY,
-        });
-        index.add_opinion(Opinion {
-            key: OpinionKey {
+        );
+        index.add_keyed(
+            OpinionKey {
                 layer_strength: 1,
                 ..key.clone()
             },
+            LayerOffset::IDENTITY,
             field,
-            value: FieldValue::Value(array_value(&[1, 2])).into(),
-            layer_offset: LayerOffset::IDENTITY,
-        });
+            FieldValue::Value(array_value(&[1, 2])).into(),
+        );
 
         let stage = Stage::from_parts(HashMap::from([(prim, index)]), HashMap::new(), false, None);
         let resolved = stage.resolve_field(prim, field).expect("resolved value");
@@ -4670,33 +4687,33 @@ mod tests {
 
         let mut index = PrimIndex::default();
         let key = test_key(LayerId(1), prim);
-        index.add_opinion(Opinion {
-            key: key.clone(),
+        index.add_keyed(
+            key.clone(),
+            LayerOffset::IDENTITY,
             field,
-            value: PropertySpec::typed_attribute(int_array_type()).into(),
-            layer_offset: LayerOffset::IDENTITY,
-        });
-        index.add_opinion(Opinion {
-            key: key.clone(),
+            PropertySpec::typed_attribute(int_array_type()).into(),
+        );
+        index.add_keyed(
+            key.clone(),
+            LayerOffset::IDENTITY,
             field,
-            value: samples(vec![
+            samples(vec![
                 (0.0, identity.clone()),
                 (2.0, override_sample),
                 (3.0, identity),
             ]),
-            layer_offset: LayerOffset::IDENTITY,
-        });
-        index.add_opinion(Opinion {
-            key: OpinionKey {
+        );
+        index.add_keyed(
+            OpinionKey {
                 layer_strength: 1,
                 ..key.clone()
             },
+            LayerOffset::IDENTITY,
             field,
-            value: PropertySpec::attribute()
+            PropertySpec::attribute()
                 .with_default(array_value(&[1, 2]))
                 .into(),
-            layer_offset: LayerOffset::IDENTITY,
-        });
+        );
 
         let stage = Stage::from_parts(HashMap::from([(prim, index)]), HashMap::new(), false, None);
         assert_eq!(
@@ -4724,29 +4741,29 @@ mod tests {
 
         let mut index = PrimIndex::default();
         let key = test_key(LayerId(1), prim);
-        index.add_opinion(Opinion {
-            key: key.clone(),
+        index.add_keyed(
+            key.clone(),
+            LayerOffset::IDENTITY,
             field,
-            value: PropertySpec::typed_attribute(int_array_type()).into(),
-            layer_offset: LayerOffset::IDENTITY,
-        });
-        index.add_opinion(Opinion {
-            key: key.clone(),
+            PropertySpec::typed_attribute(int_array_type()).into(),
+        );
+        index.add_keyed(
+            key.clone(),
+            LayerOffset::IDENTITY,
             field,
-            value: samples(vec![(0.0, Value::Blocked)]),
-            layer_offset: LayerOffset::IDENTITY,
-        });
-        index.add_opinion(Opinion {
-            key: OpinionKey {
+            samples(vec![(0.0, Value::Blocked)]),
+        );
+        index.add_keyed(
+            OpinionKey {
                 layer_strength: 1,
                 ..key.clone()
             },
+            LayerOffset::IDENTITY,
             field,
-            value: PropertySpec::attribute()
+            PropertySpec::attribute()
                 .with_default(array_value(&[42]))
                 .into(),
-            layer_offset: LayerOffset::IDENTITY,
-        });
+        );
 
         // Spec: AOUSD Core §12.3.6 (individual time samples can be blocked).
         let stage = Stage::from_parts(HashMap::from([(prim, index)]), HashMap::new(), false, None);
@@ -4798,17 +4815,21 @@ mod tests {
 
         let mut index = PrimIndex::default();
         let key = test_key(LayerId(1), prim);
-        index.add_source(key.clone());
+        index.add_source(OpinionSource {
+            key: key.clone(),
+            layer_offset: LayerOffset::IDENTITY,
+        });
         for (strength, value) in opinions.into_iter().enumerate() {
-            index.add_opinion(Opinion {
-                key: OpinionKey {
+            index.add_keyed(
+                OpinionKey {
                     layer_strength: u16::try_from(strength).expect("small fixture"),
                     ..key.clone()
                 },
+                LayerOffset::IDENTITY,
                 field,
                 // Schema fallbacks are for properties: author each value as an
                 // attribute default.
-                value: match value {
+                match value {
                     FieldValue::Value(default) => {
                         PropertySpec::typed_attribute(property_type.clone())
                             .with_default(default)
@@ -4816,8 +4837,7 @@ mod tests {
                     }
                     other => other.into(),
                 },
-                layer_offset: LayerOffset::IDENTITY,
-            });
+            );
         }
 
         let mut stage =
@@ -4834,7 +4854,7 @@ mod tests {
             FieldValue::Value(array_value(&[1, 2])),
         ]);
         let opinions = stage.prims[&prim].property_opinions(field).unwrap();
-        let Value::Array(original) = opinions[1].value.default_value().unwrap() else {
+        let Value::Array(original) = opinions.records()[1].value.default_value().unwrap() else {
             panic!("array opinion");
         };
         let resolved = stage
@@ -4974,17 +4994,20 @@ mod tests {
         let field = store.tokens.intern("x");
         let mut index = PrimIndex::default();
         let key = test_key(LayerId(1), prim);
-        index.add_source(key.clone());
+        index.add_source(OpinionSource {
+            key: key.clone(),
+            layer_offset: LayerOffset::IDENTITY,
+        });
         for (strength, spec) in specs.into_iter().enumerate() {
-            index.add_opinion(Opinion {
-                key: OpinionKey {
+            index.add_keyed(
+                OpinionKey {
                     layer_strength: u16::try_from(strength).expect("small fixture"),
                     ..key.clone()
                 },
+                LayerOffset::IDENTITY,
                 field,
-                value: spec.into(),
-                layer_offset: LayerOffset::IDENTITY,
-            });
+                spec.into(),
+            );
         }
         let stage = Stage::from_parts(HashMap::from([(prim, index)]), HashMap::new(), false, None);
         (stage, prim, field)
@@ -5053,7 +5076,7 @@ mod tests {
             assert_eq!(explained.source, ValueSource::Default);
             let contributors: Vec<_> = explained.contributors().collect();
             assert_eq!(contributors.len(), 1);
-            assert_eq!(contributors[0].opinion.key.layer_strength, 1);
+            assert_eq!(contributors[0].opinion.source().key.layer_strength, 1);
             assert!(
                 contributors[0]
                     .samples
@@ -5178,9 +5201,10 @@ mod tests {
         let supplied: Vec<(u16, Vec<KeyPath>)> = explained
             .contributors()
             .map(|opinion| match &opinion.role {
-                OpinionRole::Contributed(Contribution::Dictionary(merge)) => {
-                    (opinion.opinion.key.layer_strength, merge.supplied.clone())
-                }
+                OpinionRole::Contributed(Contribution::Dictionary(merge)) => (
+                    opinion.opinion.source().key.layer_strength,
+                    merge.supplied.clone(),
+                ),
                 other => panic!("{other:?}"),
             })
             .collect();
@@ -5326,7 +5350,7 @@ mod tests {
             .explain_prim(prim)
             .expect("composed prim")
             .iter()
-            .map(|key| (key.layer_id, key.spec_path.clone()))
+            .map(|source| (source.key.layer_id, source.key.spec_path.clone()))
             .collect();
         let spec = SpecPath::from_prim_path(prim);
         assert_eq!(

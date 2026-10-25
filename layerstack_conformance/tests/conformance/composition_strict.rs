@@ -416,7 +416,7 @@ fn observe(name: &str) -> Observed {
         };
         let actual: Vec<String> = sources
             .iter()
-            .map(|key| render_site(&loaded, key.layer_id, &key.spec_path))
+            .map(|key| render_site(&loaded, key.key.layer_id, &key.key.spec_path))
             .collect();
         let diffs = diff_stacks(&expected, &actual);
         if !diffs.is_empty() {
@@ -438,7 +438,7 @@ fn observe(name: &str) -> Observed {
                 .map(|p| p.opinions())
                 .unwrap_or_default()
                 .iter()
-                .map(|opinion| render_site(&loaded, opinion.key.layer_id, &opinion.key.spec_path))
+                .map(|opinion| render_site(&loaded, opinion.layer_id(), &opinion.spec_path()))
                 .collect();
             let diffs = diff_stacks(&expected, &actual);
             if !diffs.is_empty() {

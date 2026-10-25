@@ -340,22 +340,20 @@ impl Catalog {
             let mut prefix = Vec::new();
             let mut masked = false;
             for opinion in ordinary {
-                let strength = index
-                    .graph
-                    .cmp_nodes(opinion.key.node, set.key.node)
-                    .then_with(|| opinion.key.layer_strength.cmp(&set.key.layer_strength));
-                if strength.is_le() && opinion.value.blocks_animation() {
+                let strength = index.graph.cmp_keys(&opinion.source().key, &set.key);
+                let value = opinion.value();
+                if strength.is_le() && value.blocks_animation() {
                     masked = true;
                 }
                 if strength.is_eq()
-                    && (opinion.value.time_samples().is_some()
-                        || opinion.value.spline().is_some()
-                        || opinion.value.has_default_value())
+                    && (value.time_samples().is_some()
+                        || value.spline().is_some()
+                        || value.has_default_value())
                 {
                     masked = true;
                 }
                 if strength.is_le() {
-                    prefix.push(opinion.clone());
+                    prefix.push(opinion.opinion().clone());
                 }
             }
             if masked {
@@ -363,7 +361,7 @@ impl Catalog {
             }
             let Some(time) =
                 crate::value_resolution::query_time_for_weaker_source_with_composability(
-                    &prefix,
+                    ordinary.with_records(&prefix),
                     time,
                     interpolation,
                     None,

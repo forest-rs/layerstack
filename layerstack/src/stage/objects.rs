@@ -420,11 +420,11 @@ impl<'a> Prim<'a> {
         let stage: &'a Stage = self.stage;
         stage.explain_value(self.path, key)
     }
-    /// The opinions of the metadata field `key`, strongest first; empty
-    /// when none authors it.
+    /// The opinions of the metadata field `key`, strongest first, each
+    /// with its source ([`OpinionRef`]); empty when none authors it.
     ///
     /// Spec: AOUSD Core §10.4 (strength ordering), §12.
-    pub fn metadata_opinions(self, key: impl NameArg) -> &'a [Opinion] {
+    pub fn metadata_opinions(self, key: impl NameArg) -> Opinions<'a> {
         let stage: &'a Stage = self.stage;
         key.token(self.store.tokens())
             .and_then(|key| stage.explain_field(self.path, key))
@@ -662,13 +662,15 @@ impl<'a> Prim<'a> {
         self.stage.prim_stack(self.path).unwrap_or_default()
     }
     /// Every source that contributes to the prim, strongest first: one
-    /// [`OpinionKey`] per contributing `(arc, layer, spec)` site, a site
-    /// reached through two arcs (a reference diamond, or a layer that
-    /// appears twice in a layer stack) twice, as OpenUSD's
-    /// `PcpPrimIndex::GetPrimStack` lists them.
+    /// [`OpinionSource`] per contributing `(arc, layer, spec)` site, with
+    /// the layer offset its opinions are read through, a site reached
+    /// through two arcs (a reference diamond, or a layer that appears twice
+    /// in a layer stack) twice, as OpenUSD's `PcpPrimIndex::GetPrimStack`
+    /// lists them. An [`Opinion::source`] is a position in this list.
     ///
-    /// Spec: AOUSD Core §10.4 (strength ordering).
-    pub fn sources(self) -> &'a [OpinionKey] {
+    /// Spec: AOUSD Core §10.4 (strength ordering), §12.3.2.1 (layer
+    /// offsets).
+    pub fn sources(self) -> &'a [OpinionSource] {
         let stage: &'a Stage = self.stage;
         stage.explain_prim(self.path).unwrap_or_default()
     }
@@ -834,16 +836,20 @@ impl<'a> Property<'a> {
             key,
         )
     }
-    /// The property's opinions, strongest first; empty when only a schema
-    /// defines it.
+    /// The property's opinions, strongest first, each with its source
+    /// ([`OpinionRef`]): its layer, spec path, node and layer offset. Empty
+    /// when only a schema defines it.
     ///
-    /// OpenUSD: `UsdProperty::GetPropertyStack`, as opinions.
+    /// OpenUSD: `UsdProperty::GetPropertyStackWithLayerOffsets`, as
+    /// opinions.
     ///
-    /// Spec: AOUSD Core §10.4 (strength ordering), §12.
+    /// Spec: AOUSD Core §10.4 (strength ordering), §12, §12.3.2.1 (layer
+    /// offsets).
     #[doc(alias = "UsdProperty::GetPropertyStack")]
     #[doc(alias = "GetPropertyStack")]
+    #[doc(alias = "UsdProperty::GetPropertyStackWithLayerOffsets")]
     #[inline]
-    pub fn opinions(self) -> &'a [Opinion] {
+    pub fn opinions(self) -> Opinions<'a> {
         let stage: &'a Stage = self.stage;
         stage.explain_property_path(self.path).unwrap_or_default()
     }

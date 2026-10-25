@@ -36,7 +36,7 @@ use crate::{
     interner::TokenId,
     layer_stack::LayerStackIdentifier,
     path::PathId,
-    prim_index::{ArcKind, Opinion, OpinionKey, PrimIndex},
+    prim_index::{ArcKind, Opinion, OpinionKey, OpinionSource, PrimIndex},
     prim_index_graph::{NodeArc, NodeId, PrimIndexGraph},
     spec_path::SpecPath,
     stage::{InstanceIndexKey, InstanceIndexKeys, StageOptions},
@@ -749,7 +749,7 @@ fn prim_record(
     let mut record = PrimDependencies::default();
     record
         .layers
-        .extend(index.sources.iter().map(|source| source.layer_id));
+        .extend(index.sources.iter().map(|source| source.key.layer_id));
     // The layers authoring the references and payloads on the way to each
     // node retime it.
     record
@@ -1568,23 +1568,22 @@ fn prim_index(
         for (strength, layer_id, spec) in site::specs(ctx.store, stack, &node.site.path) {
             let layer_strength = u16::try_from(strength).unwrap_or(u16::MAX);
             let layer_offset = node_offset.compose(stack.offset_at(strength));
-            index.add_source(OpinionKey {
-                node: id,
-                layer_strength,
-                layer_id,
-                lookup_path,
-                spec_path: node.site.path.clone(),
-            });
-            let entries = crate::doc::composed_entries(spec.fields(), spec.properties());
-            index.add_opinions(entries.map(|entry| {
-                let (field, mut value) = (entry.name(), entry.value());
-                let key = OpinionKey {
+            // The spec's opinions share its source's key and offset
+            // (AOUSD Core §12.3.2.1), as OpenUSD's prim stack entries share
+            // their node and layer.
+            let source = index.add_source(OpinionSource {
+                key: OpinionKey {
                     node: id,
                     layer_strength,
                     layer_id,
                     lookup_path,
-                    spec_path: node.site.path.with_property(field),
-                };
+                    spec_path: node.site.path.clone(),
+                },
+                layer_offset,
+            });
+            let entries = crate::doc::composed_entries(spec.fields(), spec.properties());
+            index.add_opinions(entries.map(|entry| {
+                let (field, mut value) = (entry.name(), entry.value());
                 // Relative expressions anchor at every node, the root's
                 // included.
                 map_path_expressions(ctx.store, &node.map_to_root, lookup_path, &mut value);
@@ -1605,16 +1604,15 @@ fn prim_index(
                             prim,
                             property: field,
                             layer: layer_id,
-                            spec: key.spec_path.clone(),
+                            spec: node.site.path.with_property(field),
                         },
                         checks,
                     );
                 }
                 Opinion {
-                    key,
+                    source,
                     field,
                     value,
-                    layer_offset,
                 }
             }));
         }
@@ -1641,7 +1639,8 @@ pub(crate) fn order_children(
 ) {
     child_index.prepare(store);
     let graph = &index.graph;
-    let contributing: HashSet<NodeId> = index.sources.iter().map(|key| key.node).collect();
+    let contributing: HashSet<NodeId> =
+        index.sources.iter().map(|source| source.key.node).collect();
     let mut order: Vec<TokenId> = Vec::new();
     let mut names: HashSet<TokenId> = HashSet::new();
     let mut unlisted: Vec<TokenId> = Vec::new();

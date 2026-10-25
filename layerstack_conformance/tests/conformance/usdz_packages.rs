@@ -241,10 +241,11 @@ fn mismatches(case: &Case) -> Vec<String> {
                 (
                     loaded
                         .layer_names
-                        .get(&key.layer_id)
+                        .get(&key.key.layer_id)
                         .cloned()
-                        .unwrap_or_else(|| format!("{:?}", key.layer_id)),
-                    key.spec_path
+                        .unwrap_or_else(|| format!("{:?}", key.key.layer_id)),
+                    key.key
+                        .spec_path
                         .display(&loaded.store.paths, &loaded.store.tokens),
                 )
             })

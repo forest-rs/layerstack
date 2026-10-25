@@ -248,7 +248,7 @@ impl Capture<'_, '_> {
             && self
                 .scene
                 .property(property)
-                .and_then(|p| p.opinions().iter().find_map(|o| o.value.default_value()))
+                .and_then(|p| p.opinions().iter().find_map(|o| o.value().default_value()))
                 == Some(&Value::Blocked)
         {
             result = MaterialValue::default();
@@ -330,7 +330,7 @@ fn blocked(scene: &Scene<'_>, property: PropertyPath, time: Time) -> bool {
         .map(layerstack::Property::opinions)
         .unwrap_or_default();
     let default_blocked =
-        opinions.iter().find_map(|o| o.value.default_value()) == Some(&Value::Blocked);
+        opinions.iter().find_map(|o| o.value().default_value()) == Some(&Value::Blocked);
     if time == Time::Default {
         return default_blocked;
     }

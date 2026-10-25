@@ -56,7 +56,7 @@ fn sources<'a>(
     stage: &'a Stage,
     store: &'a layerstack::InMemoryStore,
     path: layerstack::PathId,
-) -> Option<&'a [layerstack::OpinionKey]> {
+) -> Option<&'a [layerstack::OpinionSource]> {
     stage.prim(path, store).map(|prim| prim.sources())
 }
 
@@ -152,8 +152,9 @@ fn prim_stacks_hold_every_nested_variant_spec() {
             .iter()
             .map(|key| {
                 (
-                    layer_name(&loaded, key.layer_id),
-                    key.spec_path
+                    layer_name(&loaded, key.key.layer_id),
+                    key.key
+                        .spec_path
                         .display(&loaded.store.paths, &loaded.store.tokens),
                 )
             })

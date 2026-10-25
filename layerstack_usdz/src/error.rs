@@ -108,6 +108,8 @@ pub enum LayerReadError {
     Usdc(layerstack_usdc::UsdcError),
     /// USDA text was not UTF-8; the error locates the invalid bytes.
     InvalidUtf8(core::str::Utf8Error),
+    /// USDA text began with a byte order mark, which USDA does not allow.
+    ByteOrderMark(layerstack_usda::ByteOrderMark),
     /// The member's extension does not identify a supported USD layer format.
     UnsupportedFormat,
 }
@@ -117,6 +119,7 @@ impl fmt::Display for LayerReadError {
         match self {
             Self::Usdc(error) => write!(f, "USDC: {error}"),
             Self::InvalidUtf8(error) => write!(f, "USDA is not UTF-8: {error}"),
+            Self::ByteOrderMark(mark) => write!(f, "USDA layer: {mark}"),
             Self::UnsupportedFormat => f.write_str("unsupported layer format"),
         }
     }
@@ -127,6 +130,7 @@ impl core::error::Error for LayerReadError {
         match self {
             Self::Usdc(error) => Some(error),
             Self::InvalidUtf8(error) => Some(error),
+            Self::ByteOrderMark(mark) => Some(mark),
             Self::UnsupportedFormat => None,
         }
     }

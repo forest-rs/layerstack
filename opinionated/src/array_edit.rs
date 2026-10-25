@@ -452,6 +452,27 @@ mod tests {
         assert_eq!(apply(&zero09_nine, &[3, 4, 5]), vec![0, 0, 3, 4, 5, 9, 9]);
     }
 
+    /// OpenUSD 26.11 `testComposeFillLiterals`: a stronger `minsize`/`resize`
+    /// fill composed over a weaker edit that carries a literal of its own.
+    /// OpenUSD 26.08 misplaced the fill's literal index there; fills here
+    /// hold their element, so composition has nothing to rebase.
+    #[test]
+    fn vt_fill_literals_compose_over_weaker_literals() {
+        let prepend = |value| {
+            edit(vec![Op::Insert {
+                src: lit(value),
+                index: ArrayIndex::Position(0),
+            }])
+        };
+        let min_size5_fill7 = edit(vec![Op::MinSizeFill { len: 5, fill: 7 }]);
+        let composed = min_size5_fill7.compose_over(&prepend(3));
+        assert_eq!(apply(&composed, &[]), vec![3, 7, 7, 7, 7]);
+
+        let size4_fill8 = edit(vec![Op::ResizeFill { len: 4, fill: 8 }]);
+        let composed = size4_fill8.compose_over(&prepend(2));
+        assert_eq!(apply(&composed, &[]), vec![2, 8, 8, 8]);
+    }
+
     #[test]
     fn vt_references_and_out_of_bounds_ops() {
         let mix_and_trim = mix_and_trim();

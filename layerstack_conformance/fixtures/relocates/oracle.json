@@ -985,7 +985,7 @@
    ]
   },
   {
-   "path": "/Oven/Shelf",
+   "path": "/Oven/Tier",
    "prim_stack": [
     [
      "kiln.usda",
@@ -1002,7 +1002,7 @@
    ]
   },
   {
-   "path": "/Oven/Shelf/Pot",
+   "path": "/Oven/Tier/Pot",
    "prim_stack": [
     [
      "kiln.usda",
@@ -1057,7 +1057,7 @@
    ]
   },
   {
-   "path": "/Forge/Shelf",
+   "path": "/Forge/Tier",
    "prim_stack": [
     [
      "kiln.usda",
@@ -1074,7 +1074,7 @@
    ]
   },
   {
-   "path": "/Forge/Shelf/Pot",
+   "path": "/Forge/Tier/Pot",
    "prim_stack": [
     [
      "kiln.usda",
@@ -1125,7 +1125,7 @@
    ]
   },
   {
-   "path": "/Stove/Shelf",
+   "path": "/Stove/Tier",
    "prim_stack": [
     [
      "kiln.usda",
@@ -1142,7 +1142,7 @@
    ]
   },
   {
-   "path": "/Stove/Shelf/Pot",
+   "path": "/Stove/Tier/Pot",
    "prim_stack": [
     [
      "kiln.usda",
@@ -1315,15 +1315,15 @@
   "/Belltower/Bell.pitch": 1,
   "/Belltower/Bell/Clapper.weight": 1,
   "/Belltower/Ringer.weight": 1,
-  "/Oven/Shelf.coat": 3,
-  "/Oven/Shelf.temp": 7,
-  "/Oven/Shelf/Pot.temp": 7,
-  "/Forge/Shelf.coat": 3,
-  "/Forge/Shelf.temp": 7,
-  "/Forge/Shelf/Pot.temp": 7,
-  "/Stove/Shelf.coat": 3,
-  "/Stove/Shelf.temp": 7,
-  "/Stove/Shelf/Pot.temp": 7,
+  "/Oven/Tier.coat": 3,
+  "/Oven/Tier.temp": 7,
+  "/Oven/Tier/Pot.temp": 7,
+  "/Forge/Tier.coat": 3,
+  "/Forge/Tier.temp": 7,
+  "/Forge/Tier/Pot.temp": 7,
+  "/Stove/Tier.coat": 3,
+  "/Stove/Tier.temp": 7,
+  "/Stove/Tier/Pot.temp": 7,
   "/Rack.coat": 3,
   "/Rack.temp": 7,
   "/Rack/Pot.temp": 7,
@@ -1342,13 +1342,13 @@
   "/Crate/Parts.gear": [
    "/Crate/Gear"
   ],
-  "/Oven/Shelf.holds": [
+  "/Oven/Tier.holds": [
    "/Oven/Chamber/Tray/Pot"
   ],
-  "/Forge/Shelf.holds": [
+  "/Forge/Tier.holds": [
    "/Forge/Chamber/Tray/Pot"
   ],
-  "/Stove/Shelf.holds": [
+  "/Stove/Tier.holds": [
    "/Stove/Chamber/Tray/Pot"
   ],
   "/Rack.holds": [],

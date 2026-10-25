@@ -68,12 +68,12 @@
 //!   spec and variant branch are ignored. `/Belltower/Ringer` inherits
 //!   beneath the relocated prim. That is the stage's own relocation.
 //! - `kiln.usda` relocates `/Kiln/Chamber/Tray`, which its reference to
-//!   `clay.usda` brings, to `/Kiln/Shelf`, and authors opinions at the
+//!   `clay.usda` brings, to `/Kiln/Tier`, and authors opinions at the
 //!   source inside the variant branch `/Kiln/Chamber` selects, which also
 //!   references `glaze.usda`. Every arc reaching the relocated tray
 //!   composes both: `/Oven` references `/Kiln`, `/Forge` references
 //!   `/Oven`, `/Stove` payloads `/Kiln`, and `/Rack` references the
-//!   relocated `/Kiln/Shelf`. Their target paths map through the arcs above
+//!   relocated `/Kiln/Tier`. Their target paths map through the arcs above
 //!   the relocate node only; `/Rack`'s is outside its target and reported.
 //! - `dock.usda` relocates `/Dock/Shed/Net`, which its reference to
 //!   `shed.usda` brings, to the new root prim `/Net`, outside `/Dock`. The
@@ -498,7 +498,7 @@ fn opinion_edits_at_relocation_targets_and_sources_recompose_in_scope() {
             "clay.usda",
             "/Clay/Chamber/Tray/Pot",
             "temp",
-            "/Forge/Shelf/Pot",
+            "/Forge/Tier/Pot",
         ),
         ("glaze.usda", "/Glaze/Tray", "coat", "/Rack"),
     ];

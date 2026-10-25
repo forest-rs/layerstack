@@ -213,7 +213,7 @@ class "_class_Heir"
 
 # Each node composes its arcs from its own sites: `/Kiln` and its
 # selected `heat` branch author explicit inherits, specializes, references
-# and payloads, as do `/Kiln/Shelf` and its spec in that branch, and none
+# and payloads, as do `/Kiln/Tier` and its spec in that branch, and none
 # replaces another's. `/Studio` references the same prim in `kiln.usda`.
 def "Kiln" (
     inherits = </_class_Fire>
@@ -226,7 +226,7 @@ def "Kiln" (
     }
 )
 {
-    def "Shelf" (
+    def "Tier" (
         inherits = </_class_Rack>
         references = @./clay.usda@</Board>
     )
@@ -240,7 +240,7 @@ def "Kiln" (
             references = @./clay.usda@</Slip>
             payload = @./clay.usda@</Ash>
         ) {
-            over "Shelf" (
+            over "Tier" (
                 inherits = </_class_Tray>
                 references = @./clay.usda@</Rim>
             )
@@ -433,7 +433,7 @@ def "Kiln" (
     }
 )
 {
-    def "Shelf" (
+    def "Tier" (
         inherits = </_class_Rack>
         references = @./clay.usda@</Board>
     )
@@ -447,7 +447,7 @@ def "Kiln" (
             references = @./clay.usda@</Slip>
             payload = @./clay.usda@</Ash>
         ) {
-            over "Shelf" (
+            over "Tier" (
                 inherits = </_class_Tray>
                 references = @./clay.usda@</Rim>
             )

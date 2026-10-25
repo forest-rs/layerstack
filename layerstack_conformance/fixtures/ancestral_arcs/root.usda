@@ -129,7 +129,7 @@ def "Vineyard" (
 # classes it inherits, one from the `lit` branch of its variant set, which
 # is added once the prim index is complete, of the reference that branch
 # authors, and those of the class its `Stool` specializes and of the prim
-# its `Shelf` references internally, map once, into `/Hut/Loft`.
+# its `Tier` references internally, map once, into `/Hut/Loft`.
 def "Hut"
 {
     def "Loft" (

@@ -1107,16 +1107,16 @@ fn dependent_session_on_same_root_moves_its_override_with_shared_source() {
     assert_eq!(store.layers[&SESSION], before_session);
 }
 
-/// `/Shelf` references `/Asset`, whose `/Asset/Item` the root layer
-/// relocates to `/Shelf/Moved`.
+/// `/Tier` references `/Asset`, whose `/Asset/Item` the root layer
+/// relocates to `/Tier/Moved`.
 fn relocated() -> InMemoryStore {
     let mut store = InMemoryStore::default();
-    let (asset, item, shelf) = (
+    let (asset, item, tier) = (
         store.path("/Asset"),
         store.path("/Asset/Item"),
-        store.path("/Shelf"),
+        store.path("/Tier"),
     );
-    let (source, moved) = (store.path("/Shelf/Item"), store.path("/Shelf/Moved"));
+    let (source, moved) = (store.path("/Tier/Item"), store.path("/Tier/Moved"));
     let item_name = store.tokens.intern("Item");
     let mut layer = Layer::new(ASSET);
     layer.insert_prim(asset, PrimSpec::def().with_children(vec![item_name]));
@@ -1124,7 +1124,7 @@ fn relocated() -> InMemoryStore {
     store.insert_layer(layer);
     let mut root = Layer::new(ROOT);
     root.insert_prim(
-        shelf,
+        tier,
         PrimSpec::def().with_reference(Reference::new(ASSET, asset)),
     );
     root.relocates.push(crate::Relocate {
@@ -1138,7 +1138,7 @@ fn relocated() -> InMemoryStore {
 #[test]
 fn deleting_a_relocated_prim_relocates_its_source_away_then_undoes() {
     let mut store = relocated();
-    let (source, moved) = (store.path("/Shelf/Item"), store.path("/Shelf/Moved"));
+    let (source, moved) = (store.path("/Tier/Item"), store.path("/Tier/Moved"));
     let mut live = LiveStage::compose(&mut store, ROOT, StageOptions::default());
     assert!(live.stage().has_prim(moved));
     let edit = NamespaceEdit::prepare_delete(
@@ -1169,7 +1169,7 @@ fn deleting_a_relocated_prim_relocates_its_source_away_then_undoes() {
 #[test]
 fn deletes_reject_what_they_cannot_remove() {
     let mut store = relocated();
-    let (shelf, root) = (store.path("/Shelf"), store.path("/"));
+    let (tier, root) = (store.path("/Tier"), store.path("/"));
     let stage = Stage::compose(&mut store, ROOT, StageOptions::default());
     let delete = |store: &mut InMemoryStore, target: &EditTarget, object| {
         NamespaceEdit::prepare_delete(&stage, store, target, object).unwrap_err()
@@ -1189,7 +1189,7 @@ fn deletes_reject_what_they_cannot_remove() {
         delete(
             &mut store,
             &EditTarget::for_layer(ASSET),
-            TargetPath::Prim(shelf)
+            TargetPath::Prim(tier)
         ),
         NamespaceError::Unmappable
     );
@@ -1198,19 +1198,19 @@ fn deletes_reject_what_they_cannot_remove() {
 #[test]
 fn deleting_beneath_an_instance_is_an_instance_proxy_edit() {
     let mut store = relocated();
-    let shelf = store.path("/Shelf");
+    let tier = store.path("/Tier");
     store.layers.get_mut(&ROOT).unwrap().relocates.clear();
     store
         .layers
         .get_mut(&ROOT)
         .unwrap()
         .prims
-        .get_mut(&shelf)
+        .get_mut(&tier)
         .unwrap()
         .instanceable = Some(true);
-    let item = store.path("/Shelf/Item");
+    let item = store.path("/Tier/Item");
     let stage = Stage::compose(&mut store, ROOT, StageOptions::default());
-    assert!(stage.is_instance(shelf));
+    assert!(stage.is_instance(tier));
     assert_eq!(
         NamespaceEdit::prepare_delete(
             &stage,

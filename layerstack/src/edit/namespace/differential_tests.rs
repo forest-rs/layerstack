@@ -173,10 +173,10 @@ fn roots_scene(listed: bool) -> InMemoryStore {
     store
 }
 
-/// `/Shelf` references the asset's `/Asset`, overriding its `Item` and,
+/// `/Tier` references the asset's `/Asset`, overriding its `Item` and,
 /// when `relocated`, relocating its `Spare`; `/Second` references
-/// `/Shelf/Item`, and the dependent layer references the root layer's
-/// `/Shelf`.
+/// `/Tier/Item`, and the dependent layer references the root layer's
+/// `/Tier`.
 fn arcs_scene(relocated: bool) -> InMemoryStore {
     let mut store = InMemoryStore::default();
     let size = store.tokens.intern("size");
@@ -193,16 +193,16 @@ fn arcs_scene(relocated: bool) -> InMemoryStore {
     author(&mut store, &mut asset, "/Asset/Spare", PrimSpec::def());
     store.insert_layer(asset);
     let mut root = Layer::new(ROOT);
-    let shelf = author(
+    let tier = author(
         &mut store,
         &mut root,
-        "/Shelf",
+        "/Tier",
         PrimSpec::def().with_reference(Reference::with_asset(ASSET, asset_root, "asset.usda")),
     );
     let item = author(
         &mut store,
         &mut root,
-        "/Shelf/Item",
+        "/Tier/Item",
         PrimSpec::over().with_property(size, attribute(2.0)),
     );
     author(
@@ -213,8 +213,8 @@ fn arcs_scene(relocated: bool) -> InMemoryStore {
     );
     author(&mut store, &mut root, "/Free", PrimSpec::def());
     if relocated {
-        let spare = store.path("/Shelf/Spare");
-        let moved = store.path("/Shelf/Moved");
+        let spare = store.path("/Tier/Spare");
+        let moved = store.path("/Tier/Moved");
         root.relocates.push(Relocate {
             source: spare,
             target: Some(moved),
@@ -226,7 +226,7 @@ fn arcs_scene(relocated: bool) -> InMemoryStore {
         &mut store,
         &mut dependent,
         "/Use",
-        PrimSpec::def().with_reference(Reference::with_asset(ROOT, shelf, "root.usda")),
+        PrimSpec::def().with_reference(Reference::with_asset(ROOT, tier, "root.usda")),
     );
     let used_item = store.path("/Use/Item");
     author(

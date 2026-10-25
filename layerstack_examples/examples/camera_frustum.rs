@@ -1,7 +1,8 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-//! Camera frusta and shutter-sampled instance transforms, without a graphics backend.
+//! Camera frusta, picking and shutter-sampled instance transforms, without a
+//! graphics backend.
 use layerstack::{
     AssetResolveError, AssetResolver, InMemoryStore, LayerId, LiveStage, PathInterner,
     ResolvedAsset, StageOptions, TokenInterner,
@@ -86,18 +87,17 @@ fn main() {
         .unwrap();
     // These instances have identity prototypes and the instancer has no world
     // transform. With transformed instancers, append local_to_world here.
-    for (time, sample) in times.iter().zip(samples) {
+    let unit_cube = |matrix| BoundingBox {
+        range: Range3d {
+            min: [-0.5; 3],
+            max: [0.5; 3],
+        },
+        matrix,
+    };
+    for (time, sample) in times.iter().zip(&samples) {
         let visible: Vec<_> = sample
             .iter()
-            .filter(|instance| {
-                camera.intersects_world_bound(&BoundingBox {
-                    range: Range3d {
-                        min: [-0.5; 3],
-                        max: [0.5; 3],
-                    },
-                    matrix: instance.matrix,
-                })
-            })
+            .filter(|instance| camera.intersects_world_bound(&unit_cube(instance.matrix)))
             .map(|instance| instance.id)
             .collect();
         println!("{time:?}: visible IDs {visible:?}");
@@ -107,6 +107,32 @@ fn main() {
             "only the centered instance intersects the primary frustum"
         );
     }
+    // Pick at the window center at mid-shutter: the nearest bound the pick ray
+    // enters is the picked instance. A narrowed frustum bounds the same region
+    // for edge and face tests, or renders it for GPU picking.
+    let frustum = camera.prepare_frustum();
+    let ray = frustum.pick_ray([0., 0.]);
+    let picked = samples[1]
+        .iter()
+        .filter_map(|instance| {
+            let hit = ray.intersect_bound(&unit_cube(instance.matrix))?;
+            Some((hit.enter, instance.id))
+        })
+        .min_by(|a, b| a.0.total_cmp(&b.0));
+    let region = frustum.narrowed([0., 0.], [0.05, 0.05]);
+    println!(
+        "picked {picked:?} along {ray:?}, region window {:?}",
+        region.window()
+    );
+    assert_eq!(
+        picked.map(|(_, id)| id),
+        Some(10),
+        "the centered instance is under the window center"
+    );
+    assert!(
+        region.intersects_world_bound(&unit_cube(samples[1][0].matrix)),
+        "the picking region contains the picked instance"
+    );
 }
 const SOURCE: &str = r#"#usda 1.0
 (timeCodesPerSecond = 24)

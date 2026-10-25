@@ -1403,14 +1403,16 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
         // Spec: AOUSD Core §12.3.2.1 (sublayer offsets). A sublayer that
         // does not resolve keeps its place; composition reports it
         // (§10.3.1, §10.6; OpenUSD `PcpErrorInvalidSublayerPath`).
+        // Offsets that do not pair with the sublayers (§7.6.1.2.2) give
+        // every sublayer the identity offset, and composition reports the
+        // counts, as OpenUSD 26.11 does (`PcpErrorInvalidSublayerAndOffsetCount`
+        // in `PcpLayerStack::_BuildLayerStack`, `pxr/usd/pcp/layerStack.cpp`).
+        let paired = sublayer_offsets.len() == sublayer_paths.len();
         for (i, asset_path) in sublayer_paths.iter().enumerate() {
-            let offset =
-                sublayer_offsets
-                    .get(i)
-                    .map_or(LayerOffset::IDENTITY, |&(offset, scale)| LayerOffset {
-                        offset,
-                        scale,
-                    });
+            let offset = sublayer_offsets.get(i).filter(|_| paired).map_or(
+                LayerOffset::IDENTITY,
+                |&(offset, scale)| LayerOffset { offset, scale },
+            );
             let Some(resolved) = self.resolve_asset(asset_path) else {
                 layer
                     .sublayers_mut()
@@ -1425,6 +1427,9 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
             if let Some(sub_layer) = resolved.layer {
                 self.resolved_layers.push(sub_layer);
             }
+        }
+        if !paired {
+            layer.set_unpaired_sublayer_offsets(Some(sublayer_offsets.len()));
         }
 
         // Create a root prim spec for child ordering.

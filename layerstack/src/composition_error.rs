@@ -93,6 +93,9 @@ pub enum CompositionError {
     /// A variable expression in an asset path or variant selection that
     /// failed to evaluate. The sublayer, arc or selection was ignored.
     VariableExpressionError(VariableExpressionError),
+    /// A layer whose `subLayers` and `subLayerOffsets` counts differ. Every
+    /// one of its sublayers took the identity offset.
+    InvalidSublayerAndOffsetCount(InvalidSublayerAndOffsetCount),
 }
 
 impl CompositionError {
@@ -106,7 +109,8 @@ impl CompositionError {
             | Self::UnresolvedSublayer(_)
             | Self::InvalidAuthoredRelocation(_)
             | Self::InvalidConflictingRelocation(_)
-            | Self::InvalidSameTargetRelocations(_) => None,
+            | Self::InvalidSameTargetRelocations(_)
+            | Self::InvalidSublayerAndOffsetCount(_) => None,
             Self::ArcCycle(cycle) => Some(cycle.prim),
             Self::UnresolvedDefaultPrim(error) => Some(error.prim),
             Self::UnresolvedPrimPath(error) => Some(error.prim),
@@ -140,6 +144,7 @@ impl CompositionError {
             Self::InvalidExternalTargetPath(_) => 13,
             Self::InvalidInstanceTargetPath(_) => 14,
             Self::VariableExpressionError(_) => 15,
+            Self::InvalidSublayerAndOffsetCount(_) => 16,
         }
     }
 }
@@ -246,6 +251,13 @@ impl Describe for CompositionError {
                 "{}: sublayer @{}@ does not resolve; it is ignored",
                 names.layer(error.layer),
                 error.asset
+            ),
+            Self::InvalidSublayerAndOffsetCount(error) => write!(
+                f,
+                "{}: {} sublayers and {} sublayer offsets; every sublayer takes the identity offset",
+                names.layer(error.layer),
+                error.sublayers,
+                error.offsets
             ),
             Self::InvalidAuthoredRelocation(error) => write!(
                 f,
@@ -585,6 +597,28 @@ pub struct UnresolvedSublayer {
     pub layer: LayerId,
     /// The sublayer's asset path as authored.
     pub asset: String,
+}
+
+/// A layer whose `subLayers` and `subLayerOffsets` counts differ, found
+/// when gathering a layer stack holding it ([`Layer::unpaired_sublayer_offsets`]).
+///
+/// The offsets cannot be paired with the sublayers, so every sublayer of
+/// `layer` takes the identity offset; the sublayers are gathered as usual.
+///
+/// Spec: AOUSD Core §7.6.1.2.2 (`subLayerOffsets` parallels `subLayers`),
+/// §10.6 (composition errors). OpenUSD 26.11 reports it as
+/// `PcpErrorInvalidSublayerAndOffsetCount` (`PcpLayerStack::_BuildLayerStack`,
+/// `pxr/usd/pcp/layerStack.cpp`), before the layer's sublayers' errors.
+///
+/// [`Layer::unpaired_sublayer_offsets`]: crate::Layer::unpaired_sublayer_offsets
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct InvalidSublayerAndOffsetCount {
+    /// The layer whose sublayers and offsets do not pair.
+    pub layer: LayerId,
+    /// How many sublayers `layer` authors.
+    pub sublayers: usize,
+    /// How many sublayer offsets `layer` authors.
+    pub offsets: usize,
 }
 
 /// A `layerRelocates` entry that is invalid whatever else its layer stack

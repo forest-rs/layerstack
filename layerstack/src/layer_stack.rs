@@ -13,7 +13,10 @@ use alloc::{rc::Rc, string::String, vec::Vec};
 use hashbrown::HashSet;
 
 use crate::{
-    composition_error::{CompositionError, ExpressionContext, SublayerCycle, UnresolvedSublayer},
+    composition_error::{
+        CompositionError, ExpressionContext, InvalidSublayerAndOffsetCount, SublayerCycle,
+        UnresolvedSublayer,
+    },
     doc::{LayerId, LayerOffset, LayerStore, SublayerEntry},
     expression_variables::{VariableReads, evaluate, expression_error},
 };
@@ -134,7 +137,9 @@ impl LayerStack {
 
     /// Gathers the layer stack rooted at `root`, appending an error for
     /// each sublayer it ignores to `errors`: a [`SublayerCycle`] or an
-    /// [`UnresolvedSublayer`].
+    /// [`UnresolvedSublayer`]; and one for each layer whose sublayer
+    /// offsets do not pair with its sublayers, an
+    /// [`InvalidSublayerAndOffsetCount`].
     ///
     /// A sublayer forms a cycle when it is already on the chain of sublayers
     /// from `root` to the layer that names it. A layer repeated elsewhere in
@@ -246,6 +251,18 @@ impl LayerStack {
                 self.layers.push(id);
                 self.offsets.push(accumulated);
                 if let Some(layer) = self.store.layer(id) {
+                    // OpenUSD 26.11 reports unpaired offsets before the
+                    // sublayers' own errors (`_BuildLayerStack`).
+                    if let Some(offsets) = layer.unpaired_sublayer_offsets {
+                        self.errors
+                            .push(CompositionError::InvalidSublayerAndOffsetCount(
+                                InvalidSublayerAndOffsetCount {
+                                    layer: id,
+                                    sublayers: layer.sublayers.len(),
+                                    offsets,
+                                },
+                            ));
+                    }
                     for sub in &layer.sublayers {
                         let Some(sublayer) = self.sublayer(id, sub) else {
                             continue;
@@ -353,6 +370,33 @@ mod tests {
     }
 
     #[test]
+    fn unpaired_sublayer_offsets_are_reported_until_sublayers_change() {
+        // OpenUSD 26.11 `PcpErrorInvalidSublayerAndOffsetCount`.
+        let mut store = InMemoryStore::default();
+        let mut root = Layer::new(LayerId(1));
+        root.sublayers_mut().push(SublayerEntry::new(LayerId(2)));
+        root.set_unpaired_sublayer_offsets(Some(0));
+        store.insert_layer(root);
+        store.insert_layer(Layer::new(LayerId(2)));
+        let mut errors = Vec::new();
+        let stack = LayerStack::gather_reporting(&store, LayerId(1), &mut errors);
+        assert_eq!(stack.layers, [LayerId(1), LayerId(2)]);
+        assert_eq!(
+            errors,
+            [CompositionError::InvalidSublayerAndOffsetCount(
+                InvalidSublayerAndOffsetCount {
+                    layer: LayerId(1),
+                    sublayers: 1,
+                    offsets: 0,
+                }
+            )]
+        );
+        let root = store.layer_mut(LayerId(1)).unwrap();
+        let _ = root.sublayers_mut();
+        assert_eq!(root.unpaired_sublayer_offsets(), None);
+    }
+
+    #[test]
     fn duplicates_are_preserved_in_layer_stack() {
         // Mirrors the idea in the supplemental composition test
         // `BasicDuplicateSublayer_root`: the same layer can appear multiple
@@ -360,6 +404,7 @@ mod tests {
         let mut store = InMemoryStore::default();
         store.insert_layer(Layer {
             id: LayerId(1),
+            unpaired_sublayer_offsets: None,
             sublayers: subs(&[2, 3]),
             default_prim: None,
             metadata: Vec::new(),
@@ -373,6 +418,7 @@ mod tests {
         });
         store.insert_layer(Layer {
             id: LayerId(2),
+            unpaired_sublayer_offsets: None,
             sublayers: subs(&[3]),
             default_prim: None,
             metadata: Vec::new(),
@@ -386,6 +432,7 @@ mod tests {
         });
         store.insert_layer(Layer {
             id: LayerId(3),
+            unpaired_sublayer_offsets: None,
             sublayers: vec![],
             default_prim: None,
             metadata: Vec::new(),
@@ -412,6 +459,7 @@ mod tests {
         let mut store = InMemoryStore::default();
         store.insert_layer(Layer {
             id: LayerId(1),
+            unpaired_sublayer_offsets: None,
             sublayers: subs(&[2]),
             default_prim: None,
             metadata: Vec::new(),
@@ -425,6 +473,7 @@ mod tests {
         });
         store.insert_layer(Layer {
             id: LayerId(2),
+            unpaired_sublayer_offsets: None,
             sublayers: subs(&[3]),
             default_prim: None,
             metadata: Vec::new(),
@@ -438,6 +487,7 @@ mod tests {
         });
         store.insert_layer(Layer {
             id: LayerId(3),
+            unpaired_sublayer_offsets: None,
             sublayers: subs(&[2]),
             default_prim: None,
             metadata: Vec::new(),
@@ -498,6 +548,7 @@ mod tests {
         let mut store = InMemoryStore::default();
         store.insert_layer(Layer {
             id: LayerId(1),
+            unpaired_sublayer_offsets: None,
             sublayers: subs(&[2, 2]),
             default_prim: None,
             metadata: Vec::new(),
@@ -511,6 +562,7 @@ mod tests {
         });
         store.insert_layer(Layer {
             id: LayerId(2),
+            unpaired_sublayer_offsets: None,
             sublayers: vec![],
             default_prim: None,
             metadata: Vec::new(),
@@ -536,6 +588,7 @@ mod tests {
         let mut store = InMemoryStore::default();
         store.insert_layer(Layer {
             id: LayerId(1),
+            unpaired_sublayer_offsets: None,
             sublayers: vec![SublayerEntry {
                 layer: LayerId(2),
                 offset: LayerOffset {
@@ -556,6 +609,7 @@ mod tests {
         });
         store.insert_layer(Layer {
             id: LayerId(2),
+            unpaired_sublayer_offsets: None,
             sublayers: vec![SublayerEntry {
                 layer: LayerId(3),
                 offset: LayerOffset {
@@ -576,6 +630,7 @@ mod tests {
         });
         store.insert_layer(Layer {
             id: LayerId(3),
+            unpaired_sublayer_offsets: None,
             sublayers: vec![],
             default_prim: None,
             metadata: Vec::new(),
@@ -615,6 +670,7 @@ mod tests {
         let mut store = InMemoryStore::default();
         store.insert_layer(Layer {
             id: LayerId(1),
+            unpaired_sublayer_offsets: None,
             sublayers: vec![SublayerEntry {
                 layer: LayerId(2),
                 offset: LayerOffset {
@@ -635,6 +691,7 @@ mod tests {
         });
         store.insert_layer(Layer {
             id: LayerId(2),
+            unpaired_sublayer_offsets: None,
             sublayers: vec![SublayerEntry {
                 layer: LayerId(3),
                 offset: LayerOffset {
@@ -655,6 +712,7 @@ mod tests {
         });
         store.insert_layer(Layer {
             id: LayerId(3),
+            unpaired_sublayer_offsets: None,
             sublayers: vec![],
             default_prim: None,
             metadata: Vec::new(),

@@ -2305,6 +2305,8 @@ fn apply_raw(store: &mut dyn LayerStore, step: &Raw) -> Result<Raw, Rejection> {
         }
         Raw::Sublayers { sublayers, .. } => {
             let found = store.layer_mut(id).ok_or(Rejection::NoSuchLayer(id))?;
+            // Each replacement sublayer has its own offset.
+            found.unpaired_sublayer_offsets = None;
             Ok(Raw::Sublayers {
                 layer: id,
                 sublayers: core::mem::replace(&mut found.sublayers, sublayers.clone()),

@@ -98,7 +98,10 @@ impl Node {
 }
 
 /// A prim index graph being built. See the [module docs](self).
-#[derive(Clone, Debug, Default)]
+///
+/// Not `Clone`: a child's graph starts from its parent's by
+/// [`Graph::for_child`], which leaves the parent's shapes behind.
+#[derive(Debug, Default)]
 pub(crate) struct Graph {
     pub(crate) nodes: Vec<Node>,
     /// Whether the prim this graph indexes introduces a payload.
@@ -117,8 +120,8 @@ pub(crate) struct Graph {
 /// The shape of a prim's children's prim index graphs, once one is built:
 /// the children of a prim often lose the same nodes of their parent's
 /// graph (culled for having no specs beneath it), so their graphs match
-/// one another's but not their parent's. A graph cloned to build a child
-/// from starts without one. Without the `std` feature, which composes on
+/// one another's but not their parent's. A child's graph
+/// ([`Graph::for_child`]) starts without one. Without the `std` feature, which composes on
 /// one thread from graphs that must still be `Send`, none is kept.
 #[derive(Debug, Default)]
 pub(crate) struct ChildShape(
@@ -142,12 +145,6 @@ impl ChildShape {
         self.0.get_or_init(|| alloc::sync::Arc::clone(shape));
         #[cfg(not(feature = "std"))]
         let _ = shape;
-    }
-}
-
-impl Clone for ChildShape {
-    fn clone(&self) -> Self {
-        Self::default()
     }
 }
 
@@ -191,6 +188,30 @@ impl Graph {
             }],
             has_payloads: false,
             instanceable: false,
+            shape: None,
+            child_shape: ChildShape::default(),
+        }
+    }
+
+    /// The graph a child of the prim this graph indexes starts from: the
+    /// same nodes, each marked as its parent prim's, and no shapes. The
+    /// child reads the parent's shapes from the parent: a copy of their
+    /// handles, made for every child on every thread and then discarded,
+    /// would contend for the one count they share, as OpenUSD 26.11 found
+    /// of the counts its child graphs copy and discard
+    /// (`PcpPrimIndex_Graph::_ApplyNodeIndexMapping`).
+    pub(crate) fn for_child(&self) -> Self {
+        Self {
+            nodes: self
+                .nodes
+                .iter()
+                .map(|node| Node {
+                    from_parent_prim: true,
+                    ..node.clone()
+                })
+                .collect(),
+            has_payloads: self.has_payloads,
+            instanceable: self.instanceable,
             shape: None,
             child_shape: ChildShape::default(),
         }

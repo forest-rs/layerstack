@@ -823,10 +823,7 @@ impl Indexer<'_, '_, '_> {
                 parent.node(0).site.path.prim_path() == parent_path.prim_path(),
                 "the parent's index"
             );
-            self.outputs.graph = parent.clone();
-            for node in &mut self.outputs.graph.nodes {
-                node.from_parent_prim = true;
-            }
+            self.outputs.graph = parent.for_child();
             ancestor_instanceable = parent.instanceable;
         } else {
             let parent_site = Site {

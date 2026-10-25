@@ -60,6 +60,8 @@ env:
 #
 # Using cargo-hack also allows us to more easily test the feature matrix of our packages.
 # We use --each-feature & --optional-deps which will run a separate check for every feature.
+# The feature matrix runs on Linux only; Windows and macOS run clippy once per package with
+# every feature enabled, which catches platform-specific code without repeating the matrix.
 #
 # We use cargo-nextest, which has a faster concurrency model for running tests.
 # However cargo-nextest does not support running doc tests, so we also have a cargo test --doc step.
@@ -174,13 +176,24 @@ jobs:
           save-if: ${{ github.event_name != 'merge_group' }}
 
       - name: cargo clippy (no_std)
+        if: matrix.os == 'ubuntu-latest'
         run: cargo hack clippy ${{ env.RUST_NO_STD_PKGS }} --workspace --locked --optional-deps --each-feature --ignore-unknown-features --features libm --exclude-features ${{ env.FEATURES_DEPENDING_ON_STD }} --target x86_64-unknown-none -- -D warnings
 
       - name: cargo clippy
+        if: matrix.os == 'ubuntu-latest'
         run: cargo hack clippy --workspace --locked --optional-deps --each-feature --ignore-unknown-features --features std -- -D warnings
 
       - name: cargo clippy (auxiliary)
+        if: matrix.os == 'ubuntu-latest'
         run: cargo hack clippy --workspace --locked --optional-deps --each-feature --ignore-unknown-features --features std --tests --benches --examples -- -D warnings
+
+      - name: cargo clippy (all features)
+        if: matrix.os != 'ubuntu-latest'
+        run: cargo hack clippy --workspace --locked --all-features -- -D warnings
+
+      - name: cargo clippy (auxiliary, all features)
+        if: matrix.os != 'ubuntu-latest'
+        run: cargo hack clippy --workspace --locked --all-features --tests --benches --examples -- -D warnings
 
   clippy-stable-wasm:
     name: cargo clippy (wasm32)

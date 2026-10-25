@@ -127,15 +127,16 @@ pub enum Value {
     TimeCode(f64),
     /// A length of time in time codes (`duration`, `GfDuration`).
     ///
-    /// Held as a plain number: composition maps it through no layer offset,
-    /// and no arithmetic relates it to [`Value::TimeCode`]. OpenUSD 26.11
-    /// scales durations by a layer offset's scale without its offset
+    /// Held as a plain number. Value resolution reads it through a layer
+    /// offset's scale but not its offset, as OpenUSD 26.11 does
     /// (`SdfLayerOffset::operator*(GfDuration)`,
-    /// `Usd_ApplyLayerOffsetToValue` in `pxr/usd/usd/valueUtils.h`) and
-    /// gives `GfTimeCode - GfTimeCode` a `GfDuration` (`pxr/base/gf/timeCode.h`);
-    /// layerstack does neither yet.
+    /// `Usd_ApplyLayerOffsetToValue` in `pxr/usd/usd/valueUtils.h`), and a
+    /// value clip scales it by its time mapping's slope. Values carry no
+    /// arithmetic, so nothing relates it to [`Value::TimeCode`] the way
+    /// `GfTimeCode - GfTimeCode` gives a `GfDuration` (`pxr/base/gf/timeCode.h`).
     ///
-    /// Spec: AOUSD Core §6.2 lists no duration type; this is an OpenUSD
+    /// Spec: AOUSD Core §12.3.2.1 (layer offsets). §6.2 lists no duration
+    /// type; this is an OpenUSD
     /// extension (`pxr/base/gf/duration.h`, `SdfValueTypeNames->Duration`).
     Duration(f64),
 

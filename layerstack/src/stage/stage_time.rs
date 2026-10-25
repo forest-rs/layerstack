@@ -1,14 +1,17 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-//! Values read through layer offsets: `timecode` values in stage time.
+//! Values read through layer offsets: `timecode` and `duration` values in
+//! stage time.
 //!
 //! A layer offset maps a layer's times into the stage's, and a `timecode`
 //! value is a time, so value resolution maps it with its opinion's offset
-//! before composing, as it maps sample times. OpenUSD does the same for
-//! every value it resolves (`Usd_ApplyLayerOffsetToValue`,
-//! `pxr/usd/usd/valueUtils.h`): `timecode` values, alone, in arrays, in
-//! sparse array edits and in dictionaries.
+//! before composing, as it maps sample times. A `duration` value is a length
+//! of time, so the offset scales it but does not shift it. OpenUSD 26.11 does
+//! the same for every value it resolves (`Usd_ApplyLayerOffsetToValue`,
+//! `pxr/usd/usd/valueUtils.h`, and `SdfLayerOffset::operator*(GfDuration)`,
+//! `pxr/usd/sdf/layerOffset.cpp`): `timecode` and `duration` values, alone,
+//! in arrays, in sparse array edits and in dictionaries.
 //!
 //! Spec: AOUSD Core §12.3.2.1 (a layer's time `t` is stage time
 //! `t * scale + offset`).
@@ -29,6 +32,33 @@ pub(crate) fn to_stage_time(offset: LayerOffset, time: f64) -> f64 {
     time * offset.scale + offset.offset
 }
 
+/// Whether `value` is a time-valued scalar kind: a `timecode` or a
+/// `duration`.
+fn is_time_valued(value: &Value) -> bool {
+    matches!(value, Value::TimeCode(_) | Value::Duration(_))
+}
+
+/// Rewrites every leaf `leaf` maps of a native array of time-valued
+/// elements, each wrapped by `wrap`; `None` when none maps.
+fn map_time_array(
+    items: &[f64],
+    wrap: fn(f64) -> Value,
+    leaf: &mut impl FnMut(&Value) -> Option<Value>,
+) -> Option<Value> {
+    let (index, first) = items
+        .iter()
+        .enumerate()
+        .find_map(|(index, time)| leaf(&wrap(*time)).map(|value| (index, value)))?;
+    let prefix = items[..index].iter().map(|time| wrap(*time));
+    let tail = items[index + 1..]
+        .iter()
+        .map(|time| leaf(&wrap(*time)).unwrap_or(wrap(*time)));
+    Some(Value::array_from_iter(
+        prefix.chain(core::iter::once(first)).chain(tail),
+        Some(&wrap(0.0)),
+    ))
+}
+
 /// Rewrites every leaf value `leaf` maps, through arrays, dictionaries and
 /// the literals of sparse array edits; `None` when none maps.
 pub(crate) fn map_leaves(
@@ -38,20 +68,13 @@ pub(crate) fn map_leaves(
     match value {
         Value::Array(items) => map_all(items, leaf).map(Value::Array),
         Value::TypedArray(crate::TypedArray::TimeCode(items)) => {
-            let (index, first) = items.iter().enumerate().find_map(|(index, time)| {
-                leaf(&Value::TimeCode(*time)).map(|value| (index, value))
-            })?;
-            let prefix = items[..index].iter().map(|time| Value::TimeCode(*time));
-            let tail = items[index + 1..]
-                .iter()
-                .map(|time| leaf(&Value::TimeCode(*time)).unwrap_or(Value::TimeCode(*time)));
-            Some(Value::array_from_iter(
-                prefix.chain(core::iter::once(first)).chain(tail),
-                Some(&Value::TimeCode(0.0)),
-            ))
+            map_time_array(items, Value::TimeCode, leaf)
+        }
+        Value::TypedArray(crate::TypedArray::Duration(items)) => {
+            map_time_array(items, Value::Duration, leaf)
         }
         Value::TypedArray(array @ crate::TypedArray::Deferred(_))
-            if matches!(array.element_kind(), Value::TimeCode(_)) =>
+            if is_time_valued(&array.element_kind()) =>
         {
             if let Some(mapped) = leaf(value) {
                 return Some(mapped);
@@ -65,7 +88,7 @@ pub(crate) fn map_leaves(
         Value::Deferred(deferred) => {
             if deferred
                 .element_kind()
-                .is_some_and(|kind| !matches!(kind, Value::TimeCode(_)))
+                .is_some_and(|kind| !is_time_valued(&kind))
             {
                 return None;
             }
@@ -153,18 +176,34 @@ fn map_all(items: &[Value], leaf: &mut impl FnMut(&Value) -> Option<Value>) -> O
     out
 }
 
-/// `value` with its `timecode` values in stage time; `None` when it holds
-/// none or `offset` is the identity.
+/// `value` with its `timecode` and `duration` values in stage time; `None`
+/// when it holds none or `offset` is the identity.
 pub(crate) fn retime_value(value: &Value, offset: LayerOffset) -> Option<Value> {
-    if offset.is_identity() {
-        return None;
-    }
-    map_leaves(value, &mut |leaf| retime_leaf(leaf, offset))
+    retime_value_with(value, offset, offset.scale)
 }
 
-fn retime_leaf(value: &Value, offset: LayerOffset) -> Option<Value> {
+/// `value` with its `timecode` values mapped through `offset` and its
+/// `duration` values multiplied by `duration_scale`; `None` when nothing
+/// changes. Value clips scale durations by their time mapping segment's
+/// slope even where the segment holds the clip still, so the two can differ
+/// (OpenUSD 26.11 `clip.cpp` `_GetTimeScale`).
+pub(crate) fn retime_value_with(
+    value: &Value,
+    offset: LayerOffset,
+    duration_scale: f64,
+) -> Option<Value> {
+    if offset.is_identity() && duration_scale == 1.0 {
+        return None;
+    }
+    map_leaves(value, &mut |leaf| retime_leaf(leaf, offset, duration_scale))
+}
+
+fn retime_leaf(value: &Value, offset: LayerOffset, duration_scale: f64) -> Option<Value> {
     match value {
         Value::TimeCode(time) => Some(Value::TimeCode(to_stage_time(offset, *time))),
+        // A duration scales but does not shift (OpenUSD 26.11
+        // `SdfLayerOffset::operator*(GfDuration)`, `layerOffset.cpp:72`).
+        Value::Duration(length) => Some(Value::Duration(length * duration_scale)),
         Value::TypedArray(crate::TypedArray::Deferred(source)) => {
             source.retimed(offset).map(Value::TypedArray)
         }
@@ -255,28 +294,28 @@ pub(crate) fn map_opinion(
     })
 }
 
-/// Whether `value` is or holds a `timecode`, in arrays, dictionaries and
-/// the literals of sparse array edits. Reads without copying; decodes a
+/// Whether `value` is or holds a `timecode` or `duration`, in arrays,
+/// dictionaries and the literals of sparse array edits. Reads without copying; decodes a
 /// deferred value only when its source cannot tell.
-fn holds_timecode(value: &Value) -> bool {
+fn holds_time_value(value: &Value) -> bool {
     match value {
-        Value::TimeCode(_) => true,
-        Value::Array(items) => items.iter().any(holds_timecode),
-        Value::TypedArray(array) => matches!(array.element_kind(), Value::TimeCode(_)),
-        Value::Dictionary(entries) => entries.iter().any(|(_, v)| holds_timecode(v)),
+        Value::TimeCode(_) | Value::Duration(_) => true,
+        Value::Array(items) => items.iter().any(holds_time_value),
+        Value::TypedArray(array) => is_time_valued(&array.element_kind()),
+        Value::Dictionary(entries) => entries.iter().any(|(_, v)| holds_time_value(v)),
         // Decodes only a value whose kind its source does not know.
         Value::Deferred(deferred) => match deferred.element_kind() {
-            Some(kind) => holds_timecode(&kind),
-            None => deferred.try_materialize().is_ok_and(holds_timecode),
+            Some(kind) => holds_time_value(&kind),
+            None => deferred.try_materialize().is_ok_and(holds_time_value),
         },
         Value::ArrayEdit(_) | Value::TypedArrayEdit(_) => {
             value.array_edit_ref().is_some_and(|edit| {
                 edit.ops.iter().any(|op| match op {
                     ArrayEditOp::Write { src, .. } | ArrayEditOp::Insert { src, .. } => {
-                        matches!(src, ArrayEditOperand::Literal(v) if holds_timecode(v))
+                        matches!(src, ArrayEditOperand::Literal(v) if holds_time_value(v))
                     }
                     ArrayEditOp::MinSizeFill { fill, .. }
-                    | ArrayEditOp::ResizeFill { fill, .. } => holds_timecode(fill),
+                    | ArrayEditOp::ResizeFill { fill, .. } => holds_time_value(fill),
                     _ => false,
                 })
             })
@@ -286,25 +325,25 @@ fn holds_timecode(value: &Value) -> bool {
 }
 
 /// Whether reading `opinion` through its offset changes actual `timecode`
-/// values. Declarations are hints, not proof of the stored kind: low-level
+/// or `duration` values. Declarations are hints, not proof of the stored kind: low-level
 /// source data can contain time codes under a different declared type.
-/// Native non-timecode arrays answer this check without visiting elements.
+/// Native arrays of other kinds answer this check without visiting elements.
 fn needs_retiming(opinion: OpinionRef<'_>) -> bool {
     if opinion.layer_offset().is_identity() {
         return false;
     }
-    let field = |value: &FieldValue| matches!(value, FieldValue::Value(v) if holds_timecode(v));
+    let field = |value: &FieldValue| matches!(value, FieldValue::Value(v) if holds_time_value(v));
     match opinion.value() {
         OpinionValue::Field(value) => field(value),
         OpinionValue::Property(spec) => {
             spec.metadata.iter().any(|entry| field(&entry.value))
-                || spec.default.as_ref().is_some_and(holds_timecode)
+                || spec.default.as_ref().is_some_and(holds_time_value)
                 || spec
                     .time_samples
                     .get()
                     .into_iter()
                     .flatten()
-                    .any(|(_, v)| holds_timecode(v))
+                    .any(|(_, v)| holds_time_value(v))
         }
     }
 }
@@ -312,12 +351,15 @@ fn needs_retiming(opinion: OpinionRef<'_>) -> bool {
 /// The opinion's value in stage time; `None` when nothing changes.
 fn retime_opinion(opinion: OpinionRef<'_>) -> Option<Opinion> {
     let offset = opinion.layer_offset();
-    map_opinion(opinion.opinion(), &mut |leaf| retime_leaf(leaf, offset))
+    map_opinion(opinion.opinion(), &mut |leaf| {
+        retime_leaf(leaf, offset, offset.scale)
+    })
 }
 
-/// `opinions` with every `timecode` value in stage time, borrowed, with
-/// nothing copied, when none needs mapping. Actual storage kinds determine
-/// whether values need mapping; native non-timecode arrays are not traversed.
+/// `opinions` with every `timecode` and `duration` value in stage time,
+/// borrowed, with nothing copied, when none needs mapping. Actual storage
+/// kinds determine whether values need mapping; native arrays of other kinds
+/// are not traversed.
 /// The opinions keep their sources: `opinions.with_records` reads them.
 ///
 /// Spec: AOUSD Core §12.3.2.1.
@@ -510,6 +552,46 @@ mod tests {
                     index: crate::array_edit::ArrayIndex::Position(0),
                 }],
             }))
+        );
+    }
+
+    #[test]
+    fn durations_scale_without_shifting() {
+        let offset = LayerOffset {
+            offset: 2.0,
+            scale: 2.0,
+        };
+        let value = Value::Dictionary(vec![
+            ("span".into(), Value::Duration(5.0)),
+            ("cue".into(), Value::TimeCode(5.0)),
+        ]);
+        assert_eq!(
+            retime_value(&value, offset),
+            Some(Value::Dictionary(vec![
+                ("span".into(), Value::Duration(10.0)),
+                ("cue".into(), Value::TimeCode(12.0)),
+            ]))
+        );
+        let spans = Value::array_from_iter(
+            [Value::Duration(1.0), Value::Duration(-3.0)],
+            Some(&Value::Duration(0.0)),
+        );
+        assert_eq!(
+            retime_value(&spans, offset),
+            Some(Value::array_from_iter(
+                [Value::Duration(2.0), Value::Duration(-6.0)],
+                Some(&Value::Duration(0.0)),
+            ))
+        );
+        // A shift alone leaves durations as they are.
+        let shift = LayerOffset {
+            offset: 7.0,
+            scale: 1.0,
+        };
+        assert_eq!(
+            retime_value(&spans, shift),
+            Some(spans.clone()),
+            "mapped, though to the same lengths"
         );
     }
 }

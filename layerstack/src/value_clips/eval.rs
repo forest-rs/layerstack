@@ -575,6 +575,21 @@ impl PreparedClipProperty {
         }
         Some((at(r1), b))
     }
+    /// The factor a `duration` clip value at stage time `time` scales by on
+    /// its way to the stage: the slope of the time mapping segment the query
+    /// uses, or 1 where that segment holds the clip still, times the anchor's
+    /// scale. OpenUSD 26.11 scales clip durations by `_GetTimeScale`
+    /// (`clip.cpp:766`) in the anchor's layer time and then maps them to the
+    /// stage with the anchor's offset (`stage.cpp` `xfValueToStage`), which
+    /// scales without shifting (AOUSD Core §12.3.2.1, §12.3.4).
+    fn duration_scale(&self, time: f64, pre: bool) -> f64 {
+        match self.value_segment(time, pre) {
+            Some((a, b)) if a.internal != b.internal => {
+                (b.external - a.external) / (b.internal - a.internal)
+            }
+            _ => self.anchor.scale,
+        }
+    }
     /// Time-valued clip value `value` at stage time `time`, mapped to the
     /// stage (OpenUSD 26.11 `clip.cpp` `_TranslateTimeToExternalHelper`).
     fn map_time_value(&self, time: f64, pre: bool, value: f64) -> f64 {
@@ -644,6 +659,8 @@ impl PreparedClipProperty {
                 if let Value::TimeCode(v) = value {
                     return Value::TimeCode(self.map_time_value(time, false, v));
                 }
+                // Durations scale by the segment's slope alone.
+                let durations = self.duration_scale(time, false);
                 let Some((a, b)) = self.value_segment(time, false) else {
                     return crate::stage::stage_time::retime_value(&value, self.anchor)
                         .unwrap_or(value);
@@ -653,12 +670,13 @@ impl PreparedClipProperty {
                 } else {
                     (b.external - a.external) / (b.internal - a.internal)
                 };
-                crate::stage::stage_time::retime_value(
+                crate::stage::stage_time::retime_value_with(
                     &value,
                     LayerOffset {
                         offset: a.external - a.internal * scale,
                         scale,
                     },
+                    durations,
                 )
                 .unwrap_or(value)
             })

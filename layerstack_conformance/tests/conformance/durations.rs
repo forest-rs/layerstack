@@ -8,8 +8,8 @@
 //! OpenUSD writes a duration as its double: in USDA with `#usda 1.4`
 //! (`_StringFromVtValueHelper`, `pxr/usd/sdf/fileIO_Common.cpp`), in USDC
 //! as value type 61 with crate version 0.16.0 (`Write(GfDuration)`,
-//! `pxr/usd/sdf/crateFile.cpp`). Durations here are plain values: the
-//! layer-offset scaling OpenUSD 26.11 applies to them is not modelled.
+//! `pxr/usd/sdf/crateFile.cpp`). `time_values` reads them through layer
+//! offsets and value clips.
 #![cfg(not(target_arch = "wasm32"))]
 
 use std::path::{Path, PathBuf};

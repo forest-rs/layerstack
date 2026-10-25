@@ -187,6 +187,7 @@ mod text_arrays;
 mod threaded_composition;
 mod threaded_usdc_read;
 mod time_values;
+mod time_varying;
 mod token_order;
 mod transform_queries;
 mod typed_reads;

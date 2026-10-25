@@ -1567,6 +1567,17 @@ fn read_loose(
         return read;
     }
     if format == Format::Usda {
+        // OpenUSD 26.11 refuses a `.usda` asset that begins with a byte
+        // order mark before parsing it, naming the mark
+        // (`SdfUsdaFileFormat::_ReadFromAsset`, `pxr/usd/sdf/usdaFileFormat.cpp`).
+        // Spec: AOUSD Core §16.2 (USDA is UTF-8).
+        if let Some(mark) = layerstack_usda::ByteOrderMark::find(data) {
+            read.layer = Err(IoError::new(
+                IoErrorKind::Rejected,
+                alloc::format!("<{identifier}> is not a valid usda layer: {mark}"),
+            ));
+            return read;
+        }
         let source = match core::str::from_utf8(data) {
             Ok(source) => source,
             Err(e) => {

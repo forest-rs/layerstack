@@ -401,6 +401,19 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
         let start = self.current_span().start;
         self.builder.start_node(SyntaxKind::Header, start);
 
+        // OpenUSD 26.11 reads no layer that starts with a byte order mark:
+        // a file is refused before parsing (`_CheckBOM`,
+        // `pxr/usd/sdf/usdaFileFormat.cpp`, which `ByteOrderMark` mirrors),
+        // and a string fails its header rule at 1:1.
+        // Spec: AOUSD Core §16.2 (USDA is UTF-8 and begins with `#usda`).
+        // Recovery reads on past the mark, so it is the only diagnostic.
+        if self.source.starts_with('\u{feff}') {
+            self.error(
+                Span::new(0, 3),
+                "expected #usda header, found a UTF-8 byte order mark, which USDA does not allow",
+            );
+            self.bump();
+        }
         // The header `#usda 1.0` is lexed as a PythonComment.
         self.eat_whitespace_only();
         if let Some(tok) = self.current()
@@ -2166,6 +2179,19 @@ fn is_trivia(kind: TokenKind) -> bool {
 mod tests {
     use super::*;
     use crate::ast::*;
+
+    #[test]
+    fn byte_order_mark_is_the_one_header_error() {
+        // OpenUSD 26.11 imports no string that starts with a byte order
+        // mark; recovery reads the layer behind it without more errors.
+        let result = parse("\u{feff}#usda 1.0\ndef \"A\" {}\n");
+        let [diagnostic] = result.diagnostics.as_slice() else {
+            panic!("diagnostics: {:?}", result.diagnostics);
+        };
+        assert_eq!(diagnostic.span, Span::new(0, 3));
+        assert!(diagnostic.message.contains("byte order mark"));
+        assert_eq!(result.layer.prims.len(), 1);
+    }
 
     #[test]
     fn ast_parsing_preserves_lossless_lowering_and_diagnostics() {

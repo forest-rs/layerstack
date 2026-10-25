@@ -484,6 +484,16 @@ fn parse_usda(
     paths: &PathInterner,
     resolver: &mut dyn AssetResolver,
 ) -> Result<ParsedLayer, UsdzError> {
+    // Spec: AOUSD Core §16.2 (USDA is UTF-8); OpenUSD 26.11 refuses a
+    // `.usda` asset that begins with a byte order mark before parsing it
+    // (`SdfUsdaFileFormat::_ReadFromAsset`, `pxr/usd/sdf/usdaFileFormat.cpp`).
+    if let Some(mark) = layerstack_usda::ByteOrderMark::find(data) {
+        return Err(UsdzError::LayerRead {
+            member: Arc::from(name),
+            layer_id,
+            cause: LayerReadError::ByteOrderMark(mark),
+        });
+    }
     let source = core::str::from_utf8(data).map_err(|error| UsdzError::LayerRead {
         member: Arc::from(name),
         layer_id,

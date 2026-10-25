@@ -186,6 +186,7 @@ mod threaded_usdc_read;
 mod transform_queries;
 mod typed_reads;
 mod udim_tiles;
+mod usda_byte_order_marks;
 mod usda_field_order;
 mod usda_openusd_text;
 mod usdc_binary;

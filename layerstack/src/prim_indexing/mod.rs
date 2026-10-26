@@ -314,7 +314,7 @@ pub(crate) fn compose(
             added,
         )
     };
-    let threads = crate::parallel::Threads::new(options.threads);
+    let threads = options.thread_budget();
     crate::parallel::with_pool_in(&threads, &work, |pool| {
         let mut walk = Walk {
             ctx: &ctx,

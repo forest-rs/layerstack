@@ -395,13 +395,15 @@ pub struct StageOptions {
     pub schemas: Option<Arc<SchemaRegistry>>,
     /// The most threads composition indexes prims on, the calling thread
     /// included. `0` and `1`, the default, compose on the calling thread;
-    /// above that, composition starts scoped worker threads for as long as
-    /// it runs, and reads the store from all of them. Without the `std`
-    /// feature composition always runs on the calling thread. A host that
-    /// opens stages from storage may read their layers on as many threads
-    /// too, as `layerstack_io::StageDocument` does: its loader and the
-    /// readers it runs share one budget of `threads`
-    /// ([`crate::parallel::Threads`]).
+    /// above that, composition starts workers while prims wait to be
+    /// indexed, and reads the store from all of them: threads of its own,
+    /// which wait for more prims until composition ends, or jobs of
+    /// [`Self::executor`], each returning once no prim waits.
+    /// Without the `std` feature composition always runs on the calling
+    /// thread. A host that opens stages from storage may read their layers
+    /// on as many threads too, as `layerstack_io::StageDocument` does: its
+    /// loader and the readers it runs share one budget of `threads`
+    /// ([`Self::thread_budget`]).
     ///
     /// The composed stage is the same for every count: its prims, values
     /// and the order of its composition errors. Only the order in which
@@ -411,6 +413,25 @@ pub struct StageOptions {
     /// OpenUSD composes on as many threads as `WorkGetConcurrencyLimit`,
     /// every core unless the host lowers it.
     pub threads: usize,
+    /// The host's executor that work beyond the calling thread runs on: a
+    /// job system, thread pool or dispatch queue the host shares with the
+    /// rest of its work ([`crate::parallel::Executor`], whose contract it
+    /// keeps). `None`, the default, starts threads of layerstack's own
+    /// (`std::thread::scope`) for as long as each piece of work runs.
+    ///
+    /// Composition, and a host reading layers on the stage's budget as
+    /// `layerstack_io::StageDocument` does, run on it, starting at most
+    /// `threads - 1` jobs at once; the executor's own size bounds the
+    /// threads they occupy. With `threads` at `0` or `1` it is never used.
+    /// The composed stage is the same with any executor.
+    ///
+    /// OpenUSD runs its parallel work on one pool the whole process shares:
+    /// `WorkDispatcher` tasks run on the TBB-backed pool that
+    /// `WorkSetConcurrencyLimit` sizes (`pxr/base/work/dispatcher.h`,
+    /// `pxr/base/work/threadLimits.h`), and a host replaces it only by
+    /// configuring TBB.
+    #[cfg(feature = "std")]
+    pub executor: Option<Arc<dyn crate::parallel::Executor>>,
     /// The dynamic file formats payloads compose arguments for: a payload
     /// to an asset with one of their extensions targets the layer its
     /// composed arguments name (see [`crate::dynamic_format`]). Empty by
@@ -420,6 +441,20 @@ pub struct StageOptions {
     /// OpenUSD finds them among the registered `SdfFileFormat` plugins
     /// (`_GetDynamicFileFormat` in `pxr/usd/pcp/primIndex.cpp`).
     pub dynamic_formats: crate::dynamic_format::DynamicFormats,
+}
+
+impl StageOptions {
+    /// The thread budget composition runs on: [`Self::threads`] threads,
+    /// on [`Self::executor`] when there is one. A host that reads a stage's
+    /// layers on the same budget, as `layerstack_io::StageDocument` does,
+    /// builds it here, so that reading and composing share one executor.
+    pub fn thread_budget(&self) -> crate::parallel::Threads {
+        #[cfg(feature = "std")]
+        if let Some(executor) = &self.executor {
+            return crate::parallel::Threads::with_executor(self.threads, Arc::clone(executor));
+        }
+        crate::parallel::Threads::new(self.threads)
+    }
 }
 
 /// A composed stage: read-only facade over composition results.
@@ -692,7 +727,7 @@ impl Stage {
         let threaded = dependencies
             .as_ref()
             .is_some_and(crate::dependency_map::DependencyRecords::builds_on_threads);
-        let threads = crate::parallel::Threads::new(self.options.threads);
+        let threads = self.options.thread_budget();
         if threaded && threads.limit() > 1 {
             let ((), deps) = crate::parallel::join(
                 &threads,

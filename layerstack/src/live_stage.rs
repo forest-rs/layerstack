@@ -993,7 +993,7 @@ impl LiveStage {
             store,
             self.root,
             &self.options.muted_layers,
-            self.options.threads,
+            &self.options.thread_budget(),
         );
         if let Some(session) = self.options.session_layer {
             layers.extend(self.layer_discovery.participating(
@@ -1848,6 +1848,8 @@ impl LiveStage {
             load_rules: self.options.load_rules.clone(),
             muted_layers: self.options.muted_layers.clone(),
             threads: self.options.threads,
+            #[cfg(feature = "std")]
+            executor: self.options.executor.clone(),
             dynamic_formats: self.options.dynamic_formats.clone(),
         };
         Stage::compose_retained(

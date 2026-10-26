@@ -93,6 +93,22 @@ impl LayerReads {
     }
 }
 
+/// The separately locked parts that the layers
+/// [`LayerDiscovery::participating_on`] has reached are kept in, so that
+/// the threads scanning layers seldom wait on one another to claim one; a
+/// power of two.
+const SEEN_SHARDS: usize = 64;
+
+/// The part of the layers reached that holds `id` ([`SEEN_SHARDS`]):
+/// layer ids are mostly numbered in turn, so their low bits spread them.
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "only the low bits pick a part"
+)]
+fn seen_shard(id: LayerId) -> usize {
+    (id.0 as usize) & (SEEN_SHARDS - 1)
+}
+
 impl LayerDiscovery {
     pub(super) fn has_expressions(&self) -> bool {
         self.layers.values().any(LayerReads::has_expressions)
@@ -143,11 +159,12 @@ impl LayerDiscovery {
         if !self.layers.is_empty() || threads.limit() <= 1 {
             return self.participating(store, root, muted);
         }
-        let seen = crate::sync::ReadLock::new(HashSet::new());
+        let seen: [crate::sync::ReadLock<HashSet<LayerId>>; SEEN_SHARDS] =
+            core::array::from_fn(|_| crate::sync::ReadLock::new(HashSet::new()));
         let scan = |id: LayerId, added: &mut Vec<LayerId>| {
             if id == LayerId::UNRESOLVED
                 || muted.contains(&id)
-                || !seen.write(|seen| seen.insert(id))
+                || !seen[seen_shard(id)].write(|seen| seen.insert(id))
             {
                 return None;
             }
@@ -165,8 +182,11 @@ impl LayerDiscovery {
         if expressions {
             return participating_layers(store, root, muted);
         }
-        let mut seen = seen;
-        core::mem::take(seen.get_mut())
+        let mut found = HashSet::with_capacity(self.layers.len());
+        for mut shard in seen {
+            found.extend(core::mem::take(shard.get_mut()));
+        }
+        found
     }
 
     pub(super) fn participating(

@@ -76,6 +76,7 @@ use alloc::{
     sync::Arc,
     vec::Vec,
 };
+use hashbrown::{HashMap, HashSet};
 use layerstack::{
     AssetResolveError, AssetResolver, InMemoryStore, Layer, LayerId, LayerStore, LiveStage,
     PathInterner, ResolvedAsset, StageOptions, TokenInterner,
@@ -469,7 +470,9 @@ enum Format {
 }
 #[derive(Clone, Debug)]
 struct Source {
-    identifier: String,
+    /// Shared with [`Catalog::ids`]' key, so recording a source copies its
+    /// identifier once, as it is read.
+    identifier: Arc<str>,
     format: Format,
     package: Option<LayerId>,
 }
@@ -482,7 +485,11 @@ enum State {
 struct Catalog {
     cache_work: PackageCacheStats,
     sources: BTreeMap<LayerId, Source>,
-    ids: BTreeMap<String, LayerId>,
+    /// The layer each identifier names. Looked up for every arc a load
+    /// resolves and never listed in order, so hashed: identifiers of one
+    /// scene share long directory prefixes that ordered keys compare again
+    /// on every lookup.
+    ids: HashMap<Arc<str>, LayerId>,
     states: BTreeMap<LayerId, State>,
     saved: BTreeMap<LayerId, u64>,
     reserved: BTreeSet<LayerId>,
@@ -619,7 +626,8 @@ impl<B: Storage> StageDocument<B> {
             ..Default::default()
         };
         let root = catalog.allocate()?;
-        catalog.ids.insert(identifier.clone(), root);
+        let identifier: Arc<str> = Arc::from(identifier);
+        catalog.ids.insert(Arc::clone(&identifier), root);
         catalog.sources.insert(
             root,
             Source {
@@ -826,7 +834,7 @@ impl<B: Storage> StageDocument<B> {
                     reader.load(&asset, Some(anchor), &self.store.tokens, &self.store.paths);
                 match result {
                     Ok(resolved) => {
-                        reader.bindings.insert((anchor, asset), resolved.layer_id);
+                        reader.bind(anchor, asset.as_str(), resolved.layer_id);
                         if let Some(layer) = resolved.layer {
                             reader.pending.push(layer);
                         }
@@ -842,8 +850,8 @@ impl<B: Storage> StageDocument<B> {
                         if self.import_policy == ImportPolicy::Strict && !failure.is_missing() {
                             return Err(failure.error);
                         }
+                        reader.bind(anchor, failure.asset.as_str(), LayerId::UNRESOLVED);
                         reader.failures.push(failure);
-                        reader.bindings.insert((anchor, asset), LayerId::UNRESOLVED);
                     }
                 }
             }
@@ -882,7 +890,7 @@ impl<B: Storage> StageDocument<B> {
         let resolved = reader.load(asset, anchor, &self.store.tokens, &self.store.paths)?;
         let id = resolved.layer_id;
         if let Some(anchor) = anchor {
-            reader.bindings.insert((anchor, asset.into()), id);
+            reader.bind(anchor, asset, id);
         }
         if let Some(layer) = resolved.layer {
             reader.pending.push(layer);
@@ -969,10 +977,7 @@ impl<B: Storage> StageDocument<B> {
     }
     /// Identifier of a loaded layer. Package members use `package[member]`.
     pub fn identifier(&self, layer: LayerId) -> Option<&str> {
-        self.catalog
-            .sources
-            .get(&layer)
-            .map(|s| s.identifier.as_str())
+        self.catalog.sources.get(&layer).map(|s| &*s.identifier)
     }
     /// Whether a layer has changed since import or its last successful save.
     /// Anonymous layers have no saved generation and remain dirty.
@@ -1164,6 +1169,12 @@ impl<B: Storage> StageDocument<B> {
 /// Storage identities, keyed by anchor identifier and authored asset.
 type Identities = BTreeMap<(Option<String>, String), Result<String, IoError>>;
 
+/// The layers the asset paths an operation resolved bind to, by the layer
+/// anchoring each path, then by path: the shape the store keeps them in
+/// ([`InMemoryStore::insert_asset_layers`]), so committing them moves the
+/// paths instead of copying them.
+type Bindings = HashMap<LayerId, HashMap<Arc<str>, LayerId>>;
+
 struct Reader<'a, B> {
     schemas: Option<Arc<layerstack::SchemaRegistry>>,
     storage: &'a mut B,
@@ -1173,7 +1184,7 @@ struct Reader<'a, B> {
     package_limits: PackageLimits,
     pending: Vec<Layer>,
     diagnostics: Vec<MemberDiagnostic>,
-    bindings: BTreeMap<(LayerId, String), LayerId>,
+    bindings: Bindings,
     /// Storage identities already computed by this operation, keyed by anchor
     /// identifier and authored asset. `Storage::identify` must be stable within
     /// a document, so a scene that references one asset from many sites asks
@@ -1210,7 +1221,7 @@ impl<'a, B: Storage> Reader<'a, B> {
             package_limits,
             pending: Vec::new(),
             diagnostics: Vec::new(),
-            bindings: BTreeMap::new(),
+            bindings: Bindings::new(),
             identities: BTreeMap::new(),
             failures: Vec::new(),
             reachable_only: false,
@@ -1249,7 +1260,7 @@ impl<'a, B: Storage> Reader<'a, B> {
             let mut progress = false;
             for request in requests {
                 let key = (request.anchor, request.asset_path.clone());
-                if !attempted.insert(key.clone()) {
+                if !attempted.insert(key) {
                     continue;
                 }
                 progress = true;
@@ -1260,13 +1271,21 @@ impl<'a, B: Storage> Reader<'a, B> {
                     &store.paths,
                 ) {
                     Ok(resolved) => {
-                        self.bindings.insert(key, resolved.layer_id);
+                        self.bind(
+                            request.anchor,
+                            request.asset_path.as_str(),
+                            resolved.layer_id,
+                        );
                         if let Some(layer) = resolved.layer {
                             self.pending.push(layer);
                         }
                     }
                     Err(error) => {
-                        self.bindings.insert(key, LayerId::UNRESOLVED);
+                        self.bind(
+                            request.anchor,
+                            request.asset_path.as_str(),
+                            LayerId::UNRESOLVED,
+                        );
                         // An evaluated path naming no asset is a missing
                         // dependency under either policy (AOUSD Core
                         // §10.3.2.1, §10.6); composition reports it.
@@ -1299,21 +1318,43 @@ impl<'a, B: Storage> Reader<'a, B> {
             }
         }
     }
+    /// Records that `asset`, anchored to the layer `anchor`, resolved to
+    /// `layer` ([`LayerId::UNRESOLVED`] when it did not).
+    fn bind(&mut self, anchor: LayerId, asset: impl Into<Arc<str>>, layer: LayerId) {
+        self.bindings
+            .entry(anchor)
+            .or_default()
+            .insert(asset.into(), layer);
+    }
     fn commit(mut self, store: &mut InMemoryStore) -> LoadReport {
         let clean_anchors: BTreeSet<_> = self
             .bindings
             .keys()
-            .map(|(anchor, _)| *anchor)
+            .copied()
             .filter(|id| {
                 store
                     .layer(*id)
                     .is_some_and(|l| self.catalog.saved.get(id) == Some(&l.generation()))
             })
             .collect();
-        let mut layers = BTreeSet::new();
+        // The first layer read for each id is committed; the report lists
+        // them in id order.
+        let mut added = HashSet::with_capacity(self.pending.len());
+        let mut layers = Vec::with_capacity(self.pending.len());
+        store.reserve_layers(self.pending.len());
         for mut layer in self.pending.drain(..) {
             let id = layer.id();
-            if layers.insert(id) {
+            if added.insert(id) {
+                layers.push(id);
+                // A layer new to the store arrives with the bindings of its
+                // arcs: bound before the store holds it, they record no
+                // change, which would look through its specs for the
+                // deferred arcs naming each asset, as no stage has seen it.
+                if !store.contains_layer(id)
+                    && let Some(assets) = self.bindings.remove(&id)
+                {
+                    store.insert_asset_layers(id, assets);
+                }
                 // A reader records a change for each spec it inserts; no
                 // stage has seen the layer before them.
                 layer.forget_change_history();
@@ -1323,15 +1364,10 @@ impl<'a, B: Storage> Reader<'a, B> {
         // One change of each anchor for all its bindings: recording one
         // looks through the anchor's specs for the deferred arcs naming
         // the asset, so binding each alone revisits them per asset.
-        let mut bindings = self.bindings.iter().peekable();
-        while let Some(((anchor, _), _)) = bindings.peek() {
-            let anchor = *anchor;
-            let mut of_anchor = Vec::new();
-            while let Some(((_, asset), id)) = bindings.next_if(|((at, _), _)| *at == anchor) {
-                of_anchor.push((asset.as_str(), *id));
-            }
-            store.insert_asset_layers(anchor, of_anchor);
+        for (anchor, assets) in core::mem::take(&mut self.bindings) {
+            store.insert_asset_layers(anchor, assets);
         }
+        layers.sort_unstable();
         for id in clean_anchors {
             self.catalog
                 .saved
@@ -1343,7 +1379,7 @@ impl<'a, B: Storage> Reader<'a, B> {
                 .insert(id, store.layer(id).unwrap().generation());
         }
         LoadReport {
-            layers: layers.into_iter().collect(),
+            layers,
             diagnostics: self.diagnostics,
             asset_failures: self.failures,
         }
@@ -1397,7 +1433,7 @@ impl<'a, B: Storage> Reader<'a, B> {
                     // when that former root becomes an ordinary member.
                     self.catalog
                         .ids
-                        .retain(|alias, member_id| *member_id != id || alias == identifier);
+                        .retain(|alias, member_id| *member_id != id || &**alias == identifier);
                 }
                 let members: Vec<String> = self
                     .catalog
@@ -1438,16 +1474,17 @@ impl<'a, B: Storage> Reader<'a, B> {
                     let outer = identifier
                         .split_once('[')
                         .map_or(identifier, |(outer, _)| outer);
-                    let member_identifier = alloc::format!("{outer}[{member}]");
+                    let member_identifier: Arc<str> =
+                        Arc::from(alloc::format!("{outer}[{member}]"));
                     self.catalog.sources.insert(
                         member_id,
                         Source {
-                            identifier: member_identifier.clone(),
+                            identifier: Arc::clone(&member_identifier),
                             format: identifier_format(member, &FileFormats::default())?,
                             package: Some(id),
                         },
                     );
-                    if member_id != id || !self.catalog.ids.contains_key(&member_identifier) {
+                    if member_id != id || !self.catalog.ids.contains_key(&*member_identifier) {
                         self.catalog.ids.insert(member_identifier, member_id);
                     }
                     self.catalog.states.insert(member_id, State::Loaded);
@@ -1466,7 +1503,7 @@ impl<'a, B: Storage> Reader<'a, B> {
                 if self
                     .catalog
                     .ids
-                    .get(&alias)
+                    .get(alias.as_str())
                     .is_some_and(|alias_id| *alias_id != id)
                 {
                     // The outer package and an explicitly resident member are
@@ -1743,18 +1780,21 @@ impl<B: Storage> Reader<'_, B> {
                     "package member identity unavailable",
                 )
             })?;
-        let identifier = alloc::format!("{}[{member}]", self.catalog.package_identifier(package));
+        let identifier: Arc<str> = Arc::from(alloc::format!(
+            "{}[{member}]",
+            self.catalog.package_identifier(package)
+        ));
         if self.catalog.states.contains_key(&id) {
             return Ok(ResolvedAsset {
                 layer_id: id,
-                resolved_path: Arc::from(identifier),
+                resolved_path: identifier,
                 layer: None,
             });
         }
         self.catalog.sources.insert(
             id,
             Source {
-                identifier: identifier.clone(),
+                identifier: Arc::clone(&identifier),
                 format: identifier_format(&member, &FileFormats::default())?,
                 package: Some(package),
             },
@@ -1765,7 +1805,7 @@ impl<B: Storage> Reader<'_, B> {
                 self.catalog.states.insert(id, State::Loaded);
                 Ok(ResolvedAsset {
                     layer_id: id,
-                    resolved_path: Arc::from(identifier),
+                    resolved_path: identifier,
                     layer: Some(layer),
                 })
             }
@@ -1796,9 +1836,9 @@ impl<B: Storage> Reader<'_, B> {
         let path = PackagePath::parse(asset, 32)
             .map_err(|reason| IoError::new(IoErrorKind::Rejected, reason))?;
         let outer = self.identify(path.outer(), anchor_identifier)?;
-        let identifier = source_identifier(&self.formats, &path, &outer, args);
+        let identifier: Arc<str> = Arc::from(source_identifier(&self.formats, &path, &outer, args));
         if let Some((first, rest)) = path.members().split_first()
-            && let Some(&package) = self.catalog.ids.get(&outer)
+            && let Some(&package) = self.catalog.ids.get(outer.as_str())
             && self.catalog.states.get(&package) == Some(&State::Loaded)
             && self.catalog.package_bytes.contains_key(&package)
         {
@@ -1809,15 +1849,15 @@ impl<B: Storage> Reader<'_, B> {
                 paths,
             );
         }
-        let id = if let Some(&id) = self.catalog.ids.get(&identifier) {
+        let id = if let Some(&id) = self.catalog.ids.get(&*identifier) {
             id
         } else {
             let id = self.catalog.allocate()?;
-            self.catalog.ids.insert(identifier.clone(), id);
+            self.catalog.ids.insert(Arc::clone(&identifier), id);
             self.catalog.sources.insert(
                 id,
                 Source {
-                    identifier: identifier.clone(),
+                    identifier: Arc::clone(&identifier),
                     format: Format::Usda,
                     package: None,
                 },
@@ -1827,7 +1867,7 @@ impl<B: Storage> Reader<'_, B> {
         if self.catalog.states.contains_key(&id) {
             return Ok(ResolvedAsset {
                 layer_id: id,
-                resolved_path: Arc::from(identifier),
+                resolved_path: identifier,
                 layer: None,
             });
         }
@@ -1848,7 +1888,7 @@ impl<B: Storage> Reader<'_, B> {
                 self.catalog.states.insert(id, State::Loaded);
                 Ok(ResolvedAsset {
                     layer_id: id,
-                    resolved_path: Arc::from(identifier),
+                    resolved_path: identifier,
                     layer: Some(layer),
                 })
             }
@@ -1876,18 +1916,16 @@ impl<B: Storage> AssetResolver for Reader<'_, B> {
             });
         }
         if let Some(anchor) = anchor {
-            self.bindings.insert(
-                (anchor, asset.into()),
-                result
-                    .as_ref()
-                    .map(|r| r.layer_id)
-                    .unwrap_or(LayerId::UNRESOLVED),
-            );
+            let bound = result
+                .as_ref()
+                .map(|r| r.layer_id)
+                .unwrap_or(LayerId::UNRESOLVED);
+            self.bind(anchor, asset, bound);
         }
         result.map_err(asset_error)
     }
     fn resolved_path(&self, id: LayerId) -> Option<&str> {
-        self.catalog.sources.get(&id).map(|s| s.identifier.as_str())
+        self.catalog.sources.get(&id).map(|s| &*s.identifier)
     }
     fn defers_variant_arcs(&self) -> bool {
         self.variant_arcs == VariantArcLoading::Selected
@@ -1900,15 +1938,15 @@ impl<B: Storage> AssetResolver for Reader<'_, B> {
     }
     fn existing_package_layer_id(&self, package: LayerId, member: &str) -> Option<LayerId> {
         let identifier = alloc::format!("{}[{member}]", self.catalog.package_identifier(package));
-        self.catalog.ids.get(&identifier).copied()
+        self.catalog.ids.get(identifier.as_str()).copied()
     }
     fn allocate_package_layer_id(&mut self, package: LayerId, member: &str) -> Option<LayerId> {
         let identifier = alloc::format!("{}[{member}]", self.catalog.package_identifier(package));
-        if let Some(&id) = self.catalog.ids.get(&identifier) {
+        if let Some(&id) = self.catalog.ids.get(identifier.as_str()) {
             return Some(id);
         }
         let id = self.catalog.allocate().ok()?;
-        self.catalog.ids.insert(identifier, id);
+        self.catalog.ids.insert(Arc::from(identifier), id);
         Some(id)
     }
 }
@@ -2101,8 +2139,8 @@ struct Overlay<'a> {
     store: &'a InMemoryStore,
     layers: &'a [Layer],
     /// Where each of `layers` is, by ID: the last one read for an ID wins.
-    index: hashbrown::HashMap<LayerId, usize>,
-    bindings: &'a BTreeMap<(LayerId, String), LayerId>,
+    index: HashMap<LayerId, usize>,
+    bindings: &'a Bindings,
 }
 impl LayerStore for Overlay<'_> {
     fn layer(&self, id: LayerId) -> Option<&Layer> {
@@ -2127,7 +2165,11 @@ impl LayerStore for Overlay<'_> {
         panic!("read-only import overlay")
     }
     fn asset_layer(&self, anchor: LayerId, asset: &str) -> Option<LayerId> {
-        match self.bindings.get(&(anchor, asset.into())) {
+        match self
+            .bindings
+            .get(&anchor)
+            .and_then(|assets| assets.get(asset))
+        {
             Some(&id) => (id != LayerId::UNRESOLVED).then_some(id),
             // Fresh authored layers must rediscover evaluated expression assets;
             // published bindings describe the old source snapshot. AOUSD Core §9.

@@ -176,6 +176,49 @@ fn four_threads_read_the_layers_one_does() {
     }
 }
 
+/// A stage opened on threads watches every layer it reads, though the
+/// open commits each new layer with its bindings and no recorded change:
+/// an edit of a layer two arcs deep, made on the store without telling the
+/// stage, is found and composed as a stage opened on one thread finds it.
+#[test]
+fn a_stage_opened_on_threads_finds_an_edit_of_a_deep_layer_as_one_thread_does() {
+    let edited = |threads: usize, variant_arcs: VariantArcLoading| {
+        let options = StageOptions {
+            threads,
+            ..StageOptions::default()
+        };
+        let loading = LoadOptions {
+            import_policy: ImportPolicy::AllowRecovery,
+            variant_arcs,
+            ..LoadOptions::default()
+        };
+        let mut doc = StageDocument::open_with(scene(), "root.usda", options, loading).unwrap();
+        let nested = doc.catalog.ids["nested.usda"];
+        let added = doc.store.path("/N/Added");
+        let layer = doc.store_mut().layer_mut(nested).unwrap();
+        layer.insert_prim(added, PrimSpec::def());
+        let (store, stage) = doc.parts_mut();
+        let changed = stage.notify_changed_layers(store);
+        stage.synchronize(store);
+        let (tokens, paths) = (&doc.store.tokens, &doc.store.paths);
+        let prims: Vec<String> = doc
+            .view()
+            .traverse()
+            .map(|prim| paths.display(prim.path(), tokens))
+            .collect();
+        (nested, changed, prims)
+    };
+    for variant_arcs in [VariantArcLoading::All, VariantArcLoading::Selected] {
+        let single = edited(1, variant_arcs);
+        assert_eq!(single.1, [single.0], "{single:?}");
+        assert!(
+            single.2.iter().any(|path| path.ends_with("/Added")),
+            "{single:?}"
+        );
+        assert_eq!(edited(4, variant_arcs), single);
+    }
+}
+
 #[test]
 fn a_stage_reaching_a_package_reads_it_on_one_thread() {
     let single = render(

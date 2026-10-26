@@ -50,10 +50,7 @@ impl<B> PreparedReload<'_, B> {
     }
     /// Candidate source identifier; package members use `package[member]`.
     pub fn identifier(&self, layer: LayerId) -> Option<&str> {
-        self.catalog
-            .sources
-            .get(&layer)
-            .map(|s| s.identifier.as_str())
+        self.catalog.sources.get(&layer).map(|s| &*s.identifier)
     }
     /// Candidate retained-array statistics without materializing numeric data.
     #[cfg(feature = "std")]

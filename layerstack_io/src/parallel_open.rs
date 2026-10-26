@@ -43,18 +43,22 @@ const PROVISIONAL: u64 = 1 << 62;
 /// A source to read, by identifier, and the provisional id its layer is
 /// read as.
 struct Task {
-    identifier: String,
+    identifier: Arc<str>,
     provisional: LayerId,
 }
 
 /// One arc a layer resolved while it was read, in the order it asked.
+///
+/// Its asset path and identifier are shared with the layer's other calls
+/// for the same asset and every call naming the same source, so recording
+/// them in the catalog and the bindings copies no string.
 #[derive(Clone)]
 enum Call {
     /// The asset path did not identify a source.
-    Failed { asset: String, error: IoError },
+    Failed { asset: Arc<str>, error: IoError },
     /// The asset path identified the source `identifier`.
     Target {
-        asset: String,
+        asset: Arc<str>,
         identifier: Arc<str>,
         provisional: LayerId,
     },
@@ -92,7 +96,7 @@ struct Shared<'a, B> {
     /// [`Reader::identify`]'s cache.
     identities: Mutex<Identities>,
     /// Each source found so far, by identifier, with its provisional id.
-    sources: Mutex<HashMap<String, LayerId>>,
+    sources: Mutex<HashMap<Arc<str>, LayerId>>,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -115,20 +119,21 @@ impl<B: Storage> Shared<'_, B> {
         lock(&self.identities).entry(key).or_insert(found).clone()
     }
 
-    /// The provisional id of the source `identifier`, and the first time
-    /// it is found, the task to read it.
-    fn source(&self, identifier: &str) -> (LayerId, Option<Task>) {
+    /// The source `identifier`, shared, with its provisional id, and the
+    /// first time it is found, the task to read it.
+    fn source(&self, identifier: String) -> (Arc<str>, LayerId, Option<Task>) {
         let mut sources = lock(&self.sources);
-        if let Some(&id) = sources.get(identifier) {
-            return (id, None);
+        if let Some((identifier, &id)) = sources.get_key_value(identifier.as_str()) {
+            return (Arc::clone(identifier), id, None);
         }
+        let identifier: Arc<str> = Arc::from(identifier);
         let provisional = LayerId(PROVISIONAL + sources.len() as u64);
-        sources.insert(String::from(identifier), provisional);
+        sources.insert(Arc::clone(&identifier), provisional);
         let task = Task {
-            identifier: String::from(identifier),
+            identifier: Arc::clone(&identifier),
             provisional,
         };
-        (provisional, Some(task))
+        (identifier, provisional, Some(task))
     }
 
     fn read(&self, task: Task, added: &mut Added<'_, Task>) -> (LayerId, Read) {
@@ -201,7 +206,7 @@ struct TaskResolver<'s, 'p, 'a, B> {
     /// The first of `calls` for each asset path asked: a layer that names
     /// one asset many times, as a scene's root names each asset it places,
     /// resolves it once.
-    asked: HashMap<String, usize>,
+    asked: HashMap<Arc<str>, usize>,
     /// The sources first found by this layer's arcs, each offered to the
     /// pool as it is found, so another thread may read it while this layer
     /// is still being read.
@@ -212,10 +217,10 @@ struct TaskResolver<'s, 'p, 'a, B> {
 
 impl<B: Storage> TaskResolver<'_, '_, '_, B> {
     /// Resolves an asset path this layer has not asked for yet.
-    fn resolve_new(&mut self, asset: &str) -> Result<ResolvedAsset, AssetResolveError> {
+    fn resolve_new(&mut self, asset: &Arc<str>) -> Result<ResolvedAsset, AssetResolveError> {
         let failed = |calls: &mut Vec<Call>, error: IoError| {
             calls.push(Call::Failed {
-                asset: String::from(asset),
+                asset: Arc::clone(asset),
                 error: error.clone(),
             });
             Err(asset_error(error))
@@ -240,14 +245,13 @@ impl<B: Storage> TaskResolver<'_, '_, '_, B> {
             Err(error) => return failed(&mut self.calls, error),
         };
         let identifier = source_identifier(self.shared.formats, &path, &outer, args);
-        let (provisional, task) = self.shared.source(&identifier);
+        let (identifier, provisional, task) = self.shared.source(identifier);
         if let Some(task) = task {
             self.added.push(task);
             self.added.offer();
         }
-        let identifier: Arc<str> = Arc::from(identifier);
         self.calls.push(Call::Target {
-            asset: String::from(asset),
+            asset: Arc::clone(asset),
             identifier: Arc::clone(&identifier),
             provisional,
         });
@@ -285,9 +289,10 @@ impl<B: Storage> AssetResolver for TaskResolver<'_, '_, '_, B> {
             self.calls.push(call);
             return result;
         }
-        let result = self.resolve_new(asset);
+        let asset: Arc<str> = Arc::from(asset);
+        let result = self.resolve_new(&asset);
         if !self.package {
-            self.asked.insert(String::from(asset), self.calls.len() - 1);
+            self.asked.insert(asset, self.calls.len() - 1);
         }
         result
     }
@@ -339,7 +344,7 @@ impl<B: Storage> Reader<'_, B> {
             Err(error) => return Some(Err(error)),
         };
         let identifier = source_identifier(&self.formats, &path, &outer, args);
-        if self.catalog.ids.contains_key(&identifier) {
+        if self.catalog.ids.contains_key(identifier.as_str()) {
             return None;
         }
         let shared = Shared {
@@ -354,7 +359,7 @@ impl<B: Storage> Reader<'_, B> {
             identities: Mutex::new(self.identities.clone()),
             sources: Mutex::default(),
         };
-        let (root_id, root) = shared.source(&identifier);
+        let (identifier, root_id, root) = shared.source(identifier);
         let work = |task: Task, added: &mut Added<'_, Task>| shared.read(task, added);
         let reads: HashMap<LayerId, Read> = with_offering_pool_in(&self.threads, &work, |pool| {
             pool.run(root.into_iter().collect())
@@ -410,7 +415,7 @@ impl<B: Storage> Reader<'_, B> {
         });
         Some(result.map(|(layer_id, layer)| ResolvedAsset {
             layer_id,
-            resolved_path: Arc::from(identifier.as_str()),
+            resolved_path: identifier,
             layer: layer.map(|mut layer| {
                 layer.map_layer_ids(final_id);
                 layer
@@ -430,16 +435,24 @@ enum Finish<'l> {
 /// Drops `reads` and rewrites the provisional layer ids of `layers` with
 /// `map`, on the threads `threads` spares: each read holds the arcs its
 /// layer resolved, and dropping or walking several thousand of them
-/// would otherwise leave every thread but one idle.
+/// would otherwise leave every thread but one idle. Each layer's change
+/// history, which records every spec its reader inserted and the
+/// rewriting, is forgotten there too, as committing a layer forgets it
+/// ([`Layer::forget_change_history`]), so freeing it does not wait for
+/// the one thread committing.
 fn drop_and_map(
     threads: &Threads,
     reads: HashMap<LayerId, Read>,
     layers: &mut [Layer],
     map: &(dyn Fn(LayerId) -> LayerId + Sync),
 ) {
+    let map_layer = |layer: &mut Layer| {
+        layer.map_layer_ids(map);
+        layer.forget_change_history();
+    };
     if threads.spare() == 0 {
         drop(reads);
-        layers.iter_mut().for_each(|layer| layer.map_layer_ids(map));
+        layers.iter_mut().for_each(map_layer);
         return;
     }
     let mut tasks: Vec<Finish<'_>> = layers
@@ -456,7 +469,7 @@ fn drop_and_map(
     }
     let work = |task: Finish<'_>, _: &mut Vec<Finish<'_>>| match task {
         Finish::Drop(reads) => drop(reads),
-        Finish::Map(layers) => layers.iter_mut().for_each(|layer| layer.map_layer_ids(map)),
+        Finish::Map(layers) => layers.iter_mut().for_each(map_layer),
     };
     layerstack::parallel::with_pool_in(threads, &work, |pool| pool.run(tasks));
 }
@@ -477,19 +490,19 @@ impl<B: Storage> Replay<'_, '_, B> {
     /// arcs' targets in order, then its diagnostics.
     fn visit(
         &mut self,
-        identifier: &str,
+        identifier: &Arc<str>,
         provisional: LayerId,
     ) -> Result<(LayerId, Option<Layer>), IoError> {
         let catalog = &mut *self.reader.catalog;
-        let id = if let Some(&id) = catalog.ids.get(identifier) {
+        let id = if let Some(&id) = catalog.ids.get(&**identifier) {
             id
         } else {
             let id = catalog.allocate()?;
-            catalog.ids.insert(String::from(identifier), id);
+            catalog.ids.insert(Arc::clone(identifier), id);
             catalog.sources.insert(
                 id,
                 Source {
-                    identifier: String::from(identifier),
+                    identifier: Arc::clone(identifier),
                     format: Format::Usda,
                     package: None,
                 },
@@ -579,14 +592,14 @@ impl<B: Storage> Replay<'_, '_, B> {
             }
             Err(error) => {
                 self.reader.failures.push(AssetFailure {
-                    asset: asset.clone(),
+                    asset: String::from(&**asset),
                     anchor: Some(anchor),
                     error,
                 });
                 LayerId::UNRESOLVED
             }
         };
-        self.reader.bindings.insert((anchor, asset.clone()), bound);
+        self.reader.bind(anchor, Arc::clone(asset), bound);
     }
 }
 

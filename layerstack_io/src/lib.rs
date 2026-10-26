@@ -89,6 +89,7 @@ pub use layerstack_usdz::{UsdcArrayLoading, UsdcReadOptions};
 mod apply;
 pub use apply::ApplyError;
 pub mod format;
+mod layer_ids;
 pub use format::{
     FORMAT_ARGS_DELIMITER, FileFormat, FileFormats, FormatArgs, FormatRegistrationError,
     FormatSource,
@@ -481,6 +482,10 @@ enum State {
     Loading,
     Loaded,
 }
+/// The sources a document reads, by layer id, and the ids it has handed
+/// out: a layer named by identifier gets one derived from it
+/// ([`layer_ids`]), an anonymous layer the next free one below
+/// [`LayerId::FIRST_DERIVED`] ([`Catalog::allocate`]).
 #[derive(Clone, Debug, Default)]
 struct Catalog {
     cache_work: PackageCacheStats,
@@ -492,7 +497,9 @@ struct Catalog {
     ids: HashMap<Arc<str>, LayerId>,
     states: BTreeMap<LayerId, State>,
     saved: BTreeMap<LayerId, u64>,
+    /// Every id handed out or held by the store, which no new layer takes.
     reserved: BTreeSet<LayerId>,
+    /// Where [`Catalog::allocate`] looks for a free id next.
     next: u64,
     package_bytes: BTreeMap<LayerId, Arc<PackageSnapshot>>,
     package_roots: BTreeMap<LayerId, String>,
@@ -540,16 +547,30 @@ impl Catalog {
             .split_once('[')
             .map_or(identifier, |(outer, _)| outer)
     }
+    /// A new id for a layer no identifier names, such as an anonymous
+    /// one: the next free one below [`LayerId::FIRST_DERIVED`], the range
+    /// hosts and stores hand out.
     fn allocate(&mut self) -> Result<LayerId, IoError> {
         loop {
             let id = LayerId(self.next);
-            self.next = self.next.checked_add(1).ok_or_else(|| {
-                IoError::new(IoErrorKind::IdentityExhausted, "layer identities exhausted")
-            })?;
-            if id != LayerId::UNRESOLVED && self.reserved.insert(id) {
+            if id >= LayerId::FIRST_DERIVED {
+                return Err(IoError::new(
+                    IoErrorKind::IdentityExhausted,
+                    "layer identities exhausted",
+                ));
+            }
+            self.next += 1;
+            if self.reserved.insert(id) {
                 return Ok(id);
             }
         }
+    }
+    /// The id of the layer `identifier` names, new to the catalog: derived
+    /// from the identifier ([`layer_ids`]), stepping past the ids taken.
+    fn allocate_for(&mut self, identifier: &str) -> Result<LayerId, IoError> {
+        let id = layer_ids::derive(identifier, |id| self.reserved.contains(&id))?;
+        self.reserved.insert(id);
+        Ok(id)
     }
 }
 
@@ -625,7 +646,7 @@ impl<B: Storage> StageDocument<B> {
             reserved: store.layer_ids().into_iter().collect(),
             ..Default::default()
         };
-        let root = catalog.allocate()?;
+        let root = catalog.allocate_for(&identifier)?;
         let identifier: Arc<str> = Arc::from(identifier);
         catalog.ids.insert(Arc::clone(&identifier), root);
         catalog.sources.insert(
@@ -1852,7 +1873,7 @@ impl<B: Storage> Reader<'_, B> {
         let id = if let Some(&id) = self.catalog.ids.get(&*identifier) {
             id
         } else {
-            let id = self.catalog.allocate()?;
+            let id = self.catalog.allocate_for(&identifier)?;
             self.catalog.ids.insert(Arc::clone(&identifier), id);
             self.catalog.sources.insert(
                 id,
@@ -1945,7 +1966,7 @@ impl<B: Storage> AssetResolver for Reader<'_, B> {
         if let Some(&id) = self.catalog.ids.get(identifier.as_str()) {
             return Some(id);
         }
-        let id = self.catalog.allocate().ok()?;
+        let id = self.catalog.allocate_for(&identifier).ok()?;
         self.catalog.ids.insert(Arc::from(identifier), id);
         Some(id)
     }

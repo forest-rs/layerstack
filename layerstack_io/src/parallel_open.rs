@@ -36,8 +36,9 @@ use layerstack::{
     parallel::{Added, Threads, with_offering_pool_in},
 };
 
-/// The first provisional layer id; the real ones a store hands out stay
-/// far below it.
+/// The first provisional layer id: the ids hosts hand out stay far below
+/// it, and those derived from identifiers start above the range
+/// ([`LayerId::FIRST_DERIVED`]).
 const PROVISIONAL: u64 = 1 << 62;
 
 /// A source to read, by identifier, and the provisional id its layer is
@@ -386,7 +387,7 @@ impl<B: Storage> Reader<'_, B> {
             ids, failed, reads, ..
         } = replay;
         let final_id = |id: LayerId| {
-            if id.0 < PROVISIONAL || id == LayerId::UNRESOLVED {
+            if !(PROVISIONAL..LayerId::FIRST_DERIVED.0).contains(&id.0) {
                 id
             } else if failed.contains(&id) {
                 LayerId::UNRESOLVED
@@ -497,7 +498,7 @@ impl<B: Storage> Replay<'_, '_, B> {
         let id = if let Some(&id) = catalog.ids.get(&**identifier) {
             id
         } else {
-            let id = catalog.allocate()?;
+            let id = catalog.allocate_for(identifier)?;
             catalog.ids.insert(Arc::clone(identifier), id);
             catalog.sources.insert(
                 id,

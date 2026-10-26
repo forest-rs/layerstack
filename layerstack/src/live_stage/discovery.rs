@@ -100,7 +100,8 @@ impl LayerReads {
 const SEEN_SHARDS: usize = 64;
 
 /// The part of the layers reached that holds `id` ([`SEEN_SHARDS`]):
-/// layer ids are mostly numbered in turn, so their low bits spread them.
+/// layer ids are numbered in turn or hashed from identifiers, so their low
+/// bits spread them.
 #[expect(
     clippy::cast_possible_truncation,
     reason = "only the low bits pick a part"

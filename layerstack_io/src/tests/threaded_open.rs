@@ -5,6 +5,7 @@
 //! ids, with the same failures and diagnostics, as opening it on one.
 
 use super::*;
+use crate::layer_ids;
 use core::fmt::Write as _;
 
 /// A root reaching a layer twice, layers through layers, missing layers,
@@ -319,4 +320,27 @@ fn opening_on_a_host_executor_reads_the_layers_one_thread_does() {
     drop(LiveStage::compose(&mut doc.store, root, options));
     let composing = jobs() - before;
     assert!(composing < opening, "{composing} of {opening} jobs compose");
+}
+
+/// A layer named by identifier gets the id derived from it, on one thread
+/// as on several, and an anonymous layer one below the derived range.
+#[test]
+fn layers_read_get_the_ids_their_identifiers_derive() {
+    for threads in [1, 4] {
+        let options = StageOptions {
+            threads,
+            ..StageOptions::default()
+        };
+        let loading = LoadOptions {
+            import_policy: ImportPolicy::AllowRecovery,
+            ..LoadOptions::default()
+        };
+        let mut doc = StageDocument::open_with(scene(), "root.usda", options, loading).unwrap();
+        for (identifier, &id) in &doc.catalog.ids {
+            assert_eq!(id, layer_ids::candidate(identifier, 0), "{identifier}");
+        }
+        assert!(doc.catalog.ids.contains_key("nested.usda"));
+        let anonymous = doc.create_anonymous_layer().unwrap();
+        assert!(anonymous < LayerId::FIRST_DERIVED, "{anonymous:?}");
+    }
 }

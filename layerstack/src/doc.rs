@@ -32,10 +32,25 @@ use crate::{
 };
 
 /// Identifies a layer by stable ID.
+///
+/// IDs are split in two ranges. Below [`LayerId::FIRST_DERIVED`] are the
+/// IDs hosts and stores hand out themselves, such as those of anonymous and
+/// session layers. From it up are the IDs a loader derives from the
+/// identifiers of the layers it reads: `layerstack_io` gives a layer it
+/// names by identifier a fixed hash of that identifier, so the same
+/// identifier gets the same ID in every open, on any number of threads, on
+/// every platform and in every process. A host allocating its own IDs
+/// should keep them below `FIRST_DERIVED`; a loader steps past any ID
+/// already in use rather than reuse it, but a layer it reads may then get
+/// another ID than it gets in an open without the host's layer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct LayerId(pub u64);
 
 impl LayerId {
+    /// The first ID of the range loaders derive from layer identifiers
+    /// (2^63); every ID below it is free for hosts and stores to hand out.
+    pub const FIRST_DERIVED: Self = Self(1 << 63);
+
     /// The layer of a reference or payload whose asset path could not be
     /// resolved (see [`Reference::unresolved`]).
     ///

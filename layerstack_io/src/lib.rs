@@ -703,7 +703,8 @@ impl<B: Storage> StageDocument<B> {
     /// there claims is rejected ([`IoErrorKind::Rejected`]).
     ///
     /// With `options.threads` above one, the layers are read on a pool of
-    /// that many threads ([`layerstack::parallel::Threads`]), and a USDC
+    /// that many threads, on `options.executor` when there is one
+    /// ([`StageOptions::thread_budget`]), and a USDC
     /// layer on the threads the pool leaves idle while it is read: reading
     /// runs at most `options.threads` threads at once, as composing after it
     /// does.
@@ -736,7 +737,7 @@ impl<B: Storage> StageDocument<B> {
         );
         reader.variant_arcs = loading.variant_arcs;
         reader.formats = loading.formats.clone();
-        reader.threads = Threads::new(options.threads);
+        reader.threads = options.thread_budget();
         #[cfg(feature = "std")]
         let threaded = reader.load_on_threads(asset, &store.tokens, &store.paths);
         #[cfg(not(feature = "std"))]

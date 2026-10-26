@@ -129,7 +129,7 @@ impl LayerDiscovery {
     }
 
     /// Every layer reached from `root`, as [`Self::participating`] finds
-    /// them, scanning the layers on up to `threads` threads when nothing is
+    /// them, scanning the layers on the threads of `threads` when nothing is
     /// retained yet, as when a stage composes: each layer's reads are its
     /// own, and the layers reached are the same whichever thread reaches
     /// each first.
@@ -138,9 +138,9 @@ impl LayerDiscovery {
         store: &dyn LayerStore,
         root: LayerId,
         muted: &BTreeSet<LayerId>,
-        threads: usize,
+        threads: &crate::parallel::Threads,
     ) -> HashSet<LayerId> {
-        if !self.layers.is_empty() || threads <= 1 {
+        if !self.layers.is_empty() || threads.limit() <= 1 {
             return self.participating(store, root, muted);
         }
         let seen = crate::sync::ReadLock::new(HashSet::new());
@@ -156,7 +156,7 @@ impl LayerDiscovery {
             Some((id, reads))
         };
         let scanned =
-            crate::parallel::with_pool(threads, &scan, |pool| pool.run(alloc::vec![root]));
+            crate::parallel::with_pool_in(threads, &scan, |pool| pool.run(alloc::vec![root]));
         let mut expressions = false;
         for (id, reads) in scanned.into_iter().flatten() {
             expressions |= reads.has_expressions();
@@ -257,7 +257,7 @@ impl LayerDiscovery {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{InMemoryStore, Layer, PrimSpec, Reference, SublayerEntry};
+    use crate::{InMemoryStore, Layer, PrimSpec, Reference, SublayerEntry, parallel::Threads};
 
     /// A discovery that scans on threads reaches the layers, and retains
     /// the reads, a discovery on one thread does, muted layers and layers
@@ -288,7 +288,7 @@ mod tests {
         for threads in [1, 4] {
             let mut many = LayerDiscovery::default();
             assert_eq!(
-                many.participating_on(&store, LayerId(1), &muted, threads),
+                many.participating_on(&store, LayerId(1), &muted, &Threads::new(threads)),
                 found
             );
             let mut retained: Vec<_> = many.layers.keys().copied().collect();

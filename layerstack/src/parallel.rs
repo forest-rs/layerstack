@@ -46,7 +46,9 @@ use core::sync::atomic::{AtomicUsize, Ordering};
 /// system, thread pool or dispatch queue, in place of the threads
 /// layerstack starts itself by default.
 ///
-/// A budget runs on one ([`Threads::with_executor`]). Each pool and each [`join`] on the
+/// A budget runs on one ([`Threads::with_executor`]), as composition and
+/// `layerstack_io::StageDocument`'s reading do with
+/// [`crate::StageOptions::executor`]. Each pool and each [`join`] on the
 /// budget calls [`Self::scope`] once and starts jobs on its scope: at most
 /// as many at once, across every pool on the budget, as the budget's
 /// [`Threads::limit`] spares beyond the calling thread. The executor's own
@@ -213,6 +215,8 @@ struct OwnScope<'s, 'env> {
 #[cfg(feature = "std")]
 impl<'env> Scope<'env> for OwnScope<'_, 'env> {
     fn spawn(&self, job: Job<'env>) -> bool {
+        #[cfg(test)]
+        tests::OWN_STARTS.with(|starts| starts.set(starts.get() + 1));
         let scope = self.scope;
         std::thread::Builder::new()
             .spawn_scoped(scope, move || job(&OwnScope { scope }))
@@ -1218,6 +1222,11 @@ mod tests {
         }
     }
 
+    std::thread_local! {
+        /// The threads started on this thread for budgets with no executor.
+        pub(super) static OWN_STARTS: core::cell::Cell<usize> = const { core::cell::Cell::new(0) };
+    }
+
     /// A host pool of two threads taking queued jobs first in, first out,
     /// whose threads waiting in a scope run that scope's jobs while they
     /// wait. A pool thread serves one scope's queue and returns when it is
@@ -1511,5 +1520,114 @@ mod tests {
             assert!(running.most.load(Ordering::SeqCst) <= 3);
             assert_eq!(threads.spare(), 2);
         }
+    }
+
+    /// A stage of groups of prims, some instancing an asset in a second
+    /// layer: wide enough for every thread to take work.
+    #[cfg(feature = "std")]
+    fn wide_stage() -> crate::InMemoryStore {
+        use crate::{InMemoryStore, Layer, LayerId, PrimSpec, Reference, Value};
+
+        let mut store = InMemoryStore::default();
+        let field = store.tokens.intern("value");
+        let asset = store.path("/Asset");
+        let part = store.tokens.intern("Part");
+        let mut source = Layer::new(LayerId(2));
+        source.insert_prim(asset, PrimSpec::def().with_children(alloc::vec![part]));
+        let part_path = store.path("/Asset/Part");
+        source.insert_prim(part_path, PrimSpec::def().with_field(field, Value::Int(1)));
+        store.insert_layer(source);
+        let mut root = Layer::new(LayerId(1));
+        for group in 0..16 {
+            let names = (0..24)
+                .map(|item| store.tokens.intern(alloc::format!("Item{item}")))
+                .collect();
+            let group_path = store.path(&alloc::format!("/Group{group}"));
+            root.insert_prim(group_path, PrimSpec::def().with_children(names));
+            for item in 0..24 {
+                let path = store.path(&alloc::format!("/Group{group}/Item{item}"));
+                let spec = PrimSpec::def()
+                    .with_field(field, Value::Int(item))
+                    .with_instanceable(item % 3 == 0)
+                    .with_reference(Reference::with_asset(LayerId(2), asset, "asset.usda"));
+                root.insert_prim(path, spec);
+            }
+        }
+        store.insert_layer(root);
+        store
+    }
+
+    /// Every prim of `wide_stage` composed with `options`, with its value.
+    #[cfg(feature = "std")]
+    fn render_wide_stage(options: crate::StageOptions) -> Vec<alloc::string::String> {
+        use crate::{LayerId, Path, Stage};
+
+        let mut store = wide_stage();
+        let field = store.tokens.intern("value");
+        let stage = Stage::compose(&mut store, LayerId(1), options);
+        let root = store.paths.lookup(&Path::root()).expect("the root path");
+        let mut prims: Vec<_> = stage
+            .traverse_all(root)
+            .map(|prim| {
+                let value = stage.resolve_field(prim, field).map(|value| value.value);
+                alloc::format!("{} {value:?}", store.paths.display(prim, &store.tokens))
+            })
+            .collect();
+        prims.sort_unstable();
+        prims
+    }
+
+    /// A stage composed on host executors is the stage one thread composes.
+    #[cfg(feature = "std")]
+    #[test]
+    #[cfg_attr(target_os = "wasi", ignore = "WASI runs tests without threads")]
+    fn a_stage_composes_alike_on_host_executors() {
+        let single = render_wide_stage(crate::StageOptions::default());
+        assert!(single.len() > 16 * 24 * 2, "{} prims", single.len());
+        for (threads, jobs) in host_budgets(4) {
+            let executor = threads.executor.clone();
+            let options = crate::StageOptions {
+                threads: 4,
+                executor,
+                with_dependencies: true,
+                ..crate::StageOptions::default()
+            };
+            assert_eq!(render_wide_stage(options), single, "{threads:?}");
+            assert!(jobs() > 0, "{threads:?} started no job");
+        }
+    }
+
+    /// Composing on threads with an executor starts every helper as its
+    /// job, and no thread of layerstack's own, as composing without one
+    /// does. The executor runs jobs on the composing thread, so a thread
+    /// started anywhere for the stage would be counted on it.
+    #[cfg(feature = "std")]
+    #[test]
+    fn every_budget_a_stage_builds_runs_on_its_executor() {
+        let deferred = Arc::new(Deferred {
+            jobs: AtomicUsize::new(0),
+        });
+        let options = crate::StageOptions {
+            threads: 4,
+            executor: Some(Arc::clone(&deferred) as Arc<dyn Executor>),
+            with_dependencies: true,
+            ..crate::StageOptions::default()
+        };
+        let before = OWN_STARTS.with(core::cell::Cell::get);
+        let mut store = wide_stage();
+        let stage = crate::Stage::compose(&mut store, crate::LayerId(1), options.clone());
+        let live = crate::LiveStage::compose(&mut store, crate::LayerId(1), options);
+        assert!(stage.composition_errors().is_empty());
+        drop(live);
+        assert!(deferred.jobs.load(Ordering::SeqCst) > 0);
+        assert_eq!(OWN_STARTS.with(core::cell::Cell::get), before);
+
+        let own = crate::StageOptions {
+            threads: 4,
+            with_dependencies: true,
+            ..crate::StageOptions::default()
+        };
+        drop(crate::Stage::compose(&mut store, crate::LayerId(1), own));
+        assert!(OWN_STARTS.with(core::cell::Cell::get) > before);
     }
 }

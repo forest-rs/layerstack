@@ -84,13 +84,25 @@ fn render(
     import_policy: ImportPolicy,
     variant_arcs: VariantArcLoading,
 ) -> String {
+    let options = StageOptions {
+        threads,
+        ..StageOptions::default()
+    };
+    render_with(root, options, import_policy, variant_arcs)
+}
+
+/// What opening `root` of `scene` with `options` read, as [`render`]
+/// renders it.
+fn render_with(
+    root: &str,
+    options: StageOptions,
+    import_policy: ImportPolicy,
+    variant_arcs: VariantArcLoading,
+) -> String {
     let doc = StageDocument::open_with(
         scene(),
         root,
-        StageOptions {
-            threads,
-            ..StageOptions::default()
-        },
+        options,
         LoadOptions {
             import_policy,
             variant_arcs,
@@ -181,4 +193,87 @@ fn a_stage_reaching_a_package_reads_it_on_one_thread() {
         VariantArcLoading::All,
     );
     assert_eq!(threaded, single);
+}
+
+/// A host executor that counts the jobs it starts and runs each on the
+/// thread that waits for it, once the body returns: it starts no thread.
+#[cfg(feature = "std")]
+#[derive(Default)]
+struct Counting {
+    jobs: core::sync::atomic::AtomicUsize,
+}
+
+#[cfg(feature = "std")]
+struct CountingScope<'a, 'env> {
+    queue: std::sync::Mutex<Vec<layerstack::parallel::Job<'env>>>,
+    jobs: &'a core::sync::atomic::AtomicUsize,
+}
+
+#[cfg(feature = "std")]
+impl<'env> layerstack::parallel::Scope<'env> for CountingScope<'_, 'env> {
+    fn spawn(&self, job: layerstack::parallel::Job<'env>) -> bool {
+        self.jobs.fetch_add(1, core::sync::atomic::Ordering::SeqCst);
+        self.queue.lock().unwrap().push(job);
+        true
+    }
+}
+
+#[cfg(feature = "std")]
+impl layerstack::parallel::Executor for Counting {
+    fn scope<'env>(&self, body: &mut (dyn FnMut(&dyn layerstack::parallel::Scope<'env>) + 'env)) {
+        let scope = CountingScope {
+            queue: std::sync::Mutex::new(Vec::new()),
+            jobs: &self.jobs,
+        };
+        body(&scope);
+        loop {
+            let job = scope.queue.lock().unwrap().pop();
+            match job {
+                Some(job) => job(&scope),
+                None => break,
+            }
+        }
+    }
+}
+
+/// Opening a stage on a host's executor reads what opening it on one
+/// thread does, and both the loader and composition start their helpers
+/// as the executor's jobs: composing the opened stage again starts fewer
+/// than opening it did.
+#[cfg(feature = "std")]
+#[test]
+fn opening_on_a_host_executor_reads_the_layers_one_thread_does() {
+    let single = render(
+        "root.usda",
+        1,
+        ImportPolicy::AllowRecovery,
+        VariantArcLoading::All,
+    );
+    let counting = Arc::new(Counting::default());
+    let options = StageOptions {
+        threads: 4,
+        executor: Some(Arc::clone(&counting) as Arc<dyn layerstack::parallel::Executor>),
+        ..StageOptions::default()
+    };
+    let opened = render_with(
+        "root.usda",
+        options.clone(),
+        ImportPolicy::AllowRecovery,
+        VariantArcLoading::All,
+    );
+    assert_eq!(opened, single);
+    let jobs = || counting.jobs.load(core::sync::atomic::Ordering::SeqCst);
+    let opening = jobs();
+    assert!(opening > 0);
+    let loading = LoadOptions {
+        import_policy: ImportPolicy::AllowRecovery,
+        ..LoadOptions::default()
+    };
+    let mut doc =
+        StageDocument::open_with(scene(), "root.usda", StageOptions::default(), loading).unwrap();
+    let root = doc.stage().stage().root_layer().unwrap();
+    let before = jobs();
+    drop(LiveStage::compose(&mut doc.store, root, options));
+    let composing = jobs() - before;
+    assert!(composing < opening, "{composing} of {opening} jobs compose");
 }

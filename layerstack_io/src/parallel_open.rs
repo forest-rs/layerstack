@@ -5,16 +5,20 @@
 //! ([`StageOptions::threads`](layerstack::StageOptions::threads)).
 //!
 //! Every layer the root reaches is identified, read and parsed by whichever
-//! thread takes it, each of its arcs resolved to a provisional id without
-//! waiting for the target, and each target found for the first time
-//! offered to the pool at once, so an idle thread reads it while the layer
-//! naming it is still being read ([`layerstack::parallel::Added::offer`]). One pass then walks the layers depth first, in
-//! the order their arcs asked for their targets, recording them as reading
-//! them one at a time does ([`Reader::load`]): the same layer ids, bindings,
-//! failures, diagnostics and pending layers, in the same order. Last, each
-//! layer's provisional ids are rewritten to the final ones, and an arc whose
-//! target failed to read becomes unresolved, as the parser makes an arc
-//! whose target fails while it reads.
+//! thread takes it, each of its arcs resolved to its target's final id
+//! without waiting for the target, as an id is derived from the identifier
+//! that names it ([`crate::layer_ids`]), and each target found for the
+//! first time offered to the pool at once, so an idle thread reads it while
+//! the layer naming it is still being read
+//! ([`layerstack::parallel::Added::offer`]). One pass then walks the layers
+//! depth first, in the order their arcs asked for their targets, recording
+//! them as reading them one at a time does ([`Reader::load`]): the same
+//! bindings, failures, diagnostics and pending layers, in the same order.
+//! Last, an arc whose target failed to read becomes unresolved, as the
+//! parser makes an arc whose target fails while it reads; only the layers
+//! naming such a target are rewritten. Under a collision of derived ids,
+//! which the threads may settle in another order than one thread does, the
+//! pass renumbers every layer read to the ids one thread gives them.
 //!
 //! A layer a package holds is read on one thread instead.
 //!
@@ -28,7 +32,8 @@ use super::{
     IoErrorKind, LooseRead, Reader, Source, State, Storage, String, Vec, asset_error, read_loose,
     source_format, source_identifier, strict_failure, strict_rejects,
 };
-use alloc::sync::Arc;
+use crate::layer_ids;
+use alloc::{collections::BTreeSet, sync::Arc};
 use hashbrown::{HashMap, HashSet};
 use layerstack::{
     AssetResolveError, AssetResolver, Layer, LayerId, PathInterner, ResolvedAsset, TokenInterner,
@@ -36,16 +41,10 @@ use layerstack::{
     parallel::{Added, Threads, with_offering_pool_in},
 };
 
-/// The first provisional layer id: the ids hosts hand out stay far below
-/// it, and those derived from identifiers start above the range
-/// ([`LayerId::FIRST_DERIVED`]).
-const PROVISIONAL: u64 = 1 << 62;
-
-/// A source to read, by identifier, and the provisional id its layer is
-/// read as.
+/// A source to read, by identifier, and the id its layer is read as.
 struct Task {
     identifier: Arc<str>,
-    provisional: LayerId,
+    id: LayerId,
 }
 
 /// One arc a layer resolved while it was read, in the order it asked.
@@ -61,7 +60,7 @@ enum Call {
     Target {
         asset: Arc<str>,
         identifier: Arc<str>,
-        provisional: LayerId,
+        id: LayerId,
     },
 }
 
@@ -96,8 +95,24 @@ struct Shared<'a, B> {
     threads: &'a Threads,
     /// [`Reader::identify`]'s cache.
     identities: Mutex<Identities>,
-    /// Each source found so far, by identifier, with its provisional id.
-    sources: Mutex<HashMap<Arc<str>, LayerId>>,
+    /// The ids the document's catalog gave identifiers before this open.
+    known: &'a HashMap<Arc<str>, LayerId>,
+    /// The ids the catalog and the store held before this open.
+    reserved: &'a BTreeSet<LayerId>,
+    sources: Mutex<Sources>,
+}
+
+/// The sources found so far.
+#[derive(Default)]
+struct Sources {
+    /// Each source, by identifier, with its id.
+    ids: HashMap<Arc<str>, LayerId>,
+    /// The ids of `ids`.
+    taken: HashSet<LayerId>,
+    /// Whether a source's id stepped past a taken candidate
+    /// ([`layer_ids::derive`]): threads may settle a collision in another
+    /// order than one thread does.
+    stepped: bool,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -120,21 +135,34 @@ impl<B: Storage> Shared<'_, B> {
         lock(&self.identities).entry(key).or_insert(found).clone()
     }
 
-    /// The source `identifier`, shared, with its provisional id, and the
-    /// first time it is found, the task to read it.
-    fn source(&self, identifier: String) -> (Arc<str>, LayerId, Option<Task>) {
+    /// The source `identifier`, shared, with its id, and the first time
+    /// it is found, the task to read it.
+    fn source(&self, identifier: String) -> Result<(Arc<str>, LayerId, Option<Task>), IoError> {
+        // Hashed before taking the lock, so threads hash at once.
+        let first = layer_ids::candidate(&identifier, 0);
         let mut sources = lock(&self.sources);
-        if let Some((identifier, &id)) = sources.get_key_value(identifier.as_str()) {
-            return (Arc::clone(identifier), id, None);
+        if let Some((identifier, &id)) = sources.ids.get_key_value(identifier.as_str()) {
+            return Ok((Arc::clone(identifier), id, None));
         }
+        let taken = |sources: &Sources, id: LayerId| {
+            id == LayerId::UNRESOLVED || self.reserved.contains(&id) || sources.taken.contains(&id)
+        };
+        let id = if let Some(&id) = self.known.get(identifier.as_str()) {
+            id
+        } else if !taken(&sources, first) {
+            first
+        } else {
+            sources.stepped = true;
+            layer_ids::derive(&identifier, |id| taken(&sources, id))?
+        };
+        sources.taken.insert(id);
         let identifier: Arc<str> = Arc::from(identifier);
-        let provisional = LayerId(PROVISIONAL + sources.len() as u64);
-        sources.insert(Arc::clone(&identifier), provisional);
+        sources.ids.insert(Arc::clone(&identifier), id);
         let task = Task {
             identifier: Arc::clone(&identifier),
-            provisional,
+            id,
         };
-        (identifier, provisional, Some(task))
+        Ok((identifier, id, Some(task)))
     }
 
     fn read(&self, task: Task, added: &mut Added<'_, Task>) -> (LayerId, Read) {
@@ -148,14 +176,14 @@ impl<B: Storage> Shared<'_, B> {
                 Ok(split) => split,
                 Err(error) => {
                     read.outcome = Outcome::Unread(error);
-                    return (task.provisional, read);
+                    return (task.id, read);
                 }
             };
             match self.storage.read_encoded(outer) {
                 Ok(bytes) => bytes,
                 Err(error) => {
                     read.outcome = Outcome::Unread(error.at(outer));
-                    return (task.provisional, read);
+                    return (task.id, read);
                 }
             }
         } else {
@@ -163,7 +191,7 @@ impl<B: Storage> Shared<'_, B> {
         };
         let format = source_format(self.formats, &task.identifier, &bytes);
         if format == Format::Usdz {
-            return (task.provisional, read);
+            return (task.id, read);
         }
         let mut resolver = TaskResolver {
             shared: self,
@@ -177,7 +205,7 @@ impl<B: Storage> Shared<'_, B> {
             format,
             &bytes,
             &task.identifier,
-            task.provisional,
+            task.id,
             self.tokens,
             self.paths,
             &mut resolver,
@@ -193,7 +221,7 @@ impl<B: Storage> Shared<'_, B> {
                 read: alloc::boxed::Box::new(loose),
             };
         }
-        (task.provisional, read)
+        (task.id, read)
     }
 }
 
@@ -246,7 +274,10 @@ impl<B: Storage> TaskResolver<'_, '_, '_, B> {
             Err(error) => return failed(&mut self.calls, error),
         };
         let identifier = source_identifier(self.shared.formats, &path, &outer, args);
-        let (identifier, provisional, task) = self.shared.source(identifier);
+        let (identifier, id, task) = match self.shared.source(identifier) {
+            Ok(source) => source,
+            Err(error) => return failed(&mut self.calls, error),
+        };
         if let Some(task) = task {
             self.added.push(task);
             self.added.offer();
@@ -254,10 +285,10 @@ impl<B: Storage> TaskResolver<'_, '_, '_, B> {
         self.calls.push(Call::Target {
             asset: Arc::clone(asset),
             identifier: Arc::clone(&identifier),
-            provisional,
+            id,
         });
         Ok(ResolvedAsset {
-            layer_id: provisional,
+            layer_id: id,
             resolved_path: identifier,
             layer: None,
         })
@@ -277,12 +308,8 @@ impl<B: Storage> AssetResolver for TaskResolver<'_, '_, '_, B> {
             let call = self.calls[first].clone();
             let result = match &call {
                 Call::Failed { error, .. } => Err(asset_error(error.clone())),
-                Call::Target {
-                    identifier,
-                    provisional,
-                    ..
-                } => Ok(ResolvedAsset {
-                    layer_id: *provisional,
+                Call::Target { identifier, id, .. } => Ok(ResolvedAsset {
+                    layer_id: *id,
                     resolved_path: Arc::clone(identifier),
                     layer: None,
                 }),
@@ -358,9 +385,14 @@ impl<B: Storage> Reader<'_, B> {
             defers_variant_arcs: self.defers_variant_arcs(),
             threads: &self.threads,
             identities: Mutex::new(self.identities.clone()),
+            known: &self.catalog.ids,
+            reserved: &self.catalog.reserved,
             sources: Mutex::default(),
         };
-        let (identifier, root_id, root) = shared.source(identifier);
+        let (identifier, root_id, root) = match shared.source(identifier) {
+            Ok(source) => source,
+            Err(error) => return Some(Err(error)),
+        };
         let work = |task: Task, added: &mut Added<'_, Task>| shared.read(task, added);
         let reads: HashMap<LayerId, Read> = with_offering_pool_in(&self.threads, &work, |pool| {
             pool.run(root.into_iter().collect())
@@ -373,38 +405,63 @@ impl<B: Storage> Reader<'_, B> {
         {
             return None;
         }
+        let stepped = lock(&shared.sources).stepped;
         self.identities = shared.identities.into_inner().unwrap_or_default();
         let first_pending = self.pending.len();
         let first_diagnostic = self.diagnostics.len();
         let mut replay = Replay {
             reader: self,
+            settled: !stepped,
             reads,
-            ids: HashMap::new(),
+            renamed: HashMap::new(),
             failed: HashSet::new(),
         };
         let result = replay.visit(&identifier, root_id);
         let Replay {
-            ids, failed, reads, ..
+            renamed,
+            failed,
+            reads,
+            ..
         } = replay;
+        debug_assert!(stepped || renamed.is_empty(), "ids settle as on one thread");
         let final_id = |id: LayerId| {
-            if !(PROVISIONAL..LayerId::FIRST_DERIVED.0).contains(&id.0) {
-                id
-            } else if failed.contains(&id) {
+            if failed.contains(&id) {
                 LayerId::UNRESOLVED
             } else {
-                ids.get(&id).copied().unwrap_or(LayerId::UNRESOLVED)
+                renamed.get(&id).copied().unwrap_or(id)
             }
         };
-        // The reads are dropped, and the layers they hold are rewritten, on
-        // the threads the reading used.
+        // The layers naming a source that failed to read, whose arcs to it
+        // become unresolved; when a collision renumbered sources, every
+        // layer read is rewritten instead.
+        let naming_failed: HashSet<LayerId> = if failed.is_empty() {
+            HashSet::new()
+        } else {
+            reads
+                .iter()
+                .filter(|(_, read)| {
+                    read.calls
+                        .iter()
+                        .any(|call| matches!(call, Call::Target { id, .. } if failed.contains(id)))
+                })
+                .map(|(&id, _)| id)
+                .collect()
+        };
+        let rewrite = |layer: &mut Layer| {
+            if !renamed.is_empty() || naming_failed.contains(&layer.id()) {
+                layer.map_layer_ids(final_id);
+            }
+        };
+        // The reads are dropped, and the layers they hold finished, on the
+        // threads the reading used.
         let threads = &self.threads;
         let pending = &mut self.pending[first_pending..];
-        drop_and_map(threads, reads, pending, &final_id);
+        finish(threads, reads, pending, &rewrite);
         // A diagnostic names the layer read, even one that failed, and so
         // do those a strict rejection carries.
         let rename = |diagnostics: &mut [layerstack_usdz::MemberDiagnostic]| {
             for diagnostic in diagnostics {
-                if let Some(&id) = ids.get(&diagnostic.layer_id) {
+                if let Some(&id) = renamed.get(&diagnostic.layer_id) {
                     diagnostic.layer_id = id;
                 }
             }
@@ -418,7 +475,7 @@ impl<B: Storage> Reader<'_, B> {
             layer_id,
             resolved_path: identifier,
             layer: layer.map(|mut layer| {
-                layer.map_layer_ids(final_id);
+                rewrite(&mut layer);
                 layer
             }),
         }))
@@ -429,36 +486,35 @@ impl<B: Storage> Reader<'_, B> {
 enum Finish<'l> {
     /// Drops some of the reads replayed.
     Drop(Vec<Read>),
-    /// Rewrites the layer ids that some of the layers read name.
-    Map(&'l mut [Layer]),
+    /// Finishes some of the layers read.
+    Layers(&'l mut [Layer]),
 }
 
-/// Drops `reads` and rewrites the provisional layer ids of `layers` with
-/// `map`, on the threads `threads` spares: each read holds the arcs its
-/// layer resolved, and dropping or walking several thousand of them
-/// would otherwise leave every thread but one idle. Each layer's change
-/// history, which records every spec its reader inserted and the
-/// rewriting, is forgotten there too, as committing a layer forgets it
-/// ([`Layer::forget_change_history`]), so freeing it does not wait for
-/// the one thread committing.
-fn drop_and_map(
+/// Drops `reads` and finishes `layers`, applying `rewrite` to each, on the
+/// threads `threads` spares: each read holds the arcs its layer resolved,
+/// and dropping several thousand of them would otherwise leave every
+/// thread but one idle. Each layer's change history, which records every
+/// spec its reader inserted and any rewriting, is forgotten there too, as
+/// committing a layer forgets it ([`Layer::forget_change_history`]), so
+/// freeing it does not wait for the one thread committing.
+fn finish(
     threads: &Threads,
     reads: HashMap<LayerId, Read>,
     layers: &mut [Layer],
-    map: &(dyn Fn(LayerId) -> LayerId + Sync),
+    rewrite: &(dyn Fn(&mut Layer) + Sync),
 ) {
-    let map_layer = |layer: &mut Layer| {
-        layer.map_layer_ids(map);
+    let finish_layer = |layer: &mut Layer| {
+        rewrite(layer);
         layer.forget_change_history();
     };
     if threads.spare() == 0 {
         drop(reads);
-        layers.iter_mut().for_each(map_layer);
+        layers.iter_mut().for_each(finish_layer);
         return;
     }
     let mut tasks: Vec<Finish<'_>> = layers
         .chunks_mut(super::LAYERS_PER_TASK)
-        .map(Finish::Map)
+        .map(Finish::Layers)
         .collect();
     let mut reads = reads.into_values();
     loop {
@@ -470,7 +526,7 @@ fn drop_and_map(
     }
     let work = |task: Finish<'_>, _: &mut Vec<Finish<'_>>| match task {
         Finish::Drop(reads) => drop(reads),
-        Finish::Map(layers) => layers.iter_mut().for_each(map_layer),
+        Finish::Layers(layers) => layers.iter_mut().for_each(finish_layer),
     };
     layerstack::parallel::with_pool_in(threads, &work, |pool| pool.run(tasks));
 }
@@ -478,27 +534,37 @@ fn drop_and_map(
 /// The single-threaded pass recording the sources read on threads.
 struct Replay<'r, 'a, B> {
     reader: &'r mut Reader<'a, B>,
+    /// Whether every source was read as the id one thread gives it: none
+    /// stepped past a taken candidate ([`Sources::stepped`]), so each
+    /// took its first, which no other source and no earlier id holds.
+    settled: bool,
     reads: HashMap<LayerId, Read>,
-    /// The final id of each provisional one.
-    ids: HashMap<LayerId, LayerId>,
-    /// The provisional ids of sources that failed to read.
+    /// The id one thread gives each source read as another, after a
+    /// collision the threads settled in another order.
+    renamed: HashMap<LayerId, LayerId>,
+    /// The ids, as read, of sources that failed to read.
     failed: HashSet<LayerId>,
 }
 
 impl<B: Storage> Replay<'_, '_, B> {
-    /// Records the source `identifier`, read as `provisional`, as
+    /// Records the source `identifier`, read as `read_id`, as
     /// `Reader::load_external` loads it once identified: its id, then its
     /// arcs' targets in order, then its diagnostics.
     fn visit(
         &mut self,
         identifier: &Arc<str>,
-        provisional: LayerId,
+        read_id: LayerId,
     ) -> Result<(LayerId, Option<Layer>), IoError> {
         let catalog = &mut *self.reader.catalog;
         let id = if let Some(&id) = catalog.ids.get(&**identifier) {
             id
         } else {
-            let id = catalog.allocate_for(identifier)?;
+            let id = if self.settled {
+                catalog.reserved.insert(read_id);
+                read_id
+            } else {
+                catalog.allocate_for(identifier)?
+            };
             catalog.ids.insert(Arc::clone(identifier), id);
             catalog.sources.insert(
                 id,
@@ -510,14 +576,16 @@ impl<B: Storage> Replay<'_, '_, B> {
             );
             id
         };
-        self.ids.insert(provisional, id);
+        if id != read_id {
+            self.renamed.insert(read_id, id);
+        }
         if catalog.states.contains_key(&id) {
             return Ok((id, None));
         }
-        let read = self.reads.get_mut(&provisional).expect("read source");
+        let read = self.reads.get_mut(&read_id).expect("read source");
         let format = match &read.outcome {
             Outcome::Unread(error) => {
-                self.failed.insert(provisional);
+                self.failed.insert(read_id);
                 return Err(error.clone());
             }
             Outcome::Read { format, .. } => *format,
@@ -534,7 +602,7 @@ impl<B: Storage> Replay<'_, '_, B> {
         for call in &calls {
             self.call(call, id, &mut children);
         }
-        let read = self.reads.get_mut(&provisional).expect("read source");
+        let read = self.reads.get_mut(&read_id).expect("read source");
         read.calls = calls;
         let Outcome::Read { read: loose, .. } = &mut read.outcome else {
             unreachable!("matched above")
@@ -564,7 +632,7 @@ impl<B: Storage> Replay<'_, '_, B> {
         };
         if let Some(error) = error {
             self.reader.catalog.states.remove(&id);
-            self.failed.insert(provisional);
+            self.failed.insert(read_id);
             return Err(error);
         }
         let layer = core::mem::replace(
@@ -583,8 +651,8 @@ impl<B: Storage> Replay<'_, '_, B> {
             Call::Target {
                 asset,
                 identifier,
-                provisional,
-            } => (asset, self.visit(identifier, *provisional)),
+                id,
+            } => (asset, self.visit(identifier, *id)),
         };
         let bound = match result {
             Ok((id, layer)) => {

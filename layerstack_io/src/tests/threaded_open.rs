@@ -69,6 +69,28 @@ def "E" (
     )])
     .unwrap();
     memory.files.insert("package.usdz".into(), package);
+    // Layers whose ids all collide ([`crate::layer_ids::WEAK_HASH`]): the
+    // threads find `b` before `c`, one thread `c` before `b`.
+    for (name, text) in [
+        (
+            "weak-hash/root.usda",
+            "#usda 1.0\ndef \"A\" (prepend references = @weak-hash/a.usda@</A>) {}\ndef \"B\" (prepend references = [@weak-hash/b.usda@</B>, @weak-hash/missing.usda@</M>]) {}\n",
+        ),
+        (
+            "weak-hash/a.usda",
+            "#usda 1.0\ndef \"A\" (prepend references = @weak-hash/c.usda@</C>) {}\n",
+        ),
+        (
+            "weak-hash/b.usda",
+            "#usda 1.0\ndef \"B\" (prepend references = @weak-hash/c.usda@</C>) {\n int b = 1\n}\n",
+        ),
+        (
+            "weak-hash/c.usda",
+            "#usda 1.0\ndef \"C\" {\n def \"Leaf\" {}\n}\n",
+        ),
+    ] {
+        memory.files.insert(name.into(), text.as_bytes().to_vec());
+    }
     memory.files.insert(
         "packaged_root.usda".into(),
         b"#usda 1.0\ndef \"P\" (prepend references = @package.usdz@</M>) {}\ndef \"Q\" (prepend references = @lib.usda@</Lib>) {}\n"
@@ -342,5 +364,94 @@ fn layers_read_get_the_ids_their_identifiers_derive() {
         assert!(doc.catalog.ids.contains_key("nested.usda"));
         let anonymous = doc.create_anonymous_layer().unwrap();
         assert!(anonymous < LayerId::FIRST_DERIVED, "{anonymous:?}");
+    }
+}
+
+/// Identifiers whose ids collide get distinct ones, numbered in the order
+/// one thread finds them, though the threads find them in another: the
+/// same ids, arcs, failures and prims on any number of threads.
+#[test]
+fn colliding_identifiers_get_the_ids_one_thread_gives_them() {
+    let ids = |threads: usize| {
+        let options = StageOptions {
+            threads,
+            ..StageOptions::default()
+        };
+        let loading = LoadOptions {
+            import_policy: ImportPolicy::AllowRecovery,
+            ..LoadOptions::default()
+        };
+        let doc =
+            StageDocument::open_with(scene(), "weak-hash/root.usda", options, loading).unwrap();
+        let mut ids: Vec<(String, LayerId)> = doc
+            .catalog
+            .ids
+            .iter()
+            .map(|(identifier, &id)| (String::from(&**identifier), id))
+            .collect();
+        ids.sort();
+        ids
+    };
+    let attempt = |attempt: u64| LayerId(LayerId::FIRST_DERIVED.0 | attempt);
+    let single = ids(1);
+    assert_eq!(
+        single,
+        [
+            ("weak-hash/a.usda".into(), attempt(1)),
+            ("weak-hash/b.usda".into(), attempt(3)),
+            ("weak-hash/c.usda".into(), attempt(2)),
+            ("weak-hash/missing.usda".into(), attempt(4)),
+            ("weak-hash/root.usda".into(), attempt(0)),
+        ]
+    );
+    let rendered = render(
+        "weak-hash/root.usda",
+        1,
+        ImportPolicy::AllowRecovery,
+        VariantArcLoading::All,
+    );
+    for prim in ["prim /A/Leaf", "prim /B/Leaf", "failure"] {
+        assert!(rendered.contains(prim), "{rendered}");
+    }
+    for _ in 0..8 {
+        assert_eq!(ids(4), single);
+        let threaded = render(
+            "weak-hash/root.usda",
+            4,
+            ImportPolicy::AllowRecovery,
+            VariantArcLoading::All,
+        );
+        assert_eq!(threaded, rendered);
+    }
+}
+
+/// A host's layer holding an identifier's first candidate keeps it: the
+/// layer read steps past it, on one thread as on several.
+#[test]
+fn a_derived_id_steps_past_a_host_layer_holding_it() {
+    for threads in [1, 4] {
+        let mut store = InMemoryStore::default();
+        store.insert_layer(Layer::new(LayerId::FIRST_DERIVED));
+        let options = StageOptions {
+            threads,
+            ..StageOptions::default()
+        };
+        let loading = LoadOptions {
+            import_policy: ImportPolicy::AllowRecovery,
+            ..LoadOptions::default()
+        };
+        let doc =
+            StageDocument::open_in_with(scene(), store, "weak-hash/root.usda", options, loading)
+                .unwrap();
+        let root = doc.catalog.ids["weak-hash/root.usda"];
+        assert_eq!(root, LayerId(LayerId::FIRST_DERIVED.0 | 1));
+        assert_eq!(doc.stage().stage().root_layer(), Some(root));
+        let host = doc.store.layer(LayerId::FIRST_DERIVED).unwrap();
+        assert!(host.prims().is_empty(), "the host's layer is untouched");
+        let mut ids: Vec<LayerId> = doc.catalog.ids.values().copied().collect();
+        ids.sort();
+        ids.dedup();
+        assert_eq!(ids.len(), doc.catalog.ids.len());
+        assert!(!ids.contains(&LayerId::FIRST_DERIVED));
     }
 }

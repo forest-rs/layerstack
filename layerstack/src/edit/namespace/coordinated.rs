@@ -879,6 +879,9 @@ impl LayerStore for Overlay<'_> {
     fn layer(&self, id: LayerId) -> Option<&Layer> {
         self.layers.get(&id).or_else(|| self.store.layer(id))
     }
+    fn is_layer_pending(&self, id: LayerId) -> bool {
+        !self.layers.contains_key(&id) && self.store.is_layer_pending(id)
+    }
     fn layer_mut(&mut self, _: LayerId) -> Option<&mut Layer> {
         None
     }

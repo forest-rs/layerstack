@@ -23,7 +23,7 @@ use crate::{
     composition_error::CompositionError,
     doc::{Layer, LayerId, LayerOffset, LayerStore},
     expression_variables::{EXPRESSION_VARIABLES, VariableReads},
-    layer_stack::{LayerStack, LayerStackIdentifier},
+    layer_stack::{LayerStack, LayerStackIdentifier, awaits},
     path::PathId,
     prim_indexing::site::ChildListing,
     relocates::RelocationTable,
@@ -124,21 +124,26 @@ impl<'s> LayerStacks<'s> {
     }
 
     /// The layer stack rooted at `identifier`, reached through the layer
-    /// stacks of `outer`'s chain (`None` for the stage's own).
+    /// stacks of `outer`'s chain (`None` for the stage's own), or the
+    /// layers it reads that the store has not loaded yet
+    /// ([`LayerStore::is_layer_pending`]).
+    ///
+    /// A stack that reads a pending layer is not recorded: it is gathered
+    /// again, whole, once asked for after the layer loads.
     pub(crate) fn find_or_compute(
         &self,
         store: &'s dyn LayerStore,
         identifier: LayerStackIdentifier,
         outer: Option<StackId>,
-    ) -> StackId {
-        let key = (identifier, self.variable_chain(store, identifier, outer));
+    ) -> Result<StackId, Vec<LayerId>> {
+        let key = (identifier, self.variable_chain(store, identifier, outer)?);
         if let Some(id) = self.by_key.read(|by_key| by_key.get(&key).copied()) {
-            return id;
+            return Ok(id);
         }
         // Gathered without the lock, so threads gather different stacks at
         // once; of two gathering the same one, the first to record it wins.
-        let computed = compute(store, identifier, key.1.clone());
-        self.by_key.write(|by_key| {
+        let computed = compute(store, identifier, key.1.clone())?;
+        Ok(self.by_key.write(|by_key| {
             if let Some(&id) = by_key.get(&key) {
                 return id;
             }
@@ -147,53 +152,63 @@ impl<'s> LayerStacks<'s> {
             self.len.store(id.0 + 1, Ordering::Release);
             by_key.insert(key, id);
             id
-        })
+        }))
     }
 
     /// The chain of layer stacks whose expression variables a stack rooted
     /// at `identifier` composes when reached from `outer`: only stacks
     /// whose root layers author variables matter, so when none does, every
-    /// context shares one stack.
+    /// context shares one stack. A root layer the store has not loaded yet
+    /// leaves the chain unknown: its pending layers are returned instead.
     fn variable_chain(
         &self,
         store: &dyn LayerStore,
         identifier: LayerStackIdentifier,
         outer: Option<StackId>,
-    ) -> Arc<[LayerStackIdentifier]> {
+    ) -> Result<Arc<[LayerStackIdentifier]>, Vec<LayerId>> {
         let Some(field) = store.tokens().lookup(EXPRESSION_VARIABLES) else {
-            return Arc::from([]);
+            return Ok(Arc::from([]));
         };
-        let authors = |stack: &LayerStackIdentifier| {
-            stack.variable_layers().any(|layer| {
-                store
-                    .layer(layer)
-                    .is_some_and(|l| l.metadata(field).is_some())
-            })
-        };
+        let mut authors = false;
+        let mut pending = Vec::new();
+        for layer in identifier.variable_layers() {
+            match store.layer(layer) {
+                Some(layer) => authors |= layer.metadata(field).is_some(),
+                None if awaits(store, layer) => pending.push(layer),
+                None => {}
+            }
+        }
+        if !pending.is_empty() {
+            return Err(pending);
+        }
         let mut chain: Vec<LayerStackIdentifier> = outer
             .map(|outer| self.get(outer).chain.to_vec())
             .unwrap_or_default();
-        if authors(&identifier) {
+        if authors {
             chain.push(identifier);
         }
-        Arc::from(chain)
+        Ok(Arc::from(chain))
     }
 }
 
 /// Gathers the layer stack rooted at `identifier`, reached through the
-/// layer stacks of `chain`, and its relocations.
+/// layer stacks of `chain`, and its relocations, or returns the layers it
+/// reads that the store has not loaded yet.
 fn compute<'s>(
     store: &'s dyn LayerStore,
     identifier: LayerStackIdentifier,
     chain: Arc<[LayerStackIdentifier]>,
-) -> ComputedStack<'s> {
+) -> Result<ComputedStack<'s>, Vec<LayerId>> {
     let mut full_chain: Vec<LayerStackIdentifier> = chain.to_vec();
     if full_chain.last() != Some(&identifier) {
         full_chain.push(identifier);
     }
     let mut errors = Vec::new();
     let mut reads = VariableReads::default();
-    let stack = LayerStack::gather_recording(store, &full_chain, &mut errors, Some(&mut reads));
+    let mut stack = LayerStack::gather_recording(store, &full_chain, &mut errors, Some(&mut reads));
+    if !stack.pending.is_empty() {
+        return Err(core::mem::take(&mut stack.pending));
+    }
     let relocations = RelocationTable::compute(store, &stack, &mut errors);
     let combined_source_to_target = combined_relocations(store, &relocations);
     let mut resolved = Vec::with_capacity(stack.layers.len());
@@ -214,7 +229,7 @@ fn compute<'s>(
         .zip(offsets.iter().copied())
         .collect();
     let children = layers.iter().map(|_| ChildListing::default()).collect();
-    ComputedStack {
+    Ok(ComputedStack {
         identifier,
         chain,
         children,
@@ -226,7 +241,7 @@ fn compute<'s>(
         combined_source_to_target,
         errors,
         reads,
-    }
+    })
 }
 
 /// Each valid relocation source traced back through the relocations of its

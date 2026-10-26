@@ -4485,24 +4485,46 @@ impl InMemoryStore {
     /// `anchor`, resolve to, as [`Self::insert_asset_layer`] does for each,
     /// recording one change of `anchor` for all of them.
     /// [`LayerId::UNRESOLVED`] records a confirmed missing asset.
-    pub fn insert_asset_layers<'a>(
+    ///
+    /// A path is taken as an [`Arc<str>`] or anything that converts into
+    /// one, such as a `&str`, so a host that holds its paths shared stores
+    /// them without copying.
+    ///
+    /// Binding the paths of an anchor the store does not hold yet records
+    /// no change: no stage has seen the layer, so it changes nothing a
+    /// stage composed. A host loading a layer and the bindings of its arcs
+    /// together binds them before [`Self::insert_layer`], as an importer
+    /// does.
+    pub fn insert_asset_layers<A: Into<Arc<str>>>(
         &mut self,
         anchor: LayerId,
-        bindings: impl IntoIterator<Item = (&'a str, LayerId)>,
+        bindings: impl IntoIterator<Item = (A, LayerId)>,
     ) {
         let assets = self.asset_layers.entry(anchor).or_default();
-        let mut changed = Vec::new();
+        let source = self.layers.get_mut(&anchor);
+        let mut changed: Vec<Arc<str>> = Vec::new();
         for (asset_path, layer) in bindings {
-            if assets.insert(Arc::from(asset_path), layer) != Some(layer) {
+            let asset_path: Arc<str> = asset_path.into();
+            if source.is_none() {
+                assets.insert(asset_path, layer);
+            } else if assets.insert(Arc::clone(&asset_path), layer) != Some(layer) {
                 changed.push(asset_path);
             }
         }
         if !changed.is_empty()
-            && let Some(source) = self.layers.get_mut(&anchor)
+            && let Some(source) = source
         {
+            let changed: Vec<&str> = changed.iter().map(|asset| &**asset).collect();
             let paths = source.deferred_arc_paths(&changed);
             source.record_change(true, paths);
         }
+    }
+
+    /// Reserves room for at least `additional` more layers, so inserting
+    /// the layers of a large load does not grow the store's table again
+    /// and again.
+    pub fn reserve_layers(&mut self, additional: usize) {
+        self.layers.reserve(additional);
     }
 
     /// Records a host-confirmed missing asset, invalidating its anchor layer.
@@ -4907,6 +4929,28 @@ mod tests {
         let since = store.layers[&LayerId(1)].generation();
         store.insert_asset_layers(LayerId(1), [("a.usda", LayerId(3)), ("b.usda", LayerId(4))]);
         assert_eq!(store.layers[&LayerId(1)].changed_paths_since(since), None);
+    }
+
+    /// A layer's bindings recorded before the store holds it change
+    /// nothing: the layer arrives with them at its own generation, its
+    /// note that it authors no reference arc intact. Once the store holds
+    /// it, binding another asset is a change of it again.
+    #[test]
+    fn binding_assets_before_their_anchor_arrives_records_no_change() {
+        let mut store = InMemoryStore::default();
+        let mut layer = Layer::new(LayerId(1));
+        layer.sublayers.push(SublayerEntry::new(LayerId(2)));
+        layer.note_no_reference_arcs();
+        let generation = layer.generation();
+        let shared: Arc<str> = Arc::from("sub.usda");
+        store.insert_asset_layers(LayerId(1), [(Arc::clone(&shared), LayerId(2))]);
+        store.insert_layer(layer);
+        let arrived = &store.layers[&LayerId(1)];
+        assert_eq!(arrived.generation(), generation);
+        assert!(arrived.known_without_reference_arcs());
+        assert_eq!(store.asset_layer(LayerId(1), "sub.usda"), Some(LayerId(2)));
+        store.insert_asset_layers(LayerId(1), [("other.usda", LayerId(3))]);
+        assert!(store.layers[&LayerId(1)].generation() > generation);
     }
 
     #[test]

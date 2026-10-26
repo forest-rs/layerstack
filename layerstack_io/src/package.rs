@@ -426,7 +426,7 @@ impl<B: Storage> StageDocument<B> {
             layers.sort_by_key(|id| {
                 catalog.sources.get(id).map_or_else(
                     || alloc::format!("anonymous/{}", id.0),
-                    |s| s.identifier.clone(),
+                    |s| String::from(&*s.identifier),
                 )
             });
             let mut names = BTreeMap::from([(root, String::from(root_member))]);
@@ -574,7 +574,7 @@ impl<B: Storage> StageDocument<B> {
         let path = PackagePath::parse(asset, 32)
             .map_err(|reason| IoError::new(IoErrorKind::Rejected, reason))?;
         let anchor = source.map(|s| {
-            s.package.map_or(s.identifier.as_str(), |package| {
+            s.package.map_or(&*s.identifier, |package| {
                 catalog.package_identifier(package)
             })
         });

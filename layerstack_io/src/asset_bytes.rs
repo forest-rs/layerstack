@@ -196,7 +196,7 @@ pub(super) fn read<B: Storage>(
     let package = source.and_then(|s| s.package);
     let outer_anchor = package
         .map(|id| catalog.package_identifier(id))
-        .or_else(|| source.map(|s| s.identifier.as_str()))
+        .or_else(|| source.map(|s| &*s.identifier))
         .map(ToString::to_string);
     if let Some(package) = package
         && !asset.starts_with('/')
@@ -231,7 +231,7 @@ pub(super) fn read<B: Storage>(
         let member = PackagePath::join(first, rest);
         let resident = catalog
             .ids
-            .get(&identifier)
+            .get(identifier.as_str())
             .and_then(|id| catalog.package_bytes.get(id))
             .cloned();
         let archive = match resident {

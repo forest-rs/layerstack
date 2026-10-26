@@ -479,7 +479,7 @@ impl<'a, B: Storage> Discovery<'a, B> {
         let package = source.and_then(|s| s.package);
         let outer_anchor = package
             .map(|id| catalog.package_identifier(id))
-            .or_else(|| source.map(|s| s.identifier.as_str()));
+            .or_else(|| source.map(|s| &*s.identifier));
         if let Some(package) = package
             && !asset.starts_with('/')
             && !asset.contains(':')

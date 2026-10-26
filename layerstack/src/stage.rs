@@ -506,6 +506,9 @@ pub struct Stage {
     deps: Option<CompositionDeps>,
     errors: Vec<CompositionError>,
     asset_requests: Vec<crate::AssetRequest>,
+    /// The prims not composed because their indexes read layers the store
+    /// has not loaded yet.
+    pending_prims: Vec<crate::PendingPrim>,
     /// The prims composed as instances, whose descendants hold only the
     /// opinions of the instance's own arcs.
     instances: HashSet<PathId>,
@@ -1730,6 +1733,7 @@ impl Stage {
             deps,
             errors: Vec::new(),
             asset_requests: Vec::new(),
+            pending_prims: Vec::new(),
             instances: HashSet::new(),
             variant_fallbacks: VariantFallbacks::default(),
             schemas: None,
@@ -1804,6 +1808,12 @@ impl Stage {
         self
     }
 
+    /// Attaches the prims composition left pending, in traversal order.
+    pub(crate) fn with_pending_prims(mut self, pending: Vec<crate::PendingPrim>) -> Self {
+        self.pending_prims = pending;
+        self
+    }
+
     /// Attaches the assets of deferred arcs composition asked for.
     pub(crate) fn with_asset_requests(mut self, mut requests: Vec<crate::AssetRequest>) -> Self {
         sort_asset_requests(&mut requests);
@@ -1864,6 +1874,23 @@ impl Stage {
     #[must_use]
     pub fn asset_requests(&self) -> &[crate::AssetRequest] {
         &self.asset_requests
+    }
+
+    /// Returns the prims this stage does not hold because their prim
+    /// indexes read layers the store has not loaded yet
+    /// ([`LayerStore::is_layer_pending`]), each with the layers it waits
+    /// for, in the order composition reached them: namespace order, the
+    /// descendants of instances that share a prototype after the rest.
+    /// Empty when the stage is complete, which it always is over a store
+    /// with no pending layers.
+    ///
+    /// A pending prim's descendants are not composed either, and are not
+    /// listed. When the stage's own layer stack reads a pending layer, the
+    /// stage holds no prim, and lists the pseudo-root. A host loads the
+    /// layers and composes again.
+    #[must_use]
+    pub fn pending_prims(&self) -> &[crate::PendingPrim] {
+        &self.pending_prims
     }
 
     /// What the arguments of the payloads to dynamic file formats that the

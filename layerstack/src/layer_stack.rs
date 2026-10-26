@@ -73,6 +73,13 @@ impl LayerStackIdentifier {
     }
 }
 
+/// Whether composition, which found no layer `id` in `store`, waits for
+/// it: the store is loading it ([`LayerStore::is_layer_pending`]), or has
+/// loaded it since, so what was read without it is stale.
+pub(crate) fn awaits(store: &dyn LayerStore, id: LayerId) -> bool {
+    store.is_layer_pending(id) || store.layer(id).is_some()
+}
+
 /// An ordered set of layers gathered recursively from sublayers.
 ///
 /// The order is strongest → weakest, and a layer is always stronger than any of
@@ -94,6 +101,10 @@ pub struct LayerStack {
     /// [`LayerStack::chain_of`]). Every layer of a gathered stack shares
     /// one chain; a stack composition joins from two has each part's.
     pub(crate) chains: Vec<Rc<[LayerStackIdentifier]>>,
+    /// The layers the stack reads that the store has not loaded yet
+    /// ([`LayerStore::is_layer_pending`]), each once, in the order they
+    /// were met: a stack that names any is incomplete.
+    pub(crate) pending: Vec<LayerId>,
 }
 
 impl LayerStack {
@@ -201,9 +212,20 @@ impl LayerStack {
             offsets: Vec<LayerOffset>,
             errors: &'a mut Vec<CompositionError>,
             reads: Option<&'r mut VariableReads>,
+            pending: Vec<LayerId>,
         }
 
-        impl Gather<'_, '_> {
+        impl<'a> Gather<'a, '_> {
+            /// The layer `id`, as the store holds it, noting it pending when
+            /// the store has not loaded it yet ([`awaits`]).
+            fn layer(&mut self, id: LayerId) -> Option<&'a crate::Layer> {
+                let layer = self.store.layer(id);
+                if layer.is_none() && awaits(self.store, id) && !self.pending.contains(&id) {
+                    self.pending.push(id);
+                }
+                layer
+            }
+
             /// The layer `sub`, a sublayer of `id`, resolves to, or `None`
             /// after reporting why it does not.
             fn sublayer(&mut self, id: LayerId, sub: &SublayerEntry) -> Option<LayerId> {
@@ -250,7 +272,7 @@ impl LayerStack {
                 self.visiting.insert(id);
                 self.layers.push(id);
                 self.offsets.push(accumulated);
-                if let Some(layer) = self.store.layer(id) {
+                if let Some(layer) = self.layer(id) {
                     // OpenUSD 26.11 reports unpaired offsets before the
                     // sublayers' own errors (`_BuildLayerStack`).
                     if let Some(offsets) = layer.unpaired_sublayer_offsets {
@@ -280,7 +302,7 @@ impl LayerStack {
                         // the accumulated offset; the translation stays in
                         // the parent's time domain. Core §12.3.2.1.
                         let parent_rate = layer.time_codes_per_second(self.store.tokens());
-                        let child_rate = self.store.layer(sublayer).map_or(24.0, |layer| {
+                        let child_rate = self.layer(sublayer).map_or(24.0, |layer| {
                             layer.time_codes_per_second(self.store.tokens())
                         });
                         let mut offset = sub.offset;
@@ -299,6 +321,7 @@ impl LayerStack {
                 layers: Vec::new(),
                 offsets: Vec::new(),
                 chains: Vec::new(),
+                pending: Vec::new(),
             };
         };
         let mut gather = Gather {
@@ -309,18 +332,21 @@ impl LayerStack {
             offsets: Vec::new(),
             errors,
             reads: reads.take(),
+            pending: Vec::new(),
         };
         // OpenUSD PcpLayerStack::_Build: authored session TCPS wins, then
         // root TCPS, session FPS, root FPS, then 24. Each stack is mapped
-        // from its own time domain into this common stage domain.
-        let root_rate = store
+        // from its own time domain into this common stage domain. The
+        // roots are read through the gather first, so the stage rate is
+        // found from layers it has noted pending if they are.
+        let root_rate = gather
             .layer(root.root)
             .map_or(24.0, |l| l.time_codes_per_second(store.tokens()));
-        let stage_rate = root.time_codes_per_second(store);
         let session_rate = root
             .session
-            .and_then(|id| store.layer(id))
+            .and_then(|id| gather.layer(id))
             .map(|l| l.time_codes_per_second(store.tokens()));
+        let stage_rate = root.time_codes_per_second(store);
         if let (Some(session), Some(rate)) = (root.session, session_rate) {
             gather.visit(
                 session,
@@ -342,6 +368,7 @@ impl LayerStack {
             chains: alloc::vec![shared; gather.layers.len()],
             layers: gather.layers,
             offsets: gather.offsets,
+            pending: gather.pending,
         }
     }
 

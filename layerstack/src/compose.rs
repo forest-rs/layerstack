@@ -167,6 +167,7 @@ fn compose_indexed(
         })
         .with_composition_errors(store, errors)
         .with_asset_requests(asset_requests)
+        .with_pending_prims(composed.pending)
         .with_instances(composed.instances)
         .with_boundary_children(composed.boundary_children)
         .with_variant_fallbacks(options.variant_fallbacks.clone());

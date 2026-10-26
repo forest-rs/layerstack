@@ -20,6 +20,8 @@ pub(crate) mod graph;
 pub(crate) mod indexer;
 pub(crate) mod layer_stacks;
 pub(crate) mod map_function;
+#[cfg(test)]
+mod pending_tests;
 pub(crate) mod site;
 pub(crate) mod site_paths;
 
@@ -28,7 +30,7 @@ use alloc::{boxed::Box, sync::Arc, vec::Vec};
 use hashbrown::{HashMap, HashSet};
 
 use crate::{
-    asset::AssetRequest,
+    asset::{AssetRequest, PendingPrim},
     composition_error::CompositionError,
     dependency_map::{DependencyRecords, PrimDependencies},
     doc::{LayerId, LayerStore},
@@ -62,6 +64,10 @@ pub(crate) struct Composition {
     pub(crate) loadable: HashSet<PathId>,
     pub(crate) errors: Vec<CompositionError>,
     pub(crate) asset_requests: Vec<AssetRequest>,
+    /// The prims not composed, with their descendants, because their
+    /// indexes read layers the store has not loaded yet, in the order the
+    /// walk joins them ([`LayerStore::is_layer_pending`]).
+    pub(crate) pending: Vec<PendingPrim>,
     /// What the prims it keeps depend on, when it records that.
     pub(crate) deps: Option<DependencyRecords>,
     pub(crate) used_layers: HashSet<LayerId>,
@@ -284,7 +290,20 @@ pub(crate) fn compose(
         root,
         session: options.session_layer,
     };
-    ctx.stage_stack = ctx.stacks.find_or_compute(ctx.store, identifier, None);
+    ctx.stage_stack = match ctx.stacks.find_or_compute(ctx.store, identifier, None) {
+        Ok(stack) => stack,
+        // Without its own layer stack the stage has no prim to compose,
+        // not even the pseudo-root.
+        Err(layers) => {
+            return Composition {
+                pending: alloc::vec![PendingPrim {
+                    prim: root_path,
+                    layers,
+                }],
+                ..Composition::default()
+            };
+        }
+    };
     let mut out = Composition {
         local_layers: ctx.stacks.get(ctx.stage_stack).layers.clone(),
         ..Composition::default()
@@ -512,6 +531,39 @@ struct Indexed {
     boundary_children: Option<Vec<PathId>>,
 }
 
+impl Indexed {
+    /// The result of indexing the prim at `path`, which reads the layers
+    /// `pending` that the store has not loaded yet: it composes nothing,
+    /// and adds no children.
+    fn pending(path: PathId, pending: Vec<LayerId>) -> Self {
+        Self {
+            path,
+            graph: None,
+            has_payloads: false,
+            instanceable: false,
+            stacks: smallvec::SmallVec::new(),
+            arc_stacks: smallvec::SmallVec::new(),
+            record: None,
+            index: PrimIndex::default(),
+            reports: Some(Box::new(Reports {
+                errors: Vec::new(),
+                asset_requests: Vec::new(),
+                reads: VariableReads::default(),
+                findings: crate::composition_checks::Findings::default(),
+                pending,
+            })),
+            active: false,
+            graph_only: false,
+            key: None,
+            index_key: None,
+            descended: false,
+            children: Vec::new(),
+            composed_children: None,
+            boundary_children: None,
+        }
+    }
+}
+
 /// Where each of a walk's results is, by the path it indexed: a table
 /// by path id when the results are dense among the ids, as for a whole
 /// stage's prims, a map otherwise.
@@ -562,6 +614,10 @@ struct Reports {
     asset_requests: Vec<AssetRequest>,
     reads: VariableReads,
     findings: crate::composition_checks::Findings,
+    /// The layers the store has not loaded yet that the prim's index
+    /// reads: when there are any, the prim is not composed, and reports
+    /// nothing else.
+    pending: Vec<LayerId>,
 }
 
 /// Indexes the prim at `path` from its parent's index, and adds the
@@ -598,6 +654,9 @@ fn index_prim(
         parent.as_deref(),
         &mut outputs,
     );
+    if !outputs.pending.is_empty() {
+        return Indexed::pending(path, outputs.pending);
+    }
     // A child's graph is often its parent's but for its sites, or else its
     // siblings'. The shape is borrowed, not cloned: the children of one
     // parent, on every thread, would contend for its count.
@@ -709,6 +768,7 @@ fn index_prim(
             asset_requests: outputs.asset_requests,
             reads: outputs.reads,
             findings,
+            pending: Vec::new(),
         })
     });
     let composed_children = (composed_children != children).then_some(composed_children);
@@ -861,19 +921,27 @@ impl Walk<'_, '_, '_> {
         if let Some(all) = boundary_children {
             out.boundary_children.insert(path, all);
         }
-        out.composed_prim_indexes += 1;
         if let Some(reports) = reports {
             let Reports {
                 errors,
                 asset_requests,
                 reads,
                 findings,
+                pending,
             } = *reports;
+            if !pending.is_empty() {
+                out.pending.push(PendingPrim {
+                    prim: path,
+                    layers: pending,
+                });
+                return;
+            }
             self.checks.extend(findings);
             record_errors(out, ctx, errors);
             out.asset_requests.extend(asset_requests);
             out.reads.extend(reads);
         }
+        out.composed_prim_indexes += 1;
         // A layer stack's use belongs to the prim whose index first adds a
         // node reading it; its descendants inherit the node. Its layers
         // join `used_layers` once the walk is done.
@@ -1058,6 +1126,7 @@ fn prototype_is_shareable(ctx: &Ctx<'_>, out: &Composition, representative: Path
             .asset_requests
             .iter()
             .any(|request| beneath(request.prim))
+        && !out.pending.iter().any(|pending| beneath(pending.prim))
 }
 
 /// Re-roots the paths beneath `from` that the opinions of `index` name
@@ -1794,6 +1863,13 @@ fn finish(out: &mut Composition) {
             list.retain(|child| out.prims.contains_key(child));
         }
     }
+    // A prim waiting for layers is not composed.
+    if !out.pending.is_empty() {
+        let pending: HashSet<PathId> = out.pending.iter().map(|pending| pending.prim).collect();
+        for list in out.children.values_mut() {
+            list.retain(|child| !pending.contains(child));
+        }
+    }
     // Inactive children are listed apart.
     let inactive = &out.inactive;
     for (parent, list) in out.children.iter_mut() {
@@ -1846,7 +1922,12 @@ pub(crate) fn expanded_prim_index(
         root,
         session: options.session_layer,
     };
-    ctx.stage_stack = ctx.stacks.find_or_compute(ctx.store, identifier, None);
+    // A stage stack that reads layers the store has not loaded yet has no
+    // prims to index.
+    let Ok(stage_stack) = ctx.stacks.find_or_compute(ctx.store, identifier, None) else {
+        return PrimIndex::default();
+    };
+    ctx.stage_stack = stage_stack;
     // The prim and its ancestors, the pseudo-root first.
     let mut chain = alloc::vec![path];
     while let Some(parent) = store.paths().parent(*chain.last().expect("a path")) {

@@ -108,6 +108,10 @@ pub(crate) struct Outputs {
     /// What the arguments of the dynamic payloads this index follows were
     /// composed from.
     pub(crate) dynamic: DynamicDependency,
+    /// The layers the store has not loaded yet that arcs of this index
+    /// target, each once: an index that reads any is incomplete, and is
+    /// not kept ([`crate::LayerStore::is_layer_pending`]).
+    pub(crate) pending: Vec<LayerId>,
 }
 
 impl Outputs {
@@ -123,6 +127,11 @@ impl Outputs {
         self.reads.extend(other.reads);
         self.arc_layers.extend(other.arc_layers);
         self.dynamic.append(other.dynamic);
+        for layer in other.pending {
+            if !self.pending.contains(&layer) {
+                self.pending.push(layer);
+            }
+        }
     }
 }
 
@@ -1545,10 +1554,23 @@ impl Indexer<'_, '_, '_> {
                 root: target_layer,
                 session: None,
             };
-            stack_id =
+            let found =
                 self.ctx
                     .stacks
                     .find_or_compute(self.ctx.store, identifier, Some(entry.site.stack));
+            stack_id = match found {
+                Ok(stack_id) => stack_id,
+                // The arc's layer stack is incomplete: the index waits for
+                // it, and is built again whole once it loads.
+                Err(pending) => {
+                    for layer in pending {
+                        if !self.outputs.pending.contains(&layer) {
+                            self.outputs.pending.push(layer);
+                        }
+                    }
+                    return;
+                }
+            };
             self.outputs.errors.push(Recorded::StackErrors {
                 stack: stack_id,
                 prim,

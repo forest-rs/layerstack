@@ -4290,6 +4290,27 @@ pub trait LayerStore: MaybeSync {
     /// Returns a layer, if present.
     fn layer(&self, id: LayerId) -> Option<&Layer>;
 
+    /// Whether the layer `id` is still loading: the store will hold it,
+    /// but [`Self::layer`] does not return it yet.
+    ///
+    /// Composition asks only about a layer [`Self::layer`] did not return.
+    /// A layer that is neither held nor pending is missing, and composes as
+    /// a layer with no opinions. A prim whose index reads a pending layer,
+    /// as a layer of the stage's layer stack, a sublayer or the target of
+    /// a reference or payload, is not composed: the stage lists it, with
+    /// the layers it waits for, in [`crate::Stage::pending_prims`], and
+    /// composes none of its descendants. Compose again once they load.
+    ///
+    /// A store that loads layers while a composition reads it makes a
+    /// layer readable through [`Self::layer`] before it stops reporting it
+    /// pending.
+    ///
+    /// The default reports no layer pending.
+    fn is_layer_pending(&self, id: LayerId) -> bool {
+        let _ = id;
+        false
+    }
+
     /// Returns a layer mutably, if present, for authoring.
     fn layer_mut(&mut self, id: LayerId) -> Option<&mut Layer>;
 

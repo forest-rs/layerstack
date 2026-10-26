@@ -102,6 +102,24 @@ pub struct AssetRequest {
     pub arc: ArcKind,
 }
 
+/// A prim composition did not compose because its index reads layers the
+/// store has not loaded yet ([`LayerStore::is_layer_pending`]); see
+/// [`Stage::pending_prims`](crate::Stage::pending_prims).
+///
+/// Neither the prim nor its descendants are on the stage, and its parent
+/// does not list it, until the host loads `layers` and composes again.
+/// A layer a stack reads only through a pending layer, such as a sublayer
+/// of one, is not known yet, and may be pending in turn.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct PendingPrim {
+    /// The prim, or the pseudo-root when the stage's own layer stack reads
+    /// a pending layer and no prim is composed.
+    pub prim: PathId,
+    /// The pending layers its index reads, each once, in the order
+    /// composition met them.
+    pub layers: Vec<LayerId>,
+}
+
 /// Returns the asset paths that composing the layer stack rooted at `root`
 /// evaluates variable expressions to and that `store` does not resolve
 /// ([`LayerStore::asset_layer`]), sorted.

@@ -237,6 +237,10 @@ impl LayerStore for ControlledStore<'_> {
             self.inner.layer_mut(id)
         }
     }
+    fn is_layer_pending(&self, id: LayerId) -> bool {
+        // A muted layer is hidden, whether or not it has loaded.
+        (id == self.root || !self.muted.contains(&id)) && self.inner.is_layer_pending(id)
+    }
     fn tokens(&self) -> &TokenInterner {
         self.inner.tokens()
     }

@@ -1081,7 +1081,7 @@ impl XformCache {
             if changes.properties_for(path).is_none_or(|fields| {
                 fields
                     .iter()
-                    .any(|field| transform_property(scene.store().tokens().resolve(field.name)))
+                    .any(|field| is_transform_property(scene.store().tokens().resolve(field.name)))
             }) {
                 self.invalidate_transform(path);
             }
@@ -1453,9 +1453,24 @@ impl XformCache {
     }
 }
 
-// UsdGeomXformable reads only xformOpOrder and the named xformOp attributes.
-// Match the whole namespace conservatively, including currently unused ops.
-pub(crate) fn transform_property(name: &str) -> bool {
+/// Whether a property can affect a native local transform.
+///
+/// Matches `xformOpOrder` and the entire `xformOp:` namespace conservatively,
+/// including currently unused operations. Consumers can filter a complete
+/// [`layerstack::Changes::properties_for`] inventory with this same rule used by
+/// [`XformCache`]. Missing inventories still require conservative invalidation.
+/// This classifies dependencies; it does not resolve, compose or evaluate them.
+///
+/// OpenUSD: `UsdGeomXformable::GetOrderedXformOps` and `GetLocalTransformation`.
+///
+/// ```
+/// use layerstack_schemas::is_transform_property;
+/// assert!(is_transform_property("xformOpOrder"));
+/// assert!(is_transform_property("xformOp:translate:placement"));
+/// assert!(!is_transform_property("primvars:displayColor"));
+/// ```
+#[must_use]
+pub fn is_transform_property(name: &str) -> bool {
     name == "xformOpOrder" || name.starts_with("xformOp:")
 }
 

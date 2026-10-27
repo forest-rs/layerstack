@@ -563,6 +563,7 @@ pub use view::{InstanceEdit, InstanceView, PrimEdit, PrimView, Scene};
 pub use xform::{
     INVERT_PREFIX, LocalTransform, LocalTransformInputs, RESET_XFORM_STACK, RelativeTransform,
     XformCache, XformCacheStats, XformOp, XformOpType, XformOps, XformProblem, XformProblemKind,
+    is_transform_property,
 };
 #[cfg(feature = "usd-geom")]
 pub use xform_edit::{MatrixXformError, XformOpEdit, XformOpError, XformOpPrecision, XformOpValue};

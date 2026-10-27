@@ -1205,7 +1205,7 @@ impl BoundsCache {
             let prim = PrimView::new(*scene, prototype);
             varying |= prim.prim().is_some_and(|handle| {
                 handle.property_names().into_iter().any(|name| {
-                    crate::xform::transform_property(name) && prim.property_might_vary(name)
+                    crate::xform::is_transform_property(name) && prim.property_might_vary(name)
                 })
             });
         }
@@ -1369,7 +1369,7 @@ fn box_from_extent(extent: &[[f32; 3]]) -> BoundingBox {
 // Keep this inventory with the built-in extent providers in extent.rs. Unknown
 // prim edits (including kind/schema changes) always invalidate conservatively.
 pub(crate) fn bounds_property(name: &str) -> bool {
-    crate::xform::transform_property(name)
+    crate::xform::is_transform_property(name)
         || matches!(
             name,
             "extent"

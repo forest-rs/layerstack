@@ -91,6 +91,19 @@ on:
       - main
 
 jobs:
+  typescript-client:
+    name: typed stage transport client
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - run: npm ci --registry=https://registry.npmjs.org
+        working-directory: packages/client
+      - run: npm run check && npm test
+        working-directory: packages/client
+
   fmt:
     name: formatting
     runs-on: ubuntu-latest

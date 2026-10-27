@@ -1,0 +1,14 @@
+{
+  "name": "@layerstack/client",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Typed transport client for a host-owned native Layerstack stage",
+  "exports": { ".": { "types": "./src/index.ts", "import": "./src/index.ts" } },
+  "files": ["src", "README.md"],
+  "scripts": {
+    "check": "tsc --noEmit --strict --target ES2022 --moduleResolution Bundler --module ESNext src/index.ts",
+    "test": "node --experimental-strip-types --test test/*.test.ts"
+  },
+  "devDependencies": { "typescript": "5.9.3" }
+}

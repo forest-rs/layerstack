@@ -655,7 +655,7 @@ fn property_overlap(
     let name = name.map(|n| scene.store().tokens().resolve(n));
     match &held.recipe {
         Recipe::Transform(paths) => {
-            paths.contains(&prim) && name.is_none_or(crate::xform::transform_property)
+            paths.contains(&prim) && name.is_none_or(crate::xform::is_transform_property)
         }
         Recipe::Bound(root) => {
             if bounds.prototype_overlap(scene, *root, prim)
@@ -667,7 +667,7 @@ fn property_overlap(
                 name.is_none_or(crate::bounds::bounds_property)
             } else {
                 prefix(scene, prim, *root)
-                    && name.is_none_or(|n| crate::xform::transform_property(n) || n == "purpose")
+                    && name.is_none_or(|n| crate::xform::is_transform_property(n) || n == "purpose")
             }
         }
         Recipe::Shading => held

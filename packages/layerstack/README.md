@@ -21,6 +21,18 @@ const size = stage.attribute("/World/Rock.size");
 size?.get();     // { kind: "scalar", type: "double", value: 2 }
 size?.explain(); // { value, source: "default", opinions: [{ layer, specPath: "/Base.size", arc: "inherits", role: "contributed", ... }] }
 stage.status();  // { prims, compositionErrors, wanted, missing, complete }
+
+// Edits are plain data, applied atomically to one layer.
+const stop = stage.onChange((changes) => console.log(changes.changedInfoOnly));
+const receipt = stage.apply(stage.root, [
+  { type: "definePrim", path: "/World/Moss", typeName: "Cube" },
+  { type: "setValue", path: "/World/Rock.size", value: { type: "double", value: 3 } },
+]);
+const redo = receipt.undo(); // the stage is as it was; redo.undo() redoes
+
+// Switching a variant may want assets: resolve fetches them.
+stage.setVariantSelection("/World", "shade", "dark");
+await stage.resolve(source);
 ```
 
 ## The model
@@ -67,6 +79,34 @@ stage.status();  // { prims, compositionErrors, wanted, missing, complete }
   `LayerstackError` with `code`, `operation` (the method), and `path` or
   `identifier` when it is about one. Composition errors are not thrown;
   `status().compositionErrors` lists them with `composition.*` codes.
+- **Edits are plain data.** `stage.apply(layer, edits)` applies an `Edit[]`
+  (`definePrim`, `removePrim`, `removeProperty`, `createAttribute`,
+  `setValue`, `clearValue`, `blockValue`, `setTargets`, `addReference`,
+  `addPayload`, `removeReference`, `removePayload`, `setVariantSelection`,
+  `setActive`, `setInstanceable`, `setKind`, `setMetadata`, `clearMetadata`)
+  to one layer atomically: all of them or none. Each is named after the
+  OpenUSD call whose semantics it has (`UsdStage::DefinePrim`,
+  `UsdAttribute::Set`, ...). A failure names the edit (`error.edit`, its
+  index) and changes nothing.
+- **Values to author say their type.** A `ValueInput` is `{ type, value }`
+  in the layout values are read in (`{ type: "color3f", value: [1, 0, 0] }`,
+  `{ type: "point3f[]", value: new Float32Array(...) }`, a `bigint` for an
+  exact `int64`), or a `Value` read from a stage, sent back as it is.
+- **Undo is a receipt.** `apply` returns an `EditReceipt` holding the
+  native inverse: `receipt.undo()` restores exactly what the edits changed
+  and returns the receipt that redoes them. An undo whose slots another
+  edit changed since fails with `edit.stale` and changes nothing. The app
+  keeps the receipts it wants; `release()` (or `using`) the rest.
+- **Edits go to an explicit layer.** `stage.editLayer` is the default
+  target: the root, or for a stage opened with `{ editLayer: "session" }`
+  an anonymous session layer in front of it. A USDZ package is read-only:
+  open it with `editLayer: "session"` to edit it, and the package stays as
+  read. Edits to a read-only layer fail with `layer.read_only`.
+- **Changes are heard synchronously.** `stage.onChange(listener)` hears
+  `{ created, removed, resynced, changedInfoOnly }` (prim paths) for every
+  recomposition, in order, before the call that caused it (`apply`, `undo`,
+  `loadSupplied`, each round of `resolve`) returns. A listener that throws
+  is reported as `listener.failed` and the others still run.
 - **Transfer is measured.** `layerstack.transfer()` reports the bytes copied
   in (sources) and out (arrays), and the module's memory.
 
@@ -84,10 +124,22 @@ stage.status();  // { prims, compositionErrors, wanted, missing, complete }
 | `resolve.aborted` | The `signal` aborted. |
 | `resolve.stuck` | An asset was supplied but is still wanted. |
 | `resolve.limit` | `maxRounds` (100) rounds did not finish. |
+| `receipt.affinity` | A receipt of another stage was passed in. |
+| `receipt.released` | The receipt was undone or released already. |
+| `listener.failed` | Reported, not thrown: a change listener threw; `cause` is its error. |
 | `path.invalid` | A path is not an absolute prim path, or not a property path where one is asked for. |
 | `prim.not_found` | No composed prim is at the path. |
 | `layer.unknown` | The stage has no layer with the id. |
 | `value.decode` | A retained array failed to decode when read. |
+| `value.unknown_type` | A value's `type` is not a registered value type name. |
+| `value.kind` | A value's scalars are of the wrong kind (strings for a `float`). |
+| `value.shape` | A scalar or tuple with the wrong number of components, or an array length that is not a multiple of them. |
+| `value.range` | A number that is not an exact integer of the type (past 2^53: send a `bigint`), a `bool` not 0 or 1, a `float` overflow. |
+| `value.unsupported` | A value that cannot be authored yet (a dictionary). |
+| `layer.read_only` | The edits target a layer that cannot be saved; open with `editLayer: "session"`. |
+| `layer.outside_stack` | The edits target a layer the stage reaches only through an arc. |
+| `edit.stale` | An undo whose slots changed since; nothing changed and the receipt is still undoable. |
+| `edit.rejected.*` | The edits were rejected and nothing changed: `edit.rejected.type_mismatch`, `edit.rejected.reserved_field`, ... |
 | `io.*` | A read or import failed: `io.rejected` (does not parse), `io.not_found`, `io.unavailable`, ... |
 | `composition.*` | In `status().compositionErrors`: `composition.unresolved_asset`, `composition.arc_cycle`, ... |
 

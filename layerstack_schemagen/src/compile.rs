@@ -133,8 +133,9 @@
 //! the features of the domains it builds on (its first comment names
 //! them); it works in `no_std` with `alloc`. It declares `extern crate
 //! alloc` and its imports itself, so it is a module of its own. From a
-//! build script (`layerstack_schemagen` is not published; depend on the
-//! repository):
+//! build script, with `layerstack_schemagen` at the version of
+//! `layerstack_schemas` (the generated tables check their format against
+//! it):
 //!
 //! ```toml
 //! [dependencies]
@@ -142,7 +143,7 @@
 //! layerstack_schemas = { version = "0.1", default-features = false, features = ["usd-geom"] }
 //!
 //! [build-dependencies]
-//! layerstack_schemagen = { git = "https://github.com/forest-rs/layerstack" }
+//! layerstack_schemagen = "0.1"
 //! ```
 //!
 //! ```no_run

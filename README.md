@@ -13,6 +13,9 @@ opinion-resolution kernel from USD scene composition and file formats.
 | [`layerstack_usdz`](layerstack_usdz/) | USDZ archive reading and packaging |
 | [`layerstack_io`](layerstack_io/) | Host-owned storage, dependency loading, retained stage documents, explicit saves, exports and reload policies |
 | [`layerstack_mesh_export`](layerstack_mesh_export/) | Meshes, Preview Surface materials, and static point instancers exported to USD |
+| [`layerstack_wasm`](layerstack_wasm/) | WebAssembly bindings: the native side of the TypeScript package |
+| [`@forest-rs/layerstack`](packages/layerstack/) | TypeScript package: open, resolve, inspect, explain, edit and save stages in the browser or Node |
+| [`layerstack_schemagen`](layerstack_schemagen/) | Generates the OpenUSD schema tables and views, and compiles a custom `schema.usda` library into `generatedSchema.usda`, `plugInfo.json` and Rust views (`cargo install layerstack_schemagen`) |
 
 ## Getting started
 
@@ -57,7 +60,8 @@ cargo run -p layerstack_examples --example light_rig_slots
 
 - [`layerstack_examples`](layerstack_examples/) contains runnable examples.
 - [`layerstack_conformance`](layerstack_conformance/) contains fixture and interoperability tests.
-- [`layerstack_schemagen`](layerstack_schemagen/) regenerates schema tables and views.
+- [`layerstack_schemagen`](layerstack_schemagen/) regenerates schema tables and views, and
+  compiles custom schema libraries.
 - [`layerstack_custom_schemas`](layerstack_custom_schemas/) is a schema library of its own,
   built as a downstream crate builds one with `layerstack_schemagen compile --rust`.
 - [`wind_tunnel`](wind_tunnel/) contains benchmarks.
@@ -72,9 +76,10 @@ cargo run -p layerstack_examples --example light_rig_slots
 
 ## Release verification
 
-The eight library crates share version `0.1.0` and Rust 1.89. The conformance
-harness, examples, schema generator, its downstream fixture crate and benchmarks
-are repository tools marked `publish = false`.
+The ten published crates and the TypeScript package share version `0.1.0`,
+except `opinionated`, which is versioned on its own (`0.2.0`); the crates need
+Rust 1.89. The conformance harness, examples, the schema generator's downstream
+fixture crate and benchmarks are repository tools marked `publish = false`.
 
 Verify the actual library archives, including their registry dependency versions
 and license files, before publishing. The archive checker requires Python 3.11
@@ -82,14 +87,14 @@ or later:
 
 ```sh
 cargo package --workspace --exclude layerstack_conformance \
-  --exclude layerstack_examples --exclude layerstack_schemagen \
-  --exclude wind_tunnel --locked --all-features
+  --exclude layerstack_examples --exclude wind_tunnel --locked --all-features
 python3 .github/check_packages.py "${CARGO_TARGET_DIR:-target}/package"
 ```
 
 A dependency-compatible publication order is `opinionated`, `layerstack`,
 `layerstack_usda`, `layerstack_usdc`, `layerstack_usdz`, `layerstack_schemas`,
-`layerstack_io`, then `layerstack_mesh_export`. Packaging verifies the local
+`layerstack_io`, `layerstack_mesh_export`, `layerstack_wasm`, then
+`layerstack_schemagen`. Packaging verifies the local
 release set together; registry publication still requires those dependencies
 and appropriate crate ownership. CI runs the same archive verification.
 

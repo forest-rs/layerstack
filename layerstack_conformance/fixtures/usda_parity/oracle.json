@@ -381,6 +381,11 @@
    "reads": false,
    "source": "#usda 1.0\ndef \"P\"\n{\n    custom kind k\n}\n"
   },
+  "strict_layer_comment_key": {
+   "error": "'\"comment\" is registered as a non-metadata field at 'comment = \"x\"' in </>",
+   "reads": false,
+   "source": "#usda 1.0\n(\n    comment = \"x\"\n)\n"
+  },
   "strict_layer_metadata_one_line": {
    "error": "'Expected ) at 'endFrame = 2' in </>",
    "reads": false,
@@ -501,6 +506,11 @@
    "reads": false,
    "source": "#usda 1.0\ndef \"A\"\n{\n} def \"B\"\n{\n}\n"
   },
+  "strict_prim_comment_key": {
+   "error": "'\"comment\" is registered as a non-metadata field at 'comment = \"x\"' in </P>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"P\" (\n    comment = \"x\"\n)\n{\n}\n"
+  },
   "strict_prim_name_control_character": {
    "error": "''a\u0010' is not a valid prim name at '\"a\u0010\"' in </>",
    "reads": false,
@@ -515,6 +525,11 @@
    "error": "'Expected } at 'double a = 1 }' in </A>",
    "reads": false,
    "source": "#usda 1.0\ndef \"A\" { double a = 1 }\n"
+  },
+  "strict_property_comment_key": {
+   "error": "'\"comment\" is registered as a non-metadata field at 'comment = \"x\"' in </P.a>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"P\"\n{\n    double a (\n        comment = \"x\"\n    )\n}\n"
   },
   "strict_property_metadata_without_name": {
    "error": "'Expected ) at '= bad' in </P.x>",

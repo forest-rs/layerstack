@@ -106,7 +106,10 @@ The cases:
   character among them; a path holding a control character or `\\`, which
   OpenUSD's path grammar has not (`pxr/usd/sdf/pathParser.h`); a property
   metadata entry without a name, or a dictionary entry without a key
-  (`MetadataKey`, `DictionaryKey`).
+  (`MetadataKey`, `DictionaryKey`); `comment` as a metadata key on a
+  layer, a prim or a property, a field that is not metadata, which only
+  a bare string authors (`_KeyValueMetadataEnd`,
+  `pxr/usd/sdf/textParserHelpers.cpp`).
 - `statements_*`: several list-op statements for one field, on a
   relationship, a connection, references, inherits, `variantSets` and
   metadata (`apiSchemas`). OpenUSD's parser sets each statement's list
@@ -1480,6 +1483,26 @@ def "D" (
 {
 }
 def "E" {}''', []),
+    "strict_layer_comment_key": ('''#usda 1.0
+(
+    comment = "x"
+)
+''', []),
+    "strict_prim_comment_key": ('''#usda 1.0
+def "P" (
+    comment = "x"
+)
+{
+}
+''', []),
+    "strict_property_comment_key": ('''#usda 1.0
+def "P"
+{
+    double a (
+        comment = "x"
+    )
+}
+''', []),
 }
 
 

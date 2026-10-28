@@ -1818,6 +1818,20 @@ impl<'a> LowerCtx<'a> {
             idx += 1;
         }
 
+        // `comment` is a field of every spec but not metadata: only a bare
+        // string authors it (`bare_comment`), and OpenUSD refuses it as a
+        // key (`_KeyValueMetadataEnd`, `pxr/usd/sdf/textParserHelpers.cpp`;
+        // `SdfFieldKeys->Comment` is a `Field`, not a `MetadataField`, in
+        // `pxr/usd/sdf/schema.cpp`). Recovery keeps it as the comment.
+        //
+        // Spec: AOUSD Core §7.6.1.6.1 (`comment`).
+        if key == "comment" {
+            self.error(
+                node.span(),
+                "\"comment\" is registered as a non-metadata field",
+            );
+        }
+
         // Skip `=`.
         if idx < sig.len() && sig[idx].0 == SyntaxKind::Equals {
             idx += 1;
@@ -2949,5 +2963,20 @@ def Scope \"root\" {
     fn escaped_names_are_reported() {
         let r = parse("#usda 1.0\ndef \"a\\x62\" {\n}\n");
         assert_eq!(r.diagnostics.len(), 1, "{:?}", r.diagnostics);
+    }
+
+    #[test]
+    fn comment_keys_are_reported() {
+        // Only a bare string authors `comment`; as a key it is a field
+        // that is not metadata, on a layer, a prim and a property alike.
+        for src in [
+            "#usda 1.0\n(\n    comment = \"x\"\n)\n",
+            "#usda 1.0\ndef \"P\" (\n    comment = \"x\"\n)\n{\n}\n",
+            "#usda 1.0\ndef \"P\"\n{\n    double a (\n        comment = \"x\"\n    )\n}\n",
+        ] {
+            assert_eq!(parse(src).diagnostics.len(), 1, "{src:?}");
+        }
+        let r = parse("#usda 1.0\n(\n    \"x\"\n)\ndef \"P\" (\n    \"y\"\n)\n{\n}\n");
+        assert!(r.diagnostics.is_empty(), "{:?}", r.diagnostics);
     }
 }

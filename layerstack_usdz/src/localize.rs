@@ -23,6 +23,7 @@ use alloc::{
 use core::fmt;
 use layerstack::asset::UdimPattern;
 use layerstack::asset_dependencies::{AssetDependency, rewrite_layer_assets};
+use layerstack::sort;
 use layerstack::{Layer, LayerId, LayerStore, PathInterner, TokenInterner};
 
 /// A resource returned by a host after resolving an authored asset use.
@@ -309,7 +310,9 @@ pub fn localize_asset(
             layer: copy,
         });
     }
-    layers.sort_by(|a, b| (a.source != root, &a.member).cmp(&(b.source != root, &b.member)));
+    sort::sort_by(&mut layers, |a, b| {
+        (a.source != root, &a.member).cmp(&(b.source != root, &b.member))
+    });
     Ok(LocalizationPlan {
         layers,
         assets: assets

@@ -31,6 +31,7 @@ use alloc::{
     vec::Vec,
 };
 use core::fmt;
+use layerstack::sort;
 use layerstack::{
     Applied, Changes, LayerStore, LiveStage, PathId, Stage, StoreIdentity, Time, Transaction,
 };
@@ -450,7 +451,7 @@ impl<E: ProceduralEvaluator> ProceduralGraph<E> {
         // their paths were interned.
         store.paths().sort_paths(&mut spec.outputs, store.tokens());
         store.paths().sort_paths(&mut spec.inputs, store.tokens());
-        spec.resources.sort();
+        sort::sort(&mut spec.resources);
         spec.resources.dedup();
         if spec.outputs.is_empty() {
             return Err(GraphError::NoOutputs(spec.recipe));

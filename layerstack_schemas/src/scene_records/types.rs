@@ -9,6 +9,7 @@ use crate::{
     usd_geom::ImageablePurpose,
 };
 use alloc::{string::String, sync::Arc, vec::Vec};
+use layerstack::sort;
 use layerstack::{ArrayReadError, PathId, PropertyPath, Time, TokenId, Value};
 
 /// Immutable policies for one observer. All-purpose binding is the default.
@@ -196,7 +197,7 @@ impl SceneMaterials {
         if let Some(subsets) = &self.subsets {
             paths.extend(subsets.subsets.iter().filter_map(|s| s.material.material));
         }
-        paths.sort_unstable();
+        sort::sort_unstable(&mut paths);
         paths.dedup();
         paths
     }

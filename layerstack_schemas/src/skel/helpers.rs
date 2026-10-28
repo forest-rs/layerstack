@@ -6,6 +6,7 @@ use super::{SkelError, compose, invalid, length, read, tokens};
 use crate::{PrimView, Time, usd_skel::SkelAnimation};
 use alloc::vec::Vec;
 use layerstack::PropertyPath;
+use layerstack::sort;
 const TRS: [&str; 3] = ["translations", "rotations", "scales"];
 
 /// Sampled joint-local transform components in the animation's joint order.
@@ -27,7 +28,7 @@ fn sample_info(prim: &PrimView<'_>, names: &[&str]) -> (Vec<f64>, bool) {
             varying |= attribute.might_be_time_varying();
         }
     }
-    result.sort_by(f64::total_cmp);
+    sort::sort_by(&mut result, f64::total_cmp);
     result.dedup_by(|a, b| *a == *b);
     (result, varying)
 }

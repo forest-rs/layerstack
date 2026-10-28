@@ -20,6 +20,7 @@
 //! [`Attribute::explain`](layerstack::Attribute::explain) says why.
 
 use core::fmt;
+use layerstack::sort;
 
 use alloc::{string::String, vec::Vec};
 
@@ -444,7 +445,7 @@ impl<'a> PrimView<'a> {
                     .strip_prefix(namespace)
                     .is_some_and(|tail| tail.starts_with(':'))
         });
-        names.sort_unstable();
+        sort::sort_unstable(&mut names);
         names
             .into_iter()
             .filter_map(|name| prim.attribute(name).map(|attribute| attribute.path()))

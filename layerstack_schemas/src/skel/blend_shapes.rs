@@ -9,6 +9,7 @@ use super::{
 use crate::{PrimView, Scene, Time, usd_skel::BlendShape};
 use alloc::{string::String, sync::Arc, vec, vec::Vec};
 use hashbrown::HashSet;
+use layerstack::sort;
 use layerstack::{PathId, TargetPath};
 
 fn validate_offsets(offsets: &[[f32; 3]], indices: &[i32], count: usize) -> Result<(), SkelError> {
@@ -261,7 +262,7 @@ impl BlendShapeQuery {
                     normals,
                 });
             }
-            samples.sort_by(|a, b| a.weight.total_cmp(&b.weight));
+            sort::sort_by(&mut samples, |a, b| a.weight.total_cmp(&b.weight));
             paths.push(path);
             shapes.push(Shape { indices, samples });
         }

@@ -15,6 +15,7 @@ use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::hash::BuildHasher;
+use layerstack::sort;
 
 use hashbrown::HashMap;
 use smallvec::SmallVec;
@@ -662,7 +663,7 @@ impl<'a> Packer<'a> {
             // as the `std::map` holds them.
             Value::VariantSelectionMap(entries) => {
                 let mut sorted: Vec<&(String, String)> = entries.iter().collect();
-                sorted.sort_by(|a, b| a.0.cmp(&b.0));
+                sort::sort_by(&mut sorted, |a, b| a.0.cmp(&b.0));
                 if let Some(pair) = sorted.windows(2).find(|w| w[0].0 == w[1].0) {
                     return Err(UsdcWriteError::DuplicateDictionaryKey {
                         path: site.path.into(),
@@ -1056,7 +1057,7 @@ impl<'a> Packer<'a> {
             return Ok(inlined(ValueType::Dictionary, 0));
         }
         let mut sorted: SortedDictionary<'a> = entries.iter().collect();
-        sorted.sort_by(|a, b| a.0.cmp(&b.0));
+        sort::sort_by(&mut sorted, |a, b| a.0.cmp(&b.0));
         if let Some(pair) = sorted.windows(2).find(|w| w[0].0 == w[1].0) {
             return Err(UsdcWriteError::DuplicateDictionaryKey {
                 path: site.path.into(),
@@ -1301,7 +1302,7 @@ impl<'a> Packer<'a> {
             #[allow(clippy::cast_possible_truncation, reason = "path table is u32-indexed")]
             sorted.push((path, i as u32, token));
         }
-        sorted.sort_by(|a, b| a.0.cmp(b.0));
+        sort::sort_by(&mut sorted, |a, b| a.0.cmp(b.0));
         let tree = path_tree(&sorted);
         let mut paths = Vec::new();
         paths.extend_from_slice(&(self.paths.len() as u64).to_le_bytes());
@@ -1837,11 +1838,13 @@ fn prepare(specs: &[Spec]) -> Result<Vec<(CratePath, &Spec)>, UsdcWriteError> {
             }
         }
     }
-    prepared.sort_by(|(a, _), (b, _)| match (&a.property, &b.property) {
-        (None, None) => a.cmp(b),
-        (None, Some(_)) => core::cmp::Ordering::Less,
-        (Some(_), None) => core::cmp::Ordering::Greater,
-        (Some(x), Some(y)) => x.cmp(y).then_with(|| a.cmp(b)),
+    sort::sort_by(&mut prepared, |(a, _), (b, _)| {
+        match (&a.property, &b.property) {
+            (None, None) => a.cmp(b),
+            (None, Some(_)) => core::cmp::Ordering::Less,
+            (Some(_), None) => core::cmp::Ordering::Greater,
+            (Some(x), Some(y)) => x.cmp(y).then_with(|| a.cmp(b)),
+        }
     });
     Ok(prepared)
 }

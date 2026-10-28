@@ -17,6 +17,7 @@
 use super::*;
 use core::ops::AddAssign;
 use layerstack::asset::{UdimPattern, UdimTile};
+use layerstack::sort;
 
 /// One existing tile of a UDIM set.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -451,11 +452,11 @@ impl<'a, B: Storage> Discovery<'a, B> {
         else {
             return Ok(None);
         };
-        entries.sort_unstable();
+        sort::sort_unstable(&mut entries);
         self.work.listings += 1;
         self.work.listed_entries += entries.len();
         let mut folded: Vec<String> = entries.iter().map(|e| e.to_ascii_lowercase()).collect();
-        folded.sort_unstable();
+        sort::sort_unstable(&mut folded);
         let entries = Arc::new(Listing { entries, folded });
         if let Some(directory) = directory {
             self.session

@@ -4,6 +4,7 @@
 //! Shared motion sample anchoring; composed value resolution stays in Stage.
 use crate::{PrimView, Scene, Time};
 use alloc::vec::Vec;
+use layerstack::sort;
 use layerstack::{Opinions, TokenInterner, Value};
 
 pub(crate) fn read<'a, T>(
@@ -56,7 +57,7 @@ pub(crate) fn anchor(
                 .iter()
                 .map(|(t, v)| (t * offset.scale + offset.offset, v))
                 .collect();
-            mapped.sort_by(|a, b| a.0.total_cmp(&b.0));
+            sort::sort_by(&mut mapped, |a, b| a.0.total_cmp(&b.0));
             times.extend(mapped.iter().map(|&(t, _)| t));
             let active = mapped
                 .iter()
@@ -77,7 +78,7 @@ pub(crate) fn anchor(
         }
     }
     if !times.is_empty() {
-        times.sort_by(f64::total_cmp);
+        sort::sort_by(&mut times, f64::total_cmp);
         times.dedup_by(|a, b| *a == *b);
         let lower = times
             .iter()

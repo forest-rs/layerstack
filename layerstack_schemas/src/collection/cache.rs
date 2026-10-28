@@ -5,6 +5,7 @@
 use super::{Membership, MembershipProblem, MembershipQuery, SCHEMA_BASE_NAMES};
 use crate::Scene;
 use alloc::{collections::BTreeMap, string::String, vec, vec::Vec};
+use layerstack::sort;
 use layerstack::{Changes, PathId, PropertyPath, TargetPath};
 
 /// A collection instance, scoped to its originating store.
@@ -362,7 +363,7 @@ fn dependencies(
         }
     }
     let store = scene.store();
-    collections.sort_by(|a, b| {
+    sort::sort_by(&mut collections, |a, b| {
         store
             .paths()
             .cmp_paths(a.owner, b.owner, store.tokens())

@@ -23,6 +23,7 @@ use alloc::{
     sync::Arc,
     vec::Vec,
 };
+use layerstack::sort;
 use layerstack::{
     ArrayReadError, AttributeQuery, Changes, PathId, PrimSnapshot, PropertyPath, PropertyType,
     Provenance, StoreIdentity, Value,
@@ -536,7 +537,7 @@ impl MaterialNetwork {
                     constant: Some(node_constant(value)),
                 });
             }
-            ports.sort_by(|a, b| {
+            sort::sort_by(&mut ports, |a, b| {
                 (a.kind == PortKind::Output, &a.name).cmp(&(b.kind == PortKind::Output, &b.name))
             });
             let type_name = scene
@@ -566,11 +567,11 @@ impl MaterialNetwork {
                     node.ports.push(capture.port(port, None));
                 }
             }
-            node.ports.sort_by(|a, b| {
+            sort::sort_by(&mut node.ports, |a, b| {
                 (a.kind == PortKind::Output, &a.name).cmp(&(b.kind == PortKind::Output, &b.name))
             });
         }
-        nodes.sort_by_key(|n| n.path);
+        sort::sort_by_key(&mut nodes, |n| n.path);
         let mut primvars = BTreeSet::new();
         let mut resources = Vec::new();
         for node in &nodes {
@@ -601,9 +602,9 @@ impl MaterialNetwork {
             }
         }
         detect_cycles(&nodes, &mut capture.issues);
-        capture
-            .dependencies
-            .sort_by(|a, b| (a.prim, &a.property).cmp(&(b.prim, &b.property)));
+        sort::sort_by(&mut capture.dependencies, |a, b| {
+            (a.prim, &a.property).cmp(&(b.prim, &b.property))
+        });
         capture.dependencies.dedup();
         let mut dependency_prims = BTreeSet::from([material]);
         dependency_prims.extend(nodes.iter().map(|n| n.path));

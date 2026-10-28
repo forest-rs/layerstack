@@ -12,6 +12,7 @@ use crate::{
     usd_geom::{BasisCurves, GeomModelApi, TetMesh},
 };
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
+use layerstack::sort;
 use layerstack::{PathId, PropertyPath, Time, Value};
 
 /// Why a geometry calculation cannot consume its input safely.
@@ -95,7 +96,7 @@ pub fn compute_surface_faces(indices: &[[i32; 4]]) -> Result<Vec<[i32; 3]>, Geom
         for face in FACES {
             let triangle = face.map(|i| tet[i]);
             let mut signature = triangle;
-            signature.sort_unstable();
+            sort::sort_unstable(&mut signature);
             counts.entry(signature).or_insert((0, triangle)).0 += 1;
         }
     }
@@ -103,7 +104,7 @@ pub fn compute_surface_faces(indices: &[[i32; 4]]) -> Result<Vec<[i32; 3]>, Geom
         .into_values()
         .filter_map(|(n, face)| (n == 1).then_some(face))
         .collect();
-    result.sort_unstable();
+    sort::sort_unstable(&mut result);
     Ok(result)
 }
 /// Finds elements whose face normals disagree with orientation, in element

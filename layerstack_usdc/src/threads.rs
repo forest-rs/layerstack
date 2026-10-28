@@ -5,6 +5,7 @@
 
 use alloc::vec::Vec;
 use layerstack::parallel::Threads;
+use layerstack::sort;
 
 /// What a task of [`run_all`] does with its item: a result.
 #[cfg(feature = "std")]
@@ -51,7 +52,7 @@ pub(crate) fn run_all<T: Send, R: Send>(
         pool.run(alloc::vec![(0, items)])
     });
     let mut done: Vec<(usize, R)> = done.into_iter().flatten().collect();
-    done.sort_unstable_by_key(|(at, _)| *at);
+    sort::sort_unstable_by_key(&mut done, |(at, _)| *at);
     done.into_iter().map(|(_, result)| result).collect()
 }
 

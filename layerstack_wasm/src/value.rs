@@ -37,6 +37,7 @@ use alloc::{
     vec,
     vec::Vec,
 };
+use layerstack::sort;
 
 use layerstack::{StringArray, TokenInterner, TypedArray, Value, ValueType, half};
 
@@ -563,7 +564,7 @@ fn decode_nested(
         })?;
         out.push((Arc::from(entry.key.as_str()), value));
     }
-    out.sort_by(|a, b| a.0.cmp(&b.0));
+    sort::sort_by(&mut out, |a, b| a.0.cmp(&b.0));
     if let Some(pair) = out.windows(2).find(|pair| pair[0].0 == pair[1].0) {
         return Err(Error::new(
             "value.shape",

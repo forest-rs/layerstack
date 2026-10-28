@@ -48,6 +48,7 @@ use alloc::{
     vec::Vec,
 };
 use core::ops::Range;
+use layerstack::sort;
 use layerstack::{ArrayReadError, PathId, PropertyPath, PropertyType, TargetPath, Value};
 
 /// A composed `primvars:*` attribute, excluding the `:indices` sidecar.
@@ -350,7 +351,7 @@ impl<'a> Primvar<'a> {
             && let Some(indices) = self.prim.property_path(&format!("{}:indices", self.name))
         {
             times.extend(sample_times(indices));
-            times.sort_by(f64::total_cmp);
+            sort::sort_by(&mut times, f64::total_cmp);
             times.dedup_by(|a, b| a.total_cmp(b).is_eq());
         }
         times
@@ -486,7 +487,7 @@ impl<'a> PrimView<'a> {
             .into_iter()
             .filter_map(|name| Primvar::new(&scene, self.path(), name))
             .collect();
-        result.sort_by_key(|p| p.name);
+        sort::sort_by_key(&mut result, |p| p.name);
         result
     }
     /// Finds the nearest value-producing primvar. Only authored constant
@@ -529,7 +530,7 @@ impl<'a> PrimView<'a> {
             .into_iter()
             .filter_map(|name| Primvar::new(&scene, self.path(), name))
             .collect();
-        result.sort_by_key(|p| p.name);
+        sort::sort_by_key(&mut result, |p| p.name);
         result
     }
     /// Local primvars with an effective authored value, excluding blocked and
@@ -621,7 +622,7 @@ impl<'a> PrimView<'a> {
             }
         }
         if let Some(values) = &mut updated {
-            values.sort_by_key(|p| p.name);
+            sort::sort_by_key(values, |p| p.name);
         }
         updated
     }

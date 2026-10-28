@@ -9,6 +9,7 @@
 //! (constant). OpenUSD: `UsdSkelNormalizeWeights`, `UsdSkelSortInfluences`
 //! and `UsdSkelResizeInfluences` (`pxr/usd/usdSkel/utils.cpp`).
 use alloc::vec::Vec;
+use layerstack::sort;
 
 /// Why an influence utility refused its arrays; they are left unchanged.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -144,7 +145,7 @@ pub fn sort_joint_influences(
     {
         block.clear();
         block.extend(weights.iter().copied().zip(indices.iter().copied()));
-        block.sort_unstable_by(|a, b| b.0.total_cmp(&a.0).then(b.1.cmp(&a.1)));
+        sort::sort_unstable_by(&mut block, |a, b| b.0.total_cmp(&a.0).then(b.1.cmp(&a.1)));
         for ((weight, index), (w, i)) in block.iter().zip(weights.iter_mut().zip(indices)) {
             *w = *weight;
             *i = *index;

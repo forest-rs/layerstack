@@ -6,6 +6,7 @@
 use crate::{PrimView, Scene, Time, usd_semantics::SemanticsLabelsApi};
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
 use layerstack::PathId;
+use layerstack::sort;
 
 /// An interval of numeric stage times for label queries.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -209,7 +210,7 @@ impl<'a> LabelsQuery<'a> {
                 } else {
                     -f64::MAX
                 });
-                times.sort_by(f64::total_cmp);
+                sort::sort_by(&mut times, f64::total_cmp);
                 times.dedup_by(|a, b| *a == *b);
                 for time in times {
                     // If any evaluation fails, OpenUSD discards the
@@ -222,7 +223,7 @@ impl<'a> LabelsQuery<'a> {
                 }
             }
         }
-        labels.sort_unstable();
+        sort::sort_unstable(&mut labels);
         labels.dedup();
         self.direct.insert(path, labels);
         true
@@ -252,7 +253,7 @@ impl<'a> LabelsQuery<'a> {
             }
             at = self.scene.parent(path);
         }
-        labels.sort_unstable();
+        sort::sort_unstable(&mut labels);
         labels.dedup();
         labels
     }
@@ -303,7 +304,7 @@ impl<'a> Scene<'a> {
             result.extend(self.direct_taxonomies(path));
             at = self.parent(path);
         }
-        result.sort_unstable();
+        sort::sort_unstable(&mut result);
         result.dedup();
         result
     }

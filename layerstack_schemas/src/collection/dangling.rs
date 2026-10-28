@@ -17,6 +17,7 @@
 //! stage does not have and reads an absent collection as empty).
 
 use alloc::vec::Vec;
+use layerstack::sort;
 
 use layerstack::{DanglingCounts, DanglingKind, DanglingTargetReport, TargetPath};
 
@@ -198,7 +199,7 @@ impl DanglingReport {
         if let Some(root) = scene.root() {
             for prim in stage.traverse_all(root) {
                 let mut instances = CollectionApi::instances(scene, prim);
-                instances.sort_unstable_by(|a, b| a.instance().cmp(b.instance()));
+                sort::sort_unstable_by(&mut instances, |a, b| a.instance().cmp(b.instance()));
                 for collection in instances {
                     let mut entry = DanglingCollection {
                         collection: CollectionIdentity {

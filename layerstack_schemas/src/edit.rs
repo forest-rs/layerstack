@@ -4,6 +4,7 @@
 //! Authoring schema properties and applied schemas as a [`Transaction`].
 
 use core::fmt;
+use layerstack::sort;
 
 use alloc::{string::String, vec::Vec};
 
@@ -911,7 +912,7 @@ impl<'s> SchemaEdit<'s> {
         }
         let mut times: Vec<f64> = stage_times;
         times.extend(pending.iter().map(|sample| sample.time));
-        times.sort_by(f64::total_cmp);
+        sort::sort_by(&mut times, f64::total_cmp);
         let at = times
             .iter()
             .copied()

@@ -9,6 +9,7 @@ use crate::{
     usd_geom::{GeomSubset as Subset, GeomSubsetElementType as SubsetElementType, Imageable, Mesh},
 };
 use alloc::{collections::BTreeSet, format, string::String, vec::Vec};
+use layerstack::sort;
 use layerstack::{ArrayReadError, PathId, PropertyPath, TokenInterner, Value};
 
 /// The ownership contract authored for a geometry subset family.
@@ -732,7 +733,7 @@ impl<'a> Imageable<'a> {
         let mut times = Vec::new();
         if selected_time.is_none() {
             times.extend(subsets.iter().flat_map(|s| sample_times(s, "indices")));
-            times.sort_by(f64::total_cmp);
+            sort::sort_by(&mut times, f64::total_cmp);
             times.dedup_by(|a, b| *a == *b);
         }
         let mut any = false;

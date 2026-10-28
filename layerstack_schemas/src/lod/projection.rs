@@ -4,6 +4,7 @@
 use super::{LodError, LodExtent, LodMatrix, empty, point, validate_transform};
 use crate::gf;
 use alloc::vec::Vec;
+use layerstack::sort;
 
 /// Metric approximation selected by a screen-size heuristic.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -239,7 +240,9 @@ pub(super) fn size(
             points.push(xy);
         }
     }
-    points.sort_by(|a, b| a[0].total_cmp(&b[0]).then(a[1].total_cmp(&b[1])));
+    sort::sort_by(&mut points, |a, b| {
+        a[0].total_cmp(&b[0]).then(a[1].total_cmp(&b[1]))
+    });
     points.dedup_by(|a, b| (a[0] - b[0]).abs() <= 1e-6 && (a[1] - b[1]).abs() <= 1e-6);
     if points.len() < 3 {
         return Ok(0.);

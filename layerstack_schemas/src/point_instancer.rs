@@ -16,6 +16,7 @@ use crate::{
 use alloc::{boxed::Box, collections::BTreeSet, sync::Arc, vec::Vec};
 use core::num::NonZeroUsize;
 use hashbrown::HashSet;
+use layerstack::sort;
 use layerstack::{
     FieldValue, ListOp, MetadataTarget, OpinionValue, PathId, TargetPath, TokenInterner, Value,
 };
@@ -165,7 +166,7 @@ fn canonical(op: ListOp<i64>) -> ListOp<i64> {
     }
     let mut items = Vec::new();
     apply_linear(&op, &mut items);
-    items.sort_unstable();
+    sort::sort_unstable(&mut items);
     ListOp::prepended(unique_first(&items)).with_deleted(unique_first(&op.delete))
 }
 

@@ -5,6 +5,7 @@ use super::*;
 #[cfg(feature = "usd-geom")]
 use alloc::collections::BTreeSet;
 use alloc::vec;
+use layerstack::sort;
 use layerstack::{Path, PropertyKind, PropertyPath, PropertyType, Value};
 
 fn time_order(a: &Time, b: &Time) -> core::cmp::Ordering {
@@ -62,10 +63,12 @@ pub(super) fn validate(
             .collect(),
         _ => Vec::new(),
     };
-    prims.sort_by(|a, b| paths.resolve(*a).cmp_with_tokens(paths.resolve(*b), tokens));
+    sort::sort_by(&mut prims, |a, b| {
+        paths.resolve(*a).cmp_with_tokens(paths.resolve(*b), tokens)
+    });
     prims.dedup();
     let mut times = times.to_vec();
-    times.sort_by(time_order);
+    sort::sort_by(&mut times, time_order);
     times.dedup();
     let mut out = ValidationReport {
         rules: rules
@@ -171,7 +174,7 @@ pub(super) fn validate(
             }
         }
     }
-    out.problems.sort_by(|a, b| {
+    sort::sort_by(&mut out.problems, |a, b| {
         a.rule
             .cmp(&b.rule)
             .then_with(|| match (a.site.prim, b.site.prim) {
@@ -301,7 +304,7 @@ fn properties<'a>(scene: &Scene<'a>, prim: PathId) -> Vec<layerstack::Property<'
         .prim(prim)
         .map(layerstack::Prim::authored_properties)
         .unwrap_or_default();
-    properties.sort_unstable_by_key(|property| property.name());
+    sort::sort_unstable_by_key(&mut properties, |property| property.name());
     properties
 }
 /// The tokens of a token value, or of a token array value with `true`;

@@ -2118,8 +2118,9 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
             DecodedField::MathArray(array) => convert_math_array(array),
             // List ops are not plain values.
             DecodedField::PathListOp(_) => Value::Null,
-            // Read as USDA only as metadata; elsewhere, as the text it is.
-            DecodedField::UnregisteredText(text) => Value::String(Arc::from(text.as_str())),
+            // Read as USDA only as metadata; elsewhere (the value of an
+            // attribute of a type no type registers), as the text it is.
+            DecodedField::UnregisteredText(text) => Value::Unregistered(Arc::from(text.as_str())),
             DecodedField::Text(kind, index) => {
                 let text = self.lookup_token(*index);
                 match kind {
@@ -2608,7 +2609,10 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
         });
         let inferred_array = fields.iter().any(|(name, value)| {
             matches!(*name, "default" | "timeSamples")
-                && !matches!(value, DecodedField::Text(..))
+                && !matches!(
+                    value,
+                    DecodedField::Text(..) | DecodedField::UnregisteredText(_)
+                )
                 && value.value().is_none_or(crate_value_is_array)
         });
         let key = (type_name.unwrap_or(u32::MAX), inferred_array);

@@ -1905,6 +1905,17 @@ impl EmitCtx<'_> {
         type_hint: &str,
         key: (u32, Option<usize>),
     ) -> Value {
+        // A value of a type no type registers is kept as the text OpenUSD's
+        // parser records for it (`SdfUnregisteredValue`; the attribute's
+        // `Sdf_ParserValueContext` records a string when its type name is not
+        // valid, `pxr/usd/sdf/textFileFormatParser.cpp`). `dictionary` is no
+        // attribute type, a keyword OpenUSD refuses there.
+        if ValueType::from_name(type_hint).is_none()
+            && type_hint != "dictionary"
+            && let Some(text) = recorded_text(value)
+        {
+            return Value::Unregistered(Arc::from(text));
+        }
         let Some((prepared, errors)) = self
             .arrays
             .take(crate::read::PreparedKey::new(key.0, key.1))

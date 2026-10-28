@@ -85,6 +85,16 @@
    "reads": false,
    "source": "#usda 1.0\n\ndef \"P\" (\n    symmetryFunction = \"mirror\"\n)\n{\n}\n"
   },
+  "read_unknown_type_names": {
+   "reads": true,
+   "source": "#usda 1.0\ndef \"P\"\n{\n    custom foobar a = [1.50, 2, -0.25e3]\n    Some::Kind b = Value\n    Some::Kind[] c = [x, \"quoted\", @a.usda@]\n    custom thing d = (1, (2, 3)) (\n        doc = \"kept\"\n    )\n    widget e = None\n    widget f\n    widget g.timeSamples = {\n        1: alpha,\n        2: None,\n    }\n    widget[] h.timeSamples = {\n        1: [1, 2],\n    }\n}\n",
+   "text": "#usda 1.0\n\ndef \"P\"\n{\n    custom foobar a = [1.5, 2, -250]\n    Some::Kind b = Value\n    Some::Kind[] c = [x, \"quoted\", @a.usda@]\n    custom thing d = (1, (2, 3)) (\n        doc = \"kept\"\n    )\n    widget e = None\n    widget f\n    widget g.timeSamples = {\n        1: alpha,\n        2: None,\n    }\n    widget[] h.timeSamples = {\n        1: [1, 2],\n    }\n}\n\n"
+  },
+  "read_unknown_type_shaped_sample": {
+   "reads": true,
+   "source": "#usda 1.0\ndef \"P\"\n{\n    widget g.timeSamples = {\n        1: [1, 2],\n    }\n}\n",
+   "text": "#usda 1.0\n\ndef \"P\"\n{\n    widget g.timeSamples = {\n        1: [1, 2],\n    }\n}\n\n"
+  },
   "read_unregistered_identifiers": {
    "reads": true,
    "source": "#usda 1.0\n(\n    layerKey = foo\n)\n\ndef \"P\" (\n    access = foo\n    names = [foo, bar]\n    mixed = [foo, 1]\n    quoted = \"foo\"\n)\n{\n    double a (\n        access = foo\n    )\n    rel r (\n        access = bar\n    )\n}\n",

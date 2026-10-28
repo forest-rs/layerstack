@@ -20,6 +20,7 @@ export interface NativeEditBatch {
   valueHalfBits(type: string, data: Uint16Array): number;
   valueText(type: string, data: string[]): number;
   valueArray(type: string, handle: NativeArrayHandle): number;
+  valueDictionary(type: string, keys: string[], slots: Uint32Array): number;
   definePrim(path: string, specifier: string, typeName?: string | null): void;
   removePrim(path: string): void;
   removeProperty(path: string): void;
@@ -175,12 +176,16 @@ function lowerEdit(batch: NativeEditBatch, edit: Edit, host: ArrayHost): void {
   }
 }
 
+/** How deep dictionaries may nest in one value, as the module allows. */
+const DICTIONARY_DEPTH = 32;
+
 /** Puts `input` into a value slot of `batch` and returns the slot. */
-function encodeValue(batch: NativeEditBatch, input: ValueInput, host: ArrayHost): number {
+function encodeValue(batch: NativeEditBatch, input: ValueInput, host: ArrayHost, depth = 0): number {
   if (typeof input !== "object" || input === null || typeof input.type !== "string") {
     fail("a value is { type, value }, such as { type: \"double\", value: 2 }");
   }
   const type = input.type;
+  if (type === "dictionary") return encodeDictionary(batch, (input as { value?: unknown }).value, host, depth);
   if ("kind" in input) {
     switch (input.kind) {
       case "scalar":
@@ -196,6 +201,35 @@ function encodeValue(batch: NativeEditBatch, input: ValueInput, host: ArrayHost)
     }
   }
   return encodeData(batch, type, input.value);
+}
+
+/**
+ * A dictionary's entries, each a value of its own type, into slots before
+ * the dictionary's own: a `Map` or a plain object of {@link ValueInput}s,
+ * or the `value` of a dictionary read from a stage.
+ */
+function encodeDictionary(batch: NativeEditBatch, entries: unknown, host: ArrayHost, depth: number): number {
+  if (depth === DICTIONARY_DEPTH) {
+    throw new EditFailure("value.shape", `dictionaries nest deeper than ${DICTIONARY_DEPTH}`);
+  }
+  let pairs: [string, unknown][];
+  if (entries instanceof Map) pairs = [...entries.entries()];
+  else if (typeof entries === "object" && entries !== null && !Array.isArray(entries) && !ArrayBuffer.isView(entries)) {
+    pairs = Object.entries(entries);
+  } else {
+    throw new EditFailure("value.kind", "a `dictionary` value is a Map or an object of { type, value } entries");
+  }
+  const keys: string[] = [];
+  const slots = new Uint32Array(pairs.length);
+  pairs.forEach(([key, value], index) => {
+    if (typeof key !== "string") fail("dictionary keys are strings");
+    if (value === null || value === undefined) {
+      throw new EditFailure("value.kind", `dictionary key \`${key}\` has no value to author`);
+    }
+    keys.push(key);
+    slots[index] = encodeValue(batch, value as ValueInput, host, depth + 1);
+  });
+  return batch.valueDictionary("dictionary", keys, slots);
 }
 
 function encodeData(batch: NativeEditBatch, type: string, data: unknown): number {

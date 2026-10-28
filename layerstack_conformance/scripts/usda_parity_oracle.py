@@ -34,6 +34,20 @@ The cases:
   inside the variant, which anchors at `/P{v=one}Child` and so names a
   variant selection (`<x>`, `<../Other>`), a quoted
   `symmetryFunction` and an unknown unit.
+- `write_*`: layers whose text OpenUSD writes back its own way: a
+  `defaultPrim` the layer does not hold; `prefixSubstitutions` and
+  `suffixSubstitutions` (`_WriteDictionary`, `stringValuesOnly`); a
+  connection to a prim; a variant selection that is an expression; the
+  header version each feature requests (`RequestWriteVersionUpgrade`,
+  `pxr/usd/sdf/fileIO_Common.cpp`: 1.1 for a tangent algorithm, 1.2 for
+  an array edit of strings, tokens or asset paths but not of numbers, 1.3
+  for a loop boundary time, 1.4 for a duration value, nothing for a
+  `timecode` spline or a `duration` declaration); `__AnyType__` prims
+  untyped; knot custom data on one line; the curve type only with a curve
+  segment; offsets within 1e-6 of the identity dropped
+  (`SdfLayerOffset::operator==`); empty comments, an empty layer `doc` and
+  a false `hasOwnedSubLayers` dropped; `, ` between relocates; `@@@`
+  around an asset path holding `@`, with `\\@@@` inside.
 - `statements_*`: several list-op statements for one field, on a
   relationship, a connection, references, inherits, `variantSets` and
   metadata (`apiSchemas`). OpenUSD's parser sets each statement's list
@@ -401,6 +415,230 @@ def "P"
         // another comment
         9: 6,
     }
+}
+''', []),
+    "write_default_prim_in_sublayer": ('''#usda 1.0
+(
+    defaultPrim = "World"
+    subLayers = [
+        @./geometry.usda@
+    ]
+)
+''', []),
+    "write_substitution_maps": ('''#usda 1.0
+
+def "P" (
+    prefixSubstitutions = {
+        "$Left": "Right",
+        "Left": "Right"
+    }
+    suffixSubstitutions = {
+        "$NUM": "1",
+    }
+)
+{
+}
+''', []),
+    "write_prim_connection": ('''#usda 1.0
+
+def "P"
+{
+    string a.connect = </Q>
+    float b.connect = [</Q>, </Q.x>]
+}
+''', []),
+    "write_expression_selection": ('''#usda 1.0
+(
+    expressionVariables = {
+        string V = "one"
+    }
+)
+
+def "P" (
+    variants = {
+        string v = "`${V}`"
+    }
+    prepend variantSets = "v"
+)
+{
+    variantSet "v" = {
+        "one" {
+        }
+    }
+}
+''', []),
+    "write_version_timecode_spline": ('''#usda 1.0
+
+def "P"
+{
+    timecode t.spline = {
+        bezier,
+        0: 10; post curve (0.3, 2),
+        2: 20,
+    }
+}
+''', []),
+    "write_version_duration_declaration": ('''#usda 1.0
+
+def "P"
+{
+    duration d
+    duration e.spline = {
+        0: 1,
+    }
+}
+''', []),
+    "write_version_duration_value": ('''#usda 1.0
+
+def "P"
+{
+    duration d = 2.5
+}
+''', []),
+    "write_version_numeric_array_edit": ('''#usda 1.0
+
+def "P"
+{
+    int[] a = edit [resize 2; insert 4 at [0]; insert 5 at [1]; append 6]
+    double[] b = edit [prepend 1]
+}
+''', []),
+    "write_version_string_array_edit": ('''#usda 1.0
+
+def "P"
+{
+    token[] a = edit [append "x"]
+    asset[] b = edit [prepend @@@a@b@@@; append @c@]
+}
+''', []),
+    "write_version_loop_boundary": ('''#usda 1.0
+
+def "P"
+{
+    double a.spline = {
+        bezier,
+        post: loop repeat(5),
+        0: 0,
+        5: 1,
+    }
+}
+''', []),
+    "write_any_type": ('''#usda 1.0
+
+def __AnyType__ "A"
+{
+}
+
+over __AnyType__ "B"
+{
+}
+''', []),
+    "write_knot_custom_data": ('''#usda 1.0
+
+def "P"
+{
+    double a.spline = {
+        bezier,
+        0: 6; post curve (1, 2); { string a = "yes"; int b = 4; dictionary c = { string d = "x" } },
+        1: 6; post held; { double e = 1 },
+        2: 7; post curve (1, 1),
+    }
+}
+''', []),
+    "write_curve_type_last_knot": ('''#usda 1.0
+
+def "P"
+{
+    double a.spline = {
+        bezier,
+        0: 6; post held,
+        1: 7; post curve (1, 1),
+    }
+}
+''', []),
+    "write_near_identity_offsets": ('''#usda 1.0
+(
+    subLayers = [
+        @./s.usda@ (offset = 0.0000001),
+        @./t.usda@ (offset = 2; scale = 1.0000001),
+        @./u.usda@ (scale = 1.0000001)
+    ]
+)
+
+def "A" (
+    prepend references = @./r.usda@ (offset = 0.0000001)
+    prepend payload = @./y.usda@ (scale = 1.0000001)
+)
+{
+}
+
+def "B" (
+    references = @./r.usda@ (
+        offset = 0.0000001
+        customData = {
+            int k = 1
+        }
+    )
+)
+{
+}
+''', []),
+    "write_empty_comments": ('''#usda 1.0
+(
+    ""
+    doc = ""
+    hasOwnedSubLayers = false
+    upAxis = "Z"
+)
+
+def "A" (
+    ""
+)
+{
+    float f (
+        ""
+    )
+    rel r (
+        ""
+    )
+    float g (
+        ""
+        doc = ""
+    )
+}
+''', []),
+    "write_layer_header_fields_kept": ('''#usda 1.0
+(
+    doc = "layer doc"
+    hasOwnedSubLayers = true
+)
+''', []),
+    "write_relocates": ('''#usda 1.0
+(
+    relocates = {
+        </A/B>: </A/C>,
+        </A/D>: </A/E>
+    }
+)
+
+def "A"
+{
+}
+''', []),
+    "write_asset_paths_with_at": ('''#usda 1.0
+(
+    subLayers = [
+        @@@./a@b.usda@@@
+    ]
+)
+
+def "P" (
+    prepend references = @@@./x@y.usda@@@
+)
+{
+    asset a = @@@cfg@x.ocio@@@
+    asset b = @@@a\\@@@b@@@
+    asset[] c = [@@@a@b@@@, @plain@]
 }
 ''', []),
 }

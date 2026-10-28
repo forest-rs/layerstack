@@ -122,10 +122,10 @@ const INDENT: &str = "    ";
 /// A USDA layer to be written: layer metadata plus root prims.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Document {
-    /// The `defaultPrim` layer metadata field, written as given. When set,
-    /// it must name a prim of the document: a root prim by name, or a prim
-    /// below the root by a relative (`Model/Geo`) or absolute (`/Model/Geo`)
-    /// path, as OpenUSD reads it (`SdfLayer::GetDefaultPrimAsPath`).
+    /// The `defaultPrim` layer metadata field, written as given. It need
+    /// not name a prim of the document: a root layer often names one its
+    /// sublayers or references hold, and OpenUSD writes any value
+    /// (`SdfLayer::SetDefaultPrim`, `Sdf_WriteLayer`).
     ///
     /// Spec: AOUSD Core §7.6.1.2.3 (`defaultPrim`).
     pub default_prim: Option<String>,
@@ -163,8 +163,8 @@ impl Document {
     ///
     /// Returns a [`WriteError`] when a name is not a valid identifier, a
     /// sibling name repeats, an attribute's type name is unknown or does not
-    /// match its value, an asset path cannot be quoted, or `defaultPrim` does
-    /// not name a root prim. Nothing is written in that case.
+    /// match its value, or an asset path cannot be quoted. Nothing is
+    /// written in that case.
     pub fn to_usda(&self) -> Result<String, WriteError> {
         let mut out = String::new();
         self.write_usda(&mut out)?;
@@ -189,31 +189,6 @@ impl Document {
         let mut w = Writer { out };
         w.document(self);
         Ok(())
-    }
-
-    /// Whether `path` (a root prim name, or a relative or absolute prim
-    /// path of names) names a prim of the document.
-    ///
-    /// The path is read as `layerstack::Layer::default_prim_path` reads it
-    /// (OpenUSD's `SdfLayer::ConvertDefaultPrimTokenToPath`): an optional
-    /// leading `/`, then `/`-separated prim names. Unlike composition, which
-    /// accepts any such path and reports a missing prim when an arc uses
-    /// it, the writer also requires the prim to be in the document.
-    fn names_prim(&self, path: &str) -> bool {
-        let mut segments = path.strip_prefix('/').unwrap_or(path).split('/');
-        let Some(first) = segments.next() else {
-            return false;
-        };
-        let Some(mut prim) = self.prims.iter().find(|p| p.name == first) else {
-            return false;
-        };
-        for segment in segments {
-            match prim.children.iter().find(|c| c.name == segment) {
-                Some(child) => prim = child,
-                None => return false,
-            }
-        }
-        true
     }
 
     /// Checks everything [`Self::to_usda`] checks, without writing.
@@ -252,11 +227,6 @@ impl Document {
             }
         }
         validate_order(self.prim_order.as_deref(), "/", is_identifier)?;
-        if let Some(name) = &self.default_prim
-            && !self.names_prim(name)
-        {
-            return Err(WriteError::DefaultPrimNotFound { name: name.clone() });
-        }
         let mut names: Vec<&str> = Vec::new();
         for prim in &self.prims {
             prim.validate("", &mut names)?;
@@ -314,7 +284,8 @@ pub struct Prim {
     /// Variant selections (`variants = { string set = "variant" }`, the
     /// `variantSelection` field): set name and selected variant, each set
     /// once, written by set name in byte order. An empty variant name
-    /// selects no variant.
+    /// selects no variant; a variable expression (`` `"${V}"` ``) selects
+    /// the variant it evaluates to.
     ///
     /// Spec: AOUSD Core §7.6.2.3.4 (`variantSelection`), §10.3.2.5
     /// (variants).
@@ -393,7 +364,7 @@ impl Prim {
     /// Whether the prim writes a metadata section: metadata, arcs or
     /// variant fields.
     fn has_metadata(&self) -> bool {
-        !self.metadata.is_empty()
+        self.metadata.iter().any(is_written)
             || self.inherits.is_some()
             || self.payloads.is_some()
             || self.references.is_some()
@@ -511,7 +482,14 @@ impl Prim {
         for (set, variant) in &self.variant_selections {
             for (name, valid) in [
                 (set, is_identifier(set)),
-                (variant, variant.is_empty() || is_variant_name(variant)),
+                // A selection may be a variable expression, which composition
+                // evaluates (`SdfVariableExpression`, AOUSD Core §10.3.2.5).
+                (
+                    variant,
+                    variant.is_empty()
+                        || is_variant_name(variant)
+                        || layerstack::variable_expression::is_expression(variant),
+                ),
             ] {
                 if !valid {
                     return Err(WriteError::InvalidName {
@@ -838,7 +816,7 @@ impl Attribute {
                 return Err(WriteError::InvalidTimeSamples { path: path.into() });
             }
         }
-        validate_targets(self.connections.as_ref(), path, true)?;
+        validate_targets(self.connections.as_ref(), path)?;
         validate_metadata(&self.metadata, &mut Vec::new(), path)
     }
 }
@@ -897,7 +875,7 @@ impl Relationship {
     }
 
     fn validate(&self, path: &str) -> Result<(), WriteError> {
-        validate_targets(self.targets.as_ref(), path, false)?;
+        validate_targets(self.targets.as_ref(), path)?;
         validate_metadata(&self.metadata, &mut Vec::new(), path)
     }
 }
@@ -925,6 +903,16 @@ impl LayerOffset {
         offset: 0.0,
         scale: 1.0,
     };
+
+    /// Whether the offset is the identity to within 1e-6 in each part, as
+    /// `SdfLayerOffset::operator==` compares (`pxr/usd/sdf/layerOffset.cpp`):
+    /// such an offset is not written.
+    #[must_use]
+    pub fn is_identity(self) -> bool {
+        const EPSILON: f64 = 1e-6;
+        (self.offset - Self::IDENTITY.offset).abs() < EPSILON
+            && (self.scale - Self::IDENTITY.scale).abs() < EPSILON
+    }
 }
 
 impl Default for LayerOffset {
@@ -1360,14 +1348,8 @@ pub enum WriteError {
         /// Path of the owning object.
         path: String,
     },
-    /// `defaultPrim` does not name a prim of the document.
-    DefaultPrimNotFound {
-        /// The `defaultPrim` value.
-        name: String,
-    },
     /// A relationship target or connection is not an absolute path of
-    /// identifiers (`/A/B` or `/A/B.ns:prop`); connections must name a
-    /// property.
+    /// identifiers (`/A/B` or `/A/B.ns:prop`).
     InvalidTargetPath {
         /// Path of the owning property.
         path: String,
@@ -1393,8 +1375,8 @@ pub enum WriteError {
     /// variant fields ([`Prim::variant_selections`] and
     /// [`Prim::variant_set_names`]), and what this writer does not produce:
     /// relocates, a bare-spelled `permission`, `symmetryFunction` or
-    /// `displayUnit` whose value that spelling cannot hold, and the
-    /// substitution maps.
+    /// `displayUnit` whose value that spelling cannot hold, and a
+    /// substitution map that is not a dictionary of strings.
     /// A quoted `key = value` statement would not parse.
     ReservedMetadata {
         /// Path of the owning object.
@@ -1470,9 +1452,6 @@ impl fmt::Display for WriteError {
                 write!(f, "{path}: asset path {asset:?} cannot be quoted")
             }
             Self::NulInString { path } => write!(f, "{path}: string contains NUL"),
-            Self::DefaultPrimNotFound { name } => {
-                write!(f, "defaultPrim {name:?} does not name a prim")
-            }
             Self::InvalidTargetPath { path, target } => {
                 write!(f, "{path}: invalid target path {target:?}")
             }
@@ -1554,9 +1533,11 @@ fn is_property_name(name: &str) -> bool {
 /// An absolute path to a prim (`/A/B`) or, after one `.`, to a property of
 /// it (`/A/B.ns:prop`) — the target forms USDA relationships and
 /// connections use (§16.2.9; §16.2.16.9 excludes variant selections from
-/// targets). Relative paths, variant selections and
-/// relational attribute paths are not produced by this writer.
-fn validate_target(target: &str, path: &str, property: bool) -> Result<(), WriteError> {
+/// targets). A connection may name a prim as a relationship may, as
+/// OpenUSD reads and writes it (`SdfSchema::IsValidAttributeConnectionPath`).
+/// Relative paths, variant selections and relational attribute paths are
+/// not produced by this writer.
+fn validate_target(target: &str, path: &str) -> Result<(), WriteError> {
     let (prim, prop) = match target.split_once('.') {
         Some((prim, prop)) => (prim, Some(prop)),
         None => (target, None),
@@ -1564,10 +1545,7 @@ fn validate_target(target: &str, path: &str, property: bool) -> Result<(), Write
     let prim_ok = prim
         .strip_prefix('/')
         .is_some_and(|rest| rest.split('/').all(is_identifier));
-    let prop_ok = match prop {
-        Some(prop) => is_property_name(prop),
-        None => !property,
-    };
+    let prop_ok = prop.is_none_or(is_property_name);
     if prim_ok && prop_ok {
         Ok(())
     } else {
@@ -1578,10 +1556,11 @@ fn validate_target(target: &str, path: &str, property: bool) -> Result<(), Write
     }
 }
 
-/// An asset path the writers can quote: not empty, without `@` or line
-/// breaks (`@@@`-quoting is not produced).
+/// An asset path the writers can quote: not empty and without line
+/// breaks or NUL. One holding `@` is written between `@@@` delimiters
+/// ([`Writer::asset`]).
 fn validate_asset_path(asset: &str, path: &str) -> Result<(), WriteError> {
-    if asset.is_empty() || asset.contains(['@', '\n', '\r', '\0']) {
+    if asset.is_empty() || asset.contains(['\n', '\r', '\0']) {
         return Err(WriteError::InvalidAssetPath {
             path: path.into(),
             asset: asset.into(),
@@ -1652,11 +1631,7 @@ fn validate_arc_list<T: PartialEq>(
 
 /// Validates a connection or target list op: well formed (see
 /// [`ListOp`]), with every path a valid target.
-fn validate_targets(
-    targets: Option<&ListOp<String>>,
-    path: &str,
-    property: bool,
-) -> Result<(), WriteError> {
+fn validate_targets(targets: Option<&ListOp<String>>, path: &str) -> Result<(), WriteError> {
     let Some(op) = targets else {
         return Ok(());
     };
@@ -1664,7 +1639,7 @@ fn validate_targets(
         return Err(WriteError::InvalidListOp { path: path.into() });
     }
     for target in op.items() {
-        validate_target(target, path, property)?;
+        validate_target(target, path)?;
     }
     Ok(())
 }
@@ -1697,9 +1672,9 @@ fn validate_order(
 /// Metadata keys with dedicated USDA syntax that a quoted `key = value`
 /// statement cannot express (OpenUSD `pxr/usd/sdf/textFileFormat.peg`):
 /// composition arcs, sublayers and variant fields (written from their own
-/// members), relocates, and the string-to-string substitution maps.
-/// `permission`, `symmetryFunction` and `displayUnit` are written bare
-/// ([`is_bare_metadata`]).
+/// members) and relocates. `permission`, `symmetryFunction` and
+/// `displayUnit` are written bare ([`is_bare_metadata`]), and the
+/// substitution maps as string maps ([`is_string_map`]).
 const RESERVED_METADATA: &[&str] = &[
     "references",
     "payload",
@@ -1709,9 +1684,16 @@ const RESERVED_METADATA: &[&str] = &[
     "variantSets",
     "subLayers",
     "relocates",
-    "prefixSubstitutions",
-    "suffixSubstitutions",
 ];
+
+/// Whether `value` is a dictionary of strings, all a substitution map
+/// (`prefixSubstitutions`, `suffixSubstitutions`) holds: USDA writes one
+/// as `"key": "value"` items, which hold nothing else
+/// (`StringDictionaryItem`, `pxr/usd/sdf/textFileFormatParser.h`).
+fn is_string_map(value: &Value) -> bool {
+    matches!(value, Value::Dictionary(entries)
+        if entries.iter().all(|(_, v)| matches!(v, Value::String(_) | Value::Token(_))))
+}
 
 /// Whether USDA spells the metadata `key` with a bare identifier rather
 /// than a value: `permission = private`, `symmetryFunction = Ns::mirror`
@@ -1863,8 +1845,13 @@ fn validate_metadata<'a>(
                 name: entry.key.clone(),
             });
         }
+        let substitutions = matches!(
+            entry.key.as_str(),
+            "prefixSubstitutions" | "suffixSubstitutions"
+        );
         if RESERVED_METADATA.contains(&entry.key.as_str())
             || (is_bare_metadata(&entry.key) && bare_identifier(entry).is_none())
+            || (substitutions && !is_string_map(&entry.value))
         {
             return Err(WriteError::ReservedMetadata {
                 path: path.into(),
@@ -1887,11 +1874,9 @@ fn validate_metadata<'a>(
 
 fn validate_value(value: &Value, path: &str) -> Result<(), WriteError> {
     let bad_asset = |asset: &String| {
-        (asset.contains('@') || asset.contains('\n') || asset.contains('\r')).then(|| {
-            WriteError::InvalidAssetPath {
-                path: path.into(),
-                asset: asset.clone(),
-            }
+        (asset.contains('\n') || asset.contains('\r')).then(|| WriteError::InvalidAssetPath {
+            path: path.into(),
+            asset: asset.clone(),
         })
     };
     // USD strings cannot carry NUL: OpenUSD truncates at it, silently
@@ -2342,10 +2327,10 @@ fn spline_text_version(prim: &Prim) -> u8 {
             _ => None,
         })
         .map(|s| {
-            if s.pre_loop_boundary.is_some()
-                || s.post_loop_boundary.is_some()
-                || s.data_type == layerstack::spline::SplineDataType::TimeCode
-            {
+            // OpenUSD requests 1.3 for a loop boundary time and 1.1 for a
+            // tangent algorithm, nothing for the spline's value type
+            // (`RequestWriteVersionUpgrade`, `pxr/usd/sdf/fileIO_Common.cpp`).
+            if s.pre_loop_boundary.is_some() || s.post_loop_boundary.is_some() {
                 3
             } else if s.knots.iter().any(|k| {
                 k.pre_tan_algorithm != layerstack::spline::TangentAlgorithm::None
@@ -2365,25 +2350,41 @@ fn spline_text_version(prim: &Prim) -> u8 {
         .fold(own, u8::max)
 }
 
-/// USDA 1.4 for a document that holds a `duration` value or declares a
-/// `duration` attribute, as OpenUSD 26.11 requests that version for a
-/// `GfDuration`, `VtArray<GfDuration>` or `VtArrayEdit<GfDuration>`
-/// (`_StringFromVtValueHelper`, `pxr/usd/sdf/fileIO_Common.cpp`); 0
-/// otherwise.
-fn duration_text_version(doc: &Document) -> u8 {
-    fn in_value(value: &Value) -> bool {
+/// The USDA minor version the values of the document need, as OpenUSD
+/// 26.11 requests one while it writes a value (`_StringFromVtValueHelper`,
+/// `pxr/usd/sdf/fileIO_Common.cpp`): 4 for a `GfDuration`,
+/// `VtArray<GfDuration>` or `VtArrayEdit<GfDuration>`, 2 for an array edit
+/// of strings, tokens, asset paths or path expressions; 0 otherwise. An
+/// array edit of any other element type requests nothing there, so a layer
+/// whose only array edits are numeric is `#usda 1.0`; a `duration`
+/// attribute declared without a value, or with a spline, writes no value
+/// and needs no newer version.
+fn value_text_version(doc: &Document) -> u8 {
+    fn in_value(value: &Value) -> u8 {
         match value {
-            Value::Duration(_) | Value::DurationArray(_) => true,
-            Value::ArrayEdit { element, .. } => matches!(**element, Value::Duration(_)),
-            Value::Dictionary(entries) => entries.iter().any(|(_, v)| in_value(v)),
-            _ => false,
+            Value::Duration(_) | Value::DurationArray(_) => 4,
+            Value::ArrayEdit { element, .. } => match **element {
+                Value::Duration(_) => 4,
+                Value::String(_) | Value::Token(_) | Value::Asset(_) | Value::PathExpression(_) => {
+                    2
+                }
+                _ => 0,
+            },
+            Value::Dictionary(entries) => {
+                entries.iter().map(|(_, v)| in_value(v)).max().unwrap_or(0)
+            }
+            _ => 0,
         }
     }
-    fn metadata(metadata: &[Metadatum]) -> bool {
-        metadata.iter().any(|m| in_value(&m.value))
+    fn metadata(metadata: &[Metadatum]) -> u8 {
+        metadata
+            .iter()
+            .map(|m| in_value(&m.value))
+            .max()
+            .unwrap_or(0)
     }
-    fn references(list: Option<&ListOp<Reference>>) -> bool {
-        list.is_some_and(|list| {
+    fn references(list: Option<&ListOp<Reference>>) -> u8 {
+        list.map_or(0, |list| {
             [
                 list.explicit.as_deref().unwrap_or_default(),
                 &list.deleted,
@@ -2393,40 +2394,50 @@ fn duration_text_version(doc: &Document) -> u8 {
                 &list.reordered,
             ]
             .iter()
-            .any(|items| {
-                items
-                    .iter()
-                    .any(|r| r.custom_data.iter().any(|(_, v)| in_value(v)))
-            })
+            .flat_map(|items| items.iter())
+            .flat_map(|r| r.custom_data.iter())
+            .map(|(_, v)| in_value(v))
+            .max()
+            .unwrap_or(0)
         })
     }
-    fn in_prim(prim: &Prim) -> bool {
-        metadata(&prim.metadata)
-            || references(prim.references.as_ref())
-            || references(prim.payloads.as_ref())
-            || prim.properties.iter().any(|p| match p {
-                Property::Attribute(a) => {
-                    matches!(a.type_name.as_str(), "duration" | "duration[]")
-                        || a.value.as_ref().is_some_and(in_value)
-                        || a.time_samples.iter().flatten().any(|(_, v)| in_value(v))
-                        || a.spline_custom_data
-                            .iter()
-                            .any(|(_, entries)| entries.iter().any(|(_, v)| in_value(v)))
-                        || metadata(&a.metadata)
-                }
-                Property::Relationship(r) => metadata(&r.metadata),
-            })
-            || prim
-                .children
+    fn in_prim(prim: &Prim) -> u8 {
+        let properties = prim.properties.iter().map(|p| match p {
+            Property::Attribute(a) => a
+                .value
                 .iter()
-                .chain(prim.variant_sets.iter().flat_map(|v| &v.variants))
-                .any(in_prim)
+                .chain(a.time_samples.iter().flatten().map(|(_, v)| v))
+                .chain(
+                    a.spline_custom_data
+                        .iter()
+                        .flat_map(|(_, entries)| entries.iter().map(|(_, v)| v)),
+                )
+                .map(in_value)
+                .max()
+                .unwrap_or(0)
+                .max(metadata(&a.metadata)),
+            Property::Relationship(r) => metadata(&r.metadata),
+        });
+        let nested = prim
+            .children
+            .iter()
+            .chain(prim.variant_sets.iter().flat_map(|v| &v.variants))
+            .map(in_prim);
+        [
+            metadata(&prim.metadata),
+            references(prim.references.as_ref()),
+            references(prim.payloads.as_ref()),
+        ]
+        .into_iter()
+        .chain(properties)
+        .chain(nested)
+        .max()
+        .unwrap_or(0)
     }
-    if metadata(&doc.metadata) || doc.prims.iter().any(in_prim) {
-        4
-    } else {
-        0
-    }
+    doc.prims
+        .iter()
+        .map(in_prim)
+        .fold(metadata(&doc.metadata), u8::max)
 }
 
 /// `items` in the order `cmp` gives, by reference. Items already in order,
@@ -2538,14 +2549,40 @@ impl LayerField<'_> {
 }
 
 /// The `comment` entry of a metadata list, which OpenUSD writes first, as
-/// a bare string.
+/// a bare string; an empty one is not written.
 fn comment_of(entries: &[Metadatum]) -> Option<&str> {
     entries
         .iter()
         .find_map(|entry| match (&*entry.key, &entry.value) {
-            ("comment", Value::String(text) | Value::Token(text)) => Some(text.as_str()),
+            ("comment", Value::String(text) | Value::Token(text)) if !text.is_empty() => {
+                Some(text.as_str())
+            }
             _ => None,
         })
+}
+
+/// Whether OpenUSD writes the metadatum: all but an empty `comment`
+/// (`Sdf_WritePrimMetadata`, `Sdf_WriteAttribute` and
+/// `Sdf_WriteRelationship` test `GetComment().empty()`,
+/// `pxr/usd/sdf/fileIO_Common.h`).
+fn is_written(entry: &Metadatum) -> bool {
+    !(entry.key == "comment"
+        && matches!(&entry.value, Value::String(text) | Value::Token(text) if text.is_empty()))
+}
+
+/// Whether OpenUSD writes the layer metadatum: as [`is_written`], and not
+/// an empty `doc` or a false `hasOwnedSubLayers`, which `_WriteLayer`
+/// leaves out (`pxr/usd/sdf/usdaFileFormat.cpp`).
+fn is_written_on_layer(entry: &Metadatum) -> bool {
+    is_written(entry)
+        && !matches!(
+            (entry.key.as_str(), &entry.value),
+            ("doc", Value::String(text) | Value::Token(text)) if text.is_empty()
+        )
+        && !matches!(
+            (entry.key.as_str(), &entry.value),
+            ("hasOwnedSubLayers", Value::Bool(false))
+        )
 }
 
 /// Infallible text sink over a validated document.
@@ -2566,10 +2603,10 @@ impl Writer<'_> {
             .map(spline_text_version)
             .max()
             .unwrap_or(0)
-            .max(duration_text_version(doc));
+            .max(value_text_version(doc));
         self.out.push_str(&alloc::format!("#usda 1.{minor}\n"));
         if doc.default_prim.is_some()
-            || !doc.metadata.is_empty()
+            || doc.metadata.iter().any(is_written_on_layer)
             || !doc.sublayers.is_empty()
             || !doc.relocates.is_empty()
         {
@@ -2580,7 +2617,7 @@ impl Writer<'_> {
             let mut fields: SmallVec<[LayerField<'_>; 16]> = doc
                 .metadata
                 .iter()
-                .filter(|entry| entry.key != "comment")
+                .filter(|entry| entry.key != "comment" && is_written_on_layer(entry))
                 .map(LayerField::Metadatum)
                 .collect();
             fields.extend(doc.default_prim.as_deref().map(LayerField::DefaultPrim));
@@ -2622,8 +2659,10 @@ impl Writer<'_> {
                     self.path(source);
                     self.out.push_str(": ");
                     self.path(target);
+                    // `, ` after each pair but the last, as `_WriteRelocates`
+                    // writes it (`pxr/usd/sdf/fileIO_Common.cpp`).
                     if i + 1 < doc.relocates.len() {
-                        self.out.push(',');
+                        self.out.push_str(", ");
                     }
                     self.out.push('\n');
                 }
@@ -2695,6 +2734,9 @@ impl Writer<'_> {
             self.out.push_str(identifier);
         } else {
             match (key, &entry.value) {
+                ("prefixSubstitutions" | "suffixSubstitutions", Value::Dictionary(entries)) => {
+                    self.string_dictionary(entries, depth);
+                }
                 (_, Value::Bool(v)) => self.out.push_str(if *v { "true" } else { "false" }),
                 _ => self.value(&entry.value, depth),
             }
@@ -2733,7 +2775,9 @@ impl Writer<'_> {
             Specifier::Over => "over ",
             Specifier::Class => "class ",
         });
-        if let Some(type_name) = &prim.type_name {
+        // `__AnyType__` (`SdfTokens->AnyTypeToken`) is written untyped, as
+        // `Sdf_WritePrimPreamble` writes it (`pxr/usd/sdf/fileIO_Common.h`).
+        if let Some(type_name) = prim.type_name.as_deref().filter(|t| *t != "__AnyType__") {
             self.out.push_str(type_name);
             self.out.push(' ');
         }
@@ -2994,16 +3038,21 @@ impl Writer<'_> {
             return;
         }
         self.out.push_str(" (\n");
-        if arc.offset.offset != 0.0 {
+        let offset = if arc.offset.is_identity() {
+            LayerOffset::IDENTITY
+        } else {
+            arc.offset
+        };
+        if offset.offset != 0.0 {
             self.indent(depth + 1);
             self.out.push_str("offset = ");
-            self.f64(arc.offset.offset);
+            self.f64(offset.offset);
             self.out.push('\n');
         }
-        if arc.offset.scale != 1.0 {
+        if offset.scale != 1.0 {
             self.indent(depth + 1);
             self.out.push_str("scale = ");
-            self.f64(arc.offset.scale);
+            self.f64(offset.scale);
             self.out.push('\n');
         }
         self.indent(depth + 1);
@@ -3015,8 +3064,12 @@ impl Writer<'_> {
     }
 
     /// ` (offset = 10; scale = 2)`, leaving out identity parts; nothing for
-    /// the identity.
+    /// the identity, or an offset within [`LayerOffset::is_identity`] of
+    /// it, as `Sdf_FileIOUtility::WriteLayerOffset` writes it.
     fn layer_offset(&mut self, offset: LayerOffset) {
+        if offset.is_identity() {
+            return;
+        }
         let has_offset = offset.offset != 0.0;
         let has_scale = offset.scale != 1.0;
         if !(has_offset || has_scale) {
@@ -3076,7 +3129,7 @@ impl Writer<'_> {
     /// `Sdf_WriteAttribute` does.
     fn attribute(&mut self, attribute: &Attribute, depth: usize) {
         let declare = attribute.value.is_some()
-            || !attribute.metadata.is_empty()
+            || attribute.metadata.iter().any(is_written)
             || attribute.custom
             || (attribute.connections.is_none()
                 && attribute.time_samples.is_none()
@@ -3091,7 +3144,7 @@ impl Writer<'_> {
                 self.out.push_str(" = ");
                 self.attribute_value(attribute, value, depth);
             }
-            if !attribute.metadata.is_empty() {
+            if attribute.metadata.iter().any(is_written) {
                 self.out.push_str(" (\n");
                 self.metadata_entries(&attribute.metadata, depth + 1);
                 self.indent(depth);
@@ -3134,7 +3187,7 @@ impl Writer<'_> {
                     .find(|(t, _)| *t == time)
                 {
                     out.push_str("; ");
-                    Writer { out }.dictionary(entries, depth + 1);
+                    Writer { out }.inline_dictionary(entries);
                 }
             };
             crate::spline_text::write(self.out, &indent, spline, &time, &value, &custom);
@@ -3216,7 +3269,8 @@ impl Writer<'_> {
             .targets
             .as_ref()
             .filter(|op| op.explicit.is_none());
-        if edits.is_none() || relationship.custom || !relationship.metadata.is_empty() {
+        let metadata = relationship.metadata.iter().any(is_written);
+        if edits.is_none() || relationship.custom || metadata {
             self.indent(depth);
             if relationship.custom {
                 self.out.push_str("custom ");
@@ -3230,7 +3284,7 @@ impl Writer<'_> {
                 self.out.push_str(" = ");
                 self.targets(targets, depth);
             }
-            if !relationship.metadata.is_empty() {
+            if metadata {
                 self.out.push_str(" (\n");
                 self.metadata_entries(&relationship.metadata, depth + 1);
                 self.indent(depth);
@@ -3289,11 +3343,21 @@ impl Writer<'_> {
                             self.out.push_str(" to ");
                             self.edit_index(*index);
                         }
+                        // An insert at the front or the back is `prepend` or
+                        // `append`, as `VtArrayEdit` streams it
+                        // (`pxr/base/vt/arrayEdit.cpp`).
                         Instruction::Insert {
                             src,
                             index: ArrayIndex::End,
                         } => {
                             self.out.push_str("append ");
+                            self.edit_operand(src, depth);
+                        }
+                        Instruction::Insert {
+                            src,
+                            index: ArrayIndex::Position(0),
+                        } => {
+                            self.out.push_str("prepend ");
                             self.edit_operand(src, depth);
                         }
                         Instruction::Insert { src, index } => {
@@ -3431,6 +3495,57 @@ impl Writer<'_> {
             self.key(key);
             self.out.push_str(" = ");
             self.value(v, depth + 1);
+            self.out.push('\n');
+        }
+        self.indent(depth);
+        self.out.push('}');
+    }
+
+    /// A dictionary on one line, `{ string a = "x"; int b = 4 }`, as
+    /// OpenUSD writes a spline knot's custom data (`_WriteDictionary` with
+    /// `multiLine` false, `pxr/usd/sdf/fileIO_Common.cpp`).
+    fn inline_dictionary(&mut self, entries: &[(String, Value)]) {
+        self.out.push_str("{ ");
+        for (i, (key, v)) in sorted_by(entries, |a, b| a.0.cmp(&b.0)).enumerate() {
+            if i > 0 {
+                self.out.push_str("; ");
+            }
+            match v {
+                Value::Dictionary(nested) => {
+                    self.out.push_str("dictionary ");
+                    self.key(key);
+                    self.out.push_str(" = ");
+                    self.inline_dictionary(nested);
+                }
+                _ => {
+                    self.out.push_str(v.canonical_type_name());
+                    self.out.push(' ');
+                    self.key(key);
+                    self.out.push_str(" = ");
+                    self.value(v, 0);
+                }
+            }
+        }
+        self.out.push_str(" }");
+    }
+
+    /// A string-to-string map, `prefixSubstitutions` or
+    /// `suffixSubstitutions`: `"key": "value"` per line, sorted, each but
+    /// the last followed by `, ` (`_WriteDictionary` with
+    /// `stringValuesOnly`, `pxr/usd/sdf/fileIO_Common.cpp`).
+    fn string_dictionary(&mut self, entries: &[(String, Value)], depth: usize) {
+        self.out.push_str("{\n");
+        let count = entries.len();
+        for (i, (key, v)) in sorted_by(entries, |a, b| a.0.cmp(&b.0)).enumerate() {
+            self.indent(depth + 1);
+            self.string(key);
+            self.out.push_str(": ");
+            if let Value::String(text) | Value::Token(text) = v {
+                self.string(text);
+            }
+            if i + 1 < count {
+                self.out.push_str(", ");
+            }
             self.out.push('\n');
         }
         self.indent(depth);
@@ -3579,10 +3694,25 @@ impl Writer<'_> {
     }
 
     /// `@path@`; validation guarantees the path has no `@` or line break.
+    /// `@path@`, or `@@@path@@@` when the path holds `@`, with `@@@` in it
+    /// escaped as `\@@@`, as `_StringFromAssetPath` writes it
+    /// (`pxr/usd/sdf/fileIO_Common.cpp`).
     fn asset(&mut self, path: &str) {
-        self.out.push('@');
-        self.out.push_str(path);
-        self.out.push('@');
+        if !path.contains('@') {
+            self.out.push('@');
+            self.out.push_str(path);
+            self.out.push('@');
+            return;
+        }
+        self.out.push_str("@@@");
+        let mut rest = path;
+        while let Some(at) = rest.find("@@@") {
+            self.out.push_str(&rest[..at]);
+            self.out.push_str("\\@@@");
+            rest = &rest[at + 3..];
+        }
+        self.out.push_str(rest);
+        self.out.push_str("@@@");
     }
 }
 
@@ -3741,30 +3871,15 @@ def Xform "Root" (
 
     #[test]
     fn rejects_invalid_documents() {
-        let mut doc = mesh_doc();
-        doc.default_prim = Some("Missing".into());
-        assert_eq!(
-            doc.to_usda(),
-            Err(WriteError::DefaultPrimNotFound {
-                name: "Missing".into()
-            }),
-            "defaultPrim must name a root prim"
-        );
-        for path in ["Root/Tri", "/Root/Tri", "/Root"] {
+        // `defaultPrim` is written as authored, whether or not the document
+        // holds the prim: a root layer may name one its sublayers hold.
+        for path in ["Root/Tri", "/Root/Tri", "/Root", "Missing", "Root/Missing"] {
             let mut doc = mesh_doc();
             doc.default_prim = Some(path.into());
-            let text = doc.to_usda().expect("a prim path names a prim");
+            let text = doc.to_usda().expect("any defaultPrim writes");
             assert!(
                 text.contains(&alloc::format!("defaultPrim = \"{path}\"")),
                 "written as authored"
-            );
-        }
-        for path in ["Root/Missing", "/Tri", "Root//Tri", "/"] {
-            let mut doc = mesh_doc();
-            doc.default_prim = Some(path.into());
-            assert!(
-                matches!(doc.to_usda(), Err(WriteError::DefaultPrimNotFound { .. })),
-                "{path} names no prim"
             );
         }
 
@@ -3816,12 +3931,25 @@ def Xform "Root" (
         doc.prims[0].children[0].push_property(Attribute::new(
             "tex",
             "asset",
-            Value::Asset("a@b.png".into()),
+            Value::Asset("a\nb.png".into()),
         ));
         assert!(
             matches!(doc.to_usda(), Err(WriteError::InvalidAssetPath { .. })),
             "unquotable asset path"
         );
+
+        // An asset path holding `@` is written between `@@@`, escaping `@@@`.
+        let mut doc = mesh_doc();
+        for (name, asset) in [("one", "a@b.png"), ("three", "a@@@b.png")] {
+            doc.prims[0].children[0].push_property(Attribute::new(
+                name,
+                "asset",
+                Value::Asset(asset.into()),
+            ));
+        }
+        let text = doc.to_usda().unwrap();
+        assert!(text.contains("asset one = @@@a@b.png@@@"), "{text}");
+        assert!(text.contains("asset three = @@@a\\@@@b.png@@@"), "{text}");
     }
 
     #[test]
@@ -4273,12 +4401,14 @@ def Xform "Root"
                 "relationship target {target:?}"
             );
         }
-        // Connections name properties, not prims.
+        // A connection may name a prim, as OpenUSD writes it.
         let mut doc = shading_doc();
         first_attribute(&mut doc.prims[0].children[0]).connections =
             Some(ListOp::explicit(vec!["/Root/Mat/Surface".into()]));
         assert!(
-            matches!(doc.to_usda(), Err(WriteError::InvalidTargetPath { .. })),
+            doc.to_usda()
+                .unwrap()
+                .contains(".connect = </Root/Mat/Surface>"),
             "connection to a prim path"
         );
         // A relationship and an attribute cannot share a name.
@@ -4755,10 +4885,10 @@ class "C"
         );
         assert!(parse(&text).diagnostics.is_empty(), "re-parses");
         assert_eq!(
-            bad_arc(|d| d.sublayers[0].asset = "a@b".into()),
+            bad_arc(|d| d.sublayers[0].asset = "a\nb".into()),
             WriteError::InvalidAssetPath {
                 path: "/".into(),
-                asset: "a@b".into()
+                asset: "a\nb".into()
             },
             "a sublayer asset path is quotable"
         );

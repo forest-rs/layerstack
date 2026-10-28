@@ -1845,15 +1845,6 @@ def Xform "A" (
 
     #[test]
     fn rejects_what_usda_rejects_and_untypable_metadata() {
-        let mut doc = mesh_doc();
-        doc.default_prim = Some("Missing".into());
-        assert_eq!(
-            document_specs(&doc),
-            Err(UsdcWriteError::Document(WriteError::DefaultPrimNotFound {
-                name: "Missing".into()
-            })),
-            "document validation"
-        );
         // Unregistered metadata is stored as the text parser stores it: the
         // text of its value; an unregistered list op has no crate form.
         let mut doc = mesh_doc();

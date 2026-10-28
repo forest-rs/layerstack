@@ -1085,7 +1085,7 @@ def "D\4" {}
         );
         assert_eq!(
             imported.lower_diagnostics.len(),
-            13,
+            12,
             "{:#?}",
             imported.lower_diagnostics
         );

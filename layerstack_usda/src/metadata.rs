@@ -241,7 +241,7 @@ pub(crate) fn element(
         (ValueType::String, ast::Value::String(text)) => Value::String(Arc::from(&**text)),
         (ValueType::Token, ast::Value::String(text)) => Value::Token(tokens.intern(text)),
         (ValueType::Asset, ast::Value::String(text)) => Value::Asset(Arc::from(&**text)),
-        (ValueType::Asset, ast::Value::Asset(text)) => Value::Asset(Arc::from(*text)),
+        (ValueType::Asset, ast::Value::Asset(text)) => Value::Asset(Arc::from(&**text)),
         (ValueType::PathExpression, ast::Value::String(text)) => {
             Value::PathExpression(Arc::from(&**text))
         }

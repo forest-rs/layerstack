@@ -563,9 +563,13 @@ pub(crate) fn write(
     value: &dyn Fn(&mut String, f64),
     custom: &dyn Fn(&mut String, f64),
 ) {
+    // A curve segment needs a knot after it: the last knot's interpolation
+    // starts none (`TsKnotMap::HasCurveSegments`, `pxr/base/ts/knotMap.cpp`).
     let curves = spline
         .knots
         .iter()
+        .rev()
+        .skip(1)
         .any(|knot| knot.next_interp == KnotInterp::Curve);
     if curves || spline.default_curve_type == CurveType::Hermite {
         out.push_str(indent);

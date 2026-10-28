@@ -332,6 +332,7 @@ impl FieldBaseEdit {
 
 #[doc = "The tokens `fieldClass` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum OpenVDBAssetFieldClass {
     #[doc = "`levelSet`"]
     LevelSet,
@@ -641,6 +642,7 @@ impl ParticleFieldEdit {
 
 #[doc = "The tokens `projectionModeHint` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum ParticleField3DGaussianSplatProjectionModeHint {
     #[doc = "`perspective`"]
     Perspective,
@@ -691,6 +693,7 @@ impl ParticleField3DGaussianSplatProjectionModeHint {
 
 #[doc = "The tokens `sortingModeHint` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum ParticleField3DGaussianSplatSortingModeHint {
     #[doc = "`zDepth`"]
     ZDepth,
@@ -3109,6 +3112,7 @@ impl VolumeEdit {
 
 #[doc = "The tokens `vectorDataRoleHint` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum VolumeFieldAssetVectorDataRoleHint {
     #[doc = "`None`"]
     None,

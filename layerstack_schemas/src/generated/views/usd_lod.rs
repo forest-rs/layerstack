@@ -457,6 +457,7 @@ impl LODHeuristicEdit {
 
 #[doc = "The tokens `lod:override:mode` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum LODOverrideApiLodOverrideMode {
     #[doc = "`inherited`"]
     Inherited,
@@ -918,6 +919,7 @@ impl LODRootApiEdit {
 
 #[doc = "The tokens `projectionMethod` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum LODScreenSizeHeuristicProjectionMethod {
     #[doc = "`projectedExtent`"]
     ProjectedExtent,

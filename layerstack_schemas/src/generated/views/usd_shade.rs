@@ -541,6 +541,7 @@ impl MaterialBindingApiEdit {
 
 #[doc = "The tokens `info:implementationSource` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum NodeDefApiImplementationSource {
     #[doc = "`id`"]
     Id,

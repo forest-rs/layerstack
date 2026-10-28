@@ -27,6 +27,7 @@ use crate::{
 };
 #[doc = "The tokens `collection:<instance>:expansionRule` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum CollectionApiExpansionRule {
     #[doc = "`explicitOnly`"]
     ExplicitOnly,
@@ -82,6 +83,7 @@ impl CollectionApiExpansionRule {
 
 #[doc = "The tokens `collection:<instance>:mode` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum CollectionApiMode {
     #[doc = "`automatic`"]
     Automatic,

@@ -609,6 +609,7 @@ impl AuthorshipApiEdit {
 
 #[doc = "The tokens `auralMode` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum SpatialAudioAuralMode {
     #[doc = "`spatial`"]
     Spatial,
@@ -659,6 +660,7 @@ impl SpatialAudioAuralMode {
 
 #[doc = "The tokens `playbackMode` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum SpatialAudioPlaybackMode {
     #[doc = "`onceFromStart`"]
     OnceFromStart,

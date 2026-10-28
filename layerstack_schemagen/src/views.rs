@@ -1181,7 +1181,7 @@ fn token_enum(cx: &Context<'_, '_>, name: &str, property: &Property) -> Result<S
         .collect();
     let (schemas, arc) = (cx.target.schemas(), cx.target.arc());
     Ok(format!(
-        "#[doc = {doc:?}]\n#[derive(Clone, Debug, PartialEq, Eq, Hash)]\npub enum {name} {{\n{declared}    \
+        "#[doc = {doc:?}]\n#[derive(Clone, Debug, PartialEq, Eq, Hash)]\n#[non_exhaustive]\npub enum {name} {{\n{declared}    \
          /// A token the schema does not list: OpenUSD does not enforce\n    \
          /// `allowedTokens`, so an authored value may be anything. The\n    \
          /// `AllowedTokens` validation rule reports it.\n    Other({arc}<str>),\n}}\n\n\

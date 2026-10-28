@@ -619,6 +619,7 @@ impl DistantLightEdit {
 
 #[doc = "The tokens `inputs:texture:format` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum DomeLightTextureFormat {
     #[doc = "`automatic`"]
     Automatic,
@@ -967,6 +968,7 @@ impl DomeLightEdit {
 
 #[doc = "The tokens `inputs:texture:format` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum DomeLight1TextureFormat {
     #[doc = "`automatic`"]
     Automatic,
@@ -1035,6 +1037,7 @@ impl DomeLight1TextureFormat {
 
 #[doc = "The tokens `poleAxis` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum DomeLight1PoleAxis {
     #[doc = "`scene`"]
     Scene,
@@ -1553,6 +1556,7 @@ impl GeometryLightEdit {
 
 #[doc = "The tokens `light:materialSyncMode` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum LightApiMaterialSyncMode {
     #[doc = "`materialGlowTintsLight`"]
     MaterialGlowTintsLight,
@@ -2272,6 +2276,7 @@ impl LightFilterEdit {
 
 #[doc = "The tokens `lightList:cacheBehavior` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum LightListApiLightListCacheBehavior {
     #[doc = "`consumeAndHalt`"]
     ConsumeAndHalt,
@@ -2537,6 +2542,7 @@ impl LightListApiEdit {
 
 #[doc = "The tokens `lightList:cacheBehavior` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum ListApiLightListCacheBehavior {
     #[doc = "`consumeAndHalt`"]
     ConsumeAndHalt,

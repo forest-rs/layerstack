@@ -42,10 +42,18 @@ impl std::error::Error for ParseError {}
 
 type Rule<T> = Result<Option<T>, ParseError>;
 
+/// How deeply groups, predicates and `not`s may nest in an expression.
+/// The parser recurses once per level, and so do dropping and evaluating
+/// what it builds; OpenUSD's grammar has no limit but its stack's. A
+/// deeper expression fails to parse.
+pub(crate) const MAX_DEPTH: usize = 64;
+
 struct Parser<'a> {
     text: &'a str,
     bytes: &'a [u8],
     pos: usize,
+    /// The groups, predicates and `not`s open at `pos`, up to [`MAX_DEPTH`].
+    depth: usize,
 }
 
 fn is_blank(b: u8) -> bool {
@@ -65,6 +73,7 @@ impl<'a> Parser<'a> {
             text,
             bytes: text.as_bytes(),
             pos: 0,
+            depth: 0,
         }
     }
 
@@ -85,6 +94,17 @@ impl<'a> Parser<'a> {
             offset: self.pos,
             message,
         }
+    }
+
+    /// Parses `rule` one level deeper, failing past [`MAX_DEPTH`].
+    fn nested<T>(&mut self, rule: impl FnOnce(&mut Self) -> Rule<T>) -> Rule<T> {
+        if self.depth >= MAX_DEPTH {
+            return Err(self.error("expression nests too deeply"));
+        }
+        self.depth += 1;
+        let result = rule(self);
+        self.depth -= 1;
+        result
     }
 
     fn eat(&mut self, b: u8) -> bool {
@@ -183,20 +203,16 @@ impl<'a> Parser<'a> {
                 operands.push(factor);
                 continue;
             }
-            // `ImpliedUnionStep`: blanks, when a factor follows.
+            // `ImpliedUnionStep`: blanks, when a factor follows. The factor
+            // is parsed once: parsing it to look ahead and again to keep it
+            // doubled the work at every level of nested groups.
             self.pos = save;
-            if self.blanks() {
-                let after_blanks = self.pos;
-                if let Some(factor) = self.lookahead(Self::path_factor)? {
-                    let _ = factor;
-                    self.pos = after_blanks;
-                    let factor = self
-                        .path_factor()?
-                        .ok_or_else(|| self.error("expected path expression"))?;
-                    push_op(&mut operands, &mut ops, SetOp::ImpliedUnion);
-                    operands.push(factor);
-                    continue;
-                }
+            if self.blanks()
+                && let Some(factor) = self.path_factor()?
+            {
+                push_op(&mut operands, &mut ops, SetOp::ImpliedUnion);
+                operands.push(factor);
+                continue;
             }
             self.pos = save;
             break;
@@ -246,7 +262,7 @@ impl<'a> Parser<'a> {
         }
         if self.eat(b'(') {
             self.blanks();
-            let Some(inner) = self.path_expr()? else {
+            let Some(inner) = self.nested(Self::path_expr)? else {
                 return Err(self.error("expected path expression after '('"));
             };
             self.blanks();
@@ -481,7 +497,7 @@ impl<'a> Parser<'a> {
             return Ok(None);
         }
         self.blanks();
-        let Some(predicate) = self.pred_expr()? else {
+        let Some(predicate) = self.nested(Self::pred_expr)? else {
             return Err(self.error("expected predicate expression"));
         };
         self.blanks();
@@ -521,19 +537,15 @@ impl<'a> Parser<'a> {
                 operands.push(factor);
                 continue;
             }
-            // `ImpliedAndStep`: blanks, when a factor follows.
+            // `ImpliedAndStep`: blanks, when a factor follows, parsed once
+            // (see `path_expr`).
             self.pos = save;
-            if self.blanks() {
-                let after_blanks = self.pos;
-                if self.lookahead(Self::pred_factor)?.is_some() {
-                    self.pos = after_blanks;
-                    let factor = self
-                        .pred_factor()?
-                        .ok_or_else(|| self.error("expected predicate expression"))?;
-                    push_pred_op(&mut operands, &mut ops, PredicateOp::ImpliedAnd);
-                    operands.push(factor);
-                    continue;
-                }
+            if self.blanks()
+                && let Some(factor) = self.pred_factor()?
+            {
+                push_pred_op(&mut operands, &mut ops, PredicateOp::ImpliedAnd);
+                operands.push(factor);
+                continue;
             }
             self.pos = save;
             break;
@@ -555,6 +567,9 @@ impl<'a> Parser<'a> {
                 let before = self.pos;
                 if self.blanks() && self.keyword("not") {
                     nots += 1;
+                    if self.depth + nots > MAX_DEPTH {
+                        return Err(self.error("expression nests too deeply"));
+                    }
                 } else {
                     self.pos = before;
                     break;
@@ -601,7 +616,7 @@ impl<'a> Parser<'a> {
         self.pos = start;
         if self.eat(b'(') {
             self.blanks();
-            let Some(inner) = self.pred_expr()? else {
+            let Some(inner) = self.nested(Self::pred_expr)? else {
                 return Err(self.error("expected predicate expression after '('"));
             };
             self.blanks();

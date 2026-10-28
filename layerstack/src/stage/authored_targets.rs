@@ -94,6 +94,7 @@ pub enum TargetRead {
 /// [`Transaction::remove_target`](crate::edit::Transaction::remove_target)
 /// takes out of its list.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct AuthoredTarget {
     /// The layer of the property spec.
     pub layer: LayerId,
@@ -119,6 +120,7 @@ pub struct AuthoredTarget {
 
 /// Why no composed prim reads a property spec (see [`UnreadTargetSpec`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum UnreadReason {
     /// The spec is inside a variant branch the stage does not select where
     /// it reads the variant set's prim from this layer.
@@ -149,6 +151,7 @@ pub enum UnreadReason {
 /// A property spec with authored targets or connections that no composed
 /// prim reads, so none of its paths is checked.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct UnreadTargetSpec {
     /// The layer of the property spec.
     pub layer: LayerId,
@@ -165,6 +168,7 @@ pub struct UnreadTargetSpec {
 /// Every relationship target and attribute connection the stage's layers
 /// author, as the stage reads them, by layer ([`Stage::authored_targets`]).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct AuthoredTargets {
     /// Each layer walked: the stage's own layer stack, strongest first,
     /// then the other layers composition used ([`Stage::used_layers`]), by
@@ -188,6 +192,7 @@ impl AuthoredTargets {
 /// The relationship targets and attribute connections one layer authors,
 /// as the stage reads them (see [`AuthoredTargets`]).
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct LayerTargets {
     /// The layer.
     pub layer: LayerId,

@@ -428,6 +428,7 @@ impl SchemaDefinition {
 ///
 /// OpenUSD: `UsdPrim::CanApplyAPI`, whose `whyNot` these name.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum CannotApply {
     /// No prim is at the path.
     NoSuchPrim,
@@ -472,6 +473,7 @@ impl core::error::Error for CannotApply {}
 /// never fails: what an issue names is left out, as OpenUSD leaves it out
 /// with a warning.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum SchemaIssue {
     /// `schema` includes (or is auto-applied) `included`, which names no
     /// registered applied schema.
@@ -550,6 +552,7 @@ pub enum SchemaIssue {
 /// Why a base is left out of a schema's ancestry
 /// ([`SchemaIssue::InvalidBase`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum InvalidBaseReason {
     /// No registered schema has the name.
     Unregistered,

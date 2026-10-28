@@ -24,6 +24,7 @@ use core::hash::Hash;
 
 /// Evidence about a successful, exact layer-stack consolidation.
 #[derive(Clone, Debug, Default, PartialEq)]
+#[non_exhaustive]
 pub struct LayerStackFlattenReport {
     /// Input layers in strength order, with accumulated time offsets.
     pub sources: Vec<(LayerId, LayerOffset)>,
@@ -37,6 +38,7 @@ pub struct LayerStackFlattenReport {
 
 /// One anchored asset occurrence, retaining its input resolution context.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct LayerStackFlattenAssetPath {
     /// The layer authoring the original path.
     pub source_layer: LayerId,
@@ -51,6 +53,7 @@ pub struct LayerStackFlattenAssetPath {
 
 /// Detached consolidated layer and the evidence describing its inputs.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct FlattenedLayerStack {
     /// A layer using the input store's token/path domains. Insert it through
     /// the host's normal publication API when ready.
@@ -61,6 +64,7 @@ pub struct FlattenedLayerStack {
 
 /// A consolidation requirement which cannot be satisfied exactly.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum LayerStackFlattenError {
     /// A requested input layer is missing.
     MissingLayer(LayerId),

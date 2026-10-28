@@ -123,6 +123,7 @@ pub(crate) use apply::{PropertyValueEdit, SourceNamespace, apply};
 
 /// What [`LiveStage::apply`](crate::LiveStage::apply) did.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct Applied {
     /// The transaction that undoes the applied one (see [`Transaction`]).
     pub inverse: Transaction,
@@ -194,6 +195,7 @@ pub struct Applied {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 #[doc(alias = "UsdNotice::ObjectsChanged")]
 #[doc(alias = "ObjectsChanged")]
+#[non_exhaustive]
 pub struct Changes {
     /// Prim paths present after the transaction but absent before it.
     pub created: Vec<PathId>,
@@ -214,6 +216,7 @@ pub struct Changes {
 /// These identify authored operations, not differences between resolved values.
 /// AOUSD Core §12 (properties); OpenUSD `UsdNotice::ObjectsChanged::GetChangedFields`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[non_exhaustive]
 pub enum PropertyField {
     /// The attribute's default value, including authored absence and blocks.
     Default,

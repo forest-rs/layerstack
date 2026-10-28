@@ -6,6 +6,7 @@ use super::*;
 
 /// Why a query may need this asset, independently of whether it is resident.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ClipDemandReason {
     /// Determine whether the manifest declares this property eligible.
     Manifest,
@@ -27,6 +28,7 @@ pub enum ClipDemandReason {
 /// One anchored demand and its reason. Loaded/missing results are retained so
 /// consumers can distinguish a complete gap from unresolved residency.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ClipDemand {
     /// Source identity, role and current availability.
     pub request: ClipAssetRequest,
@@ -36,6 +38,7 @@ pub struct ClipDemand {
 /// Query preparation evidence. Replan after satisfying demands and recomposing;
 /// a manifest read can reveal further demands. No numeric query performs I/O.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct ClipQueryPlan {
     /// Queried property in the stage namespace.
     pub property: PropertyPath,

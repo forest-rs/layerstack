@@ -393,5 +393,6 @@ fn check(
             }
         }
         AuthoringVerdict::Unknown { .. } => panic!("{context}: resident metadata settles it"),
+        verdict => panic!("{context}: unexpected verdict {verdict:?}"),
     }
 }

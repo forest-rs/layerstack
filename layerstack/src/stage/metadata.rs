@@ -8,6 +8,7 @@ use crate::{Applied, EditError, LiveStage, Transaction};
 
 /// Why a stage metadata edit was rejected. Rejection changes no authored state.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum StageMetadataError {
     /// Stage metadata may be authored only on the root or primary session layer.
     InvalidLayer(LayerId),

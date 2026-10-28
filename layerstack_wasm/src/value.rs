@@ -131,7 +131,14 @@ pub(crate) fn encode(
         Value::ArrayEdit(_) | Value::TypedArrayEdit(_) => {
             Wire::List(vec![Wire::Text(named("arrayEdit")), Wire::text("x")])
         }
+        // A value this build does not encode reads as opaque.
+        _ => opaque(type_name.unwrap_or("unknown")),
     }))
+}
+
+/// The record of a value the wrapper cannot represent, typed `type_name`.
+pub(crate) fn opaque(type_name: &str) -> Wire {
+    Wire::List(vec![Wire::Text(String::from(type_name)), Wire::text("x")])
 }
 
 /// The array record of `array`: a numeric array's buffer as an

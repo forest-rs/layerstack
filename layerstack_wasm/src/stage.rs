@@ -489,6 +489,8 @@ impl Stage {
                             Contribution::ArrayEdit => "arrayEdit",
                             Contribution::Dictionary(_) => "dictionary",
                             Contribution::ListEdit => "listEdit",
+                            // A contribution this build does not name.
+                            _ => "",
                         },
                     ),
                     OpinionRole::Block => ("block", ""),
@@ -498,6 +500,8 @@ impl Stage {
                             IgnoreCause::Shadowed => "shadowed",
                             IgnoreCause::CutOffByBlock => "cutOffByBlock",
                             IgnoreCause::Incompatible => "incompatible",
+                            // A cause this build does not name.
+                            _ => "",
                         },
                     ),
                 };
@@ -593,6 +597,8 @@ impl Stage {
             ResolvedValue::ValueList(items) => {
                 value::encode(&layerstack::Value::Array(items), None, &store.tokens)
             }
+            // A resolved form this build does not encode reads as opaque.
+            _ => Ok(Some(value::opaque("unknown"))),
         };
         Ok(encoded
             .map_err(|error| error.at_path(path))?

@@ -29,6 +29,7 @@ use crate::{
 /// Spec: AOUSD Core §10.3.2 (an arc maps its target's namespace), §12.4
 /// (list op resolution).
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct TargetsExplanation {
     /// The composed targets or connections, as
     /// [`Relationship::targets`](crate::Relationship::targets) gives them.
@@ -39,6 +40,7 @@ pub struct TargetsExplanation {
 
 /// One opinion of a [`TargetsExplanation`].
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct TargetOpinion {
     /// The layer of the property spec.
     pub layer: LayerId,
@@ -66,6 +68,7 @@ pub struct TargetOpinion {
 /// A path an opinion authors that composition dropped (see
 /// [`TargetsExplanation`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct DroppedTarget {
     /// The path as authored, in the namespace of its spec.
     pub authored: TargetPath,
@@ -75,6 +78,7 @@ pub struct DroppedTarget {
 
 /// Why composition dropped an authored target or connection path.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum DropReason {
     /// The path is outside the namespace the arc maps: a reference or
     /// payload maps only its target prim and what lies beneath it.

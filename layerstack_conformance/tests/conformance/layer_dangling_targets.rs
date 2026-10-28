@@ -89,6 +89,7 @@ fn kind_name(kind: DanglingKind) -> &'static str {
         DanglingKind::Inactive => "inactive",
         DanglingKind::Unloaded => "unloaded",
         DanglingKind::Masked => "masked",
+        kind => panic!("no name for {kind:?}"),
     }
 }
 

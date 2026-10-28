@@ -936,6 +936,7 @@ impl Lowering<'_> {
                 FieldValue::PathListOp(_) => {
                     return unsupported(path, Unsupported::ListOpMetadata("path list op"));
                 }
+                _ => return unsupported(path, Unsupported::Value("field value")),
             };
             let key = match key {
                 "documentation" => "doc",
@@ -1049,7 +1050,10 @@ impl Lowering<'_> {
                     layerstack::TypedArray::String(items) => {
                         Value::StringArray(items.iter().map(String::from).collect())
                     }
-                    items => typed_array(items),
+                    items => match typed_array(items) {
+                        Some(value) => value,
+                        None => return no("array"),
+                    },
                 }
             }
             L::ArrayEdit(edit) => self.array_edit(edit, None, site, path)?,
@@ -1072,6 +1076,7 @@ impl Lowering<'_> {
             }
             L::Opaque { .. } => return no("opaque"),
             L::Null => return no("null"),
+            _ => return no("value"),
         })
     }
 
@@ -1175,9 +1180,9 @@ impl Lowering<'_> {
     }
 }
 
-fn typed_array(array: &layerstack::TypedArray) -> Value {
+fn typed_array(array: &layerstack::TypedArray) -> Option<Value> {
     use layerstack::TypedArray as A;
-    match array {
+    Some(match array {
         A::Deferred(_) => unreachable!("save preflight materializes retained arrays"),
         A::Token(_) | A::String(_) => unreachable!("text arrays name their tokens in `value`"),
         A::Bool(items) => Value::BoolArray(items.clone().into()),
@@ -1209,7 +1214,8 @@ fn typed_array(array: &layerstack::TypedArray) -> Value {
         A::Matrix2d(items) => Value::Matrix2dArray(items.iter().map(rows).collect()),
         A::Matrix3d(items) => Value::Matrix3dArray(items.iter().map(rows).collect()),
         A::Matrix4d(items) => Value::Matrix4dArray(items.iter().map(rows).collect()),
-    }
+        _ => return None,
+    })
 }
 
 /// Whether a prim spec holds only children and their order: the shape of

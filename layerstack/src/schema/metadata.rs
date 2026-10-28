@@ -514,6 +514,7 @@ impl<'a> MetadataField<'a> {
 /// field's type (`UsdPythonToMetadataValue`); layerstack takes a value of
 /// the type.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct MetadataEditError {
     /// The field's name.
     pub field: Arc<str>,
@@ -687,6 +688,7 @@ pub fn is_spec_field(name: &str, target: MetadataTarget) -> bool {
 /// OpenUSD: `"…" is already a registered field`
 /// (`SdfSchemaBase::_UpdateMetadataFromPlugins`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct MetadataConflict {
     /// The conflicting field's name.
     pub name: TokenId,

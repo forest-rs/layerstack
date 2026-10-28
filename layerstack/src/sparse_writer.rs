@@ -31,6 +31,7 @@ use crate::{
 
 /// An invalid ordering or nonfinite time supplied to a sparse writer.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum SparseWriterError {
     /// Defaults cannot be changed after the first numeric sample.
     DefaultAfterSamples,

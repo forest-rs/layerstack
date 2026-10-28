@@ -37,6 +37,7 @@ use crate::{doc::Value, interner::TokenId};
 ///
 /// Spec: AOUSD Core §6.5 (semantic roles).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum ValueRole {
     /// A color (`color3f`).
     Color,
@@ -88,6 +89,7 @@ macro_rules! value_types {
         ///
         /// See the [module docs](self).
         #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+        #[non_exhaustive]
         pub enum ValueType {
             $(
                 #[doc = concat!("`", $name, "`.")]

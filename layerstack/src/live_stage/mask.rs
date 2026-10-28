@@ -8,6 +8,7 @@ use crate::{PrimPredicate, PropertyKind, PropertyPath};
 
 /// Evidence from synchronizing and recursively expanding a population mask.
 #[derive(Debug, Default)]
+#[non_exhaustive]
 pub struct MaskExpansionReport {
     /// Pending source and control changes synchronized before searching.
     pub synchronized: Changes,

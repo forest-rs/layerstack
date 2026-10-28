@@ -49,6 +49,7 @@ fn scalar(value: ResolvedValue) -> Option<Value> {
         )),
         ResolvedValue::ValueList(values) => Some(Value::array_from_iter(values, None)),
         ResolvedValue::PathList(_) => None,
+        _ => None,
     }
 }
 

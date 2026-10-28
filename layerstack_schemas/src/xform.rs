@@ -1478,8 +1478,16 @@ pub fn is_transform_property(name: &str) -> bool {
 mod cache_tests {
     use super::*;
     use layerstack::{
-        EditTarget, InMemoryStore, Layer, LayerId, LiveStage, PrimSpec, StageOptions, Transaction,
+        Changes, EditTarget, InMemoryStore, Layer, LayerId, LiveStage, PrimSpec, StageOptions,
+        Transaction,
     };
+
+    /// A change report that resyncs `root`.
+    fn resynced(root: PathId) -> Changes {
+        let mut changes = Changes::default();
+        changes.resynced = alloc::vec![root];
+        changes
+    }
 
     fn node(cache: &XformCache, path: PathId) -> &Node {
         &cache.nodes[cache.entries[&path].get() - 1]
@@ -1635,13 +1643,7 @@ mod cache_tests {
         cache.local_transform(&scene, other).unwrap();
         // More stage descendants than cached entries: take the bounded sparse
         // path, including a local-only query with no cached ancestors.
-        cache.apply_changes(
-            &scene,
-            &layerstack::Changes {
-                resynced: alloc::vec![root],
-                ..layerstack::Changes::default()
-            },
-        );
+        cache.apply_changes(&scene, &resynced(root));
         assert_eq!(cache.len(), 1);
         assert!(cache.entries.contains_key(&other));
         assert!(cache.namespace.is_none());
@@ -2000,13 +2002,7 @@ mod cache_tests {
             // Keep the other branch alive, forcing real free-list reuse instead
             // of the empty-cache shortcut. Include sparse local-only rebuilds.
             if round % 2 == 0 {
-                cache.apply_changes(
-                    &scene,
-                    &layerstack::Changes {
-                        resynced: alloc::vec![root],
-                        ..layerstack::Changes::default()
-                    },
-                );
+                cache.apply_changes(&scene, &resynced(root));
             } else {
                 cache.invalidate(&scene, root);
             }

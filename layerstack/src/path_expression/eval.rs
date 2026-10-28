@@ -41,6 +41,7 @@ pub enum Constancy {
 ///
 /// OpenUSD: `SdfPredicateFunctionResult`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct MatchResult {
     /// Whether it matches.
     pub value: bool,
@@ -162,6 +163,7 @@ impl Predicates for NoPredicates {
 
 /// Why a [`PathMatcher`] could not be made.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum MatcherError {
     /// The expression has relative prefixes or references
     /// ([`PathExpression::is_complete`]).

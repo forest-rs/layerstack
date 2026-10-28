@@ -131,6 +131,7 @@ fn render_error(loaded: &LoadedStage, error: &CompositionError) -> Error {
             arc,
             layer,
             path,
+            ..
         }) => Error {
             prim: display(loaded, *prim),
             arc: arc_name(arc),

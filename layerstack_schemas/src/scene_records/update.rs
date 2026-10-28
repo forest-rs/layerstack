@@ -149,6 +149,8 @@ impl SceneObserver {
                 cursor = live.change_cursor();
                 (Vec::new(), Some(SceneReset::DifferentStage))
             }
+            // A history error this crate does not know: rebuild, as for lost history.
+            Err(_) => (Vec::new(), Some(SceneReset::HistoryLost)),
         };
         let mut update = SceneUpdate {
             added: Vec::new(),

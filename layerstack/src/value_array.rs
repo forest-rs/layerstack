@@ -20,6 +20,7 @@ use crate::{ArrayEdit, ArrayEditOp, ArrayEditOperand, TokenId, Value};
 
 /// A retained numeric source could not materialize its immutable buffer.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ArrayReadError {
     /// Malformed or unsupported encoded data; the adapter supplies context.
     InvalidData(Arc<str>),
@@ -76,6 +77,7 @@ macro_rules! array_types {
         ///
         /// Spec: AOUSD Core §6.2–§6.3 (scalar and dimensioned array values).
         #[derive(Clone, Debug)]
+        #[non_exhaustive]
         pub enum TypedArray {
             $(#[doc = concat!("Native `", stringify!($variant), "` elements.")]
             $variant(Arc<Vec<$ty>>),)*
@@ -550,6 +552,7 @@ fn string_element(value: &Value) -> Option<&str> {
 /// elements and construct individual native scalar values on demand. Use
 /// `typed` and the buffer's native slice accessors for allocation-free numeric loops.
 #[derive(Clone, Copy, Debug)]
+#[non_exhaustive]
 pub enum ArrayRef<'a> {
     /// Heterogeneous or legacy scalar values.
     Values(&'a [Value]),

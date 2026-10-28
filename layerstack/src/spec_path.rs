@@ -491,6 +491,7 @@ impl SpecPath {
 
 /// Errors that can occur while parsing a [`SpecPath`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum SpecPathError {
     /// Path is not absolute (doesn't start with `/`).
     NotAbsolute,

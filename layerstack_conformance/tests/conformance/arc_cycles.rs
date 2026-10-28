@@ -184,7 +184,9 @@ impl Scene {
                     }
                     out
                 }
-                CompositionError::SublayerCycle(SublayerCycle { layer, sublayer }) => {
+                CompositionError::SublayerCycle(SublayerCycle {
+                    layer, sublayer, ..
+                }) => {
                     format!(
                         "sublayer cycle: {} -> {}",
                         self.layer(*layer),

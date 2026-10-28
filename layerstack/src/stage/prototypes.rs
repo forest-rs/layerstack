@@ -236,6 +236,7 @@ pub(super) struct PrototypeTable {
 /// Work performed by the most recent complete composition of this snapshot.
 /// Incremental value refreshes do not change these initial composition counts.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct CompositionWork {
     /// Prim indexes constructed by ordinary composition, including pruned prims.
     pub composed_prim_indexes: usize,
@@ -246,6 +247,7 @@ pub struct CompositionWork {
 /// Counts retained composed records, excluding payload allocations and graphs.
 /// Logical counts include occurrences; physical counts count shared buffers once.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct CompositionStorage {
     /// Number of composed prim occurrences.
     pub prim_indexes: usize,

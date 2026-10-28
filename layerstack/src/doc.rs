@@ -86,6 +86,7 @@ pub enum Specifier {
 /// Spec: AOUSD Core §6.2–§6.3 (scene description data types), §16.3.10
 /// (value type encoding).
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub enum Value {
     /// Blocks weaker time samples, splines and clips while allowing weaker
     /// defaults. OpenUSD `SdfAnimationBlock`, `UsdAttribute::BlockAnimation`.
@@ -748,6 +749,7 @@ pub struct FieldEntry {
 ///
 /// Spec: AOUSD Core §7.4 (metadata fields), §12.2 (metadata resolution).
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum FieldValue {
     /// A plain value (strongest wins; dictionaries combine).
     Value(Value),

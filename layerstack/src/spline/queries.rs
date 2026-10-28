@@ -7,6 +7,7 @@ use alloc::{vec, vec::Vec};
 
 /// Invalid input or a spline feature outside these bounded utilities.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum SplineQueryError {
     /// Nonfinite input, unordered knots, negative tangent widths or bad tolerance.
     InvalidInput,
@@ -31,6 +32,7 @@ impl core::fmt::Display for SplineQueryError {
 impl core::error::Error for SplineQueryError {}
 /// One vertex of a piecewise-linear spline approximation.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct SplineSample {
     /// Time in the spline's coordinate system.
     pub time: f64,
@@ -40,12 +42,14 @@ pub struct SplineSample {
 /// A continuous part of a sampled spline. Separate polylines preserve jumps and
 /// blocked regions; consumers must not connect the end of one to the next.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct SplinePolyline {
     /// Ordered vertices, including both endpoints of a nonempty segment.
     pub samples: Vec<SplineSample>,
 }
 /// Conservative interval in which two unlooped spline descriptions may differ.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct SplineChangeInterval {
     /// Inclusive start, possibly negative infinity for pre-extrapolation edits.
     pub start: f64,

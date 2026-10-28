@@ -229,7 +229,7 @@ export type Value =
   | {
       readonly kind: "scalar";
       readonly type: string;
-      /** A number, a `bigint` for `int64` and `uint64`, a string for `string`, `token`, `asset`, `pathExpression`, `path` and `unregistered` (metadata text kept unparsed). */
+      /** A number, a `bigint` for `int64` and `uint64`, a string for `string`, `token`, `asset`, `pathExpression`, `pathText` (an `SdfPath` value as authored) and `unregistered` (metadata text kept unparsed). */
       readonly value: boolean | number | bigint | string;
     }
   | {

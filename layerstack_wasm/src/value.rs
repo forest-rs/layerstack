@@ -9,7 +9,7 @@
 //!
 //! - `"s"`, `[type, "s", value]`: a scalar. Numbers are numbers, `int64`
 //!   and `uint64` are `bigint`s, text types (`string`, `token`, `asset`,
-//!   `pathExpression`, `path`, and `unregistered` for metadata text kept
+//!   `pathExpression`, `pathText`, and `unregistered` for metadata text kept
 //!   unparsed) are strings, and a `half` is its `float` value.
 //! - `"t"`, `[type, "t", numbers]`: a vector, matrix (row-major) or
 //!   quaternion (stored imaginary first, `[i, j, k, r]`).
@@ -84,7 +84,7 @@ pub(crate) fn encode(
         // The text OpenUSD keeps for metadata it has no type for, and a
         // relationship's legacy path default.
         Value::Unregistered(v) => scalar("unregistered", Wire::text(&**v)),
-        Value::Path(v) => scalar("path", Wire::text(&**v)),
+        Value::PathText(v) => scalar("pathText", Wire::text(&**v)),
         Value::Vec2d(v) => tuple("double2", v.to_vec()),
         Value::Vec3d(v) => tuple("double3", v.to_vec()),
         Value::Vec4d(v) => tuple("double4", v.to_vec()),

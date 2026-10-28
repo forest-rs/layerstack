@@ -1172,7 +1172,7 @@ impl EmitCtx<'_> {
         // as written, a relative one unanchored
         // (`TextParserAction<PathRef>`, `pxr/usd/sdf/textFileFormatParser.cpp`).
         if let Some(path) = rel.default {
-            spec.default = Some(Value::Path(Arc::from(path)));
+            spec.default = Some(Value::PathText(Arc::from(path)));
         }
     }
 

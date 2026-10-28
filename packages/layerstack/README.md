@@ -1,10 +1,10 @@
-# @layerstack/stage
+# @forest-rs/layerstack
 
 Open, resolve, inspect and explain USD stages in the browser or Node, over
 [Layerstack](https://github.com/forest-rs/layerstack) compiled to WebAssembly.
 
 ```ts
-import { loadLayerstack, LayerstackError } from "@layerstack/stage";
+import { loadLayerstack, LayerstackError } from "@forest-rs/layerstack";
 
 const layerstack = await loadLayerstack();
 using stage = layerstack.open({ identifier: "scene.usda", bytes: rootBytes });

@@ -1,7 +1,7 @@
 # layerstack_wasm
 
 WebAssembly bindings for [Layerstack](https://github.com/forest-rs/layerstack):
-the native side of the TypeScript package `@layerstack/stage`
+the native side of the TypeScript package `@forest-rs/layerstack`
 (`packages/layerstack`). Use that package from JavaScript; the exports of this
 crate are an ABI for its wrapper, which decodes their records into typed
 objects.

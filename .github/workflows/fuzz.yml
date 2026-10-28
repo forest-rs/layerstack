@@ -57,21 +57,18 @@ jobs:
           found=()
           for target in $(cargo fuzz list); do
             bash seed-corpus.sh "$target"
-            # A composed stage can be endless: arcs can give a prim children
-            # that include it again, which composition does not bound (nor
-            # does OpenUSD). Until it does, the stage target fails only on a
-            # crash, in fork mode. Fork mode still exits non-zero when a job
-            # it ignored timed out or ran out of memory, so a failed stage run
-            # counts only when it left an artifact that is neither.
+            # The stage target composes within composition limits
+            # (`LIMITS` in `fuzz/src/lib.rs`), which stop an endless
+            # namespace, so a timeout or running out of memory is a finding
+            # there as everywhere. It runs in fork mode, each job a new
+            # process: its inputs compose whole stages, and one sanitized
+            # process's memory grows toward the limit over a long run
+            # (1.7 GB after five minutes).
             extra=()
-            [ "$target" = stage ] && extra=(-fork=1 -ignore_timeouts=1 -ignore_ooms=1)
+            [ "$target" = stage ] && extra=(-fork=1)
             if ! cargo fuzz run --debug-assertions --target x86_64-unknown-linux-gnu "$target" "corpus/$target" -- \
               -max_total_time="$FUZZ_SECONDS" -max_len=65536 -rss_limit_mb=2048 -timeout=10 "${extra[@]}"; then
-              if [ "$target" != stage ] || find "artifacts/$target" -type f ! -name 'timeout-*' ! -name 'oom-*' | grep -q .; then
-                found+=("$target")
-              else
-                echo "stage: only timeouts or out-of-memory inputs, which this target ignores"
-              fi
+              found+=("$target")
             fi
           done
           if [ ${#found[@]} -gt 0 ]; then

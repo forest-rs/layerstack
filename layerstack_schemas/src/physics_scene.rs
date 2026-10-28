@@ -205,11 +205,18 @@ pub struct ShapeDescriptor {
     pub collision_groups: Vec<PathId>,
 }
 /// Collision group configuration, with groups that share a merge name merged
-/// into the first of them, as OpenUSD's parser merges them. Pair evaluation
-/// is available separately through `physics::compute_collision_group_table`.
+/// into one of them, as OpenUSD's parser merges them: each merged group's
+/// record is replaced by the last one, so the group that keeps the record is
+/// the first in that order rather than in traversal order. Pair evaluation is
+/// available separately through `physics::compute_collision_group_table`.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CollisionGroupDescriptor {
-    /// Invert authored filters to permit only the named groups.
+    /// Invert authored filters to permit only the named groups. This group's
+    /// own `physics:invertFilteredGroups` at default time, or false where it
+    /// has none: the schema declares no fallback, and its documentation
+    /// describes inversion as an option that applies only when set. The
+    /// values of groups merged into this one are dropped, as OpenUSD drops
+    /// them.
     pub invert_filtered_groups: bool,
     /// Filtered-group targets: this group's, then each merged group's.
     pub filtered_groups: Vec<TargetPath>,
@@ -238,7 +245,9 @@ pub struct PhysicsSceneSnapshot {
     pub joints: Vec<PhysicsRecord<JointDescriptor>>,
     /// Articulations whose body sets survive owner filtering.
     pub articulations: Vec<PhysicsRecord<ArticulationDescriptor>>,
-    /// Collision groups, independent of owner filtering.
+    /// Collision groups, independent of owner filtering, in traversal order
+    /// except where a merge moved the last record into a merged group's
+    /// place (see [`CollisionGroupDescriptor`]).
     pub collision_groups: Vec<PhysicsRecord<CollisionGroupDescriptor>>,
 }
 impl PhysicsSceneSnapshot {
@@ -446,10 +455,16 @@ fn merge_collision_groups(
     groups: &mut Vec<PhysicsRecord<CollisionGroupDescriptor>>,
     paths: &[PathId],
 ) {
+    // As `LoadUsdPhysicsFromRange` merges (`parseUtils.cpp:2807-2838` in
+    // v26.11.1): a group whose merge name an earlier group took merges into
+    // it and its slot takes the last group, which is examined next. The lead
+    // of a name is so the first group in that order, not in traversal order,
+    // and the records follow that order too.
     let mut representatives: Vec<(Arc<str>, usize)> = Vec::new();
-    let mut merged = Vec::new();
-    for index in 0..groups.len() {
+    let mut index = 0;
+    while index < groups.len() {
         let Ok(desc) = &groups[index].descriptor else {
+            index += 1;
             continue;
         };
         let Some(name) = desc
@@ -457,23 +472,23 @@ fn merge_collision_groups(
             .clone()
             .filter(|name| !name.is_empty())
         else {
+            index += 1;
             continue;
         };
         let path = groups[index].path;
         match representatives.iter().find(|(known, _)| *known == name) {
             Some(&(_, first)) => {
-                let member = groups[index]
-                    .descriptor
-                    .as_ref()
-                    .expect("a captured group")
-                    .clone();
+                // `first` is below `index`, which `swap_remove` leaves alone.
+                let member = groups.swap_remove(index);
+                let Ok(member) = member.descriptor else {
+                    unreachable!("checked above");
+                };
                 let Ok(target) = &mut groups[first].descriptor else {
                     unreachable!("representatives are captured groups");
                 };
                 target.merged_groups.push(path);
                 target.filtered_groups.extend(member.filtered_groups);
                 target.colliders.extend(member.colliders);
-                merged.push(index);
             }
             None => {
                 representatives.push((name, index));
@@ -481,6 +496,7 @@ fn merge_collision_groups(
                     unreachable!("checked above");
                 };
                 desc.merged_groups.push(path);
+                index += 1;
             }
         }
     }
@@ -495,9 +511,6 @@ fn merge_collision_groups(
                 .filter(|p| members.contains(p))
                 .collect();
         }
-    }
-    for index in merged.into_iter().rev() {
-        groups.remove(index);
     }
 }
 fn record<T>(path: PathId, descriptor: Result<T, PhysicsSceneError>) -> PhysicsRecord<T> {

@@ -146,8 +146,8 @@ USDZ packages with a USDC root work too. Both print retained-input bytes,
 materialized arrays, decode attempts and the remaining decode budget.
 
 Use `AttributeQuery::try_get`, generated schema `try_*` array getters or
-`PrimView::try_read_value` to preserve decode errors. The existing `open` and
-`open_in` calls use eager decoding; retained loading is an explicit option.
+`PrimView::try_read_value` to preserve decode errors. `open` decodes eagerly
+by default; retained loading is an explicit option.
 Reload creates fresh source pools, while captured values and inspection handles
 keep their old pools alive. Decoding happens during demand reads; the library
 does not schedule background I/O or evict retained arrays. This builds on the

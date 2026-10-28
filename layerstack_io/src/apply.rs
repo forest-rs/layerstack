@@ -108,7 +108,7 @@ impl<B: Storage> StageDocument<B> {
     ///
     /// let storage = Filesystem::new("garden", [])?;
     /// let mut doc = StageDocument::create(storage, "garden.usda", StageOptions::default())?;
-    /// let root = doc.stage().stage().root_layer().unwrap();
+    /// let root = doc.root_layer();
     /// let shrub = doc.store_mut().path("/Shrub");
     /// let at = EditTarget::for_layer(root);
     /// let mut edit = Transaction::new();

@@ -18,8 +18,8 @@ use layerstack::{
     asset_dependencies::DependencyTarget,
 };
 use layerstack_io::{
-    ApplyError, FORMAT_ARGS_DELIMITER, ImportPolicy, IoError, LoadReport, PackageInclusion,
-    PackagePreparationLimits, SaveReport, StageDocument, UnavailableAsset,
+    ApplyError, FORMAT_ARGS_DELIMITER, ImportPolicy, IoError, LoadOptions, LoadReport, OpenOptions,
+    PackageInclusion, PackagePreparationLimits, SaveReport, StageDocument, UnavailableAsset,
 };
 use wasm_bindgen::prelude::*;
 
@@ -119,7 +119,18 @@ impl Stage {
         } else {
             ImportPolicy::Strict
         };
-        let mut document = StageDocument::open_in(storage, store, identifier, options, policy)?;
+        let mut document = StageDocument::open(
+            storage,
+            identifier,
+            OpenOptions {
+                stage: options,
+                loading: LoadOptions {
+                    import_policy: policy,
+                    ..LoadOptions::default()
+                },
+                store: Some(store),
+            },
+        )?;
         let cursor = document.parts_mut().1.change_cursor();
         Ok(Self {
             document,

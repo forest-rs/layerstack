@@ -12,7 +12,7 @@ fn main() {
     let directory = support::directory();
     support::hello(&directory);
     let mut document = support::create(&directory, "RefExample.usda");
-    let root = document.stage().stage().root_layer().unwrap();
+    let root = document.root_layer();
     let at = EditTarget::for_layer(root);
     let store = document.store_mut();
     let first = store.path("/refSphere");

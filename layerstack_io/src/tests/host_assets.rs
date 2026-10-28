@@ -206,8 +206,15 @@ fn a_source_that_fails_to_read_is_unresolved_with_its_reason() {
         import_policy: ImportPolicy::AllowRecovery,
         ..LoadOptions::default()
     };
-    let doc =
-        StageDocument::open_with(host, "root.usda", StageOptions::default(), loading).unwrap();
+    let doc = StageDocument::open(
+        host,
+        "root.usda",
+        OpenOptions {
+            loading,
+            ..OpenOptions::default()
+        },
+    )
+    .unwrap();
     let status = doc.asset_status();
     let [gone] = &status.unresolved[..] else {
         panic!("{:?}", status.unresolved);
@@ -270,7 +277,7 @@ fn a_variant_switch_after_an_edit_wants_its_source_and_keeps_the_edit() {
     let mut doc = open();
     doc.storage_mut().supply("a.usda", look("a").as_bytes());
     doc.load_requested_assets().unwrap();
-    let root = doc.stage().stage().root_layer().unwrap();
+    let root = doc.root_layer();
     let at = EditTarget::for_layer(root);
     let child = doc.store_mut().path("/Child");
     let edited = doc.store_mut().tokens().intern("edited");
@@ -320,7 +327,7 @@ fn confirmed_absent_sources_become_missing() {
     assert!(!wanted(&doc).iter().any(|(id, _, _)| id == "sub.usda"));
     assert!(missing(&doc).contains(&("sub.usda".into(), AssetUse::Sublayer)));
 
-    let root = doc.stage().stage().root_layer().unwrap();
+    let root = doc.root_layer();
     let child = doc.store_mut().path("/Child");
     let mut edit = Transaction::new();
     edit.remove_spec(EditTarget::for_layer(root).prim(child));

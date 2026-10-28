@@ -22,11 +22,12 @@
 //! # }
 //! ```
 //!
-//! For schema fallbacks and typed views, use [`StageDocument::open_in`]: build
-//! the registry using that store's tokens, then pass the same store and its
-//! registry in `StageOptions`. Its metadata declarations also type and validate
-//! USDA metadata during initial loading, explicit loads and reloads. `open`
-//! creates a fresh store, so it rejects a registry
+//! For schema fallbacks and typed views, open into a store of your own: build
+//! the registry using that store's tokens, then pass the same store
+//! ([`OpenOptions::store`]) and its registry (`StageOptions::schemas`) to
+//! [`StageDocument::open`]. Its metadata declarations also type and validate
+//! USDA metadata during initial loading, explicit loads and reloads. Without
+//! a store, `open` creates a fresh one, so it rejects a registry
 //! ([`IoErrorKind::ForeignSchemaRegistry`]): no prebuilt registry belongs to
 //! that store's tokens. [`Storage`] supports transports without `std`.
 //! [`StageDocument::apply`] authors the document: it applies a
@@ -35,9 +36,8 @@
 //! live stage apart for lower-level control; saving, exporting and reloading
 //! remain separate operations.
 //!
-//! [`StageDocument::open_with`] and [`StageDocument::open_in_with`] accept
-//! [`LoadOptions`] for eager or retained USDC arrays and a per-file decoder
-//! budget. These options also govern dependencies, package members and reloads.
+//! [`OpenOptions::loading`] takes [`LoadOptions`] for eager or retained USDC
+//! arrays and a per-file decoder budget. These options also govern dependencies, package members and reloads.
 //! With `std`, [`StageDocument::retained_values`] exposes decoder statistics.
 //! Retained import reads complete encoded files; package members share checked
 //! ranges into one immutable archive owner. Numeric payload failures surface through
@@ -551,6 +551,45 @@ pub struct LoadOptions {
     /// File formats read beyond USDA, USDC and USDZ, by extension.
     pub formats: FileFormats,
 }
+/// How [`StageDocument::open`] and [`StageDocument::create`] build a
+/// document: the stage's options, how layers are read, and the store to
+/// read them into.
+///
+/// A [`StageOptions`] converts into one with the other fields at their
+/// defaults, so `StageDocument::open(storage, "scene.usda",
+/// StageOptions::default())` opens with strict import into a new store.
+/// Build it as a struct literal that names the fields it sets and takes
+/// the rest from `..OpenOptions::default()`.
+#[derive(Debug, Default)]
+pub struct OpenOptions {
+    /// How the stage composes and populates.
+    pub stage: StageOptions,
+    /// How the root, its dependencies, package members and later loads
+    /// and reloads are read.
+    pub loading: LoadOptions,
+    /// The store to read into, holding host-owned layers such as a session
+    /// layer, or the store the stage options' schema registry was built
+    /// on; a new store when `None`.
+    pub store: Option<InMemoryStore>,
+}
+impl From<StageOptions> for OpenOptions {
+    fn from(stage: StageOptions) -> Self {
+        Self {
+            stage,
+            ..Self::default()
+        }
+    }
+}
+/// Adds the dynamic sides of `loading`'s formats to `options`'.
+fn join_dynamic_formats(options: &mut StageOptions, loading: &LoadOptions) -> Result<(), IoError> {
+    for format in loading.formats.dynamic_formats() {
+        options
+            .dynamic_formats
+            .add(Arc::clone(format))
+            .map_err(|error| IoError::new(IoErrorKind::Rejected, error.to_string()))?;
+    }
+    Ok(())
+}
 /// Explicit protection against overwriting unsaved authored state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ReloadPolicy {
@@ -870,7 +909,7 @@ fn check_schemas(store: &InMemoryStore, options: &StageOptions) -> Result<(), Io
         Some(schemas) if !schemas.belongs_to(store.tokens()) => Err(IoError::new(
             IoErrorKind::ForeignSchemaRegistry,
             "the schema registry was built on another token interner than the store's; \
-             build it on the store's `tokens` and open into that store with `open_in`",
+             build it on the store's `tokens` and open into that store (`OpenOptions::store`)",
         )),
         _ => Ok(()),
     }
@@ -914,23 +953,32 @@ impl<B: core::fmt::Debug> core::fmt::Debug for StageDocument<B> {
 impl<B: Storage> StageDocument<B> {
     /// Creates a new USDA or USDC root bound to `target`; nothing is written
     /// until `save`. The new root remains dirty, including an empty document.
+    ///
+    /// `options` are those [`Self::open`] takes: a [`StageOptions`] alone,
+    /// or an [`OpenOptions`] with a host-owned store (schemas, a session
+    /// layer) and the load options later loads use. The assets the new
+    /// stage asks for, such as the session layer's sublayers by asset
+    /// path, are loaded before it returns ([`Self::load_requested_assets`]),
+    /// and the [`Self::load_report`] holds that evidence.
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::open`], and [`IoErrorKind::ReadOnly`] for a package
+    /// target.
     #[doc(alias = "UsdStage::CreateNew")]
     #[doc(alias = "CreateNew")]
-    pub fn create(storage: B, target: &str, options: StageOptions) -> Result<Self, IoError> {
-        Self::create_in(storage, InMemoryStore::default(), target, options)
-    }
-    /// Creates a persistent root alongside host-owned schemas/session layers.
-    /// The registry must be built on `store`'s tokens, as for
-    /// [`Self::open_in`]. The assets the new stage asks for, such as the
-    /// session layer's sublayers by asset path, are loaded before it
-    /// returns ([`Self::load_requested_assets`]), and the
-    /// [`Self::load_report`] holds that evidence.
-    pub fn create_in(
+    pub fn create(
         storage: B,
-        mut store: InMemoryStore,
         target: &str,
-        options: StageOptions,
+        options: impl Into<OpenOptions>,
     ) -> Result<Self, IoError> {
+        let OpenOptions {
+            stage: mut options,
+            loading,
+            store,
+        } = options.into();
+        let mut store = store.unwrap_or_default();
+        join_dynamic_formats(&mut options, &loading)?;
         check_schemas(&store, &options)?;
         let identifier = storage.identify(target, None).map_err(|e| e.at(target))?;
         let format = identifier_format(&identifier, &FileFormats::default())?;
@@ -964,11 +1012,11 @@ impl<B: Storage> StageDocument<B> {
             stage,
             storage,
             catalog,
-            import_policy: ImportPolicy::Strict,
-            usdc_options: UsdcReadOptions::default(),
-            package_limits: PackageLimits::default(),
-            variant_arcs: VariantArcLoading::default(),
-            formats: FileFormats::default(),
+            import_policy: loading.import_policy,
+            usdc_options: loading.usdc,
+            package_limits: loading.package,
+            variant_arcs: loading.variant_arcs,
+            formats: loading.formats,
             load_report: LoadReport::default(),
             unavailable: Unavailable::new(),
         };
@@ -977,84 +1025,50 @@ impl<B: Storage> StageDocument<B> {
         document.load_report = document.load_requested_assets()?;
         Ok(document)
     }
-    /// Opens a stage with strict import into a new store.
+    /// Opens the stage whose root layer is `asset`, reading it and the
+    /// layers it depends on from `storage`.
     ///
-    /// A schema registry in `options` cannot belong to the new store, so
-    /// opening with one fails ([`IoErrorKind::ForeignSchemaRegistry`]); use
-    /// [`Self::open_in`] with the store the registry was built on.
-    #[doc(alias = "UsdStage::Open")]
-    #[doc(alias = "Open")]
-    pub fn open(storage: B, asset: &str, options: StageOptions) -> Result<Self, IoError> {
-        Self::open_with(storage, asset, options, LoadOptions::default())
-    }
-    /// Opens with explicit root/dependency import and per-file USDC policies.
-    pub fn open_with(
-        storage: B,
-        asset: &str,
-        options: StageOptions,
-        loading: LoadOptions,
-    ) -> Result<Self, IoError> {
-        Self::open_in_with(storage, InMemoryStore::default(), asset, options, loading)
-    }
-    /// Opens into an existing store, allowing a host-owned session layer and
-    /// schema registry. Existing identifiers remain reserved. Import is staged;
-    /// failed reads never publish partially imported layers to a live stage.
+    /// `options` is a [`StageOptions`] alone, for strict import into a new
+    /// store, or an [`OpenOptions`] that also sets the [`LoadOptions`]
+    /// (import policy, USDC arrays, package limits, variant arcs, file
+    /// formats), which later loads and reloads use too, and the store to
+    /// open into. A host-owned store holds a session layer or the store a
+    /// schema registry was built on; its identifiers stay reserved. Import
+    /// is staged: failed reads never publish partially imported layers to
+    /// a live stage, and retained payloads are checked on demand.
+    ///
+    /// The dynamic sides of [`LoadOptions::formats`] ([`FileFormat::dynamic`])
+    /// join the stage's `dynamic_formats`; one claiming an extension a
+    /// format there claims is rejected ([`IoErrorKind::Rejected`]).
+    ///
+    /// With `threads` above one in the stage options, the layers are read
+    /// on a pool of that many threads, on the options' `executor` when
+    /// there is one ([`StageOptions::thread_budget`]), and a USDC layer on
+    /// the threads the pool leaves idle while it is read: reading runs at
+    /// most `threads` threads at once, as composing after it does.
     ///
     /// # Errors
     ///
-    /// [`IoErrorKind::ForeignSchemaRegistry`] when `options.schemas` was not
-    /// built on `store`'s tokens; otherwise the errors of reading the root
+    /// [`IoErrorKind::ForeignSchemaRegistry`] when the stage options'
+    /// `schemas` was not built on the store's tokens (a registry can never
+    /// belong to a new store, so pass the store it was built on), checked
+    /// before anything is read; otherwise the errors of reading the root
     /// and its dependencies.
     #[doc(alias = "UsdStage::Open")]
     #[doc(alias = "Open")]
-    pub fn open_in(
-        storage: B,
-        store: InMemoryStore,
-        asset: &str,
-        options: StageOptions,
-        import_policy: ImportPolicy,
-    ) -> Result<Self, IoError> {
-        Self::open_in_with(
-            storage,
-            store,
-            asset,
-            options,
-            LoadOptions {
-                import_policy,
-                ..Default::default()
-            },
-        )
-    }
-    /// Opens with host-owned schemas/session layers and an explicit load policy.
-    /// The registry must be built on `store`'s tokens
-    /// ([`layerstack::SchemaRegistry::belongs_to`]), or opening fails with
-    /// [`IoErrorKind::ForeignSchemaRegistry`] before anything is read. Failed
-    /// structural imports publish no layers; retained payloads are checked on demand.
-    ///
-    /// The dynamic sides of [`LoadOptions::formats`] ([`FileFormat::dynamic`])
-    /// join `options.dynamic_formats`; one claiming an extension a format
-    /// there claims is rejected ([`IoErrorKind::Rejected`]).
-    ///
-    /// With `options.threads` above one, the layers are read on a pool of
-    /// that many threads, on `options.executor` when there is one
-    /// ([`StageOptions::thread_budget`]), and a USDC
-    /// layer on the threads the pool leaves idle while it is read: reading
-    /// runs at most `options.threads` threads at once, as composing after it
-    /// does.
-    pub fn open_in_with(
+    pub fn open(
         mut storage: B,
-        mut store: InMemoryStore,
         asset: &str,
-        mut options: StageOptions,
-        loading: LoadOptions,
+        options: impl Into<OpenOptions>,
     ) -> Result<Self, IoError> {
+        let OpenOptions {
+            stage: mut options,
+            loading,
+            store,
+        } = options.into();
+        let mut store = store.unwrap_or_default();
         check_schemas(&store, &options)?;
-        for format in loading.formats.dynamic_formats() {
-            options
-                .dynamic_formats
-                .add(Arc::clone(format))
-                .map_err(|error| IoError::new(IoErrorKind::Rejected, error.to_string()))?;
-        }
+        join_dynamic_formats(&mut options, &loading)?;
         let import_policy = loading.import_policy;
         let mut catalog = Catalog {
             reserved: store.layer_ids().into_iter().collect(),
@@ -1443,6 +1457,11 @@ impl<B: Storage> StageDocument<B> {
             unavailable: self.unavailable_assets(),
             unresolved,
         }
+    }
+    /// The stage's root layer, which the document opened or created.
+    #[must_use]
+    pub fn root_layer(&self) -> LayerId {
+        self.stage.stage().root_layer().expect("document root")
     }
     /// Identifier of a loaded layer. Package members use `package[member]`.
     pub fn identifier(&self, layer: LayerId) -> Option<&str> {

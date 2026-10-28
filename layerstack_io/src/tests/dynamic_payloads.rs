@@ -406,17 +406,19 @@ pub(super) fn open<B: Storage>(storage: B, root: &str, attributes: bool) -> Stag
     let formats = FileFormats::default()
         .with(Arc::new(TestDynamic::new(attributes)))
         .unwrap();
-    StageDocument::open_in_with(
+    StageDocument::open(
         storage,
-        store,
         root,
-        StageOptions {
-            schemas: Some(schemas),
-            ..Default::default()
-        },
-        LoadOptions {
-            formats,
-            ..Default::default()
+        OpenOptions {
+            stage: StageOptions {
+                schemas: Some(schemas),
+                ..Default::default()
+            },
+            loading: LoadOptions {
+                formats,
+                ..Default::default()
+            },
+            store: Some(store),
         },
     )
     .unwrap()

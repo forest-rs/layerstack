@@ -140,16 +140,19 @@ def "Seeded" (prepend references = @gen.noise:SDF_FORMAT_ARGS:seed=7@</Noise>) {
 "#;
 
 fn open(threads: usize) -> StageDocument<Memory> {
-    StageDocument::open_with(
+    StageDocument::open(
         scene(ROOT),
         "root.usda",
-        StageOptions {
-            threads,
-            ..Default::default()
-        },
-        LoadOptions {
-            formats: formats(),
-            ..Default::default()
+        OpenOptions {
+            stage: StageOptions {
+                threads,
+                ..Default::default()
+            },
+            loading: LoadOptions {
+                formats: formats(),
+                ..Default::default()
+            },
+            ..OpenOptions::default()
         },
     )
     .unwrap()
@@ -297,13 +300,15 @@ fn generated_layers_save_only_as_copies() {
 #[test]
 fn format_failures_reject_the_layer_with_its_identifier() {
     let open = |root: &str| {
-        StageDocument::open_with(
+        StageDocument::open(
             scene(root),
             "root.usda",
-            StageOptions::default(),
-            LoadOptions {
-                formats: formats(),
-                ..Default::default()
+            OpenOptions {
+                loading: LoadOptions {
+                    formats: formats(),
+                    ..Default::default()
+                },
+                ..OpenOptions::default()
             },
         )
     };

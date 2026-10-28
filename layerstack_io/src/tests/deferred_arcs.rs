@@ -77,8 +77,15 @@ fn opening_reads_only_the_branches_the_stage_selects() {
         variant_arcs: VariantArcLoading::All,
         ..Default::default()
     };
-    let doc =
-        StageDocument::open_with(backend, "model.usda", StageOptions::default(), loading).unwrap();
+    let doc = StageDocument::open(
+        backend,
+        "model.usda",
+        OpenOptions {
+            loading,
+            ..OpenOptions::default()
+        },
+    )
+    .unwrap();
     assert!(read(&doc, "b.usda"));
     assert_eq!(name(&doc, "/Model"), Some(Value::string("a")));
 }
@@ -218,9 +225,15 @@ fn missing_assets_in_unselected_branches_are_not_read_or_reported() {
             import_policy,
             ..Default::default()
         };
-        let mut doc =
-            StageDocument::open_with(backend, "model.usda", StageOptions::default(), loading)
-                .unwrap();
+        let mut doc = StageDocument::open(
+            backend,
+            "model.usda",
+            OpenOptions {
+                loading,
+                ..OpenOptions::default()
+            },
+        )
+        .unwrap();
         assert!(doc.load_report().asset_failures.is_empty());
         assert!(doc.stage.stage().composition_errors().is_empty());
 

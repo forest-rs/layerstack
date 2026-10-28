@@ -239,11 +239,13 @@ def "P" (clips = { dictionary default = {
         ("manifest.usda", "#usda 1.0\ndef \"C\" {\n float[] x\n}"),
     ]);
     memory.files.insert("clip.usdc".into(), bytes);
-    let mut document = StageDocument::open_with(
+    let mut document = StageDocument::open(
         memory,
         "root.usda",
-        StageOptions::default(),
-        retained_options(),
+        OpenOptions {
+            loading: retained_options(),
+            ..OpenOptions::default()
+        },
     )
     .unwrap();
     let property = document.store_mut().property_path("/P.x");
@@ -1179,7 +1181,7 @@ fn a_layer_that_cannot_be_written_keeps_its_typed_cause() {
         StageOptions::default(),
     )
     .unwrap();
-    let root = document.stage().stage().root_layer().unwrap();
+    let root = document.root_layer();
     let mut layer = document.store().layer(root).unwrap().clone();
     let (tokens, paths) = (document.store().tokens(), document.store().paths());
     let path = layerstack::PropertyPath::parse("/A.a", tokens, paths).unwrap();
@@ -1211,7 +1213,7 @@ fn encoding_a_layer_returns_the_bytes_an_export_writes() {
         StageOptions::default(),
     )
     .unwrap();
-    let root = document.stage().stage().root_layer().unwrap();
+    let root = document.root_layer();
     for target in ["copy.usda", "copy.usdc"] {
         document.export_layer(root, target).unwrap();
         let written = document.storage_mut().files.remove(target).unwrap();
@@ -1252,7 +1254,7 @@ fn numeric_usdc() -> Vec<u8> {
         StageOptions::default(),
     )
     .unwrap();
-    let root = document.stage().stage().root_layer().unwrap();
+    let root = document.root_layer();
     document.export_layer(root, "mesh.usdc").unwrap();
     document.storage_mut().files.remove("mesh.usdc").unwrap()
 }
@@ -1272,16 +1274,18 @@ fn retained_options() -> LoadOptions {
 fn explicit_decode_budgets_reject_structural_import_without_publishing() {
     let mut memory = Memory::default();
     memory.files.insert("mesh.usdc".into(), numeric_usdc());
-    let error = StageDocument::open_with(
+    let error = StageDocument::open(
         memory,
         "mesh.usdc",
-        StageOptions::default(),
-        LoadOptions {
-            usdc: UsdcReadOptions {
-                decode_budget: Some(0),
+        OpenOptions {
+            loading: LoadOptions {
+                usdc: UsdcReadOptions {
+                    decode_budget: Some(0),
+                    ..Default::default()
+                },
                 ..Default::default()
             },
-            ..Default::default()
+            ..OpenOptions::default()
         },
     )
     .unwrap_err();
@@ -1295,14 +1299,16 @@ fn retained_open_decodes_on_demand_and_reload_preserves_old_snapshots() {
     let mut memory = Memory::default();
     let bytes = numeric_usdc();
     memory.files.insert("mesh.usdc".into(), bytes.clone());
-    let mut document = StageDocument::open_with(
+    let mut document = StageDocument::open(
         memory,
         "mesh.usdc",
-        StageOptions::default(),
-        retained_options(),
+        OpenOptions {
+            loading: retained_options(),
+            ..OpenOptions::default()
+        },
     )
     .unwrap();
-    let root = document.stage().stage().root_layer().unwrap();
+    let root = document.root_layer();
     let old = document.retained_values(root).unwrap().clone();
     assert_eq!(old.stats().decode_attempts, 0);
     assert_eq!(old.stats().input_bytes, bytes.len());
@@ -1357,11 +1363,13 @@ fn retained_budget_errors_are_distinct_from_missing_geometry() {
     let bytes = numeric_usdc();
     let mut memory = Memory::default();
     memory.files.insert("mesh.usdc".into(), bytes.clone());
-    let probe = StageDocument::open_with(
+    let probe = StageDocument::open(
         memory,
         "mesh.usdc",
-        StageOptions::default(),
-        retained_options(),
+        OpenOptions {
+            loading: retained_options(),
+            ..OpenOptions::default()
+        },
     )
     .unwrap();
     let root = probe.stage().stage().root_layer().unwrap();
@@ -1369,16 +1377,18 @@ fn retained_budget_errors_are_distinct_from_missing_geometry() {
         - probe.retained_values(root).unwrap().stats().remaining_units;
     let mut memory = Memory::default();
     memory.files.insert("mesh.usdc".into(), bytes);
-    let mut document = StageDocument::open_with(
+    let mut document = StageDocument::open(
         memory,
         "mesh.usdc",
-        StageOptions::default(),
-        LoadOptions {
-            usdc: UsdcReadOptions {
-                decode_budget: Some(limit),
-                ..retained_options().usdc
+        OpenOptions {
+            loading: LoadOptions {
+                usdc: UsdcReadOptions {
+                    decode_budget: Some(limit),
+                    ..retained_options().usdc
+                },
+                ..Default::default()
             },
-            ..Default::default()
+            ..OpenOptions::default()
         },
     )
     .unwrap();
@@ -1468,11 +1478,13 @@ fn retained_policy_reaches_package_members_and_explicit_dependency_loads() {
     let mut memory = Memory::default();
     memory.files.insert("scene.usdz".into(), package);
     memory.files.insert("external.usdc".into(), bytes);
-    let mut document = StageDocument::open_with(
+    let mut document = StageDocument::open(
         memory,
         "scene.usdz",
-        StageOptions::default(),
-        retained_options(),
+        OpenOptions {
+            loading: retained_options(),
+            ..OpenOptions::default()
+        },
     )
     .unwrap();
     let child = *document.catalog.ids.get("scene.usdz[mesh.usdc]").unwrap();
@@ -1527,14 +1539,16 @@ fn retained_binary_package_root_preserves_budget_and_reload_policy() {
     .unwrap();
     let mut memory = Memory::default();
     memory.files.insert("binary.usdz".into(), package);
-    let mut document = StageDocument::open_with(
+    let mut document = StageDocument::open(
         memory,
         "binary.usdz",
-        StageOptions::default(),
-        retained_options(),
+        OpenOptions {
+            loading: retained_options(),
+            ..OpenOptions::default()
+        },
     )
     .unwrap();
-    let root = document.stage().stage().root_layer().unwrap();
+    let root = document.root_layer();
     let old = document.retained_values(root).unwrap().clone();
     assert_eq!(old.stats().decode_attempts, 0);
     let path = document.store_mut().property_path("/Mesh.points");
@@ -1611,15 +1625,17 @@ fn save_tracks_successful_generations_and_excludes_sessions() {
         PrimSpec::default().with_children(vec![store.tokens().intern("Root")]),
     );
     store.insert_layer(layer);
-    let mut doc = StageDocument::open_in(
+    let mut doc = StageDocument::open(
         backend,
-        store,
         "root.usda",
-        StageOptions {
-            session_layer: Some(session),
-            ..Default::default()
+        OpenOptions {
+            stage: StageOptions {
+                session_layer: Some(session),
+                ..Default::default()
+            },
+            store: Some(store),
+            ..OpenOptions::default()
         },
-        ImportPolicy::Strict,
     )
     .unwrap();
     let root = doc.stage.stage().root_layer().unwrap();
@@ -1914,15 +1930,20 @@ fn errors_name_their_source_and_strict_rejections_keep_diagnostics() {
         "{missing}"
     );
 
-    let doc = StageDocument::open_in(
+    let doc = StageDocument::open(
         Memory::with(&[(
             "root.usda",
             "#usda 1.0\ndef \"Rock\" (\n references = @moss.usda@</Moss>\n) {}\n",
         )]),
-        InMemoryStore::default(),
         "root.usda",
-        StageOptions::default(),
-        ImportPolicy::AllowRecovery,
+        OpenOptions {
+            loading: LoadOptions {
+                import_policy: ImportPolicy::AllowRecovery,
+                ..LoadOptions::default()
+            },
+            store: Some(InMemoryStore::default()),
+            ..OpenOptions::default()
+        },
     )
     .unwrap();
     let failures = &doc.load_report().asset_failures;
@@ -2146,12 +2167,17 @@ fn package_relative_missing_dependencies_keep_recovery_evidence() {
     // A missing member is a missing dependency, which neither policy
     // rejects (AOUSD Core §9.7, §10.6); composition reports it.
     for policy in [ImportPolicy::Strict, ImportPolicy::AllowRecovery] {
-        let doc = StageDocument::open_in(
+        let doc = StageDocument::open(
             backend(),
-            InMemoryStore::default(),
             "scene.usdz",
-            StageOptions::default(),
-            policy,
+            OpenOptions {
+                loading: LoadOptions {
+                    import_policy: policy,
+                    ..LoadOptions::default()
+                },
+                store: Some(InMemoryStore::default()),
+                ..OpenOptions::default()
+            },
         )
         .unwrap();
         assert!(doc.load_report().has_errors());

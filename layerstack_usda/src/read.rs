@@ -78,7 +78,7 @@ pub fn read_usda(
 /// hold rejects the layer. Defaults remain un-authored. Numeric property arrays retain the compact
 /// import path and [`ReadStats`] accounting of [`read_usda`].
 ///
-/// For storage-backed stages, `layerstack_io::StageDocument::open_in` supplies
+/// For storage-backed stages, `layerstack_io::StageDocument::open` supplies
 /// `StageOptions::schemas` to this path for every imported USDA layer.
 /// Spec: AOUSD Core §7.4 (metadata), §6.2–6.6 (types), §16.2 (USDA).
 pub fn read_usda_with_registry(

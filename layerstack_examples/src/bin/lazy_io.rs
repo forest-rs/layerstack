@@ -13,7 +13,8 @@
 //! and an array property: `lazy_io scene.usdc /World/Mesh.points`.
 use layerstack::{EditTarget, InMemoryStore, StageOptions, Time};
 use layerstack_io::{
-    Filesystem, LoadOptions, ReloadPolicy, StageDocument, UsdcArrayLoading, UsdcReadOptions,
+    Filesystem, LoadOptions, OpenOptions, ReloadPolicy, StageDocument, UsdcArrayLoading,
+    UsdcReadOptions,
 };
 use layerstack_schemas::{SchemaEdit, usd_geom::Mesh};
 use std::{path::PathBuf, sync::Arc};
@@ -23,13 +24,16 @@ fn fixture() -> Result<PathBuf, Box<dyn std::error::Error>> {
     std::fs::create_dir_all(&directory)?;
     let store = InMemoryStore::default();
     let schemas = Arc::new(layerstack_schemas::openusd(store.tokens()));
-    let mut document = StageDocument::create_in(
+    let mut document = StageDocument::create(
         Filesystem::new(&directory, [])?,
-        store,
         "Mesh.usda",
-        StageOptions {
-            schemas: Some(schemas),
-            ..Default::default()
+        OpenOptions {
+            stage: StageOptions {
+                schemas: Some(schemas),
+                ..Default::default()
+            },
+            store: Some(store),
+            ..OpenOptions::default()
         },
     )?;
     let (store, live) = document.parts_mut();
@@ -73,19 +77,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .ok_or("asset path must name a file")?
         .to_str()
         .ok_or("asset filename must be UTF-8")?;
-    let mut document = StageDocument::open_with(
+    let mut document = StageDocument::open(
         Filesystem::new(directory, [])?,
         file,
-        StageOptions::default(),
-        LoadOptions {
-            usdc: UsdcReadOptions {
-                arrays: UsdcArrayLoading::Retained,
-                decode_budget: None,
+        OpenOptions {
+            loading: LoadOptions {
+                usdc: UsdcReadOptions {
+                    arrays: UsdcArrayLoading::Retained,
+                    decode_budget: None,
+                },
+                ..Default::default()
             },
-            ..Default::default()
+            ..OpenOptions::default()
         },
     )?;
-    let root = document.stage().stage().root_layer().unwrap();
+    let root = document.root_layer();
     let values = document
         .retained_values(root)
         .ok_or("root must be USDC or a USDZ package with a USDC root")?

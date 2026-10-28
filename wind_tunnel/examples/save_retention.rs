@@ -4,9 +4,10 @@
 //! Save/reopen ownership probe: `save_retention source.usdc fresh.usdc [snapshot]`.
 //! The destination must not exist. Explicit reload is a measurement surrogate
 //! for releasing the document's old sources, not a silent post-save rebind API.
-use layerstack::{EditTarget, PropertyPath, StageOptions, Time, Transaction, Value};
+use layerstack::{EditTarget, PropertyPath, Time, Transaction, Value};
 use layerstack_io::{
-    Filesystem, LoadOptions, ReloadPolicy, StageDocument, UsdcArrayLoading, UsdcReadOptions,
+    Filesystem, LoadOptions, OpenOptions, ReloadPolicy, StageDocument, UsdcArrayLoading,
+    UsdcReadOptions,
 };
 use std::{hint::black_box, io::Write, time::Instant};
 
@@ -55,16 +56,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     output.write_all(&std::fs::read(source)?)?;
     drop(output);
     let started = Instant::now();
-    let mut document = StageDocument::open_with(
+    let mut document = StageDocument::open(
         Filesystem::new(".", [])?,
         &target,
-        StageOptions::default(),
-        LoadOptions {
-            usdc: UsdcReadOptions {
-                arrays: UsdcArrayLoading::Retained,
+        OpenOptions {
+            loading: LoadOptions {
+                usdc: UsdcReadOptions {
+                    arrays: UsdcArrayLoading::Retained,
+                    ..Default::default()
+                },
                 ..Default::default()
             },
-            ..Default::default()
+            ..OpenOptions::default()
         },
     )?;
     let root_layer = document

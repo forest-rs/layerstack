@@ -1,0 +1,4 @@
+# Built by `npm run build:wasm` and `npm run build`.
+/wasm/
+/dist/
+/node_modules/

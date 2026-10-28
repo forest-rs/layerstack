@@ -1,0 +1,84 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+/**
+ * `@layerstack/stage`: open, resolve, inspect and explain USD stages in
+ * the browser or Node, over Layerstack compiled to WebAssembly.
+ *
+ * ```ts
+ * const layerstack = await loadLayerstack();
+ * using stage = layerstack.open({ identifier: "scene.usda", bytes });
+ * await stage.resolve({ fetch: async (id) => new Uint8Array(await (await fetch(id)).arrayBuffer()) });
+ * const size = stage.attribute("/World/Rock.size");
+ * size?.get();     // { kind: "scalar", type: "double", value: 2 }
+ * size?.explain(); // the opinions, strongest first, with layer, arc and role
+ * ```
+ *
+ * @module
+ */
+
+import init, { Stage as GlueStage, nativeVersion } from "../wasm/layerstack.js";
+import { LayerstackError } from "./errors.js";
+import { Layerstack } from "./stage.js";
+import type { NativeModule } from "./stage.js";
+
+export { LayerstackError } from "./errors.js";
+export type { ErrorCode, ErrorDetails } from "./errors.js";
+export { ABI, Attribute, Layer, Layerstack, PACKAGE_VERSION, Prim, Stage } from "./stage.js";
+export type { NativeModule, NativeStage } from "./stage.js";
+export type * from "./types.js";
+
+let own: Promise<Layerstack> | undefined;
+
+/**
+ * Loads the native module and returns its {@link Layerstack}.
+ *
+ * - No argument: this package's module (`wasm/layerstack_bg.wasm` beside
+ *   it), fetched in a browser and read from disk in Node.
+ * - A `URL`, string, `BufferSource` or `WebAssembly.Module`: this package's
+ *   glue over that module.
+ * - A {@link NativeModule}: an initialized module built by another crate
+ *   that links `layerstack_wasm`.
+ *
+ * This package's module is instantiated once per JavaScript realm: every
+ * call without a {@link NativeModule} returns the same instance.
+ *
+ * Throws `module.load` when the module cannot be read or instantiated,
+ * `module.abi` when it speaks another ABI.
+ */
+export function loadLayerstack(
+  source?: URL | string | BufferSource | WebAssembly.Module | NativeModule,
+): Promise<Layerstack> {
+  if (isNativeModule(source)) {
+    return Promise.resolve(new Layerstack(source));
+  }
+  own ??= instantiate(source);
+  return own;
+}
+
+async function instantiate(source: URL | string | BufferSource | WebAssembly.Module | undefined): Promise<Layerstack> {
+  let input: URL | string | BufferSource | WebAssembly.Module = source ?? new URL("../wasm/layerstack_bg.wasm", import.meta.url);
+  let memory: WebAssembly.Memory;
+  try {
+    if (input instanceof URL && input.protocol === "file:") {
+      const { readFile } = await import("node:fs/promises");
+      input = await readFile(input);
+    }
+    ({ memory } = await init({ module_or_path: input }));
+  } catch (error) {
+    own = undefined;
+    throw new LayerstackError("module.load", "loadLayerstack", `could not instantiate the module: ${String(error)}`, {
+      cause: error,
+    });
+  }
+  return new Layerstack({ Stage: GlueStage, nativeVersion, memory });
+}
+
+function isNativeModule(source: unknown): source is NativeModule {
+  return (
+    typeof source === "object" &&
+    source !== null &&
+    typeof (source as NativeModule).nativeVersion === "function" &&
+    typeof (source as NativeModule).Stage?.open === "function"
+  );
+}

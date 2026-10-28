@@ -1,0 +1,5 @@
+{
+  "description": "The default module's size budget: CI fails a build over it. Sizes in bytes, of wasm/layerstack_bg.wasm after wasm-opt.",
+  "optimized": 3000000,
+  "gzip": 1100000
+}

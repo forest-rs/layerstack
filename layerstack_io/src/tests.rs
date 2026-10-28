@@ -12,6 +12,7 @@ mod file_formats;
 mod host_assets;
 mod package_identity;
 mod registered_metadata;
+mod streamed_saves;
 mod threaded_open;
 mod udim_tiles;
 

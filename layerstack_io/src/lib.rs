@@ -268,6 +268,8 @@ impl core::error::Error for IoError {
 /// several sources at once from different threads.
 /// Writes must either complete or return an error; atomic replacement is the
 /// backend's responsibility. No retries or background work are scheduled.
+/// A document saves USDA through [`Self::write_streamed`], other formats
+/// through [`Self::write`].
 pub trait Storage: layerstack::MaybeSync {
     /// Resolves an authored asset identifier relative to a source identifier.
     fn identify(&self, asset: &str, anchor: Option<&str>) -> Result<String, IoError>;
@@ -356,6 +358,59 @@ pub trait Storage: layerstack::MaybeSync {
     }
     /// Writes a complete source.
     fn write(&mut self, identifier: &str, bytes: &[u8]) -> Result<(), IoError>;
+    /// Writes a complete source whose bytes `produce` hands, in order, to the
+    /// sink it is given, so that neither side holds them all.
+    ///
+    /// The source is written only when `produce` returns `Ok` and every
+    /// write to the sink succeeds; otherwise this returns the first error
+    /// (`produce` returns a sink error it was given) and leaves an existing
+    /// source as it was, as a failed [`Self::write`] does. [`Filesystem`]
+    /// streams into the temporary file it renames over the destination. The
+    /// default gathers the bytes and calls [`Self::write`] once, after
+    /// `produce` succeeds.
+    fn write_streamed(
+        &mut self,
+        identifier: &str,
+        produce: &mut dyn FnMut(&mut dyn ByteSink) -> Result<(), IoError>,
+    ) -> Result<(), IoError> {
+        let mut bytes = Vec::new();
+        produce(&mut bytes)?;
+        self.write(identifier, &bytes)
+    }
+}
+
+/// Where [`Storage::write_streamed`] sends a source's bytes, in order.
+pub trait ByteSink {
+    /// Appends `bytes` to the source being written.
+    ///
+    /// # Errors
+    ///
+    /// The backend's error; the write then fails as a whole and leaves an
+    /// existing source as it was.
+    fn write_bytes(&mut self, bytes: &[u8]) -> Result<(), IoError>;
+}
+
+impl ByteSink for Vec<u8> {
+    fn write_bytes(&mut self, bytes: &[u8]) -> Result<(), IoError> {
+        self.extend_from_slice(bytes);
+        Ok(())
+    }
+}
+
+/// USDA text into a [`ByteSink`], keeping the sink's first error for the
+/// caller ([`core::fmt::Write`] reports none).
+struct TextSink<'s> {
+    sink: &'s mut dyn ByteSink,
+    error: Option<IoError>,
+}
+
+impl core::fmt::Write for TextSink<'_> {
+    fn write_str(&mut self, text: &str) -> core::fmt::Result {
+        self.sink.write_bytes(text.as_bytes()).map_err(|error| {
+            self.error = Some(error);
+            core::fmt::Error
+        })
+    }
 }
 /// Whether recoverable malformed or unrepresented content may be imported.
 ///
@@ -1311,11 +1366,7 @@ impl<B: Storage> StageDocument<B> {
                     "a layer read with format arguments is built from them; export a copy instead",
                 ))
             } else {
-                self.serialize(id, source.format).and_then(|bytes| {
-                    self.storage
-                        .write(&source.identifier, &bytes)
-                        .map_err(|e| e.at(&source.identifier))
-                })
+                self.write_layer(id, source.format, &source.identifier)
             };
             match result {
                 Ok(()) => {
@@ -1337,10 +1388,7 @@ impl<B: Storage> StageDocument<B> {
             .identify(target, None)
             .map_err(|e| e.at(target))?;
         let format = identifier_format(&identifier, &self.formats)?;
-        let bytes = self.serialize(layer, format)?;
-        self.storage
-            .write(&identifier, &bytes)
-            .map_err(|e| e.at(&identifier))
+        self.write_layer(layer, format, &identifier)
     }
     /// Writes an explicit, already localized package plan. Asset selection and
     /// package member naming belong to the caller and existing localization API.
@@ -1377,34 +1425,56 @@ impl<B: Storage> StageDocument<B> {
     ) -> Result<LoadReport, IoError> {
         Ok(self.prepare_reload_layers(layers, policy)?.commit())
     }
-    fn serialize(&self, id: LayerId, format: Format) -> Result<Vec<u8>, IoError> {
+    /// Writes layer `id` to `identifier` in `format`, refusing a layer the
+    /// format cannot hold before the storage is asked to write. USDA text
+    /// streams to the storage ([`Storage::write_streamed`]); the other
+    /// formats are encoded whole and written at once.
+    fn write_layer(
+        &mut self,
+        id: LayerId,
+        format: Format,
+        identifier: &str,
+    ) -> Result<(), IoError> {
         let layer = self
             .store
             .layer(id)
             .ok_or_else(|| IoError::new(IoErrorKind::MissingLayer, "selected layer is absent"))?;
-        match format {
+        let (tokens, paths) = (&self.store.tokens, &self.store.paths);
+        let bytes = match format {
             Format::Usda => {
-                layerstack_usda::save::save_usda(layer, &self.store.tokens, &self.store.paths)
-                    .map(String::into_bytes)
-                    .map_err(save_error)
+                let document = layerstack_usda::save::usda_document(layer, tokens, paths)
+                    .map_err(save_error)?;
+                return self
+                    .storage
+                    .write_streamed(identifier, &mut |sink| {
+                        let mut text = TextSink { sink, error: None };
+                        document.write_usda_to(&mut text).map_err(|error| {
+                            text.error.take().unwrap_or_else(|| {
+                                save_error(layerstack_usda::save::SaveError::Document(error))
+                            })
+                        })
+                    })
+                    .map_err(|e| e.at(identifier));
             }
             Format::Usdc => {
-                layerstack_usdc::writer::save_layer(layer, &self.store.tokens, &self.store.paths)
-                    .map_err(|error| match error {
+                layerstack_usdc::writer::save_layer(layer, tokens, paths).map_err(|error| {
+                    match error {
                         layerstack_usdc::writer::UsdcWriteError::Save(error) => save_error(error),
                         error => IoError::new(IoErrorKind::Unsupported, error.to_string()),
-                    })
+                    }
+                })?
             }
-            Format::Usdz => Err(IoError::new(
-                IoErrorKind::Unsupported,
-                "package export requires an explicit localization plan",
-            )),
-            Format::Custom(index) => {
-                self.formats
-                    .get(index)
-                    .write(layer, &self.store.tokens, &self.store.paths)
+            Format::Usdz => {
+                return Err(IoError::new(
+                    IoErrorKind::Unsupported,
+                    "package export requires an explicit localization plan",
+                ));
             }
-        }
+            Format::Custom(index) => self.formats.get(index).write(layer, tokens, paths)?,
+        };
+        self.storage
+            .write(identifier, &bytes)
+            .map_err(|e| e.at(identifier))
     }
     fn session_layers(&self) -> BTreeSet<LayerId> {
         let mut layers = BTreeSet::new();

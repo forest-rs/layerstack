@@ -14,6 +14,10 @@ use alloc::{
 use layerstack::{asset::PackagePath, encoded_bytes::EncodedBytes};
 
 /// Explicit limits for a complete package snapshot, including nested packages.
+///
+/// Build it as a struct literal that names the fields it sets and takes
+/// the rest from `..PackageLimits::default()`: a field a later release adds then
+/// keeps its default.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PackageLimits {
     /// Maximum nested archive levels beneath the outer archive, at most 31.

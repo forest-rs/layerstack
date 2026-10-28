@@ -90,6 +90,10 @@ pub enum UsdcArrayLoading {
 /// it is measured in decoder units, not memory bytes. It applies independently
 /// to each file. It does not limit transport bytes, USDA parsing or scene-wide
 /// memory. The host remains responsible for those budgets.
+///
+/// Build it as a struct literal that names the fields it sets and takes
+/// the rest from `..UsdcReadOptions::default()`: a field a later release adds then
+/// keeps its default.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct UsdcReadOptions {
     /// Whether arrays decode immediately or retain their encoded storage.

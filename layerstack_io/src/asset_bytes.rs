@@ -38,6 +38,9 @@ pub struct AssetBytes {
 }
 
 /// Explicit allocation limits for resource and nonresident archive transport.
+///
+/// Build it as a struct literal; it has no default, so a literal names
+/// every field.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct AssetReadLimits {
     /// Maximum returned resource bytes, checked before returning a shared package view.

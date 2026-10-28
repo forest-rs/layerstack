@@ -118,6 +118,10 @@ pub enum BindingStrength {
 }
 
 /// How bindings are resolved.
+///
+/// Build it as a struct literal that names the fields it sets and takes
+/// the rest from `..BindingOptions::default()`: a field a later release adds then
+/// keeps its default.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct BindingOptions {
     /// Whether bindings on prims without `MaterialBindingAPI` applied count,

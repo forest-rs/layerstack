@@ -472,6 +472,10 @@ pub enum VariantArcLoading {
 /// Document import policy applied consistently to root, dependencies and package members.
 /// Existing opening methods use strict import. Set these options explicitly
 /// to defer USDC numeric decoding; checked reads then report payload errors later.
+///
+/// Build it as a struct literal that names the fields it sets and takes
+/// the rest from `..LoadOptions::default()`: a field a later release adds then
+/// keeps its default.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct LoadOptions {
     /// Whether recovery diagnostics reject an import.

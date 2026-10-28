@@ -29,6 +29,9 @@ pub struct ClipSource<'a> {
     pub offset: LayerOffset,
 }
 /// Explicit identities and metadata for a new detached clip bundle.
+///
+/// Build it as a struct literal; it has no default, so a literal names
+/// every field.
 #[derive(Clone, Debug)]
 pub struct ClipBundleOptions {
     /// Identity of the returned root layer.

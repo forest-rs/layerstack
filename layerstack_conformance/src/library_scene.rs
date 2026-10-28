@@ -778,6 +778,27 @@ impl LibraryScene {
     /// When a layer does not serialize or a file cannot be written.
     pub fn write(&self, dir: &Path, format: LibraryFormat) -> std::io::Result<WrittenLibrary> {
         std::fs::create_dir_all(dir)?;
+        let mut files = Vec::new();
+        for (name, bytes) in self.encode(format)? {
+            let path = dir.join(name);
+            std::fs::write(&path, &bytes)?;
+            files.push((path, bytes.len() as u64));
+        }
+        Ok(WrittenLibrary {
+            root: files[0].0.clone(),
+            files,
+        })
+    }
+
+    /// The root layer and its sublayers as `format`, each with the file
+    /// name [`Self::write`] gives it, root first, without touching the
+    /// filesystem: a test that needs only the bytes shares no files with
+    /// tests running at once in other processes.
+    ///
+    /// # Errors
+    ///
+    /// When a layer does not serialize.
+    pub fn encode(&self, format: LibraryFormat) -> std::io::Result<Vec<(String, Vec<u8>)>> {
         let extension = format.extension();
         let mut root = Document::new();
         root.sublayers = self
@@ -788,26 +809,21 @@ impl LibraryScene {
                 offset: LayerOffset::IDENTITY,
             })
             .collect();
-        let mut files = Vec::new();
-        let documents = std::iter::once(("library", &root))
+        let documents = core::iter::once(("library", &root))
             .chain(self.layers.iter().map(|(stem, document)| (*stem, document)));
-        for (stem, document) in documents {
-            let path = dir.join(format!("{stem}.{extension}"));
-            let bytes = match format {
-                LibraryFormat::Usda => document
-                    .to_usda()
-                    .map_err(|error| std::io::Error::other(error.to_string()))?
-                    .into_bytes(),
-                LibraryFormat::Usdc => layerstack_usdc::writer::write_document(document)
-                    .map_err(|error| std::io::Error::other(error.to_string()))?,
-            };
-            std::fs::write(&path, &bytes)?;
-            files.push((path, bytes.len() as u64));
-        }
-        Ok(WrittenLibrary {
-            root: files[0].0.clone(),
-            files,
-        })
+        documents
+            .map(|(stem, document)| {
+                let bytes = match format {
+                    LibraryFormat::Usda => document
+                        .to_usda()
+                        .map_err(|error| std::io::Error::other(error.to_string()))?
+                        .into_bytes(),
+                    LibraryFormat::Usdc => layerstack_usdc::writer::write_document(document)
+                        .map_err(|error| std::io::Error::other(error.to_string()))?,
+                };
+                Ok((format!("{stem}.{extension}"), bytes))
+            })
+            .collect()
     }
 
     /// A one-line summary of [`Self::counts`].

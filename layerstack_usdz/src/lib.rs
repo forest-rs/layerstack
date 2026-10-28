@@ -32,6 +32,10 @@
 //! &[u8] → ZIP parse → USDZ validation → root layer → format dispatch → Layer
 //! ```
 //!
+//! The ZIP reader and CRC-32 are internal: the `unstable-internals` feature
+//! makes them public modules for this repository's tests and benchmarks,
+//! with no semver promise.
+//!
 //! [`Layer`]: layerstack::doc::Layer
 //! [`PrimSpec`]: layerstack::doc::PrimSpec
 
@@ -50,8 +54,27 @@ use layerstack::doc::{Layer, LayerId};
 use layerstack::interner::TokenInterner;
 use layerstack::path::PathInterner;
 
+/// Declares a module that is public with the `unstable-internals` feature,
+/// for this repository's tests, benchmarks and fuzzing, and private without
+/// it: its items are format internals that follow no semver promise.
+macro_rules! internal_mod {
+    ($(#[$attr:meta])* $name:ident) => {
+        $(#[$attr])*
+        #[cfg(feature = "unstable-internals")]
+        pub mod $name;
+        $(#[$attr])*
+        #[cfg(not(feature = "unstable-internals"))]
+        #[allow(
+            unreachable_pub,
+            dead_code,
+            reason = "public only with the `unstable-internals` feature"
+        )]
+        mod $name;
+    };
+}
+
 mod access;
-pub mod crc32;
+internal_mod!(crc32);
 pub mod diagnostic;
 pub mod error;
 pub mod localize;
@@ -59,7 +82,7 @@ pub mod range;
 mod resolver;
 pub mod snapshot;
 pub mod writer;
-pub mod zip;
+internal_mod!(zip);
 
 pub use diagnostic::{ImportDiagnostic, MemberDiagnostic};
 pub use error::{LayerReadError, UsdzError};

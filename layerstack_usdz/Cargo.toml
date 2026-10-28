@@ -14,6 +14,9 @@ categories = ["parser-implementations"]
 [features]
 default = []
 std = ["layerstack_usdc/std"]
+# The ZIP reader and CRC-32 (`zip`, `crc32`) as public modules, for this
+# repository's tests and benchmarks. They follow no semver promise.
+unstable-internals = []
 
 [dependencies]
 layerstack = { workspace = true }
@@ -21,6 +24,8 @@ layerstack_usda = { workspace = true }
 layerstack_usdc = { workspace = true }
 
 [dev-dependencies]
+# Tests check diagnostics through the USDA syntax layers.
+layerstack_usda = { features = ["unstable-internals"], workspace = true }
 
 [lints]
 workspace = true

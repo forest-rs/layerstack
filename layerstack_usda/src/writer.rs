@@ -115,7 +115,7 @@ use smallvec::SmallVec;
 
 use crate::float_text;
 
-pub use crate::ast::Specifier;
+pub use layerstack::{Specifier, Variability};
 
 const INDENT: &str = "    ";
 
@@ -638,18 +638,6 @@ impl From<Relationship> for Property {
     fn from(relationship: Relationship) -> Self {
         Self::Relationship(relationship)
     }
-}
-
-/// Attribute variability (the `uniform` qualifier).
-///
-/// Spec: AOUSD Core §16.2.16.1 (attribute declarations), §16.3.10.29.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum Variability {
-    /// May vary over time (no qualifier).
-    #[default]
-    Varying,
-    /// Written with the `uniform` qualifier.
-    Uniform,
 }
 
 /// An attribute spec: declaration, optional default value, optional time

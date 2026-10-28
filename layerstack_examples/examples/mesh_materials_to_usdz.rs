@@ -138,6 +138,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// The CRC-32 (IEEE 802.3, reflected) PNG chunks end with.
+fn crc32(bytes: &[u8]) -> u32 {
+    let mut crc = !0_u32;
+    for &byte in bytes {
+        crc ^= u32::from(byte);
+        for _ in 0..8 {
+            crc = if crc & 1 == 1 {
+                (crc >> 1) ^ 0xEDB8_8320
+            } else {
+                crc >> 1
+            };
+        }
+    }
+    !crc
+}
+
 /// Encodes an 8-bit RGB PNG with a stored (uncompressed) deflate stream,
 /// which keeps the example free of image dependencies.
 fn rgb_png(width: u32, height: u32, pixel: impl Fn(u32, u32) -> [u8; 3]) -> Vec<u8> {
@@ -146,7 +162,7 @@ fn rgb_png(width: u32, height: u32, pixel: impl Fn(u32, u32) -> [u8; 3]) -> Vec<
         let start = out.len();
         out.extend_from_slice(kind);
         out.extend_from_slice(data);
-        let crc = layerstack_usdz::crc32::crc32(&out[start..]);
+        let crc = crc32(&out[start..]);
         out.extend_from_slice(&crc.to_be_bytes());
     }
     let mut raw = Vec::new();

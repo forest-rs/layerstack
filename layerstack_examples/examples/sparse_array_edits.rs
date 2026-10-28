@@ -16,9 +16,7 @@ use layerstack::{
     AssetResolveError, AssetResolver, LayerOffset, ResolvedAsset, Stage, StageOptions,
     SublayerEntry, Time, Value,
 };
-use layerstack_usda::emit;
-use layerstack_usda::lower;
-use layerstack_usda::parser::parse_cst;
+use layerstack_usda::read_usda;
 
 /// Stub asset resolver for inline USDA examples with no external assets.
 struct StubResolver {
@@ -48,33 +46,20 @@ impl AssetResolver for StubResolver {
 }
 
 fn insert_inline_usda(store: &mut InMemoryStore, layer_id: LayerId, source: &str) {
-    let cst = parse_cst(source);
-    assert!(
-        cst.diagnostics.is_empty(),
-        "unexpected CST diagnostics: {:?}",
-        cst.diagnostics
-    );
-
-    let ast = lower::lower(&cst.tree, source);
-    assert!(
-        ast.diagnostics.is_empty(),
-        "unexpected lowering diagnostics: {:?}",
-        ast.diagnostics
-    );
-
     let mut resolver = StubResolver { next_id: 10_000 };
-    let emitted = emit::emit(
-        &ast.layer,
+    let read = read_usda(
+        source,
         layer_id,
         store.tokens(),
         store.paths(),
         &mut resolver,
     );
+    let diagnostics: Vec<_> = read.diagnostics().collect();
     assert!(
-        emitted.diagnostics.is_empty(),
-        "unexpected emit diagnostics: {:?}",
-        emitted.diagnostics
+        diagnostics.is_empty(),
+        "unexpected diagnostics: {diagnostics:?}"
     );
+    let emitted = read.emitted;
 
     store.insert_layer(emitted.layer);
     for layer in emitted.resolved_layers {

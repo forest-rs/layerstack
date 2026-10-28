@@ -2451,7 +2451,7 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
 
     /// Reads the metadata `field` from `statements`, the USDA text a crate
     /// holds for metadata no schema registers, as reading OpenUSD's text of
-    /// the crate file would ([`layerstack_usda::emit::metadata_from_text`]);
+    /// the crate file would ([`layerstack_usda::metadata_from_text`]);
     /// `None`, after a diagnostic, when the text does not read.
     ///
     /// Spec: AOUSD Core §7.4 (metadata fields).
@@ -2462,7 +2462,7 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
         statements: &str,
     ) -> Result<Option<FieldValue>, UsdcError> {
         let read =
-            layerstack_usda::emit::metadata_from_text(field, statements, self.tokens, self.paths);
+            layerstack_usda::metadata_from_text(field, statements, self.tokens, self.paths);
         if read.is_none() {
             self.report(
                 spec_path,

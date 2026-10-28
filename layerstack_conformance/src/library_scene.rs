@@ -38,7 +38,7 @@
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
-use layerstack_usda::ast::Specifier;
+use layerstack::Specifier;
 use layerstack_usda::writer::{
     Attribute, Document, LayerOffset, ListOp, Metadatum, Prim, Relationship, SubLayer, Value,
 };

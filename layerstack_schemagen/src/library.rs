@@ -76,20 +76,20 @@ pub(crate) fn load(path: &Path, store: &mut InMemoryStore) -> Result<LayerId, St
     while cursor < resolver.paths.len() {
         let file = resolver.paths[cursor].clone();
         let text = std::fs::read_to_string(&file).map_err(|e| format!("{file}: {e}"))?;
-        let parsed = layerstack_usda::parser::parse(&text);
-        let emitted = layerstack_usda::emit::emit(
-            &parsed.layer,
+        let read = layerstack_usda::read_usda(
+            &text,
             LayerId(cursor as u64),
             store.tokens(),
             store.paths(),
             &mut resolver,
         );
-        if !parsed.diagnostics.is_empty() || !emitted.diagnostics.is_empty() {
+        if read.diagnostics().next().is_some() {
             return Err(format!(
-                "{file}: {:?} {:?}",
-                parsed.diagnostics, emitted.diagnostics
+                "{file}: {:?} {:?} {:?}",
+                read.parse_diagnostics, read.lower_diagnostics, read.emitted.diagnostics
             ));
         }
+        let emitted = read.emitted;
         store.insert_layer(emitted.layer);
         for layer in emitted.resolved_layers {
             store.insert_layer(layer);

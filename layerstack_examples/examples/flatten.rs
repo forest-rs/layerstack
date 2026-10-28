@@ -152,9 +152,14 @@ fn parse(
     paths: &PathInterner,
     resolver: &mut dyn AssetResolver,
 ) -> (Layer, Vec<Layer>) {
-    let parsed = layerstack_usda::parser::parse(text);
-    assert!(parsed.diagnostics.is_empty(), "{:?}", parsed.diagnostics);
-    let emitted = layerstack_usda::emit::emit(&parsed.layer, id, tokens, paths, resolver);
+    let read = layerstack_usda::read_usda(text, id, tokens, paths, resolver);
+    let parsed_diagnostics: Vec<_> = read
+        .parse_diagnostics
+        .iter()
+        .chain(&read.lower_diagnostics)
+        .collect();
+    assert!(parsed_diagnostics.is_empty(), "{:?}", parsed_diagnostics);
+    let emitted = read.emitted;
     assert!(emitted.diagnostics.is_empty(), "{:?}", emitted.diagnostics);
     (emitted.layer, emitted.resolved_layers)
 }

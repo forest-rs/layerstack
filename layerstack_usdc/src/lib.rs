@@ -30,6 +30,10 @@
 //! &[u8] → header → TOC → sections → value reps → assemble → Layer
 //! ```
 //!
+//! The stages are internal: the `unstable-internals` feature makes their
+//! modules public for this repository's tests, benchmarks and fuzzing, with
+//! no semver promise.
+//!
 //! [`Layer`]: layerstack::doc::Layer
 //! [`PrimSpec`]: layerstack::doc::PrimSpec
 
@@ -48,32 +52,55 @@ pub use lazy::{
     read_usdc_lazy_range_within, read_usdc_lazy_within,
 };
 
-pub mod compression;
+/// Declares a module that is public with the `unstable-internals` feature,
+/// for this repository's tests, benchmarks and fuzzing, and private without
+/// it: its items are format internals that follow no semver promise.
+macro_rules! internal_mod {
+    ($(#[$attr:meta])* $name:ident) => {
+        $(#[$attr])*
+        #[cfg(feature = "unstable-internals")]
+        pub mod $name;
+        $(#[$attr])*
+        #[cfg(not(feature = "unstable-internals"))]
+        #[allow(
+            unreachable_pub,
+            dead_code,
+            reason = "public only with the `unstable-internals` feature"
+        )]
+        mod $name;
+    };
+}
+
+internal_mod!(compression);
 pub mod error;
-pub mod header;
+internal_mod!(header);
 pub mod reader;
-pub mod section;
+internal_mod!(section);
 mod threads;
-pub mod toc;
+internal_mod!(toc);
 // Value representation decoding pervasively casts u64 file offsets/counts to
 // usize. Files larger than 4 GiB on 32-bit targets are unsupported.
 mod numeric_array;
-#[allow(
-    clippy::cast_possible_truncation,
-    reason = "pervasive u64→usize casts for file offsets; >4 GiB files unsupported"
-)]
-pub mod value_rep;
-pub mod value_type;
+internal_mod!(
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "pervasive u64→usize casts for file offsets; >4 GiB files unsupported"
+    )]
+    value_rep
+);
+internal_mod!(value_type);
 pub mod version;
 pub mod writer;
 
 // Scene assembly converts decoded sections into Layer/PrimSpec structures.
 // Like value_rep, it pervasively casts u64 indices to usize.
-#[allow(
-    clippy::cast_possible_truncation,
-    reason = "pervasive u64→usize casts for section indices; >4 GiB files unsupported"
-)]
-pub mod assemble;
+internal_mod!(
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "pervasive u64→usize casts for section indices; >4 GiB files unsupported"
+    )]
+    assemble
+);
 
 use layerstack::AssetResolver;
 use layerstack::doc::LayerId;
@@ -81,10 +108,13 @@ use layerstack::interner::TokenInterner;
 use layerstack::parallel::Threads;
 use layerstack::path::PathInterner;
 
-pub use assemble::AssembleResult;
+pub use assemble::{AssembleDiagnostic, AssembleResult};
 pub use error::UsdcError;
 pub use reader::{CrateField, CrateFile, CrateSpec};
-pub use value_rep::DecodeBudget;
+pub use value_rep::{
+    CrateArrayEdit, CrateArrayEditOp, CrateListOp, CrateValue, DecodeBudget, RawValueRep,
+};
+pub use value_type::ValueType as CrateValueType;
 pub use version::CrateVersion;
 pub use writer::save_usdc;
 

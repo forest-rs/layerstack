@@ -435,21 +435,20 @@ pub fn generate_shader_library(path: impl AsRef<Path>) -> Result<String, String>
 
 fn generate_shader_text(text: &str) -> Result<String, String> {
     let mut store = layerstack::InMemoryStore::default();
-    let parsed = layerstack_usda::parser::parse(text);
-    let emitted = layerstack_usda::emit::emit(
-        &parsed.layer,
+    let read = layerstack_usda::read_usda(
+        text,
         layerstack::LayerId(0),
         store.tokens(),
         store.paths(),
         &mut NoAssets,
     );
-    if !parsed.diagnostics.is_empty() || !emitted.diagnostics.is_empty() {
+    if read.diagnostics().next().is_some() {
         return Err(format!(
-            "shader definitions: {:?} {:?}",
-            parsed.diagnostics, emitted.diagnostics
+            "shader definitions: {:?} {:?} {:?}",
+            read.parse_diagnostics, read.lower_diagnostics, read.emitted.diagnostics
         ));
     }
-    store.insert_layer(emitted.layer);
+    store.insert_layer(read.emitted.layer);
     let nodes = shader_nodes::read_store(layerstack::LayerId(0), &mut store)?;
     render_library(nodes, store)
 }

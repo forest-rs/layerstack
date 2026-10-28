@@ -32,20 +32,19 @@ impl AssetResolver for NoAssets {
 
 fn main() {
     let mut store = InMemoryStore::default();
-    let parsed = layerstack_usda::parser::parse(SOURCE);
-    let emitted = layerstack_usda::emit::emit(
-        &parsed.layer,
+    let read = layerstack_usda::read_usda(
+        SOURCE,
         LayerId(1),
         store.tokens(),
         store.paths(),
         &mut NoAssets,
     );
+    let diagnostics: Vec<_> = read.diagnostics().collect();
     assert!(
-        parsed.diagnostics.is_empty() && emitted.diagnostics.is_empty(),
-        "the inline USD scene must load: {:?} {:?}",
-        parsed.diagnostics,
-        emitted.diagnostics
+        diagnostics.is_empty(),
+        "the inline USD scene must load: {diagnostics:?}"
     );
+    let emitted = read.emitted;
     store.insert_layer(emitted.layer);
     let schemas = Arc::new(layerstack_schemas::openusd(store.tokens()));
     let live = LiveStage::compose(

@@ -43,7 +43,8 @@ The cases:
   sequences or control characters, or set names that are not identifiers,
   which OpenUSD evaluates as the strings of a dictionary and writes back
   quoted and escaped (`TextParserAction<VariantsMetadata>`,
-  `pxr/usd/sdf/textFileFormatParser.cpp`).
+  `pxr/usd/sdf/textFileFormatParser.cpp`); a `\\` in an asset path, which
+  is not an escape there.
   Some are refused, as OpenUSD refuses them: a relative target of a prim
   inside the variant, which anchors at `/P{v=one}Child` and so names a
   variant selection (`<x>`, `<../Other>`), a quoted
@@ -96,7 +97,8 @@ The cases:
   `@@@a@@@@@` and `@@@@@@`; a `variants` entry that is not a `string`, or
   whose selection, escapes evaluated, is neither a variant name nor an
   expression (`SdfSchemaBase::IsValidVariantSelection`,
-  `pxr/usd/sdf/schema.cpp`).
+  `pxr/usd/sdf/schema.cpp`); an asset path holding a control character
+  (`_ValidateAssetPathString`, `pxr/usd/sdf/assetPath.cpp`).
 - `statements_*`: several list-op statements for one field, on a
   relationship, a connection, references, inherits, `variantSets` and
   metadata (`apiSchemas`). OpenUSD's parser sets each statement's list
@@ -565,6 +567,23 @@ def "P" (
     variants = {
         token v = "one"
     }
+)
+{
+}
+''', []),
+    # An escape is not evaluated in an asset path; a control character is
+    # refused.
+    "read_asset_path_backslash": ('''#usda 1.0
+
+def "P"
+{
+    asset s = @a\\x10b@
+}
+''', []),
+    "strict_asset_path_control_character": ('''#usda 1.0
+
+def "P" (
+    references = @a\x10b.usda@
 )
 {
 }

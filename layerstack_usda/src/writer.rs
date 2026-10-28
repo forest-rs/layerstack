@@ -2697,6 +2697,62 @@ fn is_written_on_layer(entry: &Metadatum) -> bool {
         )
 }
 
+/// A [`std::io::Write`] as the text sink of [`Document::write_usda_to`] and
+/// [`crate::save::save_usda_to`], keeping the first I/O error, which
+/// [`core::fmt::Write`] cannot carry.
+///
+/// Each piece is written with `write_all`; the pieces are large, so `inner`
+/// need not be buffered. On [`WriteError::Sink`], [`Self::take_error`]
+/// returns the I/O error.
+///
+/// ```no_run
+/// use std::fs::File;
+/// use layerstack_usda::writer::{Document, IoText};
+///
+/// let doc = Document::new();
+/// let mut text = IoText::new(File::create("layer.usda")?);
+/// if doc.write_usda_to(&mut text).is_err() {
+///     if let Some(error) = text.take_error() {
+///         return Err(error.into());
+///     }
+/// }
+/// # Ok::<(), Box<dyn core::error::Error>>(())
+/// ```
+#[cfg(feature = "std")]
+#[derive(Debug)]
+pub struct IoText<W> {
+    inner: W,
+    error: Option<std::io::Error>,
+}
+
+#[cfg(feature = "std")]
+impl<W: std::io::Write> IoText<W> {
+    /// Wraps `inner`.
+    pub fn new(inner: W) -> Self {
+        Self { inner, error: None }
+    }
+
+    /// The I/O error that made the sink refuse text, if any, taken out.
+    pub fn take_error(&mut self) -> Option<std::io::Error> {
+        self.error.take()
+    }
+
+    /// The wrapped writer.
+    pub fn into_inner(self) -> W {
+        self.inner
+    }
+}
+
+#[cfg(feature = "std")]
+impl<W: std::io::Write> fmt::Write for IoText<W> {
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        self.inner.write_all(s.as_bytes()).map_err(|error| {
+            self.error = Some(error);
+            fmt::Error
+        })
+    }
+}
+
 /// How many bytes of text [`Document::write_usda_to`] gathers before handing
 /// them to its sink.
 const SPILL_BYTES: usize = 64 * 1024;

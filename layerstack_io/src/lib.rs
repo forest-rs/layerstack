@@ -329,7 +329,10 @@ impl core::error::Error for IoError {
 /// [`IoErrorKind::NotFound`].
 /// Reads take `&self`: with the `std` feature a storage is [`Sync`]
 /// ([`layerstack::MaybeSync`]), and opening a stage may identify and read
-/// several sources at once from different threads.
+/// several sources at once from different threads. Implement it for a
+/// `Sync` type: this crate enables `std` by default, and Cargo enables it
+/// for the whole build when any crate does, so a storage that is not
+/// `Sync` compiles only while every crate in the build leaves it off.
 /// Writes must either complete or return an error; atomic replacement is the
 /// backend's responsibility. No retries or background work are scheduled.
 /// A document saves USDA through [`Self::write_streamed`], other formats

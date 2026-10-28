@@ -170,9 +170,27 @@ USDA and USDC readers/writers, USDZ packaging, mesh export, and generated OpenUS
 schema views with transform, bounds and shading queries.
 [`layerstack_io`](https://docs.rs/layerstack_io) adds retained stage documents
 with host-owned storage, explicit saving and reload policies. Applications supply
-asset resolution through [`AssetResolver`] and their own domain behavior.
+their own domain behavior.
+
+Assets reach composition through one of three seams, by when the host
+answers for them:
+
+- at import, an [`AssetResolver`] resolves each asset path a reader meets
+  to a layer ([`NoAssets`] resolves none);
+- at composition, the store answers [`LayerStore::asset_layer`] for an arc
+  or sublayer bound to an asset path, and an asset it has no answer for
+  yet is asked for ([`Stage::asset_requests`]);
+- with [`layerstack_io`](https://docs.rs/layerstack_io), a host implements
+  its `Storage` (bytes by identifier), and the document does both of the
+  others.
+
+The [`asset`] module's docs name the states of an asset that is not there.
+
 For composition of already-ordered opinions without USD paths and arcs, see
-[`opinionated`](https://docs.rs/opinionated).
+[`opinionated`](https://docs.rs/opinionated). `opinionated` is also a public
+dependency: [`ListOp`], [`ArrayIndex`], [`ArrayEditOp`] and
+[`listop::resolve_list_chain`] are its items, so a breaking `opinionated` release is a
+breaking release of this crate.
 
 OpenUSD compatibility is bounded by the implemented and tested subset. Value
 clips are evaluated from host-loaded raw layers; inspect

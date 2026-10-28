@@ -13,31 +13,13 @@
 use std::sync::Arc;
 
 use layerstack::{
-    AssetResolveError, AssetResolver, EditTarget, InMemoryStore, LayerId, ListOp, LiveStage,
-    MetadataEditReason, PathInterner, ResolvedAsset, StageOptions, TokenInterner, Value,
+    EditTarget, InMemoryStore, LayerId, ListOp, LiveStage, MetadataEditReason, NoAssets,
+    StageOptions, TokenInterner, Value,
 };
 use layerstack_custom_schemas::fields::{
     self, PrimMetadata, PrimMetadataEdit, PropertyMetadata, PropertyMetadataEdit, StageMetadata,
 };
 use layerstack_schemas::{MetadataError, PrimEdit, PrimView, Scene, SchemaEdit};
-
-struct NoAssets;
-
-impl AssetResolver for NoAssets {
-    fn resolve(
-        &mut self,
-        _: &str,
-        _: Option<LayerId>,
-        _: &TokenInterner,
-        _: &PathInterner,
-    ) -> Result<ResolvedAsset, AssetResolveError> {
-        Err(AssetResolveError::NotFound)
-    }
-
-    fn resolved_path(&self, _: LayerId) -> Option<&str> {
-        None
-    }
-}
 
 fn stage() -> (InMemoryStore, LiveStage) {
     let mut store = InMemoryStore::default();

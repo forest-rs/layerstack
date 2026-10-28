@@ -78,6 +78,8 @@ use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
+use layerstack::NoAssets;
+
 /// The directories whose every file the generator writes.
 const GENERATED_DIRS: &[&str] = &[
     "layerstack_schemas/src/generated",
@@ -439,7 +441,7 @@ fn generate_shader_text(text: &str) -> Result<String, String> {
         layerstack::LayerId(0),
         store.tokens(),
         store.paths(),
-        &mut model::NoAssets,
+        &mut NoAssets,
     );
     if !parsed.diagnostics.is_empty() || !emitted.diagnostics.is_empty() {
         return Err(format!(

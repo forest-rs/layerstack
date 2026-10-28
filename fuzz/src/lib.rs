@@ -18,9 +18,8 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use layerstack::{
-    AssetResolveError, AssetResolver, CompositionLimits, FormatArgs, InMemoryStore, LayerId, Path,
-    PathExpression, PathInterner, PropertyPath, ResolvedAsset, SpecPath, StageOptions, TargetPath,
-    Time, TokenInterner, ValueType,
+    CompositionLimits, FormatArgs, InMemoryStore, LayerId, NoAssets, Path, PathExpression,
+    PathInterner, PropertyPath, SpecPath, StageOptions, TargetPath, Time, TokenInterner, ValueType,
     asset::{PackagePath, UdimPattern},
     encoded_bytes::EncodedBytes,
     variable_expression::{ExpressionVariables, VariableExpression},
@@ -34,26 +33,6 @@ use layerstack_usdz::{
     range::{RangeLimits, RangePackage},
     snapshot::{PackageLimits, PackageSnapshot},
 };
-
-/// A resolver that finds no asset, so a fuzzed layer reads on its own.
-#[derive(Debug, Default)]
-struct NoAssets;
-
-impl AssetResolver for NoAssets {
-    fn resolve(
-        &mut self,
-        _: &str,
-        _: Option<LayerId>,
-        _: &TokenInterner,
-        _: &PathInterner,
-    ) -> Result<ResolvedAsset, AssetResolveError> {
-        Err(AssetResolveError::NotFound)
-    }
-
-    fn resolved_path(&self, _: LayerId) -> Option<&str> {
-        None
-    }
-}
 
 /// The identifier of the root layer, the only source the fuzzed storage
 /// holds: its extension follows the input's header, as a host names a

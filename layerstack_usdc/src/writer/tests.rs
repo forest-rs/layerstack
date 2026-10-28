@@ -1040,24 +1040,10 @@ fn time_samples_round_trip() {
 
 #[test]
 fn full_reader_assembles_the_layer() {
+    use layerstack::InMemoryStore;
     use layerstack::doc::{LayerId, Value as DocValue};
-    use layerstack::{AssetResolveError, AssetResolver, InMemoryStore, ResolvedAsset};
 
-    struct NoAssets;
-    impl AssetResolver for NoAssets {
-        fn resolve(
-            &mut self,
-            _: &str,
-            _: Option<LayerId>,
-            _: &layerstack::TokenInterner,
-            _: &layerstack::PathInterner,
-        ) -> Result<ResolvedAsset, AssetResolveError> {
-            Err(AssetResolveError::NotFound)
-        }
-        fn resolved_path(&self, _: LayerId) -> Option<&str> {
-            None
-        }
-    }
+    use layerstack::NoAssets;
 
     let mut specs = layer_with(&[("points", Value::Vec3fArray(vec![[0.0, 1.0, 2.0]; 2]))]);
     specs[2]
@@ -1089,24 +1075,10 @@ fn full_reader_assembles_the_layer() {
 /// a relocate requests (`Write(SdfRelocate)`, `crateFile.cpp`).
 #[test]
 fn empty_layer_relocates_round_trip_without_a_version_upgrade() {
+    use layerstack::InMemoryStore;
     use layerstack::doc::LayerId;
-    use layerstack::{AssetResolveError, AssetResolver, InMemoryStore, ResolvedAsset};
 
-    struct NoAssets;
-    impl AssetResolver for NoAssets {
-        fn resolve(
-            &mut self,
-            _: &str,
-            _: Option<LayerId>,
-            _: &layerstack::TokenInterner,
-            _: &layerstack::PathInterner,
-        ) -> Result<ResolvedAsset, AssetResolveError> {
-            Err(AssetResolveError::NotFound)
-        }
-        fn resolved_path(&self, _: LayerId) -> Option<&str> {
-            None
-        }
-    }
+    use layerstack::NoAssets;
 
     let pseudo_root = || Spec::new("/", SpecForm::PseudoRoot);
     let specs = vec![pseudo_root().with_field("layerRelocates", Value::Relocates(Vec::new()))];
@@ -1283,24 +1255,10 @@ fn rejects_invalid_input() {
 /// Spec: AOUSD Core §7.3.6, §7.6.6–§7.6.7, §16.3.
 #[test]
 fn variant_specs_round_trip() {
+    use layerstack::InMemoryStore;
     use layerstack::doc::{LayerId, Value as DocValue};
-    use layerstack::{AssetResolveError, AssetResolver, InMemoryStore, ResolvedAsset};
 
-    struct NoAssets;
-    impl AssetResolver for NoAssets {
-        fn resolve(
-            &mut self,
-            _: &str,
-            _: Option<LayerId>,
-            _: &layerstack::TokenInterner,
-            _: &layerstack::PathInterner,
-        ) -> Result<ResolvedAsset, AssetResolveError> {
-            Err(AssetResolveError::NotFound)
-        }
-        fn resolved_path(&self, _: LayerId) -> Option<&str> {
-            None
-        }
-    }
+    use layerstack::NoAssets;
 
     let tokens = |names: &[&str]| Value::TokenVector(names.iter().map(|n| n.to_string()).collect());
     let over = |path: &str| {
@@ -1425,24 +1383,10 @@ fn variant_specs_round_trip() {
 /// Spec: AOUSD Core §7.6.6 (variant set specs), §7.6.4.2.2 (`timeSamples`).
 #[test]
 fn variants_follow_variant_children_and_empty_samples_stay_authored() {
+    use layerstack::InMemoryStore;
     use layerstack::doc::LayerId;
-    use layerstack::{AssetResolveError, AssetResolver, InMemoryStore, ResolvedAsset};
 
-    struct NoAssets;
-    impl AssetResolver for NoAssets {
-        fn resolve(
-            &mut self,
-            _: &str,
-            _: Option<LayerId>,
-            _: &layerstack::TokenInterner,
-            _: &layerstack::PathInterner,
-        ) -> Result<ResolvedAsset, AssetResolveError> {
-            Err(AssetResolveError::NotFound)
-        }
-        fn resolved_path(&self, _: LayerId) -> Option<&str> {
-            None
-        }
-    }
+    use layerstack::NoAssets;
 
     let tokens = |names: &[&str]| Value::TokenVector(names.iter().map(|n| n.to_string()).collect());
     let specs = vec![
@@ -1773,24 +1717,10 @@ fn invalid_native_array_edit_programs_are_rejected() {
 /// from.
 #[test]
 fn unregistered_text_round_trips() {
+    use layerstack::InMemoryStore;
     use layerstack::doc::LayerId;
-    use layerstack::{AssetResolveError, AssetResolver, InMemoryStore, ResolvedAsset};
 
-    struct NoAssets;
-    impl AssetResolver for NoAssets {
-        fn resolve(
-            &mut self,
-            _: &str,
-            _: Option<LayerId>,
-            _: &layerstack::TokenInterner,
-            _: &layerstack::PathInterner,
-        ) -> Result<ResolvedAsset, AssetResolveError> {
-            Err(AssetResolveError::NotFound)
-        }
-        fn resolved_path(&self, _: LayerId) -> Option<&str> {
-            None
-        }
-    }
+    use layerstack::NoAssets;
 
     let store = InMemoryStore::default();
     let source = "#usda 1.0\n\ndef \"P\" (\n    access = foo\n)\n{\n    custom foobar a = [1, 2]\n    Some::Kind[] c = [x]\n}\n\n";

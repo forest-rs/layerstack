@@ -3839,24 +3839,7 @@ mod tests {
     use crate::version::CrateVersion;
     use layerstack::AssetResolveError;
 
-    /// A resolver that resolves nothing.
-    struct NoAssets;
-
-    impl AssetResolver for NoAssets {
-        fn resolve(
-            &mut self,
-            _: &str,
-            _: Option<LayerId>,
-            _: &TokenInterner,
-            _: &PathInterner,
-        ) -> Result<ResolvedAsset, AssetResolveError> {
-            Err(AssetResolveError::NotFound)
-        }
-
-        fn resolved_path(&self, _: LayerId) -> Option<&str> {
-            None
-        }
-    }
+    use layerstack::NoAssets;
 
     /// Naming paths from the path tree assembles the layer naming them from
     /// their text does: prims in and out of variant branches, properties of

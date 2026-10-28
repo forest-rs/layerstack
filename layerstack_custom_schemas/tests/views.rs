@@ -10,8 +10,8 @@
 use std::sync::Arc;
 
 use layerstack::{
-    AssetResolveError, AssetResolver, CannotApply, EditTarget, InMemoryStore, LayerId, LiveStage,
-    PathInterner, ResolvedAsset, SchemaRegistry, StageOptions, TargetPath, TokenInterner,
+    CannotApply, EditTarget, InMemoryStore, LayerId, LiveStage, NoAssets, SchemaRegistry,
+    StageOptions, TargetPath, TokenInterner,
 };
 use layerstack_custom_schemas::lab::{
     CalibrationApi, CalibrationApiCalibrationMethod, Centrifuge, ChannelApi, ChannelApiMode,
@@ -70,24 +70,6 @@ def Scope "Lamp"
 {
 }
 "#;
-
-struct NoAssets;
-
-impl AssetResolver for NoAssets {
-    fn resolve(
-        &mut self,
-        _: &str,
-        _: Option<LayerId>,
-        _: &TokenInterner,
-        _: &PathInterner,
-    ) -> Result<ResolvedAsset, AssetResolveError> {
-        Err(AssetResolveError::NotFound)
-    }
-
-    fn resolved_path(&self, _: LayerId) -> Option<&str> {
-        None
-    }
-}
 
 /// One registry of OpenUSD's schemas the two libraries build on, and of
 /// theirs.

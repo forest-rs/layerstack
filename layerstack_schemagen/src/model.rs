@@ -21,8 +21,8 @@ use std::path::{Path, PathBuf};
 
 use layerstack::schema::{SchemaDeclaration, read_generated_schema};
 use layerstack::{
-    AssetResolveError, AssetResolver, FieldValue, InMemoryStore, LayerId, PathInterner,
-    PropertyKind, ResolvedAsset, SchemaKind, TokenInterner, Value, Variability,
+    FieldValue, InMemoryStore, LayerId, NoAssets, PathInterner, PropertyKind, SchemaKind,
+    TokenInterner, Value, Variability,
 };
 use serde_json::Value as Json;
 
@@ -742,25 +742,6 @@ fn wheel_version(site_packages: &Path) -> Result<String, String> {
         "no usd_core dist-info in {}; point --pxr at a usd-core wheel's pxr package",
         site_packages.display()
     ))
-}
-
-/// Rejects every asset path: generated schema layers have none.
-pub(crate) struct NoAssets;
-
-impl AssetResolver for NoAssets {
-    fn resolve(
-        &mut self,
-        _: &str,
-        _: Option<LayerId>,
-        _: &TokenInterner,
-        _: &PathInterner,
-    ) -> Result<ResolvedAsset, AssetResolveError> {
-        Err(AssetResolveError::NotFound)
-    }
-
-    fn resolved_path(&self, _: LayerId) -> Option<&str> {
-        None
-    }
 }
 
 /// A declared type as the model keeps it: its element type's name, whether

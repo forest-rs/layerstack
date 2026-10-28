@@ -4,27 +4,12 @@
 //! Retain textured native/point instances and consume independent component deltas.
 //! Geometry and material graphs stay owned across edits; rendering belongs to the host.
 use layerstack::{
-    AssetResolveError, AssetResolver, EditTarget, InMemoryStore, LayerId, LiveStage, PathInterner,
-    ResolvedAsset, StageOptions, TokenInterner, Transaction, TypedArray, Value,
+    EditTarget, InMemoryStore, LayerId, LiveStage, NoAssets, StageOptions, Transaction, TypedArray,
+    Value,
 };
 use layerstack_schemas::{Time, scene_records::SceneObserver};
 use std::sync::Arc;
 
-struct NoAssets;
-impl AssetResolver for NoAssets {
-    fn resolve(
-        &mut self,
-        _: &str,
-        _: Option<LayerId>,
-        _: &TokenInterner,
-        _: &PathInterner,
-    ) -> Result<ResolvedAsset, AssetResolveError> {
-        Err(AssetResolveError::NotFound)
-    }
-    fn resolved_path(&self, _: LayerId) -> Option<&str> {
-        None
-    }
-}
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut store = InMemoryStore::default();
     let schemas = Arc::new(layerstack_schemas::openusd(store.tokens()));

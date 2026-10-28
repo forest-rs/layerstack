@@ -48,22 +48,10 @@
 //! # Quick start
 //!
 //! ```
-//! use layerstack::{
-//!     AssetResolveError, AssetResolver, InMemoryStore, LayerId, ResolvedAsset,
-//!     TokenInterner, PathInterner,
-//! };
+//! use layerstack::{InMemoryStore, LayerId, NoAssets};
 //! use layerstack_usda::read_usda;
 //!
-//! // Minimal resolver that rejects all asset paths (no external files).
-//! struct NoAssets;
-//! impl AssetResolver for NoAssets {
-//!     fn resolve(&mut self, _: &str, _: Option<LayerId>, _: &TokenInterner,
-//!                _: &PathInterner) -> Result<ResolvedAsset, AssetResolveError> {
-//!         Err(AssetResolveError::NotFound)
-//!     }
-//!     fn resolved_path(&self, _: LayerId) -> Option<&str> { None }
-//! }
-//!
+//! // `NoAssets` resolves no asset path: the layer reads on its own.
 //! let source = "#usda 1.0\ndef Xform \"Root\" {\n    custom string greeting = \"hello\"\n}\n";
 //!
 //! let mut store = InMemoryStore::default();

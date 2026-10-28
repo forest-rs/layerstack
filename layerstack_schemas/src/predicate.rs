@@ -25,7 +25,8 @@
 //! whole expression match nothing.
 //!
 //! OpenUSD: `UsdGetCollectionPredicateLibrary`
-//! (`pxr/usd/usd/collectionPredicateLibrary.cpp`), as of 26.08.
+//! (`pxr/usd/usd/collectionPredicateLibrary.cpp`), as of 26.11 (unchanged
+//! since 26.08).
 
 use alloc::{format, string::String, sync::Arc, vec::Vec};
 

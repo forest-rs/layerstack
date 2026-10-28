@@ -1567,23 +1567,7 @@ mod tests {
         (result.layer, tokens, paths)
     }
 
-    struct NoAssets;
-
-    impl layerstack::AssetResolver for NoAssets {
-        fn resolve(
-            &mut self,
-            _: &str,
-            _: Option<layerstack::LayerId>,
-            _: &TokenInterner,
-            _: &PathInterner,
-        ) -> Result<layerstack::ResolvedAsset, layerstack::AssetResolveError> {
-            Err(layerstack::AssetResolveError::NotFound)
-        }
-
-        fn resolved_path(&self, _: layerstack::LayerId) -> Option<&str> {
-            None
-        }
-    }
+    use layerstack::NoAssets;
 
     /// A layer saved as USDC reads back as the layer it was saved from:
     /// saving the read-back layer as USDA gives the same text as saving

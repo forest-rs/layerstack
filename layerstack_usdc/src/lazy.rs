@@ -610,23 +610,9 @@ pub(crate) fn numeric_kind(kind: ValueType) -> Option<Value> {
 mod tests {
     use super::*;
     use crate::writer::{Spec, SpecForm, Specifier, Value as W, write_crate};
-    use layerstack::{AssetResolveError, PropertyPath, ResolvedAsset};
+    use layerstack::PropertyPath;
 
-    struct NoAssets;
-    impl AssetResolver for NoAssets {
-        fn resolve(
-            &mut self,
-            _: &str,
-            _: Option<LayerId>,
-            _: &TokenInterner,
-            _: &PathInterner,
-        ) -> Result<ResolvedAsset, AssetResolveError> {
-            Err(AssetResolveError::NotFound)
-        }
-        fn resolved_path(&self, _: LayerId) -> Option<&str> {
-            None
-        }
-    }
+    use layerstack::NoAssets;
 
     /// A crate file with a `float[]` default, and with `labels`, a
     /// `string[]` default long enough to be retained.

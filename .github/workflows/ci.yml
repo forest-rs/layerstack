@@ -422,6 +422,7 @@ jobs:
             pxr/usd/pcp/testenv/testPcpDynamicFileFormatPlugin.py
             pxr/usd/pcp/testenv/TestPcpDynamicFileFormatPlugin.cpp
             pxr/usd/pcp/testenv/TestPcpDynamicFileFormatPlugin_plugInfo.json
+            pxr/usd/sdf/testenv/testSdfParsing.testenv/**
 
       - name: install stable toolchain
         uses: dtolnay/rust-toolchain@master
@@ -589,6 +590,11 @@ jobs:
       - name: check USDA field order oracle
         run: python layerstack_conformance/scripts/usda_field_order_oracle.py --check
 
+      # The USDA parity oracle must be what OpenUSD reads, writes and
+      # composes for each case.
+      - name: check USDA parity oracle
+        run: python layerstack_conformance/scripts/usda_parity_oracle.py --check
+
       # The pseudo-root oracle must be what OpenUSD's authoring calls do
       # when aimed at the pseudo-root, at the Usd and Sdf levels.
       - name: check pseudo-root edits oracle
@@ -619,6 +625,8 @@ jobs:
       - name: test against OpenUSD
         env:
           LAYERSTACK_USD_PYTHON: python
+          # OpenUSD's own USDA parsing corpus (`usda_corpus`).
+          LAYERSTACK_OPENUSD_SOURCE: ${{ github.workspace }}/openusd
         run: bash layerstack_conformance/scripts/test_against_openusd.sh
 
       # The transform oracle must be what OpenUSD computes, to within the

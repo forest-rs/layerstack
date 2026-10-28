@@ -115,6 +115,10 @@ use smallvec::SmallVec;
 
 use crate::float_text;
 
+mod walk;
+
+use walk::{Step, VariantOrder, walk};
+
 pub use layerstack::{Specifier, Variability};
 
 const INDENT: &str = "    ";
@@ -233,10 +237,7 @@ impl Document {
     /// See [`Self::to_usda`].
     pub fn validate_text(&self) -> Result<(), WriteError> {
         self.validate()?;
-        for prim in &self.prims {
-            validate_text_prim(prim, "")?;
-        }
-        Ok(())
+        validate_text_prims(&self.prims)
     }
 
     /// Checks everything [`Self::to_usda`] checks, without writing.
@@ -275,11 +276,30 @@ impl Document {
             }
         }
         validate_order(self.prim_order.as_deref(), "/", is_identifier)?;
-        let mut names: Vec<&str> = Vec::new();
-        for prim in &self.prims {
-            prim.validate("", &mut names)?;
-        }
-        Ok(())
+        // Every spec in turn, prim specs before their contents, without
+        // recursing through the namespace ([`walk()`]).
+        walk(
+            &self.prims,
+            VariantOrder::Authored,
+            |step, path, _| match step {
+                Step::Prim {
+                    prim,
+                    siblings,
+                    index,
+                } => prim.validate(path, &siblings[..index]),
+                Step::Set {
+                    set,
+                    siblings,
+                    index,
+                } => set.validate(path, &siblings[..index]),
+                Step::Variant {
+                    variant,
+                    set,
+                    index,
+                } => validate_variant(variant, path, &set.variants[..index]),
+                Step::LeavePrim | Step::LeaveSet | Step::LeaveVariant => Ok(()),
+            },
+        )
     }
 }
 
@@ -425,37 +445,32 @@ impl Prim {
             || self.variant_set_names.is_some()
     }
 
-    fn validate<'a>(&'a self, parent: &str, siblings: &mut Vec<&'a str>) -> Result<(), WriteError> {
-        // A prim in a variant (`/P{v=x}C`) follows its variant's selection
-        // directly.
-        let path = if parent.ends_with('}') {
-            alloc::format!("{parent}{}", self.name)
-        } else {
-            alloc::format!("{parent}/{}", self.name)
-        };
+    /// Validates the prim spec at `path`, after the `earlier` of its
+    /// siblings, apart from its child prims and variant sets.
+    fn validate(&self, path: &str, earlier: &[Self]) -> Result<(), WriteError> {
         if !is_identifier(&self.name) {
             return Err(WriteError::InvalidName {
-                path,
+                path: path.into(),
                 name: self.name.clone(),
             });
         }
-        if siblings.contains(&self.name.as_str()) {
-            return Err(WriteError::Duplicate { path });
+        if earlier.iter().any(|sibling| sibling.name == self.name) {
+            return Err(WriteError::Duplicate { path: path.into() });
         }
-        siblings.push(&self.name);
         if let Some(type_name) = &self.type_name
             && !is_identifier(type_name)
         {
             return Err(WriteError::InvalidName {
-                path,
+                path: path.into(),
                 name: type_name.clone(),
             });
         }
-        self.validate_body(&path)
+        self.validate_body(path)
     }
 
-    /// Validates what a prim spec and a variant's prim spec both hold;
-    /// `path` names the spec (`/P` or `/P{v=x}`).
+    /// Validates what a prim spec and a variant's prim spec both hold,
+    /// apart from their child prims and variant sets; `path` names the
+    /// spec (`/P` or `/P{v=x}`).
     fn validate_body(&self, path: &str) -> Result<(), WriteError> {
         let path = String::from(path);
         validate_metadata(&self.metadata, &mut Vec::new(), &path)?;
@@ -510,16 +525,7 @@ impl Prim {
                 Property::Relationship(relationship) => relationship.validate(&prop_path)?,
             }
         }
-        self.validate_variant_fields(&path)?;
-        let mut child_names: Vec<&str> = Vec::new();
-        for child in &self.children {
-            child.validate(&path, &mut child_names)?;
-        }
-        let mut set_names: Vec<&str> = Vec::new();
-        for set in &self.variant_sets {
-            set.validate(&path, &mut set_names)?;
-        }
-        Ok(())
+        self.validate_variant_fields(&path)
     }
 
     /// Validates the variant selections and the `variantSets` list op:
@@ -559,44 +565,63 @@ impl Prim {
     }
 }
 
+/// Drops the specs below a prim without recursing through the namespace,
+/// which may be deeper than a thread's stack allows one frame per level
+/// for: they are taken out and dropped one by one.
+impl Drop for Prim {
+    fn drop(&mut self) {
+        if self.children.is_empty() && self.variant_sets.is_empty() {
+            return;
+        }
+        let mut pending = core::mem::take(&mut self.children);
+        for set in &mut self.variant_sets {
+            pending.append(&mut set.variants);
+        }
+        while let Some(mut prim) = pending.pop() {
+            pending.append(&mut prim.children);
+            for set in &mut prim.variant_sets {
+                pending.append(&mut set.variants);
+            }
+        }
+    }
+}
+
 impl VariantSet {
-    /// Validates the set on the spec at `owner` (`/P` or `/P{v=x}`), among
-    /// the sets `siblings` already named there.
-    fn validate<'a>(&'a self, owner: &str, siblings: &mut Vec<&'a str>) -> Result<(), WriteError> {
-        let path = alloc::format!("{owner}{{{}=}}", self.name);
+    /// Validates the set at `path` (`/P{v=}`), after the `earlier` sets of
+    /// its spec, apart from its variants.
+    fn validate(&self, path: &str, earlier: &[Self]) -> Result<(), WriteError> {
         if !is_variant_identifier(&self.name) {
             return Err(WriteError::InvalidName {
-                path,
+                path: path.into(),
                 name: self.name.clone(),
             });
         }
-        if siblings.contains(&self.name.as_str()) {
-            return Err(WriteError::Duplicate { path });
+        if earlier.iter().any(|sibling| sibling.name == self.name) {
+            return Err(WriteError::Duplicate { path: path.into() });
         }
-        siblings.push(&self.name);
         if self.variants.is_empty() {
-            return Err(WriteError::EmptyVariantSet { path });
-        }
-        let mut names: Vec<&str> = Vec::new();
-        for variant in &self.variants {
-            let path = alloc::format!("{owner}{{{}={}}}", self.name, variant.name);
-            if !is_variant_name(&variant.name) {
-                return Err(WriteError::InvalidName {
-                    path,
-                    name: variant.name.clone(),
-                });
-            }
-            if names.contains(&variant.name.as_str()) {
-                return Err(WriteError::Duplicate { path });
-            }
-            names.push(&variant.name);
-            if variant.specifier != Specifier::Over || variant.type_name.is_some() {
-                return Err(WriteError::InvalidVariant { path });
-            }
-            variant.validate_body(&path)?;
+            return Err(WriteError::EmptyVariantSet { path: path.into() });
         }
         Ok(())
     }
+}
+
+/// Validates the variant at `path` (`/P{v=x}`), after the `earlier`
+/// variants of its set, apart from its child prims and variant sets.
+fn validate_variant(variant: &Prim, path: &str, earlier: &[Prim]) -> Result<(), WriteError> {
+    if !is_variant_name(&variant.name) {
+        return Err(WriteError::InvalidName {
+            path: path.into(),
+            name: variant.name.clone(),
+        });
+    }
+    if earlier.iter().any(|sibling| sibling.name == variant.name) {
+        return Err(WriteError::Duplicate { path: path.into() });
+    }
+    if variant.specifier != Specifier::Over || variant.type_name.is_some() {
+        return Err(WriteError::InvalidVariant { path: path.into() });
+    }
+    variant.validate_body(path)
 }
 
 /// A property spec of a [`Prim`]: an attribute or a relationship.
@@ -1839,23 +1864,20 @@ fn bare_identifier(entry: &Metadatum) -> Option<&str> {
 /// fields), §16.2.19 (`PermissionMetadata`, legacy content).
 pub const PERMISSIONS: &[&str] = &["public", "private"];
 
-/// Rejects binary descriptions USDA cannot preserve: per-knot curve types
-/// and sparse-edit kinds distinct from their declaration. `parent` is the
-/// path of the spec holding `prim`.
-pub(crate) fn validate_text_prim(prim: &Prim, parent: &str) -> Result<(), WriteError> {
-    // A prim in a variant (`/P{v=x}C`) follows its variant's selection
-    // directly, as in `Prim::validate`.
-    let path = if parent.ends_with('}') {
-        alloc::format!("{parent}{}", prim.name)
-    } else {
-        alloc::format!("{parent}/{}", prim.name)
-    };
-    validate_text_body(prim, &path)
+/// Rejects binary descriptions USDA cannot preserve in the root prims
+/// `prims` and every spec below them: per-knot curve types and
+/// sparse-edit kinds distinct from their declaration.
+pub(crate) fn validate_text_prims(prims: &[Prim]) -> Result<(), WriteError> {
+    walk(prims, VariantOrder::Authored, |step, path, _| match step {
+        Step::Prim { prim: body, .. } | Step::Variant { variant: body, .. } => {
+            validate_text_body(body, path)
+        }
+        Step::Set { .. } | Step::LeavePrim | Step::LeaveSet | Step::LeaveVariant => Ok(()),
+    })
 }
 
-/// [`validate_text_prim`] for the contents of a prim spec or a variant's
-/// prim spec at `path`: its properties, its children and its variant sets,
-/// nested ones included.
+/// [`validate_text_prims`] for one prim spec or variant's prim spec at
+/// `path`, apart from its child prims and variant sets.
 fn validate_text_body(body: &Prim, path: &str) -> Result<(), WriteError> {
     if body
         .variant_set_names
@@ -1914,15 +1936,6 @@ fn validate_text_body(body: &Prim, path: &str) -> Result<(), WriteError> {
                     type_name: attribute.type_name.clone(),
                 });
             }
-        }
-    }
-    for child in &body.children {
-        validate_text_prim(child, path)?;
-    }
-    for set in &body.variant_sets {
-        for variant in &set.variants {
-            let branch = alloc::format!("{path}{{{}={}}}", set.name, variant.name);
-            validate_text_body(variant, &branch)?;
         }
     }
     Ok(())
@@ -2434,10 +2447,26 @@ impl Value {
 
 // ── Text emission ───────────────────────────────────────────────────────
 
-/// Minimum USDA version for authored spline features.
+/// The USDA minor version a document needs: the newest any of its values
+/// or splines asks for ([`value_text_version`], [`spline_text_version`]),
+/// found without recursing through the namespace ([`walk()`]).
+fn text_version(doc: &Document) -> u8 {
+    let mut minor = value_text_version::metadata(&doc.metadata);
+    let Ok(()) = walk(&doc.prims, VariantOrder::Authored, |step, _, _| {
+        if let Step::Prim { prim: spec, .. } | Step::Variant { variant: spec, .. } = step {
+            minor = minor
+                .max(spline_text_version(spec))
+                .max(value_text_version::in_spec(spec));
+        }
+        Ok::<(), core::convert::Infallible>(())
+    });
+    minor
+}
+
+/// Minimum USDA version for the splines of one prim spec or variant,
+/// apart from its child prims and variant sets.
 fn spline_text_version(prim: &Prim) -> u8 {
-    let own = prim
-        .properties
+    prim.properties
         .iter()
         .filter_map(|p| match p {
             Property::Attribute(a) => a.spline.as_deref(),
@@ -2457,12 +2486,7 @@ fn spline_text_version(prim: &Prim) -> u8 {
             }
         })
         .max()
-        .unwrap_or(0);
-    prim.children
-        .iter()
-        .chain(prim.variant_sets.iter().flat_map(|v| &v.variants))
-        .map(spline_text_version)
-        .fold(own, u8::max)
+        .unwrap_or(0)
 }
 
 /// The USDA minor version the values of the document need, as OpenUSD
@@ -2474,7 +2498,9 @@ fn spline_text_version(prim: &Prim) -> u8 {
 /// whose only array edits are numeric is `#usda 1.0`; a `duration`
 /// attribute declared without a value, or with a spline, writes no value
 /// and needs no newer version.
-fn value_text_version(doc: &Document) -> u8 {
+mod value_text_version {
+    use super::{ListOp, Metadatum, Prim, Property, Reference, Value};
+
     fn in_value(value: &Value) -> u8 {
         match value {
             Value::Duration(_) | Value::DurationArray(_) => 4,
@@ -2491,7 +2517,8 @@ fn value_text_version(doc: &Document) -> u8 {
             _ => 0,
         }
     }
-    fn metadata(metadata: &[Metadatum]) -> u8 {
+    /// The version metadata entries need.
+    pub(super) fn metadata(metadata: &[Metadatum]) -> u8 {
         metadata
             .iter()
             .map(|m| in_value(&m.value))
@@ -2516,7 +2543,9 @@ fn value_text_version(doc: &Document) -> u8 {
             .unwrap_or(0)
         })
     }
-    fn in_prim(prim: &Prim) -> u8 {
+    /// The version one prim spec or variant needs, apart from its child
+    /// prims and variant sets.
+    pub(super) fn in_spec(prim: &Prim) -> u8 {
         let properties = prim.properties.iter().map(|p| match p {
             Property::Attribute(a) => a
                 .value
@@ -2533,11 +2562,6 @@ fn value_text_version(doc: &Document) -> u8 {
                 .max(metadata(&a.metadata)),
             Property::Relationship(r) => metadata(&r.metadata),
         });
-        let nested = prim
-            .children
-            .iter()
-            .chain(prim.variant_sets.iter().flat_map(|v| &v.variants))
-            .map(in_prim);
         [
             metadata(&prim.metadata),
             references(prim.references.as_ref()),
@@ -2545,14 +2569,9 @@ fn value_text_version(doc: &Document) -> u8 {
         ]
         .into_iter()
         .chain(properties)
-        .chain(nested)
         .max()
         .unwrap_or(0)
     }
-    doc.prims
-        .iter()
-        .map(in_prim)
-        .fold(metadata(&doc.metadata), u8::max)
 }
 
 /// `items` in the order `cmp` gives, by reference. Items already in order,
@@ -2825,13 +2844,7 @@ impl Writer<'_> {
     /// in document order.
     fn document(&mut self, doc: &Document) {
         // §16.2.18.1: the layer header.
-        let minor = doc
-            .prims
-            .iter()
-            .map(spline_text_version)
-            .max()
-            .unwrap_or(0)
-            .max(value_text_version(doc));
+        let minor = text_version(doc);
         self.out.push_str(&alloc::format!("#usda 1.{minor}\n"));
         if doc.default_prim.is_some()
             || doc.metadata.iter().any(is_written_on_layer)
@@ -2904,11 +2917,56 @@ impl Writer<'_> {
             self.out.push('\n');
             self.reorder("rootPrims", order, 0);
         }
-        for prim in &doc.prims {
-            self.out.push('\n');
-            self.prim(prim, 0);
-        }
+        self.prims(&doc.prims);
         self.out.push('\n');
+    }
+
+    /// The root prims `prims` and every spec below them, as
+    /// `Sdf_WritePrim`, `Sdf_WriteVariantSet` and `Sdf_WriteVariant`
+    /// (`pxr/usd/sdf/fileIO_Common.h`) write them: each root prim after a
+    /// blank line, child prims in document order with a blank line
+    /// between them, then the variant sets in document order and each
+    /// set's variants by name. A [`walk()`] keeps its place on the heap, so
+    /// no namespace is too deep to write.
+    fn prims(&mut self, prims: &[Prim]) {
+        let Ok(()) = walk(prims, VariantOrder::ByName, |step, _, depth| {
+            match step {
+                Step::Prim { prim, index, .. } => {
+                    if depth == 0 || index > 0 {
+                        self.out.push('\n');
+                    }
+                    self.prim(prim, depth);
+                }
+                Step::LeavePrim => {
+                    self.indent(depth);
+                    self.out.push_str("}\n");
+                }
+                Step::Set { set, .. } => {
+                    self.indent(depth);
+                    self.out.push_str("variantSet ");
+                    self.string(&set.name);
+                    self.out.push_str(" = {\n");
+                }
+                Step::LeaveSet => {
+                    self.indent(depth);
+                    self.out.push_str("}\n");
+                }
+                Step::Variant { variant, .. } => {
+                    self.indent(depth);
+                    self.string(&variant.name);
+                    self.prim_metadata(variant, depth);
+                    self.out.push_str(" {\n");
+                    self.prim_body(variant, depth + 1);
+                }
+                // A blank line closes each variant (`Sdf_WriteVariant`).
+                Step::LeaveVariant => {
+                    self.out.push('\n');
+                    self.indent(depth);
+                    self.out.push_str("}\n");
+                }
+            }
+            Ok::<(), core::convert::Infallible>(())
+        });
     }
 
     fn indent(&mut self, depth: usize) {
@@ -2998,7 +3056,8 @@ impl Writer<'_> {
         });
     }
 
-    /// §16.2.17: `specifier [type] "name" [( metadata )] { body }`.
+    /// §16.2.17: `specifier [type] "name" [( metadata )] {` and the start
+    /// of the body ([`Self::prim_body`]); [`Self::prims`] writes the rest.
     fn prim(&mut self, prim: &Prim, depth: usize) {
         self.spill();
         self.indent(depth);
@@ -3019,8 +3078,6 @@ impl Writer<'_> {
         self.indent(depth);
         self.out.push_str("{\n");
         self.prim_body(prim, depth + 1);
-        self.indent(depth);
-        self.out.push_str("}\n");
     }
 
     /// ` ( metadata )` after a prim or variant name, when there is any, as
@@ -3036,10 +3093,7 @@ impl Writer<'_> {
         }
     }
 
-    /// [`Self::prim_metadata`]'s section, out of line so that the fields
-    /// it sorts do not enlarge the frame of [`Self::prim`], which recurses
-    /// through child prims.
-    #[inline(never)]
+    /// [`Self::prim_metadata`]'s section.
     fn prim_fields(&mut self, prim: &Prim, depth: usize) {
         self.out.push_str(" (\n");
         let depth = depth + 1;
@@ -3136,12 +3190,14 @@ impl Writer<'_> {
         self.out.push(')');
     }
 
-    /// The statements of a prim or variant body at `depth`, as
-    /// `Sdf_WritePrimBody` orders and spaces them: `reorder` statements;
-    /// properties sorted by name in [`dictionary_cmp`] order, an attribute
-    /// before a relationship of the same name (`_SortByNameThenType`);
-    /// child prims in document order (the `primChildren` field); then
-    /// variant sets in document order (`variantSetChildren`).
+    /// The statements of a prim or variant body at `depth` that come
+    /// before its child prims, as `Sdf_WritePrimBody` orders and spaces
+    /// them: `reorder` statements; properties sorted by name in
+    /// [`dictionary_cmp`] order, an attribute before a relationship of the
+    /// same name (`_SortByNameThenType`); and a blank line between the
+    /// properties and the children. [`Self::prims`] writes the child prims
+    /// (the `primChildren` field) and variant sets (`variantSetChildren`)
+    /// after them, in document order.
     fn prim_body(&mut self, prim: &Prim, depth: usize) {
         if let Some(order) = &prim.property_order {
             self.reorder("properties", order, depth);
@@ -3159,26 +3215,15 @@ impl Writer<'_> {
         } else {
             self.sorted_properties(&prim.properties, depth);
         }
-        // A blank line between the properties and the children and
-        // between children; none before or between variant sets.
+        // A blank line between the properties and the children (and, in
+        // `Self::prims`, between children); none before or between variant
+        // sets.
         if !prim.properties.is_empty() && !prim.children.is_empty() {
             self.out.push('\n');
         }
-        for (i, child) in prim.children.iter().enumerate() {
-            if i > 0 {
-                self.out.push('\n');
-            }
-            self.prim(child, depth);
-        }
-        for set in &prim.variant_sets {
-            self.variant_set(set, depth);
-        }
     }
 
-    /// Writes `properties`, which are out of order, sorted. Out of line,
-    /// so that the keys it sorts do not enlarge the frame of
-    /// [`Self::prim_body`], which recurses through child prims.
-    #[inline(never)]
+    /// Writes `properties`, which are out of order, sorted.
     fn sorted_properties(&mut self, properties: &[Property], depth: usize) {
         let mut keyed: SmallVec<[(PropertyKey<'_>, &Property); 16]> =
             properties.iter().map(|p| (property_key(p), p)).collect();
@@ -3194,29 +3239,6 @@ impl Writer<'_> {
             Property::Relationship(relationship) => self.relationship(relationship, depth),
         }
         self.spill();
-    }
-
-    /// §16.2.17: `variantSet "name" = { "variant" [( metadata )] { body }
-    /// ... }`, each variant with its prim spec's metadata and body, then a
-    /// blank line (`Sdf_WriteVariant`), the variants sorted by name in byte
-    /// order, as `Sdf_WriteVariantSet` sorts them.
-    fn variant_set(&mut self, set: &VariantSet, depth: usize) {
-        self.indent(depth);
-        self.out.push_str("variantSet ");
-        self.string(&set.name);
-        self.out.push_str(" = {\n");
-        for variant in sorted_by(&set.variants, |a, b| a.name.cmp(&b.name)) {
-            self.indent(depth + 1);
-            self.string(&variant.name);
-            self.prim_metadata(variant, depth + 1);
-            self.out.push_str(" {\n");
-            self.prim_body(variant, depth + 2);
-            self.out.push('\n');
-            self.indent(depth + 1);
-            self.out.push_str("}\n");
-        }
-        self.indent(depth);
-        self.out.push_str("}\n");
     }
 
     /// `[op] key = item`, a list or `None` per list-op statement, as

@@ -47,7 +47,10 @@
 //!   everything a prim spec holds: metadata, arcs, selections, properties,
 //!   `reorder properties`, child prims (the prim specs the layer keeps in
 //!   that branch, [`Layer::branch_prim_specs`]) and nested variant sets,
-//!   written inside the branch that encloses them.
+//!   written inside the branch that encloses them;
+//! - a namespace of any depth: neither the lowering nor the writer
+//!   recurses through it, so a layer deeper than the USDA reader reads
+//!   (`MAX_NAMESPACE_DEPTH`, 256 levels) saves as OpenUSD writes it.
 //!
 //! A spec's `variantSets` list op is written as authored, apart from its
 //! variant sets, which are written in the order it first names them, then
@@ -103,7 +106,7 @@ use layerstack::SharedVec;
 use layerstack::doc::{
     FieldEntry, FieldValue, Layer, LayerOffset as LayerLayerOffset, PrimSpec,
     Reference as LayerReference, ReferenceSource, ReferenceTarget, Specifier, Value as LayerValue,
-    VariantSelections, VariantSets, VariantSpec,
+    VariantSelections, VariantSetSpec, VariantSpec,
 };
 use layerstack::interner::{TokenId, TokenInterner};
 use layerstack::listop::ListOp as LayerListOp;
@@ -217,9 +220,7 @@ pub fn usda_document(
     paths: &PathInterner,
 ) -> Result<Document, SaveError> {
     let doc = lower(layer, tokens, paths, true)?;
-    for prim in &doc.prims {
-        crate::writer::validate_text_prim(prim, "").map_err(SaveError::Document)?;
-    }
+    crate::writer::validate_text_prims(&doc.prims).map_err(SaveError::Document)?;
     Ok(doc)
 }
 
@@ -438,15 +439,7 @@ impl Lowering<'_> {
                 return invalid("/", Invalid::PseudoRootOpinions);
             }
             doc.prim_order = spec.prim_order().map(|o| self.names(o));
-            for &child in &spec.authored_children {
-                let parent = Parent {
-                    path: &Path::root(),
-                    shown: "/",
-                    sites: &[],
-                };
-                doc.prims
-                    .push(self.prim(layer, parent, child, &mut visited)?);
-            }
+            doc.prims = self.prims(layer, &spec.authored_children, &mut visited)?;
         }
 
         // Every prim spec, outside variants or inside one, must have been
@@ -501,18 +494,128 @@ impl Lowering<'_> {
 
     // ── Prims ───────────────────────────────────────────────────────
 
-    /// Lowers the prim spec named `name` below `parent`, in the variant
-    /// branches `parent.sites` enclose it in (none outside variants).
+    /// Lowers the root prims `roots` and every spec below them, in the
+    /// order a recursive lowering would reach them, with the specs entered
+    /// and not yet finished on a heap stack rather than the call stack: a
+    /// namespace may be deeper than a thread's stack allows one frame per
+    /// level for, and OpenUSD writes any depth (`Sdf_WritePrim`,
+    /// `pxr/usd/sdf/fileIO_Common.h`).
+    ///
+    /// Spec: AOUSD Core §7.3.5–§7.3.6 (prim, variant set and variant
+    /// specs).
+    fn prims<'l>(
+        &self,
+        layer: &'l Layer,
+        roots: &[TokenId],
+        visited: &mut Visited,
+    ) -> Result<Vec<Prim>, SaveError> {
+        let root = Path::root();
+        let mut lowered = Vec::with_capacity(roots.len());
+        let mut stack: Vec<Task<'l>> = Vec::new();
+        for &name in roots {
+            let parent = Parent {
+                path: &root,
+                shown: "/",
+                sites: &[],
+            };
+            stack.push(Task::Spec(Box::new(
+                self.prim(layer, parent, name, visited)?,
+            )));
+            while let Some(task) = stack.last_mut() {
+                match task {
+                    Task::Spec(spec) => {
+                        if let Some(&child) = spec.children.get(spec.next_child) {
+                            spec.next_child += 1;
+                            let parent = Parent {
+                                path: &spec.path,
+                                shown: &spec.shown,
+                                sites: &spec.sites,
+                            };
+                            let child = self.prim(layer, parent, child, visited)?;
+                            stack.push(Task::Spec(Box::new(child)));
+                        } else if let Some(&(&set, set_spec)) = spec.sets.get(spec.next_set) {
+                            spec.next_set += 1;
+                            let mut variants: Vec<(TokenId, &'l VariantSpec)> = set_spec
+                                .variants
+                                .iter()
+                                .map(|(&name, variant)| (name, variant))
+                                .collect();
+                            if variants.is_empty() {
+                                continue;
+                            }
+                            // By name, as `Sdf_WriteVariantSet` sorts them.
+                            sort::sort_by(&mut variants, |a, b| {
+                                self.tokens.resolve(a.0).cmp(self.tokens.resolve(b.0))
+                            });
+                            stack.push(Task::Set(SetTask {
+                                set,
+                                variants,
+                                next: 0,
+                                lowered: Vec::new(),
+                            }));
+                        } else {
+                            let Some(Task::Spec(done)) = stack.pop() else {
+                                unreachable!("the spec on top")
+                            };
+                            let prim = self.finish(*done)?;
+                            match stack.last_mut() {
+                                Some(Task::Spec(owner)) => owner.prim.children.push(prim),
+                                Some(Task::Set(set)) => set.lowered.push(prim),
+                                None => lowered.push(prim),
+                            }
+                        }
+                    }
+                    Task::Set(set) => {
+                        if let Some(&(name, variant)) = set.variants.get(set.next) {
+                            set.next += 1;
+                            let set_name = set.set;
+                            let Some((_, below)) = stack.split_last() else {
+                                unreachable!("the set on top")
+                            };
+                            let Some(Task::Spec(owner)) = below.last() else {
+                                unreachable!("a set below its spec")
+                            };
+                            let at = Parent {
+                                path: &owner.path,
+                                shown: &owner.shown,
+                                sites: &owner.sites,
+                            };
+                            let variant =
+                                self.variant(layer, owner.host, at, set_name, name, variant)?;
+                            stack.push(Task::Spec(Box::new(variant)));
+                        } else {
+                            let Some(Task::Set(done)) = stack.pop() else {
+                                unreachable!("the set on top")
+                            };
+                            let Some(Task::Spec(owner)) = stack.last_mut() else {
+                                unreachable!("a set below its spec")
+                            };
+                            owner.sets_lowered.push(VariantSet {
+                                name: self.name(done.set),
+                                variants: done.lowered,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        Ok(lowered)
+    }
+
+    /// Starts lowering the prim spec named `name` below `parent`, in the
+    /// variant branches `parent.sites` enclose it in (none outside
+    /// variants): everything but its child prims and variant sets, which
+    /// [`Self::prims`] lowers next.
     ///
     /// Spec: AOUSD Core §7.6.2 (prim spec fields), §7.3.6 (variant specs
     /// contain prim specs).
-    fn prim(
+    fn prim<'l>(
         &self,
-        layer: &Layer,
+        layer: &'l Layer,
         parent: Parent<'_>,
         name: TokenId,
         visited: &mut Visited,
-    ) -> Result<Prim, SaveError> {
+    ) -> Result<SpecTask<'l>, SaveError> {
         let path = parent.path.join(&[name]);
         let shown = child_display(parent.shown, self.tokens.resolve(name));
         let Some((id, spec)) = self
@@ -559,23 +662,43 @@ impl Lowering<'_> {
         for entry in &spec.properties {
             prim.properties.push(self.property(entry, &shown)?);
         }
-        let here = Parent {
-            path: &path,
-            shown: &shown,
-            sites: parent.sites,
-        };
-        for &child in &spec.authored_children {
-            prim.children.push(self.prim(layer, here, child, visited)?);
-        }
+        Ok(SpecTask {
+            prim,
+            path,
+            shown,
+            sites: parent.sites.to_vec(),
+            host: id,
+            children: &spec.authored_children,
+            next_child: 0,
+            sets: spec.variant_sets().iter().collect(),
+            next_set: 0,
+            sets_lowered: Vec::new(),
+            set_names: spec.variant_set_names(),
+        })
+    }
 
-        (prim.variant_set_names, prim.variant_sets) = self.variant_sets(
-            layer,
-            id,
-            spec.variant_sets(),
-            spec.variant_set_names(),
-            here,
-            visited,
-        )?;
+    /// Finishes a prim spec or variant whose child prims and variant sets
+    /// are lowered: its `variantSets` list op, as authored (`None` when it
+    /// is not).
+    ///
+    /// The list op and the set specs are written apart, as OpenUSD keeps
+    /// them (`variantSetNames` and `variantSetChildren`): a set spec the
+    /// list op does not name is written without being listed, and a listed
+    /// set without a spec is listed only. Sets are written in the layer's
+    /// order, OpenUSD's `variantSetChildren` (`Sdf_WritePrimVariantSets`),
+    /// each with at least one variant, and variants by name, as
+    /// `Sdf_WriteVariantSet` sorts them.
+    ///
+    /// Spec: AOUSD Core §7.3.6 (variant specs may contain variant set
+    /// specs), §7.6.2.3.5 (`variantSetNames`), §7.6.6–§7.6.7.
+    fn finish(&self, task: SpecTask<'_>) -> Result<Prim, SaveError> {
+        let mut prim = task.prim;
+        if is_authored(task.set_names) {
+            let path = format!("{}#variantSetNames", task.shown);
+            prim.variant_set_names =
+                Some(self.list_op(task.set_names, &path, |set| Ok(self.name(*set)))?);
+        }
+        prim.variant_sets = task.sets_lowered;
         Ok(prim)
     }
 
@@ -626,80 +749,26 @@ impl Lowering<'_> {
 
     // ── Variants ────────────────────────────────────────────────────
 
-    /// The variant sets `sets` of the prim at `host`, held by `owner`: the
-    /// prim spec, or one of its variant specs for the sets nested there,
-    /// whose `variantSetNames` is `names`. Returns that list op as
-    /// authored (`None` when it is not) and the sets.
-    ///
-    /// The list op and the set specs are written apart, as OpenUSD keeps
-    /// them (`variantSetNames` and `variantSetChildren`): a set spec the
-    /// list op does not name is written without being listed, and a listed
-    /// set without a spec is listed only. Sets are written in the layer's
-    /// order, OpenUSD's `variantSetChildren` (`Sdf_WritePrimVariantSets`),
-    /// and variants by name, as `Sdf_WriteVariantSet` sorts them.
-    ///
-    /// Spec: AOUSD Core §7.3.6 (variant specs may contain variant set
-    /// specs), §7.6.2.3.5 (`variantSetNames`), §7.6.6–§7.6.7.
-    fn variant_sets(
-        &self,
-        layer: &Layer,
-        host: PathId,
-        sets: &VariantSets,
-        names: &LayerListOp<TokenId>,
-        owner: Parent<'_>,
-        visited: &mut Visited,
-    ) -> Result<(Option<ListOp<String>>, Vec<VariantSet>), SaveError> {
-        let mut written = Vec::new();
-        for (&set, spec) in sets {
-            let mut here: Vec<(TokenId, &VariantSpec)> = spec
-                .variants
-                .iter()
-                .map(|(&name, variant)| (name, variant))
-                .collect();
-            if here.is_empty() {
-                continue;
-            }
-            sort::sort_by(&mut here, |a, b| {
-                self.tokens.resolve(a.0).cmp(self.tokens.resolve(b.0))
-            });
-            let mut variants = Vec::with_capacity(here.len());
-            for (name, variant) in here {
-                variants.push(self.variant(layer, host, owner, set, name, variant, visited)?);
-            }
-            written.push(VariantSet {
-                name: self.name(set),
-                variants,
-            });
-        }
-        let names = if is_authored(names) {
-            let path = format!("{}#variantSetNames", owner.shown);
-            Some(self.list_op(names, &path, |set| Ok(self.name(*set)))?)
-        } else {
-            None
-        };
-        Ok((names, written))
-    }
-
-    /// Lowers one variant of the prim at `host`, held by `owner`, to the
-    /// prim spec it holds: its metadata, arcs, selections, properties,
-    /// child prims (the prim specs the layer keeps in this branch) and the
-    /// variant sets nested in it.
+    /// Starts lowering one variant of the prim at `host`, held by `owner`,
+    /// to the prim spec it holds: its metadata, arcs, selections and
+    /// properties; [`Self::prims`] lowers its child prims (the prim specs
+    /// the layer keeps in this branch) and the variant sets nested in it
+    /// next.
     ///
     /// Spec: AOUSD Core §7.3.6, §7.6.7 (variant specs), §10.3.2.5.
     #[allow(
         clippy::too_many_arguments,
         reason = "the variant, its set and where it is written"
     )]
-    fn variant(
+    fn variant<'l>(
         &self,
         layer: &Layer,
         host: PathId,
         owner: Parent<'_>,
         set: TokenId,
         name: TokenId,
-        variant: &VariantSpec,
-        visited: &mut Visited,
-    ) -> Result<Prim, SaveError> {
+        variant: &'l VariantSpec,
+    ) -> Result<SpecTask<'l>, SaveError> {
         let shown = branch_display(
             owner.shown,
             self.tokens.resolve(set),
@@ -725,24 +794,19 @@ impl Lowering<'_> {
         for entry in &variant.properties {
             prim.properties.push(self.property(entry, &shown)?);
         }
-        let branch = Parent {
-            path: owner.path,
-            shown: &shown,
-            sites: &sites,
-        };
-        for &child in &variant.authored_children {
-            prim.children
-                .push(self.prim(layer, branch, child, visited)?);
-        }
-        (prim.variant_set_names, prim.variant_sets) = self.variant_sets(
-            layer,
+        Ok(SpecTask {
+            prim,
+            path: owner.path.clone(),
+            shown,
+            sites,
             host,
-            &variant.variant_sets,
-            &variant.variant_set_names,
-            branch,
-            visited,
-        )?;
-        Ok(prim)
+            children: &variant.authored_children,
+            next_child: 0,
+            sets: variant.variant_sets.iter().collect(),
+            next_set: 0,
+            sets_lowered: Vec::new(),
+            set_names: &variant.variant_set_names,
+        })
     }
 
     // ── Properties ──────────────────────────────────────────────────
@@ -1253,6 +1317,48 @@ struct Parent<'a> {
     path: &'a Path,
     shown: &'a str,
     sites: &'a [VariantSelectionSite],
+}
+
+/// A prim spec or variant [`Lowering::prims`] has started and not yet
+/// finished: the [`Prim`] lowered so far, and where its child prims and
+/// variant sets are written.
+struct SpecTask<'l> {
+    /// Everything but the child prims and variant sets.
+    prim: Prim,
+    /// The namespace path of the prim spec (a variant's is its prim's).
+    path: Path,
+    /// The variant-qualified display path (`/A{v=x}`).
+    shown: String,
+    /// The variant branches enclosing the spec's child prims.
+    sites: Vec<VariantSelectionSite>,
+    /// The prim hosting the spec's variant sets.
+    host: PathId,
+    /// The child prims' names, and the next to lower.
+    children: &'l [TokenId],
+    next_child: usize,
+    /// The variant sets, and the next to lower.
+    sets: Vec<(&'l TokenId, &'l VariantSetSpec)>,
+    next_set: usize,
+    /// The variant sets lowered so far.
+    sets_lowered: Vec<VariantSet>,
+    /// The `variantSetNames` list op.
+    set_names: &'l LayerListOp<TokenId>,
+}
+
+/// A variant set [`Lowering::prims`] is lowering: its variants by name,
+/// the next to lower and those lowered so far.
+struct SetTask<'l> {
+    set: TokenId,
+    variants: Vec<(TokenId, &'l VariantSpec)>,
+    next: usize,
+    lowered: Vec<Prim>,
+}
+
+/// A spec or set [`Lowering::prims`] has entered; a spec boxed, as it
+/// holds a whole [`Prim`].
+enum Task<'l> {
+    Spec(Box<SpecTask<'l>>),
+    Set(SetTask<'l>),
 }
 
 /// The arc list ops of a prim spec or variant.

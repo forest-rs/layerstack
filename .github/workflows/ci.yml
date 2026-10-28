@@ -543,6 +543,8 @@ jobs:
       # files layerstack saves as it reads the fixtures.
       - name: check variant set names oracle
         run: python layerstack_conformance/scripts/variant_set_names_oracle.py --check
+      - name: check variant names oracle
+        run: python layerstack_conformance/scripts/variant_names_oracle.py --check
 
       # The target list edits oracle must be how OpenUSD's `AddTarget`,
       # `RemoveTarget`, `AddConnection` and `RemoveConnection` author, call

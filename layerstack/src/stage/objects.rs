@@ -630,6 +630,24 @@ impl<'a> Prim<'a> {
             })
             .collect()
     }
+    /// The names of the variants of the variant set `set` that the prim's
+    /// composition defines: a variant any site of its prim index (any
+    /// layer, any arc) authors for the set, sorted by name and each once.
+    /// A selection may name a variant that is not among them. Empty for a
+    /// set the prim has no variants of.
+    ///
+    /// OpenUSD: `UsdVariantSet::GetVariantNames` (over
+    /// `PcpComposeSiteVariantSetOptions` for each node, as a sorted set).
+    ///
+    /// Spec: AOUSD Core §7.3.6 (variant set specs), §10.5 (variant selection).
+    #[doc(alias = "UsdVariantSet::GetVariantNames")]
+    #[doc(alias = "GetVariantNames")]
+    pub fn variant_names(self, set: impl NameArg) -> Vec<&'a str> {
+        let Some(set) = set.token(self.store.tokens()) else {
+            return Vec::new();
+        };
+        self.stage.variant_names(self.path, set, self.store)
+    }
     /// The variant selections that govern the prim, by variant set name:
     /// for each set, the strongest selection authored on any site of the
     /// prim's index, selections inside selected variants included, and for

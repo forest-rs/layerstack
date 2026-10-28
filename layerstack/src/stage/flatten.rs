@@ -95,6 +95,7 @@ pub use report::{
 pub use verify::{FlattenVerification, Mismatch, MismatchKind, SkipReason, Skipped, VerifiedScope};
 
 use super::prototypes::InstanceKey;
+use crate::sort;
 
 use alloc::{borrow::Cow, boxed::Box, format, string::String, sync::Arc, vec::Vec};
 
@@ -562,13 +563,15 @@ impl Flattener<'_, '_> {
             })
             .collect();
         let mut numbered: Vec<usize> = (0..groups.len()).collect();
-        numbered.sort_by(|&a, &b| paths.cmp_paths(least[a], least[b], tokens));
+        sort::sort_by(&mut numbered, |&a, &b| {
+            paths.cmp_paths(least[a], least[b], tokens)
+        });
         let mut order: Vec<(String, usize)> = numbered
             .into_iter()
             .enumerate()
             .map(|(number, index)| (format!("__Prototype_{}", number + 1), index))
             .collect();
-        order.sort();
+        sort::sort(&mut order);
         let mut found = Vec::new();
         let mut name = 1_usize;
         let mut prototype_of_group = alloc::vec![None; groups.len()];
@@ -944,7 +947,7 @@ impl Flattener<'_, '_> {
                     // Stable sorting preserves clip-set order and puts an
                     // authored opinion before clips introduced at its site.
                     let OpinionList { records, sources } = &mut animation;
-                    records.sort_by(|a, b| {
+                    sort::sort_by(records, |a, b| {
                         graph.cmp_keys(
                             &sources[a.source.index()].key,
                             &sources[b.source.index()].key,

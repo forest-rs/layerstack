@@ -7,6 +7,7 @@
 
 use super::*;
 use crate::prim_index::PrimIndexData;
+use crate::sort;
 use core::hash::{BuildHasher, Hash, Hasher};
 
 /// A cheap sharing bucket, not an identity. Exact equality remains mandatory.
@@ -172,7 +173,7 @@ impl InstanceIndexKey {
             crate::compose::strength_ordered_variant_selections(store, fallbacks, index)
                 .into_iter()
                 .collect();
-        selections.sort_unstable();
+        sort::sort_unstable(&mut selections);
         Self { arcs, selections }
     }
 }
@@ -326,7 +327,7 @@ impl Stage {
                 )
             })
             .collect();
-        topology.sort_unstable();
+        sort::sort_unstable(&mut topology);
         InstanceKey {
             index,
             clips,

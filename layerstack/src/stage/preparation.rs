@@ -27,6 +27,7 @@
 //!
 //! Spec: AOUSD Core §8 (namespace), §10 (composition arcs).
 
+use crate::sort;
 use alloc::{sync::Arc, vec::Vec};
 
 use hashbrown::{HashMap, HashSet};
@@ -253,7 +254,7 @@ impl ComposedEvidence {
                     .collect()
             })
             .unwrap_or_default();
-        layers.sort_unstable();
+        sort::sort_unstable(&mut layers);
         layers.dedup();
         let old = if layers.is_empty() {
             self.prim_stack_layers.remove(&prim)
@@ -284,7 +285,7 @@ impl ComposedEvidence {
                     .collect()
             })
             .unwrap_or_default();
-        sites.sort_unstable();
+        sort::sort_unstable(&mut sites);
         sites.dedup();
         let old = if sites.is_empty() {
             self.prim_node_sites.remove(&prim)

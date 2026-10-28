@@ -16,6 +16,7 @@
 //! concatenate along an arc chain). OpenUSD: `PcpMapFunction`
 //! (`pxr/usd/pcp/mapFunction.cpp`).
 
+use crate::sort;
 use alloc::{sync::Arc, vec::Vec};
 
 use crate::{
@@ -179,7 +180,7 @@ fn map_path(
 
 /// Orders pairs by source depth, then by ids, as canonical pairs are.
 fn sort_pairs(paths: &PathInterner, pairs: &mut [Pair]) {
-    pairs.sort_by(|a, b| {
+    sort::sort_by(pairs, |a, b| {
         depth(paths, a.0)
             .cmp(&depth(paths, b.0))
             .then(a.0.cmp(&b.0))

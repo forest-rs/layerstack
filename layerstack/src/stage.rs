@@ -53,6 +53,7 @@ pub use flatten::{
     FlattenError, FlattenReport, FlattenRequirements, FlattenVerification, Flattened,
 };
 
+use crate::sort;
 use alloc::{
     sync::{Arc, Weak},
     vec::Vec,
@@ -1547,7 +1548,9 @@ impl Stage {
                 .map(|clip| (clip.opinion.as_ref(), true)),
         );
         if !clip_opinions.is_empty() {
-            tagged.sort_by(|(a, _), (b, _)| index.graph.cmp_keys(&a.source().key, &b.source().key));
+            sort::sort_by(&mut tagged, |(a, _), (b, _)| {
+                index.graph.cmp_keys(&a.source().key, &b.source().key)
+            });
         }
         for (op, clip) in tagged {
             if clip || op.value().time_samples().is_some() || op.value().spline().is_some() {
@@ -1683,7 +1686,7 @@ impl Stage {
             }
             let before = times.len();
             let mut grid = grid;
-            grid.sort_by(|a, b| a.0.total_cmp(&b.0));
+            sort::sort_by(&mut grid, |a, b| a.0.total_cmp(&b.0));
             times.extend(grid.iter().filter_map(|&(time, _)| {
                 masking
                     .iter()
@@ -1701,7 +1704,7 @@ impl Stage {
             }
             masking.push(grid);
         }
-        times.sort_by(f64::total_cmp);
+        sort::sort_by(&mut times, f64::total_cmp);
         times.dedup_by(|a, b| *a == *b);
         match strongest {
             Some(Strongest::SparseDefault) => {
@@ -2206,7 +2209,7 @@ impl Stage {
         }
         self.reshare_changed_prototype_records(&changed);
         let mut changed: Vec<PathId> = changed.into_iter().collect();
-        changed.sort_unstable();
+        sort::sort_unstable(&mut changed);
         Some(changed)
     }
 
@@ -2258,7 +2261,7 @@ impl Stage {
                     .filter(|descendant| !recomposed_set.contains(descendant)),
             );
         }
-        out.sort_unstable();
+        sort::sort_unstable(&mut out);
         out.dedup();
         out
     }
@@ -2329,7 +2332,7 @@ impl Stage {
                 .prim_sites(prim)
                 .filter_map(|(layer, path)| site(layer, path)),
         );
-        sites.sort_unstable();
+        sort::sort_unstable(&mut sites);
         sites.dedup();
         sites
     }
@@ -4326,7 +4329,7 @@ pub fn apply_property_order(order: &[TokenId], names: &mut [TokenId]) {
 /// The value queries that merge clip opinions into a prim's opinions share
 /// it, and with it one instance of the standard library's sort.
 fn sort_tagged_opinions(graph: &PrimIndexGraph, tagged: &mut [(OpinionRef<'_>, Option<usize>)]) {
-    tagged.sort_by(|(a, a_entry), (b, b_entry)| {
+    sort::sort_by(tagged, |(a, a_entry), (b, b_entry)| {
         graph
             .cmp_keys(&a.source().key, &b.source().key)
             .then_with(|| a_entry.cmp(b_entry))
@@ -4499,7 +4502,7 @@ fn sort_asset_requests(requests: &mut [crate::AssetRequest]) {
             request.used_by,
         )
     }
-    requests.sort_unstable_by(|a, b| key(a).cmp(&key(b)));
+    sort::sort_unstable_by(requests, |a, b| key(a).cmp(&key(b)));
 }
 
 /// Decodes the selected value of a checked read in place: a retained numeric

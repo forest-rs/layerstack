@@ -23,6 +23,7 @@
 //! (composition arcs). OpenUSD: `UsdUtilsExtractExternalReferences`,
 //! `UsdUtilsComputeAllDependencies`, `UsdUtilsModifyAssetPaths`.
 
+use crate::sort;
 use crate::spec_path::VariantSelectionSite;
 use crate::{
     ArrayEdit, ArrayEditOp, ArrayEditOperand, FieldEntry, FieldValue, Layer, LayerId, LayerStore,
@@ -168,7 +169,7 @@ pub fn extract_layer_dependencies(
             extract_prim(prim, path, layer.id, paths, tokens, &mut out);
         }
     }
-    out.sort();
+    sort::sort(&mut out);
     out.dedup();
     out
 }
@@ -235,9 +236,9 @@ pub fn collect_dependencies(
                 .push(ResolvedDependency { source, targets });
         }
     }
-    report.layers.sort();
-    report.missing_layers.sort();
-    report.dependencies.sort_by(|a, b| a.source.cmp(&b.source));
+    sort::sort(&mut report.layers);
+    sort::sort(&mut report.missing_layers);
+    sort::sort_by(&mut report.dependencies, |a, b| a.source.cmp(&b.source));
     report
 }
 

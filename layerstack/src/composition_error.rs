@@ -12,6 +12,7 @@
 //!
 //! [`Stage::composition_errors`]: crate::Stage::composition_errors
 
+use crate::sort;
 use alloc::{string::String, vec::Vec};
 use core::{cmp::Ordering, fmt};
 
@@ -503,7 +504,7 @@ pub(crate) fn order_errors(
     tokens: &TokenInterner,
 ) {
     let place = |prim: PathId| position.get(&prim).copied().unwrap_or(usize::MAX);
-    errors.sort_by(|a, b| {
+    sort::sort_by(errors, |a, b| {
         let prims = match (a.prim(), b.prim()) {
             (None, None) => Ordering::Equal,
             (None, Some(_)) => Ordering::Less,

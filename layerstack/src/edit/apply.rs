@@ -11,6 +11,7 @@
 //! Each restoring step is [`Guarded`] by the step it undoes: it applies
 //! only while its slot still holds what that step wrote.
 
+use crate::sort;
 use alloc::{boxed::Box, sync::Arc, vec::Vec};
 use hashbrown::HashMap;
 
@@ -1019,16 +1020,16 @@ pub(crate) fn apply(
         }
     }
     if let Some(paths) = &mut local_structure {
-        paths.sort_unstable();
+        sort::sort_unstable(paths);
         paths.dedup();
         // A slot another step changes otherwise is not a child list alone.
-        child_lists.sort_unstable();
+        sort::sort_unstable(&mut child_lists);
         child_lists.dedup();
         child_lists.retain(|path| paths.binary_search(path).is_err());
     } else {
         child_lists.clear();
     }
-    resync_sites.sort_unstable();
+    sort::sort_unstable(&mut resync_sites);
     resync_sites.dedup();
     let argument_inputs = steps.iter().filter_map(argument_input).collect();
     let values = value_edits(&steps, store);
@@ -1161,7 +1162,7 @@ fn support_only_prims(
             candidates.push(path);
         }
     }
-    candidates.sort_unstable();
+    sort::sort_unstable(&mut candidates);
     candidates.dedup();
     candidates.retain(|&path| {
         // A spec whose child names alone change keeps its prim's index too.
@@ -2188,7 +2189,7 @@ pub(super) fn remove_subtree(
                 .copied()
                 .collect()
         });
-    candidates.sort_unstable();
+    sort::sort_unstable(&mut candidates);
     candidates.dedup();
     let mut steps = Vec::new();
     for path in candidates {

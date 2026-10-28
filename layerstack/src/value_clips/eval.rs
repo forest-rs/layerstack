@@ -6,6 +6,7 @@
 //! lookup, manifest eligibility and ordinary opinion strength remain elsewhere.
 //! AOUSD Core §12.3.2, §12.5; OpenUSD 26.08 `usd/clip.cpp` and `clipSet.cpp`.
 
+use crate::sort;
 use crate::value_resolution::interpolate_samples;
 use crate::{InterpolationType, LayerOffset, PropertySpec, Value};
 use alloc::{sync::Arc, vec::Vec};
@@ -244,7 +245,7 @@ impl PreparedClipProperty {
         if self.sample_times.is_empty() {
             self.sample_times.push(self.active[0].0);
         }
-        self.sample_times.sort_by(f64::total_cmp);
+        sort::sort_by(&mut self.sample_times, f64::total_cmp);
         self.sample_times.dedup();
         Ok(())
     }
@@ -293,7 +294,7 @@ impl PreparedClipProperty {
         if blocked.iter().any(|t| !t.is_finite()) {
             return Err(ClipEvalError::InvalidSamples);
         }
-        blocked.sort_by(f64::total_cmp);
+        sort::sort_by(&mut blocked, f64::total_cmp);
         blocked.dedup();
         self.blocked_activations = blocked;
         if !self.spline_mode {

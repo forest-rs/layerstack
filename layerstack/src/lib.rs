@@ -221,6 +221,7 @@ pub(crate) mod prim_indexing;
 pub mod property;
 pub mod relocates;
 pub mod schema;
+pub mod sort;
 pub mod sparse_writer;
 pub mod spec_path;
 pub mod spline;

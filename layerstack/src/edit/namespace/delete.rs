@@ -19,6 +19,7 @@
 use super::coordinated::Overlay;
 use super::*;
 use crate::prim_indexing::Boundaries;
+use crate::sort;
 use crate::{
     HashMap, HashSet, Relocate, SparseListOp, VariantSets,
     stage::preparation::{PreparationIndex, layer_links},
@@ -182,7 +183,9 @@ fn prepare_with(
             layers.push(id);
         }
     }
-    specs.sort_unstable_by(|a, b| a.0.cmp(&b.0).then(a.1.prim_path().cmp(&b.1.prim_path())));
+    sort::sort_unstable_by(&mut specs, |a, b| {
+        a.0.cmp(&b.0).then(a.1.prim_path().cmp(&b.1.prim_path()))
+    });
     Ok(NamespaceEdit {
         transaction,
         source: object,
@@ -216,7 +219,7 @@ fn working_slots(
         .into_iter()
         .filter(|path| layer.prims.contains_key(path) || layer.variant_prims.contains_key(path))
         .collect();
-    slots.sort_unstable();
+    sort::sort_unstable(&mut slots);
     slots
 }
 
@@ -462,7 +465,7 @@ fn repair(
         .chain(layer.variant_prims.keys())
         .copied()
         .collect();
-    paths.sort_unstable();
+    sort::sort_unstable(&mut paths);
     paths.dedup();
     for path in paths {
         if let Some(spec) = layer.prims.get_mut(&path) {

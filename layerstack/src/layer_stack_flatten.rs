@@ -14,6 +14,7 @@
 
 use crate::doc::VariantSelections;
 use crate::listop::append_unique;
+use crate::sort;
 use crate::spec_path::VariantSelectionSite;
 use crate::{
     CompositionError, FieldEntry, FieldValue, Layer, LayerId, LayerOffset, LayerStack,
@@ -191,7 +192,7 @@ pub fn flatten_layer_stack(
             .chain(layer.variant_prims.keys())
             .copied()
             .collect();
-        paths.sort_unstable();
+        sort::sort_unstable(&mut paths);
         paths.dedup();
         for path in paths {
             for source in layer.prim_specs(path) {

@@ -11,6 +11,7 @@
 //!
 //! Spec: AOUSD Core §10 (composition arcs and strength ordering) and §12 (value resolution).
 
+use crate::sort;
 use alloc::{sync::Arc, vec::Vec};
 
 use core::ops::Range;
@@ -857,7 +858,7 @@ impl PrimIndex {
         // Count field contributions before moving payloads. Sorting only
         // field identities avoids comparing graph keys across unrelated fields.
         let mut keys: Vec<FieldKey> = data.opinions.iter().map(FieldKey::of).collect();
-        keys.sort_unstable();
+        sort::sort_unstable(&mut keys);
         keys.dedup();
         data.fields.clear();
         data.fields.reserve_exact(keys.len());
@@ -981,7 +982,9 @@ impl PrimIndex {
             // the position the source at `old` moves to. The sort is
             // stable, so equally strong sources keep their order.
             let mut order: Vec<usize> = (0..data.sources.len()).collect();
-            order.sort_by(|&a, &b| graph.cmp_keys(&data.sources[a].key, &data.sources[b].key));
+            sort::sort_by(&mut order, |&a, &b| {
+                graph.cmp_keys(&data.sources[a].key, &data.sources[b].key)
+            });
             let mut moved = alloc::vec![0; order.len()];
             for (new, &old) in order.iter().enumerate() {
                 moved[old] = new;
@@ -999,7 +1002,7 @@ impl PrimIndex {
             }
         }
         for (_, range) in &data.fields {
-            data.opinions[span(range)].sort_by_key(|opinion| opinion.source);
+            sort::sort_by_key(&mut data.opinions[span(range)], |opinion| opinion.source);
         }
     }
 }

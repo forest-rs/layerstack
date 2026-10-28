@@ -13,6 +13,7 @@
 //!
 //! Spec: AOUSD Core §8 (namespace), §10 (composition arcs).
 
+use crate::sort;
 use alloc::borrow::Cow;
 
 use super::*;
@@ -70,7 +71,7 @@ pub(super) fn reachable_layers(
             }
         }
     }
-    found.sort_unstable();
+    sort::sort_unstable(&mut found);
     found
 }
 
@@ -134,7 +135,7 @@ pub(super) fn copy_slots(slots: &[PathId], copy: &Layer) -> Vec<PathId> {
         .chain(copy.variant_prims.keys())
         .copied()
         .collect();
-    paths.sort_unstable();
+    sort::sort_unstable(&mut paths);
     paths.dedup();
     paths
 }
@@ -286,7 +287,7 @@ impl<'a> InPlace<'a> {
             complete: true,
         };
         let mut ids: Vec<LayerId> = edits.keys().copied().collect();
-        ids.sort_unstable();
+        sort::sort_unstable(&mut ids);
         for id in ids {
             let (edit, copy) = (&edits[&id], &edited[&id]);
             let Some(layer) = projection.store.layer_mut(id) else {
@@ -368,7 +369,7 @@ pub(super) fn minimal_roots(store: &dyn LayerStore, paths: &[PathId]) -> Vec<Pat
             true
         })
         .collect();
-    roots.sort_unstable();
+    sort::sort_unstable(&mut roots);
     roots
 }
 

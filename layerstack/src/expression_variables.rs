@@ -44,6 +44,7 @@
 
 use crate::doc::VariantSelections;
 use crate::layer_stack::LayerStackIdentifier;
+use crate::sort;
 
 use alloc::{borrow::Cow, collections::BTreeSet, string::String, vec::Vec};
 use core::cell::{OnceCell, RefCell};
@@ -730,7 +731,7 @@ pub(crate) fn read_selections(
     // Prims in namespace order and each source's selections by set name, so
     // the errors are found in one order.
     let mut indexes: Vec<_> = prims.iter().collect();
-    indexes.sort_by(|(a, _), (b, _)| {
+    sort::sort_by(&mut indexes, |(a, _), (b, _)| {
         let paths = store.paths();
         paths
             .resolve(**a)
@@ -744,7 +745,9 @@ pub(crate) fn read_selections(
                 continue;
             };
             let mut selections: Vec<_> = selections.as_map().iter().collect();
-            selections.sort_by(|(a, _), (b, _)| tokens.resolve(**a).cmp(tokens.resolve(**b)));
+            sort::sort_by(&mut selections, |(a, _), (b, _)| {
+                tokens.resolve(**a).cmp(tokens.resolve(**b))
+            });
             for (set, variant) in selections {
                 if !declared.contains(set) || decided.contains(set) {
                     continue;

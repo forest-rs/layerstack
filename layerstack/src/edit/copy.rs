@@ -11,6 +11,7 @@
 //!
 //! OpenUSD: `SdfCopySpec`.
 
+use crate::sort;
 use alloc::vec::Vec;
 
 use super::{
@@ -150,7 +151,7 @@ fn copy_prim(
             reanchor_internal_arcs(spec, from_layer, to_layer);
         }
     }
-    copies.sort_by_key(|(path, spec)| {
+    sort::sort_by_key(&mut copies, |(path, spec)| {
         (
             store.paths().resolve(*path).depth(),
             spec.outer_variant_sites().len(),

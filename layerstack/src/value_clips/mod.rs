@@ -14,6 +14,7 @@ mod eval;
 mod instance_key;
 mod template;
 use crate::prim_index::{OpinionSource, PrimIndex, SourcedOpinion};
+use crate::sort;
 use crate::spline::KnotInterp;
 use crate::{
     AssetAvailability, FieldValue, HashMap, HashSet, InterpolationType, LayerId, LayerOffset,
@@ -31,7 +32,7 @@ use eval::PreparedClipProperty;
 /// item type shares one instance of the standard library's sort across
 /// the clip code.
 fn sort_by_time<T>(pairs: &mut [(f64, T)]) {
-    pairs.sort_by(|a, b| a.0.total_cmp(&b.0));
+    sort::sort_by(pairs, |a, b| a.0.total_cmp(&b.0));
 }
 pub(crate) use instance_key::{ClipInstanceKey, instance_keys};
 
@@ -393,9 +394,9 @@ impl Catalog {
                     .and_then(|p| store.paths().lookup(&p));
             }
         }
-        out.requests.sort();
+        sort::sort(&mut out.requests);
         out.requests.dedup();
-        out.issues.sort();
+        sort::sort(&mut out.issues);
         out.issues.dedup();
         out
     }
@@ -993,12 +994,12 @@ impl Catalog {
             .flatten()
             .copied()
             .collect();
-        sites.sort_unstable();
+        sort::sort_unstable(&mut sites);
         sites
     }
     pub(crate) fn layers(&self) -> Vec<LayerId> {
         let mut layers: Vec<_> = self.loaded.iter().copied().collect();
-        layers.sort_unstable();
+        sort::sort_unstable(&mut layers);
         layers
     }
     pub(crate) fn asset_requests(&self) -> &[ClipAssetRequest] {
@@ -1042,7 +1043,7 @@ impl Catalog {
                 .into_iter()
                 .filter(|r| affected.contains(&r.owner)),
         );
-        self.requests.sort();
+        sort::sort(&mut self.requests);
         self.requests.dedup();
         self.loaded.clear();
         for request in &self.requests {
@@ -1060,7 +1061,7 @@ impl Catalog {
                 .into_iter()
                 .filter(|r| affected.contains(&r.owner)),
         );
-        self.issues.sort();
+        sort::sort(&mut self.issues);
         self.issues.dedup();
     }
 }
@@ -1093,7 +1094,7 @@ fn project_opinion(
                 endpoints.extend([evaluation.lower, evaluation.upper]);
             }
         }
-        endpoints.sort_by(f64::total_cmp);
+        sort::sort_by(&mut endpoints, f64::total_cmp);
         endpoints.dedup();
         let samples = endpoints
             .into_iter()
@@ -1286,7 +1287,9 @@ fn definitions(
         // Weakest layer first. The sort is stable and a layer's opinions
         // compare equal, so each layer's `clips` come before its
         // `clipSets`, which reorder the sets those `clips` add.
-        layers.sort_by(|a, b| index.graph.cmp_keys(&b.source().key, &a.source().key));
+        sort::sort_by(&mut layers, |a, b| {
+            index.graph.cmp_keys(&b.source().key, &a.source().key)
+        });
         let mut node_sets: BTreeMap<Arc<str>, Definition> = BTreeMap::new();
         let mut offsets: BTreeMap<Arc<str>, OffsetLayers> = BTreeMap::new();
         let mut names = Vec::new();
@@ -1368,7 +1371,7 @@ fn definitions(
                     .push((opinion.layer_id(), opinion.source().key.lookup_path));
                 added.push(name.clone());
             }
-            added.sort();
+            sort::sort(&mut added);
             names = ListOp::default().with_added(added).apply_to(&names);
         }
         for (name, mut definition) in node_sets {
@@ -1426,7 +1429,7 @@ fn definitions(
             definition
         })
         .collect();
-    result.sort_by(|a, b| {
+    sort::sort_by(&mut result, |a, b| {
         index
             .graph
             .cmp_nodes(a.anchor.node, b.anchor.node)

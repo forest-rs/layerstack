@@ -3,6 +3,7 @@
 
 //! Resumable query-specific residency planning; performs no I/O or decoding.
 use super::*;
+use crate::sort;
 
 /// Why a query may need this asset, independently of whether it is resident.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -331,7 +332,7 @@ impl Catalog {
             .collect();
         // Stable ties preserve the composed clipSets order. Ancestor discovery
         // order alone does not establish composition strength.
-        sets.sort_by(|a, b| {
+        sort::sort_by(&mut sets, |a, b| {
             index
                 .graph
                 .cmp_nodes(a.key.node, b.key.node)

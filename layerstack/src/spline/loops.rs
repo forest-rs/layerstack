@@ -9,6 +9,7 @@
 //! held incoming values or derivatives; these utilities use the effective
 //! curve consistently, matching evaluation after baking.
 use super::{Knot, SplineData, SplineQueryError, queries};
+use crate::sort;
 use alloc::vec::Vec;
 use core::ops::Range;
 
@@ -126,7 +127,7 @@ impl SplineData {
             self.echo(loops, loops.prototype.start, loops.post + 1)?,
             (loops.prototype.start, loops.post + 1),
         ));
-        knots.sort_by(|a, b| a.0.time.total_cmp(&b.0.time));
+        sort::sort_by(&mut knots, |a, b| a.0.time.total_cmp(&b.0.time));
         if knots
             .windows(2)
             .any(|pair| pair[0].0.time == pair[1].0.time && pair[0].1 != pair[1].1)

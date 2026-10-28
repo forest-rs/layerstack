@@ -8,6 +8,7 @@
 
 use super::*;
 use crate::prim_indexing::Boundaries;
+use crate::sort;
 use crate::{
     ArcKind, HashMap, HashSet, NodeId, Relocate, prim_indexing::ChildIndex,
     stage::preparation::PreparationIndex,
@@ -102,7 +103,7 @@ fn prepare_with(
         });
         inspected.extend(stage.layer_stack());
     }
-    inspected.sort_unstable();
+    sort::sort_unstable(&mut inspected);
     inspected.dedup();
     let mut links = HashMap::new();
     for id in &inspected {
@@ -374,7 +375,9 @@ fn prepare_with(
             layers.push(id);
         }
     }
-    specs.sort_unstable_by(|a, b| a.0.cmp(&b.0).then(a.1.prim_path().cmp(&b.1.prim_path())));
+    sort::sort_unstable_by(&mut specs, |a, b| {
+        a.0.cmp(&b.0).then(a.1.prim_path().cmp(&b.1.prim_path()))
+    });
     Ok(NamespaceEdit {
         transaction,
         source,
@@ -444,7 +447,7 @@ fn working_slots(
         .into_iter()
         .filter(|path| layer.prims.contains_key(path) || layer.variant_prims.contains_key(path))
         .collect();
-    slots.sort_unstable();
+    sort::sort_unstable(&mut slots);
     slots
 }
 
@@ -484,8 +487,8 @@ fn validate_snapshot(
     );
     let mut old: Vec<_> = stage.prim_paths().collect();
     let mut new: Vec<_> = fresh.prim_paths().collect();
-    old.sort_unstable();
-    new.sort_unstable();
+    sort::sort_unstable(&mut old);
+    sort::sort_unstable(&mut new);
     if old != new
         || old.iter().any(|p| {
             stage.prim_stack(*p) != fresh.prim_stack(*p)
@@ -520,12 +523,12 @@ fn gather_dependent_moves(
             let mut prims: Vec<PathId> = index
                 .prims_with_nodes_beneath(source.from.prim_path())
                 .collect();
-            prims.sort_unstable();
+            sort::sort_unstable(&mut prims);
             prims
         }
         None => {
             let mut prims: Vec<PathId> = stage.prim_paths().collect();
-            prims.sort_unstable();
+            sort::sort_unstable(&mut prims);
             prims
         }
     };
@@ -609,7 +612,9 @@ fn normalize_moves(
     store: &mut dyn LayerStore,
     moves: &mut Vec<PathMove>,
 ) -> Result<(), NamespaceError> {
-    moves.sort_by_key(|m| (store.paths().resolve(m.from.prim_path()).depth(), m.from));
+    sort::sort_by_key(moves, |m| {
+        (store.paths().resolve(m.from.prim_path()).depth(), m.from)
+    });
     let mut normalized: Vec<PathMove> = Vec::new();
     for mapping in moves.drain(..) {
         let mut covered = false;

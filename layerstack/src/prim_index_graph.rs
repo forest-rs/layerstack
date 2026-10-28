@@ -64,6 +64,7 @@
 //! Spec: AOUSD Core §10 (composition arcs), §10.4 (strength ordering).
 
 use crate::layer_stack::LayerStackIdentifier;
+use crate::sort;
 
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -859,7 +860,7 @@ impl PrimIndexGraph {
 
     /// Sorts `keys` strongest first, as [`Self::cmp_keys`] orders them.
     pub(crate) fn sort_keys(&self, keys: &mut [OpinionKey]) {
-        keys.sort_by(|a, b| self.cmp_keys(a, b));
+        sort::sort_by(keys, |a, b| self.cmp_keys(a, b));
     }
 
     /// Compares two nodes' opinions with "strongest first" ordering: by

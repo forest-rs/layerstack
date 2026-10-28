@@ -121,8 +121,10 @@ pub enum UsdcWriteError {
     /// The authored layer cannot be saved; its USDA save fails the same way.
     Save(SaveError),
     /// A document's metadata key is not registered for its owner (see
-    /// [`super::document::metadata_field`]) and its value is a list op,
-    /// which an `SdfUnregisteredValue` cannot hold.
+    /// [`super::document::metadata_field`]) and its value is a typed list
+    /// op (a token or integer list op, say), which an
+    /// `SdfUnregisteredValue` does not hold: it holds an unregistered list
+    /// op's items as text.
     UnknownMetadata {
         /// Path of the owning spec.
         path: String,

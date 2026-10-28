@@ -9,6 +9,8 @@
 //! and records the crate file `SdfLayer::Export` writes for it
 //! (`fixtures/usdc_namespace_depth/deep.usdc`, and its length and FNV-1a
 //! hash in `oracle.json`) with the text of the layer OpenUSD reads back.
+//! The saved file must be OpenUSD's but for its LZ4 blocks
+//! ([`crate_sections`]).
 //! Here the same layer is built with [`Layer::define_prim`] and variant
 //! specs, saved with [`save_usdc`], and both files are read back with
 //! [`read_usdc`], each on a thread whose stack is far too small for one
@@ -26,12 +28,10 @@ use layerstack::path::{Path, PathId, TargetPath};
 use layerstack::property::{PropertySpec, PropertyType};
 use layerstack::spec_path::VariantSelectionSite;
 use layerstack::{LayerId, ListOp, NoAssets, PathInterner, TokenInterner, Value};
+use layerstack_conformance::usdc::crate_sections;
 use layerstack_conformance::workspace_root;
 use layerstack_usda::save::save_usda;
-use layerstack_usdc::header::parse_header;
-use layerstack_usdc::section::parse_sections;
-use layerstack_usdc::toc::parse_toc;
-use layerstack_usdc::{AssembleResult, DecodeBudget, read_usdc, read_usdc_lazy, save_usdc};
+use layerstack_usdc::{AssembleResult, read_usdc, read_usdc_lazy, save_usdc};
 use serde_json::Value as Json;
 
 const ORACLE: &str = include_str!("../../fixtures/usdc_namespace_depth/oracle.json");
@@ -183,39 +183,6 @@ fn assert_reads_as_openusd_reads(expected: &Expected, data: Vec<u8>) {
     }
 }
 
-/// What a crate file holds, apart from how its LZ4 blocks are spelled:
-/// the bytes before its first section (the bootstrap header less the
-/// table of contents' offset, then the value data) and each section as it
-/// decodes.
-///
-/// OpenUSD compresses with LZ4's reference compressor and `save_usdc`
-/// with `lz4_flex`: each finds its own matches, so the same input can
-/// compress to blocks of different bytes and lengths that decompress to
-/// the same bytes.
-fn decoded(data: &[u8]) -> String {
-    let header = parse_header(data).unwrap();
-    let toc = parse_toc(data, header.toc_offset).unwrap();
-    let sections = parse_sections(
-        data,
-        &toc,
-        header.crate_version(),
-        &mut DecodeBudget::with_limit(u64::MAX),
-    )
-    .unwrap();
-    let entries = [
-        toc.tokens,
-        toc.strings,
-        toc.fields,
-        toc.fieldsets,
-        toc.paths,
-        toc.specs,
-    ];
-    let first = entries.iter().flatten().map(|s| s.offset).min().unwrap();
-    // The magic and version, then the reserved bytes and the value data.
-    let start = (&data[..16], &data[24..usize::try_from(first).unwrap()]);
-    format!("{start:?}\n{sections:?}")
-}
-
 /// The deep layer saves on a small stack as the file OpenUSD writes, and
 /// reads back as the layer OpenUSD reads from that file.
 #[test]
@@ -232,7 +199,7 @@ fn deep_namespace_saves_as_openusd_writes_it() {
     let data = data.expect("saves");
     let openusd = openusd_file();
     assert!(
-        decoded(&data) == decoded(&openusd),
+        crate_sections(&data).unwrap() == crate_sections(&openusd).unwrap(),
         "the file OpenUSD writes"
     );
     assert_reads_as_openusd_reads(&expected, data);

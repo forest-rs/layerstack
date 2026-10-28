@@ -366,8 +366,15 @@ pub enum Value {
     TimeSamples(Vec<(f64, Self)>),
     /// `SdfUnregisteredValue`: what OpenUSD's text parser stores for a
     /// metadata field no schema registers, wrapping the parsed value (a
-    /// `VtDictionary` for a dictionary literal).
+    /// `VtDictionary` for a dictionary literal, an
+    /// [`Self::UnregisteredValueListOp`] for a list op).
     UnregisteredValue(Box<Self>),
+    /// `SdfUnregisteredValueListOp`: a list op whose items are each the
+    /// USDA text of a value (an `SdfUnregisteredValue` holding a string,
+    /// such as `"a"` or `1`), what OpenUSD's text parser stores, inside an
+    /// [`Self::UnregisteredValue`], for list-op metadata no schema
+    /// registers (`prepend key = ["a", 1]`).
+    UnregisteredValueListOp(ListOp<String>),
     /// `TsSpline` (the `spline` field); requires crate version 0.12.0.
     ///
     /// Spec: AOUSD Core §16.3.10.33 (spline encoding).

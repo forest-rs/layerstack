@@ -4,6 +4,7 @@
 //! An open stage: loading, inspection, explanation and authoring.
 
 use alloc::{
+    format,
     string::{String, ToString},
     sync::Arc,
     vec,
@@ -11,12 +12,14 @@ use alloc::{
 };
 
 use layerstack::{
-    ArcKind, ChangeCursor, Changes, Contribution, EditError, IgnoreCause, InMemoryStore, Layer,
-    LayerId, OpinionRole, PathId, ResolvedValue, Specifier, StageOptions, Time, Transaction,
-    ValueSource, Variability,
+    ArcKind, ChangeCursor, Changes, Contribution, EditError, FlattenError, FlattenRequirements,
+    IgnoreCause, InMemoryStore, Layer, LayerId, OpinionRole, PathId, ResolvedValue, Specifier,
+    StageOptions, Time, Transaction, ValueSource, Variability,
+    asset_dependencies::DependencyTarget,
 };
 use layerstack_io::{
-    ApplyError, FORMAT_ARGS_DELIMITER, ImportPolicy, IoError, LoadReport, StageDocument,
+    ApplyError, FORMAT_ARGS_DELIMITER, ImportPolicy, IoError, LoadReport, PackageInclusion,
+    PackagePreparationLimits, SaveReport, StageDocument,
 };
 use wasm_bindgen::prelude::*;
 
@@ -219,12 +222,7 @@ impl Stage {
     /// `layer.unknown` when the document has no such layer.
     pub(crate) fn layer_dirty(&self, id: u64) -> Result<bool, Error> {
         let layer = LayerId(id);
-        if self.document.store().layer(layer).is_none() {
-            return Err(Error::new(
-                "layer.unknown",
-                "the stage has no layer with this id",
-            ));
-        }
+        self.check_layer(layer)?;
         Ok(self.document.is_dirty(layer))
     }
 
@@ -855,6 +853,238 @@ impl Stage {
         }
     }
 
+    /// Saves the dirty layers the stage uses to the host's storage
+    /// ([`StageDocument::save`], OpenUSD's `UsdStage::Save`: not the
+    /// session layer, which is anonymous), or only layer `layer` when given
+    /// ([`StageDocument::save_layers`]). Each layer is written in its own
+    /// format to the identifier it was read from; the bytes become that
+    /// identifier's source and are handed to the host to persist.
+    ///
+    /// The record is `[written, failures, anonymous]`: each layer written as
+    /// `[layer, identifier, bytes]`, each that could not be as
+    /// `[layer, code, message]` (`io.read_only` for a package member, which
+    /// stays dirty), and the ids of the dirty anonymous layers, which have
+    /// nowhere to go (export them with `exportLayer`).
+    ///
+    /// Spec: AOUSD Core §7.1 (layers are saved as authored).
+    ///
+    /// # Errors
+    ///
+    /// `layer.unknown` when `layer` names no layer of the stage.
+    pub(crate) fn save(&mut self, layer: Option<u64>) -> Result<Wire, Error> {
+        let report = match layer {
+            Some(id) => {
+                self.check_layer(LayerId(id))?;
+                self.document.save_layers(&[LayerId(id)])
+            }
+            None => self.document.save(),
+        };
+        Ok(self.save_record(&report))
+    }
+
+    fn save_record(&mut self, report: &SaveReport) -> Wire {
+        let mut written = self.document.storage_mut().take_written();
+        let rows = report
+            .saved
+            .iter()
+            .filter_map(|&id| {
+                let identifier = self.document.identifier(id)?;
+                let bytes = written.remove(identifier)?;
+                Some(Wire::List(vec![
+                    Wire::UInt64(id.0),
+                    Wire::text(identifier),
+                    Wire::Bytes(bytes.to_vec()),
+                ]))
+            })
+            .collect();
+        let failures = report
+            .failures
+            .iter()
+            .map(|failure| {
+                Wire::List(vec![
+                    Wire::UInt64(failure.layer.0),
+                    Wire::text(failure.error.code()),
+                    Wire::text(failure.error.message.clone()),
+                ])
+            })
+            .collect();
+        let anonymous = report
+            .anonymous
+            .iter()
+            .map(|id| Wire::UInt64(id.0))
+            .collect();
+        Wire::List(vec![
+            Wire::List(rows),
+            Wire::List(failures),
+            Wire::List(anonymous),
+        ])
+    }
+
+    /// The bytes of layer `layer` as `format` (`usda` or `usdc`), as
+    /// [`StageDocument::export_layer`] writes a copy: the layer keeps its
+    /// identity, binding and dirty state, and storage is not touched. Any
+    /// layer exports, the session layer and package members included.
+    ///
+    /// # Errors
+    ///
+    /// `layer.unknown`; `argument.invalid` for another format; the
+    /// writer's `io.unsupported` for content the format cannot hold.
+    pub(crate) fn export_layer(&self, layer: u64, format: &str) -> Result<Vec<u8>, Error> {
+        let layer = LayerId(layer);
+        self.check_layer(layer)?;
+        let target = export_target(format)?;
+        let layer =
+            self.document.store().layer(layer).ok_or_else(|| {
+                Error::new("layer.unknown", "the stage has no layer with this id")
+            })?;
+        Ok(self.document.encode_layer(layer, target)?)
+    }
+
+    /// The composed stage flattened into one layer
+    /// ([`layerstack::Stage::flatten`], OpenUSD's `UsdStage::Flatten`), as
+    /// `format`: `[bytes, lossless, lost]`. Instances keep sharing their
+    /// prototypes and asset paths are written as authored. A flatten that
+    /// would lose something (animation a layer cannot hold) still exports,
+    /// accepting exactly those losses, with `lossless` false and each loss
+    /// in `lost` as `[path, message]`.
+    ///
+    /// Spec: AOUSD Core §11 (stage population), §12 (value resolution).
+    ///
+    /// # Errors
+    ///
+    /// `argument.invalid` for a format other than `usda` or `usdc`;
+    /// `flatten.failed` when the stage has no root; the writer's
+    /// `io.unsupported`.
+    pub(crate) fn export_flattened(&mut self, format: &str) -> Result<Wire, Error> {
+        let target = export_target(format)?;
+        let id = self.unused_layer_id();
+        let (store, live) = self.document.parts_mut();
+        let stage = live.stage();
+        let root = stage
+            .root_layer()
+            .ok_or_else(|| Error::new("flatten.failed", "the stage has no root layer"))?;
+        let requirements = FlattenRequirements::default();
+        let flattened = match stage.flatten(store, root, id, &requirements) {
+            Err(FlattenError::Refused(refusal)) => {
+                let relaxed = requirements.accepting(&refusal.unmet);
+                stage.flatten(store, root, id, &relaxed)
+            }
+            other => other,
+        }
+        .map_err(|error| Error::new("flatten.failed", error.to_string()))?;
+        let lost = flattened
+            .report
+            .lost()
+            .map(|finding| {
+                Wire::List(vec![
+                    Wire::Text(finding.path.to_string()),
+                    Wire::Text(finding.kind.to_string()),
+                ])
+            })
+            .collect();
+        let bytes = self.document.encode_layer(&flattened.layer, target)?;
+        Ok(Wire::List(vec![
+            Wire::Bytes(bytes),
+            Wire::Bool(flattened.report.is_lossless()),
+            Wire::List(lost),
+        ]))
+    }
+
+    /// The root layer and everything it depends on, packaged as a USDZ
+    /// ([`StageDocument::prepare_package`], OpenUSD's
+    /// `UsdUtilsCreateNewUsdzPackage`): resident layers with their unsaved
+    /// edits, and the other assets read from storage.
+    ///
+    /// The record is `[bytes, layers, assets, unresolved, omitted]`:
+    /// `bytes` the package, or `null` when a dependency is unresolved (an
+    /// asset the host has not supplied); the counts of layers and other
+    /// assets packaged; each unresolved use as `[layer, asset, reason]`;
+    /// and the ids of the layers the stage composes that the package
+    /// leaves out: the session layer, which is not part of the root's
+    /// closure (export it with `exportLayer`, or the composed stage with
+    /// `exportFlattened`).
+    ///
+    /// Spec: AOUSD Core §16 (packages).
+    ///
+    /// # Errors
+    ///
+    /// `io.rejected` when a budget of the preparation is exceeded.
+    pub(crate) fn export_package(&mut self) -> Result<Wire, Error> {
+        let stage = self.document.stage().stage();
+        let root = stage
+            .root_layer()
+            .ok_or_else(|| Error::new("package.failed", "the stage has no root layer"))?;
+        let omitted: Vec<Wire> = stage
+            .session_layer()
+            .map(|id| Wire::UInt64(id.0))
+            .into_iter()
+            .collect();
+        // A package read as the root keeps its root member's name; a layer
+        // keeps its file name.
+        let member = self
+            .document
+            .package_root_member(root)
+            .or_else(|| self.document.identifier(root).map(package_member))
+            .unwrap_or("root.usda")
+            .to_string();
+        let package = self.document.prepare_package(
+            root,
+            &member,
+            PackagePreparationLimits::default(),
+            |_| PackageInclusion::Include,
+        )?;
+        let unresolved = package
+            .report()
+            .dependencies
+            .iter()
+            .flat_map(|dependency| {
+                dependency.targets.iter().filter_map(|target| match target {
+                    DependencyTarget::Unresolved(reason) => Some(Wire::List(vec![
+                        Wire::UInt64(dependency.source.layer.0),
+                        Wire::text(&*dependency.source.identifier),
+                        Wire::text(&**reason),
+                    ])),
+                    _ => None,
+                })
+            })
+            .collect();
+        let (bytes, layers, assets) = match package.plan() {
+            Some(plan) => (
+                Wire::Bytes(package.write_usdz()?),
+                plan.layers.len(),
+                plan.assets.len(),
+            ),
+            None => (Wire::Null, 0, 0),
+        };
+        Ok(Wire::List(vec![
+            bytes,
+            Wire::Number(layers as f64),
+            Wire::Number(assets as f64),
+            Wire::List(unresolved),
+            Wire::List(omitted),
+        ]))
+    }
+
+    /// The smallest layer id above the session layer's that no layer of
+    /// the store has, for a layer the bindings build and never store.
+    fn unused_layer_id(&self) -> LayerId {
+        let store = self.document.store();
+        (SESSION_LAYER.0 + 1..)
+            .map(LayerId)
+            .find(|id| !store.contains_layer(*id))
+            .unwrap_or(SESSION_LAYER)
+    }
+
+    fn check_layer(&self, layer: LayerId) -> Result<(), Error> {
+        if self.document.store().layer(layer).is_none() {
+            return Err(Error::new(
+                "layer.unknown",
+                "the stage has no layer with this id",
+            ));
+        }
+        Ok(())
+    }
+
     fn existing_prim(&self, path: &str) -> Result<layerstack::Prim<'_>, Error> {
         check_prim_path(path)?;
         self.document.view().prim(path).ok_or_else(|| {
@@ -998,6 +1228,30 @@ impl Stage {
         Ok(self.explain(path, time)?.into())
     }
 
+    /// The record `save` builds, as documented in `stage.rs`.
+    #[wasm_bindgen(js_name = save)]
+    pub fn js_save(&mut self, layer: Option<u64>) -> Result<JsValue, JsValue> {
+        Ok(self.save(layer)?.into())
+    }
+
+    /// The bytes `export_layer` builds, as documented in `stage.rs`.
+    #[wasm_bindgen(js_name = exportLayer)]
+    pub fn js_export_layer(&self, layer: u64, format: &str) -> Result<Vec<u8>, JsValue> {
+        Ok(self.export_layer(layer, format)?)
+    }
+
+    /// The record `export_flattened` builds, as documented in `stage.rs`.
+    #[wasm_bindgen(js_name = exportFlattened)]
+    pub fn js_export_flattened(&mut self, format: &str) -> Result<JsValue, JsValue> {
+        Ok(self.export_flattened(format)?.into())
+    }
+
+    /// The record `export_package` builds, as documented in `stage.rs`.
+    #[wasm_bindgen(js_name = exportPackage)]
+    pub fn js_export_package(&mut self) -> Result<JsValue, JsValue> {
+        Ok(self.export_package()?.into())
+    }
+
     /// The record `supplied_bytes` builds, as documented in `stage.rs`.
     #[wasm_bindgen(js_name = suppliedBytes)]
     pub fn js_supplied_bytes(&self) -> u64 {
@@ -1085,6 +1339,27 @@ fn format_of(identifier: &str) -> &str {
         Some((_, extension)) => extension,
         None => "",
     }
+}
+
+/// The target whose extension picks `format` for
+/// [`StageDocument::encode_layer`]; it names nothing in storage.
+fn export_target(format: &str) -> Result<&'static str, Error> {
+    match format {
+        "usda" => Ok("export.usda"),
+        "usdc" => Ok("export.usdc"),
+        other => Err(Error::new(
+            "argument.invalid",
+            format!("`{other}` is not a layer format: usda or usdc"),
+        )),
+    }
+}
+
+/// The member name a package gives the root layer read from
+/// `identifier`: its file name, or the innermost package member's.
+fn package_member(identifier: &str) -> &str {
+    let name = identifier.trim_end_matches(']');
+    let name = name.rsplit_once('[').map_or(name, |(_, member)| member);
+    name.rsplit_once('/').map_or(name, |(_, file)| file)
 }
 
 /// `path` is an absolute prim path: `/`, or `/` and names separated by
@@ -1361,5 +1636,168 @@ def "World" (
             stage.metadata("World", "kind").unwrap_err().code,
             "path.invalid"
         );
+    }
+
+    /// The scene of the tests above with every dependency supplied.
+    fn resolved() -> Stage {
+        let mut stage = Stage::open("scene.usda", ROOT.as_bytes().to_vec(), false, false).unwrap();
+        let storage = stage.document_mut().storage_mut();
+        storage.supply("sub.usda", SUB.as_bytes().to_vec());
+        storage.supply("parts/ball.usda", BALL.as_bytes().to_vec());
+        stage.load_supplied().unwrap();
+        assert!(stage.wanted().as_list().unwrap().is_empty());
+        stage
+    }
+
+    fn set_size(stage: &mut Stage, target: LayerId, size: f64) {
+        let mut batch = EditBatch::new();
+        let slot = batch.value_numbers("double".into(), vec![size]);
+        batch.set_value("/Ball.size".into(), None, slot);
+        stage.apply(target.0, &mut batch).unwrap();
+    }
+
+    fn bytes(wire: &Wire) -> &[u8] {
+        match wire {
+            Wire::Bytes(bytes) => bytes,
+            other => panic!("{other:?}"),
+        }
+    }
+
+    fn size(stage: &Stage) -> Wire {
+        stage.get("/Ball.size", None).unwrap()
+    }
+
+    #[test]
+    fn save_writes_dirty_layers_for_the_host_and_they_reopen() {
+        let mut stage = resolved();
+        let root = stage.document().stage().stage().root_layer().unwrap();
+        set_size(&mut stage, root, 7.0);
+        let record = stage.save(None).unwrap();
+        let [written, failures, anonymous] = record.as_list().unwrap() else {
+            panic!("{record:?}");
+        };
+        assert!(failures.as_list().unwrap().is_empty());
+        assert!(anonymous.as_list().unwrap().is_empty());
+        let written = written.as_list().unwrap();
+        assert_eq!(written.len(), 1, "only the edited root was dirty");
+        let row = written[0].as_list().unwrap();
+        assert_eq!(row[0], Wire::UInt64(root.0));
+        assert_eq!(row[1].as_text(), Some("scene.usda"));
+        assert!(!stage.layer_dirty(root.0).unwrap());
+        let saved = bytes(&row[2]).to_vec();
+        let empty = stage.save(None).unwrap();
+        assert!(
+            empty.as_list().unwrap()[0].as_list().unwrap().is_empty(),
+            "nothing dirty"
+        );
+
+        let mut reopened = Stage::open("scene.usda", saved, false, false).unwrap();
+        let storage = reopened.document_mut().storage_mut();
+        storage.supply("sub.usda", SUB.as_bytes().to_vec());
+        storage.supply("parts/ball.usda", BALL.as_bytes().to_vec());
+        reopened.load_supplied().unwrap();
+        assert_eq!(size(&reopened), size(&stage));
+        assert_eq!(
+            reopened.export_flattened("usda").unwrap(),
+            stage.export_flattened("usda").unwrap(),
+            "the same composed stage"
+        );
+    }
+
+    #[test]
+    fn a_session_layer_is_anonymous_to_save_and_exports() {
+        let mut stage = Stage::open("scene.usda", ROOT.as_bytes().to_vec(), false, true).unwrap();
+        let session = stage.edit_layer().unwrap();
+        set_size(&mut stage, session, 9.0);
+        let record = stage.save(Some(session.0)).unwrap();
+        assert_eq!(
+            record.as_list().unwrap()[2],
+            Wire::List(vec![Wire::UInt64(session.0)])
+        );
+        let text = String::from_utf8(stage.export_layer(session.0, "usda").unwrap()).unwrap();
+        assert!(text.contains("double size = 9"), "{text}");
+        assert!(
+            stage.layer_dirty(session.0).unwrap(),
+            "an export changes nothing"
+        );
+        assert_eq!(
+            stage.save(Some(u64::MAX)).unwrap_err().code,
+            "layer.unknown"
+        );
+        assert_eq!(
+            stage.export_layer(session.0, "usdz").unwrap_err().code,
+            "argument.invalid"
+        );
+    }
+
+    #[test]
+    fn exported_layers_and_flattened_stages_reopen_in_each_format() {
+        let mut stage = resolved();
+        let root = stage.document().stage().stage().root_layer().unwrap();
+        for format in ["usda", "usdc"] {
+            let exported = stage.export_layer(root.0, format).unwrap();
+            let identifier = format!("copy.{format}");
+            let copy = Stage::open(&identifier, exported, false, false).unwrap();
+            assert_eq!(identifiers(&copy.wanted()), ["parts/ball.usda", "sub.usda"]);
+
+            let record = stage.export_flattened(format).unwrap();
+            let [flat, lossless, lost] = record.as_list().unwrap() else {
+                panic!("{record:?}");
+            };
+            assert_eq!(*lossless, Wire::Bool(true));
+            assert!(lost.as_list().unwrap().is_empty());
+            let identifier = format!("flat.{format}");
+            let flat = Stage::open(&identifier, bytes(flat).to_vec(), false, false).unwrap();
+            assert!(flat.wanted().as_list().unwrap().is_empty(), "no arcs left");
+            assert_eq!(size(&flat), size(&stage));
+            assert_eq!(
+                flat.get("/Ball.points", None).unwrap().as_list().unwrap()[4],
+                Wire::Number(2.0)
+            );
+        }
+        assert_eq!(
+            stage.export_flattened("text").unwrap_err().code,
+            "argument.invalid"
+        );
+    }
+
+    #[test]
+    fn a_package_holds_the_layered_stage_and_reopens_complete() {
+        let mut stage = resolved();
+        let root = stage.document().stage().stage().root_layer().unwrap();
+        set_size(&mut stage, root, 4.0);
+        let record = stage.export_package().unwrap();
+        let [package, layers, assets, unresolved, omitted] = record.as_list().unwrap() else {
+            panic!("{record:?}");
+        };
+        assert_eq!(*layers, Wire::Number(3.0));
+        assert_eq!(*assets, Wire::Number(0.0));
+        assert!(unresolved.as_list().unwrap().is_empty());
+        assert!(omitted.as_list().unwrap().is_empty());
+        assert!(
+            stage.layer_dirty(root.0).unwrap(),
+            "packaging saves nothing"
+        );
+        let reopened = Stage::open("scene.usdz", bytes(package).to_vec(), false, false).unwrap();
+        assert!(reopened.wanted().as_list().unwrap().is_empty(), "complete");
+        assert_eq!(size(&reopened), size(&stage), "with the unsaved edit");
+
+        let mut partial =
+            Stage::open("scene.usda", ROOT.as_bytes().to_vec(), false, false).unwrap();
+        let record = partial.export_package().unwrap();
+        let record = record.as_list().unwrap();
+        assert_eq!(
+            record[0],
+            Wire::Null,
+            "no package while a layer is unavailable"
+        );
+        assert_eq!(record[3].as_list().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn package_members_are_named_after_the_root() {
+        assert_eq!(package_member("set/scene.usda"), "scene.usda");
+        assert_eq!(package_member("scene.usdz[root.usdc]"), "root.usdc");
+        assert_eq!(package_member("a.usdz[b.usdz[sub/c.usda]]"), "c.usda");
     }
 }

@@ -17,14 +17,18 @@ import type {
   Changes,
   Edit,
   Explanation,
+  FlattenResult,
   Issue,
+  LayerFormat,
   LoadResult,
   MissingAsset,
   NeedKind,
   OpenOptions,
   Opinion,
+  PackageResult,
   ResolveOptions,
   ResolveResult,
+  SaveResult,
   Scalar,
   StageStatus,
   Transfer,
@@ -66,6 +70,10 @@ export interface NativeStage {
   apply(target: bigint, batch: NativeEditBatch): NativeReceipt;
   undo(receipt: NativeReceipt): NativeReceipt;
   takeChanges(render: boolean): unknown;
+  save(layer?: bigint | null): unknown;
+  exportLayer(layer: bigint, format: string): Uint8Array;
+  exportFlattened(format: string): unknown;
+  exportPackage(): unknown;
 }
 
 /** The native receipt the generated glue exports (`layerstack_wasm::EditReceipt`). Not for app use. */
@@ -570,6 +578,109 @@ export class Stage implements Disposable {
     return () => {
       const index = this.#listeners.indexOf(listener);
       if (index >= 0) this.#listeners.splice(index, 1);
+    };
+  }
+
+  /**
+   * Saves the dirty layers the stage uses (OpenUSD's `UsdStage::Save`), or
+   * only `layer`: each in its own format, to the identifier it was read
+   * from. The module writes nothing anywhere: persist `written` yourself.
+   * The saved bytes also become what the stage reads those identifiers
+   * from, and the layers are clean afterwards.
+   *
+   * The session layer is anonymous, so it is never saved: it is listed in
+   * `anonymous`; export it with {@link Stage.exportLayer}. A package member
+   * fails with `io.read_only` and stays dirty.
+   *
+   * Throws `layer.affinity` or `layer.unknown` for a `layer` not of this stage.
+   */
+  save(layer?: Layer): SaveResult {
+    if (layer !== undefined) this.#own("save", layer);
+    const [written, failures, anonymous] = this.#call("save", (native) => native.save(layer?.id ?? null)) as [
+      Row[],
+      Row[],
+      bigint[],
+    ];
+    let bytes = 0;
+    const saved = written.map(([id, identifier, data]) => {
+      bytes += (data as Uint8Array).byteLength;
+      return { layer: this.#layer(id as bigint), identifier: identifier as string, bytes: data as Uint8Array };
+    });
+    this.#ls.count("out", bytes);
+    return {
+      written: saved,
+      failures: failures.map(([id, code, message]) => ({
+        layer: this.#layer(id as bigint),
+        code: code as string,
+        message: message as string,
+      })),
+      anonymous: anonymous.map((id) => this.#layer(id)),
+      bytes,
+    };
+  }
+
+  /**
+   * The bytes of `layer` as `format`: a copy, as OpenUSD's `SdfLayer::Export`
+   * writes one. The layer keeps its identity and dirty state. Any layer
+   * exports, the session layer and package members included.
+   *
+   * Throws `argument.invalid` for another format, and `io.unsupported` for
+   * content the format cannot hold.
+   */
+  exportLayer(layer: Layer, format: LayerFormat): Uint8Array {
+    this.#own("exportLayer", layer);
+    const bytes = this.#call("exportLayer", (native) => native.exportLayer(layer.id, format));
+    this.#ls.count("out", bytes.byteLength);
+    return bytes;
+  }
+
+  /**
+   * The composed stage as one layer with no composition arcs, in `format`
+   * (`usda` by default), as OpenUSD's `UsdStage::Flatten` writes it:
+   * instances keep sharing prototypes, asset paths are written as authored.
+   * Opening the bytes on their own composes the same stage. Content a
+   * layer cannot hold is left out and listed in `lost`, never silently.
+   */
+  exportFlattened(format: LayerFormat = "usda"): FlattenResult {
+    const [bytes, lossless, lost] = this.#call("exportFlattened", (native) => native.exportFlattened(format)) as [
+      Uint8Array,
+      boolean,
+      Row[],
+    ];
+    this.#ls.count("out", bytes.byteLength);
+    return {
+      bytes,
+      lossless,
+      lost: lost.map(([path, message]) => ({ path: path as string, message: message as string })),
+    };
+  }
+
+  /**
+   * The root layer and everything it depends on as a USDZ package, as
+   * OpenUSD's `UsdUtilsCreateNewUsdzPackage` makes it: layers with their
+   * unsaved edits, and the other assets the host supplied. When a
+   * dependency is not available (supply it, or confirm it absent) `bytes`
+   * is `null` and `unresolved` lists why.
+   *
+   * The session layer is not part of the root's dependencies, so it is not
+   * packaged (`omitted`): export it with {@link Stage.exportLayer}, or the
+   * composed stage with {@link Stage.exportFlattened}.
+   */
+  exportPackage(): PackageResult {
+    const [bytes, layers, assets, unresolved, omitted] = this.#call("exportPackage", (native) =>
+      native.exportPackage(),
+    ) as [Uint8Array | null, number, number, Row[], bigint[]];
+    this.#ls.count("out", bytes?.byteLength ?? 0);
+    return {
+      bytes,
+      layers,
+      assets,
+      unresolved: unresolved.map(([layer, asset, reason]) => ({
+        layer: this.#layer(layer as bigint),
+        asset: asset as string,
+        reason: reason as string,
+      })),
+      omitted: omitted.map((id) => this.#layer(id)),
     };
   }
 

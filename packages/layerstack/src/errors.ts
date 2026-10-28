@@ -44,6 +44,8 @@
  *   USDZ member); open with `editLayer: "session"`.
  * - `layer.outside_stack`: the edits target a layer the stage reaches only
  *   through an arc.
+ * - `flatten.failed`: the stage could not be flattened (it has no root).
+ * - `package.failed`: the stage could not be packaged (it has no root).
  * - `edit.*`: the edits were rejected and nothing changed:
  *   `edit.stale` (an undo whose slots changed since; the receipt stays
  *   undoable), `edit.rejected.*` (such as `edit.rejected.type_mismatch`
@@ -81,6 +83,8 @@ export type ErrorCode =
   | "value.unsupported"
   | "layer.read_only"
   | "layer.outside_stack"
+  | "flatten.failed"
+  | "package.failed"
   | `edit.${string}`
   | `io.${string}`;
 

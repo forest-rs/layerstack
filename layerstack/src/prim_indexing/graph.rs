@@ -121,6 +121,45 @@ impl Node {
     }
 }
 
+/// What comparing a specializes node with its siblings
+/// ([`Graph::cmp_siblings`]) reads of the node's origins and ancestors,
+/// kept for each node ([`Graph::ancestries`]) so that a comparison does
+/// not walk them.
+///
+/// OpenUSD walks both for each comparison (`_GetOriginRootNode`,
+/// `_OriginsAreNestedArcs`), and a node is compared with every sibling it
+/// is linked past: chains of implied classes make both walks long.
+#[derive(Clone, Copy, Debug)]
+struct Ancestry {
+    /// The first node of the node's chain of origins whose origin is its
+    /// parent: OpenUSD's origin root node.
+    origin_root: NodeIndex,
+    /// The number of origins from the node to `origin_root`.
+    origin_chain: u32,
+    /// The node after this one on the walk `_OriginsAreNestedArcs` makes
+    /// toward the root: a propagated specializes's origin, any other
+    /// node's parent; `NONE` after the root.
+    up: NodeIndex,
+    /// The number of nodes on that walk from this node, the root's 1.
+    depth: u32,
+    /// A node further along that walk, to take it in steps of
+    /// logarithmic count: Myers' skew-binary jump pointers ("An applicative
+    /// random-access stack", 1983). `NONE` for the root.
+    jump: NodeIndex,
+}
+
+impl Ancestry {
+    /// The ancestry of a node not yet linked, which linking it replaces:
+    /// no walk has a node `depth` 0.
+    const UNLINKED: Self = Self {
+        origin_root: NONE,
+        origin_chain: 0,
+        up: NONE,
+        depth: 0,
+        jump: NONE,
+    };
+}
+
 /// A prim index graph being built. See the [module docs](self).
 ///
 /// Not `Clone`: a child's graph starts from its parent's by
@@ -143,6 +182,12 @@ pub(crate) struct Graph {
     /// more than [`NodeLookup::MIN_NODES`] nodes; `None` before, and once
     /// the graph is finalized.
     lookup: Option<NodeLookup>,
+    /// Each node's [`Ancestry`], by node index, once the graph, past
+    /// [`NodeLookup::MIN_NODES`] nodes, has linked a specializes beside a
+    /// sibling (only comparisons of two specializes read them); empty
+    /// before, and once finalized. A child prim's graph
+    /// ([`Self::for_child`]) starts without them.
+    ancestries: Vec<Ancestry>,
 }
 
 /// A large graph's nodes by site and by origin, each list in arena order.
@@ -164,7 +209,8 @@ struct NodeLookup {
 type NodeList = smallvec::SmallVec<[NodeIndex; 2]>;
 
 impl NodeLookup {
-    /// The node count past which a graph keeps a lookup.
+    /// The node count past which a graph keeps a lookup, and
+    /// [`Graph::ancestries`].
     const MIN_NODES: usize = 64;
 
     /// A lookup of every node of `nodes`.
@@ -260,6 +306,7 @@ impl Graph {
             shape: None,
             child_shape: ChildShape::default(),
             lookup: None,
+            ancestries: Vec::new(),
         }
     }
 
@@ -287,6 +334,7 @@ impl Graph {
             // The child's sites differ from these
             // ([`Self::append_child_name`]): its lookup is its own.
             lookup: None,
+            ancestries: Vec::new(),
         }
     }
 
@@ -402,6 +450,8 @@ impl Graph {
     /// Inserts `child`, already in the arena, beneath `parent` in strength
     /// order. OpenUSD: `_InsertChildInStrengthOrder`.
     pub(crate) fn link_child(&mut self, paths: &PathInterner, parent: NodeIndex, child: NodeIndex) {
+        self.node_mut(child).parent = parent;
+        self.keep_ancestry(parent, child);
         self.insert_child(paths, parent, child);
         self.place_sibling_key(parent, child);
     }
@@ -531,6 +581,129 @@ impl Graph {
         }
     }
 
+    /// Records the [`Ancestry`] of `child`, being linked beneath `parent`,
+    /// when the graph keeps them, and starts keeping them for every node
+    /// when `child` is the first specializes linked beside a sibling in a
+    /// graph past [`NodeLookup::MIN_NODES`] nodes. A smaller graph, as
+    /// production indexes are (`ALab` specializes in most of its), walks
+    /// its few nodes for less than keeping them would cost each one.
+    fn keep_ancestry(&mut self, parent: NodeIndex, child: NodeIndex) {
+        if self.ancestries.is_empty() {
+            if self.node(child).arc_kind == ArcKind::Specializes
+                && self.node(parent).first_child != NONE
+                && self.nodes.len() > NodeLookup::MIN_NODES
+            {
+                self.ancestries = alloc::vec![Ancestry::UNLINKED; self.nodes.len()];
+                self.refresh_ancestry(0);
+            }
+            return;
+        }
+        // Nodes pushed since the last one linked.
+        self.ancestries.resize(self.nodes.len(), Ancestry::UNLINKED);
+        self.ancestries[child as usize] = self.ancestry_of(child);
+    }
+
+    /// `node`'s [`Ancestry`], if the graph keeps it and the node is linked.
+    fn kept_ancestry(&self, node: NodeIndex) -> Option<Ancestry> {
+        self.ancestries
+            .get(node as usize)
+            .copied()
+            .filter(|ancestry| ancestry.depth != 0)
+    }
+
+    /// The node after `node` on the walk toward the root that
+    /// [`Ancestry::up`] records.
+    fn ancestry_up(&self, node: NodeIndex) -> NodeIndex {
+        if self.is_propagated_specializes(node) {
+            self.node(node).origin
+        } else {
+            self.node(node).parent
+        }
+    }
+
+    /// The origin `node`'s [`Ancestry::origin_root`] is found from, if its
+    /// origin is not its parent.
+    fn ancestry_origin(&self, node: NodeIndex) -> Option<NodeIndex> {
+        let entry = self.node(node);
+        (entry.origin != entry.parent).then_some(entry.origin)
+    }
+
+    /// `node`'s [`Ancestry`], from those of its origin and of the next
+    /// node toward the root, which must be current.
+    fn ancestry_of(&self, node: NodeIndex) -> Ancestry {
+        let (origin_root, origin_chain) = match self.ancestry_origin(node) {
+            None => (node, 0),
+            Some(origin) => {
+                let of_origin = self.ancestries[origin as usize];
+                (of_origin.origin_root, of_origin.origin_chain + 1)
+            }
+        };
+        let up = self.ancestry_up(node);
+        if up == NONE {
+            return Ancestry {
+                origin_root,
+                origin_chain,
+                up,
+                depth: 1,
+                jump: NONE,
+            };
+        }
+        let of_up = self.ancestries[up as usize];
+        // Jump as far as `up` jumps twice when its two jumps are as long,
+        // otherwise to `up`.
+        let jump = match of_up.jump {
+            NONE => up,
+            first => {
+                let of_first = self.ancestries[first as usize];
+                if of_first.jump != NONE
+                    && of_up.depth - of_first.depth
+                        == of_first.depth - self.ancestries[of_first.jump as usize].depth
+                {
+                    of_first.jump
+                } else {
+                    up
+                }
+            }
+        };
+        Ancestry {
+            origin_root,
+            origin_chain,
+            up,
+            depth: of_up.depth + 1,
+            jump,
+        }
+    }
+
+    /// Sets the [`Ancestry`] of every node from `from` on, each after
+    /// those of its origin and of the next node toward the root when they
+    /// are among them: in a finalized graph, as a grafted subgraph is, a
+    /// node's origin can follow it.
+    fn refresh_ancestry(&mut self, from: NodeIndex) {
+        let first = from as usize;
+        let mut done = alloc::vec![false; self.nodes.len() - first];
+        let mut pending = Vec::new();
+        for start in first..self.nodes.len() {
+            pending.push(node_index(start));
+            while let Some(&node) = pending.last() {
+                if done[node as usize - first] {
+                    pending.pop();
+                    continue;
+                }
+                let waiting = [self.ancestry_origin(node), Some(self.ancestry_up(node))]
+                    .into_iter()
+                    .flatten()
+                    .find(|&dep| dep != NONE && dep >= from && !done[dep as usize - first]);
+                if let Some(dep) = waiting {
+                    pending.push(dep);
+                    continue;
+                }
+                self.ancestries[node as usize] = self.ancestry_of(node);
+                done[node as usize - first] = true;
+                pending.pop();
+            }
+        }
+    }
+
     /// Appends a new node to the arena (not yet linked to a parent).
     pub(crate) fn push_node(&mut self, node: Node) -> NodeIndex {
         let index = NodeIndex::try_from(self.nodes.len()).expect("prim index node count");
@@ -594,6 +767,10 @@ impl Graph {
             node.last_child = shift(node.last_child);
         }
         self.nodes.append(&mut subgraph.nodes);
+        if !self.ancestries.is_empty() {
+            self.ancestries.resize(self.nodes.len(), Ancestry::UNLINKED);
+            self.refresh_ancestry(base);
+        }
         self.extend_lookup(base);
         self.link_child(paths, parent, base);
         base
@@ -714,6 +891,9 @@ impl Graph {
     /// The first node of `node`'s chain of origins whose origin is its
     /// parent, and the length of the chain. OpenUSD: `_GetOriginRootNode`.
     fn origin_root(&self, node: NodeIndex) -> (NodeIndex, usize) {
+        if let Some(ancestry) = self.kept_ancestry(node) {
+            return (ancestry.origin_root, ancestry.origin_chain as usize);
+        }
         let mut cursor = node;
         let mut count = 0;
         while self.node(cursor).origin != self.node(cursor).parent {
@@ -723,23 +903,40 @@ impl Graph {
         (cursor, count)
     }
 
-    /// OpenUSD: `_OriginsAreNestedArcs`.
+    /// Whether `a` is on the walk toward the root from `b`, or `b` on the
+    /// walk from `a`: each node goes to its parent, a propagated
+    /// specializes to its origin. OpenUSD: `_OriginsAreNestedArcs`.
     fn origins_are_nested(&self, a: NodeIndex, b: NodeIndex) -> bool {
-        let nested_under = |x: NodeIndex, y: NodeIndex| {
-            let mut n = x;
-            while n != NONE {
-                if n == y {
+        self.walks_through(a, b) || self.walks_through(b, a)
+    }
+
+    /// Whether the walk toward the root from `from` meets `node`. With
+    /// both nodes' [`Ancestry`] kept: whether the node of the walk as far
+    /// from the root as `node` is `node`.
+    fn walks_through(&self, from: NodeIndex, node: NodeIndex) -> bool {
+        let (Some(of_from), Some(of_node)) = (self.kept_ancestry(from), self.kept_ancestry(node))
+        else {
+            let mut at = from;
+            while at != NONE {
+                if at == node {
                     return true;
                 }
-                n = if self.is_propagated_specializes(n) {
-                    self.node(n).origin
-                } else {
-                    self.node(n).parent
-                };
+                at = self.ancestry_up(at);
             }
-            false
+            return false;
         };
-        nested_under(a, b) || nested_under(b, a)
+        let depth = of_node.depth;
+        let (mut at, mut ancestry) = (from, of_from);
+        while ancestry.depth > depth {
+            at = if ancestry.jump != NONE && self.ancestries[ancestry.jump as usize].depth >= depth
+            {
+                ancestry.jump
+            } else {
+                ancestry.up
+            };
+            ancestry = self.ancestries[at as usize];
+        }
+        at == node
     }
 
     /// Which of `a` and `b` a strong-to-weak walk of the graph from the
@@ -913,9 +1110,10 @@ impl Graph {
         // Already in strength order with nothing to erase, as most indexes
         // are (every one without arcs): relinking would rebuild the links
         // the order was read from.
-        // A finished index adds no nodes: its lookup would only hold
-        // memory for as long as the index is kept.
+        // A finished index adds no nodes: its lookup and ancestries would
+        // only hold memory for as long as the index is kept.
         self.lookup = None;
+        self.ancestries = Vec::new();
         if self.nodes.iter().all(|node| !node.culled) && self.in_strength_order() {
             return;
         }

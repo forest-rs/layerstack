@@ -175,7 +175,7 @@ fn setters_match_cpp_call_by_call() {
         } else {
             // C++ `SetShaderId` authors `info:implementationSource` and then
             // fails at the missing `info:id`; a refused edit authors nothing.
-            assert_eq!(result, Err(NodeDefError::MissingIdAttribute(prim)));
+            assert_eq!(result, Err(NodeDefError::MissingIdAttribute { prim }));
             assert!(transaction.is_empty());
             assert_eq!(*store.layer(LayerId(1)).unwrap(), before);
         }

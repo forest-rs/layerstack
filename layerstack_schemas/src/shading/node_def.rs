@@ -26,7 +26,10 @@ pub enum NodeDefError {
     /// schemas, for [`NodeDefApiEdit::set_shader_id`] to set. C++
     /// `SetShaderId` fails there too (after authoring
     /// `info:implementationSource`; this edit authors nothing).
-    MissingIdAttribute(PathId),
+    MissingIdAttribute {
+        /// The prim.
+        prim: PathId,
+    },
     /// The property is a relationship, an array or an attribute of another
     /// type than the setter authors.
     WrongPropertyType {
@@ -40,7 +43,7 @@ pub enum NodeDefError {
 impl core::fmt::Display for NodeDefError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            Self::MissingIdAttribute(_) => f.write_str("the prim has no info:id attribute"),
+            Self::MissingIdAttribute { .. } => f.write_str("the prim has no info:id attribute"),
             Self::WrongPropertyType { property, .. } => {
                 write!(f, "{property} is not of the type the setter authors")
             }
@@ -60,7 +63,7 @@ impl NodeDefApiImplementationSource {
     /// its `info:id`. The `AllowedTokens` validation rule still reports the
     /// authored `Other` value.
     #[must_use]
-    pub fn effective(authored: Option<&Self>) -> Self {
+    pub(crate) fn effective(authored: Option<&Self>) -> Self {
         match authored {
             Some(Self::SourceAsset) => Self::SourceAsset,
             Some(Self::SourceCode) => Self::SourceCode,
@@ -91,7 +94,7 @@ impl<'a> NodeDefApi<'a> {
 
     /// The implementation source OpenUSD consults for this node: the
     /// composed `info:implementationSource` when the schema lists it, and
-    /// `Id` otherwise ([`NodeDefApiImplementationSource::effective`]).
+    /// `Id` otherwise.
     /// [`Self::implementation_source`] keeps the authored value.
     #[doc(alias = "UsdShadeNodeDefAPI::GetImplementationSource")]
     #[doc(alias = "GetImplementationSource")]
@@ -233,7 +236,7 @@ impl NodeDefApiEdit {
     ) -> Result<&Self, NodeDefError> {
         let prim = self.path();
         if edit.property_kind(prim, ID).is_none() {
-            return Err(NodeDefError::MissingIdAttribute(prim));
+            return Err(NodeDefError::MissingIdAttribute { prim });
         }
         check_uniform(edit, prim, ID, "token")?;
         check_uniform(edit, prim, IMPLEMENTATION_SOURCE, "token")?;

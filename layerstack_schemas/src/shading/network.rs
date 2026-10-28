@@ -132,7 +132,7 @@ impl MaterialNode {
     /// Whether OpenUSD resolves this node by its `info:id`: the composed
     /// `info:implementationSource` is `id`, unauthored, or a token the
     /// schema does not list, which C++ `UsdShadeNodeDefAPI::GetImplementationSource`
-    /// reads as `id` ([`NodeDefApiImplementationSource::effective`]).
+    /// reads as `id`.
     #[must_use]
     pub fn implemented_by_id(&self) -> bool {
         implemented_by_id(self.implementation_source.as_deref())

@@ -219,28 +219,48 @@ impl<'a> Packer<'a> {
         Ok(i)
     }
 
-    /// `_AddPath`: adds the parent first, then this path's element token.
+    /// `_AddPath`: adds a target path's bracketed path first (`/C` for
+    /// `/A.b[/C]`), then the parent, then this path's element token, each
+    /// path once.
+    ///
+    /// `_AddPath` recurses; here the paths still to add wait on a heap
+    /// stack, as a namespace has no depth limit.
     fn path(&mut self, path: &CratePath) -> Result<u32, UsdcWriteError> {
         if let Some(&i) = self.path_index.get(path) {
             return Ok(i);
         }
-        // The ancestors not yet added, nearest first: a loop, not
-        // `_AddPath`'s recursion, as a namespace has no depth limit.
-        let mut missing = alloc::vec![path.clone()];
-        while let Some(parent) = missing.last().and_then(CratePath::parent) {
-            if self.path_index.contains_key(&parent) {
-                break;
+        enum Step {
+            /// Add the path, after what it needs.
+            Enter(CratePath),
+            /// Add the path itself, what it needs being added.
+            Leave(CratePath),
+        }
+        // Entered and not yet left: `_AddPath` finds such a path present.
+        let mut entered = BTreeSet::new();
+        let mut steps = alloc::vec![Step::Enter(path.clone())];
+        while let Some(step) = steps.pop() {
+            match step {
+                Step::Enter(path) => {
+                    if self.path_index.contains_key(&path) || !entered.insert(path.clone()) {
+                        continue;
+                    }
+                    let parent = path.parent();
+                    let target = path.target().cloned();
+                    steps.push(Step::Leave(path));
+                    // Popped last to first: the target, then the parent.
+                    steps.extend(parent.map(Step::Enter));
+                    steps.extend(target.map(Step::Enter));
+                }
+                Step::Leave(path) => {
+                    self.token(&path.element_token())?;
+                    let i = index(self.paths.len())?;
+                    self.paths.push(Some(path.clone()));
+                    entered.remove(&path);
+                    self.path_index.insert(path, i);
+                }
             }
-            missing.push(parent);
         }
-        let mut added = 0;
-        for path in missing.into_iter().rev() {
-            self.token(&path.element_token())?;
-            added = index(self.paths.len())?;
-            self.paths.push(Some(path.clone()));
-            self.path_index.insert(path, added);
-        }
-        Ok(added)
+        Ok(self.path_index[path])
     }
 
     /// `_AddPath(SdfPath())`: the empty path, a reference or payload's
@@ -1819,7 +1839,7 @@ fn prepare(specs: &[Spec]) -> Result<Vec<(CratePath, &Spec)>, UsdcWriteError> {
             SpecForm::Variant => {
                 matches!(last, Some(Element::Variant { variant, .. }) if !variant.is_empty())
             }
-            SpecForm::Attribute | SpecForm::Relationship => path.is_property(),
+            SpecForm::Attribute | SpecForm::Relationship => path.is_prim_property(),
             form => {
                 return Err(UsdcWriteError::UnsupportedSpecForm {
                     path: spec.path.clone(),
@@ -1885,7 +1905,8 @@ fn prepare(specs: &[Spec]) -> Result<Vec<(CratePath, &Spec)>, UsdcWriteError> {
         }
     }
     sort::sort_by(&mut prepared, |(a, _), (b, _)| {
-        match (&a.property, &b.property) {
+        // Spec property paths are prim property paths: a name each.
+        match (a.property.first(), b.property.first()) {
             (None, None) => a.cmp(b),
             (None, Some(_)) => core::cmp::Ordering::Less,
             (Some(_), None) => core::cmp::Ordering::Greater,

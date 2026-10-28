@@ -4,9 +4,9 @@
 //! Paths as the writer stores them, their `SdfPath` ordering, and the
 //! compressed path tree of the PATHS section.
 //!
-//! Spec: AOUSD Core §16.3.7; OpenUSD `pxr/usd/sdf/crateFile.cpp`
-//! (`_WritePaths`, `_BuildCompressedPathDataRecursive`) and `path.cpp`
-//! (`SdfPath::operator<`).
+//! Spec: AOUSD Core §16.3.7, §8 (paths); OpenUSD `pxr/usd/sdf/crateFile.cpp`
+//! (`_WritePaths`, `_BuildCompressedPathDataRecursive`), `path.cpp`
+//! (`SdfPath::operator<`) and `pathNode.h` (`Sdf_PathNode::Compare`).
 
 use alloc::borrow::Cow;
 use alloc::string::String;
@@ -33,21 +33,44 @@ pub(crate) enum Element {
     },
 }
 
+/// One element of a path's property part.
+///
+/// The variants are in `Sdf_PathNode::NodeType` order (a prim property,
+/// then a target, a mapper and a relational attribute node), so the
+/// derived ordering is `Sdf_PathNode::Compare`'s: by node type, then a
+/// name by byte order or a bracketed path in `SdfPath` order.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum PropertyElement {
+    /// The property of a prim or variant (`.b`).
+    Property(String),
+    /// A target path (`[/C]`), after a property or a relational
+    /// attribute.
+    Target(CratePath),
+    /// A mapper (`.mapper[/C]`), after a property or a relational
+    /// attribute.
+    Mapper(CratePath),
+    /// A relational attribute (`.d`), after a target.
+    RelationalAttribute(String),
+}
+
 /// An absolute path the writer supports: the pseudo-root, a prim path, a
 /// variant set or variant path (`/A{v=}`, `/A{v=x}`), a prim inside a
-/// variant (`/A{v=x}B`), or a property path of a prim or variant.
+/// variant (`/A{v=x}B`), a property path of a prim or variant, or a path
+/// below a property (`/A.b[/C]`, `/A.b[/C].d`, `/A.b.mapper[/C]`, ...).
 ///
 /// The derived ordering is `SdfPath`'s for these paths: prim parts compare
 /// element by element (an ancestor before its descendants, names by byte
 /// order, a prim before a variant selection), and only then the property
-/// part, with no property first. So a prim is followed by its properties,
-/// then by its child prims, then by its variant sets and variants.
+/// parts, likewise, with no property first. So a prim is followed by its
+/// properties, then by its child prims, then by its variant sets and
+/// variants.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct CratePath {
     /// Prim part elements from the root; empty for the pseudo-root.
     pub(crate) elements: Vec<Element>,
-    /// Property name for a property path.
-    pub(crate) property: Option<String>,
+    /// Property part elements, the property first; empty for a path that
+    /// is not below a property.
+    pub(crate) property: Vec<PropertyElement>,
 }
 
 impl CratePath {
@@ -55,15 +78,20 @@ impl CratePath {
     pub(crate) fn root() -> Self {
         Self {
             elements: Vec::new(),
-            property: None,
+            property: Vec::new(),
         }
     }
 
-    /// Parses `/`, `/A/B`, `/A{v=x}B`, `/A{v=}` or `/A/B.prop:name`.
+    /// Parses `/`, `/A/B`, `/A{v=x}B`, `/A{v=}`, `/A/B.prop:name`, or a
+    /// path below a property such as `/A.b[/C].d` or `/A.b.mapper[/C]`.
     ///
     /// A variant selection follows a prim or another selection and is
     /// followed by a child prim name, another selection, a property or
-    /// the end; a variant set (`{v=}`) ends the path.
+    /// the end; a variant set (`{v=}`) ends the path. A property part
+    /// follows `SdfPath`'s grammar (`PropElts`, `pxr/usd/sdf/pathParser.h`)
+    /// as far as these elements go: a property name, then a target or a
+    /// mapper; a relational attribute after a target, then a target or a
+    /// mapper again; the bracketed paths absolute.
     pub(crate) fn parse(text: &str) -> Result<Self, UsdcWriteError> {
         let invalid = |reason| UsdcWriteError::InvalidPath {
             path: text.into(),
@@ -76,7 +104,7 @@ impl CratePath {
             return Ok(Self::root());
         }
         let mut elements = Vec::new();
-        let mut property = None;
+        let mut property = Vec::new();
         loop {
             let end = rest.find(['/', '{', '.']).unwrap_or(rest.len());
             let name = &rest[..end];
@@ -105,11 +133,7 @@ impl CratePath {
             match rest.chars().next() {
                 None => break,
                 Some('.') => {
-                    let name = &rest[1..];
-                    if !name.split(':').all(is_name) {
-                        return Err(invalid("property name is not a namespaced identifier"));
-                    }
-                    property = Some(name.into());
+                    property = parse_property(&rest[1..]).map_err(invalid)?;
                     break;
                 }
                 Some('/') if !after_selection => rest = &rest[1..],
@@ -120,45 +144,58 @@ impl CratePath {
         let is_set =
             |e: &Element| matches!(e, Element::Variant { variant, .. } if variant.is_empty());
         if let Some(i) = elements.iter().position(is_set)
-            && (i + 1 < elements.len() || property.is_some())
+            && (i + 1 < elements.len() || !property.is_empty())
         {
             return Err(invalid("a variant set path has no children"));
         }
         Ok(Self { elements, property })
     }
 
-    /// Whether this is a property path.
-    pub(crate) fn is_property(&self) -> bool {
-        self.property.is_some()
+    /// Whether this is a prim property path (`SdfPath::IsPrimPropertyPath`):
+    /// a property of a prim or variant, the only property path a spec has
+    /// here and the one the path tree stores by its name.
+    pub(crate) fn is_prim_property(&self) -> bool {
+        self.property.len() == 1
     }
 
     /// Whether this is the pseudo-root.
     pub(crate) fn is_root(&self) -> bool {
-        self.elements.is_empty() && self.property.is_none()
+        self.elements.is_empty() && self.property.is_empty()
     }
 
-    /// The last element of the prim part, for a path that is not a
-    /// property path.
+    /// The last element of the prim part, for a path that is not below a
+    /// property.
     pub(crate) fn last_element(&self) -> Option<&Element> {
-        self.elements.last().filter(|_| self.property.is_none())
+        self.elements.last().filter(|_| self.property.is_empty())
     }
 
-    /// The parent path, `SdfPath::GetParentPath`: the prim part of a
-    /// property path, otherwise the prim part less its last element (so a
-    /// variant's parent is the prim or variant holding its set); `None`
-    /// for the pseudo-root.
+    /// The parent path, `SdfPath::GetParentPath`: the path less its last
+    /// element, so a property's parent is its prim, a target's its
+    /// property and a variant's the prim or variant holding its set;
+    /// `None` for the pseudo-root.
     pub(crate) fn parent(&self) -> Option<Self> {
-        if self.property.is_some() {
+        if let Some((_, parent)) = self.property.split_last() {
             return Some(Self {
                 elements: self.elements.clone(),
-                property: None,
+                property: parent.to_vec(),
             });
         }
         let (_, parent) = self.elements.split_last()?;
         Some(Self {
             elements: parent.to_vec(),
-            property: None,
+            property: Vec::new(),
         })
+    }
+
+    /// The bracketed path of a target path (`SdfPath::GetTargetPath`,
+    /// `/C` for `/A.b[/C]`), which `CrateFile::_AddPath` adds to the path
+    /// table before the target path's parent; `None` for any other path,
+    /// a mapper's included.
+    pub(crate) fn target(&self) -> Option<&Self> {
+        match self.property.last()? {
+            PropertyElement::Target(target) => Some(target),
+            _ => None,
+        }
     }
 
     /// The variant set path of a variant path (`/A{v=}` for `/A{v=x}`).
@@ -173,7 +210,7 @@ impl CratePath {
                 });
                 Some(Self {
                     elements,
-                    property: None,
+                    property: Vec::new(),
                 })
             }
             _ => None,
@@ -182,15 +219,23 @@ impl CratePath {
 
     /// Number of path elements below the pseudo-root.
     pub(crate) fn depth(&self) -> usize {
-        self.elements.len() + usize::from(self.property.is_some())
+        self.elements.len() + self.property.len()
     }
 
     /// The token stored for this path's last element, as `CrateFile::_AddPath`
-    /// stores it: the property name for a property path, otherwise the
-    /// element's text (`B`, `{v=x}`, empty for the root).
+    /// stores it: the property name for a prim property path, otherwise
+    /// the element's text (`SdfPath::GetElementToken`: `B`, `{v=x}`,
+    /// `[/C]`, `.mapper[/C]`, `.d`, empty for the root).
     pub(crate) fn element_token(&self) -> Cow<'_, str> {
-        match (&self.property, self.elements.last()) {
-            (Some(property), _) => Cow::Borrowed(property),
+        match (self.property.last(), self.elements.last()) {
+            (Some(PropertyElement::Property(name)), _) => Cow::Borrowed(name),
+            (Some(PropertyElement::Target(target)), _) => Cow::Owned(alloc::format!("[{target}]")),
+            (Some(PropertyElement::Mapper(target)), _) => {
+                Cow::Owned(alloc::format!(".mapper[{target}]"))
+            }
+            (Some(PropertyElement::RelationalAttribute(name)), _) => {
+                Cow::Owned(alloc::format!(".{name}"))
+            }
             (None, Some(Element::Prim(name))) => Cow::Borrowed(name),
             (None, Some(Element::Variant { set, variant })) => {
                 Cow::Owned(alloc::format!("{{{set}={variant}}}"))
@@ -198,6 +243,77 @@ impl CratePath {
             (None, None) => Cow::Borrowed(""),
         }
     }
+}
+
+/// Parses a property part, `text` being what follows its `.`: a property
+/// name, then the elements [`CratePath::parse`] lists, or the reason it
+/// is not one.
+fn parse_property(mut text: &str) -> Result<Vec<PropertyElement>, &'static str> {
+    // A name ends where a bracketed path or the next element starts.
+    let name_end = |text: &str| text.find(['[', '.']).unwrap_or(text.len());
+    let end = name_end(text);
+    if !is_property_name(&text[..end]) {
+        return Err("property name is not a namespaced identifier");
+    }
+    let mut property = alloc::vec![PropertyElement::Property(text[..end].into())];
+    text = &text[end..];
+    while !text.is_empty() {
+        let after_target = matches!(property.last(), Some(PropertyElement::Target(_)));
+        let after_mapper = matches!(property.last(), Some(PropertyElement::Mapper(_)));
+        if after_mapper {
+            return Err("a mapper ends the path");
+        }
+        if after_target {
+            // Only a relational attribute follows a target.
+            let Some(rest) = text.strip_prefix('.') else {
+                return Err("a target is followed by a relational attribute");
+            };
+            let end = name_end(rest);
+            if !is_property_name(&rest[..end]) {
+                return Err("relational attribute name is not a namespaced identifier");
+            }
+            property.push(PropertyElement::RelationalAttribute(rest[..end].into()));
+            text = &rest[end..];
+        } else if let Some(rest) = text.strip_prefix(".mapper[") {
+            let (target, rest) = bracketed(rest)?;
+            property.push(PropertyElement::Mapper(target));
+            text = rest;
+        } else if let Some(rest) = text.strip_prefix('[') {
+            let (target, rest) = bracketed(rest)?;
+            property.push(PropertyElement::Target(target));
+            text = rest;
+        } else {
+            return Err("a property is followed by a target or a mapper");
+        }
+    }
+    Ok(property)
+}
+
+/// Parses the absolute path of a bracketed element, `text` following its
+/// `[`, and returns it with the text after its `]`.
+fn bracketed(text: &str) -> Result<(CratePath, &str), &'static str> {
+    let mut depth = 0_usize;
+    for (at, byte) in text.bytes().enumerate() {
+        match byte {
+            b'[' => depth += 1,
+            b']' if depth == 0 => {
+                let target = CratePath::parse(&text[..at])
+                    .map_err(|_| "bracketed path is not an absolute path")?;
+                if target.is_root() {
+                    return Err("bracketed path is the pseudo-root");
+                }
+                return Ok((target, &text[at + 1..]));
+            }
+            b']' => depth -= 1,
+            _ => {}
+        }
+    }
+    Err("bracketed path is not closed")
+}
+
+/// A property name: namespaced identifiers (`primvars:st`).
+fn is_property_name(name: &str) -> bool {
+    name.split(':').all(is_name)
 }
 
 impl core::fmt::Display for CratePath {
@@ -214,8 +330,14 @@ impl core::fmt::Display for CratePath {
             }
             after_selection = matches!(element, Element::Variant { .. });
         }
-        if let Some(property) = &self.property {
-            write!(f, ".{property}")?;
+        for element in &self.property {
+            match element {
+                PropertyElement::Property(name) | PropertyElement::RelationalAttribute(name) => {
+                    write!(f, ".{name}")?;
+                }
+                PropertyElement::Target(target) => write!(f, "[{target}]")?,
+                PropertyElement::Mapper(target) => write!(f, ".mapper[{target}]")?,
+            }
         }
         Ok(())
     }
@@ -288,8 +410,11 @@ pub(crate) fn path_tree(sorted: &[(&CratePath, u32, u32)]) -> PathTree {
         let has_sibling = next < n && sorted[next].0.depth() == path.depth();
         tree.path_indexes.push(i64::from(*index));
         let token = i64::from(*token);
-        tree.element_tokens
-            .push(if path.is_property() { -token } else { token });
+        tree.element_tokens.push(if path.is_prim_property() {
+            -token
+        } else {
+            token
+        });
         tree.jumps.push(match (has_child, has_sibling) {
             (true, true) => (next - i) as i64,
             (false, true) => 0,
@@ -324,6 +449,15 @@ mod tests {
             "/A{v=a}B/C.x",
             "/A{v=a}{w=.b-c|d}",
             "/A{v=a}.x",
+            "/A.b[/C]",
+            "/A.b[/C].d",
+            "/A.b[/C].d:e",
+            "/A.b.mapper[/C]",
+            "/A.b[/C].d.mapper[/E]",
+            "/A.b[/C].d[/E]",
+            "/A.b[/C.d[/E].f].g",
+            "/A.b[/C{v=x}].d",
+            "/A{v=a}.b[/C].d",
         ] {
             assert_eq!(p(text).to_string(), text, "{text}");
         }
@@ -342,7 +476,13 @@ mod tests {
             "/A{v}",
             "/A{v=a",
             "/{v=a}",
-            "/A.rel[/B]",
+            "/A.rel[B]",
+            "/A.rel[/]",
+            "/A.rel[/B",
+            "/A.rel[/B].",
+            "/A.rel[/B][/C]",
+            "/A.rel.mapper[/B].arg",
+            "/A.rel.expression",
             "/A B",
         ] {
             assert!(CratePath::parse(bad).is_err(), "{bad:?} rejected");
@@ -364,6 +504,10 @@ mod tests {
             p("/A{v=}"),
             p("/A{u=z}C"),
             p("/A{v=b}.a"),
+            p("/A.b[/C].d"),
+            p("/A.b.mapper[/C]"),
+            p("/A.b[/C]"),
+            p("/A.b[/B].z"),
         ];
         paths.sort();
         let sorted: Vec<String> = paths.iter().map(ToString::to_string).collect();
@@ -373,6 +517,10 @@ mod tests {
                 "/",
                 "/A",
                 "/A.b",
+                "/A.b[/B].z",
+                "/A.b[/C]",
+                "/A.b[/C].d",
+                "/A.b.mapper[/C]",
                 "/A.z",
                 "/A/C",
                 "/A/C.a",
@@ -384,7 +532,7 @@ mod tests {
                 "/B"
             ],
             "prim part first, then property; ancestors first; prims before \
-             variant selections"
+             variant selections; targets before mappers"
         );
     }
 

@@ -1,0 +1,14 @@
+#usda 1.0
+def "P"
+{
+    float c.connect = </A.b[/C].d>
+    rel m = </A.b.mapper[/C]>
+    rel n = </A.b[/C.d[/E].f].g>
+    rel r = </A.b[/C].d>
+    rel s = </A.b[/C/D.e].f:g>
+    rel t = </A.b[/C].d.mapper[/E]>
+    rel u = <.b[C].d>
+    rel v = </A.b[/C{v=x}].d>
+    prepend rel w = [</A.b[/C].d>, </A.b.mapper[/C]>]
+    rel x = <../A.b[../C].d>
+}

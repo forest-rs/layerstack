@@ -609,6 +609,10 @@ fn vectors(
 }
 
 /// Policies for computing per-instance transforms.
+///
+/// Build it as a struct literal that names the fields it sets and takes
+/// the rest from `..InstanceTransformOptions::default()`: a field a later release adds then
+/// keeps its default.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct InstanceTransformOptions {
     /// Prepend each prototype's local transform; never its ancestor transforms.

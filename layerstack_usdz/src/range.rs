@@ -59,6 +59,10 @@ impl<T: RangeSource + ?Sized> RangeSource for Arc<T> {
 }
 
 /// Range inspection budgets, checked before transport or payload allocation.
+///
+/// Build it as a struct literal that names the fields it sets and takes
+/// the rest from `..RangeLimits::default()`: a field a later release adds then
+/// keeps its default.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RangeLimits {
     /// Maximum nested archive levels, at most 31.

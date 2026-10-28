@@ -11,6 +11,10 @@ use core::{mem::size_of, ops::Deref};
 /// Byte accounting includes record headers and owned vector capacities, excluding
 /// allocator overhead and spare ring capacity (reported separately in stats).
 /// An oversized batch is not retained; it creates a history gap requiring recovery.
+///
+/// Build it as a struct literal that names the fields it sets and takes
+/// the rest from `..ChangeHistoryBudget::default()`: a field a later release adds then
+/// keeps its default.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ChangeHistoryBudget {
     /// Maximum number of retained batches.

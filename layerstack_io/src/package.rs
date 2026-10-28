@@ -27,6 +27,10 @@ pub enum PackageInclusion {
 }
 /// Explicit inventory and opaque resource limits. Format imports can themselves
 /// follow layer arcs; the layer count bounds inventory work, not scene allocation.
+///
+/// Build it as a struct literal that names the fields it sets and takes
+/// the rest from `..PackagePreparationLimits::default()`: a field a later release adds then
+/// keeps its default.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PackagePreparationLimits {
     /// Maximum distinct layers inspected.

@@ -64,6 +64,9 @@ pub enum AuthoringTimes {
 /// assert_eq!(frames.write, AuthoringWrite::Default);
 /// assert_eq!(frames.times, AuthoringTimes::Range { start: 1., end: 24. });
 /// ```
+///
+/// Build it as a struct literal; it has no default, so a literal names
+/// every field.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct AuthoringQuery {
     /// The slot the write authors.

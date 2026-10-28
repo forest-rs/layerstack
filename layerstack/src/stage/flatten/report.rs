@@ -22,6 +22,10 @@ use crate::{
 /// requirement ([`FlattenError::Refused`]), rather than return a layer that
 /// breaks one. The default preserves instancing and animation exactly,
 /// writes asset paths as authored and refuses any loss.
+///
+/// Build it as a struct literal that names the fields it sets and takes
+/// the rest from `..FlattenRequirements::default()`: a field a later release adds then
+/// keeps its default.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FlattenRequirements<'a> {
     /// Whether instances keep sharing their prototypes.

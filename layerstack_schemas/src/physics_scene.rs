@@ -51,6 +51,9 @@ pub enum SimulationOwner {
     Scene(PathId),
 }
 /// Explicit parse scope; empty includes is an error, empty excludes is valid.
+///
+/// Build it as a struct literal; it has no default, so a literal names
+/// every field.
 #[derive(Clone, Copy, Debug)]
 pub struct PhysicsSceneOptions<'a> {
     /// Subtrees to include. Use the pseudo-root for a complete stage capture.

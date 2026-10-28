@@ -25,6 +25,10 @@ pub struct PrimStatus {
 
 /// Conjunction of composed prim flags. `None` accepts either flag value.
 /// A failing prim prunes its subtree, matching OpenUSD predicate traversal.
+///
+/// Build it as a struct literal that names the fields it sets and takes
+/// the rest from `..PrimPredicate::default()`: a field a later release adds then
+/// keeps its default.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PrimPredicate {
     /// Required active state, or either state.

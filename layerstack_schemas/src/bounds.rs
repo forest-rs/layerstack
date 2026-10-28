@@ -191,6 +191,10 @@ impl core::error::Error for BoundsError {
 }
 
 /// Policies held constant for a cache's lifetime.
+///
+/// Build it as a struct literal that names the fields it sets and takes
+/// the rest from `..BoundsOptions::default()`: a field a later release adds then
+/// keeps its default.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BoundsOptions {
     /// Purposes contributing to queried bounds, in any order.

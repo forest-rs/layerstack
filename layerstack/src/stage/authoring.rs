@@ -207,6 +207,7 @@ pub enum SourceComposability {
 ///
 /// `Eq` compares the times bit for bit, as [`LayerOffset`]'s does.
 #[derive(Clone, Copy, Debug)]
+#[non_exhaustive]
 pub struct SampleBracket {
     /// The stage time of the lower bracketing sample.
     pub lower: f64,
@@ -236,6 +237,7 @@ impl SampleBracket {
 /// One source that outranks a prospective write at some inspected time,
 /// without materializing its values.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct AuthoringSource {
     /// Authoring layer, variant-qualified spec path and node of the prim's
     /// composition graph. For clips this is the metadata anchor, not a clip
@@ -292,6 +294,7 @@ impl SpanTimes {
 
 /// What a prospective write would show over a span of inspected times.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum AuthoringVerdict {
     /// The target does not contribute, as [`AuthoringInspection::target`]
     /// says.
@@ -362,6 +365,7 @@ pub enum CurrentSource {
 
 /// The answer for inspected times that share it.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct AuthoringSpan {
     /// The times.
     pub times: SpanTimes,
@@ -377,6 +381,7 @@ pub struct AuthoringSpan {
 /// Sources are the slots OpenUSD would read before the written one; the
 /// value explanation APIs name the contributors of the current value.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct AuthoringInspection {
     /// The strongest occurrence of the mapped target site, including a site
     /// whose layer has no prim or property spec yet. `None` means the target
@@ -424,6 +429,7 @@ impl AuthoringInspection {
 
 /// An invalid prospective authoring query.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum AuthoringInspectionError {
     /// The store's token/path domains do not belong to this stage snapshot.
     ForeignStore,

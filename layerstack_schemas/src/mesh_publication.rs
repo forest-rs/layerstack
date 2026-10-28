@@ -63,6 +63,7 @@ fn numeric_type_matches(name: &str, array: &TypedArray) -> bool {
         TypedArray::Token(_) => name == "token",
         TypedArray::String(_) => name == "string",
         TypedArray::Deferred(_) => false, // The caller materializes before checking.
+        _ => false,
     }
 }
 

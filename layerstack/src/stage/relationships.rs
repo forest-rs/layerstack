@@ -8,6 +8,7 @@ use alloc::vec;
 
 /// Work performed by one retained forwarded-relationship query.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct RelationshipQueryWork {
     /// Target resolutions, including missing or incompatible relationships.
     pub evaluations: u64,

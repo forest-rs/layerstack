@@ -187,6 +187,7 @@ fn count_values(layer: &Layer) -> u64 {
                 FieldValue::Int64ListOp(op) => list(op),
                 FieldValue::UInt64ListOp(op) => list(op),
                 FieldValue::UnregisteredListOp(op) => list(op),
+                _ => 1,
             })
             .sum()
     }

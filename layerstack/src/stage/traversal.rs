@@ -7,6 +7,7 @@ use super::*;
 
 /// Composed prim flags used by traversal and inspection.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct PrimStatus {
     /// The prim and its ancestors are active.
     pub active: bool,
@@ -160,6 +161,7 @@ impl Iterator for PrimRange<'_> {
 }
 /// One visit in a preorder or pre-and-post traversal.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct PrimVisit {
     /// Visited prim path.
     pub prim: PathId,

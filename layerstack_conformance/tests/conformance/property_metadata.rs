@@ -20,7 +20,7 @@ use crate::support::schema_scene as support;
 use std::sync::Arc;
 
 use layerstack::{EditTarget, LayerId, ResolvedValue, Value};
-use layerstack::{MetadataEditError, MetadataEditReason, MetadataTarget, MetadataType};
+use layerstack::{MetadataEditReason, MetadataTarget, MetadataType};
 use layerstack_schemas::{MetadataError, PrimEdit, SchemaEdit};
 use serde::Deserialize;
 
@@ -155,13 +155,7 @@ fn property_metadata_authoring_matches_openusd_call_by_call() {
         } else {
             MetadataTarget::Relationship
         };
-        let refused = |reason| {
-            Err(MetadataError::Field(MetadataEditError {
-                field: call.key.as_str().into(),
-                target,
-                reason,
-            }))
-        };
+        let refused = |reason| Some((call.key.as_str(), target, reason));
         if matches!(call.key.as_str(), "typeName" | "custom" | "default") {
             // A field of the spec with its own edit, or one the kind of
             // spec has not (a relationship's `typeName`).
@@ -170,7 +164,7 @@ fn property_metadata_authoring_matches_openusd_call_by_call() {
             } else {
                 MetadataEditReason::NotForSpec
             };
-            assert_eq!(result, refused(reason), "{label}");
+            assert_eq!(refusal(&result), refused(reason), "{label}");
             continue;
         }
         assert_eq!(result.is_ok(), call.accepted, "{label}: {result:?}");
@@ -187,17 +181,25 @@ fn property_metadata_authoring_matches_openusd_call_by_call() {
             }
             (Err(error), "nope", _) => assert_eq!(*error, MetadataError::NoSuchProperty),
             (Err(_), _, "unknownKey") => {
-                assert_eq!(result, refused(MetadataEditReason::Unregistered), "{label}");
+                assert_eq!(
+                    refusal(&result),
+                    refused(MetadataEditReason::Unregistered),
+                    "{label}"
+                );
             }
             (Err(_), _, "documentation") => assert_eq!(
-                result,
+                refusal(&result),
                 refused(MetadataEditReason::ValueType {
                     expected: MetadataType::parse("string").unwrap()
                 }),
                 "{label}"
             ),
             (Err(_), ..) => {
-                assert_eq!(result, refused(MetadataEditReason::NotForSpec), "{label}");
+                assert_eq!(
+                    refusal(&result),
+                    refused(MetadataEditReason::NotForSpec),
+                    "{label}"
+                );
             }
         }
     }
@@ -243,12 +245,12 @@ fn property_metadata_clears_only_target_specs() {
         .clear_property_metadata(&mut edit, "a", "displayName")
         .unwrap();
     assert_eq!(
-        handle.clear_property_metadata(&mut edit, "a", "noLoadHint"),
-        Err(MetadataError::Field(MetadataEditError {
-            field: "noLoadHint".into(),
-            target: MetadataTarget::Attribute,
-            reason: MetadataEditReason::NotForSpec,
-        }))
+        refusal(&handle.clear_property_metadata(&mut edit, "a", "noLoadHint")),
+        Some((
+            "noLoadHint",
+            MetadataTarget::Attribute,
+            MetadataEditReason::NotForSpec
+        ))
     );
     let transaction = edit.finish();
     live.apply(&mut store, &transaction).unwrap();
@@ -267,4 +269,14 @@ fn property_metadata_clears_only_target_specs() {
             .property("doubleSided")
             .is_some()
     );
+}
+
+/// The field, spec kind and reason of a refused metadata edit.
+fn refusal(
+    result: &Result<(), MetadataError>,
+) -> Option<(&str, MetadataTarget, MetadataEditReason)> {
+    match result {
+        Err(MetadataError::Field(error)) => Some((&error.field, error.target, error.reason)),
+        _ => None,
+    }
 }

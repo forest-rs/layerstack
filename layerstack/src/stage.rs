@@ -159,6 +159,7 @@ impl Resolved<ResolvedValue> {
 ///
 /// Spec: AOUSD Core §12 (value resolution), including §12.4 for `ListOps`.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum ResolvedValue {
     /// A scalar value (strongest wins).
     Scalar(Value),

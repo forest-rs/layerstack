@@ -949,6 +949,7 @@ pub trait ReferenceResolver {
 /// A complete expression [`PathExpression::resolve_complete`] resolved,
 /// with what it read.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct ResolvedExpression<K> {
     /// The expression with every reference resolved.
     pub expression: PathExpression,

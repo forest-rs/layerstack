@@ -24,6 +24,7 @@ use crate::{
 /// The outcome of [`Stage::verify_flattened`]: what was compared, and every
 /// difference found.
 #[derive(Clone, Debug, Default, PartialEq)]
+#[non_exhaustive]
 pub struct FlattenVerification {
     /// What was compared.
     pub scope: VerifiedScope,
@@ -61,6 +62,7 @@ impl FlattenVerification {
 /// `1e-9`, relative to their size, since the spline is evaluated at mapped
 /// times.
 #[derive(Clone, Debug, Default, PartialEq)]
+#[non_exhaustive]
 pub struct VerifiedScope {
     /// Prims compared.
     pub prims: usize,
@@ -82,6 +84,7 @@ pub struct VerifiedScope {
 
 /// Something [`Stage::verify_flattened`] did not compare.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct Skipped {
     /// The composed prim or property.
     pub path: ObjectPath,
@@ -91,6 +94,7 @@ pub struct Skipped {
 
 /// Why [`Stage::verify_flattened`] did not compare something.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum SkipReason {
     /// The report records it as lost, so the flattened layer does not hold
     /// it; its values and metadata are not compared.
@@ -99,6 +103,7 @@ pub enum SkipReason {
 
 /// A difference between the stage and the flattened stage.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct Mismatch {
     /// The composed prim or property.
     pub path: ObjectPath,
@@ -112,6 +117,7 @@ pub struct Mismatch {
 
 /// What a [`Mismatch`] is about.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum MismatchKind {
     /// A prim the stage composes and the flattened stage does not, or the
     /// reverse.

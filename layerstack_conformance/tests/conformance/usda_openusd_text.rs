@@ -349,12 +349,14 @@ fn unresolved_sublayers_are_reported_by_both_readers() {
         store.mark_asset_missing(root, "./missing.usda");
         let stage = Stage::compose(&mut store, root, StageOptions::default());
         assert!(stage.asset_requests().is_empty(), "{format}");
+        let [CompositionError::UnresolvedSublayer(UnresolvedSublayer { layer, asset, .. })] =
+            stage.composition_errors()
+        else {
+            panic!("{format}: {:?}", stage.composition_errors());
+        };
         assert_eq!(
-            stage.composition_errors(),
-            [CompositionError::UnresolvedSublayer(UnresolvedSublayer {
-                layer: root,
-                asset: "./missing.usda".into(),
-            })],
+            (*layer, asset.as_str()),
+            (root, "./missing.usda"),
             "{format}"
         );
         for prim in ["/Root", "/Weak"] {

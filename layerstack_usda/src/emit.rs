@@ -2365,6 +2365,7 @@ fn field_list_op_repeats(value: &FieldValue) -> bool {
         FieldValue::PathListOp(op) => repeats(op),
         // Text OpenUSD keeps unchecked.
         FieldValue::UnregisteredListOp(_) | FieldValue::Value(_) => false,
+        _ => false,
     }
 }
 
@@ -2381,6 +2382,7 @@ fn field_list_op_is_empty(value: &FieldValue) -> bool {
         // A `None` statement, which OpenUSD takes here (an empty list is
         // refused as it is read).
         FieldValue::UnregisteredListOp(_) | FieldValue::Value(_) => false,
+        _ => false,
     }
 }
 

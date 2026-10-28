@@ -38,6 +38,7 @@ use alloc::{
 
 /// The authored role of an external identifier.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[non_exhaustive]
 pub enum AssetDependencyKind {
     /// Sublayer include.
     Sublayer,
@@ -59,6 +60,7 @@ pub enum AssetDependencyKind {
 /// Repeated identical uses in one field are coalesced; different specs and roles
 /// remain separate. Handles belong to the supplied store's interners.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[non_exhaustive]
 pub struct AssetDependency {
     /// Layer that authors this identifier.
     pub layer: LayerId,
@@ -99,6 +101,7 @@ pub struct ResolvedDependency {
 
 /// Recursive inventory without implicit I/O or resolver policy.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct DependencyReport {
     /// Loaded layers visited once, sorted by identifier.
     pub layers: Vec<LayerId>,

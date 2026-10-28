@@ -92,6 +92,7 @@ pub struct ExpressionAssetPath {
 /// [`InMemoryStore::insert_asset_layer`]: crate::InMemoryStore::insert_asset_layer
 /// [`InMemoryStore::mark_asset_missing`]: crate::InMemoryStore::mark_asset_missing
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct AssetRequest {
     /// The layer that authors the arc or sublayer, which a relative path is
     /// anchored to.
@@ -117,6 +118,7 @@ pub struct AssetRequest {
 /// A layer a stack reads only through a pending layer, such as a sublayer
 /// of one, is not known yet, and may be pending in turn.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct PendingPrim {
     /// The prim, or the pseudo-root when the stage's own layer stack reads
     /// a pending layer and no prim is composed.
@@ -332,6 +334,7 @@ pub struct ResolvedAsset {
 ///
 /// Spec: AOUSD Core §9.2 (asset identifiers), §9.5 (search path failure).
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum AssetResolveError {
     /// The asset path could not be found after exhausting all search paths
     /// and extension probing.

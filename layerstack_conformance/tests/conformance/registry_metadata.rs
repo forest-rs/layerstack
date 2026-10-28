@@ -156,6 +156,7 @@ pub(crate) fn encode(value: &FieldValue, tokens: &TokenInterner) -> Json {
         FieldValue::UInt64ListOp(op) => list(op, |v| json!(v)),
         FieldValue::UnregisteredListOp(op) => list(op, |s| json!(&**s)),
         FieldValue::PathListOp(_) => panic!("no metadata field holds paths"),
+        other => panic!("no encoding for {other:?}"),
     }
 }
 

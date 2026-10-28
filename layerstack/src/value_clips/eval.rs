@@ -15,6 +15,7 @@ pub(super) const CLIP_SAFE_STEP: f64 = f64::EPSILON * 1e6 * 10. * 2.;
 
 /// A schedule or property which cannot be evaluated coherently.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ClipEvalError {
     /// At least one activation and one asset slot are required.
     EmptySchedule,

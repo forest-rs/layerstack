@@ -32,6 +32,7 @@ use crate::{
 ///
 /// Spec: AOUSD Core §7.6.2 (prim spec fields).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum PrimField {
     /// `specifier`: `def`, `over` or `class`.
     Specifier,

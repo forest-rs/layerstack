@@ -240,13 +240,16 @@ fn binding_strength_through_property_metadata() {
         stronger.clone(),
     )
     .unwrap();
-    assert_eq!(
-        api.write_property_metadata(&mut edit, "doubleSided", "bindMaterialAs", stronger),
-        Err(MetadataError::Field(layerstack::MetadataEditError {
-            field: "bindMaterialAs".into(),
-            target: layerstack::MetadataTarget::Attribute,
-            reason: layerstack::MetadataEditReason::NotForSpec,
-        }))
+    let refused = api.write_property_metadata(&mut edit, "doubleSided", "bindMaterialAs", stronger);
+    assert!(
+        matches!(
+            &refused,
+            Err(MetadataError::Field(error))
+                if &*error.field == "bindMaterialAs"
+                    && error.target == layerstack::MetadataTarget::Attribute
+                    && error.reason == layerstack::MetadataEditReason::NotForSpec
+        ),
+        "{refused:?}"
     );
     let transaction = edit.finish();
     live.apply(&mut store, &transaction).unwrap();

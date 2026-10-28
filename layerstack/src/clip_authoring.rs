@@ -52,6 +52,7 @@ pub struct ClipBundleOptions {
 }
 /// Complete detached descriptions ready for host export and publication.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct ClipBundle {
     /// Root containing clip metadata, timeline bounds and topology sublayer.
     pub root: Layer,
@@ -64,6 +65,7 @@ pub struct ClipBundle {
 }
 /// Why a clip authoring operation cannot form a coherent interchange record.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum ClipAuthoringError {
     /// No clip sources were supplied for a sequence bundle.
     EmptySequence,

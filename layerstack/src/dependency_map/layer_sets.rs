@@ -13,6 +13,7 @@ use hashbrown::{HashMap, HashSet};
 /// Physical sharing of retained prim-to-layer contributor sets.
 /// Counts exclude reverse indexes, arc topology, cache keys and allocator overhead.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct LayerDependencyStorage {
     /// Number of prims with recorded layer dependencies.
     pub prims: usize,

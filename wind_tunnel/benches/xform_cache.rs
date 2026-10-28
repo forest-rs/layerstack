@@ -83,10 +83,8 @@ fn bench(c: &mut Criterion) {
             ("leaf_resync_report_query", leaf, false),
             ("root_resync_report_requery_all", root, true),
         ] {
-            let changes = layerstack::Changes {
-                resynced: vec![root],
-                ..layerstack::Changes::default()
-            };
+            let mut changes = layerstack::Changes::default();
+            changes.resynced = vec![root];
             group.bench_with_input(BenchmarkId::new(label, n), &n, |b, _| {
                 b.iter(|| {
                     reported.apply_changes(&scene, &changes);

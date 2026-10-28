@@ -23,6 +23,7 @@ impl ChangeCursor {
 
 /// Why incremental evidence cannot be replayed for an observer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ChangeHistoryError {
     /// Required evidence was evicted or exceeded the budget. Rebuild derived state.
     Expired,
@@ -43,6 +44,7 @@ pub struct ChangeSubscription {
 
 /// A fully updated composed scene and the evidence for this change batch.
 #[derive(Clone, Copy)]
+#[non_exhaustive]
 pub struct ChangeNotice<'a> {
     /// Stage after the completed update.
     pub stage: &'a Stage,

@@ -198,6 +198,7 @@ impl PayloadLoadRules {
 
 /// An invalid atomic layer-muting request. No control changes are applied.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum LayerMuteError {
     /// The stage's root layer cannot be muted.
     RootLayer,

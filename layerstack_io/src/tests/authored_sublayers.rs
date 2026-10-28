@@ -116,9 +116,9 @@ fn composed(doc: &StageDocument<Memory>) -> Composed {
         unresolved_sublayers: errors
             .iter()
             .filter_map(|error| match error {
-                CompositionError::UnresolvedSublayer(UnresolvedSublayer { layer, asset }) => {
-                    Some((layer_name(doc, *layer), asset.clone()))
-                }
+                CompositionError::UnresolvedSublayer(UnresolvedSublayer {
+                    layer, asset, ..
+                }) => Some((layer_name(doc, *layer), asset.clone())),
                 _ => None,
             })
             .collect(),

@@ -20,6 +20,7 @@ use crate::{
 /// [`EditError::display`] writes it in words, its paths, names and slots
 /// as text; its `Display` writes the same with ids, having no store.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum EditError {
     /// `layer` is not at the generation the transaction expects: it was
     /// edited after the transaction was prepared.
@@ -77,6 +78,7 @@ pub enum EditError {
 
 /// A slot of a spec that a precondition checks.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum Slot {
     /// Whether the spec exists, and for a property spec its whole content.
     Spec,
@@ -104,6 +106,7 @@ pub enum Slot {
 
 /// Why one edit of a transaction cannot be applied.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum Rejection {
     /// No layer with this id is in the store.
     NoSuchLayer(LayerId),

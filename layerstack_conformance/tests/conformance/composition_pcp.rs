@@ -355,17 +355,21 @@ fn error_sublayer_cycle_root_layer_stack_matches() {
             .unwrap_or_else(|| panic!("layer {name}"))
             .0
     };
+    let cycles: Vec<_> = stage
+        .composition_errors()
+        .iter()
+        .map(|error| match error {
+            CompositionError::SublayerCycle(SublayerCycle {
+                layer, sublayer, ..
+            }) => (*layer, *sublayer),
+            other => panic!("not a sublayer cycle: {other:?}"),
+        })
+        .collect();
     assert_eq!(
-        stage.composition_errors(),
+        cycles,
         [
-            CompositionError::SublayerCycle(SublayerCycle {
-                layer: layer("B.usd"),
-                sublayer: layer("A.usd"),
-            }),
-            CompositionError::SublayerCycle(SublayerCycle {
-                layer: layer("A.usd"),
-                sublayer: layer("B.usd"),
-            }),
+            (layer("B.usd"), layer("A.usd")),
+            (layer("A.usd"), layer("B.usd")),
         ]
     );
 }

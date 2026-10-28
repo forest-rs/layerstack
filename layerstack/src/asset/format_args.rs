@@ -23,6 +23,7 @@ pub struct FormatArgs(BTreeMap<String, String>);
 
 /// An asset path whose format arguments do not parse.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct FormatArgsError {
     /// The asset path.
     pub asset: String,

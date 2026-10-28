@@ -70,6 +70,7 @@ use crate::{
 /// [`Prim::metadata`](crate::Prim::metadata),
 /// [`Property::metadata`](crate::Property::metadata)).
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct ValueExplanation<'s, T> {
     /// The resolved value; `None` when the query resolves no value.
     pub value: Option<T>,
@@ -172,6 +173,7 @@ pub enum ValueSource {
 /// Two explained opinions are equal when they name the same opinion value,
 /// the same graph node (by identity), and play the same part.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct ExplainedOpinion<'s> {
     /// The opinion with its source: its layer, spec path and composition
     /// node, the layer offset its arcs apply
@@ -263,6 +265,7 @@ pub enum OpinionRole {
 
 /// What a contributing opinion contributed.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum Contribution {
     /// A dense value: the strongest value wins, or the base that stronger
     /// sparse array edits compose over.
@@ -301,6 +304,7 @@ pub type KeyPath = Vec<Arc<str>>;
 
 /// Why a consulted opinion did not contribute.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum IgnoreCause {
     /// A stronger opinion ended the fold first: a dense value, a sample that
     /// does not compose, or a value of another kind.

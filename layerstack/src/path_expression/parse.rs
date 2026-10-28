@@ -20,6 +20,7 @@ use super::{
 
 /// Why path expression text did not parse.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ParseError {
     /// The byte offset where parsing failed.
     pub offset: usize,

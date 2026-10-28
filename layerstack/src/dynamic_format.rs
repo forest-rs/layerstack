@@ -316,6 +316,7 @@ impl<'a> DynamicFormatContext<'a> {
 
 /// Why a [`DynamicFileFormat`] could not be registered.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum DynamicFormatRegistrationError {
     /// The format claims no extension.
     NoExtensions {

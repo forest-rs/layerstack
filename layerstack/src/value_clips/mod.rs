@@ -47,6 +47,7 @@ pub enum ClipAssetRole {
 }
 /// Why an asset is unavailable to preparation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[non_exhaustive]
 pub enum ClipAssetUnavailable {
     /// The host confirmed that it does not exist.
     Missing,
@@ -65,6 +66,7 @@ pub enum ClipAssetStatus {
 }
 /// An inspectable clip asset use, anchored to the metadata's authoring layer.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[non_exhaustive]
 pub struct ClipAssetRequest {
     /// Composed prim that owns this independent clip definition.
     pub owner: PathId,
@@ -83,6 +85,7 @@ pub struct ClipAssetRequest {
 }
 /// A recoverable preparation limitation or malformed definition.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[non_exhaustive]
 pub enum ClipIssueKind {
     /// Missing or incompatible clip metadata.
     InvalidMetadata(&'static str),
@@ -97,6 +100,7 @@ pub enum ClipIssueKind {
 }
 /// Structured preparation diagnostic; other independent sets remain usable.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[non_exhaustive]
 pub struct ClipIssue {
     /// Composed owner of the clip set.
     pub owner: PathId,
@@ -116,6 +120,7 @@ pub(crate) struct FlattenClip {
 }
 /// Actual source of one bracketing clip sample.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct ClipSampleSource {
     /// Raw clip layer, or manifest layer for its fallback; absent for a gap or
     /// an automatically generated manifest.
@@ -139,6 +144,7 @@ pub enum ClipValueMode {
 }
 /// Clip resolution evidence, owned independently of query scratch storage.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct ClipValueSource {
     /// Representation selected by the manifest declaration.
     pub mode: ClipValueMode,

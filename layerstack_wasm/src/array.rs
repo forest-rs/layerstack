@@ -93,6 +93,7 @@ pub(crate) fn numeric(array: &TypedArray) -> Option<(Layout, Bytes)> {
         TypedArray::Vec3i(items) => of("int3[]", "i32", 3, items),
         TypedArray::Vec4i(items) => of("int4[]", "i32", 4, items),
         TypedArray::Token(_) | TypedArray::String(_) | TypedArray::Deferred(_) => return None,
+        _ => return None,
     })
 }
 
@@ -141,6 +142,7 @@ pub(crate) fn input_data(array: &TypedArray) -> Option<InputData> {
         TypedArray::Vec3i(items) => widened(items.as_flattened()),
         TypedArray::Vec4i(items) => widened(items.as_flattened()),
         TypedArray::Token(_) | TypedArray::String(_) | TypedArray::Deferred(_) => return None,
+        _ => return None,
     })
 }
 

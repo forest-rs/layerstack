@@ -158,6 +158,7 @@ impl fmt::Display for Requirement {
 
 /// A requirement a flatten could not meet, with the finding that breaks it.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct UnmetRequirement {
     /// The requirement.
     pub requirement: Requirement,
@@ -173,6 +174,7 @@ impl fmt::Display for UnmetRequirement {
 
 /// Why a composed stage was not flattened.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum FlattenError {
     /// The root layer is not in the store.
     MissingRootLayer(LayerId),
@@ -183,6 +185,7 @@ pub enum FlattenError {
 /// A refused flatten: every requirement it could not meet, and the report
 /// of everything it found.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct FlattenRefusal {
     /// Every unmet requirement, in the order the stage was traversed.
     pub unmet: Vec<UnmetRequirement>,
@@ -221,6 +224,7 @@ impl core::error::Error for FlattenError {}
 /// or an asset the flattened layer still depends on. Paths are composed
 /// stage paths as text, so a report means the same thing to any store.
 #[derive(Clone, Debug, Default, PartialEq)]
+#[non_exhaustive]
 pub struct FlattenReport {
     /// What was written exactly as composed.
     pub preserved: Preserved,
@@ -283,6 +287,7 @@ impl FlattenReport {
 /// opinion authors them; each one written otherwise is covered by a
 /// finding instead.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct Preserved {
     /// Prim specs written: the pseudo-root, every composed prim and every
     /// prototype.
@@ -305,6 +310,7 @@ pub struct Preserved {
 /// A composed prim, or a property of one, by path: text that means the
 /// same thing in any store.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[non_exhaustive]
 pub struct ObjectPath {
     /// The composed prim path (`/World/Tree`), `/` for the layer itself.
     pub prim: String,
@@ -340,6 +346,7 @@ impl fmt::Display for ObjectPath {
 
 /// One thing a flatten did not write exactly as authored.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct Finding {
     /// The composed prim or property it concerns.
     pub path: ObjectPath,
@@ -361,6 +368,7 @@ impl fmt::Display for Finding {
 
 /// The opinion behind a [`Finding`].
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct FindingSource {
     /// The layer that authors it, as the store the stage was composed from
     /// identifies it. The resolver that loaded the layer names it
@@ -372,6 +380,7 @@ pub struct FindingSource {
 
 /// The kinds of [`Finding`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum FindingCategory {
     /// Written differently from how it was authored, on purpose, with the
     /// same composed meaning.
@@ -384,6 +393,7 @@ pub enum FindingCategory {
 
 /// What a [`Finding`] records.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum FindingKind {
     /// A deliberate transformation.
     Transformed(Transformation),
@@ -418,6 +428,7 @@ impl fmt::Display for FindingKind {
 /// A deliberate transformation: the flattened layer authors something
 /// differently, and composes it the same.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum Transformation {
     /// Resident discrete clip values written into composed time samples.
     /// OpenUSD `UsdStage::_TimeSampleMapResolver::ProcessClips`.
@@ -553,6 +564,7 @@ impl fmt::Display for Transformation {
 
 /// Composed content a flattened layer does not hold.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Loss {
     /// A spline read through a layer offset whose scale is not positive,
     /// which would reverse it.
@@ -596,6 +608,7 @@ impl fmt::Display for Loss {
 
 /// Something outside the flattened layer that it refers to.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ExternalDependency {
     /// An asset path value, as written.
     AssetPath(String),

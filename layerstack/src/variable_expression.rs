@@ -178,6 +178,7 @@ impl ExpressionVariables {
 
 /// The result of evaluating a [`VariableExpression`].
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct Evaluation {
     /// The value, or `None` when the expression yields no value or an
     /// error occurred.

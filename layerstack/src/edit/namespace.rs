@@ -78,6 +78,7 @@ pub struct NamespaceEdit {
 /// Why a namespace move or delete cannot be prepared. No layer has been
 /// modified.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum NamespaceError {
     /// Paths must be distinct non-root prims, or distinct properties.
     InvalidPaths,

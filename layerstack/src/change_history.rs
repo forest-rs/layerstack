@@ -29,6 +29,7 @@ impl Default for ChangeHistoryBudget {
 
 /// Retained evidence memory and cumulative retention work, not whole-stage memory.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ChangeHistoryStats {
     /// Batches currently available for replay.
     pub retained_batches: usize,

@@ -86,6 +86,7 @@ fn kind_name(kind: DanglingKind) -> &'static str {
         DanglingKind::Inactive => "inactive",
         DanglingKind::Unloaded => "unloaded",
         DanglingKind::Masked => "masked",
+        kind => panic!("no name for {kind:?}"),
     }
 }
 
@@ -270,15 +271,16 @@ fn fixture_covers_every_kind() {
     let report = DanglingReport::compute(&Scene::new(&stage, &loaded.store), 0);
     let total = report.targets.total();
     assert_eq!(
-        total,
-        DanglingCounts {
-            no_prim: 32,
-            no_property: 20,
-            inactive: 23,
-            unloaded: 16,
-            masked: 0,
-        }
+        (
+            total.no_prim,
+            total.no_property,
+            total.inactive,
+            total.unloaded,
+            total.masked,
+        ),
+        (32, 20, 23, 16, 0)
     );
+    assert_eq!(total.total(), 32 + 20 + 23 + 16);
     let relationships: usize = report
         .targets
         .relationships
@@ -357,13 +359,14 @@ fn library_dangling_knob() {
     };
     let stage = Stage::compose(&mut loaded.store, loaded.root_layer, options);
     let report = DanglingReport::compute(&Scene::new(&stage, &loaded.store), 1);
+    let total = report.targets.total();
     assert_eq!(
-        report.targets.total(),
-        DanglingCounts {
-            no_prim: counts.dangling_prims + counts.dangling_collection_paths,
-            no_property: counts.dangling_properties,
-            ..DanglingCounts::default()
-        }
+        (total.no_prim, total.no_property, total.total()),
+        (
+            counts.dangling_prims + counts.dangling_collection_paths,
+            counts.dangling_properties,
+            counts.dangling_prims + counts.dangling_collection_paths + counts.dangling_properties,
+        )
     );
     let by_collection: usize = report.collections.iter().map(|c| c.total()).sum();
     assert_eq!(by_collection, counts.dangling_collection_paths);

@@ -479,14 +479,19 @@ fn edit_results_name_the_assets_a_transaction_asks_for() {
     edit.add_payload(at.prim(a), payload("a.usda"), ListPosition::BackOfPrepend);
     let (store, stage) = doc.parts_mut();
     let applied = stage.apply(store, &edit).unwrap();
-    let asked = [layerstack::AssetRequest {
-        anchor: root,
-        asset_path: "a.usda".into(),
-        prim: a,
-        arc: ArcKind::Payloads,
-    }];
-    assert_eq!(applied.asset_requests, asked);
-    assert_eq!(doc.stage.stage().asset_requests(), asked);
+    let asked = |requests: &[layerstack::AssetRequest]| {
+        let [request] = requests else {
+            return false;
+        };
+        (
+            request.anchor,
+            request.asset_path.as_str(),
+            request.prim,
+            request.arc,
+        ) == (root, "a.usda", a, ArcKind::Payloads)
+    };
+    assert!(asked(&applied.asset_requests));
+    assert!(asked(doc.stage.stage().asset_requests()));
     assert!(!read(&doc, "a.usda"));
 
     // A request pending before an edit is not reported again.

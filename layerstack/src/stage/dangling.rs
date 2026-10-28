@@ -40,6 +40,7 @@ use crate::{LayerStore, PathInterner, PropertyKind, PropertyPath, TargetPath, To
 /// OpenUSD, a name each stage chooses when it opens), so a path into one
 /// is [`Self::NoPrim`] here.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum DanglingKind {
     /// No prim at the path, or at the prim path of a property path, and no
     /// inactive prim, unloaded payload or population mask above it to
@@ -74,6 +75,7 @@ pub enum DanglingKind {
 
 /// Dangling targets counted by [`DanglingKind`].
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct DanglingCounts {
     /// [`DanglingKind::NoPrim`].
     pub no_prim: usize,
@@ -121,6 +123,7 @@ impl DanglingCounts {
 
 /// One dangling target: the property that names it, and why it dangles.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct DanglingTarget {
     /// The relationship or attribute whose composed list names it.
     pub source: PropertyPath,
@@ -158,6 +161,7 @@ impl crate::diagnostic::Describe for DanglingTarget {
 
 /// The targets or connections of every property of one name.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct DanglingByName {
     /// The property name, on any prim.
     pub name: TokenId,
@@ -176,6 +180,7 @@ pub struct DanglingByName {
 /// Dangling relationship targets and attribute connections over a stage,
 /// by property name ([`Stage::dangling_targets`]).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct DanglingTargetReport {
     /// Relationships with at least one composed target, by name, in
     /// property-name order.

@@ -628,6 +628,7 @@ impl PathInterner {
 
 /// Errors that can occur when parsing a path.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum PathError {
     /// Path is not absolute (doesn't start with `/`).
     NotAbsolute,
@@ -656,6 +657,7 @@ impl core::error::Error for PathError {}
 
 /// Errors that can occur when parsing a [`PropertyPath`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum PropertyPathError {
     /// Path is not absolute (doesn't start with `/`).
     NotAbsolute,
@@ -699,6 +701,7 @@ impl core::error::Error for PropertyPathError {}
 
 /// Errors that can occur when parsing a [`TargetPath`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum TargetPathError {
     /// The input was parsed as a prim target path and was invalid.
     Prim(PathError),

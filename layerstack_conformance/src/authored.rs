@@ -116,6 +116,7 @@ pub fn render_field(value: &FieldValue, names: Names<'_>) -> String {
         FieldValue::UnregisteredListOp(list) => {
             render_list(list, |s| format!("Unregistered({s:?})"))
         }
+        other => format!("{other:?}"),
     }
 }
 

@@ -480,6 +480,7 @@ pub(crate) fn order_errors(
 /// [`Layer::default_prim_path`]: crate::Layer::default_prim_path
 /// [`LiveStage::notify_default_prim_edit`]: crate::LiveStage::notify_default_prim_edit
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct UnresolvedDefaultPrim {
     /// The composed prim whose composition reached the arc.
     pub prim: PathId,
@@ -517,6 +518,7 @@ pub struct UnresolvedDefaultPrim {
 /// source independently of the composed occurrence. Diagnostics own that
 /// spec and implement `Clone`; clone retained diagnostics explicitly.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct UnresolvedPrimPath {
     /// The composed prim whose composition reached the arc.
     pub prim: PathId,
@@ -554,6 +556,7 @@ pub struct UnresolvedPrimPath {
 /// defining cycles; this follows OpenUSD, which reports them as
 /// `PcpErrorArcCycle` (`_CheckForCycle` in `pxr/usd/pcp/primIndex.cpp`).
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct ArcCycle {
     /// The composed prim whose composition reached the arc.
     pub prim: PathId,
@@ -567,6 +570,7 @@ pub struct ArcCycle {
 
 /// One site on the chain of arcs of an [`ArcCycle`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct ArcCycleSite {
     /// The root layer of the layer stack holding the site.
     pub layer_stack: LayerId,
@@ -588,6 +592,7 @@ pub struct ArcCycleSite {
 /// composition error and is ignored). OpenUSD reports this as
 /// `PcpErrorSublayerCycle` (`pxr/usd/pcp/errors.h`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct SublayerCycle {
     /// The layer whose `subLayers` names `sublayer`.
     pub layer: LayerId,
@@ -613,6 +618,7 @@ pub struct SublayerCycle {
 ///
 /// [`Reference::unresolved`]: crate::Reference::unresolved
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct UnresolvedAsset {
     /// The composed prim whose composition reached the arc.
     pub prim: PathId,
@@ -652,6 +658,7 @@ pub struct UnresolvedAsset {
 ///
 /// [`SublayerEntry::unresolved`]: crate::SublayerEntry::unresolved
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct UnresolvedSublayer {
     /// The layer whose `subLayers` names the sublayer.
     pub layer: LayerId,
@@ -672,6 +679,7 @@ pub struct UnresolvedSublayer {
 ///
 /// [`Layer::unpaired_sublayer_offsets`]: crate::Layer::unpaired_sublayer_offsets
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct InvalidSublayerAndOffsetCount {
     /// The layer whose sublayers and offsets do not pair.
     pub layer: LayerId,
@@ -691,6 +699,7 @@ pub struct InvalidSublayerAndOffsetCount {
 /// `PcpErrorInvalidAuthoredRelocation` (`Pcp_IsValidRelocatesEntry` in
 /// `pxr/usd/pcp/layerStack.cpp`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct InvalidAuthoredRelocation {
     /// The layer whose `layerRelocates` authors the entry.
     pub layer: LayerId,
@@ -705,6 +714,7 @@ pub struct InvalidAuthoredRelocation {
 /// Why a `layerRelocates` entry is invalid on its own (see
 /// [`InvalidAuthoredRelocation`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum InvalidRelocationReason {
     /// The source is a root prim, whose parent, the pseudo-root, authors no
     /// arcs.
@@ -728,6 +738,7 @@ pub enum InvalidRelocationReason {
 /// (`_ValidateAndRemoveConflictingRelocates` in
 /// `pxr/usd/pcp/layerStack.cpp`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct InvalidConflictingRelocation {
     /// The layer whose `layerRelocates` authors the ignored entry.
     pub layer: LayerId,
@@ -748,6 +759,7 @@ pub struct InvalidConflictingRelocation {
 /// How two `layerRelocates` entries conflict (see
 /// [`InvalidConflictingRelocation`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[non_exhaustive]
 pub enum RelocationConflict {
     /// The entry's target is the other entry's source.
     TargetIsConflictSource,
@@ -769,6 +781,7 @@ pub enum RelocationConflict {
 /// source path"). OpenUSD reports it as
 /// `PcpErrorInvalidSameTargetRelocations`.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct InvalidSameTargetRelocations {
     /// The shared target path.
     pub target: PathId,
@@ -792,6 +805,7 @@ pub struct InvalidSameTargetRelocations {
 /// it as `PcpErrorOpinionAtRelocationSource` (`_EvalNodeRelocations` in
 /// `pxr/usd/pcp/primIndex.cpp`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct OpinionAtRelocationSource {
     /// The composed prim the relocation moves the source to.
     pub prim: PathId,
@@ -813,6 +827,7 @@ pub struct OpinionAtRelocationSource {
 /// ignored). OpenUSD reports it as `PcpErrorArcToProhibitedChild`
 /// (`_ComposeIsProhibitedPrimChild` in `pxr/usd/pcp/primIndex.cpp`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct ArcToProhibitedChild {
     /// The composed prim whose composition reached the arc.
     pub prim: PathId,
@@ -841,6 +856,7 @@ pub struct ArcToProhibitedChild {
 /// (`PcpPropertyIndex`'s `_GetPrimProperty` in
 /// `pxr/usd/pcp/propertyIndex.cpp`).
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct InconsistentPropertyType {
     /// The composed prim that owns the property.
     pub prim: PathId,
@@ -878,6 +894,7 @@ pub struct InconsistentPropertyType {
 /// is `PcpMapFunction`, with the root identity added for internal and class
 /// arcs in `pxr/usd/pcp/primIndex.cpp`).
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct InvalidExternalTargetPath {
     /// The composed prim that owns the property.
     pub prim: PathId,
@@ -908,6 +925,7 @@ pub struct InvalidExternalTargetPath {
 /// `PcpErrorInvalidInstanceTargetPath` and ignores the path
 /// (`_TargetInClassAndTargetsInstance` in `pxr/usd/pcp/targetIndex.cpp`).
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct InvalidInstanceTargetPath {
     /// The composed prim that owns the property.
     pub prim: PathId,
@@ -952,6 +970,7 @@ pub enum ExpressionContext {
 /// `pxr/usd/pcp/utils.cpp`), with the context `sublayer`, `reference`,
 /// `payload` or `variant`.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct VariableExpressionError {
     /// The composed prim whose composition reached the expression, or
     /// `None` for a sublayer asset path, found gathering a layer stack.

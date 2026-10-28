@@ -9,6 +9,7 @@ use super::*;
 /// Counts exclude dependency traversal and prototype regrouping; these are
 /// work evidence, not a total CPU estimate.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct RecompositionWork {
     /// Prim indexes constructed, including supporting ancestors and retries.
     pub composed_prim_indexes: usize,

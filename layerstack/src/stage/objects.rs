@@ -1261,6 +1261,7 @@ impl Relationship<'_> {
 }
 /// Work performed by one retained query, independent of stage counters.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct AttributeQueryWork {
     /// Uncached evaluations, including absence, failures and schema fallbacks.
     pub evaluations: u64,

@@ -39,17 +39,15 @@ fn bench(c: &mut Criterion) {
         black_box(xforms.local_to_world(&scene, path));
     }
     black_box(bounds.world_bound(&scene, root).unwrap());
-    let changes = Changes {
-        changed_info_only: vec![root],
-        property_changes: vec![PrimPropertyChanges {
-            prim: root,
-            fields: vec![PropertyChange {
-                name: roughness,
-                field: PropertyField::Default,
-            }],
+    let mut changes = Changes::default();
+    changes.changed_info_only = vec![root];
+    changes.property_changes = vec![PrimPropertyChanges {
+        prim: root,
+        fields: vec![PropertyChange {
+            name: roughness,
+            field: PropertyField::Default,
         }],
-        ..Changes::default()
-    };
+    }];
     c.bench_function("unrelated_property/xform_leaf", |b| {
         b.iter(|| {
             xforms.apply_changes(&scene, &changes);

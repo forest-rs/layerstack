@@ -74,6 +74,7 @@ impl SchemaDeclaration {
 
 /// Why [`read_generated_schema`] could not read a declared schema.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum GeneratedSchemaError {
     /// The layer has no root prim named for the declared schema.
     MissingSchema {

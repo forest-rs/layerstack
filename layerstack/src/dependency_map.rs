@@ -35,6 +35,7 @@ use crate::live_stage::OPINION_EDIT;
 /// Direction: source was composed into target. "If source changes,
 /// target may need recomposition."
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct ArcDependency {
     /// The prim that authored the arc (or the arc target, for inherits).
     pub source: PathId,

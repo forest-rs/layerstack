@@ -140,6 +140,7 @@ impl ArgValue {
 
 /// Why a predicate library did not bind a call.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct PredicateBindError {
     /// The function's name.
     pub name: String,

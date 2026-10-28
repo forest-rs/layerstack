@@ -19,6 +19,7 @@ use core::hash::Hash;
 
 /// Work requiring attention while combining authored descriptions.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct StitchReport {
     /// List-op pairs requiring OpenUSD's historical approximation: convert
     /// `add` to `append` and discard `reorder` before composition.
@@ -28,6 +29,7 @@ pub struct StitchReport {
 }
 /// An input which cannot be stitched into a coherent authored spec.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum StitchError {
     /// Attribute and relationship specs cannot occupy the same property path.
     PropertyKindMismatch,

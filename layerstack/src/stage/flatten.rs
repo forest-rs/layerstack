@@ -117,6 +117,7 @@ use crate::{
 
 /// A flattened stage: the layer, and the report of how it was written.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct Flattened {
     /// The flattened layer, with no composition arcs.
     pub layer: Layer,

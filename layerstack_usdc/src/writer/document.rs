@@ -527,8 +527,11 @@ fn attribute_value(declared: Declared, value: &mut UsdaValue) -> Value {
 
 fn lower_relationship(relationship: &mut Relationship, prim: &str) -> Result<Spec, UsdcWriteError> {
     let path = alloc::format!("{prim}.{}", relationship.name);
-    // A relationship's legacy `default` is an `SdfPath` value, which this
-    // writer does not encode.
+    // A relationship's legacy `default` is an `SdfPath` value, which no
+    // crate value type holds: OpenUSD 26.11 posts "Attempted to pack
+    // unsupported type 'SdfPath'" and writes an invalid value its reader
+    // refuses (`CrateFile::_PackValue`, `crateFile.cpp`), so the save
+    // refuses it before any output instead.
     if relationship.default.is_some() {
         return Err(UsdcWriteError::UnencodedField {
             path,

@@ -1,7 +1,7 @@
 # Copyright 2026 the LayerStack Authors
 # SPDX-License-Identifier: Apache-2.0 OR MIT
 """Records, call by call, what OpenUSD's USDC writer does with values the
-USDC writer of layerstack once refused, and what it reads back.
+USDC writer of layerstack once refused or refuses, and what it reads back.
 
 Usage: usdc_encodings_oracle.py [--check] [OUT_DIR]
 
@@ -37,6 +37,11 @@ same text as the source layer (`same_text`) and that text.
   `[/C]`, then `.d`), adding a target path's bracketed path before its
   parent (`CrateFile::_AddPath`), and reads them back with
   `SdfPath::AppendElementToken`.
+- `relationship_default`: a relationship's legacy `default`
+  (`rel r.default = </A/B>`), an `SdfPath` value. The crate has no type
+  for an `SdfPath` value: `CrateFile::_PackValue` posts "Attempted to
+  pack unsupported type 'SdfPath'" and writes an invalid value, which the
+  read refuses ("Attempted to unpack unsupported type").
 
 `--check` regenerates every file into a temporary directory and fails
 unless each matches the checked-in fixture.
@@ -87,6 +92,16 @@ def "B" (
     }
 )
 {
+}
+""",
+    "relationship_default": """#usda 1.0
+
+def "A"
+{
+    rel r
+    rel r.default = </A/B>
+    rel s = </A>
+    rel s.default = </C.x>
 }
 """,
     "relational_targets": usda_parity_oracle.CASES["read_relational_targets"][0],

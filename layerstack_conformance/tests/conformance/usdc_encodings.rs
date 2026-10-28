@@ -1,7 +1,8 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-//! Values the USDC writer once refused, saved as OpenUSD 26.11 saves them.
+//! Values the USDC writer once refused, saved as OpenUSD 26.11 saves them
+//! or refused where OpenUSD cannot save them.
 //!
 //! `scripts/usdc_encodings_oracle.py` records, for each case under
 //! `fixtures/usdc_encodings`, what OpenUSD does call by call: it opens the
@@ -10,7 +11,8 @@
 //! each case is read with [`read_usda`] and saved with [`save_usdc`]: an
 //! export OpenUSD accepts must give OpenUSD's file but for its LZ4 blocks
 //! ([`crate_sections`]), and both files must read back with [`read_usdc`]
-//! as the text OpenUSD reads back.
+//! as the text OpenUSD reads back; an export OpenUSD refuses must be
+//! refused before any output.
 //!
 //! Spec: AOUSD Core §16.3 (USDC), §7.4 (metadata); OpenUSD 26.11
 //! `pxr/usd/sdf/crateFile.cpp`.
@@ -22,6 +24,7 @@ use layerstack_conformance::usdc::crate_sections;
 use layerstack_conformance::workspace_root;
 use layerstack_usda::read_usda;
 use layerstack_usda::save::save_usda;
+use layerstack_usdc::writer::UsdcWriteError;
 use layerstack_usdc::{read_usdc, save_usdc};
 use serde_json::Value as Json;
 
@@ -45,7 +48,7 @@ fn oracle(case: &str) -> Json {
 }
 
 /// Saves `case`'s USDA source as USDC.
-fn save(case: &str) -> Result<Vec<u8>, layerstack_usdc::writer::UsdcWriteError> {
+fn save(case: &str) -> Result<Vec<u8>, UsdcWriteError> {
     let text = std::fs::read_to_string(fixtures().join(format!("{case}.usda"))).unwrap();
     let tokens = TokenInterner::default();
     let paths = PathInterner::default();
@@ -106,4 +109,30 @@ fn unregistered_list_ops_save_as_openusd_saves_them() {
 #[test]
 fn relational_targets_save_as_openusd_saves_them() {
     assert_saves_as_openusd("relational_targets");
+}
+
+/// A relationship's legacy `default` is an `SdfPath`, which OpenUSD packs
+/// as an invalid value and then fails to read; the save refuses it.
+#[test]
+fn relationship_defaults_are_refused_as_openusd_cannot_read_them() {
+    let record = oracle("relationship_default");
+    let export = &record["export_usdc"];
+    assert_eq!(export["accepted"], Json::Bool(false), "{export}");
+    let errors = export["errors"].as_array().unwrap();
+    assert!(
+        errors
+            .iter()
+            .all(|e| e.as_str().unwrap().contains("unsupported type 'SdfPath'")),
+        "{errors:?}"
+    );
+    assert_eq!(record["open_usdc"]["accepted"], Json::Bool(false));
+    assert!(
+        matches!(
+            save("relationship_default"),
+            Err(UsdcWriteError::UnencodedField { ref path, ref key })
+                if path == "/A.r" && key == "default"
+        ),
+        "{:?}",
+        save("relationship_default")
+    );
 }

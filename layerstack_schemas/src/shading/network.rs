@@ -12,7 +12,11 @@ use super::{
     ConnectedSources, MaterialSource, MaterialTerminal, PortKind, ShadingDependency, ShadingIssue,
     ValueSourceKind, ValueSources,
 };
-use crate::{PrimView, Scene, Time, assets::AssetReference, usd_shade::Material};
+use crate::{
+    PrimView, Scene, Time,
+    assets::AssetReference,
+    usd_shade::{Material, NodeDefApiImplementationSource},
+};
 use alloc::{
     collections::{BTreeMap, BTreeSet},
     string::{String, ToString},
@@ -94,6 +98,13 @@ pub struct MaterialPort {
     /// unavailable or failed decoding; inspect all evidence before choosing policy.
     pub constant: Option<MaterialConstant>,
 }
+/// Whether an `info:implementationSource` token selects the `info:id`
+/// implementation, as [`NodeDefApiImplementationSource::effective`] decides.
+fn implemented_by_id(token: Option<&str>) -> bool {
+    let authored = token.map(NodeDefApiImplementationSource::from_token);
+    NodeDefApiImplementationSource::effective(authored.as_ref())
+        == NodeDefApiImplementationSource::Id
+}
 /// One upstream prim, captured once even when reached through shared branches.
 #[derive(Clone, Debug, PartialEq)]
 pub struct MaterialNode {
@@ -117,6 +128,14 @@ pub struct MaterialNode {
     pub ports: Vec<MaterialPort>,
 }
 impl MaterialNode {
+    /// Whether OpenUSD resolves this node by its `info:id`: the composed
+    /// `info:implementationSource` is `id`, unauthored, or a token the
+    /// schema does not list, which C++ `UsdShadeNodeDefAPI::GetImplementationSource`
+    /// reads as `id` ([`NodeDefApiImplementationSource::effective`]).
+    #[must_use]
+    pub fn implemented_by_id(&self) -> bool {
+        implemented_by_id(self.implementation_source.as_deref())
+    }
     /// Captured input by base name, including an absent standard input's default.
     #[must_use]
     pub fn input(&self, name: &str) -> Option<&MaterialPort> {
@@ -438,7 +457,7 @@ impl MaterialNetwork {
                 .connectable_behavior(path)
                 .is_some_and(|b| b.is_container);
             let is_shader = scene.is_a(path, "Shader");
-            let defaults = if is_shader && implementation_source.as_deref() == Some("id") {
+            let defaults = if is_shader && implemented_by_id(implementation_source.as_deref()) {
                 defaults::inputs(identifier.as_deref().unwrap_or(""))
             } else {
                 Vec::new()

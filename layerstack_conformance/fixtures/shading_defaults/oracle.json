@@ -1,0 +1,99 @@
+{
+  "version": "26.11",
+  "nodes": [
+    {
+      "path": "/Unknown/Surface",
+      "authored": "bogus",
+      "effective": "id",
+      "shader_id": "UsdPreviewSurface"
+    },
+    {
+      "path": "/Unknown/Texture",
+      "authored": "elsewhere",
+      "effective": "id",
+      "shader_id": "UsdUVTexture"
+    },
+    {
+      "path": "/Plain/Surface",
+      "authored": "id",
+      "effective": "id",
+      "shader_id": "UsdPreviewSurface"
+    },
+    {
+      "path": "/Asset/Surface",
+      "authored": "sourceAsset",
+      "effective": "sourceAsset",
+      "shader_id": null
+    },
+    {
+      "path": "/Untyped",
+      "authored": null,
+      "effective": "id",
+      "shader_id": "UsdPreviewSurface"
+    }
+  ],
+  "surfaces": [
+    {
+      "material": "/Unknown",
+      "surface": "/Unknown/Surface"
+    },
+    {
+      "material": "/Plain",
+      "surface": "/Plain/Surface"
+    },
+    {
+      "material": "/Asset",
+      "surface": "/Asset/Surface"
+    }
+  ],
+  "connections": [
+    {
+      "destination": "/Mat/A.inputs:full",
+      "source": "/Mat/B.outputs:out",
+      "can_connect": true,
+      "connectability": "full"
+    },
+    {
+      "destination": "/Mat/A.inputs:empty",
+      "source": "/Mat/B.outputs:out",
+      "can_connect": true,
+      "connectability": "full"
+    },
+    {
+      "destination": "/Mat/A.inputs:empty",
+      "source": "/Mat.inputs:matIn",
+      "can_connect": true,
+      "connectability": "full"
+    },
+    {
+      "destination": "/Mat/A.inputs:empty",
+      "source": "/Mat.inputs:matEmpty",
+      "can_connect": true,
+      "connectability": "full"
+    },
+    {
+      "destination": "/Mat/A.inputs:bogus",
+      "source": "/Mat/B.outputs:out",
+      "can_connect": false,
+      "connectability": "bogus"
+    },
+    {
+      "destination": "/Mat/A.inputs:iface",
+      "source": "/Mat.inputs:matIface",
+      "can_connect": true,
+      "connectability": "interfaceOnly"
+    },
+    {
+      "destination": "/Mat/A.inputs:iface",
+      "source": "/Mat.inputs:matEmpty",
+      "can_connect": false,
+      "connectability": "interfaceOnly"
+    },
+    {
+      "destination": "/Mat/A.inputs:iface",
+      "source": "/Mat.inputs:matIn",
+      "can_connect": false,
+      "connectability": "interfaceOnly"
+    }
+  ]
+}

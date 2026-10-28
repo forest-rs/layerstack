@@ -253,7 +253,7 @@ impl PreviewSurfaceNetwork {
         let Some(node) = network.node(selected.output.prim_path()).filter(|n| {
             n.is_shader
                 && n.identifier.as_deref() == Some("UsdPreviewSurface")
-                && n.implementation_source.as_deref() == Some("id")
+                && n.implemented_by_id()
         }) else {
             result.issues.push(issue(
                 Some(selected.output.prim_path()),
@@ -460,7 +460,7 @@ fn expression(
     if chain.contains(&source_node.path) {
         return Err(issue(Some(source_node.path), None, PreviewIssueKind::Cycle));
     }
-    if !source_node.is_shader || source_node.implementation_source.as_deref() != Some("id") {
+    if !source_node.is_shader || !source_node.implemented_by_id() {
         return Err(issue(
             Some(source_node.path),
             None,

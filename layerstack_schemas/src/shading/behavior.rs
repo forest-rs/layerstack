@@ -30,7 +30,8 @@ pub enum ConnectionIssue {
     OutputNotConnectable,
     /// An interface-only input requires an interface-only input source.
     InterfaceOnly,
-    /// An input declares a connectability token other than full/interfaceOnly.
+    /// An input declares a non-empty connectability token other than
+    /// full/interfaceOnly (an empty one is `full`, as in C++).
     UnknownConnectability,
     /// Derived containers forbid output-to-input passthrough.
     PassthroughForbidden,
@@ -149,10 +150,13 @@ impl Scene<'_> {
             == Some(true);
         let source_input =
             super::shading_kind(self.store().tokens().resolve(source.property())) == Some(true);
+        // C++ `UsdShadeInput::GetConnectability`: an unauthored or empty
+        // `connectability` is `full`.
         let connectability = |path: PropertyPath| {
             PrimView::new(*self, path.prim_path())
                 .property_metadata(self.store().tokens().resolve(path.property()))
                 .and_then(|m| m.connectability())
+                .filter(|token| !token.is_empty())
                 .unwrap_or("full")
         };
         if input {

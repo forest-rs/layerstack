@@ -1,0 +1,85 @@
+#usda 1.0
+
+def Material "Unknown"
+{
+    token outputs:surface.connect = </Unknown/Surface.outputs:surface>
+
+    def Shader "Surface"
+    {
+        uniform token info:implementationSource = "bogus"
+        uniform token info:id = "UsdPreviewSurface"
+        color3f inputs:diffuseColor = (0.5, 0.25, 0.125)
+        color3f inputs:emissiveColor.connect = </Unknown/Texture.outputs:rgb>
+        token outputs:surface
+    }
+
+    def Shader "Texture"
+    {
+        uniform token info:implementationSource = "elsewhere"
+        uniform token info:id = "UsdUVTexture"
+        asset inputs:file = @tex.png@
+        float3 outputs:rgb
+    }
+}
+
+def Material "Plain"
+{
+    token outputs:surface.connect = </Plain/Surface.outputs:surface>
+
+    def Shader "Surface"
+    {
+        uniform token info:id = "UsdPreviewSurface"
+        color3f inputs:diffuseColor = (0.5, 0.25, 0.125)
+        token outputs:surface
+    }
+}
+
+def Material "Asset"
+{
+    token outputs:surface.connect = </Asset/Surface.outputs:surface>
+
+    def Shader "Surface"
+    {
+        uniform token info:implementationSource = "sourceAsset"
+        uniform token info:id = "UsdPreviewSurface"
+        uniform asset info:sourceAsset = @surface.osl@
+        token outputs:surface
+    }
+}
+
+def "Untyped"
+{
+    uniform token info:id = "UsdPreviewSurface"
+}
+
+def Material "Mat"
+{
+    float inputs:matIn = 1
+    float inputs:matIface (
+        connectability = "interfaceOnly"
+    )
+    float inputs:matEmpty (
+        connectability = ""
+    )
+    float outputs:surface
+
+    def Shader "A"
+    {
+        float inputs:full = 1
+        float inputs:empty = 1 (
+            connectability = ""
+        )
+        float inputs:bogus = 1 (
+            connectability = "bogus"
+        )
+        float inputs:iface (
+            connectability = "interfaceOnly"
+        )
+        float outputs:out
+    }
+
+    def Shader "B"
+    {
+        float outputs:out
+    }
+}

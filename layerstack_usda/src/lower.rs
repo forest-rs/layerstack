@@ -19,6 +19,7 @@ use crate::Span;
 use crate::ast::*;
 use crate::cst::{SyntaxKind, SyntaxNode, SyntaxTree};
 use crate::diagnostic::Diagnostic;
+use crate::writer::is_variant_selection;
 
 /// Lowers a CST into an AST, producing diagnostics for semantic errors.
 pub fn lower<'a>(tree: &SyntaxTree, source: &'a str) -> ParseResult<'a> {
@@ -1118,12 +1119,21 @@ impl<'a> LowerCtx<'a> {
         selections
     }
 
+    /// One `variants` entry, which OpenUSD reads as a dictionary entry
+    /// (`TextParserAction<VariantsMetadata>`,
+    /// `pxr/usd/sdf/textFileFormatParser.cpp`): a quoted set name and the
+    /// selection have their escape sequences evaluated, as in any string; a
+    /// typed entry must be a `string`; and the selection must be one
+    /// `SdfSchemaBase::IsValidVariantSelection` accepts.
+    ///
+    /// Spec: AOUSD Core §16.2.17.3 (`variants`), §7.6.2.3.4
+    /// (`variantSelection`).
     fn lower_variant_selection_entry(&mut self, node: SyntaxNode<'_>) -> VariantSelection<'a> {
         let tree = node.tree();
         let sig = signature(node);
 
-        let mut set_name = "";
-        let mut branch_name = "";
+        let mut set_name = Cow::Borrowed("");
+        let mut branch_name = Cow::Borrowed("");
 
         let strings: Signature = sig
             .iter()
@@ -1136,18 +1146,36 @@ impl<'a> LowerCtx<'a> {
             .copied()
             .collect();
 
-        if strings.len() >= 2 {
-            set_name = self.name_literal(self.node_from(tree, strings[0].1));
-            branch_name = self.name_literal(self.node_from(tree, strings[strings.len() - 1].1));
-        } else if !idents.is_empty() && !strings.is_empty() {
-            for ident in &idents {
-                let t = self.text(self.node_from(tree, ident.1));
-                if t != "string" && t != "token" {
-                    set_name = t;
-                    break;
-                }
+        // A type before an identifier or a quoted set name.
+        let type_name =
+            (idents.len() >= 2 || (!idents.is_empty() && strings.len() >= 2)).then(|| idents[0]);
+        if let Some(type_name) = type_name {
+            let type_node = self.node_from(tree, type_name.1);
+            if self.text(type_node) != "string" {
+                self.error(type_node.span(), "variant name must be a string");
             }
-            branch_name = self.name_literal(self.node_from(tree, strings[strings.len() - 1].1));
+        }
+        let Some(&value) = strings.last() else {
+            return VariantSelection {
+                set_name,
+                branch_name,
+            };
+        };
+        let value = self.node_from(tree, value.1);
+        if strings.len() >= 2 {
+            set_name = self.string_literal(self.node_from(tree, strings[0].1));
+            branch_name = self.string_literal(value);
+        } else if !idents.is_empty() {
+            if let Some(key) = idents.get(usize::from(type_name.is_some())) {
+                set_name = Cow::Borrowed(self.text(self.node_from(tree, key.1)));
+            }
+            branch_name = self.string_literal(value);
+        }
+        if !is_variant_selection(&branch_name) {
+            self.error(
+                value.span(),
+                alloc::format!("{branch_name:?} is not a valid variant selection"),
+            );
         }
 
         VariantSelection {
@@ -1945,7 +1973,9 @@ pub(crate) fn parse_number_value(text: &str) -> Value<'_> {
 
 #[cfg(test)]
 mod tests {
+    use alloc::format;
     use alloc::vec;
+    use alloc::vec::Vec;
 
     use crate::ast::*;
     use crate::parser::parse_cst;
@@ -2216,7 +2246,7 @@ def \"A\" {
         let src = "#usda 1.0\ndef \"A\" {\n    rel a\n    rel b = None\n    rel c = []\n    rel d = None (\n        doc = \"d\"\n    )\n}\n";
         let r = parse(src);
         assert!(r.diagnostics.is_empty(), "{:?}", r.diagnostics);
-        let targets: vec::Vec<_> = r.layer.prims[0]
+        let targets: Vec<_> = r.layer.prims[0]
             .children
             .iter()
             .map(|c| match c {
@@ -2367,6 +2397,48 @@ def \"A\" {
             assert_eq!(items[0].prim_path, Some("/Root"));
         } else {
             panic!("expected Payload");
+        }
+    }
+
+    #[test]
+    fn variant_selections_evaluate_escapes() {
+        // OpenUSD's writer escapes a control character in a selection, as
+        // in an expression; reading it back must evaluate the escape.
+        let src = "#usda 1.0\ndef \"A\" (\n    variants = {\n        string \"s\\x10\" = \"`${V}\\x10`\"\n        string t = \"d\\x61rk\"\n    }\n) {\n}\n";
+        let r = parse(src);
+        assert!(r.diagnostics.is_empty(), "{:?}", r.diagnostics);
+        let PrimMeta::Variants(sels) = &r.layer.prims[0].metadata[0] else {
+            panic!("expected Variants");
+        };
+        let sels: Vec<(&str, &str)> = sels
+            .iter()
+            .map(|s| (&*s.set_name, &*s.branch_name))
+            .collect();
+        assert_eq!(sels, [("s\x10", "`${V}\x10`"), ("t", "dark")]);
+    }
+
+    #[test]
+    fn invalid_variant_selections_are_reported() {
+        for entry in [
+            "string v = \"a b\"",
+            "string v = \"a\\x10b\"",
+            "string v = \"`${V}\"",
+            "token v = \"one\"",
+        ] {
+            let src = format!(
+                "#usda 1.0\ndef \"A\" (\n    variants = {{\n        {entry}\n    }}\n) {{\n}}\n"
+            );
+            assert_eq!(parse(&src).diagnostics.len(), 1, "{entry}");
+        }
+        for entry in [
+            "string v = \"\"",
+            "string v = \".\"",
+            "string v = \".a|b-c\"",
+        ] {
+            let src = format!(
+                "#usda 1.0\ndef \"A\" (\n    variants = {{\n        {entry}\n    }}\n) {{\n}}\n"
+            );
+            assert!(parse(&src).diagnostics.is_empty(), "{entry}");
         }
     }
 
@@ -2666,7 +2738,7 @@ def Scope \"root\" {
                    y = -0.0\n}\n";
         let r = parse(src);
         assert!(r.diagnostics.is_empty(), "{:?}", r.diagnostics);
-        let values: vec::Vec<_> = r.layer.prims[0]
+        let values: Vec<_> = r.layer.prims[0]
             .children
             .iter()
             .map(|child| match child {
@@ -2688,7 +2760,7 @@ def Scope \"root\" {
                    18446744073709551616\n    double c = -9223372036854775809\n}\n";
         let r = parse(src);
         assert!(r.diagnostics.is_empty(), "{:?}", r.diagnostics);
-        let values: vec::Vec<_> = r.layer.prims[0]
+        let values: Vec<_> = r.layer.prims[0]
             .children
             .iter()
             .map(|child| match child {
@@ -2732,7 +2804,7 @@ def Scope \"root\" {
                    @@@a@@@@@\n    asset c = @@\n}\n";
         let r = parse(src);
         assert!(r.diagnostics.is_empty(), "{:?}", r.diagnostics);
-        let assets: vec::Vec<_> = r.layer.prims[0]
+        let assets: Vec<_> = r.layer.prims[0]
             .children
             .iter()
             .map(|child| match child {
@@ -2766,7 +2838,7 @@ def Scope \"root\" {
         let MetadataValue::Dictionary(dict) = &entry.value else {
             panic!("expected a dictionary");
         };
-        let items: vec::Vec<_> = dict
+        let items: Vec<_> = dict
             .iter()
             .map(|e| match &e.value {
                 Value::String(v) => (e.type_name, &*e.key, &**v),

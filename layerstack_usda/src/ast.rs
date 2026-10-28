@@ -145,13 +145,14 @@ pub enum PrimMeta<'a> {
     Custom(MetadataEntry<'a>),
 }
 
-/// A variant selection: `"setName" = "branchName"`.
+/// A variant selection: `string setName = "branchName"`.
 #[derive(Debug)]
 pub struct VariantSelection<'a> {
-    /// Variant set name.
-    pub set_name: &'a str,
-    /// Selected variant branch name.
-    pub branch_name: &'a str,
+    /// Variant set name, with escape sequences evaluated where it is
+    /// quoted.
+    pub set_name: Cow<'a, str>,
+    /// Selected variant branch name, with escape sequences evaluated.
+    pub branch_name: Cow<'a, str>,
 }
 
 // ── Properties ─────────────────────────────────────────────────────────

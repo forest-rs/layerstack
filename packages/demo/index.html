@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Layerstack scene editor</title>
+  </head>
+  <body>
+    <header>
+      <h1>Layerstack scene editor</h1>
+      <div id="counters" class="counters"></div>
+    </header>
+    <div id="error" class="error" hidden></div>
+    <main>
+      <section class="panel script">
+        <h2>Script</h2>
+        <div id="script-body"></div>
+      </section>
+      <section class="panel tree">
+        <h2>Prims</h2>
+        <div id="tree-body" class="body"></div>
+      </section>
+      <section class="panel inspector">
+        <h2>Attributes</h2>
+        <div id="inspector-body" class="body"></div>
+      </section>
+      <section class="panel explanation">
+        <h2>Explanation</h2>
+        <div id="explanation-body" class="body"></div>
+      </section>
+      <section class="panel layers">
+        <h2>Layers</h2>
+        <div id="layers-body" class="body"></div>
+      </section>
+      <section class="panel undo">
+        <h2>Undo stack</h2>
+        <div id="undo-body" class="body"></div>
+      </section>
+      <section class="panel loop">
+        <h2>Asset loop</h2>
+        <div id="loop-body" class="body scroll"></div>
+      </section>
+      <section class="panel changes">
+        <h2>Change log</h2>
+        <div id="changes-body" class="body scroll"></div>
+      </section>
+    </main>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

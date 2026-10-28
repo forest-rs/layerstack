@@ -9,7 +9,9 @@
 //! without reading resident layers again.
 
 use super::*;
-use layerstack::{ArcKind, PropertyPath, PropertyType, Time, Transaction};
+use layerstack::{
+    ArcKind, LayerOffset, PropertyPath, PropertyType, SublayerEntry, Time, Transaction,
+};
 use layerstack_usdz::PackageFile;
 
 /// A host's byte map: a source it has not been given is unavailable, one
@@ -338,4 +340,129 @@ fn opening_on_threads_wants_the_same_sources() {
     );
     assert_eq!(int(&doc, "/Child.child"), Some(1));
     assert_eq!(missing(&doc), [("gone.usda".into(), ArcKind::References)]);
+}
+
+/// A sublayer of a sublayer supplied in an earlier round composes when it
+/// is supplied: the live stage reads the layer stack the supplied sublayer
+/// extends, gathers its sublayer into the stage's layer stack and serves
+/// its opinions, as composing anew does. OpenUSD opens each sublayer as it
+/// computes the layer stack (`PcpLayerStack::_BuildLayerStack`).
+#[test]
+fn a_sublayer_of_a_supplied_sublayer_composes() {
+    let mut host = Host::default();
+    host.supply(
+        "scene.usda",
+        b"#usda 1.0\n(\n    subLayers = [@./sub.usda@]\n)\ndef \"Ball\" {\n    int size = 2\n}\n",
+    );
+    let mut doc = StageDocument::open(host, "scene.usda", StageOptions::default()).unwrap();
+    doc.storage_mut().supply(
+        "./sub.usda",
+        b"#usda 1.0\n(\n    subLayers = [@./deep/detail.usda@]\n)\nover \"Ball\" {\n    int serial = 1\n}\n",
+    );
+    doc.load_requested_assets().unwrap();
+    assert_eq!(int(&doc, "/Ball.serial"), Some(1));
+    assert_eq!(
+        wanted(&doc),
+        [want("./deep/detail.usda", "./sub.usda", ArcKind::Local)]
+    );
+
+    doc.storage_mut().supply(
+        "./deep/detail.usda",
+        b"#usda 1.0\nover \"Ball\" {\n    int tag = 3\n}\n",
+    );
+    let loaded = doc.load_requested_assets().unwrap();
+    assert_eq!(loaded.layers.len(), 1);
+    assert!(wanted(&doc).is_empty());
+    assert!(doc.stage().stage().asset_requests().is_empty());
+    let stack: Vec<&str> = doc
+        .stage()
+        .stage()
+        .layer_stack()
+        .iter()
+        .map(|layer| doc.identifier(*layer).unwrap())
+        .collect();
+    assert_eq!(stack, ["scene.usda", "./sub.usda", "./deep/detail.usda"]);
+    assert_eq!(int(&doc, "/Ball.size"), Some(2));
+    assert_eq!(int(&doc, "/Ball.tag"), Some(3));
+    assert!(doc.asset_status().is_complete());
+}
+
+/// A sublayer added by asset path to a layer of the stage's layer stack
+/// that is not its root composes through `apply`: one supplied loads with
+/// the edit, one not supplied yet is wanted from that layer and composes
+/// when it is supplied, and the layer stack gathers each in its place.
+#[test]
+fn a_sublayer_added_to_a_sublayer_composes() {
+    let mut host = Host::default();
+    host.supply(
+        "scene.usda",
+        b"#usda 1.0\n(\n    subLayers = [@sub.usda@]\n)\ndef \"Ball\" {\n    int size = 2\n}\n",
+    );
+    host.supply(
+        "sub.usda",
+        b"#usda 1.0\nover \"Ball\" {\n    int serial = 1\n}\n",
+    );
+    host.supply(
+        "more.usda",
+        b"#usda 1.0\nover \"Ball\" {\n    int more = 4\n}\n",
+    );
+    let mut doc = StageDocument::open(host, "scene.usda", StageOptions::default()).unwrap();
+    let stack = |doc: &StageDocument<Host>| -> Vec<String> {
+        doc.stage()
+            .stage()
+            .layer_stack()
+            .iter()
+            .map(|layer| doc.identifier(*layer).unwrap().into())
+            .collect()
+    };
+    assert_eq!(stack(&doc), ["scene.usda", "sub.usda"]);
+    let sub = doc.stage().stage().layer_stack()[1];
+
+    let mut edit = Transaction::new();
+    edit.insert_sublayer(
+        sub,
+        0,
+        SublayerEntry::unresolved("more.usda", LayerOffset::IDENTITY),
+    );
+    let (_, loaded) = doc.apply(&edit).unwrap();
+    assert_eq!(loaded.layers.len(), 1);
+    assert_eq!(stack(&doc), ["scene.usda", "sub.usda", "more.usda"]);
+    assert_eq!(int(&doc, "/Ball.more"), Some(4));
+    assert!(wanted(&doc).is_empty());
+    // The stage reads the added layer: an edit made to it directly is
+    // found when the document synchronizes.
+    let more = doc.stage().stage().layer_stack()[2];
+    let property = doc.store_mut().property_path("/Ball.more");
+    doc.store_mut().layer_mut(more).unwrap().set_property(
+        property,
+        PropertySpec::typed_attribute(PropertyType::parse("int").unwrap())
+            .with_default(Value::Int(6)),
+    );
+    doc.synchronize();
+    assert_eq!(int(&doc, "/Ball.more"), Some(6));
+
+    let mut edit = Transaction::new();
+    edit.insert_sublayer(
+        sub,
+        1,
+        SublayerEntry::unresolved("later.usda", LayerOffset::IDENTITY),
+    );
+    let (_, loaded) = doc.apply(&edit).unwrap();
+    assert!(loaded.layers.is_empty());
+    assert_eq!(
+        wanted(&doc),
+        [want("later.usda", "sub.usda", ArcKind::Local)]
+    );
+    doc.storage_mut().supply(
+        "later.usda",
+        b"#usda 1.0\nover \"Ball\" {\n    int later = 5\n}\n",
+    );
+    doc.load_requested_assets().unwrap();
+    assert_eq!(
+        stack(&doc),
+        ["scene.usda", "sub.usda", "more.usda", "later.usda"]
+    );
+    assert_eq!(int(&doc, "/Ball.later"), Some(5));
+    assert_eq!(int(&doc, "/Ball.serial"), Some(1));
+    assert!(doc.asset_status().is_complete());
 }

@@ -897,6 +897,9 @@ impl LayerStore for Overlay<'_> {
     fn paths(&self) -> &crate::PathInterner {
         self.store.paths()
     }
+    fn layer_identifier(&self, id: LayerId) -> Option<&str> {
+        self.store.layer_identifier(id)
+    }
     fn asset_layer(&self, anchor: LayerId, path: &str) -> Option<LayerId> {
         self.store.asset_layer(anchor, path)
     }

@@ -1176,4 +1176,34 @@ mod tests {
         let stage = Stage::compose(&mut store, LayerId(1), options);
         assert_eq!(missing(stage.composition_errors()), []);
     }
+
+    /// A store that names its layers ([`LayerStore::layer_identifier`])
+    /// has them written `@identifier@` in diagnostics, as OpenUSD writes
+    /// layers; a layer it does not name keeps its id.
+    #[test]
+    fn errors_name_layers_by_identifier() {
+        let mut store = InMemoryStore::default();
+        let error = CompositionError::UnresolvedSublayer(UnresolvedSublayer {
+            layer: LayerId(1),
+            asset: "./sub.usda".into(),
+        });
+        assert_eq!(
+            error.display(&store).to_string(),
+            "layer 1: sublayer @./sub.usda@ does not resolve; it is ignored"
+        );
+        store.set_layer_identifier(LayerId(1), "./root.usda");
+        assert_eq!(store.layer_identifier(LayerId(1)), Some("./root.usda"));
+        assert_eq!(
+            error.display(&store).to_string(),
+            "@./root.usda@: sublayer @./sub.usda@ does not resolve; it is ignored"
+        );
+        let missing = CompositionError::MissingLayer(MissingLayer {
+            layer: LayerId(2),
+            sublayer_of: Some(LayerId(1)),
+        });
+        assert_eq!(
+            missing.display(&store).to_string(),
+            "@./root.usda@: sublayer layer 2 is not in the store; it is ignored"
+        );
+    }
 }

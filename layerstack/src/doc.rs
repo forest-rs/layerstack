@@ -4555,6 +4555,21 @@ pub trait LayerStore: MaybeSync {
     /// Returns the shared path interner.
     fn paths(&self) -> &PathInterner;
 
+    /// The host's identifier of the layer `id` (`./set.usda`,
+    /// `props.usdz[geo.usdc]`), if it has one: what diagnostics print for
+    /// the layer ([`crate::CompositionError::display`],
+    /// [`crate::EditError::display`]) instead of its id, written
+    /// `@identifier@` as OpenUSD writes layers in its errors. An id derived
+    /// from an identifier ([`LayerId::FIRST_DERIVED`]) is a hash that says
+    /// nothing to a reader.
+    ///
+    /// Composition does not read it. The default names no layer, and
+    /// diagnostics print `layer <id>`.
+    fn layer_identifier(&self, id: LayerId) -> Option<&str> {
+        let _ = id;
+        None
+    }
+
     /// Returns the loaded layer that `asset_path`, anchored to the layer
     /// `anchor`, resolves to; `None` when it is not known.
     ///
@@ -4605,6 +4620,9 @@ pub struct InMemoryStore {
     /// anchored to, then by path, for [`LayerStore::asset_layer`].
     /// [`LayerId::UNRESOLVED`] records a confirmed missing asset.
     pub(crate) asset_layers: HashMap<LayerId, HashMap<Arc<str>, LayerId>>,
+    /// The identifiers hosts named layers by
+    /// ([`Self::set_layer_identifier`], [`LayerStore::layer_identifier`]).
+    pub(crate) identifiers: HashMap<LayerId, Arc<str>>,
 }
 
 impl InMemoryStore {
@@ -4641,7 +4659,17 @@ impl InMemoryStore {
             paths: self.paths.snapshot(),
             layers: self.layers.clone(),
             asset_layers: self.asset_layers.clone(),
+            identifiers: self.identifiers.clone(),
         }
+    }
+
+    /// Names the layer `layer` by `identifier`, the host's name for it
+    /// (`./set.usda`, `props.usdz[geo.usdc]`), which diagnostics print in
+    /// place of its id ([`LayerStore::layer_identifier`]). Composition does
+    /// not read it, and the layer need not be held yet; a second call
+    /// renames it.
+    pub fn set_layer_identifier(&mut self, layer: LayerId, identifier: impl Into<Arc<str>>) {
+        self.identifiers.insert(layer, identifier.into());
     }
     /// Inserts (or replaces) a layer.
     /// Replacing a layer advances its generations so live stages detect reloads,
@@ -4950,6 +4978,10 @@ impl LayerStore for InMemoryStore {
 
     fn paths(&self) -> &PathInterner {
         &self.paths
+    }
+
+    fn layer_identifier(&self, id: LayerId) -> Option<&str> {
+        self.identifiers.get(&id).map(|identifier| &**identifier)
     }
 
     fn asset_layer(&self, anchor: LayerId, asset_path: &str) -> Option<LayerId> {

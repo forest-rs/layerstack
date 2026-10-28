@@ -800,3 +800,54 @@ fn custom_joint_types_are_reported_when_named() {
     let unnamed = kinds(CustomPhysicsTypes::default());
     assert!(matches!(unnamed[0], (path, JointKind::D6 { .. }) if path == joint));
 }
+#[test]
+fn merged_groups_follow_the_native_parser_swap_order() {
+    // `parseUtils.cpp` moves the last group into each merged group's slot
+    // and examines it next, so `/World/Y` leads merge name `n` although
+    // `/World/X` comes first in traversal order.
+    let (mut store, mut stage) = setup();
+    let root = store.path("/World");
+    let [p, q, x, y] =
+        ["/World/P", "/World/Q", "/World/X", "/World/Y"].map(|path| store.path(path));
+    let mut edit = SchemaEdit::new(stage.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
+    Xform::define(&mut edit, root).expect("outside any instance");
+    for (path, name) in [(p, "m"), (q, "m"), (x, "n"), (y, "n")] {
+        let group = PhysicsCollisionGroup::define(&mut edit, path).expect("outside any instance");
+        group.set_merge_group_name(&mut edit, name);
+        if path == x {
+            group.set_invert_filtered_groups(&mut edit, true);
+        }
+    }
+    let transaction = edit.finish();
+    stage.apply(&mut store, &transaction).unwrap();
+    let snapshot = PhysicsSceneSnapshot::capture(
+        &Scene::new(stage.stage(), &store),
+        PhysicsSceneOptions {
+            includes: &[root],
+            excludes: &[],
+            simulation_owners: None,
+            custom: CustomPhysicsTypes::default(),
+        },
+    )
+    .unwrap();
+    let groups: Vec<(PathId, Vec<PathId>, bool)> = snapshot
+        .collision_groups
+        .iter()
+        .map(|g| {
+            let desc = g.descriptor.as_ref().unwrap();
+            (
+                g.path,
+                desc.merged_groups.clone(),
+                desc.invert_filtered_groups,
+            )
+        })
+        .collect();
+    assert_eq!(
+        groups,
+        [
+            (p, alloc::vec![p, q], false),
+            // The lead keeps its own (unauthored) inversion; `X`'s is dropped.
+            (y, alloc::vec![y, x], false),
+        ]
+    );
+}

@@ -270,6 +270,17 @@
           "filtered_groups": [],
           "invert": false,
           "merged_groups": []
+        },
+        "/World/G8": {
+          "filtered_groups": [
+            "/World/G5",
+            "/World/G6"
+          ],
+          "invert": false,
+          "merged_groups": [
+            "/World/G7",
+            "/World/G8"
+          ]
         }
       },
       "joints": {},

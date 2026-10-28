@@ -1,0 +1,313 @@
+{
+  "version": "26.11",
+  "calls": [
+    {
+      "call": "set",
+      "path": "/Q",
+      "field": "customData",
+      "key_path": "a:b:c",
+      "value": 1,
+      "accepted": true,
+      "local_documentation": null,
+      "local_custom_data": {
+        "a": {
+          "b": {
+            "c": 1
+          }
+        }
+      },
+      "local_asset_info": null,
+      "composed_custom_data": {
+        "a": {
+          "b": {
+            "c": 1
+          }
+        }
+      },
+      "composed_entry": 1
+    },
+    {
+      "call": "set",
+      "path": "/Q",
+      "field": "customData",
+      "key_path": "a:d",
+      "value": "x",
+      "accepted": true,
+      "local_documentation": null,
+      "local_custom_data": {
+        "a": {
+          "b": {
+            "c": 1
+          },
+          "d": "x"
+        }
+      },
+      "local_asset_info": null,
+      "composed_custom_data": {
+        "a": {
+          "b": {
+            "c": 1
+          },
+          "d": "x"
+        }
+      },
+      "composed_entry": "x"
+    },
+    {
+      "call": "set",
+      "path": "/Q",
+      "field": "assetInfo",
+      "key_path": "identifier",
+      "value": {
+        "asset": "x.usda"
+      },
+      "accepted": true,
+      "local_documentation": null,
+      "local_custom_data": {
+        "a": {
+          "b": {
+            "c": 1
+          },
+          "d": "x"
+        }
+      },
+      "local_asset_info": {
+        "identifier": {
+          "asset": "x.usda"
+        }
+      },
+      "composed_custom_data": {
+        "a": {
+          "b": {
+            "c": 1
+          },
+          "d": "x"
+        }
+      },
+      "composed_entry": {
+        "asset": "x.usda"
+      }
+    },
+    {
+      "call": "set",
+      "path": "/Q.y",
+      "field": "customData",
+      "key_path": "k:j",
+      "value": "v",
+      "accepted": true,
+      "local_documentation": null,
+      "local_custom_data": {
+        "k": {
+          "j": "v"
+        }
+      },
+      "local_asset_info": null,
+      "composed_custom_data": {
+        "k": {
+          "j": "v"
+        }
+      },
+      "composed_entry": "v"
+    },
+    {
+      "call": "clear",
+      "path": "/Q",
+      "field": "customData",
+      "key_path": "a:b:c",
+      "value": null,
+      "accepted": true,
+      "local_documentation": null,
+      "local_custom_data": {
+        "a": {
+          "d": "x"
+        }
+      },
+      "local_asset_info": {
+        "identifier": {
+          "asset": "x.usda"
+        }
+      },
+      "composed_custom_data": {
+        "a": {
+          "d": "x"
+        }
+      },
+      "composed_entry": null
+    },
+    {
+      "call": "clear",
+      "path": "/Q",
+      "field": "customData",
+      "key_path": "missing",
+      "value": null,
+      "accepted": true,
+      "local_documentation": null,
+      "local_custom_data": {
+        "a": {
+          "d": "x"
+        }
+      },
+      "local_asset_info": {
+        "identifier": {
+          "asset": "x.usda"
+        }
+      },
+      "composed_custom_data": {
+        "a": {
+          "d": "x"
+        }
+      },
+      "composed_entry": null
+    },
+    {
+      "call": "clear",
+      "path": "/Q",
+      "field": "customData",
+      "key_path": "a:d",
+      "value": null,
+      "accepted": true,
+      "local_documentation": null,
+      "local_custom_data": null,
+      "local_asset_info": {
+        "identifier": {
+          "asset": "x.usda"
+        }
+      },
+      "composed_custom_data": {},
+      "composed_entry": null
+    },
+    {
+      "call": "clear",
+      "path": "/Q.y",
+      "field": "customData",
+      "key_path": "k:j",
+      "value": null,
+      "accepted": true,
+      "local_documentation": null,
+      "local_custom_data": null,
+      "local_asset_info": null,
+      "composed_custom_data": {},
+      "composed_entry": null
+    },
+    {
+      "call": "set",
+      "path": "/W",
+      "field": "customData",
+      "key_path": "shared:y",
+      "value": 2,
+      "accepted": true,
+      "local_documentation": null,
+      "local_custom_data": {
+        "shared": {
+          "y": 2
+        }
+      },
+      "local_asset_info": null,
+      "composed_custom_data": {
+        "shared": {
+          "x": 1,
+          "y": 2
+        },
+        "w": 1
+      },
+      "composed_entry": 2
+    },
+    {
+      "call": "set",
+      "path": "/W",
+      "field": "customData",
+      "key_path": "w",
+      "value": 3,
+      "accepted": true,
+      "local_documentation": null,
+      "local_custom_data": {
+        "shared": {
+          "y": 2
+        },
+        "w": 3
+      },
+      "local_asset_info": null,
+      "composed_custom_data": {
+        "shared": {
+          "x": 1,
+          "y": 2
+        },
+        "w": 3
+      },
+      "composed_entry": 3
+    },
+    {
+      "call": "clear",
+      "path": "/W",
+      "field": "customData",
+      "key_path": "w",
+      "value": null,
+      "accepted": true,
+      "local_documentation": null,
+      "local_custom_data": {
+        "shared": {
+          "y": 2
+        }
+      },
+      "local_asset_info": null,
+      "composed_custom_data": {
+        "shared": {
+          "x": 1,
+          "y": 2
+        },
+        "w": 1
+      },
+      "composed_entry": 1
+    },
+    {
+      "call": "set",
+      "path": "/Q",
+      "field": "documentation",
+      "key_path": "a",
+      "value": "x",
+      "accepted": true,
+      "local_documentation": {
+        "a": "x"
+      },
+      "local_custom_data": null,
+      "local_asset_info": {
+        "identifier": {
+          "asset": "x.usda"
+        }
+      },
+      "composed_custom_data": {},
+      "composed_entry": null
+    },
+    {
+      "call": "set",
+      "path": "/Q",
+      "field": "customData",
+      "key_path": "a::b",
+      "value": "x",
+      "accepted": true,
+      "local_documentation": {
+        "a": "x"
+      },
+      "local_custom_data": {
+        "a": {
+          "": {
+            "b": "x"
+          }
+        }
+      },
+      "local_asset_info": {
+        "identifier": {
+          "asset": "x.usda"
+        }
+      },
+      "composed_custom_data": {
+        "a": {
+          "": {
+            "b": "x"
+          }
+        }
+      },
+      "composed_entry": "x"
+    }
+  ]
+}

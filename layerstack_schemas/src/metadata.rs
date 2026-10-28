@@ -23,6 +23,22 @@ pub struct StageMetadata<'a> {
     scene: Scene<'a>,
 }
 
+/// The entry at the colon-separated `key_path` of a nested dictionary
+/// value; a path with an empty part names none.
+pub(crate) fn dictionary_entry<'v>(value: &'v Value, key_path: &str) -> Option<&'v Value> {
+    let mut value = value;
+    for key in key_path.split(':') {
+        let Value::Dictionary(entries) = value else {
+            return None;
+        };
+        value = &entries
+            .iter()
+            .find(|(name, _)| name.as_ref() == key && !key.is_empty())?
+            .1;
+    }
+    Some(value)
+}
+
 fn scalar(value: ResolvedValue) -> Option<Value> {
     match value {
         ResolvedValue::Scalar(value) => Some(value),
@@ -62,6 +78,21 @@ impl<'a> PrimView<'a> {
             return None;
         }
         scalar(self.prim()?.metadata(key)?.value)
+    }
+
+    /// The entry at the colon-separated `key_path` of the prim's composed
+    /// dictionary field `name` (`customData`, `assetInfo`, or a dictionary
+    /// field a plugin registers), as [`Self::metadata_value`] composes it:
+    /// `"a:b"` names the entry `b` of the dictionary `a`. `None` when the
+    /// field holds no such entry or is not a dictionary.
+    ///
+    /// OpenUSD: `UsdObject::GetMetadataByDictKey`. AOUSD Core §12.2.5.
+    #[doc(alias = "GetMetadataByDictKey")]
+    #[doc(alias = "GetCustomDataByKey")]
+    #[doc(alias = "GetAssetInfoByKey")]
+    #[must_use]
+    pub fn metadata_by_key(&self, name: &str, key_path: &str) -> Option<Value> {
+        dictionary_entry(&self.metadata_value(name)?, key_path).cloned()
     }
 
     /// Reads metadata on a declared or schema-defined property, of either kind.
@@ -122,6 +153,18 @@ impl<'a> PropertyMetadata<'a> {
                     _ => key.is_some_and(|key| p.metadata(key).is_some()),
                 })
         })
+    }
+
+    /// The entry at the colon-separated `key_path` of the property's
+    /// composed dictionary field `name`, as [`PrimView::metadata_by_key`]
+    /// reads a prim's.
+    ///
+    /// OpenUSD: `UsdObject::GetMetadataByDictKey`. AOUSD Core §12.2.5.
+    #[doc(alias = "GetMetadataByDictKey")]
+    #[doc(alias = "GetCustomDataByKey")]
+    #[must_use]
+    pub fn value_by_key(&self, name: &str, key_path: &str) -> Option<Value> {
+        dictionary_entry(&self.value(name)?, key_path).cloned()
     }
 
     /// A field's composed authored value, for a field registered for the

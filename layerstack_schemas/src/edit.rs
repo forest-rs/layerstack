@@ -175,6 +175,9 @@ pub struct SchemaEdit<'s> {
     removed: Vec<(PathId, TokenId)>,
     #[cfg(feature = "usd-ui")]
     ui_hints: Vec<(TargetPath, Value)>,
+    /// The edit target's dictionary-valued metadata fields this edit
+    /// authors, as it leaves them (an empty dictionary once cleared).
+    dictionaries: Vec<(TargetPath, TokenId, Value)>,
 }
 
 /// One time sample an edit authors, in stage time.
@@ -229,6 +232,7 @@ impl<'s> SchemaEdit<'s> {
             removed: Vec::new(),
             #[cfg(feature = "usd-ui")]
             ui_hints: Vec::new(),
+            dictionaries: Vec::new(),
         }
     }
 
@@ -459,6 +463,7 @@ impl<'s> SchemaEdit<'s> {
             removed: self.removed.clone(),
             #[cfg(feature = "usd-ui")]
             ui_hints: self.ui_hints.clone(),
+            dictionaries: self.dictionaries.clone(),
         };
         let result = collect(&mut child)?;
         self.transaction.append(child.transaction);
@@ -481,6 +486,7 @@ impl<'s> SchemaEdit<'s> {
         {
             self.ui_hints = child.ui_hints;
         }
+        self.dictionaries = child.dictionaries;
         Ok(result)
     }
 
@@ -1203,6 +1209,9 @@ impl<'s> SchemaEdit<'s> {
             PropertyKind::Relationship => layerstack::MetadataTarget::Relationship,
         };
         self.check_metadata(key, target, value.as_ref())?;
+        let field = self.tokens().intern(key);
+        let property = PropertyPath::new(path, self.tokens().intern(name));
+        self.replace_dictionary(TargetPath::Property(property), field, value.as_ref());
         match value {
             Some(value) => self.set_property_metadata(path, name, key, value),
             None => {
@@ -1243,6 +1252,7 @@ impl<'s> SchemaEdit<'s> {
         self.can_edit(path).map_err(MetadataError::CannotEdit)?;
         self.check_metadata(key, layerstack::MetadataTarget::Prim, value.as_ref())?;
         let name = self.tokens().intern(key);
+        self.replace_dictionary(TargetPath::Prim(path), name, value.as_ref());
         let at = self.target.prim(path);
         match value {
             Some(value) => {
@@ -1254,6 +1264,120 @@ impl<'s> SchemaEdit<'s> {
                 self.transaction.clear_metadata(at, name);
             }
         }
+        Ok(())
+    }
+
+    /// Records that a whole-field edit sets the field `key` of `target` to
+    /// `value` (`None` clears it), so a later by-key edit in this edit
+    /// starts from it rather than from the layer.
+    fn replace_dictionary(
+        &mut self,
+        target: TargetPath,
+        key: TokenId,
+        value: Option<&layerstack::FieldValue>,
+    ) {
+        self.dictionaries
+            .retain(|(at, field, _)| (*at, *field) != (target, key));
+        let dictionary = match value {
+            Some(layerstack::FieldValue::Value(dictionary @ Value::Dictionary(_))) => {
+                dictionary.clone()
+            }
+            Some(_) => return,
+            None => Value::Dictionary(Vec::new()),
+        };
+        self.dictionaries.push((target, key, dictionary));
+    }
+
+    /// Sets (`Some`) or erases (`None`) the entry at `key_path` of the
+    /// dictionary field `key` of `target` in the edit target, keeping the
+    /// other entries the edit target authors; a weaker layer's dictionary
+    /// keeps composing under it. Erasing the last entry clears the field.
+    ///
+    /// OpenUSD: `UsdObject::SetMetadataByDictKey` and
+    /// `ClearMetadataByDictKey` (`SdfLayer::SetFieldDictValueByKey`,
+    /// `EraseFieldDictValueByKey`). AOUSD Core §7.4, §12.2.5 (dictionary
+    /// metadata composes per key).
+    pub(crate) fn author_metadata_by_key(
+        &mut self,
+        target: TargetPath,
+        key: &str,
+        key_path: &str,
+        value: Option<Value>,
+    ) -> Result<(), MetadataError> {
+        let keys: Vec<&str> = key_path.split(':').collect();
+        if keys.iter().any(|part| part.is_empty()) {
+            return Err(MetadataError::InvalidKeyPath(key_path.into()));
+        }
+        let spec_kind = match target {
+            TargetPath::Prim(path) => {
+                if !self.exists(path) {
+                    return Err(MetadataError::NoSuchPrim);
+                }
+                self.can_edit(path).map_err(MetadataError::CannotEdit)?;
+                layerstack::MetadataTarget::Prim
+            }
+            TargetPath::Property(path) => {
+                let name = String::from(self.tokens().resolve(path.property()));
+                match self
+                    .property_kind(path.prim_path(), &name)
+                    .ok_or(MetadataError::NoSuchProperty)?
+                {
+                    PropertyKind::Attribute => layerstack::MetadataTarget::Attribute,
+                    PropertyKind::Relationship => layerstack::MetadataTarget::Relationship,
+                }
+            }
+        };
+        let field = self.tokens().intern(key);
+        let mut dictionary = match self
+            .dictionaries
+            .iter()
+            .rev()
+            .find(|(at, f, _)| (*at, *f) == (target, field))
+        {
+            Some((_, _, dictionary)) => dictionary.clone(),
+            None => self.local_dictionary(target, field),
+        };
+        let erase = value.is_none();
+        if erase && crate::metadata::dictionary_entry(&dictionary, key_path).is_none() {
+            // Nothing to erase: C++ authors nothing either.
+            return Ok(());
+        }
+        set_dictionary_entry(&mut dictionary, &keys, value);
+        // The field must take a dictionary: `customData`, `assetInfo`, or
+        // one a plugin registers.
+        self.check_metadata(
+            key,
+            spec_kind,
+            Some(&layerstack::FieldValue::Value(dictionary.clone())),
+        )?;
+        let empty = matches!(&dictionary, Value::Dictionary(entries) if entries.is_empty());
+        let at = match target {
+            TargetPath::Prim(path) => self.target.prim(path),
+            TargetPath::Property(path) => {
+                self.ensure_property(path);
+                self.target.property(path)
+            }
+        };
+        if erase && empty {
+            self.transaction.clear_metadata(at, field);
+        } else {
+            self.transaction.set_metadata(
+                at,
+                field,
+                layerstack::FieldValue::Value(dictionary.clone()),
+            );
+        }
+        if let TargetPath::Property(property) = target {
+            self.property_metadata.push(PropertyMetadataEdit {
+                property,
+                key: field,
+                value: (!(erase && empty))
+                    .then(|| layerstack::FieldValue::Value(dictionary.clone())),
+            });
+        }
+        self.dictionaries
+            .retain(|(at, f, _)| (*at, *f) != (target, field));
+        self.dictionaries.push((target, field, dictionary));
         Ok(())
     }
 
@@ -1300,12 +1424,19 @@ impl<'s> SchemaEdit<'s> {
 
     #[cfg(feature = "usd-ui")]
     fn local_ui_hints(&mut self, target: TargetPath) -> Value {
+        let key = self.tokens().intern("uiHints");
+        self.local_dictionary(target, key)
+    }
+
+    /// The dictionary the edit target's layer authors for the field `key`
+    /// of `target` (an empty one when it authors none or another value),
+    /// never a composed one.
+    fn local_dictionary(&mut self, target: TargetPath, key: TokenId) -> Value {
         if let TargetPath::Property(path) = target
             && self.removed.contains(&(path.prim_path(), path.property()))
         {
             return Value::Dictionary(Vec::new());
         }
-        let key = self.tokens().intern("uiHints");
         let mapped = match target {
             TargetPath::Prim(path) => self.target.map_to_spec_path(path, self.store.paths_mut()),
             TargetPath::Property(path) => self
@@ -1744,8 +1875,11 @@ pub enum MetadataError {
     /// The field cannot be authored on that kind of spec, or the value is
     /// not of its type: unregistered, registered for other kinds of spec,
     /// a field of the spec with its own edit, or a value of another type
-    /// ([`layerstack::MetadataEditError`]).
+    /// ([`layerstack::MetadataEditError`]). A by-key edit of a field that
+    /// does not take a dictionary is refused this way.
     Field(layerstack::MetadataEditError),
+    /// A dictionary key path with an empty part (`""`, `"a::b"`, `"a:"`).
+    InvalidKeyPath(String),
 }
 
 impl fmt::Display for MetadataError {
@@ -1755,8 +1889,52 @@ impl fmt::Display for MetadataError {
             Self::NoSuchProperty => f.write_str("no such property"),
             Self::CannotEdit(error) => error.fmt(f),
             Self::Field(error) => error.fmt(f),
+            Self::InvalidKeyPath(path) => write!(f, "invalid dictionary key path {path:?}"),
         }
     }
 }
 
 impl core::error::Error for MetadataError {}
+
+/// Sets (`Some`) or erases (`None`) the entry at `keys`, creating the
+/// dictionaries on the way to a set and replacing a non-dictionary there;
+/// an erase removes the dictionaries it leaves empty, as `VtDictionary::EraseValueAtPath` does.
+fn set_dictionary_entry(value: &mut Value, keys: &[&str], replacement: Option<Value>) {
+    let Some((key, rest)) = keys.split_first() else {
+        return;
+    };
+    if !matches!(value, Value::Dictionary(_)) {
+        if replacement.is_none() {
+            return;
+        }
+        *value = Value::Dictionary(Vec::new());
+    }
+    let Value::Dictionary(entries) = value else {
+        return;
+    };
+    let position = entries.iter().position(|(name, _)| name.as_ref() == *key);
+    if rest.is_empty() {
+        match (position, replacement) {
+            (Some(i), Some(v)) => entries[i].1 = v,
+            (Some(i), None) => {
+                entries.remove(i);
+            }
+            (None, Some(v)) => entries.push((alloc::sync::Arc::from(*key), v)),
+            (None, None) => {}
+        }
+        return;
+    }
+    let i = match position {
+        Some(i) => i,
+        None if replacement.is_none() => return,
+        None => {
+            entries.push((alloc::sync::Arc::from(*key), Value::Dictionary(Vec::new())));
+            entries.len() - 1
+        }
+    };
+    let erase = replacement.is_none();
+    set_dictionary_entry(&mut entries[i].1, rest, replacement);
+    if erase && matches!(&entries[i].1, Value::Dictionary(inner) if inner.is_empty()) {
+        entries.remove(i);
+    }
+}

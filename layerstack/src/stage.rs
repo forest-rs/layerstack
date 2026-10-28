@@ -1886,7 +1886,7 @@ impl Stage {
     }
 
     /// Returns the assets the store does not resolve yet
-    /// ([`crate::AssetAvailability::Unresolved`]) that composition reached,
+    /// ([`crate::AssetAvailability::Unavailable`]) that composition reached,
     /// by anchor layer, then asset path, then prim, then arc: those of the
     /// deferred references and payloads
     /// ([`Reference::deferred`](crate::Reference::deferred)) it followed,
@@ -4489,14 +4489,14 @@ pub(crate) fn dictionary_chain(
 }
 
 /// Sorts asset requests by anchor layer, then asset path, then prim, then
-/// arc.
+/// use (sublayer, reference, payload).
 fn sort_asset_requests(requests: &mut [crate::AssetRequest]) {
-    fn key(request: &crate::AssetRequest) -> (LayerId, &str, PathId, u8) {
+    fn key(request: &crate::AssetRequest) -> (LayerId, &str, PathId, crate::AssetUse) {
         (
             request.anchor,
             &request.asset_path,
             request.prim,
-            request.arc.strength_rank(),
+            request.used_by,
         )
     }
     requests.sort_unstable_by(|a, b| key(a).cmp(&key(b)));

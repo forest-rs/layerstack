@@ -75,10 +75,8 @@ fn validate(
         .ok_or("no texture asset")?;
         (points, asset)
     };
-    let image = candidate.read_asset_bytes(
-        &asset.authored_path,
-        asset.source.map(|source| source.layer),
-    )?;
+    let image =
+        candidate.read_asset_bytes(&asset.asset_path, asset.source.map(|source| source.layer))?;
     if image.bytes.len() > 8 {
         return Err("host texture byte budget exceeded".into());
     }

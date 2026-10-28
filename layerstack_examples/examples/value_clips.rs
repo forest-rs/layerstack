@@ -61,7 +61,7 @@ fn main() {
     let pending = Stage::compose(&mut store, options.root_id, StageOptions::default());
     assert!(
         pending.clip_asset_requests().iter().all(|request| {
-            request.status == ClipAssetStatus::Unavailable(ClipAssetUnavailable::Unresolved)
+            request.status == ClipAssetStatus::Unavailable(ClipAssetUnavailable::Unanswered)
         }),
         "preparation must request host resolution"
     );

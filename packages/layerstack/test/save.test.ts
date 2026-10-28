@@ -125,13 +125,13 @@ describe("exporting", () => {
     assert.equal((await failure(() => stage.exportLayer(stage.root, "usdz" as "usda"))).code, "argument.invalid");
   });
 
-  it("flattens the composed stage in each format, which reopens with nothing wanted", async () => {
+  it("flattens the composed stage in each format, which reopens with nothing unavailable", async () => {
     using stage = await resolvedScene();
     for (const format of ["usda", "usdc"] as const) {
       const flat = stage.exportFlattened(format);
       assert.ok(flat.lossless);
       using reopened = layerstack.open({ identifier: `flat.${format}`, bytes: flat.bytes });
-      assert.deepEqual(reopened.wanted(), [], "no arcs are left");
+      assert.deepEqual(reopened.unavailable(), [], "no arcs are left");
       assert.equal(composed(reopened), composed(stage), format);
       assert.deepEqual(reopened.attribute("/Ball.tag")?.get(), { kind: "scalar", type: "token", value: "trim" });
     }
@@ -155,7 +155,7 @@ describe("exporting", () => {
     using stage = layerstack.open({ identifier: "scene.usda", bytes: bytes("scene.usda") });
     const packaged = stage.exportPackage();
     assert.equal(packaged.bytes, null);
-    assert.deepEqual(packaged.unresolved.map((use) => use.asset).sort(), ["./parts/ball.usda", "./sub.usda"]);
+    assert.deepEqual(packaged.unresolved.map((use) => use.assetPath).sort(), ["./parts/ball.usda", "./sub.usda"]);
     assert.ok(packaged.unresolved.every((use) => use.layer === stage.root && use.reason.length > 0));
   });
 });

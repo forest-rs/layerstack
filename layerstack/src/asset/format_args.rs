@@ -26,7 +26,7 @@ pub struct FormatArgs(BTreeMap<String, String>);
 #[non_exhaustive]
 pub struct FormatArgsError {
     /// The asset path.
-    pub asset: String,
+    pub asset_path: String,
     /// The argument without `=`.
     pub argument: String,
 }
@@ -36,7 +36,7 @@ impl fmt::Display for FormatArgsError {
         write!(
             f,
             "{}: format argument `{}` has no `=`",
-            self.asset, self.argument
+            self.asset_path, self.argument
         )
     }
 }
@@ -64,7 +64,7 @@ impl FormatArgs {
         if !encoded.is_empty() {
             for pair in encoded.split('&') {
                 let (key, value) = pair.split_once('=').ok_or_else(|| FormatArgsError {
-                    asset: asset.into(),
+                    asset_path: asset.into(),
                     argument: pair.into(),
                 })?;
                 args.insert(key, value);

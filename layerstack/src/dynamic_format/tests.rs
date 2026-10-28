@@ -155,7 +155,7 @@ fn payload_arguments_compose_from_the_opinions_stronger_than_it() {
             anchor: LayerId(2),
             asset_path: IDENTIFIER.into(),
             prim: world,
-            arc: crate::ArcKind::Payloads,
+            used_by: crate::AssetUse::Payload,
         }]
     );
     let dependency = stage.dynamic_dependency(world).unwrap();

@@ -23,7 +23,7 @@ use alloc::{string::String, sync::Arc, vec::Vec};
 use hashbrown::HashSet;
 
 use crate::{
-    asset::{AssetRequest, FormatArgs},
+    asset::{AssetRequest, AssetUse, FormatArgs},
     composition_error::{
         ArcCycle, ArcCycleSite, ArcToProhibitedChild, CompositionError, OpinionAtRelocationSource,
         UnresolvedAsset, UnresolvedDefaultPrim, UnresolvedPrimPath,
@@ -1509,6 +1509,11 @@ impl Indexer<'_, '_, '_> {
     ) {
         let reference = &arc.arc;
         let prim = self.originating_prim();
+        let used_by = if kind == ArcKind::Payloads {
+            AssetUse::Payload
+        } else {
+            AssetUse::Reference
+        };
         let is_internal = reference.asset.is_none();
         let mut offset = reference.layer_offset;
         let stack_id;
@@ -1541,18 +1546,18 @@ impl Indexer<'_, '_, '_> {
                         self.record_error(CompositionError::UnresolvedAsset(UnresolvedAsset {
                             prim,
                             arc: kind,
-                            asset: identifier,
+                            asset_path: identifier,
                             introducing_layer: arc.source_layer,
                             introducing_spec: path_at_intro.clone(),
                         }));
                         return;
                     }
-                    AssetAvailability::Unresolved => {
+                    AssetAvailability::Unavailable => {
                         self.outputs.asset_requests.push(AssetRequest {
                             anchor,
                             asset_path: identifier,
                             prim,
-                            arc: kind,
+                            used_by,
                         });
                         return;
                     }
@@ -1563,7 +1568,7 @@ impl Indexer<'_, '_, '_> {
                         anchor: reference.layer,
                         asset_path: reference.asset.clone().unwrap_or_default(),
                         prim,
-                        arc: kind,
+                        used_by,
                     });
                     return;
                 }
@@ -1574,7 +1579,7 @@ impl Indexer<'_, '_, '_> {
                     self.record_error(CompositionError::UnresolvedAsset(UnresolvedAsset {
                         prim,
                         arc: kind,
-                        asset: reference.asset.clone().unwrap_or_default(),
+                        asset_path: reference.asset.clone().unwrap_or_default(),
                         introducing_layer: arc.source_layer,
                         introducing_spec: path_at_intro.clone(),
                     }));

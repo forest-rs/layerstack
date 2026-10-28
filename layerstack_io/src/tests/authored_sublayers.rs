@@ -13,7 +13,7 @@
 
 use super::*;
 use layerstack::{
-    ArcKind, CompositionError, LayerOffset, SublayerEntry, Time, Transaction, UnresolvedSublayer,
+    AssetUse, CompositionError, LayerOffset, SublayerEntry, Time, Transaction, UnresolvedSublayer,
 };
 
 const SESSION: LayerId = LayerId(7);
@@ -117,8 +117,10 @@ fn composed(doc: &StageDocument<Memory>) -> Composed {
             .iter()
             .filter_map(|error| match error {
                 CompositionError::UnresolvedSublayer(UnresolvedSublayer {
-                    layer, asset, ..
-                }) => Some((layer_name(doc, *layer), asset.clone())),
+                    layer,
+                    asset_path,
+                    ..
+                }) => Some((layer_name(doc, *layer), asset_path.clone())),
                 _ => None,
             })
             .collect(),
@@ -172,7 +174,7 @@ fn session_sublayers_load_at_open() {
         .load_report()
         .asset_failures
         .iter()
-        .map(|failure| failure.asset.as_str())
+        .map(|failure| failure.asset_path.as_str())
         .collect();
     assert_eq!(failures, ["missing.usda"]);
     assert!(doc.load_report().asset_failures[0].is_missing());
@@ -199,17 +201,17 @@ fn sublayers_authored_through_apply_load() {
     let mut edit = Transaction::new();
     edit.set_sublayers(SESSION, session_sublayers());
     let (applied, loaded) = doc.apply(&edit).unwrap();
-    let requested: Vec<(&str, ArcKind)> = applied
+    let requested: Vec<(&str, AssetUse)> = applied
         .asset_requests
         .iter()
-        .map(|request| (request.asset_path.as_str(), request.arc))
+        .map(|request| (request.asset_path.as_str(), request.used_by))
         .collect();
     assert_eq!(
         requested,
         [
-            ("missing.usda", ArcKind::Local),
-            ("rel.usda", ArcKind::Local),
-            ("sub.usda", ArcKind::Local),
+            ("missing.usda", AssetUse::Sublayer),
+            ("rel.usda", AssetUse::Sublayer),
+            ("sub.usda", AssetUse::Sublayer),
         ]
     );
     let read: Vec<&str> = loaded
@@ -249,7 +251,7 @@ fn sublayers_authored_through_apply_load() {
     );
     let (applied, loaded) = doc.apply(&edit).unwrap();
     assert_eq!(applied.asset_requests.len(), 1);
-    assert_eq!(applied.asset_requests[0].arc, ArcKind::Local);
+    assert_eq!(applied.asset_requests[0].used_by, AssetUse::Sublayer);
     assert_eq!(
         doc.view()
             .prim(applied.asset_requests[0].prim)

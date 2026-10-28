@@ -70,7 +70,7 @@ impl AssetPreviewsApi<'_> {
         });
         Some(Thumbnails {
             default_image: AssetReference {
-                authored_path: String::from(&*path),
+                asset_path: String::from(&*path),
                 source,
             },
         })

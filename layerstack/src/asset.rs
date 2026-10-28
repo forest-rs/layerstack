@@ -19,6 +19,27 @@
 //! [`UdimPattern`] spells UDIM texture tile sets (`color.<UDIM>.png`), whose
 //! tiles resolve one by one as ordinary asset paths.
 //!
+//! # Absent assets
+//!
+//! The crates name an asset that is not there one way:
+//!
+//! - **unavailable**: the host has not answered for it yet, and it may
+//!   still arrive ([`crate::AssetAvailability::Unavailable`],
+//!   [`AssetResolveError::Unavailable`]). Composition asks for it
+//!   ([`AssetRequest`]) and composes without it meanwhile.
+//! - **missing** (or **not found**): confirmed absent
+//!   ([`crate::AssetAvailability::Missing`],
+//!   [`crate::InMemoryStore::mark_asset_missing`]).
+//! - **unresolved**: the arc or sublayer contributes nothing, for any
+//!   reason, missing or failed to read
+//!   ([`crate::CompositionError::UnresolvedAsset`],
+//!   [`crate::Reference::unresolved`]).
+//! - **pending**: the layer's id is known and its content is loading
+//!   ([`crate::LayerStore::is_layer_pending`], [`PendingPrim`]).
+//!
+//! [`AssetUse`] says what uses an asset: a sublayer, a reference or a
+//! payload.
+//!
 //! # Usage pattern
 //!
 //! ```ignore
@@ -81,7 +102,7 @@ pub struct ExpressionAssetPath {
 /// An asset a deferred reference or payload ([`Reference::deferred`]) that
 /// composition followed names, or a sublayer by asset path of a layer stack
 /// it read ([`crate::SublayerEntry::unresolved`]), which the store does not
-/// resolve yet ([`crate::AssetAvailability::Unresolved`]); see
+/// resolve yet ([`crate::AssetAvailability::Unavailable`]); see
 /// [`Stage::asset_requests`](crate::Stage::asset_requests).
 ///
 /// The arc or sublayer contributes nothing until the host loads `asset_path`, anchored
@@ -105,9 +126,48 @@ pub struct AssetRequest {
     /// first prim to read its layer stack, the pseudo-root for the stage's
     /// own.
     pub prim: PathId,
-    /// The kind of arc: [`ArcKind::References`] or [`ArcKind::Payloads`],
-    /// or [`ArcKind::Local`] for a sublayer of a layer stack.
-    pub arc: ArcKind,
+    /// What uses the asset: a sublayer, a reference or a payload.
+    pub used_by: AssetUse,
+}
+
+/// What uses an asset that composition asks for or could not resolve: a
+/// sublayer of a layer stack, or a reference or payload arc.
+///
+/// Spec: AOUSD Core §10.3.1 (sublayers), §10.3.2.1 (references),
+/// §10.3.2.2 (payloads).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[non_exhaustive]
+pub enum AssetUse {
+    /// A sublayer a layer's `subLayers` names.
+    Sublayer,
+    /// A reference arc.
+    Reference,
+    /// A payload arc.
+    Payload,
+}
+
+impl AssetUse {
+    /// The use in `snake_case`: `sublayer`, `reference` or `payload`, as
+    /// bindings spell it. A new variant brings a new name.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Sublayer => "sublayer",
+            Self::Reference => "reference",
+            Self::Payload => "payload",
+        }
+    }
+    /// The use of the asset an arc of `kind` names: [`Self::Reference`] for
+    /// [`ArcKind::References`], [`Self::Payload`] for
+    /// [`ArcKind::Payloads`]; `None` for an arc that names no asset.
+    #[must_use]
+    pub const fn of_arc(kind: ArcKind) -> Option<Self> {
+        match kind {
+            ArcKind::References => Some(Self::Reference),
+            ArcKind::Payloads => Some(Self::Payload),
+            _ => None,
+        }
+    }
 }
 
 /// A prim composition did not compose because its index reads layers the

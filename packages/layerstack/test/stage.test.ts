@@ -48,15 +48,15 @@ describe("loading the module", () => {
 describe("opening with only the root", () => {
   it("composes what it has and wants the rest", () => {
     using stage = openScene();
-    const wanted = stage.wanted();
+    const unavailable = stage.unavailable();
     assert.deepEqual(
-      wanted.map((need) => [need.identifier, need.asset, need.arc]),
+      unavailable.map((need) => [need.identifier, need.assetPath, need.usedBy]),
       [
-        ["parts/ball.usda", "./parts/ball.usda", "references"],
-        ["sub.usda", "./sub.usda", "sublayers"],
+        ["parts/ball.usda", "./parts/ball.usda", "reference"],
+        ["sub.usda", "./sub.usda", "sublayer"],
       ],
     );
-    assert.ok(wanted.every((need) => need.anchor === stage.root));
+    assert.ok(unavailable.every((need) => need.anchor === stage.root));
     assert.equal(stage.root.identifier, "scene.usda");
     assert.equal(stage.root.format, "usda");
     const ball = stage.prim("/Ball");
@@ -64,7 +64,7 @@ describe("opening with only the root", () => {
     assert.equal(ball?.specifier, "def");
     const status = stage.status();
     assert.equal(status.complete, false);
-    assert.equal(status.wanted.length, 2);
+    assert.equal(status.unavailable.length, 2);
     assert.deepEqual(status.compositionErrors, []);
   });
 
@@ -86,7 +86,7 @@ describe("opening with only the root", () => {
 });
 
 describe("the resolve loop", () => {
-  it("fetches in rounds until nothing is wanted", async () => {
+  it("fetches in rounds until nothing is unavailable", async () => {
     using stage = openScene();
     const source = mockSource(scene);
     const result = await stage.resolve(source);
@@ -103,34 +103,40 @@ describe("the resolve loop", () => {
     assert.deepEqual(stage.attribute("/Ball.radius")?.get(), { kind: "scalar", type: "double", value: 0.5 });
   });
 
-  it("can be driven by hand: wanted, supply, loadSupplied", () => {
+  it("can be driven by hand: unavailable, supply, loadSupplied", () => {
     using stage = openScene();
-    for (const need of stage.wanted()) stage.supply(need.identifier, bytes(need.identifier));
+    for (const need of stage.unavailable()) stage.supply(need.identifier, bytes(need.identifier));
     const first = stage.loadSupplied();
     assert.deepEqual(
       first.loaded.map((layer) => layer.identifier),
       ["parts/ball.usda", "sub.usda"],
     );
     assert.deepEqual(
-      stage.wanted().map((need) => need.identifier),
+      stage.unavailable().map((need) => need.identifier),
       ["parts/trim.usda"],
     );
     assert.ok(layerstack.transfer().bytesIn > 0);
   });
 
-  it("keeps a confirmed-absent asset missing, with composition codes", async () => {
+  it("keeps a confirmed-absent asset unresolved, with composition codes", async () => {
     using stage = openScene();
     const result = await stage.resolve(mockSource({ ...scene, "sub.usda": null, "parts/ball.usda": null }));
     assert.deepEqual(
-      result.failures.map((failure) => [failure.asset, failure.code]).sort(),
+      result.failures.map((failure) => [failure.assetPath, failure.code]).sort(),
       [
         ["./parts/ball.usda", "io.not_found"],
         ["./sub.usda", "io.not_found"],
       ],
     );
     const status = stage.status();
-    assert.deepEqual(status.wanted, []);
-    assert.deepEqual(status.missing.map((asset) => asset.asset).sort(), ["./parts/ball.usda", "./sub.usda"]);
+    assert.deepEqual(status.unavailable, []);
+    assert.deepEqual(
+      status.unresolved.map((asset) => [asset.assetPath, asset.usedBy, asset.identifier, asset.reason]).sort(),
+      [
+        ["./parts/ball.usda", "reference", "parts/ball.usda", "io.not_found"],
+        ["./sub.usda", "sublayer", "sub.usda", "io.not_found"],
+      ],
+    );
     const codes = status.compositionErrors.map((issue) => issue.code).sort();
     assert.deepEqual(codes, ["composition.unresolved_asset", "composition.unresolved_sublayer"]);
     assert.equal(status.compositionErrors.find((issue) => issue.code === "composition.unresolved_asset")?.prim, "/Ball");
@@ -146,7 +152,7 @@ describe("the resolve loop", () => {
     assert.equal(error.identifier, "sub.usda");
     assert.ok(error.cause instanceof Error);
     assert.ok(stage.layers().some((layer) => layer.identifier === "parts/ball.usda"));
-    assert.deepEqual(stage.wanted().map((need) => need.identifier).sort(), ["parts/trim.usda", "sub.usda"]);
+    assert.deepEqual(stage.unavailable().map((need) => need.identifier).sort(), ["parts/trim.usda", "sub.usda"]);
   });
 
   it("stops with resolve.aborted", async () => {
@@ -179,7 +185,7 @@ def "Model" (
     ]);
     using stage = layerstack.open({ identifier: "set/model.usdz", bytes: pack });
     assert.deepEqual(
-      stage.wanted().map((need) => need.identifier),
+      stage.unavailable().map((need) => need.identifier),
       ["set/outside.usda"],
     );
     assert.deepEqual(stage.attribute("/Model.height")?.get(), { kind: "scalar", type: "float", value: 3 });

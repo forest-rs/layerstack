@@ -666,7 +666,7 @@ impl<B: Storage> Replay<'_, '_, B> {
             }
             Err(error) => {
                 self.reader.failures.push(AssetFailure {
-                    asset: String::from(&**asset),
+                    asset_path: String::from(&**asset),
                     anchor: Some(anchor),
                     error,
                 });

@@ -143,13 +143,16 @@ fn render_error(loaded: &LoadedStage, error: &CompositionError) -> Error {
             asset: None,
         },
         CompositionError::UnresolvedAsset(UnresolvedAsset {
-            prim, arc, asset, ..
+            prim,
+            arc,
+            asset_path,
+            ..
         }) => Error {
             prim: display(loaded, *prim),
             arc: arc_name(arc),
             layer: None,
             unresolved: None,
-            asset: Some(file_stem(asset)),
+            asset: Some(file_stem(asset_path)),
         },
         other => panic!("unexpected composition error {other:?}"),
     }

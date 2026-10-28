@@ -31,7 +31,7 @@ use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use hashbrown::{HashMap, HashSet};
 
 use crate::{
-    asset::{AssetRequest, PendingPrim},
+    asset::{AssetRequest, AssetUse, PendingPrim},
     composition_error::{CompositionError, LimitExceeded},
     composition_limits::CompositionLimit,
     dependency_map::{DependencyRecords, PrimDependencies},
@@ -2057,7 +2057,7 @@ fn record_errors(out: &mut Composition, ctx: &Ctx<'_>, errors: Vec<Recorded>) {
 }
 
 /// The asset requests for the sublayers `stack` names that the store has
-/// not resolved, each [`ArcKind::Local`] at `prim`, the first prim to read
+/// not resolved, each [`AssetUse::Sublayer`] at `prim`, the first prim to read
 /// the stack.
 fn sublayer_requests(
     stack: &layer_stacks::ComputedStack<'_>,
@@ -2067,7 +2067,7 @@ fn sublayer_requests(
         anchor: request.anchor,
         asset_path: request.asset_path.clone(),
         prim,
-        arc: ArcKind::Local,
+        used_by: AssetUse::Sublayer,
     })
 }
 

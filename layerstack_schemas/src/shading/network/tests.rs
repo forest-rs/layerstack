@@ -256,7 +256,7 @@ fn typed_preview_handoff_preserves_defaults_interfaces_shared_nodes_and_asset_an
         .value
         .asset_reference()
         .unwrap();
-    assert_eq!(file.authored_path, "../textures/paint.png");
+    assert_eq!(file.asset_path, "../textures/paint.png");
     assert_eq!(
         file.source.as_ref().unwrap().layer,
         LayerId(2),

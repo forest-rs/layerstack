@@ -26,7 +26,7 @@ pub struct UdimTileAsset {
     pub tile: UdimTile,
     /// The tile spelled as authored: the pattern with this tile's number
     /// (`UsdShadeUdimUtils::ReplaceUdimPattern`).
-    pub asset: String,
+    pub asset_path: String,
     /// The tile's resolved identity, in the directory of the set's resolved
     /// pattern: a storage identifier or a `package[member]` path. Pass it to
     /// [`StageDocument::read_asset_bytes`] without an anchor to read the tile.
@@ -600,7 +600,7 @@ impl Spelled {
                 .iter()
                 .map(|&tile| UdimTileAsset {
                     tile,
-                    asset: pattern.tile_path(tile),
+                    asset_path: pattern.tile_path(tile),
                     identifier: self.tile(tile),
                 })
                 .collect(),

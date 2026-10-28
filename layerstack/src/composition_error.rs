@@ -318,7 +318,7 @@ impl Describe for CompositionError {
                 "{}: the {} to @{}@ authored at {} in {} does not resolve; it contributes nothing",
                 names.path(error.prim),
                 arc_name(error.arc),
-                error.asset,
+                error.asset_path,
                 names.spec(&error.introducing_spec),
                 names.layer(error.introducing_layer)
             ),
@@ -326,7 +326,7 @@ impl Describe for CompositionError {
                 f,
                 "{}: sublayer @{}@ does not resolve; it is ignored",
                 names.layer(error.layer),
-                error.asset
+                error.asset_path
             ),
             Self::LimitExceeded(error) => match error.limit {
                 CompositionLimit::PrimIndexNodes => write!(
@@ -687,8 +687,8 @@ pub struct UnresolvedAsset {
     /// The asset path as authored, or as a variable expression evaluates
     /// it, normalized as list editing compares it (`./a/../b.usd` reads
     /// `./b.usd`). A relative path is relative to `introducing_layer`.
-    pub asset: String,
-    /// The layer whose list edit adds the arc, which `asset` is anchored
+    pub asset_path: String,
+    /// The layer whose list edit adds the arc, which `asset_path` is anchored
     /// to. For an arc reached through another arc it is a layer of that
     /// arc's target, not of the stage's layer stack.
     pub introducing_layer: LayerId,
@@ -723,7 +723,7 @@ pub struct UnresolvedSublayer {
     /// The layer whose `subLayers` names the sublayer.
     pub layer: LayerId,
     /// The sublayer's asset path as authored.
-    pub asset: String,
+    pub asset_path: String,
 }
 
 /// A layer that a layer stack names by id but the store neither holds
@@ -1131,7 +1131,7 @@ mod tests {
         assert_eq!(CODES[15], "composition.variable_expression");
         let error = CompositionError::UnresolvedSublayer(UnresolvedSublayer {
             layer: LayerId(0),
-            asset: "./sub.usda".into(),
+            asset_path: "./sub.usda".into(),
         });
         assert_eq!(error.code(), "composition.unresolved_sublayer");
         assert_eq!(
@@ -1147,7 +1147,7 @@ mod tests {
         let unresolved = CompositionError::UnresolvedAsset(UnresolvedAsset {
             prim: moss,
             arc: ArcKind::References,
-            asset: "./moss.usda".into(),
+            asset_path: "./moss.usda".into(),
             introducing_layer: LayerId(0),
             introducing_spec: SpecPath::from_prim_path(moss),
         });
@@ -1255,7 +1255,7 @@ mod tests {
         let mut store = InMemoryStore::default();
         let error = CompositionError::UnresolvedSublayer(UnresolvedSublayer {
             layer: LayerId(1),
-            asset: "./sub.usda".into(),
+            asset_path: "./sub.usda".into(),
         });
         assert_eq!(
             error.display(&store).to_string(),

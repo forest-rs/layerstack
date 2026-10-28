@@ -65,7 +65,7 @@ fn to_json(value: &Value) -> Json {
 fn thumbnail(scene: Scene<'_>, prim: PathId) -> Option<String> {
     AssetPreviewsApi::from_prim_unchecked(PrimView::new(scene, prim))
         .default_thumbnails()
-        .map(|thumbnails| thumbnails.default_image.authored_path)
+        .map(|thumbnails| thumbnails.default_image.asset_path)
 }
 
 fn local_asset_info(store: &InMemoryStore, prim: PathId) -> Option<Json> {
@@ -126,7 +126,7 @@ fn default_thumbnails_edit_as_cpp_edits_them() {
         assert_eq!(
             thumbnails
                 .as_ref()
-                .map(|t| t.default_image.authored_path.clone()),
+                .map(|t| t.default_image.asset_path.clone()),
             row.default_image,
             "{label}"
         );
@@ -157,7 +157,7 @@ fn asset_default_previews_populate_only_the_default_prim() {
     assert_eq!(
         previews
             .default_thumbnails(&store)
-            .map(|t| t.default_image.authored_path),
+            .map(|t| t.default_image.asset_path),
         want.default_image
     );
     for path in [

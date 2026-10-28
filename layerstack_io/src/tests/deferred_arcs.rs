@@ -5,7 +5,7 @@
 //! loaded only when composition reaches them (AOUSD Core §10.3.2.5).
 
 use super::*;
-use layerstack::{ArcKind, CompositionError};
+use layerstack::{AssetUse, CompositionError};
 
 /// A model whose variant set `look` selects `a`; each branch references
 /// its own asset.
@@ -142,7 +142,7 @@ fn selecting_a_deferred_branch_asks_for_its_assets_until_they_load() {
     assert_eq!(requests[0].anchor, root);
     assert_eq!(requests[0].asset_path, "b.usda");
     assert_eq!(requests[0].prim, model);
-    assert_eq!(requests[0].arc, ArcKind::References);
+    assert_eq!(requests[0].used_by, AssetUse::Reference);
     assert!(doc.stage.stage().composition_errors().is_empty());
 
     let report = doc.load_requested_assets().unwrap();
@@ -229,7 +229,7 @@ fn missing_assets_in_unselected_branches_are_not_read_or_reported() {
         select(&mut doc, "b");
         let report = doc.load_requested_assets().unwrap();
         assert_eq!(report.asset_failures.len(), 1);
-        assert_eq!(report.asset_failures[0].asset, "b.usda");
+        assert_eq!(report.asset_failures[0].asset_path, "b.usda");
         assert!(report.asset_failures[0].is_missing());
         assert!(doc.stage.stage().asset_requests().is_empty());
         let root = doc.stage.stage().root_layer().unwrap();
@@ -239,7 +239,11 @@ fn missing_assets_in_unselected_branches_are_not_read_or_reported() {
             panic!("{:?}", doc.stage.stage().composition_errors());
         };
         assert_eq!(
-            (error.asset.as_str(), error.prim, error.introducing_layer),
+            (
+                error.asset_path.as_str(),
+                error.prim,
+                error.introducing_layer
+            ),
             ("b.usda", model, root)
         );
         let spec = error
@@ -271,7 +275,7 @@ fn a_missing_deferred_asset_that_appears_loads_after_a_reload() {
     assert!(doc.load_report().asset_failures[0].is_missing());
     assert!(matches!(
         doc.stage.stage().composition_errors(),
-        [CompositionError::UnresolvedAsset(error)] if error.asset == "b.usda"
+        [CompositionError::UnresolvedAsset(error)] if error.asset_path == "b.usda"
     ));
 
     // The miss is recorded: asking again reads nothing.
@@ -487,8 +491,8 @@ fn edit_results_name_the_assets_a_transaction_asks_for() {
             request.anchor,
             request.asset_path.as_str(),
             request.prim,
-            request.arc,
-        ) == (root, "a.usda", a, ArcKind::Payloads)
+            request.used_by,
+        ) == (root, "a.usda", a, AssetUse::Payload)
     };
     assert!(asked(&applied.asset_requests));
     assert!(asked(doc.stage.stage().asset_requests()));

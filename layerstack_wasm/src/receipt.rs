@@ -29,7 +29,7 @@ pub struct EditReceipt {
     pub(crate) target: LayerId,
     /// The transaction that undoes the edits; `None` once undone.
     pub(crate) inverse: Option<Transaction>,
-    /// `[target, changes, loaded, failures, wanted]`, as
+    /// `[target, changes, loaded, failures, unavailable]`, as
     /// `Stage::receipt` documents it.
     pub(crate) record: Wire,
 }

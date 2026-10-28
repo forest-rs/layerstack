@@ -480,7 +480,7 @@ fn dormant_unavailable_clip_does_not_block_resident_samples() {
             &*request.identifier == "bad.usda"
                 && request.status
                     == layerstack::value_clips::ClipAssetStatus::Unavailable(
-                        layerstack::value_clips::ClipAssetUnavailable::Unresolved,
+                        layerstack::value_clips::ClipAssetUnavailable::Unanswered,
                     )
         }),
         "dormant assets remain an explicit host request"

@@ -135,7 +135,7 @@ fn weak_layer_and_retimed_assets_keep_their_actual_anchor() {
     let asset = AssetReference::read(&scene, property, Time::Default)
         .unwrap()
         .unwrap();
-    assert_eq!(asset.authored_path, "./default.exr");
+    assert_eq!(asset.asset_path, "./default.exr");
     assert_eq!(asset.source.unwrap().layer, LayerId(2));
     assert_eq!(
         AssetReference::read(&scene, property, Time::at(10.)),
@@ -197,7 +197,7 @@ fn anchoring_reports_missing_context_and_preserves_host_search_policy() {
     ] {
         assert_eq!(
             AssetReference {
-                authored_path: path.into(),
+                asset_path: path.into(),
                 source: None
             }
             .anchor(&Locations),
@@ -207,7 +207,7 @@ fn anchoring_reports_missing_context_and_preserves_host_search_policy() {
     for path in ["/absolute/a.exr", "https://example.org/a.exr"] {
         assert_eq!(
             AssetReference {
-                authored_path: path.into(),
+                asset_path: path.into(),
                 source: None
             }
             .anchor(&Locations)
@@ -234,7 +234,7 @@ fn anchoring_reports_missing_context_and_preserves_host_search_policy() {
     );
     let mut missing = asset;
     missing.source.as_mut().unwrap().layer = LayerId(99);
-    missing.authored_path = "./a.exr".into();
+    missing.asset_path = "./a.exr".into();
     assert_eq!(
         missing.anchor(&Locations),
         Err(AssetAnchorError::CannotAnchor)
@@ -306,7 +306,7 @@ fn source_only_asset_edits_change_anchors_and_parameter_upload_revisions() {
     let next = cache.capture(&scene, path).unwrap();
     let asset = texture_asset(next.inputs);
     assert!(next.evaluated);
-    assert_eq!(asset.authored_path, before_asset.authored_path);
+    assert_eq!(asset.asset_path, before_asset.asset_path);
     assert_eq!(asset.source.as_ref().unwrap().layer, LayerId(1));
     assert_eq!(
         asset.anchor(&Locations).unwrap().identifier,

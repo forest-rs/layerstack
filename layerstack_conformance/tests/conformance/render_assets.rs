@@ -32,7 +32,7 @@ fn asset_settings_keep_their_authoring_layer() {
     let Some(RenderSettingValue::Asset(asset)) = settings.get(oracle.setting.as_str()) else {
         panic!("{:?}", settings.get(oracle.setting.as_str()));
     };
-    assert_eq!(asset.authored_path, oracle.authored_path);
+    assert_eq!(asset.asset_path, oracle.authored_path);
     assert_eq!(
         asset.source.as_ref().map(|source| source.layer),
         Some(LayerId(2))

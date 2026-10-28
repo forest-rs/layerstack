@@ -18,9 +18,9 @@ members = ["."]
 [dependencies]
 layerstack = { features = ["std"], path = "../layerstack" }
 layerstack_io = { features = ["std"], path = "../layerstack_io" }
-layerstack_usda = { path = "../layerstack_usda" }
-layerstack_usdc = { features = ["std"], path = "../layerstack_usdc" }
-layerstack_usdz = { features = ["std"], path = "../layerstack_usdz" }
+layerstack_usda = { features = ["unstable-internals"], path = "../layerstack_usda" }
+layerstack_usdc = { features = ["std", "unstable-internals"], path = "../layerstack_usdc" }
+layerstack_usdz = { features = ["std", "unstable-internals"], path = "../layerstack_usdz" }
 libfuzzer-sys = "0.4"
 
 [profile.release]

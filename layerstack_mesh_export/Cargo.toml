@@ -26,5 +26,10 @@ layerstack_usdz = { workspace = true }
 # depends on it.
 libm = { workspace = true }
 
+[dev-dependencies]
+# Tests inspect the exported USDA and USDZ through the format internals.
+layerstack_usda = { features = ["unstable-internals"], workspace = true }
+layerstack_usdz = { features = ["unstable-internals"], workspace = true }
+
 [lints]
 workspace = true

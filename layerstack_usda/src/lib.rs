@@ -5,10 +5,13 @@
 //!
 //! This crate provides a parser for the USDA scene
 //! description format as specified in AOUSD Core §16.2, plus a deterministic
-//! writer. It is organized in these layers:
+//! writer. Read a layer with [`read_usda`], and save one with [`save_usda`].
+//! It is organized in these layers; the first four are internal, and the
+//! `unstable-internals` feature makes them public modules for this
+//! repository's tests, benchmarks and fuzzing, with no semver promise:
 //!
-//! 1. **Lexer** ([`lexer`]) — Tokenizes USDA source into a stream of
-//!    [`Token`](lexer::Token)s with span information. Whitespace, comments,
+//! 1. **Lexer** — Tokenizes USDA source into a stream of
+//!    tokens with span information. Whitespace, comments,
 //!    and all syntactic punctuation are preserved as tokens to support
 //!    lossless round-tripping.
 //!
@@ -21,7 +24,7 @@
 //!    syntactic noise. Represents what was *authored* in the file, not what
 //!    composition produces.
 //!
-//! 4. **Emit** ([`emit`]) — Converts the AST into layerstack's [`Layer`] /
+//! 4. **Emit** — Converts the AST into layerstack's [`Layer`] /
 //!    [`PrimSpec`] document model for composition.
 //!
 //! 5. **Writer** ([`writer`]) — Serializes an explicit *authored* document
@@ -37,10 +40,9 @@
 //!
 //! For scene loading, [`read_usda`] uses the shared grammar while converting
 //! numeric property arrays directly from source ranges into native buffers.
-//! It avoids per-element syntax nodes and generic AST tuples. Use the parser
-//! APIs when the syntax or inspectable AST is needed.
-//! For plugin metadata, [`read_usda_with_registry`] and
-//! [`emit::emit_with_registry`] use caller-registered types and spec targets,
+//! It avoids per-element syntax nodes and generic AST tuples.
+//! For plugin metadata, [`read_usda_with_registry`] uses caller-registered
+//! types and spec targets,
 //! preserving the ordinary literal inference for unregistered field names;
 //! an identifier there keeps its text ([`layerstack::Value::Unregistered`]),
 //! as OpenUSD keeps it.
@@ -90,11 +92,32 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
 
-#[allow(
-    clippy::cast_possible_truncation,
-    reason = "USDA files >4GB are unrealistic; u32 spans are intentional"
-)]
-pub mod lexer;
+/// Declares a module that is public with the `unstable-internals` feature,
+/// for this repository's tests, benchmarks and fuzzing, and private without
+/// it: its items are format internals that follow no semver promise.
+macro_rules! internal_mod {
+    ($(#[$attr:meta])* $name:ident) => {
+        $(#[$attr])*
+        #[cfg(feature = "unstable-internals")]
+        pub mod $name;
+        $(#[$attr])*
+        #[cfg(not(feature = "unstable-internals"))]
+        #[allow(
+            unreachable_pub,
+            dead_code,
+            reason = "public only with the `unstable-internals` feature"
+        )]
+        mod $name;
+    };
+}
+
+internal_mod!(
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "USDA files >4GB are unrealistic; u32 spans are intentional"
+    )]
+    lexer
+);
 
 #[allow(
     clippy::cast_possible_truncation,
@@ -103,33 +126,41 @@ pub mod lexer;
 mod span;
 pub use span::{Span, TextPosition};
 
-pub mod ast;
+internal_mod!(ast);
 pub mod diagnostic;
 use layerstack::ident;
 
-#[allow(
-    clippy::cast_possible_truncation,
-    reason = "USDA files >4GB are unrealistic; u32 spans are intentional"
-)]
-pub mod cst;
+internal_mod!(
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "USDA files >4GB are unrealistic; u32 spans are intentional"
+    )]
+    cst
+);
 
-#[allow(
-    clippy::cast_possible_truncation,
-    reason = "USDA files >4GB are unrealistic; u32 spans are intentional"
-)]
-pub mod parser;
+internal_mod!(
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "USDA files >4GB are unrealistic; u32 spans are intentional"
+    )]
+    parser
+);
 
-#[allow(
-    clippy::cast_possible_truncation,
-    reason = "USDA files >4GB are unrealistic; u32 spans are intentional"
-)]
-pub mod lower;
+internal_mod!(
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "USDA files >4GB are unrealistic; u32 spans are intentional"
+    )]
+    lower
+);
 
-#[allow(
-    clippy::cast_possible_truncation,
-    reason = "USDA value conversions intentionally narrow numeric types"
-)]
-pub mod emit;
+internal_mod!(
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "USDA value conversions intentionally narrow numeric types"
+    )]
+    emit
+);
 
 mod byte_order_mark;
 pub use byte_order_mark::ByteOrderMark;
@@ -138,6 +169,7 @@ pub mod metadata;
 mod numeric;
 mod read;
 mod token_source;
+pub use emit::{EmitResult, metadata_from_text};
 pub use read::{ReadResult, ReadStats, read_usda, read_usda_with_registry};
 
 pub mod save;

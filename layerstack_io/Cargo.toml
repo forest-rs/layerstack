@@ -23,5 +23,9 @@ layerstack_usda = { workspace = true }
 layerstack_usdc = { workspace = true }
 layerstack_usdz = { workspace = true }
 
+[dev-dependencies]
+# Tests locate package members through the USDZ reader.
+layerstack_usdz = { features = ["unstable-internals"], workspace = true }
+
 [lints]
 workspace = true

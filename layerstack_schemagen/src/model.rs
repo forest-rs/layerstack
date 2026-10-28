@@ -254,17 +254,18 @@ pub(crate) fn read(pxr: &Path, source: &Path) -> Result<Model, String> {
         let path = definitions(pxr, source, plugin, origin).join("generatedSchema.usda");
         files.push(relative(&path));
         let text = fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-        let parsed = layerstack_usda::parser::parse(&text);
-        let emitted = layerstack_usda::emit::emit(
-            &parsed.layer,
+        let read = layerstack_usda::read_usda(
+            &text,
             LayerId(u64::try_from(index).expect("few domains") + 1),
             store.tokens(),
             store.paths(),
             &mut NoAssets,
         );
-        let diagnostics: Vec<String> = parsed
-            .diagnostics
+        let emitted = read.emitted;
+        let diagnostics: Vec<String> = read
+            .parse_diagnostics
             .iter()
+            .chain(&read.lower_diagnostics)
             .chain(&emitted.diagnostics)
             .map(|d| d.message.clone())
             .collect();
@@ -580,15 +581,15 @@ fn source_api_names(
     files.push(relative);
     let text = fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
     let store = InMemoryStore::default();
-    let parsed = layerstack_usda::parser::parse(&text);
     // Its sublayers name other schema files, which need not resolve.
-    let emitted = layerstack_usda::emit::emit(
-        &parsed.layer,
+    let emitted = layerstack_usda::read_usda(
+        &text,
         LayerId(1),
         store.tokens(),
         store.paths(),
         &mut NoAssets,
-    );
+    )
+    .emitted;
     let custom_data = store.tokens().intern("customData");
     let placeholder = layerstack::schema::INSTANCE_NAME_PLACEHOLDER;
     let mut names = BTreeMap::new();

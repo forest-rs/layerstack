@@ -15,7 +15,7 @@ use std::sync::Arc;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut store = InMemoryStore::default();
     let schemas = Arc::new(layerstack_schemas::openusd(store.tokens()));
-    let parsed = layerstack_usda::parser::parse(
+    let read = layerstack_usda::read_usda(
         r#"#usda 1.0
  def Material "Paint" {
     token outputs:surface.connect = </Paint/Surface.outputs:surface>
@@ -43,15 +43,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
  }
 "#,
-    );
-    assert!(parsed.diagnostics.is_empty(), "{:?}", parsed.diagnostics);
-    let emitted = layerstack_usda::emit::emit(
-        &parsed.layer,
         LayerId(1),
         store.tokens(),
         store.paths(),
         &mut NoAssets,
     );
+    let parsed_diagnostics: Vec<_> = read
+        .parse_diagnostics
+        .iter()
+        .chain(&read.lower_diagnostics)
+        .collect();
+    assert!(parsed_diagnostics.is_empty(), "{:?}", parsed_diagnostics);
+    let emitted = read.emitted;
     assert!(emitted.diagnostics.is_empty(), "{:?}", emitted.diagnostics);
     store.insert_layer(emitted.layer);
     let mut live = LiveStage::compose(

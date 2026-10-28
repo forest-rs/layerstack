@@ -1073,7 +1073,7 @@ fn a_knot_curve_type_in_a_nested_variant_is_not_rewritten() {
         spline: Some(Box::new(spline)),
         ..Attribute::declared("d", "double")
     });
-    let variant = |name: &str| Prim::new(crate::writer::Specifier::Over, None, name);
+    let variant = |name: &str| Prim::new(Specifier::Over, None, name);
     let set = |name: &str, variant: Prim| VariantSet {
         name: name.into(),
         variants: vec![variant],

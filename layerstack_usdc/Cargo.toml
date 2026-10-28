@@ -14,6 +14,10 @@ categories = ["parser-implementations"]
 [features]
 default = []
 std = ["layerstack/std"]
+# The crate file's layers (`header`, `toc`, `section`, `value_rep`,
+# `value_type`, `compression`, `assemble`) as public modules, for this
+# repository's tests, benchmarks and fuzzing. They follow no semver promise.
+unstable-internals = []
 
 [dependencies]
 # Hash maps for internal indexes; `layerstack` already depends on it.
@@ -24,6 +28,8 @@ lz4_flex = { workspace = true }
 smallvec = { workspace = true }
 
 [dev-dependencies]
+# Tests read the USDA text the writer produces through its syntax layers.
+layerstack_usda = { features = ["unstable-internals"], workspace = true }
 
 [lints]
 workspace = true

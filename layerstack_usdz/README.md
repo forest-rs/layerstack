@@ -15,9 +15,7 @@ use layerstack_usdz::{PackageFile, write_usdz};
 let layer = b"#usda 1.0\ndef Xform \"Model\" {}\n";
 let bytes = write_usdz(&[PackageFile::new("scene.usda", layer)]).unwrap();
 
-let archive = layerstack_usdz::zip::ZipArchive::parse(&bytes).unwrap();
-assert_eq!(archive.entries()[0].name.as_ref(), "scene.usda");
-assert_eq!(archive.entries()[0].data_offset % 64, 0);
+assert_eq!(&bytes[..4], b"PK\x03\x04");
 ```
 
 Pass the root layer first, followed by its dependent layers and media. Entries

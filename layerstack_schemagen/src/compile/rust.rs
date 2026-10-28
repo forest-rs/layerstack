@@ -167,20 +167,20 @@ pub(crate) fn module_text(
     // The library's schemas, read from its generated schema layer as
     // OpenUSD's are read from theirs.
     let store = InMemoryStore::default();
-    let parsed = layerstack_usda::parser::parse(generated_schema);
-    let emitted = layerstack_usda::emit::emit(
-        &parsed.layer,
+    let read = layerstack_usda::read_usda(
+        generated_schema,
         LayerId(1),
         store.tokens(),
         store.paths(),
         &mut NoAssets,
     );
-    if !parsed.diagnostics.is_empty() || !emitted.diagnostics.is_empty() {
+    if read.diagnostics().next().is_some() {
         return Err(error(format!(
-            "generatedSchema.usda does not read back: {:?} {:?}",
-            parsed.diagnostics, emitted.diagnostics
+            "generatedSchema.usda does not read back: {:?} {:?} {:?}",
+            read.parse_diagnostics, read.lower_diagnostics, read.emitted.diagnostics
         )));
     }
+    let emitted = read.emitted;
     let tokens = &store.tokens();
     let names = |names: &[String]| names.iter().map(|n| tokens.intern(n)).collect::<Vec<_>>();
     let mut declared = Vec::new();

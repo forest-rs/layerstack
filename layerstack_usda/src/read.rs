@@ -8,7 +8,7 @@ use layerstack::{AssetResolver, LayerId, PathInterner, SchemaRegistry, TokenInte
 
 use crate::{
     Span, ast,
-    diagnostic::Diagnostic,
+    diagnostic::{Diagnostic, Severity},
     emit::EmitResult,
     lexer::{Lexer, Token, TokenKind},
     numeric::Number,
@@ -44,6 +44,31 @@ pub struct ReadResult {
     pub stats: ReadStats,
 }
 
+impl ReadResult {
+    /// The diagnostics of every phase, in phase order: parsing, lowering,
+    /// then emission.
+    pub fn diagnostics(&self) -> impl Iterator<Item = &Diagnostic> {
+        self.parse_diagnostics
+            .iter()
+            .chain(&self.lower_diagnostics)
+            .chain(&self.emitted.diagnostics)
+    }
+
+    /// Whether any phase reported an error (not only warnings).
+    #[must_use]
+    pub fn has_errors(&self) -> bool {
+        self.diagnostics()
+            .any(|diagnostic| diagnostic.severity == Severity::Error)
+    }
+
+    /// Whether the reader refused the layer as OpenUSD's refuses it
+    /// ([`EmitResult::rejected`]).
+    #[must_use]
+    pub fn is_rejected(&self) -> bool {
+        self.emitted.rejected
+    }
+}
+
 /// Imports USDA directly into an authored layer using the shared grammar.
 ///
 /// Numeric scalar, vector and quaternion property arrays (including time
@@ -51,12 +76,11 @@ pub struct ReadResult {
 /// during parsing, without retaining their element tokens or scanning them again. This avoids per-element CST nodes, generic AST values and tuple
 /// allocations. Matrices, metadata, array edits and unsupported or malformed
 /// shapes use the ordinary lowering path, preserving its diagnostics and
-/// recovery. Numeric range checking and value conversion are shared with
-/// [`crate::emit::emit`]. Authored values and declared USD types are preserved.
+/// recovery. Numeric range checking and value conversion are shared with the
+/// general emitter. Authored values and declared USD types are preserved.
 ///
-/// Use [`crate::parser::parse`] for an inspectable AST or
-/// [`crate::parser::parse_cst`] for lossless editing. The compact structural AST
-/// used here is private and never returned to callers. Asset resolution and
+/// The syntax layers (the lossless tree, the AST) are internal; the
+/// `unstable-internals` feature exposes them for this repository's tests. Asset resolution and
 /// file I/O remain caller owned; this API works with `no_std` and `alloc`.
 ///
 /// Spec: AOUSD Core §6.2–6.5 (typed values), §12.3 (samples), §16.2 (USDA).
@@ -771,7 +795,7 @@ mod tests {
                 .iter()
                 .chain(&read.lower_diagnostics)
                 .chain(&read.emitted.diagnostics)
-                .filter(|d| d.severity == crate::diagnostic::Severity::Error)
+                .filter(|d| d.severity == Severity::Error)
                 .count();
             assert!(errors > 0, "{source:?}");
         }

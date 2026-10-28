@@ -7,7 +7,7 @@ use alloc::sync::Arc;
 
 use layerstack::{AssetResolveError, LayerId};
 use layerstack_usda::diagnostic::{Diagnostic, Severity};
-use layerstack_usdc::assemble::AssembleDiagnostic;
+use layerstack_usdc::AssembleDiagnostic;
 
 /// A diagnostic from a loaded package member.
 ///

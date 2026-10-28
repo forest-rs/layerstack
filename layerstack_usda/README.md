@@ -20,7 +20,8 @@ adds no APIs; file I/O and asset loading belong to the caller.
 ## Read and write
 
 ```rust
-use layerstack_usda::{parser, writer::{Attribute, Document, Prim, Value}};
+use layerstack::{InMemoryStore, LayerId, NoAssets};
+use layerstack_usda::{read_usda, writer::{Attribute, Document, Prim, Value}};
 
 let mut root = Prim::def("Xform", "Root");
 root.push_property(Attribute::new(
@@ -32,34 +33,32 @@ document.default_prim = Some("Root".into());
 document.prims.push(root);
 let text = document.to_usda().unwrap();
 
-let parsed = parser::parse(&text);
-assert!(parsed.diagnostics.is_empty());
+let store = InMemoryStore::default();
+let read = read_usda(&text, LayerId(1), store.tokens(), store.paths(), &mut NoAssets);
+assert!(read.diagnostics().next().is_none());
 ```
 
-`parser::parse_cst` preserves source syntax, including comments and whitespace.
-`parser::parse` lowers that tree to an AST. Both recover from malformed input;
-inspect their diagnostics before treating the result as valid. To compose the
-authored data, use [`emit::emit`](https://docs.rs/layerstack_usda/latest/layerstack_usda/emit/fn.emit.html)
-with Layerstack interners and an `AssetResolver`, and inspect emission diagnostics
-as well. The resolver supplies external layers; the parser does not open files.
+`read_usda` reads a layer with Layerstack interners and an `AssetResolver`,
+which supplies external layers; the reader does not open files. It recovers
+from malformed input: inspect `diagnostics()` (parsing, lowering and emission,
+in that order) or `has_errors()` before treating the result as valid, and
+`is_rejected()` for a layer the reader refuses as OpenUSD's does. It imports
+numeric scalar, vector and quaternion property arrays directly into native
+buffers in one numeric pass, including samples and variant branches, without
+retaining per-element tokens, syntax nodes or generic AST tuples; `stats`
+reports retained syntax and recognized numeric arrays. The importer still
+retains structural syntax for declarations and metadata; the caller supplies
+the complete source string.
 
-For scene loading, use `read_usda` with the same interners and resolver. It
-imports numeric scalar, vector and quaternion property arrays directly into
-native buffers in one numeric pass, including samples and variant branches.
-Grammar tokens arrive on demand, and emission takes ownership of the prepared
-buffers without scanning the numbers again. This avoids retaining
-per-element tokens, syntax nodes and generic AST tuples. Unsupported shapes use
-the shared grammar and ordinary emitter. Inspect `parse_diagnostics`,
-`lower_diagnostics`, and `emitted.diagnostics`; `stats` reports retained syntax
-and recognized numeric arrays. Use the parser APIs when you need an inspectable
-AST or lossless editing. The importer still retains structural syntax for
-declarations and metadata; the caller supplies the complete source string.
+The syntax layers (lexer, lossless tree, AST, emitter) are internal. The
+`unstable-internals` feature makes them public modules for this repository's
+tests, benchmarks and fuzzing; they follow no semver promise.
 
 Metadata statements read as their field's registered type, as OpenUSD's text
 parser reads them: the fields Sdf and usd-core's own plugins register are
 built in, and for plugin-defined metadata build a `layerstack::SchemaRegistry`
-with the same token interner and use `read_usda_with_registry`, or
-`emit::emit_with_registry` for an AST. A field registered for the kind of spec
+with the same token interner and use `read_usda_with_registry`. A field
+registered for the kind of spec
 a statement is on converts its literal (`irIsInvertible = 0` is `false` for a
 `bool` field); a literal the type cannot hold rejects the layer with a
 diagnostic naming the field, its type and why (`Diagnostic::metadata`). A name

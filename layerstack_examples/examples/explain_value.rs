@@ -24,7 +24,6 @@ use layerstack::{
     AssetResolveError, AssetResolver, Contribution, IgnoreCause, InterpolationType, OpinionRole,
     ResolvedAsset, Stage, StageOptions, Time, Value, ValueExplanation, ValueSource,
 };
-use layerstack_usda::{emit, lower, parser::parse_cst};
 
 const GROVE: &str = r#"#usda 1.0
 (
@@ -112,11 +111,14 @@ impl InlineResolver {
         let source = *self.sources.get(name)?;
         self.ids.insert(name.to_string(), id);
         self.names.insert(id, name.to_string());
-        let cst = parse_cst(source);
-        assert!(cst.diagnostics.is_empty(), "{:?}", cst.diagnostics);
-        let ast = lower::lower(&cst.tree, source);
-        assert!(ast.diagnostics.is_empty(), "{:?}", ast.diagnostics);
-        let emitted = emit::emit(&ast.layer, id, tokens, paths, self);
+        let read = layerstack_usda::read_usda(source, id, tokens, paths, self);
+        let syntax: Vec<_> = read
+            .parse_diagnostics
+            .iter()
+            .chain(&read.lower_diagnostics)
+            .collect();
+        assert!(syntax.is_empty(), "{syntax:?}");
+        let emitted = read.emitted;
         assert!(emitted.diagnostics.is_empty(), "{:?}", emitted.diagnostics);
         self.pending.extend(emitted.resolved_layers);
         Some(emitted.layer)

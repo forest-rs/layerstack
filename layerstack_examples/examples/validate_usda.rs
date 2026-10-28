@@ -1,9 +1,10 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-//! Validate USDA files through the full parse pipeline.
+//! Validate USDA files through the full read pipeline.
 //!
-//! Runs each file through CST → AST → emit and reports diagnostics.
+//! Reads each file with `read_usda` and reports the diagnostics of each
+//! phase: parsing, lowering and emission.
 //!
 //! ```sh
 //! cargo run -p layerstack_examples --example validate_usda -- file1.usda file2.usda
@@ -16,9 +17,7 @@ use layerstack::interner::TokenInterner;
 use layerstack::path::PathInterner;
 use layerstack::{AssetResolveError, AssetResolver, ResolvedAsset};
 
-use layerstack_usda::emit;
-use layerstack_usda::lower;
-use layerstack_usda::parser::parse_cst;
+use layerstack_usda::read_usda;
 
 /// Stub resolver for single-file validation (no sublayer loading).
 struct StubResolver {
@@ -68,43 +67,22 @@ fn main() {
 
         let mut diag_count = 0;
 
-        // CST parse.
-        let cst = parse_cst(&source);
-        if !cst.diagnostics.is_empty() {
-            for d in &cst.diagnostics {
-                eprintln!("{path}: CST: {d:?}");
-            }
-            diag_count += cst.diagnostics.len();
-        }
-
-        // AST lower.
-        let ast_result = lower::lower(&cst.tree, &source);
-        if !ast_result.diagnostics.is_empty() {
-            for d in &ast_result.diagnostics {
-                eprintln!("{path}: AST: {d:?}");
-            }
-            diag_count += ast_result.diagnostics.len();
-        }
-
-        // Emit.
         let tokens = TokenInterner::default();
         let paths = PathInterner::default();
         let mut resolver = StubResolver { next_id: 100 };
-        let emit_result = emit::emit(
-            &ast_result.layer,
-            LayerId(1),
-            &tokens,
-            &paths,
-            &mut resolver,
-        );
-        if !emit_result.diagnostics.is_empty() {
-            for d in &emit_result.diagnostics {
-                eprintln!("{path}: emit: {d:?}");
+        let read = read_usda(&source, LayerId(1), &tokens, &paths, &mut resolver);
+        for (phase, diagnostics) in [
+            ("parse", &read.parse_diagnostics),
+            ("lower", &read.lower_diagnostics),
+            ("emit", &read.emitted.diagnostics),
+        ] {
+            for d in diagnostics {
+                eprintln!("{path}: {phase}: {d:?}");
             }
-            diag_count += emit_result.diagnostics.len();
+            diag_count += diagnostics.len();
         }
 
-        let prim_count = emit_result.layer.prims().len();
+        let prim_count = read.emitted.layer.prims().len();
         let status = if diag_count == 0 { "ok" } else { "WARN" };
         println!("{path}: {status} ({prim_count} prims, {diag_count} diagnostics)");
 

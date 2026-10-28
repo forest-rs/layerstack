@@ -29,9 +29,9 @@ hashbrown = { workspace = true }
 layerstack_conformance = { path = "../layerstack_conformance" }
 layerstack_io = { features = ["std"], workspace = true }
 layerstack_schemas = { default-features = false, features = ["usd-geom", "usd-proc", "usd-render", "usd-shade", "usd-skel"], workspace = true }
-layerstack_usda = { workspace = true }
-layerstack_usdc = { features = ["std"], workspace = true }
-layerstack_usdz = { workspace = true }
+layerstack_usda = { features = ["unstable-internals"], workspace = true }
+layerstack_usdc = { features = ["std", "unstable-internals"], workspace = true }
+layerstack_usdz = { features = ["unstable-internals"], workspace = true }
 opinionated.workspace = true
 
 [[bench]]

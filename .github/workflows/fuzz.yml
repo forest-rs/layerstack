@@ -1,0 +1,88 @@
+# Fuzzes every reader each night, and on demand, from its minimized findings
+# and the repository's own layers. It is not part of pull request CI: a run
+# finds new inputs at random, which says nothing about the change under
+# review. The minimized findings themselves run on stable in `cargo test`
+# (`layerstack_conformance`'s `fuzz_regressions`), so a fixed finding stays
+# fixed on every pull request. A failed run keeps what it found as the
+# `fuzz-findings` artifact.
+
+name: Fuzz
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+    inputs:
+      seconds:
+        description: Seconds to fuzz each target
+        default: "300"
+
+env:
+  CARGO_TERM_COLOR: always
+  FUZZ_SECONDS: ${{ inputs.seconds || '300' }}
+
+jobs:
+  fuzz:
+    name: cargo fuzz
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          lfs: true
+
+      - name: install nightly toolchain
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: install cargo-fuzz
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-fuzz
+
+      - name: restore cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: fuzz
+
+      # The prebuilt cargo-fuzz is a musl binary, and cargo-fuzz builds for
+      # the target it was built for unless told otherwise; the sanitizers
+      # need the runner's own glibc target.
+      - name: cargo fuzz build
+        working-directory: fuzz
+        run: cargo fuzz build --debug-assertions --target x86_64-unknown-linux-gnu
+
+      - name: cargo fuzz run
+        working-directory: fuzz
+        run: |
+          # Every target runs even after one finds something.
+          found=()
+          for target in $(cargo fuzz list); do
+            bash seed-corpus.sh "$target"
+            # A composed stage can be endless: arcs can give a prim children
+            # that include it again, which composition does not bound (nor
+            # does OpenUSD). Until it does, the stage target fails only on a
+            # crash, in fork mode. Fork mode still exits non-zero when a job
+            # it ignored timed out or ran out of memory, so a failed stage run
+            # counts only when it left an artifact that is neither.
+            extra=()
+            [ "$target" = stage ] && extra=(-fork=1 -ignore_timeouts=1 -ignore_ooms=1)
+            if ! cargo fuzz run --debug-assertions --target x86_64-unknown-linux-gnu "$target" "corpus/$target" -- \
+              -max_total_time="$FUZZ_SECONDS" -max_len=65536 -rss_limit_mb=2048 -timeout=10 "${extra[@]}"; then
+              if [ "$target" != stage ] || find "artifacts/$target" -type f ! -name 'timeout-*' ! -name 'oom-*' | grep -q .; then
+                found+=("$target")
+              else
+                echo "stage: only timeouts or out-of-memory inputs, which this target ignores"
+              fi
+            fi
+          done
+          if [ ${#found[@]} -gt 0 ]; then
+            echo "findings in: ${found[*]}"
+            exit 1
+          fi
+
+      - name: keep the findings
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: fuzz-findings
+          path: fuzz/artifacts
+          if-no-files-found: ignore

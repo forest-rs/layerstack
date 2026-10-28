@@ -55,11 +55,12 @@ pub use format_args::{FORMAT_ARGS_DELIMITER, FormatArgs, FormatArgsError};
 pub use package_path::PackagePath;
 pub use udim::{UdimPattern, UdimTile};
 
-use hashbrown::{HashMap, HashSet};
+use hashbrown::HashSet;
 
+use crate::doc::VariantSelections;
 use crate::{
     doc::{Layer, LayerId, LayerStore, Reference, VariantSets},
-    interner::{TokenId, TokenInterner},
+    interner::TokenInterner,
     listop::ListOp,
     path::{PathId, PathInterner},
     prim_index::ArcKind,
@@ -197,11 +198,11 @@ pub fn resolve_selected_deferred_arcs(
             .iter()
             .flat_map(|(host, specs)| specs.iter().map(move |spec| (host, spec))),
     ) {
-        let mut add = |selections: &HashMap<TokenId, TokenId>| {
+        let mut add = |selections: &VariantSelections| {
             selected.extend(
                 selections
                     .iter()
-                    .map(|(&set, &variant)| VariantSelectionSite {
+                    .map(|(set, variant)| VariantSelectionSite {
                         host_path: host,
                         set,
                         variant,

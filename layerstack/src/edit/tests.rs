@@ -953,8 +953,8 @@ fn live_stage_apply_recomposes_what_the_edits_affect() {
     edit.set_variant_selection(scene.prim(rock_a), shape, Some(jagged));
     undo.push(live.apply(&mut store, &edit).expect("c select").inverse);
     assert_eq!(
-        live.stage().variant_selections(rock_a, &store).get(&shape),
-        Some(&jagged)
+        live.stage().variant_selections(rock_a, &store).get(shape),
+        Some(jagged)
     );
     let in_jagged = EditTarget::for_node(
         live.stage(),
@@ -1451,8 +1451,8 @@ fn live_stage_edits_a_branch_selected_by_a_fallback() {
     };
     let mut live = crate::LiveStage::compose(&mut store, SCENE, options.clone());
     assert_eq!(
-        live.stage().variant_selections(rock_a, &store).get(&shape),
-        Some(&jagged),
+        live.stage().variant_selections(rock_a, &store).get(shape),
+        Some(jagged),
         "the fallback is the selection"
     );
 

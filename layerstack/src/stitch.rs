@@ -9,10 +9,11 @@
 //! stitch detached layers, then publish through the host's normal layer refresh.
 //! AOUSD Core §7.3–7.6, §12.2, §12.4; OpenUSD `UsdUtilsStitchLayers/StitchInfo`.
 
+use crate::doc::VariantSelections;
 use crate::listop::append_unique;
 use crate::{
-    FieldEntry, FieldValue, HashMap, Layer, ListOp, PrimSpec, PropertyEntry, PropertySpec,
-    Specifier, TimeSamples, TokenId, TokenInterner, Value, VariantSets, VariantSpec,
+    FieldEntry, FieldValue, Layer, ListOp, PrimSpec, PropertyEntry, PropertySpec, Specifier,
+    TimeSamples, TokenId, TokenInterner, Value, VariantSets, VariantSpec,
 };
 use alloc::{boxed::Box, sync::Arc, vec::Vec};
 use core::hash::Hash;
@@ -146,9 +147,11 @@ fn fill<T: Clone>(strong: &mut Option<T>, weak: &Option<T>) {
         strong.clone_from(weak);
     }
 }
-fn map_missing<T: Clone>(strong: &mut HashMap<TokenId, T>, weak: &HashMap<TokenId, T>) {
-    for (&key, value) in weak {
-        strong.entry(key).or_insert_with(|| value.clone());
+fn map_missing(strong: &mut VariantSelections, weak: &VariantSelections) {
+    for (set, variant) in weak {
+        if !strong.contains(set) {
+            strong.insert(set, variant);
+        }
     }
 }
 fn validate_property(property: &PropertySpec) -> Result<(), StitchError> {

@@ -16,6 +16,7 @@ use alloc::{sync::Arc, vec::Vec};
 
 use hashbrown::{HashMap, HashSet};
 
+use crate::doc::VariantSelections;
 use crate::{
     doc::{
         FieldEntry, FieldValue, Layer, LayerId, LayerOffset, LayerStore, PrimSpec, Reference,
@@ -113,7 +114,7 @@ impl<'a> SpecRef<'a> {
     }
 
     /// The authored variant selections, `None` when there are none.
-    pub(crate) fn variant_selections(self) -> Option<&'a HashMap<TokenId, TokenId>> {
+    pub(crate) fn variant_selections(self) -> Option<&'a VariantSelections> {
         match self {
             Self::Prim(spec) => spec.variant_selections(),
             Self::Variant(spec) => {
@@ -477,7 +478,7 @@ pub(crate) fn authored_selections(
     set: TokenId,
 ) -> Vec<TokenId> {
     specs(store, stack, site)
-        .filter_map(|(_, _, spec)| spec.variant_selections()?.get(&set).copied())
+        .filter_map(|(_, _, spec)| spec.variant_selections()?.get(set))
         .collect()
 }
 

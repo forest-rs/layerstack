@@ -2667,7 +2667,7 @@ fn apply_raw(store: &mut dyn LayerStore, step: &Raw) -> Result<Raw, Rejection> {
             let selections = target.variant_selections();
             let old = match variant {
                 Some(variant) => selections.insert(*set, *variant),
-                None => selections.remove(set),
+                None => selections.remove(*set),
             };
             Ok(Raw::Selection {
                 layer: id,

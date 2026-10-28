@@ -24,7 +24,7 @@ use hashbrown::{HashMap, HashSet};
 
 use layerstack::doc::{
     FieldValue, Layer, LayerId, LayerOffset, PrimSpec, RarePrimFields, Reference, Specifier,
-    SublayerEntry, Value, VariantSets, VariantSpec, set_field_vec,
+    SublayerEntry, Value, VariantSelections, VariantSets, VariantSpec, set_field_vec,
 };
 use layerstack::interner::{TokenId, TokenInterner};
 use layerstack::listop::ListOp;
@@ -3411,9 +3411,9 @@ fn copy_prim(spec: &PrimSpec) -> PrimSpec {
             list.clone()
         }
     }
-    fn map<K: Clone, V: Clone>(map: &HashMap<K, V>) -> HashMap<K, V> {
+    fn map(map: &VariantSelections) -> VariantSelections {
         if map.is_empty() {
-            HashMap::new()
+            VariantSelections::new()
         } else {
             map.clone()
         }

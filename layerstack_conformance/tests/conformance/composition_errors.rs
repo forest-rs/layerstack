@@ -398,7 +398,7 @@ fn edit_selection(
         .variant_selections;
     match variant {
         Some(variant) => selections.insert(set, variant),
-        None => selections.remove(&set),
+        None => selections.remove(set),
     };
     live.notify_layer_prim_edits(layer, &[prim]);
     live.recompose(&mut loaded.store)

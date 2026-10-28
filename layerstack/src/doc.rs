@@ -1644,7 +1644,7 @@ pub struct VariantSpec {
     ///
     /// When a variant branch header includes `variants = { string v2 = "b" }`,
     /// those selections apply to the owning prim when this variant is selected.
-    pub variant_selections: HashMap<TokenId, TokenId>,
+    pub variant_selections: VariantSelections,
     /// The variant sets nested in this branch (`/P{a=x}{b=}`), keyed by
     /// set name, in the order they were added.
     ///
@@ -1665,6 +1665,126 @@ pub struct VariantSpec {
     /// Spec: AOUSD Core §7.6.7 (variant specs contribute prim spec fields).
     pub property_order: Option<Vec<TokenId>>,
 }
+
+/// Variant selections: for each variant set name, the name of the variant
+/// selected (`variants = { string shape = "round" }` in USDA), as a prim
+/// spec ([`PrimSpec::variant_selections`]) or a variant branch
+/// ([`VariantSpec::variant_selections`]) authors them.
+///
+/// A set has at most one selection. Iteration visits each set once, in no
+/// particular order; sort by name for a stable one.
+///
+/// Spec: AOUSD Core §7.6.2.3.4 (`variantSelection`), §10.3.2.5 (only the
+/// selected variant contributes).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct VariantSelections(HashMap<TokenId, TokenId>);
+
+impl VariantSelections {
+    /// No selections.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// The variant selected in `set`, if any.
+    #[inline]
+    #[must_use]
+    pub fn get(&self, set: TokenId) -> Option<TokenId> {
+        self.0.get(&set).copied()
+    }
+
+    /// Whether `set` has a selection.
+    #[inline]
+    #[must_use]
+    pub fn contains(&self, set: TokenId) -> bool {
+        self.0.contains_key(&set)
+    }
+
+    /// Selects `variant` in `set`, returning the selection it replaces.
+    pub fn insert(&mut self, set: TokenId, variant: TokenId) -> Option<TokenId> {
+        self.0.insert(set, variant)
+    }
+
+    /// Removes the selection of `set`, returning it.
+    pub fn remove(&mut self, set: TokenId) -> Option<TokenId> {
+        self.0.remove(&set)
+    }
+
+    /// Removes every selection.
+    pub fn clear(&mut self) {
+        self.0.clear();
+    }
+
+    /// The number of sets with a selection.
+    #[inline]
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    /// Whether no set has a selection.
+    #[inline]
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// Each selection as `(set, variant)`, in no particular order.
+    pub fn iter(&self) -> VariantSelectionsIter<'_> {
+        VariantSelectionsIter(self.0.iter())
+    }
+
+    /// The map itself, for composition's own lookups.
+    pub(crate) fn as_map(&self) -> &HashMap<TokenId, TokenId> {
+        &self.0
+    }
+
+    /// The map itself, mutably, for composition's own updates.
+    pub(crate) fn as_map_mut(&mut self) -> &mut HashMap<TokenId, TokenId> {
+        &mut self.0
+    }
+}
+
+impl FromIterator<(TokenId, TokenId)> for VariantSelections {
+    fn from_iter<I: IntoIterator<Item = (TokenId, TokenId)>>(iter: I) -> Self {
+        Self(iter.into_iter().collect())
+    }
+}
+
+impl Extend<(TokenId, TokenId)> for VariantSelections {
+    fn extend<I: IntoIterator<Item = (TokenId, TokenId)>>(&mut self, iter: I) {
+        self.0.extend(iter);
+    }
+}
+
+impl<'a> IntoIterator for &'a VariantSelections {
+    type Item = (TokenId, TokenId);
+    type IntoIter = VariantSelectionsIter<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
+/// The selections of a [`VariantSelections`] as `(set, variant)`
+/// ([`VariantSelections::iter`]), in no particular order.
+#[derive(Clone, Debug)]
+pub struct VariantSelectionsIter<'a>(hashbrown::hash_map::Iter<'a, TokenId, TokenId>);
+
+impl Iterator for VariantSelectionsIter<'_> {
+    type Item = (TokenId, TokenId);
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next().map(|(set, variant)| (*set, *variant))
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.0.size_hint()
+    }
+}
+
+impl ExactSizeIterator for VariantSelectionsIter<'_> {}
 
 /// One variant spec of a prim spec, with the branches of the same prim spec
 /// that enclose it (see [`PrimSpec::variant_branches`]).
@@ -1704,9 +1824,9 @@ impl VariantBranch<'_> {
     /// Whether `selections` (set → variant) selects this branch and every
     /// branch enclosing it.
     #[must_use]
-    pub fn is_selected(&self, selections: &HashMap<TokenId, TokenId>) -> bool {
+    pub fn is_selected(&self, selections: &VariantSelections) -> bool {
         self.chain()
-            .all(|(set, variant)| selections.get(&set) == Some(&variant))
+            .all(|(set, variant)| selections.get(set) == Some(variant))
     }
 
     /// The variant selection sites naming this branch, for the prim spec at
@@ -1762,11 +1882,11 @@ pub struct VariantBranches<'a> {
     /// Branches still to visit.
     pending: Vec<VariantBranch<'a>>,
     /// When set, only the branches it selects are visited.
-    selections: Option<&'a HashMap<TokenId, TokenId>>,
+    selections: Option<&'a VariantSelections>,
 }
 
 impl<'a> VariantBranches<'a> {
-    fn new(sets: &'a VariantSets, selections: Option<&'a HashMap<TokenId, TokenId>>) -> Self {
+    fn new(sets: &'a VariantSets, selections: Option<&'a VariantSelections>) -> Self {
         let mut branches = Self {
             pending: Vec::new(),
             selections,
@@ -1779,14 +1899,14 @@ impl<'a> VariantBranches<'a> {
         for (set, set_spec) in sets {
             match self.selections {
                 Some(selections) => {
-                    let Some(variant) = selections.get(set) else {
+                    let Some(variant) = selections.get(*set) else {
                         continue;
                     };
-                    if let Some(spec) = set_spec.variants.get(variant) {
+                    if let Some(spec) = set_spec.variants.get(&variant) {
                         self.pending.push(VariantBranch {
                             enclosing: enclosing.to_vec(),
                             set: *set,
-                            variant: *variant,
+                            variant,
                             spec,
                         });
                     }
@@ -2412,7 +2532,7 @@ pub struct RarePrimFields {
     /// Spec: AOUSD Core §10 (specializes arc, §5.1.33), with ordering via §12.4 (`ListOps`).
     pub specializes: SparseListOp<PathId>,
     /// Authored variant selections (set -> chosen variant).
-    pub variant_selections: HashMap<TokenId, TokenId>,
+    pub variant_selections: VariantSelections,
     /// Authored variant sets of this prim spec (`/P{v=}`), keyed by set
     /// name, in the order they were added (OpenUSD's
     /// `variantSetChildren`). Sets nested in a branch belong to that branch's
@@ -2581,7 +2701,7 @@ impl PrimSpec {
     /// hash map has no empty value to borrow without allocating one.
     #[inline]
     #[must_use]
-    pub fn variant_selections(&self) -> Option<&HashMap<TokenId, TokenId>> {
+    pub fn variant_selections(&self) -> Option<&VariantSelections> {
         self.rare
             .as_deref()
             .map(|rare| &rare.variant_selections)
@@ -2594,7 +2714,7 @@ impl PrimSpec {
     pub fn variant_selection(&self, set: TokenId) -> Option<TokenId> {
         self.rare
             .as_deref()
-            .and_then(|rare| rare.variant_selections.get(&set).copied())
+            .and_then(|rare| rare.variant_selections.get(set))
     }
 
     /// The variant sets of this prim spec (see
@@ -2841,7 +2961,7 @@ impl PrimSpec {
     /// Spec: AOUSD Core §10.3.2.5 (only the selected variant contributes).
     pub fn selected_variant_branches<'a>(
         &'a self,
-        selections: &'a HashMap<TokenId, TokenId>,
+        selections: &'a VariantSelections,
     ) -> VariantBranches<'a> {
         VariantBranches::new(self.variant_sets(), Some(selections))
     }
@@ -4159,7 +4279,7 @@ impl Layer {
         &'a self,
         path: PathId,
         host: PathId,
-        selections: &'a HashMap<TokenId, TokenId>,
+        selections: &'a VariantSelections,
     ) -> impl Iterator<Item = &'a PrimSpec> {
         self.prim_specs(path).filter(move |spec| {
             spec.outer_variant_sites()
@@ -4169,7 +4289,7 @@ impl Layer {
                     .outer_variant_sites()
                     .iter()
                     .filter(|site| site.host_path == host)
-                    .all(|site| selections.get(&site.set) == Some(&site.variant))
+                    .all(|site| selections.get(site.set) == Some(site.variant))
         })
     }
 
@@ -4850,6 +4970,30 @@ impl LayerStore for InMemoryStore {
 mod tests {
     use super::*;
     use alloc::boxed::Box;
+
+    /// A set has one selection; a new one replaces it, and iteration
+    /// visits each set once.
+    #[test]
+    fn variant_selections_hold_one_variant_per_set() {
+        let store = InMemoryStore::default();
+        let [shape, size, round, square, big] =
+            ["shape", "size", "round", "square", "big"].map(|name| store.tokens.intern(name));
+        let mut selections: VariantSelections = [(shape, round)].into_iter().collect();
+        assert_eq!(selections.insert(shape, square), Some(round));
+        selections.extend([(size, big)]);
+        assert_eq!((selections.get(shape), selections.len()), (Some(square), 2));
+        assert!(selections.contains(size) && !selections.contains(big));
+        let mut all: Vec<_> = selections.iter().collect();
+        all.sort();
+        let mut expected = vec![(shape, square), (size, big)];
+        expected.sort();
+        assert_eq!(all, expected);
+        assert_eq!(selections.remove(size), Some(big));
+        assert_eq!(selections.remove(size), None);
+        selections.clear();
+        assert!(selections.is_empty());
+        assert_eq!(selections, VariantSelections::new());
+    }
 
     /// Variants keep the order they were added, a replaced one in place,
     /// and compare equal by name whatever their order.
@@ -5819,7 +5963,7 @@ mod tests {
         assert_eq!(chains, expected, "every variant spec, nested ones included");
 
         // Only fully selected branches are visited.
-        let selections: HashMap<TokenId, TokenId> = [(a, y), (b, y)].into_iter().collect();
+        let selections: VariantSelections = [(a, y), (b, y)].into_iter().collect();
         let mut selected: Vec<Vec<(TokenId, TokenId)>> = prim
             .selected_variant_branches(&selections)
             .map(|branch| branch.chain().collect())

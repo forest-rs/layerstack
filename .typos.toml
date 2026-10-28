@@ -34,4 +34,6 @@ extend-exclude = [
     # Random regular expressions and what OpenUSD matches with them.
     "layerstack_conformance/fixtures/path_expression/selection_globs.json",
     "layerstack_conformance/fixtures/path_expression/selection_glob_divergences.json",
+    # Minimized fuzz inputs: mutated bytes, misspellings included.
+    "fuzz/regressions/",
 ]

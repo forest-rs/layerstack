@@ -171,7 +171,12 @@ pub fn flatten_layer_stack(
         context.fields(&mut layer.metadata, id, offset, None)?;
         merge_fields(&mut result.metadata, &layer.metadata);
         fill(&mut result.default_prim, &layer.default_prim);
-        result.relocates.extend_from_slice(&layer.relocates);
+        if let Some(relocates) = &layer.relocates {
+            result
+                .relocates
+                .get_or_insert_with(Vec::new)
+                .extend_from_slice(relocates);
+        }
         let mut paths: Vec<_> = layer
             .prims
             .keys()

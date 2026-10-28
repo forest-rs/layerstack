@@ -137,11 +137,8 @@ fn lower_document(mut doc: Document) -> Result<Vec<Spec>, UsdcWriteError> {
     for entry in &mut doc.metadata {
         root.fields.push(metadatum(Owner::Layer, "/", entry)?);
     }
-    if !doc.relocates.is_empty() {
-        root = root.with_field(
-            "layerRelocates",
-            Value::Relocates(core::mem::take(&mut doc.relocates)),
-        );
+    if let Some(relocates) = doc.relocates.take() {
+        root = root.with_field("layerRelocates", Value::Relocates(relocates));
     }
     if !doc.sublayers.is_empty() {
         let assets = doc

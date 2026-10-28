@@ -2237,7 +2237,7 @@ mod tests {
         let (a, b, c) = (p(store, "/A"), p(store, "/A/B"), p(store, "/A/C"));
         let (r, r_b) = (p(store, "/R"), p(store, "/R/B"));
         let mut root = Layer::new(LayerId(1));
-        root.relocates = vec![crate::Relocate {
+        *root.relocates_mut() = vec![crate::Relocate {
             source: b,
             target: Some(c),
         }];
@@ -2463,8 +2463,7 @@ mod tests {
             .layers
             .get_mut(&LayerId(1))
             .expect("root layer")
-            .relocates
-            .clear();
+            .clear_relocates();
         // No composed layer stack holds layer 3.
         live.notify_relocates_edit(LayerId(3));
         assert!(live.recompose(&mut store).is_empty());
@@ -2482,7 +2481,7 @@ mod tests {
         let (b, c, field_x) = relocated_scene(&mut store);
         let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
         let root = store.layers.get_mut(&LayerId(1)).expect("root layer");
-        root.relocates.clear();
+        root.clear_relocates();
         root.touch();
         assert_eq!(live.notify_changed_layers(&store), [LayerId(1)]);
         live.recompose(&mut store);
@@ -2690,7 +2689,7 @@ mod tests {
             sublayers: vec![],
             default_prim: None,
             metadata: Vec::new(),
-            relocates: Vec::new(),
+            relocates: None,
             prims: crate::doc::LayerPrims::default(),
             variant_prims: HashMap::new(),
             generation: 0,
@@ -2723,7 +2722,7 @@ mod tests {
             sublayers: vec![],
             default_prim: None,
             metadata: Vec::new(),
-            relocates: Vec::new(),
+            relocates: None,
             prims: crate::doc::LayerPrims::default(),
             variant_prims: HashMap::new(),
             generation: 0,
@@ -2751,7 +2750,7 @@ mod tests {
             sublayers: vec![],
             default_prim: None,
             metadata: Vec::new(),
-            relocates: Vec::new(),
+            relocates: None,
             prims: crate::doc::LayerPrims::default(),
             variant_prims: HashMap::new(),
             generation: 0,
@@ -2827,7 +2826,7 @@ mod tests {
             sublayers: vec![],
             default_prim: None,
             metadata: Vec::new(),
-            relocates: Vec::new(),
+            relocates: None,
             prims: crate::doc::LayerPrims::default(),
             variant_prims: HashMap::new(),
             generation: 0,
@@ -2911,7 +2910,7 @@ mod tests {
             sublayers: vec![],
             default_prim: None,
             metadata: Vec::new(),
-            relocates: Vec::new(),
+            relocates: None,
             prims: crate::doc::LayerPrims::default(),
             variant_prims: HashMap::new(),
             generation: 0,
@@ -2930,7 +2929,7 @@ mod tests {
             sublayers: vec![],
             default_prim: None,
             metadata: Vec::new(),
-            relocates: Vec::new(),
+            relocates: None,
             prims: crate::doc::LayerPrims::default(),
             variant_prims: HashMap::new(),
             generation: 0,
@@ -2983,7 +2982,7 @@ mod tests {
             sublayers: vec![],
             default_prim: None,
             metadata: Vec::new(),
-            relocates: Vec::new(),
+            relocates: None,
             prims: crate::doc::LayerPrims::default(),
             variant_prims: HashMap::new(),
             generation: 0,
@@ -3002,7 +3001,7 @@ mod tests {
             sublayers: vec![SublayerEntry::new(LayerId(2))],
             default_prim: None,
             metadata: Vec::new(),
-            relocates: Vec::new(),
+            relocates: None,
             prims: crate::doc::LayerPrims::default(),
             variant_prims: HashMap::new(),
             generation: 0,
@@ -3066,7 +3065,7 @@ mod tests {
             sublayers: vec![],
             default_prim: None,
             metadata: Vec::new(),
-            relocates: Vec::new(),
+            relocates: None,
             prims: crate::doc::LayerPrims::default(),
             variant_prims: HashMap::new(),
             generation: 0,
@@ -3127,7 +3126,7 @@ mod tests {
             sublayers: vec![SublayerEntry::new(LayerId(2))],
             default_prim: None,
             metadata: Vec::new(),
-            relocates: Vec::new(),
+            relocates: None,
             prims: crate::doc::LayerPrims::default(),
             variant_prims: HashMap::new(),
             generation: 0,
@@ -3146,7 +3145,7 @@ mod tests {
             sublayers: vec![],
             default_prim: None,
             metadata: Vec::new(),
-            relocates: Vec::new(),
+            relocates: None,
             prims: crate::doc::LayerPrims::default(),
             variant_prims: HashMap::new(),
             generation: 0,
@@ -3202,7 +3201,7 @@ mod tests {
             sublayers: vec![],
             default_prim: None,
             metadata: Vec::new(),
-            relocates: Vec::new(),
+            relocates: None,
             prims: crate::doc::LayerPrims::default(),
             variant_prims: HashMap::new(),
             generation: 0,
@@ -3251,7 +3250,7 @@ mod tests {
             sublayers: vec![],
             default_prim: None,
             metadata: Vec::new(),
-            relocates: Vec::new(),
+            relocates: None,
             prims: crate::doc::LayerPrims::default(),
             variant_prims: HashMap::new(),
             generation: 0,
@@ -3271,7 +3270,7 @@ mod tests {
             sublayers: vec![],
             default_prim: None,
             metadata: Vec::new(),
-            relocates: Vec::new(),
+            relocates: None,
             prims: crate::doc::LayerPrims::default(),
             variant_prims: HashMap::new(),
             generation: 0,
@@ -3319,7 +3318,7 @@ mod tests {
             sublayers: vec![],
             default_prim: None,
             metadata: Vec::new(),
-            relocates: Vec::new(),
+            relocates: None,
             prims: crate::doc::LayerPrims::default(),
             variant_prims: HashMap::new(),
             generation: 0,
@@ -3376,7 +3375,7 @@ mod tests {
             sublayers: vec![],
             default_prim: None,
             metadata: Vec::new(),
-            relocates: Vec::new(),
+            relocates: None,
             prims: crate::doc::LayerPrims::default(),
             variant_prims: HashMap::new(),
             generation: 0,
@@ -3436,7 +3435,7 @@ mod tests {
             sublayers: vec![SublayerEntry::new(LayerId(2))],
             default_prim: None,
             metadata: Vec::new(),
-            relocates: Vec::new(),
+            relocates: None,
             prims: crate::doc::LayerPrims::default(),
             variant_prims: HashMap::new(),
             generation: 0,
@@ -3455,7 +3454,7 @@ mod tests {
             sublayers: vec![],
             default_prim: None,
             metadata: Vec::new(),
-            relocates: Vec::new(),
+            relocates: None,
             prims: crate::doc::LayerPrims::default(),
             variant_prims: HashMap::new(),
             generation: 0,
@@ -3494,7 +3493,7 @@ mod tests {
             sublayers: vec![],
             default_prim: None,
             metadata: Vec::new(),
-            relocates: Vec::new(),
+            relocates: None,
             prims: crate::doc::LayerPrims::default(),
             variant_prims: HashMap::new(),
             generation: 0,

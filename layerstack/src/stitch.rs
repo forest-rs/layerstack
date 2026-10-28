@@ -77,7 +77,7 @@ pub fn stitch_layers(
     if result.sublayers.is_empty() {
         result.sublayers.clone_from(&weak.sublayers);
     }
-    if result.relocates.is_empty() {
+    if result.relocates.is_none() {
         result.relocates.clone_from(&weak.relocates);
     }
     // Sorting avoids dependence on hash iteration when first inserting branch contexts.

@@ -215,7 +215,7 @@ fn arcs_scene(relocated: bool) -> InMemoryStore {
     if relocated {
         let spare = store.path("/Tier/Spare");
         let moved = store.path("/Tier/Moved");
-        root.relocates.push(Relocate {
+        root.relocates_mut().push(Relocate {
             source: spare,
             target: Some(moved),
         });

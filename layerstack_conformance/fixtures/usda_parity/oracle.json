@@ -25,6 +25,11 @@
    "source": "#usda 1.0\ndef \"A\" (\n    prepend apiSchemas = [\"X\", \"X\"]\n)\n{\n}\n",
    "text": "#usda 1.0\n\ndef \"A\"\n{\n}\n\n"
   },
+  "read_empty_relocates": {
+   "reads": true,
+   "source": "#usda 1.0\n(\n    relocates = {\n    }\n)\n",
+   "text": "#usda 1.0\n(\n    relocates = {\n    }\n)\n\n"
+  },
   "read_legacy_kept_type_names": {
    "reads": true,
    "source": "#usda 1.0\ndef \"P\"\n{\n    custom Transform a = ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (2, 3, 4, 1) )\n    custom PointIndex[] b = [0, 1, 2]\n    custom EdgeIndex c = 3\n    custom FaceIndex[] d.timeSamples = {\n        1: [4, 5],\n    }\n}\n",

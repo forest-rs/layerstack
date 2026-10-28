@@ -1382,7 +1382,7 @@ fn relocated_prims_edit_through_the_nodes_they_read() {
         .layers
         .get_mut(&SCENE)
         .expect("scene")
-        .relocates
+        .relocates_mut()
         .push(crate::doc::Relocate {
             source,
             target: Some(moved),

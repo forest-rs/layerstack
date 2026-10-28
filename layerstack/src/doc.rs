@@ -3187,11 +3187,14 @@ pub struct Layer {
     /// Spec: AOUSD Core §7.6.1 (layer spec fields), §12.2.7 (layer metadata
     /// is read from the root layer, not composed).
     pub(crate) metadata: Vec<FieldEntry>,
-    /// The authored `layerRelocates` entries, in authored order.
+    /// The authored `layerRelocates` entries, in authored order, or `None`
+    /// when the layer authors no `layerRelocates` field. An authored but
+    /// empty field (`relocates = {}`) is kept, as OpenUSD keeps it
+    /// (`SdfLayer::HasRelocates`).
     ///
     /// Spec: AOUSD Core §7.6.1.2.4 (`layerRelocates`), §10.3.2.6
     /// (relocates are computed per layer stack from every layer's entries).
-    pub(crate) relocates: Vec<Relocate>,
+    pub(crate) relocates: Option<Vec<Relocate>>,
     /// Prim specs keyed by prim path.
     ///
     /// Each path holds one spec here: the spec authored outside any variant
@@ -3340,7 +3343,7 @@ impl Layer {
             unpaired_sublayer_offsets: None,
             default_prim: None,
             metadata: Vec::new(),
-            relocates: Vec::new(),
+            relocates: None,
             prims: LayerPrims::default(),
             variant_prims: HashMap::new(),
             generation: 0,
@@ -3503,18 +3506,40 @@ impl Layer {
     /// Spec: AOUSD Core §7.6.1.2.4 (`layerRelocates`), §10.3.2.6
     /// (relocates are computed per layer stack from every layer's entries).
     /// OpenUSD: `SdfLayer::GetRelocates`.
+    /// Empty when the layer authors no `layerRelocates` field, or an
+    /// empty one ([`Layer::has_relocates`] tells them apart).
     #[must_use]
     pub fn relocates(&self) -> &[Relocate] {
-        &self.relocates
+        self.relocates.as_deref().unwrap_or_default()
     }
 
-    /// Returns the `layerRelocates` entries for editing.
+    /// Whether the layer authors a `layerRelocates` field, even an empty
+    /// one.
+    ///
+    /// Spec: AOUSD Core §7.6.1.2.4 (`layerRelocates`). OpenUSD:
+    /// `SdfLayer::HasRelocates`.
+    #[must_use]
+    pub fn has_relocates(&self) -> bool {
+        self.relocates.is_some()
+    }
+
+    /// Returns the `layerRelocates` entries for editing, authoring the
+    /// field (empty) when the layer has none.
     ///
     /// Records a structural change of the whole layer: relocates move
     /// namespace across the layer stack.
     pub fn relocates_mut(&mut self) -> &mut Vec<Relocate> {
         self.touch_structure();
-        &mut self.relocates
+        self.relocates.get_or_insert_with(Vec::new)
+    }
+
+    /// Removes the `layerRelocates` field. OpenUSD:
+    /// `SdfLayer::ClearRelocates`.
+    ///
+    /// Records a structural change of the whole layer.
+    pub fn clear_relocates(&mut self) {
+        self.touch_structure();
+        self.relocates = None;
     }
 
     /// Returns the prim specs keyed by prim path.
@@ -5245,6 +5270,10 @@ mod tests {
         step(&layer, "sublayers_mut", true);
         let _ = layer.relocates_mut();
         step(&layer, "relocates_mut", true);
+        assert!(layer.has_relocates());
+        layer.clear_relocates();
+        step(&layer, "clear_relocates", true);
+        assert!(!layer.has_relocates());
         let _ = layer.metadata_fields_mut();
         step(&layer, "metadata_fields_mut", true);
         layer.set_default_prim(Some(size));

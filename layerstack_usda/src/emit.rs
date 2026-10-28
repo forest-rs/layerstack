@@ -303,6 +303,9 @@ impl EmitCtx<'_> {
                     }
                 }
                 ast::LayerMeta::Relocates(entries) => {
+                    // The statement authors the field, an empty one for
+                    // `relocates = {}` (`SdfLayer::HasRelocates`).
+                    let _ = layer.relocates_mut();
                     for entry in entries {
                         // OpenUSD names the source path in both messages.
                         // Spec: `SdfSchema::IsValidRelocatesSourcePath`.

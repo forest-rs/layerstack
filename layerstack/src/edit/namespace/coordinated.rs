@@ -357,7 +357,7 @@ fn prepare_with(
             );
         }
         if original.relocates != layer.relocates {
-            relocates.push((id, layer.relocates.clone()));
+            relocates.push((id, layer.relocates().to_vec()));
             push(
                 &mut transaction,
                 Raw::LayerRelocates {
@@ -651,7 +651,7 @@ fn requires_relocate(
     if source.property_path().is_none()
         && stage.layer_stack().iter().any(|id| {
             store.layer(*id).is_some_and(|l| {
-                l.relocates
+                l.relocates()
                     .iter()
                     .any(|r| r.target == Some(source.prim_path()))
             })
@@ -793,7 +793,7 @@ fn update_relocates(
 ) -> Result<(), NamespaceError> {
     let mut old_source = None;
     for id in roots {
-        for r in &layers[id].relocates {
+        for r in layers[id].relocates() {
             if r.target == Some(mapping.from.prim_path()) {
                 if old_source.is_some_and(|p| p != r.source) {
                     return Err(NamespaceError::UnsupportedComposition(
@@ -806,23 +806,29 @@ fn update_relocates(
     }
     if let Some(source) = old_source {
         for id in roots {
-            layers
-                .get_mut(id)
-                .unwrap()
-                .relocates
-                .retain(|r| r.source != source);
+            if let Some(relocates) = &mut layers.get_mut(id).unwrap().relocates {
+                relocates.retain(|r| r.source != source);
+            }
         }
         if source != mapping.to.prim_path() {
-            layers.get_mut(&target).unwrap().relocates.push(Relocate {
-                source,
-                target: Some(mapping.to.prim_path()),
-            });
+            layers
+                .get_mut(&target)
+                .unwrap()
+                .relocates_mut()
+                .push(Relocate {
+                    source,
+                    target: Some(mapping.to.prim_path()),
+                });
         }
     } else {
-        layers.get_mut(&target).unwrap().relocates.push(Relocate {
-            source: mapping.from.prim_path(),
-            target: Some(mapping.to.prim_path()),
-        });
+        layers
+            .get_mut(&target)
+            .unwrap()
+            .relocates_mut()
+            .push(Relocate {
+                source: mapping.from.prim_path(),
+                target: Some(mapping.to.prim_path()),
+            });
     }
     // A relocation source is prohibited from holding local opinions. Local
     // opinions were moved above; unrelated source-layer assets were not.
@@ -835,7 +841,7 @@ fn update_existing_relocates(
 ) -> Result<(), NamespaceError> {
     for (id, mappings) in moves {
         for mapping in mappings {
-            for r in &mut layers.get_mut(id).unwrap().relocates {
+            for r in layers.get_mut(id).unwrap().relocates.iter_mut().flatten() {
                 r.source = mapping.prim(store, r.source);
                 if let Some(target) = &mut r.target {
                     *target = mapping.prim(store, *target);
@@ -947,7 +953,7 @@ impl ProjectionScope<'_> {
             || stage
                 .used_layers(false)
                 .iter()
-                .any(|id| store.layer(*id).is_some_and(|l| !l.relocates.is_empty()))
+                .any(|id| store.layer(*id).is_some_and(|l| !l.relocates().is_empty()))
         {
             return None;
         }

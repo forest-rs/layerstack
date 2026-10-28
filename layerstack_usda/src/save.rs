@@ -341,16 +341,18 @@ impl Lowering<'_> {
     fn layer(&self, layer: &Layer) -> Result<Document, SaveError> {
         let mut doc = Document::new();
         doc.default_prim = layer.default_prim().map(|t| self.name(t));
-        doc.relocates = layer
-            .relocates()
-            .iter()
-            .map(|r| {
-                (
-                    self.display(r.source),
-                    r.target.map_or_else(String::new, |p| self.display(p)),
-                )
-            })
-            .collect();
+        doc.relocates = layer.has_relocates().then(|| {
+            layer
+                .relocates()
+                .iter()
+                .map(|r| {
+                    (
+                        self.display(r.source),
+                        r.target.map_or_else(String::new, |p| self.display(p)),
+                    )
+                })
+                .collect()
+        });
         doc.metadata = self.metadata(layer.metadata_fields(), "/")?;
         // Spec: AOUSD Core §10.3.1 (sublayers), written by their authored
         // asset paths; an unresolved sublayer keeps its own.

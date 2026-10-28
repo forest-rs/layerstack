@@ -1381,6 +1381,8 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
                     // Spec: AOUSD Core §7.6.1.2.4 (`layerRelocates`),
                     // §16.3.10.15 (crate relocates values).
                     if let Some(CrateValue::RelocatesMap(pairs)) = value.value() {
+                        // The field is authored even with no entries.
+                        let _ = layer.relocates_mut();
                         for (source, target) in pairs {
                             self.push_relocate(layer, source, target)?;
                         }

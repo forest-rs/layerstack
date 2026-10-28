@@ -62,7 +62,7 @@ pub(crate) enum Raw {
     /// Replaces layer relocates as one structural, guarded slot.
     LayerRelocates {
         layer: LayerId,
-        relocates: Vec<crate::Relocate>,
+        relocates: Option<Vec<crate::Relocate>>,
     },
     /// Replaces a layer's sublayers, with their offsets, as one slot.
     Sublayers {
@@ -1465,7 +1465,7 @@ fn apply_op(
             layer_fields::edit_sublayers(store, *layer, edit, journal)
         }
         Op::SetRelocates { layer, relocates } => {
-            layer_fields::set_relocates(store, *layer, relocates, journal)
+            layer_fields::set_relocates(store, *layer, relocates.as_deref(), journal)
         }
         Op::EditArc { at, edit } => prim_fields::edit_arc(store, at, edit, journal),
         Op::AddVariantSet { at, name, position } => {

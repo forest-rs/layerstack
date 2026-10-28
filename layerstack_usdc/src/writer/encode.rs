@@ -1523,7 +1523,9 @@ pub(super) fn required_version(specs: &[Spec]) -> CrateVersion {
             };
             version = version.max(required);
         }
-        if matches!(field.value, Value::Relocates(_)) {
+        // Each relocate requests the version (`Write(SdfRelocate)`,
+        // `pxr/usd/sdf/crateFile.cpp`), so an empty map does not.
+        if matches!(&field.value, Value::Relocates(entries) if !entries.is_empty()) {
             version = version.max(CrateVersion::new(0, 11, 0));
         }
         if has_path_expression(&field.value) {

@@ -681,7 +681,7 @@ fn root_stack_referenced_child_uses_relocates_and_coordinated_dependent_override
     dep.synchronize(&mut store);
     direct_stage.synchronize(&mut store);
     assert_eq!(
-        store.layers[&ROOT].relocates,
+        store.layers[&ROOT].relocates(),
         vec![crate::Relocate {
             source: child,
             target: Some(renamed)
@@ -742,7 +742,7 @@ fn root_stack_referenced_child_uses_relocates_and_coordinated_dependent_override
         .unwrap()
         .inverse;
     assert_eq!(
-        store.layers[&ROOT].relocates,
+        store.layers[&ROOT].relocates(),
         vec![crate::Relocate {
             source: child,
             target: Some(rename_again)
@@ -764,7 +764,7 @@ fn root_stack_referenced_child_uses_relocates_and_coordinated_dependent_override
         .apply(&mut store, restore_source.transaction())
         .unwrap()
         .inverse;
-    assert!(store.layers[&ROOT].relocates.is_empty());
+    assert!(store.layers[&ROOT].relocates().is_empty());
     assert!(live.stage().has_prim(child));
     live.apply(&mut store, &restore_inverse).unwrap();
     live.apply(&mut store, &inverse).unwrap();
@@ -915,7 +915,7 @@ fn relocated_expression_arcs_keep_root_local_values_and_refresh_source_values() 
         local,
         PrimSpec::over().with_property(name, expression("/Model/Child//")),
     );
-    layer.relocates.push(crate::Relocate {
+    layer.relocates_mut().push(crate::Relocate {
         source: model_child,
         target: Some(moved),
     });
@@ -1049,7 +1049,7 @@ fn namespace_relocate_slot_has_atomic_rollback_and_conflicting_undo_guards() {
     assert_eq!(store.layers[&ROOT], before);
     let inverse = live.apply(&mut store, edit.transaction()).unwrap().inverse;
     let other = store.path("/Other");
-    store.layers.get_mut(&ROOT).unwrap().relocates[0].target = Some(other);
+    store.layers.get_mut(&ROOT).unwrap().relocates_mut()[0].target = Some(other);
     store.layer_mut(ROOT).unwrap().touch();
     let conflicting = store.layers[&ROOT].clone();
     assert!(matches!(
@@ -1129,7 +1129,7 @@ fn relocated() -> InMemoryStore {
         tier,
         PrimSpec::def().with_reference(Reference::new(ASSET, asset)),
     );
-    root.relocates.push(crate::Relocate {
+    root.relocates_mut().push(crate::Relocate {
         source,
         target: Some(moved),
     });
@@ -1201,7 +1201,7 @@ fn deletes_reject_what_they_cannot_remove() {
 fn deleting_beneath_an_instance_is_an_instance_proxy_edit() {
     let mut store = relocated();
     let tier = store.path("/Tier");
-    store.layers.get_mut(&ROOT).unwrap().relocates.clear();
+    store.layers.get_mut(&ROOT).unwrap().clear_relocates();
     store
         .layers
         .get_mut(&ROOT)

@@ -87,7 +87,7 @@ impl LocalNamespace {
     fn build_allowed(store: &dyn LayerStore, root: LayerId) -> Option<Self> {
         let layer = store.layer(root)?;
         if !layer.sublayers.is_empty()
-            || !layer.relocates.is_empty()
+            || !layer.relocates().is_empty()
             || !layer.variant_prims.is_empty()
             || !layer.prims.values().all(|s| supported(store, s))
         {
@@ -149,7 +149,7 @@ impl LocalNamespace {
         // An inverse may restore branch slots even when the current stage
         // was purely local. Eligibility follows the resulting authored layer.
         if !layer.sublayers.is_empty()
-            || !layer.relocates.is_empty()
+            || !layer.relocates().is_empty()
             || !layer.variant_prims.is_empty()
         {
             return false;

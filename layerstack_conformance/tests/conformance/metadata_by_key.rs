@@ -151,8 +151,8 @@ fn metadata_by_key_matches_cpp_call_by_call() {
                 )
             }
             None => (
-                view.metadata_value("customData"),
-                view.metadata_by_key(field, key_path),
+                view.metadata().value("customData"),
+                view.metadata().value_by_key(field, key_path),
             ),
         };
         assert_eq!(

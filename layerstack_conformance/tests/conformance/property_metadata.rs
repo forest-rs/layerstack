@@ -141,7 +141,8 @@ fn property_metadata_authoring_matches_openusd_call_by_call() {
         let result = PrimEdit::new(&edit, prim)
             .expect("outside any instance")
             .unwrap()
-            .write_property_metadata(&mut edit, &call.property, &call.key, value);
+            .write_property_metadata(&mut edit, &call.property, &call.key, value)
+            .map(|_| ());
         if result.is_err() {
             assert!(
                 edit.transaction().is_empty(),
@@ -276,8 +277,8 @@ fn property_metadata_clears_only_target_specs() {
 }
 
 /// The field, spec kind and reason of a refused metadata edit.
-fn refusal(
-    result: &Result<(), MetadataError>,
+fn refusal<T>(
+    result: &Result<T, MetadataError>,
 ) -> Option<(&str, MetadataTarget, MetadataEditReason)> {
     match result {
         Err(MetadataError::Field(error)) => Some((&error.field, error.target, error.reason)),

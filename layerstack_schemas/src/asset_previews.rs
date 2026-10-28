@@ -50,7 +50,7 @@ impl AssetPreviewsApi<'_> {
             return None;
         }
         let key_path = [DEFAULT_THUMBNAILS, DEFAULT_IMAGE].join(":");
-        let Value::Asset(path) = self.metadata_by_key(ASSET_INFO, &key_path)? else {
+        let Value::Asset(path) = self.metadata().value_by_key(ASSET_INFO, &key_path)? else {
             return None;
         };
         let source = self.prim().and_then(|prim| {

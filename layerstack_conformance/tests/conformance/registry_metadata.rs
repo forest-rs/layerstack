@@ -844,7 +844,7 @@ fn metadata_edits_are_checked_and_saved_as_openusd_checks_and_writes_them() {
                 _ => view.write_property_metadata(&mut edit, "r", &call.field, value.clone()),
             };
             let refused = match result {
-                Ok(()) => None,
+                Ok(_) => None,
                 Err(layerstack_schemas::MetadataError::Field(error)) => Some(error),
                 Err(other) => panic!("{what}: {other:?}"),
             };
@@ -920,7 +920,7 @@ fn unauthored_fields_read_as_openusd_reads_them() {
                 let key = store.tokens().lookup(&case.field).unwrap();
                 (value, live.stage().has_metadata(key, &store))
             }
-            "prim" => (prim.metadata_value(&case.field), false),
+            "prim" => (prim.metadata().value(&case.field), false),
             "attribute" | "relationship" => {
                 let name = if case.object == "attribute" { "a" } else { "r" };
                 let metadata = prim.property_metadata(name).unwrap();

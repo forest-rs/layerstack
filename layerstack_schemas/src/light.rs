@@ -187,7 +187,8 @@ fn discover(
             let child = child_prim.path();
             if defined(scene, child)
                 && !child_prim.is_abstract()
-                && PrimView::new(scene, child).metadata_value("active") != Some(Value::Bool(false))
+                && PrimView::new(scene, child).metadata().value("active")
+                    != Some(Value::Bool(false))
                 && (mode == LightListMode::IgnoreCache || scene.is_model(child))
             {
                 stack.push(child);

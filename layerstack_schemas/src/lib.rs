@@ -207,8 +207,9 @@
 //!
 //! The registry also retains each enabled plugin's `SdfMetadata` declarations:
 //! field types, applicable spec kinds, registered defaults and documentation.
-//! Typed metadata readers are available on [`PrimView`], [`PropertyMetadata`]
-//! (from [`PrimView::property_metadata`]) and [`StageMetadata`] (from
+//! Typed metadata readers are available on [`PrimMetadata`] (from
+//! [`PrimView::metadata`]), [`PropertyMetadata`] (from
+//! [`PrimView::property_metadata`]) and [`StageMetadata`] (from
 //! [`Scene::metadata`]). Property readers compose authored opinions without
 //! synthesizing registered field defaults. Stage readers use the root layer
 //! and registered layer defaults; sublayer metadata does not participate.
@@ -448,7 +449,7 @@ mod metadata;
 #[cfg(feature = "usd")]
 pub mod validation;
 mod view;
-pub use metadata::{PropertyMetadata, StageMetadata};
+pub use metadata::{PrimMetadata, PropertyMetadata, StageMetadata};
 #[cfg(feature = "usd-media")]
 pub mod asset_previews;
 pub mod assets;

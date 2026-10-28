@@ -117,7 +117,8 @@ fn default_thumbnails_edit_as_cpp_edits_them() {
         let scene = Scene::new(live.stage(), &store);
         let view = PrimView::new(scene, prim);
         assert_eq!(
-            view.metadata_by_key("assetInfo", "previews:thumbnails:default")
+            view.metadata()
+                .value_by_key("assetInfo", "previews:thumbnails:default")
                 .map(|value| to_json(&value)),
             Some(row.composed_default.clone()),
             "{label}"

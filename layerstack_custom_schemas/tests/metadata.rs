@@ -193,7 +193,7 @@ fn typed_setters_author_what_the_typed_getters_read_and_openusd_writes() {
         None
     );
     assert_eq!(
-        PrimView::new(scene, prim).metadata_value("metaBool"),
+        PrimView::new(scene, prim).metadata().value("metaBool"),
         Some(Value::Bool(true))
     );
 }

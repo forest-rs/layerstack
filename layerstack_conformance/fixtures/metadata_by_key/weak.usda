@@ -1,0 +1,17 @@
+#usda 1.0
+
+def "W" (
+    customData = {
+        int w = 1
+        dictionary shared = {
+            int x = 1
+        }
+    }
+)
+{
+}
+
+def "Q"
+{
+    float y
+}

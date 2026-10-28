@@ -681,6 +681,121 @@ impl PrimEdit {
         edit.author_property_metadata(self.path, name, key, None)
     }
 
+    /// Authors `value` at the colon-separated `key_path` of the property
+    /// `name`'s dictionary field `key` (`customData`, or a dictionary
+    /// field a plugin registers) in the edit target: `"a:b"` sets the entry
+    /// `b` of the dictionary `a`, creating `a` if needed. The other entries
+    /// the edit target authors stay, and a weaker layer's dictionary keeps
+    /// composing under it: the composed dictionary is never copied in.
+    /// A schema-defined property no layer authors yet gets a spec, as
+    /// [`Self::write_property_metadata`] gives it one. Read it back with
+    /// [`crate::PropertyMetadata::value_by_key`].
+    ///
+    /// The `uiHints` dictionary has its own helpers (the `ui_hints` module);
+    /// do not mix them with by-key edits of it in one [`SchemaEdit`].
+    ///
+    /// OpenUSD: `UsdObject::SetMetadataByDictKey`,
+    /// `UsdObject::SetCustomDataByKey`.
+    ///
+    /// Spec: AOUSD Core §7.4 (metadata), §12.2.5 (dictionary combining).
+    ///
+    /// # Errors
+    ///
+    /// Why nothing was authored: no such property
+    /// ([`crate::MetadataError::NoSuchProperty`]), an empty part in
+    /// `key_path` ([`crate::MetadataError::InvalidKeyPath`]), or a field
+    /// that is not a dictionary registered for the property's kind
+    /// ([`crate::MetadataError::Field`]).
+    #[doc(alias = "SetMetadataByDictKey")]
+    #[doc(alias = "SetCustomDataByKey")]
+    pub fn write_property_metadata_by_key(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        name: &str,
+        key: &str,
+        key_path: &str,
+        value: Value,
+    ) -> Result<(), crate::MetadataError> {
+        let property = PropertyPath::new(self.path, edit.tokens().intern(name));
+        edit.author_metadata_by_key(TargetPath::Property(property), key, key_path, Some(value))
+    }
+
+    /// Erases the entry at `key_path` of the property `name`'s dictionary
+    /// field `key` in the edit target, keeping its other entries and
+    /// removing the dictionaries the erase leaves empty; erasing the last
+    /// entry clears the field, so weaker opinions show through. Erasing an
+    /// entry the edit target does not author authors nothing.
+    ///
+    /// OpenUSD: `UsdObject::ClearMetadataByDictKey`,
+    /// `UsdObject::ClearCustomDataByKey`.
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::write_property_metadata_by_key`].
+    #[doc(alias = "ClearMetadataByDictKey")]
+    #[doc(alias = "ClearCustomDataByKey")]
+    pub fn clear_property_metadata_by_key(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        name: &str,
+        key: &str,
+        key_path: &str,
+    ) -> Result<(), crate::MetadataError> {
+        let property = PropertyPath::new(self.path, edit.tokens().intern(name));
+        edit.author_metadata_by_key(TargetPath::Property(property), key, key_path, None)
+    }
+
+    /// Authors `value` at the colon-separated `key_path` of the prim's
+    /// dictionary field `key` (`customData`, `assetInfo`, or a dictionary
+    /// field a plugin registers) in the edit target, as
+    /// [`Self::write_property_metadata_by_key`] authors a property's. Read
+    /// it back with [`PrimView::metadata_by_key`].
+    ///
+    /// OpenUSD: `UsdObject::SetMetadataByDictKey`,
+    /// `UsdObject::SetCustomDataByKey`, `UsdObject::SetAssetInfoByKey`.
+    ///
+    /// Spec: AOUSD Core §7.4 (metadata), §12.2.5 (dictionary combining).
+    ///
+    /// # Errors
+    ///
+    /// Why nothing was authored: no prim, one that cannot be edited, an
+    /// empty part in `key_path`, or a field that is not a dictionary
+    /// registered for prims.
+    #[doc(alias = "SetMetadataByDictKey")]
+    #[doc(alias = "SetCustomDataByKey")]
+    #[doc(alias = "SetAssetInfoByKey")]
+    pub fn write_metadata_by_key(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        key: &str,
+        key_path: &str,
+        value: Value,
+    ) -> Result<(), crate::MetadataError> {
+        edit.author_metadata_by_key(TargetPath::Prim(self.path), key, key_path, Some(value))
+    }
+
+    /// Erases the entry at `key_path` of the prim's dictionary field `key`
+    /// in the edit target, as [`Self::clear_property_metadata_by_key`]
+    /// erases a property's.
+    ///
+    /// OpenUSD: `UsdObject::ClearMetadataByDictKey`,
+    /// `UsdObject::ClearCustomDataByKey`, `UsdObject::ClearAssetInfoByKey`.
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::write_metadata_by_key`].
+    #[doc(alias = "ClearMetadataByDictKey")]
+    #[doc(alias = "ClearCustomDataByKey")]
+    #[doc(alias = "ClearAssetInfoByKey")]
+    pub fn clear_metadata_by_key(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        key: &str,
+        key_path: &str,
+    ) -> Result<(), crate::MetadataError> {
+        edit.author_metadata_by_key(TargetPath::Prim(self.path), key, key_path, None)
+    }
+
     /// Authors `value` as the prim's metadata field `key` in the edit
     /// target: a field registered for prims, built in (`kind`,
     /// `customData`, `hidden`, …) or by a plugin's `SdfMetadata` in the

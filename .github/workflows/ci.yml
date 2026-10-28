@@ -494,6 +494,8 @@ jobs:
 
       - name: check schema metadata oracle
         run: python layerstack_conformance/scripts/schema_metadata_oracle.py --check
+      - name: check metadata by key oracle
+        run: python layerstack_conformance/scripts/metadata_by_key_oracle.py --check
 
       - name: check layer stack flatten oracle
         run: python layerstack_conformance/scripts/layer_stack_flatten_oracle.py --check

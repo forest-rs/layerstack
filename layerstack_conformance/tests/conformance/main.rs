@@ -103,6 +103,7 @@ mod membership_cache;
 mod membership_index;
 mod mesh_export;
 mod metadata;
+mod metadata_by_key;
 mod missing_assets;
 mod motion;
 mod namespace_coordinated;

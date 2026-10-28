@@ -1887,8 +1887,164 @@ struct Raised;
 /// match (`</A b>` matches `/A`, and ` b` is left over).
 ///
 /// Spec: AOUSD Core §8 (paths).
-fn is_path_text(text: &str) -> bool {
+pub(crate) fn is_path_text(text: &str) -> bool {
     matches!(PathGrammar { text }.path(0), Ok(Some(end)) if end == text.len())
+}
+
+/// What the property part of a path of [`is_path_text`]'s grammar ends in,
+/// where it goes beyond a property name, as `SdfPath` classes the path
+/// (`pxr/usd/sdf/path.h`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum PropertyTail {
+    /// `/A.b[/C].d`: a relational attribute, which OpenUSD counts as a
+    /// property path (`IsRelationalAttributePath`, `IsPropertyPath`), so a
+    /// relationship may target it and an attribute connect to it.
+    RelationalAttribute,
+    /// `/A.b.mapper[/C]` or `/A.b[/C].d.mapper[/E]` (`IsMapperPath`),
+    /// which a relationship may target.
+    Mapper,
+    /// A target path (`/A.b[/C]`), a relational attribute's target
+    /// (`/A.b[/C].d[/E]`), a mapper argument (`.mapper[/C].arg`) or an
+    /// expression (`.expression`): neither a target nor a connection.
+    Other,
+}
+
+/// A part of a property part, between the `.` at its top level.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum TailPart<'t> {
+    /// A property name, a relational attribute name, a keyword or a
+    /// mapper argument.
+    Name(&'t str),
+    /// A bracketed path, `[...]`.
+    Bracket,
+}
+
+/// Splits `text`, a path of [`is_path_text`]'s grammar whose property part
+/// goes beyond a property name (a bracketed path, `.mapper` or
+/// `.expression` after it), into its prim part, its property part after
+/// the `.` and what that ends in; `None` for a prim path or a property
+/// path that ends in its property name.
+///
+/// The property part follows the grammar's `PropElts`: a property name,
+/// then a bracketed target path optionally followed by a relational
+/// attribute (`RelAttrSeq`: `.`, a name, then a bracketed path or a
+/// mapper or expression), or a mapper or expression
+/// (`pxr/usd/sdf/pathParser.h`).
+///
+/// Spec: AOUSD Core §8 (paths).
+pub(crate) fn split_property_tail(text: &str) -> Option<(&str, &str, PropertyTail)> {
+    use TailPart::{Bracket, Name};
+    let (prim, tail) = split_top_level(text, b'.')?;
+    let mut parts: SmallVec<[TailPart<'_>; 8]> = SmallVec::new();
+    let mut depth = 0_usize;
+    let mut name_start = Some(0);
+    for (at, byte) in tail.bytes().enumerate() {
+        match byte {
+            b'[' => {
+                if depth == 0 {
+                    if let Some(start) = name_start.take()
+                        && start < at
+                    {
+                        parts.push(Name(&tail[start..at]));
+                    }
+                    parts.push(Bracket);
+                }
+                depth += 1;
+            }
+            b']' => depth = depth.saturating_sub(1),
+            b'.' if depth == 0 => {
+                if let Some(start) = name_start
+                    && start < at
+                {
+                    parts.push(Name(&tail[start..at]));
+                }
+                name_start = Some(at + 1);
+            }
+            _ => {}
+        }
+    }
+    if let Some(start) = name_start
+        && start < tail.len()
+    {
+        parts.push(Name(&tail[start..]));
+    }
+    let ends = match parts.as_slice() {
+        [Name(_)] => return None,
+        [Name(_), Bracket, Name(_)] => PropertyTail::RelationalAttribute,
+        [Name(_), Name("mapper"), Bracket] | [Name(_), Bracket, Name(_), Name("mapper"), Bracket] => {
+            PropertyTail::Mapper
+        }
+        _ => PropertyTail::Other,
+    };
+    Some((prim, tail, ends))
+}
+
+/// Splits `text` at the first `byte` outside `[...]` and `{...}`.
+fn split_top_level(text: &str, byte: u8) -> Option<(&str, &str)> {
+    let mut depth = 0_usize;
+    for (at, b) in text.bytes().enumerate() {
+        match b {
+            b'[' | b'{' => depth += 1,
+            b']' | b'}' => depth = depth.saturating_sub(1),
+            _ if b == byte && depth == 0 => return Some((&text[..at], &text[at + 1..])),
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Whether the prim part of `text`, a path of [`is_path_text`]'s grammar,
+/// holds a variant selection: a `{` outside the paths in `[...]`, which
+/// may hold their own (`/A.b[/C{v=x}].d`).
+pub(crate) fn has_prim_variant_selection(text: &str) -> bool {
+    let mut depth = 0_usize;
+    for b in text.bytes() {
+        match b {
+            b'[' => depth += 1,
+            b']' => depth = depth.saturating_sub(1),
+            b'{' if depth == 0 => return true,
+            _ => {}
+        }
+    }
+    false
+}
+
+/// `text` with each path in its top-level `[...]` made absolute by
+/// `anchor` (a relative one) and in turn its own bracketed paths, as
+/// `SdfPath::MakeAbsolutePath` anchors a path's target paths at the
+/// path's anchor; `text` itself when it holds no `[`.
+pub(crate) fn anchor_bracketed<'t>(
+    text: &'t str,
+    anchor: &mut impl FnMut(&str) -> String,
+) -> Cow<'t, str> {
+    if !text.contains('[') {
+        return Cow::Borrowed(text);
+    }
+    let mut out = String::with_capacity(text.len());
+    let mut depth = 0_usize;
+    let mut start = 0;
+    for (at, b) in text.bytes().enumerate() {
+        match b {
+            b'[' => {
+                if depth == 0 {
+                    out.push_str(&text[start..=at]);
+                    start = at + 1;
+                }
+                depth += 1;
+            }
+            b']' => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    let inner = anchor(&text[start..at]);
+                    out.push_str(&anchor_bracketed(&inner, anchor));
+                    start = at;
+                }
+            }
+            _ => {}
+        }
+    }
+    out.push_str(&text[start..]);
+    Cow::Owned(out)
 }
 
 /// The rules of [`is_path_text`], over `text`'s byte positions.
@@ -2282,7 +2438,10 @@ mod tests {
     use crate::ast::*;
     use crate::parser::parse_cst;
 
-    use super::{is_path_text, lower};
+    use super::{
+        PropertyTail, anchor_bracketed, has_prim_variant_selection, is_path_text, lower,
+        split_property_tail,
+    };
 
     /// Helper: parse source through CST then lower to AST.
     fn parse(src: &str) -> ParseResult<'_> {
@@ -3243,6 +3402,39 @@ def Scope \"root\" {
     }
 
     #[test]
+    fn property_tails_are_classed_as_openusd_classes_them() {
+        use PropertyTail::{Mapper, Other, RelationalAttribute};
+        // `SdfPath::IsRelationalAttributePath`, `IsMapperPath`; the others
+        // are target paths, mapper arguments and expressions.
+        for (path, prim, tail, ends) in [
+            ("/A.b[/C].d", "/A", "b[/C].d", RelationalAttribute),
+            ("/A/B.b[/C.d[/E].f].g:h", "/A/B", "b[/C.d[/E].f].g:h", RelationalAttribute),
+            ("/A.b[/C].mapper", "/A", "b[/C].mapper", RelationalAttribute),
+            ("/A.b[/C{v=x}].d", "/A", "b[/C{v=x}].d", RelationalAttribute),
+            ("/A.b.mapper[/C]", "/A", "b.mapper[/C]", Mapper),
+            ("/A.b[/C].d.mapper[/E]", "/A", "b[/C].d.mapper[/E]", Mapper),
+            ("/A.b[/C]", "/A", "b[/C]", Other),
+            ("/A.b.mapper[/C].arg", "/A", "b.mapper[/C].arg", Other),
+            ("/A.b.expression", "/A", "b.expression", Other),
+            ("/A.b[/C].d[/E]", "/A", "b[/C].d[/E]", Other),
+            ("/A.b[/C].d.expression", "/A", "b[/C].d.expression", Other),
+        ] {
+            assert_eq!(split_property_tail(path), Some((prim, tail, ends)), "{path}");
+        }
+        for path in ["/A", "/A.b", "/A.b:c", "/A{v=.x}"] {
+            assert_eq!(split_property_tail(path), None, "{path}");
+        }
+        assert!(!has_prim_variant_selection("/A.b[/C{v=x}].d"));
+        assert!(has_prim_variant_selection("/A{v=x}.b[/C].d"));
+        let mut anchor = |inner: &str| format!("/P/{inner}");
+        assert_eq!(
+            anchor_bracketed("/A.b[C.d[E].f].g", &mut anchor),
+            "/A.b[/P/C.d[/P/E].f].g"
+        );
+        assert_eq!(anchor_bracketed("/A.b", &mut anchor), "/A.b");
+    }
+
+    #[test]
     fn paths_follow_the_path_grammar() {
         // Each as `SdfPath::IsValidPathString` in OpenUSD 26.11 judges it,
         // which applies the grammar `PathRef` does.
@@ -3261,6 +3453,19 @@ def Scope \"root\" {
             "/A {v=x}",
             "/A{ v-x = .y|z- }",
             "/\u{c4}.\u{fc}",
+            "/A.b[/C]",
+            "/A.b.mapper[/C]",
+            "/A.b.mapper[/C].arg",
+            "/A.b[/C].d.mapper[/E]",
+            "/A.b[/C].d.mapper[/E].x",
+            "/A.b[/C].d.expression",
+            "/A.b[/C].d[/E]",
+            "/A.b[/C].mapper",
+            "/A.b[/C.d[/E].f].g",
+            "/A.b[/C/D.e].f:g",
+            "/A.b[/C{v=x}].d",
+            ".b[C].d",
+            "../A.b[../C].d",
         ] {
             assert!(is_path_text(path), "{path}");
         }
@@ -3283,6 +3488,15 @@ def Scope \"root\" {
             "../",
             "/..",
             "/A\\x10",
+            "/A.b[/C].d.e",
+            "/A.b[]",
+            "/A.b[/C]d",
+            "/A.b.mapper",
+            "/A.b.mapper[/C].",
+            "/A.b[/C].d[/E].f",
+            "/A.b.expression[/C]",
+            "/A.b[/C].d.mapper",
+            "/A.b[/C].1",
         ] {
             assert!(!is_path_text(path), "{path}");
         }

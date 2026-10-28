@@ -1833,6 +1833,23 @@ def Xform "A" (
         );
     }
 
+    /// A relational attribute or mapper target, which USDA reads and
+    /// writes, has no crate path here: the save refuses it before any
+    /// output rather than write a path the crate format cannot spell.
+    #[test]
+    fn relational_targets_are_refused() {
+        let (layer, tokens, paths) =
+            import_usda("#usda 1.0\ndef \"A\"\n{\n    rel r = </A.b[/C].d>\n}\n");
+        assert!(
+            matches!(
+                save_usdc(&layer, &tokens, &paths),
+                Err(UsdcWriteError::InvalidPath { ref path, .. }) if path == "/A.b[/C].d"
+            ),
+            "{:?}",
+            save_usdc(&layer, &tokens, &paths)
+        );
+    }
+
     /// `opaque` declares an attribute that holds no value, such as
     /// `UsdCollectionAPI`'s `collection:__INSTANCE_NAME__`.
     #[test]

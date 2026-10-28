@@ -135,7 +135,17 @@ The cases:
   `SdfSchema::IsValidInheritPath`, `IsValidReference`), while
   `read_reference_empty_path` reads `<>` in references; and a target or
   connection that is `<>` or the root
-  (`IsValidRelationshipTargetPath`, `IsValidAttributeConnectionPath`).
+  (`IsValidRelationshipTargetPath`, `IsValidAttributeConnectionPath`);
+  and a target or connection of the path grammar's other kinds, a target
+  path (`</A.b[/C]>`), a mapper argument, an expression, a relational
+  attribute's target or expression, a mapper as a connection, or a
+  relational attribute of a prim path with a variant selection, while
+  `read_relational_targets` reads relational attributes
+  (`</A.b[/C].d>`, which `SdfPath::IsPropertyPath` counts as properties)
+  as targets and connections, and mappers (`</A.b.mapper[/C]>`,
+  `IsMapperPath`) as targets, their bracketed paths anchored as the path
+  is (`SdfPath::MakeAbsolutePath`) and holding variant selections or
+  further relational attributes.
 - `read_string_byte_escapes` and `write_string_nul`: strings whose
   escapes OpenUSD keeps as bytes in a `std::string`: bytes that are not
   UTF-8 (`\\xff`), which it writes back escaped, and NUL, which its
@@ -1724,6 +1734,75 @@ def "P"
 def "P"
 {
     rel r = <..>
+}
+''', []),
+    "read_relational_targets": ('''#usda 1.0
+def "P"
+{
+    float c.connect = </A.b[/C].d>
+    rel m = </A.b.mapper[/C]>
+    rel n = </A.b[/C.d[/E].f].g>
+    rel r = </A.b[/C].d>
+    rel s = </A.b[/C/D.e].f:g>
+    rel t = </A.b[/C].d.mapper[/E]>
+    rel u = <.b[C].d>
+    rel v = </A.b[/C{v=x}].d>
+    prepend rel w = [</A.b[/C].d>, </A.b.mapper[/C]>]
+    rel x = <../A.b[../C].d>
+}
+''', ["/P.c", "/P.m", "/P.n", "/P.r", "/P.s", "/P.t", "/P.u", "/P.v", "/P.w", "/P.x"]),
+    "strict_relational_target_path": ('''#usda 1.0
+def "P"
+{
+    rel r = </A.b[/C]>
+}
+''', []),
+    "strict_relational_mapper_argument": ('''#usda 1.0
+def "P"
+{
+    rel r = </A.b.mapper[/C].arg>
+}
+''', []),
+    "strict_relational_expression": ('''#usda 1.0
+def "P"
+{
+    rel r = </A.b.expression>
+}
+''', []),
+    "strict_relational_attribute_target": ('''#usda 1.0
+def "P"
+{
+    rel r = </A.b[/C].d[/E]>
+}
+''', []),
+    "strict_relational_attribute_expression": ('''#usda 1.0
+def "P"
+{
+    rel r = </A.b[/C].d.expression>
+}
+''', []),
+    "strict_relational_variant_selection": ('''#usda 1.0
+def "P"
+{
+    rel r = </A{v=x}.b[/C].d>
+}
+''', []),
+    "strict_relational_connection_target_path": ('''#usda 1.0
+def "P"
+{
+    float c.connect = </A.b[/C]>
+}
+''', []),
+    "strict_relational_connection_mapper": ('''#usda 1.0
+def "P"
+{
+    float c.connect = </A.b.mapper[/C]>
+}
+''', []),
+    "strict_relational_connection_expression": ('''#usda 1.0
+def "P"
+{
+    float c.connect = </A.b.expression>
 }
 ''', []),
     "strict_connection_root": ('''#usda 1.0

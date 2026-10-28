@@ -796,13 +796,13 @@ mod tests {
         ] {
             assert_eq!(
                 compare(&format!(
-                    "#usda 1.0\ndef \"A\" {{ {ty}[] values = [0, 1, 2,] }}"
+                    "#usda 1.0\ndef \"A\" {{ {ty}[] values = [0, 1, 2,]; }}"
                 ))
                 .numeric_arrays,
                 1
             );
             assert_eq!(
-                compare(&format!("#usda 1.0\ndef \"A\" {{ {ty}[] values = [] }}")).numeric_arrays,
+                compare(&format!("#usda 1.0\ndef \"A\" {{ {ty}[] values = []; }}")).numeric_arrays,
                 0
             );
         }
@@ -838,14 +838,14 @@ mod tests {
                 .collect::<Vec<_>>()
                 .join(", ");
             let stats = compare(&format!(
-                "#usda 1.0\ndef \"A\" {{ {ty}[] values = [({tuple}), ({tuple}),] }}"
+                "#usda 1.0\ndef \"A\" {{ {ty}[] values = [({tuple}), ({tuple}),]; }}"
             ));
             assert_eq!(stats.numeric_elements, 2);
         }
         compare(
-            "#usda 1.0\ndef \"A\" { double[] values = [-0, -0.0, inf, -inf, nan, 18446744073709551615, -9223372036854775808] }",
+            "#usda 1.0\ndef \"A\" { double[] values = [-0, -0.0, inf, -inf, nan, 18446744073709551615, -9223372036854775808]; }",
         );
-        compare("#usda 1.0\ndef \"A\" { float3[] values = [(1/*a*/2, 3,), (4, - 0, nan)] }");
+        compare("#usda 1.0\ndef \"A\" { float3[] values = [(1/*a*/2, 3,), (4, - 0, nan)]; }");
     }
 
     #[test]
@@ -886,7 +886,7 @@ mod tests {
             ("quatd", "[(0.1, 0.2, 0.3, 0.4)]"),
         ];
         for (ty, value) in arrays {
-            let source = format!("#usda 1.0\ndef \"A\" {{ {ty}[] values = {value} }}");
+            let source = format!("#usda 1.0\ndef \"A\" {{ {ty}[] values = {value}; }}");
             let stats = compare(&source);
             assert_eq!(stats.numeric_arrays, 1, "{source}");
             let parsed = crate::parser::parse(&source);
@@ -962,8 +962,8 @@ def "A" {
     int[] ids.timeSamples = { 3: [3], -1: [1, 2], 4: None, 5: [] }
     int[] ids = [4, 5]
     variantSet "look" = {
-        "x" { point3f[] points = [(1, 2, 3)] }
-        "y" { point3f[] points = [(4, 5, 6)] }
+        "x" { point3f[] points = [(1, 2, 3)]; }
+        "y" { point3f[] points = [(4, 5, 6)]; }
     }
     string[] names = ["a", "b"]
     matrix2d[] matrices = [((1, 0), (0, 1))]
@@ -1029,7 +1029,7 @@ def "A" {
     bool[] user:flags = [True, false, 1]
     double[] infinities = [-inf, inf, nan, -0] /* after the closing bracket */
     int[] ignored.connect = </A.overflow>
-    def "Child" { float[] weights = [0.5, 1.0] }
+    def "Child" { float[] weights = [0.5, 1.0]; }
 }
 "#,
         );
@@ -1084,7 +1084,7 @@ def "A\1" (
     }
     variantSet "v" = {
         "x" ( doc = "branch \xfc" ) {
-            def "C\3" { custom string t = "\xfb" }
+            def "C\3" { custom string t = "\xfb"; }
         }
     }
     rel r = </A>
@@ -1115,7 +1115,7 @@ def "D\4" {}
         for _ in 0..100_000 {
             source.push_str("(1, 2, 3),");
         }
-        source.push_str("] }");
+        source.push_str("]\n}\n");
         let store = InMemoryStore::default();
         let imported = read_usda(
             &source,

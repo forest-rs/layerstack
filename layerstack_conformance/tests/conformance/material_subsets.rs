@@ -131,7 +131,7 @@ fn material_subsets_validate_only_requested_time_and_allow_parent_only_meshes() 
     assert_eq!(*overlapping.subsets[1].indices, [0]);
     assert!(!overlapping.validation.is_valid());
     let (store, live) = support::scene(
-        "#usda 1.0\ndef Material \"A\" {}\ndef Mesh \"M\" { rel material:binding = </A> }",
+        "#usda 1.0\ndef Material \"A\" {}\ndef Mesh \"M\" { rel material:binding = </A>; }",
     );
     let path = store.path("/M");
     let a = store.path("/A");

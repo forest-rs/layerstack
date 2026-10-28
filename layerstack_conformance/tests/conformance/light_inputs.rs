@@ -62,7 +62,7 @@ def SphereLight "Light" {
  float inputs:diffuse.connect = </Missing.outputs:out>
  custom float inputs:cycle.connect = </Light.inputs:cycle>
  float inputs:specular = None
- def Shader "Shader" { float outputs:out }
+ def Shader "Shader" { float outputs:out; }
 }
 "#,
     );
@@ -143,7 +143,7 @@ def SphereLight "Light" {
  rel light:filters = [</Bridge.forward>, </Missing>]
  uniform token[] xformOpOrder = ["xformOp:translate:missing"]
 }
-def Scope "Bridge" { rel forward = </Filter> }
+def Scope "Bridge" { rel forward = </Filter>; }
 def LightFilter "Filter" {}
 "#,
     );
@@ -205,7 +205,7 @@ def SphereLight "Light" {
  string inputs:intensity = "bad"
  rel light:filters = </Bridge.forward>
 }
-def Scope "Bridge" { rel forward = </Bridge.forward> }
+def Scope "Bridge" { rel forward = </Bridge.forward>; }
 "#,
     );
     let light = store.path("/Light");
@@ -218,8 +218,8 @@ def Scope "Bridge" { rel forward = </Bridge.forward> }
 fn filter_port_capture_and_asset_source_evidence_use_the_same_owned_model() {
     let (mut store, _) = support::scene(
         r#"#usda 1.0
-def LightFilter "Filter" { custom float inputs:gain = 0.25 }
-def DomeLight "Dome" { asset inputs:texture:file = @textures/sky.exr@ }
+def LightFilter "Filter" { custom float inputs:gain = 0.25; }
+def DomeLight "Dome" { asset inputs:texture:file = @textures/sky.exr@; }
 "#,
     );
     let filter = store.path("/Filter");

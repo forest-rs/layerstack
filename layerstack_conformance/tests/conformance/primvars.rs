@@ -552,7 +552,7 @@ fn incremental_inheritance_distinguishes_unchanged_from_cleared() {
         r#"#usda 1.0
         def "Only" {
             float primvars:only = 1
-            def "Stop" { float primvars:only = 2 (interpolation = "vertex") }
+            def "Stop" { float primvars:only = 2 (interpolation = "vertex"); }
         }
     "#,
     );

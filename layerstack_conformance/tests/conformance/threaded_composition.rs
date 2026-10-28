@@ -127,11 +127,18 @@ fn wide_scene(groups: usize, width: usize) -> String {
 ) {{
     def "Body" {{
         double size = {proto}
-        def "Part" {{ token kind = "leaf" }}
+        def "Part" {{ token kind = "leaf"; }}
     }}
     variantSet "look" = {{
-        "plain" {{ def "Trim" {{ }} }}
-        "fancy" {{ def "Trim" {{ def "Bead" {{ }} }} def "Extra" {{ }} }}
+        "plain" {{
+            def "Trim" {{ }}
+        }}
+        "fancy" {{
+            def "Trim" {{
+                def "Bead" {{ }}
+            }}
+            def "Extra" {{ }}
+        }}
     }}
 }}"#
         )
@@ -139,7 +146,7 @@ fn wide_scene(groups: usize, width: usize) -> String {
     }
     out.push_str(
         r#"class "_Shared" {
-    def "FromClass" { int count = 3 }
+    def "FromClass" { int count = 3; }
 }
 def "World" {
 "#,

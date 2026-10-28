@@ -370,8 +370,12 @@ def "Asset" (
 ) {
     def "Geo" {}
     variantSet "geo" = {
-        "render" { over "Geo" (payload = @render.usda@) {} }
-        "deform" { over "Geo" (payload = @deform.usda@) {} }
+        "render" {
+            over "Geo" (payload = @render.usda@) {}
+        }
+        "deform" {
+            over "Geo" (payload = @deform.usda@) {}
+        }
     }
 }
 "#;

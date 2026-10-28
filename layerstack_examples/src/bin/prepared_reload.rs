@@ -31,7 +31,7 @@ impl Storage for Memory {
 }
 fn package(points: &str, image: &[u8]) -> Vec<u8> {
     let mesh = format!(
-        "#usda 1.0\ndef Mesh \"Mesh\" {{ point3f[] points=[{points}]\n custom asset texture=@../images/color.png@ }}"
+        "#usda 1.0\ndef Mesh \"Mesh\" {{ point3f[] points=[{points}]\n custom asset texture=@../images/color.png@; }}"
     );
     layerstack_usdz::write_usdz(&[
         layerstack_usdz::PackageFile::new(

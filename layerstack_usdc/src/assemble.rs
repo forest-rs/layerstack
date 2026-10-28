@@ -3846,13 +3846,13 @@ def "World" {
         variantSet "look" = {
             "x" {
                 double shade = 0.5
-                def "Inner" { double d = 2 }
+                def "Inner" { double d = 2; }
             }
             "y" { }
         }
-        def "Child" { custom token kind = "leaf" }
+        def "Child" { custom token kind = "leaf"; }
     }
-    over "B" { double size = 3 }
+    over "B" { double size = 3; }
 }
 def "Other" {}
 "#;

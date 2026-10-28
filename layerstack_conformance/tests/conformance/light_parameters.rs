@@ -19,7 +19,7 @@ def SphereLight "L" (prepend apiSchemas = ["ShapingAPI", "ShadowAPI"]) {
  float inputs:shadow:distance = 40
 }
 def SphereLight "Bare" {}
-def SphereLight "Custom" { custom float inputs:shaping:focus = 2 }
+def SphereLight "Custom" { custom float inputs:shaping:focus = 2; }
 "#,
     );
     let light = store.path("/L");
@@ -54,7 +54,7 @@ def SphereLight "L" (prepend apiSchemas = ["ShapingAPI", "ShadowAPI"]) {
  float inputs:shaping:focus.connect = </L/Shader.outputs:focus>
  asset inputs:shaping:ies:file.connect = </L/Shader.outputs:file>
  string inputs:shadow:falloff = "wrong"
- def Shader "Shader" { float outputs:focus; asset outputs:file }
+ def Shader "Shader" { float outputs:focus; asset outputs:file; }
 }
 "#,
     );
@@ -77,10 +77,10 @@ fn dome_versions_keep_their_distinct_pole_semantics_and_texture_evidence() {
     let (store, live) = support::scene(
         r#"#usda 1.0
 (upAxis = "Z")
-def DomeLight "Legacy" { asset inputs:texture:file = @./sky.exr@ }
-def DomeLight_1 "Modern" { token inputs:texture:format = "latlong" }
-def DomeLight_1 "Bad" { token poleAxis = "invalid" }
-def DomeLight "BadFormat" { token inputs:texture:format = "unknown" }
+def DomeLight "Legacy" { asset inputs:texture:file = @./sky.exr@; }
+def DomeLight_1 "Modern" { token inputs:texture:format = "latlong"; }
+def DomeLight_1 "Bad" { token poleAxis = "invalid"; }
+def DomeLight "BadFormat" { token inputs:texture:format = "unknown"; }
 "#,
     );
     let legacy = store.path("/Legacy");

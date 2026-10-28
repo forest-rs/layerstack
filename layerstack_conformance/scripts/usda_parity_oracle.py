@@ -59,7 +59,12 @@ The cases:
   value and metadata after `.connect` or `.timeSamples`; two metadata
   entries, or dictionary entries, on one line without `;`; a line break
   after `=`, before a list's `,`, after an attribute's type or before a
-  prim's name; relocates without `,` between them.
+  prim's name; relocates without `,` between them; a prim body
+  statement not ended by a line break (or, after a property or
+  `reorder` statement, a `;`) before the prim's closing `}` or another
+  statement, and a `;` that ends no statement on its line (`PrimItem`,
+  `LayerSpec`, `StatementSequenceOf`, `pxr/usd/sdf/textFileFormatParser.h`),
+  while `read_statements_on_one_line` reads the forms that do end one.
 - `statements_*`: several list-op statements for one field, on a
   relationship, a connection, references, inherits, `variantSets` and
   metadata (`apiSchemas`). OpenUSD's parser sets each statement's list
@@ -953,6 +958,103 @@ def Scope
     }
 )
 ''', []),
+    "strict_property_before_brace": ('''#usda 1.0
+def "A" { double a = 1 }
+''', []),
+    "strict_relationship_before_brace": ('''#usda 1.0
+def "A"
+{
+    rel r = </A> /* a comment */ }
+''', []),
+    "strict_reorder_before_brace": ('''#usda 1.0
+def "A"
+{
+    reorder nameChildren = ["B"] }
+''', []),
+    "strict_prim_after_prim_on_line": ('''#usda 1.0
+def "A"
+{
+} def "B"
+{
+}
+''', []),
+    "strict_child_after_child_on_line": ('''#usda 1.0
+def "A"
+{
+    def "B"
+    {
+    } def "C"
+    {
+    }
+}
+''', []),
+    "strict_child_before_brace": ('''#usda 1.0
+def "A" { def "B" {} }
+''', []),
+    "strict_variant_set_before_brace": ('''#usda 1.0
+def "A" (
+    variantSets = "v"
+)
+{
+    variantSet "v" = { "x" {} } }
+''', []),
+    "strict_semicolon_after_prim": ('''#usda 1.0
+def "A"
+{
+};
+''', []),
+    "strict_semicolon_after_child": ('''#usda 1.0
+def "A"
+{
+    def "B"
+    {
+    };
+}
+''', []),
+    "strict_semicolon_alone": ('''#usda 1.0
+def "A"
+{
+    double a = 1
+    ;
+}
+''', []),
+    "strict_semicolon_twice": ('''#usda 1.0
+def "A"
+{
+    double a = 1;;
+}
+''', []),
+    "strict_metadata_semicolon_alone": ('''#usda 1.0
+(
+    doc = "x";
+    ;
+)
+''', []),
+    "strict_dictionary_semicolon_alone": ('''#usda 1.0
+def "A" (
+    customData = { ; }
+)
+{
+}
+''', []),
+    "strict_root_prims_then_prim_on_line": ('''#usda 1.0
+reorder rootPrims = ["A"] def "A"
+{
+}
+''', []),
+    "read_statements_on_one_line": ('''#usda 1.0
+reorder rootPrims = ["A"]; def "A" { double a = 1; rel r = </A>; }
+def "B"
+{
+    reorder nameChildren = ["C"]; def "C" { double c = 1; } # a comment
+    variantSet "v" = { "x" { double x = 1; } "y" {} }
+}
+def "D" (
+    customData = { int a = 1; }
+)
+{
+}
+def "E" {}''', []),
 }
 
 

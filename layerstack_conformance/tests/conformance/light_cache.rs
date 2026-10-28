@@ -25,7 +25,7 @@ fn set(
 #[test]
 fn capture_and_discovery_reuse_unrelated_edits_with_component_upload_stamps() {
     let (mut store, mut live) = support::scene(
-        "#usda 1.0\ndef SphereLight \"Light\" {\n float inputs:intensity = 1\n}\ndef Scope \"Other\" { float custom = 1 }\n",
+        "#usda 1.0\ndef SphereLight \"Light\" {\n float inputs:intensity = 1\n}\ndef Scope \"Other\" { float custom = 1; }\n",
     );
     let path = store.path("/Light");
     let root = store.path("/");

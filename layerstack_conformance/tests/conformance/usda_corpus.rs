@@ -147,23 +147,6 @@ const DIFFERENCES: &[Difference] = &[
                  OpenUSD refuses the combination",
     },
     Difference {
-        file: "28_bad_newline8.usda",
-        outcome: Outcome::Accepts,
-        reason: "a property ended by the prim's `}` on its own line is read; OpenUSD \
-                 wants a line break or `;` first, which much hand-written text omits",
-    },
-    Difference {
-        file: "29_bad_newline9.usda",
-        outcome: Outcome::Accepts,
-        reason: "a prim starting on the line that closes another is read, as in \
-                 `28_bad_newline8`",
-    },
-    Difference {
-        file: "42_bad_noNewlineBetweenComps.usda",
-        outcome: Outcome::Accepts,
-        reason: "prims on one line, as in `29_bad_newline9`",
-    },
-    Difference {
         file: "46_weirdStringContent.usda",
         outcome: Outcome::Error,
         reason: "string escapes that make bytes that are not UTF-8 are reported: a \

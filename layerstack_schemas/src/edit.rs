@@ -354,7 +354,7 @@ impl<'s> SchemaEdit<'s> {
     /// otherwise nothing is authored. A spec the target lacks is created,
     /// its missing ancestor specs as `over`s, and an existing one, such as
     /// an `over`, is changed in place. So `/A/B` with `/A` undefined
-    /// authors `def "A" { def Xform "B" {} }`, and a prim already defined
+    /// authors a `def "A"` holding a `def Xform "B"`, and a prim already defined
     /// as `schema`, in any layer, authors nothing. The pseudo-root (`/`)
     /// is never authored.
     ///

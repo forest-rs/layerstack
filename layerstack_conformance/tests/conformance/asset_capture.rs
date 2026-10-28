@@ -160,8 +160,8 @@ fn weak_layer_and_retimed_assets_keep_their_actual_anchor() {
 fn blocks_wrong_storage_and_absent_attributes_are_distinct() {
     let (store, live) = support::scene(
         r#"#usda 1.0
-def DomeLight "Dome" { asset inputs:texture:file = None }
-def Scope "Bad" { custom float texture = 2; rel relation }
+def DomeLight "Dome" { asset inputs:texture:file = None; }
+def Scope "Bad" { custom float texture = 2; rel relation; }
 "#,
     );
     let dome = store.path("/Dome");

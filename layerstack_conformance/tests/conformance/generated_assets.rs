@@ -788,8 +788,12 @@ fn publication_updates_an_unselected_mesh_without_changing_the_selected_cube() {
         r#"#usda 1.0
 def Xform "Asset" (variants = { string shape = "cube" }; prepend variantSets = "shape") {
  variantSet "shape" = {
-  "mesh" { def Mesh "Geometry" {} }
-  "cube" { def Cube "Geometry" { double size = 7 } }
+  "mesh" {
+   def Mesh "Geometry" {}
+  }
+  "cube" {
+   def Cube "Geometry" { double size = 7; }
+  }
  }
 }
 "#,
@@ -848,8 +852,12 @@ fn publication_checks_the_exact_variant_site_and_rejects_stale_preparations() {
         r#"#usda 1.0
 def Xform "Asset" (variants = { string shape = "mesh" }; prepend variantSets = "shape") {
  variantSet "shape" = {
-  "mesh" { def Mesh "Geometry" {} }
-  "cube" { def Cube "Geometry" {} }
+  "mesh" {
+   def Mesh "Geometry" {}
+  }
+  "cube" {
+   def Cube "Geometry" {}
+  }
  }
 }
 "#,

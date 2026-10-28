@@ -110,7 +110,7 @@ fn broken_in(header: &str, classes: &str) -> (String, Rule) {
 fn a_well_formed_library_compiles() {
     let compiled = compile_text(&format!(
         "{CODELESS}{}",
-        r#"class Thing "Thing" (inherits = </Typed>) { int count = 1 }"#
+        r#"class Thing "Thing" (inherits = </Typed>) { int count = 1; }"#
     ))
     .unwrap();
     assert_eq!(compiled.classes().len(), 1);
@@ -267,24 +267,26 @@ class "ThingAPI" (inherits = </OneAPI>; customData = {token apiSchemaType = "non
         ),
         (
             r#"class "ThingAPI" (inherits = </APISchemaBase>
-    customData = {token apiSchemaType = "multipleApply"}) { int count }"#,
+    customData = {token apiSchemaType = "multipleApply"}) { int count; }"#,
             "/ThingAPI",
             |r| matches!(r, Rule::PropertiesWithoutPrefix),
         ),
         (
-            r#"class "Thing" (inherits = </Typed>) { widget count }"#,
+            r#"class "Thing" (inherits = </Typed>) { widget count; }"#,
             "/Thing.count",
             |r| matches!(r, Rule::UnknownType { type_name } if type_name == "widget"),
         ),
         (
             r#"class "Thing" (inherits = </Typed>) { token my:count
-    token myCount }"#,
+    token myCount
+}"#,
             "/Thing",
             |r| matches!(r, Rule::DuplicateName { name, relationship: false } if name == "Thing.myCount"),
         ),
         (
             r#"class "Thing" (inherits = </Typed>) { rel a (customData = {string apiName = "x"})
-    rel b (customData = {string apiName = "x"}) }"#,
+    rel b (customData = {string apiName = "x"})
+}"#,
             "/Thing",
             |r| {
                 matches!(
@@ -297,8 +299,8 @@ class "ThingAPI" (inherits = </OneAPI>; customData = {token apiSchemaType = "non
             },
         ),
         (
-            r#"class "Base" (inherits = </Typed>) { int count }
-class "Thing" (inherits = </Base>) { int count (customData = {bool apiSchemaOverride = true}) }"#,
+            r#"class "Base" (inherits = </Typed>) { int count; }
+class "Thing" (inherits = </Base>) { int count (customData = {bool apiSchemaOverride = true}); }"#,
             "/Thing.count",
             |r| matches!(r, Rule::OverrideOfDefinedProperty { .. }),
         ),
@@ -306,7 +308,8 @@ class "Thing" (inherits = </Base>) { int count (customData = {bool apiSchemaOver
             r#"class "ThingAPI" (inherits = </APISchemaBase>
     customData = {token apiSchemaType = "multipleApply"; token propertyNamespacePrefix = "p"})
 { int a
-    int p:__INSTANCE_NAME__:a }"#,
+    int p:__INSTANCE_NAME__:a
+}"#,
             "/ThingAPI",
             |r| matches!(r, Rule::PrefixedPropertyExists { name } if name == "p:__INSTANCE_NAME__:a"),
         ),
@@ -730,7 +733,7 @@ fn the_command_writes_and_checks_a_rust_module() {
     let source = directory.0.join("schema.usda");
     std::fs::write(
         &source,
-        format!("{CODELESS}class Thing \"Thing\" (inherits = </Typed>) {{ float size }}\n"),
+        format!("{CODELESS}class Thing \"Thing\" (inherits = </Typed>) {{ float size; }}\n"),
     )
     .unwrap();
     let module = directory.0.join("src/schemas.rs");

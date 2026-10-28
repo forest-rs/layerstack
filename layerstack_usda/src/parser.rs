@@ -336,24 +336,69 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
         }
     }
 
-    /// Reports a metadata or dictionary entry followed on its line by
-    /// anything but `;` or the `close` of its block: entries are separated
-    /// by line breaks or `;` (`StatementSequenceOf`,
-    /// `pxr/usd/sdf/textFileFormatParser.h`), so `( a = 1 b = 2 )` is
-    /// refused.
+    /// Ends a metadata or dictionary entry: at a line break, at a `;` on
+    /// its line (which is consumed), or before the `close` of its block.
+    /// Entries are separated by one line break or `;`
+    /// (`StatementSequenceOf`, `pxr/usd/sdf/textFileFormatParser.h`), so
+    /// `( a = 1 b = 2 )` is refused, as is a `;` on a later line.
     fn expect_entry_end(&mut self, close: TokenKind) {
-        self.eat_trivia();
+        self.expect_statement_end(true, Some(close));
+    }
+
+    /// Ends a statement at a line break, at a `;` on its line where
+    /// `semicolon` allows one (the `;` is consumed), or before `close` on
+    /// its line; reports anything else on the line, without consuming it.
+    /// Only comments may come between: OpenUSD pads a statement's end with
+    /// `SinglelinePadding` (`pxr/usd/sdf/textFileFormatParser.h`), so a
+    /// block comment spanning lines is no line break. The end of the file
+    /// is left to whatever reports it unclosed.
+    ///
+    /// Spec: AOUSD Core §16.2.10 (statement separators).
+    fn expect_statement_end(&mut self, semicolon: bool, close: Option<TokenKind>) {
         if self.line_break {
             return;
         }
-        match self.peek() {
-            None | Some(TokenKind::Semicolon) => {}
-            Some(kind) if kind == close => {}
-            Some(_) => {
-                let span = self.current_span();
-                self.error(span, "expected a line break or `;` between entries");
+        let mut index = self.pos;
+        while let Some(tok) = self.tokens.get(index) {
+            if tok.kind == TokenKind::Newline || !is_trivia(tok.kind) {
+                break;
             }
+            index += 1;
         }
+        let Some(next) = self.tokens.get(index) else {
+            return;
+        };
+        if next.kind == TokenKind::Newline || Some(next.kind) == close {
+            return;
+        }
+        if semicolon && next.kind == TokenKind::Semicolon {
+            self.eat_trivia();
+            self.bump();
+            return;
+        }
+        let message = if semicolon {
+            "expected a line break or `;` at the end of the statement"
+        } else {
+            "expected a line break at the end of the statement"
+        };
+        self.error(next.span, message);
+    }
+
+    /// Reports and skips a `;` that does not end a statement on its line:
+    /// OpenUSD takes one separator after each statement and none before
+    /// the first (`StatementSequenceOf`, `PrimItem`,
+    /// `pxr/usd/sdf/textFileFormatParser.h`).
+    fn refuse_stray_separator(&mut self) -> bool {
+        let semicolon = self.peek() == Some(TokenKind::Semicolon);
+        if semicolon {
+            let span = self.current_span();
+            self.error(
+                span,
+                "unexpected `;` with no statement before it on its line",
+            );
+            self.bump();
+        }
+        semicolon
     }
 
     /// Returns the span of the current token, or empty span at EOF.
@@ -435,12 +480,17 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
                 break;
             }
 
+            // A root prim ends at a line break or the end of the file, a
+            // `reorder rootPrims` statement also at `;` (`LayerSpec`,
+            // `pxr/usd/sdf/textFileFormatParser.h`).
             if self.peek() == Some(TokenKind::Ident) && self.current_text() == "reorder" {
                 self.parse_reorder_statement();
+                self.expect_statement_end(true, None);
             } else if self.peek() == Some(TokenKind::Ident)
                 && matches!(self.current_text(), "def" | "over" | "class")
             {
                 self.parse_prim();
+                self.expect_statement_end(false, None);
             } else {
                 let span = self.current_span();
                 self.error(span, "expected prim definition or reorder statement");
@@ -504,7 +554,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
                 break;
             }
 
-            if self.eat_statement_separator() {
+            if self.refuse_stray_separator() {
                 continue;
             }
             if self.peek() == Some(TokenKind::Ident) && self.current_text() == "subLayers" {
@@ -744,7 +794,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
                 break;
             }
 
-            if self.eat_statement_separator() {
+            if self.refuse_stray_separator() {
                 continue;
             }
             if self.peek() == Some(TokenKind::Ident) && self.current_text() == "relocates" {
@@ -1104,17 +1154,24 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
                 break;
             }
 
-            if self.eat_statement_separator() {
+            if self.refuse_stray_separator() {
                 continue;
             }
+            // A prim or variant set ends at a line break, a property or
+            // `reorder` statement also at `;`, which it consumes (`PrimItem`,
+            // `pxr/usd/sdf/textFileFormatParser.h`): the closing `}` of
+            // the prim does not end one on its line.
             if self.peek() == Some(TokenKind::Ident)
                 && matches!(self.current_text(), "def" | "over" | "class")
             {
                 self.parse_prim();
+                self.expect_statement_end(false, None);
             } else if self.peek() == Some(TokenKind::Ident) && self.current_text() == "variantSet" {
                 self.parse_variant_set();
+                self.expect_statement_end(false, None);
             } else if self.is_reorder_statement() {
                 self.parse_reorder_statement();
+                self.expect_statement_end(true, None);
             } else if (self.peek() == Some(TokenKind::Ident)
                 && (self.current_text() == "rel"
                     || (self.current_text() == "varying" && self.rel_after(self.pos))))
@@ -1335,10 +1392,11 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
         self.builder.finish_node(end);
     }
 
-    /// Reports anything on a property's line after its name, value and
-    /// metadata, and skips it to the end of the line. A `;` or a closing
-    /// brace also ends the property; OpenUSD wants a line break or `;` even
-    /// before the brace. A property that
+    /// Ends a property statement at a line break or a `;` on its line,
+    /// as [`Self::expect_statement_end`]; OpenUSD wants one even before the
+    /// prim's closing brace (`PrimItem`, `pxr/usd/sdf/textFileFormatParser.h`),
+    /// so `def "W" { double x = 1 }` is refused. Anything else on the line
+    /// is reported and skipped to the end of the statement. A property that
     /// reported an error since `errors` diagnostics were recorded is
     /// skipped silently: its value parser said what went wrong. A word there is not another
     /// property: OpenUSD's parser rejects `keep rel targets = </A>` (`keep`
@@ -1362,6 +1420,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
             next,
             None | Some(TokenKind::Newline | TokenKind::Semicolon | TokenKind::RightBrace)
         ) {
+            self.expect_statement_end(true, None);
             return;
         }
         while self.pos < index {
@@ -1384,6 +1443,9 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
             ) {
                 break;
             }
+            self.bump();
+        }
+        if self.peek() == Some(TokenKind::Semicolon) {
             self.bump();
         }
     }
@@ -1553,7 +1615,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
             if self.peek() == Some(TokenKind::RightParen) || self.current().is_none() {
                 break;
             }
-            if self.eat_statement_separator() {
+            if self.refuse_stray_separator() {
                 continue;
             }
             let entry_start = self.current_span().start;
@@ -1950,17 +2012,6 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
         self.builder.finish_node(end);
     }
 
-    /// Consumes a `;` statement separator, which may stand in for a line
-    /// break between metadata entries and prim body statements (AOUSD Core
-    /// §16.2.10; OpenUSD's `StatementSeparator`).
-    fn eat_statement_separator(&mut self) -> bool {
-        let semicolon = self.peek() == Some(TokenKind::Semicolon);
-        if semicolon {
-            self.bump();
-        }
-        semicolon
-    }
-
     /// Consumes trivia, returning whether it included a line break.
     fn eat_trivia_crossing_newline(&mut self) -> bool {
         let mut newline = false;
@@ -2093,12 +2144,14 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
             if self.peek() == Some(TokenKind::RightBrace) || self.current().is_none() {
                 break;
             }
+            if self.refuse_stray_separator() {
+                continue;
+            }
             self.parse_dictionary_entry();
             // Entries are separated by line breaks or `;`
             // (`StatementSequenceOf<DictionaryValueItem>`,
             // `pxr/usd/sdf/textFileFormatParser.h`).
             self.expect_entry_end(TokenKind::RightBrace);
-            self.eat_statement_separator();
         }
 
         self.expect(TokenKind::RightBrace);
@@ -2549,7 +2602,7 @@ def Xform "Root" (
     custom string label = "a\nlabel"
     double weight.timeSamples = { 0: 1, 2: -2 }
     variantSet "look" = {
-        "red" { custom token color = "red" }
+        "red" { custom token color = "red"; }
     }
     float[] edits = edit [
         write [1, 2] [0]
@@ -2557,8 +2610,8 @@ def Xform "Root" (
     ]
 }
 "#,
-            "#usda 1.0\r\ndef \"A\" { /* multiline\ncomment */ float[] a = edit [resize 3\r\nwrite [2] [1]] }",
-            "#usda 1.0\ndef \"A\" { double a.spline = { 0: 1; post linear, 2: 3; post held, } }",
+            "#usda 1.0\r\ndef \"A\" { /* multiline\ncomment */ float[] a = edit [resize 3\r\nwrite [2] [1]]; }",
+            "#usda 1.0\ndef \"A\" { double a.spline = { 0: 1; post linear, 2: 3; post held, }; }",
             "#usda 1.0\ndef \"A\" { float[] a = edit [resize 3 write [2] [1]] double b.curve = { 1: 0 } }",
             "#bad header\ndef \"A\" { float a = - /* comment */ token }",
             "#usda 1.0\ndef \"A\" { float3[] a = [(1,, 2), (3, 4] }",
@@ -2817,13 +2870,46 @@ def Xform "Root" (
         assert!(parsed.diagnostics.is_empty(), "{:?}", parsed.diagnostics);
     }
 
-    /// More leniently than OpenUSD, which wants a line break or `;` after
-    /// every statement of a prim body, a closing brace may end a property
-    /// on its line (`def "W" { double x = 1 }`).
+    /// OpenUSD 26.11 wants a line break or `;` after every statement of a
+    /// prim body, even before the closing brace, and a line break after a
+    /// prim: `def "W" { double x = 1 }` and `} def "B"` are refused, as is
+    /// a `;` that ends no statement on its line (`PrimItem`, `LayerSpec`,
+    /// `StatementSequenceOf`, `pxr/usd/sdf/textFileFormatParser.h`).
     #[test]
-    fn a_closing_brace_ends_a_property_on_its_line() {
-        let parsed = parse_cst("#usda 1.0\ndef \"W\" { double x = 1 }\n");
-        assert!(parsed.diagnostics.is_empty(), "{:?}", parsed.diagnostics);
+    fn statements_end_at_a_line_break_or_semicolon() {
+        for refused in [
+            "def \"W\" { double x = 1 }\n",
+            "def \"W\" {\n    rel r = </W> /* note */ }\n",
+            "def \"W\" {\n    reorder nameChildren = [\"a\"] }\n",
+            "def \"W\" {\n    def \"A\" {\n    } def \"B\" {\n    }\n}\n",
+            "def \"W\" { def \"A\" {} }\n",
+            "def \"W\" {\n    variantSet \"v\" = {\n        \"a\" {\n        }\n    };\n}\n",
+            "def \"W\" {\n}\ndef \"A\" {\n} def \"B\" {\n}\n",
+            "def \"W\" {\n};\n",
+            "def \"W\" {\n    double x = 1;;\n}\n",
+            "def \"W\" {\n    double x = 1\n    ;\n}\n",
+            "(\n    doc = \"d\";\n    ;\n)\n",
+            "def \"W\" (\n    customData = { ; }\n)\n{\n}\n",
+            "reorder rootPrims = [\"W\"] def \"W\" {\n}\n",
+        ] {
+            let parsed = parse_cst(&format!("#usda 1.0\n{refused}"));
+            assert!(!parsed.diagnostics.is_empty(), "{refused}");
+        }
+        for read in [
+            "def \"W\" { double x = 1; }\n",
+            "def \"W\" {\n    reorder nameChildren = [\"a\"]; }\n",
+            "def \"W\" {\n    double x = 1; def \"A\" {\n    } # note\n}\n",
+            "def \"W\" {\n    variantSet \"v\" = { \"a\" {} \"b\" {} }\n}\n",
+            "def \"W\" (\n    customData = { int a = 1; }\n)\n{\n}\n",
+            "reorder rootPrims = [\"W\"]; def \"W\" {}",
+        ] {
+            let parsed = parse_cst(&format!("#usda 1.0\n{read}"));
+            assert!(
+                parsed.diagnostics.is_empty(),
+                "{read}: {:?}",
+                parsed.diagnostics
+            );
+        }
     }
 
     /// OpenUSD 26.08 rejects a property's metadata opening on the next

@@ -34,7 +34,7 @@ fn import(c: &mut Criterion) {
         for _ in 0..count {
             source.push_str("(1.25, -2.5, 3.75),");
         }
-        source.push_str("] }");
+        source.push_str("]\n}\n");
         group.throughput(Throughput::Bytes(source.len() as u64));
         group.bench_with_input(BenchmarkId::new("ast_emit", count), &source, |b, source| {
             b.iter(|| {

@@ -148,7 +148,7 @@ fn sampled_cameras_match_openusd_including_conformed_transforms_and_culling() {
     }
 }
 fn compute(attributes: &str, time: Time) -> Result<ComputedCamera, CameraError> {
-    let source = format!("#usda 1.0\ndef Camera \"C\" {{ {attributes} }}");
+    let source = format!("#usda 1.0\ndef Camera \"C\" {{\n{attributes}\n}}");
     let (store, live) = support::scene(&source);
     let path = store.path("/C");
     Camera::new(&Scene::new(live.stage(), &store), path)

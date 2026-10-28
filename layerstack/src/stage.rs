@@ -61,8 +61,6 @@ use core::hash::Hash;
 
 use hashbrown::{HashMap, HashSet};
 
-use invalidation::InvalidationGraph;
-
 use crate::doc::VariantSelections;
 pub(crate) use crate::ident::dictionary_cmp;
 use crate::prim_indexing::Boundaries;
@@ -2333,17 +2331,6 @@ impl Stage {
     #[must_use]
     pub fn has_dependencies(&self) -> bool {
         self.deps.is_some()
-    }
-
-    /// Returns a reference to the dependency graph if composition was run
-    /// with [`StageOptions::with_dependencies`] enabled.
-    ///
-    /// The [`InvalidationGraph`] is the single source of truth for the
-    /// dependency topology: "if prim A changes, which prims need
-    /// recomposition?"
-    #[must_use]
-    pub fn graph(&self) -> Option<&InvalidationGraph<PathId>> {
-        self.deps.as_ref().map(|d| &d.graph)
     }
 
     /// Returns all arc dependencies (diagnostic/inspection API).

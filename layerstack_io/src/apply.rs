@@ -9,6 +9,7 @@ use layerstack::{Applied, EditError, Transaction};
 
 /// Why [`StageDocument::apply`] failed.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub enum ApplyError {
     /// The transaction was rejected ([`LiveStage::apply`]); nothing was
     /// applied and nothing was loaded.

@@ -792,6 +792,10 @@ impl Stage {
                 }
                 Err(out)
             }
+            Err(error) => {
+                let store = self.document.store();
+                Err(Error::new(error.code(), error.display(store).to_string()))
+            }
         }
     }
 

@@ -12,6 +12,7 @@ use crate::version::CrateVersion;
 
 /// Errors that can occur while reading a USDC file.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum UsdcError {
     /// Invalid magic bytes (expected `PXR-USDC`).
     InvalidMagic,

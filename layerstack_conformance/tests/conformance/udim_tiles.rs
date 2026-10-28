@@ -45,7 +45,7 @@ use layerstack::{LayerId, StageOptions};
 use layerstack_conformance::workspace_root;
 use layerstack_io::{
     IoError, IoErrorKind, PackageInclusion, PackagePreparationLimits, StageDocument, Storage,
-    UdimDiscovery, UdimDiscoveryWork,
+    UdimDiscovery,
 };
 use serde_json::Value as Json;
 
@@ -290,17 +290,17 @@ fn dependency_discovery_lists_every_tile_and_the_same_unresolved_uses() {
     // resolves here.
     let work = prepared.udim_work();
     assert_eq!(
-        work,
-        UdimDiscoveryWork {
-            identifies: 112,
-            existence_checks: 112 + 99,
-            listings: 3,
-            listings_reused: 4,
-            listed_entries: 15 + 1 + 2,
-            member_lookups: 0,
-            package_reads: 0,
-            sets_reused: 3,
-        }
+        (
+            work.identifies,
+            work.existence_checks,
+            work.listings,
+            work.listings_reused,
+            work.listed_entries,
+            work.member_lookups,
+            work.package_reads,
+            work.sets_reused,
+        ),
+        (112, 112 + 99, 3, 4, 15 + 1 + 2, 0, 0, 3)
     );
 }
 

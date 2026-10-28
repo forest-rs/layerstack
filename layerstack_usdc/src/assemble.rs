@@ -52,6 +52,7 @@ use crate::value_type::{SpecForm, ValueType};
 
 /// Result of assembling a USDC file into a layer.
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct AssembleResult {
     /// The assembled layer.
     pub layer: Layer,
@@ -67,6 +68,7 @@ pub struct AssembleResult {
 
 /// Authored content that assembly could not represent in the layer model.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct AssembleDiagnostic {
     /// Path of the spec as written in the file (for example `/A.b` or
     /// `/A{v=x}B`).

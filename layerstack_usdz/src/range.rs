@@ -86,6 +86,7 @@ impl Default for RangeLimits {
 /// Source requests and actual successful byte delivery, excluding host-internal
 /// copies/retries. Verification covers selected payloads, never the entire archive.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct RangeStats {
     /// Number of source read attempts, including failed requests.
     pub read_attempts: usize,
@@ -102,6 +103,7 @@ pub struct RangeStats {
 }
 /// A package-format or host-transport failure, with its original typed cause.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum RangeError<E> {
     /// Original host source failure.
     Source(E),

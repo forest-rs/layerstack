@@ -12,6 +12,7 @@ use layerstack::doc::LayerId;
 
 /// Errors that can occur while reading a USDZ package.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum UsdzError {
     /// Not a valid ZIP file (bad magic or structure).
     InvalidZip {
@@ -103,6 +104,7 @@ impl fmt::Display for UsdzError {
 
 /// A hard failure while decoding a package layer.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum LayerReadError {
     /// The binary decoder's original error, including its version or offset.
     Usdc(layerstack_usdc::UsdcError),

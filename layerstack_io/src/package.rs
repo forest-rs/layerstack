@@ -15,6 +15,7 @@ use layerstack_usdz::localize::{
 
 /// Host decision for an authored dependency, including inactive list items.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum PackageInclusion {
     /// Include this concrete resource and its dependencies.
     Include,

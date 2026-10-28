@@ -7,6 +7,7 @@ use super::*;
 
 /// Where resolved asset bytes came from; no format decoding is implied.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum AssetByteSource {
     /// Bytes supplied by the host storage backend.
     Storage,
@@ -24,6 +25,7 @@ pub enum AssetByteSource {
 /// Keeps image/environment assets independent of any renderer or image decoder.
 /// Package members use the same `package[member]` identity as imported layers.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct AssetBytes {
     /// Canonical resolved identity, suitable for host cache keys.
     pub identifier: String,

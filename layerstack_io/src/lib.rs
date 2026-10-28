@@ -124,6 +124,7 @@ pub use filesystem::Filesystem;
 
 /// Error category retained separately from its explanatory message.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum IoErrorKind {
     /// No source exists at the selected identifier.
     NotFound,
@@ -199,6 +200,7 @@ impl IoErrorKind {
 }
 /// A storage or format failure, naming the source it is about.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct IoError {
     /// Machine-readable category.
     pub kind: IoErrorKind,
@@ -454,6 +456,7 @@ pub enum ImportPolicy {
 ///
 /// Spec: AOUSD Core §10.3.2.5 (only the selected variant contributes).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum VariantArcLoading {
     /// Those in the branches the authoring layer selects itself. The rest
     /// are deferred ([`layerstack::Reference::deferred`]): composition asks
@@ -492,6 +495,7 @@ pub enum ReloadPolicy {
 }
 /// A successfully loaded batch, with format evidence available to the caller.
 #[derive(Clone, Debug, Default)]
+#[non_exhaustive]
 pub struct LoadReport {
     /// Layers materialized during this operation, including package members.
     pub layers: Vec<LayerId>,
@@ -521,6 +525,7 @@ impl LoadReport {
 /// `Display` names the asset as authored and the transport or format
 /// failure; [`StageDocument::identifier`] names the `anchor` layer.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct AssetFailure {
     /// Authored asset path.
     pub asset: String,
@@ -566,6 +571,7 @@ fn strict_rejects(diagnostic: &MemberDiagnostic) -> bool {
 /// An asset the stage asks for that storage cannot supply yet
 /// ([`IoErrorKind::Unavailable`]); see [`StageDocument::unavailable_assets`].
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct UnavailableAsset {
     /// The source to supply, as [`Storage::identify`] named it for
     /// `asset` anchored to `anchor`: the key a host fetches and supplies
@@ -585,6 +591,7 @@ pub struct UnavailableAsset {
 /// it and its arc or sublayer contributes nothing. See
 /// [`StageDocument::asset_status`].
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct MissingAsset {
     /// The layer authoring the arc or sublayer.
     pub anchor: LayerId,
@@ -596,6 +603,7 @@ pub struct MissingAsset {
 }
 /// The assets a document's stage lacks now ([`StageDocument::asset_status`]).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct AssetStatus {
     /// Assets storage cannot supply yet, which a later load can read
     /// ([`StageDocument::unavailable_assets`]).
@@ -613,6 +621,7 @@ impl AssetStatus {
 }
 /// Failure to save one layer. Other selected layers may have saved successfully.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct LayerFailure {
     /// Selected layer.
     pub layer: LayerId,
@@ -621,6 +630,7 @@ pub struct LayerFailure {
 }
 /// Save evidence; failed layers retain their dirty generations.
 #[derive(Clone, Debug, Default)]
+#[non_exhaustive]
 pub struct SaveReport {
     /// Layers written successfully.
     pub saved: Vec<LayerId>,
@@ -678,6 +688,7 @@ struct Catalog {
 /// Package transport/index work since creation. Candidate work is published only
 /// on commit. Counts exclude numeric decoding and structural layer assembly.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct PackageCacheStats {
     /// Fresh package trees opened and completely verified.
     pub opens: usize,
@@ -1670,16 +1681,16 @@ impl<'a, B: Storage> Reader<'a, B> {
                         if self.policy == ImportPolicy::Strict {
                             return Err(error);
                         }
-                        self.diagnostics.push(MemberDiagnostic {
-                            member: Arc::from(request.asset_path),
-                            layer_id: request.anchor,
-                            diagnostic: ImportDiagnostic::UsdaEmit(
+                        self.diagnostics.push(MemberDiagnostic::new(
+                            Arc::from(request.asset_path),
+                            request.anchor,
+                            ImportDiagnostic::UsdaEmit(
                                 layerstack_usda::diagnostic::Diagnostic::error(
                                     layerstack_usda::Span::new(0, 0),
                                     error.message,
                                 ),
                             ),
-                        });
+                        ));
                     }
                 }
             }
@@ -1956,11 +1967,7 @@ fn read_loose(
         #[cfg(feature = "std")]
         retained: None,
     };
-    let member = |diagnostic| MemberDiagnostic {
-        member: Arc::from(identifier),
-        layer_id: id,
-        diagnostic,
-    };
+    let member = |diagnostic| MemberDiagnostic::new(Arc::from(identifier), id, diagnostic);
     if let Format::Custom(index) = format {
         read.layer = read_custom(
             formats.get(index),

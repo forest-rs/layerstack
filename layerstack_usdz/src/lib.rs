@@ -110,6 +110,7 @@ impl UsdcReadOptions {
 
 /// The result of successfully reading a USDZ package.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct UsdzResult {
     /// The root layer assembled from the first USD file in the package.
     pub layer: Layer,

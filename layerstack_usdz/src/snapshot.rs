@@ -36,6 +36,7 @@ impl Default for PackageLimits {
 }
 /// Work performed to construct one immutable, completely verified snapshot.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct PackageStats {
     /// Directories parsed once, including nested packages.
     pub index_parses: usize,

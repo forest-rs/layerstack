@@ -10,6 +10,7 @@ use layerstack::{
 
 /// One failed demanded source, retaining its exact anchor and transport failure.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct ClipLoadFailure {
     /// Requested source and preparation availability.
     pub request: ClipAssetRequest,
@@ -18,6 +19,7 @@ pub struct ClipLoadFailure {
 }
 /// Explicit load work and the final resumable query plan.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct ClipQueryPreparation {
     /// Plan after successful loads and confirmed missing results.
     pub plan: ClipQueryPlan,

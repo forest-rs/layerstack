@@ -99,6 +99,7 @@ pub(crate) fn canonical_args(mut args: FormatArgs, format: Option<&dyn FileForma
 
 /// What a [`FileFormat`] reads a layer from.
 #[derive(Clone, Copy)]
+#[non_exhaustive]
 pub struct FormatSource<'a> {
     /// The layer's identifier: the source's storage identifier, followed by
     /// its arguments when it has any ([`FormatArgs::identifier`]).
@@ -240,6 +241,7 @@ pub trait FileFormat: fmt::Debug + Send + Sync {
 
 /// Why a format could not be registered.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum FormatRegistrationError {
     /// The format claims no extension.
     NoExtensions {

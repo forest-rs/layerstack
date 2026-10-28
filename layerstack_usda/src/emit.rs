@@ -73,6 +73,7 @@ use layerstack::value_type::ValueType;
 
 /// Result of emitting a single USDA layer.
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct EmitResult {
     /// The emitted layer.
     pub layer: Layer,

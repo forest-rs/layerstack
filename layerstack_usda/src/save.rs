@@ -223,6 +223,7 @@ pub fn usda_document(
 
 /// Why an authored layer could not be saved.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum SaveError {
     /// The layer authors something this save does not write yet.
     Unsupported {
@@ -290,6 +291,7 @@ impl core::error::Error for SaveError {
 
 /// Authored content outside the supported subset.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Unsupported {
     /// A sparse array edit.
     ArrayEdit,
@@ -319,6 +321,7 @@ impl fmt::Display for Unsupported {
 
 /// A layer the file formats cannot hold as it stands.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Invalid {
     /// A prim spec has no specifier.
     MissingSpecifier,

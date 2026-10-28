@@ -3482,6 +3482,40 @@ impl Stage {
             .collect()
     }
 
+    /// The names of the variants of the set `set` that any site of the
+    /// prim's index defines, sorted by name. See [`Prim::variant_names`].
+    pub(crate) fn variant_names<'s>(
+        &self,
+        prim: PathId,
+        set: TokenId,
+        store: &'s dyn LayerStore,
+    ) -> Vec<&'s str> {
+        let Some(index) = self.prims.get(&prim) else {
+            return Vec::new();
+        };
+        let tokens = store.tokens();
+        let mut names = alloc::collections::BTreeSet::new();
+        for source in &index.sources {
+            let Some((sets, _)) = store
+                .layer(source.key.layer_id)
+                .and_then(|layer| {
+                    layer.source_prim_spec(
+                        source.key.lookup_path,
+                        &source.key.spec_path,
+                        store.paths(),
+                    )
+                })
+                .and_then(|spec| spec.variant_sets_in(&source.key.spec_path.variant_chain()))
+            else {
+                continue;
+            };
+            if let Some(set_spec) = sets.get(&set) {
+                names.extend(set_spec.variants.keys().map(|&name| tokens.resolve(name)));
+            }
+        }
+        names.into_iter().collect()
+    }
+
     /// Returns `true` if the stage contains a prim at `path`.
     #[must_use]
     pub(crate) fn has_prim(&self, path: PathId) -> bool {

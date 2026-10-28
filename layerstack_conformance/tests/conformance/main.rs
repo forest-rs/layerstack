@@ -216,6 +216,7 @@ mod value_matrix;
 mod value_types;
 mod variant_branch_fields;
 mod variant_children;
+mod variant_names;
 mod variant_selection;
 mod variant_set_names;
 mod variant_specs;

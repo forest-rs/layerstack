@@ -1,0 +1,54 @@
+#usda 1.0
+
+def "Base" (
+    prepend variantSets = "look"
+)
+{
+    variantSet "look" = {
+        "green" {
+        }
+        "blue" {
+        }
+    }
+}
+
+def "Shape" (
+    variants = {
+        string look = "red"
+    }
+    prepend references = </Base>
+    prepend variantSets = ["look", "size"]
+)
+{
+    variantSet "look" = {
+        "red" (
+            prepend variantSets = "finish"
+        ) {
+            variantSet "finish" = {
+                "matte" {
+                }
+                "gloss" {
+                }
+            }
+        }
+        "blue" {
+        }
+    }
+}
+
+def "Other" (
+    variants = {
+        string look = "missing"
+    }
+    prepend references = </Shape>
+)
+{
+}
+
+def "Unlisted"
+{
+    variantSet "hidden" = {
+        "only" {
+        }
+    }
+}

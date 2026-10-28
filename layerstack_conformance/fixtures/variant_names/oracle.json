@@ -1,0 +1,121 @@
+{
+  "version": "26.11",
+  "rows": [
+    {
+      "prim": "/Base",
+      "set": "look",
+      "names": [
+        "blue",
+        "green"
+      ]
+    },
+    {
+      "prim": "/Base",
+      "set": "size",
+      "names": []
+    },
+    {
+      "prim": "/Base",
+      "set": "finish",
+      "names": []
+    },
+    {
+      "prim": "/Base",
+      "set": "hidden",
+      "names": []
+    },
+    {
+      "prim": "/Base",
+      "set": "none",
+      "names": []
+    },
+    {
+      "prim": "/Shape",
+      "set": "look",
+      "names": [
+        "blue",
+        "green",
+        "red"
+      ]
+    },
+    {
+      "prim": "/Shape",
+      "set": "size",
+      "names": []
+    },
+    {
+      "prim": "/Shape",
+      "set": "finish",
+      "names": [
+        "gloss",
+        "matte"
+      ]
+    },
+    {
+      "prim": "/Shape",
+      "set": "hidden",
+      "names": []
+    },
+    {
+      "prim": "/Shape",
+      "set": "none",
+      "names": []
+    },
+    {
+      "prim": "/Other",
+      "set": "look",
+      "names": [
+        "blue",
+        "green",
+        "red"
+      ]
+    },
+    {
+      "prim": "/Other",
+      "set": "size",
+      "names": []
+    },
+    {
+      "prim": "/Other",
+      "set": "finish",
+      "names": []
+    },
+    {
+      "prim": "/Other",
+      "set": "hidden",
+      "names": []
+    },
+    {
+      "prim": "/Other",
+      "set": "none",
+      "names": []
+    },
+    {
+      "prim": "/Unlisted",
+      "set": "look",
+      "names": []
+    },
+    {
+      "prim": "/Unlisted",
+      "set": "size",
+      "names": []
+    },
+    {
+      "prim": "/Unlisted",
+      "set": "finish",
+      "names": []
+    },
+    {
+      "prim": "/Unlisted",
+      "set": "hidden",
+      "names": [
+        "only"
+      ]
+    },
+    {
+      "prim": "/Unlisted",
+      "set": "none",
+      "names": []
+    }
+  ]
+}

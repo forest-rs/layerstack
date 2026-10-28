@@ -41,7 +41,9 @@
 //! APIs when the syntax or inspectable AST is needed.
 //! For plugin metadata, [`read_usda_with_registry`] and
 //! [`emit::emit_with_registry`] use caller-registered types and spec targets,
-//! preserving the ordinary literal inference for unregistered field names.
+//! preserving the ordinary literal inference for unregistered field names;
+//! an identifier there keeps its text ([`layerstack::Value::Unregistered`]),
+//! as OpenUSD keeps it.
 //!
 //! # Quick start
 //!

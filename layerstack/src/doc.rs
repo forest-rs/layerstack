@@ -136,6 +136,15 @@ pub enum Value {
     /// Spec: AOUSD Core §16.3.10.14 (crate encoding); the type itself is an
     /// OpenUSD extension (`pxr/usd/sdf/pathExpression.h`).
     PathExpression(Arc<str>),
+    /// A value OpenUSD keeps as the text its USDA parser recorded, an
+    /// `SdfUnregisteredValue` holding a string: a metadata value no schema
+    /// registers and inference gives no type (a bare identifier, `foo`),
+    /// or the value of an attribute whose type name no type registers. It
+    /// is written back as that text.
+    ///
+    /// OpenUSD: `SdfUnregisteredValue`, `Sdf_ParserValueContext`'s recorded
+    /// string (`pxr/usd/sdf/parserValueContext.cpp`).
+    Unregistered(Arc<str>),
     /// A time code value (`timecode`), semantically a time in frames.
     ///
     /// Spec: §6.2.
@@ -307,6 +316,7 @@ impl PartialEq for Value {
             (Self::Token(a), Self::Token(b)) => a == b,
             (Self::Asset(a), Self::Asset(b)) => a == b,
             (Self::PathExpression(a), Self::PathExpression(b)) => a == b,
+            (Self::Unregistered(a), Self::Unregistered(b)) => a == b,
             (Self::TimeCode(a), Self::TimeCode(b)) => a == b,
             (Self::Duration(a), Self::Duration(b)) => a == b,
             (Self::Vec2f(a), Self::Vec2f(b)) => a == b,
@@ -362,6 +372,7 @@ impl fmt::Display for Value {
             Self::Token(v) => write!(f, "token({v:?})"),
             Self::Asset(v) => write!(f, "@{v}@"),
             Self::PathExpression(v) => write!(f, "pathExpression({v:?})"),
+            Self::Unregistered(v) => write!(f, "unregistered({v:?})"),
             Self::TimeCode(v) | Self::Duration(v) => write!(f, "{v}"),
             // Vectors
             Self::Vec2d(v) => write!(f, "({}, {})", v[0], v[1]),

@@ -33,7 +33,9 @@ The cases:
   `PointIndex`, `EdgeIndex`, `FaceIndex`, `_AddLegacyTypesToRegistry`,
   `pxr/usd/sdf/schema.cpp`); `yes` and `no` as bools; comments in a spline;
   an authored but empty `relocates`, which OpenUSD keeps
-  (`SdfLayer::HasRelocates`).
+  (`SdfLayer::HasRelocates`); identifiers in metadata no schema registers,
+  which OpenUSD keeps as their text (`SdfUnregisteredValue`) and writes
+  unquoted.
   Some are refused, as OpenUSD refuses them: a relative target of a prim
   inside the variant, which anchors at `/P{v=one}Child` and so names a
   variant selection (`<x>`, `<../Other>`), a quoted
@@ -917,6 +919,26 @@ def "P"
     relocates = {
     }
 )
+''', []),
+    "read_unregistered_identifiers": ('''#usda 1.0
+(
+    layerKey = foo
+)
+
+def "P" (
+    access = foo
+    names = [foo, bar]
+    mixed = [foo, 1]
+    quoted = "foo"
+)
+{
+    double a (
+        access = foo
+    )
+    rel r (
+        access = bar
+    )
+}
 ''', []),
     "read_metadata_semicolons": ('''#usda 1.0
 (startFrame = 1; endFrame = 2)

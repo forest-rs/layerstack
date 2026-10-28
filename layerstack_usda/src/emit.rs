@@ -846,7 +846,39 @@ impl EmitCtx<'_> {
         let value = self.checked(entry.span, |ctx| {
             ctx.convert_metadata_value(&entry.value, hint)
         })?;
+        // Here only an identifier reads as a token (`foo`; a quoted string
+        // is a string), and OpenUSD keeps its text, which it writes back
+        // unquoted (`SdfUnregisteredValue`, `_KeyValueMetadataEnd`,
+        // `pxr/usd/sdf/textParserHelpers.cpp`). `permission` is the field
+        // OpenUSD registers with an identifier value of its own
+        // (`PermissionMetadata`, `pxr/usd/sdf/textFileFormatParser.h`).
+        let value = if key_name == "permission" {
+            value
+        } else {
+            self.unregistered_identifiers(value)
+        };
         Some((key, FieldValue::Value(value)))
+    }
+
+    /// `value` with each token, an identifier read in metadata no schema
+    /// registers, kept as its text ([`Value::Unregistered`]).
+    fn unregistered_identifiers(&self, value: Value) -> Value {
+        match value {
+            Value::Token(token) => Value::Unregistered(Arc::from(self.tokens.resolve(token))),
+            Value::Array(items) => Value::Array(
+                items
+                    .into_iter()
+                    .map(|item| self.unregistered_identifiers(item))
+                    .collect(),
+            ),
+            Value::TypedArray(TypedArray::Token(tokens)) if !tokens.is_empty() => Value::Array(
+                tokens
+                    .iter()
+                    .map(|token| Value::Unregistered(Arc::from(self.tokens.resolve(*token))))
+                    .collect(),
+            ),
+            value => value,
+        }
     }
 
     /// Returns `true` when a metadata value is an array of integers.

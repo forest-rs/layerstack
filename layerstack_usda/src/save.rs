@@ -911,6 +911,7 @@ impl Lowering<'_> {
         let no = |kind: &'static str| unsupported(path, Unsupported::Value(kind));
         Ok(match value {
             L::Bool(v) => Value::Bool(*v),
+            L::Unregistered(text) => Value::Unregistered(String::from(&**text)),
             L::UChar(v) => Value::UChar(*v),
             L::Int(v) => Value::Int(*v),
             L::UInt(v) => Value::UInt(*v),
@@ -1066,6 +1067,24 @@ impl Lowering<'_> {
     /// an attribute default, otherwise from the elements themselves, which
     /// must all have the first one's type.
     fn array(&self, items: &[LayerValue], site: Site<'_>, path: &str) -> Result<Value, SaveError> {
+        // An array holding text OpenUSD keeps as it recorded it (an
+        // identifier in metadata no schema registers) is one such text, its
+        // items as the parser records them (`[foo, 1]`,
+        // `Sdf_ParserValueContext`, `pxr/usd/sdf/parserValueContext.cpp`).
+        if items
+            .iter()
+            .any(|item| matches!(item, LayerValue::Unregistered(_)))
+        {
+            let mut text = String::from("[");
+            for (i, item) in items.iter().enumerate() {
+                if i > 0 {
+                    text.push_str(", ");
+                }
+                text.push_str(&self.value(item, site, path)?.to_usda_text());
+            }
+            text.push(']');
+            return Ok(Value::Unregistered(text));
+        }
         let mut out = match site {
             Site::Value(type_name, _) => Value::empty_array_of(type_name),
             Site::Metadata => None,

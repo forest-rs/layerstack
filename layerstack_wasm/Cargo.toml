@@ -1,0 +1,39 @@
+[package]
+publish = false
+name = "layerstack_wasm"
+description = "WebAssembly bindings for Layerstack: open, resolve, inspect and explain a stage from JavaScript, with the host supplying asset bytes."
+readme = "README.md"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords = ["usd", "wasm", "scene-description", "bindings"]
+categories = ["wasm", "api-bindings"]
+
+[lib]
+# `cdylib` is the module `@layerstack/stage` loads; `rlib` lets a
+# downstream crate link these bindings into a module of its own.
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["std"]
+std = [
+    "layerstack/std",
+    "layerstack_io/std",
+    "layerstack_schemas/std",
+    "wasm-bindgen/std",
+]
+
+[dependencies]
+layerstack = { workspace = true }
+layerstack_io = { workspace = true }
+# Every OpenUSD schema domain, for fallback values and typed prims.
+layerstack_schemas = { features = ["all"], workspace = true }
+# The JavaScript ABI: the generated glue and `.d.ts` of the exported
+# classes. Only this crate depends on it; the CLI that generates the glue
+# must be the version `Cargo.lock` holds.
+wasm-bindgen = { default-features = false, version = "0.2.129" }
+
+[lints]
+workspace = true

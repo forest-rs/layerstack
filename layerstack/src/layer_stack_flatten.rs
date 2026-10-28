@@ -146,6 +146,9 @@ pub fn flatten_layer_stack(
 ) -> Result<FlattenedLayerStack, LayerStackFlattenError> {
     let mut errors = Vec::new();
     let stack = LayerStack::gather_recording(store, &[identifier], &mut errors, None);
+    // A layer the store does not hold is refused below, by id, as
+    // `LayerStackFlattenError::MissingLayer`.
+    errors.retain(|error| !matches!(error, CompositionError::MissingLayer(_)));
     if !errors.is_empty() {
         return Err(LayerStackFlattenError::Gather(errors));
     }

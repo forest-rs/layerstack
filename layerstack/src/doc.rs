@@ -4527,8 +4527,10 @@ pub trait LayerStore: MaybeSync {
     /// but [`Self::layer`] does not return it yet.
     ///
     /// Composition asks only about a layer [`Self::layer`] did not return.
-    /// A layer that is neither held nor pending is missing, and composes as
-    /// a layer with no opinions. A prim whose index reads a pending layer,
+    /// A layer that is neither held nor pending is missing: it composes as a
+    /// layer with no opinions, and composition reports it
+    /// ([`crate::CompositionError::MissingLayer`]) unless the stage mutes
+    /// it. A prim whose index reads a pending layer,
     /// as a layer of the stage's layer stack, a sublayer or the target of
     /// a reference or payload, is not composed: the stage lists it, with
     /// the layers it waits for, in [`crate::Stage::pending_prims`], and

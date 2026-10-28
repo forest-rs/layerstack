@@ -275,7 +275,7 @@ pub(crate) fn compose(
     };
     let mut ctx = Ctx {
         store,
-        stacks: LayerStacks::default(),
+        stacks: LayerStacks::muting(&options.muted_layers),
         child_index,
         fallbacks: &options.variant_fallbacks,
         include_payload: &include_payload,
@@ -1927,7 +1927,7 @@ pub(crate) fn expanded_prim_index(
     };
     let mut ctx = Ctx {
         store,
-        stacks: LayerStacks::default(),
+        stacks: LayerStacks::muting(&options.muted_layers),
         child_index: &child_index,
         fallbacks: &options.variant_fallbacks,
         include_payload: &include_payload,

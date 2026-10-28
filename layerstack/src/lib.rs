@@ -242,9 +242,9 @@ pub use composition_error::{
     ArcCycle, ArcCycleSite, ArcToProhibitedChild, CompositionError, ExpressionContext,
     InconsistentPropertyType, InvalidAuthoredRelocation, InvalidConflictingRelocation,
     InvalidExternalTargetPath, InvalidInstanceTargetPath, InvalidRelocationReason,
-    InvalidSameTargetRelocations, InvalidSublayerAndOffsetCount, OpinionAtRelocationSource,
-    RelocationConflict, SublayerCycle, UnresolvedAsset, UnresolvedDefaultPrim, UnresolvedPrimPath,
-    UnresolvedSublayer, VariableExpressionError,
+    InvalidSameTargetRelocations, InvalidSublayerAndOffsetCount, MissingLayer,
+    OpinionAtRelocationSource, RelocationConflict, SublayerCycle, UnresolvedAsset,
+    UnresolvedDefaultPrim, UnresolvedPrimPath, UnresolvedSublayer, VariableExpressionError,
 };
 pub use dependency_map::{ArcDependency, LayerDependencyStorage};
 pub use doc::{

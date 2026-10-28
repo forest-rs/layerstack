@@ -53,7 +53,7 @@ std = ["fearless_simd?/std", "layerstack/std"]
 simd = ["usd-skel", "dep:fearless_simd"]
 
 [dependencies]
-layerstack = { workspace = true }
+layerstack = { features = ["unstable-internals"], workspace = true }
 # Hash maps for internal indexes; `layerstack` already depends on it.
 hashbrown = { workspace = true }
 # Sines, cosines, arccosines and square roots for transforms in `no_std`;

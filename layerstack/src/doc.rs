@@ -32,6 +32,16 @@ use crate::{
     spec_path::{SpecPath, SpecPathError, VariantSelectionSite},
 };
 
+#[cfg(feature = "unstable-internals")]
+pub use crate::entries::{
+    get_field, get_field_mut, insert_field_if_absent, remove_field, set_field_vec,
+};
+#[cfg(not(feature = "unstable-internals"))]
+#[allow(unused_imports, reason = "not every helper is used in every module")]
+pub(crate) use crate::entries::{
+    get_field, get_field_mut, insert_field_if_absent, remove_field, set_field_vec,
+};
+
 /// Identifies a layer by stable ID.
 ///
 /// IDs are split in two ranges. Below [`LayerId::FIRST_DERIVED`] are the
@@ -3000,34 +3010,6 @@ impl PrimSpec {
     }
 }
 
-/// Inserts or replaces a field in a `Vec<FieldEntry>` by name.
-///
-/// If a field with the given name already exists, its value is replaced in
-/// place. Otherwise a new entry is appended.
-pub fn set_field_vec(fields: &mut Vec<FieldEntry>, name: TokenId, value: FieldValue) {
-    if let Some(entry) = fields.iter_mut().find(|e| e.name == name) {
-        entry.value = value;
-    } else {
-        fields.push(FieldEntry { name, value });
-    }
-}
-
-/// Returns a shared reference to the value of a field, if present.
-pub fn get_field<'a>(fields: &'a [FieldEntry], name: &TokenId) -> Option<&'a FieldValue> {
-    fields.iter().find(|e| &e.name == name).map(|e| &e.value)
-}
-
-/// Returns a mutable reference to the value of a field, if present.
-pub fn get_field_mut<'a>(
-    fields: &'a mut [FieldEntry],
-    name: &TokenId,
-) -> Option<&'a mut FieldValue> {
-    fields
-        .iter_mut()
-        .find(|e| &e.name == name)
-        .map(|e| &mut e.value)
-}
-
 /// Splits a `defaultPrim` value into the prim names of the path it names,
 /// or returns `None` when it does not name a prim path (see
 /// [`Layer::default_prim_path`]).
@@ -3052,19 +3034,6 @@ fn is_prim_name(name: &str) -> bool {
     let allowed =
         |c: char| c == '_' || c.is_ascii_alphanumeric() || (!c.is_ascii() && !c.is_whitespace());
     !first.is_ascii_digit() && allowed(first) && chars.all(allowed)
-}
-
-/// Inserts a field only if no entry with the same name exists.
-pub fn insert_field_if_absent(fields: &mut Vec<FieldEntry>, name: TokenId, value: FieldValue) {
-    if !fields.iter().any(|e| e.name == name) {
-        fields.push(FieldEntry { name, value });
-    }
-}
-
-/// Removes a field by name, returning its value.
-pub fn remove_field(fields: &mut Vec<FieldEntry>, name: TokenId) -> Option<FieldValue> {
-    let index = fields.iter().position(|e| e.name == name)?;
-    Some(fields.remove(index).value)
 }
 
 /// The prim specs of a layer inside variant branches, by prim path

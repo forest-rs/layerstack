@@ -14,6 +14,11 @@ categories = ["data-structures"]
 [features]
 default = []
 std = []
+# The storage-representation helpers (`doc::get_field`, `property::get_property`,
+# ...) and the work pool (`parallel::with_pool`, `Pool`, ...) as public items,
+# for this repository's format crates, tests and benchmarks. They follow no
+# semver promise.
+unstable-internals = []
 
 [lints]
 workspace = true

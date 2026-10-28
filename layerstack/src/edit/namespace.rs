@@ -602,7 +602,7 @@ fn inactive_prim(stage: &Stage, store: &dyn LayerStore, prim: PathId) -> bool {
                 return prim.active;
             }
             active
-                .and_then(|key| crate::get_field(spec.fields(), &key))
+                .and_then(|key| crate::doc::get_field(spec.fields(), &key))
                 .and_then(|field| match field {
                     FieldValue::Value(Value::Bool(value)) => Some(*value),
                     _ => None,

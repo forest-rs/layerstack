@@ -22,7 +22,7 @@ unstable-internals = []
 [dependencies]
 # Hash maps for internal indexes; `layerstack` already depends on it.
 hashbrown = { workspace = true }
-layerstack = { workspace = true }
+layerstack = { features = ["unstable-internals"], workspace = true }
 layerstack_usda = { workspace = true }
 lz4_flex = { workspace = true }
 smallvec = { workspace = true }

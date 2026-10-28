@@ -406,7 +406,7 @@ fn time_bound(
     let field = |name| {
         tokens
             .lookup(name)
-            .and_then(|key| crate::get_field(&layer.metadata, &key))
+            .and_then(|key| crate::doc::get_field(&layer.metadata, &key))
     };
     match field(name).or_else(|| field(legacy)) {
         Some(FieldValue::Value(Value::Double(v))) if v.is_finite() => Ok(*v),
@@ -811,7 +811,7 @@ mod tests {
             vec![[3., 3.], [4., 4.], [22., 1.], [24., 2.]]
         );
         assert_eq!(
-            crate::get_field(
+            crate::doc::get_field(
                 &bundle.root.metadata,
                 &store.tokens.lookup("startTimeCode").unwrap()
             ),
@@ -1021,8 +1021,8 @@ mod tests {
         let start = store.tokens.lookup("startTimeCode").unwrap();
         let end = store.tokens.lookup("endTimeCode").unwrap();
         for layer in [&mut a, &mut b] {
-            crate::set_field_vec(&mut layer.metadata, start, Value::Double(0.).into());
-            crate::set_field_vec(&mut layer.metadata, end, Value::Double(10.).into());
+            crate::doc::set_field_vec(&mut layer.metadata, start, Value::Double(0.).into());
+            crate::doc::set_field_vec(&mut layer.metadata, end, Value::Double(10.).into());
         }
         let sources = [
             ClipSource {

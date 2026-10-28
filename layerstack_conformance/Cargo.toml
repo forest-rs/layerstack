@@ -15,7 +15,7 @@ categories = ["development-tools::testing"]
 workspace = true
 
 [dependencies]
-layerstack = { features = ["std"], workspace = true }
+layerstack = { features = ["std", "unstable-internals"], workspace = true }
 layerstack_mesh_export = { workspace = true }
 layerstack_schemas = { features = ["all"], workspace = true }
 layerstack_usda = { features = ["unstable-internals"], workspace = true }

@@ -2221,12 +2221,6 @@ fn property_names_apply_reorder_properties() {
     let ordered = [gamma, beta, alpha].map(|name| store.tokens().resolve(name));
     assert_eq!(prim.property_names(), ordered);
     assert_eq!(prim.authored_property_names(), ordered);
-
-    let mut names = vec![alpha, beta, gamma];
-    layerstack::stage::apply_property_order(&[], &mut names);
-    assert_eq!(names, [alpha, beta, gamma]);
-    layerstack::stage::apply_property_order(&[beta, beta], &mut names);
-    assert_eq!(names, [beta, alpha, gamma]);
 }
 
 // ── Dictionary combining ──────────────────────────────────────────────

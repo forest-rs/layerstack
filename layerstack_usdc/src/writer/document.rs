@@ -447,6 +447,8 @@ fn natural(value: &mut UsdaValue) -> Value {
         U::Token(v) => Value::Token(core::mem::take(v)),
         U::Asset(v) => Value::Asset(core::mem::take(v)),
         U::PathExpression(v) => Value::PathExpression(core::mem::take(v)),
+        // A crate stores an `SdfUnregisteredValue` as the text it holds.
+        U::Unregistered(v) => Value::UnregisteredValue(Box::new(Value::String(core::mem::take(v)))),
         U::PathExpressionArray(v) => Value::PathExpressionArray(core::mem::take(v)),
         U::Float2(v) => Value::Vec2f(*v),
         U::Float3(v) => Value::Vec3f(*v),

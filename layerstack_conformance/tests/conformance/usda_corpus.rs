@@ -94,12 +94,6 @@ const DIFFERENCES: &[Difference] = &[
                  value holds",
     },
     Difference {
-        file: "17_bad_attributeaccess.usda",
-        outcome: Outcome::Differs,
-        reason: "an unregistered bare identifier (`access = foo`) is kept as a token \
-                 and written quoted; OpenUSD keeps the value's text",
-    },
-    Difference {
         file: "183_unknown_type_and_metadata.usda",
         outcome: Outcome::Error,
         reason: "attributes of an unknown type name, as in `178_invalid_typeName`",
@@ -111,21 +105,11 @@ const DIFFERENCES: &[Difference] = &[
                  `127_varyingRelationship`",
     },
     Difference {
-        file: "18_bad_primaccess.usda",
-        outcome: Outcome::Differs,
-        reason: "an unregistered bare identifier, as in `17_bad_attributeaccess`",
-    },
-    Difference {
         file: "192_listop_metadata.usda",
         outcome: Outcome::Error,
         reason: "unregistered list-op metadata whose items are not all of one type \
                  (`[-1.1, -2.1]` in an integer list op): OpenUSD keeps the items' \
                  text, layerstack types them",
-    },
-    Difference {
-        file: "19_bad_relationshipaccess.usda",
-        outcome: Outcome::Differs,
-        reason: "an unregistered bare identifier, as in `17_bad_attributeaccess`",
     },
     Difference {
         file: "229_bad_spline_extrap_loop_boundary.usda",

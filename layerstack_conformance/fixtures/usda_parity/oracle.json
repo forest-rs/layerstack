@@ -80,6 +80,11 @@
    "reads": false,
    "source": "#usda 1.0\n\ndef \"P\" (\n    symmetryFunction = \"mirror\"\n)\n{\n}\n"
   },
+  "read_unregistered_identifiers": {
+   "reads": true,
+   "source": "#usda 1.0\n(\n    layerKey = foo\n)\n\ndef \"P\" (\n    access = foo\n    names = [foo, bar]\n    mixed = [foo, 1]\n    quoted = \"foo\"\n)\n{\n    double a (\n        access = foo\n    )\n    rel r (\n        access = bar\n    )\n}\n",
+   "text": "#usda 1.0\n(\n    layerKey = foo\n)\n\ndef \"P\" (\n    access = foo\n    mixed = [foo, 1]\n    names = [foo, bar]\n    quoted = \"foo\"\n)\n{\n    double a (\n        access = foo\n    )\n    rel r (\n        access = bar\n    )\n}\n\n"
+  },
   "read_variability_restated": {
    "reads": true,
    "source": "#usda 1.0\ndef \"A\"\n{\n    uniform float a = 1\n    uniform float a.connect = </B.c>\n    varying rel r = </B>\n    prepend rel r = </C>\n    custom float b = 1\n    float b.timeSamples = {\n        1: 2,\n    }\n}\n",

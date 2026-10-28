@@ -1036,6 +1036,10 @@ pub enum Value {
     PathExpression(String),
     /// Array of authored `SdfPathExpression` texts.
     PathExpressionArray(Vec<String>),
+    /// A value kept as the text OpenUSD's USDA parser recorded for it
+    /// (`SdfUnregisteredValue`), written as that text
+    /// ([`layerstack::Value::Unregistered`]).
+    Unregistered(String),
     /// A native sparse array edit. `element` is the scalar type descriptor;
     /// its value is ignored. Instructions retain their authored order and
     /// operate over weaker arrays rather than storing an evaluated result.
@@ -2223,7 +2227,9 @@ impl Value {
             | Self::UIntListOp(_)
             | Self::Int64ListOp(_)
             | Self::UInt64ListOp(_) => (Elem::ListOp, 1, false),
-            Self::Block | Self::AnimationBlock | Self::ArrayEdit { .. } => return None,
+            Self::Block | Self::AnimationBlock | Self::ArrayEdit { .. } | Self::Unregistered(_) => {
+                return None;
+            }
         };
         Some(Shape { elem, arity, array })
     }
@@ -2313,6 +2319,7 @@ impl Value {
             }
             Self::Block => "SdfValueBlock",
             Self::AnimationBlock => "SdfAnimationBlock",
+            Self::Unregistered(_) => "SdfUnregisteredValue",
         }
     }
 }
@@ -3332,6 +3339,9 @@ impl Writer<'_> {
 
     fn value(&mut self, value: &Value, depth: usize) {
         match value {
+            // The recorded text, as `Sdf_FileIOUtility` writes an
+            // `SdfUnregisteredValue` (`pxr/usd/sdf/fileIO_Common.cpp`).
+            Value::Unregistered(text) => self.out.push_str(text),
             Value::ArrayEdit { instructions, .. } => {
                 self.out.push_str("edit [");
                 for (i, op) in instructions.iter().enumerate() {

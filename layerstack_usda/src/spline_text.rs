@@ -598,6 +598,22 @@ fn describe(token: &Token) -> String {
 /// Writes the spline items of a `.spline = { ... }` value, each on its own
 /// line at `indent`, as OpenUSD's `Sdf_FileIOUtility::WriteSpline` writes
 /// them. `number` writes one number of the spline's value type.
+/// Whether [`write()`] writes a tangent algorithm for `spline`: a knot's
+/// pre-tangent is written only after a curve segment (or for the first
+/// knot) and its post-tangent only before one, so an algorithm on a tangent
+/// a held, linear or blocked segment leaves out is not written either.
+/// OpenUSD requests `#usda 1.1` only for the algorithms it writes
+/// (`RequestWriteVersionUpgrade`, `pxr/usd/sdf/fileIO_Common.cpp`).
+pub(crate) fn writes_tangent_algorithm(spline: &SplineData) -> bool {
+    use layerstack::spline::TangentAlgorithm;
+    let mut interp = KnotInterp::Curve;
+    spline.knots.iter().any(|knot| {
+        let pre = interp == KnotInterp::Curve && knot.pre_tan_algorithm != TangentAlgorithm::None;
+        interp = knot.next_interp;
+        pre || (interp == KnotInterp::Curve && knot.post_tan_algorithm != TangentAlgorithm::None)
+    })
+}
+
 pub(crate) fn write(
     out: &mut String,
     indent: &str,

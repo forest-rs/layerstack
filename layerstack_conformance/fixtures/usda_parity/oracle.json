@@ -640,6 +640,11 @@
    "reads": true,
    "source": "#usda 1.0\n\ndef \"P\"\n{\n    timecode t.spline = {\n        bezier,\n        0: 10; post curve (0.3, 2),\n        2: 20,\n    }\n}\n",
    "text": "#usda 1.0\n\ndef \"P\"\n{\n    timecode t.spline = {\n        bezier,\n        0: 10; pre (0, 0); post curve (0.3, 2),\n        2: 20; pre (0, 0); post held,\n    }\n}\n\n"
+  },
+  "write_version_unwritten_tangent_algorithm": {
+   "reads": true,
+   "source": "#usda 1.1\n\ndef \"P\"\n{\n    double a.spline = {\n        bezier,\n        7: 5.5; post held,\n        21: 7.5; pre (2, 0, autoEase); post curve (1.1, -1.4),\n    }\n}\n",
+   "text": "#usda 1.0\n\ndef \"P\"\n{\n    double a.spline = {\n        7: 5.5; pre (0, 0); post held,\n        21: 7.5; post curve (1.1, -1.4),\n    }\n}\n\n"
   }
  },
  "openusd_version": "26.11"

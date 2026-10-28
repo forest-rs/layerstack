@@ -52,7 +52,8 @@ The cases:
   `pxr/usd/sdf/fileIO_Common.cpp`: 1.1 for a tangent algorithm, 1.2 for
   an array edit of strings, tokens or asset paths but not of numbers, 1.3
   for a loop boundary time, 1.4 for a duration value, nothing for a
-  `timecode` spline or a `duration` declaration); `__AnyType__` prims
+  `timecode` spline, a `duration` declaration or a tangent algorithm on a
+  tangent a held segment leaves unwritten); `__AnyType__` prims
   untyped; knot custom data on one line; the curve type only with a curve
   segment; offsets within 1e-6 of the identity dropped
   (`SdfLayerOffset::operator==`); empty comments, an empty layer `doc` and
@@ -512,6 +513,17 @@ def "P"
         bezier,
         0: 10; post curve (0.3, 2),
         2: 20,
+    }
+}
+''', []),
+    "write_version_unwritten_tangent_algorithm": ('''#usda 1.1
+
+def "P"
+{
+    double a.spline = {
+        bezier,
+        7: 5.5; post held,
+        21: 7.5; pre (2, 0, autoEase); post curve (1.1, -1.4),
     }
 }
 ''', []),

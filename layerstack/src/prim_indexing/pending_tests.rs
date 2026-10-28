@@ -49,14 +49,8 @@ impl LayerStore for LoadingStore {
     fn tokens(&self) -> &TokenInterner {
         self.inner.tokens()
     }
-    fn tokens_mut(&mut self) -> &mut TokenInterner {
-        self.inner.tokens_mut()
-    }
     fn paths(&self) -> &PathInterner {
         self.inner.paths()
-    }
-    fn paths_mut(&mut self) -> &mut PathInterner {
-        self.inner.paths_mut()
     }
 }
 

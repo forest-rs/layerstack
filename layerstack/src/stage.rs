@@ -972,7 +972,7 @@ impl Stage {
                             .shared_typed(schema_type)
                             .unwrap_or_else(|| empty.clone()),
                         Some(schemas) => {
-                            schemas.intern_instance_names(&identity.applied, store.tokens_mut());
+                            schemas.intern_instance_names(&identity.applied, store.tokens());
                             Arc::new(schemas.prim_definition(
                                 schema_type,
                                 &identity.applied,

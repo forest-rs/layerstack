@@ -39,7 +39,7 @@ pub(crate) enum NamespaceMap {
 
 impl NamespaceMap {
     /// The spec path of the stage prim `path`, if the map covers it.
-    pub(crate) fn map_prim(&self, path: PathId, paths: &mut PathInterner) -> Option<SpecPath> {
+    pub(crate) fn map_prim(&self, path: PathId, paths: &PathInterner) -> Option<SpecPath> {
         match self {
             Self::Identity => Some(SpecPath::from_prim_path(path)),
             Self::Prefix {
@@ -272,7 +272,7 @@ impl EditTarget {
     ///
     /// OpenUSD: `UsdEditTarget::MapToSpecPath`.
     #[must_use]
-    pub fn map_to_spec_path(&self, path: PathId, paths: &mut PathInterner) -> Option<SpecPath> {
+    pub fn map_to_spec_path(&self, path: PathId, paths: &PathInterner) -> Option<SpecPath> {
         self.map.map_prim(path, paths)
     }
 
@@ -294,7 +294,7 @@ impl EditTarget {
     pub fn map_property_to_spec_path(
         &self,
         path: PropertyPath,
-        paths: &mut PathInterner,
+        paths: &PathInterner,
     ) -> Option<SpecPath> {
         self.map
             .map_prim(path.prim_path(), paths)
@@ -419,7 +419,7 @@ impl Address {
 
     /// The addressed spec path; `None` if the target does not map the
     /// stage path.
-    pub(crate) fn resolve(&self, paths: &mut PathInterner) -> Option<SpecPath> {
+    pub(crate) fn resolve(&self, paths: &PathInterner) -> Option<SpecPath> {
         match &self.path {
             AddressPath::Spec(path) => Some(path.clone()),
             AddressPath::Stage {
@@ -453,7 +453,7 @@ impl Address {
     pub(crate) fn map_target(
         &self,
         target: TargetPath,
-        paths: &mut PathInterner,
+        paths: &PathInterner,
     ) -> Option<TargetPath> {
         let AddressPath::Stage { map, .. } = &self.path else {
             return Some(target);

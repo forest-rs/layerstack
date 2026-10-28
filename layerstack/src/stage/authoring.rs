@@ -590,7 +590,7 @@ impl Stage {
             return Err(AuthoringInspectionError::NotAttribute(property));
         }
         let mapped = target
-            .map_property_to_spec_path(property, store.paths_mut())
+            .map_property_to_spec_path(property, store.paths())
             .ok_or(AuthoringInspectionError::Unmappable(property))?;
         let mapped_prim = mapped.prim_spec();
         // A site composition culled, as it has no spec yet, is placed in

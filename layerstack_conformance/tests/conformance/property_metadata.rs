@@ -61,7 +61,7 @@ struct SchemaSpec {
 }
 
 /// The Rust value the oracle's tagged value stands for.
-fn value(ty: &str, json: &serde_json::Value, tokens: &mut layerstack::TokenInterner) -> Value {
+fn value(ty: &str, json: &serde_json::Value, tokens: &layerstack::TokenInterner) -> Value {
     match ty {
         "string" => Value::String(Arc::from(json.as_str().unwrap())),
         "token" => Value::Token(tokens.intern(json.as_str().unwrap())),

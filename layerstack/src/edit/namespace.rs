@@ -225,9 +225,9 @@ impl NamespaceEdit {
             let pseudo_root = store_root_path(store);
             repair_fields(store, &mut edited.metadata, local_move, pseudo_root, false)?;
             if let Some(mapping) = local_move.filter(|m| m.from.property_path().is_none())
-                && let Some(path) = original.default_prim_path(store.tokens_mut())
+                && let Some(path) = original.default_prim_path(store.tokens())
             {
-                let old = store.paths_mut().intern(path);
+                let old = store.paths().intern(path);
                 let new = mapping.prim(store, old);
                 if old != new {
                     let path = store.paths().resolve(new);
@@ -236,7 +236,7 @@ impl NamespaceEdit {
                     } else {
                         path.display(store.tokens())
                     };
-                    edited.default_prim = Some(store.tokens_mut().intern(&text));
+                    edited.default_prim = Some(store.tokens().intern(&text));
                 }
             }
 
@@ -409,7 +409,7 @@ fn map(
     path: TargetPath,
 ) -> Result<SpecPath, NamespaceError> {
     let prim = target
-        .map_to_spec_path(path.prim_path(), store.paths_mut())
+        .map_to_spec_path(path.prim_path(), store.paths())
         .ok_or(NamespaceError::Unmappable)?;
     Ok(match path {
         TargetPath::Prim(_) => prim,
@@ -492,7 +492,7 @@ fn validate_stage(
             .ok_or(NamespaceError::InvalidPaths)?,
         TargetPath::Property(p) => store.paths().resolve(p.prim_path()).clone(),
     };
-    let parent = store.paths_mut().intern(parent);
+    let parent = store.paths().intern(parent);
     if !store.paths().resolve(parent).segments().is_empty() && !stage.has_prim(parent) {
         return Err(NamespaceError::MissingParent);
     }
@@ -500,7 +500,7 @@ fn validate_stage(
         let mut current = Some(store.paths().resolve(object.prim_path()).clone());
         let mut first = true;
         while let Some(path) = current {
-            let at = store.paths_mut().intern(path.clone());
+            let at = store.paths().intern(path.clone());
             if inactive_prim(stage, store, at) {
                 return Err(NamespaceError::UnsupportedComposition(
                     "namespace moves of or beneath inactive roots require dormant descendant coordination",
@@ -804,7 +804,7 @@ pub(super) fn move_specs(
     let parent_path = destination_path
         .parent()
         .ok_or(NamespaceError::InvalidPaths)?;
-    let parent = store.paths_mut().intern(parent_path.clone());
+    let parent = store.paths().intern(parent_path.clone());
     if !parent_path.segments().is_empty() && !layer.prims.contains_key(&parent) {
         return Err(NamespaceError::MissingParent);
     }
@@ -826,7 +826,7 @@ pub(super) fn move_specs(
             .strip_prefix(&source_path)
             .unwrap()
             .to_vec();
-        let new = store.paths_mut().intern(destination_path.join(&suffix));
+        let new = store.paths().intern(destination_path.join(&suffix));
         if layer.prims.contains_key(&new) || layer.variant_prims.contains_key(&new) {
             return Err(NamespaceError::Collision);
         }
@@ -840,7 +840,7 @@ pub(super) fn move_specs(
             layer.variant_prims.insert(new, branches);
         }
     }
-    let source_parent = store.paths_mut().intern(source_path.parent().unwrap());
+    let source_parent = store.paths().intern(source_path.parent().unwrap());
     let old_name = source_path.leaf().unwrap();
     let new_name = destination_path.leaf().unwrap();
     let old_index = layer
@@ -906,7 +906,7 @@ impl PathMove {
             return path;
         };
         let result = store.paths().resolve(self.to.prim_path()).join(&suffix);
-        store.paths_mut().intern(result)
+        store.paths().intern(result)
     }
     fn target(&self, store: &mut dyn LayerStore, path: TargetPath) -> TargetPath {
         if self.from.property_path().is_some() {
@@ -1001,7 +1001,7 @@ fn path_names(store: &dyn LayerStore, path: PathId) -> Vec<alloc::string::String
         .collect()
 }
 fn store_root_path(store: &mut dyn LayerStore) -> PathId {
-    store.paths_mut().intern(Path::root())
+    store.paths().intern(Path::root())
 }
 fn repair_value(
     store: &mut dyn LayerStore,

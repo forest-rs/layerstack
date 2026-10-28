@@ -355,7 +355,7 @@ impl LiveStage {
                 .into_iter()
                 .filter(|p| !replacement.stage.has_prim(*p))
                 .collect(),
-            resynced: alloc::vec![store.paths_mut().intern(crate::Path::root())],
+            resynced: alloc::vec![store.paths().intern(crate::Path::root())],
             ..Default::default()
         };
         replacement.notices = core::mem::take(&mut self.notices);
@@ -828,7 +828,7 @@ impl LiveStage {
         for &path in &affected {
             let mut current = store.paths().resolve(path).parent();
             while let Some(parent) = current {
-                let parent_id = store.paths_mut().intern(parent.clone());
+                let parent_id = store.paths().intern(parent.clone());
                 seed.insert(parent_id);
                 current = parent.parent();
             }
@@ -836,7 +836,7 @@ impl LiveStage {
         // Deleted specs are removal candidates, not population candidates.
         // Seeding them would leave an empty child-list entry on a parent
         // whose clean population has no child-list entry at all.
-        let pseudo_root = store.paths_mut().intern(crate::Path::root());
+        let pseudo_root = store.paths().intern(crate::Path::root());
         seed.retain(|path| {
             *path == pseudo_root
                 || store
@@ -1909,7 +1909,7 @@ impl LiveStage {
                 .copied()
                 .filter(|path| !self.stage.has_prim(*path))
                 .collect();
-            changes.resynced = alloc::vec![store.paths_mut().intern(crate::Path::root())];
+            changes.resynced = alloc::vec![store.paths().intern(crate::Path::root())];
         }
 
         // A before/after difference, not an edit log: removed paths are those

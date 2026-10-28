@@ -503,7 +503,7 @@ fn variant_set_edits_agree_with_openusd_call_by_call() {
         );
         let target = edit_target(&mut loaded, &live, &case["target"]);
         let prim = loaded.store.path(case["prim"].as_str().unwrap());
-        let spec_path = target.map_to_spec_path(prim, &mut loaded.store.paths);
+        let spec_path = target.map_to_spec_path(prim, &loaded.store.paths);
         let pseudo_root = case["prim"] == "/";
         let addressed = |loaded: &LoadedStage| {
             let path = spec_path.as_ref().filter(|_| !pseudo_root)?;

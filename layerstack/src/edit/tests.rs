@@ -165,7 +165,7 @@ fn targets_map_through_reference_and_variant_nodes() {
     assert_eq!(reference.layer(), ROCK);
     let mapped = |target: &EditTarget, store: &mut InMemoryStore, path| {
         target
-            .map_to_spec_path(path, &mut store.paths)
+            .map_to_spec_path(path, &store.paths)
             .map(|spec| spec.display(&store.paths, &store.tokens))
     };
     assert_eq!(
@@ -189,7 +189,7 @@ fn targets_map_through_reference_and_variant_nodes() {
     let size = store.property_path("/World/RockA.roughness");
     assert_eq!(
         variant
-            .map_property_to_spec_path(size, &mut store.paths)
+            .map_property_to_spec_path(size, &store.paths)
             .map(|spec| spec.display(&store.paths, &store.tokens))
             .as_deref(),
         Some("/Rock{shape=round}.roughness")
@@ -1406,7 +1406,7 @@ fn relocated_prims_edit_through_the_nodes_they_read() {
     let size = store.property_path("/World/RockA/Moved.size");
     assert_eq!(
         target
-            .map_property_to_spec_path(size, &mut store.paths)
+            .map_property_to_spec_path(size, &store.paths)
             .map(|p| p.display(&store.paths, &store.tokens))
             .as_deref(),
         Some("/Rock/Chip.size")
@@ -2170,7 +2170,7 @@ fn class_arc_targets_keep_the_root_identity() {
             .intern(store.paths.resolve(source).join(&[look]));
         let mapped = |store: &mut InMemoryStore, path| {
             target
-                .map_to_spec_path(path, &mut store.paths)
+                .map_to_spec_path(path, &store.paths)
                 .map(|spec| spec.prim_path())
         };
         assert_eq!(mapped(&mut store, prim), Some(source));

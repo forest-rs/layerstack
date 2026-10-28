@@ -110,7 +110,7 @@ impl Loc {
     /// The location of the spec that lists this prim spec among its
     /// children (`primChildren`) and the prim's name; `None` for the
     /// pseudo-root and for a variant spec.
-    pub(crate) fn parent(&self, paths: &mut PathInterner) -> Option<(Self, TokenId)> {
+    pub(crate) fn parent(&self, paths: &PathInterner) -> Option<(Self, TokenId)> {
         let Self::Prim { path, sites } = self else {
             return None;
         };

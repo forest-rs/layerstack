@@ -54,8 +54,8 @@ pub fn try_read_array<'a, T>(
 /// Writes an array of `write`'s type.
 pub fn write_array<T: Copy>(
     items: &[T],
-    tokens: &mut TokenInterner,
-    write: impl Fn(T, &mut TokenInterner) -> Value,
+    tokens: &TokenInterner,
+    write: impl Fn(T, &TokenInterner) -> Value,
 ) -> Value {
     Value::array_from_iter(items.iter().map(|item| write(*item, tokens)), None)
 }
@@ -71,7 +71,7 @@ macro_rules! plain {
         }
 
         /// Encodes the USD value without coercing incompatible types.
-        pub fn $write(value: $ty, _: &mut TokenInterner) -> Value {
+        pub fn $write(value: $ty, _: &TokenInterner) -> Value {
             Value::$variant(value)
         }
 
@@ -82,7 +82,7 @@ macro_rules! plain {
         }
 
         /// Encodes the USD value without coercing incompatible types.
-        pub fn $write_array(items: &[$ty], _: &mut TokenInterner) -> Value {
+        pub fn $write_array(items: &[$ty], _: &TokenInterner) -> Value {
             Value::TypedArray(TypedArray::$variant(Arc::new(items.to_vec())))
         }
 
@@ -124,12 +124,12 @@ macro_rules! plain {
 
         /// Transfers an owned vector without copying elements. Allocates a shared
         /// owner header; the vector's element allocation and capacity survive.
-        pub fn $owned(items: Vec<$ty>, _: &mut TokenInterner) -> Value {
+        pub fn $owned(items: Vec<$ty>, _: &TokenInterner) -> Value {
             Value::TypedArray(TypedArray::$variant(Arc::new(items)))
         }
 
         /// Transfers a shared owner without allocating or copying elements.
-        pub fn $shared(items: Arc<Vec<$ty>>, _: &mut TokenInterner) -> Value {
+        pub fn $shared(items: Arc<Vec<$ty>>, _: &TokenInterner) -> Value {
             Value::TypedArray(TypedArray::$variant(items))
         }
     };
@@ -420,7 +420,7 @@ macro_rules! text {
         }
 
         /// Encodes the USD value without coercing incompatible types.
-        pub fn $write(value: &str, _: &mut TokenInterner) -> Value {
+        pub fn $write(value: &str, _: &TokenInterner) -> Value {
             Value::$variant(Arc::from(value))
         }
     };
@@ -475,12 +475,12 @@ pub fn try_read_string_array_shared(
 
 /// Encodes a `string[]` value into one text buffer, without a value per
 /// element.
-pub fn write_string_array(items: &[&str], _: &mut TokenInterner) -> Value {
+pub fn write_string_array(items: &[&str], _: &TokenInterner) -> Value {
     Value::from(items.iter().collect::<StringArray>())
 }
 
 /// Transfers a shared `string[]` buffer without allocating or copying it.
-pub fn write_string_array_shared(items: Arc<StringArray>, _: &mut TokenInterner) -> Value {
+pub fn write_string_array_shared(items: Arc<StringArray>, _: &TokenInterner) -> Value {
     Value::TypedArray(TypedArray::String(items))
 }
 
@@ -510,7 +510,7 @@ pub fn read_token<'a>(value: &Value, tokens: &'a TokenInterner) -> Option<&'a st
 }
 
 /// Encodes the USD value without coercing incompatible types.
-pub fn write_token(value: &str, tokens: &mut TokenInterner) -> Value {
+pub fn write_token(value: &str, tokens: &TokenInterner) -> Value {
     Value::Token(tokens.intern(value))
 }
 
@@ -523,7 +523,7 @@ pub fn read_half(value: &Value, _: &TokenInterner) -> Option<f32> {
 }
 
 /// Encodes the USD value without coercing incompatible types.
-pub fn write_half(value: f32, _: &mut TokenInterner) -> Value {
+pub fn write_half(value: f32, _: &TokenInterner) -> Value {
     Value::Half(half::from_f32(value))
 }
 
@@ -539,7 +539,7 @@ pub fn read_half_array(value: &Value, tokens: &TokenInterner) -> Option<Vec<f32>
 }
 
 /// Encodes the USD value without coercing incompatible types.
-pub fn write_half_array(items: &[f32], _: &mut TokenInterner) -> Value {
+pub fn write_half_array(items: &[f32], _: &TokenInterner) -> Value {
     Value::TypedArray(TypedArray::Half(Arc::new(
         items.iter().copied().map(half::from_f32).collect(),
     )))
@@ -556,7 +556,7 @@ macro_rules! halves {
         }
 
         /// Encodes the USD value without coercing incompatible types.
-        pub fn $write(value: [f32; $n], _: &mut TokenInterner) -> Value {
+        pub fn $write(value: [f32; $n], _: &TokenInterner) -> Value {
             Value::$variant(value.map(half::from_f32))
         }
 
@@ -572,7 +572,7 @@ macro_rules! halves {
         }
 
         /// Encodes the USD value without coercing incompatible types.
-        pub fn $write_array(items: &[[f32; $n]], _: &mut TokenInterner) -> Value {
+        pub fn $write_array(items: &[[f32; $n]], _: &TokenInterner) -> Value {
             Value::TypedArray(TypedArray::$variant(Arc::new(
                 items
                     .iter()
@@ -633,7 +633,7 @@ macro_rules! matrix {
         }
 
         /// Encodes the USD value without coercing incompatible types.
-        pub fn $write(value: [[f64; $n]; $n], _: &mut TokenInterner) -> Value {
+        pub fn $write(value: [[f64; $n]; $n], _: &TokenInterner) -> Value {
             let mut flat = [0.0; $n * $n];
             for (i, row) in value.iter().enumerate() {
                 flat[i * $n..(i + 1) * $n].copy_from_slice(row);
@@ -660,7 +660,7 @@ macro_rules! matrix {
         }
 
         /// Encodes the USD value without coercing incompatible types.
-        pub fn $write_array(items: &[[[f64; $n]; $n]], _: &mut TokenInterner) -> Value {
+        pub fn $write_array(items: &[[[f64; $n]; $n]], _: &TokenInterner) -> Value {
             Value::TypedArray(TypedArray::$variant(Arc::new(
                 items
                     .iter()
@@ -717,13 +717,13 @@ fn map_list_op<T, U>(op: &ListOp<T>, mut item: impl FnMut(&T) -> U) -> ListOp<U>
 
 /// Encodes a list op of tokens, the value of a `tokenlistop` metadata
 /// field, with its tokens interned in `tokens`.
-pub fn write_token_list_op(op: &ListOp<&str>, tokens: &mut TokenInterner) -> FieldValue {
+pub fn write_token_list_op(op: &ListOp<&str>, tokens: &TokenInterner) -> FieldValue {
     FieldValue::from(map_list_op(op, |token| tokens.intern(token)))
 }
 
 /// Encodes a list op of strings, the value of a `stringlistop` metadata
 /// field.
-pub fn write_string_list_op(op: &ListOp<&str>, _: &mut TokenInterner) -> FieldValue {
+pub fn write_string_list_op(op: &ListOp<&str>, _: &TokenInterner) -> FieldValue {
     FieldValue::from(map_list_op(op, |text| Arc::<str>::from(*text)))
 }
 
@@ -775,15 +775,15 @@ mod tests {
 
     #[test]
     fn string_arrays_read_and_write_their_shared_buffer() {
-        let mut tokens = TokenInterner::default();
-        let value = write_string_array(&["a", "", "long text"], &mut tokens);
+        let tokens = TokenInterner::default();
+        let value = write_string_array(&["a", "", "long text"], &tokens);
         let shared = read_string_array_shared(&value, &tokens).unwrap();
         assert!(shared.iter().eq(["a", "", "long text"]));
         assert!(core::ptr::eq(
             borrow_string_array(&value).unwrap(),
             &*shared
         ));
-        let transferred = write_string_array_shared(shared.clone(), &mut tokens);
+        let transferred = write_string_array_shared(shared.clone(), &tokens);
         assert!(Arc::ptr_eq(
             &shared,
             &read_string_array_shared(&transferred, &tokens).unwrap()
@@ -836,16 +836,16 @@ mod tests {
 
     #[test]
     fn numeric_reads_and_transfers_preserve_the_allocation() {
-        let mut tokens = TokenInterner::default();
+        let tokens = TokenInterner::default();
         let mut points = Vec::with_capacity(32);
         points.push([-0.0, 1.0, 2.0]);
         let pointer = points.as_ptr();
-        let value = write_float3_array_owned(points, &mut tokens);
+        let value = write_float3_array_owned(points, &tokens);
         let shared = read_float3_array_shared(&value, &tokens).unwrap();
         assert_eq!(shared.as_ptr(), pointer);
         assert_eq!(shared.capacity(), 32);
         assert_eq!(borrow_float3_array(&value).unwrap().as_ptr(), pointer);
-        let transferred = write_float3_array_shared(shared.clone(), &mut tokens);
+        let transferred = write_float3_array_shared(shared.clone(), &tokens);
         assert!(Arc::ptr_eq(
             &shared,
             &read_float3_array_shared(&transferred, &tokens).unwrap()
@@ -872,12 +872,12 @@ mod tests {
 
     #[test]
     fn native_array_readers_keep_kind_and_bits() {
-        let mut tokens = TokenInterner::default();
+        let tokens = TokenInterner::default();
         let values = [[-0.0_f32, f32::from_bits(0x7fc0_1234), 2.0]];
-        let native = write_float3_array(&values, &mut tokens);
+        let native = write_float3_array(&values, &tokens);
         let read = read_float3_array(&native, &tokens).unwrap();
         assert_eq!(read[0].map(f32::to_bits), values[0].map(f32::to_bits));
-        let empty = write_float3_array(&[], &mut tokens);
+        let empty = write_float3_array(&[], &tokens);
         assert!(matches!(empty, Value::TypedArray(TypedArray::Vec3f(_))));
         assert_eq!(read_float3_array(&empty, &tokens), Some(Vec::new()));
         assert_eq!(read_double3_array(&empty, &tokens), None);
@@ -887,7 +887,7 @@ mod tests {
             Some(Vec::new())
         );
 
-        let times = write_timecode_array(&[1.0, -0.0], &mut tokens);
+        let times = write_timecode_array(&[1.0, -0.0], &tokens);
         assert_eq!(
             read_timecode_array(&times, &tokens),
             Some(alloc::vec![1.0, -0.0])
@@ -895,20 +895,20 @@ mod tests {
         assert_eq!(read_double_array(&times, &tokens), None);
         let halves = [[0.5, 1.0, 2.0]];
         assert_eq!(
-            read_half3_array(&write_half3_array(&halves, &mut tokens), &tokens),
+            read_half3_array(&write_half3_array(&halves, &tokens), &tokens),
             Some(halves.to_vec())
         );
     }
 
     #[test]
     fn native_matrix_arrays_convert_rows_without_scalar_boxes() {
-        let mut tokens = TokenInterner::default();
+        let tokens = TokenInterner::default();
         let rows = core::array::from_fn::<_, 4, _>(|row| {
             core::array::from_fn::<_, 4, _>(|column| {
                 f64::from(u8::try_from(row * 4 + column).unwrap())
             })
         });
-        let native = write_matrix4d_array(&[rows], &mut tokens);
+        let native = write_matrix4d_array(&[rows], &tokens);
         let Value::TypedArray(TypedArray::Matrix4d(flat)) = &native else {
             panic!("native matrix storage");
         };
@@ -917,7 +917,7 @@ mod tests {
             read_matrix4d_array(&native, &tokens),
             Some(alloc::vec![rows])
         );
-        let legacy = Value::Array(alloc::vec![write_matrix4d(rows, &mut tokens)]);
+        let legacy = Value::Array(alloc::vec![write_matrix4d(rows, &tokens)]);
         assert_eq!(
             read_matrix4d_array(&legacy, &tokens),
             read_matrix4d_array(&native, &tokens)
@@ -927,14 +927,14 @@ mod tests {
 
     #[test]
     fn values_round_trip() {
-        let mut tokens = TokenInterner::default();
+        let tokens = TokenInterner::default();
         let matrix = [
             [1.0, 2.0, 3.0, 4.0],
             [5.0, 6.0, 7.0, 8.0],
             [9.0, 10.0, 11.0, 12.0],
             [13.0, 14.0, 15.0, 16.0],
         ];
-        let written = write_matrix4d(matrix, &mut tokens);
+        let written = write_matrix4d(matrix, &tokens);
         assert_eq!(
             written,
             Value::Matrix4d(alloc::boxed::Box::new(core::array::from_fn(|i| {
@@ -943,11 +943,11 @@ mod tests {
         );
         assert_eq!(read_matrix4d(&written, &tokens), Some(matrix));
 
-        let token = write_token("catmullClark", &mut tokens);
+        let token = write_token("catmullClark", &tokens);
         assert_eq!(read_token(&token, &tokens), Some("catmullClark"));
-        let halves = write_half3([0.5, 1.0, 2.0], &mut tokens);
+        let halves = write_half3([0.5, 1.0, 2.0], &tokens);
         assert_eq!(read_half3(&halves, &tokens), Some([0.5, 1.0, 2.0]));
-        let array = write_array(&[[1.0_f32, 2.0, 3.0]], &mut tokens, write_float3);
+        let array = write_array(&[[1.0_f32, 2.0, 3.0]], &tokens, write_float3);
         assert_eq!(
             read_array(&array, &tokens, read_float3),
             Some(alloc::vec![[1.0, 2.0, 3.0]])

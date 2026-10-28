@@ -1582,9 +1582,9 @@ impl Reference {
                 let value = String::from(store.tokens().resolve(default_prim));
                 let segments: Vec<TokenId> = default_prim_names(&value)?
                     .into_iter()
-                    .map(|name| store.tokens_mut().intern(name))
+                    .map(|name| store.tokens().intern(name))
                     .collect();
-                Some(store.paths_mut().intern(Path::root().join(&segments)))
+                Some(store.paths().intern(Path::root().join(&segments)))
             }
         }
     }
@@ -4142,7 +4142,7 @@ impl Layer {
     /// layer.set_default_prim(Some(tokens.intern("Model.attr")));
     /// assert!(layer.default_prim_path(&mut tokens).is_none());
     /// ```
-    pub fn default_prim_path(&self, tokens: &mut TokenInterner) -> Option<Path> {
+    pub fn default_prim_path(&self, tokens: &TokenInterner) -> Option<Path> {
         let value = String::from(tokens.resolve(self.default_prim?));
         let segments: Vec<TokenId> = default_prim_names(&value)?
             .into_iter()
@@ -4550,14 +4550,8 @@ pub trait LayerStore: MaybeSync {
     /// Returns the shared token interner.
     fn tokens(&self) -> &TokenInterner;
 
-    /// Returns the shared token interner mutably, allowing interning of additional tokens.
-    fn tokens_mut(&mut self) -> &mut TokenInterner;
-
     /// Returns the shared path interner.
     fn paths(&self) -> &PathInterner;
-
-    /// Returns the shared path interner mutably, allowing interning of derived paths.
-    fn paths_mut(&mut self) -> &mut PathInterner;
 
     /// Returns the loaded layer that `asset_path`, anchored to the layer
     /// `anchor`, resolves to; `None` when it is not known.
@@ -4934,16 +4928,8 @@ impl LayerStore for InMemoryStore {
         &self.tokens
     }
 
-    fn tokens_mut(&mut self) -> &mut TokenInterner {
-        &mut self.tokens
-    }
-
     fn paths(&self) -> &PathInterner {
         &self.paths
-    }
-
-    fn paths_mut(&mut self) -> &mut PathInterner {
-        &mut self.paths
     }
 
     fn asset_layer(&self, anchor: LayerId, asset_path: &str) -> Option<LayerId> {
@@ -5863,13 +5849,13 @@ mod tests {
             ("Model/", None),
             ("a:b", None),
         ];
-        let mut tokens = TokenInterner::default();
+        let tokens = TokenInterner::default();
         let mut layer = Layer::new(LayerId(1));
-        assert_eq!(layer.default_prim_path(&mut tokens), None, "not authored");
+        assert_eq!(layer.default_prim_path(&tokens), None, "not authored");
         for (token, expected) in cases {
             layer.default_prim = Some(tokens.intern(token));
             let actual = layer
-                .default_prim_path(&mut tokens)
+                .default_prim_path(&tokens)
                 .map(|path| path.display(&tokens));
             assert_eq!(actual.as_deref(), *expected, "defaultPrim = {token:?}");
         }
@@ -5918,7 +5904,7 @@ mod tests {
         let mut layer = Layer::new(LayerId(1));
         layer.insert_prim(p, prim);
 
-        let count_at = |path: &str, tokens: &mut TokenInterner, paths: &mut PathInterner| {
+        let count_at = |path: &str, tokens: &TokenInterner, paths: &PathInterner| {
             let path = SpecPath::parse(path, tokens, paths).unwrap();
             match layer.variant_spec_at(&path, paths)?.fields[0].value {
                 FieldValue::Value(Value::Int64(value)) => Some(value),
@@ -5932,7 +5918,7 @@ mod tests {
         assert_eq!(count_at("/P{b=y}", &mut tokens, &mut paths), None);
         assert_eq!(count_at("/P", &mut tokens, &mut paths), None);
 
-        let sets_at = |path: &str, tokens: &mut TokenInterner, paths: &mut PathInterner| {
+        let sets_at = |path: &str, tokens: &TokenInterner, paths: &PathInterner| {
             let path = SpecPath::parse(path, tokens, paths).unwrap();
             layer
                 .variant_sets_at(&path, paths)

@@ -576,9 +576,9 @@ fn gather_dependent_moves(
                 return Err(NamespaceError::Unmappable);
             }
             let from = store
-                .paths_mut()
+                .paths()
                 .intern(Path::root().join(&composed.segments()[..composed.depth() - suffix.len()]));
-            let to = store.paths_mut().intern(
+            let to = store.paths().intern(
                 Path::root()
                     .join(&composed.segments()[..mount_depth])
                     .join(dest_suffix),
@@ -779,7 +779,7 @@ fn ensure_ancestors(store: &mut dyn LayerStore, layer: &mut Layer, path: Path) {
         return;
     }
     ensure_ancestors(store, layer, path.parent().unwrap());
-    let id = store.paths_mut().intern(path);
+    let id = store.paths().intern(path);
     if !layer.prims.contains_key(&id) {
         layer.insert_prim(id, PrimSpec::over());
     }
@@ -860,10 +860,10 @@ fn repair_default_prim(store: &mut dyn LayerStore, layer: &mut Layer, mapping: &
     if mapping.from.property_path().is_some() {
         return;
     }
-    let Some(path) = layer.default_prim_path(store.tokens_mut()) else {
+    let Some(path) = layer.default_prim_path(store.tokens()) else {
         return;
     };
-    let old = store.paths_mut().intern(path);
+    let old = store.paths().intern(path);
     let new = mapping.prim(store, old);
     if old != new {
         let path = store.paths().resolve(new);
@@ -872,7 +872,7 @@ fn repair_default_prim(store: &mut dyn LayerStore, layer: &mut Layer, mapping: &
         } else {
             path.display(store.tokens())
         };
-        layer.default_prim = Some(store.tokens_mut().intern(&text));
+        layer.default_prim = Some(store.tokens().intern(&text));
     }
 }
 
@@ -894,14 +894,8 @@ impl LayerStore for Overlay<'_> {
     fn tokens(&self) -> &crate::TokenInterner {
         self.store.tokens()
     }
-    fn tokens_mut(&mut self) -> &mut crate::TokenInterner {
-        self.store.tokens_mut()
-    }
     fn paths(&self) -> &crate::PathInterner {
         self.store.paths()
-    }
-    fn paths_mut(&mut self) -> &mut crate::PathInterner {
-        self.store.paths_mut()
     }
     fn asset_layer(&self, anchor: LayerId, path: &str) -> Option<LayerId> {
         self.store.asset_layer(anchor, path)

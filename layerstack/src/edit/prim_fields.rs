@@ -334,7 +334,7 @@ fn map_arc_path(
     if store.paths().resolve(path).depth() == 0 {
         return Err(Rejection::PseudoRootArc);
     }
-    match at.map_target(TargetPath::Prim(path), store.paths_mut()) {
+    match at.map_target(TargetPath::Prim(path), store.paths()) {
         Some(TargetPath::Prim(mapped)) => Ok(mapped),
         _ => Err(Rejection::UnmappableTarget(TargetPath::Prim(path))),
     }
@@ -553,7 +553,7 @@ pub(crate) fn remove_applied_schema(
     name: TokenId,
     journal: &mut Journal<'_>,
 ) -> Result<(), Rejection> {
-    let key = store.tokens_mut().intern("apiSchemas");
+    let key = store.tokens().intern("apiSchemas");
     let loc = prim_address(store, at)?;
     let id = at.layer();
     let current = spec_at(layer(store, id)?, &loc).map(|spec| {
@@ -612,7 +612,7 @@ fn write(
         } else {
             "instanceable"
         };
-        let key = store.tokens_mut().intern(name);
+        let key = store.tokens().intern(name);
         let spec = spec_at(layer(store, id)?, &loc).expect("ensured spec");
         let index = field_index(spec.fields(), key);
         return journal.run(

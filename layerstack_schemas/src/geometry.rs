@@ -709,7 +709,7 @@ mod tests {
         let frame = store.tokens.intern("constraintTargets:frame");
         let mut local = crate::gf::IDENTITY;
         local[3][0] = 2.;
-        let matrix = crate::value::write_matrix4d(local, &mut store.tokens);
+        let matrix = crate::value::write_matrix4d(local, &store.tokens);
         let mut layer = Layer::new(LayerId(1));
         layer.insert_prim(
             parent,

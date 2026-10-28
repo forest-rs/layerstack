@@ -877,7 +877,7 @@ def Xform "Asset" (variants = { string shape = "mesh" }; prepend variantSets = "
         .prepare(live.stage(), &mut store, &target, path, &[])
         .unwrap();
     live.apply(&mut store, &update.transaction).unwrap();
-    let mapped = target.map_to_spec_path(path, &mut store.paths).unwrap();
+    let mapped = target.map_to_spec_path(path, &store.paths).unwrap();
     assert_eq!(
         store.tokens.resolve(
             store

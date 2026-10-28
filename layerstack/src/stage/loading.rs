@@ -245,14 +245,8 @@ impl LayerStore for ControlledStore<'_> {
     fn tokens(&self) -> &TokenInterner {
         self.inner.tokens()
     }
-    fn tokens_mut(&mut self) -> &mut TokenInterner {
-        self.inner.tokens_mut()
-    }
     fn paths(&self) -> &PathInterner {
         self.inner.paths()
-    }
-    fn paths_mut(&mut self) -> &mut PathInterner {
-        self.inner.paths_mut()
     }
     fn asset_layer(&self, anchor: LayerId, asset: &str) -> Option<LayerId> {
         self.inner.asset_layer(anchor, asset)
@@ -299,8 +293,8 @@ impl super::Stage {
         } else {
             alloc::format!("/{path}")
         };
-        let path = Path::parse_absolute(&absolute, store.tokens_mut()).ok()?;
-        let id = store.paths_mut().intern(path);
+        let path = Path::parse_absolute(&absolute, store.tokens()).ok()?;
+        let id = store.paths().intern(path);
         self.has_prim(id).then_some(id)
     }
 

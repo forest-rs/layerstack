@@ -174,7 +174,7 @@ fn addressed(
     name: &str,
 ) -> Json {
     let store = &mut loaded.store;
-    let Some(path) = target.map_to_spec_path(prim, &mut store.paths) else {
+    let Some(path) = target.map_to_spec_path(prim, &store.paths) else {
         return Json::Null;
     };
     property_at(

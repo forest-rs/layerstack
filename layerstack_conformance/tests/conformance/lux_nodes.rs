@@ -42,8 +42,8 @@ fn entire_discovered_catalogue_matches_cpp_names_usd_types_defaults_and_metadata
     let oracle: Oracle =
         serde_json::from_str(include_str!("../../fixtures/lux_nodes.json")).unwrap();
     assert_eq!(oracle.version, layerstack_schemas::OPENUSD_VERSION);
-    let mut tokens = TokenInterner::default();
-    let nodes = builtin_light_node_definitions(&mut tokens);
+    let tokens = TokenInterner::default();
+    let nodes = builtin_light_node_definitions(&tokens);
     assert_eq!(
         nodes.iter().map(|n| n.identifier).collect::<Vec<_>>(),
         oracle
@@ -87,8 +87,8 @@ fn entire_discovered_catalogue_matches_cpp_names_usd_types_defaults_and_metadata
 }
 #[test]
 fn catalogue_preserves_schema_origin_and_separates_prim_and_node_identity() {
-    let mut tokens = TokenInterner::default();
-    let nodes = builtin_light_node_definitions(&mut tokens);
+    let tokens = TokenInterner::default();
+    let nodes = builtin_light_node_definitions(&tokens);
     assert!(
         !nodes
             .iter()

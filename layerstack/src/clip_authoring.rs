@@ -150,7 +150,7 @@ fn empty_spline(source: &crate::spline::SplineData) -> crate::spline::SplineData
         knots: Vec::new(),
     }
 }
-fn ensure_parent_specs(layer: &mut Layer, path: PathId, paths: &mut PathInterner) {
+fn ensure_parent_specs(layer: &mut Layer, path: PathId, paths: &PathInterner) {
     let mut at = path;
     while let Some(parent_path) = paths.resolve(at).parent() {
         let leaf = paths.resolve(at).leaf();
@@ -175,8 +175,8 @@ fn ensure_parent_specs(layer: &mut Layer, path: PathId, paths: &mut PathInterner
 
 struct ManifestStore<'a> {
     layer: Layer,
-    tokens: &'a mut TokenInterner,
-    paths: &'a mut PathInterner,
+    tokens: &'a TokenInterner,
+    paths: &'a PathInterner,
 }
 impl crate::LayerStore for ManifestStore<'_> {
     fn layer(&self, id: LayerId) -> Option<&Layer> {
@@ -188,13 +188,7 @@ impl crate::LayerStore for ManifestStore<'_> {
     fn tokens(&self) -> &TokenInterner {
         self.tokens
     }
-    fn tokens_mut(&mut self) -> &mut TokenInterner {
-        self.tokens
-    }
     fn paths(&self) -> &PathInterner {
-        self.paths
-    }
-    fn paths_mut(&mut self) -> &mut PathInterner {
         self.paths
     }
 }
@@ -289,8 +283,8 @@ pub fn generate_clip_manifest_from_layers(
     layers: &[&Layer],
     clip_prim_path: PathId,
     manifest_id: LayerId,
-    tokens: &mut TokenInterner,
-    paths: &mut PathInterner,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
 ) -> Result<Layer, ClipAuthoringError> {
     if paths.resolve(clip_prim_path).segments().is_empty() {
         return Err(ClipAuthoringError::InvalidPrimPath(clip_prim_path));
@@ -430,8 +424,8 @@ fn time_bound(
 pub fn stitch_clip_sequence(
     sources: &[ClipSource<'_>],
     options: &ClipBundleOptions,
-    tokens: &mut TokenInterner,
-    paths: &mut PathInterner,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
 ) -> Result<ClipBundle, ClipAuthoringError> {
     if sources.is_empty() {
         return Err(ClipAuthoringError::EmptySequence);
@@ -721,7 +715,7 @@ mod tests {
     }
     #[test]
     fn cpp_sequence_and_manifest_fixture() {
-        let (mut store, path, a, b, options) = fixture();
+        let (store, path, a, b, options) = fixture();
         let before = a.clone();
         let sources = [
             ClipSource {
@@ -735,8 +729,7 @@ mod tests {
                 offset: LayerOffset::IDENTITY,
             },
         ];
-        let bundle =
-            stitch_clip_sequence(&sources, &options, &mut store.tokens, &mut store.paths).unwrap();
+        let bundle = stitch_clip_sequence(&sources, &options, &store.tokens, &store.paths).unwrap();
         let meta = clip_metadata(&bundle, path, &store.tokens);
         assert_eq!(
             pairs(dictionary_value(meta, "active")),
@@ -790,7 +783,7 @@ mod tests {
     }
     #[test]
     fn offsets_keep_asset_indices_and_map_local_time() {
-        let (mut store, path, a, b, options) = fixture();
+        let (store, path, a, b, options) = fixture();
         let sources = [
             ClipSource {
                 layer: &a,
@@ -806,8 +799,7 @@ mod tests {
                 offset: LayerOffset::IDENTITY,
             },
         ];
-        let bundle =
-            stitch_clip_sequence(&sources, &options, &mut store.tokens, &mut store.paths).unwrap();
+        let bundle = stitch_clip_sequence(&sources, &options, &store.tokens, &store.paths).unwrap();
         let meta = clip_metadata(&bundle, path, &store.tokens);
         assert_eq!(
             pairs(dictionary_value(meta, "active")),
@@ -827,7 +819,7 @@ mod tests {
     }
     #[test]
     fn precise_failures_leave_sources_unchanged() {
-        let (mut store, _, a, b, options) = fixture();
+        let (store, _, a, b, options) = fixture();
         let before = a.clone();
         let source = |offset| ClipSource {
             layer: &a,
@@ -835,7 +827,7 @@ mod tests {
             offset,
         };
         assert_eq!(
-            stitch_clip_sequence(&[], &options, &mut store.tokens, &mut store.paths).unwrap_err(),
+            stitch_clip_sequence(&[], &options, &store.tokens, &store.paths).unwrap_err(),
             ClipAuthoringError::EmptySequence
         );
         assert_eq!(
@@ -845,8 +837,8 @@ mod tests {
                     scale: 0.
                 })],
                 &options,
-                &mut store.tokens,
-                &mut store.paths
+                &store.tokens,
+                &store.paths
             )
             .unwrap_err(),
             ClipAuthoringError::InvalidOffset(a.id)
@@ -855,8 +847,8 @@ mod tests {
             stitch_clip_sequence(
                 &[source(LayerOffset::IDENTITY), source(LayerOffset::IDENTITY)],
                 &options,
-                &mut store.tokens,
-                &mut store.paths
+                &store.tokens,
+                &store.paths
             )
             .unwrap_err(),
             ClipAuthoringError::DuplicateActivation
@@ -867,8 +859,8 @@ mod tests {
             stitch_clip_sequence(
                 &[source(LayerOffset::IDENTITY)],
                 &bad,
-                &mut store.tokens,
-                &mut store.paths
+                &store.tokens,
+                &store.paths
             )
             .unwrap_err(),
             ClipAuthoringError::ConflictingLayerId(bad.root_id)
@@ -885,15 +877,14 @@ mod tests {
             },
         ];
         assert_eq!(
-            stitch_clip_sequence(&sources, &options, &mut store.tokens, &mut store.paths)
-                .unwrap_err(),
+            stitch_clip_sequence(&sources, &options, &store.tokens, &store.paths).unwrap_err(),
             ClipAuthoringError::DuplicateActivation
         );
         assert_eq!(a, before);
     }
     #[test]
     fn manifest_keeps_variant_branches_and_descendants() {
-        let (mut store, path, mut a, b, options) = fixture();
+        let (store, path, mut a, b, options) = fixture();
         let set = store.tokens.intern("v");
         let branch = store.tokens.intern("A");
         let unused = store.tokens.intern("B");
@@ -950,8 +941,8 @@ mod tests {
             &[&a],
             path,
             LayerId(12),
-            &mut store.tokens,
-            &mut store.paths,
+            &store.tokens,
+            &store.paths,
         )
         .unwrap();
         let parent = &manifest.prims[&path];
@@ -987,8 +978,7 @@ mod tests {
                 offset: LayerOffset::IDENTITY,
             },
         ];
-        let bundle =
-            stitch_clip_sequence(&sources, &options, &mut store.tokens, &mut store.paths).unwrap();
+        let bundle = stitch_clip_sequence(&sources, &options, &store.tokens, &store.paths).unwrap();
         assert_eq!(
             bundle.manifest.prims[&path].variant_sets()[&set].variants[&branch].properties[0]
                 .spec
@@ -1008,7 +998,7 @@ mod tests {
     }
     #[test]
     fn malformed_source_samples_are_rejected_before_topology_strips_them() {
-        let (mut store, _, mut a, _, options) = fixture();
+        let (store, _, mut a, _, options) = fixture();
         let outside = store.path("/Outside");
         let attribute = store.tokens.intern("value");
         let mut property = PropertySpec::typed_attribute(PropertyType::parse("float").unwrap());
@@ -1020,14 +1010,13 @@ mod tests {
             offset: LayerOffset::IDENTITY,
         };
         assert_eq!(
-            stitch_clip_sequence(&[source], &options, &mut store.tokens, &mut store.paths)
-                .unwrap_err(),
+            stitch_clip_sequence(&[source], &options, &store.tokens, &store.paths).unwrap_err(),
             ClipAuthoringError::Stitch(StitchError::InvalidTimeSamples)
         );
     }
     #[test]
     fn overlapping_incompatible_offsets_are_rejected() {
-        let (mut store, _, mut a, mut b, options) = fixture();
+        let (store, _, mut a, mut b, options) = fixture();
         let start = store.tokens.lookup("startTimeCode").unwrap();
         let end = store.tokens.lookup("endTimeCode").unwrap();
         for layer in [&mut a, &mut b] {
@@ -1050,14 +1039,13 @@ mod tests {
             },
         ];
         assert_eq!(
-            stitch_clip_sequence(&sources, &options, &mut store.tokens, &mut store.paths)
-                .unwrap_err(),
+            stitch_clip_sequence(&sources, &options, &store.tokens, &store.paths).unwrap_err(),
             ClipAuthoringError::ConflictingTimeMapping
         );
     }
     #[test]
     fn samples_dominate_spline_annotations_across_clips() {
-        let (mut store, path, mut a, b, options) = fixture();
+        let (store, path, mut a, b, options) = fixture();
         let name = store.tokens.lookup("animated").unwrap();
         let property = a.prims.get_mut(&path).unwrap().property_mut(name).unwrap();
         property.time_samples = TimeSamples::none();
@@ -1076,8 +1064,8 @@ mod tests {
             &[&a],
             path,
             options.manifest_id,
-            &mut store.tokens,
-            &mut store.paths,
+            &store.tokens,
+            &store.paths,
         )
         .unwrap();
         let annotation = only.prims[&path]
@@ -1096,8 +1084,8 @@ mod tests {
                 &layers,
                 path,
                 options.manifest_id,
-                &mut store.tokens,
-                &mut store.paths,
+                &store.tokens,
+                &store.paths,
             )
             .unwrap();
             assert!(

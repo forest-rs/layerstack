@@ -106,7 +106,7 @@ fn compose_indexed(
     child_index: &ChildIndex,
 ) -> Composed {
     let scope = match (listed, options.mask.as_ref()) {
-        (Some(paths), _) => crate::prim_indexing::Scope::listed(store.paths_mut(), paths),
+        (Some(paths), _) => crate::prim_indexing::Scope::listed(store.paths(), paths),
         (None, None) => crate::prim_indexing::Scope::All,
         (None, Some(mask)) => {
             let selection = crate::prim_indexing::Selection::new(store.paths(), &mask.include);

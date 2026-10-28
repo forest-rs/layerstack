@@ -62,7 +62,7 @@ impl ProducerPublisher<i32> for Publish {
         if self.fail == Some(spec.recipe) {
             return Err("host rejected output");
         }
-        let token = store.tokens_mut().intern("value");
+        let token = store.tokens().intern("value");
         let mut transaction = Transaction::new();
         transaction.expect_generation(ROOT, store.layer(ROOT).unwrap().generation());
         for &site in &spec.outputs {
@@ -368,7 +368,7 @@ fn rejected_publication_guards_leave_all_outputs_and_acknowledgements_unchanged(
             _: &Stage,
             store: &mut dyn LayerStore,
         ) -> Result<Transaction, Infallible> {
-            let token = store.tokens_mut().intern("value");
+            let token = store.tokens().intern("value");
             let mut edit = Transaction::new();
             edit.expect_generation(ROOT, store.layer(ROOT).unwrap().generation() + 1);
             for &site in &spec.outputs {

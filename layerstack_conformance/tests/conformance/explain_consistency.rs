@@ -126,7 +126,7 @@ fn names(store: &InMemoryStore) -> Names {
 
 /// A registry giving every prim type a fallback for every property name;
 /// `alternate` picks different fallbacks (of another array length).
-fn registry(names: &Names, alternate: bool, tokens: &mut TokenInterner) -> SchemaRegistry {
+fn registry(names: &Names, alternate: bool, tokens: &TokenInterner) -> SchemaRegistry {
     let mut builder = SchemaRegistry::builder();
     for &type_name in &names.types {
         let mut schema = SchemaDefinition::typed(type_name);
@@ -150,8 +150,7 @@ fn registry(names: &Names, alternate: bool, tokens: &mut TokenInterner) -> Schem
 fn check_stage(label: &str, store: &mut InMemoryStore, root: LayerId, tally: &mut Tally) {
     let names = names(store);
     let mut compose = |schemas: Option<bool>| {
-        let schemas =
-            schemas.map(|alternate| Arc::new(registry(&names, alternate, &mut store.tokens)));
+        let schemas = schemas.map(|alternate| Arc::new(registry(&names, alternate, &store.tokens)));
         let options = StageOptions {
             schemas,
             ..StageOptions::default()

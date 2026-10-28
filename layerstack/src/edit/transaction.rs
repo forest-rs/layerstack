@@ -1273,7 +1273,7 @@ pub(crate) fn authored(
     at: &Address,
     slot: &Slot,
 ) -> Option<Option<Authored>> {
-    let path = at.resolve(store.paths_mut())?;
+    let path = at.resolve(store.paths())?;
     let loc = Loc::of(&path);
     let layer = store.layer(at.layer())?;
     let Some(spec) = spec_at(layer, &loc) else {

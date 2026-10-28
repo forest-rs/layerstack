@@ -50,8 +50,8 @@ fn main() {
             offset: LayerOffset::IDENTITY,
         }],
         &options,
-        &mut store.tokens,
-        &mut store.paths,
+        &store.tokens,
+        &store.paths,
     )
     .expect("valid clip sequence");
     store.insert_layer(bundle.root);

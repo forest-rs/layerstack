@@ -1207,7 +1207,7 @@ fn check_preconditions(store: &mut dyn LayerStore, txn: &Transaction) -> Result<
                 let found = authored_layer_metadata(store, *layer, *key)
                     .ok_or(EditError::UnresolvedPrecondition { index })?;
                 if !found.same(expected) {
-                    let root = store.paths_mut().intern(crate::Path::root());
+                    let root = store.paths().intern(crate::Path::root());
                     return Err(EditError::StaleValue {
                         layer: *layer,
                         path: SpecPath::from_prim_path(root),
@@ -1233,7 +1233,7 @@ fn check_preconditions(store: &mut dyn LayerStore, txn: &Transaction) -> Result<
                     authored(store, at, slot).ok_or(EditError::UnresolvedPrecondition { index })?;
                 if !found.same(expected) {
                     let path = at
-                        .resolve(store.paths_mut())
+                        .resolve(store.paths())
                         .ok_or(EditError::UnresolvedPrecondition { index })?;
                     return Err(EditError::StaleValue {
                         layer: at.layer(),
@@ -1289,7 +1289,7 @@ pub(super) fn resolve_including_pseudo_root(
         return Err(Rejection::NoSuchLayer(at.layer()));
     }
     let path = at
-        .resolve(store.paths_mut())
+        .resolve(store.paths())
         .ok_or_else(|| Rejection::Unmappable(at.named_path()))?;
     let loc = Loc::of(&path);
     Ok((path, loc))
@@ -1311,7 +1311,7 @@ fn apply_op(
             key,
             value,
         } => {
-            let _ = store.paths_mut().intern(crate::Path::root());
+            let _ = store.paths().intern(crate::Path::root());
             let name = store.tokens().resolve(*key);
             if name == "defaultPrim" {
                 if !matches!(value, None | Some(FieldValue::Value(Value::Token(_)))) {
@@ -1355,9 +1355,7 @@ fn apply_op(
             if let Loc::Variant { .. } = loc {
                 return ensure(store, id, &loc, journal);
             }
-            let (parent, name) = loc
-                .parent(store.paths_mut())
-                .ok_or(Rejection::NotAPrim(path))?;
+            let (parent, name) = loc.parent(store.paths()).ok_or(Rejection::NotAPrim(path))?;
             ensure(store, id, &parent, journal)?;
             let spec = PrimSpec {
                 specifier: Some(*specifier),
@@ -1809,7 +1807,7 @@ fn add_applied_schema(
     name: TokenId,
     journal: &mut Journal<'_>,
 ) -> Result<(), Rejection> {
-    let key = store.tokens_mut().intern("apiSchemas");
+    let key = store.tokens().intern("apiSchemas");
     let (path, loc) = resolve(store, at)?;
     if path.property().is_some() {
         return Err(Rejection::NotAPrim(path));
@@ -1876,7 +1874,7 @@ fn map_target(
     at: &Address,
     target: TargetPath,
 ) -> Result<TargetPath, Rejection> {
-    at.map_target(target, store.paths_mut())
+    at.map_target(target, store.paths())
         .ok_or(Rejection::UnmappableTarget(target))
 }
 
@@ -2016,7 +2014,7 @@ pub(super) fn ensure(
     }
     match loc {
         Loc::Prim { path, sites } => {
-            let parent = loc.parent(store.paths_mut());
+            let parent = loc.parent(store.paths());
             if let Some((parent, _)) = &parent {
                 ensure(store, id, parent, journal)?;
             }
@@ -2222,7 +2220,7 @@ pub(super) fn remove_subtree(
     }
     match loc {
         Loc::Prim { .. } => {
-            if let Some((parent, name)) = loc.parent(store.paths_mut())
+            if let Some((parent, name)) = loc.parent(store.paths())
                 && spec_at(layer(store, id)?, &parent)
                     .is_some_and(|spec| spec.children().contains(&name))
             {

@@ -734,14 +734,14 @@ mod tests {
         );
     }
 
-    fn tokens(store: &mut crate::TokenInterner, names: &[&str]) -> Vec<TokenId> {
+    fn tokens(store: &crate::TokenInterner, names: &[&str]) -> Vec<TokenId> {
         names.iter().map(|name| store.intern(name)).collect()
     }
 
     #[test]
     fn token_arrays_hold_ids_and_share_until_edited() {
-        let mut interner = crate::TokenInterner::default();
-        let ids = tokens(&mut interner, &["a", "b", "c"]);
+        let interner = crate::TokenInterner::default();
+        let ids = tokens(&interner, &["a", "b", "c"]);
         let value = Value::from(ids.clone());
         let legacy = Value::Array(ids.iter().copied().map(Value::Token).collect());
         assert_eq!(value, legacy, "content equality spans representations");

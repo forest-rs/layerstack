@@ -163,7 +163,7 @@ fn check_opinion(
         return;
     }
     tally.sites += 1;
-    let mapped = target.map_property_to_spec_path(PropertyPath::new(prim, name), &mut store.paths);
+    let mapped = target.map_property_to_spec_path(PropertyPath::new(prim, name), &store.paths);
     if mapped.as_ref() != Some(&key.spec_path) {
         tally.failures.push(format!(
             "{context}: target maps to {:?}",

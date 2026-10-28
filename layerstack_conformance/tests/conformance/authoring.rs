@@ -431,7 +431,7 @@ fn rocks_authoring_session_matches_openusd() {
     });
     assert_eq!(
         through_b
-            .map_property_to_spec_path(size_b, &mut s.store.paths)
+            .map_property_to_spec_path(size_b, &s.store.paths)
             .map(|p| p.display(&s.store.paths, &s.store.tokens))
             .as_deref(),
         Some("/Rock.size")
@@ -451,7 +451,7 @@ fn rocks_authoring_session_matches_openusd() {
     });
     assert_eq!(
         in_jagged
-            .map_property_to_spec_path(roughness_a, &mut s.store.paths)
+            .map_property_to_spec_path(roughness_a, &s.store.paths)
             .map(|p| p.display(&s.store.paths, &s.store.tokens))
             .as_deref(),
         Some("/Rock{shape=jagged}.roughness")

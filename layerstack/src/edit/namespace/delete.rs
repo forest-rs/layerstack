@@ -74,7 +74,7 @@ fn prepare_with(
         TargetPath::Property(_) => Some(path.clone()),
     };
     while let Some(prim) = ancestor {
-        let id = store.paths_mut().intern(prim.clone());
+        let id = store.paths().intern(prim.clone());
         if stage.is_instance(id) && TargetPath::Prim(id) != object {
             return Err(NamespaceError::InstanceProxy);
         }
@@ -367,7 +367,7 @@ fn remove_specs(store: &mut dyn LayerStore, layer: &mut Layer, object: TargetPat
     }
     for sites in removed_roots {
         let loc = Loc::Prim { path: prim, sites };
-        if let Some((parent, name)) = loc.parent(store.paths_mut())
+        if let Some((parent, name)) = loc.parent(store.paths())
             && let Some(mut spec) = spec_at_mut(layer, &parent)
         {
             spec.children().retain(|child| *child != name);
@@ -475,9 +475,9 @@ fn repair(
     let root = store_root_path(store);
     repair_fields(store, &mut layer.metadata, root, object)?;
     if let TargetPath::Prim(_) = object
-        && let Some(path) = layer.default_prim_path(store.tokens_mut())
+        && let Some(path) = layer.default_prim_path(store.tokens())
     {
-        let default = store.paths_mut().intern(path);
+        let default = store.paths().intern(path);
         if names(store, object, TargetPath::Prim(default)) {
             layer.default_prim = None;
         }

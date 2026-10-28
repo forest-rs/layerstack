@@ -790,13 +790,13 @@ mod tests {
     #[test]
     fn labeled_empty_arrays_keep_their_element_type() {
         let ty = PropertyType::parse("float[]").unwrap();
-        let mut tokens = layerstack::TokenInterner::default();
+        let tokens = layerstack::TokenInterner::default();
         assert!(compatible(
-            &crate::value::write_float_array(&[], &mut tokens),
+            &crate::value::write_float_array(&[], &tokens),
             &ty
         ));
         assert!(!compatible(
-            &crate::value::write_int_array(&[], &mut tokens),
+            &crate::value::write_int_array(&[], &tokens),
             &ty
         ));
     }

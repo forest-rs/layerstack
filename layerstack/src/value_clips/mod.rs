@@ -460,7 +460,7 @@ impl Catalog {
         raw: &mut HashMap<LayerId, Arc<RawLayer>>,
     ) -> Option<ReadySet> {
         let clip_root = match get(&def.dictionary, "primPath") {
-            Some(Value::String(s)) => Path::parse_absolute(s, store.tokens_mut()).ok(),
+            Some(Value::String(s)) => Path::parse_absolute(s, store.tokens()).ok(),
             _ => None,
         };
         let Some(clip_root) = clip_root.filter(|p| *p != Path::root()) else {
@@ -666,7 +666,7 @@ impl Catalog {
         let Some(suffix) = source.strip_prefix(&source_prefix) else {
             return;
         };
-        let clip_path = store.paths_mut().intern(set.clip_root.join(suffix));
+        let clip_path = store.paths().intern(set.clip_root.join(suffix));
         self.demands
             .entry(prim)
             .or_default()
@@ -1487,12 +1487,12 @@ mod tests {
 
     fn template_stage(missing_middle: bool) -> (InMemoryStore, Stage, PathId, TokenId) {
         let mut store = InMemoryStore::default();
-        let owner = Path::parse_absolute("/P", store.tokens_mut()).unwrap();
-        let owner = store.paths_mut().intern(owner);
-        let clip_path = Path::parse_absolute("/Clip", store.tokens_mut()).unwrap();
-        let clip_path = store.paths_mut().intern(clip_path);
-        let clips = store.tokens_mut().intern("clips");
-        let x = store.tokens_mut().intern("x");
+        let owner = Path::parse_absolute("/P", store.tokens()).unwrap();
+        let owner = store.paths().intern(owner);
+        let clip_path = Path::parse_absolute("/Clip", store.tokens()).unwrap();
+        let clip_path = store.paths().intern(clip_path);
+        let clips = store.tokens().intern("clips");
+        let x = store.tokens().intern("x");
         let metadata = Value::Dictionary(vec![(
             "default".into(),
             Value::Dictionary(vec![
@@ -1606,8 +1606,8 @@ mod tests {
     fn variant_clip_anchor_keeps_local_strength_and_descendant_reference_mapping() {
         use crate::{Reference, SublayerEntry, Time, VariantSetSpec, VariantSpec};
         let (mut store, _, prim, field) = template_stage(true);
-        let mode = store.tokens_mut().intern("mode");
-        let a = store.tokens_mut().intern("a");
+        let mode = store.tokens().intern("mode");
+        let a = store.tokens().intern("a");
         let child = store.property_path("/P/Q.x");
         let clip_child = store.property_path("/Clip/Q.x");
         let mut root = store.layer(LayerId(1)).unwrap().clone();

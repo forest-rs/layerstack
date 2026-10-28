@@ -73,7 +73,7 @@ fn intrinsic(mut candidate: &Schema) -> bool {
 fn definition(
     identifier: &'static str,
     light: &'static Schema,
-    tokens: &mut TokenInterner,
+    tokens: &TokenInterner,
 ) -> LightNodeDefinition {
     let mut ports = BTreeMap::new();
     // C++ copies these four local property sets in this order. In particular,
@@ -139,7 +139,7 @@ fn definition(
 /// same interner. Scene schema registries, authored values, plugin execution,
 /// Sdr UI hints and renderer shader support do not affect this built-in catalogue.
 #[must_use]
-pub fn builtin_light_node_definitions(tokens: &mut TokenInterner) -> Vec<LightNodeDefinition> {
+pub fn builtin_light_node_definitions(tokens: &TokenInterner) -> Vec<LightNodeDefinition> {
     let mut nodes: Vec<_> = tables()
         .iter()
         .filter(|schema| schema.kind == SchemaKind::ConcreteTyped && intrinsic(schema))

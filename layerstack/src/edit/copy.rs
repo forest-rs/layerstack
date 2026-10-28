@@ -126,7 +126,7 @@ fn copy_prim(
     // Move the copies to the destination's namespace, then remap the paths
     // they author, as a namespace move does.
     let parent_path = destination.parent().expect("a prim below the pseudo-root");
-    let parent = store.paths_mut().intern(parent_path);
+    let parent = store.paths().intern(parent_path);
     scratch.insert_prim(parent, PrimSpec::over());
     let from_spec = SpecPath::from_prim_path(from);
     let to_spec = SpecPath::from_prim_path(to);
@@ -165,7 +165,7 @@ fn copy_prim(
         remove_subtree(store, to_layer, &destination_loc, journal)?;
     }
     let (parent_loc, name) = destination_loc
-        .parent(store.paths_mut())
+        .parent(store.paths())
         .expect("a prim below the pseudo-root");
     ensure(store, to_layer, &parent_loc, journal)?;
     for (path, spec) in copies {

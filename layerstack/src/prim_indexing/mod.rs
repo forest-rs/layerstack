@@ -362,10 +362,13 @@ pub(crate) fn compose(
     out.used_layers
         .reserve(used.iter().map(|layers| layers.len()).sum());
     out.used_layers.extend(used.into_iter().flatten().copied());
-    // The stage's own layer stack, and any no arc reached, report last.
+    // The stage's own layer stack, and any no arc reached, report last,
+    // their sublayer requests at the pseudo-root.
     for (at, stack) in (0..).zip(ctx.stacks.iter()) {
         if !out.reported_stacks.contains(&StackId(at)) {
             out.errors.extend(stack.errors.iter().cloned());
+            out.asset_requests
+                .extend(sublayer_requests(stack, ctx.root_path));
         }
         out.reads.extend(stack.reads.clone());
     }
@@ -1831,15 +1834,17 @@ fn map_path_expressions(
     }
 }
 
-/// Records the errors indexing a prim found, the errors of a layer stack
-/// with the first prim to use it.
+/// Records the errors indexing a prim found, the errors and sublayer
+/// requests of a layer stack with the first prim to use it.
 fn record_errors(out: &mut Composition, ctx: &Ctx<'_>, errors: Vec<Recorded>) {
     for recorded in errors {
         match recorded {
             Recorded::Error(error) => out.errors.push(error),
             Recorded::StackErrors { stack, prim } => {
                 if out.reported_stacks.insert(stack) {
-                    for mut error in ctx.stacks.get(stack).errors.iter().cloned() {
+                    let stack = ctx.stacks.get(stack);
+                    out.asset_requests.extend(sublayer_requests(stack, prim));
+                    for mut error in stack.errors.iter().cloned() {
                         if let CompositionError::VariableExpressionError(error) = &mut error {
                             error.prim = Some(prim);
                         }
@@ -1849,6 +1854,21 @@ fn record_errors(out: &mut Composition, ctx: &Ctx<'_>, errors: Vec<Recorded>) {
             }
         }
     }
+}
+
+/// The asset requests for the sublayers `stack` names that the store has
+/// not resolved, each [`ArcKind::Local`] at `prim`, the first prim to read
+/// the stack.
+fn sublayer_requests(
+    stack: &layer_stacks::ComputedStack<'_>,
+    prim: PathId,
+) -> impl Iterator<Item = AssetRequest> {
+    stack.requests.iter().map(move |request| AssetRequest {
+        anchor: request.anchor,
+        asset_path: request.asset_path.clone(),
+        prim,
+        arc: ArcKind::Local,
+    })
 }
 
 /// Lists inactive children apart and deduplicates the errors.

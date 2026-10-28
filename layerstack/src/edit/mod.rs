@@ -141,7 +141,8 @@ pub struct Applied {
     ///
     /// Each names an arc that contributes nothing until the host loads its
     /// asset and composes again: for example a deferred payload the
-    /// transaction added ([`crate::Reference::deferred`]), a variant
+    /// transaction added ([`crate::Reference::deferred`]), a sublayer it
+    /// adds by asset path ([`crate::SublayerEntry::unresolved`]), a variant
     /// selection that reaches one, or a changed input of a dynamic file
     /// format's arguments ([`crate::dynamic_format`]). Requests pending
     /// before the transaction are not repeated here. A document host loads

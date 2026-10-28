@@ -23,7 +23,7 @@ use crate::{
     composition_error::CompositionError,
     doc::{Layer, LayerId, LayerOffset, LayerStore},
     expression_variables::{EXPRESSION_VARIABLES, VariableReads},
-    layer_stack::{LayerStack, LayerStackIdentifier, awaits},
+    layer_stack::{LayerStack, LayerStackIdentifier, SublayerRequest, awaits},
     path::PathId,
     prim_indexing::site::ChildListing,
     relocates::RelocationTable,
@@ -62,6 +62,9 @@ pub(crate) struct ComputedStack<'s> {
     pub(crate) errors: Vec<CompositionError>,
     /// Expression variables its sublayer paths read.
     pub(crate) reads: VariableReads,
+    /// The sublayer asset paths it names that the store has not resolved,
+    /// which the first prim to read the stack asks for.
+    pub(crate) requests: Vec<SublayerRequest>,
 }
 
 impl core::fmt::Debug for ComputedStack<'_> {
@@ -209,6 +212,7 @@ fn compute<'s>(
     if !stack.pending.is_empty() {
         return Err(core::mem::take(&mut stack.pending));
     }
+    let requests = core::mem::take(&mut stack.requests);
     let relocations = RelocationTable::compute(store, &stack, &mut errors);
     let combined_source_to_target = combined_relocations(store, &relocations);
     let mut resolved = Vec::with_capacity(stack.layers.len());
@@ -241,6 +245,7 @@ fn compute<'s>(
         combined_source_to_target,
         errors,
         reads,
+        requests,
     })
 }
 

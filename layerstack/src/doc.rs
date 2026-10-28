@@ -971,8 +971,8 @@ pub struct Relocate {
 /// A sublayer entry with an optional time offset.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SublayerEntry {
-    /// The sublayer's layer ID, or [`LayerId::UNRESOLVED`] when its asset
-    /// path could not be resolved (see [`SublayerEntry::unresolved`]).
+    /// The sublayer's layer ID, or [`LayerId::UNRESOLVED`] when no layer
+    /// is resolved for its asset path (see [`SublayerEntry::unresolved`]).
     pub layer: LayerId,
     /// Time offset applied to this sublayer (§12.3.2.1).
     pub offset: LayerOffset,
@@ -1008,16 +1008,28 @@ impl SublayerEntry {
         }
     }
 
-    /// Creates a sublayer entry for `asset`, whose resolution failed.
+    /// Creates a sublayer entry for `asset` with no layer resolved: the way
+    /// to author a sublayer by asset path, and how an importer keeps one
+    /// whose resolution failed.
     ///
     /// The entry keeps its place and authored asset path, and its layer is
-    /// [`LayerId::UNRESOLVED`]: gathering the layer stack skips it and
-    /// composition reports it as [`CompositionError::UnresolvedSublayer`],
-    /// keeping the rest of the layer stack.
+    /// [`LayerId::UNRESOLVED`]. Gathering the layer stack resolves it
+    /// through the store ([`LayerStore::asset_availability`]), relative to
+    /// the layer naming it: a layer the store binds the path to takes its
+    /// place; a path the store has no answer for is asked for
+    /// ([`Stage::asset_requests`](crate::Stage::asset_requests), which
+    /// `layerstack_io::StageDocument` loads at open and after
+    /// `StageDocument::apply`); one the store confirmed missing
+    /// ([`InMemoryStore::mark_asset_missing`], as importers record a failed
+    /// resolution) is skipped and reported as
+    /// [`CompositionError::UnresolvedSublayer`], keeping the rest of the
+    /// layer stack.
     ///
-    /// Spec: AOUSD Core §10.3.1 (sublayers), §10.6 (composition errors).
-    /// OpenUSD reports it as `PcpErrorInvalidSublayerPath`
-    /// (`PcpLayerStack::_BuildLayerStack`, `pxr/usd/pcp/layerStack.cpp`).
+    /// Spec: AOUSD Core §9.4 (relative asset paths), §10.3.1 (sublayers),
+    /// §10.6 (composition errors). OpenUSD opens each sublayer as it
+    /// computes the layer stack and reports one it cannot open as
+    /// `PcpErrorInvalidSublayerPath` (`PcpLayerStack::_BuildLayerStack`,
+    /// `pxr/usd/pcp/layerStack.cpp`).
     ///
     /// [`CompositionError::UnresolvedSublayer`]: crate::CompositionError::UnresolvedSublayer
     pub fn unresolved(asset: impl Into<String>, offset: LayerOffset) -> Self {
@@ -1028,8 +1040,9 @@ impl SublayerEntry {
         }
     }
 
-    /// Returns `true` when this sublayer's asset path could not be resolved
-    /// (see [`SublayerEntry::unresolved`]).
+    /// Returns `true` when no layer is resolved for this sublayer's asset
+    /// path (see [`SublayerEntry::unresolved`]): gathering the layer stack
+    /// resolves it through the store.
     ///
     /// A sublayer whose asset path is a variable expression
     /// ([`SublayerEntry::is_expression`]) is kept unresolved by importers:

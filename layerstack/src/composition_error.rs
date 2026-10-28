@@ -581,9 +581,14 @@ pub struct UnresolvedAsset {
 /// a layer stack.
 ///
 /// Importers keep such a sublayer as a [`SublayerEntry::unresolved`] instead
-/// of dropping it. It contributes no layer, and the rest of the layer stack,
-/// including the sublayers after it, is gathered as usual. Each layer stack
-/// that reaches it reports it.
+/// of dropping it, and record the miss in the store
+/// ([`InMemoryStore::mark_asset_missing`]); one the store has no answer for
+/// yet is asked for instead ([`Stage::asset_requests`]). It contributes no
+/// layer, and the rest of the layer stack, including the sublayers after
+/// it, is gathered as usual. Each layer stack that reaches it reports it.
+///
+/// [`InMemoryStore::mark_asset_missing`]: crate::InMemoryStore::mark_asset_missing
+/// [`Stage::asset_requests`]: crate::Stage::asset_requests
 ///
 /// Spec: AOUSD Core §10.3.1 (sublayers), §10.6 (composition errors).
 /// OpenUSD reports it as `PcpErrorInvalidSublayerPath`

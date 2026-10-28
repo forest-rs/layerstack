@@ -17,7 +17,7 @@ use crate::{
         CompositionError, ExpressionContext, InvalidSublayerAndOffsetCount, SublayerCycle,
         UnresolvedSublayer,
     },
-    doc::{LayerId, LayerOffset, LayerStore, SublayerEntry},
+    doc::{AssetAvailability, LayerId, LayerOffset, LayerStore, SublayerEntry},
     expression_variables::{VariableReads, evaluate, expression_error},
 };
 
@@ -105,6 +105,23 @@ pub struct LayerStack {
     /// ([`LayerStore::is_layer_pending`]), each once, in the order they
     /// were met: a stack that names any is incomplete.
     pub(crate) pending: Vec<LayerId>,
+    /// The sublayer asset paths the stack names that the store has no
+    /// answer for yet ([`AssetAvailability::Unresolved`]), in the order
+    /// they were met, which composition asks for
+    /// ([`crate::Stage::asset_requests`]).
+    pub(crate) requests: Vec<SublayerRequest>,
+}
+
+/// A sublayer asset path, anchored to the layer that authors it, that the
+/// store has not resolved ([`AssetAvailability::Unresolved`]): composition
+/// lists it among [`crate::Stage::asset_requests`] as an
+/// [`ArcKind::Local`](crate::ArcKind::Local) request.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct SublayerRequest {
+    /// The layer whose `subLayers` names the path.
+    pub(crate) anchor: LayerId,
+    /// The asset path, evaluated when authored as an expression.
+    pub(crate) asset_path: String,
 }
 
 impl LayerStack {
@@ -128,10 +145,16 @@ impl LayerStack {
 
     /// Gathers the layer stack rooted at `root`.
     ///
-    /// A sublayer that would form a cycle, or whose asset path could not be
-    /// resolved, is ignored; composition reports it as a [`SublayerCycle`]
-    /// or an [`UnresolvedSublayer`] through
-    /// [`Stage::composition_errors`](crate::Stage::composition_errors).
+    /// A sublayer that would form a cycle, or whose asset path the store
+    /// confirmed missing, is ignored; composition reports it as a
+    /// [`SublayerCycle`] or an [`UnresolvedSublayer`] through
+    /// [`Stage::composition_errors`](crate::Stage::composition_errors). A
+    /// sublayer by asset path ([`SublayerEntry::unresolved`]) is resolved
+    /// through the store ([`LayerStore::asset_availability`]); one it has
+    /// no answer for is skipped, and composition asks for it
+    /// ([`Stage::asset_requests`](crate::Stage::asset_requests)).
+    ///
+    /// [`SublayerEntry::unresolved`]: crate::SublayerEntry::unresolved
     ///
     /// A sublayer asset path that is a variable expression
     /// ([`SublayerEntry::is_expression`]) is evaluated with the expression
@@ -155,9 +178,11 @@ impl LayerStack {
     /// A sublayer forms a cycle when it is already on the chain of sublayers
     /// from `root` to the layer that names it. A layer repeated elsewhere in
     /// the hierarchy is not a cycle and appears once per occurrence. A
-    /// sublayer whose asset path could not be resolved
-    /// ([`SublayerEntry::is_unresolved`]) contributes no layer; the rest of
-    /// the stack is gathered as usual.
+    /// sublayer with no layer resolved ([`SublayerEntry::is_unresolved`])
+    /// takes the layer the store binds its path to; without one it
+    /// contributes no layer, reported when the store confirmed it missing
+    /// and recorded in [`LayerStack::requests`] when the store has no
+    /// answer yet; the rest of the stack is gathered as usual.
     ///
     /// Spec: AOUSD Core §10.3.1 (a sublayer that would form a cycle is a
     /// composition error and is ignored), §10.6. OpenUSD reports the two as
@@ -213,6 +238,7 @@ impl LayerStack {
             errors: &'a mut Vec<CompositionError>,
             reads: Option<&'r mut VariableReads>,
             pending: Vec<LayerId>,
+            requests: Vec<SublayerRequest>,
         }
 
         impl<'a> Gather<'a, '_> {
@@ -228,12 +254,27 @@ impl LayerStack {
 
             /// The layer `sub`, a sublayer of `id`, resolves to, or `None`
             /// after reporting why it does not.
+            ///
+            /// A sublayer an importer did not resolve
+            /// ([`SublayerEntry::is_unresolved`]), such as one a host
+            /// authors by asset path, and the path a variable expression
+            /// evaluates to, are resolved through the store
+            /// ([`LayerStore::asset_availability`]) relative to `id`: a
+            /// path the store has no answer for is asked for
+            /// ([`SublayerRequest`]), one it confirmed missing is reported.
+            /// OpenUSD opens each sublayer as it computes the layer stack
+            /// (`PcpLayerStack::_BuildLayerStack`), so a sublayer authored
+            /// on any layer of the stack, the session layer's included,
+            /// loads when the stage recomposes. AOUSD Core §9.4, §10.3.1.
             fn sublayer(&mut self, id: LayerId, sub: &SublayerEntry) -> Option<LayerId> {
+                if !sub.is_unresolved() {
+                    return Some(sub.layer);
+                }
                 let asset = sub.asset.as_deref().unwrap_or_default();
-                if sub.is_unresolved() && sub.is_expression() {
+                let path = if sub.is_expression() {
                     let evaluated =
                         evaluate(self.store, self.chain, asset, self.reads.as_deref_mut());
-                    let path = match evaluated {
+                    match evaluated {
                         Ok(path) => path?,
                         Err(error) => {
                             self.errors.push(expression_error(
@@ -245,27 +286,32 @@ impl LayerStack {
                             ));
                             return None;
                         }
-                    };
-                    let layer = self.store.asset_layer(id, &path);
-                    if layer.is_none() {
+                    }
+                } else {
+                    String::from(asset)
+                };
+                match self.store.asset_availability(id, &path) {
+                    AssetAvailability::Loaded(layer) => Some(layer),
+                    AssetAvailability::Missing => {
                         self.errors.push(CompositionError::UnresolvedSublayer(
                             UnresolvedSublayer {
                                 layer: id,
                                 asset: path,
                             },
                         ));
+                        None
                     }
-                    return layer;
+                    AssetAvailability::Unresolved => {
+                        let request = SublayerRequest {
+                            anchor: id,
+                            asset_path: path,
+                        };
+                        if !self.requests.contains(&request) {
+                            self.requests.push(request);
+                        }
+                        None
+                    }
                 }
-                if sub.is_unresolved() {
-                    self.errors
-                        .push(CompositionError::UnresolvedSublayer(UnresolvedSublayer {
-                            layer: id,
-                            asset: String::from(asset),
-                        }));
-                    return None;
-                }
-                Some(sub.layer)
             }
 
             fn visit(&mut self, id: LayerId, accumulated: LayerOffset) {
@@ -322,6 +368,7 @@ impl LayerStack {
                 offsets: Vec::new(),
                 chains: Vec::new(),
                 pending: Vec::new(),
+                requests: Vec::new(),
             };
         };
         let mut gather = Gather {
@@ -333,6 +380,7 @@ impl LayerStack {
             errors,
             reads: reads.take(),
             pending: Vec::new(),
+            requests: Vec::new(),
         };
         // OpenUSD PcpLayerStack::_Build: authored session TCPS wins, then
         // root TCPS, session FPS, root FPS, then 24. Each stack is mapped
@@ -369,6 +417,7 @@ impl LayerStack {
             layers: gather.layers,
             offsets: gather.offsets,
             pending: gather.pending,
+            requests: gather.requests,
         }
     }
 
@@ -539,8 +588,9 @@ mod tests {
         );
     }
 
-    /// An unresolved sublayer contributes no layer and is reported; the
-    /// sublayers around it, and their offsets, are kept.
+    /// An unresolved sublayer the store confirmed missing contributes no
+    /// layer and is reported; the sublayers around it, and their offsets,
+    /// are kept.
     #[test]
     fn unresolved_sublayers_are_reported_and_skipped() {
         let mut store = InMemoryStore::default();
@@ -555,6 +605,7 @@ mod tests {
         ];
         store.insert_layer(root);
         store.insert_layer(Layer::new(LayerId(2)));
+        store.mark_asset_missing(LayerId(1), "./missing.usda");
 
         let mut errors = Vec::new();
         let stack = LayerStack::gather_reporting(&store, LayerId(1), &mut errors);
@@ -567,6 +618,47 @@ mod tests {
                 asset: "./missing.usda".into(),
             })]
         );
+        assert!(stack.requests.is_empty());
+    }
+
+    /// A sublayer authored by asset path that the store has no answer for
+    /// is asked for, not reported; once the store binds it, it is gathered
+    /// in its place with its offset (OpenUSD opens each sublayer as it
+    /// computes the stack, `PcpLayerStack::_BuildLayerStack`).
+    #[test]
+    fn sublayers_by_asset_path_are_asked_for_until_bound() {
+        let mut store = InMemoryStore::default();
+        let offset = LayerOffset {
+            offset: 5.0,
+            scale: 1.0,
+        };
+        let mut root = Layer::new(LayerId(1));
+        root.sublayers = vec![
+            SublayerEntry::unresolved("./later.usda", offset),
+            SublayerEntry::new(LayerId(2)),
+        ];
+        store.insert_layer(root);
+        store.insert_layer(Layer::new(LayerId(2)));
+
+        let mut errors = Vec::new();
+        let stack = LayerStack::gather_reporting(&store, LayerId(1), &mut errors);
+        assert_eq!(stack.layers, [LayerId(1), LayerId(2)]);
+        assert!(errors.is_empty());
+        assert_eq!(
+            stack.requests,
+            [SublayerRequest {
+                anchor: LayerId(1),
+                asset_path: "./later.usda".into(),
+            }]
+        );
+
+        store.insert_layer(Layer::new(LayerId(3)));
+        store.insert_asset_layer(LayerId(1), "./later.usda", LayerId(3));
+        let stack = LayerStack::gather_reporting(&store, LayerId(1), &mut errors);
+        assert_eq!(stack.layers, [LayerId(1), LayerId(3), LayerId(2)]);
+        assert_eq!(stack.offsets[1], offset);
+        assert!(errors.is_empty());
+        assert!(stack.requests.is_empty());
     }
 
     #[test]

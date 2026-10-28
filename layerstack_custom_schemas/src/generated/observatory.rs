@@ -478,6 +478,13 @@ static TOKEN: ValueType = ValueType { name: "token" };
 
 static TOKEN_ARRAY: ValueType = ValueType { name: "token[]" };
 
+// The tables are written in table format 1, which the
+// `layerstack_schemas` built against must read.
+const _: () = assert!(
+    ::layerstack_schemas::table::TABLE_FORMAT == 1,
+    "written for another layerstack_schemas table format: regenerate this module with layerstack_schemagen 0.1.0",
+);
+
 #[allow(
     clippy::unreadable_literal,
     clippy::approx_constant,

@@ -344,6 +344,11 @@ pub(crate) fn table_imports(text: &str) -> (Vec<&'static str>, Vec<&'static str>
     )
 }
 
+/// The `layerstack_schemas::table::TABLE_FORMAT` the tables are written
+/// in. A library module checks it at compile time ([`crate::compile`]'s
+/// `--rust`), so this changes with the table types' fields and meaning.
+pub(crate) const TABLE_FORMAT: u32 = 1;
+
 /// The `TABLES` static of `schemas`, `auto_applies` and `metadata`,
 /// declared with `declaration` (`pub(crate) static`), with a value this
 /// generation cannot express listed in `failures`.

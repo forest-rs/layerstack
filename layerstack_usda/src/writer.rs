@@ -1428,7 +1428,9 @@ pub enum WriteError {
         /// The declared type name.
         type_name: String,
     },
-    /// An asset path contains `@` or a line break and cannot be quoted.
+    /// An asset path is empty where one is required, or holds a control
+    /// character (a line break, NUL, DEL or a C1 control), which OpenUSD's
+    /// `SdfAssetPath` refuses to read.
     InvalidAssetPath {
         /// Path of the owning object.
         path: String,
@@ -1668,11 +1670,11 @@ fn validate_target(target: &str, path: &str) -> Result<(), WriteError> {
     }
 }
 
-/// An asset path the writers can quote: not empty and without line
-/// breaks or NUL. One holding `@` is written between `@@@` delimiters
-/// ([`Writer::asset`]).
+/// An asset path the writers can quote: not empty and without control
+/// characters (`_ValidateAssetPathString`, `pxr/usd/sdf/assetPath.cpp`).
+/// One holding `@` is written between `@@@` delimiters ([`Writer::asset`]).
 fn validate_asset_path(asset: &str, path: &str) -> Result<(), WriteError> {
-    if asset.is_empty() || asset.contains(['\n', '\r', '\0']) {
+    if asset.is_empty() || asset.chars().any(char::is_control) {
         return Err(WriteError::InvalidAssetPath {
             path: path.into(),
             asset: asset.into(),
@@ -1985,11 +1987,15 @@ fn validate_metadata<'a>(
 }
 
 fn validate_value(value: &Value, path: &str) -> Result<(), WriteError> {
+    // OpenUSD's `SdfAssetPath` refuses control characters.
     let bad_asset = |asset: &String| {
-        (asset.contains('\n') || asset.contains('\r')).then(|| WriteError::InvalidAssetPath {
-            path: path.into(),
-            asset: asset.clone(),
-        })
+        asset
+            .chars()
+            .any(char::is_control)
+            .then(|| WriteError::InvalidAssetPath {
+                path: path.into(),
+                asset: asset.clone(),
+            })
     };
     // USD strings cannot carry NUL: OpenUSD truncates at it, silently
     // dropping the rest of the value.
@@ -4189,6 +4195,19 @@ def Xform "Root" (
             matches!(doc.to_usda(), Err(WriteError::InvalidAssetPath { .. })),
             "unquotable asset path"
         );
+        // OpenUSD's `SdfAssetPath` refuses control characters.
+        for asset in ["a\x10b.png", "a\u{85}b.png"] {
+            let mut doc = mesh_doc();
+            doc.prims[0].children[0].push_property(Attribute::new(
+                "tex",
+                "asset[]",
+                Value::AssetArray(vec![asset.into()]),
+            ));
+            assert!(
+                matches!(doc.to_usda(), Err(WriteError::InvalidAssetPath { .. })),
+                "{asset:?}"
+            );
+        }
 
         // An asset path holding `@` is written between `@@@`, escaping `@@@`.
         let mut doc = mesh_doc();

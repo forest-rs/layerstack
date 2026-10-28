@@ -1579,9 +1579,13 @@ impl<'a> LowerCtx<'a> {
     /// (`pxr/usd/sdf/parserHelpers.cpp`), which strips three `@` from each
     /// end of a triple-delimited path (so one or two further `@` before the
     /// closing three stay in the path) and replaces `\@@@` with `@@@`.
+    ///
+    /// A path holding a control character is reported, as OpenUSD's
+    /// `SdfAssetPath` refuses one (`_ValidateAssetPathString`,
+    /// `pxr/usd/sdf/assetPath.cpp`).
     fn lower_asset_ref(&mut self, node: SyntaxNode<'_>) -> Cow<'a, str> {
         let full = node.span().text(self.source);
-        if full.len() >= 6 && full.starts_with("@@@") && full.ends_with("@@@") {
+        let path = if full.len() >= 6 && full.starts_with("@@@") && full.ends_with("@@@") {
             let path = &full[3..full.len() - 3];
             if path.contains("\\@@@") {
                 Cow::Owned(path.replace("\\@@@", "@@@"))
@@ -1592,7 +1596,18 @@ impl<'a> LowerCtx<'a> {
             Cow::Borrowed(&full[1..full.len() - 1])
         } else {
             Cow::Borrowed(full)
+        };
+        if let Some((index, c)) = path.chars().enumerate().find(|(_, c)| c.is_control()) {
+            self.error(
+                node.span(),
+                alloc::format!(
+                    "invalid asset path: character {} is control character {:#x}",
+                    index + 1,
+                    u32::from(c)
+                ),
+            );
         }
+        path
     }
 
     fn lower_path_ref(&self, node: SyntaxNode<'_>) -> &'a str {
@@ -2796,6 +2811,22 @@ def Scope \"root\" {
             matches!(below.default, Some(Value::Number(_))),
             "an out-of-range integer must not become a valid signed minimum"
         );
+    }
+
+    #[test]
+    fn control_characters_in_asset_paths_are_reported() {
+        // `SdfAssetPath` refuses C0 and C1 controls and DEL; an escape is
+        // not evaluated in an asset path, so `\x10` is four characters.
+        for c in ['\x10', '\x7f', '\u{85}'] {
+            for asset in [format!("@a{c}b@"), format!("@@@a{c}b@@@")] {
+                let src = format!(
+                    "#usda 1.0\ndef \"A\" (\n    references = {asset}\n) {{\n    asset s = {asset}\n}}\n"
+                );
+                assert_eq!(parse(&src).diagnostics.len(), 2, "{src:?}");
+            }
+        }
+        let r = parse("#usda 1.0\ndef \"A\" {\n    asset s = @a\\x10b@\n}\n");
+        assert!(r.diagnostics.is_empty(), "{:?}", r.diagnostics);
     }
 
     #[test]

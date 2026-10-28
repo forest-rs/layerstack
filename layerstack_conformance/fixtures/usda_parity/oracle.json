@@ -1,5 +1,10 @@
 {
  "cases": {
+  "read_asset_path_backslash": {
+   "reads": true,
+   "source": "#usda 1.0\n\ndef \"P\"\n{\n    asset s = @a\\x10b@\n}\n",
+   "text": "#usda 1.0\n\ndef \"P\"\n{\n    asset s = @a\\x10b@\n}\n\n"
+  },
   "read_asset_path_delimiters": {
    "reads": true,
    "source": "#usda 1.0\ndef \"P\"\n{\n    asset a = @@\n    asset b = @@@a@@@@@\n    asset c = @@@@@@\n}\n",
@@ -275,6 +280,11 @@
    "reads": true,
    "source": "#usda 1.0\n\ndef \"P\" (\n    variantSets = [\"a\", \"b\"]\n    append variantSets = \"c\"\n)\n{\n}\n",
    "text": "#usda 1.0\n\ndef \"P\" (\n    append variantSets = \"c\"\n)\n{\n}\n\n"
+  },
+  "strict_asset_path_control_character": {
+   "error": "'Invalid asset path string -- character 2 is control character 0x10'",
+   "reads": false,
+   "source": "#usda 1.0\n\ndef \"P\" (\n    references = @a\u0010b.usda@\n)\n{\n}\n"
   },
   "strict_attribute_metadata_one_line": {
    "error": "'Expected ) at 'hidden = true)' in </A.a>",

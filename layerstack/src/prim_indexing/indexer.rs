@@ -1067,6 +1067,7 @@ impl Indexer<'_, '_, '_> {
                 last_child: NONE,
                 prev_sibling: NONE,
                 next_sibling: NONE,
+                sibling_key: 0,
                 site: site.clone(),
                 map_to_parent: map_to_parent.clone(),
                 map_to_root,

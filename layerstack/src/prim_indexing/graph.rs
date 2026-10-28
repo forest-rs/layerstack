@@ -27,6 +27,17 @@ pub(crate) const NONE: NodeIndex = NodeIndex::MAX;
 /// A node's children, collected ([`Graph::child_list`]).
 pub(crate) type ChildList = smallvec::SmallVec<[NodeIndex; 8]>;
 
+/// The [`Node::sibling_key`] of a node's only child: the middle of the
+/// keys, leaving as much room for stronger siblings as for weaker ones.
+const FIRST_SIBLING_KEY: u64 = 1 << 63;
+
+/// The distance between the [`Node::sibling_key`]s of a child appended or
+/// prepended to its siblings, or of adjacent siblings renumbered: a child
+/// linked between two siblings takes the key halfway between theirs, so
+/// about 32 children can be linked between two adjacent siblings before
+/// the siblings are renumbered.
+const SIBLING_KEY_GAP: u64 = 1 << 32;
+
 /// The [`NodeIndex`] of the node at `at` in a graph's node list.
 pub(crate) fn node_index(at: usize) -> NodeIndex {
     NodeIndex::try_from(at).expect("prim index node count")
@@ -50,6 +61,10 @@ pub(crate) struct Node {
     pub(crate) last_child: NodeIndex,
     pub(crate) prev_sibling: NodeIndex,
     pub(crate) next_sibling: NodeIndex,
+    /// Orders the node among its parent's children: the keys of a node's
+    /// children grow from the strongest to the weakest
+    /// ([`Graph::sibling_order`]). Set as the node is linked.
+    pub(crate) sibling_key: u64,
     pub(crate) site: Site,
     /// Maps paths of this node's namespace to its parent's.
     pub(crate) map_to_parent: MapFunction,
@@ -170,6 +185,7 @@ impl Graph {
                 last_child: NONE,
                 prev_sibling: NONE,
                 next_sibling: NONE,
+                sibling_key: FIRST_SIBLING_KEY,
                 site,
                 map_to_parent: MapFunction::identity(),
                 map_to_root: MapFunction::identity(),
@@ -329,6 +345,13 @@ impl Graph {
     /// Inserts `child`, already in the arena, beneath `parent` in strength
     /// order. OpenUSD: `_InsertChildInStrengthOrder`.
     pub(crate) fn link_child(&mut self, paths: &PathInterner, parent: NodeIndex, child: NodeIndex) {
+        self.insert_child(paths, parent, child);
+        self.place_sibling_key(parent, child);
+    }
+
+    /// Links `child` among `parent`'s children, ordered by
+    /// [`Self::cmp_siblings`].
+    fn insert_child(&mut self, paths: &PathInterner, parent: NodeIndex, child: NodeIndex) {
         let first = self.node(parent).first_child;
         let last = self.node(parent).last_child;
         self.node_mut(child).parent = parent;
@@ -361,6 +384,39 @@ impl Graph {
                 return;
             }
             at = self.node(at).next_sibling;
+        }
+    }
+
+    /// Gives `child`, just linked beneath `parent`, a
+    /// [`Node::sibling_key`] between its neighbours' keys, renumbering
+    /// `parent`'s children when there is no room between them.
+    fn place_sibling_key(&mut self, parent: NodeIndex, child: NodeIndex) {
+        let (prev, next) = (self.node(child).prev_sibling, self.node(child).next_sibling);
+        let key = match (prev, next) {
+            (NONE, NONE) => Some(FIRST_SIBLING_KEY),
+            (prev, NONE) => self.node(prev).sibling_key.checked_add(SIBLING_KEY_GAP),
+            (NONE, next) => self.node(next).sibling_key.checked_sub(SIBLING_KEY_GAP),
+            (prev, next) => {
+                let (low, high) = (self.node(prev).sibling_key, self.node(next).sibling_key);
+                (high - low >= 2).then(|| low + (high - low) / 2)
+            }
+        };
+        match key {
+            Some(key) => self.node_mut(child).sibling_key = key,
+            None => self.renumber_siblings(parent),
+        }
+    }
+
+    /// Spaces the [`Node::sibling_key`]s of `parent`'s children evenly
+    /// about [`FIRST_SIBLING_KEY`].
+    fn renumber_siblings(&mut self, parent: NodeIndex) {
+        let count = self.children(parent).count() as u64;
+        let mut key = FIRST_SIBLING_KEY - (count / 2) * SIBLING_KEY_GAP;
+        let mut child = self.node(parent).first_child;
+        while child != NONE {
+            self.node_mut(child).sibling_key = key;
+            key += SIBLING_KEY_GAP;
+            child = self.node(child).next_sibling;
         }
     }
 
@@ -442,7 +498,7 @@ impl Graph {
                 return by_depth;
             }
             if na.origin != nb.origin {
-                let order = self.origin_is_stronger(0, na.origin, nb.origin);
+                let order = self.origin_is_stronger(na.origin, nb.origin);
                 if order.is_ne() {
                     return order;
                 }
@@ -482,7 +538,7 @@ impl Graph {
             return None;
         }
         if root_a != root_b {
-            return Some(self.origin_is_stronger(0, root_a, root_b));
+            return Some(self.origin_is_stronger(root_a, root_b));
         }
         let hierarchy_depth = |authored: bool, origin: NodeIndex| {
             if authored {
@@ -511,7 +567,7 @@ impl Graph {
                 return Some(by_implied);
             }
         }
-        Some(self.origin_is_stronger(0, origin_a, origin_b))
+        Some(self.origin_is_stronger(origin_a, origin_b))
     }
 
     /// `_GetNamespaceDepthForClassHierarchy`.
@@ -554,29 +610,83 @@ impl Graph {
         nested_under(a, b) || nested_under(b, a)
     }
 
-    /// Which of `a` and `b` a strong-to-weak walk from `start` reaches
-    /// first: `Less` for `a`. OpenUSD: `_OriginIsStronger`.
-    pub(crate) fn origin_is_stronger(
-        &self,
-        start: NodeIndex,
-        a: NodeIndex,
-        b: NodeIndex,
-    ) -> Ordering {
-        if start == a {
+    /// Which of `a` and `b` a strong-to-weak walk of the graph from the
+    /// root reaches first: `Less` for `a`, `Equal` for neither (a node not
+    /// yet linked beneath the root). OpenUSD: `_OriginIsStronger`, called
+    /// with the root node.
+    ///
+    /// OpenUSD walks the nodes in strength order until it meets one of the
+    /// two, which costs a walk of most of the graph for each comparison of
+    /// two siblings, and a graph's size again for each node linked. The
+    /// walk visits a node before the nodes beneath it and a node's
+    /// children strongest first, so the first of the two it meets is the
+    /// ancestor of the other, or else the one beneath the stronger of the
+    /// two children of their deepest common ancestor that lead to them:
+    /// this answers the same from the two nodes' ancestors and the order
+    /// of those two children ([`Node::sibling_key`]), without the walk.
+    pub(crate) fn origin_is_stronger(&self, a: NodeIndex, b: NodeIndex) -> Ordering {
+        let depth_a = self.linked_depth(a);
+        let depth_b = self.linked_depth(b);
+        let (depth_a, depth_b) = match (depth_a, depth_b) {
+            (None, None) => return Ordering::Equal,
+            (Some(_), None) => return Ordering::Less,
+            (None, Some(_)) => return Ordering::Greater,
+            (Some(depth_a), Some(depth_b)) => (depth_a, depth_b),
+        };
+        if a == b {
             return Ordering::Less;
         }
-        if start == b {
+        // Bring the deeper node up to the other's depth: when that reaches
+        // the other node, the other is its ancestor and is met first.
+        let (mut x, mut y) = (a, b);
+        for _ in depth_b..depth_a {
+            x = self.node(x).parent;
+        }
+        if x == b {
             return Ordering::Greater;
         }
-        let mut child = self.node(start).first_child;
-        while child != NONE {
-            let order = self.origin_is_stronger(child, a, b);
-            if order.is_ne() {
-                return order;
-            }
-            child = self.node(child).next_sibling;
+        for _ in depth_a..depth_b {
+            y = self.node(y).parent;
         }
-        Ordering::Equal
+        if y == a {
+            return Ordering::Less;
+        }
+        while self.node(x).parent != self.node(y).parent {
+            x = self.node(x).parent;
+            y = self.node(y).parent;
+        }
+        self.sibling_order(x, y)
+    }
+
+    /// The number of parents above `node` when it is linked beneath the
+    /// root, each node below the root among its parent's children; `None`
+    /// for a node outside the graph's tree (one not yet linked, or
+    /// beneath one).
+    fn linked_depth(&self, node: NodeIndex) -> Option<usize> {
+        if node == NONE {
+            return None;
+        }
+        let mut depth = 0;
+        let mut at = node;
+        while at != 0 {
+            let entry = self.node(at);
+            // A node is among its parent's children once linked:
+            // `link_child` sets the parent before it links the node.
+            if entry.parent == NONE
+                || (entry.prev_sibling == NONE && self.node(entry.parent).first_child != at)
+            {
+                return None;
+            }
+            at = entry.parent;
+            depth += 1;
+        }
+        Some(depth)
+    }
+
+    /// Which of two children of one node comes first among its children:
+    /// `Less` for `a`.
+    fn sibling_order(&self, a: NodeIndex, b: NodeIndex) -> Ordering {
+        self.node(a).sibling_key.cmp(&self.node(b).sibling_key)
     }
 
     /// Compares the strength of any two nodes. OpenUSD:
@@ -733,6 +843,13 @@ impl Graph {
             out[parent].last_child = index;
         }
         self.nodes = out;
+        // The relinked children keep the keys of their old places.
+        for at in 0..self.nodes.len() {
+            let index = node_index(at);
+            if self.node(index).first_child != NONE {
+                self.renumber_siblings(index);
+            }
+        }
     }
 
     /// OpenUSD: `processOriginChain` in `_ComputeEraseCulledNodeIndexMapping`.
@@ -824,3 +941,6 @@ pub(crate) fn truncated(paths: &PathInterner, path: &SpecPath, levels: u16) -> S
     let prim = paths.intern_segments(&prefix);
     path.truncated_to(prim, keep)
 }
+
+#[cfg(test)]
+mod tests;

@@ -97,7 +97,7 @@ fn colliders(scene: Scene<'_>, root: PathId) -> Vec<PathId> {
         };
         if !prim.is_defined()
             || prim.is_abstract()
-            || PrimView::new(scene, path).metadata_value("active") == Some(Value::Bool(false))
+            || PrimView::new(scene, path).metadata().value("active") == Some(Value::Bool(false))
             || (path != root
                 && scene.has_api(path, "PhysicsRigidBodyAPI", None)
                 && enabled(scene, path, "physics:rigidBodyEnabled"))

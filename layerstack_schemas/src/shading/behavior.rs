@@ -69,7 +69,7 @@ impl Scene<'_> {
         // behavior; built-in/indirect APIs are consulted only without a typed
         // behavior. OpenUSD _BehaviorRegistry::_GetBehaviorForPrimTypeId.
         #[cfg(feature = "usd-lux")]
-        if PrimView::new(*self,path).metadata_value("apiSchemas").and_then(|v|v.array_ref().map(|a|a.iter().any(|v|matches!(&*v,layerstack::Value::Token(t) if self.store().tokens().resolve(*t)=="LightAPI")))).unwrap_or(false) {
+        if PrimView::new(*self,path).metadata().value("apiSchemas").and_then(|v|v.array_ref().map(|a|a.iter().any(|v|matches!(&*v,layerstack::Value::Token(t) if self.store().tokens().resolve(*t)=="LightAPI")))).unwrap_or(false) {
             return Some(ConnectableBehavior {is_container:true,requires_encapsulation:false,outputs_connectable:true,derived_container:true});
         }
         #[cfg(feature = "usd-lux")]

@@ -2,9 +2,28 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 //! Registered metadata reads over composed prims, properties and the root layer.
+//!
+//! Each target has one handle: [`PrimView::metadata`] ([`PrimMetadata`]),
+//! [`PrimView::property_metadata`] ([`PropertyMetadata`]) and
+//! [`Scene::metadata`] ([`StageMetadata`]). Each reads a metadata `field`
+//! by its USD name (`kind`, `customData`, …), and a dictionary entry by
+//! the field and a colon-separated `key_path` (`"a:b"`), as OpenUSD's
+//! `GetMetadataByDictKey` takes it. The writers on [`PrimView`] take the
+//! same names.
 
 use crate::{PrimView, Scene};
-use layerstack::{MetadataTarget, PropertyKind, PropertyPath, ResolvedValue, TokenInterner, Value};
+use layerstack::{
+    MetadataTarget, PathId, PropertyKind, PropertyPath, ResolvedValue, TokenInterner, Value,
+};
+
+/// Metadata on a composed prim: the fields registered for prims, built in
+/// (`kind`, `customData`, `hidden`, …) or in the stage's schema registry.
+/// Readers compose authored opinions; dictionaries and list ops combine
+/// through the stage's metadata resolver (OpenUSD `UsdObject::GetMetadata`).
+#[derive(Clone, Copy, Debug)]
+pub struct PrimMetadata<'a> {
+    prim: PrimView<'a>,
+}
 
 /// Metadata on an existing composed property, including schema-defined properties.
 /// Readers compose authored opinions; Sdf's registered field defaults are not
@@ -62,46 +81,19 @@ impl<'a> Scene<'a> {
 }
 
 impl<'a> PrimView<'a> {
-    /// A prim field's composed authored value: a field registered for
-    /// prims, built in or in the stage's schema registry
-    /// ([`layerstack::MetadataField::lookup`]). Dictionaries and list ops
-    /// combine through the stage's ordinary metadata resolver.
-    ///
-    /// Spec: AOUSD Core §12.2 (metadata resolution).
+    /// The prim's metadata.
     #[must_use]
-    pub fn metadata_value(&self, name: &str) -> Option<Value> {
-        let scene = self.scene();
-        let tokens = scene.store().tokens();
-        let key = tokens.lookup(name)?;
-        if !layerstack::MetadataField::lookup(name, scene.stage().schemas(), tokens)?
-            .applies_to(MetadataTarget::Prim)
-        {
-            return None;
-        }
-        scalar(self.prim()?.metadata(key)?.value)
+    pub fn metadata(&self) -> PrimMetadata<'a> {
+        PrimMetadata { prim: *self }
     }
 
-    /// The entry at the colon-separated `key_path` of the prim's composed
-    /// dictionary field `name` (`customData`, `assetInfo`, or a dictionary
-    /// field a plugin registers), as [`Self::metadata_value`] composes it:
-    /// `"a:b"` names the entry `b` of the dictionary `a`. `None` when the
-    /// field holds no such entry or is not a dictionary.
-    ///
-    /// OpenUSD: `UsdObject::GetMetadataByDictKey`. AOUSD Core §12.2.5.
-    #[doc(alias = "GetMetadataByDictKey")]
-    #[doc(alias = "GetCustomDataByKey")]
-    #[doc(alias = "GetAssetInfoByKey")]
+    /// Reads metadata on the declared or schema-defined property
+    /// `property`, of either kind. Missing prims and properties have no
+    /// metadata view.
     #[must_use]
-    pub fn metadata_by_key(&self, name: &str, key_path: &str) -> Option<Value> {
-        dictionary_entry(&self.metadata_value(name)?, key_path).cloned()
-    }
-
-    /// Reads metadata on a declared or schema-defined property, of either kind.
-    /// Missing prims and properties have no metadata view.
-    #[must_use]
-    pub fn property_metadata(&self, name: &str) -> Option<PropertyMetadata<'a>> {
+    pub fn property_metadata(&self, property: &str) -> Option<PropertyMetadata<'a>> {
         let scene = self.scene();
-        let property = self.prim()?.property(name)?;
+        let property = self.prim()?.property(property)?;
         let kind = property
             .declaration()
             .map_or_else(|| property.kind(), |declaration| declaration.kind);
@@ -117,10 +109,55 @@ impl<'a> PrimView<'a> {
 
     pub(crate) fn read_metadata<T>(
         &self,
-        name: &str,
+        field: &str,
         read: impl Fn(&Value, &'a TokenInterner) -> Option<T>,
     ) -> Option<T> {
-        read(&self.metadata_value(name)?, self.scene().store().tokens())
+        read(
+            &self.metadata().value(field)?,
+            self.scene().store().tokens(),
+        )
+    }
+}
+
+impl<'a> PrimMetadata<'a> {
+    /// The prim whose metadata is read.
+    #[must_use]
+    pub fn path(&self) -> PathId {
+        self.prim.path()
+    }
+
+    /// The prim field `field`'s composed authored value, for a field
+    /// registered for prims, built in or in the stage's schema registry
+    /// ([`layerstack::MetadataField::lookup`]).
+    ///
+    /// Spec: AOUSD Core §12.2 (metadata resolution).
+    #[doc(alias = "GetMetadata")]
+    #[must_use]
+    pub fn value(&self, field: &str) -> Option<Value> {
+        let scene = self.prim.scene();
+        let tokens = scene.store().tokens();
+        let key = tokens.lookup(field)?;
+        if !layerstack::MetadataField::lookup(field, scene.stage().schemas(), tokens)?
+            .applies_to(MetadataTarget::Prim)
+        {
+            return None;
+        }
+        scalar(self.prim.prim()?.metadata(key)?.value)
+    }
+
+    /// The entry at the colon-separated `key_path` of the prim's composed
+    /// dictionary field `field` (`customData`, `assetInfo`, or a
+    /// dictionary field a plugin registers), as [`Self::value`] composes
+    /// it: `"a:b"` names the entry `b` of the dictionary `a`. `None` when
+    /// the field holds no such entry or is not a dictionary.
+    ///
+    /// OpenUSD: `UsdObject::GetMetadataByDictKey`. AOUSD Core §12.2.5.
+    #[doc(alias = "GetMetadataByDictKey")]
+    #[doc(alias = "GetCustomDataByKey")]
+    #[doc(alias = "GetAssetInfoByKey")]
+    #[must_use]
+    pub fn value_by_key(&self, field: &str, key_path: &str) -> Option<Value> {
+        dictionary_entry(&self.value(field)?, key_path).cloned()
     }
 }
 
@@ -136,14 +173,14 @@ impl<'a> PropertyMetadata<'a> {
     /// This presence query also accepts application-defined metadata keys.
     /// OpenUSD: `UsdObject::HasAuthoredMetadata`; AOUSD Core §7.4.
     #[must_use]
-    pub fn has_authored(&self, name: &str) -> bool {
-        let key = self.scene.store().tokens().lookup(name);
+    pub fn has_authored(&self, field: &str) -> bool {
+        let key = self.scene.store().tokens().lookup(field);
         self.scene.property(self.path).is_some_and(|property| {
             property
                 .opinions()
                 .iter()
                 .filter_map(|o| o.value().as_property())
-                .any(|p| match name {
+                .any(|p| match field {
                     "typeName" => p.type_name.is_some(),
                     "custom" | "variability" => true,
                     "default" => p.default.is_some(),
@@ -157,27 +194,28 @@ impl<'a> PropertyMetadata<'a> {
     }
 
     /// The entry at the colon-separated `key_path` of the property's
-    /// composed dictionary field `name`, as [`PrimView::metadata_by_key`]
+    /// composed dictionary field `field`, as [`PrimMetadata::value_by_key`]
     /// reads a prim's.
     ///
     /// OpenUSD: `UsdObject::GetMetadataByDictKey`. AOUSD Core §12.2.5.
     #[doc(alias = "GetMetadataByDictKey")]
     #[doc(alias = "GetCustomDataByKey")]
     #[must_use]
-    pub fn value_by_key(&self, name: &str, key_path: &str) -> Option<Value> {
-        dictionary_entry(&self.value(name)?, key_path).cloned()
+    pub fn value_by_key(&self, field: &str, key_path: &str) -> Option<Value> {
+        dictionary_entry(&self.value(field)?, key_path).cloned()
     }
 
-    /// A field's composed authored value, for a field registered for the
-    /// property's kind, built in or in the stage's schema registry.
+    /// The field `field`'s composed authored value, for a field registered
+    /// for the property's kind, built in or in the stage's schema registry.
     /// No value is synthesized from the field's registered default.
     ///
     /// Spec: AOUSD Core §12.2.5–12.2.6 (dictionary and list-op combining).
+    #[doc(alias = "GetMetadata")]
     #[must_use]
-    pub fn value(&self, name: &str) -> Option<Value> {
+    pub fn value(&self, field: &str) -> Option<Value> {
         let tokens = self.scene.store().tokens();
-        let key = tokens.lookup(name)?;
-        if !layerstack::MetadataField::lookup(name, self.scene.stage().schemas(), tokens)?
+        let key = tokens.lookup(field)?;
+        if !layerstack::MetadataField::lookup(field, self.scene.stage().schemas(), tokens)?
             .applies_to(self.target)
         {
             return None;
@@ -192,26 +230,27 @@ impl<'a> PropertyMetadata<'a> {
 
     pub(crate) fn read_metadata<T>(
         &self,
-        name: &str,
+        field: &str,
         read: impl Fn(&Value, &'a TokenInterner) -> Option<T>,
     ) -> Option<T> {
-        read(&self.value(name)?, self.scene.store().tokens())
+        read(&self.value(field)?, self.scene.store().tokens())
     }
 }
 
 impl<'a> StageMetadata<'a> {
-    /// An authored root-layer field or its registered layer default.
+    /// The root layer's authored field `field`, or its registered layer
+    /// default.
     #[must_use]
-    pub fn value(&self, name: &str) -> Option<Value> {
-        let key = self.scene.store().tokens().lookup(name)?;
+    pub fn value(&self, field: &str) -> Option<Value> {
+        let key = self.scene.store().tokens().lookup(field)?;
         self.scene.stage().layer_metadata(key, self.scene.store())
     }
 
     pub(crate) fn read_metadata<T>(
         &self,
-        name: &str,
+        field: &str,
         read: impl Fn(&Value, &'a TokenInterner) -> Option<T>,
     ) -> Option<T> {
-        read(&self.value(name)?, self.scene.store().tokens())
+        read(&self.value(field)?, self.scene.store().tokens())
     }
 }

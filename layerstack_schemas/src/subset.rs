@@ -571,7 +571,7 @@ impl<'a> Imageable<'a> {
                 }
                 let path = child.path();
                 let subset = Subset::get(&scene, path)?;
-                if subset.metadata_value("active") == Some(Value::Bool(false)) {
+                if subset.metadata().value("active") == Some(Value::Bool(false)) {
                     return None;
                 }
                 if element.is_some_and(|e| subset.element_type().as_ref() != Some(e))

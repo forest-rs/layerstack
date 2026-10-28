@@ -622,7 +622,7 @@ impl PrimEdit {
         edit.remove_target(self.path, name, target);
     }
 
-    /// Authors `value` as the metadata field `key` of the property `name`
+    /// Authors `value` as the metadata field `field` of the property `property`
     /// (both USD names), such as `documentation` (USDA `doc`),
     /// `displayName`, `customData`, `bindMaterialAs` on a binding
     /// relationship, `connectability` on a shading input, `weight` on a
@@ -654,14 +654,15 @@ impl PrimEdit {
     pub fn write_property_metadata(
         &self,
         edit: &mut SchemaEdit<'_>,
-        name: &str,
-        key: &str,
+        property: &str,
+        field: &str,
         value: impl Into<layerstack::FieldValue>,
-    ) -> Result<(), crate::MetadataError> {
-        edit.author_property_metadata(self.path, name, key, Some(value.into()))
+    ) -> Result<&Self, crate::MetadataError> {
+        edit.author_property_metadata(self.path, property, field, Some(value.into()))?;
+        Ok(self)
     }
 
-    /// Clears the metadata field `key` of the property `name` in the edit
+    /// Clears the metadata field `field` of the property `property` in the edit
     /// target, so weaker opinions or the field's fallback show through. The
     /// field is checked as [`Self::write_property_metadata`] checks it; a
     /// property with no spec in the edit target has nothing to clear.
@@ -676,14 +677,15 @@ impl PrimEdit {
     pub fn clear_property_metadata(
         &self,
         edit: &mut SchemaEdit<'_>,
-        name: &str,
-        key: &str,
-    ) -> Result<(), crate::MetadataError> {
-        edit.author_property_metadata(self.path, name, key, None)
+        property: &str,
+        field: &str,
+    ) -> Result<&Self, crate::MetadataError> {
+        edit.author_property_metadata(self.path, property, field, None)?;
+        Ok(self)
     }
 
     /// Authors `value` at the colon-separated `key_path` of the property
-    /// `name`'s dictionary field `key` (`customData`, or a dictionary
+    /// `property`'s dictionary field `field` (`customData`, or a dictionary
     /// field a plugin registers) in the edit target: `"a:b"` sets the entry
     /// `b` of the dictionary `a`, creating `a` if needed. The other entries
     /// the edit target authors stay, and a weaker layer's dictionary keeps
@@ -712,17 +714,18 @@ impl PrimEdit {
     pub fn write_property_metadata_by_key(
         &self,
         edit: &mut SchemaEdit<'_>,
-        name: &str,
-        key: &str,
+        property: &str,
+        field: &str,
         key_path: &str,
         value: Value,
-    ) -> Result<(), crate::MetadataError> {
-        let property = PropertyPath::new(self.path, edit.tokens().intern(name));
-        edit.author_metadata_by_key(TargetPath::Property(property), key, key_path, Some(value))
+    ) -> Result<&Self, crate::MetadataError> {
+        let property = PropertyPath::new(self.path, edit.tokens().intern(property));
+        edit.author_metadata_by_key(TargetPath::Property(property), field, key_path, Some(value))?;
+        Ok(self)
     }
 
-    /// Erases the entry at `key_path` of the property `name`'s dictionary
-    /// field `key` in the edit target, keeping its other entries and
+    /// Erases the entry at `key_path` of the property `property`'s dictionary
+    /// field `field` in the edit target, keeping its other entries and
     /// removing the dictionaries the erase leaves empty; erasing the last
     /// entry clears the field, so weaker opinions show through. Erasing an
     /// entry the edit target does not author authors nothing.
@@ -738,19 +741,20 @@ impl PrimEdit {
     pub fn clear_property_metadata_by_key(
         &self,
         edit: &mut SchemaEdit<'_>,
-        name: &str,
-        key: &str,
+        property: &str,
+        field: &str,
         key_path: &str,
-    ) -> Result<(), crate::MetadataError> {
-        let property = PropertyPath::new(self.path, edit.tokens().intern(name));
-        edit.author_metadata_by_key(TargetPath::Property(property), key, key_path, None)
+    ) -> Result<&Self, crate::MetadataError> {
+        let property = PropertyPath::new(self.path, edit.tokens().intern(property));
+        edit.author_metadata_by_key(TargetPath::Property(property), field, key_path, None)?;
+        Ok(self)
     }
 
     /// Authors `value` at the colon-separated `key_path` of the prim's
-    /// dictionary field `key` (`customData`, `assetInfo`, or a dictionary
+    /// dictionary field `field` (`customData`, `assetInfo`, or a dictionary
     /// field a plugin registers) in the edit target, as
     /// [`Self::write_property_metadata_by_key`] authors a property's. Read
-    /// it back with [`PrimView::metadata_by_key`].
+    /// it back with [`crate::PrimMetadata::value_by_key`].
     ///
     /// OpenUSD: `UsdObject::SetMetadataByDictKey`,
     /// `UsdObject::SetCustomDataByKey`, `UsdObject::SetAssetInfoByKey`.
@@ -768,14 +772,15 @@ impl PrimEdit {
     pub fn write_metadata_by_key(
         &self,
         edit: &mut SchemaEdit<'_>,
-        key: &str,
+        field: &str,
         key_path: &str,
         value: Value,
-    ) -> Result<(), crate::MetadataError> {
-        edit.author_metadata_by_key(TargetPath::Prim(self.path), key, key_path, Some(value))
+    ) -> Result<&Self, crate::MetadataError> {
+        edit.author_metadata_by_key(TargetPath::Prim(self.path), field, key_path, Some(value))?;
+        Ok(self)
     }
 
-    /// Erases the entry at `key_path` of the prim's dictionary field `key`
+    /// Erases the entry at `key_path` of the prim's dictionary field `field`
     /// in the edit target, as [`Self::clear_property_metadata_by_key`]
     /// erases a property's.
     ///
@@ -791,18 +796,19 @@ impl PrimEdit {
     pub fn clear_metadata_by_key(
         &self,
         edit: &mut SchemaEdit<'_>,
-        key: &str,
+        field: &str,
         key_path: &str,
-    ) -> Result<(), crate::MetadataError> {
-        edit.author_metadata_by_key(TargetPath::Prim(self.path), key, key_path, None)
+    ) -> Result<&Self, crate::MetadataError> {
+        edit.author_metadata_by_key(TargetPath::Prim(self.path), field, key_path, None)?;
+        Ok(self)
     }
 
-    /// Authors `value` as the prim's metadata field `key` in the edit
+    /// Authors `value` as the prim's metadata field `field` in the edit
     /// target: a field registered for prims, built in (`kind`,
     /// `customData`, `hidden`, …) or by a plugin's `SdfMetadata` in the
     /// stage's schema registry, with a value of its type, checked as
     /// [`Self::write_property_metadata`] checks a property's. Read it back
-    /// with [`PrimView::metadata_value`].
+    /// with [`crate::PrimMetadata::value`].
     ///
     /// OpenUSD: `UsdObject::SetMetadata` on a `UsdPrim`.
     ///
@@ -816,13 +822,14 @@ impl PrimEdit {
     pub fn write_metadata(
         &self,
         edit: &mut SchemaEdit<'_>,
-        key: &str,
+        field: &str,
         value: impl Into<layerstack::FieldValue>,
-    ) -> Result<(), crate::MetadataError> {
-        edit.author_prim_metadata(self.path, key, Some(value.into()))
+    ) -> Result<&Self, crate::MetadataError> {
+        edit.author_prim_metadata(self.path, field, Some(value.into()))?;
+        Ok(self)
     }
 
-    /// Clears the prim's metadata field `key` in the edit target, checked
+    /// Clears the prim's metadata field `field` in the edit target, checked
     /// as [`Self::write_metadata`] checks it.
     ///
     /// OpenUSD: `UsdObject::ClearMetadata` on a `UsdPrim`.
@@ -834,9 +841,10 @@ impl PrimEdit {
     pub fn clear_metadata(
         &self,
         edit: &mut SchemaEdit<'_>,
-        key: &str,
-    ) -> Result<(), crate::MetadataError> {
-        edit.author_prim_metadata(self.path, key, None)
+        field: &str,
+    ) -> Result<&Self, crate::MetadataError> {
+        edit.author_prim_metadata(self.path, field, None)?;
+        Ok(self)
     }
 }
 

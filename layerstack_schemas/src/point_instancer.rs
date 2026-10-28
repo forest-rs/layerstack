@@ -788,7 +788,7 @@ impl PointInstancer<'_> {
     fn masked_ids(&self, time: Time) -> Result<HashSet<i64>, PointInstancerError> {
         let mut hidden = if let Some(ids) = self.composed_inactive_ids() {
             ids
-        } else if let Some(value) = self.metadata_value("inactiveIds") {
+        } else if let Some(value) = self.metadata().value("inactiveIds") {
             crate::value::try_read_array(
                 &value,
                 self.scene().store().tokens(),

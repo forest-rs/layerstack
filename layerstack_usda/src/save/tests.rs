@@ -69,8 +69,107 @@ impl Imported {
         self.layer.property_mut(path).unwrap()
     }
 
+    /// Saves the layer as one string, checking that streaming it writes
+    /// the same text.
     fn save(&self) -> Result<String, SaveError> {
-        save_usda(&self.layer, &self.tokens, &self.paths)
+        let text = save_usda(&self.layer, &self.tokens, &self.paths);
+        let mut streamed = Pieces::default();
+        let result = save_usda_to(&self.layer, &self.tokens, &self.paths, &mut streamed);
+        match &text {
+            Ok(text) => assert_eq!(&streamed.text, text, "streamed text"),
+            Err(error) => {
+                assert_eq!(result.as_ref(), Err(error), "streamed error");
+                assert!(streamed.text.is_empty(), "nothing streamed before an error");
+            }
+        }
+        text
+    }
+}
+
+/// A sink recording the pieces it is handed.
+#[derive(Default)]
+struct Pieces {
+    text: String,
+    pieces: usize,
+}
+
+impl fmt::Write for Pieces {
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        self.text.push_str(s);
+        self.pieces += 1;
+        Ok(())
+    }
+}
+
+/// A sink refusing every piece after its first `accepts`.
+struct Refusing {
+    accepts: usize,
+    calls: usize,
+}
+
+impl fmt::Write for Refusing {
+    fn write_str(&mut self, _: &str) -> fmt::Result {
+        self.calls += 1;
+        if self.calls > self.accepts {
+            Err(fmt::Error)
+        } else {
+            Ok(())
+        }
+    }
+}
+
+/// A layer whose text is several streaming pieces long: many prims, and
+/// one array longer than a piece.
+fn large_source() -> String {
+    let mut source = String::from("#usda 1.0\n\ndef \"Root\"\n{\n    float[] samples = [");
+    for i in 0..30_000 {
+        if i > 0 {
+            source.push_str(", ");
+        }
+        source.push_str(&format!("{}.25", i % 977));
+    }
+    source.push_str("]\n");
+    for i in 0..2_000 {
+        source.push_str(&format!(
+            "    def Xform \"Child{i}\"\n    {{\n        double3 xformOp:translate = ({i}, 0.5, -1)\n        uniform token[] xformOpOrder = [\"xformOp:translate\"]\n    }}\n"
+        ));
+    }
+    source.push_str("}\n");
+    source
+}
+
+#[test]
+fn streams_the_text_save_usda_returns_in_pieces() {
+    let imported = Imported::new(&large_source());
+    let text = save_usda(&imported.layer, &imported.tokens, &imported.paths).unwrap();
+    assert!(text.len() > 4 * 64 * 1024, "{} bytes", text.len());
+    let mut streamed = Pieces::default();
+    save_usda_to(
+        &imported.layer,
+        &imported.tokens,
+        &imported.paths,
+        &mut streamed,
+    )
+    .unwrap();
+    assert!(streamed.pieces > 4, "{} pieces", streamed.pieces);
+    assert_eq!(streamed.text, text);
+}
+
+#[test]
+fn a_refusing_sink_stops_the_save_with_a_sink_error() {
+    let imported = Imported::new(&large_source());
+    for accepts in [0, 1, 3] {
+        let mut sink = Refusing { accepts, calls: 0 };
+        assert_eq!(
+            save_usda_to(
+                &imported.layer,
+                &imported.tokens,
+                &imported.paths,
+                &mut sink
+            ),
+            Err(SaveError::Sink)
+        );
+        assert_eq!(sink.calls, accepts + 1, "nothing more after the refusal");
     }
 }
 

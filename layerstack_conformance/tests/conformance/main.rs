@@ -207,6 +207,7 @@ mod usda_corpus;
 mod usda_field_order;
 mod usda_openusd_text;
 mod usda_parity;
+mod usda_streaming;
 mod usdc_binary;
 mod usdc_corpus;
 mod usdc_versions;

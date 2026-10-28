@@ -169,9 +169,54 @@ pub fn save_usda(
     tokens: &TokenInterner,
     paths: &PathInterner,
 ) -> Result<String, SaveError> {
-    lower(layer, tokens, paths, true)?
+    usda_document(layer, tokens, paths)?
         .to_usda()
         .map_err(SaveError::Document)
+}
+
+/// Saves an authored layer as USDA text into `sink`, a piece at a time:
+/// the bytes [`save_usda`] returns, without holding them all
+/// ([`Document::write_usda_to`]).
+///
+/// The layer is lowered and checked before anything reaches `sink`, so a
+/// [`SaveError`] other than [`SaveError::Sink`] leaves `sink` untouched.
+///
+/// # Errors
+///
+/// See [`save_usda`]; [`SaveError::Sink`] when `sink` refuses text, after
+/// which it holds an incomplete prefix.
+pub fn save_usda_to<W: fmt::Write + ?Sized>(
+    layer: &Layer,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
+    sink: &mut W,
+) -> Result<(), SaveError> {
+    usda_document(layer, tokens, paths)?
+        .write_usda_to(sink)
+        .map_err(SaveError::from_usda)
+}
+
+/// The document [`save_usda`] writes for `layer`, checked as text
+/// ([`Document::validate_text`]): lowered as [`layer_document`] lowers it,
+/// except that a dictionary entry with no value is left out.
+///
+/// Lowering first and writing later lets a caller refuse a layer before
+/// it opens a destination, then stream the text
+/// ([`Document::write_usda_to`]).
+///
+/// # Errors
+///
+/// See [`save_usda`].
+pub fn usda_document(
+    layer: &Layer,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
+) -> Result<Document, SaveError> {
+    let doc = lower(layer, tokens, paths, true)?;
+    for prim in &doc.prims {
+        crate::writer::validate_text_prim(prim, "").map_err(SaveError::Document)?;
+    }
+    Ok(doc)
 }
 
 /// Why an authored layer could not be saved.
@@ -202,6 +247,20 @@ pub enum SaveError {
         /// Cached source failure.
         error: layerstack::ArrayReadError,
     },
+    /// The sink of [`save_usda_to`] refused text, and holds an incomplete
+    /// prefix of it. The sink keeps its own error.
+    Sink,
+}
+
+impl SaveError {
+    /// A writer error as a save error: [`WriteError::Sink`] as
+    /// [`Self::Sink`], the others as [`Self::Document`].
+    fn from_usda(error: WriteError) -> Self {
+        match error {
+            WriteError::Sink => Self::Sink,
+            error => Self::Document(error),
+        }
+    }
 }
 
 impl fmt::Display for SaveError {
@@ -213,6 +272,7 @@ impl fmt::Display for SaveError {
             Self::Invalid { path, problem } => write!(f, "{path}: {problem}"),
             Self::Document(e) => write!(f, "{e}"),
             Self::ArrayRead { path, error } => write!(f, "{path}: {error}"),
+            Self::Sink => f.write_str("the text sink refused the written text"),
         }
     }
 }

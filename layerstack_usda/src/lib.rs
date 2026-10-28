@@ -83,9 +83,13 @@
 //! # `no_std` support
 //!
 //! This crate uses `no_std` with `alloc` and requires Rust 1.89 or later.
-//! Parsing consumes `&str` buffers and writing returns owned strings. The
-//! declared `std` feature currently adds no APIs; file I/O belongs to the
-//! caller. Writer and save errors implement `core::error::Error` without it.
+//! Parsing consumes `&str` buffers. Writing returns an owned string or
+//! streams the text into any [`core::fmt::Write`] a piece at a time
+//! ([`save::save_usda_to`], [`writer::Document::write_usda_to`]), so a caller
+//! can write a file without holding its text. The declared `std` feature
+//! currently adds no APIs; file I/O belongs to the caller (`layerstack_io`
+//! streams saves through its storage). Writer and save errors implement
+//! `core::error::Error` without it.
 //!
 //! [`Layer`]: layerstack::Layer
 //! [`PrimSpec`]: layerstack::PrimSpec

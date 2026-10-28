@@ -525,6 +525,84 @@ export type Edit =
   | SetMetadataEdit
   | ClearMetadataEdit;
 
+/** A layer file format: USDA text or USDC binary. */
+export type LayerFormat = "usda" | "usdc";
+
+/** A layer {@link Stage.save} wrote: persist `bytes` under `identifier`. */
+export interface SavedLayer {
+  /** The layer, now clean ({@link Stage.isDirty} is false). */
+  readonly layer: Layer;
+  /** The identifier it was read from, and is saved to. */
+  readonly identifier: string;
+  /** The layer in its own format (its identifier's extension), a copy for the host. */
+  readonly bytes: Uint8Array;
+}
+
+/** A layer {@link Stage.save} could not write; it stays dirty. */
+export interface LayerFailure {
+  readonly layer: Layer;
+  /** `io.read_only` for a package member, or the writer's `io.*` code. */
+  readonly code: string;
+  readonly message: string;
+}
+
+/**
+ * What {@link Stage.save} did. The module writes nothing anywhere: the
+ * host persists `written`, which also become the sources the stage reads
+ * those identifiers from.
+ */
+export interface SaveResult {
+  /** The layers written. */
+  readonly written: readonly SavedLayer[];
+  /** The layers that could not be written. */
+  readonly failures: readonly LayerFailure[];
+  /** Dirty anonymous layers (the session layer), which have no identifier to save to: use {@link Stage.exportLayer}. */
+  readonly anonymous: readonly Layer[];
+  /** The bytes written, summed. */
+  readonly bytes: number;
+}
+
+/** Composed content a flatten could not write ({@link FlattenResult.lost}). */
+export interface FlattenLoss {
+  /** The composed prim or property path. */
+  readonly path: string;
+  /** What was lost, in words. */
+  readonly message: string;
+}
+
+/** What {@link Stage.exportFlattened} wrote. */
+export interface FlattenResult {
+  /** The flattened layer: no composition arcs, every composed prim and value. */
+  readonly bytes: Uint8Array;
+  /** Whether everything composed was written; when not, `lost` says what was left out. */
+  readonly lossless: boolean;
+  readonly lost: readonly FlattenLoss[];
+}
+
+/** A dependency {@link Stage.exportPackage} could not package. */
+export interface UnresolvedAsset {
+  /** The layer that authors it. */
+  readonly layer: Layer;
+  /** The asset path as authored. */
+  readonly asset: string;
+  /** Why it could not be packaged (not supplied yet, confirmed absent, ...). */
+  readonly reason: string;
+}
+
+/** What {@link Stage.exportPackage} made. */
+export interface PackageResult {
+  /** The USDZ package; `null` when a dependency is unresolved. */
+  readonly bytes: Uint8Array | null;
+  /** The layers packaged, the root first. */
+  readonly layers: number;
+  /** The other assets packaged (textures, ...). */
+  readonly assets: number;
+  /** The dependencies that kept the package from being made. */
+  readonly unresolved: readonly UnresolvedAsset[];
+  /** Layers the stage composes that the package leaves out: the session layer, which is not part of the root's dependencies. */
+  readonly omitted: readonly Layer[];
+}
+
 /** The version of this package and of the native module it runs. */
 export interface Version {
   /** This package's version. */

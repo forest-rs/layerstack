@@ -23,6 +23,15 @@
 //! change listeners. A root that cannot be saved (a USDZ package) is edited
 //! through a session layer opened in front of it ([`Stage::open`]).
 //!
+//! Saving writes the dirty layers to the [`HostStorage`], which keeps the
+//! bytes for the host to persist ([`HostStorage::take_written`]); exports
+//! return bytes and touch nothing: a layer in USDA or USDC
+//! ([`layerstack_io::StageDocument::encode_layer`]), the flattened stage,
+//! or a USDZ package of the root's dependencies.
+//!
+//! Composed numeric arrays cross as [`ArrayHandle`]s: the stage's shared
+//! buffer, pinned, which the wrapper views in place in the module's memory.
+//!
 //! Failures are [`Error`]s with a stable dotted code (`io.unavailable`,
 //! `path.invalid`); the codes of the core crates' errors come from their
 //! `code()` methods ([`layerstack_io::IoErrorKind::code`],

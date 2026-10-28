@@ -115,6 +115,20 @@ await stage.resolve(source);
   recomposition, in order, before the call that caused it (`apply`, `undo`,
   `loadSupplied`, each round of `resolve`) returns. A listener that throws
   is reported as `listener.failed` and the others still run.
+- **Saving hands you the bytes.** The module writes nothing anywhere.
+  `stage.save()` (or `save(layer)`) writes each dirty layer the stage uses
+  in its own format and returns `written: { layer, identifier, bytes }[]`
+  for you to persist; the layers are clean afterwards, and the saved bytes
+  are what the stage reads those identifiers from from then on. The session
+  layer is anonymous, so it is never saved (`anonymous` lists it); a package
+  member fails with `io.read_only`. Exports copy and change nothing:
+  `exportLayer(layer, "usda" | "usdc")` returns one layer's bytes (the
+  session layer too), `exportFlattened(format)` the composed stage as one
+  layer with no arcs (`lossless`, and `lost` for anything a layer cannot
+  hold), and `exportPackage()` a USDZ of the root and everything it
+  depends on, unsaved edits included (`bytes` is `null`, with `unresolved`
+  saying why, while a dependency is not supplied; the session layer is
+  `omitted`).
 - **Transfer is measured.** `layerstack.transfer()` reports the bytes copied
   in (sources) and out (array copies, saved and exported bytes), the views
   built and the bytes they exposed without a copy, and the module's memory.
@@ -136,6 +150,7 @@ await stage.resolve(source);
 | `receipt.affinity` | A receipt of another stage was passed in. |
 | `receipt.released` | The receipt was undone or released already. |
 | `array.released` | The array handle was released. |
+| `flatten.failed`, `package.failed` | The stage has no root layer to flatten or package. |
 | `array.no_memory` | The module does not expose its memory, so a handle cannot be read. |
 | `listener.failed` | Reported, not thrown: a change listener threw; `cause` is its error. |
 | `path.invalid` | A path is not an absolute prim path, or not a property path where one is asked for. |

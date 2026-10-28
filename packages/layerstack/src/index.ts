@@ -17,6 +17,9 @@
  *   { type: "setValue", path: "/World/Rock.size", value: { type: "double", value: 3 } },
  * ]);
  * receipt.undo(); // returns the receipt that redoes it
+ *
+ * const { written } = stage.save(); // [{ layer, identifier, bytes }]: persist them
+ * const usdz = stage.exportPackage().bytes;
  * ```
  *
  * @module

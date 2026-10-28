@@ -182,7 +182,7 @@
 //! let options = StageOptions { schemas: Some(Arc::new(registry)), ..StageOptions::default() };
 //! // ... compose `stage` from `store` with `options` ...
 //! let scene = Scene::new(stage, &store);
-//! let scope = schemas::Telescope::new(&scene, store.path("/Scope")).expect("a telescope");
+//! let scope = schemas::Telescope::get(&scene, store.path("/Scope")).expect("a telescope");
 //! let aperture: Option<f32> = scope.telescope_aperture();
 //! let order = scope.xform_op_order(); // `Xformable`'s
 //! ```

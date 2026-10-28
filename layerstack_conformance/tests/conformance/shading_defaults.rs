@@ -70,7 +70,7 @@ fn unknown_implementation_source_resolves_by_id_as_cpp_does() {
     }
     for row in &oracle.surfaces {
         let material = store.path(&row.material);
-        let source = Material::new(&scene, material)
+        let source = Material::get(&scene, material)
             .unwrap()
             .compute_surface_source(&[]);
         let surface = source
@@ -91,7 +91,7 @@ fn unknown_implementation_source_resolves_by_id_as_cpp_does() {
             .is_some_and(|node| node.effective == "id");
         let surface_path = source.shader.unwrap();
         assert_eq!(
-            PreviewSurface::new(&scene, surface_path).is_some(),
+            PreviewSurface::get(&scene, surface_path).is_some(),
             by_id,
             "{}",
             row.material

@@ -322,9 +322,9 @@ impl PhysicsSceneSnapshot {
                     }
                 }
             }
-            if let Some(api) = PhysicsScene::new(scene, path) {
+            if let Some(api) = PhysicsScene::get(scene, path) {
                 snapshot.scenes.push(record(path, scene_descriptor(api)));
-            } else if let Some(api) = PhysicsCollisionGroup::new(scene, path) {
+            } else if let Some(api) = PhysicsCollisionGroup::get(scene, path) {
                 let query = api.colliders_collection().membership_query();
                 if !query.problems().is_empty() {
                     snapshot

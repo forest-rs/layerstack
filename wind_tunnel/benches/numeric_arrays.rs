@@ -83,7 +83,7 @@ fn arrays(c: &mut Criterion) {
                 });
             });
             let scene = Scene::new(&stage, &store);
-            let mesh = Mesh::new(&scene, prim).unwrap();
+            let mesh = Mesh::get(&scene, prim).unwrap();
             group.bench_function(BenchmarkId::new("schema_points", len), |b| {
                 b.iter(|| black_box(mesh.points().unwrap()));
             });
@@ -118,7 +118,7 @@ fn arrays(c: &mut Criterion) {
             };
             let sparse = Stage::compose(&mut store, LayerId(2), options);
             let scene = Scene::new(&sparse, &store);
-            let mesh = Mesh::new(&scene, prim).unwrap();
+            let mesh = Mesh::get(&scene, prim).unwrap();
             group.bench_function(BenchmarkId::new("schema_sparse_points_default", len), |b| {
                 b.iter(|| black_box(mesh.points().unwrap()));
             });

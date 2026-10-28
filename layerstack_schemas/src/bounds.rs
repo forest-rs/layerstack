@@ -711,7 +711,7 @@ impl BoundsCache {
         if scene.is_a(path, "Boundable") {
             // An instancer whose instances are invalid computes no extent.
             let computed =
-                if let Some(instancer) = crate::usd_geom::PointInstancer::new(scene, path) {
+                if let Some(instancer) = crate::usd_geom::PointInstancer::get(scene, path) {
                     match instancer.compute_extent(self.time, self.time, None) {
                         Ok(extent) => Some(extent),
                         Err(BoundsError::InvalidPointInstancer { .. }) => None,
@@ -1168,7 +1168,7 @@ impl BoundsCache {
         scene: &Scene<'_>,
         path: PathId,
     ) -> Result<(PurposeBounds, bool), BoundsError> {
-        let instancer = crate::usd_geom::PointInstancer::new(scene, path)
+        let instancer = crate::usd_geom::PointInstancer::get(scene, path)
             .ok_or(BoundsError::MissingPrim(path))?;
         // UsdGeomBBoxCache refuses the invalid prim a property target names.
         let prototypes = instancer

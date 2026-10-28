@@ -108,7 +108,7 @@ fn shading_matches_openusd() {
     for expected in oracle.materials {
         let path = loaded.store.path(&expected.material);
         let scene = Scene::new(&stage, &loaded.store);
-        let material = Material::new(&scene, path).unwrap();
+        let material = Material::get(&scene, path).unwrap();
         let terminal = match expected.terminal.as_str() {
             "surface" => MaterialTerminal::Surface,
             "displacement" => MaterialTerminal::Displacement,
@@ -148,7 +148,7 @@ fn contexts_and_diagnostics_are_inspectable() {
         },
     );
     let scene = Scene::new(&stage, &loaded.store);
-    let material = Material::new(&scene, contexts).unwrap();
+    let material = Material::get(&scene, contexts).unwrap();
     let result = material.compute_surface_source(&["neverInterned", "bad", "ri"]);
     assert_eq!(result.context.as_deref(), Some("ri"));
     assert!(
@@ -184,13 +184,13 @@ fn contexts_and_diagnostics_are_inspectable() {
         material.compute_surface_source(&[]).context.as_deref(),
         Some("")
     );
-    let ri = Material::new(&scene, only_ri).unwrap();
+    let ri = Material::get(&scene, only_ri).unwrap();
     assert!(ri.compute_surface_source(&["", "ri"]).selected().is_none());
     assert_eq!(
         ri.compute_surface_source(&["ri"]).context.as_deref(),
         Some("ri")
     );
-    let result = Material::new(&scene, multiple)
+    let result = Material::get(&scene, multiple)
         .unwrap()
         .compute_surface_source(&[]);
     assert_eq!(
@@ -199,7 +199,7 @@ fn contexts_and_diagnostics_are_inspectable() {
         "diamond branches must not look cyclic"
     );
     assert!(result.trace.issues.is_empty());
-    let result = Material::new(&scene, invalid)
+    let result = Material::get(&scene, invalid)
         .unwrap()
         .compute_surface_source(&[]);
     assert_eq!(result.trace.issues.len(), 4);
@@ -244,7 +244,7 @@ fn retarget_and_undo_preserve_source_and_dependency_evidence() {
         },
     );
     let read = |stage: &Stage, store: &layerstack::InMemoryStore| {
-        Material::new(&Scene::new(stage, store), material)
+        Material::get(&Scene::new(stage, store), material)
             .unwrap()
             .compute_surface_source(&[])
     };
@@ -289,7 +289,7 @@ fn authored_providers_are_not_evaluated_until_a_time_is_requested() {
     );
     let reader = loaded.store.path("/Values/Reader");
     let scene = Scene::new(&stage, &loaded.store);
-    let view = layerstack_schemas::usd_shade::Shader::new(&scene, reader).unwrap();
+    let view = layerstack_schemas::usd_shade::Shader::get(&scene, reader).unwrap();
     let result = view.input("animated").unwrap().value_sources();
     assert_eq!(result.sources.len(), 1);
     assert_eq!(result.sources[0].kind, ValueSourceKind::AuthoredValue);

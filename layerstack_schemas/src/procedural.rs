@@ -489,7 +489,7 @@ impl<E: ProceduralEvaluator> Procedural<E> {
                 .saturating_add(u64::try_from(self.inputs.len()).unwrap_or(u64::MAX));
             return Ok(self.output.as_deref().expect("retained output"));
         }
-        if GenerativeProcedural::new(scene, self.recipe).is_none() {
+        if GenerativeProcedural::get(scene, self.recipe).is_none() {
             self.clear_result();
             return Err(ProceduralError::NotProcedural(self.recipe));
         }

@@ -31,7 +31,7 @@ use crate::{
 /// `UsdSkelComputeJointsExtent`.
 pub(crate) fn skeleton(context: &mut ExtentContext<'_>) -> Result<Range3d, ExtentError> {
     let scene = *context.scene();
-    let Some(skeleton) = Skeleton::new(&scene, context.prim()) else {
+    let Some(skeleton) = Skeleton::get(&scene, context.prim()) else {
         return Ok(Range3d::default());
     };
     let Some(query) = query(context, skeleton)? else {
@@ -54,7 +54,7 @@ pub(crate) fn skeleton(context: &mut ExtentContext<'_>) -> Result<Range3d, Exten
 pub(crate) fn skel_root(context: &mut ExtentContext<'_>) -> Result<Range3d, ExtentError> {
     let scene = *context.scene();
     let root = context.prim();
-    let Some(skel_root) = SkelRoot::new(&scene, root) else {
+    let Some(skel_root) = SkelRoot::get(&scene, root) else {
         return Ok(Range3d::default());
     };
     // Discovery reads bindings anywhere under the root; the root's own
@@ -72,7 +72,7 @@ pub(crate) fn skel_root(context: &mut ExtentContext<'_>) -> Result<Range3d, Exte
             targets.push(binding.geometry);
         } else if !seen.contains(&binding.skeleton) {
             seen.push(binding.skeleton);
-            let skeleton = Skeleton::new(&scene, binding.skeleton).expect("a bound Skeleton");
+            let skeleton = Skeleton::get(&scene, binding.skeleton).expect("a bound Skeleton");
             if let Some(query) = query(context, skeleton)? {
                 skeletons.push((query, alloc::vec![binding.geometry]));
             }
@@ -80,7 +80,7 @@ pub(crate) fn skel_root(context: &mut ExtentContext<'_>) -> Result<Range3d, Exte
     }
     if bindings.bindings.is_empty() {
         for path in descendant_skeletons(&scene, root) {
-            let skeleton = Skeleton::new(&scene, path).expect("a Skeleton prim");
+            let skeleton = Skeleton::get(&scene, path).expect("a Skeleton prim");
             if let Some(query) = query(context, skeleton)? {
                 skeletons.push((query, Vec::new()));
             }

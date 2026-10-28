@@ -396,7 +396,7 @@ impl SkelCache {
         if self.rigs.contains_key(&path) {
             return Ok(());
         }
-        let q = Skeleton::new(scene, path)
+        let q = Skeleton::get(scene, path)
             .ok_or_else(|| invalid(path, "joints"))?
             .query()?;
         let definition = q.definition;

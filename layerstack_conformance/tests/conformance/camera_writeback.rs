@@ -14,7 +14,7 @@ use layerstack_schemas::{
 
 fn source(store: &mut layerstack::InMemoryStore, live: &layerstack::LiveStage) -> ComputedCamera {
     let path = store.path("/SourceParent/Source");
-    Camera::new(&Scene::new(live.stage(), store), path)
+    Camera::get(&Scene::new(live.stage(), store), path)
         .unwrap()
         .compute_camera(&mut XformCache::new(Time::Default))
         .unwrap()
@@ -43,7 +43,7 @@ fn numeric_writeback_matches_native_parent_conversion_and_undo() {
     let transaction = edit.finish();
     let report = live.apply(&mut store, &transaction).unwrap();
     let scene = Scene::new(live.stage(), &store);
-    let actual = Camera::new(&scene, path)
+    let actual = Camera::get(&scene, path)
         .unwrap()
         .compute_camera(&mut XformCache::new(Time::at(2.)))
         .unwrap();
@@ -95,7 +95,7 @@ fn numeric_writeback_matches_native_parent_conversion_and_undo() {
         camera.shutter_offsets(),
         "whole snapshot also includes shutter offsets"
     );
-    let old = Camera::new(&scene, path)
+    let old = Camera::get(&scene, path)
         .unwrap()
         .horizontal_aperture_at(Time::at(1.));
     assert_eq!(old, Some(35.), "other numeric samples remain");
@@ -126,7 +126,7 @@ fn default_writeback_keeps_numeric_slots() {
     let transaction = edit.finish();
     live.apply(&mut store, &transaction).unwrap();
     let scene = Scene::new(live.stage(), &store);
-    let dest = Camera::new(&scene, path).unwrap();
+    let dest = Camera::get(&scene, path).unwrap();
     assert_eq!(dest.horizontal_aperture(), Some(40.), "default is replaced");
     assert_eq!(
         dest.horizontal_aperture_at(Time::at(1.)),
@@ -333,7 +333,7 @@ fn reference_target_maps_all_camera_samples_and_matrix_together() {
         );
     }
     let scene = Scene::new(live.stage(), &store);
-    let actual = Camera::new(&scene, path)
+    let actual = Camera::get(&scene, path)
         .unwrap()
         .compute_camera(&mut XformCache::new(Time::at(14.)))
         .unwrap();

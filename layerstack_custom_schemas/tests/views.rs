@@ -155,15 +155,15 @@ fn views_are_had_for_prims_of_their_schemas() {
     .map(|p| store.path(p));
     let scene = Scene::new(live.stage(), &store);
     // `IsA`, through derived and abstract schemas.
-    assert!(Spectrometer::new(&scene, spectro).is_some());
-    assert!(Spectrometer::new(&scene, imager).is_some());
-    assert!(Instrument::new(&scene, spinner).is_some());
-    assert!(ImagingSpectrometer::new(&scene, spectro).is_none());
-    assert!(Centrifuge::new(&scene, spectro).is_none());
-    assert!(Instrument::new(&scene, lamp).is_none());
-    assert!(Telescope::new(&scene, scope).is_some());
-    assert!(Xformable::new(&scene, scope).is_some());
-    assert!(Telescope::new(&scene, rack).is_none());
+    assert!(Spectrometer::get(&scene, spectro).is_some());
+    assert!(Spectrometer::get(&scene, imager).is_some());
+    assert!(Instrument::get(&scene, spinner).is_some());
+    assert!(ImagingSpectrometer::get(&scene, spectro).is_none());
+    assert!(Centrifuge::get(&scene, spectro).is_none());
+    assert!(Instrument::get(&scene, lamp).is_none());
+    assert!(Telescope::get(&scene, scope).is_some());
+    assert!(Xformable::get(&scene, scope).is_some());
+    assert!(Telescope::get(&scene, rack).is_none());
     // `HasAPI`: a built-in, an auto-applied schema, an authored one.
     assert!(CalibrationApi::get(&scene, spectro).is_some());
     assert!(CalibrationApi::get(&scene, spinner).is_some());
@@ -178,7 +178,7 @@ fn getters_read_authored_values_fallbacks_and_samples() {
     let [spectro, imager, spinner, lamp] =
         ["/Spectro", "/Imager", "/Spinner", "/Lamp"].map(|p| store.path(p));
     let scene = Scene::new(live.stage(), &store);
-    let spectrometer = Spectrometer::new(&scene, spectro).expect("a spectrometer");
+    let spectrometer = Spectrometer::get(&scene, spectro).expect("a spectrometer");
     // Inherited getters, through `Deref` to `Instrument`'s view.
     assert_eq!(
         spectrometer.instrument_serial_number().as_deref(),
@@ -215,7 +215,7 @@ fn getters_read_authored_values_fallbacks_and_samples() {
         calibration.calibration_method(),
         Some(CalibrationApiCalibrationMethod::Reference)
     );
-    let centrifuge = Centrifuge::new(&scene, spinner).expect("a centrifuge");
+    let centrifuge = Centrifuge::get(&scene, spinner).expect("a centrifuge");
     // `centrifuge:maxSpeed`'s accessors are named for its `apiName`.
     assert_eq!(centrifuge.max_rpm(), Some(15000.0));
     assert_eq!(centrifuge.centrifuge_refrigerated(), Some(false));
@@ -226,7 +226,7 @@ fn getters_read_authored_values_fallbacks_and_samples() {
         Some(30.0)
     );
     // A derived schema's fallback for the property it redeclares.
-    let imaging = ImagingSpectrometer::new(&scene, imager).expect("an imager");
+    let imaging = ImagingSpectrometer::get(&scene, imager).expect("an imager");
     assert_eq!(
         imaging.instrument_status(),
         Some(InstrumentInstrumentStatus::Running)
@@ -270,7 +270,7 @@ fn inherited_openusd_views_read_through_deref() {
     let (store, live) = stage();
     let [scope_path, rack] = ["/Scope", "/Rack"].map(|p| store.path(p));
     let scene = Scene::new(live.stage(), &store);
-    let scope = Telescope::new(&scene, scope_path).expect("a telescope");
+    let scope = Telescope::get(&scene, scope_path).expect("a telescope");
     assert_eq!(scope.telescope_aperture(), Some(1.1));
     assert_eq!(
         scope.telescope_mount(),
@@ -365,7 +365,7 @@ fn setters_author_through_a_schema_edit() {
     live.apply(&mut store, &transaction).expect("applies");
 
     let scene = Scene::new(live.stage(), &store);
-    let centrifuge = Centrifuge::new(&scene, centrifuge).expect("defined");
+    let centrifuge = Centrifuge::get(&scene, centrifuge).expect("defined");
     assert_eq!(centrifuge.max_rpm(), Some(9000.0));
     assert_eq!(centrifuge.max_rpm_at(Time::held(4.0)), Some(12000.0));
     assert_eq!(centrifuge.centrifuge_refrigerated(), Some(true));
@@ -373,7 +373,7 @@ fn setters_author_through_a_schema_edit() {
         centrifuge.instrument_status(),
         Some(InstrumentInstrumentStatus::Running)
     );
-    let spectrometer = Spectrometer::new(&scene, spectro).expect("defined");
+    let spectrometer = Spectrometer::get(&scene, spectro).expect("defined");
     assert_eq!(
         spectrometer.spectrometer_light_source(),
         [TargetPath::Prim(lamp)]
@@ -385,7 +385,7 @@ fn setters_author_through_a_schema_edit() {
     let green = ChannelApi::get(&scene, spectro, "green").expect("applied");
     assert_eq!(green.gain(), Some(4.0));
     assert_eq!(green.mode(), Some(ChannelApiMode::Other("custom".into())));
-    let scope = Telescope::new(&scene, scope_path).expect("defined");
+    let scope = Telescope::get(&scene, scope_path).expect("defined");
     assert_eq!(scope.telescope_aperture(), Some(0.75));
     assert_eq!(scope.telescope_mount(), Some(TelescopeTelescopeMount::Fork));
     assert_eq!(

@@ -61,7 +61,7 @@ fn material_subsets_keep_shared_indices_and_inherited_binding_provenance() {
             Some(if stronger { a } else { b })
         );
         assert_eq!(family.subsets[1].material.material, Some(a));
-        let native = layerstack_schemas::usd_geom::GeomSubset::new(&scene, sa)
+        let native = layerstack_schemas::usd_geom::GeomSubset::get(&scene, sa)
             .unwrap()
             .indices()
             .unwrap();
@@ -202,7 +202,7 @@ fn snapshot_subset_query_does_not_decode_unselected_topology_samples() {
     );
     calls.store(0, Ordering::Relaxed);
     let scene = Scene::new(live.stage(), &store);
-    let geometry = layerstack_schemas::usd_geom::Imageable::new(&scene, path).unwrap();
+    let geometry = layerstack_schemas::usd_geom::Imageable::get(&scene, path).unwrap();
     assert!(
         geometry
             .try_validate_subset_family_at(
@@ -501,13 +501,13 @@ def Mesh "M" (prepend apiSchemas = ["MaterialBindingAPI"])
             continue;
         }
         let scene = Scene::new(live.stage(), &store);
-        let family = Imageable::new(&scene, mesh)
+        let family = Imageable::get(&scene, mesh)
             .unwrap()
             .subset_family_type("materialBind");
         let entry = match created {
             Some(Err(_)) => serde_json::json!({"call": label, "accepted": false, "result": null}),
             Some(Ok(path)) => {
-                let indices = layerstack_schemas::usd_geom::GeomSubset::new(&scene, path)
+                let indices = layerstack_schemas::usd_geom::GeomSubset::get(&scene, path)
                     .unwrap()
                     .indices()
                     .unwrap();
@@ -526,7 +526,7 @@ def Mesh "M" (prepend apiSchemas = ["MaterialBindingAPI"])
     assert_eq!(serde_json::Value::from(log), expected["calls"]);
 
     let scene = Scene::new(live.stage(), &store);
-    let subsets: Vec<_> = Imageable::new(&scene, mesh)
+    let subsets: Vec<_> = Imageable::get(&scene, mesh)
         .unwrap()
         .geom_subsets(None, Some("materialBind"))
         .iter()
@@ -614,7 +614,7 @@ def Mesh "M"
     let transaction = edit.finish();
     live.apply(&mut store, &transaction).unwrap();
     let scene = Scene::new(live.stage(), &store);
-    let geom = Imageable::new(&scene, mesh).unwrap();
+    let geom = Imageable::get(&scene, mesh).unwrap();
     assert_eq!(geom.subset_family_type("materialBind"), "partition");
     let mut cache = BindingCache::new(MaterialPurpose::All, BindingOptions::default());
     let family = cache

@@ -20,8 +20,6 @@
 
 use core::ops::Deref;
 
-use layerstack::PathId;
-
 use crate::{ApplySchemaError, CannotEdit, PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "\\\\deprecated Materials should use UsdShadeMaterial instead."]
 #[doc = ""]
@@ -67,8 +65,9 @@ impl<'a> RiMaterialApi<'a> {
         Self { base: prim }
     }
 
-    /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
-    /// edit's target) if the prim may have it.
+    /// Applies the schema to the prim at `path` (text, `"/World/Prim"`,
+    /// or an id) as a `prepend apiSchemas` entry in the edit's target, if
+    /// the prim may have it.
     ///
     /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.
     ///
@@ -80,7 +79,7 @@ impl<'a> RiMaterialApi<'a> {
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
-        path: PathId,
+        path: impl ::layerstack::PrimPathArg,
     ) -> Result<RiMaterialApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(RiMaterialApiEdit::from_prim)
@@ -274,8 +273,9 @@ impl<'a> RiSplineApi<'a> {
         Self { base: prim }
     }
 
-    /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
-    /// edit's target) if the prim may have it.
+    /// Applies the schema to the prim at `path` (text, `"/World/Prim"`,
+    /// or an id) as a `prepend apiSchemas` entry in the edit's target, if
+    /// the prim may have it.
     ///
     /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.
     ///
@@ -287,7 +287,7 @@ impl<'a> RiSplineApi<'a> {
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
-        path: PathId,
+        path: impl ::layerstack::PrimPathArg,
     ) -> Result<RiSplineApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(RiSplineApiEdit::from_prim)
@@ -376,8 +376,9 @@ impl<'a> StatementsApi<'a> {
         Self { base: prim }
     }
 
-    /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
-    /// edit's target) if the prim may have it.
+    /// Applies the schema to the prim at `path` (text, `"/World/Prim"`,
+    /// or an id) as a `prepend apiSchemas` entry in the edit's target, if
+    /// the prim may have it.
     ///
     /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.
     ///
@@ -389,7 +390,7 @@ impl<'a> StatementsApi<'a> {
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
-        path: PathId,
+        path: impl ::layerstack::PrimPathArg,
     ) -> Result<StatementsApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(StatementsApiEdit::from_prim)

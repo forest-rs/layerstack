@@ -74,7 +74,7 @@ fn visibility(stage: &Stage, loaded: &mut LoadedStage, call: &Json) -> Json {
     }
     let path = loaded.store.path(call["path"].as_str().unwrap());
     let scene = Scene::new(stage, &loaded.store);
-    let imageable = Imageable::new(&scene, path).expect("an imageable prim");
+    let imageable = Imageable::get(&scene, path).expect("an imageable prim");
     Json::from(imageable.compute_visibility(time_of(call)).as_str())
 }
 

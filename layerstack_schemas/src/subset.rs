@@ -201,7 +201,7 @@ fn check_indices(
     indices: &[i32],
 ) -> Result<(), SubsetAuthoringError> {
     let scene = edit.scene();
-    let geom = Imageable::new(&scene, parent)
+    let geom = Imageable::get(&scene, parent)
         .filter(|geom| valid_geom(geom, element))
         .ok_or(SubsetError::InvalidGeometry)?;
     match elements(&geom, element, Time::Default)? {
@@ -570,7 +570,7 @@ impl<'a> Imageable<'a> {
                     return None;
                 }
                 let path = child.path();
-                let subset = Subset::new(&scene, path)?;
+                let subset = Subset::get(&scene, path)?;
                 if subset.metadata_value("active") == Some(Value::Bool(false)) {
                     return None;
                 }

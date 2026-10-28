@@ -114,7 +114,7 @@ fn layered_connections_match_cpp_and_undo_authored_absence() {
         assert_eq!(port.property_type(), Some(ty.clone()));
         assert_eq!(port.name(), "roughness");
         assert_eq!(port.kind(), PortKind::Input);
-        let view = Shader::new(&scene, shader).unwrap();
+        let view = Shader::get(&scene, shader).unwrap();
         assert_eq!(view.input("roughness").unwrap().path(), path);
         assert_eq!(view.output("result").unwrap().name(), "result");
         assert_eq!(view.ports(PortKind::Input).len(), 1);

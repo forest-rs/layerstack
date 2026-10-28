@@ -33,7 +33,7 @@ fn all_splat_channels_match_cpp_at_earliest_time() {
     for row in oracle.rows {
         let path = store.path(&row.path);
         let scene = Scene::new(live.stage(), &store);
-        let splat = ParticleField3DGaussianSplat::new(&scene, path).unwrap();
+        let splat = ParticleField3DGaussianSplat::get(&scene, path).unwrap();
         assert_eq!(row.channels.len(), SplatData::ALL.len());
         for (channel, data) in row.channels.into_iter().zip(SplatData::ALL) {
             let selected = splat.attribute_in_use(data);
@@ -83,7 +83,7 @@ fn builtin_particle_apis_author_read_and_change_precision_with_undo() {
     let transaction = edit.finish();
     live.apply(&mut store, &transaction).unwrap();
     let scene = Scene::new(live.stage(), &store);
-    let splat = ParticleField3DGaussianSplat::new(&scene, path).unwrap();
+    let splat = ParticleField3DGaussianSplat::get(&scene, path).unwrap();
     assert_eq!(
         SplatData::ALL.map(|data| splat.attribute_in_use(data).uses_float),
         [false, true, false, true, false]
@@ -123,7 +123,7 @@ fn builtin_particle_apis_author_read_and_change_precision_with_undo() {
     let transaction = edit.finish();
     let applied = live.apply(&mut store, &transaction).unwrap();
     let scene = Scene::new(live.stage(), &store);
-    let splat = ParticleField3DGaussianSplat::new(&scene, path).unwrap();
+    let splat = ParticleField3DGaussianSplat::get(&scene, path).unwrap();
     assert!(splat.attribute_in_use(SplatData::Positions).uses_float);
     assert_eq!(
         splat
@@ -133,7 +133,7 @@ fn builtin_particle_apis_author_read_and_change_precision_with_undo() {
     );
     live.apply(&mut store, &applied.inverse).unwrap();
     assert!(
-        !ParticleField3DGaussianSplat::new(&Scene::new(live.stage(), &store), path)
+        !ParticleField3DGaussianSplat::get(&Scene::new(live.stage(), &store), path)
             .unwrap()
             .attribute_in_use(SplatData::Positions)
             .uses_float

@@ -25,7 +25,7 @@ use layerstack::PathId;
 use crate::{ApplySchemaError, CannotEdit, PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "This LOD heuristic selects LOD children on the basis of distance from the view point to the LOD root."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `LODDistanceHeuristic`, inheriting [`LODHeuristic`]. Construct it with [`LODDistanceHeuristic::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `LODDistanceHeuristic`, inheriting [`LODHeuristic`]. Construct it with [`LODDistanceHeuristic::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLodDistanceHeuristic`."]
 #[doc(alias = "UsdLodDistanceHeuristic")]
 #[derive(Clone, Copy, Debug)]
@@ -49,7 +49,7 @@ impl<'a> LODDistanceHeuristic<'a> {
     #[doc(alias = "UsdLodDistanceHeuristic::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -57,7 +57,7 @@ impl<'a> LODDistanceHeuristic<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -70,7 +70,8 @@ impl<'a> LODDistanceHeuristic<'a> {
     /// Defines the prim at `path` as a `LODDistanceHeuristic`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `LODDistanceHeuristic` is left as it is.
+    /// already defined as a `LODDistanceHeuristic` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///
@@ -347,7 +348,7 @@ impl LODDistanceHeuristicEdit {
 
 #[doc = "Base class for LOD Heuristics."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's abstract typed schema `LODHeuristic`, inheriting [`crate::usd::Typed`]. Construct it with [`LODHeuristic::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's abstract typed schema `LODHeuristic`, inheriting [`crate::usd::Typed`]. Construct it with [`LODHeuristic::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLodHeuristic`."]
 #[doc(alias = "UsdLodHeuristic")]
 #[derive(Clone, Copy, Debug)]
@@ -371,7 +372,7 @@ impl<'a> LODHeuristic<'a> {
     #[doc(alias = "UsdLodHeuristic::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -379,7 +380,7 @@ impl<'a> LODHeuristic<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -563,8 +564,9 @@ impl<'a> LODOverrideApi<'a> {
         Self { base: prim }
     }
 
-    /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
-    /// edit's target) if the prim may have it.
+    /// Applies the schema to the prim at `path` (text, `"/World/Prim"`,
+    /// or an id) as a `prepend apiSchemas` entry in the edit's target, if
+    /// the prim may have it.
     ///
     /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.
     ///
@@ -576,7 +578,7 @@ impl<'a> LODOverrideApi<'a> {
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
-        path: PathId,
+        path: impl ::layerstack::PrimPathArg,
     ) -> Result<LODOverrideApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(LODOverrideApiEdit::from_prim)
@@ -764,8 +766,9 @@ impl<'a> LODRootApi<'a> {
         Self { base: prim }
     }
 
-    /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
-    /// edit's target) if the prim may have it.
+    /// Applies the schema to the prim at `path` (text, `"/World/Prim"`,
+    /// or an id) as a `prepend apiSchemas` entry in the edit's target, if
+    /// the prim may have it.
     ///
     /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.
     ///
@@ -777,7 +780,7 @@ impl<'a> LODRootApi<'a> {
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
-        path: PathId,
+        path: impl ::layerstack::PrimPathArg,
     ) -> Result<LODRootApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(LODRootApiEdit::from_prim)
@@ -973,7 +976,7 @@ impl LODScreenSizeHeuristicProjectionMethod {
 
 #[doc = "This LOD heuristic selects LOD children on the basis of the fraction of the viewplane would be covered by the extent."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `LODScreenSizeHeuristic`, inheriting [`LODHeuristic`]. Construct it with [`LODScreenSizeHeuristic::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `LODScreenSizeHeuristic`, inheriting [`LODHeuristic`]. Construct it with [`LODScreenSizeHeuristic::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLodScreenSizeHeuristic`."]
 #[doc(alias = "UsdLodScreenSizeHeuristic")]
 #[derive(Clone, Copy, Debug)]
@@ -997,7 +1000,7 @@ impl<'a> LODScreenSizeHeuristic<'a> {
     #[doc(alias = "UsdLodScreenSizeHeuristic::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -1005,7 +1008,7 @@ impl<'a> LODScreenSizeHeuristic<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -1018,7 +1021,8 @@ impl<'a> LODScreenSizeHeuristic<'a> {
     /// Defines the prim at `path` as a `LODScreenSizeHeuristic`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `LODScreenSizeHeuristic` is left as it is.
+    /// already defined as a `LODScreenSizeHeuristic` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///

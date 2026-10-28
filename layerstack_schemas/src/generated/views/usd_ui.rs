@@ -160,8 +160,9 @@ impl<'a> AccessibilityApi<'a> {
         Self { base: instance }
     }
 
-    /// Applies the instance `instance` of the schema to `path` (a `prepend
-    /// apiSchemas` entry in the edit's target) if the prim may have it.
+    /// Applies the instance `instance` of the schema to the prim at `path`
+    /// (text, `"/World/Prim"`, or an id) as a `prepend apiSchemas`
+    /// entry in the edit's target, if the prim may have it.
     ///
     /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.
     ///
@@ -173,7 +174,7 @@ impl<'a> AccessibilityApi<'a> {
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
-        path: PathId,
+        path: impl ::layerstack::PrimPathArg,
         instance: &str,
     ) -> Result<AccessibilityApiEdit, ApplySchemaError> {
         let prim = edit.apply_api(path, Self::SCHEMA, Some(instance))?;
@@ -374,7 +375,7 @@ impl AccessibilityApiEdit {
 
 #[doc = "Backdrop is a visual indication of a grouping of nodes."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `Backdrop`, inheriting [`crate::usd::Typed`]. Construct it with [`Backdrop::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `Backdrop`, inheriting [`crate::usd::Typed`]. Construct it with [`Backdrop::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdUIBackdrop`."]
 #[doc(alias = "UsdUIBackdrop")]
 #[derive(Clone, Copy, Debug)]
@@ -398,7 +399,7 @@ impl<'a> Backdrop<'a> {
     #[doc(alias = "UsdUIBackdrop::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -406,7 +407,7 @@ impl<'a> Backdrop<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -419,7 +420,8 @@ impl<'a> Backdrop<'a> {
     /// Defines the prim at `path` as a `Backdrop`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `Backdrop` is left as it is.
+    /// already defined as a `Backdrop` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///
@@ -597,8 +599,9 @@ impl<'a> NodeGraphNodeApi<'a> {
         Self { base: prim }
     }
 
-    /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
-    /// edit's target) if the prim may have it.
+    /// Applies the schema to the prim at `path` (text, `"/World/Prim"`,
+    /// or an id) as a `prepend apiSchemas` entry in the edit's target, if
+    /// the prim may have it.
     ///
     /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.
     ///
@@ -610,7 +613,7 @@ impl<'a> NodeGraphNodeApi<'a> {
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
-        path: PathId,
+        path: impl ::layerstack::PrimPathArg,
     ) -> Result<NodeGraphNodeApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(NodeGraphNodeApiEdit::from_prim)
@@ -882,8 +885,9 @@ impl<'a> SceneGraphPrimApi<'a> {
         Self { base: prim }
     }
 
-    /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
-    /// edit's target) if the prim may have it.
+    /// Applies the schema to the prim at `path` (text, `"/World/Prim"`,
+    /// or an id) as a `prepend apiSchemas` entry in the edit's target, if
+    /// the prim may have it.
     ///
     /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.
     ///
@@ -895,7 +899,7 @@ impl<'a> SceneGraphPrimApi<'a> {
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
-        path: PathId,
+        path: impl ::layerstack::PrimPathArg,
     ) -> Result<SceneGraphPrimApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(SceneGraphPrimApiEdit::from_prim)

@@ -162,7 +162,7 @@
 //! live.apply(&mut store, &transaction).expect("applies");
 //!
 //! let scene = Scene::new(live.stage(), &store);
-//! let mesh = Mesh::new(&scene, path).expect("a mesh");
+//! let mesh = Mesh::get(&scene, path).expect("a mesh");
 //! assert_eq!(mesh.face_vertex_counts(), Some(vec![4].into()));
 //! assert_eq!(mesh.points_at(Time::held(1.0)).map(|p| p.len()), Some(4));
 //! // Nothing authored: the schema's fallback.
@@ -199,7 +199,7 @@
 //! let transaction = edit.finish();
 //! live.apply(&mut store, &transaction).expect("applies");
 //! let scene = Scene::new(live.stage(), &store);
-//! assert_eq!(PreviewSurface::new(&scene, path).unwrap().roughness(), Some(0.25));
+//! assert_eq!(PreviewSurface::get(&scene, path).unwrap().roughness(), Some(0.25));
 //! assert_eq!(PreviewSurface::roughness_default(), 0.5);
 //! ```
 //!
@@ -303,7 +303,7 @@
 //! live.apply(&mut store, &transaction).expect("applies");
 //!
 //! let scene = Scene::new(live.stage(), &store);
-//! let sphere = Sphere::new(&scene, ball).expect("a sphere");
+//! let sphere = Sphere::get(&scene, ball).expect("a sphere");
 //! let info = sphere.compute_purpose_info();
 //! assert_eq!(info.purpose, ImageablePurpose::Guide);
 //! assert_eq!(info.authored_on, Some(group));

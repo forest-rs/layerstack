@@ -244,7 +244,7 @@ fn check(
             "schema definition supplies the attribute"
         );
         let scene = layerstack_schemas::Scene::new(&stage, &store);
-        let sphere = layerstack_schemas::usd_geom::Sphere::new(&scene, prim)
+        let sphere = layerstack_schemas::usd_geom::Sphere::get(&scene, prim)
             .expect("schema fixture is a Sphere");
         for (&time, &value) in queries.iter().zip(expected) {
             let interpolation = if held {

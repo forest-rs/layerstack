@@ -124,7 +124,7 @@ fn common_stack_authoring_matches_cpp_and_undoes_exactly() {
     let scene = Scene::new(live.stage(), &store);
     for (record, &path) in oracle.records.iter().zip(&paths) {
         if let Some(expected) = &record.matrices {
-            let view = Xformable::new(&scene, path).unwrap();
+            let view = Xformable::get(&scene, path).unwrap();
             assert_eq!(
                 view.xform_op_order().unwrap(),
                 *record.order.as_ref().unwrap()

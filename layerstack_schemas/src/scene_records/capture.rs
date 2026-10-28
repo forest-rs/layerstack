@@ -105,7 +105,7 @@ pub(super) fn mesh(
     work: &mut SceneWork,
 ) -> Result<Arc<SceneMesh>, SceneError> {
     work.mesh_inputs += 1;
-    let mesh = Mesh::new(scene, path).expect("inventory is a mesh");
+    let mesh = Mesh::get(scene, path).expect("inventory is a mesh");
     let points = checked(&mesh, "points", mesh.try_points(time))?;
     let counts = checked(&mesh, "faceVertexCounts", mesh.try_face_vertex_counts(time))?;
     let indices = checked(
@@ -301,7 +301,7 @@ pub(super) fn primvars(
     Ok((output, has_id_targets))
 }
 pub(super) fn appearance(scene: &Scene<'_>, path: PathId, time: Time) -> SceneAppearance {
-    Imageable::new(scene, path).map_or_else(
+    Imageable::get(scene, path).map_or_else(
         || SceneAppearance {
             visibility: crate::Visibility::Inherited,
             purpose: ImageablePurpose::Default,
@@ -361,7 +361,7 @@ pub(super) fn point_instances(
     time: Time,
     work: &mut SceneWork,
 ) -> Result<ScenePointInstances, SceneError> {
-    let prim = PointInstancer::new(scene, path).expect("inventory is a point instancer");
+    let prim = PointInstancer::get(scene, path).expect("inventory is a point instancer");
     let error = |source| SceneError::PointInstancer { prim: path, source };
     let transforms = prim
         .prepare_instance_transforms(

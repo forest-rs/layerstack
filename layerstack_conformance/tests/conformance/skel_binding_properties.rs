@@ -83,7 +83,7 @@ fn binding_properties_match_cpp() {
         "../../fixtures/skel_binding_properties/scene.usda"
     ));
     let scene = Scene::new(live.stage(), &store);
-    let bindings = SkelRoot::new(&scene, store.path("/World"))
+    let bindings = SkelRoot::get(&scene, store.path("/World"))
         .unwrap()
         .bindings_with_instance_proxies();
     let queries: Vec<(String, &SkinningQuery<'_>)> = bindings

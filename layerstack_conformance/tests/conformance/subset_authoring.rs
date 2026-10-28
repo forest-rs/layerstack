@@ -52,7 +52,7 @@ fn unique_subsets_validate_membership_and_publish_a_valid_partition() {
     let transaction = edit.finish();
     let applied = live.apply(&mut store, &transaction).unwrap();
     let scene = Scene::new(live.stage(), &store);
-    let geom = Imageable::new(&scene, mesh).unwrap();
+    let geom = Imageable::get(&scene, mesh).unwrap();
     assert!(
         geom.try_validate_subset_family(&Element::Face, "f")
             .unwrap()
@@ -106,7 +106,7 @@ fn rolled_back_subset_groups_release_names_and_family_overlays() {
     let transaction = edit.finish();
     live.apply(&mut store, &transaction).unwrap();
     let scene = Scene::new(live.stage(), &store);
-    let geom = Imageable::new(&scene, mesh).unwrap();
+    let geom = Imageable::get(&scene, mesh).unwrap();
     assert_eq!(geom.subset_family_type("f"), "unrestricted");
     assert!(
         geom.try_validate_subset_family(&Element::Face, "f")

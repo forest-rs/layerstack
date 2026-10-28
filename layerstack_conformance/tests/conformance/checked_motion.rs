@@ -59,7 +59,7 @@ fn point_motion_preserves_required_and_optional_decode_failures() {
                 },
             );
             let scene = Scene::new(live.stage(), &store);
-            let prim = PointBased::new(&scene, path).unwrap();
+            let prim = PointBased::get(&scene, path).unwrap();
             let expected = PointMotionError::Decode {
                 property: layerstack::PropertyPath::new(path, token),
                 error,
@@ -116,7 +116,7 @@ fn instancer_transform_and_mask_queries_preserve_decode_failures() {
                 },
             );
             let scene = Scene::new(live.stage(), &store);
-            let prim = PointInstancer::new(&scene, path).unwrap();
+            let prim = PointInstancer::get(&scene, path).unwrap();
             let expected = PointInstancerError::Decode {
                 property: layerstack::PropertyPath::new(path, token),
                 error,

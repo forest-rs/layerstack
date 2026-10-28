@@ -20,8 +20,6 @@
 
 use core::ops::Deref;
 
-use layerstack::PathId;
-
 use crate::{
     ApplySchemaError, CannotEdit, InstanceEdit, InstanceView, PrimEdit, PrimView, Scene, SchemaEdit,
 };
@@ -105,8 +103,9 @@ impl<'a> SemanticsLabelsApi<'a> {
         Self { base: instance }
     }
 
-    /// Applies the instance `instance` of the schema to `path` (a `prepend
-    /// apiSchemas` entry in the edit's target) if the prim may have it.
+    /// Applies the instance `instance` of the schema to the prim at `path`
+    /// (text, `"/World/Prim"`, or an id) as a `prepend apiSchemas`
+    /// entry in the edit's target, if the prim may have it.
     ///
     /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.
     ///
@@ -118,7 +117,7 @@ impl<'a> SemanticsLabelsApi<'a> {
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
-        path: PathId,
+        path: impl ::layerstack::PrimPathArg,
         instance: &str,
     ) -> Result<SemanticsLabelsApiEdit, ApplySchemaError> {
         let prim = edit.apply_api(path, Self::SCHEMA, Some(instance))?;

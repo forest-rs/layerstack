@@ -164,7 +164,7 @@ fn retained_custom_subsets_keep_scale_flags_local_and_refresh_pose_edits() {
         |cache: &mut SkelCache, store: &layerstack::InMemoryStore, live: &layerstack::LiveStage| {
             let scene = Scene::new(live.stage(), store);
             let time = cache.time();
-            for q in SkelRoot::new(&scene, root)
+            for q in SkelRoot::get(&scene, root)
                 .unwrap()
                 .bindings()
                 .skinning_queries()

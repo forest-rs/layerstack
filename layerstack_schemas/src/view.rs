@@ -1100,12 +1100,12 @@ mod handle_tests {
         store.insert_layer(layer);
         let stage = Stage::compose(&mut store, LayerId(1), options);
         let scene = Scene::from(stage.view(&store));
-        let by_text = Sphere::new(&scene, "/Ball").expect("a sphere");
+        let by_text = Sphere::get(&scene, "/Ball").expect("a sphere");
         assert_eq!(by_text.path(), ball);
-        assert!(Sphere::new(&scene, ball).is_some());
-        assert!(Xform::new(&scene, "/Ball").is_none(), "not an Xform");
+        assert!(Sphere::get(&scene, ball).is_some());
+        assert!(Xform::get(&scene, "/Ball").is_none(), "not an Xform");
         for absent in ["/Nowhere", "Ball", "/Ball/"] {
-            assert!(Sphere::new(&scene, absent).is_none(), "{absent:?}");
+            assert!(Sphere::get(&scene, absent).is_none(), "{absent:?}");
         }
         let radius = by_text
             .prim()

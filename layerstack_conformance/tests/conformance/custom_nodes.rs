@@ -42,7 +42,7 @@ fn inherited_ports_compile_and_author_through_the_public_api() {
     let transaction = edit.finish();
     let applied = live.apply(&mut store, &transaction).unwrap();
     let scene = Scene::new(live.stage(), &store);
-    let node = custom::StudioWetPaint::new(&scene, path).unwrap();
+    let node = custom::StudioWetPaint::get(&scene, path).unwrap();
     assert_eq!(node.weights(), Some(vec![0.25, 0.75].into()));
     assert_eq!(node.precision(), Some(0.5));
     assert_eq!(node.enabled(), Some(false));
@@ -87,7 +87,7 @@ fn selected_materialx_interfaces_author_usd_without_loading_implementations() {
     let transaction = edit.finish();
     live.apply(&mut store, &transaction).unwrap();
     let scene = Scene::new(live.stage(), &store);
-    let node = materialx::NdPaint::new(&scene, path).unwrap();
+    let node = materialx::NdPaint::get(&scene, path).unwrap();
     assert_eq!(node.gain(), Some(0.75));
     assert_eq!(node.file().as_deref(), Some("paint.exr"));
     assert_eq!(
@@ -98,7 +98,7 @@ fn selected_materialx_interfaces_author_usd_without_loading_implementations() {
     assert_eq!(materialx::NdPaint::tint_default(), [1., 0.5, 0.25]);
     assert_eq!(node.tint(), None);
     assert!(node.out_output().is_some());
-    let output = materialx::NdRgba::new(&scene, rgba)
+    let output = materialx::NdRgba::get(&scene, rgba)
         .unwrap()
         .out_output()
         .unwrap();
@@ -139,7 +139,7 @@ fn user_literals_compile_and_round_trip_without_rust_path_rewriting() {
     let transaction = edit.finish();
     live.apply(&mut store, &transaction).unwrap();
     let scene = Scene::new(live.stage(), &store);
-    let node = custom::CrateLiteral::new(&scene, path).unwrap();
+    let node = custom::CrateLiteral::get(&scene, path).unwrap();
     assert_eq!(node.label().as_deref(), Some(LABEL));
     assert_eq!(node.mode(), Some("crate::mode"));
     assert_eq!(node.file().as_deref(), Some("crate::asset"));

@@ -112,7 +112,7 @@ fn text_arrays(c: &mut Criterion) {
         };
         let stage = Stage::compose(&mut store, LayerId(1), options);
         let scene = Scene::new(&stage, &store);
-        let pass = RenderPass::new(&scene, prim).unwrap();
+        let pass = RenderPass::get(&scene, prim).unwrap();
         group.bench_function(BenchmarkId::new("schema_strings", len), |b| {
             b.iter(|| black_box(black_box(&pass).command().unwrap()));
         });

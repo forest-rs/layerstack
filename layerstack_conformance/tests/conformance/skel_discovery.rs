@@ -109,7 +109,7 @@ fn skel_bindings_match_openusd_and_report_problems() {
     let text = |path| store.paths().display(path, store.tokens()).to_string();
     let mut shapes = BlendShapeCache::new(Time::Default);
     for (root, expected) in &oracle.roots {
-        let found = SkelRoot::new(&scene, store.path(root)).unwrap().bindings();
+        let found = SkelRoot::get(&scene, store.path(root)).unwrap().bindings();
         assert!(found.problems.is_empty(), "{root}: {:?}", found.problems);
         let mut bindings: Vec<_> = found.bindings.iter().collect();
         bindings.sort_by_key(|binding| text(binding.geometry));
@@ -184,7 +184,7 @@ fn an_invalid_skeleton_target_is_reported_beside_the_other_bindings() {
     assert_ne!(source, SCENE);
     let (store, live) = support::scene(&source);
     let scene = Scene::new(live.stage(), &store);
-    let found = SkelRoot::new(&scene, store.path("/Root3"))
+    let found = SkelRoot::get(&scene, store.path("/Root3"))
         .unwrap()
         .bindings();
     let [problem] = found.problems.as_slice() else {

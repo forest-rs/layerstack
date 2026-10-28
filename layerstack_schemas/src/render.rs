@@ -324,7 +324,7 @@ impl RenderSettings<'_> {
     /// use layerstack::PathId;
     /// use layerstack_schemas::{Scene, usd_render::RenderSettings};
     /// # fn specification(scene: Scene<'_>, path: PathId) {
-    /// let settings = RenderSettings::new(&scene, path).unwrap();
+    /// let settings = RenderSettings::get(&scene, path).unwrap();
     /// let spec = settings.compute_spec(&["ri"]);
     /// for product in &spec.products {
     ///     let channels = product.render_var_indices.iter()
@@ -367,7 +367,7 @@ impl RenderSettings<'_> {
             let TargetPath::Prim(path) = target else {
                 continue;
             };
-            let Some(product) = RenderProduct::new(&scene, path) else {
+            let Some(product) = RenderProduct::get(&scene, path) else {
                 continue;
             };
             let mut own = base.clone();
@@ -427,7 +427,7 @@ impl RenderSettings<'_> {
                     computed.render_var_indices.push(*index);
                     continue;
                 }
-                let Some(var) = RenderVar::new(&scene, var_path) else {
+                let Some(var) = RenderVar::get(&scene, var_path) else {
                     spec.problems.push(RenderProblem::InvalidRenderVar {
                         product: path,
                         target,

@@ -467,7 +467,7 @@ fn instanced_rigs_discover_remapped_bindings_and_refresh_shared_source_edits() {
             .all(|prim| view.prim(prim).is_some_and(|prim| prim.is_instance()))
     );
     let scene = Scene::new(live.stage(), &store);
-    let root = SkelRoot::new(&scene, root).unwrap();
+    let root = SkelRoot::get(&scene, root).unwrap();
     assert!(root.bindings().bindings.is_empty());
     let discovered: Vec<_> = root
         .bindings_with_instance_proxies()

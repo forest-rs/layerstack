@@ -55,7 +55,7 @@ fn render_specs_match_openusd() {
     let binding_paths =
         ["/BindingCycle", "/BindingEmptyCycle", "/BindingMissing"].map(|p| loaded.store.path(p));
     let scene = Scene::new(&stage, &loaded.store);
-    let settings = RenderSettings::new(&scene, path).unwrap();
+    let settings = RenderSettings::get(&scene, path).unwrap();
     let path_name = |p| {
         loaded
             .store

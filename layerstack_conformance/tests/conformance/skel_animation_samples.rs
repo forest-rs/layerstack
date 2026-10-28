@@ -34,7 +34,7 @@ def SkelAnimation "Sparse" (references = </Base> {offset}) {{
         let (store, live) = support::scene(&source);
         let path = store.path("/Sparse");
         let scene = Scene::new(live.stage(), &store);
-        let a = SkelAnimation::new(&scene, path).unwrap();
+        let a = SkelAnimation::get(&scene, path).unwrap();
         assert_eq!(
             a.joint_transform_time_samples(),
             times,
@@ -102,7 +102,7 @@ fn sparse_samples_union_grids_but_dense_regions_and_blocks_mask_weaker_times() {
         let (store, live) = support::scene(&source);
         let path = store.path("/Sparse");
         let scene = Scene::new(live.stage(), &store);
-        let a = SkelAnimation::new(&scene, path).unwrap();
+        let a = SkelAnimation::get(&scene, path).unwrap();
         assert_eq!(a.joint_transform_time_samples(), times, "{translations}");
         assert_eq!(a.blend_shape_weight_time_samples(), times, "{weights}");
         assert_eq!(a.joint_transforms_might_be_time_varying(), varying);
@@ -134,7 +134,7 @@ fn sparse_edits_stop_at_intermediate_dense_sources() {
         let (store, live) = support::scene(&source);
         let path = store.path("/Sparse");
         let scene = Scene::new(live.stage(), &store);
-        let a = SkelAnimation::new(&scene, path).unwrap();
+        let a = SkelAnimation::get(&scene, path).unwrap();
         assert_eq!(a.joint_transform_time_samples(), times);
         assert_eq!(a.joint_transforms_might_be_time_varying(), varying);
     }

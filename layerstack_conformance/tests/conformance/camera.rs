@@ -83,7 +83,7 @@ fn sampled_cameras_match_openusd_including_conformed_transforms_and_culling() {
                 Time::at(t)
             }
         });
-        let camera = Camera::new(&scene, path)
+        let camera = Camera::get(&scene, path)
             .unwrap()
             .compute_camera(&mut XformCache::new(time))
             .unwrap();
@@ -151,7 +151,7 @@ fn compute(attributes: &str, time: Time) -> Result<ComputedCamera, CameraError> 
     let source = format!("#usda 1.0\ndef Camera \"C\" {{\n{attributes}\n}}");
     let (store, live) = support::scene(&source);
     let path = store.path("/C");
-    Camera::new(&Scene::new(live.stage(), &store), path)
+    Camera::get(&Scene::new(live.stage(), &store), path)
         .unwrap()
         .compute_camera(&mut XformCache::new(time))
 }
@@ -292,7 +292,7 @@ fn edits_and_undo_refresh_lens_and_shared_ancestor_transforms() {
     let path = store.path("/Rig/Perspective");
     let rig = store.path("/Rig");
     let mut xforms = XformCache::new(Time::Default);
-    let before = Camera::new(&Scene::new(live.stage(), &store), path)
+    let before = Camera::get(&Scene::new(live.stage(), &store), path)
         .unwrap()
         .compute_camera(&mut xforms)
         .unwrap();
@@ -309,7 +309,7 @@ fn edits_and_undo_refresh_lens_and_shared_ancestor_transforms() {
     let edit = live.apply(&mut store, &t).unwrap();
     let scene = Scene::new(live.stage(), &store);
     xforms.apply_changes(&scene, &edit.changes);
-    let changed = Camera::new(&scene, path)
+    let changed = Camera::get(&scene, path)
         .unwrap()
         .compute_camera(&mut xforms)
         .unwrap();
@@ -321,7 +321,7 @@ fn edits_and_undo_refresh_lens_and_shared_ancestor_transforms() {
     let undo = live.apply(&mut store, &edit.inverse).unwrap();
     let scene = Scene::new(live.stage(), &store);
     xforms.apply_changes(&scene, &undo.changes);
-    let restored = Camera::new(&scene, path)
+    let restored = Camera::get(&scene, path)
         .unwrap()
         .compute_camera(&mut xforms)
         .unwrap();

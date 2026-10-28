@@ -25,7 +25,7 @@ use layerstack::PathId;
 use crate::{CannotEdit, PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "Represents the renderer and scene configuration for a single render pass in a multi-pass rendering workflow."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `RenderPass`, inheriting [`crate::usd::Typed`]. Construct it with [`RenderPass::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `RenderPass`, inheriting [`crate::usd::Typed`]. Construct it with [`RenderPass::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdRenderPass`."]
 #[doc(alias = "UsdRenderPass")]
 #[derive(Clone, Copy, Debug)]
@@ -49,7 +49,7 @@ impl<'a> RenderPass<'a> {
     #[doc(alias = "UsdRenderPass::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -57,7 +57,7 @@ impl<'a> RenderPass<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -70,7 +70,8 @@ impl<'a> RenderPass<'a> {
     /// Defines the prim at `path` as a `RenderPass`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `RenderPass` is left as it is.
+    /// already defined as a `RenderPass` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///
@@ -371,7 +372,7 @@ impl RenderProductProductType {
 
 #[doc = "A single render output artifact, such as a rendered image or other file-like artifact. Specifies one or more RenderVars combined into the output artifact."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `RenderProduct`, inheriting [`RenderSettingsBase`]. Construct it with [`RenderProduct::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `RenderProduct`, inheriting [`RenderSettingsBase`]. Construct it with [`RenderProduct::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdRenderProduct`."]
 #[doc(alias = "UsdRenderProduct")]
 #[derive(Clone, Copy, Debug)]
@@ -395,7 +396,7 @@ impl<'a> RenderProduct<'a> {
     #[doc(alias = "UsdRenderProduct::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -403,7 +404,7 @@ impl<'a> RenderProduct<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -416,7 +417,8 @@ impl<'a> RenderProduct<'a> {
     /// Defines the prim at `path` as a `RenderProduct`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `RenderProduct` is left as it is.
+    /// already defined as a `RenderProduct` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///
@@ -597,7 +599,7 @@ impl RenderProductEdit {
 
 #[doc = "All the global settings for a single invocation of a rendering of a scene. Includes configuration of what render products should be produced, and what imageable purposes should be rendered."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `RenderSettings`, inheriting [`RenderSettingsBase`]. Construct it with [`RenderSettings::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `RenderSettings`, inheriting [`RenderSettingsBase`]. Construct it with [`RenderSettings::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdRenderSettings`."]
 #[doc(alias = "UsdRenderSettings")]
 #[derive(Clone, Copy, Debug)]
@@ -621,7 +623,7 @@ impl<'a> RenderSettings<'a> {
     #[doc(alias = "UsdRenderSettings::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -629,7 +631,7 @@ impl<'a> RenderSettings<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -642,7 +644,8 @@ impl<'a> RenderSettings<'a> {
     /// Defines the prim at `path` as a `RenderSettings`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `RenderSettings` is left as it is.
+    /// already defined as a `RenderSettings` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///
@@ -929,7 +932,7 @@ impl RenderSettingsBaseAspectRatioConformPolicy {
 
 #[doc = "An abstract base class schema that defines settings common to both RenderSettings and RenderProduct."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's abstract typed schema `RenderSettingsBase`, inheriting [`crate::usd::Typed`]. Construct it with [`RenderSettingsBase::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's abstract typed schema `RenderSettingsBase`, inheriting [`crate::usd::Typed`]. Construct it with [`RenderSettingsBase::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdRenderSettingsBase`."]
 #[doc(alias = "UsdRenderSettingsBase")]
 #[derive(Clone, Copy, Debug)]
@@ -953,7 +956,7 @@ impl<'a> RenderSettingsBase<'a> {
     #[doc(alias = "UsdRenderSettingsBase::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -961,7 +964,7 @@ impl<'a> RenderSettingsBase<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -1311,7 +1314,7 @@ impl RenderVarSourceType {
 
 #[doc = "Describes a quantity or 'channel' of computed data, produced by a renderer. Examples include camera-space depth channels, material shader quantities such as color or alpha channels, light path expressions (LPEs), and renderer intrinsic quantities such as computation time per pixel."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `RenderVar`, inheriting [`crate::usd::Typed`]. Construct it with [`RenderVar::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `RenderVar`, inheriting [`crate::usd::Typed`]. Construct it with [`RenderVar::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdRenderVar`."]
 #[doc(alias = "UsdRenderVar")]
 #[derive(Clone, Copy, Debug)]
@@ -1335,7 +1338,7 @@ impl<'a> RenderVar<'a> {
     #[doc(alias = "UsdRenderVar::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -1343,7 +1346,7 @@ impl<'a> RenderVar<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -1356,7 +1359,8 @@ impl<'a> RenderVar<'a> {
     /// Defines the prim at `path` as a `RenderVar`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `RenderVar` is left as it is.
+    /// already defined as a `RenderVar` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///

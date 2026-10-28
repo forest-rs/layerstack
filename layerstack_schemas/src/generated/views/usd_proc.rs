@@ -25,7 +25,7 @@ use layerstack::PathId;
 use crate::{CannotEdit, PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "Represents an abstract generative procedural prim which delivers its input parameters via properties (including relationships) within the \"primvars:\" namespace."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `GenerativeProcedural`, inheriting [`crate::usd_geom::Boundable`]. Construct it with [`GenerativeProcedural::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `GenerativeProcedural`, inheriting [`crate::usd_geom::Boundable`]. Construct it with [`GenerativeProcedural::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdProcGenerativeProcedural`."]
 #[doc(alias = "UsdProcGenerativeProcedural")]
 #[derive(Clone, Copy, Debug)]
@@ -49,7 +49,7 @@ impl<'a> GenerativeProcedural<'a> {
     #[doc(alias = "UsdProcGenerativeProcedural::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -57,7 +57,7 @@ impl<'a> GenerativeProcedural<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -70,7 +70,8 @@ impl<'a> GenerativeProcedural<'a> {
     /// Defines the prim at `path` as a `GenerativeProcedural`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `GenerativeProcedural` is left as it is.
+    /// already defined as a `GenerativeProcedural` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///

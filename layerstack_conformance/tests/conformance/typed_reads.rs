@@ -347,7 +347,7 @@ fn typed_defaults_skip_incompatible_opinions_without_numeric_retry() {
         }
         if name == "inputs:intensity" {
             let scene = Scene::new(&stage, &loaded.store);
-            let light = DistantLight::new(&scene, path).unwrap().light_api();
+            let light = DistantLight::get(&scene, path).unwrap().light_api();
             assert_eq!(
                 light.intensity().map(|v| json!(v)).unwrap_or(Json::Null),
                 expected_default
@@ -504,7 +504,7 @@ fn empty_sample_maps_do_not_mask_transform_animation() {
     let (loaded, stage, _) = fixture();
     let path = loaded.store.path("/EmptySamplesXform");
     let scene = Scene::new(&stage, &loaded.store);
-    let xform = layerstack_schemas::usd_geom::Xformable::new(&scene, path).unwrap();
+    let xform = layerstack_schemas::usd_geom::Xformable::get(&scene, path).unwrap();
     assert!(xform.transform_might_be_time_varying());
     assert_eq!(xform.transform_time_samples(), vec![7.0, 11.0]);
     assert_eq!(xform.local_transform(Time::at(9.0)).matrix[3][0], 2.0);

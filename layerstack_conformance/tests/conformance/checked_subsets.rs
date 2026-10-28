@@ -102,7 +102,7 @@ fn subset_members_preserve_errors_in_unassigned_and_both_checked_validations() {
             failure_scene(MESH, "/M/S.indices", Value::Int(0), &error, time);
         let mesh_path = store.path("/M");
         let scene = Scene::new(live.stage(), &store);
-        let geometry = Imageable::new(&scene, mesh_path).unwrap();
+        let geometry = Imageable::get(&scene, mesh_path).unwrap();
         let expected = SubsetError::Decode { property, error };
         assert_eq!(
             geometry.unassigned_subset_indices(&Element::Face, "faces", time),
@@ -188,7 +188,7 @@ fn subset_queries_preserve_errors_for_every_supported_topology_array() {
             let (store, live, property) = failure_scene(&source, name, kind.clone(), &error, time);
             let path = store.path("/M");
             let scene = Scene::new(live.stage(), &store);
-            let geometry = Imageable::new(&scene, path).unwrap();
+            let geometry = Imageable::get(&scene, path).unwrap();
             let expected = SubsetError::Decode { property, error };
             assert_eq!(
                 geometry.unassigned_subset_indices(&element, "faces", time),
@@ -216,7 +216,7 @@ fn mesh_validation_distinguishes_every_failed_array_from_missing_topology() {
             let (store, live, property) = failure_scene(MESH, name, kind.clone(), &error, time);
             let path = store.path("/M");
             let scene = Scene::new(live.stage(), &store);
-            let mesh = Mesh::new(&scene, path).unwrap();
+            let mesh = Mesh::get(&scene, path).unwrap();
             assert_eq!(
                 mesh.validate_topology(time),
                 Err(MeshTopologyError::Decode { property, error }),
@@ -231,7 +231,7 @@ fn checked_validation_retains_ordinary_missing_topology_as_a_problem() {
     let (store, live) = support::scene("#usda 1.0\ndef Mesh \"M\" {}");
     let path = store.path("/M");
     let scene = Scene::new(live.stage(), &store);
-    let geometry = Imageable::new(&scene, path).unwrap();
+    let geometry = Imageable::get(&scene, path).unwrap();
     let validation = geometry
         .try_validate_subset_family(&Element::Face, "faces")
         .unwrap();
@@ -243,7 +243,7 @@ fn checked_validation_retains_ordinary_missing_topology_as_a_problem() {
         "ordinary missing topology is a successful validation with problems"
     );
     assert_eq!(
-        Mesh::new(&scene, path)
+        Mesh::get(&scene, path)
             .unwrap()
             .validate_topology(Time::Default),
         Err(MeshTopologyError::MissingAttribute),
@@ -290,8 +290,8 @@ fn topology_reads_skip_incompatible_defaults_but_keep_numeric_source_selection()
             },
         );
         let scene = Scene::new(&stage, &store);
-        let geometry = Imageable::new(&scene, path).unwrap();
-        let mesh = Mesh::new(&scene, path).unwrap();
+        let geometry = Imageable::get(&scene, path).unwrap();
+        let mesh = Mesh::get(&scene, path).unwrap();
         if decode_failure {
             assert_eq!(
                 mesh.validate_topology(Time::Default),

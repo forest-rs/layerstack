@@ -1276,7 +1276,7 @@ fn typed_view(
             doc_text(&schema.doc),
             format!(
                 "The view of {owner} {kind_text} typed schema `{}`{inherits}. Construct it \
-                 with [`{view}::new`], which checks the prim is of the schema (`IsA`); it \
+                 with [`{view}::get`], which checks the prim is of the schema (`IsA`); it \
                  derefs to the view of the schema it inherits from. For anything it does not \
                  offer, read the property by its USD name through the generic handle \
                  ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value).",
@@ -1290,7 +1290,8 @@ fn typed_view(
             "    /// Defines the prim at `path` as a `{name}`, and its undefined\n    \
              /// ancestors, through the edit's target, as OpenUSD's\n    \
              /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim\n    \
-             /// already defined as a `{name}` is left as it is.\n    \
+             /// already defined as a `{name}` is left as it is. `path` is an\n    \
+             /// interned id, since the prim may not exist yet.\n    \
              ///\n    /// # Errors\n    ///\n    \
              /// [`CannotEdit`] for a path beneath an instance or in a\n    \
              /// prototype, which OpenUSD refuses; nothing is authored.\n    \
@@ -1315,11 +1316,11 @@ fn typed_view(
          fn deref(&self) -> &Self::Target {{\n        &self.base\n    }}\n}}\n\n\
          {allow}impl<'a> {view}<'a> {{\n    /// The schema's name.\n    pub const SCHEMA: &'static str = {name:?};\n\n    \
          #[doc = {new_doc:?}]\n{get_alias}    #[must_use]\n    \
-         pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {{\n        \
+         pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {{\n        \
          let path = scene.prim_path(path)?;\n        \
          scene\n            .is_a(path, Self::SCHEMA)\n            .then(|| Self::from_prim_unchecked(PrimView::new(*scene, path)))\n    }}\n\n    \
          /// A view of `prim` as of the schema, without checking that it is\n    \
-         /// (`IsA`), as [`Self::new`] does: a getter reads what the prim\n    \
+         /// (`IsA`), as [`Self::get`] does: a getter reads what the prim\n    \
          /// authors, and the schema's fallbacks only for a prim of the schema.\n    \
          /// For the view of a schema built on this one.\n    #[must_use]\n    \
          pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {{\n        Self {{\n            base: {wrap_base},\n        }}\n    }}\n\n    \
@@ -1438,13 +1439,14 @@ fn applied_view(
              /// fallbacks only for an applied instance.\n    #[must_use]\n    \
              pub fn from_instance_unchecked(instance: InstanceView<'a>) -> Self {{\n        \
              Self {{ base: instance }}\n    }}\n\n    \
-             /// Applies the instance `instance` of the schema to `path` (a `prepend\n    \
-             /// apiSchemas` entry in the edit's target) if the prim may have it.\n    \
+             /// Applies the instance `instance` of the schema to the prim at `path`\n    \
+             /// (text, `\"/World/Prim\"`, or an id) as a `prepend apiSchemas`\n    \
+             /// entry in the edit's target, if the prim may have it.\n    \
              ///\n    /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.\n    \
              ///\n    /// # Errors\n    ///\n    \
              /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):\n    \
              /// [`ApplySchemaError::CannotEdit`] beneath an instance or in a prototype.\n    \
-             pub fn apply(\n        edit: &mut SchemaEdit<'_>,\n        path: PathId,\n        instance: &str,\n    ) -> Result<{edit}, ApplySchemaError> {{\n        \
+             pub fn apply(\n        edit: &mut SchemaEdit<'_>,\n        path: impl ::layerstack::PrimPathArg,\n        instance: &str,\n    ) -> Result<{edit}, ApplySchemaError> {{\n        \
              let prim = edit.apply_api(path, Self::SCHEMA, Some(instance))?;\n        \
              Ok({edit}::from_instance(InstanceEdit::new(prim, instance)))\n    }}\n\n"
         )
@@ -1460,13 +1462,14 @@ fn applied_view(
              /// what the prim authors, and the schema's fallbacks only for a\n    \
              /// prim with the schema applied. For a built-in's view.\n    #[must_use]\n    \
              pub fn from_prim_unchecked(prim: PrimView<'a>) -> Self {{\n        Self {{ base: prim }}\n    }}\n\n    \
-             /// Applies the schema to `path` (a `prepend apiSchemas` entry in the\n    \
-             /// edit's target) if the prim may have it.\n    \
+             /// Applies the schema to the prim at `path` (text, `\"/World/Prim\"`,\n    \
+             /// or an id) as a `prepend apiSchemas` entry in the edit's target, if\n    \
+             /// the prim may have it.\n    \
              ///\n    /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.\n    \
              ///\n    /// # Errors\n    ///\n    \
              /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):\n    \
              /// [`ApplySchemaError::CannotEdit`] beneath an instance or in a prototype.\n    \
-             pub fn apply(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<{edit}, ApplySchemaError> {{\n        \
+             pub fn apply(\n        edit: &mut SchemaEdit<'_>,\n        path: impl ::layerstack::PrimPathArg,\n    ) -> Result<{edit}, ApplySchemaError> {{\n        \
              edit.apply_api(path, Self::SCHEMA, None).map({edit}::from_prim)\n    }}\n\n"
         )
     };
@@ -1798,13 +1801,6 @@ impl TestTable {
             }
             // Getters.
             let get = match &instance {
-                None if matches!(
-                    view.kind,
-                    SchemaKind::ConcreteTyped | SchemaKind::AbstractTyped
-                ) =>
-                {
-                    format!("{view_path}::new(scene, h.path(prim))")
-                }
                 None => format!("{view_path}::get(scene, h.path(prim))"),
                 Some(i) => format!("{view_path}::get(scene, h.path(prim), {i:?})"),
             };

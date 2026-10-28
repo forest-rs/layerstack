@@ -40,7 +40,7 @@ fn filtering_matches_cpp_and_snapshots_follow_explicit_recomputation() {
     assert_eq!(table.stored_pair_count(), 15);
     assert!(table.is_collision_enabled(a, unknown));
     assert!(table.is_collision_enabled_at(999, 0));
-    let group = PhysicsCollisionGroup::new(&scene, a).unwrap();
+    let group = PhysicsCollisionGroup::get(&scene, a).unwrap();
     assert!(
         group
             .colliders_collection()

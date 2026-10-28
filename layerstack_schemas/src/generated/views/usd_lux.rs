@@ -25,7 +25,7 @@ use layerstack::PathId;
 use crate::{ApplySchemaError, CannotEdit, PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "A base class used by intrinsic lights. Not intended to be used directly."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's abstract typed schema `BoundableLightBase`, inheriting [`crate::usd_geom::Boundable`]. Construct it with [`BoundableLightBase::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's abstract typed schema `BoundableLightBase`, inheriting [`crate::usd_geom::Boundable`]. Construct it with [`BoundableLightBase::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxBoundableLightBase`."]
 #[doc(alias = "UsdLuxBoundableLightBase")]
 #[derive(Clone, Copy, Debug)]
@@ -49,7 +49,7 @@ impl<'a> BoundableLightBase<'a> {
     #[doc(alias = "UsdLuxBoundableLightBase::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -57,7 +57,7 @@ impl<'a> BoundableLightBase<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -121,7 +121,7 @@ impl BoundableLightBaseEdit {
 
 #[doc = "A light that is emitted outwards from a cylinder."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `CylinderLight`, inheriting [`BoundableLightBase`]. Construct it with [`CylinderLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `CylinderLight`, inheriting [`BoundableLightBase`]. Construct it with [`CylinderLight::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxCylinderLight`."]
 #[doc(alias = "UsdLuxCylinderLight")]
 #[derive(Clone, Copy, Debug)]
@@ -145,7 +145,7 @@ impl<'a> CylinderLight<'a> {
     #[doc(alias = "UsdLuxCylinderLight::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -153,7 +153,7 @@ impl<'a> CylinderLight<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -166,7 +166,8 @@ impl<'a> CylinderLight<'a> {
     /// Defines the prim at `path` as a `CylinderLight`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `CylinderLight` is left as it is.
+    /// already defined as a `CylinderLight` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///
@@ -341,7 +342,7 @@ impl CylinderLightEdit {
 
 #[doc = "A light that emits from one side of a circular disk (along the -Z axis), centered in the XY plane."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `DiskLight`, inheriting [`BoundableLightBase`]. Construct it with [`DiskLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `DiskLight`, inheriting [`BoundableLightBase`]. Construct it with [`DiskLight::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxDiskLight`."]
 #[doc(alias = "UsdLuxDiskLight")]
 #[derive(Clone, Copy, Debug)]
@@ -365,7 +366,7 @@ impl<'a> DiskLight<'a> {
     #[doc(alias = "UsdLuxDiskLight::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -373,7 +374,7 @@ impl<'a> DiskLight<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -386,7 +387,8 @@ impl<'a> DiskLight<'a> {
     /// Defines the prim at `path` as a `DiskLight`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `DiskLight` is left as it is.
+    /// already defined as a `DiskLight` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///
@@ -480,7 +482,7 @@ impl DiskLightEdit {
 
 #[doc = "A light that provides light from a far distant source, along the -Z axis. Also known as a \"directional light\"."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `DistantLight`, inheriting [`NonboundableLightBase`]. Construct it with [`DistantLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `DistantLight`, inheriting [`NonboundableLightBase`]. Construct it with [`DistantLight::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxDistantLight`."]
 #[doc(alias = "UsdLuxDistantLight")]
 #[derive(Clone, Copy, Debug)]
@@ -504,7 +506,7 @@ impl<'a> DistantLight<'a> {
     #[doc(alias = "UsdLuxDistantLight::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -512,7 +514,7 @@ impl<'a> DistantLight<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -525,7 +527,8 @@ impl<'a> DistantLight<'a> {
     /// Defines the prim at `path` as a `DistantLight`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `DistantLight` is left as it is.
+    /// already defined as a `DistantLight` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///
@@ -688,7 +691,7 @@ impl DomeLightTextureFormat {
 
 #[doc = "A light that is emitted inwards from a distant external environment such as a sky or a light environment captured in an HDR image used for Image Based Lighting (IBL)."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `DomeLight`, inheriting [`NonboundableLightBase`]. Construct it with [`DomeLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `DomeLight`, inheriting [`NonboundableLightBase`]. Construct it with [`DomeLight::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxDomeLight`."]
 #[doc(alias = "UsdLuxDomeLight")]
 #[derive(Clone, Copy, Debug)]
@@ -712,7 +715,7 @@ impl<'a> DomeLight<'a> {
     #[doc(alias = "UsdLuxDomeLight::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -720,7 +723,7 @@ impl<'a> DomeLight<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -733,7 +736,8 @@ impl<'a> DomeLight<'a> {
     /// Defines the prim at `path` as a `DomeLight`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `DomeLight` is left as it is.
+    /// already defined as a `DomeLight` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///
@@ -1092,7 +1096,7 @@ impl DomeLight1PoleAxis {
 
 #[doc = "A light that is emitted inwards from a distant external environment such as a sky or a light environment captured in an HDR image used for Image Based Lighting (IBL). Provides additional control over the dome's orientation via the poleAxis property."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `DomeLight_1`, inheriting [`NonboundableLightBase`]. Construct it with [`DomeLight1::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `DomeLight_1`, inheriting [`NonboundableLightBase`]. Construct it with [`DomeLight1::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxDomeLight_1`."]
 #[doc(alias = "UsdLuxDomeLight_1")]
 #[doc(alias = "DomeLight_1")]
@@ -1117,7 +1121,7 @@ impl<'a> DomeLight1<'a> {
     #[doc(alias = "UsdLuxDomeLight_1::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -1125,7 +1129,7 @@ impl<'a> DomeLight1<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -1138,7 +1142,8 @@ impl<'a> DomeLight1<'a> {
     /// Defines the prim at `path` as a `DomeLight_1`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `DomeLight_1` is left as it is.
+    /// already defined as a `DomeLight_1` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///
@@ -1399,7 +1404,7 @@ impl DomeLight1Edit {
 
 #[doc = "A light that emits outwards from a geometric prim. Deprecated, use MeshLight instead."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `GeometryLight`, inheriting [`NonboundableLightBase`]. Construct it with [`GeometryLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `GeometryLight`, inheriting [`NonboundableLightBase`]. Construct it with [`GeometryLight::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxGeometryLight`."]
 #[doc(alias = "UsdLuxGeometryLight")]
 #[derive(Clone, Copy, Debug)]
@@ -1423,7 +1428,7 @@ impl<'a> GeometryLight<'a> {
     #[doc(alias = "UsdLuxGeometryLight::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -1431,7 +1436,7 @@ impl<'a> GeometryLight<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -1444,7 +1449,8 @@ impl<'a> GeometryLight<'a> {
     /// Defines the prim at `path` as a `GeometryLight`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `GeometryLight` is left as it is.
+    /// already defined as a `GeometryLight` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///
@@ -1657,8 +1663,9 @@ impl<'a> LightApi<'a> {
         Self { base: prim }
     }
 
-    /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
-    /// edit's target) if the prim may have it.
+    /// Applies the schema to the prim at `path` (text, `"/World/Prim"`,
+    /// or an id) as a `prepend apiSchemas` entry in the edit's target, if
+    /// the prim may have it.
     ///
     /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.
     ///
@@ -1670,7 +1677,7 @@ impl<'a> LightApi<'a> {
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
-        path: PathId,
+        path: impl ::layerstack::PrimPathArg,
     ) -> Result<LightApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(LightApiEdit::from_prim)
@@ -2153,7 +2160,7 @@ impl LightApiEdit {
 
 #[doc = "A light filter is used to modify the effect of a light."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `LightFilter`, inheriting [`crate::usd_geom::Xformable`]. Construct it with [`LightFilter::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `LightFilter`, inheriting [`crate::usd_geom::Xformable`]. Construct it with [`LightFilter::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxLightFilter`."]
 #[doc(alias = "UsdLuxLightFilter")]
 #[derive(Clone, Copy, Debug)]
@@ -2177,7 +2184,7 @@ impl<'a> LightFilter<'a> {
     #[doc(alias = "UsdLuxLightFilter::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -2185,7 +2192,7 @@ impl<'a> LightFilter<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -2198,7 +2205,8 @@ impl<'a> LightFilter<'a> {
     /// Defines the prim at `path` as a `LightFilter`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `LightFilter` is left as it is.
+    /// already defined as a `LightFilter` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///
@@ -2376,8 +2384,9 @@ impl<'a> LightListApi<'a> {
         Self { base: prim }
     }
 
-    /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
-    /// edit's target) if the prim may have it.
+    /// Applies the schema to the prim at `path` (text, `"/World/Prim"`,
+    /// or an id) as a `prepend apiSchemas` entry in the edit's target, if
+    /// the prim may have it.
     ///
     /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.
     ///
@@ -2389,7 +2398,7 @@ impl<'a> LightListApi<'a> {
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
-        path: PathId,
+        path: impl ::layerstack::PrimPathArg,
     ) -> Result<LightListApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(LightListApiEdit::from_prim)
@@ -2645,8 +2654,9 @@ impl<'a> ListApi<'a> {
         Self { base: prim }
     }
 
-    /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
-    /// edit's target) if the prim may have it.
+    /// Applies the schema to the prim at `path` (text, `"/World/Prim"`,
+    /// or an id) as a `prepend apiSchemas` entry in the edit's target, if
+    /// the prim may have it.
     ///
     /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.
     ///
@@ -2656,7 +2666,10 @@ impl<'a> ListApi<'a> {
     /// [`ApplySchemaError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdLuxListAPI::Apply")]
     #[doc(alias = "Apply")]
-    pub fn apply(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<ListApiEdit, ApplySchemaError> {
+    pub fn apply(
+        edit: &mut SchemaEdit<'_>,
+        path: impl ::layerstack::PrimPathArg,
+    ) -> Result<ListApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(ListApiEdit::from_prim)
     }
@@ -2856,8 +2869,9 @@ impl<'a> MeshLightApi<'a> {
         Self { base: prim }
     }
 
-    /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
-    /// edit's target) if the prim may have it.
+    /// Applies the schema to the prim at `path` (text, `"/World/Prim"`,
+    /// or an id) as a `prepend apiSchemas` entry in the edit's target, if
+    /// the prim may have it.
     ///
     /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.
     ///
@@ -2869,7 +2883,7 @@ impl<'a> MeshLightApi<'a> {
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
-        path: PathId,
+        path: impl ::layerstack::PrimPathArg,
     ) -> Result<MeshLightApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(MeshLightApiEdit::from_prim)
@@ -2916,7 +2930,7 @@ impl MeshLightApiEdit {
 
 #[doc = "A base class used by intrinsic lights. Not intended to be used directly."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's abstract typed schema `NonboundableLightBase`, inheriting [`crate::usd_geom::Xformable`]. Construct it with [`NonboundableLightBase::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's abstract typed schema `NonboundableLightBase`, inheriting [`crate::usd_geom::Xformable`]. Construct it with [`NonboundableLightBase::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxNonboundableLightBase`."]
 #[doc(alias = "UsdLuxNonboundableLightBase")]
 #[derive(Clone, Copy, Debug)]
@@ -2940,7 +2954,7 @@ impl<'a> NonboundableLightBase<'a> {
     #[doc(alias = "UsdLuxNonboundableLightBase::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -2948,7 +2962,7 @@ impl<'a> NonboundableLightBase<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -3012,7 +3026,7 @@ impl NonboundableLightBaseEdit {
 
 #[doc = "A light that provides properties to allow it to identify an external Sdr shader node."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `PluginLight`, inheriting [`crate::usd_geom::Xformable`]. Construct it with [`PluginLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `PluginLight`, inheriting [`crate::usd_geom::Xformable`]. Construct it with [`PluginLight::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxPluginLight`."]
 #[doc(alias = "UsdLuxPluginLight")]
 #[derive(Clone, Copy, Debug)]
@@ -3036,7 +3050,7 @@ impl<'a> PluginLight<'a> {
     #[doc(alias = "UsdLuxPluginLight::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -3044,7 +3058,7 @@ impl<'a> PluginLight<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -3057,7 +3071,8 @@ impl<'a> PluginLight<'a> {
     /// Defines the prim at `path` as a `PluginLight`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `PluginLight` is left as it is.
+    /// already defined as a `PluginLight` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///
@@ -3136,7 +3151,7 @@ impl PluginLightEdit {
 
 #[doc = "A Light filter that provides properties that allow it to identify an external SdrShadingNode definition, through UsdShadeNodeDefAPI, that can be provided to render delegates without the need to provide a schema definition for the light filter's type."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `PluginLightFilter`, inheriting [`LightFilter`]. Construct it with [`PluginLightFilter::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `PluginLightFilter`, inheriting [`LightFilter`]. Construct it with [`PluginLightFilter::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxPluginLightFilter`."]
 #[doc(alias = "UsdLuxPluginLightFilter")]
 #[derive(Clone, Copy, Debug)]
@@ -3160,7 +3175,7 @@ impl<'a> PluginLightFilter<'a> {
     #[doc(alias = "UsdLuxPluginLightFilter::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -3168,7 +3183,7 @@ impl<'a> PluginLightFilter<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -3181,7 +3196,8 @@ impl<'a> PluginLightFilter<'a> {
     /// Defines the prim at `path` as a `PluginLightFilter`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `PluginLightFilter` is left as it is.
+    /// already defined as a `PluginLightFilter` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///
@@ -3251,7 +3267,7 @@ impl PluginLightFilterEdit {
 
 #[doc = "A rectangular portal in the local XY plane that guides sampling of a dome light (DomeLight, DomeLight_1)."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `PortalLight`, inheriting [`BoundableLightBase`]. Construct it with [`PortalLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `PortalLight`, inheriting [`BoundableLightBase`]. Construct it with [`PortalLight::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxPortalLight`."]
 #[doc(alias = "UsdLuxPortalLight")]
 #[derive(Clone, Copy, Debug)]
@@ -3275,7 +3291,7 @@ impl<'a> PortalLight<'a> {
     #[doc(alias = "UsdLuxPortalLight::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -3283,7 +3299,7 @@ impl<'a> PortalLight<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -3296,7 +3312,8 @@ impl<'a> PortalLight<'a> {
     /// Defines the prim at `path` as a `PortalLight`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `PortalLight` is left as it is.
+    /// already defined as a `PortalLight` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///
@@ -3429,7 +3446,7 @@ impl PortalLightEdit {
 
 #[doc = "A light that emits from one side of a rectangle (along the -Z axis), centered in the XY plane."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `RectLight`, inheriting [`BoundableLightBase`]. Construct it with [`RectLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `RectLight`, inheriting [`BoundableLightBase`]. Construct it with [`RectLight::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxRectLight`."]
 #[doc(alias = "UsdLuxRectLight")]
 #[derive(Clone, Copy, Debug)]
@@ -3453,7 +3470,7 @@ impl<'a> RectLight<'a> {
     #[doc(alias = "UsdLuxRectLight::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -3461,7 +3478,7 @@ impl<'a> RectLight<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -3474,7 +3491,8 @@ impl<'a> RectLight<'a> {
     /// Defines the prim at `path` as a `RectLight`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `RectLight` is left as it is.
+    /// already defined as a `RectLight` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///
@@ -3688,8 +3706,9 @@ impl<'a> ShadowApi<'a> {
         Self { base: prim }
     }
 
-    /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
-    /// edit's target) if the prim may have it.
+    /// Applies the schema to the prim at `path` (text, `"/World/Prim"`,
+    /// or an id) as a `prepend apiSchemas` entry in the edit's target, if
+    /// the prim may have it.
     ///
     /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.
     ///
@@ -3701,7 +3720,7 @@ impl<'a> ShadowApi<'a> {
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
-        path: PathId,
+        path: impl ::layerstack::PrimPathArg,
     ) -> Result<ShadowApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(ShadowApiEdit::from_prim)
@@ -4000,8 +4019,9 @@ impl<'a> ShapingApi<'a> {
         Self { base: prim }
     }
 
-    /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
-    /// edit's target) if the prim may have it.
+    /// Applies the schema to the prim at `path` (text, `"/World/Prim"`,
+    /// or an id) as a `prepend apiSchemas` entry in the edit's target, if
+    /// the prim may have it.
     ///
     /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.
     ///
@@ -4013,7 +4033,7 @@ impl<'a> ShapingApi<'a> {
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
-        path: PathId,
+        path: impl ::layerstack::PrimPathArg,
     ) -> Result<ShapingApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(ShapingApiEdit::from_prim)
@@ -4375,7 +4395,7 @@ impl ShapingApiEdit {
 
 #[doc = "A light that is emitted outwards from a sphere."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `SphereLight`, inheriting [`BoundableLightBase`]. Construct it with [`SphereLight::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `SphereLight`, inheriting [`BoundableLightBase`]. Construct it with [`SphereLight::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdLuxSphereLight`."]
 #[doc(alias = "UsdLuxSphereLight")]
 #[derive(Clone, Copy, Debug)]
@@ -4399,7 +4419,7 @@ impl<'a> SphereLight<'a> {
     #[doc(alias = "UsdLuxSphereLight::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -4407,7 +4427,7 @@ impl<'a> SphereLight<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -4420,7 +4440,8 @@ impl<'a> SphereLight<'a> {
     /// Defines the prim at `path` as a `SphereLight`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `SphereLight` is left as it is.
+    /// already defined as a `SphereLight` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///
@@ -4600,8 +4621,9 @@ impl<'a> VolumeLightApi<'a> {
         Self { base: prim }
     }
 
-    /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
-    /// edit's target) if the prim may have it.
+    /// Applies the schema to the prim at `path` (text, `"/World/Prim"`,
+    /// or an id) as a `prepend apiSchemas` entry in the edit's target, if
+    /// the prim may have it.
     ///
     /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.
     ///
@@ -4613,7 +4635,7 @@ impl<'a> VolumeLightApi<'a> {
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
-        path: PathId,
+        path: impl ::layerstack::PrimPathArg,
     ) -> Result<VolumeLightApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(VolumeLightApiEdit::from_prim)

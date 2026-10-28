@@ -77,7 +77,7 @@ fn contextual_identifiers_and_link_membership_match_cpp_with_selection_evidence(
         .into();
     let scene = Scene::new(live.stage(), &store);
     let light = LightApi::get(&scene, light_path).unwrap();
-    let filter = LightFilter::new(&scene, filter_path).unwrap();
+    let filter = LightFilter::get(&scene, filter_path).unwrap();
     for row in oracle().selections {
         let contexts: Vec<_> = row.contexts.iter().map(String::as_str).collect();
         assert_eq!(light.select_shader_id(&contexts).id, row.light);
@@ -196,7 +196,7 @@ fn dome_orientation_matches_cpp_preserves_reset_and_reports_noop() {
     let transaction = edit.finish();
     let applied = live.apply(&mut store, &transaction).unwrap();
     let scene = Scene::new(live.stage(), &store);
-    let dome = DomeLight::new(&scene, path).unwrap();
+    let dome = DomeLight::get(&scene, path).unwrap();
     assert_eq!(dome.xform_op_order().unwrap(), reference.dome_order);
     assert_eq!(
         dome.read_value(
@@ -260,7 +260,7 @@ fn filter_context_authoring_and_existing_declarations_preserve_opinions() {
     assert!(!declaration.custom);
     assert_eq!(declaration.variability, Variability::Uniform);
     let scene = Scene::new(live.stage(), &store);
-    let filter = LightFilter::new(&scene, path).unwrap();
+    let filter = LightFilter::get(&scene, path).unwrap();
     assert_eq!(filter.select_shader_id(&["existing"]).id, "New");
     assert_eq!(filter.select_shader_id(&["new"]).id, "GpuFilter");
     assert_eq!(filter.select_shader_id(&[]).id, "Default");
@@ -328,7 +328,7 @@ fn blocked_shader_identifiers_match_cpp_and_preserve_typed_default_skipping() {
         let scene = Scene::new(live.stage(), &store);
         let contexts: Vec<_> = row.contexts.iter().map(String::as_str).collect();
         let selected = if row.filter {
-            LightFilter::new(&scene, path)
+            LightFilter::get(&scene, path)
                 .unwrap()
                 .select_shader_id(&contexts)
         } else {

@@ -33,9 +33,9 @@ fn interval_bounds_select_effective_offset_grids_without_adding_brackets() {
     let animation = store.path("/Animation");
     let transform = store.tokens().lookup("xformOp:translate").unwrap();
     let scene = Scene::new(live.stage(), &store);
-    let xform = Xformable::new(&scene, shape).unwrap();
+    let xform = Xformable::get(&scene, shape).unwrap();
     let primvar = Primvar::new(&scene, shape, "test").unwrap();
-    let skel = SkelAnimation::new(&scene, animation).unwrap();
+    let skel = SkelAnimation::get(&scene, animation).unwrap();
     let attribute = live
         .stage()
         .prim(shape, &store)
@@ -111,9 +111,9 @@ fn inclusive_helpers_keep_nan_reversed_and_infinite_bound_behavior() {
     let shape = store.path("/Shape");
     let animation = store.path("/Animation");
     let scene = Scene::new(live.stage(), &store);
-    let xform = Xformable::new(&scene, shape).unwrap();
+    let xform = Xformable::get(&scene, shape).unwrap();
     let primvar = Primvar::new(&scene, shape, "test").unwrap();
-    let skel = SkelAnimation::new(&scene, animation).unwrap();
+    let skel = SkelAnimation::get(&scene, animation).unwrap();
     for (start, end, expected) in [
         (6., 8., vec![6., 8.]),
         (6., 6., vec![6.]),

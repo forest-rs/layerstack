@@ -309,7 +309,7 @@ fn composed(stage: &Stage, store: &InMemoryStore, prim: layerstack::PathId) -> J
     let scene = Scene::new(stage, store);
     let collection =
         CollectionApi::get(&scene, prim, "lightLink").expect("the light-link collection");
-    let light = SphereLight::new(&scene, prim).expect("a sphere light");
+    let light = SphereLight::get(&scene, prim).expect("a sphere light");
     let names = |targets: Vec<TargetPath>| -> Vec<String> {
         targets
             .iter()

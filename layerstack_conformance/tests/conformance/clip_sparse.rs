@@ -449,7 +449,7 @@ fn skeleton_discovery_keeps_clip_samples_after_a_dense_to_sparse_transition() {
     assert_eq!(resolved.provenance.unwrap().layer, LayerId(1));
     let path = store.path("/P");
     let scene = layerstack_schemas::Scene::new(&stage, &store);
-    let animation = layerstack_schemas::usd_skel::SkelAnimation::new(&scene, path).unwrap();
+    let animation = layerstack_schemas::usd_skel::SkelAnimation::get(&scene, path).unwrap();
     assert_eq!(
         animation.blend_shape_weight_time_samples(),
         [0., 10., 15., 20.]

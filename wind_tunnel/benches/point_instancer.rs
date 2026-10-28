@@ -248,13 +248,13 @@ fn bench(c: &mut Criterion) {
             },
         );
         let scene = Scene::new(&fixture.stage, &fixture.store);
-        let still = PointInstancer::new(&scene, fixture.still).unwrap();
-        let moving = PointInstancer::new(&scene, fixture.moving).unwrap();
+        let still = PointInstancer::get(&scene, fixture.still).unwrap();
+        let moving = PointInstancer::get(&scene, fixture.moving).unwrap();
         let options = InstanceTransformOptions::default();
         group.bench_with_input(BenchmarkId::new("compute_mask", n), &n, |b, _| {
             b.iter(|| black_box(still.try_compute_mask(Time::Default).unwrap()));
         });
-        let culled = PointInstancer::new(&scene, fixture.culled).unwrap();
+        let culled = PointInstancer::get(&scene, fixture.culled).unwrap();
         group.bench_with_input(
             BenchmarkId::new("compute_mask_tenth_inactive", n),
             &n,

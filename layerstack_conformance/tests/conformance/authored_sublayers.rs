@@ -134,7 +134,7 @@ fn step(doc: &StageDocument<Filesystem>) -> String {
         .iter()
         .map(|error| match error {
             CompositionError::UnresolvedSublayer(error) => {
-                format!("{}:{}", name(error.layer), error.asset)
+                format!("{}:{}", name(error.layer), error.asset_path)
             }
             other => format!("other:{other:?}"),
         })

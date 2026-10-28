@@ -88,8 +88,8 @@ use alloc::{
 };
 use hashbrown::{HashMap, HashSet};
 use layerstack::{
-    AssetResolveError, AssetResolver, InMemoryStore, Layer, LayerId, LayerStore, LiveStage,
-    PathInterner, ResolvedAsset, StageOptions, TokenInterner,
+    AssetResolveError, AssetResolver, AssetUse, InMemoryStore, Layer, LayerId, LayerStore,
+    LiveStage, PathInterner, ResolvedAsset, StageOptions, TokenInterner,
 };
 use layerstack::{asset::PackagePath, encoded_bytes::EncodedBytes, parallel::Threads};
 use layerstack_usdz::snapshot::{PackageLimits, PackageSnapshot, PackageStats};
@@ -532,7 +532,7 @@ impl LoadReport {
 #[non_exhaustive]
 pub struct AssetFailure {
     /// Authored asset path.
-    pub asset: String,
+    pub asset_path: String,
     /// Layer that authored the request, when present.
     pub anchor: Option<LayerId>,
     /// Original transport or format failure.
@@ -551,7 +551,11 @@ impl AssetFailure {
 }
 impl core::fmt::Display for AssetFailure {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "could not open asset @{}@: {}", self.asset, self.error)
+        write!(
+            f,
+            "could not open asset @{}@: {}",
+            self.asset_path, self.error
+        )
     }
 }
 /// The failure among `failures` that a strict import rejects its layer
@@ -573,37 +577,57 @@ fn strict_rejects(diagnostic: &MemberDiagnostic) -> bool {
         )
 }
 /// An asset the stage asks for that storage cannot supply yet
-/// ([`IoErrorKind::Unavailable`]); see [`StageDocument::unavailable_assets`].
+/// ([`IoErrorKind::Unavailable`]): it is unavailable, and may still
+/// arrive. See [`StageDocument::unavailable_assets`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct UnavailableAsset {
     /// The source to supply, as [`Storage::identify`] named it for
-    /// `asset` anchored to `anchor`: the key a host fetches and supplies
-    /// bytes under. Several entries may share it.
+    /// `asset_path` anchored to `anchor`: the key a host fetches and
+    /// supplies bytes under. Several entries may share it.
     pub identifier: String,
-    /// The layer authoring the arc or sublayer, which a relative `asset`
-    /// is anchored to ([`StageDocument::identifier`] names it).
+    /// The layer authoring the arc or sublayer, which a relative
+    /// `asset_path` is anchored to ([`StageDocument::identifier`] names it).
     pub anchor: LayerId,
     /// The asset path as authored.
-    pub asset: String,
-    /// What asks for it: [`layerstack::ArcKind::References`] or
-    /// [`layerstack::ArcKind::Payloads`] for an arc,
-    /// [`layerstack::ArcKind::Local`] for a sublayer.
-    pub arc: layerstack::ArcKind,
+    pub asset_path: String,
+    /// What uses it: a sublayer, a reference or a payload.
+    pub used_by: AssetUse,
 }
-/// An asset the stage uses that is confirmed missing: composition reports
-/// it and its arc or sublayer contributes nothing. See
-/// [`StageDocument::asset_status`].
+/// An asset the stage uses that is unresolved: composition reports it
+/// ([`layerstack::CompositionError::UnresolvedAsset`] or
+/// [`layerstack::CompositionError::UnresolvedSublayer`]) and its arc or
+/// sublayer contributes nothing, because the asset is missing or its read
+/// failed. See [`StageDocument::asset_status`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
-pub struct MissingAsset {
-    /// The layer authoring the arc or sublayer.
+pub struct UnresolvedAsset {
+    /// The layer authoring the arc or sublayer, which a relative
+    /// `asset_path` is anchored to.
     pub anchor: LayerId,
     /// The asset path as authored (as evaluated, for a variable
     /// expression or a dynamic payload's arguments).
-    pub asset: String,
-    /// What asks for it, as for [`UnavailableAsset::arc`].
-    pub arc: layerstack::ArcKind,
+    pub asset_path: String,
+    /// What uses it: a sublayer, a reference or a payload.
+    pub used_by: AssetUse,
+    /// The source a read of it addressed ([`IoError::identifier`]), when
+    /// the document read it and storage named one.
+    pub identifier: Option<String>,
+    /// Why a read of it failed: [`IoErrorKind::NotFound`] for an asset
+    /// confirmed missing ([`Self::is_missing`]), another kind for one that
+    /// was found but could not be read or was rejected, which only
+    /// [`ImportPolicy::AllowRecovery`] keeps. `None` when no read of it
+    /// failed in this document: the layer authoring the arc recorded it
+    /// unresolved itself.
+    pub reason: Option<IoErrorKind>,
+}
+impl UnresolvedAsset {
+    /// Whether the asset is confirmed missing: its read found no source
+    /// ([`IoErrorKind::NotFound`]).
+    #[must_use]
+    pub fn is_missing(&self) -> bool {
+        self.reason == Some(IoErrorKind::NotFound)
+    }
 }
 /// The assets a document's stage lacks now ([`StageDocument::asset_status`]).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -612,15 +636,15 @@ pub struct AssetStatus {
     /// Assets storage cannot supply yet, which a later load can read
     /// ([`StageDocument::unavailable_assets`]).
     pub unavailable: Vec<UnavailableAsset>,
-    /// Assets confirmed missing, each once, in the order composition
-    /// reports them.
-    pub missing: Vec<MissingAsset>,
+    /// Assets that contribute nothing, missing or failed to read, each
+    /// once, in the order composition reports them.
+    pub unresolved: Vec<UnresolvedAsset>,
 }
 impl AssetStatus {
     /// Whether the stage lacks no asset.
     #[must_use]
     pub fn is_complete(&self) -> bool {
-        self.unavailable.is_empty() && self.missing.is_empty()
+        self.unavailable.is_empty() && self.unresolved.is_empty()
     }
 }
 /// Failure to save one layer. Other selected layers may have saved successfully.
@@ -688,6 +712,18 @@ struct Catalog {
     package_roots: BTreeMap<LayerId, String>,
     #[cfg(feature = "std")]
     retained_values: BTreeMap<LayerId, layerstack_usdc::RetainedValues>,
+    /// The latest failed read of each dependency, by anchor layer and
+    /// authored asset path, which [`StageDocument::asset_status`] gives
+    /// the unresolved assets composition reports.
+    failures: BTreeMap<(LayerId, String), ReadFailure>,
+}
+/// Why a dependency read failed, kept for [`UnresolvedAsset`].
+#[derive(Clone, Debug)]
+struct ReadFailure {
+    /// The source the read addressed ([`IoError::identifier`]).
+    identifier: Option<String>,
+    /// The failure's kind.
+    kind: IoErrorKind,
 }
 /// Package transport/index work since creation. Candidate work is published only
 /// on commit. Counts exclude numeric decoding and structural layer assembly.
@@ -1092,7 +1128,7 @@ impl<B: Storage> StageDocument<B> {
                     Err(error) => {
                         self.unavailable.remove(&(anchor, asset.clone()));
                         let failure = AssetFailure {
-                            asset: asset.clone(),
+                            asset_path: asset.clone(),
                             anchor: Some(anchor),
                             error,
                         };
@@ -1101,7 +1137,7 @@ impl<B: Storage> StageDocument<B> {
                         if self.import_policy == ImportPolicy::Strict && !failure.is_missing() {
                             return Err(failure.error);
                         }
-                        reader.bind(anchor, failure.asset.as_str(), LayerId::UNRESOLVED);
+                        reader.bind(anchor, failure.asset_path.as_str(), LayerId::UNRESOLVED);
                         reader.failures.push(failure);
                     }
                 }
@@ -1267,22 +1303,22 @@ impl<B: Storage> StageDocument<B> {
                 continue;
             };
             if assets.last().is_some_and(|last| {
-                last.anchor == request.anchor && last.asset == request.asset_path
+                last.anchor == request.anchor && last.asset_path == request.asset_path
             }) {
                 continue;
             }
             assets.push(UnavailableAsset {
                 identifier: identifier.clone(),
                 anchor: request.anchor,
-                asset: request.asset_path.clone(),
-                arc: request.arc,
+                asset_path: request.asset_path.clone(),
+                used_by: request.used_by,
             });
         }
         assets
     }
     /// The assets the composed stage lacks now: those storage cannot
-    /// supply yet ([`Self::unavailable_assets`]) and those confirmed
-    /// missing, which composition reports
+    /// supply yet ([`Self::unavailable_assets`]) and those unresolved,
+    /// missing or failed to read, which composition reports
     /// ([`layerstack::CompositionError::UnresolvedAsset`] and
     /// [`layerstack::CompositionError::UnresolvedSublayer`]). Unlike
     /// [`Self::load_report`], it follows every load and edit: an asset
@@ -1293,28 +1329,38 @@ impl<B: Storage> StageDocument<B> {
     /// `PcpErrorInvalidSublayerPath`.
     #[must_use]
     pub fn asset_status(&self) -> AssetStatus {
-        let mut missing: Vec<MissingAsset> = Vec::new();
+        let mut unresolved: Vec<UnresolvedAsset> = Vec::new();
         for error in self.stage.stage().composition_errors() {
-            let asset = match error {
-                layerstack::CompositionError::UnresolvedAsset(error) => MissingAsset {
-                    anchor: error.introducing_layer,
-                    asset: error.asset.clone(),
-                    arc: error.arc,
-                },
-                layerstack::CompositionError::UnresolvedSublayer(error) => MissingAsset {
-                    anchor: error.layer,
-                    asset: error.asset.clone(),
-                    arc: layerstack::ArcKind::Local,
-                },
+            let (anchor, asset_path, used_by) = match error {
+                layerstack::CompositionError::UnresolvedAsset(error) => (
+                    error.introducing_layer,
+                    &error.asset_path,
+                    AssetUse::of_arc(error.arc).unwrap_or(AssetUse::Reference),
+                ),
+                layerstack::CompositionError::UnresolvedSublayer(error) => {
+                    (error.layer, &error.asset_path, AssetUse::Sublayer)
+                }
                 _ => continue,
             };
-            if !missing.contains(&asset) {
-                missing.push(asset);
+            if unresolved.iter().any(|asset| {
+                asset.anchor == anchor
+                    && asset.asset_path == *asset_path
+                    && asset.used_by == used_by
+            }) {
+                continue;
             }
+            let failure = self.catalog.failures.get(&(anchor, asset_path.clone()));
+            unresolved.push(UnresolvedAsset {
+                anchor,
+                asset_path: asset_path.clone(),
+                used_by,
+                identifier: failure.and_then(|failure| failure.identifier.clone()),
+                reason: failure.map(|failure| failure.kind),
+            });
         }
         AssetStatus {
             unavailable: self.unavailable_assets(),
-            missing,
+            unresolved,
         }
     }
     /// Identifier of a loaded layer. Package members use `package[member]`.
@@ -1681,7 +1727,7 @@ impl<'a, B: Storage> Reader<'a, B> {
                         // §10.3.2.1, §10.6); composition reports it.
                         if error.kind == IoErrorKind::NotFound {
                             self.failures.push(AssetFailure {
-                                asset: request.asset_path,
+                                asset_path: request.asset_path,
                                 anchor: Some(request.anchor),
                                 error,
                             });
@@ -1770,6 +1816,17 @@ impl<'a, B: Storage> Reader<'a, B> {
             self.catalog
                 .saved
                 .insert(id, store.layer(id).unwrap().generation());
+        }
+        for failure in &self.failures {
+            if let Some(anchor) = failure.anchor {
+                self.catalog.failures.insert(
+                    (anchor, failure.asset_path.clone()),
+                    ReadFailure {
+                        identifier: failure.error.identifier.clone(),
+                        kind: failure.error.kind,
+                    },
+                );
+            }
         }
         LoadReport {
             layers,
@@ -2315,7 +2372,7 @@ impl<B: Storage> AssetResolver for Reader<'_, B> {
         }
         if let Err(error) = &result {
             self.failures.push(AssetFailure {
-                asset: asset.into(),
+                asset_path: asset.into(),
                 anchor,
                 error: error.clone(),
             });

@@ -20,7 +20,7 @@ await stage.resolve({
 const size = stage.attribute("/World/Rock.size");
 size?.get();     // { kind: "scalar", type: "double", value: 2 }
 size?.explain(); // { value, source: "default", opinions: [{ layer, specPath: "/Base.size", arc: "inherits", role: "contributed", ... }] }
-stage.status();  // { prims, compositionErrors, wanted, missing, complete }
+stage.status();  // { prims, compositionErrors, unavailable, unresolved, complete }
 
 // Edits are plain data, applied atomically to one layer.
 const stop = stage.onChange((changes) => console.log(changes.changedInfoOnly));
@@ -30,7 +30,7 @@ const receipt = stage.apply(stage.root, [
 ]);
 const redo = receipt.undo(); // the stage is as it was; redo.undo() redoes
 
-// Switching a variant may want assets: resolve fetches them.
+// Switching a variant may need assets the host has not supplied: resolve fetches them.
 stage.setVariantSelection("/World", "shade", "dark");
 await stage.resolve(source);
 ```
@@ -43,14 +43,17 @@ await stage.resolve(source);
   `NativeModule` (the generated glue of a module that links
   `layerstack_wasm`) to use that module.
 - **Opening is synchronous and complete.** `open` composes the root layer
-  alone. Every dependency it cannot read yet is *wanted*, not missing.
-- **Loading is a loop you can see.** `wanted()` lists `AssetNeed`s
-  (`identifier`, the asset as authored, the `anchor` layer and the arc).
+  alone. Every dependency it cannot read yet is *unavailable*: it may still
+  arrive. One confirmed absent, or whose read failed, is *unresolved*: its
+  arc contributes nothing (`status().unresolved`, with the failure's code).
+- **Loading is a loop you can see.** `unavailable()` lists
+  `UnavailableAsset`s (`identifier`, the `assetPath` as authored, the
+  `anchor` layer and what it is `usedBy`: a sublayer, reference or payload).
   `supply(identifier, bytes | null)` answers one; `loadSupplied()` reads the
-  answers and may make more wanted. `resolve(source)` runs the loop for you,
-  fetching each round's identifiers at once. A USDZ is one buffer: its members
-  resolve inside it, and what it references outside is wanted like anything
-  else. Identifiers are the authored path anchored to the anchor layer's
+  answers and may make more unavailable. `resolve(source)` runs the loop for
+  you, fetching each round's identifiers at once. A USDZ is one buffer: its
+  members resolve inside it, and what it references outside is unavailable
+  like anything else. Identifiers are the authored path anchored to the anchor layer's
   directory (`./a.usda` from `set/scene.usda` is `set/a.usda`); map them to
   URLs however you like.
 - **Reads are snapshots, queries are live.** `stage.prim(path)`,
@@ -149,7 +152,7 @@ await stage.resolve(source);
 | `argument.invalid` | An argument has the wrong type. |
 | `resolve.fetch` | The asset source's `fetch` threw; `identifier` names it, `cause` is the error. |
 | `resolve.aborted` | The `signal` aborted. |
-| `resolve.stuck` | An asset was supplied but is still wanted. |
+| `resolve.stuck` | An asset was supplied but is still unavailable. |
 | `resolve.limit` | `maxRounds` (100) rounds did not finish. |
 | `receipt.affinity` | A receipt of another stage was passed in. |
 | `receipt.released` | The receipt was undone or released already. |

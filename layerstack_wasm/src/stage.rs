@@ -140,12 +140,13 @@ impl Stage {
         &mut self.document
     }
 
-    /// The assets the stage wants, each
-    /// `[identifier, asset, anchor, arc]` ([`StageDocument::unavailable_assets`]):
-    /// the identifier to supply, the asset path as authored, the anchor
-    /// layer's id and `"sublayers"`, `"references"` or `"payloads"`.
+    /// The assets the stage asks for that the host has not supplied yet,
+    /// each `[identifier, assetPath, anchor, usedBy]`
+    /// ([`StageDocument::unavailable_assets`]): the identifier to supply,
+    /// the asset path as authored, the anchor layer's id and
+    /// `"sublayer"`, `"reference"` or `"payload"` ([`layerstack::AssetUse::name`]).
     #[must_use]
-    pub(crate) fn wanted(&self) -> Wire {
+    pub(crate) fn unavailable(&self) -> Wire {
         Wire::List(
             self.document
                 .unavailable_assets()
@@ -153,9 +154,9 @@ impl Stage {
                 .map(|need| {
                     Wire::List(vec![
                         Wire::Text(need.identifier),
-                        Wire::Text(need.asset),
+                        Wire::Text(need.asset_path),
                         Wire::UInt64(need.anchor.0),
-                        Wire::text(need_arc(need.arc)),
+                        Wire::text(need.used_by.name()),
                     ])
                 })
                 .collect(),
@@ -246,12 +247,13 @@ impl Stage {
         Ok(self.document.is_dirty(layer))
     }
 
-    /// The stage's state now: `[prims, compositionErrors, missing]`, the
-    /// number of prims its default traversal visits, each composition
+    /// The stage's state now: `[prims, compositionErrors, unresolved]`,
+    /// the number of prims its default traversal visits, each composition
     /// error as `[code, message, prim]` ([`layerstack::CompositionError`],
-    /// `prim` `null` for an error in a layer stack) and each confirmed
-    /// missing asset as `[anchor, asset, arc]`
-    /// ([`StageDocument::asset_status`]).
+    /// `prim` `null` for an error in a layer stack) and each unresolved
+    /// asset as `[anchor, assetPath, usedBy, identifier, reason]`
+    /// ([`StageDocument::asset_status`]; `identifier` and `reason`, the
+    /// read failure's code, `null` when no read of it failed).
     ///
     /// Spec: AOUSD Core §10.6 (composition errors).
     #[must_use]
@@ -274,23 +276,27 @@ impl Stage {
                 ])
             })
             .collect();
-        let missing = self
+        let unresolved = self
             .document
             .asset_status()
-            .missing
+            .unresolved
             .into_iter()
             .map(|asset| {
                 Wire::List(vec![
                     Wire::UInt64(asset.anchor.0),
-                    Wire::Text(asset.asset),
-                    Wire::text(need_arc(asset.arc)),
+                    Wire::Text(asset.asset_path),
+                    Wire::text(asset.used_by.name()),
+                    asset.identifier.map_or(Wire::Null, Wire::Text),
+                    asset
+                        .reason
+                        .map_or(Wire::Null, |kind| Wire::text(kind.code())),
                 ])
             })
             .collect();
         Wire::List(vec![
             Wire::Number(view.traverse().count() as f64),
             Wire::List(errors),
-            Wire::List(missing),
+            Wire::List(unresolved),
         ])
     }
 
@@ -656,16 +662,16 @@ impl Stage {
 
     /// Applies the edits of `batch` to the layer `target` as one
     /// transaction ([`StageDocument::apply`]), which loads the assets the
-    /// edits ask for that the host has supplied; those it has not are
-    /// wanted (`wanted`). `batch` is left empty.
+    /// edits ask for that the host has supplied; those it has not stay
+    /// unavailable (`unavailable`). `batch` is left empty.
     ///
     /// Either every edit applies or none does. The receipt holds the
     /// inverse, and its record is `[target, changes, loaded, failures,
-    /// wanted]`: the target layer's id, the composed changes of the
+    /// unavailable]`: the target layer's id, the composed changes of the
     /// transaction (`[created, removed, resynced, changedInfoOnly]`), the
     /// ids of the layers loaded for it, each asset that failed to load as
     /// `[asset, anchor, code, message]`, and the assets it asks for that
-    /// the host has not supplied, as `wanted` rows.
+    /// the host has not supplied, as `unavailable` rows.
     ///
     /// Spec: AOUSD Core §7 (scene description), §10.3.1 (the layer stack
     /// edits target).
@@ -822,12 +828,12 @@ impl Stage {
     }
 
     /// The receipt of an applied transaction. Its record is
-    /// `[target, changes, loaded, failures, wanted]`: the target layer's
+    /// `[target, changes, loaded, failures, unavailable]`: the target layer's
     /// id, the composed changes of the transaction
     /// (`[created, removed, resynced, changedInfoOnly]`), the ids of the
     /// layers loaded for it, each asset that failed to load as
     /// `[asset, anchor, code, message]`, and the assets it asks for that
-    /// the host has not supplied yet, as [`Self::wanted`] rows.
+    /// the host has not supplied yet, as [`Self::unavailable`] rows.
     fn receipt(
         &self,
         target: LayerId,
@@ -852,21 +858,21 @@ impl Stage {
                 Wire::text(error.message.clone()),
             ]));
         }
-        let wanted = self
+        let unavailable = self
             .document
             .unavailable_assets()
             .into_iter()
             .filter(|need| {
                 applied.asset_requests.iter().any(|request| {
-                    request.anchor == need.anchor && request.asset_path == need.asset
+                    request.anchor == need.anchor && request.asset_path == need.asset_path
                 })
             })
             .map(|need| {
                 Wire::List(vec![
                     Wire::Text(need.identifier),
-                    Wire::Text(need.asset),
+                    Wire::Text(need.asset_path),
                     Wire::UInt64(need.anchor.0),
-                    Wire::text(need_arc(need.arc)),
+                    Wire::text(need.used_by.name()),
                 ])
             })
             .collect();
@@ -875,7 +881,7 @@ impl Stage {
             changes_record(&applied.changes, store),
             loaded,
             Wire::List(failures),
-            Wire::List(wanted),
+            Wire::List(unavailable),
         ]);
         EditReceipt {
             stage: Arc::clone(&self.identity),
@@ -1030,7 +1036,7 @@ impl Stage {
     /// The record is `[bytes, layers, assets, unresolved, omitted]`:
     /// `bytes` the package, or `null` when a dependency is unresolved (an
     /// asset the host has not supplied); the counts of layers and other
-    /// assets packaged; each unresolved use as `[layer, asset, reason]`;
+    /// assets packaged; each unresolved use as `[layer, assetPath, reason]`;
     /// and the ids of the layers the stage composes that the package
     /// leaves out: the session layer, which is not part of the root's
     /// closure (export it with `exportLayer`, or the composed stage with
@@ -1198,10 +1204,10 @@ impl Stage {
         Ok(self.relationship(path)?.into())
     }
 
-    /// The record `wanted` builds, as documented in `stage.rs`.
-    #[wasm_bindgen(js_name = wanted)]
-    pub fn js_wanted(&self) -> JsValue {
-        self.wanted().into()
+    /// The record `unavailable` builds, as documented in `stage.rs`.
+    #[wasm_bindgen(js_name = unavailable)]
+    pub fn js_unavailable(&self) -> JsValue {
+        self.unavailable().into()
     }
 
     /// Supplies the bytes of `identifier` ([`HostStorage::supply`]).
@@ -1349,7 +1355,7 @@ fn load_result(report: &LoadReport) -> Wire {
         .iter()
         .map(|failure| {
             Wire::List(vec![
-                Wire::text(failure.asset.clone()),
+                Wire::text(failure.asset_path.clone()),
                 failure.anchor.map_or(Wire::Null, |id| Wire::UInt64(id.0)),
                 Wire::text(failure.error.code()),
                 Wire::text(failure.error.message.clone()),
@@ -1363,14 +1369,6 @@ fn load_result(report: &LoadReport) -> Wire {
 /// linearly (OpenUSD's default).
 fn time_of(time: Option<f64>) -> Time {
     time.map_or(Time::Default, Time::at)
-}
-
-/// What asks for an asset, as the wrapper spells it.
-fn need_arc(arc: ArcKind) -> &'static str {
-    match arc {
-        ArcKind::Local => "sublayers",
-        other => arc_name(other),
-    }
 }
 
 /// An arc kind as the wrapper spells it: the scene description field's
@@ -1506,7 +1504,7 @@ def "Ball" {
         )
         .unwrap();
         assert_eq!(
-            identifiers(&stage.wanted()),
+            identifiers(&stage.unavailable()),
             ["parts/ball.usda", "sub.usda"]
         );
         stage
@@ -1519,7 +1517,7 @@ def "Ball" {
             .supply("parts/ball.usda", BALL.as_bytes().to_vec());
         let loaded = stage.load_supplied().unwrap();
         assert_eq!(loaded.as_list().unwrap()[0].as_list().unwrap().len(), 2);
-        assert!(stage.wanted().as_list().unwrap().is_empty());
+        assert!(stage.unavailable().as_list().unwrap().is_empty());
         assert_eq!(
             stage.get("/Ball.serial", None).unwrap(),
             Wire::List(vec![
@@ -1649,13 +1647,13 @@ def "Ball" {
         storage.supply("sub.usda", SUB.as_bytes().to_vec());
         storage.supply("parts/ball.usda", ball.as_bytes().to_vec());
         stage.load_supplied().unwrap();
-        assert_eq!(identifiers(&stage.wanted()), ["parts/trim.usda"]);
+        assert_eq!(identifiers(&stage.unavailable()), ["parts/trim.usda"]);
         stage
             .document_mut()
             .storage_mut()
             .supply("parts/trim.usda", trim.as_bytes().to_vec());
         stage.load_supplied().unwrap();
-        assert!(stage.wanted().as_list().unwrap().is_empty());
+        assert!(stage.unavailable().as_list().unwrap().is_empty());
         assert_eq!(
             stage.get("/Ball.tag", None).unwrap(),
             Wire::List(vec![
@@ -1760,7 +1758,7 @@ def "World" (
         storage.supply("sub.usda", SUB.as_bytes().to_vec());
         storage.supply("parts/ball.usda", BALL.as_bytes().to_vec());
         stage.load_supplied().unwrap();
-        assert!(stage.wanted().as_list().unwrap().is_empty());
+        assert!(stage.unavailable().as_list().unwrap().is_empty());
         stage
     }
 
@@ -1860,7 +1858,10 @@ def "World" (
             let exported = stage.export_layer(root.0, format).unwrap();
             let identifier = format!("copy.{format}");
             let copy = Stage::open(&identifier, exported, false, false, BROWSER_LIMITS).unwrap();
-            assert_eq!(identifiers(&copy.wanted()), ["parts/ball.usda", "sub.usda"]);
+            assert_eq!(
+                identifiers(&copy.unavailable()),
+                ["parts/ball.usda", "sub.usda"]
+            );
 
             let record = stage.export_flattened(format).unwrap();
             let [flat, lossless, lost] = record.as_list().unwrap() else {
@@ -1877,7 +1878,10 @@ def "World" (
                 BROWSER_LIMITS,
             )
             .unwrap();
-            assert!(flat.wanted().as_list().unwrap().is_empty(), "no arcs left");
+            assert!(
+                flat.unavailable().as_list().unwrap().is_empty(),
+                "no arcs left"
+            );
             assert_eq!(size(&flat), size(&stage));
             assert_eq!(
                 flat.get("/Ball.points", None).unwrap().as_list().unwrap()[4],
@@ -1915,7 +1919,10 @@ def "World" (
             BROWSER_LIMITS,
         )
         .unwrap();
-        assert!(reopened.wanted().as_list().unwrap().is_empty(), "complete");
+        assert!(
+            reopened.unavailable().as_list().unwrap().is_empty(),
+            "complete"
+        );
         assert_eq!(size(&reopened), size(&stage), "with the unsaved edit");
 
         let mut partial = Stage::open(

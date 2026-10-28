@@ -87,7 +87,7 @@ impl ClipQueryPlan {
             matches!(
                 d.request.status,
                 ClipAssetStatus::Unavailable(
-                    ClipAssetUnavailable::Unresolved | ClipAssetUnavailable::NotResident(_)
+                    ClipAssetUnavailable::Unanswered | ClipAssetUnavailable::NotResident(_)
                 )
             )
         })

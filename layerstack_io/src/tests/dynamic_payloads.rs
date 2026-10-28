@@ -1004,7 +1004,7 @@ fn argument_input_edits_report_the_assets_they_request() {
             .paths()
             .display(request.prim, doc.store().tokens());
         assert!(prim.starts_with("/Lab"), "{prim}");
-        assert_eq!(request.arc, layerstack::ArcKind::Payloads);
+        assert_eq!(request.used_by, AssetUse::Payload);
         assert!(request.asset_path.contains(FORMAT_ARGS_DELIMITER));
     }
     assert!(doc.stage().stage().asset_requests().is_empty());

@@ -1342,7 +1342,7 @@ mod default_prim_tests {
             expected.push(CompositionError::UnresolvedAsset(UnresolvedAsset {
                 prim,
                 arc,
-                asset: "./absent.usda".into(),
+                asset_path: "./absent.usda".into(),
                 introducing_layer: ROOT,
                 introducing_spec: crate::SpecPath::from_prim_path(prim),
             }));
@@ -1704,7 +1704,7 @@ mod deferred_arc_tests {
             [CompositionError::UnresolvedAsset(UnresolvedAsset {
                 prim: missing,
                 arc: ArcKind::References,
-                asset: "./missing.usda".into(),
+                asset_path: "./missing.usda".into(),
                 introducing_layer: ROOT,
                 introducing_spec: crate::SpecPath::from_prim_path(missing),
             })]
@@ -1716,7 +1716,7 @@ mod deferred_arc_tests {
                 anchor: ROOT,
                 asset_path: "./pending.usda".into(),
                 prim: pending,
-                arc: ArcKind::Payloads,
+                used_by: crate::AssetUse::Payload,
             }]
         );
         assert!(stage.used_layers(false).contains(&ASSET));

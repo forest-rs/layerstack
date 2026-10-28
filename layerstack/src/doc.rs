@@ -4482,8 +4482,11 @@ pub enum AssetAvailability {
     Loaded(LayerId),
     /// The host resolved the asset and confirmed that it does not exist.
     Missing,
-    /// The host has not supplied a resolution result.
-    Unresolved,
+    /// The host has not answered yet: the asset is unavailable, and may
+    /// still arrive. Composition asks for it
+    /// ([`crate::Stage::asset_requests`]) rather than treating it as
+    /// missing.
+    Unavailable,
 }
 
 /// [`Sync`] with the `std` feature, so that a stage can compose from
@@ -4601,7 +4604,7 @@ pub trait LayerStore: MaybeSync {
     /// supporting clip templates should also report confirmed missing candidates.
     fn asset_availability(&self, anchor: LayerId, asset_path: &str) -> AssetAvailability {
         self.asset_layer(anchor, asset_path)
-            .map_or(AssetAvailability::Unresolved, AssetAvailability::Loaded)
+            .map_or(AssetAvailability::Unavailable, AssetAvailability::Loaded)
     }
 }
 
@@ -4999,7 +5002,7 @@ impl LayerStore for InMemoryStore {
         {
             Some(&LayerId::UNRESOLVED) => AssetAvailability::Missing,
             Some(&id) => AssetAvailability::Loaded(id),
-            None => AssetAvailability::Unresolved,
+            None => AssetAvailability::Unavailable,
         }
     }
 }

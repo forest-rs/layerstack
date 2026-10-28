@@ -14,40 +14,48 @@ export type ArcKind =
   | "payloads"
   | "specializes";
 
-/** What asks for an asset: a sublayer, a reference or a payload. */
-export type NeedKind = "sublayers" | "references" | "payloads";
+/** What uses an asset: a sublayer, a reference or a payload. */
+export type AssetUse = "sublayer" | "reference" | "payload";
 
 /**
- * An asset the stage wants: storage has no answer for it yet. Supply its
- * bytes under `identifier` ({@link Stage.supply}), or `null` if it does
- * not exist, then call {@link Stage.loadSupplied}; or let
- * {@link Stage.resolve} run the loop.
+ * An asset the stage asks for that the host has not supplied yet: it is
+ * unavailable, and may still arrive. Supply its bytes under `identifier`
+ * ({@link Stage.supply}), or `null` if it does not exist, then call
+ * {@link Stage.loadSupplied}; or let {@link Stage.resolve} run the loop.
  */
-export interface AssetNeed {
+export interface UnavailableAsset {
   /** The key to supply bytes under: the authored asset path anchored to the anchor layer's directory, `.` and `..` removed. */
   readonly identifier: string;
   /** The asset path as authored. */
-  readonly asset: string;
+  readonly assetPath: string;
   /** The layer that authors the arc or sublayer. */
   readonly anchor: Layer;
-  /** What asks for it. */
-  readonly arc: NeedKind;
+  /** What uses it. */
+  readonly usedBy: AssetUse;
 }
 
-/** An asset the stage uses that is confirmed absent: composition reports it and its arc contributes nothing. */
-export interface MissingAsset {
+/**
+ * An asset the stage uses that is unresolved: composition reports it and
+ * its arc or sublayer contributes nothing, because the asset is missing
+ * (`reason` `io.not_found`) or its read failed.
+ */
+export interface UnresolvedAsset {
   /** The asset path as authored. */
-  readonly asset: string;
+  readonly assetPath: string;
   /** The layer that authors the arc or sublayer. */
   readonly anchor: Layer;
-  /** What asks for it. */
-  readonly arc: NeedKind;
+  /** What uses it. */
+  readonly usedBy: AssetUse;
+  /** The identifier a read of it addressed; `null` when none was read. */
+  readonly identifier: string | null;
+  /** The code of the read failure (`io.not_found` for one confirmed missing); `null` when no read of it failed. */
+  readonly reason: string | null;
 }
 
 /** An asset a load could not read. */
 export interface AssetFailure {
   /** The asset path as authored. */
-  readonly asset: string;
+  readonly assetPath: string;
   /** The layer that authors it, if any. */
   readonly anchor: Layer | null;
   /** The read failure's code (`io.not_found` for one confirmed absent). */
@@ -60,7 +68,7 @@ export interface AssetFailure {
 export interface LoadResult {
   /** The layers read, package members included. */
   readonly loaded: readonly Layer[];
-  /** The assets that failed to read, kept as missing. */
+  /** The assets that failed to read, kept unresolved. */
   readonly failures: readonly AssetFailure[];
 }
 
@@ -110,11 +118,11 @@ export interface StageStatus {
   readonly prims: number;
   /** The composition errors. */
   readonly compositionErrors: readonly Issue[];
-  /** The assets the stage wants now ({@link Stage.wanted}). */
-  readonly wanted: readonly AssetNeed[];
-  /** The assets confirmed absent. */
-  readonly missing: readonly MissingAsset[];
-  /** Whether nothing is wanted or missing. */
+  /** The assets the host has not supplied yet ({@link Stage.unavailable}). */
+  readonly unavailable: readonly UnavailableAsset[];
+  /** The assets that contribute nothing: missing, or failed to read. */
+  readonly unresolved: readonly UnresolvedAsset[];
+  /** Whether no asset is unavailable or unresolved. */
   readonly complete: boolean;
 }
 
@@ -461,7 +469,7 @@ export interface SetTargetsEdit {
  * `UsdReferences::AddReference` / `UsdPayloads::AddPayload`. With `asset`
  * an external arc (resolved against the target layer, as authored); without
  * one an internal arc. Without `primPath` it targets the default prim. An
- * asset the stage has not read is wanted ({@link EditReceipt.wanted}): run
+ * asset the stage has not read is unavailable ({@link EditReceipt.unavailable}): run
  * {@link Stage.resolve}.
  */
 export interface AddArcEdit {
@@ -490,8 +498,8 @@ export interface RemoveArcEdit {
 
 /**
  * `UsdVariantSet::SetVariantSelection`; `null` (or `""`) clears it. Assets
- * the selected variant needs that the stage has not read are wanted
- * ({@link EditReceipt.wanted}).
+ * the selected variant needs that the stage has not read are unavailable
+ * ({@link EditReceipt.unavailable}).
  */
 export interface SetVariantSelectionEdit {
   readonly type: "setVariantSelection";
@@ -620,11 +628,11 @@ export interface FlattenResult {
 }
 
 /** A dependency {@link Stage.exportPackage} could not package. */
-export interface UnresolvedAsset {
+export interface UnpackagedAsset {
   /** The layer that authors it. */
   readonly layer: Layer;
   /** The asset path as authored. */
-  readonly asset: string;
+  readonly assetPath: string;
   /** Why it could not be packaged (not supplied yet, confirmed absent, ...). */
   readonly reason: string;
 }
@@ -638,7 +646,7 @@ export interface PackageResult {
   /** The other assets packaged (textures, ...). */
   readonly assets: number;
   /** The dependencies that kept the package from being made. */
-  readonly unresolved: readonly UnresolvedAsset[];
+  readonly unresolved: readonly UnpackagedAsset[];
   /** Layers the stage composes that the package leaves out: the session layer, which is not part of the root's dependencies. */
   readonly omitted: readonly Layer[];
 }

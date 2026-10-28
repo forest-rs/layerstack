@@ -165,7 +165,7 @@ fn resolve_deferred(store: &dyn LayerStore, reference: &Reference) -> Reference 
     let layer = match store.asset_availability(reference.layer, asset) {
         crate::AssetAvailability::Loaded(layer) => layer,
         crate::AssetAvailability::Missing => LayerId::UNRESOLVED,
-        crate::AssetAvailability::Unresolved => return reference.clone(),
+        crate::AssetAvailability::Unavailable => return reference.clone(),
     };
     anchored_asset(Reference {
         layer,

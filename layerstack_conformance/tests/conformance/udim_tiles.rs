@@ -204,7 +204,7 @@ fn every_authored_pattern_finds_the_tiles_openusd_finds() {
             "{pattern}"
         );
         for tile in &found.tiles {
-            assert_eq!(tile.asset, udim.tile_path(tile.tile));
+            assert_eq!(tile.asset_path, udim.tile_path(tile.tile));
         }
     }
 }

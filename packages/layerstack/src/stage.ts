@@ -11,8 +11,8 @@ import type {
   ArcKind,
   ArrayData,
   AssetFailure,
-  AssetNeed,
   AssetSource,
+  AssetUse,
   ChangeListener,
   Changes,
   Edit,
@@ -21,8 +21,6 @@ import type {
   Issue,
   LayerFormat,
   LoadResult,
-  MissingAsset,
-  NeedKind,
   OpenOptions,
   Opinion,
   PackageResult,
@@ -32,6 +30,8 @@ import type {
   Scalar,
   StageStatus,
   Transfer,
+  UnavailableAsset,
+  UnresolvedAsset,
   Value,
   ValueSource,
   VariantSet,
@@ -45,12 +45,12 @@ export const PACKAGE_VERSION = "0.1.0";
  * The ABI this package speaks: the version of the records it exchanges
  * with the native module (`layerstack_wasm::ABI`).
  */
-export const ABI = 4;
+export const ABI = 5;
 
 /** The native stage the generated glue exports (`layerstack_wasm::Stage`). Not for app use. */
 export interface NativeStage {
   free(): void;
-  wanted(): unknown;
+  unavailable(): unknown;
   supply(identifier: string, bytes: Uint8Array): void;
   confirmAbsent(identifier: string): void;
   loadSupplied(): unknown;
@@ -143,7 +143,7 @@ export class Layerstack {
   /**
    * Opens a stage from the bytes of its root layer, copied once into the
    * module. Nothing is fetched: the stage composes what it has and wants
-   * the rest ({@link Stage.wanted}, {@link Stage.resolve}).
+   * the rest ({@link Stage.unavailable}, {@link Stage.resolve}).
    *
    * Throws `io.rejected` for a root that does not parse.
    *
@@ -330,20 +330,15 @@ export class Stage implements Disposable {
     return this.#editLayer ?? null;
   }
 
-  /** The assets the stage wants now: storage has no answer for them yet. */
-  wanted(): AssetNeed[] {
-    const rows = this.#call("wanted", (native) => native.wanted()) as Row[];
-    return rows.map(([identifier, asset, anchor, arc]) => ({
-      identifier: identifier as string,
-      asset: asset as string,
-      anchor: this.#layer(anchor as bigint),
-      arc: arc as NeedKind,
-    }));
+  /** The assets the stage asks for that the host has not supplied yet: they may still arrive. */
+  unavailable(): UnavailableAsset[] {
+    const rows = this.#call("unavailable", (native) => native.unavailable()) as Row[];
+    return rows.map((row) => this.#unavailable(row));
   }
 
   /**
    * Supplies the bytes of `identifier` (copied once into the module), or
-   * `null` to confirm there is no such asset. A wanted asset is read at the
+   * `null` to confirm there is no such asset. An unavailable asset is read at the
    * next {@link Stage.loadSupplied}; a layer already read stays as it was
    * read.
    */
@@ -360,9 +355,9 @@ export class Stage implements Disposable {
   }
 
   /**
-   * Reads what was supplied for the assets the stage wants. It reads no
+   * Reads what was supplied for the unavailable assets. It reads no
    * layer already read, so it works whatever layers are dirty. A supplied
-   * layer may want more: call {@link Stage.wanted} again.
+   * layer may ask for more: call {@link Stage.unavailable} again.
    *
    * Throws `io.rejected` when a supplied layer does not parse under the
    * strict import policy; the layers read before it stay.
@@ -377,8 +372,8 @@ export class Stage implements Disposable {
   }
 
   /**
-   * Runs the loop until nothing is wanted: {@link Stage.wanted}, fetch
-   * every wanted identifier from `source` at once, {@link Stage.supply}
+   * Runs the loop until no asset is unavailable: {@link Stage.unavailable},
+   * fetch every unavailable identifier from `source` at once, {@link Stage.supply}
    * what arrived, {@link Stage.loadSupplied}.
    *
    * A fetch that throws fails the loop with `resolve.fetch` (naming the
@@ -393,28 +388,28 @@ export class Stage implements Disposable {
     let rounds = 0;
     let bytes = 0;
     for (;;) {
-      const wanted = [...new Set(this.wanted().map((need) => need.identifier))];
-      if (wanted.length === 0) break;
-      const stuck = wanted.find((identifier) => supplied.has(identifier));
+      const unavailable = [...new Set(this.unavailable().map((asset) => asset.identifier))];
+      if (unavailable.length === 0) break;
+      const stuck = unavailable.find((identifier) => supplied.has(identifier));
       if (stuck !== undefined) {
-        throw new LayerstackError("resolve.stuck", "resolve", "an asset was supplied but the stage still wants it", {
+        throw new LayerstackError("resolve.stuck", "resolve", "an asset was supplied but is still unavailable", {
           identifier: stuck,
         });
       }
       if (rounds === maxRounds) {
-        throw new LayerstackError("resolve.limit", "resolve", `still wanting assets after ${maxRounds} rounds`);
+        throw new LayerstackError("resolve.limit", "resolve", `assets still unavailable after ${maxRounds} rounds`);
       }
       rounds += 1;
       if (signal?.aborted) {
         throw new LayerstackError("resolve.aborted", "resolve", "the signal aborted", { cause: signal.reason });
       }
-      const settled = await Promise.allSettled(wanted.map((identifier) => source.fetch(identifier, signal)));
+      const settled = await Promise.allSettled(unavailable.map((identifier) => source.fetch(identifier, signal)));
       if (signal?.aborted) {
         throw new LayerstackError("resolve.aborted", "resolve", "the signal aborted", { cause: signal.reason });
       }
       let failed: LayerstackError | null = null;
       settled.forEach((outcome, index) => {
-        const identifier = wanted[index] as string;
+        const identifier = unavailable[index] as string;
         if (outcome.status === "rejected") {
           failed ??= new LayerstackError("resolve.fetch", "resolve", "the asset source failed to fetch", {
             identifier,
@@ -456,14 +451,16 @@ export class Stage implements Disposable {
     return this.#call("isDirty", (native) => native.layerDirty(layer.id));
   }
 
-  /** The stage's state now: prims, composition errors, wanted and missing assets. */
+  /** The stage's state now: prims, composition errors, unavailable and unresolved assets. */
   status(): StageStatus {
-    const [prims, errors, missing] = this.#call("status", (native) => native.status()) as [number, Row[], Row[]];
-    const wanted = this.wanted();
-    const missingAssets: MissingAsset[] = missing.map(([anchor, asset, arc]) => ({
-      asset: asset as string,
+    const [prims, errors, rows] = this.#call("status", (native) => native.status()) as [number, Row[], Row[]];
+    const unavailable = this.unavailable();
+    const unresolved: UnresolvedAsset[] = rows.map(([anchor, assetPath, usedBy, identifier, reason]) => ({
+      assetPath: assetPath as string,
       anchor: this.#layer(anchor as bigint),
-      arc: arc as NeedKind,
+      usedBy: usedBy as AssetUse,
+      identifier: identifier as string | null,
+      reason: reason as string | null,
     }));
     return {
       prims,
@@ -474,9 +471,9 @@ export class Stage implements Disposable {
           prim: prim as string | null,
         }),
       ),
-      wanted,
-      missing: missingAssets,
-      complete: wanted.length === 0 && missingAssets.length === 0,
+      unavailable,
+      unresolved,
+      complete: unavailable.length === 0 && unresolved.length === 0,
     };
   }
 
@@ -506,7 +503,7 @@ export class Stage implements Disposable {
   /**
    * Applies `edits` to the layer `target` atomically: every edit applies,
    * or none does and this throws. Assets the edits ask for that the stage
-   * has not read (a new reference, a variant's payload) are wanted
+   * has not read (a new reference, a variant's payload) are unavailable
    * afterwards: the receipt lists them, and {@link Stage.resolve} fetches
    * them. Change listeners run before this returns.
    *
@@ -558,7 +555,7 @@ export class Stage implements Disposable {
    * Selects `variant` of the variant set `set` on `prim` (`null` clears
    * the selection), in `target` or the {@link Stage.editLayer}: a
    * `setVariantSelection` edit. A variant whose arcs need assets the stage
-   * has not read leaves them wanted: `await stage.resolve(source)` after.
+   * has not read leaves them unavailable: `await stage.resolve(source)` after.
    *
    * Throws `layer.read_only` when there is no `target` and no edit layer.
    */
@@ -691,9 +688,9 @@ export class Stage implements Disposable {
       bytes,
       layers,
       assets,
-      unresolved: unresolved.map(([layer, asset, reason]) => ({
+      unresolved: unresolved.map(([layer, assetPath, reason]) => ({
         layer: this.#layer(layer as bigint),
-        asset: asset as string,
+        assetPath: assetPath as string,
         reason: reason as string,
       })),
       omitted: omitted.map((id) => this.#layer(id)),
@@ -723,19 +720,14 @@ export class Stage implements Disposable {
   }
 
   #receipt(native: NativeReceipt): EditReceipt {
-    const [target, changes, loaded, failures, wanted] = native.record() as [bigint, Row, bigint[], Row[], Row[]];
+    const [target, changes, loaded, failures, unavailable] = native.record() as [bigint, Row, bigint[], Row[], Row[]];
     const receipt = new EditReceipt(
       this,
       this.#layer(target),
       decodeChanges(changes),
       loaded.map((id) => this.#layer(id)),
       failures.map(([asset, anchor, code, message]) => this.#failure(asset, anchor, code, message)),
-      wanted.map(([identifier, asset, anchor, arc]) => ({
-        identifier: identifier as string,
-        asset: asset as string,
-        anchor: this.#layer(anchor as bigint),
-        arc: arc as NeedKind,
-      })),
+      unavailable.map((row) => this.#unavailable(row)),
     );
     receiptNatives.set(receipt, native);
     return receipt;
@@ -803,9 +795,18 @@ export class Stage implements Disposable {
     return layer;
   }
 
-  #failure(asset: unknown, anchor: unknown, code: unknown, message: unknown): AssetFailure {
+  #unavailable([identifier, assetPath, anchor, usedBy]: Row): UnavailableAsset {
     return {
-      asset: asset as string,
+      identifier: identifier as string,
+      assetPath: assetPath as string,
+      anchor: this.#layer(anchor as bigint),
+      usedBy: usedBy as AssetUse,
+    };
+  }
+
+  #failure(assetPath: unknown, anchor: unknown, code: unknown, message: unknown): AssetFailure {
+    return {
+      assetPath: assetPath as string,
       anchor: anchor === null ? null : this.#layer(anchor as bigint),
       code: code as string,
       message: message as string,
@@ -1025,7 +1026,7 @@ export class EditReceipt implements Disposable {
   /** The assets that failed to read for the edits. */
   readonly failures: readonly AssetFailure[];
   /** The assets the edits ask for that the host has not supplied: run {@link Stage.resolve}. */
-  readonly wanted: readonly AssetNeed[];
+  readonly unavailable: readonly UnavailableAsset[];
 
   /** @internal Use {@link Stage.apply}. */
   constructor(
@@ -1034,14 +1035,14 @@ export class EditReceipt implements Disposable {
     changes: Changes,
     loaded: readonly Layer[],
     failures: readonly AssetFailure[],
-    wanted: readonly AssetNeed[],
+    unavailable: readonly UnavailableAsset[],
   ) {
     this.stage = stage;
     this.target = target;
     this.changes = changes;
     this.loaded = loaded;
     this.failures = failures;
-    this.wanted = wanted;
+    this.unavailable = unavailable;
   }
 
   /** Whether it was undone or released: it can no longer undo. */

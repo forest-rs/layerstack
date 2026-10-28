@@ -106,16 +106,16 @@ pub struct LayerStack {
     /// were met: a stack that names any is incomplete.
     pub(crate) pending: Vec<LayerId>,
     /// The sublayer asset paths the stack names that the store has no
-    /// answer for yet ([`AssetAvailability::Unresolved`]), in the order
+    /// answer for yet ([`AssetAvailability::Unavailable`]), in the order
     /// they were met, which composition asks for
     /// ([`crate::Stage::asset_requests`]).
     pub(crate) requests: Vec<SublayerRequest>,
 }
 
 /// A sublayer asset path, anchored to the layer that authors it, that the
-/// store has not resolved ([`AssetAvailability::Unresolved`]): composition
+/// store has not resolved ([`AssetAvailability::Unavailable`]): composition
 /// lists it among [`crate::Stage::asset_requests`] as an
-/// [`ArcKind::Local`](crate::ArcKind::Local) request.
+/// [`AssetUse::Sublayer`](crate::AssetUse::Sublayer) request.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct SublayerRequest {
     /// The layer whose `subLayers` names the path.
@@ -301,12 +301,12 @@ impl LayerStack {
                         self.errors.push(CompositionError::UnresolvedSublayer(
                             UnresolvedSublayer {
                                 layer: id,
-                                asset: path,
+                                asset_path: path,
                             },
                         ));
                         None
                     }
-                    AssetAvailability::Unresolved => {
+                    AssetAvailability::Unavailable => {
                         let request = SublayerRequest {
                             anchor: id,
                             asset_path: path,
@@ -633,7 +633,7 @@ mod tests {
             errors,
             [CompositionError::UnresolvedSublayer(UnresolvedSublayer {
                 layer: LayerId(1),
-                asset: "./missing.usda".into(),
+                asset_path: "./missing.usda".into(),
             })]
         );
         assert!(stack.requests.is_empty());

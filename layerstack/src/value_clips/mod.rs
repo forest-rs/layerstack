@@ -51,8 +51,8 @@ pub enum ClipAssetRole {
 pub enum ClipAssetUnavailable {
     /// The host confirmed that it does not exist.
     Missing,
-    /// No host resolution result has been supplied.
-    Unresolved,
+    /// The host has not answered yet; the asset may still arrive.
+    Unanswered,
     /// A binding exists, but its layer is not resident in the store.
     NotResident(LayerId),
 }
@@ -420,8 +420,8 @@ impl Catalog {
             AssetAvailability::Missing => {
                 ClipAssetStatus::Unavailable(ClipAssetUnavailable::Missing)
             }
-            AssetAvailability::Unresolved => {
-                ClipAssetStatus::Unavailable(ClipAssetUnavailable::Unresolved)
+            AssetAvailability::Unavailable => {
+                ClipAssetStatus::Unavailable(ClipAssetUnavailable::Unanswered)
             }
         };
         self.requests.push(ClipAssetRequest {
@@ -1728,7 +1728,7 @@ mod tests {
         assert_eq!(requests.len(), 3);
         assert_eq!(
             requests[1].status,
-            ClipAssetStatus::Unavailable(ClipAssetUnavailable::Unresolved)
+            ClipAssetStatus::Unavailable(ClipAssetUnavailable::Unanswered)
         );
         assert_eq!(stage.clip_issues().len(), 1);
         assert_eq!(

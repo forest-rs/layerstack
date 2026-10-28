@@ -2124,7 +2124,7 @@ fn package_relative_missing_dependencies_keep_recovery_evidence() {
         assert!(doc.load_report().diagnostics.iter().any(|d| matches!(&d.diagnostic, ImportDiagnostic::AssetResolve {asset, error: AssetResolveError::NotFound} if &**asset == "./missing.usda")));
         assert!(matches!(
             doc.stage().stage().composition_errors(),
-            [layerstack::CompositionError::UnresolvedAsset(error)] if error.asset == "./missing.usda"
+            [layerstack::CompositionError::UnresolvedAsset(error)] if error.asset_path == "./missing.usda"
         ));
     }
 }
@@ -2774,11 +2774,11 @@ fn root_reload_refreshes_nested_expression_assets_and_recovers_missing_sources()
         .commit();
     assert!(matches!(
         &report.asset_failures[..],
-        [failure] if failure.asset == "child.usda" && failure.is_missing()
+        [failure] if failure.asset_path == "child.usda" && failure.is_missing()
     ));
     assert!(matches!(
         doc.stage.stage().composition_errors(),
-        [layerstack::CompositionError::UnresolvedSublayer(error)] if error.asset == "child.usda"
+        [layerstack::CompositionError::UnresolvedSublayer(error)] if error.asset_path == "child.usda"
     ));
     assert!(
         doc.view()

@@ -17,7 +17,7 @@ use layerstack::doc::{LayerId, LayerOffset, SublayerEntry};
 use layerstack::interner::TokenInterner;
 use layerstack::path::PathInterner;
 use layerstack::{
-    ArcKind, AssetResolveError, AssetResolver, CompositionError, InMemoryStore, ResolvedAsset,
+    AssetResolveError, AssetResolver, AssetUse, CompositionError, InMemoryStore, ResolvedAsset,
     Stage, StageOptions, UnresolvedSublayer, Value,
 };
 use layerstack_conformance::authored::{Names, dump_layer};
@@ -336,26 +336,29 @@ fn unresolved_sublayers_are_reported_by_both_readers() {
         }
         let stage = Stage::compose(&mut store, root, StageOptions::default());
         assert!(stage.composition_errors().is_empty(), "{format}");
-        let requested: Vec<(LayerId, &str, ArcKind)> = stage
+        let requested: Vec<(LayerId, &str, AssetUse)> = stage
             .asset_requests()
             .iter()
-            .map(|request| (request.anchor, request.asset_path.as_str(), request.arc))
+            .map(|request| (request.anchor, request.asset_path.as_str(), request.used_by))
             .collect();
         assert_eq!(
             requested,
-            [(root, "./missing.usda", ArcKind::Local)],
+            [(root, "./missing.usda", AssetUse::Sublayer)],
             "{format}"
         );
         store.mark_asset_missing(root, "./missing.usda");
         let stage = Stage::compose(&mut store, root, StageOptions::default());
         assert!(stage.asset_requests().is_empty(), "{format}");
-        let [CompositionError::UnresolvedSublayer(UnresolvedSublayer { layer, asset, .. })] =
-            stage.composition_errors()
+        let [
+            CompositionError::UnresolvedSublayer(UnresolvedSublayer {
+                layer, asset_path, ..
+            }),
+        ] = stage.composition_errors()
         else {
             panic!("{format}: {:?}", stage.composition_errors());
         };
         assert_eq!(
-            (*layer, asset.as_str()),
+            (*layer, asset_path.as_str()),
             (root, "./missing.usda"),
             "{format}"
         );

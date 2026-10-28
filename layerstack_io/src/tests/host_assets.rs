@@ -10,7 +10,7 @@
 
 use super::*;
 use layerstack::{
-    ArcKind, LayerOffset, PropertyPath, PropertyType, SublayerEntry, Time, Transaction,
+    AssetUse, LayerOffset, PropertyPath, PropertyType, SublayerEntry, Time, Transaction,
 };
 use layerstack_usdz::PackageFile;
 
@@ -20,6 +20,8 @@ use layerstack_usdz::PackageFile;
 struct Host {
     supplied: BTreeMap<String, Vec<u8>>,
     absent: BTreeSet<String>,
+    /// Sources whose read fails ([`IoErrorKind::Storage`]).
+    broken: BTreeSet<String>,
     reads: Reads,
 }
 
@@ -40,6 +42,8 @@ impl Storage for Host {
         }
         let kind = if self.absent.contains(identifier) {
             IoErrorKind::NotFound
+        } else if self.broken.contains(identifier) {
+            IoErrorKind::Storage
         } else {
             IoErrorKind::Unavailable
         };
@@ -88,24 +92,24 @@ fn open() -> StageDocument<Host> {
 
 /// The wanted list as (identifier, anchor identifier, arc), sorted: the
 /// document lists it by anchor layer id, which a host does not choose.
-fn wanted(doc: &StageDocument<Host>) -> Vec<(String, String, ArcKind)> {
-    let mut wanted: Vec<(String, String, ArcKind)> = doc
+fn wanted(doc: &StageDocument<Host>) -> Vec<(String, String, AssetUse)> {
+    let mut wanted: Vec<(String, String, AssetUse)> = doc
         .unavailable_assets()
         .into_iter()
         .map(|asset| {
             assert_eq!(
-                asset.identifier, asset.asset,
+                asset.identifier, asset.asset_path,
                 "the host identifies paths as written"
             );
             let anchor = doc.identifier(asset.anchor).unwrap_or("anonymous").into();
-            (asset.identifier, anchor, asset.arc)
+            (asset.identifier, anchor, asset.used_by)
         })
         .collect();
     wanted.sort_by(|a, b| (&a.0, &a.1).cmp(&(&b.0, &b.1)));
     wanted
 }
 
-fn want(identifier: &str, anchor: &str, arc: ArcKind) -> (String, String, ArcKind) {
+fn want(identifier: &str, anchor: &str, arc: AssetUse) -> (String, String, AssetUse) {
     (identifier.into(), anchor.into(), arc)
 }
 
@@ -121,11 +125,11 @@ fn look_name(doc: &StageDocument<Host>) -> Option<String> {
         .and_then(|a| a.value::<String>(Time::Default))
 }
 
-fn missing(doc: &StageDocument<Host>) -> Vec<(String, ArcKind)> {
+fn missing(doc: &StageDocument<Host>) -> Vec<(String, AssetUse)> {
     doc.asset_status()
-        .missing
+        .unresolved
         .into_iter()
-        .map(|asset| (asset.asset, asset.arc))
+        .map(|asset| (asset.asset_path, asset.used_by))
         .collect()
 }
 
@@ -138,26 +142,57 @@ fn opening_with_only_the_root_lists_what_the_stage_wants() {
     assert_eq!(
         wanted(&doc),
         [
-            want("a.usda", "root.usda", ArcKind::References),
-            want("child.usda", "root.usda", ArcKind::References),
-            want("sub.usda", "root.usda", ArcKind::Local),
+            want("a.usda", "root.usda", AssetUse::Reference),
+            want("child.usda", "root.usda", AssetUse::Reference),
+            want("sub.usda", "root.usda", AssetUse::Sublayer),
         ]
     );
     assert!(doc.view().prim("/Child").is_some());
     assert!(doc.view().prim("/FromSub").is_none());
-    assert_eq!(missing(&doc), [("gone.usda".into(), ArcKind::References)]);
+    assert_eq!(missing(&doc), [("gone.usda".into(), AssetUse::Reference)]);
     let status = doc.asset_status();
     assert_eq!(status.unavailable, doc.unavailable_assets());
     assert!(!status.is_complete());
+    let [gone] = &status.unresolved[..] else {
+        panic!("{:?}", status.unresolved);
+    };
+    assert_eq!(gone.identifier.as_deref(), Some("gone.usda"));
+    assert_eq!(gone.reason, Some(IoErrorKind::NotFound));
+    assert!(gone.is_missing());
     // The only failure is the confirmed absence; nothing unavailable is
     // reported as failed, and nothing failed the open.
     let failures: Vec<&str> = doc
         .load_report()
         .asset_failures
         .iter()
-        .map(|failure| failure.asset.as_str())
+        .map(|failure| failure.asset_path.as_str())
         .collect();
     assert_eq!(failures, ["gone.usda"]);
+}
+
+/// A source whose read fails is unresolved, not missing, under recovery:
+/// its arc contributes nothing, and the status names the source and the
+/// failure.
+#[test]
+fn a_source_that_fails_to_read_is_unresolved_with_its_reason() {
+    let mut host = Host::default();
+    host.supply("root.usda", ROOT.as_bytes());
+    host.broken.insert("gone.usda".into());
+    let loading = LoadOptions {
+        import_policy: ImportPolicy::AllowRecovery,
+        ..LoadOptions::default()
+    };
+    let doc =
+        StageDocument::open_with(host, "root.usda", StageOptions::default(), loading).unwrap();
+    let status = doc.asset_status();
+    let [gone] = &status.unresolved[..] else {
+        panic!("{:?}", status.unresolved);
+    };
+    assert_eq!(gone.asset_path, "gone.usda");
+    assert_eq!(gone.used_by, AssetUse::Reference);
+    assert_eq!(gone.identifier.as_deref(), Some("gone.usda"));
+    assert_eq!(gone.reason, Some(IoErrorKind::Storage));
+    assert!(!gone.is_missing());
 }
 
 /// Supplying some sources and loading composes them and leaves the rest
@@ -177,8 +212,8 @@ fn supplied_sources_load_round_by_round() {
     assert_eq!(
         wanted(&doc),
         [
-            want("a.usda", "root.usda", ArcKind::References),
-            want("grand.usda", "child.usda", ArcKind::References),
+            want("a.usda", "root.usda", AssetUse::Reference),
+            want("grand.usda", "child.usda", AssetUse::Reference),
         ]
     );
 
@@ -194,7 +229,7 @@ fn supplied_sources_load_round_by_round() {
     assert!(wanted(&doc).is_empty());
     let status = doc.asset_status();
     assert!(status.unavailable.is_empty());
-    assert_eq!(missing(&doc), [("gone.usda".into(), ArcKind::References)]);
+    assert_eq!(missing(&doc), [("gone.usda".into(), AssetUse::Reference)]);
 
     // Nothing left to read: loading again reads nothing.
     let before = doc.storage().reads.iter().count();
@@ -233,7 +268,7 @@ fn a_variant_switch_after_an_edit_wants_its_source_and_keeps_the_edit() {
     let (applied, loaded) = doc.apply(&edit).unwrap();
     assert_eq!(applied.asset_requests.len(), 1);
     assert!(loaded.layers.is_empty() && loaded.asset_failures.is_empty());
-    assert!(wanted(&doc).contains(&want("b.usda", "root.usda", ArcKind::References)));
+    assert!(wanted(&doc).contains(&want("b.usda", "root.usda", AssetUse::Reference)));
     assert!(
         !missing(&doc).iter().any(|(asset, _)| asset == "b.usda"),
         "wanted, not missing"
@@ -259,7 +294,7 @@ fn confirmed_absent_sources_become_missing() {
     assert_eq!(loaded.asset_failures.len(), 1);
     assert!(loaded.asset_failures[0].is_missing());
     assert!(!wanted(&doc).iter().any(|(id, _, _)| id == "sub.usda"));
-    assert!(missing(&doc).contains(&("sub.usda".into(), ArcKind::Local)));
+    assert!(missing(&doc).contains(&("sub.usda".into(), AssetUse::Sublayer)));
 
     let root = doc.stage().stage().root_layer().unwrap();
     let child = doc.store_mut().path("/Child");
@@ -289,7 +324,7 @@ fn a_package_is_one_supplied_buffer() {
     let mut doc = StageDocument::open(host, "root.usda", StageOptions::default()).unwrap();
     assert_eq!(
         wanted(&doc),
-        [want("pkg.usdz", "root.usda", ArcKind::References)]
+        [want("pkg.usdz", "root.usda", AssetUse::Reference)]
     );
 
     doc.storage_mut().supply("pkg.usdz", &package);
@@ -297,7 +332,7 @@ fn a_package_is_one_supplied_buffer() {
     assert_eq!(int(&doc, "/Pkg.part"), Some(1));
     assert_eq!(
         wanted(&doc),
-        [want("ext.usda", "pkg.usdz", ArcKind::References)]
+        [want("ext.usda", "pkg.usdz", AssetUse::Reference)]
     );
 
     doc.storage_mut()
@@ -333,13 +368,13 @@ fn opening_on_threads_wants_the_same_sources() {
     assert_eq!(
         wanted(&doc),
         [
-            want("a.usda", "root.usda", ArcKind::References),
-            want("grand.usda", "child.usda", ArcKind::References),
-            want("sub.usda", "root.usda", ArcKind::Local),
+            want("a.usda", "root.usda", AssetUse::Reference),
+            want("grand.usda", "child.usda", AssetUse::Reference),
+            want("sub.usda", "root.usda", AssetUse::Sublayer),
         ]
     );
     assert_eq!(int(&doc, "/Child.child"), Some(1));
-    assert_eq!(missing(&doc), [("gone.usda".into(), ArcKind::References)]);
+    assert_eq!(missing(&doc), [("gone.usda".into(), AssetUse::Reference)]);
 }
 
 /// A sublayer of a sublayer supplied in an earlier round composes when it
@@ -363,7 +398,7 @@ fn a_sublayer_of_a_supplied_sublayer_composes() {
     assert_eq!(int(&doc, "/Ball.serial"), Some(1));
     assert_eq!(
         wanted(&doc),
-        [want("./deep/detail.usda", "./sub.usda", ArcKind::Local)]
+        [want("./deep/detail.usda", "./sub.usda", AssetUse::Sublayer)]
     );
 
     doc.storage_mut().supply(
@@ -451,7 +486,7 @@ fn a_sublayer_added_to_a_sublayer_composes() {
     assert!(loaded.layers.is_empty());
     assert_eq!(
         wanted(&doc),
-        [want("later.usda", "sub.usda", ArcKind::Local)]
+        [want("later.usda", "sub.usda", AssetUse::Sublayer)]
     );
     doc.storage_mut().supply(
         "later.usda",

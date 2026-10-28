@@ -376,8 +376,8 @@ describe("applying", () => {
     assert.deepEqual(world.variantSets(), [{ name: "shade", selection: "light", variants: ["dark", "light"] }]);
     const receipt = stage.setVariantSelection(world, "shade", "dark");
     assert.deepEqual(
-      receipt.wanted.map((need) => [need.identifier, need.arc]),
-      [["dark.usda", "references"]],
+      receipt.unavailable.map((need) => [need.identifier, need.usedBy]),
+      [["dark.usda", "reference"]],
     );
     assert.equal(stage.attribute("/World.tint")?.get() ?? null, null, "the variant's asset is not read yet");
     const source = mockSource(files);

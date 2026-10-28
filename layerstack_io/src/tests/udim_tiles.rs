@@ -158,7 +158,7 @@ fn tiles_resolve_beside_their_layer_in_order_skipping_gaps_and_the_range_ends() 
             Some("models/tex/bark.<UDIM>.png")
         );
         let tile = &found.tiles[1];
-        assert_eq!(tile.asset, "./tex/bark.1003.png");
+        assert_eq!(tile.asset_path, "./tex/bark.1003.png");
         assert_eq!(tile.identifier, "models/tex/bark.1003.png");
         let calls = document.storage.calls();
         let spent = [0, 1, 2].map(|i| calls[i] - before[i]);
@@ -355,7 +355,7 @@ fn tiles_inside_a_package_come_from_its_index_without_storage_work() {
         .resolve_udim_tiles(pattern, Some(model), &mut UdimDiscovery::default())
         .unwrap();
     assert_eq!(numbers(&found), [1001, 1002, 1011]);
-    assert_eq!(found.tiles[0].asset, "./pkg.usdz[tex/c.1001.png]");
+    assert_eq!(found.tiles[0].asset_path, "./pkg.usdz[tex/c.1001.png]");
     assert_eq!(found.tiles[0].identifier, "models/pkg.usdz[tex/c.1001.png]");
     assert_eq!(found.work.package_reads, 1);
     assert_eq!(found.work.existence_checks, 0);

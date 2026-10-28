@@ -11,7 +11,7 @@ use layerstack::{AssetResolver, PropertyKind, PropertyPath, Provenance, Value};
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AssetReference {
     /// Authored asset spelling, before host resolution or expression evaluation.
-    pub authored_path: String,
+    pub asset_path: String,
     /// Winning authored source, or None for a schema fallback.
     pub source: Option<Provenance>,
 }
@@ -19,7 +19,7 @@ pub struct AssetReference {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AnchoredAsset {
     /// Original spelling, retained for diagnostics.
-    pub authored_path: String,
+    pub asset_path: String,
     /// Host-created identifier. This does not prove that an asset exists or
     /// identify a decoded texture/profile or GPU resource.
     pub identifier: String,
@@ -101,7 +101,7 @@ impl AssetReference {
         });
         if let Some(resolved) = resolved {
             return Ok(Some(Self {
-                authored_path: resolved.value,
+                asset_path: resolved.value,
                 source: resolved.provenance,
             }));
         }
@@ -116,7 +116,7 @@ impl AssetReference {
     pub fn from_value(value: &Value, source: Option<&Provenance>) -> Option<Self> {
         match value {
             Value::Asset(path) => Some(Self {
-                authored_path: path.to_string(),
+                asset_path: path.to_string(),
                 source: source.cloned(),
             }),
             _ => None,
@@ -129,17 +129,17 @@ impl AssetReference {
     /// decoding, color conversion or persistent resource allocation.
     /// AOUSD Core §9.2, §9.4–9.7.
     pub fn anchor(&self, resolver: &dyn AssetResolver) -> Result<AnchoredAsset, AssetAnchorError> {
-        if self.authored_path.is_empty() {
+        if self.asset_path.is_empty() {
             return Err(AssetAnchorError::EmptyPath);
         }
-        if self.authored_path.starts_with('`') {
+        if self.asset_path.starts_with('`') {
             return Err(AssetAnchorError::ExpressionRequiresEvaluation);
         }
         let identifier = if let Some(source) = &self.source {
-            resolver.anchor_asset_path(&self.authored_path, source.layer)
+            resolver.anchor_asset_path(&self.asset_path, source.layer)
         } else {
             // A source-free relative fallback cannot invent an authoring layer.
-            let path = self.authored_path.replace('\\', "/");
+            let path = self.asset_path.replace('\\', "/");
             if !path.starts_with('/') && !path.contains(':') {
                 return Err(AssetAnchorError::MissingSource);
             }
@@ -147,7 +147,7 @@ impl AssetReference {
         }
         .ok_or(AssetAnchorError::CannotAnchor)?;
         Ok(AnchoredAsset {
-            authored_path: self.authored_path.clone(),
+            asset_path: self.asset_path.clone(),
             identifier,
             source: self.source.clone(),
         })

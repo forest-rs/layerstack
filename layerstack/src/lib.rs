@@ -235,7 +235,7 @@ pub mod live_stage;
 
 pub use array_edit::{ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex, TypedArrayEdit};
 pub use asset::{
-    AssetRequest, AssetResolveError, AssetResolver, ExpressionAssetPath, FormatArgs,
+    AssetRequest, AssetResolveError, AssetResolver, AssetUse, ExpressionAssetPath, FormatArgs,
     FormatArgsError, PendingPrim, ResolvedAsset, expression_asset_paths,
     expression_asset_paths_for_stack, resolve_selected_deferred_arcs,
 };

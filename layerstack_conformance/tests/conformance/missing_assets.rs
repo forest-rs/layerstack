@@ -162,13 +162,13 @@ fn record(doc: &StageDocument<Fixture>) -> Json {
                     ArcKind::Payloads => "payload",
                     other => panic!("arc {other:?}"),
                 },
-                "asset": file_name(&error.asset),
+                "asset": file_name(&error.asset_path),
                 "introducing_layer": identifier(error.introducing_layer),
                 "introducing_spec": error.introducing_spec.display(store.paths(), store.tokens()),
             }),
             CompositionError::UnresolvedSublayer(error) => json!({
                 "type": "InvalidSublayerPath",
-                "asset": file_name(&error.asset),
+                "asset": file_name(&error.asset_path),
                 "layer": identifier(error.layer),
             }),
             other => panic!("unexpected composition error {other:?}"),
@@ -241,7 +241,7 @@ fn missing_dependencies_open_and_report_composition_errors() {
                 assert!(failure.is_missing(), "{failure}");
                 let anchor = failure.anchor.expect("authoring layer");
                 (
-                    failure.asset.clone(),
+                    failure.asset_path.clone(),
                     file_name(doc.identifier(anchor).unwrap()),
                 )
             })
@@ -264,8 +264,8 @@ fn missing_dependencies_open_and_report_composition_errors() {
             failure.to_string(),
             format!(
                 "could not open asset @{}@: {}: no such file",
-                failure.asset,
-                file_name(&failure.asset)
+                failure.asset_path,
+                file_name(&failure.asset_path)
             )
         );
     }

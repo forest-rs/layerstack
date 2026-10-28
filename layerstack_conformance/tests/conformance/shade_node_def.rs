@@ -63,7 +63,7 @@ fn reads(
         row.insert(
             format!("source_asset:{source_type}"),
             view.source_asset(source_type)
-                .map(|asset| asset.authored_path)
+                .map(|asset| asset.asset_path)
                 .into(),
         );
         row.insert(

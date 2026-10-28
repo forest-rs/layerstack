@@ -5,11 +5,11 @@
 //! package `@forest-rs/layerstack` (`packages/layerstack`).
 //!
 //! The module opens a stage from the bytes of its root layer and never
-//! fetches. The host runs the loop: the stage lists the assets it wants
-//! (`wanted`), the host fetches them however it likes, supplies their bytes
-//! ([`HostStorage::supply`], or [`HostStorage::confirm_absent`] for one that
-//! does not exist), and the stage reads them (`loadSupplied`), until
-//! nothing is wanted. A USDZ package is one supplied source. The stage then
+//! fetches. The host runs the loop: the stage lists the assets it asks for
+//! that the host has not supplied (`unavailable`), the host fetches them
+//! however it likes, supplies their bytes ([`HostStorage::supply`], or
+//! [`HostStorage::confirm_absent`] for one that does not exist), and the
+//! stage reads them (`loadSupplied`), until none is unavailable. A USDZ package is one supplied source. The stage then
 //! answers prim, child, attribute and value queries and explains where a
 //! value comes from (`explain`).
 //!
@@ -77,7 +77,7 @@ use wasm_bindgen::prelude::*;
 /// wrapper. It changes whenever an export's arguments or a record's layout
 /// change incompatibly; the wrapper refuses a module whose ABI differs from
 /// its own (`module.abi`).
-pub const ABI: u32 = 4;
+pub const ABI: u32 = 5;
 
 /// The crate version, the source revision the module was built from
 /// (`LAYERSTACK_REVISION` at build time, `unknown` when unset) and [`ABI`],

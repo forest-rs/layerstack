@@ -174,6 +174,10 @@ pub enum CrateValue {
     ListOp(CrateListOp),
     /// Time samples (timecode → value).
     TimeSamples(Vec<(f64, Self)>),
+    /// The text of a time sample stored as an `SdfUnregisteredValue`: what
+    /// OpenUSD's text parser records for a sample of an attribute whose
+    /// type name no type registers (`widget g.timeSamples = { 1: 200 }`).
+    UnregisteredText(String),
     /// Variant selection map (variant set → selection).
     VariantSelectionMap(Vec<(String, String)>),
     /// A vector of paths (resolved strings).
@@ -2257,7 +2261,16 @@ fn decode_time_samples(
 
     for time in timecodes {
         let vr = RawValueRep::new(read_bytes(data, &mut rep_off)?);
-        let val = decode_nested(&vr, data, sections, budget, mode)?;
+        let val = match decode_nested(&vr, data, sections, budget, mode)? {
+            // Kept as text, as a default value of the type is
+            // (`DecodedField::UnregisteredText`), not as a string.
+            CrateValue::String(text)
+                if vr.value_type().ok() == Some(ValueType::UnregisteredValue) =>
+            {
+                CrateValue::UnregisteredText(text)
+            }
+            val => val,
+        };
         samples.push((time, val));
     }
 

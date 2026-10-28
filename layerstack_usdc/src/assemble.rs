@@ -2209,6 +2209,9 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
                 // TimeSamples are handled separately.
                 Value::Null
             }
+            // A sample of an attribute of a type no type registers, as the
+            // text it is (as `DecodedField::UnregisteredText` for a default).
+            CrateValue::UnregisteredText(text) => Value::Unregistered(Arc::from(text.as_str())),
             CrateValue::VariantSelectionMap(_) => Value::Null,
             CrateValue::PathVector(paths) => {
                 let vals: Vec<Value> = paths
@@ -3975,6 +3978,50 @@ def "Other" {}
         assert_eq!(
             field("info"),
             value(Value::Dictionary(alloc::vec![("k".into(), Value::Int(1))]))
+        );
+    }
+
+    /// A time sample stored as an `SdfUnregisteredValue`, as OpenUSD's text
+    /// parser records a sample of a type no type registers, reads as the
+    /// text it is, as a default does; it read as a string, which the USDA
+    /// writer refuses for such a type. OpenUSD 26.11 reads the sample of
+    /// `widget g.timeSamples = { 1: 200 }` from its own crate file as
+    /// `Sdf.UnregisteredValue('200')`.
+    #[test]
+    fn unregistered_time_samples_read_as_text() {
+        use crate::writer::{Spec, SpecForm as Form, Value as V, write_crate};
+        let text = |text: &str| V::UnregisteredValue(Box::new(V::String(text.into())));
+        let bytes = write_crate(&[
+            Spec::new("/", Form::PseudoRoot)
+                .with_field("primChildren", V::TokenVector(alloc::vec!["P".into()])),
+            Spec::new("/P", Form::Prim)
+                .with_field("specifier", V::Specifier(Specifier::Def))
+                .with_field("propertyChildren", V::TokenVector(alloc::vec!["g".into()])),
+            Spec::new("/P.g", Form::Attribute)
+                .with_field("typeName", V::Token("widget".into()))
+                .with_field("custom", V::Bool(false))
+                .with_field(
+                    "timeSamples",
+                    V::TimeSamples(alloc::vec![(1.0, text("200")), (2.0, text("alpha"))]),
+                ),
+        ])
+        .unwrap();
+        let (tokens, paths) = (TokenInterner::default(), PathInterner::default());
+        let read = crate::read_usdc(&bytes, LayerId(1), &tokens, &paths, &mut NoAssets).unwrap();
+        let p = paths.intern(Path::parse_absolute("/P", &tokens).unwrap());
+        let prim = read.layer.prims().get(&p).unwrap();
+        let g = tokens.intern("g");
+        let attribute = prim
+            .properties
+            .iter()
+            .find(|entry| entry.name == g)
+            .expect("/P.g");
+        assert_eq!(
+            attribute.spec.time_samples.get().unwrap(),
+            [
+                (1.0, Value::Unregistered("200".into())),
+                (2.0, Value::Unregistered("alpha".into()))
+            ]
         );
     }
 

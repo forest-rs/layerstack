@@ -20,15 +20,35 @@
    "reads": false,
    "source": "#usda 1.0\n\ndef \"P\"\n{\n    double a = 1 (displayUnit = furlong)\n}\n"
   },
+  "read_duplicate_metadata_list_items": {
+   "reads": true,
+   "source": "#usda 1.0\ndef \"A\" (\n    prepend apiSchemas = [\"X\", \"X\"]\n)\n{\n}\n",
+   "text": "#usda 1.0\n\ndef \"A\"\n{\n}\n\n"
+  },
   "read_legacy_type_names": {
    "reads": true,
    "source": "#usda 1.0\n\ndef \"P\"\n{\n    custom Vec3f a = (1, 2, 3)\n    custom Vec2d[] b = [(1, 2), (3, 4)]\n    custom PointFloat[] c = [(0, 0, 0)]\n    custom NormalFloat d = (0, 1, 0)\n    custom VectorFloat e = (1, 0, 0)\n    custom Color f = (1, 0.5, 0)\n    custom Quatf g = (1, 0, 0, 0)\n    custom Matrix2d h = ( (1, 0), (0, 1) )\n    custom Frame i = ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1) )\n    custom Vec4h j.timeSamples = {\n        1: (1, 2, 3, 4),\n    }\n    custom double k (\n        customData = {\n            Vec3d offset = (1, 2, 3)\n        }\n    )\n}\n",
    "text": "#usda 1.0\n\ndef \"P\"\n{\n    custom float3 a = (1, 2, 3)\n    custom double2[] b = [(1, 2), (3, 4)]\n    custom point3f[] c = [(0, 0, 0)]\n    custom normal3f d = (0, 1, 0)\n    custom vector3f e = (1, 0, 0)\n    custom color3d f = (1, 0.5, 0)\n    custom quatf g = (1, 0, 0, 0)\n    custom matrix2d h = ( (1, 0), (0, 1) )\n    custom frame4d i = ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1) )\n    custom half4 j\n    half4 j.timeSamples = {\n        1: (1, 2, 3, 4),\n    }\n    custom double k (\n        customData = {\n            double3 offset = (1, 2, 3)\n        }\n    )\n}\n\n"
   },
+  "read_metadata_semicolons": {
+   "reads": true,
+   "source": "#usda 1.0\n(startFrame = 1; endFrame = 2)\n\ndef \"A\"\n{\n    float a (doc = \"x\"; hidden = true)\n}\n",
+   "text": "#usda 1.0\n(\n    endFrame = 2\n    startFrame = 1\n)\n\ndef \"A\"\n{\n    float a (\n        doc = \"x\"\n        hidden = true\n    )\n}\n\n"
+  },
+  "read_newline_after_comma": {
+   "reads": true,
+   "source": "#usda 1.0\ndef \"A\"\n{\n    float[] a = [1,\n    2\n    ]\n    float2 b = (1,\n 2)\n}\n",
+   "text": "#usda 1.0\n\ndef \"A\"\n{\n    float[] a = [1, 2]\n    float2 b = (1, 2)\n}\n\n"
+  },
   "read_property_metadata_list_ops": {
    "reads": true,
    "source": "#usda 1.0\n\ndef \"P\"\n{\n    double a (\n        delete testIntOps = [1, 2]\n        prepend testIntOps = [3]\n        append testTokenOps = [\"x\", \"y\"]\n    )\n    rel r (\n        add testIntOps = [4]\n        reorder testIntOps = [4, 3]\n    )\n}\n",
    "text": "#usda 1.0\n\ndef \"P\"\n{\n    double a (\n        delete testIntOps = [1, 2]\n        prepend testIntOps = [3]\n        append testTokenOps = [\"x\", \"y\"]\n    )\n    rel r (\n        add testIntOps = [4]\n        reorder testIntOps = [4, 3]\n    )\n}\n\n"
+  },
+  "read_references_differing_offsets": {
+   "reads": true,
+   "source": "#usda 1.0\ndef \"A\" (\n    references = [@a.usda@, @a.usda@ (offset = 1)]\n)\n{\n}\n",
+   "text": "#usda 1.0\n\ndef \"A\" (\n    references = [\n        @a.usda@,\n        @a.usda@ (offset = 1)\n    ]\n)\n{\n}\n\n"
   },
   "read_spline_comments": {
    "reads": true,
@@ -44,6 +64,11 @@
    "error": "'Expected ) at '\"mirror\"' in </P>",
    "reads": false,
    "source": "#usda 1.0\n\ndef \"P\" (\n    symmetryFunction = \"mirror\"\n)\n{\n}\n"
+  },
+  "read_variability_restated": {
+   "reads": true,
+   "source": "#usda 1.0\ndef \"A\"\n{\n    uniform float a = 1\n    uniform float a.connect = </B.c>\n    varying rel r = </B>\n    prepend rel r = </C>\n    custom float b = 1\n    float b.timeSamples = {\n        1: 2,\n    }\n}\n",
+   "text": "#usda 1.0\n\ndef \"A\"\n{\n    uniform float a = 1\n    uniform float a.connect = </B.c>\n    custom float b = 1\n    float b.timeSamples = {\n        1: 2,\n    }\n    prepend rel r = </C>\n}\n\n"
   },
   "read_variant_child_relative_target": {
    "error": "'Relationship target paths cannot contain variant selections at ' = <x>' in </P{v=one}Child.side>",
@@ -185,6 +210,191 @@
    "reads": true,
    "source": "#usda 1.0\n\ndef \"P\" (\n    variantSets = [\"a\", \"b\"]\n    append variantSets = \"c\"\n)\n{\n}\n",
    "text": "#usda 1.0\n\ndef \"P\" (\n    append variantSets = \"c\"\n)\n{\n}\n\n"
+  },
+  "strict_attribute_metadata_one_line": {
+   "error": "'Expected ) at 'hidden = true)' in </A.a>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"A\"\n{\n    float a (doc = \"x\" hidden = true)\n}\n"
+  },
+  "strict_dictionary_one_line": {
+   "error": "'Expected } at 'int b = 2 }' in </A>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"A\" (\n    customData = { int a = 1 int b = 2 }\n)\n{\n}\n"
+  },
+  "strict_duplicate_connections": {
+   "error": "'Duplicate items exist for field 'connectionPaths' at '/A.c' at '[</X.a>, </X.a>]' in </A.c>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"A\"\n{\n    float c.connect = [</X.a>, </X.a>]\n}\n"
+  },
+  "strict_duplicate_deleted_targets": {
+   "error": "'Duplicate items exist for field 'targetPaths' at '/A.r' at ' = [</B>, </B>]' in </A.r>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"A\"\n{\n    delete rel r = [</B>, </B>]\n}\n"
+  },
+  "strict_duplicate_inherits": {
+   "error": "'Duplicate items exist for field 'inheritPaths' at '/A' at '[</B>, </B>]' in </A>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"A\" (\n    prepend inherits = [</B>, </B>]\n)\n{\n}\n"
+  },
+  "strict_duplicate_references": {
+   "error": "'Duplicate items exist for field 'references' at '/A' at '[@a.usda@, @a.usda@]' in </A>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"A\" (\n    prepend references = [@a.usda@, @a.usda@]\n)\n{\n}\n"
+  },
+  "strict_duplicate_targets": {
+   "error": "'Duplicate items exist for field 'targetPaths' at '/A.r' at ' = [</B>, </C>, </B>]' in </A.r>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"A\"\n{\n    rel r = [</B>, </C>, </B>]\n}\n"
+  },
+  "strict_duplicate_variant_sets": {
+   "error": "'Duplicate items exist for field 'variantSetNames' at '/A' at '[\"v\", \"v\"]' in </A>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"A\" (\n    prepend variantSets = [\"v\", \"v\"]\n)\n{\n}\n"
+  },
+  "strict_inherit_above_root": {
+   "error": "'Inherit paths must be absolute prim paths at '<../../B>' in </A>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"A\" (\n    inherits = <../../B>\n)\n{\n}\n"
+  },
+  "strict_layer_metadata_one_line": {
+   "error": "'Expected ) at 'endFrame = 2' in </>",
+   "reads": false,
+   "source": "#usda 1.0\n(\n    startFrame = 1 endFrame = 2\n)\n"
+  },
+  "strict_list_edit_empty_metadata": {
+   "error": "'parse error matching pxrInternal_v0_26_11__pxrReserved___pegtl::pad<pxrInternal_v0_26_11__pxrReserved__::Sdf_TextFileFormatParser::ListOf<pxrInternal_v0_26_11__pxrReserved__::Sdf_TextFileFormatParser::ListValueItem>, pxrInternal_v0_26_11__pxrReserved__::Sdf_TextFileFormatParser::MultilinePadding> at ']' in </A>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"A\" (\n    prepend apiSchemas = []\n)\n{\n}\n"
+  },
+  "strict_list_edit_empty_refs": {
+   "error": "'Setting references to None (or an empty list)is only allowed when setting explicit references, not for list editing at '[]' in </A>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"A\" (\n    prepend references = []\n)\n{\n}\n"
+  },
+  "strict_list_edit_empty_rel": {
+   "error": "'Setting relationship targets to None (or empty list) is only allowed when setting explicit targets, not for list editing at ' = []' in </A.r>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"A\"\n{\n    delete rel r = []\n}\n"
+  },
+  "strict_list_edit_empty_variant_sets": {
+   "error": "'parse error matching pxrInternal_v0_26_11__pxrReserved___pegtl::pad<pxrInternal_v0_26_11__pxrReserved__::Sdf_TextFileFormatParser::ListOf<pxrInternal_v0_26_11__pxrReserved__::Sdf_TextFileFormatParser::String>, pxrInternal_v0_26_11__pxrReserved__::Sdf_TextFileFormatParser::MultilinePadding> at ']' in </A>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"A\" (\n    prepend variantSets = []\n)\n{\n}\n"
+  },
+  "strict_list_edit_none_connect": {
+   "error": "'Setting connection paths to None (or an empty list) is only allowed when setting explicit connection paths, not for list editing at 'None' in </A.c>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"A\"\n{\n    delete float c.connect = None\n}\n"
+  },
+  "strict_list_edit_none_inherits": {
+   "error": "'Setting inherit paths to None (or empty list) is only allowed when setting explicit inherit paths, not for list editing at 'None' in </A>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"A\" (\n    add inherits = None\n)\n{\n}\n"
+  },
+  "strict_list_edit_none_payload": {
+   "error": "'Setting payload to None (or an empty list)is only allowed when setting explicit payloads, not for list editing at 'None' in </A>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"A\" (\n    append payload = None\n)\n{\n}\n"
+  },
+  "strict_list_edit_none_refs": {
+   "error": "'Setting references to None (or an empty list)is only allowed when setting explicit references, not for list editing at 'None' in </A>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"A\" (\n    prepend references = None\n)\n{\n}\n"
+  },
+  "strict_list_edit_none_rel": {
+   "error": "'Setting relationship targets to None (or empty list) is only allowed when setting explicit targets, not for list editing at ' = None' in </A.r>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"A\"\n{\n    prepend rel r = None\n}\n"
+  },
+  "strict_list_op_on_value": {
+   "error": "'parse error matching pxrInternal_v0_26_11__pxrReserved___pegtl::seq<pxrInternal_v0_26_11__pxrReserved__::Sdf_TextFileFormatParser::AttributeDeclaration, pxrInternal_v0_26_11__pxrReserved___pegtl::pad<pxrInternal_v0_26_11__pxrReserved__::Sdf_PathParser::Dot, pxrInternal_v0_26_11__pxrReserved__::Sdf_TextFileFormatParser::InlinePadding>, pxrInternal_v0_26_11__pxrReserved__::Sdf_TextFileFormatParser::KeywordConnect, pxrInternal_v0_26_11__pxrReserved__::Sdf_TextFileFormatParser::Assignment, pxrInternal_v0_26_11__pxrReserved__::Sdf_TextFileFormatParser::ConnectValue> at '= 1' in </A.a>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"A\"\n{\n    add float a = 1\n}\n"
+  },
+  "strict_matrix_row_count": {
+   "error": "'Tuple dimensions error for attribute of type matrix2d. at '' in </A.m>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"A\"\n{\n    matrix2d m = ( (1, 0), (0, 1), (0, 0) )\n}\n"
+  },
+  "strict_matrix_row_length": {
+   "error": "'Tuple dimensions error for attribute of type matrix2d. at ', (0, 1) )' in </A.m>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"A\"\n{\n    matrix2d m = ( (1, 0, 0), (0, 1) )\n}\n"
+  },
+  "strict_metadata_after_connect": {
+   "error": "'Expected } at 'float a.connect = </Q.b> (doc = \"x\")' in </A>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"A\"\n{\n    float a.connect = </Q.b> (doc = \"x\")\n}\n"
+  },
+  "strict_metadata_after_samples": {
+   "error": "'Expected } at 'float a.timeSamples = {' in </A>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"A\"\n{\n    float a.timeSamples = {\n        1: 2,\n    } (doc = \"x\")\n}\n"
+  },
+  "strict_newline_after_equals": {
+   "error": "'Expected } at 'float a =' in </A>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"A\"\n{\n    float a =\n        1\n}\n"
+  },
+  "strict_newline_after_metadata_equals": {
+   "error": "'Expected string at '' in </A>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"A\" (\n    kind =\n    \"x\"\n)\n{\n}\n"
+  },
+  "strict_newline_after_type": {
+   "error": "'Expected } at 'float' in </A>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"A\"\n{\n    float\n    a = 1\n}\n"
+  },
+  "strict_newline_before_comma": {
+   "error": "'parse error matching pxrInternal_v0_26_11__pxrReserved__::Sdf_TextFileFormatParser::ListValueClose at ', 2]' in </A.a>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"A\"\n{\n    float[] a = [1\n    , 2]\n}\n"
+  },
+  "strict_newline_before_prim_name": {
+   "error": "'parse error matching pxrInternal_v0_26_11__pxrReserved___pegtl::internal::eof at 'def Scope' in </>",
+   "reads": false,
+   "source": "#usda 1.0\ndef Scope\n\"A\"\n{\n}\n"
+  },
+  "strict_newline_in_string": {
+   "error": "'parse error matching pxrInternal_v0_26_11__pxrReserved___pegtl::until<pxrInternal_v0_26_11__pxrReserved___pegtl::one<'\"'>, pxrInternal_v0_26_11__pxrReserved___pegtl::sor<pxrInternal_v0_26_11__pxrReserved___pegtl::two<'\\\\'>, pxrInternal_v0_26_11__pxrReserved___pegtl::string<'\\\\', '\"'>, pxrInternal_v0_26_11__pxrReserved__::Sdf_TextFileFormatParser::Utf8NoEolf>> at '' in </A.s>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"A\"\n{\n    string s = \"a\nb\"\n}\n"
+  },
+  "strict_relocates_without_comma": {
+   "error": "'Expected } at '</c>: </d>' in </>",
+   "reads": false,
+   "source": "#usda 1.0\n(\n    relocates = {\n        </a>: </b>\n        </c>: </d>\n    }\n)\n"
+  },
+  "strict_role_change": {
+   "error": "'attribute 'p' already has type 'point3d', cannot change to 'normal3d' at 'p.timeSamples = {' in </A.p>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"A\"\n{\n    point3d p = (1, 0, 0)\n    normal3d p.timeSamples = {\n        1: (0, 1, 0),\n    }\n}\n"
+  },
+  "strict_spline_curve_spacing": {
+   "error": "'Expected } at '(1, 2),' in </A.a>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"A\"\n{\n    double a.spline = {\n        bezier,\n        0: 1; post curve(1, 2),\n        1: 2,\n    }\n}\n"
+  },
+  "strict_type_change": {
+   "error": "'attribute 'a' already has type 'float', cannot change to 'double' at 'a.timeSamples = {' in </A.a>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"A\"\n{\n    float a = 1\n    double a.timeSamples = {\n        1: 2,\n    }\n}\n"
+  },
+  "strict_variability_change": {
+   "error": "'attribute 'a' already has variability 'SdfVariabilityUniform', cannot change to 'SdfVariabilityVarying' at 'a.connect = </B.c>' in </A.a>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"A\"\n{\n    uniform float a = 1\n    float a.connect = </B.c>\n}\n"
+  },
+  "strict_vector_array_dimension": {
+   "error": "'Tuple dimensions error for attribute of type float2[]. at ']' in </A.v>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"A\"\n{\n    float2[] v = [(1, 2), (3, 4, 5)]\n}\n"
+  },
+  "strict_vector_dimension": {
+   "error": "'Tuple dimensions error for attribute of type float3. at '' in </A.v>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"A\"\n{\n    float3 v = (1, 2)\n}\n"
   },
   "write_any_type": {
    "reads": true,

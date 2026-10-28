@@ -293,6 +293,12 @@ fn tokenize(text: &str) -> Result<Vec<Token>, String> {
                 }
             }
             let word = &text[at..end];
+            // `curve` and its parameters are separate tokens: OpenUSD wants
+            // white space, or a comment, between them (corpus
+            // `223_bad_spline_post_shaping_spacing`).
+            if word == "curve" && text[end..].starts_with('(') {
+                return Err(String::from("expected a space between `curve` and `(`"));
+            }
             match word {
                 "inf" => tokens.push(Token::Number(f64::INFINITY)),
                 "nan" => tokens.push(Token::Number(f64::NAN)),

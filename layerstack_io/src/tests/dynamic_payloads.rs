@@ -538,11 +538,11 @@ def "Params" (
     double TestPcp_radius = 50.0
     int A:TestPcp_num = 2
 }
-def "Near" (TestPcp_depth = 2 TestPcp_num = 3) {
+def "Near" (TestPcp_depth = 2; TestPcp_num = 3) {
     int TestPcp_depth = 2
     int TestPcp_num = 3
 }
-def "Far" (TestPcp_depth = 3 TestPcp_radius = 50) {
+def "Far" (TestPcp_depth = 3; TestPcp_radius = 50) {
     int TestPcp_depth = 3
     double TestPcp_radius = 50
 }

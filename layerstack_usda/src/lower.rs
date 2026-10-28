@@ -436,7 +436,11 @@ impl<'a> LowerCtx<'a> {
             "references" => {
                 let arc_list = sig.iter().find(|s| s.0 == SyntaxKind::ArcList);
                 let arc_node = arc_list.map(|s| self.node_from(tree, s.1));
-                Some(PrimMeta::References(self.lower_arc_listop(arc_node, op)))
+                Some(PrimMeta::References(self.lower_arc_listop(
+                    arc_node,
+                    op,
+                    node.span(),
+                )))
             }
             "inherits" => {
                 let pl = sig.iter().find(|s| s.0 == SyntaxKind::PathList);
@@ -459,7 +463,11 @@ impl<'a> LowerCtx<'a> {
             "payload" => {
                 let arc_list = sig.iter().find(|s| s.0 == SyntaxKind::ArcList);
                 let arc_node = arc_list.map(|s| self.node_from(tree, s.1));
-                Some(PrimMeta::Payload(self.lower_arc_listop(arc_node, op)))
+                Some(PrimMeta::Payload(self.lower_arc_listop(
+                    arc_node,
+                    op,
+                    node.span(),
+                )))
             }
             "variants" => {
                 let sel = sig.iter().find(|s| s.0 == SyntaxKind::VariantSelections);
@@ -469,7 +477,11 @@ impl<'a> LowerCtx<'a> {
             "variantSets" => {
                 let nl = sig.iter().find(|s| s.0 == SyntaxKind::NameList);
                 let nl_node = nl.map(|s| self.node_from(tree, s.1));
-                Some(PrimMeta::VariantSets(self.lower_name_listop(nl_node, op)))
+                Some(PrimMeta::VariantSets(self.lower_name_listop(
+                    nl_node,
+                    op,
+                    node.span(),
+                )))
             }
             "kind" => {
                 let val = self.find_string_value(node);
@@ -919,16 +931,25 @@ impl<'a> LowerCtx<'a> {
         &mut self,
         list_node: Option<SyntaxNode<'_>>,
         kind: ListOpKind,
+        span: Span,
     ) -> ListOpArc<'a> {
         let Some(node) = list_node else {
-            return ListOpArc { kind, items: None };
+            return ListOpArc {
+                span,
+                kind,
+                items: None,
+            };
         };
         // Check for None keyword.
         if node
             .children_no_trivia()
             .any(|c| c.kind() == SyntaxKind::Ident && self.text(c) == "None")
         {
-            return ListOpArc { kind, items: None };
+            return ListOpArc {
+                span,
+                kind,
+                items: None,
+            };
         }
         let tree = node.tree();
         let arc_ids = children_of(node, SyntaxKind::ArcRef);
@@ -938,6 +959,7 @@ impl<'a> LowerCtx<'a> {
             items.push(self.lower_arc_ref(self.node_from(tree, id)));
         }
         ListOpArc {
+            span,
             kind,
             items: Some(items),
         }
@@ -1028,18 +1050,28 @@ impl<'a> LowerCtx<'a> {
         &mut self,
         list_node: Option<SyntaxNode<'_>>,
         kind: ListOpKind,
+        span: Span,
     ) -> ListOp<&'a str> {
         let Some(node) = list_node else {
-            return ListOp { kind, items: None };
+            return ListOp {
+                span,
+                kind,
+                items: None,
+            };
         };
         if node
             .children_no_trivia()
             .any(|c| c.kind() == SyntaxKind::Ident && self.text(c) == "None")
         {
-            return ListOp { kind, items: None };
+            return ListOp {
+                span,
+                kind,
+                items: None,
+            };
         }
         let items = self.lower_name_list(node);
         ListOp {
+            span,
             kind,
             items: Some(items),
         }

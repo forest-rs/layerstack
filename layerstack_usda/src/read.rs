@@ -226,6 +226,8 @@ struct LexicalCursor<'a> {
     source: &'a str,
     lexer: Lexer<'a>,
     lookahead: Option<Token>,
+    /// Whether a line break precedes [`Self::lookahead`].
+    broken: bool,
 }
 
 /// A literal an element component holds: a number, `true` or `false`.
@@ -257,7 +259,12 @@ impl Literal {
 impl<'a> LexicalCursor<'a> {
     fn peek(&mut self) -> Option<Token> {
         if self.lookahead.is_none() {
-            self.lookahead = self.lexer.find(|token| !trivia(token.kind));
+            let mut broken = false;
+            self.lookahead = self.lexer.find(|token| {
+                broken |= token.kind == TokenKind::Newline;
+                !trivia(token.kind)
+            });
+            self.broken = broken;
         }
         self.lookahead
     }
@@ -330,6 +337,15 @@ impl Elements<'_> {
         let Some((components, _)) = self.components() else {
             return Element::Malformed;
         };
+        // A `,` on the next line is refused; the structural parser reports it.
+        if self
+            .cursor
+            .peek()
+            .is_some_and(|token| token.kind == TokenKind::Comma)
+            && self.cursor.broken
+        {
+            return Element::Malformed;
+        }
         self.cursor.eat(TokenKind::Comma);
         Element::Components(components)
     }
@@ -371,6 +387,7 @@ pub(crate) fn numeric_array<'a>(
         source,
         lexer: Lexer::at_offset(source, start),
         lookahead: None,
+        broken: false,
     };
     cursor.eat(TokenKind::LeftBracket)?;
     let elements = Elements { cursor, width };
@@ -544,6 +561,7 @@ pub(crate) fn numeric_tuple<'a>(
         source,
         lexer: Lexer::at_offset(source, start),
         lookahead: None,
+        broken: false,
     };
     let mut elements = Elements { cursor, width };
     let (components, end) = elements.components()?;

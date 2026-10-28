@@ -42,7 +42,9 @@ use alloc::format;
 use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
+use core::hash::Hash;
 
+use hashbrown::HashSet;
 use layerstack::doc::{
     FieldEntry, FieldValue, Layer, LayerId, LayerOffset, PrimSpec, Reference, ReferenceSource,
     Specifier, SublayerEntry, Value, VariantSets, VariantSpec, get_field_mut, set_field_vec,
@@ -682,6 +684,14 @@ impl EmitCtx<'_> {
         let Some((key, value)) = self.metadata_entry(entry, target) else {
             return;
         };
+        if value.is_list_op() {
+            self.check_empty_edit(
+                entry.span,
+                entry.key,
+                entry.op,
+                field_list_op_is_empty(&value),
+            );
+        }
         match get_field_mut(fields, &key) {
             Some(existing) if value.is_list_op() => {
                 if !set_field_list_op(existing, entry.op, value) {
@@ -767,6 +777,18 @@ impl EmitCtx<'_> {
                     self.convert_metadata_value(value, "dictionary")
                 });
             return match converted {
+                // OpenUSD's parser sets no list of a registered field that
+                // names an item twice, and reports nothing: the statement is
+                // ignored (`_SetItemsIfListOpWithError`,
+                // `pxr/usd/sdf/textParserHelpers.cpp`). It is ignored here
+                // too, with a warning.
+                Ok(value) if field_list_op_repeats(&value) => {
+                    self.diagnostics.push(Diagnostic::warning(
+                        entry.span,
+                        format!("`{key_name}` list op statement names an item twice; ignored"),
+                    ));
+                    None
+                }
                 Ok(value) => Some((key, value)),
                 Err(error) => {
                     reject(self, Some(value_type), error);
@@ -891,13 +913,45 @@ impl EmitCtx<'_> {
         ) else {
             return;
         };
-        spec.type_name = Some(property_type);
-        // Qualifiers restated by any statement of the attribute hold for the
-        // whole spec (Core §7.6.3.1.1 `custom`, §7.6.4.1.2 `variability`).
-        spec.custom |= attr.custom;
-        if attr.uniform {
-            spec.variability = Variability::Uniform;
+        // Every statement of an attribute declares its type and
+        // variability; OpenUSD refuses a statement that changes either
+        // ("attribute 'a' already has type ..., cannot change to ...",
+        // `_PrimInitAttribute`, `pxr/usd/sdf/textParserHelpers.cpp`).
+        let variability = if attr.uniform {
+            Variability::Uniform
+        } else {
+            Variability::Varying
+        };
+        if let Some(existing) = &spec.type_name {
+            if existing.type_name() != property_type.type_name() {
+                self.reject(
+                    attr.span,
+                    format!(
+                        "attribute '{}' already has type '{}', cannot change to '{}'",
+                        attr.name,
+                        existing.type_name(),
+                        property_type.type_name()
+                    ),
+                );
+                return;
+            }
+            if spec.variability != variability {
+                self.reject(
+                    attr.span,
+                    format!(
+                        "attribute '{}' already has variability '{:?}', cannot change to '{:?}'",
+                        attr.name, spec.variability, variability
+                    ),
+                );
+                return;
+            }
         }
+        spec.type_name = Some(property_type);
+        // `custom` restated by any statement holds for the whole spec
+        // (Core §7.6.3.1.1); the variability is the one every statement
+        // declares (§7.6.4.1.2).
+        spec.custom |= attr.custom;
+        spec.variability = variability;
         set_fields(&mut spec.metadata, metadata);
         if let Some((kind, listop)) = connection {
             match spec.targets.as_mut() {
@@ -952,6 +1006,8 @@ impl EmitCtx<'_> {
                 .collect();
             let targets: Vec<&str> = targets.iter().map(|target| &**target).collect();
             let target_paths = self.target_paths(&targets, anchor, rel.span);
+            self.check_empty_edit(rel.span, "targetPaths", rel.op, target_paths.is_empty());
+            self.check_duplicates(rel.span, "targetPaths", &target_paths);
             let mut listop = ListOp::default();
             match rel.op {
                 ast::ListOpKind::Explicit => listop.explicit = Some(target_paths),
@@ -979,11 +1035,14 @@ impl EmitCtx<'_> {
             return;
         };
         spec.custom |= rel.custom;
-        // A relationship is uniform unless a statement says `varying`
-        // (AOUSD Core §7.6.5; OpenUSD `TextParserAction<KeywordRel>`).
-        if rel.varying {
-            spec.variability = Variability::Varying;
-        }
+        // A relationship is uniform unless its statement says `varying`;
+        // each statement sets it, so the last one's holds (AOUSD Core
+        // §7.6.5; OpenUSD `TextParserAction<KeywordRel>`).
+        spec.variability = if rel.varying {
+            Variability::Varying
+        } else {
+            Variability::Uniform
+        };
         set_fields(&mut spec.metadata, metadata);
         if let Some(listop) = listop {
             match spec.targets.as_mut() {
@@ -1204,6 +1263,13 @@ impl EmitCtx<'_> {
         arc: &str,
         in_branch: bool,
     ) -> ListOp<Reference> {
+        let field = if arc == "Payload" {
+            "payload"
+        } else {
+            "references"
+        };
+        let empty = arc_list.items.as_ref().is_none_or(Vec::is_empty);
+        self.check_empty_edit(arc_list.span, field, arc_list.kind, empty);
         let Some(items) = &arc_list.items else {
             // `= None` clears the arc list.
             return ListOp::explicit(Vec::new());
@@ -1215,6 +1281,7 @@ impl EmitCtx<'_> {
                 .iter()
                 .filter_map(|r| self.emit_arc_ref(r, arc, in_branch)),
         );
+        self.check_duplicates(arc_list.span, field, &refs);
 
         let mut listop = ListOp::default();
         match arc_list.kind {
@@ -1339,6 +1406,7 @@ impl EmitCtx<'_> {
             return ListOp::explicit(Vec::new());
         };
         let items: Vec<TokenId> = items.iter().map(|name| self.tokens.intern(name)).collect();
+        self.check_duplicates(names.span, "variantSetNames", &items);
         let mut listop = ListOp::default();
         match names.kind {
             ast::ListOpKind::Explicit => listop.explicit = Some(items),
@@ -1365,12 +1433,28 @@ impl EmitCtx<'_> {
         sites: &[VariantSelectionSite],
         arc: &str,
     ) -> ListOp<PathId> {
+        let field = if arc == "Inherit" {
+            "inheritPaths"
+        } else {
+            "specializes"
+        };
+        let empty = paths.items.as_ref().is_none_or(Vec::is_empty);
+        self.check_empty_edit(paths.span, field, paths.kind, empty);
         let Some(items) = &paths.items else {
             return ListOp::explicit(Vec::new());
         };
 
         let mut path_ids = Vec::with_capacity(items.len());
         path_ids.extend(items.iter().filter_map(|s| {
+            // A relative path may not climb above the root: OpenUSD's
+            // `MakeAbsolutePath` gives no path for it.
+            if self.climbs_above_root(s, anchor, sites) {
+                self.reject(
+                    paths.span,
+                    format!("{arc} paths must be absolute prim paths: <{s}>"),
+                );
+                return None;
+            }
             // Spec: `SdfSchema::IsValidInheritPath` and
             // `IsValidSpecializesPath`.
             let Some(absolute) = (!has_variant_selection(s))
@@ -1392,6 +1476,7 @@ impl EmitCtx<'_> {
             }
             path
         }));
+        self.check_duplicates(paths.span, field, &path_ids);
 
         let mut listop = ListOp::default();
         match paths.kind {
@@ -1468,6 +1553,13 @@ impl EmitCtx<'_> {
             })
             .collect();
         let target_paths = self.target_paths(&targets, anchor, conn.span);
+        self.check_empty_edit(
+            conn.span,
+            "connectionPaths",
+            conn.op,
+            conn.targets.is_empty(),
+        );
+        self.check_duplicates(conn.span, "connectionPaths", &target_paths);
 
         let mut listop = ListOp::default();
         match conn.op {
@@ -1479,6 +1571,87 @@ impl EmitCtx<'_> {
             ast::ListOpKind::Reorder => listop.reorder = target_paths,
         }
         listop
+    }
+
+    /// Reports a list-edit statement that sets no items, `None` or `[]`,
+    /// which OpenUSD allows only for an explicit list ("Setting ... to None
+    /// (or an empty list) is only allowed when setting explicit ...",
+    /// `pxr/usd/sdf/textFileFormatParser.cpp`).
+    ///
+    /// Spec: AOUSD Core §12.4 (list ops).
+    fn check_empty_edit(&mut self, span: Span, field: &str, kind: ast::ListOpKind, empty: bool) {
+        if empty && kind != ast::ListOpKind::Explicit {
+            self.reject(
+                span,
+                format!(
+                    "Setting {field} to None (or an empty list) is only allowed when \
+                     setting explicit {field}, not for list editing"
+                ),
+            );
+        }
+    }
+
+    /// Reports a list-op statement that names an item twice, as OpenUSD's
+    /// parser refuses it for targets, connections, arcs and `variantSets`
+    /// (`_HasDuplicates` in `_SetListOpItemsWithError`,
+    /// `pxr/usd/sdf/textParserHelpers.h`). List-op metadata statements are
+    /// not checked: OpenUSD reads `prepend apiSchemas = ["X", "X"]`.
+    fn check_duplicates<T: Eq + Hash>(&mut self, span: Span, field: &str, items: &[T]) {
+        let duplicated = if items.len() <= 16 {
+            items
+                .iter()
+                .enumerate()
+                .any(|(i, item)| items[..i].contains(item))
+        } else {
+            let mut seen = HashSet::with_capacity(items.len());
+            !items.iter().all(|item| seen.insert(item))
+        };
+        if duplicated {
+            self.reject(span, format!("Duplicate items exist for field '{field}'"));
+        }
+    }
+
+    /// Whether the relative `path`, authored on the prim at `anchor` in the
+    /// variant branches `sites`, climbs above the root
+    /// (`<../../B>` on `/A`).
+    fn climbs_above_root(&self, path: &str, anchor: &str, sites: &[VariantSelectionSite]) -> bool {
+        if path.starts_with('/') {
+            return false;
+        }
+        let mut climbs = 0;
+        let mut rest = path;
+        while let Some(tail) = rest.strip_prefix("../") {
+            climbs += 1;
+            rest = tail;
+        }
+        if rest == ".." {
+            climbs += 1;
+        }
+        climbs > self.anchor_elements(anchor, sites).len()
+    }
+
+    /// The elements of the prim path relative paths authored on the prim at
+    /// `anchor`, in the variant branches `sites`, anchor at: each prim name,
+    /// followed by the selections of the variant sets it hosts (`None`),
+    /// without the selections the path ends with (`SdfPath::GetPrimPath`).
+    fn anchor_elements<'p>(
+        &self,
+        anchor: &'p str,
+        sites: &[VariantSelectionSite],
+    ) -> Vec<Option<&'p str>> {
+        let mut elements: Vec<Option<&str>> = Vec::new();
+        for (level, name) in anchor.split('/').filter(|s| !s.is_empty()).enumerate() {
+            elements.push(Some(name));
+            let hosted = sites
+                .iter()
+                .filter(|site| self.paths.resolve(site.host_path).depth() == level + 1)
+                .count();
+            elements.extend(core::iter::repeat_n(None, hosted));
+        }
+        while elements.last() == Some(&None) {
+            elements.pop();
+        }
+        elements
     }
 
     /// Makes `path`, authored on the prim at `anchor` whose spec sits in the
@@ -1504,20 +1677,7 @@ impl EmitCtx<'_> {
         if path.starts_with('/') || sites.is_empty() {
             return Some(absolute_path(path, anchor));
         }
-        // The anchor's elements: each prim name, followed by the selections
-        // of the variant sets it hosts (`None`).
-        let mut elements: Vec<Option<&str>> = Vec::new();
-        for (level, name) in anchor.split('/').filter(|s| !s.is_empty()).enumerate() {
-            elements.push(Some(name));
-            let hosted = sites
-                .iter()
-                .filter(|site| self.paths.resolve(site.host_path).depth() == level + 1)
-                .count();
-            elements.extend(core::iter::repeat_n(None, hosted));
-        }
-        while elements.last() == Some(&None) {
-            elements.pop();
-        }
+        let mut elements = self.anchor_elements(anchor, sites);
         let mut rest = path;
         let mut climbs = 0;
         loop {
@@ -1963,6 +2123,44 @@ fn absolute_path<'p>(path: &'p str, anchor: &str) -> Cow<'p, str> {
         out.push('/');
     }
     Cow::Owned(out)
+}
+
+/// Whether a list-op field value names an item twice in one of its lists.
+fn field_list_op_repeats(value: &FieldValue) -> bool {
+    fn repeats<T: Eq + Hash>(op: &ListOp<T>) -> bool {
+        let lists =
+            op.explicit
+                .iter()
+                .chain([&op.prepend, &op.append, &op.delete, &op.add, &op.reorder]);
+        lists.into_iter().any(|items| {
+            let mut seen = HashSet::with_capacity(items.len());
+            !items.iter().all(|item| seen.insert(item))
+        })
+    }
+    match value {
+        FieldValue::TokenListOp(op) => repeats(op),
+        FieldValue::StringListOp(op) => repeats(op),
+        FieldValue::IntListOp(op) => repeats(op),
+        FieldValue::UIntListOp(op) => repeats(op),
+        FieldValue::Int64ListOp(op) => repeats(op),
+        FieldValue::UInt64ListOp(op) => repeats(op),
+        FieldValue::PathListOp(op) => repeats(op),
+        FieldValue::Value(_) => false,
+    }
+}
+
+/// Whether a list-op field value authors no items at all.
+fn field_list_op_is_empty(value: &FieldValue) -> bool {
+    match value {
+        FieldValue::TokenListOp(op) => op.items().next().is_none(),
+        FieldValue::StringListOp(op) => op.items().next().is_none(),
+        FieldValue::IntListOp(op) => op.items().next().is_none(),
+        FieldValue::UIntListOp(op) => op.items().next().is_none(),
+        FieldValue::Int64ListOp(op) => op.items().next().is_none(),
+        FieldValue::UInt64ListOp(op) => op.items().next().is_none(),
+        FieldValue::PathListOp(op) => op.items().next().is_none(),
+        FieldValue::Value(_) => false,
+    }
 }
 
 /// The unit names an attribute's `displayUnit` may hold: those of
@@ -2478,7 +2676,7 @@ def \"A\" {
 #usda 1.0
 (
     relocates = {
-        </Rig/Anim>: </Anim>
+        </Rig/Anim>: </Anim>,
         <Rig/Other>: <>,
         </Rig/Deep>: </Rig/Anim/Deep>
     }

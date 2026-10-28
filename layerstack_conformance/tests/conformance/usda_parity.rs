@@ -10,10 +10,11 @@
 //! composed targets or connections (see the script for every case). Here:
 //!
 //! - a case OpenUSD reads, layerstack's [`read_usda`] reads with no
-//!   diagnostic, [`save_usda`] writes OpenUSD's text byte for byte, and a
+//!   error, [`save_usda`] writes OpenUSD's text byte for byte, and a
 //!   stage on the layer composes the same targets;
 //! - a case OpenUSD refuses, layerstack's reader refuses too: it reports an
-//!   error, which a strict import fails on.
+//!   error, which a strict import fails on. A warning is allowed where
+//!   OpenUSD reads a statement and silently ignores it.
 //!
 //! Spec: AOUSD Core §16 (the USDA text format), §12.4 (list ops).
 
@@ -21,6 +22,7 @@ use layerstack::{
     AssetResolveError, AssetResolver, InMemoryStore, LayerId, PathInterner, ResolvedAsset, Stage,
     StageOptions, TokenInterner,
 };
+use layerstack_usda::diagnostic::{Diagnostic, Severity};
 use layerstack_usda::read_usda;
 use layerstack_usda::save::save_usda;
 use serde_json::Value as Json;
@@ -72,19 +74,25 @@ fn outcome(source: &str, queries: &[&str]) -> Outcome {
         &store.paths,
         &mut NoAssets,
     );
+    // Errors, which a strict import fails on; a warning reports what is
+    // read as OpenUSD reads it.
+    let error = |d: &&Diagnostic| d.severity == Severity::Error;
     let diagnostics = read
         .parse_diagnostics
         .iter()
+        .filter(error)
         .map(|d| format!("parse: {d:?}"))
         .chain(
             read.lower_diagnostics
                 .iter()
+                .filter(error)
                 .map(|d| format!("lower: {d:?}")),
         )
         .chain(
             read.emitted
                 .diagnostics
                 .iter()
+                .filter(error)
                 .map(|d| format!("emit: {d:?}")),
         )
         .collect();

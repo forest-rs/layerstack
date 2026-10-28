@@ -390,6 +390,8 @@ pub enum ListOpKind {
 /// A list-op applied to a generic list.
 #[derive(Debug)]
 pub struct ListOp<T> {
+    /// Source span of the statement.
+    pub span: Span,
     /// The kind of list operation.
     pub kind: ListOpKind,
     /// The items (`None` for `= None`).
@@ -399,6 +401,8 @@ pub struct ListOp<T> {
 /// A list-op applied to composition arc references.
 #[derive(Debug)]
 pub struct ListOpArc<'a> {
+    /// Source span of the statement.
+    pub span: Span,
     /// The kind of list operation.
     pub kind: ListOpKind,
     /// The arc entries (`None` for `= None`).

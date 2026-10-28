@@ -130,7 +130,8 @@ pub enum UsdcWriteError {
     },
     /// A field the crate stores as a type this writer does not encode: an
     /// attribute's `displayUnit`, which OpenUSD holds as a `TfEnum` of its
-    /// units (`SdfGetUnitFromName`, `pxr/usd/sdf/types.cpp`).
+    /// units (`SdfGetUnitFromName`, `pxr/usd/sdf/types.cpp`), and a
+    /// relationship's legacy `default`, an `SdfPath`.
     UnencodedField {
         /// Path of the owning spec.
         path: String,

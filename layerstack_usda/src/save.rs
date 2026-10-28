@@ -749,10 +749,14 @@ impl Lowering<'_> {
                 })
             }
             PropertyKind::Relationship => {
-                if spec.type_name.is_some()
-                    || spec.default.is_some()
-                    || spec.time_samples.is_authored()
-                {
+                // A relationship holds no value but the legacy `default`
+                // path (`rel r.default = </A>`).
+                let default = match &spec.default {
+                    None => None,
+                    Some(LayerValue::Path(default)) => Some(String::from(&**default)),
+                    Some(_) => return invalid(path, Invalid::RelationshipValue),
+                };
+                if spec.type_name.is_some() || spec.time_samples.is_authored() {
                     return invalid(path, Invalid::RelationshipValue);
                 }
                 Property::Relationship(Relationship {
@@ -760,6 +764,7 @@ impl Lowering<'_> {
                     custom: spec.custom,
                     varying: spec.variability == Variability::Varying,
                     targets,
+                    default,
                     metadata,
                 })
             }
@@ -915,6 +920,7 @@ impl Lowering<'_> {
         Ok(match value {
             L::Bool(v) => Value::Bool(*v),
             L::Unregistered(text) => Value::Unregistered(String::from(&**text)),
+            L::Path(_) => return no("path"),
             L::UChar(v) => Value::UChar(*v),
             L::Int(v) => Value::Int(*v),
             L::UInt(v) => Value::UInt(*v),

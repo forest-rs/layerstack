@@ -881,6 +881,10 @@ pub struct Relationship {
     /// targets authored); an explicit empty list writes `rel name = None`,
     /// which blocks weaker opinions.
     pub targets: Option<ListOp<String>>,
+    /// The legacy `default` path (`rel name.default = <path>`), as
+    /// authored; written after the targets, as `Sdf_WriteRelationship`
+    /// writes it (`pxr/usd/sdf/fileIO_Common.h`).
+    pub default: Option<String>,
     /// Relationship metadata (e.g. `bindMaterialAs`), in authored order;
     /// written sorted by name.
     pub metadata: Vec<Metadatum>,
@@ -894,6 +898,7 @@ impl Relationship {
             custom: false,
             varying: false,
             targets: Some(ListOp::explicit(alloc::vec![target.into()])),
+            default: None,
             metadata: Vec::new(),
         }
     }
@@ -907,6 +912,16 @@ impl Relationship {
 
     fn validate(&self, path: &str) -> Result<(), WriteError> {
         validate_targets(self.targets.as_ref(), path)?;
+        if let Some(default) = &self.default
+            && default
+                .chars()
+                .any(|c| matches!(c, '<' | '>' | '\n' | '\r'))
+        {
+            return Err(WriteError::InvalidArcPath {
+                path: path.into(),
+                target: default.clone(),
+            });
+        }
         validate_metadata(&self.metadata, &mut Vec::new(), path)
     }
 }
@@ -3350,6 +3365,21 @@ impl Writer<'_> {
                 w.out.push_str(" = ");
                 w.targets(targets, depth);
             });
+        }
+        // The default last, its line ended by the statement's indentation
+        // and a line break, as `Sdf_WriteRelationship` ends it
+        // (`Puts(out, indent, "\n")`, `pxr/usd/sdf/fileIO_Common.h`).
+        if let Some(default) = &relationship.default {
+            self.indent(depth);
+            if relationship.varying {
+                self.out.push_str("varying ");
+            }
+            self.out.push_str("rel ");
+            self.out.push_str(&relationship.name);
+            self.out.push_str(".default = ");
+            self.path(default);
+            self.indent(depth);
+            self.out.push('\n');
         }
     }
 

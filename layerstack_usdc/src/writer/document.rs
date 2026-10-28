@@ -369,6 +369,14 @@ fn attribute_value(declared: Declared, value: &mut UsdaValue) -> Value {
 
 fn lower_relationship(relationship: &mut Relationship, prim: &str) -> Result<Spec, UsdcWriteError> {
     let path = alloc::format!("{prim}.{}", relationship.name);
+    // A relationship's legacy `default` is an `SdfPath` value, which this
+    // writer does not encode.
+    if relationship.default.is_some() {
+        return Err(UsdcWriteError::UnencodedField {
+            path,
+            key: "default".into(),
+        });
+    }
     let mut spec = Spec::new(path.clone(), SpecForm::Relationship).with_field(
         "variability",
         Value::Variability(if relationship.varying {

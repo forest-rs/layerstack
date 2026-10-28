@@ -79,26 +79,14 @@ struct Difference {
 
 /// The corpus files layerstack handles otherwise than OpenUSD 26.11, in
 /// name order.
-const DIFFERENCES: &[Difference] = &[
-    Difference {
-        file: "127_varyingRelationship.usda",
-        outcome: Outcome::Error,
-        reason: "a relationship's legacy `.default = <path>` is reported: the layer \
-                 has no path value to keep it",
-    },
-    Difference {
-        file: "185_namespaced_properties.usda",
-        outcome: Outcome::Error,
-        reason: "a relationship's legacy `.default = <path>`, as in \
-                 `127_varyingRelationship`",
-    },
-    Difference {
-        file: "46_weirdStringContent.usda",
-        outcome: Outcome::Error,
-        reason: "string escapes that make bytes that are not UTF-8 are reported: a \
-                 layerstack string is UTF-8",
-    },
-];
+const DIFFERENCES: &[Difference] = &[Difference {
+    file: "46_weirdStringContent.usda",
+    outcome: Outcome::Error,
+    reason: "string escapes that make bytes that are not UTF-8 (`\\xff`) are \
+             reported: OpenUSD keeps the bytes in a `std::string`, a layerstack \
+             string is UTF-8 (`Arc<str>`), and the reader refuses to change \
+             the bytes rather than keep them",
+}];
 
 /// Exports each `.usda` file of the directory `argv[1]` into `argv[2]`, as
 /// `<name>` with OpenUSD's text or `<name>.error` when OpenUSD refuses it.

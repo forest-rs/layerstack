@@ -1692,26 +1692,36 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
         self.parse_namespaced_name();
 
         // `.default = <path>`, a legacy relationship default OpenUSD still
-        // reads (`RelationshipSpec`, `pxr/usd/sdf/textFileFormatParser.h`).
-        // The layer has no path value to hold it, so it is reported rather
-        // than dropped unseen; any other suffix is not relationship syntax.
+        // reads and keeps (`RelationshipSpec`,
+        // `pxr/usd/sdf/textFileFormatParser.h`); any other suffix is not
+        // relationship syntax.
         self.eat_trivia();
         if self.peek() == Some(TokenKind::Dot) {
             let span = self.current_span();
+            let start = span.start;
+            self.builder.start_node(SyntaxKind::DefaultSuffix, start);
             self.bump();
             if self.at_keyword("default") {
-                self.error(
-                    span,
-                    "unsupported: a relationship's `.default` value is not kept",
-                );
-            } else {
-                self.error(span, "expected `default` after a relationship name");
-            }
-            if self.at_keyword("timeSamples") || self.at_keyword("default") {
                 self.bump();
                 self.expect(TokenKind::Equals);
-                self.parse_value_expr(); // consume and discard
+                self.eat_trivia();
+                if self.peek() == Some(TokenKind::LeftAngle) {
+                    self.parse_path_ref();
+                } else {
+                    let span = self.current_span();
+                    self.error(span, "expected a path after a relationship's `.default =`");
+                    self.parse_value_expr();
+                }
+            } else {
+                self.error(span, "expected `default` after a relationship name");
+                if self.at_keyword("timeSamples") {
+                    self.bump();
+                    self.expect(TokenKind::Equals);
+                    self.parse_value_expr(); // consume and discard
+                }
             }
+            let end = self.current_span().start;
+            self.builder.finish_node(end);
         }
 
         // Optional assignment.

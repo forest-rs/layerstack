@@ -60,6 +60,11 @@
    "source": "#usda 1.0\ndef \"A\" (\n    references = [@a.usda@, @a.usda@ (offset = 1)]\n)\n{\n}\n",
    "text": "#usda 1.0\n\ndef \"A\" (\n    references = [\n        @a.usda@,\n        @a.usda@ (offset = 1)\n    ]\n)\n{\n}\n\n"
   },
+  "read_relationship_default": {
+   "reads": true,
+   "source": "#usda 1.0\ndef \"A\"\n{\n    rel r.default = </B>\n    rel s = </C>\n    rel s.default = <../D>\n    custom rel t.default = </E>\n    varying rel u (\n        doc = \"x\"\n    )\n    prepend varying rel u = </F>\n    varying rel u.default = </G>\n    def \"Child\"\n    {\n        rel v.default = </H>\n    }\n}\n",
+   "text": "#usda 1.0\n\ndef \"A\"\n{\n    rel r\n    rel r.default = </B>    \n    rel s = </C>\n    rel s.default = <../D>    \n    custom rel t\n    rel t.default = </E>    \n    varying rel u (\n        doc = \"x\"\n    )\n    prepend varying rel u = </F>\n    varying rel u.default = </G>    \n\n    def \"Child\"\n    {\n        rel v\n        rel v.default = </H>        \n    }\n}\n\n"
+  },
   "read_spline_bounded_loop_and_default_inner_loops": {
    "reads": true,
    "source": "#usda 1.0\ndef \"A\"\n{\n    double a.spline = {\n        pre: loop repeat(0),\n        loop: (0, 0, 0, 0, 0),\n        0: 1; post held,\n        16: 2; post held,\n    }\n    double b.spline = {\n        post: loop reset,\n        loop: (0, 16, 0, 2, 5),\n        0: 1; post held,\n        16: 2; post held,\n    }\n}\n",

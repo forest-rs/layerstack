@@ -554,6 +554,7 @@ fn instancer_prim(
         custom: false,
         varying: false,
         targets: Some(ListOp::explicit(targets)),
+        default: None,
         metadata: Vec::new(),
     });
     prim.children.push(scope);

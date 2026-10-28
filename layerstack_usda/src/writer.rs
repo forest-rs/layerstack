@@ -182,14 +182,58 @@ impl Document {
     ///
     /// See [`Self::to_usda`].
     pub fn write_usda(&self, out: &mut String) -> Result<(), WriteError> {
+        self.validate_text()?;
+        Writer::new(out).document(self);
+        Ok(())
+    }
+
+    /// Serializes the document as USDA text into `sink`, a piece at a time,
+    /// without holding the whole text: the bytes [`Self::to_usda`] returns
+    /// reach `sink` in order, in pieces of about 64 KiB.
+    ///
+    /// Validation runs before anything is written, so a document error
+    /// leaves `sink` untouched. Once `sink` refuses a piece
+    /// ([`fmt::Write::write_str`] returns an error) nothing more is handed to
+    /// it and [`WriteError::Sink`] is returned: what `sink` received is an
+    /// incomplete prefix, for the caller to discard (`layerstack_io` writes a
+    /// file through a temporary that replaces it only when complete).
+    ///
+    /// # Errors
+    ///
+    /// See [`Self::to_usda`], and [`WriteError::Sink`].
+    pub fn write_usda_to<W: fmt::Write + ?Sized>(&self, sink: &mut W) -> Result<(), WriteError> {
+        self.validate_text()?;
+        let mut buffer = String::with_capacity(SPILL_BYTES + SPILL_SLACK);
+        let mut sink = StrSink(sink);
+        let mut spill = Spill {
+            sink: &mut sink,
+            failed: false,
+        };
+        let mut w = Writer {
+            out: &mut buffer,
+            spill: Some(&mut spill),
+        };
+        w.document(self);
+        w.flush();
+        if w.spill.is_some_and(|spill| spill.failed) {
+            Err(WriteError::Sink)
+        } else {
+            Ok(())
+        }
+    }
+
+    /// [`Self::validate`] plus the checks only text needs: text cannot
+    /// preserve every binary value description, so those differences are
+    /// rejected before output rather than silently rewritten.
+    ///
+    /// # Errors
+    ///
+    /// See [`Self::to_usda`].
+    pub fn validate_text(&self) -> Result<(), WriteError> {
         self.validate()?;
-        // Text cannot preserve every binary value description. Reject
-        // those differences before output rather than silently rewrite them.
         for prim in &self.prims {
             validate_text_prim(prim, "")?;
         }
-        let mut w = Writer { out };
-        w.document(self);
         Ok(())
     }
 
@@ -1486,6 +1530,10 @@ pub enum WriteError {
         /// Path of the prim or variant (`/P`, `/P{v=x}`).
         path: String,
     },
+    /// The sink of [`Document::write_usda_to`] refused text after the
+    /// document validated, and holds an incomplete prefix of it. The sink
+    /// keeps its own error.
+    Sink,
 }
 
 impl fmt::Display for WriteError {
@@ -1550,6 +1598,7 @@ impl fmt::Display for WriteError {
             Self::EmptyExplicitVariantSets { path } => {
                 write!(f, "{path}: USDA cannot write an empty explicit variantSets")
             }
+            Self::Sink => f.write_str("the text sink refused the written text"),
         }
     }
 }
@@ -1788,7 +1837,7 @@ pub const PERMISSIONS: &[&str] = &["public", "private"];
 /// Rejects binary descriptions USDA cannot preserve: per-knot curve types
 /// and sparse-edit kinds distinct from their declaration. `parent` is the
 /// path of the spec holding `prim`.
-fn validate_text_prim(prim: &Prim, parent: &str) -> Result<(), WriteError> {
+pub(crate) fn validate_text_prim(prim: &Prim, parent: &str) -> Result<(), WriteError> {
     // A prim in a variant (`/P{v=x}C`) follows its variant's selection
     // directly, as in `Prim::validate`.
     let path = if parent.ends_with('}') {
@@ -2111,7 +2160,7 @@ impl Value {
     pub fn to_usda_text(&self) -> String {
         let spelling = |v: bool| if v { "true" } else { "false" };
         let mut out = String::new();
-        let mut writer = Writer { out: &mut out };
+        let mut writer = Writer::new(&mut out);
         match self {
             Self::Bool(v) => writer.out.push_str(spelling(*v)),
             Self::BoolArray(items) => writer.array(items, |w, v| w.out.push_str(spelling(*v))),
@@ -2644,12 +2693,67 @@ fn is_written_on_layer(entry: &Metadatum) -> bool {
         )
 }
 
+/// How many bytes of text [`Document::write_usda_to`] gathers before handing
+/// them to its sink.
+const SPILL_BYTES: usize = 64 * 1024;
+
+/// Room past [`SPILL_BYTES`] for the item written after the last check, so
+/// the buffer rarely grows.
+const SPILL_SLACK: usize = 4 * 1024;
+
+/// A `fmt::Write` of any size behind one pointer.
+struct StrSink<'s, W: ?Sized>(&'s mut W);
+
+impl<W: fmt::Write + ?Sized> fmt::Write for StrSink<'_, W> {
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        self.0.write_str(s)
+    }
+}
+
+/// Where a streaming [`Writer`] hands its buffered text.
+struct Spill<'s> {
+    sink: &'s mut dyn fmt::Write,
+    /// Set once `sink` refuses text; nothing more is handed to it.
+    failed: bool,
+}
+
 /// Infallible text sink over a validated document.
+///
+/// Text goes to `out`; with a `spill`, `out` is a buffer handed on and
+/// cleared between items ([`Self::spill`]) once it holds [`SPILL_BYTES`].
 struct Writer<'o> {
     out: &'o mut String,
+    spill: Option<&'o mut Spill<'o>>,
+}
+
+impl<'o> Writer<'o> {
+    /// A writer appending all its text to `out`.
+    fn new(out: &'o mut String) -> Self {
+        Self { out, spill: None }
+    }
 }
 
 impl Writer<'_> {
+    /// Hands the buffered text on once there is enough of it. Called
+    /// between items (array elements, time samples, properties, prims),
+    /// never inside one.
+    fn spill(&mut self) {
+        if self.out.len() >= SPILL_BYTES {
+            self.flush();
+        }
+    }
+
+    /// Hands any buffered text on.
+    fn flush(&mut self) {
+        let Some(spill) = self.spill.as_deref_mut() else {
+            return;
+        };
+        if !spill.failed && spill.sink.write_str(self.out).is_err() {
+            spill.failed = true;
+        }
+        self.out.clear();
+    }
+
     /// The layer as `_WriteLayer` (`pxr/usd/sdf/usdaFileFormat.cpp`)
     /// writes it: the header with the comment first, the other fields
     /// sorted by name, then relocates; `reorder rootPrims`; the root prims
@@ -2831,6 +2935,7 @@ impl Writer<'_> {
 
     /// §16.2.17: `specifier [type] "name" [( metadata )] { body }`.
     fn prim(&mut self, prim: &Prim, depth: usize) {
+        self.spill();
         self.indent(depth);
         self.out.push_str(match prim.specifier {
             Specifier::Def => "def ",
@@ -3023,6 +3128,7 @@ impl Writer<'_> {
             Property::Attribute(attribute) => self.attribute(attribute, depth),
             Property::Relationship(relationship) => self.relationship(relationship, depth),
         }
+        self.spill();
     }
 
     /// §16.2.17: `variantSet "name" = { "variant" [( metadata )] { body }
@@ -3224,6 +3330,7 @@ impl Writer<'_> {
                 self.out.push_str(": ");
                 self.attribute_value(attribute, value, depth + 1);
                 self.out.push_str(",\n");
+                self.spill();
             }
             self.indent(depth);
             self.out.push_str("}\n");
@@ -3233,13 +3340,13 @@ impl Writer<'_> {
             self.attribute_head(attribute);
             self.out.push_str(".spline = {\n");
             let indent = "    ".repeat(depth + 1);
-            let time = |out: &mut String, v: f64| Writer { out }.f64(v);
+            let time = |out: &mut String, v: f64| Writer::new(out).f64(v);
             let value = |out: &mut String, v: f64| {
                 #[allow(clippy::cast_possible_truncation, reason = "a float spline's values")]
                 match attribute.type_name.as_str() {
-                    "float" => Writer { out }.f32(v as f32),
-                    "half" => Writer { out }.half(layerstack::half::from_f64(v)),
-                    _ => Writer { out }.f64(v),
+                    "float" => Writer::new(out).f32(v as f32),
+                    "half" => Writer::new(out).half(layerstack::half::from_f64(v)),
+                    _ => Writer::new(out).f64(v),
                 }
             };
             let custom = |out: &mut String, time: f64| {
@@ -3249,7 +3356,7 @@ impl Writer<'_> {
                     .find(|(t, _)| *t == time)
                 {
                     out.push_str("; ");
-                    Writer { out }.inline_dictionary(entries);
+                    Writer::new(out).inline_dictionary(entries);
                 }
             };
             crate::spline_text::write(self.out, &indent, spline, &time, &value, &custom);
@@ -3718,6 +3825,7 @@ impl Writer<'_> {
                 self.out.push_str(", ");
             }
             item(self, x);
+            self.spill();
         }
         self.out.push(']');
     }

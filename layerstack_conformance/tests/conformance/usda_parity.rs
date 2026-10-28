@@ -24,7 +24,7 @@ use layerstack::{
 };
 use layerstack_usda::diagnostic::{Diagnostic, Severity};
 use layerstack_usda::read_usda;
-use layerstack_usda::save::save_usda;
+use layerstack_usda::save::{save_usda, save_usda_to};
 use serde_json::Value as Json;
 
 const ORACLE: &str = include_str!("../../fixtures/usda_parity/oracle.json");
@@ -98,6 +98,16 @@ fn outcome(source: &str, queries: &[&str]) -> Outcome {
         .collect();
     let saved =
         save_usda(&read.emitted.layer, &store.tokens, &store.paths).map_err(|e| format!("{e:?}"));
+    let mut streamed = String::new();
+    let streaming = save_usda_to(
+        &read.emitted.layer,
+        &store.tokens,
+        &store.paths,
+        &mut streamed,
+    )
+    .map(|()| streamed)
+    .map_err(|e| format!("{e:?}"));
+    assert_eq!(streaming, saved, "streamed text");
     store.insert_layer(read.emitted.layer);
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
     let view = stage.view(&store);

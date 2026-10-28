@@ -77,8 +77,10 @@ preparation all use the registry. Asset resolution remains caller-owned.
 
 `writer::Document` is an explicit authoring model. To save an existing
 `layerstack::Layer`, use `save::save_usda` with that layer's token and path
-interners. This preserves supported authored opinions and asset paths; it does
-not flatten a composed stage, copy referenced assets, or retain source formatting.
+interners, or `save::save_usda_to` to stream the same text into any
+`core::fmt::Write` a piece at a time, without holding all of it. This preserves
+supported authored opinions and asset paths; it does not flatten a composed
+stage, copy referenced assets, or retain source formatting.
 
 Saving supports sublayers, references, payloads, inherits, specializes,
 variant sets and nested branches, attributes, relationships, time samples,

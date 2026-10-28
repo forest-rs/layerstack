@@ -14,7 +14,7 @@
 //!
 //! - a file OpenUSD reads: [`read_usda`] reports no error, so a strict
 //!   import reads it, and [`save_usda`] writes OpenUSD's text byte for
-//!   byte;
+//!   byte, as does streaming it ([`save_usda_to`]);
 //! - a file OpenUSD refuses: the reader reports an error, so a strict
 //!   import refuses it.
 //!
@@ -38,7 +38,7 @@ use layerstack::{
 };
 use layerstack_usda::diagnostic::Severity;
 use layerstack_usda::read_usda;
-use layerstack_usda::save::save_usda;
+use layerstack_usda::save::{save_usda, save_usda_to};
 
 /// What became of one corpus file.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -174,7 +174,17 @@ fn layerstack_text(source: &[u8]) -> Option<String> {
     if errors {
         return None;
     }
-    save_usda(&read.emitted.layer, &store.tokens, &store.paths).ok()
+    let text = save_usda(&read.emitted.layer, &store.tokens, &store.paths).ok()?;
+    let mut streamed = String::new();
+    save_usda_to(
+        &read.emitted.layer,
+        &store.tokens,
+        &store.paths,
+        &mut streamed,
+    )
+    .expect("streams the layer it saves");
+    assert_eq!(streamed, text, "streamed text");
+    Some(text)
 }
 
 fn outcome(file: &Path, openusd: Option<&str>) -> Outcome {

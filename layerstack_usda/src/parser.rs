@@ -2430,35 +2430,55 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
         self.builder.finish_node(end);
     }
 
+    /// Parses one entry of a dictionary: `type key = value`, or
+    /// `dictionary key = { ... }`.
+    ///
+    /// OpenUSD's `DictionaryValueItem` (`pxr/usd/sdf/textFileFormatParser.h`)
+    /// requires the type, or the `dictionary` keyword and a dictionary
+    /// value, and a space between it and the key; a string item
+    /// (`"key": "value"`) is only read in `prefixSubstitutions` and
+    /// `suffixSubstitutions` ([`Self::parse_string_dictionary`]). Each
+    /// other form is reported, and still read for recovery.
+    ///
+    /// Spec: AOUSD Core §16.2.11 (`DictionaryValueItem`).
     fn parse_dictionary_entry(&mut self) {
         let start = self.current_span().start;
         self.builder.start_node(SyntaxKind::DictionaryEntry, start);
 
-        // A string dictionary item, `"key": "value"`, as in
-        // `prefixSubstitutions` and `suffixSubstitutions` (OpenUSD's
-        // `StringDictionaryItem`, `pxr/usd/sdf/textFileFormatParser.h`).
         self.eat_trivia();
         if self.at_string() && self.peek_next_non_trivia() == Some(TokenKind::Colon) {
-            self.bump(); // key
-            self.expect(TokenKind::Colon);
-            self.parse_value_expr();
-            self.eat(TokenKind::Comma);
+            let span = self.current_span();
+            self.error(
+                span,
+                "a `\"key\": \"value\"` entry is only read in prefixSubstitutions and \
+                 suffixSubstitutions; a dictionary entry needs a type",
+            );
+            self.parse_string_dictionary_item();
             let end = self.current_span().start;
             self.builder.finish_node(end);
             return;
         }
 
-        // Optional type or `dictionary` keyword.
+        // The type or `dictionary` keyword.
+        let mut dictionary = false;
         if self.peek() == Some(TokenKind::Ident) && self.current_text() == "dictionary" {
+            dictionary = true;
             self.bump();
+            self.key_separated("`dictionary`");
         } else if self.peek() == Some(TokenKind::Ident) {
             self.bump(); // type name
             // Array suffix.
-            self.eat_trivia();
-            if self.peek() == Some(TokenKind::LeftBracket) {
+            if self.peek_past_trivia_from(self.pos).map(|(_, kind)| kind)
+                == Some(TokenKind::LeftBracket)
+            {
+                self.eat_trivia();
                 self.bump();
                 self.expect(TokenKind::RightBracket);
             }
+            self.key_separated("the type");
+        } else if self.at_string() {
+            let span = self.current_span();
+            self.error(span, "expected a type before the dictionary key");
         }
 
         // Key: string or identifier, which OpenUSD's `DictionaryKey`
@@ -2474,8 +2494,118 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
         }
 
         self.expect(TokenKind::Equals);
+        self.eat_trivia();
+        if dictionary && self.peek() != Some(TokenKind::LeftBrace) {
+            let span = self.current_span();
+            self.error(span, "expected a dictionary after `dictionary` and its key");
+        }
         self.parse_value_expr();
 
+        let end = self.current_span().start;
+        self.builder.finish_node(end);
+    }
+
+    /// Reports a dictionary key not set apart from what precedes it,
+    /// `what`, by a space on the line (`int"k"`, `int[]k`): OpenUSD's
+    /// `TokenSeparator` (`pxr/usd/sdf/textFileFormatParser.h`).
+    fn key_separated(&mut self, what: &str) {
+        let mut spaced = false;
+        let mut index = self.pos;
+        while let Some(token) = self.tokens.get(index) {
+            match token.kind {
+                TokenKind::Whitespace => spaced = true,
+                TokenKind::BlockComment => {}
+                _ => break,
+            }
+            index += 1;
+        }
+        let at_newline = self
+            .tokens
+            .get(index)
+            .is_some_and(|token| token.kind == TokenKind::Newline);
+        if !spaced || at_newline {
+            let span = self.current_span();
+            self.error(
+                span,
+                format!("expected a space on the line between {what} and the dictionary key"),
+            );
+        }
+    }
+
+    /// Parses `"key": "value"`, an entry of [`Self::parse_string_dictionary`]
+    /// (OpenUSD's `StringDictionaryItem`: two strings and a `:` on one
+    /// line).
+    fn parse_string_dictionary_item(&mut self) {
+        self.eat_trivia();
+        if self.at_string() {
+            self.bump(); // key
+        } else {
+            let span = self.current_span();
+            self.error(span, "expected a string key");
+        }
+        let mut index = self.pos;
+        let mut broken = false;
+        while let Some(token) = self.tokens.get(index) {
+            if !is_trivia(token.kind) {
+                break;
+            }
+            broken |= token.kind == TokenKind::Newline;
+            index += 1;
+        }
+        if broken {
+            let span = self.current_span();
+            self.error(span, "unexpected line break before `:`");
+        }
+        self.expect(TokenKind::Colon);
+        self.line_break = false;
+        self.eat_trivia();
+        self.on_the_line("the value");
+        if !self.at_string() {
+            let span = self.current_span();
+            self.error(span, "expected a string value");
+        }
+        self.parse_value_expr();
+    }
+
+    /// Parses the value of `prefixSubstitutions` or `suffixSubstitutions`:
+    /// `{ "key": "value", ... }`, entries separated by `,` and a `,` after
+    /// the last allowed, as OpenUSD's `StringDictionary` reads it
+    /// (`ListOf<StringDictionaryItem>`, `pxr/usd/sdf/textFileFormatParser.h`),
+    /// into a `DictionaryValue` of string entries.
+    ///
+    /// Spec: AOUSD Core §16.2.19 (`PrefixSubstitutionsMetadata`,
+    /// `StringDictionary`).
+    fn parse_string_dictionary(&mut self) {
+        let start = self.current_span().start;
+        self.builder.start_node(SyntaxKind::DictionaryValue, start);
+        self.expect(TokenKind::LeftBrace);
+        loop {
+            let progress = self.progress();
+            self.eat_trivia();
+            if self.peek() == Some(TokenKind::RightBrace) || self.current().is_none() {
+                break;
+            }
+            let entry = self.current_span().start;
+            self.builder.start_node(SyntaxKind::DictionaryEntry, entry);
+            self.parse_string_dictionary_item();
+            let end = self.current_span().start;
+            self.builder.finish_node(end);
+            // `,` ends an entry on its line; only `}` may follow without one.
+            self.line_break = false;
+            self.eat_trivia();
+            if self.peek() == Some(TokenKind::Comma) {
+                if self.line_break {
+                    let span = self.current_span();
+                    self.error(span, "unexpected line break before `,`");
+                }
+                self.bump();
+            } else if self.peek() != Some(TokenKind::RightBrace) && self.current().is_some() {
+                let span = self.current_span();
+                self.error(span, "expected `,` or `}` after a string dictionary entry");
+            }
+            self.skip_unparsed(progress);
+        }
+        self.expect(TokenKind::RightBrace);
         let end = self.current_span().start;
         self.builder.finish_node(end);
     }
@@ -2751,6 +2881,10 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
         self.eat_trivia();
         if self.peek() == Some(TokenKind::Ident) && self.current_text() == "None" {
             self.bump();
+        } else if self.peek() == Some(TokenKind::LeftBrace)
+            && matches!(key, "prefixSubstitutions" | "suffixSubstitutions")
+        {
+            self.parse_string_dictionary();
         } else if self.peek() == Some(TokenKind::LeftBrace) {
             self.nested(Nesting::Value, Self::parse_dictionary_value);
         } else {
@@ -2943,6 +3077,76 @@ def Xform "Root" (
                 "{src}: {:?}",
                 result.diagnostics
             );
+        }
+    }
+
+    #[test]
+    fn dictionary_entries_follow_the_dictionary_grammar() {
+        let dictionary = |body: &str| {
+            parse(&format!(
+                "#usda 1.0\n(\n    customLayerData = {{\n        {body}\n    }}\n)\n"
+            ))
+            .diagnostics
+        };
+        // `DictionaryValueItem`: a type, or `dictionary` and a dictionary,
+        // set apart from the key by a space on the line.
+        for body in [
+            "int a = 1",
+            "int[] a = [1]",
+            "int [] a = [1]",
+            "int /* c */ a = 1",
+            "string \"k\" = \"v\"",
+            "int def = 1",
+            "dictionary d = {\n        }",
+        ] {
+            assert!(
+                dictionary(body).is_empty(),
+                "{body}: {:?}",
+                dictionary(body)
+            );
+        }
+        for body in [
+            "\"k\" = 1",
+            "\"k\" = {}",
+            "\"k\": \"v\"",
+            "dictionary d = 1",
+            "int\"k\" = 1",
+            "int []a = [1]",
+            "int/* c */a = 1",
+            "int\n        a = 1",
+        ] {
+            assert!(!dictionary(body).is_empty(), "{body}");
+        }
+
+        // `StringDictionary`: `"key": "value"` entries on their lines,
+        // separated by `,`, and nothing else.
+        let substitutions = |body: &str| {
+            parse(&format!(
+                "#usda 1.0\ndef \"P\" (\n    prefixSubstitutions = {{\n        {body}\n    }}\n)\n{{\n}}\n"
+            ))
+            .diagnostics
+        };
+        for body in [
+            "\"a\": \"b\"",
+            "\"a\":\"b\", 'c' : 'd',",
+            "\"a\": \"b\",\n        \"c\": \"d\"",
+            "",
+        ] {
+            assert!(
+                substitutions(body).is_empty(),
+                "{body}: {:?}",
+                substitutions(body)
+            );
+        }
+        for body in [
+            "\"a\": \"b\"\n        \"c\": \"d\"",
+            "\"a\": \"b\"\n        , \"c\": \"d\"",
+            "\"a\"\n        : \"b\"",
+            "\"a\":\n        \"b\"",
+            "\"a\": 1",
+            "string a = \"b\"",
+        ] {
+            assert!(!substitutions(body).is_empty(), "{body}");
         }
     }
 

@@ -15,6 +15,11 @@
    "source": "#usda 1.0\n\ndef \"P\"\n{\n    bool a = yes\n    bool b = no\n    bool[] c = [yes, no, true, 0]\n    bool[] d = edit [\n        write yes to [0]\n        minsize 3 fill no\n    ]\n}\n",
    "text": "#usda 1.0\n\ndef \"P\"\n{\n    bool a = 1\n    bool b = 0\n    bool[] c = [1, 0, 1, 0]\n    bool[] d = edit [write 1 to [0]; minsize 3 fill 0]\n}\n\n"
   },
+  "read_dictionary_entry_spacing": {
+   "reads": true,
+   "source": "#usda 1.0\n(\n    customLayerData = {\n        int [] a = [1]\n        int /* c */ b = 2\n        dictionary 'd' = {\n            string def = \"v\"\n        }\n    }\n)\n",
+   "text": "#usda 1.0\n(\n    customLayerData = {\n        int[] a = [1]\n        int b = 2\n        dictionary d = {\n            string def = \"v\"\n        }\n    }\n)\n\n"
+  },
   "read_dictionary_semicolons": {
    "reads": true,
    "source": "#usda 1.0\n\ndef \"P\" (\n    customData = { string a = \"yes\"; int b = 4; dictionary c = { string d = \"x\"; double e = 1 } }\n)\n{\n    double s.spline = {\n        0: 6; post linear; {},\n        1: 6; {},\n    }\n}\n",
@@ -94,6 +99,11 @@
    "reads": true,
    "source": "#usda 1.0\nreorder rootPrims = [\"A\"]; def \"A\" { double a = 1; rel r = </A>; }\ndef \"B\"\n{\n    reorder nameChildren = [\"C\"]; def \"C\" { double c = 1; } # a comment\n    variantSet \"v\" = { \"x\" { double x = 1; } \"y\" {} }\n}\ndef \"D\" (\n    customData = { int a = 1; }\n)\n{\n}\ndef \"E\" {}",
    "text": "#usda 1.0\n\ndef \"A\"\n{\n    double a = 1\n    rel r = </A>\n}\n\ndef \"B\"\n{\n    def \"C\"\n    {\n        double c = 1\n    }\n    variantSet \"v\" = {\n        \"x\" {\n            double x = 1\n\n        }\n        \"y\" {\n\n        }\n    }\n}\n\ndef \"D\" (\n    customData = {\n        int a = 1\n    }\n)\n{\n}\n\ndef \"E\"\n{\n}\n\n"
+  },
+  "read_substitutions_on_one_line": {
+   "reads": true,
+   "source": "#usda 1.0\ndef \"P\" (\n    prefixSubstitutions = {\"a\":\"b\", 'c' : 'd',}\n    suffixSubstitutions = {\n        \"e\": \"f\",\n        \"g\": \"h\",\n    }\n)\n{\n}\n",
+   "text": "#usda 1.0\n\ndef \"P\" (\n    prefixSubstitutions = {\n        \"a\": \"b\", \n        \"c\": \"d\"\n    }\n    suffixSubstitutions = {\n        \"e\": \"f\", \n        \"g\": \"h\"\n    }\n)\n{\n}\n\n"
   },
   "read_symmetry_function": {
    "reads": true,
@@ -311,10 +321,30 @@
    "reads": false,
    "source": "#usda 1.0\ndef \"P\"\n{\n    dictionary[] bags\n}\n"
   },
+  "strict_dictionary_entry_string_item": {
+   "error": "'Expected } at '\"k\": \"v\"' in </P>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"P\" (\n    customData = {\n        \"k\": \"v\"\n    }\n)\n{\n}\n"
+  },
+  "strict_dictionary_entry_untyped": {
+   "error": "'Expected } at '\"k\" = 1' in </>",
+   "reads": false,
+   "source": "#usda 1.0\n(\n    customLayerData = {\n        \"k\" = 1\n    }\n)\n"
+  },
+  "strict_dictionary_entry_untyped_dictionary": {
+   "error": "'Expected } at '\"d\" = {' in </>",
+   "reads": false,
+   "source": "#usda 1.0\n(\n    customLayerData = {\n        \"d\" = {\n            int a = 1\n        }\n    }\n)\n"
+  },
   "strict_dictionary_entry_without_key": {
    "error": "'Expected } at 'string = \"a\"' in </>",
    "reads": false,
    "source": "#usda 1.0\n(\n    customLayerData = {\n        string = \"a\"\n    }\n)\n"
+  },
+  "strict_dictionary_keyword_not_dictionary": {
+   "error": "'Expected dictionary at '1' in </>",
+   "reads": false,
+   "source": "#usda 1.0\n(\n    customLayerData = {\n        dictionary d = 1\n    }\n)\n"
   },
   "strict_dictionary_one_line": {
    "error": "'Expected } at 'int b = 2 }' in </A>",
@@ -330,6 +360,11 @@
    "error": "'Expected } at 'custom dictionary bag' in </P>",
    "reads": false,
    "source": "#usda 1.0\ndef \"P\"\n{\n    custom dictionary bag\n}\n"
+  },
+  "strict_dictionary_type_against_key": {
+   "error": "'Expected } at 'int\"k\" = 1' in </>",
+   "reads": false,
+   "source": "#usda 1.0\n(\n    customLayerData = {\n        int\"k\" = 1\n    }\n)\n"
   },
   "strict_dictionary_type_with_value": {
    "error": "'Expected } at 'dictionary bag = {' in </P>",
@@ -595,6 +630,21 @@
    "error": "'Cannot set extrapolation looping with a non-null loopBoundaryTime when inner loops are possibly present.'",
    "reads": false,
    "source": "#usda 1.0\ndef \"A\"\n{\n    double a.spline = {\n        loop: (0, 16, 1, 0, 0),\n        post: loop oscillate(16),\n        0: 1; post held,\n        16: 2; post held,\n    }\n}\n"
+  },
+  "strict_substitutions_typed_entry": {
+   "error": "'Expected } at 'string a = \"b\"' in </P>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"P\" (\n    suffixSubstitutions = {\n        string a = \"b\"\n    }\n)\n{\n}\n"
+  },
+  "strict_substitutions_value_not_string": {
+   "error": "'Expected } at '\"a\": 1' in </P>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"P\" (\n    prefixSubstitutions = {\n        \"a\": 1\n    }\n)\n{\n}\n"
+  },
+  "strict_substitutions_without_comma": {
+   "error": "'Expected } at '\"c\": \"d\"' in </P>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"P\" (\n    prefixSubstitutions = {\n        \"a\": \"b\"\n        \"c\": \"d\"\n    }\n)\n{\n}\n"
   },
   "strict_target_path_control_character": {
    "error": "'parse error at '\u0010>' in </P.r>",

@@ -80,9 +80,27 @@ impl Stage {
     }
 }
 
+/// Keeps the argument traits closed: their implementations are the ones
+/// listed with each trait, so a later release can add methods to them.
+mod sealed {
+    /// Implemented for the types the argument traits accept.
+    #[expect(
+        unnameable_types,
+        reason = "a sealed trait is reachable through the bound only, so no other crate implements it"
+    )]
+    pub trait Sealed {}
+    impl Sealed for crate::PathId {}
+    impl Sealed for crate::TokenId {}
+    impl Sealed for crate::PropertyPath {}
+    impl Sealed for &str {}
+    impl Sealed for &alloc::string::String {}
+}
+
 /// A prim path given to a [`StageView`] query: text (`"/World/Arm"`) or an
 /// interned id.
-pub trait PrimPathArg {
+///
+/// The trait is sealed: these are its only implementations.
+pub trait PrimPathArg: sealed::Sealed {
     /// The interned path this names, if the store has interned it.
     fn prim_path(&self, paths: &PathInterner, tokens: &TokenInterner) -> Option<PathId>;
 }
@@ -110,7 +128,9 @@ impl PrimPathArg for &String {
 ///
 /// Looking text up never interns it; text the store has never interned
 /// names nothing, so the query answers `None`.
-pub trait NameArg {
+///
+/// The trait is sealed: these are its only implementations.
+pub trait NameArg: sealed::Sealed {
     /// The interned token this names, if the store has interned it.
     fn token(&self, tokens: &TokenInterner) -> Option<TokenId>;
 }
@@ -135,7 +155,9 @@ impl NameArg for &String {
 
 /// A property path given to a [`StageView`] query: text
 /// (`"/World/Arm.points"`) or an interned property path.
-pub trait PropertyPathArg {
+///
+/// The trait is sealed: these are its only implementations.
+pub trait PropertyPathArg: sealed::Sealed {
     /// The property path this names, if the store has interned its parts.
     fn property_path(&self, paths: &PathInterner, tokens: &TokenInterner) -> Option<PropertyPath>;
 }

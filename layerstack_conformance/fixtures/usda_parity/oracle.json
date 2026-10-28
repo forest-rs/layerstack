@@ -311,6 +311,11 @@
    "reads": false,
    "source": "#usda 1.0\ndef \"P\"\n{\n    dictionary[] bags\n}\n"
   },
+  "strict_dictionary_entry_without_key": {
+   "error": "'Expected } at 'string = \"a\"' in </>",
+   "reads": false,
+   "source": "#usda 1.0\n(\n    customLayerData = {\n        string = \"a\"\n    }\n)\n"
+  },
   "strict_dictionary_one_line": {
    "error": "'Expected } at 'int b = 2 }' in </A>",
    "reads": false,
@@ -510,6 +515,11 @@
    "error": "'Expected } at 'double a = 1 }' in </A>",
    "reads": false,
    "source": "#usda 1.0\ndef \"A\" { double a = 1 }\n"
+  },
+  "strict_property_metadata_without_name": {
+   "error": "'Expected ) at '= bad' in </P.x>",
+   "reads": false,
+   "source": "#usda 1.0\n\ndef \"P\"\n{\n    custom_type x (\n        = bad\n    )\n}\n"
   },
   "strict_relationship_before_brace": {
    "error": "'Expected } at 'rel r = </A> /* a comment */ }' in </A>",

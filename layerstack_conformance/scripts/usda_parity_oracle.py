@@ -104,7 +104,9 @@ The cases:
   outside the `VariantName` path grammar
   (`SdfSchemaBase::IsValidVariantIdentifier`), a space or a control
   character among them; a path holding a control character or `\\`, which
-  OpenUSD's path grammar has not (`pxr/usd/sdf/pathParser.h`).
+  OpenUSD's path grammar has not (`pxr/usd/sdf/pathParser.h`); a property
+  metadata entry without a name, or a dictionary entry without a key
+  (`MetadataKey`, `DictionaryKey`).
 - `statements_*`: several list-op statements for one field, on a
   relationship, a connection, references, inherits, `variantSets` and
   metadata (`apiSchemas`). OpenUSD's parser sets each statement's list
@@ -638,6 +640,22 @@ def "P" (
 )
 {
 }
+''', []),
+    "strict_property_metadata_without_name": ('''#usda 1.0
+
+def "P"
+{
+    custom_type x (
+        = bad
+    )
+}
+''', []),
+    "strict_dictionary_entry_without_key": ('''#usda 1.0
+(
+    customLayerData = {
+        string = "a"
+    }
+)
 ''', []),
     "write_version_timecode_spline": ('''#usda 1.0
 

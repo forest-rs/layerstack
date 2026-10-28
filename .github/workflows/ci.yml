@@ -502,11 +502,19 @@ jobs:
             # A composed stage can be endless: arcs can give a prim children
             # that include it again, which composition does not bound (nor
             # does OpenUSD). Until it does, the stage target fails only on a
-            # crash, in fork mode.
+            # crash, in fork mode. Fork mode still exits non-zero when a job
+            # it ignored timed out or ran out of memory, so a failed stage run
+            # counts only when it left an artifact that is neither.
             extra=()
             [ "$target" = stage ] && extra=(-fork=1 -ignore_timeouts=1 -ignore_ooms=1)
-            cargo fuzz run --debug-assertions --target x86_64-unknown-linux-gnu "$target" "corpus/$target" -- \
-              -max_total_time=60 -max_len=65536 -rss_limit_mb=2048 -timeout=10 "${extra[@]}"
+            if ! cargo fuzz run --debug-assertions --target x86_64-unknown-linux-gnu "$target" "corpus/$target" -- \
+              -max_total_time=60 -max_len=65536 -rss_limit_mb=2048 -timeout=10 "${extra[@]}"; then
+              [ "$target" = stage ] || exit 1
+              if find "artifacts/$target" -type f ! -name 'timeout-*' ! -name 'oom-*' | grep -q .; then
+                exit 1
+              fi
+              echo "stage: only timeouts or out-of-memory inputs, which this target ignores"
+            fi
           done
 
   # The tables and views in layerstack_schemas/src/generated, and the test

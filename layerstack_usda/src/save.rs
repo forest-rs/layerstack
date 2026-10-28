@@ -303,8 +303,6 @@ pub enum Unsupported {
     ListOpMetadata(&'static str),
     /// A value of this kind.
     Value(&'static str),
-    /// The layer's `layerRelocates` metadata.
-    Relocates,
 }
 
 impl fmt::Display for Unsupported {
@@ -314,7 +312,6 @@ impl fmt::Display for Unsupported {
             Self::MixedListOp => f.write_str("a list op with an explicit list and edits"),
             Self::ListOpMetadata(kind) => write!(f, "{kind} metadata"),
             Self::Value(kind) => write!(f, "a {kind} value"),
-            Self::Relocates => f.write_str("layer relocates"),
         }
     }
 }

@@ -5,7 +5,8 @@
 # Builds the default module into wasm/: `layerstack_wasm` for
 # wasm32-unknown-unknown with the size-tuned `wasm` profile, the glue with
 # the wasm-bindgen CLI (which must be the version Cargo.lock holds), then
-# `wasm-opt -Oz`. Set WASM_BINDGEN and WASM_OPT to use binaries off PATH.
+# `wasm-opt -Oz --converge`. Set WASM_BINDGEN and WASM_OPT to use binaries
+# off PATH.
 set -euo pipefail
 package=$(cd "$(dirname "$0")/.." && pwd)
 workspace=$(cd "$package/../.." && pwd)
@@ -26,6 +27,8 @@ rm -rf "$package/wasm"
   "$target/wasm32-unknown-unknown/wasm/layerstack_wasm.wasm"
 cp "$package/wasm/layerstack_bg.wasm" "$package/wasm/layerstack_bg.unoptimized.wasm"
 # The features rustc enables by default for wasm32-unknown-unknown.
-"$wasm_opt" -Oz --enable-bulk-memory --enable-mutable-globals --enable-nontrapping-float-to-int \
+# `--converge` repeats the passes while the module still shrinks: one -Oz
+# leaves inlining and merging opportunities that a second round takes.
+"$wasm_opt" -Oz --converge --enable-bulk-memory --enable-mutable-globals --enable-nontrapping-float-to-int \
   --enable-sign-ext --enable-reference-types --enable-multivalue \
   "$package/wasm/layerstack_bg.unoptimized.wasm" -o "$package/wasm/layerstack_bg.wasm"

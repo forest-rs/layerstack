@@ -30,7 +30,7 @@ anonymous session layer opened in front of it.
 cargo build -p layerstack_wasm --profile wasm --target wasm32-unknown-unknown
 wasm-bindgen --target web --out-dir packages/layerstack/wasm --out-name layerstack \
   target/wasm32-unknown-unknown/wasm/layerstack_wasm.wasm
-wasm-opt -Oz packages/layerstack/wasm/layerstack_bg.wasm -o packages/layerstack/wasm/layerstack_bg.wasm
+wasm-opt -Oz --converge packages/layerstack/wasm/layerstack_bg.wasm -o packages/layerstack/wasm/layerstack_bg.wasm
 ```
 
 `packages/layerstack/scripts/build-wasm.sh` runs these steps and checks that

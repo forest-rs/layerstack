@@ -89,7 +89,7 @@ use alloc::{
 use hashbrown::{HashMap, HashSet};
 use layerstack::{
     AssetResolveError, AssetResolver, AssetUse, InMemoryStore, Layer, LayerId, LayerStore,
-    LiveStage, PathInterner, ResolvedAsset, StageOptions, TokenInterner,
+    LiveStage, PathId, PathInterner, ResolvedAsset, StageOptions, TokenInterner,
 };
 use layerstack::{asset::PackagePath, encoded_bytes::EncodedBytes, parallel::Threads};
 use layerstack_usdz::snapshot::{PackageLimits, PackageSnapshot, PackageStats};
@@ -133,7 +133,8 @@ pub enum IoErrorKind {
     /// received it. Unlike [`Self::NotFound`], a dependency read with this
     /// outcome is not missing: it stays unbound, the stage keeps asking for
     /// it ([`layerstack::Stage::asset_requests`]),
-    /// [`StageDocument::unavailable_assets`] lists it, and
+    /// [`StageDocument::unavailable_assets`] lists it with the prims
+    /// composed without it ([`UnavailableAsset::prims`]), and
     /// [`StageDocument::load_requested_assets`] reads it again. A root
     /// layer, or an asset [`StageDocument::load_asset`] is asked for,
     /// that is unavailable fails that call with this kind.
@@ -593,6 +594,13 @@ pub struct UnavailableAsset {
     pub asset_path: String,
     /// What uses it: a sublayer, a reference or a payload.
     pub used_by: AssetUse,
+    /// The composed prims composed without it, each once, in the order the
+    /// stage lists its requests ([`layerstack::AssetRequest::prim`]): the
+    /// prims whose reference or payload names it, or for a sublayer the
+    /// first prim to read its layer stack, the pseudo-root for the stage's
+    /// own. They are on the stage, without the asset's opinions, until it
+    /// loads.
+    pub prims: Vec<PathId>,
 }
 /// An asset the stage uses that is unresolved: composition reports it
 /// ([`layerstack::CompositionError::UnresolvedAsset`] or
@@ -1293,6 +1301,14 @@ impl<B: Storage> StageDocument<B> {
     /// (which opening and [`Self::apply`] call) found unavailable and the
     /// stage still asks for, so an edit that drops the arc drops it here.
     ///
+    /// Meanwhile the stage composes without them: a prim whose reference
+    /// or payload names one is on the stage without that arc's opinions,
+    /// and a layer stack without that sublayer. Each entry lists those
+    /// prims ([`UnavailableAsset::prims`]), so a host can tell which are
+    /// incomplete; composition reports no error for them, and does not
+    /// withhold them as it withholds a prim reading a pending layer
+    /// ([`layerstack::Stage::pending_prims`]).
+    ///
     /// OpenUSD has no equivalent: its resolver reads synchronously.
     #[must_use]
     pub fn unavailable_assets(&self) -> Vec<UnavailableAsset> {
@@ -1302,9 +1318,12 @@ impl<B: Storage> StageDocument<B> {
             let Some(identifier) = self.unavailable.get(&key) else {
                 continue;
             };
-            if assets.last().is_some_and(|last| {
+            if let Some(last) = assets.last_mut().filter(|last| {
                 last.anchor == request.anchor && last.asset_path == request.asset_path
             }) {
+                if !last.prims.contains(&request.prim) {
+                    last.prims.push(request.prim);
+                }
                 continue;
             }
             assets.push(UnavailableAsset {
@@ -1312,6 +1331,7 @@ impl<B: Storage> StageDocument<B> {
                 anchor: request.anchor,
                 asset_path: request.asset_path.clone(),
                 used_by: request.used_by,
+                prims: alloc::vec![request.prim],
             });
         }
         assets

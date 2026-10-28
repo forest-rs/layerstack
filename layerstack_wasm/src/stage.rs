@@ -19,7 +19,7 @@ use layerstack::{
 };
 use layerstack_io::{
     ApplyError, FORMAT_ARGS_DELIMITER, ImportPolicy, IoError, LoadReport, PackageInclusion,
-    PackagePreparationLimits, SaveReport, StageDocument,
+    PackagePreparationLimits, SaveReport, StageDocument, UnavailableAsset,
 };
 use wasm_bindgen::prelude::*;
 
@@ -141,24 +141,18 @@ impl Stage {
     }
 
     /// The assets the stage asks for that the host has not supplied yet,
-    /// each `[identifier, assetPath, anchor, usedBy]`
+    /// each `[identifier, assetPath, anchor, usedBy, prims]`
     /// ([`StageDocument::unavailable_assets`]): the identifier to supply,
-    /// the asset path as authored, the anchor layer's id and
-    /// `"sublayer"`, `"reference"` or `"payload"` ([`layerstack::AssetUse::name`]).
+    /// the asset path as authored, the anchor layer's id,
+    /// `"sublayer"`, `"reference"` or `"payload"` ([`layerstack::AssetUse::name`])
+    /// and the paths of the prims composed without it.
     #[must_use]
     pub(crate) fn unavailable(&self) -> Wire {
         Wire::List(
             self.document
                 .unavailable_assets()
                 .into_iter()
-                .map(|need| {
-                    Wire::List(vec![
-                        Wire::Text(need.identifier),
-                        Wire::Text(need.asset_path),
-                        Wire::UInt64(need.anchor.0),
-                        Wire::text(need.used_by.name()),
-                    ])
-                })
+                .map(|need| unavailable_row(need, self.document.store()))
                 .collect(),
         )
     }
@@ -867,14 +861,7 @@ impl Stage {
                     request.anchor == need.anchor && request.asset_path == need.asset_path
                 })
             })
-            .map(|need| {
-                Wire::List(vec![
-                    Wire::Text(need.identifier),
-                    Wire::Text(need.asset_path),
-                    Wire::UInt64(need.anchor.0),
-                    Wire::text(need.used_by.name()),
-                ])
-            })
+            .map(|need| unavailable_row(need, store))
             .collect();
         let record = Wire::List(vec![
             Wire::UInt64(target.0),
@@ -1340,6 +1327,23 @@ fn changes_record(changes: &Changes, store: &InMemoryStore) -> Wire {
         paths(&changes.removed),
         paths(&changes.resynced),
         paths(&changes.changed_info_only),
+    ])
+}
+
+/// `[identifier, assetPath, anchor, usedBy, prims]` for an unavailable
+/// asset, as [`Stage::unavailable`] lists it.
+fn unavailable_row(asset: UnavailableAsset, store: &InMemoryStore) -> Wire {
+    let prims = asset
+        .prims
+        .iter()
+        .map(|&prim| Wire::Text(store.paths().display(prim, store.tokens())))
+        .collect();
+    Wire::List(vec![
+        Wire::Text(asset.identifier),
+        Wire::Text(asset.asset_path),
+        Wire::UInt64(asset.anchor.0),
+        Wire::text(asset.used_by.name()),
+        Wire::List(prims),
     ])
 }
 

@@ -46,14 +46,14 @@ describe("loading the module", () => {
 });
 
 describe("opening with only the root", () => {
-  it("composes what it has and wants the rest", () => {
+  it("composes what it has and lists the rest as unavailable", () => {
     using stage = openScene();
     const unavailable = stage.unavailable();
     assert.deepEqual(
-      unavailable.map((need) => [need.identifier, need.assetPath, need.usedBy]),
+      unavailable.map((need) => [need.identifier, need.assetPath, need.usedBy, need.prims]),
       [
-        ["parts/ball.usda", "./parts/ball.usda", "reference"],
-        ["sub.usda", "./sub.usda", "sublayer"],
+        ["parts/ball.usda", "./parts/ball.usda", "reference", ["/Ball"]],
+        ["sub.usda", "./sub.usda", "sublayer", ["/"]],
       ],
     );
     assert.ok(unavailable.every((need) => need.anchor === stage.root));

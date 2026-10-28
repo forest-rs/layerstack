@@ -32,6 +32,13 @@ export interface UnavailableAsset {
   readonly anchor: Layer;
   /** What uses it. */
   readonly usedBy: AssetUse;
+  /**
+   * The paths of the prims composed without it: those whose reference or
+   * payload names it, or for a sublayer the first prim to read its layer
+   * stack (`/` for the stage's own). They are on the stage, without the
+   * asset's opinions, until it loads.
+   */
+  readonly prims: readonly string[];
 }
 
 /**

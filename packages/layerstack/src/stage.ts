@@ -45,7 +45,7 @@ export const PACKAGE_VERSION = "0.1.0";
  * The ABI this package speaks: the version of the records it exchanges
  * with the native module (`layerstack_wasm::ABI`).
  */
-export const ABI = 5;
+export const ABI = 6;
 
 /** The native stage the generated glue exports (`layerstack_wasm::Stage`). Not for app use. */
 export interface NativeStage {
@@ -795,12 +795,13 @@ export class Stage implements Disposable {
     return layer;
   }
 
-  #unavailable([identifier, assetPath, anchor, usedBy]: Row): UnavailableAsset {
+  #unavailable([identifier, assetPath, anchor, usedBy, prims]: Row): UnavailableAsset {
     return {
       identifier: identifier as string,
       assetPath: assetPath as string,
       anchor: this.#layer(anchor as bigint),
       usedBy: usedBy as AssetUse,
+      prims: prims as string[],
     };
   }
 

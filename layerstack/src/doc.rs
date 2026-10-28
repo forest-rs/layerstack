@@ -4543,6 +4543,15 @@ pub trait LayerStore: MaybeSync {
     /// layer readable through [`Self::layer`] before it stops reporting it
     /// pending.
     ///
+    /// Pending is for a store that knows a layer's id before its content,
+    /// such as one that streams layers it has already named. An asset
+    /// whose id the host has not answered for yet is unavailable instead
+    /// ([`AssetAvailability::Unavailable`]): composition composes the prims
+    /// that need it without it and asks for it
+    /// ([`crate::Stage::asset_requests`], naming each prim), as
+    /// `layerstack_io`'s document does for a source its storage cannot
+    /// supply yet.
+    ///
     /// The default reports no layer pending.
     fn is_layer_pending(&self, id: LayerId) -> bool {
         let _ = id;

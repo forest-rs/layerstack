@@ -1113,7 +1113,7 @@ fn add_specs(store: &dyn LayerStore, layer: &Layer, index: &mut LayerChildren, c
             }
         } else {
             // A stable sort merges the appended run into the sorted one.
-            names.sort_by(|a, b| tokens.resolve(*a).cmp(tokens.resolve(*b)));
+            tokens.sort_by_text(names);
             names.dedup();
         }
     }
@@ -1231,7 +1231,7 @@ fn index_layer(store: &dyn LayerStore, layer: &Layer) -> LayerChildren {
     for (_, names) in index.values_mut().flatten() {
         names.sort_unstable();
         names.dedup();
-        names.sort_by(|a, b| tokens.resolve(*a).cmp(tokens.resolve(*b)));
+        tokens.sort_by_text(names);
     }
     index
 }

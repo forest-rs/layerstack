@@ -163,12 +163,7 @@ impl Folder for Recording {
                     ignored: OpinionKind::Set,
                 },
             }));
-        report.events.sort_by_key(|event| match event {
-            FamilyEvent::ContributedDense { provenance }
-            | FamilyEvent::ContributedSparse { provenance }
-            | FamilyEvent::Ignored { provenance, .. }
-            | FamilyEvent::StoppedByBlock { provenance } => provenance.opinion,
-        });
+        sort_events_by_opinion(&mut report.events);
         self.folds.push(SampleFold {
             time: sample,
             events: report.events,
@@ -514,6 +509,18 @@ fn same_element_kind(a: &Value, b: &Value) -> bool {
     core::mem::discriminant(a) == core::mem::discriminant(b)
 }
 
+/// Sorts a fold's events by the opinion they are about, stably, as the
+/// fold explanations list them. The recorder and the default-time
+/// explanation share it, and with it one sort.
+fn sort_events_by_opinion(events: &mut [FamilyEvent<ChainPos>]) {
+    events.sort_by_key(|event| match event {
+        FamilyEvent::ContributedDense { provenance }
+        | FamilyEvent::ContributedSparse { provenance }
+        | FamilyEvent::Ignored { provenance, .. }
+        | FamilyEvent::StoppedByBlock { provenance } => provenance.opinion,
+    });
+}
+
 /// Actual storage kinds, not declaration names: role aliases share a kind.
 pub(crate) fn edit_matches_value(edit: &Value, base: &Value) -> bool {
     let Some(ty) = edit.array_edit_type() else {
@@ -683,12 +690,7 @@ pub(crate) fn explain_sparse_value_with_composability(
                 });
             },
         );
-        events.sort_by_key(|event| match event {
-            FamilyEvent::ContributedSparse { provenance }
-            | FamilyEvent::ContributedDense { provenance }
-            | FamilyEvent::Ignored { provenance, .. }
-            | FamilyEvent::StoppedByBlock { provenance } => provenance.opinion,
-        });
+        sort_events_by_opinion(&mut events);
         return SparseExplanation {
             result,
             folds: alloc::vec![SampleFold {

@@ -104,6 +104,21 @@ impl TokenInterner {
 }
 
 impl TokenInterner {
+    /// Sorts `ids` by their text, stably: a sorted run already in place is
+    /// merged rather than sorted again. Every sort of tokens by text goes
+    /// through here, so the program carries one instance of the standard
+    /// library's sort for it rather than one per call site.
+    pub(crate) fn sort_by_text(&self, ids: &mut [TokenId]) {
+        ids.sort_by(|a, b| self.resolve(*a).cmp(self.resolve(*b)));
+    }
+
+    /// Sorts `ids` in dictionary order ([`crate::ident::dictionary_cmp`],
+    /// OpenUSD's `TfDictionaryLessThan`), stably. Like
+    /// [`Self::sort_by_text`], one sort serves every caller.
+    pub(crate) fn sort_in_dictionary_order(&self, ids: &mut [TokenId]) {
+        ids.sort_by(|a, b| crate::ident::dictionary_cmp(self.resolve(*a), self.resolve(*b)));
+    }
+
     pub(crate) fn snapshot(&self) -> Self {
         let strings = self.strings.snapshot();
         let shared = strings.len();

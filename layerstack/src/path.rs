@@ -605,8 +605,16 @@ impl PathInterner {
     /// Sorts `ids` in namespace order ([`Self::cmp_paths`]) and removes
     /// duplicates.
     pub fn sort_paths(&self, ids: &mut Vec<PathId>, tokens: &TokenInterner) {
-        ids.sort_unstable_by(|a, b| self.cmp_paths(*a, *b, tokens));
+        self.sort_in_namespace_order(ids, tokens);
         ids.dedup();
+    }
+
+    /// Sorts `ids` in namespace order ([`Self::cmp_paths`]), keeping
+    /// duplicates. Every sort of paths in namespace order goes through
+    /// here, so the program carries one instance of the standard library's
+    /// sort for it rather than one per call site.
+    pub(crate) fn sort_in_namespace_order(&self, ids: &mut [PathId], tokens: &TokenInterner) {
+        ids.sort_unstable_by(|a, b| self.cmp_paths(*a, *b, tokens));
     }
 
     /// Formats a [`PathId`] as a string (e.g. `/Robot/Arm`).

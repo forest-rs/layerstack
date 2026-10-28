@@ -1282,12 +1282,7 @@ impl Stage {
             });
             (!masked).then_some((clip.as_ref(), Some(entry)))
         }));
-        tagged.sort_by(|(a, a_entry), (b, b_entry)| {
-            index
-                .graph
-                .cmp_keys(&a.source().key, &b.source().key)
-                .then_with(|| a_entry.cmp(b_entry))
-        });
+        sort_tagged_opinions(&index.graph, &mut tagged);
         // The ordinary opinions keep their sources' ids; each clip's
         // source is its set's anchor.
         let mut prefix = OpinionList {
@@ -1392,12 +1387,7 @@ impl Stage {
                 .iter()
                 .map(|clip| (clip.opinion.as_ref(), Some(clip.entry))),
         );
-        tagged.sort_by(|(a, a_entry), (b, b_entry)| {
-            index
-                .graph
-                .cmp_keys(&a.source().key, &b.source().key)
-                .then_with(|| a_entry.cmp(b_entry))
-        });
+        sort_tagged_opinions(&index.graph, &mut tagged);
         let source = selected.as_ref().and_then(|selected| {
             self.clips
                 .evaluation_for(prim, field, selected.entry, selected.query, interp)
@@ -1609,12 +1599,7 @@ impl Stage {
                 .map(|clip| (clip.opinion.as_ref(), Some(clip.entry))),
         );
         if !clip_opinions.is_empty() {
-            tagged.sort_by(|(a, a_clip), (b, b_clip)| {
-                index
-                    .graph
-                    .cmp_keys(&a.source().key, &b.source().key)
-                    .then_with(|| a_clip.cmp(b_clip))
-            });
+            sort_tagged_opinions(&index.graph, &mut tagged);
         }
         let mut times = Vec::new();
         let mut varying = false;
@@ -4312,10 +4297,23 @@ pub fn apply_property_order(order: &[TokenId], names: &mut [TokenId]) {
     }
 }
 
+/// Sorts opinions, each tagged with its clip's entry or `None` for an
+/// ordinary opinion, strongest first ([`PrimIndexGraph::cmp_keys`]), an
+/// ordinary opinion before the clips of its source and clips by entry.
+/// The value queries that merge clip opinions into a prim's opinions share
+/// it, and with it one instance of the standard library's sort.
+fn sort_tagged_opinions(graph: &PrimIndexGraph, tagged: &mut [(OpinionRef<'_>, Option<usize>)]) {
+    tagged.sort_by(|(a, a_entry), (b, b_entry)| {
+        graph
+            .cmp_keys(&a.source().key, &b.source().key)
+            .then_with(|| a_entry.cmp(b_entry))
+    });
+}
+
 /// Sorts property names as OpenUSD's `UsdPrim::GetPropertyNames` does
 /// ([`dictionary_cmp`]).
 fn sort_property_names(names: &mut [TokenId], tokens: &crate::interner::TokenInterner) {
-    names.sort_by(|a, b| dictionary_cmp(tokens.resolve(*a), tokens.resolve(*b)));
+    tokens.sort_in_dictionary_order(names);
 }
 
 /// An iterator for deterministic preorder stage traversal.

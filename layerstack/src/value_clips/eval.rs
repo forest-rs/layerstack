@@ -113,14 +113,14 @@ impl PreparedClipProperty {
         {
             return Err(ClipEvalError::InvalidActivation);
         }
-        active.sort_by(|a, b| a.0.total_cmp(&b.0));
+        super::sort_by_time(&mut active);
         if active.windows(2).any(|p| p[0].0 == p[1].0) {
             return Err(ClipEvalError::InvalidActivation);
         }
         if times.iter().any(|(a, b)| !a.is_finite() || !b.is_finite()) {
             return Err(ClipEvalError::InvalidTimeMapping);
         }
-        times.sort_by(|a, b| a.0.total_cmp(&b.0));
+        super::sort_by_time(&mut times);
         if times.windows(3).any(|p| p[0].0 == p[2].0) {
             return Err(ClipEvalError::InvalidTimeMapping);
         }

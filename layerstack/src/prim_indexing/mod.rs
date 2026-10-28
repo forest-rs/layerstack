@@ -1443,7 +1443,7 @@ fn child_names(ctx: &Ctx<'_>, graph: &Graph) -> Vec<TokenId> {
     }
     if !unlisted.is_empty() {
         let tokens = ctx.store.tokens();
-        unlisted.sort_by(|a, b| tokens.resolve(*a).cmp(tokens.resolve(*b)));
+        tokens.sort_by_text(&mut unlisted);
         for name in unlisted {
             if names.insert(name) {
                 order.push(name);
@@ -1541,7 +1541,7 @@ fn apply_relocated_names(
         *order = kept;
     }
     let tokens = ctx.store.tokens();
-    to_add.sort_by(|a, b| tokens.resolve(*a).cmp(tokens.resolve(*b)));
+    tokens.sort_by_text(&mut to_add);
     to_add.dedup();
     for name in to_add {
         if names.insert(name) {
@@ -1737,7 +1737,7 @@ pub(crate) fn order_children(
         );
     }
     let tokens = store.tokens();
-    unlisted.sort_by(|a, b| tokens.resolve(*a).cmp(tokens.resolve(*b)));
+    tokens.sort_by_text(&mut unlisted);
     for name in unlisted {
         if names.insert(name) {
             order.push(name);

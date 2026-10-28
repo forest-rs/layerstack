@@ -127,7 +127,7 @@ impl DemandSet {
             .cloned()
             .collect();
         let mut active = set.active.clone();
-        active.sort_by(|a, b| a.0.total_cmp(&b.0));
+        sort_by_time(&mut active);
         let mut key = set.definition.anchor.clone();
         key.node = node;
         Self {

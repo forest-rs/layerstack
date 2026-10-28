@@ -467,13 +467,7 @@ impl super::Stage {
                         .copied()
                         .filter(|p| within(*p)),
                 );
-                children.sort_by(|a, b| {
-                    store
-                        .paths()
-                        .resolve(*a)
-                        .cmp_with_tokens(store.paths().resolve(*b), store.tokens())
-                });
-                children.dedup();
+                store.paths().sort_paths(&mut children, store.tokens());
                 boundaries.insert(parent, children);
             }
         }

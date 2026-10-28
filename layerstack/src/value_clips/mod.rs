@@ -25,6 +25,14 @@ pub(crate) use demand::AuthoringClipSet;
 pub use demand::{ClipDemand, ClipDemandReason, ClipQueryPlan};
 pub use eval::ClipEvalError;
 use eval::PreparedClipProperty;
+
+/// Sorts `(time, item)` pairs by time, stably: pairs at one time keep
+/// their authored order, as a jump discontinuity in `times` needs. Each
+/// item type shares one instance of the standard library's sort across
+/// the clip code.
+fn sort_by_time<T>(pairs: &mut [(f64, T)]) {
+    pairs.sort_by(|a, b| a.0.total_cmp(&b.0));
+}
 pub(crate) use instance_key::{ClipInstanceKey, instance_keys};
 
 /// Why the host should resolve this clip-related asset.
@@ -299,12 +307,9 @@ impl Catalog {
             return out;
         };
         let mut owners: Vec<_> = prims.keys().copied().collect();
-        owners.sort_by(|a, b| {
-            store
-                .paths()
-                .resolve(*a)
-                .cmp_with_tokens(store.paths().resolve(*b), store.tokens())
-        });
+        store
+            .paths()
+            .sort_in_namespace_order(&mut owners, store.tokens());
         let mut raw = HashMap::new();
         let mut prepared = HashMap::new();
         for &owner in &owners {

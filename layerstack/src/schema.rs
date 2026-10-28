@@ -1407,10 +1407,12 @@ impl<'a> Build<'a> {
             }
         }
         let tokens = self.tokens;
+        // Descending dictionary order: ascending, reversed. Two names
+        // compare equal only when they are the same token, so this is
+        // the descending order exactly.
         for list in self.auto_applied.values_mut() {
-            list.sort_by(|a, b| {
-                crate::stage::dictionary_cmp(tokens.resolve(*b), tokens.resolve(*a))
-            });
+            tokens.sort_in_dictionary_order(list);
+            list.reverse();
         }
     }
 

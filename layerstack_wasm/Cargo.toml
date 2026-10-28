@@ -1,5 +1,4 @@
 [package]
-publish = false
 name = "layerstack_wasm"
 description = "WebAssembly bindings for Layerstack: open, resolve, inspect, explain and edit a stage from JavaScript, with the host supplying asset bytes."
 readme = "README.md"

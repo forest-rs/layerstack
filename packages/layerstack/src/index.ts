@@ -13,7 +13,7 @@
  * size?.get();     // { kind: "scalar", type: "double", value: 2 }
  * size?.explain(); // the opinions, strongest first, with layer, arc and role
  *
- * const receipt = stage.apply(stage.editLayer!, [
+ * const receipt = stage.apply([
  *   { type: "setValue", path: "/World/Rock.size", value: { type: "double", value: 3 } },
  * ]);
  * receipt.undo(); // returns the receipt that redoes it
@@ -31,12 +31,9 @@ import { Layerstack } from "./stage.js";
 import type { NativeModule } from "./stage.js";
 
 export { ArrayCopy, ArrayHandle } from "./arrays.js";
-export type { NativeArrayHandle } from "./arrays.js";
 export { LayerstackError } from "./errors.js";
 export type { ErrorCode, ErrorDetails } from "./errors.js";
 export { ABI, Attribute, EditReceipt, Layer, Layerstack, PACKAGE_VERSION, Prim, Relationship, Stage } from "./stage.js";
-export type { NativeModule, NativeReceipt, NativeStage } from "./stage.js";
-export type { NativeEditBatch } from "./edits.js";
 export type * from "./types.js";
 
 let own: Promise<Layerstack> | undefined;
@@ -48,8 +45,8 @@ let own: Promise<Layerstack> | undefined;
  *   it), fetched in a browser and read from disk in Node.
  * - A `URL`, string, `BufferSource` or `WebAssembly.Module`: this package's
  *   glue over that module.
- * - A {@link NativeModule}: an initialized module built by another crate
- *   that links `layerstack_wasm`.
+ * - A `NativeModule` (`@forest-rs/layerstack/native`): an initialized
+ *   module built by another crate that links `layerstack_wasm`.
  *
  * This package's module is instantiated once per JavaScript realm: every
  * call without a {@link NativeModule} returns the same instance.

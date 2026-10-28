@@ -150,7 +150,7 @@ jobs:
           toolchain: ${{ env.RUST_STABLE_VER }}
 
       - name: build and verify release archives
-        run: cargo package ${{ env.RUST_MIN_VER_PKGS }} --locked --all-features
+        run: cargo package ${{ env.RUST_MIN_VER_PKGS }} -p layerstack_wasm --locked --all-features
 
       - name: check archive metadata and license files
         run: python3 .github/check_packages.py target/package

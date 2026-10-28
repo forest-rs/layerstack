@@ -14,9 +14,9 @@ const text = new TextEncoder();
 function meshStage(points: Float32Array): Stage {
   const stage = layerstack.open({ identifier: "mesh.usda", bytes: text.encode('#usda 1.0\ndef Mesh "Mesh" {\n}\n') });
   stage
-    .apply(stage.root, [
+    .apply([
       { type: "createAttribute", path: "/Mesh.points", typeName: "point3f[]", custom: false, value: { type: "point3f[]", value: points } },
-    ])
+    ], stage.root)
     .release();
   return stage;
 }
@@ -57,7 +57,7 @@ describe("array handles", () => {
   it("are snapshots: an edit after reading does not change them", () => {
     using stage = meshStage(new Float32Array([0, 1, 2]));
     using points = handle(stage);
-    stage.apply(stage.root, [{ type: "setValue", path: "/Mesh.points", value: { type: "point3f[]", value: [7, 8, 9] } }]).release();
+    stage.apply([{ type: "setValue", path: "/Mesh.points", value: { type: "point3f[]", value: [7, 8, 9] } }], stage.root).release();
     assert.deepEqual(Array.from(points.copy() as Float32Array), [0, 1, 2]);
     using now = handle(stage);
     assert.deepEqual(Array.from(now.view() as Float32Array), [7, 8, 9]);
@@ -107,10 +107,10 @@ describe("array handles", () => {
     assert.equal(value?.kind, "array");
     const before = layerstack.transfer().bytesOut;
     stage
-      .apply(stage.root, [
+      .apply([
         { type: "createAttribute", path: "/Mesh.rest", typeName: "point3f[]", value: { kind: "array", type: "point3f[]", array: points } },
         { type: "createAttribute", path: "/Mesh.wide", typeName: "double3[]", value: { kind: "array", type: "double3[]", array: points } },
-      ])
+      ], stage.root)
       .release();
     assert.equal(layerstack.transfer().bytesOut, before, "nothing was copied out to send them");
     using rest = stage.attribute("/Mesh.rest")?.array();

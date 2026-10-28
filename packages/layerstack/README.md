@@ -24,7 +24,7 @@ stage.status();  // { prims, compositionErrors, unavailable, unresolved, complet
 
 // Edits are plain data, applied atomically to one layer.
 const stop = stage.onChange((changes) => console.log(changes.changedInfoOnly));
-const receipt = stage.apply(stage.root, [
+const receipt = stage.apply([
   { type: "definePrim", path: "/World/Moss", typeName: "Cube" },
   { type: "setValue", path: "/World/Rock.size", value: { type: "double", value: 3 } },
 ]);
@@ -41,7 +41,8 @@ await stage.resolve(source);
   JavaScript realm and returns its `Layerstack`. Pass a URL, bytes or a
   `WebAssembly.Module` to load this package's module from elsewhere, or a
   `NativeModule` (the generated glue of a module that links
-  `layerstack_wasm`) to use that module.
+  `layerstack_wasm`; its type is in `@forest-rs/layerstack/native`) to use
+  that module.
 - **Opening is synchronous and complete.** `open` composes the root layer
   alone. Every dependency it cannot read yet is *unavailable*: it may still
   arrive. One confirmed absent, or whose read failed, is *unresolved*: its
@@ -92,7 +93,7 @@ await stage.resolve(source);
   `LayerstackError` with `code`, `operation` (the method), and `path` or
   `identifier` when it is about one. Composition errors are not thrown;
   `status().compositionErrors` lists them with `composition.*` codes.
-- **Edits are plain data.** `stage.apply(layer, edits)` applies an `Edit[]`
+- **Edits are plain data.** `stage.apply(edits, target?)` applies an `Edit[]`
   (`definePrim`, `removePrim`, `removeProperty`, `createAttribute`,
   `setValue`, `clearValue`, `blockValue`, `setTargets`, `addReference`,
   `addPayload`, `removeReference`, `removePayload`, `setVariantSelection`,
@@ -182,9 +183,12 @@ A released code keeps its spelling and meaning.
 
 ## Versions
 
-The package and the `layerstack_wasm` crate are versioned independently. They
-meet at an ABI number: `layerstack.version` is `{ package, crate, revision,
-abi }`, and loading a module of another ABI fails with `module.abi`.
+The package and the `layerstack_wasm` crate are released together, at the
+same version. They meet at an ABI number, the layout of the records the
+module exchanges with this package: `layerstack.version` is `{ package,
+crate, revision, abi }`, and loading a module of another ABI fails with
+`module.abi`. The first release speaks ABI 1; a release that changes a
+record's layout brings a new ABI.
 
 ## Building and testing
 

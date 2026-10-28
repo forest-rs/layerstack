@@ -1384,3 +1384,23 @@ fn rejects_misplaced_variant_specs() {
         "a branch child without a prim spec"
     );
 }
+
+/// A lowered document shares the layer's numeric array buffers.
+#[test]
+fn lowering_shares_numeric_array_buffers() {
+    let mut imported =
+        Imported::new("#usda 1.0\ndef \"A\"\n{\n    float3[] points = [(0, 1, 2), (3, 4, 5)]\n}\n");
+    let Some(LayerValue::TypedArray(layerstack::TypedArray::Vec3f(points))) =
+        imported.property("/A.points").default.clone()
+    else {
+        panic!("a native float3[] array");
+    };
+    let document = usda_document(&imported.layer, &imported.tokens, &imported.paths).unwrap();
+    let Property::Attribute(attribute) = &document.prims[0].properties[0] else {
+        panic!("points attribute");
+    };
+    let Some(Value::Float3Array(lowered)) = &attribute.value else {
+        panic!("a float3[] value");
+    };
+    assert_eq!(lowered.as_ptr(), points.as_ptr());
+}

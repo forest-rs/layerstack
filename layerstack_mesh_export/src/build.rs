@@ -473,14 +473,14 @@ fn instancer_prim(
         attrs.push(Attribute::new(
             geom::Boundable::EXTENT,
             "float3[]",
-            Value::Float3Array(extent),
+            Value::Float3Array(extent.into()),
         ));
     }
     if let Some(ids) = &instancer.ids {
         attrs.push(Attribute::new(
             geom::PointInstancer::IDS,
             "int64[]",
-            Value::Int64Array(ids.to_vec()),
+            Value::Int64Array(ids.to_vec().into()),
         ));
     }
     // `orientationsf` wins over `orientations` wherever it is known
@@ -490,7 +490,7 @@ fn instancer_prim(
         attrs.push(Attribute::new(
             geom::PointInstancer::ORIENTATIONS,
             "quath[]",
-            Value::QuathArray(orientations),
+            Value::QuathArray(orientations.into()),
         ));
     }
     if let Some(orientations) = instancer
@@ -501,13 +501,13 @@ fn instancer_prim(
         attrs.push(Attribute::new(
             geom::PointInstancer::ORIENTATIONSF,
             "quatf[]",
-            Value::QuatfArray(orientations.to_vec()),
+            Value::QuatfArray(orientations.to_vec().into()),
         ));
     }
     attrs.push(Attribute::new(
         geom::PointInstancer::POSITIONS,
         "point3f[]",
-        Value::Float3Array(instancer.positions.to_vec()),
+        Value::Float3Array(instancer.positions.to_vec().into()),
     ));
     // Instance primvars, checked above: `vertex` is one element per
     // instance (`pxr/usd/usdGeom/pointInstancer.h`, "Primvars on
@@ -522,13 +522,13 @@ fn instancer_prim(
     attrs.push(Attribute::new(
         geom::PointInstancer::PROTO_INDICES,
         "int[]",
-        Value::IntArray(checked.proto_indices),
+        Value::IntArray(checked.proto_indices.into()),
     ));
     if let Some(scales) = &instancer.scales {
         attrs.push(Attribute::new(
             geom::PointInstancer::SCALES,
             "float3[]",
-            Value::Float3Array(scales.to_vec()),
+            Value::Float3Array(scales.to_vec().into()),
         ));
     }
     push_transform(&mut attrs, instancer.transform);
@@ -592,22 +592,22 @@ fn mesh_prim(mesh: &Mesh<'_>, parent: &str, cx: &Context<'_, '_>) -> Result<Prim
         attrs.push(Attribute::new(
             geom::Boundable::EXTENT,
             "float3[]",
-            Value::Float3Array(extent.to_vec()),
+            Value::Float3Array(extent.to_vec().into()),
         ));
     }
     attrs.push(Attribute::new(
         geom::Mesh::FACE_VERTEX_COUNTS,
         "int[]",
-        Value::IntArray(counts),
+        Value::IntArray(counts.into()),
     ));
     attrs.push(Attribute::new(
         geom::Mesh::FACE_VERTEX_INDICES,
         "int[]",
-        Value::IntArray(indices),
+        Value::IntArray(indices.into()),
     ));
 
     if let Some(normals) = &mesh.normals {
-        let values = Value::Float3Array(normals.values.to_vec());
+        let values = Value::Float3Array(normals.values.to_vec().into());
         match normals.indices {
             // `normals` is a plain attribute with an `interpolation`, not a
             // primvar, so it cannot be indexed (`pxr/usd/usdGeom/pointBased.h`).
@@ -662,7 +662,7 @@ fn mesh_prim(mesh: &Mesh<'_>, parent: &str, cx: &Context<'_, '_>) -> Result<Prim
     attrs.push(Attribute::new(
         geom::PointBased::POINTS,
         "point3f[]",
-        Value::Float3Array(mesh.points.to_vec()),
+        Value::Float3Array(mesh.points.to_vec().into()),
     ));
 
     if let Some(uvs) = &mesh.uvs {
@@ -672,7 +672,7 @@ fn mesh_prim(mesh: &Mesh<'_>, parent: &str, cx: &Context<'_, '_>) -> Result<Prim
             &mut attrs,
             "primvars:st",
             "texCoord2f[]",
-            Value::Float2Array(uvs.values.to_vec()),
+            Value::Float2Array(uvs.values.to_vec().into()),
             uvs.values.len(),
             uvs,
             sites,
@@ -804,7 +804,7 @@ fn subset_prim(subset: &MaterialSubset<'_>, material: String) -> Result<Prim, Me
     prim.push_property(Attribute::new(
         geom::GeomSubset::INDICES,
         "int[]",
-        Value::IntArray(indices),
+        Value::IntArray(indices.into()),
     ));
     apply_binding(&mut prim, material);
     Ok(prim)
@@ -1032,7 +1032,7 @@ fn push_primvar<V>(
         attrs.push(Attribute::new(
             format!("{name}:indices"),
             "int[]",
-            Value::IntArray(indices),
+            Value::IntArray(indices.into()),
         ));
     }
     Ok(())

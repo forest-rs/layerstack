@@ -105,6 +105,7 @@ use core::cmp::Ordering;
 use core::fmt::{self, Write as _};
 use core::ptr;
 
+use layerstack::SharedVec;
 use layerstack::array_edit::{ArrayIndex, Instruction, Operand};
 use layerstack::ident::dictionary_cmp;
 use layerstack::spline::SplineData;
@@ -1085,7 +1086,10 @@ impl Metadatum {
 ///
 /// Numeric element types are explicit so the declared attribute type can be
 /// checked against the value (§6.5.1, type and alias agreement). Arrays of
-/// small vectors are stored packed for large mesh buffers.
+/// small vectors are stored packed for large mesh buffers, and numeric
+/// arrays are [`SharedVec`]s: cloning a value shares its buffer, and a
+/// document lowered from a layer ([`crate::save::layer_document`]) shares
+/// the layer's buffers rather than copying them.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
     /// `bool`.
@@ -1183,27 +1187,27 @@ pub enum Value {
     /// last row, as USD authors it (row vectors, §6.3).
     Matrix4d([[f64; 4]; 4]),
     /// `bool[]`.
-    BoolArray(Vec<bool>),
+    BoolArray(SharedVec<bool>),
     /// `uchar[]`.
-    UCharArray(Vec<u8>),
+    UCharArray(SharedVec<u8>),
     /// `int[]`.
-    IntArray(Vec<i32>),
+    IntArray(SharedVec<i32>),
     /// `uint[]`.
-    UIntArray(Vec<u32>),
+    UIntArray(SharedVec<u32>),
     /// `int64[]`.
-    Int64Array(Vec<i64>),
+    Int64Array(SharedVec<i64>),
     /// `uint64[]`.
-    UInt64Array(Vec<u64>),
+    UInt64Array(SharedVec<u64>),
     /// `half[]`, as binary16 bit patterns.
-    HalfArray(Vec<u16>),
+    HalfArray(SharedVec<u16>),
     /// `float[]`.
-    FloatArray(Vec<f32>),
+    FloatArray(SharedVec<f32>),
     /// `double[]`.
-    DoubleArray(Vec<f64>),
+    DoubleArray(SharedVec<f64>),
     /// `timecode[]`, as [`Self::TimeCode`] is to [`Self::Double`].
-    TimeCodeArray(Vec<f64>),
+    TimeCodeArray(SharedVec<f64>),
     /// `duration[]`, as [`Self::Duration`] is to [`Self::Double`].
-    DurationArray(Vec<f64>),
+    DurationArray(SharedVec<f64>),
     /// `string[]`.
     StringArray(Vec<String>),
     /// `token[]`.
@@ -1211,40 +1215,40 @@ pub enum Value {
     /// `asset[]`.
     AssetArray(Vec<String>),
     /// `float2[]` and aliases (e.g. `texCoord2f[]`).
-    Float2Array(Vec<[f32; 2]>),
+    Float2Array(SharedVec<[f32; 2]>),
     /// `float3[]` and aliases (e.g. `point3f[]`, `normal3f[]`).
-    Float3Array(Vec<[f32; 3]>),
+    Float3Array(SharedVec<[f32; 3]>),
     /// `float4[]` and aliases.
-    Float4Array(Vec<[f32; 4]>),
+    Float4Array(SharedVec<[f32; 4]>),
     /// `double2[]` and aliases.
-    Double2Array(Vec<[f64; 2]>),
+    Double2Array(SharedVec<[f64; 2]>),
     /// `double3[]` and aliases.
-    Double3Array(Vec<[f64; 3]>),
+    Double3Array(SharedVec<[f64; 3]>),
     /// `double4[]` and aliases.
-    Double4Array(Vec<[f64; 4]>),
+    Double4Array(SharedVec<[f64; 4]>),
     /// `int2[]`.
-    Int2Array(Vec<[i32; 2]>),
+    Int2Array(SharedVec<[i32; 2]>),
     /// `int3[]`.
-    Int3Array(Vec<[i32; 3]>),
+    Int3Array(SharedVec<[i32; 3]>),
     /// `int4[]`.
-    Int4Array(Vec<[i32; 4]>),
+    Int4Array(SharedVec<[i32; 4]>),
     /// `half2[]` and aliases.
-    Half2Array(Vec<[u16; 2]>),
+    Half2Array(SharedVec<[u16; 2]>),
     /// `half3[]` and aliases.
-    Half3Array(Vec<[u16; 3]>),
+    Half3Array(SharedVec<[u16; 3]>),
     /// `half4[]` and aliases.
-    Half4Array(Vec<[u16; 4]>),
+    Half4Array(SharedVec<[u16; 4]>),
     /// `quath[]`: half-precision quaternions as IEEE 754 binary16 bits, each
     /// stored `[i, j, k, r]` (imaginary part first, real part last), the
     /// memory order of OpenUSD's `GfQuath`. USDA writes each one real part
     /// first, `(r, i, j, k)`, as OpenUSD does.
     ///
     /// Spec: AOUSD Core §6.3 (`quath`, dimensioned types).
-    QuathArray(Vec<[u16; 4]>),
+    QuathArray(SharedVec<[u16; 4]>),
     /// `quatf[]`, each as [`Self::Quatf`] stores it.
-    QuatfArray(Vec<[f32; 4]>),
+    QuatfArray(SharedVec<[f32; 4]>),
     /// `quatd[]`, each as [`Self::Quatd`] stores it.
-    QuatdArray(Vec<[f64; 4]>),
+    QuatdArray(SharedVec<[f64; 4]>),
     /// `matrix2d[]`.
     Matrix2dArray(Vec<[[f64; 2]; 2]>),
     /// `matrix3d[]`.
@@ -2174,44 +2178,44 @@ impl Value {
     /// writer has a [`Value`] for.
     pub(crate) fn empty_array_of(type_name: &str) -> Option<Self> {
         if type_name == "timecode[]" {
-            return Some(Self::TimeCodeArray(Vec::new()));
+            return Some(Self::TimeCodeArray(SharedVec::new()));
         }
         if type_name == "duration[]" {
-            return Some(Self::DurationArray(Vec::new()));
+            return Some(Self::DurationArray(SharedVec::new()));
         }
         let shape = parse_type_name(type_name).filter(|shape| shape.array)?;
         Some(match (shape.elem, shape.arity) {
-            (Elem::Bool, 1) => Self::BoolArray(Vec::new()),
-            (Elem::UChar, 1) => Self::UCharArray(Vec::new()),
-            (Elem::Int, 1) => Self::IntArray(Vec::new()),
-            (Elem::UInt, 1) => Self::UIntArray(Vec::new()),
-            (Elem::Int64, 1) => Self::Int64Array(Vec::new()),
-            (Elem::UInt64, 1) => Self::UInt64Array(Vec::new()),
-            (Elem::Half, 1) => Self::HalfArray(Vec::new()),
-            (Elem::Half, 2) => Self::Half2Array(Vec::new()),
-            (Elem::Half, 3) => Self::Half3Array(Vec::new()),
-            (Elem::Half, 4) => Self::Half4Array(Vec::new()),
-            (Elem::Quath, 1) => Self::QuathArray(Vec::new()),
-            (Elem::Quatf, 1) => Self::QuatfArray(Vec::new()),
-            (Elem::Quatd, 1) => Self::QuatdArray(Vec::new()),
+            (Elem::Bool, 1) => Self::BoolArray(SharedVec::new()),
+            (Elem::UChar, 1) => Self::UCharArray(SharedVec::new()),
+            (Elem::Int, 1) => Self::IntArray(SharedVec::new()),
+            (Elem::UInt, 1) => Self::UIntArray(SharedVec::new()),
+            (Elem::Int64, 1) => Self::Int64Array(SharedVec::new()),
+            (Elem::UInt64, 1) => Self::UInt64Array(SharedVec::new()),
+            (Elem::Half, 1) => Self::HalfArray(SharedVec::new()),
+            (Elem::Half, 2) => Self::Half2Array(SharedVec::new()),
+            (Elem::Half, 3) => Self::Half3Array(SharedVec::new()),
+            (Elem::Half, 4) => Self::Half4Array(SharedVec::new()),
+            (Elem::Quath, 1) => Self::QuathArray(SharedVec::new()),
+            (Elem::Quatf, 1) => Self::QuatfArray(SharedVec::new()),
+            (Elem::Quatd, 1) => Self::QuatdArray(SharedVec::new()),
             (Elem::Matrix, 2) => Self::Matrix2dArray(Vec::new()),
             (Elem::Matrix, 3) => Self::Matrix3dArray(Vec::new()),
             (Elem::Matrix, 4) => Self::Matrix4dArray(Vec::new()),
-            (Elem::Float, 1) => Self::FloatArray(Vec::new()),
-            (Elem::Double, 1) => Self::DoubleArray(Vec::new()),
+            (Elem::Float, 1) => Self::FloatArray(SharedVec::new()),
+            (Elem::Double, 1) => Self::DoubleArray(SharedVec::new()),
             (Elem::String, 1) => Self::StringArray(Vec::new()),
             (Elem::Token, 1) => Self::TokenArray(Vec::new()),
             (Elem::Asset, 1) => Self::AssetArray(Vec::new()),
             (Elem::PathExpression, 1) => Self::PathExpressionArray(Vec::new()),
-            (Elem::Float, 2) => Self::Float2Array(Vec::new()),
-            (Elem::Float, 3) => Self::Float3Array(Vec::new()),
-            (Elem::Float, 4) => Self::Float4Array(Vec::new()),
-            (Elem::Double, 2) => Self::Double2Array(Vec::new()),
-            (Elem::Double, 3) => Self::Double3Array(Vec::new()),
-            (Elem::Double, 4) => Self::Double4Array(Vec::new()),
-            (Elem::Int, 2) => Self::Int2Array(Vec::new()),
-            (Elem::Int, 3) => Self::Int3Array(Vec::new()),
-            (Elem::Int, 4) => Self::Int4Array(Vec::new()),
+            (Elem::Float, 2) => Self::Float2Array(SharedVec::new()),
+            (Elem::Float, 3) => Self::Float3Array(SharedVec::new()),
+            (Elem::Float, 4) => Self::Float4Array(SharedVec::new()),
+            (Elem::Double, 2) => Self::Double2Array(SharedVec::new()),
+            (Elem::Double, 3) => Self::Double3Array(SharedVec::new()),
+            (Elem::Double, 4) => Self::Double4Array(SharedVec::new()),
+            (Elem::Int, 2) => Self::Int2Array(SharedVec::new()),
+            (Elem::Int, 3) => Self::Int3Array(SharedVec::new()),
+            (Elem::Int, 4) => Self::Int4Array(SharedVec::new()),
             _ => return None,
         })
     }
@@ -3926,18 +3930,18 @@ mod tests {
         mesh.push_property(Attribute::new(
             "points",
             "point3f[]",
-            Value::Float3Array(vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.1, -2.5e-3]]),
+            Value::Float3Array(vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.1, -2.5e-3]].into()),
         ));
         mesh.push_property(Attribute::new(
             "faceVertexCounts",
             "int[]",
-            Value::IntArray(vec![3]),
+            Value::IntArray(vec![3].into()),
         ));
         mesh.push_property(
             Attribute::new(
                 "primvars:st",
                 "texCoord2f[]",
-                Value::Float2Array(vec![[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]]),
+                Value::Float2Array(vec![[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]].into()),
             )
             .with_metadata("interpolation", Value::Token("vertex".into())),
         );
@@ -4157,7 +4161,7 @@ def Xform "Root" (
         prim.push_property(Attribute::new(
             "f",
             "float[]",
-            Value::FloatArray(vec![f32::INFINITY, f32::NEG_INFINITY, f32::NAN, 0.1, -0.0]),
+            Value::FloatArray(vec![f32::INFINITY, f32::NEG_INFINITY, f32::NAN, 0.1, -0.0].into()),
         ));
         prim.push_property(Attribute::new(
             "tex",
@@ -4193,7 +4197,7 @@ over "P" (
     #[test]
     fn quath_arrays_are_written_real_part_first() {
         // Bits stored `[i, j, k, r]`: a 90° turn about Z and the identity.
-        let value = Value::QuathArray(vec![[0, 0, 0x39a8, 0x39a8], [0, 0, 0, 0x3c00]]);
+        let value = Value::QuathArray(vec![[0, 0, 0x39a8, 0x39a8], [0, 0, 0, 0x3c00]].into());
         let text = doc_with(Attribute::new("orientations", "quath[]", value.clone()))
             .to_usda()
             .unwrap();
@@ -5305,7 +5309,7 @@ def Xform "Tree" (
         prim.push_property(Attribute::new(
             "flags",
             "bool[]",
-            Value::BoolArray(vec![true, false]),
+            Value::BoolArray(vec![true, false].into()),
         ));
         prim.push_property(Attribute::declared("o", "opaque"));
         let text = Document {

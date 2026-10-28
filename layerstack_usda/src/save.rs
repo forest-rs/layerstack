@@ -97,6 +97,7 @@ use alloc::vec::Vec;
 use core::fmt;
 
 use hashbrown::{HashMap, HashSet};
+use layerstack::SharedVec;
 use layerstack::doc::{
     FieldEntry, FieldValue, Layer, LayerOffset as LayerLayerOffset, PrimSpec,
     Reference as LayerReference, ReferenceSource, ReferenceTarget, Specifier, Value as LayerValue,
@@ -118,8 +119,9 @@ use crate::writer::{
 ///
 /// `tokens` and `paths` are the interners the layer's identifiers belong
 /// to. The whole layer is checked first; on success the returned document
-/// also passes [`Document::validate`]. See the [module docs](self) for the
-/// supported subset.
+/// also passes [`Document::validate`]. Its numeric arrays share the layer's
+/// buffers ([`Value`]) rather than copying them; matrix and text arrays are
+/// converted. See the [module docs](self) for the supported subset.
 ///
 /// # Errors
 ///
@@ -1178,32 +1180,32 @@ fn typed_array(array: &layerstack::TypedArray) -> Value {
     match array {
         A::Deferred(_) => unreachable!("save preflight materializes retained arrays"),
         A::Token(_) | A::String(_) => unreachable!("text arrays name their tokens in `value`"),
-        A::Bool(items) => Value::BoolArray(items.as_ref().clone()),
-        A::UChar(items) => Value::UCharArray(items.as_ref().clone()),
-        A::Int(items) => Value::IntArray(items.as_ref().clone()),
-        A::UInt(items) => Value::UIntArray(items.as_ref().clone()),
-        A::Int64(items) => Value::Int64Array(items.as_ref().clone()),
-        A::UInt64(items) => Value::UInt64Array(items.as_ref().clone()),
-        A::Half(items) => Value::HalfArray(items.as_ref().clone()),
-        A::Float(items) => Value::FloatArray(items.as_ref().clone()),
-        A::Double(items) => Value::DoubleArray(items.as_ref().clone()),
-        A::TimeCode(items) => Value::TimeCodeArray(items.as_ref().clone()),
-        A::Duration(items) => Value::DurationArray(items.as_ref().clone()),
-        A::Vec2f(items) => Value::Float2Array(items.as_ref().clone()),
-        A::Vec3f(items) => Value::Float3Array(items.as_ref().clone()),
-        A::Vec4f(items) => Value::Float4Array(items.as_ref().clone()),
-        A::Vec2d(items) => Value::Double2Array(items.as_ref().clone()),
-        A::Vec3d(items) => Value::Double3Array(items.as_ref().clone()),
-        A::Vec4d(items) => Value::Double4Array(items.as_ref().clone()),
-        A::Vec2h(items) => Value::Half2Array(items.as_ref().clone()),
-        A::Vec3h(items) => Value::Half3Array(items.as_ref().clone()),
-        A::Vec4h(items) => Value::Half4Array(items.as_ref().clone()),
-        A::Vec2i(items) => Value::Int2Array(items.as_ref().clone()),
-        A::Vec3i(items) => Value::Int3Array(items.as_ref().clone()),
-        A::Vec4i(items) => Value::Int4Array(items.as_ref().clone()),
-        A::Quath(items) => Value::QuathArray(items.as_ref().clone()),
-        A::Quatf(items) => Value::QuatfArray(items.as_ref().clone()),
-        A::Quatd(items) => Value::QuatdArray(items.as_ref().clone()),
+        A::Bool(items) => Value::BoolArray(items.clone().into()),
+        A::UChar(items) => Value::UCharArray(items.clone().into()),
+        A::Int(items) => Value::IntArray(items.clone().into()),
+        A::UInt(items) => Value::UIntArray(items.clone().into()),
+        A::Int64(items) => Value::Int64Array(items.clone().into()),
+        A::UInt64(items) => Value::UInt64Array(items.clone().into()),
+        A::Half(items) => Value::HalfArray(items.clone().into()),
+        A::Float(items) => Value::FloatArray(items.clone().into()),
+        A::Double(items) => Value::DoubleArray(items.clone().into()),
+        A::TimeCode(items) => Value::TimeCodeArray(items.clone().into()),
+        A::Duration(items) => Value::DurationArray(items.clone().into()),
+        A::Vec2f(items) => Value::Float2Array(items.clone().into()),
+        A::Vec3f(items) => Value::Float3Array(items.clone().into()),
+        A::Vec4f(items) => Value::Float4Array(items.clone().into()),
+        A::Vec2d(items) => Value::Double2Array(items.clone().into()),
+        A::Vec3d(items) => Value::Double3Array(items.clone().into()),
+        A::Vec4d(items) => Value::Double4Array(items.clone().into()),
+        A::Vec2h(items) => Value::Half2Array(items.clone().into()),
+        A::Vec3h(items) => Value::Half3Array(items.clone().into()),
+        A::Vec4h(items) => Value::Half4Array(items.clone().into()),
+        A::Vec2i(items) => Value::Int2Array(items.clone().into()),
+        A::Vec3i(items) => Value::Int3Array(items.clone().into()),
+        A::Vec4i(items) => Value::Int4Array(items.clone().into()),
+        A::Quath(items) => Value::QuathArray(items.clone().into()),
+        A::Quatf(items) => Value::QuatfArray(items.clone().into()),
+        A::Quatd(items) => Value::QuatdArray(items.clone().into()),
         A::Matrix2d(items) => Value::Matrix2dArray(items.iter().map(rows).collect()),
         A::Matrix3d(items) => Value::Matrix3dArray(items.iter().map(rows).collect()),
         A::Matrix4d(items) => Value::Matrix4dArray(items.iter().map(rows).collect()),
@@ -1277,10 +1279,10 @@ fn layer_offset(offset: LayerLayerOffset) -> LayerOffset {
 /// The empty array of `element`'s type, if the writers have one.
 fn empty_array_like(element: &Value) -> Option<Value> {
     if matches!(element, Value::TimeCode(_)) {
-        return Some(Value::TimeCodeArray(Vec::new()));
+        return Some(Value::TimeCodeArray(SharedVec::new()));
     }
     if matches!(element, Value::Duration(_)) {
-        return Some(Value::DurationArray(Vec::new()));
+        return Some(Value::DurationArray(SharedVec::new()));
     }
     Value::empty_array_of(&format!("{}[]", element.canonical_type_name()))
 }
@@ -1293,39 +1295,39 @@ fn rows<const N: usize, const M: usize>(m: &[f64; M]) -> [[f64; N]; N] {
 /// Appends `element` to `array` when it has the array's element type.
 pub(crate) fn push_element(array: &mut Value, element: Value) -> bool {
     match (array, element) {
-        (Value::BoolArray(a), Value::Bool(v)) => a.push(v),
-        (Value::UCharArray(a), Value::UChar(v)) => a.push(v),
-        (Value::IntArray(a), Value::Int(v)) => a.push(v),
-        (Value::UIntArray(a), Value::UInt(v)) => a.push(v),
-        (Value::Int64Array(a), Value::Int64(v)) => a.push(v),
-        (Value::UInt64Array(a), Value::UInt64(v)) => a.push(v),
-        (Value::HalfArray(a), Value::Half(v)) => a.push(v),
-        (Value::Half2Array(a), Value::Half2(v)) => a.push(v),
-        (Value::Half3Array(a), Value::Half3(v)) => a.push(v),
-        (Value::Half4Array(a), Value::Half4(v)) => a.push(v),
-        (Value::QuathArray(a), Value::Quath(v)) => a.push(v),
-        (Value::QuatfArray(a), Value::Quatf(v)) => a.push(v),
-        (Value::QuatdArray(a), Value::Quatd(v)) => a.push(v),
+        (Value::BoolArray(a), Value::Bool(v)) => a.make_mut().push(v),
+        (Value::UCharArray(a), Value::UChar(v)) => a.make_mut().push(v),
+        (Value::IntArray(a), Value::Int(v)) => a.make_mut().push(v),
+        (Value::UIntArray(a), Value::UInt(v)) => a.make_mut().push(v),
+        (Value::Int64Array(a), Value::Int64(v)) => a.make_mut().push(v),
+        (Value::UInt64Array(a), Value::UInt64(v)) => a.make_mut().push(v),
+        (Value::HalfArray(a), Value::Half(v)) => a.make_mut().push(v),
+        (Value::Half2Array(a), Value::Half2(v)) => a.make_mut().push(v),
+        (Value::Half3Array(a), Value::Half3(v)) => a.make_mut().push(v),
+        (Value::Half4Array(a), Value::Half4(v)) => a.make_mut().push(v),
+        (Value::QuathArray(a), Value::Quath(v)) => a.make_mut().push(v),
+        (Value::QuatfArray(a), Value::Quatf(v)) => a.make_mut().push(v),
+        (Value::QuatdArray(a), Value::Quatd(v)) => a.make_mut().push(v),
         (Value::Matrix2dArray(a), Value::Matrix2d(v)) => a.push(v),
         (Value::Matrix3dArray(a), Value::Matrix3d(v)) => a.push(v),
         (Value::Matrix4dArray(a), Value::Matrix4d(v)) => a.push(v),
-        (Value::FloatArray(a), Value::Float(v)) => a.push(v),
-        (Value::DoubleArray(a), Value::Double(v)) => a.push(v),
-        (Value::TimeCodeArray(a), Value::TimeCode(v)) => a.push(v),
-        (Value::DurationArray(a), Value::Duration(v)) => a.push(v),
+        (Value::FloatArray(a), Value::Float(v)) => a.make_mut().push(v),
+        (Value::DoubleArray(a), Value::Double(v)) => a.make_mut().push(v),
+        (Value::TimeCodeArray(a), Value::TimeCode(v)) => a.make_mut().push(v),
+        (Value::DurationArray(a), Value::Duration(v)) => a.make_mut().push(v),
         (Value::StringArray(a), Value::String(v)) => a.push(v),
         (Value::TokenArray(a), Value::Token(v)) => a.push(v),
         (Value::AssetArray(a), Value::Asset(v)) => a.push(v),
         (Value::PathExpressionArray(a), Value::PathExpression(v)) => a.push(v),
-        (Value::Float2Array(a), Value::Float2(v)) => a.push(v),
-        (Value::Float3Array(a), Value::Float3(v)) => a.push(v),
-        (Value::Float4Array(a), Value::Float4(v)) => a.push(v),
-        (Value::Double2Array(a), Value::Double2(v)) => a.push(v),
-        (Value::Double3Array(a), Value::Double3(v)) => a.push(v),
-        (Value::Double4Array(a), Value::Double4(v)) => a.push(v),
-        (Value::Int2Array(a), Value::Int2(v)) => a.push(v),
-        (Value::Int3Array(a), Value::Int3(v)) => a.push(v),
-        (Value::Int4Array(a), Value::Int4(v)) => a.push(v),
+        (Value::Float2Array(a), Value::Float2(v)) => a.make_mut().push(v),
+        (Value::Float3Array(a), Value::Float3(v)) => a.make_mut().push(v),
+        (Value::Float4Array(a), Value::Float4(v)) => a.make_mut().push(v),
+        (Value::Double2Array(a), Value::Double2(v)) => a.make_mut().push(v),
+        (Value::Double3Array(a), Value::Double3(v)) => a.make_mut().push(v),
+        (Value::Double4Array(a), Value::Double4(v)) => a.make_mut().push(v),
+        (Value::Int2Array(a), Value::Int2(v)) => a.make_mut().push(v),
+        (Value::Int3Array(a), Value::Int3(v)) => a.make_mut().push(v),
+        (Value::Int4Array(a), Value::Int4(v)) => a.make_mut().push(v),
         _ => return false,
     }
     true

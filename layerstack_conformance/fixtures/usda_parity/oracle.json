@@ -156,6 +156,11 @@
    },
    "text": "#usda 1.0\n\ndef \"P\" (\n    variants = {\n        string v = \"one\"\n    }\n    prepend variantSets = \"v\"\n)\n{\n    variantSet \"v\" = {\n        \"one\" (\n            prepend inherits = </P/Base>\n        ) {\n            float c.connect = </P/Child.x>\n            rel r = </P/Child>\n            rel up = </Other>\n\n            def \"Child\"\n            {\n                float x\n            }\n\n        }\n    }\n}\n\ndef \"Other\"\n{\n}\n\n"
   },
+  "read_variant_selection_escapes": {
+   "reads": true,
+   "source": "#usda 1.0\n(\n    expressionVariables = {\n        string V = \"one\"\n    }\n)\n\ndef \"P\" (\n    variants = {\n        string a = \"d\\x61rk\"\n        string \"b\\x10\" = \"\"\n        string c = \"`${V}\\x10`\"\n        string d = \"`${V}\u0010`\"\n        string \"e f\" = \".one\"\n        string \"t\\x6fne\" = \"one\"\n    }\n)\n{\n}\n",
+   "text": "#usda 1.0\n(\n    expressionVariables = {\n        string V = \"one\"\n    }\n)\n\ndef \"P\" (\n    variants = {\n        string a = \"dark\"\n        string \"b\\x10\" = \"\"\n        string c = \"`${V}\\x10`\"\n        string d = \"`${V}\\x10`\"\n        string \"e f\" = \".one\"\n        string tone = \"one\"\n    }\n)\n{\n}\n\n"
+  },
   "read_varying_rel": {
    "reads": true,
    "source": "#usda 1.0\n\ndef \"P\"\n{\n    varying rel a = </A>\n    custom varying rel b\n    delete varying rel c = </A>\n    prepend varying rel c = [</B>, </C>]\n    reorder varying rel c = [</C>, </B>]\n    custom varying rel d = </A> (\n        doc = \"varying\"\n    )\n    rel e = </A>\n}\n",
@@ -570,6 +575,21 @@
    "error": "'attribute 'a' already has variability 'SdfVariabilityUniform', cannot change to 'SdfVariabilityVarying' at 'a.connect = </B.c>' in </A.a>",
    "reads": false,
    "source": "#usda 1.0\ndef \"A\"\n{\n    uniform float a = 1\n    float a.connect = </B.c>\n}\n"
+  },
+  "strict_variant_selection_escaped_control": {
+   "error": "'\"a\u0010b\" is not a valid variant name due to ':1:2: parse error at 'variants = {' in </P>",
+   "reads": false,
+   "source": "#usda 1.0\n\ndef \"P\" (\n    variants = {\n        string v = \"a\\x10b\"\n    }\n)\n{\n}\n"
+  },
+  "strict_variant_selection_not_identifier": {
+   "error": "'\"a b\" is not a valid variant name due to ':1:2: parse error at 'variants = {' in </P>",
+   "reads": false,
+   "source": "#usda 1.0\n\ndef \"P\" (\n    variants = {\n        string v = \"a b\"\n    }\n)\n{\n}\n"
+  },
+  "strict_variant_selection_token": {
+   "error": "'variant name must be a string at 'variants = {' in </P>",
+   "reads": false,
+   "source": "#usda 1.0\n\ndef \"P\" (\n    variants = {\n        token v = \"one\"\n    }\n)\n{\n}\n"
   },
   "strict_variant_set_before_brace": {
    "error": "'Expected } at 'variantSet \"v\" = { \"x\" {} } }' in </A>",

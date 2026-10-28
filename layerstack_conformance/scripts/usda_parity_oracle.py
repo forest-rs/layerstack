@@ -39,7 +39,11 @@ The cases:
   ones (`Some::Kind`) among them, whose values OpenUSD keeps as the text
   its parser records (`Sdf_ParserValueContext`); a relationship's legacy
   `.default = <path>`, which OpenUSD keeps as written and writes after the
-  targets.
+  targets; `variants` entries whose set names and selections hold escape
+  sequences or control characters, or set names that are not identifiers,
+  which OpenUSD evaluates as the strings of a dictionary and writes back
+  quoted and escaped (`TextParserAction<VariantsMetadata>`,
+  `pxr/usd/sdf/textFileFormatParser.cpp`).
   Some are refused, as OpenUSD refuses them: a relative target of a prim
   inside the variant, which anchors at `/P{v=one}Child` and so names a
   variant selection (`<x>`, `<../Other>`), a quoted
@@ -89,7 +93,10 @@ The cases:
   `read_unknown_type_one_valued_sample` reads one among `None`s; an asset
   path without its closing `@` or `@@@` (OpenUSD's `AssetRef`), or whose
   closing `@@@` is escaped, while `read_asset_path_delimiters` reads `@@`,
-  `@@@a@@@@@` and `@@@@@@`.
+  `@@@a@@@@@` and `@@@@@@`; a `variants` entry that is not a `string`, or
+  whose selection, escapes evaluated, is neither a variant name nor an
+  expression (`SdfSchemaBase::IsValidVariantSelection`,
+  `pxr/usd/sdf/schema.cpp`).
 - `statements_*`: several list-op statements for one field, on a
   relationship, a connection, references, inherits, `variantSets` and
   metadata (`apiSchemas`). OpenUSD's parser sets each statement's list
@@ -509,6 +516,57 @@ def "P" (
         "one" {
         }
     }
+}
+''', []),
+    # `\\x10` is an escape in the USDA text, `\x10` the character itself.
+    "read_variant_selection_escapes": ('''#usda 1.0
+(
+    expressionVariables = {
+        string V = "one"
+    }
+)
+
+def "P" (
+    variants = {
+        string a = "d\\x61rk"
+        string "b\\x10" = ""
+        string c = "`${V}\\x10`"
+        string d = "`${V}\x10`"
+        string "e f" = ".one"
+        string "t\\x6fne" = "one"
+    }
+)
+{
+}
+''', []),
+    "strict_variant_selection_not_identifier": ('''#usda 1.0
+
+def "P" (
+    variants = {
+        string v = "a b"
+    }
+)
+{
+}
+''', []),
+    "strict_variant_selection_escaped_control": ('''#usda 1.0
+
+def "P" (
+    variants = {
+        string v = "a\\x10b"
+    }
+)
+{
+}
+''', []),
+    "strict_variant_selection_token": ('''#usda 1.0
+
+def "P" (
+    variants = {
+        token v = "one"
+    }
+)
+{
 }
 ''', []),
     "write_version_timecode_spline": ('''#usda 1.0

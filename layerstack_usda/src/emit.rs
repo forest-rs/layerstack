@@ -581,8 +581,8 @@ impl EmitCtx<'_> {
                 }
                 ast::PrimMeta::Variants(selections) => {
                     for sel in selections {
-                        let set_tok = self.tokens.intern(sel.set_name);
-                        let branch_tok = self.tokens.intern(sel.branch_name);
+                        let set_tok = self.tokens.intern(&sel.set_name);
+                        let branch_tok = self.tokens.intern(&sel.branch_name);
                         spec.rare_mut()
                             .variant_selections
                             .insert(set_tok, branch_tok);
@@ -1331,8 +1331,8 @@ impl EmitCtx<'_> {
                 }
                 ast::PrimMeta::Variants(selections) => {
                     for sel in selections {
-                        let set_tok = self.tokens.intern(sel.set_name);
-                        let branch_tok = self.tokens.intern(sel.branch_name);
+                        let set_tok = self.tokens.intern(&sel.set_name);
+                        let branch_tok = self.tokens.intern(&sel.branch_name);
                         variant_spec.variant_selections.insert(set_tok, branch_tok);
                     }
                 }

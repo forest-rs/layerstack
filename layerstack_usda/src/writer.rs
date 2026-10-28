@@ -330,9 +330,10 @@ pub struct Prim {
     pub specializes: Option<ListOp<String>>,
     /// Variant selections (`variants = { string set = "variant" }`, the
     /// `variantSelection` field): set name and selected variant, each set
-    /// once, written by set name in byte order. An empty variant name
-    /// selects no variant; a variable expression (`` `"${V}"` ``) selects
-    /// the variant it evaluates to.
+    /// once, written by set name in byte order, the name quoted and escaped
+    /// where it is not an identifier. An empty variant name selects no
+    /// variant; a variable expression (`` `"${V}"` ``) selects the variant
+    /// it evaluates to.
     ///
     /// Spec: AOUSD Core §7.6.2.3.4 (`variantSelection`), §10.3.2.5
     /// (variants).
@@ -518,32 +519,21 @@ impl Prim {
     }
 
     /// Validates the variant selections and the `variantSets` list op:
-    /// set names are identifiers, each selected once; a selection is a
-    /// variant name or empty; the list op is well formed and names each
-    /// set once per operation.
+    /// each set is selected once, by any name, as the `variants`
+    /// dictionary's keys are any strings OpenUSD reads back; a selection is
+    /// one [`is_variant_selection`] accepts; the list op is well formed and
+    /// names each set once per operation.
     ///
     /// Spec: AOUSD Core §7.6.2.3.4, §7.6.2.3.5.
     fn validate_variant_fields(&self, path: &str) -> Result<(), WriteError> {
         let key = alloc::format!("{path}#variants");
         let mut selected: Vec<&str> = Vec::new();
         for (set, variant) in &self.variant_selections {
-            for (name, valid) in [
-                (set, is_identifier(set)),
-                // A selection may be a variable expression, which composition
-                // evaluates (`SdfVariableExpression`, AOUSD Core §10.3.2.5).
-                (
-                    variant,
-                    variant.is_empty()
-                        || is_variant_name(variant)
-                        || layerstack::variable_expression::is_expression(variant),
-                ),
-            ] {
-                if !valid {
-                    return Err(WriteError::InvalidName {
-                        path: key,
-                        name: name.clone(),
-                    });
-                }
+            if !is_variant_selection(variant) {
+                return Err(WriteError::InvalidName {
+                    path: key,
+                    name: variant.clone(),
+                });
             }
             if selected.contains(&set.as_str()) {
                 return Err(WriteError::Duplicate {
@@ -1629,6 +1619,20 @@ fn is_variant_name(name: &str) -> bool {
     let rest = name.strip_prefix('.').unwrap_or(name);
     !rest.is_empty()
         && rest
+            .chars()
+            .all(|c| crate::ident::is_continue(c) || c == '|' || c == '-')
+}
+
+/// Whether `selection` is a variant selection OpenUSD reads: a variable
+/// expression, which composition evaluates (`SdfVariableExpression`, AOUSD
+/// Core §10.3.2.5), or text of OpenUSD's `VariantName` path grammar, which
+/// may be empty or a lone `.` (`SdfSchemaBase::IsValidVariantSelection`,
+/// `pxr/usd/sdf/schema.cpp`, which the text parser applies to `variants`).
+pub(crate) fn is_variant_selection(selection: &str) -> bool {
+    layerstack::variable_expression::is_expression(selection)
+        || selection
+            .strip_prefix('.')
+            .unwrap_or(selection)
             .chars()
             .all(|c| crate::ident::is_continue(c) || c == '|' || c == '-')
 }
@@ -4392,6 +4396,38 @@ over "P" (
         };
         assert_eq!(entries[0].key, tricky);
         assert!(matches!(&entries[0].value, ast::Value::String(s) if s == tricky));
+    }
+
+    #[test]
+    fn escaped_variant_selections_read_back() {
+        // OpenUSD writes a selection's control characters, and a set name
+        // that is not an identifier, escaped in quotes, and reads them back.
+        let selections = vec![
+            ("s \x10".to_string(), "`${V}\x10`".to_string()),
+            ("t".to_string(), ".".to_string()),
+        ];
+        let mut prim = Prim::def("Xform", "Root");
+        prim.variant_selections = selections.clone();
+        let text = Document {
+            prims: vec![prim],
+            ..Document::new()
+        }
+        .to_usda()
+        .unwrap();
+        assert!(
+            text.contains("string \"s \\x10\" = \"`${V}\\x10`\""),
+            "{text}"
+        );
+        let parsed = parse(&text);
+        assert!(parsed.diagnostics.is_empty(), "{:?}", parsed.diagnostics);
+        let ast::PrimMeta::Variants(read) = &parsed.layer.prims[0].metadata[0] else {
+            panic!("expected variants");
+        };
+        let read: Vec<(String, String)> = read
+            .iter()
+            .map(|s| (s.set_name.to_string(), s.branch_name.to_string()))
+            .collect();
+        assert_eq!(read, selections);
     }
 
     #[test]

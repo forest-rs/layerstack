@@ -706,6 +706,8 @@ jobs:
         run: python layerstack_conformance/scripts/asset_previews_oracle.py --check
       - name: check intrinsic bounds oracle
         run: python layerstack_conformance/scripts/intrinsic_bounds_oracle.py --check
+      - name: check render asset settings oracle
+        run: python layerstack_conformance/scripts/render_assets_oracle.py --check
 
       # The path expression oracle must be what OpenUSD parses and matches.
       - name: check path expression oracle

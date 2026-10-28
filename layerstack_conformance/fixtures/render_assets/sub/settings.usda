@@ -1,0 +1,11 @@
+#usda 1.0
+
+def Scope "Render"
+{
+    def RenderSettings "Settings"
+    {
+        asset ri:lut = @./lut.cube@
+        asset[] ri:luts = [@./lut.cube@]
+        int ri:plain = 3
+    }
+}

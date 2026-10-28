@@ -1,0 +1,7 @@
+{
+  "version": "26.11",
+  "setting": "ri:lut",
+  "authored_path": "./lut.cube",
+  "resolved_path": "sub/lut.cube",
+  "authoring_layer": "sub/settings.usda"
+}

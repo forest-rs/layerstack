@@ -10,6 +10,7 @@
 use crate::view::forwarded_targets;
 use crate::{
     PrimView, Scene, Time,
+    assets::AssetReference,
     usd_render::{
         RenderProduct, RenderProductProductType, RenderSettings, RenderSettingsBase,
         RenderSettingsBaseAspectRatioConformPolicy, RenderVar, RenderVarSourceType,
@@ -21,8 +22,14 @@ use layerstack::{PathId, PropertyKind, PropertyPath, TargetPath, Value};
 /// Extra render configuration: an authored value or ordered target paths.
 #[derive(Clone, Debug, PartialEq)]
 pub enum RenderSettingValue {
-    /// An authored attribute's default value.
+    /// An authored attribute's default value, other than a single asset.
     Value(Value),
+    /// An authored `asset` attribute's default, with the layer that authors
+    /// it, which a relative path is anchored at ([`AssetReference::anchor`]):
+    /// a LUT or procedural authored in a referenced asset or sublayer
+    /// resolves next to that layer, as C++ `UsdAttribute::Get` resolves an
+    /// `SdfAssetPath`. AOUSD Core §9.4 (asset paths anchor at their layer).
+    Asset(AssetReference),
     /// Authored relationship targets or prims providing a connected output.
     Paths(Vec<TargetPath>),
 }
@@ -283,7 +290,16 @@ impl Scene<'_> {
                 }
             }
             if let Some(value) = prim.raw_value(name, Time::Default) {
-                out.insert(Arc::from(name), RenderSettingValue::Value(value));
+                let setting = match value {
+                    Value::Asset(_) => {
+                        AssetReference::read(self, PropertyPath::new(path, property), Time::Default)
+                            .ok()
+                            .flatten()
+                            .map_or(RenderSettingValue::Value(value), RenderSettingValue::Asset)
+                    }
+                    value => RenderSettingValue::Value(value),
+                };
+                out.insert(Arc::from(name), setting);
             }
         }
         out

@@ -183,7 +183,7 @@ fn texture_nodes(text: &str) -> Vec<(String, String, String)> {
         .filter(|p| value(p, "info:id").as_deref() == Some("UsdUVTexture"))
         .map(|p| {
             (
-                p.name.into(),
+                String::from(&*p.name),
                 value(p, "inputs:file").unwrap(),
                 value(p, "inputs:sourceColorSpace").unwrap(),
             )

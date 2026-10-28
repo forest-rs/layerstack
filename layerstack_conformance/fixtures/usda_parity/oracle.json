@@ -45,6 +45,11 @@
    "source": "#usda 1.0\n(\n    relocates = {\n    }\n)\n",
    "text": "#usda 1.0\n(\n    relocates = {\n    }\n)\n\n"
   },
+  "read_escaped_names": {
+   "reads": true,
+   "source": "#usda 1.0\nreorder rootPrims = [\"\\x41\", 'B\\303\\251']\n\ndef \"\\x41\" (\n    prepend variantSets = [\"s\\x31\"]\n)\n{\n    reorder nameChildren = [\"\\x44\", \"C\"]\n    reorder properties = [\"\\x62\", \"a\"]\n    double a = 1\n    double b = 2\n    variantSet \"s\\x31\" = {\n        \"x\\x32\" {\n        }\n    }\n    def \"C\"\n    {\n    }\n    def \"D\"\n    {\n    }\n}\n\ndef 'B\\xc3\\xa9'\n{\n}\n",
+   "text": "#usda 1.0\n\nreorder rootPrims = [\"A\", \"B\u00e9\"]\n\ndef \"A\" (\n    prepend variantSets = \"s1\"\n)\n{\n    reorder properties = [\"b\", \"a\"]\n    reorder nameChildren = [\"D\", \"C\"]\n    double a = 1\n    double b = 2\n\n    def \"C\"\n    {\n    }\n\n    def \"D\"\n    {\n    }\n    variantSet \"s1\" = {\n        \"x2\" {\n\n        }\n    }\n}\n\ndef \"B\u00e9\"\n{\n}\n\n"
+  },
   "read_keyword_like_type_names": {
    "reads": true,
    "source": "#usda 1.0\ndef \"P\"\n{\n    custom Dictionary a\n    custom at b\n    custom write c\n}\n",
@@ -440,6 +445,16 @@
    "error": "'parse error at '' in </P.a>",
    "reads": false,
    "source": "#usda 1.0\ndef \"P\"\n{\n    asset a = @@@a\\@@@\n}\n"
+  },
+  "strict_escaped_prim_name_not_identifier": {
+   "error": "''a b' is not a valid prim name at '\"a\\x20b\"' in </>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"a\\x20b\"\n{\n}\n"
+  },
+  "strict_escaped_variant_set_name_not_identifier": {
+   "error": "'\"a\tb\" is not a valid variant name due to ':1:2: parse error at '\"a\\tb\" = {' in </P>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"P\"\n{\n    variantSet \"a\\tb\" = {\n        \"x\" {\n        }\n    }\n}\n"
   },
   "strict_inherit_above_root": {
    "error": "'Inherit paths must be absolute prim paths at '<../../B>' in </A>",

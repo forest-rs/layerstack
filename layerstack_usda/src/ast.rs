@@ -32,8 +32,9 @@ pub struct Layer<'a> {
     pub metadata: Vec<LayerMeta<'a>>,
     /// Root prim definitions.
     pub prims: Vec<Prim<'a>>,
-    /// Root prim ordering (`reorder rootPrims = [...]`).
-    pub root_prim_order: Option<Vec<&'a str>>,
+    /// Root prim ordering (`reorder rootPrims = [...]`), escape sequences
+    /// evaluated.
+    pub root_prim_order: Option<Vec<Cow<'a, str>>>,
 }
 
 // ── Layer metadata ─────────────────────────────────────────────────────
@@ -95,8 +96,8 @@ pub struct Prim<'a> {
     pub specifier: Specifier,
     /// Optional type name (e.g., `Mesh`, `Scope`).
     pub type_name: Option<&'a str>,
-    /// Prim name (from the quoted string).
-    pub name: &'a str,
+    /// Prim name (from the quoted string), escape sequences evaluated.
+    pub name: Cow<'a, str>,
     /// Prim metadata block.
     pub metadata: Vec<PrimMeta<'a>>,
     /// Body contents: properties, child prims, variant sets.
@@ -114,10 +115,10 @@ pub enum PrimChild<'a> {
     Prim(Prim<'a>),
     /// A variant set definition.
     VariantSet(VariantSet<'a>),
-    /// `reorder nameChildren = [...]`
-    ReorderNameChildren(Vec<&'a str>),
-    /// `reorder properties = [...]`
-    ReorderProperties(Vec<&'a str>),
+    /// `reorder nameChildren = [...]`, escape sequences evaluated.
+    ReorderNameChildren(Vec<Cow<'a, str>>),
+    /// `reorder properties = [...]`, escape sequences evaluated.
+    ReorderProperties(Vec<Cow<'a, str>>),
 }
 
 // ── Prim metadata ──────────────────────────────────────────────────────
@@ -136,7 +137,7 @@ pub enum PrimMeta<'a> {
     /// `variants = { ... }`
     Variants(Vec<VariantSelection<'a>>),
     /// `variantSets = [...]` / `prepend variantSets = [...]`
-    VariantSets(ListOp<&'a str>),
+    VariantSets(ListOp<Cow<'a, str>>),
     /// `kind = "..."`, with escape sequences evaluated.
     Kind(Cow<'a, str>),
     /// `doc = "..."`, with escape sequences evaluated.
@@ -236,8 +237,8 @@ pub struct TimeSample<'a> {
 pub struct VariantSet<'a> {
     /// Source span.
     pub span: Span,
-    /// Variant set name.
-    pub name: &'a str,
+    /// Variant set name, escape sequences evaluated.
+    pub name: Cow<'a, str>,
     /// Variant branches.
     pub branches: Vec<VariantBranch<'a>>,
 }
@@ -245,8 +246,8 @@ pub struct VariantSet<'a> {
 /// A variant branch.
 #[derive(Debug)]
 pub struct VariantBranch<'a> {
-    /// Branch name.
-    pub name: &'a str,
+    /// Branch name, escape sequences evaluated.
+    pub name: Cow<'a, str>,
     /// Branch metadata.
     pub metadata: Vec<PrimMeta<'a>>,
     /// Branch body (same contents as a prim body).

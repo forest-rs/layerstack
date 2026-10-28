@@ -318,7 +318,7 @@ impl<'a> LowerCtx<'a> {
 
         let mut specifier = Specifier::Def;
         let mut type_name = None;
-        let mut name = "";
+        let mut name = Cow::Borrowed("");
         let mut metadata = Vec::new();
         let mut children = Vec::new();
 
@@ -868,7 +868,7 @@ impl<'a> LowerCtx<'a> {
 
     fn lower_variant_set(&mut self, node: SyntaxNode<'_>) -> VariantSet<'a> {
         let span = node.span();
-        let mut name = "";
+        let mut name = Cow::Borrowed("");
         let mut branches = Vec::with_capacity(children_of(node, SyntaxKind::VariantBranch).count());
 
         for child in node.children_no_trivia() {
@@ -894,7 +894,7 @@ impl<'a> LowerCtx<'a> {
         let tree = node.tree();
         let sig = signature(node);
 
-        let mut name = "";
+        let mut name = Cow::Borrowed("");
         let mut metadata = Vec::new();
         let mut children = Vec::new();
 
@@ -933,7 +933,7 @@ impl<'a> LowerCtx<'a> {
         }
     }
 
-    fn lower_name_list_from_reorder(&mut self, node: SyntaxNode<'_>) -> Vec<&'a str> {
+    fn lower_name_list_from_reorder(&mut self, node: SyntaxNode<'_>) -> Vec<Cow<'a, str>> {
         let nl = node
             .children_no_trivia()
             .find(|c| c.kind() == SyntaxKind::NameList);
@@ -1069,7 +1069,7 @@ impl<'a> LowerCtx<'a> {
         list_node: Option<SyntaxNode<'_>>,
         kind: ListOpKind,
         span: Span,
-    ) -> ListOp<&'a str> {
+    ) -> ListOp<Cow<'a, str>> {
         let Some(node) = list_node else {
             return ListOp {
                 span,
@@ -1097,7 +1097,7 @@ impl<'a> LowerCtx<'a> {
         }
     }
 
-    fn lower_name_list(&mut self, node: SyntaxNode<'_>) -> Vec<&'a str> {
+    fn lower_name_list(&mut self, node: SyntaxNode<'_>) -> Vec<Cow<'a, str>> {
         let strings = node.children().filter(|c| is_string_kind(c.kind()));
         let mut names = Vec::with_capacity(strings.clone().count());
         names.extend(strings.map(|c| self.name_literal(c)));
@@ -1667,20 +1667,16 @@ impl<'a> LowerCtx<'a> {
         }
     }
 
-    /// A quoted name: a prim, variant set or variant name.
+    /// A quoted name: a prim, variant set, variant or `reorder` name, with
+    /// its escape sequences evaluated, as OpenUSD's text parser evaluates
+    /// every quoted string before it reads a name from it
+    /// (`TextParserAction<String>`, `pxr/usd/sdf/textFileFormatParser.cpp`):
+    /// `def "\x41"` defines `A`. What the name must be is checked where it
+    /// is used.
     ///
-    /// Names are identifiers or variant names (AOUSD Core §16.2.8), which
-    /// OpenUSD's writer never escapes, so a name is taken from the source
-    /// as written, and one spelled with an escape sequence is reported.
-    fn name_literal(&mut self, node: SyntaxNode<'_>) -> &'a str {
-        let name = strip_quotes(self.text(node));
-        if name.contains('\\') {
-            self.error(
-                node.span(),
-                "unsupported: escape sequences in a quoted name are not evaluated",
-            );
-        }
-        name
+    /// Spec: AOUSD Core §16.2.5 (string escapes), §16.2.8 (names).
+    fn name_literal(&mut self, node: SyntaxNode<'_>) -> Cow<'a, str> {
+        self.string_literal(node)
     }
 
     /// A variant set or variant name, in a `variantSet` statement or the
@@ -1689,9 +1685,9 @@ impl<'a> LowerCtx<'a> {
     /// (`pxr/usd/sdf/textFileFormatParser.cpp`).
     ///
     /// Spec: AOUSD Core §16.2.8 (variant names).
-    fn variant_name_literal(&mut self, node: SyntaxNode<'_>) -> &'a str {
+    fn variant_name_literal(&mut self, node: SyntaxNode<'_>) -> Cow<'a, str> {
         let name = self.name_literal(node);
-        if !name.contains('\\') && !is_variant_identifier(name) {
+        if !is_variant_identifier(&name) {
             self.error(
                 node.span(),
                 alloc::format!("{name:?} is not a valid variant name"),
@@ -2858,7 +2854,7 @@ def \"A\" {
 reorder rootPrims = [\"B\", \"A\"]
 ";
         let r = parse(src);
-        assert_eq!(r.layer.root_prim_order, Some(vec!["B", "A"]));
+        assert_eq!(r.layer.root_prim_order, Some(vec!["B".into(), "A".into()]));
     }
 
     // ── Dictionary values ─────────────────────────────────────────
@@ -3207,8 +3203,27 @@ def Scope \"root\" {
     }
 
     #[test]
-    fn escaped_names_are_reported() {
-        let r = parse("#usda 1.0\ndef \"a\\x62\" {\n}\n");
+    fn escaped_names_are_evaluated() {
+        let r = parse(
+            "#usda 1.0\nreorder rootPrims = [\"\\x41\"]\ndef \"\\x41\" {\n    reorder nameChildren = ['\\xc3\\xa9']\n    variantSet \"s\\x31\" = {\n        \"x\\x32\" {\n        }\n    }\n}\n",
+        );
+        assert!(r.diagnostics.is_empty(), "{:?}", r.diagnostics);
+        assert_eq!(r.layer.root_prim_order, Some(vec!["A".into()]));
+        let prim = &r.layer.prims[0];
+        assert_eq!(prim.name, "A");
+        let [
+            PrimChild::ReorderNameChildren(order),
+            PrimChild::VariantSet(set),
+        ] = prim.children.as_slice()
+        else {
+            panic!("{:?}", prim.children);
+        };
+        assert_eq!(order, &["\u{e9}"]);
+        assert_eq!((&*set.name, &*set.branches[0].name), ("s1", "x2"));
+        // Evaluated, a name must still be one: `\x20` is a space.
+        let r = parse(
+            "#usda 1.0\ndef \"P\"\n{\n    variantSet \"a\\x20b\" = {\n        \"x\" {\n        }\n    }\n}\n",
+        );
         assert_eq!(r.diagnostics.len(), 1, "{:?}", r.diagnostics);
     }
 

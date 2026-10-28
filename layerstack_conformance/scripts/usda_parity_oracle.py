@@ -49,7 +49,10 @@ The cases:
   the empty set name), which OpenUSD reads and writes back
   (`SdfSchemaBase::IsValidVariantIdentifier`); and a variant named "",
   whose spec takes the set's path, so OpenUSD never lists the set and
-  writes nothing of the statement.
+  writes nothing of the statement; prim, variant set, variant and
+  `reorder` names spelled with escape sequences, which OpenUSD evaluates
+  before it reads the name (`TextParserAction<String>`), and refuses
+  when the result is not a name (`strict_escaped_*`).
   Some are refused, as OpenUSD refuses them: a relative target of a prim
   inside the variant, which anchors at `/P{v=one}Child` and so names a
   variant selection (`<x>`, `<../Other>`), a quoted
@@ -1760,6 +1763,47 @@ def "P"
         }
         "x" {
             double a = 1
+        }
+    }
+}
+''', []),
+    "read_escaped_names": (r'''#usda 1.0
+reorder rootPrims = ["\x41", 'B\303\251']
+
+def "\x41" (
+    prepend variantSets = ["s\x31"]
+)
+{
+    reorder nameChildren = ["\x44", "C"]
+    reorder properties = ["\x62", "a"]
+    double a = 1
+    double b = 2
+    variantSet "s\x31" = {
+        "x\x32" {
+        }
+    }
+    def "C"
+    {
+    }
+    def "D"
+    {
+    }
+}
+
+def 'B\xc3\xa9'
+{
+}
+''', []),
+    "strict_escaped_prim_name_not_identifier": (r'''#usda 1.0
+def "a\x20b"
+{
+}
+''', []),
+    "strict_escaped_variant_set_name_not_identifier": (r'''#usda 1.0
+def "P"
+{
+    variantSet "a\tb" = {
+        "x" {
         }
     }
 }

@@ -4917,7 +4917,7 @@ over "B"
         assert!(parsed.diagnostics.is_empty(), "{:?}", parsed.diagnostics);
         assert_eq!(
             parsed.layer.root_prim_order,
-            Some(vec!["B", "A"]),
+            Some(vec!["B".into(), "A".into()]),
             "rootPrims"
         );
     }

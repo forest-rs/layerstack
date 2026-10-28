@@ -1103,31 +1103,32 @@ def "A" {
 
     #[test]
     fn prims_lowered_as_they_close_keep_diagnostics_in_source_order() {
-        // Lowering reports escapes in names and strings and malformed
+        // Lowering reports escapes that are not UTF-8, in names and
+        // strings, and malformed
         // splines; reading lowers each prim as it closes, yet reports what
         // lowering the whole tree reports, in the same order.
         let source = r#"#usda 1.0
 (
     doc = "layer \xff"
 )
-def "A\1" (
+def "A\xf1" (
     doc = "prim \xfe"
     references = @@@a\@@@b@@@
 ) {
     int i.spline = { 1: 2 }
-    def "B\2" {
+    def "B\xf2" {
         string s = "\xfd"
         double d.spline = { bad }
     }
     variantSet "v" = {
         "x" ( doc = "branch \xfc" ) {
-            def "C\3" { custom string t = "\xfb"; }
+            def "C\xf3" { custom string t = "\xfb"; }
         }
     }
     rel r = </A>
     string after = "\xfa"
 }
-def "D\4" {}
+def "D\xf4" {}
 "#;
         compare(source);
         let store = InMemoryStore::default();

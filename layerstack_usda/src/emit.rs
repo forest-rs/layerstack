@@ -378,7 +378,7 @@ impl EmitCtx<'_> {
             if !self.admits_prim_name(prim) {
                 continue;
             }
-            let name_tok = self.tokens.intern(prim.name);
+            let name_tok = self.tokens.intern(&prim.name);
             root_children.push(name_tok);
             self.emit_prim(
                 prim,
@@ -428,13 +428,9 @@ impl EmitCtx<'_> {
     ///
     /// Spec: AOUSD Core §7.3.3 (prim names are identifiers), §8 (paths).
     fn admits_prim_name(&mut self, prim: &ast::Prim<'_>) -> bool {
-        // The lowering reports an escaped name, which still must not hold `/`.
-        let invalid = if prim.name.contains('\\') {
-            prim.name.contains('/')
-        } else {
-            !is_identifier(prim.name)
-        };
-        if invalid {
+        // The name's escapes are evaluated (`def "\\x41"` is `A`) before it
+        // is checked, as OpenUSD's parser checks the evaluated string.
+        if !is_identifier(&prim.name) {
             let message = format!("'{}' is not a valid prim name", prim.name);
             self.reject(prim.span, message);
             return false;
@@ -454,7 +450,7 @@ impl EmitCtx<'_> {
     ) {
         let parent_len = prim_path.len();
         prim_path.push('/');
-        prim_path.push_str(prim.name);
+        prim_path.push_str(&prim.name);
         let path_id = self.paths.intern_child(place.parent, place.name);
 
         let mut spec = PrimSpec::default().with_outer_variant_sites(outer_variant_sites.to_vec());
@@ -482,7 +478,7 @@ impl EmitCtx<'_> {
                     if !self.admits_prim_name(child_prim) {
                         continue;
                     }
-                    let child_name = self.tokens.intern(child_prim.name);
+                    let child_name = self.tokens.intern(&child_prim.name);
                     if !spec.authored_children.contains(&child_name) {
                         spec.authored_children.push(child_name);
                     }
@@ -1263,7 +1259,7 @@ impl EmitCtx<'_> {
         // The set spec alone: `variantSetNames` lists the sets that compose
         // (AOUSD Core §7.6.2.3.5), and a `variantSet` block does not list
         // its set, as OpenUSD's text parser does not.
-        let set_tok = self.tokens.intern(vs.name);
+        let set_tok = self.tokens.intern(&vs.name);
         // A set's variants keep the order their blocks first introduce them
         // (OpenUSD's `variantChildren`); a block naming a variant again
         // adds to it in place.
@@ -1274,7 +1270,7 @@ impl EmitCtx<'_> {
         let mut branch_context = Vec::with_capacity(enclosing.len() + 1);
 
         for branch in &vs.branches {
-            let branch_tok = self.tokens.intern(branch.name);
+            let branch_tok = self.tokens.intern(&branch.name);
             let variant_spec = set_spec.variants.get_or_insert_default(branch_tok);
             branch_context.clear();
             branch_context.extend_from_slice(enclosing);
@@ -1306,7 +1302,7 @@ impl EmitCtx<'_> {
                         if !self.admits_prim_name(child_prim) {
                             continue;
                         }
-                        let child_tok = self.tokens.intern(child_prim.name);
+                        let child_tok = self.tokens.intern(&child_prim.name);
                         if !variant_spec.authored_children.contains(&child_tok) {
                             variant_spec.authored_children.push(child_tok);
                         }
@@ -1582,7 +1578,7 @@ impl EmitCtx<'_> {
     /// give an empty list.
     ///
     /// Spec: AOUSD Core §7.6.2.3.5 (`variantSetNames`), §12.4 (list ops).
-    fn emit_name_listop(&mut self, names: &ast::ListOp<&str>) -> ListOp<TokenId> {
+    fn emit_name_listop(&mut self, names: &ast::ListOp<Cow<'_, str>>) -> ListOp<TokenId> {
         let Some(items) = &names.items else {
             return ListOp::explicit(Vec::new());
         };

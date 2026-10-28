@@ -760,6 +760,13 @@ pub enum FieldValue {
     Int64ListOp(Box<ListOp<i64>>),
     /// A list-op field over `uint64` values (`uint64listop`).
     UInt64ListOp(Box<ListOp<u64>>),
+    /// A list-op field no schema registers, its items the text OpenUSD's
+    /// parser records for each statement's list, brackets dropped
+    /// (`prepend key = [1, 2.5]` holds `1, 2.5`).
+    ///
+    /// OpenUSD: `SdfUnregisteredValueListOp` (`_KeyValueMetadataEnd`,
+    /// `pxr/usd/sdf/textParserHelpers.cpp`).
+    UnregisteredListOp(Box<ListOp<Arc<str>>>),
 }
 
 impl FieldValue {

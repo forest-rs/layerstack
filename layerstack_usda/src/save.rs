@@ -863,6 +863,9 @@ impl Lowering<'_> {
                 FieldValue::UInt64ListOp(op) => {
                     Value::UInt64ListOp(self.list_op(op, &path, |x| Ok(*x))?)
                 }
+                FieldValue::UnregisteredListOp(op) => {
+                    Value::UnregisteredListOp(self.list_op(op, &path, |s| Ok(String::from(&**s)))?)
+                }
                 FieldValue::PathListOp(_) => {
                     return unsupported(path, Unsupported::ListOpMetadata("path list op"));
                 }

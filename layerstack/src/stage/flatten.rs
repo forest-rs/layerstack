@@ -1519,6 +1519,7 @@ fn is_explicit(value: &FieldValue) -> bool {
         FieldValue::UIntListOp(list) => list.explicit.is_some(),
         FieldValue::Int64ListOp(list) => list.explicit.is_some(),
         FieldValue::UInt64ListOp(list) => list.explicit.is_some(),
+        FieldValue::UnregisteredListOp(list) => list.explicit.is_some(),
     }
 }
 

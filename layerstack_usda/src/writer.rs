@@ -1040,6 +1040,10 @@ pub enum Value {
     /// (`SdfUnregisteredValue`), written as that text
     /// ([`layerstack::Value::Unregistered`]).
     Unregistered(String),
+    /// A list op of metadata no schema registers, its items text written
+    /// as it is (`SdfUnregisteredValueListOp`,
+    /// [`layerstack::FieldValue::UnregisteredListOp`]).
+    UnregisteredListOp(ListOp<String>),
     /// A native sparse array edit. `element` is the scalar type descriptor;
     /// its value is ignored. Instructions retain their authored order and
     /// operate over weaker arrays rather than storing an evaluated result.
@@ -2226,7 +2230,8 @@ impl Value {
             | Self::IntListOp(_)
             | Self::UIntListOp(_)
             | Self::Int64ListOp(_)
-            | Self::UInt64ListOp(_) => (Elem::ListOp, 1, false),
+            | Self::UInt64ListOp(_)
+            | Self::UnregisteredListOp(_) => (Elem::ListOp, 1, false),
             Self::Block | Self::AnimationBlock | Self::ArrayEdit { .. } | Self::Unregistered(_) => {
                 return None;
             }
@@ -2313,6 +2318,7 @@ impl Value {
             Self::UIntListOp(_) => "uintListOp",
             Self::Int64ListOp(_) => "int64ListOp",
             Self::UInt64ListOp(_) => "uint64ListOp",
+            Self::UnregisteredListOp(_) => "SdfUnregisteredValueListOp",
             Self::ArrayEdit { element, .. } => {
                 Self::empty_array_of(&alloc::format!("{}[]", element.canonical_type_name()))
                     .map_or("opaque", |array| array.canonical_type_name())
@@ -2734,6 +2740,9 @@ impl Writer<'_> {
             Value::UIntListOp(op) => return self.list_op(key, op, depth, |w, x| w.display(x)),
             Value::Int64ListOp(op) => return self.list_op(key, op, depth, |w, x| w.display(x)),
             Value::UInt64ListOp(op) => return self.list_op(key, op, depth, |w, x| w.display(x)),
+            Value::UnregisteredListOp(op) => {
+                return self.list_op(key, op, depth, |w, text| w.out.push_str(text));
+            }
             _ => {}
         }
         self.indent(depth);
@@ -3487,7 +3496,8 @@ impl Writer<'_> {
             | Value::IntListOp(_)
             | Value::UIntListOp(_)
             | Value::Int64ListOp(_)
-            | Value::UInt64ListOp(_) => unreachable!("list ops are written as statements"),
+            | Value::UInt64ListOp(_)
+            | Value::UnregisteredListOp(_) => unreachable!("list ops are written as statements"),
             Value::Block => self.out.push_str("None"),
             Value::AnimationBlock => self.out.push_str("AnimationBlock"),
             Value::Dictionary(entries) => self.dictionary(entries, depth),

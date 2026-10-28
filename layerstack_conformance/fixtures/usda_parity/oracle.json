@@ -85,6 +85,11 @@
    "source": "#usda 1.0\n(\n    layerKey = foo\n)\n\ndef \"P\" (\n    access = foo\n    names = [foo, bar]\n    mixed = [foo, 1]\n    quoted = \"foo\"\n)\n{\n    double a (\n        access = foo\n    )\n    rel r (\n        access = bar\n    )\n}\n",
    "text": "#usda 1.0\n(\n    layerKey = foo\n)\n\ndef \"P\" (\n    access = foo\n    mixed = [foo, 1]\n    names = [foo, bar]\n    quoted = \"foo\"\n)\n{\n    double a (\n        access = foo\n    )\n    rel r (\n        access = bar\n    )\n}\n\n"
   },
+  "read_unregistered_list_ops": {
+   "reads": true,
+   "source": "#usda 1.0\ndef \"A\" (\n    prepend mixed = [1, 2.50, \"x\", y]\n    append mixed = [3]\n    prepend mixed = [4]\n    delete mixed = [\"a\"]\n    add pairs = [(1, 2), (3, 4)]\n    prepend repeated = [1, 1]\n    kept = [1, 2]\n    prepend kept = [3]\n    prepend replaced = [3]\n    replaced = [1, 2]\n)\n{\n    double a (\n        reorder ints = [3, -1]\n        append ints = [18446744073709551615, -2.5]\n    )\n}\n\ndef \"B\" (\n    prepend nothing = None\n)\n{\n}\n",
+   "text": "#usda 1.0\n\ndef \"A\" (\n    kept = [1, 2]\n    delete mixed = [\"a\"]\n    prepend mixed = [4]\n    append mixed = [3]\n    add pairs = [(1, 2), (3, 4)]\n    prepend repeated = [1, 1]\n    replaced = [1, 2]\n)\n{\n    double a (\n        append ints = [18446744073709551615, -2.5]\n        reorder ints = [3, -1]\n    )\n}\n\ndef \"B\" (\n)\n{\n}\n\n"
+  },
   "read_variability_restated": {
    "reads": true,
    "source": "#usda 1.0\ndef \"A\"\n{\n    uniform float a = 1\n    uniform float a.connect = </B.c>\n    varying rel r = </B>\n    prepend rel r = </C>\n    custom float b = 1\n    float b.timeSamples = {\n        1: 2,\n    }\n}\n",

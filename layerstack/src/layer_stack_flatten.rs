@@ -373,6 +373,7 @@ impl<F: FnMut(LayerId, &str) -> Option<String>> Context<'_, F> {
                 FieldValue::UIntListOp(list) => validate_list(list, layer)?,
                 FieldValue::Int64ListOp(list) => validate_list(list, layer)?,
                 FieldValue::UInt64ListOp(list) => validate_list(list, layer)?,
+                FieldValue::UnregisteredListOp(list) => validate_list(list, layer)?,
             }
         }
         Ok(())

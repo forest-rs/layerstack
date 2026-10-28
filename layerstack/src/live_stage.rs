@@ -1848,7 +1848,6 @@ impl LiveStage {
             load_rules: self.options.load_rules.clone(),
             muted_layers: self.options.muted_layers.clone(),
             threads: self.options.threads,
-            #[cfg(feature = "std")]
             executor: self.options.executor.clone(),
             dynamic_formats: self.options.dynamic_formats.clone(),
         };

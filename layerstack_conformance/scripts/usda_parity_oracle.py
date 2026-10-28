@@ -70,7 +70,11 @@ The cases:
   `reorder` statement, a `;`) before the prim's closing `}` or another
   statement, and a `;` that ends no statement on its line (`PrimItem`,
   `LayerSpec`, `StatementSequenceOf`, `pxr/usd/sdf/textFileFormatParser.h`),
-  while `read_statements_on_one_line` reads the forms that do end one.
+  while `read_statements_on_one_line` reads the forms that do end one; a
+  spline with both inner loops and a looping extrapolation with a loop
+  boundary time, in either order (`TsSpline::_SetInnerLoopParams`,
+  `SetPreExtrapolation`, `pxr/base/ts/spline.cpp`), where
+  `read_spline_bounded_loop_and_default_inner_loops` reads each alone.
 - `statements_*`: several list-op statements for one field, on a
   relationship, a connection, references, inherits, `variantSets` and
   metadata (`apiSchemas`). OpenUSD's parser sets each statement's list
@@ -1026,6 +1030,45 @@ def Scope
         </c>: </d>
     }
 )
+''', []),
+    "strict_spline_bounded_loop_then_inner_loops": ('''#usda 1.0
+def "A"
+{
+    double a.spline = {
+        pre: loop repeat(0),
+        loop: (0, 16, 0, 2, 5),
+        0: 1; post held,
+        16: 2; post held,
+    }
+}
+''', []),
+    "strict_spline_inner_loops_then_bounded_loop": ('''#usda 1.0
+def "A"
+{
+    double a.spline = {
+        loop: (0, 16, 1, 0, 0),
+        post: loop oscillate(16),
+        0: 1; post held,
+        16: 2; post held,
+    }
+}
+''', []),
+    "read_spline_bounded_loop_and_default_inner_loops": ('''#usda 1.0
+def "A"
+{
+    double a.spline = {
+        pre: loop repeat(0),
+        loop: (0, 0, 0, 0, 0),
+        0: 1; post held,
+        16: 2; post held,
+    }
+    double b.spline = {
+        post: loop reset,
+        loop: (0, 16, 0, 2, 5),
+        0: 1; post held,
+        16: 2; post held,
+    }
+}
 ''', []),
     "strict_property_before_brace": ('''#usda 1.0
 def "A" { double a = 1 }

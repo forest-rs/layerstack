@@ -222,7 +222,7 @@ fn main() {
     );
 
     // 3. Save it as one USDA file.
-    let text = layerstack_usda::save::save_usda(flat, store.tokens(), store.paths())
+    let text = layerstack_usda::save_usda(flat, store.tokens(), store.paths())
         .expect("the flattened grove saves");
     println!("{text}");
     assert!(!text.contains("references"), "the file names no asset");

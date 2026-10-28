@@ -704,8 +704,8 @@ fn declarations_follow_the_schema_and_the_weakest_opinion() {
 fn save(layer: &Layer, store: &InMemoryStore) -> (Result<String, String>, Result<Vec<u8>, String>) {
     let (tokens, paths) = (&store.tokens(), &store.paths());
     (
-        layerstack_usda::save::save_usda(layer, tokens, paths).map_err(|e| e.to_string()),
-        layerstack_usdc::writer::save_layer(layer, tokens, paths).map_err(|e| e.to_string()),
+        layerstack_usda::save_usda(layer, tokens, paths).map_err(|e| e.to_string()),
+        layerstack_usdc::save_usdc(layer, tokens, paths).map_err(|e| e.to_string()),
     )
 }
 

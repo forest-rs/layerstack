@@ -159,7 +159,7 @@ fn typed_setters_author_what_the_typed_getters_read_and_openusd_writes() {
     assert_eq!(metadata.meta_u_char(), None);
 
     let layer = store.layer(LayerId(1)).unwrap();
-    let text = layerstack_usda::save::save_usda(layer, store.tokens(), store.paths()).unwrap();
+    let text = layerstack_usda::save_usda(layer, store.tokens(), store.paths()).unwrap();
     for (field, lines) in [
         ("metaBool", &["metaBool = true"][..]),
         ("metaFloat", &["metaFloat = 0.25"]),

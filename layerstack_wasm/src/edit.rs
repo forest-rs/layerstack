@@ -978,8 +978,7 @@ def "Spare" (
     /// The USDA text of layer `id`.
     fn text(stage: &Stage, id: LayerId) -> String {
         let store = stage.document().store();
-        layerstack_usda::save::save_usda(store.layer(id).unwrap(), store.tokens(), store.paths())
-            .unwrap()
+        layerstack_usda::save_usda(store.layer(id).unwrap(), store.tokens(), store.paths()).unwrap()
     }
 
     /// Every composed prim with its fields, attribute values, samples,

@@ -389,7 +389,7 @@ fn close(a: &Json, b: &Json) -> bool {
 #[test]
 fn the_op_api_authors_the_fixture_scene() {
     let (mut store, mut live, _, applied, before) = authored();
-    let text = layerstack_usda::save::save_usda(
+    let text = layerstack_usda::save_usda(
         store.layer(LayerId(1)).unwrap(),
         store.tokens(),
         store.paths(),

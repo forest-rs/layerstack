@@ -67,7 +67,7 @@ use alloc::vec::Vec;
 use layerstack::doc::Layer;
 use layerstack::interner::TokenInterner;
 use layerstack::path::PathInterner;
-use layerstack_usda::save::layer_document;
+use layerstack_usda::save::usdc_document;
 use layerstack_usda::writer::{
     Attribute, Document, ListOp as UsdaListOp, Metadatum, Prim, Property,
     Reference as UsdaReference, Relationship, Specifier as UsdaSpecifier, Value as UsdaValue,
@@ -96,7 +96,7 @@ pub fn write_document(doc: &Document) -> Result<Vec<u8>, UsdcWriteError> {
 /// Saves an authored layer as a USDC file.
 ///
 /// The layer goes through the same lowering as its USDA
-/// ([`layerstack_usda::save::layer_document`]), so both formats read the
+/// ([`layerstack_usda::save::usdc_document`]), so both formats read the
 /// same source fields; the resulting document uses the same validation and
 /// lowering as [`write_document`]. `tokens` and `paths` are the interners the layer's
 /// identifiers belong to.
@@ -108,12 +108,12 @@ pub fn write_document(doc: &Document) -> Result<Vec<u8>, UsdcWriteError> {
 ///
 /// [`UsdcWriteError::Save`] for what the lowering rejects, before any
 /// output; otherwise the errors of [`write_document`].
-pub fn save_layer(
+pub fn save_usdc(
     layer: &Layer,
     tokens: &TokenInterner,
     paths: &PathInterner,
 ) -> Result<Vec<u8>, UsdcWriteError> {
-    let doc = layer_document(layer, tokens, paths).map_err(UsdcWriteError::Save)?;
+    let doc = usdc_document(layer, tokens, paths).map_err(UsdcWriteError::Save)?;
     doc.validate().map_err(UsdcWriteError::Document)?;
     write_crate(&lower_document(doc)?)
 }
@@ -1655,8 +1655,8 @@ def Xform "A" (
 }
 "#;
         let (layer, tokens, paths) = import_usda(source);
-        let usda = layerstack_usda::save::save_usda(&layer, &tokens, &paths).unwrap();
-        let bytes = save_layer(&layer, &tokens, &paths).unwrap();
+        let usda = layerstack_usda::save_usda(&layer, &tokens, &paths).unwrap();
+        let bytes = save_usdc(&layer, &tokens, &paths).unwrap();
 
         let tokens = TokenInterner::default();
         let paths = PathInterner::default();
@@ -1669,7 +1669,7 @@ def Xform "A" (
         )
         .unwrap();
         assert!(read.diagnostics.is_empty(), "{:?}", read.diagnostics);
-        let again = layerstack_usda::save::save_usda(&read.layer, &tokens, &paths).unwrap();
+        let again = layerstack_usda::save_usda(&read.layer, &tokens, &paths).unwrap();
         assert_eq!(again, usda, "USDC and USDA carry the same layer");
     }
 
@@ -1838,7 +1838,7 @@ def Xform "A" (
             .expect("the attribute")
             .default = Some(layerstack::Value::Int(1));
         assert_eq!(
-            save_layer(&layer, &tokens, &paths),
+            save_usdc(&layer, &tokens, &paths),
             Err(UsdcWriteError::Save(
                 layerstack_usda::save::SaveError::Document(WriteError::UnknownType {
                     path: "/A.a".into(),
@@ -1854,7 +1854,7 @@ def Xform "A" (
     #[test]
     fn opaque_attributes_are_declared_without_a_value() {
         let (layer, tokens, paths) = import_usda("#usda 1.0\ndef \"A\"\n{\n    opaque a\n}\n");
-        let bytes = save_layer(&layer, &tokens, &paths).expect("an opaque declaration saves");
+        let bytes = save_usdc(&layer, &tokens, &paths).expect("an opaque declaration saves");
         let read = crate::read_usdc(
             &bytes,
             layerstack::LayerId(2),

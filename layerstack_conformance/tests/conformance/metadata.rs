@@ -253,7 +253,7 @@ fn registered_asset_array_metadata_retains_its_crate_type() {
         def "Populated" (payloadAssetDependencies = [@a.usda@, @b.usda@]) {}
     "#,
     );
-    let bytes = layerstack_usdc::writer::save_layer(
+    let bytes = layerstack_usdc::save_usdc(
         store.layer(LayerId(1)).unwrap(),
         store.tokens(),
         store.paths(),

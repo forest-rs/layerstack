@@ -70,7 +70,7 @@ fn layer_named(loaded: &LoadedStage, name: &str) -> LayerId {
 /// The layer as OpenUSD's `SdfLayer::ExportToString` writes it.
 fn text(loaded: &LoadedStage, layer: LayerId) -> String {
     let store = &loaded.store;
-    layerstack_usda::save::save_usda(store.layer(layer).unwrap(), store.tokens(), store.paths())
+    layerstack_usda::save_usda(store.layer(layer).unwrap(), store.tokens(), store.paths())
         .expect("saves")
 }
 

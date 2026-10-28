@@ -182,7 +182,7 @@ fn main() {
                     !location.contains(['\t', '\r', '\n']),
                     "manifest requires one path per line"
                 );
-                let bytes = layerstack_usdc::writer::save_layer(
+                let bytes = layerstack_usdc::save_usdc(
                     store.layer(*id).unwrap(),
                     store.tokens(),
                     store.paths(),

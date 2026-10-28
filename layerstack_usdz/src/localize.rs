@@ -339,11 +339,11 @@ impl LocalizationPlan {
         for layer in &self.layers {
             valid_layer_member(&layer.member)?;
             let bytes = if layer.member.ends_with(".usda") {
-                layerstack_usda::save::save_usda(&layer.layer, tokens, paths)
+                layerstack_usda::save_usda(&layer.layer, tokens, paths)
                     .map_err(LocalizationError::Usda)?
                     .into_bytes()
             } else {
-                layerstack_usdc::writer::save_layer(&layer.layer, tokens, paths)
+                layerstack_usdc::save_usdc(&layer.layer, tokens, paths)
                     .map_err(LocalizationError::Usdc)?
             };
             serialized.push(bytes);

@@ -132,7 +132,7 @@ fn prim_relocates_are_refused_as_openusd_refuses_them() {
         .map(|d| (d.spec_path.as_str(), d.field.as_deref()))
         .collect();
     assert_eq!(reported, [("/A", Some("relocates"))]);
-    let text = layerstack_usda::save::save_usda(&read.layer, &tokens, &paths).unwrap();
+    let text = layerstack_usda::save_usda(&read.layer, &tokens, &paths).unwrap();
     assert!(!text.contains("relocates"), "{text}");
     let our_prims: Vec<String> = ["/A", "/A/B"]
         .into_iter()

@@ -4,10 +4,11 @@
 //! Saving an authored [`Layer`]: the one lowering route from the layer
 //! model to the writers.
 //!
-//! [`layer_document`] lowers a [`Layer`] to the authored [`Document`] that
-//! both writers serialize: [`Document::to_usda`] here, and the crate writer
-//! in `layerstack_usdc` (`layerstack_usdc::writer::save_layer`). Every source
-//! field is read in this one place, so USDA and USDC cannot select
+//! [`usdc_document`] lowers a [`Layer`] to the authored [`Document`] the
+//! crate writer in `layerstack_usdc` serializes (`layerstack_usdc::save_usdc`),
+//! and [`usda_document`] to the one [`save_usda`] writes with
+//! [`Document::to_usda`], which differs only in leaving out a dictionary
+//! entry with no value. Every source field is read in this one place, so USDA and USDC cannot select
 //! different slots of the same layer; the crate lowering of a [`Document`]
 //! is itself defined as what OpenUSD's text parser stores for that
 //! document's USDA.
@@ -62,7 +63,7 @@
 //!
 //! # Rejected before any output
 //!
-//! [`layer_document`] checks the whole layer before a writer runs and
+//! [`usdc_document`] checks the whole layer before a writer runs and
 //! returns the first problem it finds, naming its source path:
 //!
 //! - [`SaveError::Unsupported`]: untyped sparse array edits outside attributes;
@@ -128,7 +129,7 @@ use crate::writer::{
 ///
 /// A [`SaveError`] naming the source path of the first unsupported or
 /// invalid spec, field or value.
-pub fn layer_document(
+pub fn usdc_document(
     layer: &Layer,
     tokens: &TokenInterner,
     paths: &PathInterner,
@@ -155,18 +156,18 @@ fn lower(
     Ok(doc)
 }
 
-/// Saves an authored layer as USDA text, as [`layer_document`] lowers it
+/// Saves an authored layer as USDA text, as [`usdc_document`] lowers it
 /// except that a dictionary entry with no value ([`LayerValue::Null`]) is
 /// left out rather than refused.
 ///
 /// OpenUSD 26.11's USDA writer skips such an entry with a warning, where
 /// 26.08 wrote `key =` (`Sdf_FileIOUtility::_WriteDictionary`,
 /// `pxr/usd/sdf/fileIO_Common.cpp`); its USDC writer refuses it, as
-/// [`layer_document`] does. Spec: AOUSD Core §6.6.2 (dictionaries).
+/// [`usdc_document`] does. Spec: AOUSD Core §6.6.2 (dictionaries).
 ///
 /// # Errors
 ///
-/// See [`layer_document`]. Nothing is produced on error.
+/// See [`usdc_document`]. Nothing is produced on error.
 pub fn save_usda(
     layer: &Layer,
     tokens: &TokenInterner,
@@ -200,7 +201,7 @@ pub fn save_usda_to<W: fmt::Write + ?Sized>(
 }
 
 /// The document [`save_usda`] writes for `layer`, checked as text
-/// ([`Document::validate_text`]): lowered as [`layer_document`] lowers it,
+/// ([`Document::validate_text`]): lowered as [`usdc_document`] lowers it,
 /// except that a dictionary entry with no value is left out.
 ///
 /// Lowering first and writing later lets a caller refuse a layer before

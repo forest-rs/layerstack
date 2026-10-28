@@ -247,7 +247,7 @@ fn authored() -> (InMemoryStore, LiveStage, Harness) {
 fn setters_author_the_fixture_scene() {
     let (store, _, _) = authored();
     let layer = store.layer(LayerId(1)).expect("the root layer");
-    let text = layerstack_usda::save::save_usda(layer, store.tokens(), store.paths())
+    let text = layerstack_usda::save_usda(layer, store.tokens(), store.paths())
         .expect("the authored layer saves");
     if text != SCENE {
         let out = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("schema_views.usda");
@@ -455,7 +455,7 @@ fn targets_map_through_the_edit_target() {
 
     // The layers OpenUSD composes.
     let save = |id| {
-        layerstack_usda::save::save_usda(store.layer(id).unwrap(), store.tokens(), store.paths())
+        layerstack_usda::save_usda(store.layer(id).unwrap(), store.tokens(), store.paths())
             .expect("saves")
     };
     let (main, asset) = (save(LayerId(1)), save(LayerId(2)));
@@ -764,7 +764,7 @@ fn local_variant_targets_keep_paths_outside_the_branch() {
         .includes();
     assert_eq!(includes, wanted);
 
-    let text = layerstack_usda::save::save_usda(
+    let text = layerstack_usda::save_usda(
         store.layer(LayerId(1)).unwrap(),
         store.tokens(),
         store.paths(),

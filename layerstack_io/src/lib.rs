@@ -1664,7 +1664,7 @@ impl<B: Storage> StageDocument<B> {
                     .map_err(save_error)?;
                 return write_usda(&document, sink);
             }
-            Format::Usdc => layerstack_usdc::writer::save_layer(layer, tokens, paths)
+            Format::Usdc => layerstack_usdc::save_usdc(layer, tokens, paths)
                 .map_err(|error| caused(IoCause::UsdcWrite(error)))?,
             Format::Usdz => {
                 return Err(IoError::new(

@@ -114,8 +114,8 @@ pub fn usda(data: &[u8]) {
     let read = layerstack_usda::read_usda(source, LayerId(1), &tokens, &paths, &mut NoAssets);
     // The writers take whatever a recovered read holds, and refuse what
     // they cannot write with an error.
-    let _ = layerstack_usda::save::save_usda(&read.emitted.layer, &tokens, &paths);
-    let _ = layerstack_usdc::writer::save_layer(&read.emitted.layer, &tokens, &paths);
+    let _ = layerstack_usda::save_usda(&read.emitted.layer, &tokens, &paths);
+    let _ = layerstack_usdc::save_usdc(&read.emitted.layer, &tokens, &paths);
 }
 
 /// Imports USDA text, and when it imports without errors, saves it and
@@ -136,8 +136,7 @@ pub fn usda_round_trip(data: &[u8]) {
     let tokens = TokenInterner::default();
     let paths = PathInterner::default();
     let read = layerstack_usda::read_usda(&first, LayerId(1), &tokens, &paths, &mut NoAssets);
-    let Ok(crate_file) = layerstack_usdc::writer::save_layer(&read.emitted.layer, &tokens, &paths)
-    else {
+    let Ok(crate_file) = layerstack_usdc::save_usdc(&read.emitted.layer, &tokens, &paths) else {
         return;
     };
     let tokens = TokenInterner::default();
@@ -147,7 +146,7 @@ pub fn usda_round_trip(data: &[u8]) {
             .unwrap_or_else(|error| {
                 panic!("saved crate file does not read back ({error}):\n{first}")
             });
-    let third = layerstack_usda::save::save_usda(&reread.layer, &tokens, &paths)
+    let third = layerstack_usda::save_usda(&reread.layer, &tokens, &paths)
         .unwrap_or_else(|error| panic!("crate layer does not save ({error}):\n{first}"));
     assert_eq!(first, third, "the crate file reads back differently");
 }
@@ -168,7 +167,7 @@ fn save_clean(source: &str) -> Option<String> {
     if !clean {
         return None;
     }
-    layerstack_usda::save::save_usda(&read.emitted.layer, &tokens, &paths).ok()
+    layerstack_usda::save_usda(&read.emitted.layer, &tokens, &paths).ok()
 }
 
 /// Reads a crate file eagerly, retained (decoding every retained value by
@@ -184,7 +183,7 @@ pub fn usdc(data: &[u8]) {
         layerstack_usdc::read_usdc_lazy(Arc::from(data), LayerId(1), &tokens, &paths, &mut NoAssets)
     {
         // Saving reads every value, so every retained one decodes.
-        let _ = layerstack_usda::save::save_usda(&read.assembled.layer, &tokens, &paths);
+        let _ = layerstack_usda::save_usda(&read.assembled.layer, &tokens, &paths);
         let _ = read.values.stats();
     }
 

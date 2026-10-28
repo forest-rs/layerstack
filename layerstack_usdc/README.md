@@ -36,7 +36,7 @@ let bytes = layerstack_usdc::writer::write_document(&document).unwrap();
 assert_eq!(&bytes[..8], b"PXR-USDC");
 ```
 
-`writer::save_layer` saves an existing `layerstack::Layer` using its interners.
+`save_usdc` saves an existing `layerstack::Layer` using its interners.
 It shares USDA's [layer-save lowering and limitations](https://docs.rs/layerstack_usda/latest/layerstack_usda/save/index.html):
 variants, splines, layer relocates and path expressions are supported; native
 sparse edits are supported too. Some metadata/value forms are rejected. The binary

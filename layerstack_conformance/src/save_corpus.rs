@@ -174,18 +174,18 @@ impl Imported {
     ///
     /// # Errors
     ///
-    /// See [`layerstack_usda::save::layer_document`].
+    /// See [`layerstack_usda::save::usdc_document`].
     pub fn save_usda(&self) -> Result<String, SaveError> {
-        layerstack_usda::save::save_usda(&self.layer, &self.tokens, &self.paths)
+        layerstack_usda::save_usda(&self.layer, &self.tokens, &self.paths)
     }
 
     /// Saves the layer as USDC.
     ///
     /// # Errors
     ///
-    /// See [`layerstack_usdc::writer::save_layer`].
+    /// See [`layerstack_usdc::save_usdc`].
     pub fn save_usdc(&self) -> Result<Vec<u8>, layerstack_usdc::writer::UsdcWriteError> {
-        layerstack_usdc::writer::save_layer(&self.layer, &self.tokens, &self.paths)
+        layerstack_usdc::save_usdc(&self.layer, &self.tokens, &self.paths)
     }
 
     /// The authored prim spec at `path`, for editing.

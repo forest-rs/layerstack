@@ -182,7 +182,7 @@ fn test_file_format() {
                 paths: store.paths(),
             };
             let layer = format.read(&source).unwrap();
-            layerstack_usda::save::save_usda(&layer, store.tokens(), store.paths()).unwrap()
+            layerstack_usda::save_usda(&layer, store.tokens(), store.paths()).unwrap()
         };
         let baseline = |store: &InMemoryStore, file: &str, asset: &str| {
             let text = std::fs::read_to_string(format!("{dir}/baseline/{file}"))
@@ -197,8 +197,7 @@ fn test_file_format() {
                 &schemas,
             );
             assert!(!read.emitted.rejected);
-            layerstack_usda::save::save_usda(&read.emitted.layer, store.tokens(), store.paths())
-                .unwrap()
+            layerstack_usda::save_usda(&read.emitted.layer, store.tokens(), store.paths()).unwrap()
         };
         let none = FormatArgs::new();
         assert_eq!(

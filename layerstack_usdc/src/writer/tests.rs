@@ -1801,7 +1801,7 @@ fn unregistered_text_round_trips() {
         store.paths(),
         &mut NoAssets,
     );
-    let bytes = save_layer(&read.emitted.layer, store.tokens(), store.paths()).expect("saved");
+    let bytes = save_usdc(&read.emitted.layer, store.tokens(), store.paths()).expect("saved");
     let back = crate::read_usdc(
         &bytes,
         LayerId(2),
@@ -1810,6 +1810,6 @@ fn unregistered_text_round_trips() {
         &mut NoAssets,
     )
     .expect("read back");
-    let text = layerstack_usda::save::save_usda(&back.layer, store.tokens(), store.paths());
+    let text = layerstack_usda::save_usda(&back.layer, store.tokens(), store.paths());
     assert_eq!(text.as_deref(), Ok(source));
 }

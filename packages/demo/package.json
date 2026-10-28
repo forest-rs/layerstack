@@ -1,0 +1,22 @@
+{
+  "name": "@forest-rs/layerstack-demo",
+  "version": "0.0.0",
+  "private": true,
+  "description": "A scene editor over @forest-rs/layerstack: open, explain, edit, switch a variant, undo, save and reopen, in plain DOM.",
+  "license": "Apache-2.0 OR MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -p tsconfig.json && vite build",
+    "preview": "vite preview",
+    "acceptance": "node scripts/acceptance.ts"
+  },
+  "dependencies": {
+    "@forest-rs/layerstack": "file:../layerstack"
+  },
+  "devDependencies": {
+    "@types/node": "24.4.0",
+    "typescript": "5.9.3",
+    "vite": "8.3.4"
+  }
+}

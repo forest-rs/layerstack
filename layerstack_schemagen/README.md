@@ -7,8 +7,13 @@ authoring until transaction application (`Create*Attr().Set()`). Codeless schema
 get their native schema spelling without invented C++ declarations. Regeneration
 preserves the aliases and their semantic notes.
 
-`cargo run -p layerstack_schemagen -- --help` lists its commands and flags, and
-`compile --help` the compiler's.
+Install the command with `cargo install layerstack_schemagen`, at the version
+of `layerstack_schemas` your library builds on. `layerstack_schemagen --help`
+lists its commands and flags, and `layerstack_schemagen compile --help` the
+compiler's. Inside this repository, `cargo run -p layerstack_schemagen --` runs
+the same command. Regenerating the bundled schemas (`--pxr`) writes this
+repository's `layerstack_schemas`, so run it from a checkout; an installed
+command compiles libraries and runs the generators that take `--out`.
 
 Regenerate the bundled OpenUSD schemas with the matching wheel and source:
 
@@ -30,7 +35,7 @@ form, into the `generatedSchema.usda` and `plugInfo.json` OpenUSD's
 layerstack (`layerstack::schema::read_generated_schema`):
 
 ```sh
-cargo run -p layerstack_schemagen -- compile schema/schema.usda --out schema --openusd-source <OpenUSD>
+layerstack_schemagen compile schema/schema.usda --out schema --openusd-source <OpenUSD>
 ```
 
 Sublayers such as `@usdGeom/schema.usda@` resolve next to the layer naming them,
@@ -54,7 +59,7 @@ tables. `CompiledSchema::rust_module` is the build-script counterpart; see the
 `compile` module docs for the Cargo and `build.rs` setup.
 
 ```sh
-cargo run -p layerstack_schemagen -- compile schema/schema.usda --openusd-source <OpenUSD> --rust src/schemas.rs
+layerstack_schemagen compile schema/schema.usda --openusd-source <OpenUSD> --rust src/schemas.rs
 ```
 
 Generate a downstream shader module without an OpenUSD installation:

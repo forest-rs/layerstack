@@ -8,7 +8,7 @@ license.workspace = true
 repository.workspace = true
 keywords = ["usd", "schemas", "codegen"]
 categories = ["development-tools"]
-publish = false
+readme = "README.md"
 
 [dependencies]
 layerstack = { workspace = true }

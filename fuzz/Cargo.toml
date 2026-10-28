@@ -1,0 +1,69 @@
+# Fuzz targets for the readers, run with `cargo +nightly fuzz run <target>`
+# from this directory. This crate is its own workspace, outside the main
+# one, so libFuzzer and nightly never reach the library crates' builds.
+
+[package]
+name = "layerstack_fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+license = "Apache-2.0 OR MIT"
+
+[package.metadata]
+cargo-fuzz = true
+
+[workspace]
+members = ["."]
+
+[dependencies]
+layerstack = { features = ["std"], path = "../layerstack" }
+layerstack_io = { features = ["std"], path = "../layerstack_io" }
+layerstack_usda = { path = "../layerstack_usda" }
+layerstack_usdc = { features = ["std"], path = "../layerstack_usdc" }
+layerstack_usdz = { features = ["std"], path = "../layerstack_usdz" }
+libfuzzer-sys = "0.4"
+
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "usda"
+path = "fuzz_targets/usda.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "usda_round_trip"
+path = "fuzz_targets/usda_round_trip.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "usdc"
+path = "fuzz_targets/usdc.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "usdz"
+path = "fuzz_targets/usdz.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "text"
+path = "fuzz_targets/text.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "stage"
+path = "fuzz_targets/stage.rs"
+test = false
+doc = false
+bench = false

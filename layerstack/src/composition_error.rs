@@ -126,7 +126,7 @@ impl CompositionError {
 
     /// The stable code naming this error's kind, for hosts and bindings
     /// that branch on it without matching the enum: `composition.` and the
-    /// variant's name in `snake_case`.
+    /// variant's name in `snake_case`, less any `Error` suffix.
     ///
     /// | Variant | Code |
     /// |---|---|
@@ -145,7 +145,7 @@ impl CompositionError {
     /// | [`Self::InconsistentPropertyType`] | `composition.inconsistent_property_type` |
     /// | [`Self::InvalidExternalTargetPath`] | `composition.invalid_external_target_path` |
     /// | [`Self::InvalidInstanceTargetPath`] | `composition.invalid_instance_target_path` |
-    /// | [`Self::VariableExpressionError`] | `composition.variable_expression_error` |
+    /// | [`Self::VariableExpressionError`] | `composition.variable_expression` |
     /// | [`Self::InvalidSublayerAndOffsetCount`] | `composition.invalid_sublayer_and_offset_count` |
     ///
     /// Codes are part of the public contract: a released code keeps its
@@ -211,7 +211,7 @@ const CODES: [&str; 17] = [
     "composition.inconsistent_property_type",
     "composition.invalid_external_target_path",
     "composition.invalid_instance_target_path",
-    "composition.variable_expression_error",
+    "composition.variable_expression",
     "composition.invalid_sublayer_and_offset_count",
 ];
 
@@ -1002,8 +1002,10 @@ mod tests {
                 !case.is_empty() && case.bytes().all(|b| b.is_ascii_lowercase() || b == b'_'),
                 "{code}"
             );
+            assert!(!case.ends_with("_error"), "{code} names its type");
             assert!(seen.insert(code), "{code} repeats");
         }
+        assert_eq!(CODES[15], "composition.variable_expression");
         let error = CompositionError::UnresolvedSublayer(UnresolvedSublayer {
             layer: LayerId(0),
             asset: "./sub.usda".into(),

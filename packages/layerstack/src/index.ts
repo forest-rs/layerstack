@@ -24,7 +24,7 @@ import type { NativeModule } from "./stage.js";
 
 export { LayerstackError } from "./errors.js";
 export type { ErrorCode, ErrorDetails } from "./errors.js";
-export { ABI, Attribute, Layer, Layerstack, PACKAGE_VERSION, Prim, Stage } from "./stage.js";
+export { ABI, Attribute, Layer, Layerstack, PACKAGE_VERSION, Prim, Relationship, Stage } from "./stage.js";
 export type { NativeModule, NativeStage } from "./stage.js";
 export type * from "./types.js";
 

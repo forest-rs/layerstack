@@ -35,7 +35,7 @@ export const PACKAGE_VERSION = "0.1.0";
  * The ABI this package speaks: the version of the records it exchanges
  * with the native module (`layerstack_wasm::ABI`).
  */
-export const ABI = 1;
+export const ABI = 2;
 
 /** The native stage the generated glue exports (`layerstack_wasm::Stage`). Not for app use. */
 export interface NativeStage {
@@ -55,6 +55,8 @@ export interface NativeStage {
   get(path: string, time?: number | null): unknown;
   timeSamples(path: string): Float64Array;
   explain(path: string, time?: number | null): unknown;
+  metadata(path: string, key: string): unknown;
+  relationship(path: string): unknown;
 }
 
 /**
@@ -393,6 +395,12 @@ export class Stage implements Disposable {
     return row === null ? null : new Attribute(this, path, row);
   }
 
+  /** The relationship at the property path `path` (`/World.lookAt`), or `null`. */
+  relationship(path: string): Relationship | null {
+    const row = this.#call("relationship", (native) => native.relationship(path)) as Row | null;
+    return row === null ? null : new Relationship(this, path, row);
+  }
+
   /** Disposes the native stage. Idempotent. */
   free(): void {
     const native = this.#native;
@@ -517,10 +525,19 @@ export class Prim {
     return this.stage.attribute(`${this.path}.${name}`);
   }
 
-  /** Its variant sets and their selections. */
+  /** Its variant sets, their selections and variant names. */
   variantSets(): VariantSet[] {
     const rows = this.stage.native("variantSets", (native) => native.variantSets(this.path)) as Row[];
-    return rows.map(([name, selection]) => ({ name: name as string, selection: selection as string | null }));
+    return rows.map(([name, selection, variants]) => ({
+      name: name as string,
+      selection: selection as string | null,
+      variants: variants as string[],
+    }));
+  }
+
+  /** Its composed metadata field `key` (`kind`, `documentation`, `apiSchemas`), or `null` when nothing authors it. */
+  metadata(key: string): Value | null {
+    return readMetadata(this.stage, this.path, key);
   }
 }
 
@@ -599,6 +616,43 @@ export class Attribute {
   timeSamples(): number[] {
     return Array.from(this.stage.native("timeSamples", (native) => native.timeSamples(this.path)));
   }
+
+  /** Its composed metadata field `key` (`hidden`, `documentation`), or `null` when nothing authors it. */
+  metadata(key: string): Value | null {
+    return readMetadata(this.stage, this.path, key);
+  }
+}
+
+/** A composed relationship, as read when it was returned; {@link Relationship.targets} queries the stage now. */
+export class Relationship {
+  /** The stage it was read from. */
+  readonly stage: Stage;
+  /** Its property path (`/World.lookAt`). */
+  readonly path: string;
+  /** Its name (`lookAt`). */
+  readonly name: string;
+  /** Whether an opinion declares it `custom`: one no schema of its prim is expected to define. */
+  readonly custom: boolean;
+
+  /** @internal */
+  constructor(stage: Stage, path: string, row: Row) {
+    this.stage = stage;
+    this.path = path;
+    this.name = path.slice(path.lastIndexOf(".") + 1);
+    this.custom = row[0] as boolean;
+    Object.freeze(this);
+  }
+
+  /** Its composed targets, in order: prim and property paths. */
+  targets(): string[] {
+    const row = this.stage.native("relationship", (native) => native.relationship(this.path)) as Row | null;
+    return row === null ? [] : [...(row[1] as string[])];
+  }
+
+  /** Its composed metadata field `key`, or `null`. */
+  metadata(key: string): Value | null {
+    return readMetadata(this.stage, this.path, key);
+  }
 }
 
 /** Array data copied out of the module: the elements live in JS memory. */
@@ -627,6 +681,11 @@ class ArrayCopy implements ArrayData {
 
   /** Nothing to release: the elements are JS-owned. */
   [Symbol.dispose](): void {}
+}
+
+function readMetadata(stage: Stage, path: string, key: string): Value | null {
+  const record = stage.native("metadata", (native) => native.metadata(path, key));
+  return decodeValue(stage.layerstack, record);
 }
 
 function decodeValue(layerstack: Layerstack, record: unknown): Value | null {

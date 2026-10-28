@@ -221,6 +221,8 @@ export interface VariantSet {
   readonly name: string;
   /** The selected variant; `null` when nothing selects one. */
   readonly selection: string | null;
+  /** The set's variant names, in composed order. */
+  readonly variants: readonly string[];
 }
 
 /** The version of this package and of the native module it runs. */

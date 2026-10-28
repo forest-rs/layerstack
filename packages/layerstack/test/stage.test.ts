@@ -250,6 +250,48 @@ describe("values and explanations", () => {
   });
 });
 
+describe("metadata, relationships and variant sets", () => {
+  it("read what the layers author", () => {
+    using stage = layerstack.open({
+      identifier: "meta.usda",
+      bytes: new TextEncoder().encode(`#usda 1.0
+def "World" (
+    kind = "assembly"
+    variants = {
+        string shade = "light"
+    }
+    prepend variantSets = "shade"
+) {
+    custom rel lookAt = [</World/Rock>, </World.size>]
+    double size = 2 (
+        hidden = true
+    )
+
+    def "Rock" {
+    }
+
+    variantSet "shade" = {
+        "light" {
+        }
+        "dark" {
+        }
+    }
+}
+`),
+    });
+    const world = stage.prim("/World");
+    assert.deepEqual(world?.metadata("kind"), { kind: "scalar", type: "token", value: "assembly" });
+    assert.equal(world?.metadata("documentation"), null);
+    assert.deepEqual(stage.attribute("/World.size")?.metadata("hidden"), { kind: "scalar", type: "bool", value: true });
+    assert.deepEqual(world?.variantSets(), [{ name: "shade", selection: "light", variants: ["dark", "light"] }]);
+    const lookAt = stage.relationship("/World.lookAt");
+    assert.equal(lookAt?.name, "lookAt");
+    assert.equal(lookAt?.custom, true);
+    assert.deepEqual(lookAt?.targets(), ["/World/Rock", "/World.size"]);
+    assert.equal(stage.relationship("/World.missing"), null);
+  });
+});
+
 describe("errors", () => {
   it("carry stable codes and what they are about", async () => {
     const rejected = await failure(() =>

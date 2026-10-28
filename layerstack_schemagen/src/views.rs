@@ -1195,7 +1195,7 @@ fn token_enum(cx: &Context<'_, '_>, name: &str, property: &Property) -> Result<S
          pub(crate) fn read(\n        value: &::layerstack::Value,\n        \
          tokens: &::layerstack::TokenInterner,\n    ) -> Option<Self> {{\n        \
          {schemas}::value::read_token(value, tokens).map(Self::from_token)\n    }}\n\n    \
-         pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {{\n        \
+         pub(crate) fn write(self, tokens: &::layerstack::TokenInterner) -> ::layerstack::Value {{\n        \
          {schemas}::value::write_token(self.as_str(), tokens)\n    }}\n}}\n\n",
         doc = format!(
             "The tokens `{}` allows.",

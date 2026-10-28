@@ -368,7 +368,7 @@ impl GeneratedMesh {
             ancestor = store.paths().parent(parent);
         }
         let mapped = target
-            .map_to_spec_path(path, store.paths_mut())
+            .map_to_spec_path(path, store.paths())
             .ok_or(MeshPublicationError::InvalidTarget)?;
         let layer = store
             .layer(target.layer())
@@ -390,7 +390,7 @@ impl GeneratedMesh {
         }
         let mut transaction = Transaction::new();
         if !exists {
-            let mesh = store.tokens_mut().intern("Mesh");
+            let mesh = store.tokens().intern("Mesh");
             transaction.create_prim(target.prim(path), Specifier::Def, Some(mesh));
         }
         let mut attributes = Vec::new();
@@ -420,7 +420,7 @@ impl GeneratedMesh {
             String::from("extent"),
             typed("float3[]", TypedArray::Vec3f(extent)),
         ));
-        let subdivision = store.tokens_mut().intern("none");
+        let subdivision = store.tokens().intern("none");
         attributes.push((
             String::from("subdivisionScheme"),
             attribute(
@@ -432,10 +432,10 @@ impl GeneratedMesh {
             layerstack::Variability::Uniform;
         for primvar in &self.primvars {
             let mut spec = attribute(primvar.type_name.clone(), primvar.value.clone());
-            let interpolation = store.tokens_mut().intern("interpolation");
-            let token = store.tokens_mut().intern(&primvar.interpolation);
+            let interpolation = store.tokens().intern("interpolation");
+            let token = store.tokens().intern(&primvar.interpolation);
             spec.set_metadata(interpolation, Value::Token(token));
-            let element_size = store.tokens_mut().intern("elementSize");
+            let element_size = store.tokens().intern("elementSize");
             spec.set_metadata(
                 element_size,
                 Value::Int(i32::try_from(primvar.element_size).expect("validated element size")),
@@ -453,14 +453,14 @@ impl GeneratedMesh {
             .iter()
             .filter(|name| !properties.contains(name))
         {
-            let name = store.tokens_mut().intern(name);
+            let name = store.tokens().intern(name);
             transaction.remove_spec(target.property(PropertyPath::new(path, name)));
         }
         for (name, desired) in attributes {
-            let token = store.tokens_mut().intern(&name);
+            let token = store.tokens().intern(&name);
             let property = PropertyPath::new(path, token);
             let site = target
-                .map_property_to_spec_path(property, store.paths_mut())
+                .map_property_to_spec_path(property, store.paths())
                 .ok_or(MeshPublicationError::InvalidTarget)?;
             let local = store
                 .layer(target.layer())

@@ -530,8 +530,8 @@ impl<S: LayerStore> QuerySession<S> {
     }
     /// Interns a namespace path without modifying authored data.
     pub fn path(&mut self, text: &str) -> Result<PathId, layerstack::PathError> {
-        let path = layerstack::Path::parse_absolute(text, self.store.tokens_mut())?;
-        Ok(self.store.paths_mut().intern(path))
+        let path = layerstack::Path::parse_absolute(text, self.store.tokens())?;
+        Ok(self.store.paths().intern(path))
     }
     /// Prototype roots retained by a bounds query, including missing targets.
     pub fn bound_prototype_dependencies(&mut self, id: QueryId) -> Option<Vec<PathId>> {

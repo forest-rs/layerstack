@@ -84,7 +84,7 @@ fn emitted_offset_bundle_plays_in_openusd() {
         eprintln!("skipped: no Python with OpenUSD's pxr (set LAYERSTACK_USD_PYTHON)");
         return;
     }
-    let (mut store, a, b, options) = fixture();
+    let (store, a, b, options) = fixture();
     // Asset order deliberately differs from activation order, and A scales time.
     let sources = [
         ClipSource {
@@ -104,8 +104,7 @@ fn emitted_offset_bundle_plays_in_openusd() {
             },
         },
     ];
-    let bundle =
-        stitch_clip_sequence(&sources, &options, &mut store.tokens, &mut store.paths).unwrap();
+    let bundle = stitch_clip_sequence(&sources, &options, &store.tokens, &store.paths).unwrap();
     let dir =
         std::env::temp_dir().join(format!("layerstack-clip-authoring-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
@@ -212,7 +211,7 @@ print(json.dumps({
 
 #[test]
 fn incompatible_overlapping_clip_maps_return_no_bundle() {
-    let (mut store, a, b, options) = fixture();
+    let (store, a, b, options) = fixture();
     let before = (a.clone(), b.clone());
     // Map B's local100..110 onto stage5..15, overlapping A's stage0..10.
     // A global clip-time map cannot preserve both affine maps in the overlap.
@@ -232,7 +231,7 @@ fn incompatible_overlapping_clip_maps_return_no_bundle() {
         },
     ];
     assert_eq!(
-        stitch_clip_sequence(&sources, &options, &mut store.tokens, &mut store.paths).unwrap_err(),
+        stitch_clip_sequence(&sources, &options, &store.tokens, &store.paths).unwrap_err(),
         ClipAuthoringError::ConflictingTimeMapping
     );
     // Inputs remain detached and unchanged by rejection.

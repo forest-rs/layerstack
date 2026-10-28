@@ -241,15 +241,15 @@ fn capture_samples_uniform_settings_at_requested_time() {
     ] {
         for (name, values) in [("thresholds", thresholds), ("blendThresholds", blends)] {
             let token = store.tokens.intern(name);
-            let value = crate::value::write_float_array(values, &mut store.tokens);
+            let value = crate::value::write_float_array(values, &store.tokens);
             transaction.set_time_sample(target.property(PropertyPath::new(path, token)), 1., value);
         }
         let token = store.tokens.intern("lod:domain");
-        let value = crate::value::write_token("sampled", &mut store.tokens);
+        let value = crate::value::write_token("sampled", &store.tokens);
         transaction.set_time_sample(target.property(PropertyPath::new(path, token)), 1., value);
     }
     let token = store.tokens.intern("projectionMethod");
-    let value = crate::value::write_token("projectedExtent", &mut store.tokens);
+    let value = crate::value::write_token("projectedExtent", &store.tokens);
     transaction.set_time_sample(target.property(PropertyPath::new(screen, token)), 1., value);
     stage.apply(&mut store, &transaction).unwrap();
     let scene = Scene::new(stage.stage(), &store);

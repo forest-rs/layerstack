@@ -257,7 +257,7 @@ impl LiveStage {
         store: &mut dyn LayerStore,
         name: Option<TokenId>,
     ) -> Result<Applied, StageMetadataError> {
-        let key = store.tokens_mut().intern("defaultPrim");
+        let key = store.tokens().intern("defaultPrim");
         let layer = self.stage().root_layer().expect("live stage root");
         match name {
             Some(name) => {
@@ -309,7 +309,7 @@ impl LiveStage {
         name: &str,
         value: f64,
     ) -> Result<Applied, StageMetadataError> {
-        let key = store.tokens_mut().intern(name);
+        let key = store.tokens().intern(name);
         self.set_stage_metadata(store, layer, key, FieldValue::Value(Value::Double(value)))
     }
 }

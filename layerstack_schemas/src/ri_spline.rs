@@ -275,7 +275,7 @@ mod tests {
                     PropertySpec::typed_attribute(PropertyType::parse("float[]").unwrap())
                         .with_default(crate::value::write_float_array(
                             &[0., 0., 1.],
-                            &mut store.tokens,
+                            &store.tokens,
                         )),
                 )
                 .with_property(
@@ -283,7 +283,7 @@ mod tests {
                     PropertySpec::typed_attribute(PropertyType::parse("float[]").unwrap())
                         .with_default(crate::value::write_float_array(
                             &[0., 1., 2.],
-                            &mut store.tokens,
+                            &store.tokens,
                         )),
                 ),
         );

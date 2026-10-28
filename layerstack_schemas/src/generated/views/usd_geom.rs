@@ -75,7 +75,7 @@ impl BackPlateApiPlateVisibility {
         crate::value::read_token(value, tokens).map(Self::from_token)
     }
 
-    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+    pub(crate) fn write(self, tokens: &::layerstack::TokenInterner) -> ::layerstack::Value {
         crate::value::write_token(self.as_str(), tokens)
     }
 }
@@ -886,7 +886,7 @@ impl BasisCurvesBasis {
         crate::value::read_token(value, tokens).map(Self::from_token)
     }
 
-    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+    pub(crate) fn write(self, tokens: &::layerstack::TokenInterner) -> ::layerstack::Value {
         crate::value::write_token(self.as_str(), tokens)
     }
 }
@@ -937,7 +937,7 @@ impl BasisCurvesCurveType {
         crate::value::read_token(value, tokens).map(Self::from_token)
     }
 
-    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+    pub(crate) fn write(self, tokens: &::layerstack::TokenInterner) -> ::layerstack::Value {
         crate::value::write_token(self.as_str(), tokens)
     }
 }
@@ -992,7 +992,7 @@ impl BasisCurvesWrap {
         crate::value::read_token(value, tokens).map(Self::from_token)
     }
 
-    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+    pub(crate) fn write(self, tokens: &::layerstack::TokenInterner) -> ::layerstack::Value {
         crate::value::write_token(self.as_str(), tokens)
     }
 }
@@ -1406,7 +1406,7 @@ impl CameraProjection {
         crate::value::read_token(value, tokens).map(Self::from_token)
     }
 
-    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+    pub(crate) fn write(self, tokens: &::layerstack::TokenInterner) -> ::layerstack::Value {
         crate::value::write_token(self.as_str(), tokens)
     }
 }
@@ -1461,7 +1461,7 @@ impl CameraStereoRole {
         crate::value::read_token(value, tokens).map(Self::from_token)
     }
 
-    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+    pub(crate) fn write(self, tokens: &::layerstack::TokenInterner) -> ::layerstack::Value {
         crate::value::write_token(self.as_str(), tokens)
     }
 }
@@ -2416,7 +2416,7 @@ impl CapsuleAxis {
         crate::value::read_token(value, tokens).map(Self::from_token)
     }
 
-    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+    pub(crate) fn write(self, tokens: &::layerstack::TokenInterner) -> ::layerstack::Value {
         crate::value::write_token(self.as_str(), tokens)
     }
 }
@@ -2675,7 +2675,7 @@ impl Capsule1Axis {
         crate::value::read_token(value, tokens).map(Self::from_token)
     }
 
-    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+    pub(crate) fn write(self, tokens: &::layerstack::TokenInterner) -> ::layerstack::Value {
         crate::value::write_token(self.as_str(), tokens)
     }
 }
@@ -2974,7 +2974,7 @@ impl ConeAxis {
         crate::value::read_token(value, tokens).map(Self::from_token)
     }
 
-    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+    pub(crate) fn write(self, tokens: &::layerstack::TokenInterner) -> ::layerstack::Value {
         crate::value::write_token(self.as_str(), tokens)
     }
 }
@@ -3671,7 +3671,7 @@ impl CylinderAxis {
         crate::value::read_token(value, tokens).map(Self::from_token)
     }
 
-    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+    pub(crate) fn write(self, tokens: &::layerstack::TokenInterner) -> ::layerstack::Value {
         crate::value::write_token(self.as_str(), tokens)
     }
 }
@@ -3930,7 +3930,7 @@ impl Cylinder1Axis {
         crate::value::read_token(value, tokens).map(Self::from_token)
     }
 
-    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+    pub(crate) fn write(self, tokens: &::layerstack::TokenInterner) -> ::layerstack::Value {
         crate::value::write_token(self.as_str(), tokens)
     }
 }
@@ -4229,7 +4229,7 @@ impl GeomModelApiModelCardGeometry {
         crate::value::read_token(value, tokens).map(Self::from_token)
     }
 
-    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+    pub(crate) fn write(self, tokens: &::layerstack::TokenInterner) -> ::layerstack::Value {
         crate::value::write_token(self.as_str(), tokens)
     }
 }
@@ -4284,7 +4284,7 @@ impl GeomModelApiModelCardVisibility {
         crate::value::read_token(value, tokens).map(Self::from_token)
     }
 
-    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+    pub(crate) fn write(self, tokens: &::layerstack::TokenInterner) -> ::layerstack::Value {
         crate::value::write_token(self.as_str(), tokens)
     }
 }
@@ -4348,7 +4348,7 @@ impl GeomModelApiModelDrawMode {
         crate::value::read_token(value, tokens).map(Self::from_token)
     }
 
-    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+    pub(crate) fn write(self, tokens: &::layerstack::TokenInterner) -> ::layerstack::Value {
         crate::value::write_token(self.as_str(), tokens)
     }
 }
@@ -4938,7 +4938,7 @@ impl GeomSubsetElementType {
         crate::value::read_token(value, tokens).map(Self::from_token)
     }
 
-    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+    pub(crate) fn write(self, tokens: &::layerstack::TokenInterner) -> ::layerstack::Value {
         crate::value::write_token(self.as_str(), tokens)
     }
 }
@@ -5246,7 +5246,7 @@ impl GprimOrientation {
         crate::value::read_token(value, tokens).map(Self::from_token)
     }
 
-    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+    pub(crate) fn write(self, tokens: &::layerstack::TokenInterner) -> ::layerstack::Value {
         crate::value::write_token(self.as_str(), tokens)
     }
 }
@@ -5884,7 +5884,7 @@ impl ImageablePurpose {
         crate::value::read_token(value, tokens).map(Self::from_token)
     }
 
-    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+    pub(crate) fn write(self, tokens: &::layerstack::TokenInterner) -> ::layerstack::Value {
         crate::value::write_token(self.as_str(), tokens)
     }
 }
@@ -5935,7 +5935,7 @@ impl ImageableVisibility {
         crate::value::read_token(value, tokens).map(Self::from_token)
     }
 
-    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+    pub(crate) fn write(self, tokens: &::layerstack::TokenInterner) -> ::layerstack::Value {
         crate::value::write_token(self.as_str(), tokens)
     }
 }
@@ -6217,7 +6217,7 @@ impl MeshFaceVaryingLinearInterpolation {
         crate::value::read_token(value, tokens).map(Self::from_token)
     }
 
-    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+    pub(crate) fn write(self, tokens: &::layerstack::TokenInterner) -> ::layerstack::Value {
         crate::value::write_token(self.as_str(), tokens)
     }
 }
@@ -6272,7 +6272,7 @@ impl MeshInterpolateBoundary {
         crate::value::read_token(value, tokens).map(Self::from_token)
     }
 
-    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+    pub(crate) fn write(self, tokens: &::layerstack::TokenInterner) -> ::layerstack::Value {
         crate::value::write_token(self.as_str(), tokens)
     }
 }
@@ -6331,7 +6331,7 @@ impl MeshSubdivisionScheme {
         crate::value::read_token(value, tokens).map(Self::from_token)
     }
 
-    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+    pub(crate) fn write(self, tokens: &::layerstack::TokenInterner) -> ::layerstack::Value {
         crate::value::write_token(self.as_str(), tokens)
     }
 }
@@ -6382,7 +6382,7 @@ impl MeshTriangleSubdivisionRule {
         crate::value::read_token(value, tokens).map(Self::from_token)
     }
 
-    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+    pub(crate) fn write(self, tokens: &::layerstack::TokenInterner) -> ::layerstack::Value {
         crate::value::write_token(self.as_str(), tokens)
     }
 }
@@ -8346,7 +8346,7 @@ impl NurbsPatchUForm {
         crate::value::read_token(value, tokens).map(Self::from_token)
     }
 
-    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+    pub(crate) fn write(self, tokens: &::layerstack::TokenInterner) -> ::layerstack::Value {
         crate::value::write_token(self.as_str(), tokens)
     }
 }
@@ -8401,7 +8401,7 @@ impl NurbsPatchVForm {
         crate::value::read_token(value, tokens).map(Self::from_token)
     }
 
-    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+    pub(crate) fn write(self, tokens: &::layerstack::TokenInterner) -> ::layerstack::Value {
         crate::value::write_token(self.as_str(), tokens)
     }
 }
@@ -9837,7 +9837,7 @@ impl PlaneAxis {
         crate::value::read_token(value, tokens).map(Self::from_token)
     }
 
-    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+    pub(crate) fn write(self, tokens: &::layerstack::TokenInterner) -> ::layerstack::Value {
         crate::value::write_token(self.as_str(), tokens)
     }
 }
@@ -12646,7 +12646,7 @@ impl VisibilityApiGuideVisibility {
         crate::value::read_token(value, tokens).map(Self::from_token)
     }
 
-    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+    pub(crate) fn write(self, tokens: &::layerstack::TokenInterner) -> ::layerstack::Value {
         crate::value::write_token(self.as_str(), tokens)
     }
 }
@@ -12701,7 +12701,7 @@ impl VisibilityApiProxyVisibility {
         crate::value::read_token(value, tokens).map(Self::from_token)
     }
 
-    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+    pub(crate) fn write(self, tokens: &::layerstack::TokenInterner) -> ::layerstack::Value {
         crate::value::write_token(self.as_str(), tokens)
     }
 }
@@ -12756,7 +12756,7 @@ impl VisibilityApiRenderVisibility {
         crate::value::read_token(value, tokens).map(Self::from_token)
     }
 
-    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+    pub(crate) fn write(self, tokens: &::layerstack::TokenInterner) -> ::layerstack::Value {
         crate::value::write_token(self.as_str(), tokens)
     }
 }

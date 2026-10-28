@@ -18,7 +18,7 @@ struct Row {
     source: String,
     allowed: bool,
 }
-fn property(paths: &mut PathInterner, tokens: &mut TokenInterner, text: &str) -> PropertyPath {
+fn property(paths: &PathInterner, tokens: &TokenInterner, text: &str) -> PropertyPath {
     let (prim, name) = text.split_once('.').unwrap();
     PropertyPath::new(
         paths.intern(layerstack::Path::parse_absolute(prim, tokens).unwrap()),
@@ -30,10 +30,10 @@ fn connection_policy_matches_cpp_across_scopes_interfaces_and_container_kinds() 
     let oracle: Oracle =
         serde_json::from_str(include_str!("../../fixtures/lux_connections.json")).unwrap();
     assert_eq!(oracle.version, layerstack_schemas::OPENUSD_VERSION);
-    let (mut store, live) = support::scene(include_str!("../../fixtures/lux_connections.usda"));
+    let (store, live) = support::scene(include_str!("../../fixtures/lux_connections.usda"));
     for row in oracle.rows {
-        let dest = property(&mut store.paths, &mut store.tokens, &row.destination);
-        let source = property(&mut store.paths, &mut store.tokens, &row.source);
+        let dest = property(&store.paths, &store.tokens, &row.destination);
+        let source = property(&store.paths, &store.tokens, &row.source);
         let scene = Scene::new(live.stage(), &store);
         assert_eq!(
             scene.validate_shading_connection(dest, source).is_ok(),

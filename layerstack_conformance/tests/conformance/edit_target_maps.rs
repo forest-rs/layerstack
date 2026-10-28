@@ -209,7 +209,7 @@ fn edit_targets_map_as_openusd_does() {
         for (path, expected) in case["spec_paths"].as_object().expect("spec paths") {
             let id = store.path(path);
             let got = target
-                .map_to_spec_path(id, &mut store.paths)
+                .map_to_spec_path(id, &store.paths)
                 .map(|spec| spec.display(&store.paths, &store.tokens));
             if target.maps_to_itself(id, &store.paths) != (got.as_deref() == Some(path.as_str())) {
                 failures.push(format!(
@@ -226,7 +226,7 @@ fn edit_targets_map_as_openusd_does() {
         let look = store.tokens.intern("look");
         let at = PropertyPath::new(prim, look);
         let spec = target
-            .map_property_to_spec_path(at, &mut store.paths)
+            .map_property_to_spec_path(at, &store.paths)
             .expect("the prim maps");
         for (path, expected) in case["targets"].as_object().expect("targets") {
             let wanted =
@@ -288,8 +288,8 @@ fn a_local_variant_node_is_the_local_variant_target() {
     for path in ["/Rock", "/Rock/Pebble", "/Light", "/Class/X"] {
         let path = store.path(path);
         assert_eq!(
-            node.map_to_spec_path(path, &mut store.paths),
-            local.map_to_spec_path(path, &mut store.paths)
+            node.map_to_spec_path(path, &store.paths),
+            local.map_to_spec_path(path, &store.paths)
         );
     }
 }

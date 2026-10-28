@@ -407,7 +407,7 @@ fn fixture_registry_matches_openusd() {
         register_plugin(&fixture().join(plugin), &mut builder, &mut store);
     }
     let registry = builder.build(&store.tokens);
-    assert_matches_oracle(&registry, &mut store.tokens);
+    assert_matches_oracle(&registry, &store.tokens);
 }
 
 /// The Rust modules `compile --rust` generates for the fixtures
@@ -416,7 +416,7 @@ fn fixture_registry_matches_openusd() {
 #[test]
 fn generated_registration_matches_openusd() {
     use layerstack_custom_schemas::{lab, observatory};
-    let mut tokens = TokenInterner::default();
+    let tokens = TokenInterner::default();
     let mut builder = SchemaRegistry::builder();
     let domains: Vec<layerstack_schemas::Domain> = lab::DEPENDENCIES
         .iter()
@@ -427,7 +427,7 @@ fn generated_registration_matches_openusd() {
     lab::register(&mut builder, &tokens).expect("the lab schemas");
     observatory::register(&mut builder, &tokens).expect("the observatory schemas");
     let registry = builder.build(&tokens);
-    assert_matches_oracle(&registry, &mut tokens);
+    assert_matches_oracle(&registry, &tokens);
 }
 
 /// `registry`, with OpenUSD's `Usd` and `UsdGeom` and the lab and observatory
@@ -435,7 +435,7 @@ fn generated_registration_matches_openusd() {
 /// (`oracle.json`): every schema's kind, `IsA`, application rules,
 /// auto-applies and prim definitions, with each property's kind, type,
 /// variability, fallback and `allowedTokens`.
-fn assert_matches_oracle(registry: &SchemaRegistry, tokens: &mut TokenInterner) {
+fn assert_matches_oracle(registry: &SchemaRegistry, tokens: &TokenInterner) {
     let oracle: Oracle =
         serde_json::from_str(&read(&fixture().join("oracle.json"))).expect("oracle.json");
     assert!(

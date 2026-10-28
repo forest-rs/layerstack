@@ -91,7 +91,7 @@ impl AssetResolver for NoAssets {
 
 /// One registry of OpenUSD's schemas the two libraries build on, and of
 /// theirs.
-fn registry(tokens: &mut TokenInterner) -> SchemaRegistry {
+fn registry(tokens: &TokenInterner) -> SchemaRegistry {
     let mut builder = SchemaRegistry::builder();
     let domains: Vec<Domain> = lab::DEPENDENCIES
         .iter()
@@ -106,7 +106,7 @@ fn registry(tokens: &mut TokenInterner) -> SchemaRegistry {
 
 fn stage() -> (InMemoryStore, LiveStage) {
     let mut store = InMemoryStore::default();
-    let schemas = registry(&mut store.tokens);
+    let schemas = registry(&store.tokens);
     assert!(schemas.issues().is_empty(), "{:?}", schemas.issues());
     let read = layerstack_usda::read_usda(
         SCENE,

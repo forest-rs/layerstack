@@ -75,7 +75,7 @@ impl AccessibilityApiPriority {
         crate::value::read_token(value, tokens).map(Self::from_token)
     }
 
-    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+    pub(crate) fn write(self, tokens: &::layerstack::TokenInterner) -> ::layerstack::Value {
         crate::value::write_token(self.as_str(), tokens)
     }
 }
@@ -548,7 +548,7 @@ impl NodeGraphNodeApiExpansionState {
         crate::value::read_token(value, tokens).map(Self::from_token)
     }
 
-    pub(crate) fn write(self, tokens: &mut ::layerstack::TokenInterner) -> ::layerstack::Value {
+    pub(crate) fn write(self, tokens: &::layerstack::TokenInterner) -> ::layerstack::Value {
         crate::value::write_token(self.as_str(), tokens)
     }
 }

@@ -211,10 +211,10 @@ fn valid_default_prim(scene: &Scene<'_>) -> bool {
         return false;
     };
     // Reuse canonical Sdf defaultPrim grammar without mutating the scene's interner.
-    let mut scratch = layerstack::TokenInterner::default();
+    let scratch = layerstack::TokenInterner::default();
     let mut probe = layerstack::Layer::new(layer.id());
     probe.set_default_prim(Some(scratch.intern(scene.store().tokens().resolve(name))));
-    let Some(path) = probe.default_prim_path(&mut scratch) else {
+    let Some(path) = probe.default_prim_path(&scratch) else {
         return false;
     };
     let Some(segments) = path

@@ -554,7 +554,7 @@ impl SkinningBake {
         store: &mut dyn LayerStore,
     ) -> Result<SkinningBakeReport, SkinningBakeError> {
         let names = {
-            let tokens = store.tokens_mut();
+            let tokens = store.tokens();
             Names {
                 points: tokens.intern("points"),
                 normals: tokens.intern("normals"),
@@ -1849,7 +1849,7 @@ fn clear_value(
     property: PropertyPath,
     transaction: &mut Transaction,
 ) {
-    let Some(mapped) = target.map_property_to_spec_path(property, store.paths_mut()) else {
+    let Some(mapped) = target.map_property_to_spec_path(property, store.paths()) else {
         return;
     };
     if !mapped.variant_chain().is_empty() {
@@ -1887,7 +1887,7 @@ impl SkinningBake {
         post: &PostBake,
         report: &mut SkinningBakeReport,
     ) -> Transaction {
-        let token = store.tokens_mut().intern("extent");
+        let token = store.tokens().intern("extent");
         let mut computed: Vec<Vec<Recomputed<Extent>>> = Vec::with_capacity(post.extents.len());
         {
             let scene = Scene::new(live.stage(), &*store);
@@ -1947,7 +1947,7 @@ impl SkinningBake {
         post: &PostBake,
         report: &mut SkinningBakeReport,
     ) -> Transaction {
-        let token = store.tokens_mut().intern("extentsHint");
+        let token = store.tokens().intern("extentsHint");
         let mut computed: Vec<Vec<Recomputed<Vec<Extent>>>> = Vec::with_capacity(post.hints.len());
         {
             let scene = Scene::new(live.stage(), &*store);

@@ -168,9 +168,9 @@ pub fn asset_default_previews(
     if path.depth() == 0 {
         return None;
     }
-    let no_such_prim = store.tokens_mut().intern("__No_Such_Prim__");
-    let mask = store.paths_mut().intern(path.join(&[no_such_prim]));
-    let prim = store.paths_mut().intern(path);
+    let no_such_prim = store.tokens().intern("__No_Such_Prim__");
+    let mask = store.paths().intern(path.join(&[no_such_prim]));
+    let prim = store.paths().intern(path);
     let stage = Stage::compose(
         store,
         layer,

@@ -387,7 +387,7 @@ impl<'s> SchemaEdit<'s> {
         schema: &str,
     ) -> Result<crate::PrimEdit, CannotEdit> {
         self.can_edit(path)?;
-        let type_name = (!schema.is_empty()).then(|| self.store.tokens_mut().intern(schema));
+        let type_name = (!schema.is_empty()).then(|| self.store.tokens().intern(schema));
         // `path` and its ancestors below the pseudo-root, root prim first.
         let paths = self.store.paths();
         let mut lineage: Vec<PathId> =
@@ -492,8 +492,8 @@ impl<'s> SchemaEdit<'s> {
     }
 
     /// The scene interner used to encode values collected by this edit.
-    pub fn tokens(&mut self) -> &mut TokenInterner {
-        self.store.tokens_mut()
+    pub fn tokens(&mut self) -> &TokenInterner {
+        self.store.tokens()
     }
 
     #[cfg(any(feature = "usd-geom", feature = "usd-shade"))]
@@ -522,7 +522,7 @@ impl<'s> SchemaEdit<'s> {
     #[cfg(feature = "usd-geom")]
     pub(crate) fn unique_child_path(&mut self, parent: PathId, base: &str) -> Option<PathId> {
         let parsed =
-            layerstack::Path::parse_absolute(&alloc::format!("/{base}"), self.store.tokens_mut())
+            layerstack::Path::parse_absolute(&alloc::format!("/{base}"), self.store.tokens())
                 .ok()?;
         if parsed.depth() != 1 {
             return None;
@@ -534,7 +534,7 @@ impl<'s> SchemaEdit<'s> {
             } else {
                 alloc::format!("{base}_{suffix}")
             };
-            let token = self.store.tokens_mut().intern(name);
+            let token = self.store.tokens().intern(name);
             let path = parent.join(&[token]);
             if let Some(id) = self.store.paths().lookup(&path) {
                 if self.exists(id) {
@@ -542,7 +542,7 @@ impl<'s> SchemaEdit<'s> {
                 }
                 return Some(id);
             }
-            return Some(self.store.paths_mut().intern(path));
+            return Some(self.store.paths().intern(path));
         }
         None
     }
@@ -551,7 +551,7 @@ impl<'s> SchemaEdit<'s> {
     #[cfg(feature = "usd-geom")]
     pub(crate) fn child_path(&mut self, parent: PathId, name: TokenId) -> PathId {
         let path = self.store.paths().resolve(parent).join(&[name]);
-        self.store.paths_mut().intern(path)
+        self.store.paths().intern(path)
     }
 
     /// The target site's authored metadata, never a flattened composed list.
@@ -570,7 +570,7 @@ impl<'s> SchemaEdit<'s> {
         {
             return Some(value.clone());
         }
-        let mapped = self.target.map_to_spec_path(path, self.store.paths_mut())?;
+        let mapped = self.target.map_to_spec_path(path, self.store.paths())?;
         let layer = self.store.layer(self.target.layer())?;
         let fields = if !mapped.variant_chain().is_empty() {
             &layer.variant_spec_at(&mapped, self.store.paths())?.fields
@@ -603,7 +603,7 @@ impl<'s> SchemaEdit<'s> {
     }
 
     fn property(&mut self, path: PathId, name: &str) -> layerstack::edit::Address {
-        let name = self.store.tokens_mut().intern(name);
+        let name = self.store.tokens().intern(name);
         self.target.property(PropertyPath::new(path, name))
     }
 
@@ -695,7 +695,7 @@ impl<'s> SchemaEdit<'s> {
         match self.defined.iter().rev().find(|(p, _)| *p == path) {
             Some((_, defined)) => {
                 let defined = defined.clone();
-                Some(self.store.tokens_mut().intern(defined))
+                Some(self.store.tokens().intern(defined))
             }
             None => self
                 .stage_prim(path)
@@ -743,7 +743,7 @@ impl<'s> SchemaEdit<'s> {
     /// OpenUSD: `UsdAttribute::Set`, and `UsdPrim::CreateAttribute` with
     /// the definition's type and variability for a schema attribute.
     pub(crate) fn set_value(&mut self, path: PathId, name: &str, time: Option<f64>, value: Value) {
-        let token = self.store.tokens_mut().intern(name);
+        let token = self.store.tokens().intern(name);
         let at = self.target.property(PropertyPath::new(path, token));
         let authored = self
             .stage_property(PropertyPath::new(path, token))
@@ -807,7 +807,7 @@ impl<'s> SchemaEdit<'s> {
     /// it: the last default this edit sets, else the stage's (fallback
     /// included).
     pub(crate) fn default_value(&mut self, path: PathId, name: &str) -> Option<Value> {
-        let token = self.store.tokens_mut().intern(name);
+        let token = self.store.tokens().intern(name);
         if let Some((_, _, value)) = self
             .defaults
             .iter()
@@ -820,7 +820,7 @@ impl<'s> SchemaEdit<'s> {
             let property = PropertyPath::new(path, token);
             let mapped = self
                 .target
-                .map_property_to_spec_path(property, self.store.paths_mut());
+                .map_property_to_spec_path(property, self.store.paths());
             if let Some(value) = self
                 .stage_property(property)
                 .map(layerstack::Property::opinions)
@@ -860,7 +860,7 @@ impl<'s> SchemaEdit<'s> {
     /// `UsdSchemaBase::_CreateAttr` consults it to write sparsely.
     #[cfg(feature = "usd-shade")]
     pub(crate) fn authors_default(&mut self, path: PathId, name: &str) -> bool {
-        let token = self.store.tokens_mut().intern(name);
+        let token = self.store.tokens().intern(name);
         if let Some((_, _, value)) = self
             .defaults
             .iter()
@@ -892,7 +892,7 @@ impl<'s> SchemaEdit<'s> {
         let Some(time) = time else {
             return self.default_value(path, name);
         };
-        let token = self.store.tokens_mut().intern(name);
+        let token = self.store.tokens().intern(name);
         let property = PropertyPath::new(path, token);
         let attribute = self.stage_property(property).and_then(|p| p.as_attribute());
         let stage_times = attribute.map(|a| a.sample_times()).unwrap_or_default();
@@ -931,7 +931,7 @@ impl<'s> SchemaEdit<'s> {
     /// OpenUSD: `UsdAttribute::HasAuthoredValue`.
     #[cfg(feature = "usd-geom")]
     pub(crate) fn has_authored_value(&mut self, path: PathId, name: &str) -> bool {
-        let token = self.store.tokens_mut().intern(name);
+        let token = self.store.tokens().intern(name);
         let property = PropertyPath::new(path, token);
         if let Some((_, _, value)) = self
             .defaults
@@ -961,7 +961,7 @@ impl<'s> SchemaEdit<'s> {
         let property = PropertyPath::new(path, name);
         let mapped = self
             .target
-            .map_property_to_spec_path(property, self.store.paths_mut());
+            .map_property_to_spec_path(property, self.store.paths());
         let opinions = self.stage_property(property)?.opinions();
         let mut specs = opinions
             .iter()
@@ -990,7 +990,7 @@ impl<'s> SchemaEdit<'s> {
     /// leaves it, if the prim has such an attribute: one this edit creates,
     /// else the stage's (an opinion's declaration, else the schema's).
     pub(crate) fn attribute_type(&mut self, path: PathId, name: &str) -> Option<PropertyType> {
-        let token = self.store.tokens_mut().intern(name);
+        let token = self.store.tokens().intern(name);
         if let Some((_, _, ty)) = self
             .created
             .iter()
@@ -1010,7 +1010,7 @@ impl<'s> SchemaEdit<'s> {
     }
 
     pub(crate) fn property_kind(&mut self, path: PathId, name: &str) -> Option<PropertyKind> {
-        let token = self.store.tokens_mut().intern(name);
+        let token = self.store.tokens().intern(name);
         if let Some((_, _, ty)) = self
             .created
             .iter()
@@ -1076,7 +1076,7 @@ impl<'s> SchemaEdit<'s> {
     ///
     /// OpenUSD: `UsdPrim::CreateAttribute(name, typeName, custom = false)`.
     pub(crate) fn create_attribute(&mut self, path: PathId, name: &str, ty: PropertyType) {
-        let token = self.store.tokens_mut().intern(name);
+        let token = self.store.tokens().intern(name);
         let at = self.target.property(PropertyPath::new(path, token));
         let mut spec = PropertySpec::typed_attribute(ty.clone());
         spec.custom = false;
@@ -1092,7 +1092,7 @@ impl<'s> SchemaEdit<'s> {
 
     #[cfg(any(feature = "usd-lux", feature = "usd-geom", feature = "usd-shade"))]
     pub(crate) fn create_uniform_attribute(&mut self, path: PathId, name: &str, ty: PropertyType) {
-        let token = self.store.tokens_mut().intern(name);
+        let token = self.store.tokens().intern(name);
         let at = self.target.property(PropertyPath::new(path, token));
         let mut spec = PropertySpec::typed_attribute(ty.clone());
         spec.custom = false;
@@ -1439,10 +1439,10 @@ impl<'s> SchemaEdit<'s> {
             return Value::Dictionary(Vec::new());
         }
         let mapped = match target {
-            TargetPath::Prim(path) => self.target.map_to_spec_path(path, self.store.paths_mut()),
+            TargetPath::Prim(path) => self.target.map_to_spec_path(path, self.store.paths()),
             TargetPath::Property(path) => self
                 .target
-                .map_property_to_spec_path(path, self.store.paths_mut()),
+                .map_property_to_spec_path(path, self.store.paths()),
         };
         let value = mapped.and_then(|mapped| {
             let layer = self.store.layer(self.target.layer())?;
@@ -1491,7 +1491,7 @@ impl<'s> SchemaEdit<'s> {
             {
                 let mapped = self
                     .target
-                    .map_property_to_spec_path(path, self.store.paths_mut());
+                    .map_property_to_spec_path(path, self.store.paths());
                 let mut values = self
                     .stage_property(path)
                     .map(layerstack::Property::opinions)
@@ -1563,7 +1563,7 @@ impl<'s> SchemaEdit<'s> {
         }
         let mapped = self
             .target
-            .map_property_to_spec_path(path, self.store.paths_mut());
+            .map_property_to_spec_path(path, self.store.paths());
         let local = mapped.as_ref().is_some_and(|mapped| {
             self.store.layer(self.target.layer()).is_some_and(|layer| {
                 if !mapped.variant_chain().is_empty() {
@@ -1639,7 +1639,7 @@ impl<'s> SchemaEdit<'s> {
     /// OpenUSD: `UsdPrim::CreateRelationship`; AOUSD Core §12.2.4.
     #[cfg(any(feature = "usd-vol", feature = "usd-lux", feature = "usd-shade"))]
     pub(crate) fn ensure_relationship(&mut self, path: PathId, name: &str, custom: bool) {
-        let token = self.store.tokens_mut().intern(name);
+        let token = self.store.tokens().intern(name);
         if self
             .created
             .iter()
@@ -1683,7 +1683,7 @@ impl<'s> SchemaEdit<'s> {
 
     #[cfg(feature = "usd-geom")]
     pub(crate) fn create_relationship(&mut self, path: PathId, name: &str) {
-        let name = self.store.tokens_mut().intern(name);
+        let name = self.store.tokens().intern(name);
         let at = self.target.property(PropertyPath::new(path, name));
         self.transaction
             .create_property(at, PropertySpec::relationship());
@@ -1692,7 +1692,7 @@ impl<'s> SchemaEdit<'s> {
 
     #[cfg(feature = "usd-geom")]
     pub(crate) fn block_attribute(&mut self, path: PathId, name: &str) {
-        let name = self.store.tokens_mut().intern(name);
+        let name = self.store.tokens().intern(name);
         self.ensure_property(PropertyPath::new(path, name));
         let at = self.target.property(PropertyPath::new(path, name));
         self.transaction.block_attribute(at);
@@ -1703,7 +1703,7 @@ impl<'s> SchemaEdit<'s> {
 
     #[cfg(feature = "usd-geom")]
     pub(crate) fn remove_property(&mut self, path: PathId, name: &str) {
-        let name = self.store.tokens_mut().intern(name);
+        let name = self.store.tokens().intern(name);
         let at = self.target.property(PropertyPath::new(path, name));
         self.transaction.remove_spec(at);
         self.removed.push((path, name));
@@ -1719,7 +1719,7 @@ impl<'s> SchemaEdit<'s> {
     /// Whether the edit target's layer holds a spec for the property
     /// `name` of the prim at `path`.
     fn has_local_property(&mut self, path: PathId, name: TokenId) -> bool {
-        let Some(mapped) = self.target.map_to_spec_path(path, self.store.paths_mut()) else {
+        let Some(mapped) = self.target.map_to_spec_path(path, self.store.paths()) else {
             return false;
         };
         let Some(layer) = self.store.layer(self.target.layer()) else {
@@ -1776,7 +1776,7 @@ impl<'s> SchemaEdit<'s> {
 
     /// Authors `targets` as the explicit targets of the relationship `name`.
     pub(crate) fn set_targets(&mut self, path: PathId, name: &str, targets: &[TargetPath]) {
-        let token = self.store.tokens_mut().intern(name);
+        let token = self.store.tokens().intern(name);
         self.define_relationship(path, token);
         let at = self.target.property(PropertyPath::new(path, token));
         self.transaction
@@ -1792,7 +1792,7 @@ impl<'s> SchemaEdit<'s> {
         target: TargetPath,
         position: ListPosition,
     ) {
-        let token = self.store.tokens_mut().intern(name);
+        let token = self.store.tokens().intern(name);
         self.define_relationship(path, token);
         let at = self.target.property(PropertyPath::new(path, token));
         self.transaction.add_target(at, target, position);
@@ -1801,7 +1801,7 @@ impl<'s> SchemaEdit<'s> {
     /// Removes `target` from the targets of the relationship `name`,
     /// deleting it in the edit target's list op.
     pub(crate) fn remove_target(&mut self, path: PathId, name: &str, target: TargetPath) {
-        let token = self.store.tokens_mut().intern(name);
+        let token = self.store.tokens().intern(name);
         self.define_relationship(path, token);
         let at = self.target.property(PropertyPath::new(path, token));
         self.transaction.remove_target(at, target);
@@ -1833,7 +1833,7 @@ impl<'s> SchemaEdit<'s> {
             .ok_or(CannotApply::NotAnAppliedSchema)?;
         let type_name = self.type_name(path);
         let names = self.applied_names(path);
-        let tokens = self.store.tokens_mut();
+        let tokens = self.store.tokens();
         let schema_token = tokens.intern(schema);
         registry.intern_instance_names(&names, tokens);
         let definition = registry.prim_definition(type_name, &names, tokens);

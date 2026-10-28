@@ -208,7 +208,7 @@ impl Stage {
         if let Some(layer) = session.and_then(|id| store.layer(id)) {
             out.default_prim = layer.default_prim.or(out.default_prim);
         }
-        let pseudo_root = store.paths_mut().intern(Path::root());
+        let pseudo_root = store.paths().intern(Path::root());
         // `reorder rootPrims`, which OpenUSD copies with the rest of the
         // pseudo-root's metadata.
         let root_order = session
@@ -264,7 +264,7 @@ impl Stage {
                 }
                 crate::doc::set_field_vec(&mut metadata, entry.name, entry.value);
             }
-            let tcps = flattener.store.tokens_mut().intern("timeCodesPerSecond");
+            let tcps = flattener.store.tokens().intern("timeCodesPerSecond");
             let rate = self.time_codes_per_second(flattener.store);
             crate::doc::set_field_vec(&mut metadata, tcps, FieldValue::Value(Value::Double(rate)));
         }
@@ -576,10 +576,10 @@ impl Flattener<'_, '_> {
             let prototype = loop {
                 let token = self
                     .store
-                    .tokens_mut()
+                    .tokens()
                     .intern(format!("Flattened_Prototype_{name}"));
                 name += 1;
-                let path = self.store.paths_mut().intern(Path::root().join(&[token]));
+                let path = self.store.paths().intern(Path::root().join(&[token]));
                 if !self.stage.has_prim(path) {
                     break path;
                 }
@@ -631,7 +631,7 @@ impl Flattener<'_, '_> {
 
     fn child_path(&mut self, parent: PathId, name: TokenId) -> PathId {
         let path = self.store.paths().resolve(parent).join(&[name]);
-        self.store.paths_mut().intern(path)
+        self.store.paths().intern(path)
     }
 
     /// Writes `prototype` from the descendants of `source`, the first of its
@@ -1282,7 +1282,7 @@ impl Flattener<'_, '_> {
             return target;
         };
         let mapped = paths.resolve(remap.to).join(rest);
-        let prim = self.store.paths_mut().intern(mapped);
+        let prim = self.store.paths().intern(mapped);
         match target {
             TargetPath::Prim(_) => TargetPath::Prim(prim),
             TargetPath::Property(property) => {

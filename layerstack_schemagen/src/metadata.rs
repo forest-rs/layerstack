@@ -549,7 +549,7 @@ fn element_type(ty: &str) -> Option<&str> {
     })
 }
 
-fn primitive(ty: &str, tokens: &mut TokenInterner) -> Result<Value, String> {
+fn primitive(ty: &str, tokens: &TokenInterner) -> Result<Value, String> {
     Ok(match ty {
         "bool" => Value::Bool(false),
         "uchar" => Value::UChar(0),
@@ -578,7 +578,7 @@ fn conversion(ty: &str) -> Result<(String, String), String> {
         "dictionary" => return Ok(("::alloc::vec::Vec<(::alloc::sync::Arc<str>, ::layerstack::Value)>".into(), "|v, _| match v { ::layerstack::Value::Dictionary(entries) => Some(entries.clone()), _ => None }".into())),
         _ => {}
     }
-    let mut tokens = TokenInterner::default();
+    let tokens = TokenInterner::default();
     if ty == "string[]" {
         // A `string[]` reads as its shared text buffer, as attributes do.
         return Ok((
@@ -587,14 +587,14 @@ fn conversion(ty: &str) -> Result<(String, String), String> {
         ));
     }
     if let Some(element) = element_type(ty) {
-        primitive(element, &mut tokens)?;
+        primitive(element, &tokens)?;
         let (ty, read) = conversion(element)?;
         return Ok((
             format!("::alloc::vec::Vec<{ty}>"),
             format!("|v, t| crate::value::read_array(v, t, {read})"),
         ));
     }
-    let zero = primitive(ty, &mut tokens)?;
+    let zero = primitive(ty, &tokens)?;
     let conversion =
         crate::views::rust_type(&zero, false)?.expect("metadata primitive has a Rust type");
     Ok((conversion.read, conversion.read_fn))
@@ -769,13 +769,13 @@ pub(crate) fn library_items(
                 format!("Reads {doc}")
             );
             let write_call = match label {
-                "stage" => accessor.write_call.replace("TOKENS", "store.tokens_mut()"),
+                "stage" => accessor.write_call.replace("TOKENS", "store.tokens()"),
                 _ => accessor.write_call.replace("TOKENS", "edit.tokens()"),
             };
             let _ = match label {
                 "stage" => write!(
                     kind.writes,
-                    "\n    #[doc = {:?}]\n    ///\n    /// # Errors\n    ///\n    /// Why the field cannot be authored ([`::layerstack::LiveStage::set_stage_metadata`]).\n    pub fn set_{method}(\n        live: &mut ::layerstack::LiveStage,\n        store: &mut dyn ::layerstack::LayerStore,\n        layer: ::layerstack::LayerId,\n        value: {write},\n    ) -> Result<::layerstack::Applied, ::layerstack::StageMetadataError> {{\n        let value = {write_call};\n        let key = store.tokens_mut().intern({name:?});\n        live.set_stage_metadata(store, layer, key, value)\n    }}\n\n    #[doc = {:?}]\n    ///\n    /// # Errors\n    ///\n    /// Why the field cannot be cleared.\n    pub fn clear_{method}(\n        live: &mut ::layerstack::LiveStage,\n        store: &mut dyn ::layerstack::LayerStore,\n        layer: ::layerstack::LayerId,\n    ) -> Result<::layerstack::Applied, ::layerstack::StageMetadataError> {{\n        let key = store.tokens_mut().intern({name:?});\n        live.clear_stage_metadata(store, layer, key)\n    }}\n",
+                    "\n    #[doc = {:?}]\n    ///\n    /// # Errors\n    ///\n    /// Why the field cannot be authored ([`::layerstack::LiveStage::set_stage_metadata`]).\n    pub fn set_{method}(\n        live: &mut ::layerstack::LiveStage,\n        store: &mut dyn ::layerstack::LayerStore,\n        layer: ::layerstack::LayerId,\n        value: {write},\n    ) -> Result<::layerstack::Applied, ::layerstack::StageMetadataError> {{\n        let value = {write_call};\n        let key = store.tokens().intern({name:?});\n        live.set_stage_metadata(store, layer, key, value)\n    }}\n\n    #[doc = {:?}]\n    ///\n    /// # Errors\n    ///\n    /// Why the field cannot be cleared.\n    pub fn clear_{method}(\n        live: &mut ::layerstack::LiveStage,\n        store: &mut dyn ::layerstack::LayerStore,\n        layer: ::layerstack::LayerId,\n    ) -> Result<::layerstack::Applied, ::layerstack::StageMetadataError> {{\n        let key = store.tokens().intern({name:?});\n        live.clear_stage_metadata(store, layer, key)\n    }}\n",
                     format!("Authors {doc} on `layer`, the stage's root or session layer."),
                     format!("Clears `{name}` on `layer`."),
                 ),

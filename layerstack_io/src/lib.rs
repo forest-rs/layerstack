@@ -2568,12 +2568,6 @@ impl LayerStore for Overlay<'_> {
     fn paths(&self) -> &PathInterner {
         &self.store.paths
     }
-    fn tokens_mut(&mut self) -> &mut TokenInterner {
-        panic!("read-only import overlay")
-    }
-    fn paths_mut(&mut self) -> &mut PathInterner {
-        panic!("read-only import overlay")
-    }
     fn asset_layer(&self, anchor: LayerId, asset: &str) -> Option<LayerId> {
         match self
             .bindings

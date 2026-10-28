@@ -257,7 +257,7 @@ impl LiveStage {
                 }
                 path = parent;
             }
-            *root = store.paths_mut().intern(path);
+            *root = store.paths().intern(path);
         }
         let roots = minimal_roots(store, &roots);
         let within: HashSet<PathId> = roots.iter().copied().collect();
@@ -625,15 +625,9 @@ mod tests {
         fn tokens(&self) -> &TokenInterner {
             self.inner.tokens()
         }
-        fn tokens_mut(&mut self) -> &mut TokenInterner {
-            self.inner.tokens_mut()
-        }
         fn paths(&self) -> &PathInterner {
             self.path_reads.fetch_add(1, Ordering::Relaxed);
             self.inner.paths()
-        }
-        fn paths_mut(&mut self) -> &mut PathInterner {
-            self.inner.paths_mut()
         }
     }
 

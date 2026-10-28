@@ -5,7 +5,7 @@ use alloc::{boxed::Box, string::String, vec::Vec};
 
 use super::*;
 
-fn attr(tokens: &mut TokenInterner, name: &str, fallback: impl Into<Value>) -> PropertyDefinition {
+fn attr(tokens: &TokenInterner, name: &str, fallback: impl Into<Value>) -> PropertyDefinition {
     PropertyDefinition::attribute(tokens.intern(name)).with_fallback(fallback)
 }
 
@@ -23,7 +23,7 @@ fn fallback(
     type_name: Option<TokenId>,
     applied: &[TokenId],
     name: &str,
-    tokens: &mut TokenInterner,
+    tokens: &TokenInterner,
 ) -> Option<Value> {
     registry.intern_instance_names(applied, tokens);
     let property = tokens.intern(name);
@@ -35,18 +35,18 @@ fn fallback(
 
 #[test]
 fn typed_schemas_inherit_properties_and_is_a() {
-    let mut t = TokenInterner::default();
+    let t = TokenInterner::default();
     let (foo, bar, baz) = (t.intern("Foo"), t.intern("Bar"), t.intern("Baz"));
     let mut builder = SchemaRegistry::builder();
     builder
         .register(
             SchemaDefinition::new(foo, SchemaKind::AbstractTyped)
-                .with_property(attr(&mut t, "fooprop", 0)),
+                .with_property(attr(&t, "fooprop", 0)),
         )
         .register(
             SchemaDefinition::typed(bar)
                 .with_parent(foo)
-                .with_property(attr(&mut t, "barprop", 1.0_f32)),
+                .with_property(attr(&t, "barprop", 1.0_f32)),
         )
         .register(SchemaDefinition::typed(baz).with_parent(foo));
     let registry = builder.build(&t);
@@ -58,10 +58,10 @@ fn typed_schemas_inherit_properties_and_is_a() {
     let baz1 = registry.prim_definition(Some(baz), &[], &t);
     assert!(baz1.is_a(baz) && baz1.is_a(foo) && !baz1.is_a(bar));
     assert_eq!(
-        fallback(&registry, Some(bar), &[], "fooprop", &mut t),
+        fallback(&registry, Some(bar), &[], "fooprop", &t),
         Some(Value::Int(0))
     );
-    assert_eq!(fallback(&registry, Some(baz), &[], "barprop", &mut t), None);
+    assert_eq!(fallback(&registry, Some(baz), &[], "barprop", &t), None);
 
     // An abstract or unknown type name is typeless.
     let unknown = t.intern("Unknown");
@@ -80,33 +80,33 @@ fn typed_schemas_inherit_properties_and_is_a() {
 /// hand-built one composes its parent chain up to a flattened ancestor.
 #[test]
 fn flattened_definitions_compose_no_ancestor() {
-    let mut t = TokenInterner::default();
+    let t = TokenInterner::default();
     let [base, slim, mid, leaf, label] =
         ["Base", "Slim", "Mid", "Leaf", "LabelAPI"].map(|n| t.intern(n));
     let mut builder = SchemaRegistry::builder();
     builder
         .register(
             SchemaDefinition::new(base, SchemaKind::AbstractTyped)
-                .with_property(attr(&mut t, "base:mass", 1))
+                .with_property(attr(&t, "base:mass", 1))
                 .with_built_in(label),
         )
-        .register(SchemaDefinition::api(label).with_property(attr(&mut t, "label:text", "")))
+        .register(SchemaDefinition::api(label).with_property(attr(&t, "label:text", "")))
         .register(
             SchemaDefinition::typed(slim)
                 .with_parent(base)
                 .flattened()
-                .with_property(attr(&mut t, "slim:x", 1)),
+                .with_property(attr(&t, "slim:x", 1)),
         )
         .register(
             SchemaDefinition::new(mid, SchemaKind::AbstractTyped)
                 .with_parent(base)
                 .flattened()
-                .with_property(attr(&mut t, "mid:y", 2)),
+                .with_property(attr(&t, "mid:y", 2)),
         )
         .register(
             SchemaDefinition::typed(leaf)
                 .with_parent(mid)
-                .with_property(attr(&mut t, "leaf:z", 3)),
+                .with_property(attr(&t, "leaf:z", 3)),
         );
     let registry = builder.build(&t);
     let names = |definition: &PrimDefinition| -> Vec<String> {
@@ -133,7 +133,7 @@ fn flattened_definitions_compose_no_ancestor() {
 /// `TfType` ancestry of a hand-written `plugInfo.json`'s `bases`.
 #[test]
 fn additional_bases_give_c3_ancestry_but_no_properties() {
-    let mut t = TokenInterner::default();
+    let t = TokenInterner::default();
     let [body, tagged, thing, twin, gadget, muddle, tag, only, lost] = [
         "Body", "Tagged", "Thing", "Twin", "Gadget", "Muddle", "TagAPI", "OnlyAPI", "Lost",
     ]
@@ -142,14 +142,14 @@ fn additional_bases_give_c3_ancestry_but_no_properties() {
     builder
         .register(
             SchemaDefinition::new(body, SchemaKind::AbstractTyped).with_property(attr(
-                &mut t,
+                &t,
                 "body:mass",
                 1,
             )),
         )
         .register(
             SchemaDefinition::new(tagged, SchemaKind::AbstractTyped).with_property(attr(
-                &mut t,
+                &t,
                 "tag:label",
                 "",
             )),
@@ -158,7 +158,7 @@ fn additional_bases_give_c3_ancestry_but_no_properties() {
             SchemaDefinition::typed(thing)
                 .with_parent(body)
                 .with_additional_base(tagged)
-                .with_property(attr(&mut t, "thing:size", 3)),
+                .with_property(attr(&t, "thing:size", 3)),
         )
         .register(
             SchemaDefinition::typed(twin)
@@ -176,7 +176,7 @@ fn additional_bases_give_c3_ancestry_but_no_properties() {
                 .with_parent(body)
                 .with_additional_base(thing),
         )
-        .register(SchemaDefinition::api(tag).with_property(attr(&mut t, "tag:mode", "on")))
+        .register(SchemaDefinition::api(tag).with_property(attr(&t, "tag:mode", "on")))
         .register(SchemaDefinition::api(only).with_can_only_apply_to(tagged))
         .auto_apply(tag, tagged);
     let registry = builder.build(&t);
@@ -281,7 +281,7 @@ fn base_cycles_are_cut_and_reported() {
 fn inclusions_compose_right_after_their_schema() {
     // Spec: AOUSD Core §13.3.2.3's order: each schema's built-ins and
     // auto-applies follow it, before the next authored schema.
-    let mut t = TokenInterner::default();
+    let t = TokenInterner::default();
     let names = [
         "Tile", "LabelAPI", "StyleAPI", "ColorAPI", "OtherAPI", "AutoAPI",
     ];
@@ -292,7 +292,7 @@ fn inclusions_compose_right_after_their_schema() {
         .register(
             SchemaDefinition::api(label)
                 .with_built_in(style)
-                .with_property(attr(&mut t, "text", "label")),
+                .with_property(attr(&t, "text", "label")),
         )
         .register(
             SchemaDefinition::api(style)
@@ -301,11 +301,11 @@ fn inclusions_compose_right_after_their_schema() {
         )
         .register(
             SchemaDefinition::api(color)
-                .with_property(attr(&mut t, "note", "color"))
-                .with_property(attr(&mut t, "shade", "color")),
+                .with_property(attr(&t, "note", "color"))
+                .with_property(attr(&t, "shade", "color")),
         )
-        .register(SchemaDefinition::api(other).with_property(attr(&mut t, "shade", "other")))
-        .register(SchemaDefinition::api(auto).with_property(attr(&mut t, "text", "auto")))
+        .register(SchemaDefinition::api(other).with_property(attr(&t, "shade", "other")))
+        .register(SchemaDefinition::api(auto).with_property(attr(&t, "text", "auto")))
         .auto_apply(auto, label);
     let registry = builder.build(&t);
 
@@ -316,19 +316,19 @@ fn inclusions_compose_right_after_their_schema() {
         ["LabelAPI", "StyleAPI", "ColorAPI", "AutoAPI", "OtherAPI"]
     );
     // `ColorAPI`, nested two deep in `LabelAPI`, outranks `OtherAPI`.
-    let shade = fallback(&registry, Some(tile), &applied, "shade", &mut t);
+    let shade = fallback(&registry, Some(tile), &applied, "shade", &t);
     assert_eq!(shade, Some(Value::from("color")));
     // `StyleAPI` defines `note` without a fallback; `ColorAPI` fills it in.
-    let note = fallback(&registry, Some(tile), &applied, "note", &mut t);
+    let note = fallback(&registry, Some(tile), &applied, "note", &t);
     assert_eq!(note, Some(Value::from("color")));
-    let text = fallback(&registry, Some(tile), &applied, "text", &mut t);
+    let text = fallback(&registry, Some(tile), &applied, "text", &t);
     assert_eq!(text, Some(Value::from("label")));
 }
 
 #[test]
 fn overrides_replace_fallbacks_but_not_variability() {
     // Spec: AOUSD Core §13.3.2.2.
-    let mut t = TokenInterner::default();
+    let t = TokenInterner::default();
     let (outer, inner) = (t.intern("OuterAPI"), t.intern("InnerAPI"));
     let size = t.intern("size");
     let int = PropertyType::parse("int").unwrap();
@@ -343,7 +343,7 @@ fn overrides_replace_fallbacks_but_not_variability() {
                         .with_fallback(20)
                         .uniform(),
                 )
-                .with_override(attr(&mut t, "ghost", 1)),
+                .with_override(attr(&t, "ghost", 1)),
         )
         .register(
             SchemaDefinition::api(inner).with_property(
@@ -373,7 +373,7 @@ fn overrides_replace_fallbacks_but_not_variability() {
 fn multiple_apply_instances_fill_in_templates() {
     // Spec: AOUSD Core §13.3.2 (instance names, which may contain `:`) and
     // §13.3.2.1 (built-ins by type and by named instance).
-    let mut t = TokenInterner::default();
+    let t = TokenInterner::default();
     let (tile, slot, pin) = (t.intern("Tile"), t.intern("SlotAPI"), t.intern("PinAPI"));
     let (pin_extra, slot_main) = (t.intern("PinAPI:extra"), t.intern("SlotAPI:main"));
     let mut builder = SchemaRegistry::builder();
@@ -383,12 +383,12 @@ fn multiple_apply_instances_fill_in_templates() {
             SchemaDefinition::new(slot, SchemaKind::MultipleApplyApi)
                 .with_built_in(pin)
                 .with_built_in(pin_extra)
-                .with_property(attr(&mut t, "slot:__INSTANCE_NAME__:index", 0)),
+                .with_property(attr(&t, "slot:__INSTANCE_NAME__:index", 0)),
         )
         .register(
             SchemaDefinition::new(pin, SchemaKind::MultipleApplyApi)
-                .with_property(attr(&mut t, "pin:__INSTANCE_NAME__:offset", 0.25_f32))
-                .with_property(attr(&mut t, "__INSTANCE_NAME__:pinned", "no")),
+                .with_property(attr(&t, "pin:__INSTANCE_NAME__:offset", 0.25_f32))
+                .with_property(attr(&t, "__INSTANCE_NAME__:pinned", "no")),
         );
     let registry = builder.build(&t);
 
@@ -417,13 +417,13 @@ fn multiple_apply_instances_fill_in_templates() {
         ("main:pinned", Value::from("no")),
     ] {
         assert_eq!(
-            fallback(&registry, Some(tile), &applied, name, &mut t),
+            fallback(&registry, Some(tile), &applied, name, &t),
             Some(value),
             "{name}"
         );
     }
     assert_eq!(
-        fallback(&registry, Some(tile), &applied, "slot:right:index", &mut t),
+        fallback(&registry, Some(tile), &applied, "slot:right:index", &t),
         None
     );
 
@@ -472,19 +472,19 @@ fn invalid_inclusions_are_skipped_and_reported() {
 
 #[test]
 fn inclusion_cycles_build_each_definition_from_the_top() {
-    let mut t = TokenInterner::default();
+    let t = TokenInterner::default();
     let (one, two) = (t.intern("OneAPI"), t.intern("TwoAPI"));
     let mut builder = SchemaRegistry::builder();
     builder
         .register(
             SchemaDefinition::api(one)
                 .with_built_in(two)
-                .with_property(attr(&mut t, "value", 1)),
+                .with_property(attr(&t, "value", 1)),
         )
         .register(
             SchemaDefinition::api(two)
                 .with_built_in(one)
-                .with_property(attr(&mut t, "value", 2)),
+                .with_property(attr(&t, "value", 2)),
         );
     let registry = builder.build(&t);
     let from_one = registry.prim_definition(None, &[one], &t);
@@ -492,7 +492,7 @@ fn inclusion_cycles_build_each_definition_from_the_top() {
     let from_two = registry.prim_definition(None, &[two], &t);
     assert_eq!(applied_names(&from_two, &t), ["TwoAPI", "OneAPI"]);
     assert_eq!(
-        fallback(&registry, None, &[two], "value", &mut t),
+        fallback(&registry, None, &[two], "value", &t),
         Some(Value::Int(2))
     );
     assert!(
@@ -507,15 +507,15 @@ fn inclusion_cycles_build_each_definition_from_the_top() {
 fn auto_applies_reach_derived_types_in_reverse_dictionary_order() {
     // OpenUSD orders a type's auto-applied schemas in reverse dictionary
     // order (`Usd_SortAutoAppliedAPISchemas`).
-    let mut t = TokenInterner::default();
+    let t = TokenInterner::default();
     let (shape, tile) = (t.intern("Shape"), t.intern("Tile"));
     let (first, second) = (t.intern("AutoFirstAPI"), t.intern("AutoSecondAPI"));
     let mut builder = SchemaRegistry::builder();
     builder
         .register(SchemaDefinition::new(shape, SchemaKind::AbstractTyped))
         .register(SchemaDefinition::typed(tile).with_parent(shape))
-        .register(SchemaDefinition::api(first).with_property(attr(&mut t, "enabled", true)))
-        .register(SchemaDefinition::api(second).with_property(attr(&mut t, "enabled", false)))
+        .register(SchemaDefinition::api(first).with_property(attr(&t, "enabled", true)))
+        .register(SchemaDefinition::api(second).with_property(attr(&t, "enabled", false)))
         .auto_apply(first, shape)
         .auto_apply(second, shape);
     let registry = builder.build(&t);
@@ -525,14 +525,14 @@ fn auto_applies_reach_derived_types_in_reverse_dictionary_order() {
         ["AutoSecondAPI", "AutoFirstAPI"]
     );
     assert_eq!(
-        fallback(&registry, Some(tile), &[], "enabled", &mut t),
+        fallback(&registry, Some(tile), &[], "enabled", &t),
         Some(Value::Bool(false))
     );
 }
 
 #[test]
 fn a_weaker_definition_of_another_type_is_ignored() {
-    let mut t = TokenInterner::default();
+    let t = TokenInterner::default();
     let (strong, weak) = (t.intern("StrongAPI"), t.intern("WeakAPI"));
     let rank = t.intern("rank");
     let mut builder = SchemaRegistry::builder();
@@ -548,12 +548,9 @@ fn a_weaker_definition_of_another_type_is_ignored() {
             ),
         );
     let registry = builder.build(&t);
+    assert_eq!(fallback(&registry, None, &[strong, weak], "rank", &t), None);
     assert_eq!(
-        fallback(&registry, None, &[strong, weak], "rank", &mut t),
-        None
-    );
-    assert_eq!(
-        fallback(&registry, None, &[weak, strong], "rank", &mut t),
+        fallback(&registry, None, &[weak, strong], "rank", &t),
         Some(Value::Float(2.0))
     );
 }
@@ -564,12 +561,12 @@ fn a_weaker_definition_of_another_type_is_ignored() {
 #[test]
 #[should_panic(expected = "was never interned")]
 fn uninterned_instance_names_are_reported() {
-    let mut t = TokenInterner::default();
+    let t = TokenInterner::default();
     let slot = t.intern("SlotAPI");
     let mut builder = SchemaRegistry::builder();
     builder.register(
         SchemaDefinition::new(slot, SchemaKind::MultipleApplyApi).with_property(attr(
-            &mut t,
+            &t,
             "slot:__INSTANCE_NAME__:index",
             0,
         )),
@@ -583,23 +580,23 @@ fn uninterned_instance_names_are_reported() {
 /// has: never a template name, nor a name one segment off an instance's.
 #[test]
 fn property_lookup_matches_the_built_definition() {
-    let mut t = TokenInterner::default();
+    let t = TokenInterner::default();
     let [tile, slot, pin, label] = ["Tile", "SlotAPI", "PinAPI", "LabelAPI"].map(|n| t.intern(n));
     let pin_extra = t.intern("PinAPI:extra");
     let mut builder = SchemaRegistry::builder();
     builder
         .register(SchemaDefinition::typed(tile).with_built_in(label))
-        .register(SchemaDefinition::api(label).with_property(attr(&mut t, "label", "x")))
+        .register(SchemaDefinition::api(label).with_property(attr(&t, "label", "x")))
         .register(
             SchemaDefinition::new(slot, SchemaKind::MultipleApplyApi)
                 .with_built_in(pin)
                 .with_built_in(pin_extra)
-                .with_property(attr(&mut t, "slot:__INSTANCE_NAME__:index", 3))
-                .with_property(attr(&mut t, "slot:__INSTANCE_NAME__", 1)),
+                .with_property(attr(&t, "slot:__INSTANCE_NAME__:index", 3))
+                .with_property(attr(&t, "slot:__INSTANCE_NAME__", 1)),
         )
         .register(
             SchemaDefinition::new(pin, SchemaKind::MultipleApplyApi).with_property(attr(
-                &mut t,
+                &t,
                 "__INSTANCE_NAME__:pinned",
                 2,
             )),
@@ -672,7 +669,7 @@ fn generated_schema_layers_read_as_definitions() {
     };
     use alloc::sync::Arc;
 
-    let mut t = TokenInterner::default();
+    let t = TokenInterner::default();
     let paths = PathInterner::default();
     let (slot, pin, tile) = (t.intern("SlotAPI"), t.intern("PinAPI"), t.intern("Tile"));
     let [by_type, by_instance] =
@@ -750,11 +747,11 @@ fn generated_schema_layers_read_as_definitions() {
     let registry = builder.build(&t);
     let applied = [t.intern("SlotAPI:a")];
     assert_eq!(
-        fallback(&registry, None, &applied, "pin:a:offset", &mut t),
+        fallback(&registry, None, &applied, "pin:a:offset", &t),
         Some(Value::Float(0.5))
     );
     assert_eq!(
-        fallback(&registry, None, &applied, "pin:a:extra:offset", &mut t),
+        fallback(&registry, None, &applied, "pin:a:extra:offset", &t),
         Some(Value::Float(0.25))
     );
 
@@ -771,7 +768,7 @@ fn generated_schema_layers_read_as_definitions() {
 /// `UsdSchemaRegistry::IsAllowedAPISchemaInstanceName`.
 #[test]
 fn can_apply_checks_instance_names_and_prim_types() {
-    let mut t = TokenInterner::default();
+    let t = TokenInterner::default();
     let [shape, tile, other, label, slot, pin] =
         ["Shape", "Tile", "Other", "LabelAPI", "SlotAPI", "PinAPI"].map(|n| t.intern(n));
     let (main, right) = (t.intern("main"), t.intern("right"));
@@ -789,8 +786,8 @@ fn can_apply_checks_instance_names_and_prim_types() {
         })
         .register(
             SchemaDefinition::new(pin, SchemaKind::MultipleApplyApi)
-                .with_property(attr(&mut t, "pin:__INSTANCE_NAME__:offset", 0))
-                .with_property(attr(&mut t, "pin:__INSTANCE_NAME__", 0)),
+                .with_property(attr(&t, "pin:__INSTANCE_NAME__:offset", 0))
+                .with_property(attr(&t, "pin:__INSTANCE_NAME__", 0)),
         );
     let registry = builder.build(&t);
 
@@ -964,7 +961,7 @@ fn can_apply_checks_instance_names_and_prim_types() {
 /// OpenUSD 26.11: `UsdPrim::CanApplyAPI` (`_IsPrimValidApplyToTarget`).
 #[test]
 fn can_apply_accepts_a_prim_with_a_listed_applied_schema() {
-    let mut t = TokenInterner::default();
+    let t = TokenInterner::default();
     let [tile, panel, sensor, port, gauge, valve, meter, ghost] = [
         "Tile",
         "Panel",
@@ -985,7 +982,7 @@ fn can_apply_accepts_a_prim_with_a_listed_applied_schema() {
         .register(SchemaDefinition::api(sensor))
         .register(
             SchemaDefinition::new(port, SchemaKind::MultipleApplyApi).with_property(attr(
-                &mut t,
+                &t,
                 "port:__INSTANCE_NAME__:rate",
                 0,
             )),

@@ -41,10 +41,11 @@ stage.status();  // { prims, compositionErrors, wanted, missing, complete }
   else. Identifiers are the authored path anchored to the anchor layer's
   directory (`./a.usda` from `set/scene.usda` is `set/a.usda`); map them to
   URLs however you like.
-- **Reads are snapshots, queries are live.** `stage.prim(path)` and
-  `stage.attribute(path)` return a `Prim` or `Attribute` whose fields are read
-  once; their methods (`get`, `explain`, `children`, `attributeNames`,
-  `variantSets`) query the stage now.
+- **Reads are snapshots, queries are live.** `stage.prim(path)`,
+  `stage.attribute(path)` and `stage.relationship(path)` return a `Prim`,
+  `Attribute` or `Relationship` whose fields are read once; their methods
+  (`get`, `explain`, `children`, `attributeNames`, `variantSets` with each
+  set's variant names, `targets`, `metadata`) query the stage now.
 - **Paths are text**: `/World/Rock` for prims, `/World/Rock.size` for
   properties.
 - **Values say their shape.** `Value` is a union on `kind`: `scalar`

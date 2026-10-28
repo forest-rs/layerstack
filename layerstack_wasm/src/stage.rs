@@ -11,8 +11,8 @@ use alloc::{
 };
 
 use layerstack::{
-    ArcKind, Contribution, IgnoreCause, InMemoryStore, LayerId, OpinionRole, Specifier,
-    StageOptions, Time, ValueSource, Variability,
+    ArcKind, Contribution, IgnoreCause, InMemoryStore, LayerId, OpinionRole, ResolvedValue,
+    Specifier, StageOptions, Time, ValueSource, Variability,
 };
 use layerstack_io::{FORMAT_ARGS_DELIMITER, ImportPolicy, LoadReport, StageDocument};
 use wasm_bindgen::prelude::*;
@@ -282,8 +282,12 @@ impl Stage {
             .collect())
     }
 
-    /// The variant sets of the prim at `path`, each `[name, selection]`,
-    /// `selection` `null` when nothing selects a variant.
+    /// The variant sets of the prim at `path`, each
+    /// `[name, selection, variants]`, `selection` `null` when nothing
+    /// selects a variant and `variants` the set's variant names in
+    /// composed order.
+    ///
+    /// Spec: AOUSD Core §10.5 (variant sets and selections).
     ///
     /// # Errors
     ///
@@ -294,7 +298,16 @@ impl Stage {
             prim.variant_sets()
                 .into_iter()
                 .map(|(name, selection)| {
-                    Wire::List(vec![Wire::text(name), Wire::text_or_null(selection)])
+                    Wire::List(vec![
+                        Wire::text(name),
+                        Wire::text_or_null(selection),
+                        Wire::List(
+                            prim.variant_names(name)
+                                .into_iter()
+                                .map(Wire::text)
+                                .collect(),
+                        ),
+                    ])
                 })
                 .collect(),
         ))
@@ -470,6 +483,98 @@ impl Stage {
         self.document.storage().supplied_bytes()
     }
 
+    /// The composed metadata field `key` of the prim or property at
+    /// `path` as a value record ([`crate::value`]), or `null` when nothing
+    /// authors it (or no object is at `path`). A token list (`apiSchemas`)
+    /// is a `token[]`, a target list a `path[]` of text, and a dictionary
+    /// a `"d"` record.
+    ///
+    /// Spec: AOUSD Core §12.2 (metadata resolution). OpenUSD:
+    /// `UsdObject::GetMetadata`.
+    ///
+    /// # Errors
+    ///
+    /// `path.invalid`; `value.decode` for a retained array that fails to
+    /// decode.
+    pub(crate) fn metadata(&self, path: &str, key: &str) -> Result<Wire, Error> {
+        let view = self.document.view();
+        let resolved = if path.contains('.') {
+            check_property_path(path)?;
+            view.property(path)
+                .and_then(|property| property.metadata(key))
+        } else {
+            check_prim_path(path)?;
+            view.prim(path).and_then(|prim| prim.metadata(key))
+        };
+        let Some(resolved) = resolved else {
+            return Ok(Wire::Null);
+        };
+        let store = self.document.store();
+        let texts = |name: &str, items: Vec<String>| {
+            Wire::List(vec![
+                Wire::text(name),
+                Wire::text("a"),
+                Wire::text("string"),
+                Wire::Number(1.0),
+                Wire::Number(items.len() as f64),
+                Wire::List(items.into_iter().map(Wire::Text).collect()),
+            ])
+        };
+        let encoded = match resolved.value {
+            ResolvedValue::Scalar(value) => value::encode(&value, None, &store.tokens),
+            ResolvedValue::TokenList(items) => Ok(Some(texts(
+                "token[]",
+                items
+                    .into_iter()
+                    .map(|token| store.tokens.resolve(token).to_string())
+                    .collect(),
+            ))),
+            ResolvedValue::PathList(items) => Ok(Some(texts(
+                "path[]",
+                items
+                    .into_iter()
+                    .map(|target| target.display(&store.paths, &store.tokens))
+                    .collect(),
+            ))),
+            ResolvedValue::Dictionary(entries) => {
+                value::encode(&layerstack::Value::Dictionary(entries), None, &store.tokens)
+            }
+            ResolvedValue::ValueList(items) => {
+                value::encode(&layerstack::Value::Array(items), None, &store.tokens)
+            }
+        };
+        Ok(encoded
+            .map_err(|error| error.at_path(path))?
+            .unwrap_or(Wire::Null))
+    }
+
+    /// The relationship at the property path `path`: `[custom, targets]`,
+    /// its composed targets in order as text, or `null` when the prim has
+    /// no such relationship.
+    ///
+    /// Spec: AOUSD Core §7.6.5.1.1 (`targetPaths`), §12.4 (list ops).
+    /// OpenUSD: `UsdRelationship::GetTargets`.
+    ///
+    /// # Errors
+    ///
+    /// `path.invalid` when `path` is not a property path.
+    pub(crate) fn relationship(&self, path: &str) -> Result<Wire, Error> {
+        check_property_path(path)?;
+        let store = self.document.store();
+        let Some(relationship) = self.document.view().relationship(path) else {
+            return Ok(Wire::Null);
+        };
+        let targets = relationship
+            .targets()
+            .into_iter()
+            .map(|target| Wire::Text(target.display(&store.paths, &store.tokens)))
+            .collect();
+        Ok(Wire::List(vec![
+            Wire::Bool(relationship.is_custom()),
+            Wire::List(targets),
+        ]))
+    }
+
     fn existing_prim(&self, path: &str) -> Result<layerstack::Prim<'_>, Error> {
         check_prim_path(path)?;
         self.document.view().prim(path).ok_or_else(|| {
@@ -486,6 +591,18 @@ impl Stage {
     #[wasm_bindgen(js_name = open)]
     pub fn js_open(identifier: &str, bytes: Vec<u8>, recover: bool) -> Result<Self, JsValue> {
         Ok(Self::open(identifier, bytes, recover)?)
+    }
+
+    /// The record `metadata` builds, as documented in `stage.rs`.
+    #[wasm_bindgen(js_name = metadata)]
+    pub fn js_metadata(&self, path: &str, key: &str) -> Result<JsValue, JsValue> {
+        Ok(self.metadata(path, key)?.into())
+    }
+
+    /// The record `relationship` builds, as documented in `stage.rs`.
+    #[wasm_bindgen(js_name = relationship)]
+    pub fn js_relationship(&self, path: &str) -> Result<JsValue, JsValue> {
+        Ok(self.relationship(path)?.into())
     }
 
     /// The record `wanted` builds, as documented in `stage.rs`.
@@ -857,5 +974,70 @@ def "Ball" {
         assert_eq!(format_of("scene.usdz[root.usdc]"), "usdc");
         assert_eq!(format_of("scene.usdz"), "usdz");
         assert_eq!(format_of("v1.2/plain"), "");
+    }
+
+    #[test]
+    fn metadata_relationships_and_variant_names_read() {
+        let root = r#"#usda 1.0
+def "World" (
+    kind = "assembly"
+    variants = {
+        string shade = "light"
+    }
+    prepend variantSets = "shade"
+) {
+    custom rel lookAt = [</World/Rock>, </World.size>]
+    double size = 2 (
+        hidden = true
+    )
+
+    def "Rock" {
+    }
+
+    variantSet "shade" = {
+        "light" {
+        }
+        "dark" {
+        }
+    }
+}
+"#;
+        let stage = Stage::open("scene.usda", root.as_bytes().to_vec(), false).unwrap();
+        assert_eq!(
+            stage.metadata("/World", "kind").unwrap(),
+            Wire::List(vec![
+                Wire::text("token"),
+                Wire::text("s"),
+                Wire::text("assembly")
+            ])
+        );
+        assert_eq!(
+            stage.metadata("/World.size", "hidden").unwrap(),
+            Wire::List(vec![Wire::text("bool"), Wire::text("s"), Wire::Bool(true)])
+        );
+        assert_eq!(
+            stage.metadata("/World", "documentation").unwrap(),
+            Wire::Null
+        );
+        assert_eq!(
+            stage.relationship("/World.lookAt").unwrap(),
+            Wire::List(vec![
+                Wire::Bool(true),
+                Wire::List(vec![Wire::text("/World/Rock"), Wire::text("/World.size")]),
+            ])
+        );
+        assert_eq!(stage.relationship("/World.missing").unwrap(), Wire::Null);
+        assert_eq!(
+            stage.variant_sets("/World").unwrap(),
+            Wire::List(vec![Wire::List(vec![
+                Wire::text("shade"),
+                Wire::text("light"),
+                Wire::List(vec![Wire::text("dark"), Wire::text("light")]),
+            ])])
+        );
+        assert_eq!(
+            stage.metadata("World", "kind").unwrap_err().code,
+            "path.invalid"
+        );
     }
 }

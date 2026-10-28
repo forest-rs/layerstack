@@ -173,7 +173,9 @@ pub fn expression_asset_paths_for_stack(
 /// variant branches. Composition may still select differently, through a
 /// stronger layer or an arc; it asks for the arcs left deferred
 /// ([`crate::Stage::asset_requests`]). An arc whose asset does not resolve
-/// becomes [`Reference::unresolved`], as an importer records any other.
+/// becomes [`Reference::unresolved`], as an importer records any other;
+/// one the resolver cannot supply yet ([`AssetResolveError::Unavailable`])
+/// stays deferred.
 ///
 /// Importers call this once they have read the whole layer, when
 /// [`AssetResolver::defers_variant_arcs`] is `true`. A payload the resolver
@@ -227,6 +229,7 @@ pub fn resolve_selected_deferred_arcs(
                 continue;
             }
             *arc = match resolver.resolve(&asset, Some(anchor), tokens, paths) {
+                Err(AssetResolveError::Unavailable) => continue,
                 Ok(resolved) => {
                     resolved_layers.extend(resolved.layer);
                     Reference {
@@ -336,6 +339,14 @@ pub enum AssetResolveError {
     /// The asset was located but could not be loaded (parse error, I/O
     /// failure, unsupported format, etc.).
     LoadError(Arc<str>),
+    /// The resolver cannot supply the asset yet, but may later: a host
+    /// fetching sources asynchronously has not received it. It is neither
+    /// found nor missing. Importers keep such an arc deferred
+    /// ([`Reference::deferred`]) and such a sublayer by asset path
+    /// ([`crate::SublayerEntry::unresolved`]), recording nothing in the
+    /// store, so composition asks for it again
+    /// ([`crate::Stage::asset_requests`]) until the host loads it.
+    Unavailable,
 }
 
 /// Resolves asset path strings to layers.

@@ -1377,10 +1377,21 @@ impl EmitCtx<'_> {
                     .with_custom_data(custom_data),
             );
         }
-        let Some(resolved) = self.resolve_asset(asset) else {
-            return Some(
-                Reference::unresolved(asset, target, layer_offset).with_custom_data(custom_data),
-            );
+        let resolved = match self.resolve_arc_asset(asset) {
+            Ok(resolved) => resolved,
+            // Not supplied yet: composition asks for it again.
+            Err(AssetResolveError::Unavailable) => {
+                return Some(
+                    Reference::deferred(self.layer_id, asset, target, layer_offset)
+                        .with_custom_data(custom_data),
+                );
+            }
+            Err(_) => {
+                return Some(
+                    Reference::unresolved(asset, target, layer_offset)
+                        .with_custom_data(custom_data),
+                );
+            }
         };
         if let Some(layer) = resolved.layer {
             self.resolved_layers.push(layer);
@@ -2017,9 +2028,16 @@ impl EmitCtx<'_> {
         if is_expression(asset_path) {
             return None;
         }
+        self.resolve_arc_asset(asset_path).ok()
+    }
+
+    /// Resolves the asset path of a reference or payload relative to this
+    /// layer, keeping why it did not resolve: an asset the resolver cannot
+    /// supply yet ([`AssetResolveError::Unavailable`]) leaves its arc
+    /// deferred, for composition to ask for again.
+    fn resolve_arc_asset(&mut self, asset_path: &str) -> Result<ResolvedAsset, AssetResolveError> {
         self.resolver
             .resolve(asset_path, Some(self.layer_id), self.tokens, self.paths)
-            .ok()
     }
 
     /// Tries to convert a tuple into a typed dimensioned [`Value`] (§6.3).
@@ -4255,6 +4273,61 @@ def \"A\" (
         fn defers_variant_arcs(&self) -> bool {
             true
         }
+    }
+
+    /// A resolver that cannot supply any asset yet.
+    struct UnavailableResolver;
+
+    impl AssetResolver for UnavailableResolver {
+        fn resolve(
+            &mut self,
+            _asset_path: &str,
+            _anchor: Option<LayerId>,
+            _tokens: &TokenInterner,
+            _paths: &PathInterner,
+        ) -> Result<ResolvedAsset, AssetResolveError> {
+            Err(AssetResolveError::Unavailable)
+        }
+
+        fn resolved_path(&self, _id: LayerId) -> Option<&str> {
+            None
+        }
+    }
+
+    /// An arc whose asset the resolver cannot supply yet stays deferred,
+    /// anchored to the layer, for composition to ask for again; a sublayer
+    /// keeps its asset path with no layer, which composition resolves
+    /// through the store; an asset that is not found stays unresolved.
+    #[test]
+    fn unavailable_assets_keep_their_arcs_deferred() {
+        let src = "#usda 1.0\n(subLayers = [@sub.usda@])\ndef \"P\" (prepend references = @later.usda@) {}\n";
+        let cst = parse_cst(src);
+        let ast = crate::lower::lower(&cst.tree, src);
+        let tokens = TokenInterner::default();
+        let paths = PathInterner::default();
+        let result = emit(
+            &ast.layer,
+            LayerId(1),
+            &tokens,
+            &paths,
+            &mut UnavailableResolver,
+        );
+        assert_eq!(
+            result.layer.sublayers(),
+            [SublayerEntry::unresolved("sub.usda", LayerOffset::IDENTITY)]
+        );
+        let p = paths
+            .lookup(&Path::parse_absolute("/P", &tokens).unwrap())
+            .unwrap();
+        let arc = &result.layer.prim(p).unwrap().references.prepend[0];
+        assert!(arc.is_unresolved());
+        assert_eq!(
+            arc.source(),
+            ReferenceSource::Asset {
+                anchor: LayerId(1),
+                path: "later.usda"
+            }
+        );
     }
 
     /// Arcs inside variant branches the layer selects itself, at every

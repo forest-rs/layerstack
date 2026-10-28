@@ -399,10 +399,15 @@ impl<B: Storage> Reader<'_, B> {
         })
         .into_iter()
         .collect();
-        if reads
-            .values()
-            .any(|read| matches!(read.outcome, Outcome::Package))
-        {
+        // A source storage cannot supply yet leaves its arcs deferred, as
+        // one thread reading records them (`Reader::resolve`).
+        if reads.values().any(|read| {
+            matches!(read.outcome, Outcome::Package)
+                || matches!(&read.outcome, Outcome::Unread(error) if error.kind == IoErrorKind::Unavailable)
+                || read.calls.iter().any(|call| {
+                    matches!(call, Call::Failed { error, .. } if error.kind == IoErrorKind::Unavailable)
+                })
+        }) {
             return None;
         }
         let stepped = lock(&shared.sources).stepped;

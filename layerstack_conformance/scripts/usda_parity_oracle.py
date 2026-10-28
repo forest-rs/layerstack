@@ -35,7 +35,9 @@ The cases:
   an authored but empty `relocates`, which OpenUSD keeps
   (`SdfLayer::HasRelocates`); identifiers in metadata no schema registers,
   which OpenUSD keeps as their text (`SdfUnregisteredValue`) and writes
-  unquoted.
+  unquoted; attributes of type names no type registers, C++-namespaced
+  ones (`Some::Kind`) among them, whose values OpenUSD keeps as the text
+  its parser records (`Sdf_ParserValueContext`).
   Some are refused, as OpenUSD refuses them: a relative target of a prim
   inside the variant, which anchors at `/P{v=one}Child` and so names a
   variant selection (`<x>`, `<../Other>`), a quoted
@@ -968,6 +970,34 @@ def "B" (
     prepend nothing = None
 )
 {
+}
+''', []),
+    "read_unknown_type_names": ('''#usda 1.0
+def "P"
+{
+    custom foobar a = [1.50, 2, -0.25e3]
+    Some::Kind b = Value
+    Some::Kind[] c = [x, "quoted", @a.usda@]
+    custom thing d = (1, (2, 3)) (
+        doc = "kept"
+    )
+    widget e = None
+    widget f
+    widget g.timeSamples = {
+        1: alpha,
+        2: None,
+    }
+    widget[] h.timeSamples = {
+        1: [1, 2],
+    }
+}
+''', []),
+    "read_unknown_type_shaped_sample": ('''#usda 1.0
+def "P"
+{
+    widget g.timeSamples = {
+        1: [1, 2],
+    }
 }
 ''', []),
     "read_metadata_semicolons": ('''#usda 1.0

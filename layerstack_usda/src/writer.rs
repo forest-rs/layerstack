@@ -744,12 +744,41 @@ impl Attribute {
         self
     }
 
+    /// Validates an attribute of a type name no type registers, which
+    /// OpenUSD reads and keeps (`foobar`, `Some::Type[]`), its values the
+    /// text its parser recorded ([`Value::Unregistered`]). A registered
+    /// type's array form it lacks (`opaque[]`), a legacy alias OpenUSD
+    /// reads as a current name (`Vec3f`) and `dictionary`, a keyword, are
+    /// no such names.
+    fn validate_kept_type(&self, path: &str) -> Result<(), WriteError> {
+        let base = self.type_name.strip_suffix("[]").unwrap_or(&self.type_name);
+        let kept = base != "dictionary"
+            && ValueType::from_name(base).is_none()
+            && crate::lower::current_type_name(base) == base
+            && base.split("::").all(is_identifier);
+        let unknown = || WriteError::UnknownType {
+            path: path.into(),
+            type_name: self.type_name.clone(),
+        };
+        if !kept || self.spline.is_some() {
+            return Err(unknown());
+        }
+        let text = |value: &Value| matches!(value, Value::Unregistered(_) | Value::Block);
+        if self.value.as_ref().is_some_and(|value| !text(value))
+            || self
+                .time_samples
+                .iter()
+                .flatten()
+                .any(|(_, value)| !text(value))
+        {
+            return Err(unknown());
+        }
+        Ok(())
+    }
+
     fn validate(&self, path: &str) -> Result<(), WriteError> {
         let Some(declared) = parse_type_name(&self.type_name) else {
-            return Err(WriteError::UnknownType {
-                path: path.into(),
-                type_name: self.type_name.clone(),
-            });
+            return self.validate_kept_type(path);
         };
         if let Some(value) = &self.value
             && !matches!(value, Value::Block | Value::AnimationBlock)

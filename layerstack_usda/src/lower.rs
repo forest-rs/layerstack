@@ -613,9 +613,18 @@ impl<'a> LowerCtx<'a> {
             idx += 1;
         }
 
-        // type name
+        // type name, a namespaced name when the name follows it (`Some::Type`)
         if idx < sig.len() && sig[idx].0 == SyntaxKind::Ident {
             type_name = current_type_name(self.text(self.node_from(tree, sig[idx].1)));
+            idx += 1;
+        } else if idx + 1 < sig.len()
+            && sig[idx].0 == SyntaxKind::NamespacedName
+            && matches!(
+                sig[idx + 1].0,
+                SyntaxKind::NamespacedName | SyntaxKind::Ident | SyntaxKind::LeftBracket
+            )
+        {
+            type_name = self.node_from(tree, sig[idx].1).span().text(self.source);
             idx += 1;
         }
 
@@ -1772,7 +1781,7 @@ impl<'a> LowerCtx<'a> {
 /// legacy value factories of `Sdf_ParserHelpers` (`parserHelpers.cpp`).
 /// `Transform`, `PointIndex`, `EdgeIndex`, `FaceIndex` and `Schema` keep
 /// their names there, so they stay as they are here too.
-fn current_type_name(name: &str) -> &str {
+pub(crate) fn current_type_name(name: &str) -> &str {
     match name {
         "Vec2i" => "int2",
         "Vec2h" => "half2",

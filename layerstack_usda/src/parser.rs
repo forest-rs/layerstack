@@ -1324,11 +1324,35 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
         let mut type_name = "";
         let mut is_array = false;
 
-        // Type name.
+        // Type name, which may be C++-namespaced (`Some::Type`): OpenUSD's
+        // `Identifier` is `KeywordlessIdentifier (:: KeywordlessIdentifier)*`
+        // (`pxr/usd/sdf/textFileFormatParser.h`).
         self.eat_trivia();
         if self.peek() == Some(TokenKind::Ident) {
-            type_name = self.current_text();
-            self.bump();
+            let kind =
+                |parser: &Self, at: usize| parser.tokens.get(parser.pos + at).map(|t| t.kind);
+            let namespaced = |parser: &Self, at: usize| {
+                kind(parser, at) == Some(TokenKind::Colon)
+                    && kind(parser, at + 1) == Some(TokenKind::Colon)
+                    && kind(parser, at + 2) == Some(TokenKind::Ident)
+            };
+            if namespaced(self, 1) {
+                let type_start = self.current_span().start;
+                self.builder
+                    .start_node(SyntaxKind::NamespacedName, type_start);
+                self.bump();
+                while namespaced(self, 0) {
+                    self.bump();
+                    self.bump();
+                    self.bump();
+                }
+                let type_end = self.current_span().start;
+                self.builder.finish_node(type_end);
+                type_name = &self.source[type_start as usize..type_end as usize];
+            } else {
+                type_name = self.current_text();
+                self.bump();
+            }
         }
 
         // Array suffix `[]`.

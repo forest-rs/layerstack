@@ -87,18 +87,6 @@ const DIFFERENCES: &[Difference] = &[
                  has no path value to keep it",
     },
     Difference {
-        file: "178_invalid_typeName.usda",
-        outcome: Outcome::Error,
-        reason: "an attribute of an unknown type name (`foobar`, `Some::EnumValue`) \
-                 is not read: OpenUSD keeps its value's text, which no layerstack \
-                 value holds",
-    },
-    Difference {
-        file: "183_unknown_type_and_metadata.usda",
-        outcome: Outcome::Error,
-        reason: "attributes of an unknown type name, as in `178_invalid_typeName`",
-    },
-    Difference {
         file: "185_namespaced_properties.usda",
         outcome: Outcome::Error,
         reason: "a relationship's legacy `.default = <path>`, as in \

@@ -1808,9 +1808,17 @@ def Xform "A" (
         );
     }
 
+    /// An attribute of a type name no type registers holds only the text
+    /// OpenUSD records for its values; a typed value there is refused.
     #[test]
     fn save_layer_rejects_before_writing() {
-        let (layer, tokens, paths) = import_usda("#usda 1.0\ndef \"A\"\n{\n    vec3f a\n}\n");
+        let (mut layer, tokens, paths) = import_usda("#usda 1.0\ndef \"A\"\n{\n    vec3f a\n}\n");
+        let a = paths.intern(layerstack::path::Path::parse_absolute("/A", &tokens).unwrap());
+        layer
+            .prim_mut(a)
+            .and_then(|prim| prim.property_mut(tokens.intern("a")))
+            .expect("the attribute")
+            .default = Some(layerstack::Value::Int(1));
         assert_eq!(
             save_layer(&layer, &tokens, &paths),
             Err(UsdcWriteError::Save(

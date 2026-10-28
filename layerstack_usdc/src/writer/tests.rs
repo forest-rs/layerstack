@@ -1765,3 +1765,51 @@ fn invalid_native_array_edit_programs_are_rejected() {
         }
     }
 }
+
+/// Text OpenUSD keeps as an `SdfUnregisteredValue` (an identifier in
+/// metadata no schema registers, the values of an attribute of a type name
+/// no type registers) is stored as one and read back as the same text:
+/// OpenUSD 26.11 reads the crate file this writes as the USDA it was read
+/// from.
+#[test]
+fn unregistered_text_round_trips() {
+    use layerstack::doc::LayerId;
+    use layerstack::{AssetResolveError, AssetResolver, InMemoryStore, ResolvedAsset};
+
+    struct NoAssets;
+    impl AssetResolver for NoAssets {
+        fn resolve(
+            &mut self,
+            _: &str,
+            _: Option<LayerId>,
+            _: &layerstack::TokenInterner,
+            _: &layerstack::PathInterner,
+        ) -> Result<ResolvedAsset, AssetResolveError> {
+            Err(AssetResolveError::NotFound)
+        }
+        fn resolved_path(&self, _: LayerId) -> Option<&str> {
+            None
+        }
+    }
+
+    let store = InMemoryStore::default();
+    let source = "#usda 1.0\n\ndef \"P\" (\n    access = foo\n)\n{\n    custom foobar a = [1, 2]\n    Some::Kind[] c = [x]\n}\n\n";
+    let read = layerstack_usda::read_usda(
+        source,
+        LayerId(1),
+        &store.tokens,
+        &store.paths,
+        &mut NoAssets,
+    );
+    let bytes = save_layer(&read.emitted.layer, &store.tokens, &store.paths).expect("saved");
+    let back = crate::read_usdc(
+        &bytes,
+        LayerId(2),
+        &store.tokens,
+        &store.paths,
+        &mut NoAssets,
+    )
+    .expect("read back");
+    let text = layerstack_usda::save::save_usda(&back.layer, &store.tokens, &store.paths);
+    assert_eq!(text.as_deref(), Ok(source));
+}

@@ -14,8 +14,8 @@ use hashbrown::HashSet;
 
 use crate::{
     composition_error::{
-        CompositionError, ExpressionContext, InvalidSublayerAndOffsetCount, SublayerCycle,
-        UnresolvedSublayer,
+        CompositionError, ExpressionContext, InvalidSublayerAndOffsetCount, MissingLayer,
+        SublayerCycle, UnresolvedSublayer,
     },
     doc::{AssetAvailability, LayerId, LayerOffset, LayerStore, SublayerEntry},
     expression_variables::{VariableReads, evaluate, expression_error},
@@ -149,6 +149,9 @@ impl LayerStack {
     /// confirmed missing, is ignored; composition reports it as a
     /// [`SublayerCycle`] or an [`UnresolvedSublayer`] through
     /// [`Stage::composition_errors`](crate::Stage::composition_errors). A
+    /// layer named by id that the store neither holds nor loads, the root
+    /// included, contributes nothing, and composition reports it as a
+    /// [`MissingLayer`]. A
     /// sublayer by asset path ([`SublayerEntry::unresolved`]) is resolved
     /// through the store ([`LayerStore::asset_availability`]); one it has
     /// no answer for is skipped, and composition asks for it
@@ -171,9 +174,11 @@ impl LayerStack {
 
     /// Gathers the layer stack rooted at `root`, appending an error for
     /// each sublayer it ignores to `errors`: a [`SublayerCycle`] or an
-    /// [`UnresolvedSublayer`]; and one for each layer whose sublayer
+    /// [`UnresolvedSublayer`]; one for each layer whose sublayer
     /// offsets do not pair with its sublayers, an
-    /// [`InvalidSublayerAndOffsetCount`].
+    /// [`InvalidSublayerAndOffsetCount`]; and one for each layer, the root
+    /// included, that the store neither holds nor loads, a
+    /// [`MissingLayer`] (composition leaves out the layers a stage mutes).
     ///
     /// A sublayer forms a cycle when it is already on the chain of sublayers
     /// from `root` to the layer that names it. A layer repeated elsewhere in
@@ -314,11 +319,22 @@ impl LayerStack {
                 }
             }
 
-            fn visit(&mut self, id: LayerId, accumulated: LayerOffset) {
+            /// Visits the layer `id`, a sublayer of `parent` or a root of
+            /// the stack, and its sublayers. A layer the store neither
+            /// holds nor loads is reported missing ([`MissingLayer`]).
+            fn visit(&mut self, id: LayerId, parent: Option<LayerId>, accumulated: LayerOffset) {
                 self.visiting.insert(id);
                 self.layers.push(id);
                 self.offsets.push(accumulated);
-                if let Some(layer) = self.layer(id) {
+                let layer = self.layer(id);
+                if layer.is_none() && !awaits(self.store, id) {
+                    self.errors
+                        .push(CompositionError::MissingLayer(MissingLayer {
+                            layer: id,
+                            sublayer_of: parent,
+                        }));
+                }
+                if let Some(layer) = layer {
                     // OpenUSD 26.11 reports unpaired offsets before the
                     // sublayers' own errors (`_BuildLayerStack`).
                     if let Some(offsets) = layer.unpaired_sublayer_offsets {
@@ -355,7 +371,7 @@ impl LayerStack {
                         if parent_rate != child_rate {
                             offset.scale = offset.scale * parent_rate / child_rate;
                         }
-                        self.visit(sublayer, accumulated.compose(offset));
+                        self.visit(sublayer, Some(id), accumulated.compose(offset));
                     }
                 }
                 self.visiting.remove(&id);
@@ -398,6 +414,7 @@ impl LayerStack {
         if let (Some(session), Some(rate)) = (root.session, session_rate) {
             gather.visit(
                 session,
+                None,
                 LayerOffset {
                     offset: 0.0,
                     scale: stage_rate / rate,
@@ -406,6 +423,7 @@ impl LayerStack {
         }
         gather.visit(
             root.root,
+            None,
             LayerOffset {
                 offset: 0.0,
                 scale: stage_rate / root_rate,

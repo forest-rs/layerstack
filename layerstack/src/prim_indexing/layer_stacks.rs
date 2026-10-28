@@ -14,7 +14,7 @@
 //! per layer stack). OpenUSD: `PcpLayerStack`, `PcpLayerStackRegistry`
 //! (`pxr/usd/pcp/layerStack.cpp`).
 
-use alloc::{boxed::Box, sync::Arc, vec::Vec};
+use alloc::{boxed::Box, collections::BTreeSet, sync::Arc, vec::Vec};
 use core::sync::atomic::{AtomicU32, Ordering};
 
 use hashbrown::HashMap;
@@ -101,6 +101,9 @@ pub(crate) struct LayerStacks<'s> {
     stacks: Slots<ComputedStack<'s>>,
     len: AtomicU32,
     by_key: ReadLock<HashMap<StackKey, StackId>>,
+    /// The layers the stage mutes ([`crate::StageOptions::muted_layers`]):
+    /// the store hides them, and they are not reported missing.
+    muted: Option<&'s BTreeSet<LayerId>>,
 }
 
 /// Reads computed layer stacks by id, for a reader borrowing the stacks
@@ -117,6 +120,14 @@ impl Stacks for LayerStacks<'_> {
 }
 
 impl<'s> LayerStacks<'s> {
+    /// No stacks yet, for a stage that mutes `muted`.
+    pub(crate) fn muting(muted: &'s BTreeSet<LayerId>) -> Self {
+        Self {
+            muted: Some(muted),
+            ..Self::default()
+        }
+    }
+
     pub(crate) fn get(&self, id: StackId) -> &ComputedStack<'s> {
         self.stacks.get(id.0).expect("computed layer stack")
     }
@@ -145,7 +156,7 @@ impl<'s> LayerStacks<'s> {
         }
         // Gathered without the lock, so threads gather different stacks at
         // once; of two gathering the same one, the first to record it wins.
-        let computed = compute(store, identifier, key.1.clone())?;
+        let computed = compute(store, identifier, key.1.clone(), self.muted)?;
         Ok(self.by_key.write(|by_key| {
             if let Some(&id) = by_key.get(&key) {
                 return id;
@@ -201,6 +212,7 @@ fn compute<'s>(
     store: &'s dyn LayerStore,
     identifier: LayerStackIdentifier,
     chain: Arc<[LayerStackIdentifier]>,
+    muted: Option<&BTreeSet<LayerId>>,
 ) -> Result<ComputedStack<'s>, Vec<LayerId>> {
     let mut full_chain: Vec<LayerStackIdentifier> = chain.to_vec();
     if full_chain.last() != Some(&identifier) {
@@ -211,6 +223,12 @@ fn compute<'s>(
     let mut stack = LayerStack::gather_recording(store, &full_chain, &mut errors, Some(&mut reads));
     if !stack.pending.is_empty() {
         return Err(core::mem::take(&mut stack.pending));
+    }
+    // A muted layer is hidden on purpose, not missing.
+    if let Some(muted) = muted {
+        errors.retain(|error| {
+            !matches!(error, CompositionError::MissingLayer(missing) if muted.contains(&missing.layer))
+        });
     }
     let requests = core::mem::take(&mut stack.requests);
     let relocations = RelocationTable::compute(store, &stack, &mut errors);

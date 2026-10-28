@@ -522,6 +522,14 @@ mod tests {
         assert!(live.stage().has_prim(store.path("/Host/Child")));
         assert!(live.mute_layer(LayerId(2)).unwrap());
         live.recompose_changes(&mut store);
+        // The muted payload target is hidden, not missing.
+        assert!(
+            !live
+                .stage()
+                .composition_errors()
+                .iter()
+                .any(|error| matches!(error, crate::CompositionError::MissingLayer(_)))
+        );
         assert!(!live.recomposition_work().full_rebuild);
         assert!(Arc::ptr_eq(&retained, &live.stage().prims[&unrelated].data));
         assert!(live.unmute_layer(LayerId(2)));

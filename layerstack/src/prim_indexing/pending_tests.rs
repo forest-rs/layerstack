@@ -10,8 +10,8 @@ use hashbrown::HashSet;
 
 use super::{Boundaries, ChildIndex};
 use crate::{
-    InMemoryStore, Layer, LayerId, LayerStore, PathId, PathInterner, PendingPrim, PrimSpec,
-    Reference, Stage, StageOptions, SublayerEntry, TokenInterner,
+    CompositionError, InMemoryStore, Layer, LayerId, LayerStore, PathId, PathInterner, PendingPrim,
+    PrimSpec, Reference, Stage, StageOptions, SublayerEntry, TokenInterner,
 };
 
 const ROOT: LayerId = LayerId(1);
@@ -187,6 +187,15 @@ fn a_reference_to_a_pending_layer_leaves_its_prim_pending() {
     store.pending.insert(ASSET);
     let child_index = ChildIndex::default();
     let stage = compose(&mut store, &child_index);
+    // A layer still loading is not missing.
+    assert!(
+        !stage
+            .composition_errors()
+            .iter()
+            .any(|error| matches!(error, CompositionError::MissingLayer(_))),
+        "{:?}",
+        stage.composition_errors()
+    );
     let path = |store: &LoadingStore, path: &str| store.inner.path(path);
     let (a, e) = (path(&store, "/World/A"), path(&store, "/World/E"));
     // Both prims wait: the incomplete layer stack is not kept for the

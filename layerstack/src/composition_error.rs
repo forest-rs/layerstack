@@ -96,6 +96,10 @@ pub enum CompositionError {
     /// A layer whose `subLayers` and `subLayerOffsets` counts differ. Every
     /// one of its sublayers took the identity offset.
     InvalidSublayerAndOffsetCount(InvalidSublayerAndOffsetCount),
+    /// A layer a layer stack names by id that the store neither holds nor
+    /// reports loading: the stage's root or session layer, or a sublayer.
+    /// It contributed nothing.
+    MissingLayer(MissingLayer),
 }
 
 impl CompositionError {
@@ -110,7 +114,8 @@ impl CompositionError {
             | Self::InvalidAuthoredRelocation(_)
             | Self::InvalidConflictingRelocation(_)
             | Self::InvalidSameTargetRelocations(_)
-            | Self::InvalidSublayerAndOffsetCount(_) => None,
+            | Self::InvalidSublayerAndOffsetCount(_)
+            | Self::MissingLayer(_) => None,
             Self::ArcCycle(cycle) => Some(cycle.prim),
             Self::UnresolvedDefaultPrim(error) => Some(error.prim),
             Self::UnresolvedPrimPath(error) => Some(error.prim),
@@ -147,6 +152,7 @@ impl CompositionError {
     /// | [`Self::InvalidInstanceTargetPath`] | `composition.invalid_instance_target_path` |
     /// | [`Self::VariableExpressionError`] | `composition.variable_expression` |
     /// | [`Self::InvalidSublayerAndOffsetCount`] | `composition.invalid_sublayer_and_offset_count` |
+    /// | [`Self::MissingLayer`] | `composition.missing_layer` |
     ///
     /// Codes are part of the public contract: a released code keeps its
     /// spelling and meaning, and a new variant brings a new code.
@@ -179,6 +185,7 @@ impl CompositionError {
             Self::InvalidInstanceTargetPath(_) => 14,
             Self::VariableExpressionError(_) => 15,
             Self::InvalidSublayerAndOffsetCount(_) => 16,
+            Self::MissingLayer(_) => 17,
         }
     }
 }
@@ -195,7 +202,7 @@ impl CompositionError {
 }
 
 /// [`CompositionError::code`] by [`CompositionError::rank`].
-const CODES: [&str; 17] = [
+const CODES: [&str; 18] = [
     "composition.foreign_schema_registry",
     "composition.sublayer_cycle",
     "composition.arc_cycle",
@@ -213,6 +220,7 @@ const CODES: [&str; 17] = [
     "composition.invalid_instance_target_path",
     "composition.variable_expression",
     "composition.invalid_sublayer_and_offset_count",
+    "composition.missing_layer",
 ];
 
 /// The arc as an error names it.
@@ -307,6 +315,19 @@ impl Describe for CompositionError {
                 names.layer(error.layer),
                 error.asset
             ),
+            Self::MissingLayer(error) => match error.sublayer_of {
+                Some(parent) => write!(
+                    f,
+                    "{}: sublayer {} is not in the store; it is ignored",
+                    names.layer(parent),
+                    names.layer(error.layer)
+                ),
+                None => write!(
+                    f,
+                    "{} is not in the store; its layer stack has no opinions from it",
+                    names.layer(error.layer)
+                ),
+            },
             Self::InvalidSublayerAndOffsetCount(error) => write!(
                 f,
                 "{}: {} sublayers and {} sublayer offsets; every sublayer takes the identity offset",
@@ -664,6 +685,38 @@ pub struct UnresolvedSublayer {
     pub layer: LayerId,
     /// The sublayer's asset path as authored.
     pub asset: String,
+}
+
+/// A layer that a layer stack names by id but the store neither holds
+/// ([`LayerStore::layer`]) nor reports loading
+/// ([`LayerStore::is_layer_pending`]), found when gathering the stack.
+///
+/// The root of a layer stack (the stage's root layer, its session layer,
+/// or a reference or payload target composition reached by id) or a
+/// sublayer a [`SublayerEntry::new`] names by id. The layer contributes no
+/// opinions and no sublayers, and the rest of the stack is gathered as
+/// usual. A muted layer ([`StageOptions::muted_layers`]) is hidden on
+/// purpose and is not reported; a sublayer authored by asset path that
+/// does not resolve is an [`UnresolvedSublayer`] instead.
+///
+/// Spec: AOUSD Core §10.3.1 (sublayers), §10.6 (composition errors).
+/// OpenUSD has no layer ids: `UsdStage::Open` fails on a root layer it
+/// cannot open, and a sublayer it cannot open is
+/// `PcpErrorInvalidSublayerPath` ("Could not load sublayer ... skipping",
+/// `PcpLayerStack::_BuildLayerStack`, `pxr/usd/pcp/layerStack.cpp`).
+///
+/// [`LayerStore::layer`]: crate::LayerStore::layer
+/// [`LayerStore::is_layer_pending`]: crate::LayerStore::is_layer_pending
+/// [`SublayerEntry::new`]: crate::SublayerEntry::new
+/// [`StageOptions::muted_layers`]: crate::StageOptions::muted_layers
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub struct MissingLayer {
+    /// The layer the store does not hold.
+    pub layer: LayerId,
+    /// The layer whose `subLayers` names it; `None` for the root or
+    /// session layer of a layer stack.
+    pub sublayer_of: Option<LayerId>,
 }
 
 /// A layer whose `subLayers` and `subLayerOffsets` counts differ, found
@@ -1051,5 +1104,76 @@ mod tests {
             "/World/Moss.height: the spec at /World/Moss.height in layer 2 is not an attribute, \
              as the defining spec at /World/Moss.height in layer 1 is; it is ignored"
         );
+    }
+
+    /// A layer a stack names by id that the store does not hold is an
+    /// error, not an empty stage: OpenUSD 26.11's `UsdStage::Open` fails on
+    /// a root layer it cannot open, and reports a sublayer it cannot open
+    /// as `PcpErrorInvalidSublayerPath` and skips it.
+    #[test]
+    fn missing_root_and_sublayer_layers_are_reported() {
+        use crate::{Layer, PrimSpec, Reference, Stage, StageOptions, SublayerEntry};
+
+        let missing = |errors: &[CompositionError]| -> Vec<(LayerId, Option<LayerId>)> {
+            errors
+                .iter()
+                .filter_map(|error| match error {
+                    CompositionError::MissingLayer(missing) => {
+                        Some((missing.layer, missing.sublayer_of))
+                    }
+                    _ => None,
+                })
+                .collect()
+        };
+
+        // An absent root: the stage is empty and says why.
+        let mut store = InMemoryStore::default();
+        let stage = Stage::compose(&mut store, LayerId(99), StageOptions::default());
+        assert_eq!(missing(stage.composition_errors()), [(LayerId(99), None)]);
+        let error = &stage.composition_errors()[0];
+        assert_eq!(error.code(), "composition.missing_layer");
+        assert_eq!(error.prim(), None);
+        assert_eq!(
+            error.display(&store).to_string(),
+            "layer 99 is not in the store; its layer stack has no opinions from it"
+        );
+
+        // An absent sublayer by id is skipped; its siblings still compose.
+        let mut store = InMemoryStore::default();
+        let (kept, referenced) = (store.path("/Kept"), store.path("/Referenced"));
+        let mut root = Layer::new(LayerId(1));
+        root.sublayers_mut().extend([
+            SublayerEntry::new(LayerId(2)),
+            SublayerEntry::new(LayerId(3)),
+        ]);
+        let mut spec = PrimSpec::def();
+        spec.references.make_mut().explicit =
+            Some(alloc::vec![Reference::new(LayerId(4), referenced)]);
+        root.insert_prim(store.path("/Ref"), spec);
+        store.insert_layer(root);
+        let mut sibling = Layer::new(LayerId(3));
+        sibling.insert_prim(kept, PrimSpec::def());
+        store.insert_layer(sibling);
+        let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+        assert!(stage.has_prim(kept));
+        // The reference's target layer is the root of its own stack.
+        assert_eq!(
+            missing(stage.composition_errors()),
+            [(LayerId(4), None), (LayerId(2), Some(LayerId(1)))]
+        );
+        assert_eq!(
+            stage.composition_errors()[1].display(&store).to_string(),
+            "layer 1: sublayer layer 2 is not in the store; it is ignored"
+        );
+
+        // A muted layer is hidden on purpose, not missing.
+        store.insert_layer(Layer::new(LayerId(2)));
+        store.insert_layer(Layer::new(LayerId(4)));
+        let options = StageOptions {
+            muted_layers: [LayerId(2), LayerId(4)].into_iter().collect(),
+            ..StageOptions::default()
+        };
+        let stage = Stage::compose(&mut store, LayerId(1), options);
+        assert_eq!(missing(stage.composition_errors()), []);
     }
 }

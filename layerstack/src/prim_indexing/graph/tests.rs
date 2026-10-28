@@ -287,3 +287,76 @@ fn a_large_graph_finds_nodes_as_scans_of_it_do() {
     graph.finalize();
     assert!(graph.lookup.is_none());
 }
+
+/// The sibling OpenUSD links `child` before, walking `parent`'s children
+/// strongest first (`_InsertChildInStrengthOrder`); `NONE` for none.
+fn front_scan_place(
+    graph: &Graph,
+    paths: &PathInterner,
+    parent: NodeIndex,
+    child: NodeIndex,
+) -> NodeIndex {
+    let (first, last) = (
+        graph.node(parent).first_child,
+        graph.node(parent).last_child,
+    );
+    if first == NONE || graph.cmp_siblings(paths, child, first).is_lt() {
+        return first;
+    }
+    if !graph.cmp_siblings(paths, child, last).is_lt() {
+        return NONE;
+    }
+    graph
+        .children(parent)
+        .find(|&at| graph.cmp_siblings(paths, child, at).is_lt())
+        .expect("stronger than the last")
+}
+
+#[test]
+fn children_are_linked_where_a_walk_from_the_strongest_links_them() {
+    let paths = PathInterner::default();
+    let mut numbers = Numbers(5);
+    let mut graph = Graph::new(site(&paths), 0);
+    let kinds = [
+        ArcKind::Inherits,
+        ArcKind::Variants,
+        ArcKind::References,
+        ArcKind::Payloads,
+        ArcKind::Specializes,
+    ];
+    for at in 1..400 {
+        // Few parents, so most nodes are linked among many siblings.
+        let parent = super::node_index(numbers.below(at.min(4)));
+        let origin = if numbers.below(2) == 0 {
+            parent
+        } else {
+            super::node_index(numbers.below(at))
+        };
+        let arc_kind = kinds[numbers.below(kinds.len())];
+        let sibling_num = u16::try_from(numbers.below(3)).expect("small");
+        let mut new = node(&site(&paths), arc_kind, parent, origin, sibling_num);
+        new.namespace_depth = u16::try_from(numbers.below(2)).expect("small");
+        let index = graph.push_node(new);
+        let expected = front_scan_place(&graph, &paths, parent, index);
+        graph.link_child(&paths, parent, index);
+        assert_eq!(graph.node(index).next_sibling, expected, "node {index}");
+    }
+}
+
+#[test]
+fn a_child_linked_near_the_end_of_many_siblings_compares_with_few() {
+    let paths = PathInterner::default();
+    let mut graph = Graph::new(site(&paths), 0);
+    // A weaker sibling, then many inherits each weaker than the last:
+    // each new one goes just before the weaker sibling.
+    add(&mut graph, &paths, ArcKind::Payloads, 0, 0, 0);
+    let count = 2_000;
+    let before = super::SIBLING_COMPARISONS.with(core::cell::Cell::get);
+    for at in 0..count {
+        let origin = add(&mut graph, &paths, ArcKind::References, 1, 1, at);
+        add(&mut graph, &paths, ArcKind::Inherits, 0, origin, 0);
+    }
+    let made = super::SIBLING_COMPARISONS.with(core::cell::Cell::get) - before;
+    // A walk from the strongest would compare each with every earlier one.
+    assert!(made <= 6 * usize::from(count), "{made} comparisons");
+}

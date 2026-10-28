@@ -9,7 +9,7 @@ use crate::support::schema_scene as support;
 use layerstack::{InMemoryStore, LayerId, ListOp, PropertyPath, TargetPath, edit::EditTarget};
 use layerstack_schemas::{
     Scene, SchemaEdit,
-    shading::{ConnectionModification, PortEdit},
+    shading::{ConnectionModification, ConnectionSource, PortEdit},
 };
 use serde::Deserialize;
 
@@ -103,8 +103,12 @@ fn connection_edits_match_cpp_call_by_call() {
                     Some("append") => ConnectionModification::Append,
                     other => panic!("unknown mode {other:?}"),
                 };
-                port.connect_to_source(&mut edit, prim, &call.name, modification)
-                    .is_ok()
+                port.connect_to_source(
+                    &mut edit,
+                    ConnectionSource::new(prim, &call.name),
+                    modification,
+                )
+                .is_ok()
             }
             "disconnect" => {
                 let source = PortEdit::get(&mut edit, source).unwrap().unwrap();

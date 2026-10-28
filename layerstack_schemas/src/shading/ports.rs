@@ -196,13 +196,88 @@ pub enum ConnectionModification {
     Append,
 }
 
+/// The source of a connection: a prim and the full name of one of its
+/// shading attributes (`outputs:rgb`, `inputs:roughness`).
+///
+/// Build it from the base name with [`Self::output`] or [`Self::input`],
+/// as [`PrimEdit::create_output`] and [`PrimEdit::create_input`] take it,
+/// from the full name with [`Self::new`], or from a [`PortEdit`] handle
+/// (`From`). [`PortEdit::connect_to_source`],
+/// [`PortEdit::disconnect_source`] and [`PortEdit::set_sources`] all take
+/// it.
+///
+/// OpenUSD: `UsdShadeConnectionSourceInfo` (source prim, name and type).
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct ConnectionSource {
+    prim: PathId,
+    name: String,
+}
+impl ConnectionSource {
+    /// The attribute `name` of `prim`, by its full name with its namespace
+    /// (`outputs:rgb`). A connection refuses a name outside the `outputs:`
+    /// and `inputs:` namespaces ([`PortError::InvalidName`]).
+    #[must_use]
+    pub fn new(prim: PathId, name: &str) -> Self {
+        Self {
+            prim,
+            name: name.into(),
+        }
+    }
+    /// The output `name` (its base name, `rgb` for `outputs:rgb`) of `prim`.
+    #[must_use]
+    pub fn output(prim: PathId, name: &str) -> Self {
+        Self {
+            prim,
+            name: format!("{}{name}", PortKind::Output.prefix()),
+        }
+    }
+    /// The input `name` (its base name, `file` for `inputs:file`) of
+    /// `prim`, such as a node graph's interface input.
+    #[must_use]
+    pub fn input(prim: PathId, name: &str) -> Self {
+        Self {
+            prim,
+            name: format!("{}{name}", PortKind::Input.prefix()),
+        }
+    }
+    /// The prim the source attribute is on.
+    #[must_use]
+    pub fn prim(&self) -> PathId {
+        self.prim
+    }
+    /// The source attribute's full name, with its `outputs:` or `inputs:`
+    /// namespace.
+    #[must_use]
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+}
+impl From<&PortEdit> for ConnectionSource {
+    fn from(port: &PortEdit) -> Self {
+        Self {
+            prim: port.prim,
+            name: port.name.clone(),
+        }
+    }
+}
+impl From<PortEdit> for ConnectionSource {
+    fn from(port: PortEdit) -> Self {
+        Self {
+            prim: port.prim,
+            name: port.name,
+        }
+    }
+}
+
 /// A named input or output authored through a [`SchemaEdit`].
 ///
 /// Connections are source opinions: every target is mapped through the edit
 /// target when committed, and undo restores authored absence as well as values.
-/// Semantic `CanConnect` validation is not performed. Sources passed to
-/// [`Self::set_sources`] must already exist in the scene or have been created
-/// in this edit; [`Self::connect_to_source`] creates a missing one, as C++
+/// Semantic `CanConnect` validation is not performed. Every connection
+/// method takes its source as a [`ConnectionSource`] (a prim and a full
+/// attribute name) or a `PortEdit`. Sources passed to [`Self::set_sources`]
+/// must already exist in the scene or have been created in this edit;
+/// [`Self::connect_to_source`] creates a missing one, as C++
 /// `ConnectToSource` does.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PortEdit {
@@ -269,20 +344,31 @@ impl PortEdit {
         edit.set_value(self.prim, &self.name, Some(time), value);
         Ok(self)
     }
-    /// Replaces this spec's connections with an explicit ordered source list.
-    /// All ports are checked before any operations are appended. An empty list
-    /// blocks weaker connections; it does not erase the authored opinion.
+    /// Replaces this spec's connections with an explicit ordered source list
+    /// (each a [`ConnectionSource`], or a [`PortEdit`] handle). Every
+    /// source must exist already, on the stage or created in this edit; all
+    /// are checked before any operations are appended. An empty list blocks
+    /// weaker connections; it does not erase the authored opinion.
     ///
     /// OpenUSD: `UsdShadeConnectableAPI::SetConnectedSources`, for existing
     /// attributes. AOUSD Core §7.6.4.2.3 and §12.4 (connection list composition).
+    ///
+    /// # Errors
+    ///
+    /// Before authoring anything: this port or a source does not exist.
     pub fn set_sources(
         &self,
         edit: &mut SchemaEdit<'_>,
-        sources: &[Self],
+        sources: impl IntoIterator<Item = impl Into<ConnectionSource>>,
     ) -> Result<&Self, PortError> {
         self.validate(edit)?;
-        for source in sources {
-            source.validate(edit)?;
+        let sources: Vec<ConnectionSource> = sources.into_iter().map(Into::into).collect();
+        for source in &sources {
+            Self {
+                prim: source.prim,
+                name: source.name.clone(),
+            }
+            .validate(edit)?;
         }
         let targets = sources
             .iter()
@@ -296,8 +382,8 @@ impl PortEdit {
         edit.set_connection_op(self.prim, &self.name, Some(ListOp::explicit(targets)));
         Ok(self)
     }
-    /// Connects the source `name` (`outputs:…` or `inputs:…`) of the prim
-    /// `prim`, placing it as `modification` says, and returns the source.
+    /// Connects `source` (a [`ConnectionSource`], or a [`PortEdit`]
+    /// handle), placing it as `modification` says, and returns the source.
     /// A source attribute that does not exist yet is created with this
     /// port's type, not `custom` and with no value, as C++ creates it;
     /// an existing one keeps its own type, which is not checked against
@@ -310,19 +396,19 @@ impl PortEdit {
     /// # Errors
     ///
     /// Before authoring anything: this port or the source prim does not
-    /// exist, `name` is not a shading attribute name, or a relationship
-    /// already has it.
+    /// exist, the source's name is not a shading attribute name, or a
+    /// relationship already has it.
     #[doc(alias = "ConnectToSource")]
     pub fn connect_to_source(
         &self,
         edit: &mut SchemaEdit<'_>,
-        prim: PathId,
-        name: &str,
+        source: impl Into<ConnectionSource>,
         modification: ConnectionModification,
     ) -> Result<Self, PortError> {
         self.validate(edit)?;
-        let source = self.source_port(edit, prim, name)?;
-        let target = TargetPath::Property(PropertyPath::new(prim, edit.tokens().intern(name)));
+        let ConnectionSource { prim, name } = source.into();
+        let source = self.source_port(edit, prim, &name)?;
+        let target = TargetPath::Property(PropertyPath::new(prim, edit.tokens().intern(&name)));
         match modification {
             ConnectionModification::Replace => edit.set_connection_op(
                 self.prim,
@@ -372,7 +458,8 @@ impl PortEdit {
             name: name.into(),
         })
     }
-    /// Removes the one source `source` from this port's connections: from
+    /// Removes the one source `source` (a [`ConnectionSource`], or a
+    /// [`PortEdit`] handle) from this port's connections: from
     /// the edit target's explicit list when it authors one, else as a
     /// deletion that also removes it from weaker layers' connections. Other
     /// sources stay connected.
@@ -387,9 +474,10 @@ impl PortEdit {
     pub fn disconnect_source(
         &self,
         edit: &mut SchemaEdit<'_>,
-        source: &Self,
+        source: impl Into<ConnectionSource>,
     ) -> Result<&Self, PortError> {
         self.validate(edit)?;
+        let source = source.into();
         let target = TargetPath::Property(PropertyPath::new(
             source.prim,
             edit.tokens().intern(&source.name),
@@ -400,7 +488,7 @@ impl PortEdit {
     /// Disconnects all sources by authoring an explicit empty list.
     /// OpenUSD: `DisconnectSource()` with no source argument.
     pub fn disconnect_sources(&self, edit: &mut SchemaEdit<'_>) -> Result<&Self, PortError> {
-        self.set_sources(edit, &[])
+        self.set_sources(edit, core::iter::empty::<ConnectionSource>())
     }
     /// Erases this spec's connection opinion, revealing weaker connections.
     /// OpenUSD: `ClearSources`; this differs from [`Self::disconnect_sources`].

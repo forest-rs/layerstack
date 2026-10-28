@@ -105,12 +105,6 @@ const DIFFERENCES: &[Difference] = &[
                  `127_varyingRelationship`",
     },
     Difference {
-        file: "229_bad_spline_extrap_loop_boundary.usda",
-        outcome: Outcome::Accepts,
-        reason: "a spline with both inner loops and a looping extrapolation is read; \
-                 OpenUSD refuses the combination",
-    },
-    Difference {
         file: "46_weirdStringContent.usda",
         outcome: Outcome::Error,
         reason: "string escapes that make bytes that are not UTF-8 are reported: a \

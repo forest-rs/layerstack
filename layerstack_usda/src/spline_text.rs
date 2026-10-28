@@ -317,6 +317,40 @@ struct Parser {
     custom_times: Vec<f64>,
 }
 
+/// Refuses a spline with both inner loops (loop parameters other than the
+/// default `(0, 0, 0, 0, 0)`) and a looping extrapolation with a loop
+/// boundary time, in either order: OpenUSD 26.11 reports a coding error
+/// setting either while the other is present (`TsSpline::_SetInnerLoopParams`,
+/// `SetPreExtrapolation`, `SetPostExtrapolation`, `pxr/base/ts/spline.cpp`),
+/// which fails the layer's read.
+fn refuse_bounded_loops_with_inner_loops(spline: &SplineData) -> Result<(), String> {
+    let looping = |mode: Extrapolation| {
+        matches!(
+            mode,
+            Extrapolation::LoopRepeat | Extrapolation::LoopReset | Extrapolation::LoopOscillate
+        )
+    };
+    let bounded = (looping(spline.pre_extrapolation) && spline.pre_loop_boundary.is_some())
+        || (looping(spline.post_extrapolation) && spline.post_loop_boundary.is_some());
+    let inner = spline.loop_params.is_some_and(|lp| {
+        lp != LoopParams {
+            proto_start: 0.0,
+            proto_end: 0.0,
+            num_pre_loops: 0,
+            num_post_loops: 0,
+            value_offset: 0.0,
+        }
+    });
+    if bounded && inner {
+        return Err(
+            "a spline cannot have both inner loops and a looping extrapolation \
+                    with a loop boundary time"
+                .into(),
+        );
+    }
+    Ok(())
+}
+
 impl Parser {
     fn peek(&self) -> Option<&Token> {
         self.tokens.get(self.pos)
@@ -376,12 +410,14 @@ impl Parser {
                 let (mode, boundary) = self.extrapolation()?;
                 spline.pre_extrapolation = mode;
                 spline.pre_loop_boundary = boundary;
+                refuse_bounded_loops_with_inner_loops(spline)?;
             }
             "post" => {
                 self.expect(&Token::Punct(':'))?;
                 let (mode, boundary) = self.extrapolation()?;
                 spline.post_extrapolation = mode;
                 spline.post_loop_boundary = boundary;
+                refuse_bounded_loops_with_inner_loops(spline)?;
             }
             "loop" => {
                 self.expect(&Token::Punct(':'))?;
@@ -403,6 +439,7 @@ impl Parser {
                     num_post_loops,
                     value_offset,
                 });
+                refuse_bounded_loops_with_inner_loops(spline)?;
             }
             other => return Err(format!("unknown spline item `{other}`")),
         }

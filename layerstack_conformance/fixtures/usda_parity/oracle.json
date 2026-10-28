@@ -60,6 +60,11 @@
    "source": "#usda 1.0\ndef \"A\" (\n    references = [@a.usda@, @a.usda@ (offset = 1)]\n)\n{\n}\n",
    "text": "#usda 1.0\n\ndef \"A\" (\n    references = [\n        @a.usda@,\n        @a.usda@ (offset = 1)\n    ]\n)\n{\n}\n\n"
   },
+  "read_spline_bounded_loop_and_default_inner_loops": {
+   "reads": true,
+   "source": "#usda 1.0\ndef \"A\"\n{\n    double a.spline = {\n        pre: loop repeat(0),\n        loop: (0, 0, 0, 0, 0),\n        0: 1; post held,\n        16: 2; post held,\n    }\n    double b.spline = {\n        post: loop reset,\n        loop: (0, 16, 0, 2, 5),\n        0: 1; post held,\n        16: 2; post held,\n    }\n}\n",
+   "text": "#usda 1.3\n\ndef \"A\"\n{\n    double a.spline = {\n        pre: loop repeat(0),\n        0: 1; pre (0, 0); post held,\n        16: 2; post held,\n    }\n    double b.spline = {\n        post: loop reset,\n        loop: (0, 16, 0, 2, 5),\n        0: 1; pre (0, 0); post held,\n        16: 2; post held,\n    }\n}\n\n"
+  },
   "read_spline_comments": {
    "reads": true,
    "source": "#usda 1.0\n\ndef \"P\"\n{\n    double a.spline = {\n        bezier,\n        # a comment line\n        7: 5.5; post curve/* inline */(1.1, -1.4),\n        // another comment\n        9: 6,\n    }\n}\n",
@@ -461,10 +466,20 @@
    "reads": false,
    "source": "#usda 1.0\ndef \"A\"\n{\n    double a = 1;;\n}\n"
   },
+  "strict_spline_bounded_loop_then_inner_loops": {
+   "error": "'Cannot set non-default inner loop params when spline has extrapolation looping with non-null loopBoundaryTime.'",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"A\"\n{\n    double a.spline = {\n        pre: loop repeat(0),\n        loop: (0, 16, 0, 2, 5),\n        0: 1; post held,\n        16: 2; post held,\n    }\n}\n"
+  },
   "strict_spline_curve_spacing": {
    "error": "'Expected } at '(1, 2),' in </A.a>",
    "reads": false,
    "source": "#usda 1.0\ndef \"A\"\n{\n    double a.spline = {\n        bezier,\n        0: 1; post curve(1, 2),\n        1: 2,\n    }\n}\n"
+  },
+  "strict_spline_inner_loops_then_bounded_loop": {
+   "error": "'Cannot set extrapolation looping with a non-null loopBoundaryTime when inner loops are possibly present.'",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"A\"\n{\n    double a.spline = {\n        loop: (0, 16, 1, 0, 0),\n        post: loop oscillate(16),\n        0: 1; post held,\n        16: 2; post held,\n    }\n}\n"
   },
   "strict_type_change": {
    "error": "'attribute 'a' already has type 'float', cannot change to 'double' at 'a.timeSamples = {' in </A.a>",

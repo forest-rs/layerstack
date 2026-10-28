@@ -105,6 +105,44 @@
    "source": "#usda 1.0\ndef \"A\" (\n    references = [@a.usda@, @a.usda@ (offset = 1)]\n)\n{\n}\n",
    "text": "#usda 1.0\n\ndef \"A\" (\n    references = [\n        @a.usda@,\n        @a.usda@ (offset = 1)\n    ]\n)\n{\n}\n\n"
   },
+  "read_relational_targets": {
+   "reads": true,
+   "source": "#usda 1.0\ndef \"P\"\n{\n    float c.connect = </A.b[/C].d>\n    rel m = </A.b.mapper[/C]>\n    rel n = </A.b[/C.d[/E].f].g>\n    rel r = </A.b[/C].d>\n    rel s = </A.b[/C/D.e].f:g>\n    rel t = </A.b[/C].d.mapper[/E]>\n    rel u = <.b[C].d>\n    rel v = </A.b[/C{v=x}].d>\n    prepend rel w = [</A.b[/C].d>, </A.b.mapper[/C]>]\n    rel x = <../A.b[../C].d>\n}\n",
+   "targets": {
+    "/P.c": [
+     "/A.b[/C].d"
+    ],
+    "/P.m": [
+     "/A.b.mapper[/C]"
+    ],
+    "/P.n": [
+     "/A.b[/C.d[/E].f].g"
+    ],
+    "/P.r": [
+     "/A.b[/C].d"
+    ],
+    "/P.s": [
+     "/A.b[/C/D.e].f:g"
+    ],
+    "/P.t": [
+     "/A.b[/C].d.mapper[/E]"
+    ],
+    "/P.u": [
+     "/P.b[/P/C].d"
+    ],
+    "/P.v": [
+     "/A.b[/C{v=x}].d"
+    ],
+    "/P.w": [
+     "/A.b[/C].d",
+     "/A.b.mapper[/C]"
+    ],
+    "/P.x": [
+     "/A.b[/C].d"
+    ]
+   },
+   "text": "#usda 1.0\n\ndef \"P\"\n{\n    float c.connect = </A.b[/C].d>\n    rel m = </A.b.mapper[/C]>\n    rel n = </A.b[/C.d[/E].f].g>\n    rel r = </A.b[/C].d>\n    rel s = </A.b[/C/D.e].f:g>\n    rel t = </A.b[/C].d.mapper[/E]>\n    rel u = </P.b[/P/C].d>\n    rel v = </A.b[/C{v=x}].d>\n    prepend rel w = [\n        </A.b[/C].d>,\n        </A.b.mapper[/C]>,\n    ]\n    rel x = </A.b[/C].d>\n}\n\n"
+  },
   "read_relationship_default": {
    "reads": true,
    "source": "#usda 1.0\ndef \"A\"\n{\n    rel r.default = </B>\n    rel s = </C>\n    rel s.default = <../D>\n    custom rel t.default = </E>\n    varying rel u (\n        doc = \"x\"\n    )\n    prepend varying rel u = </F>\n    varying rel u.default = </G>\n    def \"Child\"\n    {\n        rel v.default = </H>\n    }\n}\n",
@@ -675,6 +713,51 @@
    "error": "'Reference prim path <../B> must be either empty or an absolute prim path at '<../B>' in </P>",
    "reads": false,
    "source": "#usda 1.0\ndef \"P\" (\n    references = <../B>\n)\n{\n}\n"
+  },
+  "strict_relational_attribute_expression": {
+   "error": "'Relationship target paths must be absolute prim, property or mapper paths at ' = </A.b[/C].d.expression>' in </P.r>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"P\"\n{\n    rel r = </A.b[/C].d.expression>\n}\n"
+  },
+  "strict_relational_attribute_target": {
+   "error": "'Relationship target paths must be absolute prim, property or mapper paths at ' = </A.b[/C].d[/E]>' in </P.r>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"P\"\n{\n    rel r = </A.b[/C].d[/E]>\n}\n"
+  },
+  "strict_relational_connection_expression": {
+   "error": "''/A.b.expression' is not a valid prim or property scene path at '</A.b.expression>' in </P.c>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"P\"\n{\n    float c.connect = </A.b.expression>\n}\n"
+  },
+  "strict_relational_connection_mapper": {
+   "error": "''/A.b.mapper[/C]' is not a valid prim or property scene path at '</A.b.mapper[/C]>' in </P.c>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"P\"\n{\n    float c.connect = </A.b.mapper[/C]>\n}\n"
+  },
+  "strict_relational_connection_target_path": {
+   "error": "''/A.b[/C]' is not a valid prim or property scene path at '</A.b[/C]>' in </P.c>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"P\"\n{\n    float c.connect = </A.b[/C]>\n}\n"
+  },
+  "strict_relational_expression": {
+   "error": "'Relationship target paths must be absolute prim, property or mapper paths at ' = </A.b.expression>' in </P.r>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"P\"\n{\n    rel r = </A.b.expression>\n}\n"
+  },
+  "strict_relational_mapper_argument": {
+   "error": "'Relationship target paths must be absolute prim, property or mapper paths at ' = </A.b.mapper[/C].arg>' in </P.r>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"P\"\n{\n    rel r = </A.b.mapper[/C].arg>\n}\n"
+  },
+  "strict_relational_target_path": {
+   "error": "'Relationship target paths must be absolute prim, property or mapper paths at ' = </A.b[/C]>' in </P.r>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"P\"\n{\n    rel r = </A.b[/C]>\n}\n"
+  },
+  "strict_relational_variant_selection": {
+   "error": "'Relationship target paths cannot contain variant selections at ' = </A{v=x}.b[/C].d>' in </P.r>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"P\"\n{\n    rel r = </A{v=x}.b[/C].d>\n}\n"
   },
   "strict_relationship_before_brace": {
    "error": "'Expected } at 'rel r = </A> /* a comment */ }' in </A>",

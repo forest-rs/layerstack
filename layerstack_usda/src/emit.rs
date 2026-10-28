@@ -54,7 +54,7 @@ use layerstack::doc::{
 };
 use layerstack::interner::{TokenId, TokenInterner};
 use layerstack::listop::ListOp;
-use layerstack::path::{Path, PathId, PathInterner, TargetPath};
+use layerstack::path::{Path, PathId, PathInterner, PropertyPath, TargetPath};
 use layerstack::property::{
     PropertyEntry, PropertyKind, PropertySpec, Variability, property_entry,
 };
@@ -70,6 +70,7 @@ use smallvec::SmallVec;
 use crate::Span;
 use crate::ast;
 use crate::diagnostic::Diagnostic;
+use crate::lower::{PropertyTail, anchor_bracketed, has_prim_variant_selection, split_property_tail};
 use crate::metadata::{MetadataRejection, MetadataValueError};
 use crate::numeric::{convert_scalar, dimensioned_value, element_type_hint};
 use crate::writer::is_identifier;
@@ -1102,7 +1103,7 @@ impl EmitCtx<'_> {
                         );
                         return None;
                     }
-                    let absolute = (!has_variant_selection(target))
+                    let absolute = (!has_prim_variant_selection(target))
                         .then(|| self.variant_anchored(target, anchor, sites))
                         .flatten();
                     if absolute.is_none() {
@@ -1123,6 +1124,7 @@ impl EmitCtx<'_> {
                 anchor,
                 rel.span,
                 "Relationship target paths must be absolute prim, property or mapper paths",
+                true,
             );
             self.check_empty_edit(rel.span, "targetPaths", rel.op, target_paths.is_empty());
             self.check_duplicates(rel.span, "targetPaths", &target_paths);
@@ -1724,7 +1726,7 @@ impl EmitCtx<'_> {
             .iter()
             .copied()
             .filter(|target| {
-                let invalid = has_variant_selection(target);
+                let invalid = has_prim_variant_selection(target);
                 if invalid {
                     self.reject(
                         conn.span,
@@ -1739,6 +1741,7 @@ impl EmitCtx<'_> {
             anchor,
             conn.span,
             "Connection paths must be absolute prim or property paths",
+            false,
         );
         self.check_empty_edit(
             conn.span,
@@ -1908,6 +1911,7 @@ impl EmitCtx<'_> {
         anchor: &str,
         span: Span,
         refusal: &str,
+        mappers: bool,
     ) -> Vec<TargetPath> {
         targets
             .iter()
@@ -1916,6 +1920,34 @@ impl EmitCtx<'_> {
                 if target.is_empty() || absolute == "/" {
                     self.reject(span, format!("{refusal}: <{target}>"));
                     return None;
+                }
+                let absolute =
+                    anchor_bracketed(&absolute, &mut |inner| absolute_path(inner, anchor).into());
+                // A relational attribute (`/A.b[/C].d`), and for a
+                // relationship a mapper (`/A.b.mapper[/C]`), is a property
+                // target whose property token is the whole property part
+                // (`b[/C].d`): layerstack keeps and writes it, and
+                // composes it as a property of its prim (`/A`), mapping
+                // that prim's path and not the bracketed paths. The other
+                // kinds are refused, as `IsValidRelationshipTargetPath` and
+                // `IsValidAttributeConnectionPath` refuse them
+                // (`pxr/usd/sdf/schema.cpp`).
+                if let Some((prim, tail, ends)) = split_property_tail(&absolute) {
+                    let allowed = match ends {
+                        PropertyTail::RelationalAttribute => true,
+                        PropertyTail::Mapper => mappers,
+                        PropertyTail::Other => false,
+                    };
+                    let prim = Path::parse_absolute(prim, self.tokens)
+                        .ok()
+                        .filter(|_| allowed)
+                        .map(|prim| self.paths.intern(prim));
+                    let Some(prim) = prim else {
+                        self.reject(span, format!("{refusal}: <{target}>"));
+                        return None;
+                    };
+                    let property = self.tokens.intern(tail);
+                    return Some(TargetPath::Property(PropertyPath::new(prim, property)));
                 }
                 match TargetPath::parse(&absolute, self.tokens, self.paths) {
                     Ok(path) => Some(path),

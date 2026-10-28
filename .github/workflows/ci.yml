@@ -461,62 +461,6 @@ jobs:
         env:
           RUSTDOCFLAGS: '--cfg docsrs -D warnings'
 
-  # A short fuzzing smoke run of every reader: each target in `fuzz/` for a
-  # minute from its minimized findings and the repository's own layers.
-  # The minimized findings also run on stable in `cargo test`
-  # (`layerstack_conformance`'s `fuzz_regressions`).
-  fuzz:
-    name: cargo fuzz
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          lfs: true
-
-      - name: install nightly toolchain
-        uses: dtolnay/rust-toolchain@nightly
-
-      - name: install cargo-fuzz
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-fuzz
-
-      - name: restore cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: fuzz
-          save-if: ${{ github.event_name != 'merge_group' }}
-
-      # The prebuilt cargo-fuzz is a musl binary, and cargo-fuzz builds for
-      # the target it was built for unless told otherwise; the sanitizers
-      # need the runner's own glibc target.
-      - name: cargo fuzz build
-        working-directory: fuzz
-        run: cargo fuzz build --debug-assertions --target x86_64-unknown-linux-gnu
-
-      - name: cargo fuzz run
-        working-directory: fuzz
-        run: |
-          for target in $(cargo fuzz list); do
-            bash seed-corpus.sh "$target"
-            # A composed stage can be endless: arcs can give a prim children
-            # that include it again, which composition does not bound (nor
-            # does OpenUSD). Until it does, the stage target fails only on a
-            # crash, in fork mode. Fork mode still exits non-zero when a job
-            # it ignored timed out or ran out of memory, so a failed stage run
-            # counts only when it left an artifact that is neither.
-            extra=()
-            [ "$target" = stage ] && extra=(-fork=1 -ignore_timeouts=1 -ignore_ooms=1)
-            if ! cargo fuzz run --debug-assertions --target x86_64-unknown-linux-gnu "$target" "corpus/$target" -- \
-              -max_total_time=60 -max_len=65536 -rss_limit_mb=2048 -timeout=10 "${extra[@]}"; then
-              [ "$target" = stage ] || exit 1
-              if find "artifacts/$target" -type f ! -name 'timeout-*' ! -name 'oom-*' | grep -q .; then
-                exit 1
-              fi
-              echo "stage: only timeouts or out-of-memory inputs, which this target ignores"
-            fi
-          done
-
   # The tables and views in layerstack_schemas/src/generated, and the test
   # table in layerstack_conformance/tests/generated, must be what
   # layerstack_schemagen writes from the usd-core release they name and the

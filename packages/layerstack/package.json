@@ -1,8 +1,11 @@
 {
-  "name": "@layerstack/stage",
+  "name": "@forest-rs/layerstack",
   "version": "0.1.0",
   "description": "Open, resolve, inspect and explain USD stages in the browser or Node, over Layerstack compiled to WebAssembly.",
   "license": "Apache-2.0 OR MIT",
+  "publishConfig": {
+    "access": "public"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/forest-rs/layerstack",

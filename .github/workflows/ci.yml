@@ -373,7 +373,7 @@ jobs:
       - name: cargo check
         run: cargo hack check ${{ env.RUST_MIN_VER_PKGS }} ${{ env.RUST_NO_WASM_PKGS }} --locked --target wasm32-unknown-unknown --optional-deps --each-feature --ignore-unknown-features --features std
 
-  # The `@layerstack/stage` package over the default module: build the
+  # The `@forest-rs/layerstack` package over the default module: build the
   # module as it ships (the `wasm` profile, the `wasm-bindgen` CLI at the
   # version Cargo.lock holds, `wasm-opt -Oz`), fail over its size budget
   # (packages/layerstack/size-budget.json), type-check the wrapper and its

@@ -12,7 +12,7 @@ keywords = ["usd", "wasm", "scene-description", "bindings"]
 categories = ["wasm", "api-bindings"]
 
 [lib]
-# `cdylib` is the module `@layerstack/stage` loads; `rlib` lets a
+# `cdylib` is the module `@forest-rs/layerstack` loads; `rlib` lets a
 # downstream crate link these bindings into a module of its own.
 crate-type = ["cdylib", "rlib"]
 

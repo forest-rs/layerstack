@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 //! WebAssembly bindings for Layerstack: the native side of the TypeScript
-//! package `@layerstack/stage` (`packages/layerstack`).
+//! package `@forest-rs/layerstack` (`packages/layerstack`).
 //!
 //! The module opens a stage from the bytes of its root layer and never
 //! fetches. The host runs the loop: the stage lists the assets it wants

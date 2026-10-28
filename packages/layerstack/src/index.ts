@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 /**
- * `@layerstack/stage`: open, resolve, inspect and explain USD stages in
+ * `@forest-rs/layerstack`: open, resolve, inspect and explain USD stages in
  * the browser or Node, over Layerstack compiled to WebAssembly.
  *
  * ```ts

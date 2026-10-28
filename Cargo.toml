@@ -106,7 +106,7 @@ strip = "debuginfo"
 [profile.ci.package."*"]
 debug-assertions = true
 
-# The WebAssembly module of `@layerstack/stage` (`layerstack_wasm`): small
+# The WebAssembly module of `@forest-rs/layerstack` (`layerstack_wasm`): small
 # rather than fast, as its size budget asks
 # (`packages/layerstack/size-budget.json`). A panic traps the instance,
 # which the wrapper then refuses to call.

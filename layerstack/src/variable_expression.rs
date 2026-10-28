@@ -375,7 +375,15 @@ struct Parser<'a> {
     input: &'a [u8],
     source: &'a str,
     pos: usize,
+    /// The function calls open at `pos`, up to [`MAX_CALL_DEPTH`].
+    depth: usize,
 }
+
+/// How deeply function calls may nest in an expression. The parser
+/// recurses once per call, and so do building and evaluating it; OpenUSD's
+/// grammar has no limit but its stack's. A deeper expression is reported
+/// as a parse error.
+const MAX_CALL_DEPTH: usize = 64;
 
 impl<'a> Parser<'a> {
     fn new(source: &'a str) -> Self {
@@ -383,6 +391,7 @@ impl<'a> Parser<'a> {
             input: source.as_bytes(),
             source,
             pos: 0,
+            depth: 0,
         }
     }
 
@@ -658,7 +667,13 @@ impl<'a> Parser<'a> {
             return Ok(None);
         }
         self.spaces();
-        let args = self.separated(Self::body)?;
+        if self.depth >= MAX_CALL_DEPTH {
+            return Err(("Functions nest too deeply".into(), self.pos));
+        }
+        self.depth += 1;
+        let args = self.separated(Self::body);
+        self.depth -= 1;
+        let args = args?;
         self.spaces();
         if !self.eat(")") {
             return Err(("Missing ending ')'".into(), self.pos));
@@ -1591,6 +1606,18 @@ mod tests {
             ["Variables must be a C identifier at character 3"]
         );
         assert!(VariableExpression::parse("`'a'`").is_valid());
+        // Calls nested past the limit are an error, not a stack overflow.
+        let nested =
+            |depth: usize| alloc::format!("`{}1{}`", "not(".repeat(depth), ")".repeat(depth));
+        assert!(
+            VariableExpression::parse(&nested(super::MAX_CALL_DEPTH))
+                .errors()
+                .is_empty()
+        );
+        assert_eq!(
+            VariableExpression::parse(&nested(super::MAX_CALL_DEPTH + 1)).errors(),
+            ["Functions nest too deeply at character 261"]
+        );
         assert!(super::is_expression("`a`"));
         assert!(!super::is_expression("``"));
         assert!(!super::is_expression("a`"));

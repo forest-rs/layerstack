@@ -504,3 +504,21 @@ fn linking_reports_why_it_fails() {
     );
     let _ = format!("{}", link("//{odd}").unwrap());
 }
+
+/// Groups, predicates and `not`s nested past [`MAX_DEPTH`] fail to parse
+/// rather than overflow the stack; nested implied unions parse in linear
+/// time, where looking ahead doubled the work at every level.
+#[test]
+fn nesting_is_limited() {
+    use super::parse::MAX_DEPTH;
+    let groups = |depth: usize| format!("{}/A{}", "(/A ".repeat(depth), ")".repeat(depth));
+    assert!(PathExpression::parse(&groups(MAX_DEPTH)).is_ok());
+    assert!(PathExpression::parse(&groups(MAX_DEPTH + 1)).is_err());
+    let nots = |depth: usize| format!("/A{{{}x}}", "not ".repeat(depth));
+    assert!(PathExpression::parse(&nots(MAX_DEPTH - 1)).is_ok());
+    assert!(PathExpression::parse(&nots(MAX_DEPTH + 1)).is_err());
+    let predicates =
+        |depth: usize| format!("/A{{{}x{}}}", "(x and ".repeat(depth), ")".repeat(depth));
+    assert!(PathExpression::parse(&predicates(MAX_DEPTH - 1)).is_ok());
+    assert!(PathExpression::parse(&predicates(MAX_DEPTH + 1)).is_err());
+}

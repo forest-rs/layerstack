@@ -763,7 +763,7 @@ impl Flattener<'_, '_> {
             .collect();
         {
             let tokens = self.store.tokens();
-            keys.sort_unstable_by(|a, b| tokens.resolve(*a).cmp(tokens.resolve(*b)));
+            tokens.sort_by_text(&mut keys);
         }
         let path = self.display(prim);
         let mut clips_noted = false;
@@ -1148,7 +1148,7 @@ impl Flattener<'_, '_> {
         }
         {
             let tokens = self.store.tokens();
-            keys.sort_unstable_by(|a, b| tokens.resolve(*a).cmp(tokens.resolve(*b)));
+            tokens.sort_by_text(&mut keys);
         }
         let anchored = self.anchor_opinions(opinions);
         let mut out = Vec::new();

@@ -113,7 +113,9 @@ impl LocalNamespace {
         // Keep the population order once, so a changed boundary does not
         // sort every sibling again. Authored ordering is applied separately.
         for children in index.children.values_mut() {
-            children.sort_by(|a, b| compare_paths(store, *a, *b));
+            store
+                .paths()
+                .sort_in_namespace_order(children, store.tokens());
         }
         Some(index)
     }
@@ -232,8 +234,7 @@ fn merge_child_edits(
     children: &mut Vec<PathId>,
     edits: &mut Vec<PathId>,
 ) {
-    edits.sort_by(|a, b| compare_paths(store, *a, *b));
-    edits.dedup();
+    store.paths().sort_paths(edits, store.tokens());
     let mut merged = Vec::with_capacity(children.len() + edits.len());
     let mut at = 0;
     for &path in edits.iter() {

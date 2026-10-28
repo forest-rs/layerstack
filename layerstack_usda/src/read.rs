@@ -746,6 +746,35 @@ mod tests {
         }
     }
 
+    /// Minimized fuzz inputs: a prim statement whose name recovery lowers
+    /// as a lone quote (`def"`) or as an empty name (`def def`) reads with
+    /// error diagnostics; both once panicked.
+    #[test]
+    fn malformed_prim_names_read_with_errors() {
+        for source in [
+            "def\"",
+            "def def",
+            "#usda 1.0\ndef \"A\"\n{\n    def \"\"\n}\n",
+        ] {
+            let store = InMemoryStore::default();
+            let read = read_usda(
+                source,
+                LayerId(1),
+                &store.tokens,
+                &store.paths,
+                &mut NoAssets,
+            );
+            let errors = read
+                .parse_diagnostics
+                .iter()
+                .chain(&read.lower_diagnostics)
+                .chain(&read.emitted.diagnostics)
+                .filter(|d| d.severity == crate::diagnostic::Severity::Error)
+                .count();
+            assert!(errors > 0, "{source:?}");
+        }
+    }
+
     fn compare(source: &str) -> ReadStats {
         let old = InMemoryStore::default();
         let parsed = crate::parser::parse(source);

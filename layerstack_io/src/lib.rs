@@ -65,6 +65,16 @@
 //! [`StageDocument::resolve_udim_tiles`] lists the existing tiles of a UDIM
 //! texture (`color.<UDIM>.png`) through the same storage and packages, with
 //! the storage work it spent.
+//!
+//! A host that fetches sources asynchronously, such as a browser, opens
+//! with only what it has: its [`Storage`] reports a source it has not
+//! received as [`IoErrorKind::Unavailable`], which leaves that arc or
+//! sublayer waiting rather than missing. The loop is want, fetch, supply,
+//! load: [`StageDocument::unavailable_assets`] lists the identifiers the
+//! stage wants, the host supplies their bytes to its storage, and
+//! [`StageDocument::load_requested_assets`] reads them, until nothing is
+//! wanted. [`StageDocument::asset_status`] reports what the stage lacks now.
+//! A USDZ package is one supplied source; its members resolve inside it.
 #![no_std]
 extern crate alloc;
 #[cfg(feature = "std")]
@@ -117,6 +127,16 @@ pub use filesystem::Filesystem;
 pub enum IoErrorKind {
     /// No source exists at the selected identifier.
     NotFound,
+    /// The storage cannot supply the source yet, but may later: a host
+    /// fetching sources asynchronously, such as a browser, has not
+    /// received it. Unlike [`Self::NotFound`], a dependency read with this
+    /// outcome is not missing: it stays unbound, the stage keeps asking for
+    /// it ([`layerstack::Stage::asset_requests`]),
+    /// [`StageDocument::unavailable_assets`] lists it, and
+    /// [`StageDocument::load_requested_assets`] reads it again. A root
+    /// layer, or an asset [`StageDocument::load_asset`] is asked for,
+    /// that is unavailable fails that call with this kind.
+    Unavailable,
     /// Storage could not read or write the bytes.
     Storage,
     /// The format reader rejected the source or strict import found errors.
@@ -197,6 +217,9 @@ impl core::error::Error for IoError {
 
 /// Host-owned identifier policy and byte transport, usable without `std`.
 /// `identify` must return stable canonical identifiers within this document.
+/// A read of a source the host cannot supply yet returns
+/// [`IoErrorKind::Unavailable`], one it knows does not exist
+/// [`IoErrorKind::NotFound`].
 /// Reads take `&self`: with the `std` feature a storage is [`Sync`]
 /// ([`layerstack::MaybeSync`]), and opening a stage may identify and read
 /// several sources at once from different threads.
@@ -442,6 +465,54 @@ fn strict_rejects(diagnostic: &MemberDiagnostic) -> bool {
             }
         )
 }
+/// An asset the stage asks for that storage cannot supply yet
+/// ([`IoErrorKind::Unavailable`]); see [`StageDocument::unavailable_assets`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UnavailableAsset {
+    /// The source to supply, as [`Storage::identify`] named it for
+    /// `asset` anchored to `anchor`: the key a host fetches and supplies
+    /// bytes under. Several entries may share it.
+    pub identifier: String,
+    /// The layer authoring the arc or sublayer, which a relative `asset`
+    /// is anchored to ([`StageDocument::identifier`] names it).
+    pub anchor: LayerId,
+    /// The asset path as authored.
+    pub asset: String,
+    /// What asks for it: [`layerstack::ArcKind::References`] or
+    /// [`layerstack::ArcKind::Payloads`] for an arc,
+    /// [`layerstack::ArcKind::Local`] for a sublayer.
+    pub arc: layerstack::ArcKind,
+}
+/// An asset the stage uses that is confirmed missing: composition reports
+/// it and its arc or sublayer contributes nothing. See
+/// [`StageDocument::asset_status`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MissingAsset {
+    /// The layer authoring the arc or sublayer.
+    pub anchor: LayerId,
+    /// The asset path as authored (as evaluated, for a variable
+    /// expression or a dynamic payload's arguments).
+    pub asset: String,
+    /// What asks for it, as for [`UnavailableAsset::arc`].
+    pub arc: layerstack::ArcKind,
+}
+/// The assets a document's stage lacks now ([`StageDocument::asset_status`]).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct AssetStatus {
+    /// Assets storage cannot supply yet, which a later load can read
+    /// ([`StageDocument::unavailable_assets`]).
+    pub unavailable: Vec<UnavailableAsset>,
+    /// Assets confirmed missing, each once, in the order composition
+    /// reports them.
+    pub missing: Vec<MissingAsset>,
+}
+impl AssetStatus {
+    /// Whether the stage lacks no asset.
+    #[must_use]
+    pub fn is_complete(&self) -> bool {
+        self.unavailable.is_empty() && self.missing.is_empty()
+    }
+}
 /// Failure to save one layer. Other selected layers may have saved successfully.
 #[derive(Clone, Debug)]
 pub struct LayerFailure {
@@ -602,7 +673,12 @@ pub struct StageDocument<B> {
     variant_arcs: VariantArcLoading,
     formats: FileFormats,
     load_report: LoadReport,
+    unavailable: Unavailable,
 }
+/// The assets the stage asked for that storage could not supply yet
+/// ([`IoErrorKind::Unavailable`]), by anchor layer and authored asset path,
+/// with the identifier storage gave each.
+type Unavailable = BTreeMap<(LayerId, String), String>;
 impl<B: core::fmt::Debug> core::fmt::Debug for StageDocument<B> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("StageDocument")
@@ -613,6 +689,7 @@ impl<B: core::fmt::Debug> core::fmt::Debug for StageDocument<B> {
             .field("variant_arcs", &self.variant_arcs)
             .field("formats", &self.formats)
             .field("load_report", &self.load_report)
+            .field("unavailable", &self.unavailable)
             .finish_non_exhaustive()
     }
 }
@@ -674,6 +751,7 @@ impl<B: Storage> StageDocument<B> {
             variant_arcs: VariantArcLoading::default(),
             formats: FileFormats::default(),
             load_report: LoadReport::default(),
+            unavailable: Unavailable::new(),
         };
         // A host-owned session layer's sublayers by asset path load with
         // the new stage, as `UsdStage::CreateNew` opens them.
@@ -805,6 +883,7 @@ impl<B: Storage> StageDocument<B> {
             variant_arcs: loading.variant_arcs,
             formats: loading.formats,
             load_report: report,
+            unavailable: Unavailable::new(),
         };
         let requested = document.load_requested_assets()?;
         document.load_report.merge(requested);
@@ -832,6 +911,14 @@ impl<B: Storage> StageDocument<B> {
     /// report's [`LoadReport::asset_failures`]. Strict import returns the
     /// error instead, keeping the layers earlier rounds loaded, unless the
     /// asset was not found ([`AssetFailure::is_missing`]).
+    ///
+    /// An asset storage cannot supply yet ([`IoErrorKind::Unavailable`]) is
+    /// neither loaded nor recorded as missing: the stage keeps asking for
+    /// it, [`Self::unavailable_assets`] lists it, and a later call reads it
+    /// again, so a host that supplies sources as they arrive calls this
+    /// after each batch. Only the assets the stage asks for are read, never
+    /// a resident layer, so this works whatever layers are dirty, where
+    /// [`Self::reload`] would refuse ([`IoErrorKind::DirtyReload`]).
     ///
     /// Returns the layers loaded, with their diagnostics and failures.
     ///
@@ -872,12 +959,20 @@ impl<B: Storage> StageDocument<B> {
                     reader.load(&asset, Some(anchor), &self.store.tokens, &self.store.paths);
                 match result {
                     Ok(resolved) => {
+                        self.unavailable.remove(&(anchor, asset.clone()));
                         reader.bind(anchor, asset.as_str(), resolved.layer_id);
                         if let Some(layer) = resolved.layer {
                             reader.pending.push(layer);
                         }
                     }
+                    // Not supplied yet: left unbound, so the stage keeps
+                    // asking for it and a later call reads it again.
+                    Err(error) if error.kind == IoErrorKind::Unavailable => {
+                        let identifier = error.identifier.unwrap_or_else(|| asset.clone());
+                        self.unavailable.insert((anchor, asset), identifier);
+                    }
                     Err(error) => {
+                        self.unavailable.remove(&(anchor, asset.clone()));
                         let failure = AssetFailure {
                             asset: asset.clone(),
                             anchor: Some(anchor),
@@ -1011,9 +1106,88 @@ impl<B: Storage> StageDocument<B> {
     pub fn storage_mut(&mut self) -> &mut B {
         &mut self.storage
     }
-    /// Evidence from the initial import.
+    /// Evidence from the initial import: what opening or creating the
+    /// document read, with the failures it met then. It is not updated
+    /// by later loads; [`Self::asset_status`] reports the assets the stage
+    /// lacks now.
     pub fn load_report(&self) -> &LoadReport {
         &self.load_report
+    }
+    /// The assets the stage asks for that storage cannot supply yet
+    /// ([`IoErrorKind::Unavailable`]): the list a host fetches, each once
+    /// per anchor layer and authored path, in the order the stage lists
+    /// its requests ([`layerstack::Stage::asset_requests`]: by anchor
+    /// layer, then asset path).
+    ///
+    /// A host supplies their bytes to its [`Storage`]
+    /// ([`Self::storage_mut`]) under [`UnavailableAsset::identifier`], or
+    /// makes it report [`IoErrorKind::NotFound`] for one it confirmed
+    /// absent, then calls [`Self::load_requested_assets`], which reads them
+    /// without reading resident layers again, dirty ones included. A
+    /// supplied layer may ask for more, so the host repeats until this is
+    /// empty. It lists what the latest [`Self::load_requested_assets`]
+    /// (which opening and [`Self::apply`] call) found unavailable and the
+    /// stage still asks for, so an edit that drops the arc drops it here.
+    ///
+    /// OpenUSD has no equivalent: its resolver reads synchronously.
+    #[must_use]
+    pub fn unavailable_assets(&self) -> Vec<UnavailableAsset> {
+        let mut assets: Vec<UnavailableAsset> = Vec::new();
+        for request in self.stage.stage().asset_requests() {
+            let key = (request.anchor, request.asset_path.clone());
+            let Some(identifier) = self.unavailable.get(&key) else {
+                continue;
+            };
+            if assets.last().is_some_and(|last| {
+                last.anchor == request.anchor && last.asset == request.asset_path
+            }) {
+                continue;
+            }
+            assets.push(UnavailableAsset {
+                identifier: identifier.clone(),
+                anchor: request.anchor,
+                asset: request.asset_path.clone(),
+                arc: request.arc,
+            });
+        }
+        assets
+    }
+    /// The assets the composed stage lacks now: those storage cannot
+    /// supply yet ([`Self::unavailable_assets`]) and those confirmed
+    /// missing, which composition reports
+    /// ([`layerstack::CompositionError::UnresolvedAsset`] and
+    /// [`layerstack::CompositionError::UnresolvedSublayer`]). Unlike
+    /// [`Self::load_report`], it follows every load and edit: an asset
+    /// that loads, or whose arc an edit removes, leaves it.
+    ///
+    /// Spec: AOUSD Core §10.6 (composition errors). OpenUSD:
+    /// `UsdStage::GetCompositionErrors`, `PcpErrorInvalidAssetPath`,
+    /// `PcpErrorInvalidSublayerPath`.
+    #[must_use]
+    pub fn asset_status(&self) -> AssetStatus {
+        let mut missing: Vec<MissingAsset> = Vec::new();
+        for error in self.stage.stage().composition_errors() {
+            let asset = match error {
+                layerstack::CompositionError::UnresolvedAsset(error) => MissingAsset {
+                    anchor: error.introducing_layer,
+                    asset: error.asset.clone(),
+                    arc: error.arc,
+                },
+                layerstack::CompositionError::UnresolvedSublayer(error) => MissingAsset {
+                    anchor: error.layer,
+                    asset: error.asset.clone(),
+                    arc: layerstack::ArcKind::Local,
+                },
+                _ => continue,
+            };
+            if !missing.contains(&asset) {
+                missing.push(asset);
+            }
+        }
+        AssetStatus {
+            unavailable: self.unavailable_assets(),
+            missing,
+        }
     }
     /// Identifier of a loaded layer. Package members use `package[member]`.
     pub fn identifier(&self, layer: LayerId) -> Option<&str> {
@@ -1320,6 +1494,9 @@ impl<'a, B: Storage> Reader<'a, B> {
                             self.pending.push(layer);
                         }
                     }
+                    // Not supplied yet: left unbound, for composition to ask
+                    // for again.
+                    Err(error) if error.kind == IoErrorKind::Unavailable => {}
                     Err(error) => {
                         self.bind(
                             request.anchor,
@@ -1948,6 +2125,14 @@ impl<B: Storage> AssetResolver for Reader<'_, B> {
         paths: &PathInterner,
     ) -> Result<ResolvedAsset, AssetResolveError> {
         let result = self.load(asset, anchor, tokens, paths);
+        // An asset storage cannot supply yet is neither loaded nor missing:
+        // it stays unbound, and its arc deferred, so composition asks for
+        // it again.
+        if let Err(error) = &result
+            && error.kind == IoErrorKind::Unavailable
+        {
+            return Err(AssetResolveError::Unavailable);
+        }
         if let Err(error) = &result {
             self.failures.push(AssetFailure {
                 asset: asset.into(),
@@ -2027,10 +2212,10 @@ fn save_error(error: layerstack_usda::save::SaveError) -> IoError {
     }
 }
 fn asset_error(error: IoError) -> AssetResolveError {
-    if error.kind == IoErrorKind::NotFound {
-        AssetResolveError::NotFound
-    } else {
-        AssetResolveError::LoadError(Arc::from(error.message))
+    match error.kind {
+        IoErrorKind::NotFound => AssetResolveError::NotFound,
+        IoErrorKind::Unavailable => AssetResolveError::Unavailable,
+        _ => AssetResolveError::LoadError(Arc::from(error.message)),
     }
 }
 fn identifier_format(identifier: &str, formats: &FileFormats) -> Result<Format, IoError> {

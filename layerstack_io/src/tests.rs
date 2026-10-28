@@ -9,6 +9,7 @@ mod deferred_arcs;
 mod dynamic_payloads;
 mod encoded_ownership;
 mod file_formats;
+mod host_assets;
 mod package_identity;
 mod registered_metadata;
 mod threaded_open;

@@ -35,7 +35,9 @@ use layerstack::property::{
 use layerstack::spec_path::VariantSelectionSite;
 use layerstack::variable_expression::is_expression;
 use layerstack::{ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex};
-use layerstack::{AssetResolver, PropertyType, ReferenceSource, ReferenceTarget, ResolvedAsset};
+use layerstack::{
+    AssetResolveError, AssetResolver, PropertyType, ReferenceSource, ReferenceTarget, ResolvedAsset,
+};
 
 use crate::error::UsdcError;
 use crate::numeric_array::*;
@@ -2990,11 +2992,21 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
                         .with_custom_data(custom_data),
                 );
             }
-            let Some(resolved) = self.resolve_asset(&asset_path) else {
-                return Some(
-                    Reference::unresolved(asset_path, target, layer_offset)
-                        .with_custom_data(custom_data),
-                );
+            let resolved = match self.resolve_arc_asset(&asset_path) {
+                Ok(resolved) => resolved,
+                // Not supplied yet: composition asks for it again.
+                Err(AssetResolveError::Unavailable) => {
+                    return Some(
+                        Reference::deferred(self.layer_id, asset_path, target, layer_offset)
+                            .with_custom_data(custom_data),
+                    );
+                }
+                Err(_) => {
+                    return Some(
+                        Reference::unresolved(asset_path, target, layer_offset)
+                            .with_custom_data(custom_data),
+                    );
+                }
             };
             if let Some(layer) = resolved.layer {
                 self.resolved_layers.push(layer);
@@ -3325,13 +3337,19 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
         if is_expression(asset_path) {
             return None;
         }
+        self.resolve_arc_asset(asset_path).ok()
+    }
+
+    /// Resolves the asset path of a reference or payload relative to this
+    /// layer, keeping why it did not resolve: an asset the resolver cannot
+    /// supply yet ([`AssetResolveError::Unavailable`]) leaves its arc
+    /// deferred, for composition to ask for again.
+    fn resolve_arc_asset(&mut self, asset_path: &str) -> Result<ResolvedAsset, AssetResolveError> {
         let Some(resolver) = self.resolver.as_deref_mut() else {
             self.wants_resolver = true;
-            return None;
+            return Err(AssetResolveError::NotFound);
         };
-        resolver
-            .resolve(asset_path, Some(self.layer_id), self.tokens, self.paths)
-            .ok()
+        resolver.resolve(asset_path, Some(self.layer_id), self.tokens, self.paths)
     }
 
     /// Whether the resolver leaves a payload to `asset_path` for
@@ -4039,6 +4057,46 @@ def "Other" {}
         fn resolved_path(&self, _: LayerId) -> Option<&str> {
             None
         }
+    }
+
+    /// A resolver that cannot supply any asset yet.
+    struct Unavailable;
+
+    impl AssetResolver for Unavailable {
+        fn resolve(
+            &mut self,
+            _: &str,
+            _: Option<LayerId>,
+            _: &TokenInterner,
+            _: &PathInterner,
+        ) -> Result<ResolvedAsset, AssetResolveError> {
+            Err(AssetResolveError::Unavailable)
+        }
+
+        fn resolved_path(&self, _: LayerId) -> Option<&str> {
+            None
+        }
+    }
+
+    /// An arc whose asset the resolver cannot supply yet stays deferred,
+    /// anchored to the layer, for composition to ask for again.
+    #[test]
+    fn unavailable_assets_keep_their_arcs_deferred() {
+        let bytes = chunked_file(8);
+        let (tokens, paths) = (TokenInterner::default(), PathInterner::default());
+        let read = crate::read_usdc(&bytes, LayerId(1), &tokens, &paths, &mut Unavailable).unwrap();
+        let p3 = paths
+            .lookup(&Path::parse_absolute("/P3", &tokens).unwrap())
+            .unwrap();
+        let arc = &read.layer.prim(p3).unwrap().references.prepend[0];
+        assert!(arc.is_unresolved());
+        assert_eq!(
+            arc.source(),
+            ReferenceSource::Asset {
+                anchor: LayerId(1),
+                path: "./asset_3.usda"
+            }
+        );
     }
 
     /// A file of `n` prims and their properties, with what a read reports

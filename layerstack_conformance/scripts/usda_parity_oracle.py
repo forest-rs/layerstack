@@ -103,7 +103,8 @@ The cases:
   `pxr/usd/sdf/textParserHelpers.cpp`), and a variant or variant set name
   outside the `VariantName` path grammar
   (`SdfSchemaBase::IsValidVariantIdentifier`), a space or a control
-  character among them.
+  character among them; a path holding a control character or `\\`, which
+  OpenUSD's path grammar has not (`pxr/usd/sdf/pathParser.h`).
 - `statements_*`: several list-op statements for one field, on a
   relationship, a connection, references, inherits, `variantSets` and
   metadata (`apiSchemas`). OpenUSD's parser sets each statement's list
@@ -619,6 +620,21 @@ def "P"
 
 def "P" (
     variantSets = "v\x10"
+)
+{
+}
+''', []),
+    "strict_target_path_control_character": ('''#usda 1.0
+
+def "P"
+{
+    rel r = </A\x10>
+}
+''', []),
+    "strict_arc_path_backslash": ('''#usda 1.0
+
+def "P" (
+    inherits = </A\\x10>
 )
 {
 }

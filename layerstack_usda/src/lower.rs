@@ -1612,13 +1612,24 @@ impl<'a> LowerCtx<'a> {
         path
     }
 
-    fn lower_path_ref(&self, node: SyntaxNode<'_>) -> &'a str {
+    /// The path of a `<...>` reference, without its delimiters.
+    ///
+    /// A path holding a control character or `\\` is reported: OpenUSD's
+    /// path grammar has neither (`pxr/usd/sdf/pathParser.h`), so its text
+    /// parser refuses the layer.
+    ///
+    /// Spec: AOUSD Core §8 (paths).
+    fn lower_path_ref(&mut self, node: SyntaxNode<'_>) -> &'a str {
         let full = node.span().text(self.source);
-        if full.starts_with('<') && full.ends_with('>') && full.len() >= 2 {
+        let path = if full.starts_with('<') && full.ends_with('>') && full.len() >= 2 {
             &full[1..full.len() - 1]
         } else {
             full
+        };
+        if path.chars().any(|c| c.is_control() || c == '\\') {
+            self.error(node.span(), alloc::format!("{path:?} is not a valid path"));
         }
+        path
     }
 
     fn find_asset_ref(&mut self, node: SyntaxNode<'_>) -> Cow<'a, str> {
@@ -2869,6 +2880,16 @@ def Scope \"root\" {
         }
         let r = parse("#usda 1.0\ndef \"A\" {\n    asset s = @a\\x10b@\n}\n");
         assert!(r.diagnostics.is_empty(), "{:?}", r.diagnostics);
+    }
+
+    #[test]
+    fn control_characters_and_backslashes_in_paths_are_reported() {
+        for path in ["</A\x10>", "</A\x7f.b>", "</A\\x10>"] {
+            let src = format!(
+                "#usda 1.0\ndef \"A\" (\n    inherits = {path}\n) {{\n    rel r = {path}\n}}\n"
+            );
+            assert_eq!(parse(&src).diagnostics.len(), 2, "{src:?}");
+        }
     }
 
     #[test]

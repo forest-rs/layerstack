@@ -281,6 +281,11 @@
    "source": "#usda 1.0\n\ndef \"P\" (\n    variantSets = [\"a\", \"b\"]\n    append variantSets = \"c\"\n)\n{\n}\n",
    "text": "#usda 1.0\n\ndef \"P\" (\n    append variantSets = \"c\"\n)\n{\n}\n\n"
   },
+  "strict_arc_path_backslash": {
+   "error": "'parse error at '\\x10>' in </P>",
+   "reads": false,
+   "source": "#usda 1.0\n\ndef \"P\" (\n    inherits = </A\\x10>\n)\n{\n}\n"
+  },
   "strict_asset_path_control_character": {
    "error": "'Invalid asset path string -- character 2 is control character 0x10'",
    "reads": false,
@@ -565,6 +570,11 @@
    "error": "'Cannot set extrapolation looping with a non-null loopBoundaryTime when inner loops are possibly present.'",
    "reads": false,
    "source": "#usda 1.0\ndef \"A\"\n{\n    double a.spline = {\n        loop: (0, 16, 1, 0, 0),\n        post: loop oscillate(16),\n        0: 1; post held,\n        16: 2; post held,\n    }\n}\n"
+  },
+  "strict_target_path_control_character": {
+   "error": "'parse error at '\u0010>' in </P.r>",
+   "reads": false,
+   "source": "#usda 1.0\n\ndef \"P\"\n{\n    rel r = </A\u0010>\n}\n"
   },
   "strict_type_change": {
    "error": "'attribute 'a' already has type 'float', cannot change to 'double' at 'a.timeSamples = {' in </A.a>",

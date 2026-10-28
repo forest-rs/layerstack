@@ -674,6 +674,8 @@ jobs:
 
       - name: check shading port authoring oracle
         run: python layerstack_conformance/scripts/shading_ports_oracle.py --check
+      - name: check node def sources oracle
+        run: python layerstack_conformance/scripts/shade_node_def_oracle.py --check
       - name: check runnable tutorial outputs with OpenUSD
         run: |
           for tutorial in tutorial_hello_world tutorial_references tutorial_variants tutorial_stage_io; do

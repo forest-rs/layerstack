@@ -844,6 +844,28 @@ impl<'s> SchemaEdit<'s> {
         }
     }
 
+    /// Whether a default value is authored for the attribute `name` of
+    /// `path` as this edit leaves it: one this edit sets, else one a stage
+    /// opinion authors. A block authors none. Time samples are not
+    /// consulted, so use it for uniform attributes.
+    ///
+    /// OpenUSD: `UsdAttribute::HasAuthoredValue`, as
+    /// `UsdSchemaBase::_CreateAttr` consults it to write sparsely.
+    #[cfg(feature = "usd-shade")]
+    pub(crate) fn authors_default(&mut self, path: PathId, name: &str) -> bool {
+        let token = self.store.tokens_mut().intern(name);
+        if let Some((_, _, value)) = self
+            .defaults
+            .iter()
+            .rev()
+            .find(|(p, n, _)| (*p, *n) == (path, token))
+        {
+            return !matches!(value, Value::Blocked);
+        }
+        !self.removed.contains(&(path, token))
+            && crate::PrimView::new(self.scene(), path).has_authored_value(name)
+    }
+
     /// The value of the attribute `name` of `path` at `time` (its default for
     /// `None`) as this edit leaves it, with held interpolation: the samples
     /// this edit sets join the stage's composed sample times, a sample this
@@ -1033,7 +1055,7 @@ impl<'s> SchemaEdit<'s> {
         scene.metadata().up_axis().unwrap_or("Y")
     }
 
-    #[cfg(any(feature = "usd-lux", feature = "usd-geom"))]
+    #[cfg(any(feature = "usd-lux", feature = "usd-geom", feature = "usd-shade"))]
     pub(crate) fn create_uniform_attribute(&mut self, path: PathId, name: &str, ty: PropertyType) {
         let token = self.store.tokens_mut().intern(name);
         let at = self.target.property(PropertyPath::new(path, token));

@@ -40,6 +40,13 @@ const FIRST_SIBLING_KEY: u64 = 1 << 63;
 /// the siblings are renumbered.
 const SIBLING_KEY_GAP: u64 = 1 << 32;
 
+#[cfg(test)]
+std::thread_local! {
+    /// The sibling comparisons made on this thread
+    /// ([`Graph::cmp_siblings`]), for tests of how many linking takes.
+    static SIBLING_COMPARISONS: core::cell::Cell<usize> = const { core::cell::Cell::new(0) };
+}
+
 /// The [`NodeIndex`] of the node at `at` in a graph's node list.
 pub(crate) fn node_index(at: usize) -> NodeIndex {
     NodeIndex::try_from(at).expect("prim index node count")
@@ -423,17 +430,71 @@ impl Graph {
             self.node_mut(parent).last_child = child;
             return;
         }
+        let next = if self.node(child).arc_kind == ArcKind::Specializes {
+            self.first_stronger_from_front(paths, child, first)
+        } else {
+            self.first_stronger_from_both_ends(paths, child, first, last)
+        };
+        let prev = self.node(next).prev_sibling;
+        self.node_mut(child).prev_sibling = prev;
+        self.node_mut(child).next_sibling = next;
+        self.node_mut(next).prev_sibling = child;
+        self.node_mut(prev).next_sibling = child;
+    }
+
+    /// The first of the siblings from `first` that `child` is stronger
+    /// than, as OpenUSD finds it: walking the siblings strongest first.
+    /// The last sibling is one.
+    fn first_stronger_from_front(
+        &self,
+        paths: &PathInterner,
+        child: NodeIndex,
+        first: NodeIndex,
+    ) -> NodeIndex {
         let mut at = first;
-        while at != NONE {
+        loop {
             if self.cmp_siblings(paths, child, at).is_lt() {
-                let prev = self.node(at).prev_sibling;
-                self.node_mut(child).prev_sibling = prev;
-                self.node_mut(child).next_sibling = at;
-                self.node_mut(at).prev_sibling = child;
-                self.node_mut(prev).next_sibling = child;
-                return;
+                return at;
             }
             at = self.node(at).next_sibling;
+        }
+    }
+
+    /// [`Self::first_stronger_from_front`] for a `child` that is not a
+    /// specializes, which `child` is stronger than past `first` (it is not
+    /// stronger than `first`, and is stronger than `last`), walking in
+    /// from both ends of the siblings at once: a child added among many
+    /// siblings is usually added near one end of them.
+    ///
+    /// The siblings are in [`Self::cmp_siblings`] order, which for nodes
+    /// other than specializes compares fields of each node that never
+    /// change once it is linked (arc kind, namespace depth, sibling
+    /// number) and the order of the nodes' origins in the graph, which
+    /// nodes added later leave as it is: the siblings `child` is stronger
+    /// than all come after those it is not, so the first of them is the
+    /// one after the last sibling it is not stronger than. Specializes
+    /// compare by how their origins nest, and are found from the front.
+    fn first_stronger_from_both_ends(
+        &self,
+        paths: &PathInterner,
+        child: NodeIndex,
+        first: NodeIndex,
+        last: NodeIndex,
+    ) -> NodeIndex {
+        let (mut front, mut back) = (first, last);
+        loop {
+            // `child` is not stronger than `front`, and is stronger than
+            // `back`.
+            let after_front = self.node(front).next_sibling;
+            if after_front == back || self.cmp_siblings(paths, child, after_front).is_lt() {
+                return after_front;
+            }
+            front = after_front;
+            let before_back = self.node(back).prev_sibling;
+            if before_back == front || !self.cmp_siblings(paths, child, before_back).is_lt() {
+                return back;
+            }
+            back = before_back;
         }
     }
 
@@ -546,6 +607,8 @@ impl Graph {
         a: NodeIndex,
         b: NodeIndex,
     ) -> Ordering {
+        #[cfg(test)]
+        SIBLING_COMPARISONS.with(|count| count.set(count.get() + 1));
         if a == b {
             return Ordering::Equal;
         }

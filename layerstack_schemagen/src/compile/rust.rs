@@ -108,7 +108,7 @@ fn upstream(library: &str, class: &ClassInfo) -> Option<Upstream> {
 /// The type names a library module imports or the prelude has, which no
 /// generated type may be.
 const IMPORTED: &[&str] = &[
-    "ApplyError",
+    "ApplySchemaError",
     "Arc",
     "Box",
     "CannotApply",

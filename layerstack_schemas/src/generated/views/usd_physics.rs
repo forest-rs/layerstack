@@ -23,7 +23,7 @@ use core::ops::Deref;
 use layerstack::PathId;
 
 use crate::{
-    ApplyError, CannotEdit, InstanceEdit, InstanceView, PrimEdit, PrimView, Scene, SchemaEdit,
+    ApplySchemaError, CannotEdit, InstanceEdit, InstanceView, PrimEdit, PrimView, Scene, SchemaEdit,
 };
 #[doc = "PhysicsArticulationRootAPI can be applied to a scene graph node, and marks the subtree rooted here for inclusion in one or more reduced coordinate articulations."]
 #[doc = ""]
@@ -77,13 +77,13 @@ impl<'a> PhysicsArticulationRootApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
-    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
+    /// [`ApplySchemaError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdPhysicsArticulationRootAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<PhysicsArticulationRootApiEdit, ApplyError> {
+    ) -> Result<PhysicsArticulationRootApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(PhysicsArticulationRootApiEdit::from_prim)
     }
@@ -179,13 +179,13 @@ impl<'a> PhysicsCollisionApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
-    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
+    /// [`ApplySchemaError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdPhysicsCollisionAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<PhysicsCollisionApiEdit, ApplyError> {
+    ) -> Result<PhysicsCollisionApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(PhysicsCollisionApiEdit::from_prim)
     }
@@ -896,14 +896,14 @@ impl<'a> PhysicsDriveApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
-    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
+    /// [`ApplySchemaError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdPhysicsDriveAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
         instance: &str,
-    ) -> Result<PhysicsDriveApiEdit, ApplyError> {
+    ) -> Result<PhysicsDriveApiEdit, ApplySchemaError> {
         let prim = edit.apply_api(path, Self::SCHEMA, Some(instance))?;
         Ok(PhysicsDriveApiEdit::from_instance(InstanceEdit::new(
             prim, instance,
@@ -1263,13 +1263,13 @@ impl<'a> PhysicsFilteredPairsApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
-    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
+    /// [`ApplySchemaError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdPhysicsFilteredPairsAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<PhysicsFilteredPairsApiEdit, ApplyError> {
+    ) -> Result<PhysicsFilteredPairsApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(PhysicsFilteredPairsApiEdit::from_prim)
     }
@@ -2129,14 +2129,14 @@ impl<'a> PhysicsLimitApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
-    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
+    /// [`ApplySchemaError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdPhysicsLimitAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
         instance: &str,
-    ) -> Result<PhysicsLimitApiEdit, ApplyError> {
+    ) -> Result<PhysicsLimitApiEdit, ApplySchemaError> {
         let prim = edit.apply_api(path, Self::SCHEMA, Some(instance))?;
         Ok(PhysicsLimitApiEdit::from_instance(InstanceEdit::new(
             prim, instance,
@@ -2315,13 +2315,13 @@ impl<'a> PhysicsMassApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
-    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
+    /// [`ApplySchemaError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdPhysicsMassAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<PhysicsMassApiEdit, ApplyError> {
+    ) -> Result<PhysicsMassApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(PhysicsMassApiEdit::from_prim)
     }
@@ -2627,13 +2627,13 @@ impl<'a> PhysicsMaterialApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
-    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
+    /// [`ApplySchemaError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdPhysicsMaterialAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<PhysicsMaterialApiEdit, ApplyError> {
+    ) -> Result<PhysicsMaterialApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(PhysicsMaterialApiEdit::from_prim)
     }
@@ -2969,13 +2969,13 @@ impl<'a> PhysicsMeshCollisionApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
-    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
+    /// [`ApplySchemaError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdPhysicsMeshCollisionAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<PhysicsMeshCollisionApiEdit, ApplyError> {
+    ) -> Result<PhysicsMeshCollisionApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(PhysicsMeshCollisionApiEdit::from_prim)
     }
@@ -3628,13 +3628,13 @@ impl<'a> PhysicsRigidBodyApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
-    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
+    /// [`ApplySchemaError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdPhysicsRigidBodyAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<PhysicsRigidBodyApiEdit, ApplyError> {
+    ) -> Result<PhysicsRigidBodyApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(PhysicsRigidBodyApiEdit::from_prim)
     }

@@ -22,7 +22,7 @@ use core::ops::Deref;
 
 use layerstack::PathId;
 
-use crate::{ApplyError, CannotEdit, PrimEdit, PrimView, Scene, SchemaEdit};
+use crate::{ApplySchemaError, CannotEdit, PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "Field3D field primitive."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `Field3DAsset`, inheriting [`FieldAsset`]. Construct it with [`Field3DAsset::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
@@ -1075,13 +1075,13 @@ impl<'a> ParticleFieldKernelBaseApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
-    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
+    /// [`ApplySchemaError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdVolParticleFieldKernelBaseAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<ParticleFieldKernelBaseApiEdit, ApplyError> {
+    ) -> Result<ParticleFieldKernelBaseApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(ParticleFieldKernelBaseApiEdit::from_prim)
     }
@@ -1177,13 +1177,13 @@ impl<'a> ParticleFieldKernelConstantSurfletApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
-    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
+    /// [`ApplySchemaError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdVolParticleFieldKernelConstantSurfletAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<ParticleFieldKernelConstantSurfletApiEdit, ApplyError> {
+    ) -> Result<ParticleFieldKernelConstantSurfletApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(ParticleFieldKernelConstantSurfletApiEdit::from_prim)
     }
@@ -1279,13 +1279,13 @@ impl<'a> ParticleFieldKernelGaussianEllipsoidApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
-    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
+    /// [`ApplySchemaError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdVolParticleFieldKernelGaussianEllipsoidAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<ParticleFieldKernelGaussianEllipsoidApiEdit, ApplyError> {
+    ) -> Result<ParticleFieldKernelGaussianEllipsoidApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(ParticleFieldKernelGaussianEllipsoidApiEdit::from_prim)
     }
@@ -1381,13 +1381,13 @@ impl<'a> ParticleFieldKernelGaussianSurfletApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
-    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
+    /// [`ApplySchemaError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdVolParticleFieldKernelGaussianSurfletAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<ParticleFieldKernelGaussianSurfletApiEdit, ApplyError> {
+    ) -> Result<ParticleFieldKernelGaussianSurfletApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(ParticleFieldKernelGaussianSurfletApiEdit::from_prim)
     }
@@ -1483,13 +1483,13 @@ impl<'a> ParticleFieldOpacityAttributeApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
-    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
+    /// [`ApplySchemaError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdVolParticleFieldOpacityAttributeAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<ParticleFieldOpacityAttributeApiEdit, ApplyError> {
+    ) -> Result<ParticleFieldOpacityAttributeApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(ParticleFieldOpacityAttributeApiEdit::from_prim)
     }
@@ -1733,13 +1733,13 @@ impl<'a> ParticleFieldOrientationAttributeApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
-    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
+    /// [`ApplySchemaError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdVolParticleFieldOrientationAttributeAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<ParticleFieldOrientationAttributeApiEdit, ApplyError> {
+    ) -> Result<ParticleFieldOrientationAttributeApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(ParticleFieldOrientationAttributeApiEdit::from_prim)
     }
@@ -1996,13 +1996,13 @@ impl<'a> ParticleFieldPositionAttributeApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
-    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
+    /// [`ApplySchemaError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdVolParticleFieldPositionAttributeAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<ParticleFieldPositionAttributeApiEdit, ApplyError> {
+    ) -> Result<ParticleFieldPositionAttributeApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(ParticleFieldPositionAttributeApiEdit::from_prim)
     }
@@ -2256,13 +2256,13 @@ impl<'a> ParticleFieldPositionBaseApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
-    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
+    /// [`ApplySchemaError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdVolParticleFieldPositionBaseAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<ParticleFieldPositionBaseApiEdit, ApplyError> {
+    ) -> Result<ParticleFieldPositionBaseApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(ParticleFieldPositionBaseApiEdit::from_prim)
     }
@@ -2358,13 +2358,13 @@ impl<'a> ParticleFieldRadianceBaseApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
-    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
+    /// [`ApplySchemaError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdVolParticleFieldRadianceBaseAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<ParticleFieldRadianceBaseApiEdit, ApplyError> {
+    ) -> Result<ParticleFieldRadianceBaseApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(ParticleFieldRadianceBaseApiEdit::from_prim)
     }
@@ -2460,13 +2460,13 @@ impl<'a> ParticleFieldScaleAttributeApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
-    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
+    /// [`ApplySchemaError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdVolParticleFieldScaleAttributeAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<ParticleFieldScaleAttributeApiEdit, ApplyError> {
+    ) -> Result<ParticleFieldScaleAttributeApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(ParticleFieldScaleAttributeApiEdit::from_prim)
     }
@@ -2715,13 +2715,13 @@ impl<'a> ParticleFieldSphericalHarmonicsAttributeApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
-    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
+    /// [`ApplySchemaError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdVolParticleFieldSphericalHarmonicsAttributeAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<ParticleFieldSphericalHarmonicsAttributeApiEdit, ApplyError> {
+    ) -> Result<ParticleFieldSphericalHarmonicsAttributeApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(ParticleFieldSphericalHarmonicsAttributeApiEdit::from_prim)
     }

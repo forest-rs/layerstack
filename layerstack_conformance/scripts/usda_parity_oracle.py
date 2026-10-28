@@ -83,7 +83,10 @@ The cases:
   an attribute type name that is, or has a part that is, a keyword of the
   grammar (`dictionary`, `kind`; `KeywordlessIdentifier`), while
   `read_keyword_like_type_names` reads names that are not (`Dictionary`,
-  and `at`, a keyword only inside a spline).
+  and `at`, a keyword only inside a spline); a second valued time sample
+  of a type no type registers (`Sdf_ParserValueContext` forgets the
+  unrecognized type after the first value), while
+  `read_unknown_type_one_valued_sample` reads one among `None`s.
 - `statements_*`: several list-op statements for one field, on a
   relationship, a connection, references, inherits, `variantSets` and
   metadata (`apiSchemas`). OpenUSD's parser sets each statement's list
@@ -1245,6 +1248,35 @@ def "P"
 def "P"
 {
     custom Some::dictionary d
+}
+''', []),
+    "strict_unknown_type_second_sample": ('''#usda 1.0
+def "P"
+{
+    widget g.timeSamples = {
+        1: alpha,
+        2: None,
+        3: beta,
+    }
+}
+''', []),
+    "strict_unknown_array_type_second_sample": ('''#usda 1.0
+def "P"
+{
+    widget[] h.timeSamples = {
+        1: [1, 2],
+        2: [3],
+    }
+}
+''', []),
+    "read_unknown_type_one_valued_sample": ('''#usda 1.0
+def "P"
+{
+    widget g.timeSamples = {
+        1: None,
+        2: alpha,
+        3: None,
+    }
 }
 ''', []),
     "read_keyword_like_type_names": ('''#usda 1.0

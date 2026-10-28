@@ -73,10 +73,12 @@ The cases:
 unless it matches the checked-in fixture.
 """
 import argparse
+import difflib
 import filecmp
 import json
 import os
 import re
+import sys
 import tempfile
 
 from pxr import Sdf, Tf, Usd
@@ -1012,8 +1014,13 @@ def main():
         return
     with tempfile.TemporaryDirectory() as tmp:
         write(tmp)
-        if not filecmp.cmp(os.path.join(tmp, "oracle.json"),
-                           os.path.join(FIXTURES, "oracle.json"), shallow=False):
+        fresh = os.path.join(tmp, "oracle.json")
+        committed = os.path.join(FIXTURES, "oracle.json")
+        if not filecmp.cmp(fresh, committed, shallow=False):
+            with open(committed) as a, open(fresh) as b:
+                diff = difflib.unified_diff(a.readlines(), b.readlines(),
+                                            "committed", "regenerated", n=2)
+                sys.stdout.writelines(list(diff)[:200])
             raise SystemExit(f"oracle.json differs from {FIXTURES}")
 
 

@@ -34,6 +34,7 @@
 //! Spec: AOUSD Core §12.3.3 (spline opinions).
 
 use alloc::{format, string::String, vec::Vec};
+use layerstack::sort;
 
 use layerstack::spline::{
     CurveType, Extrapolation, Knot, KnotInterp, LoopParams, SplineData, SplineDataType,
@@ -96,7 +97,7 @@ pub(crate) fn parse(
             *pre = quantize(*pre, data_type);
         }
     }
-    spline.knots.sort_by(|a, b| a.time.total_cmp(&b.time));
+    sort::sort_by(&mut spline.knots, |a, b| a.time.total_cmp(&b.time));
     if spline.knots.windows(2).any(|w| w[0].time == w[1].time) {
         return Err("two knots at the same time".into());
     }

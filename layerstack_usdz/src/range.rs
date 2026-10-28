@@ -20,6 +20,7 @@ use alloc::{
     vec::Vec,
 };
 use core::{fmt, ops::Range};
+use layerstack::sort;
 use layerstack::{asset::PackagePath, encoded_bytes::EncodedBytes};
 
 /// One fixed logical byte source. Opening a source and identity/version policy
@@ -343,7 +344,7 @@ impl<S: RangeSource> RangePackage<S> {
         if pos != directory.len() {
             return Err(invalid("central directory byte count mismatch").into());
         }
-        order.sort_unstable();
+        sort::sort_unstable(&mut order);
         if let Some((header, _)) = order.first()
             && *header != 0
         {

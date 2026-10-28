@@ -16,6 +16,7 @@
 //! Spec: AOUSD Core §15 (collections); OpenUSD's `UsdCollectionAPI`.
 
 use alloc::{string::String, vec::Vec};
+use layerstack::sort;
 
 use hashbrown::{HashMap, HashSet};
 use layerstack::{Changes, PathId, TargetPath};
@@ -275,7 +276,7 @@ impl MembershipIndex {
                 found.push(self.inclusion(slot, membership, None));
             }
         }
-        found.sort_unstable_by_key(|(rank, _)| *rank);
+        sort::sort_unstable_by_key(&mut found, |(rank, _)| *rank);
         found.into_iter().map(|(_, inclusion)| inclusion).collect()
     }
 
@@ -283,7 +284,7 @@ impl MembershipIndex {
     /// of the owning prim, then name.
     pub fn collections(&self) -> impl Iterator<Item = (&CollectionIdentity, &MembershipQuery)> {
         let mut live: Vec<&Indexed> = self.slots.iter().flatten().collect();
-        live.sort_unstable_by_key(|entry| entry.rank);
+        sort::sort_unstable_by_key(&mut live, |entry| entry.rank);
         live.into_iter()
             .map(|entry| (&entry.identity, &entry.query))
     }
@@ -477,7 +478,7 @@ impl MembershipIndex {
             &mut update.recompiled,
             &mut update.changed,
         ] {
-            list.sort_by(|a, b| {
+            sort::sort_by(list, |a, b| {
                 store
                     .paths()
                     .cmp_paths(a.owner, b.owner, store.tokens())
@@ -605,7 +606,7 @@ impl MembershipIndex {
                     .map(|e| (u32::try_from(slot).expect("fits"), &e.identity))
             })
             .collect();
-        live.sort_by(|(_, a), (_, b)| {
+        sort::sort_by(&mut live, |(_, a), (_, b)| {
             store
                 .paths()
                 .cmp_paths(a.owner, b.owner, store.tokens())

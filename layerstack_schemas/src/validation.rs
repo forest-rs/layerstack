@@ -51,6 +51,7 @@
 
 use crate::Scene;
 use alloc::{sync::Arc, vec::Vec};
+use layerstack::sort;
 use layerstack::{CompositionError, LayerId, LayerStore, PathId, SpecPath, Time, TokenId};
 
 mod custom;
@@ -496,7 +497,7 @@ impl ValidationContext {
     #[must_use]
     pub fn new(rules: impl IntoIterator<Item = BuiltinRule>) -> Self {
         let mut rules: Vec<_> = rules.into_iter().collect();
-        rules.sort_unstable();
+        sort::sort_unstable(&mut rules);
         rules.dedup();
         Self {
             rules,

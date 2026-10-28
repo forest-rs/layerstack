@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use super::*;
+use layerstack::sort;
 /// Rooted rigid-body graph under an articulation API.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ArticulationDescriptor {
@@ -63,7 +64,7 @@ pub(super) fn capture(
                 .map(|d| (j.path, d))
         })
         .collect();
-    ordered_joints.sort_by(|a, b| path_order(scene, a.0, b.0));
+    sort::sort_by(&mut ordered_joints, |a, b| path_order(scene, a.0, b.0));
     let mut roots = Vec::new();
     let mut base = path;
     if bodies.iter().any(|b| b.path == path) {
@@ -147,7 +148,7 @@ pub(super) fn capture(
                 // searches DFS body order for the candidate root path: joint
                 // roots are absent, so equal joint roots retain lexical order.
                 let mut candidates: Vec<_> = links.iter().collect();
-                candidates.sort_by(|a, b| path_order(scene, a.path, b.path));
+                sort::sort_by(&mut candidates, |a, b| path_order(scene, a.path, b.path));
                 let rank = |link: &Link| {
                     let root = link.root_joint.unwrap_or(link.path);
                     links
@@ -179,7 +180,7 @@ pub(super) fn capture(
         .iter()
         .flat_map(|c| c.iter().flat_map(|l| l.children.iter().copied()))
         .collect();
-    articulated_bodies.sort_by(|a, b| match (a, b) {
+    sort::sort_by(&mut articulated_bodies, |a, b| match (a, b) {
         (None, None) => core::cmp::Ordering::Equal,
         (None, Some(_)) => core::cmp::Ordering::Less,
         (Some(_), None) => core::cmp::Ordering::Greater,
@@ -190,7 +191,7 @@ pub(super) fn capture(
         .iter()
         .flat_map(|c| c.iter().flat_map(|l| l.joints.iter().copied()))
         .collect();
-    articulated_joints.sort_by(|a, b| path_order(scene, *a, *b));
+    sort::sort_by(&mut articulated_joints, |a, b| path_order(scene, *a, *b));
     articulated_joints.dedup();
     Ok(ArticulationDescriptor {
         roots,

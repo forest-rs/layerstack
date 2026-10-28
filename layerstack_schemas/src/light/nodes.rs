@@ -6,6 +6,7 @@
 //! AOUSD Core §13.3 (schema definitions), §12.3.5 (fallback values).
 use crate::{shading::PortKind, table::Schema};
 use alloc::{collections::BTreeMap, vec::Vec};
+use layerstack::sort;
 use layerstack::{PropertyKind, PropertyType, SchemaKind, TokenInterner, Value, Variability};
 
 /// One schema-defined shader port, preserving USD types and defaults.
@@ -147,6 +148,6 @@ pub fn builtin_light_node_definitions(tokens: &TokenInterner) -> Vec<LightNodeDe
         .collect();
     nodes.push(definition("MeshLight", schema("MeshLightAPI"), tokens));
     nodes.push(definition("VolumeLight", schema("VolumeLightAPI"), tokens));
-    nodes.sort_by_key(|node| node.identifier);
+    sort::sort_by_key(&mut nodes, |node| node.identifier);
     nodes
 }

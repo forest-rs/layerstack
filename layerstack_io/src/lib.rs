@@ -87,6 +87,7 @@ use alloc::{
     vec::Vec,
 };
 use hashbrown::{HashMap, HashSet};
+use layerstack::sort;
 use layerstack::{
     AssetResolveError, AssetResolver, AssetUse, InMemoryStore, Layer, LayerId, LayerStore,
     LiveStage, PathId, PathInterner, ResolvedAsset, StageOptions, TokenInterner,
@@ -1880,7 +1881,7 @@ impl<'a, B: Storage> Reader<'a, B> {
         for (anchor, assets) in core::mem::take(&mut self.bindings) {
             store.insert_asset_layers(anchor, assets);
         }
-        layers.sort_unstable();
+        sort::sort_unstable(&mut layers);
         for id in clean_anchors {
             self.catalog
                 .saved

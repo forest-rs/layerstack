@@ -10,6 +10,7 @@
 //! AOUSD Core §12.2.5 (dictionary metadata), §12.3 (attribute values).
 use crate::{CannotEdit, PrimView, Scene, SchemaEdit};
 use alloc::{string::String, sync::Arc, vec::Vec};
+use layerstack::sort;
 use layerstack::{PathId, PropertyKind, PropertyPath, TargetPath, Value};
 
 /// Invalid UI hint target or data. Failed setters author nothing.
@@ -93,7 +94,7 @@ pub(crate) fn set_dictionary_path(dictionary: &mut Value, keys: &[&str], value: 
     } else {
         set_dictionary_path(&mut entries[i].1, rest, value);
     }
-    entries.sort_by(|a, b| a.0.cmp(&b.0));
+    sort::sort_by(entries, |a, b| a.0.cmp(&b.0));
 }
 fn string(value: Option<Value>) -> Option<String> {
     match value {

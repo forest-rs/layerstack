@@ -8,6 +8,7 @@ use crate::{gf, usd_geom::ImageablePurpose};
 use alloc::{vec, vec::Vec};
 use hashbrown::HashSet;
 use layerstack::PathId;
+use layerstack::sort;
 
 pub(super) const MIN_CHILDREN: usize = 64;
 
@@ -22,7 +23,7 @@ pub(super) struct Reduction {
 }
 impl Reduction {
     pub(super) fn new(mut children: Vec<PathId>) -> Self {
-        children.sort_unstable();
+        sort::sort_unstable(&mut children);
         Self {
             children,
             buckets: Vec::new(),

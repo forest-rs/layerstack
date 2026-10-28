@@ -15,6 +15,7 @@ use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
+use layerstack::sort;
 use layerstack::{PathId, PropertyPath, PropertyType, Provenance, TargetPath, Value};
 
 /// Classification of an emitter, independent of any rendering backend.
@@ -452,7 +453,7 @@ impl LightInputs {
             });
             inputs.push(input);
         }
-        inputs.sort_by(|a, b| a.name.cmp(&b.name));
+        sort::sort_by(&mut inputs, |a, b| a.name.cmp(&b.name));
         let mut attributes = Vec::new();
         for name in [
             "poleAxis",
@@ -536,7 +537,9 @@ impl LightInputs {
                 });
             }
         }
-        dependencies.sort_by(|a, b| (a.prim, &a.property).cmp(&(b.prim, &b.property)));
+        sort::sort_by(&mut dependencies, |a, b| {
+            (a.prim, &a.property).cmp(&(b.prim, &b.property))
+        });
         dependencies.dedup();
         let type_name = scene
             .prim(light)

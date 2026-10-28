@@ -21,6 +21,7 @@ use alloc::{
     borrow::Cow, boxed::Box, collections::BTreeMap, format, string::String, sync::Arc, vec::Vec,
 };
 use core::{num::NonZeroUsize, ops::Bound};
+use layerstack::sort;
 
 use hashbrown::HashMap;
 use layerstack::{Path, PathId, PropertyPath, TokenId, Value, half};
@@ -600,7 +601,7 @@ impl<'a> Xformable<'a> {
                 times.extend(attribute.sample_times());
             }
         }
-        times.sort_by(f64::total_cmp);
+        sort::sort_by(&mut times, f64::total_cmp);
         times.dedup_by(|a, b| *a == *b);
         times
     }

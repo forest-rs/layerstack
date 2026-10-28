@@ -104,6 +104,7 @@ use alloc::vec::Vec;
 use core::cmp::Ordering;
 use core::fmt::{self, Write as _};
 use core::ptr;
+use layerstack::sort;
 
 use layerstack::SharedVec;
 use layerstack::array_edit::{ArrayIndex, Instruction, Operand};
@@ -2577,7 +2578,9 @@ fn sorted_by<'a, T>(items: &'a [T], mut cmp: impl FnMut(&T, &T) -> Ordering) -> 
     }
     let mut refs: Vec<&T> = items.iter().collect();
     // Ties go by place in `items`: the unstable sort needs no buffer.
-    refs.sort_unstable_by(|a, b| cmp(a, b).then_with(|| ptr::from_ref(*a).cmp(&ptr::from_ref(*b))));
+    sort::sort_unstable_by(&mut refs, |a, b| {
+        cmp(a, b).then_with(|| ptr::from_ref(*a).cmp(&ptr::from_ref(*b)))
+    });
     InOrder::Sorted(refs.into_iter())
 }
 

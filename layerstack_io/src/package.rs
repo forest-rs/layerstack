@@ -9,6 +9,7 @@ use layerstack::asset_dependencies::{
     AssetDependency, AssetDependencyKind, DependencyReport, DependencyTarget, ResolvedDependency,
     extract_layer_dependencies, rewrite_layer_assets,
 };
+use layerstack::sort;
 use layerstack_usdz::localize::{
     LocalizationPlan, LocalizedAsset, LocalizedLayer, relative_member,
 };
@@ -428,7 +429,7 @@ impl<B: Storage> StageDocument<B> {
         let mut plan = None;
         if report.is_complete() {
             let mut layers = report.layers.clone();
-            layers.sort_by_key(|id| {
+            sort::sort_by_key(&mut layers, |id| {
                 catalog.sources.get(id).map_or_else(
                     || alloc::format!("anonymous/{}", id.0),
                     |s| String::from(&*s.identifier),
@@ -457,7 +458,7 @@ impl<B: Storage> StageDocument<B> {
                 .map(|identifier| (identifier.as_str(), false))
                 .chain(sets.keys().map(|pattern| (&**pattern, true)))
                 .collect();
-            keys.sort_unstable();
+            sort::sort_unstable(&mut keys);
             for (index, (key, is_set)) in keys.into_iter().enumerate() {
                 if is_set {
                     let name = alloc::format!("assets/{index:06}/{}", sets[key].tail);
@@ -494,8 +495,9 @@ impl<B: Storage> StageDocument<B> {
                     layer: copy,
                 });
             }
-            localized
-                .sort_by(|a, b| (a.source != root, &a.member).cmp(&(b.source != root, &b.member)));
+            sort::sort_by(&mut localized, |a, b| {
+                (a.source != root, &a.member).cmp(&(b.source != root, &b.member))
+            });
             plan = Some(LocalizationPlan {
                 layers: localized,
                 assets: {
@@ -514,7 +516,7 @@ impl<B: Storage> StageDocument<B> {
                             })
                         }))
                         .collect();
-                    localized.sort_by(|a, b| a.member.cmp(&b.member));
+                    sort::sort_by(&mut localized, |a, b| a.member.cmp(&b.member));
                     localized
                 },
                 resolved_uses: report.dependencies.len(),

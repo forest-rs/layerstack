@@ -31,6 +31,7 @@ use alloc::{string::String, sync::Arc, vec, vec::Vec};
 use core::ops::{Bound, RangeBounds};
 use hashbrown::HashMap;
 use layerstack::edit::{Address, EditTarget};
+use layerstack::sort;
 use layerstack::{
     Applied, EditError, LayerId, LayerStore, LiveStage, PathId, PrimPredicate, PropertyPath,
     PropertySpec, PropertyType, TokenId, Transaction, TypedArray, Value, Variability,
@@ -633,7 +634,7 @@ fn contains(interval: &(Bound<f64>, Bound<f64>), time: f64) -> bool {
 }
 
 fn sorted_unique(mut times: Vec<f64>) -> Vec<f64> {
-    times.sort_by(f64::total_cmp);
+    sort::sort_by(&mut times, f64::total_cmp);
     times.dedup();
     times
 }
@@ -951,7 +952,7 @@ impl SkinningBake {
             });
         }
         for model in &mut models {
-            model.indices.sort_unstable();
+            sort::sort_unstable(&mut model.indices);
             model.indices.dedup();
         }
         post.hints = models;
@@ -1681,7 +1682,7 @@ fn run_all(jobs: Vec<Job>, threads: usize) -> Vec<(usize, Output)> {
     };
     let tasks: Vec<(usize, Job)> = jobs.into_iter().enumerate().collect();
     let mut outputs = layerstack::parallel::with_pool(threads, &work, |pool| pool.run(tasks));
-    outputs.sort_unstable_by_key(|(order, _, _)| *order);
+    sort::sort_unstable_by_key(&mut outputs, |(order, _, _)| *order);
     outputs
         .into_iter()
         .map(|(_, target, output)| (target, output))

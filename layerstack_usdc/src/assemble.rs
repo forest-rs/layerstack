@@ -19,6 +19,7 @@ use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use layerstack::parallel::Threads;
+use layerstack::sort;
 
 use hashbrown::{HashMap, HashSet};
 
@@ -1045,7 +1046,7 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
                 diagnostics.extend(reported.map(|reported| (spec, reported)));
             }
             // Stable: a spec's diagnostics keep their order.
-            all.sort_by_key(SpecItem::spec);
+            sort::sort_by_key(&mut all, SpecItem::spec);
             sort_by_spec(&mut diagnostics);
             items = alloc::vec![all];
         }
@@ -1830,7 +1831,7 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
                 specs.push((i, self.lookup_path(spec.path_index)?));
             }
         }
-        specs.sort_by(|(_, a), (_, b)| {
+        sort::sort_by(&mut specs, |(_, a), (_, b)| {
             let key = |path: &str| (path.matches('{').count(), !path.ends_with("=}"));
             key(a).cmp(&key(b)).then_with(|| a.cmp(b))
         });
@@ -1918,7 +1919,7 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
 
         // Properties of variants that have no variant spec.
         let mut orphans: Vec<&str> = variant_properties.into_keys().collect();
-        orphans.sort_unstable();
+        sort::sort_unstable(&mut orphans);
         for path in orphans {
             self.report(path, None, "variant property has no variant spec")?;
         }
@@ -2088,7 +2089,7 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
                 .into_iter()
                 .map(|(index, name)| (self.path_text(index), name))
                 .collect();
-            named.sort_unstable();
+            sort::sort_unstable(&mut named);
             append_unique(
                 &mut parent.authored_children,
                 named.into_iter().map(|(_, name)| name),
@@ -3639,7 +3640,7 @@ fn put_property(properties: &mut Vec<PropertyEntry>, name: TokenId, spec: Arc<Pr
 /// Sorts diagnostics by the spec they are about, stably. Outside the
 /// generic pass, so the prim and property passes share one sort.
 fn sort_by_spec(diagnostics: &mut [(usize, AssembleDiagnostic)]) {
-    diagnostics.sort_by_key(|(spec, _)| *spec);
+    sort::sort_by_key(diagnostics, |(spec, _)| *spec);
 }
 
 /// Orders `properties` by their position in `children` (`propertyChildren`),
@@ -3662,7 +3663,7 @@ fn sort_by_children(properties: &mut [PropertyEntry], children: &[TokenId]) {
     };
     let place = |entry: &PropertyEntry| positions.of(entry.name);
     if !properties.is_sorted_by_key(place) {
-        properties.sort_by_key(place);
+        sort::sort_by_key(properties, place);
     }
 }
 

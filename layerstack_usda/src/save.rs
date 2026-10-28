@@ -95,6 +95,7 @@ use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::fmt;
+use layerstack::sort;
 
 use hashbrown::HashSet;
 use layerstack::SharedVec;
@@ -463,7 +464,7 @@ impl Lowering<'_> {
             })
             .map(|(path, spec)| self.spec_display(*path, spec.outer_variant_sites()))
             .collect();
-        unlisted.sort();
+        sort::sort(&mut unlisted);
         if let Some(path) = unlisted.into_iter().next() {
             return invalid(path, Invalid::UnlistedPrim);
         }
@@ -618,7 +619,7 @@ impl Lowering<'_> {
             .iter()
             .map(|(set, variant)| (self.name(set), self.name(variant)))
             .collect();
-        out.sort();
+        sort::sort(&mut out);
         out
     }
 
@@ -657,7 +658,9 @@ impl Lowering<'_> {
             if here.is_empty() {
                 continue;
             }
-            here.sort_by(|a, b| self.tokens.resolve(a.0).cmp(self.tokens.resolve(b.0)));
+            sort::sort_by(&mut here, |a, b| {
+                self.tokens.resolve(a.0).cmp(self.tokens.resolve(b.0))
+            });
             let mut variants = Vec::with_capacity(here.len());
             for (name, variant) in here {
                 variants.push(self.variant(layer, host, owner, set, name, variant, visited)?);

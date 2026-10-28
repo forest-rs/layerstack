@@ -2440,14 +2440,12 @@ fn spline_text_version(prim: &Prim) -> u8 {
         })
         .map(|s| {
             // OpenUSD requests 1.3 for a loop boundary time and 1.1 for a
-            // tangent algorithm, nothing for the spline's value type
-            // (`RequestWriteVersionUpgrade`, `pxr/usd/sdf/fileIO_Common.cpp`).
+            // tangent algorithm it writes, nothing for the spline's value
+            // type (`RequestWriteVersionUpgrade`,
+            // `pxr/usd/sdf/fileIO_Common.cpp`).
             if s.pre_loop_boundary.is_some() || s.post_loop_boundary.is_some() {
                 3
-            } else if s.knots.iter().any(|k| {
-                k.pre_tan_algorithm != layerstack::spline::TangentAlgorithm::None
-                    || k.post_tan_algorithm != layerstack::spline::TangentAlgorithm::None
-            }) {
+            } else if crate::spline_text::writes_tangent_algorithm(s) {
                 1
             } else {
                 0

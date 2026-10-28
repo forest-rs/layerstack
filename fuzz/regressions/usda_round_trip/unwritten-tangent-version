@@ -1,0 +1,9 @@
+#usda 1.1
+def "P"
+{
+    double a.spline = {
+        bezier,
+        7: 5.5; post held,
+        21: 7.5; pre (2, 0, autoEase); post curve (1.1, -1.4),
+    }
+}

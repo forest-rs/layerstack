@@ -53,9 +53,11 @@
 //! Metadata keys outside the table in [`metadata_field`] are stored as the
 //! text parser stores them, as an `SdfUnregisteredValue`: a dictionary as
 //! itself (prim `profilesInfo` among them,
-//! [`FieldType::UnregisteredDictionary`]) and any other value as the text
-//! of its USDA value. An unregistered list op has no such form and is
-//! rejected.
+//! [`FieldType::UnregisteredDictionary`]), an unregistered list op
+//! (`prepend key = ["a", 1]`) as an `SdfUnregisteredValueListOp` of each
+//! item's text, and any other value as the text of its USDA value. A typed
+//! list op (a token or integer list op, say) under such a key has no such
+//! form and is rejected.
 //!
 //! Spec: AOUSD Core §7.4 (metadata), §7.6 (core fields), §16.3 (crate
 //! format).
@@ -86,8 +88,9 @@ use super::{ListOp, Reference, Spec, SpecForm, Specifier, Value, Variability, wr
 /// # Errors
 ///
 /// [`UsdcWriteError::Document`] when the USDA writer would reject the
-/// document; [`UsdcWriteError::UnknownMetadata`] for an unregistered list
-/// op and [`UsdcWriteError::MetadataType`] for metadata of the wrong type;
+/// document; [`UsdcWriteError::UnknownMetadata`] for a typed list op
+/// under an unregistered key and [`UsdcWriteError::MetadataType`] for
+/// metadata of the wrong type;
 /// otherwise the errors of [`write_crate`].
 pub fn write_document(doc: &Document) -> Result<Vec<u8>, UsdcWriteError> {
     write_crate(&document_specs(doc)?)
@@ -669,9 +672,7 @@ fn natural(value: &mut UsdaValue) -> Value {
         U::UIntListOp(op) => Value::UIntListOp(map_list_op(op, |x| *x)),
         U::Int64ListOp(op) => Value::Int64ListOp(map_list_op(op, |x| *x)),
         U::UInt64ListOp(op) => Value::UInt64ListOp(map_list_op(op, |x| *x)),
-        // Not encoded as the `SdfUnregisteredValueListOp` it is: `metadatum`
-        // refuses it first, and no other field holds one.
-        U::UnregisteredListOp(op) => Value::StringListOp(list_op(op)),
+        U::UnregisteredListOp(op) => Value::UnregisteredValueListOp(list_op(op)),
         U::ArrayEdit {
             element,
             instructions,
@@ -956,18 +957,20 @@ fn metadatum(
     }
     let Some((name, ty)) = metadata_field(owner, &entry.key) else {
         // OpenUSD's text parser keeps metadata no schema registers as an
-        // `SdfUnregisteredValue`: a dictionary as itself, anything else as
-        // the text of its value (`textParserHelpers.cpp`), which a crate
-        // stores as it is.
+        // `SdfUnregisteredValue`: a dictionary as itself, a list op as an
+        // `SdfUnregisteredValueListOp` of each item's text, anything else
+        // as the text of its value (`textParserHelpers.cpp`), which a
+        // crate stores as it is.
         let value = match &mut entry.value {
             v @ UsdaValue::Dictionary(_) => natural(v),
+            UsdaValue::UnregisteredListOp(op) => Value::UnregisteredValueListOp(list_op(op)),
+            // Typed list ops belong to registered fields.
             UsdaValue::TokenListOp(_)
             | UsdaValue::StringListOp(_)
             | UsdaValue::IntListOp(_)
             | UsdaValue::UIntListOp(_)
             | UsdaValue::Int64ListOp(_)
-            | UsdaValue::UInt64ListOp(_)
-            | UsdaValue::UnregisteredListOp(_) => {
+            | UsdaValue::UInt64ListOp(_) => {
                 return Err(UsdcWriteError::UnknownMetadata {
                     path: path.into(),
                     key: entry.key.clone(),
@@ -2081,7 +2084,8 @@ def Xform "A" (
     #[test]
     fn rejects_what_usda_rejects_and_untypable_metadata() {
         // Unregistered metadata is stored as the text parser stores it: the
-        // text of its value; an unregistered list op has no crate form.
+        // text of its value; a typed list op under such a key has no crate
+        // form.
         let mut doc = mesh_doc();
         doc.metadata
             .push(Metadatum::new("fooBar", UsdaValue::String("x".into())));

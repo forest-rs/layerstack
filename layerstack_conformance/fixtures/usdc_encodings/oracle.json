@@ -1,0 +1,23 @@
+{
+ "cases": {
+  "unregistered_list_ops": {
+   "export_usdc": {
+    "accepted": true,
+    "bytes": 1266,
+    "errors": [],
+    "fnv1a64": "c417fb869102b6ce"
+   },
+   "open_usda": {
+    "accepted": true,
+    "errors": []
+   },
+   "open_usdc": {
+    "accepted": true,
+    "errors": [],
+    "same_text": true,
+    "text": "#usda 1.0\n(\n    prepend layerThing = [\"x\"]\n)\n\ndef \"A\" (\n    append bar = [1, 2.5]\n    delete baz = [\"c\"]\n    prepend foo = [\"a\", \"b\"]\n    reorder quux = [\"d\", \"e\"]\n    add qux = [hello]\n)\n{\n    rel r (\n        append relThing = [3]\n    )\n    int x (\n        prepend attrThing = [\"m\"]\n    )\n}\n\ndef \"B\" (\n    prepend foo = [\"a\", \"b\"]\n    myDict = {\n        int a = 1\n    }\n)\n{\n}\n\n"
+   }
+  }
+ },
+ "openusd_version": "26.11"
+}

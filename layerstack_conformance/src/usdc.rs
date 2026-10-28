@@ -270,3 +270,46 @@ pub fn crate_structure(data: &[u8]) -> Result<CrateStructure, layerstack_usdc::U
         specs,
     })
 }
+
+/// What a crate file holds, apart from how its LZ4 blocks are spelled:
+/// the bytes before its first section (the bootstrap header less the
+/// table of contents' offset, then the value data, byte for byte) and each
+/// section as it decodes, in table order.
+///
+/// Two files with equal sections are the same file but for compression:
+/// OpenUSD compresses with LZ4's reference compressor and `save_usdc` with
+/// `lz4_flex`, and each finds its own matches, so the same input can
+/// compress to blocks of different bytes and lengths that decompress to
+/// the same bytes.
+///
+/// # Errors
+///
+/// Any reader error for the header, TOC or sections.
+pub fn crate_sections(data: &[u8]) -> Result<String, layerstack_usdc::UsdcError> {
+    let header = layerstack_usdc::header::parse_header(data)?;
+    let toc = layerstack_usdc::toc::parse_toc(data, header.toc_offset)?;
+    let sections = layerstack_usdc::section::parse_sections(
+        data,
+        &toc,
+        header.crate_version(),
+        &mut layerstack_usdc::DecodeBudget::with_limit(u64::MAX),
+    )?;
+    let entries = [
+        toc.tokens,
+        toc.strings,
+        toc.fields,
+        toc.fieldsets,
+        toc.paths,
+        toc.specs,
+    ];
+    let first = entries
+        .iter()
+        .flatten()
+        .map(|s| usize::try_from(s.offset).unwrap_or(usize::MAX))
+        .min()
+        .unwrap_or(data.len())
+        .min(data.len());
+    // The magic and version, then the reserved bytes and the value data.
+    let start = (&data[..16], &data[24.min(first)..first]);
+    Ok(format!("{start:?}\n{sections:?}"))
+}

@@ -161,6 +161,8 @@ struct Packer<'a> {
     fieldset_index: BTreeMap<Vec<u32>, u32>,
     /// `(path index, field set index, spec form)`.
     specs: Vec<(u32, u32, u32)>,
+    /// The `SdfUnregisteredValue` holding each held value's representation.
+    unregistered: HashMap<u64, u64>,
     /// Non-array candidates by `(value type, representation flags, length, hash)`.
     /// Retain offsets into `out`, not a second copy of every encoded payload.
     blobs: HashMap<(u8, u64, usize, u64), SmallVec<[usize; 1]>>,
@@ -183,6 +185,7 @@ impl<'a> Packer<'a> {
             fieldset_index: BTreeMap::new(),
             specs: Vec::new(),
             blobs: HashMap::default(),
+            unregistered: HashMap::default(),
             arrays: ArrayDedup::default(),
             dictionaries: HashMap::default(),
         };
@@ -690,6 +693,20 @@ impl<'a> Packer<'a> {
                 self.blob(T::VariantSelectionMap, 0, bytes, false)?
             }
             Value::UnregisteredValue(inner) => self.unregistered(inner, site)?,
+            // `Write(SdfListOp<SdfUnregisteredValue>)`: each item an
+            // `SdfUnregisteredValue` holding its text, written as
+            // `Write(VtValue)` writes one, a forward offset of 8 to its
+            // representation, the text inlined as a string index.
+            Value::UnregisteredValueListOp(op) => {
+                let bytes = self.list_op(op, site, |packer, text, out| {
+                    site.check_text(text)?;
+                    let string = packer.string(text)?;
+                    out.extend_from_slice(&8_u64.to_le_bytes());
+                    out.extend_from_slice(&inlined(T::String, string).to_le_bytes());
+                    Ok(())
+                })?;
+                self.blob(T::UnregisteredValueListOp, 0, bytes, false)?
+            }
             Value::TimeSamples(samples) => self.time_samples(samples, site)?,
             Value::Spline(spline, custom_data) => self.spline(spline, custom_data, site)?,
             Value::ArrayEdit {
@@ -1100,16 +1117,36 @@ impl<'a> Packer<'a> {
         Ok(value_rep)
     }
 
-    /// `Write(SdfUnregisteredValue)`: the held value written through
-    /// `_RecursiveWrite`, as a dictionary entry's value is — a relative
-    /// offset to the value representation, preceded by any data the value
-    /// itself needs.
+    /// `Write(SdfUnregisteredValue)`, which `_ValueHandler::Pack` starts
+    /// where the file ends: `_RecursiveWrite`'s forward offset, then the
+    /// data the held value needs (none for text, which is inlined; an
+    /// `SdfUnregisteredValueListOp` or a dictionary otherwise), then the
+    /// held value's representation, which the offset reaches. A value
+    /// holding a representation already held shares that value, as
+    /// OpenUSD's handler shares equal values.
+    ///
+    /// Spec: AOUSD Core §16.3.10 (value representations); OpenUSD 26.11
+    /// `pxr/usd/sdf/crateFile.cpp` (`_RecursiveWrite`, `Write(VtValue)`).
     fn unregistered(&mut self, inner: &'a Value, site: Site<'_>) -> Result<u64, UsdcWriteError> {
+        let at = self.out.len();
+        self.out.extend_from_slice(&0_u64.to_le_bytes());
         let value_rep = self.pack(inner, site)?;
-        let mut bytes = [0_u8; 16];
-        bytes[..8].copy_from_slice(&8_u64.to_le_bytes());
-        bytes[8..].copy_from_slice(&value_rep.to_le_bytes());
-        self.blob(ValueType::UnregisteredValue, 0, bytes, false)
+        if let Some(&shared) = self.unregistered.get(&value_rep) {
+            // An equal held value was packed before, so nothing was
+            // written after the offset.
+            debug_assert_eq!(self.out.len(), at + 8, "a shared value writes nothing");
+            self.out.truncate(at);
+            return Ok(shared);
+        }
+        let jump = (self.out.len() - at) as u64;
+        self.out[at..at + 8].copy_from_slice(&jump.to_le_bytes());
+        self.out.extend_from_slice(&value_rep.to_le_bytes());
+        if at as u64 > MAX_PAYLOAD {
+            return Err(UsdcWriteError::TooLarge);
+        }
+        let unregistered = rep(ValueType::UnregisteredValue, 0, at as u64);
+        self.unregistered.insert(value_rep, unregistered);
+        Ok(unregistered)
     }
 
     /// A path list op item: the index of an absolute path.

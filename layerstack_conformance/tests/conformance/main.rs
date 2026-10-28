@@ -213,6 +213,7 @@ mod usda_parity;
 mod usda_streaming;
 mod usdc_binary;
 mod usdc_corpus;
+mod usdc_encodings;
 mod usdc_namespace_depth;
 mod usdc_versions;
 mod usdz_package;

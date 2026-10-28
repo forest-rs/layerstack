@@ -449,6 +449,8 @@ mod metadata;
 pub mod validation;
 mod view;
 pub use metadata::{PropertyMetadata, StageMetadata};
+#[cfg(feature = "usd-media")]
+pub mod asset_previews;
 pub mod assets;
 #[cfg(feature = "usd-geom")]
 pub mod extent;

@@ -210,6 +210,15 @@ pub mod dependency_map;
 pub use deferred_value::{DeferredValue, DeferredValueSource};
 pub mod doc;
 pub mod dynamic_format;
+#[cfg_attr(
+    not(feature = "unstable-internals"),
+    allow(
+        unreachable_pub,
+        dead_code,
+        reason = "public only with the `unstable-internals` feature"
+    )
+)]
+mod entries;
 mod shared_vec;
 mod store_identity;
 pub use store_identity::StoreIdentity;
@@ -275,9 +284,10 @@ pub use doc::{
     Specifier, SublayerEntry, Value, VariantBranch, VariantBranches, VariantPrims,
     VariantSelections, VariantSelectionsIter, VariantSetSpec, VariantSets, VariantSetsIter,
     VariantSetsIterMut, VariantSpec, Variants, VariantsIter, VariantsIterMut, combine_dictionaries,
-    combine_dictionary_chain, get_field, get_field_mut, insert_field_if_absent, remove_field,
-    set_field_vec,
+    combine_dictionary_chain,
 };
+#[cfg(feature = "unstable-internals")]
+pub use doc::{get_field, get_field_mut, insert_field_if_absent, remove_field, set_field_vec};
 pub use dynamic_format::{
     DynamicArgs, DynamicDependency, DynamicFileFormat, DynamicFormatContext,
     DynamicFormatRegistrationError, DynamicFormats, UnregisteredField,

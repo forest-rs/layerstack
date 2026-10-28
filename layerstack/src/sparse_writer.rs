@@ -161,7 +161,7 @@ impl SparseAttributeWriter {
 /// never compare close, and `Null` never represents an existing value.
 /// OpenUSD `usdUtils/sparseValueWriter.cpp`, `GfIsClose` in `gf/math.h`.
 #[must_use]
-pub fn sparse_values_close(a: &Value, b: &Value) -> bool {
+pub(crate) fn sparse_values_close(a: &Value, b: &Value) -> bool {
     if let (Some(a), Some(b)) = (a.array_ref(), b.array_ref()) {
         if let (Some(a), Some(b)) = (a.typed(), b.typed())
             && core::mem::discriminant(&a.element_kind())

@@ -4313,7 +4313,7 @@ impl Stage {
 /// `UsdPrim::GetPropertyNames` applies to the sorted names.
 ///
 /// Spec: AOUSD Core §7.6.2.2.2 (`propertyChildren` ordering).
-pub fn apply_property_order(order: &[TokenId], names: &mut [TokenId]) {
+pub(crate) fn apply_property_order(order: &[TokenId], names: &mut [TokenId]) {
     let mut rest = 0;
     for name in order {
         if let Some(found) = names[rest..].iter().position(|n| n == name) {
@@ -5747,5 +5747,25 @@ mod tests {
                 .and_then(|e| e.value),
             at_25
         );
+    }
+}
+
+#[cfg(test)]
+mod property_order_tests {
+    use super::*;
+    use crate::InMemoryStore;
+    use alloc::vec;
+
+    /// An empty order keeps the names; a name listed twice moves once.
+    #[test]
+    fn property_order_moves_each_listed_name_once() {
+        let store = InMemoryStore::default();
+        let [alpha, beta, gamma] =
+            ["alpha", "beta", "gamma"].map(|name| store.tokens().intern(name));
+        let mut names = vec![alpha, beta, gamma];
+        apply_property_order(&[], &mut names);
+        assert_eq!(names, [alpha, beta, gamma]);
+        apply_property_order(&[beta, beta], &mut names);
+        assert_eq!(names, [beta, alpha, gamma]);
     }
 }

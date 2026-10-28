@@ -35,6 +35,16 @@ use crate::{
     value_type::{UnknownValueType, ValueType},
 };
 
+#[cfg(feature = "unstable-internals")]
+pub use crate::entries::{
+    get_property, get_property_mut, property_entry, remove_property, set_property_vec,
+};
+#[cfg(not(feature = "unstable-internals"))]
+#[allow(unused_imports, reason = "not every helper is used in every module")]
+pub(crate) use crate::entries::{
+    get_property, get_property_mut, property_entry, remove_property, set_property_vec,
+};
+
 /// When a composed property or scene computation is read: the default time, or a time code
 /// with the interpolation between its time samples.
 ///
@@ -641,63 +651,6 @@ pub struct PropertyEntry {
     /// [`Arc::make_mut`] to edit this record without changing other snapshots.
     /// Samples and metadata detach independently when those slots are edited.
     pub spec: Arc<PropertySpec>,
-}
-
-/// Returns the property named `name`, if present.
-#[must_use]
-pub fn get_property(properties: &[PropertyEntry], name: TokenId) -> Option<&PropertySpec> {
-    properties.iter().find(|e| e.name == name).map(|e| &*e.spec)
-}
-
-/// Returns the property named `name` mutably, if present.
-#[must_use]
-pub fn get_property_mut(
-    properties: &mut [PropertyEntry],
-    name: TokenId,
-) -> Option<&mut PropertySpec> {
-    properties
-        .iter_mut()
-        .find(|e| e.name == name)
-        .map(|e| Arc::make_mut(&mut e.spec))
-}
-
-/// Inserts or replaces the property named `name`, keeping the position of a
-/// replaced property (authored order).
-pub fn set_property_vec(properties: &mut Vec<PropertyEntry>, name: TokenId, spec: PropertySpec) {
-    if let Some(existing) = properties.iter_mut().find(|entry| entry.name == name) {
-        existing.spec = Arc::new(spec);
-    } else {
-        properties.push(PropertyEntry {
-            name,
-            spec: Arc::new(spec),
-        });
-    }
-}
-
-/// Returns the property named `name`, creating an empty spec of `kind` (see
-/// [`PropertySpec::of_kind`]) at the end of the list when absent.
-pub fn property_entry(
-    properties: &mut Vec<PropertyEntry>,
-    name: TokenId,
-    kind: PropertyKind,
-) -> &mut PropertySpec {
-    let index = match properties.iter().position(|e| e.name == name) {
-        Some(index) => index,
-        None => {
-            properties.push(PropertyEntry {
-                name,
-                spec: Arc::new(PropertySpec::of_kind(kind)),
-            });
-            properties.len() - 1
-        }
-    };
-    Arc::make_mut(&mut properties[index].spec)
-}
-
-/// Removes the property named `name`, returning its spec.
-pub fn remove_property(properties: &mut Vec<PropertyEntry>, name: TokenId) -> Option<PropertySpec> {
-    let index = properties.iter().position(|e| e.name == name)?;
-    Some(Arc::unwrap_or_clone(properties.remove(index).spec))
 }
 
 #[cfg(test)]

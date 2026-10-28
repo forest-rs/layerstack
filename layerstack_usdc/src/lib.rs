@@ -99,20 +99,9 @@ pub use writer::save_usdc;
 /// Spec: AOUSD Core §16.3.
 ///
 /// ```
-/// use layerstack::{
-///     AssetResolveError, AssetResolver, LayerId, ResolvedAsset,
-///     TokenInterner, PathInterner,
-/// };
+/// use layerstack::{LayerId, NoAssets, PathInterner, TokenInterner};
 /// use layerstack_usdc::{read_usdc, UsdcError};
 ///
-/// struct NoAssets;
-/// impl AssetResolver for NoAssets {
-///     fn resolve(&mut self, _: &str, _: Option<LayerId>, _: &TokenInterner,
-///                _: &PathInterner) -> Result<ResolvedAsset, AssetResolveError> {
-///         Err(AssetResolveError::NotFound)
-///     }
-///     fn resolved_path(&self, _: LayerId) -> Option<&str> { None }
-/// }
 ///
 /// // Truncated data fails cleanly at the header stage.
 /// let result = read_usdc(

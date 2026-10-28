@@ -4514,6 +4514,12 @@ impl<T: ?Sized> MaybeSync for T {}
 /// with [`crate::StageOptions::threads`] above one reads it from several
 /// threads at once, and interns into its [`TokenInterner`] and
 /// [`PathInterner`] through shared references.
+///
+/// Implement it for a `Sync` type. Cargo enables `std` for the whole build
+/// when any crate in it does (`layerstack_io` does by default), so a store
+/// that is not `Sync` compiles only until another dependency turns the
+/// feature on. Without `std` the interners are not `Sync`, which is why
+/// the bound depends on the feature.
 pub trait LayerStore: MaybeSync {
     /// Retains affinity of the shared token/path domains. Moving this store or
     /// adding names preserves it; replacing either interner invalidates it.

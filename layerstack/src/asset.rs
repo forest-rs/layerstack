@@ -422,13 +422,18 @@ pub enum AssetResolveError {
 /// 1. Locating the asset (applying search paths, extension probing, etc.)
 /// 2. Loading and parsing the layer data
 /// 3. Assigning a [`LayerId`] and returning the [`Layer`]; the resolver
-///    owns the ID space, and also allocates IDs for layers loaded on its
-///    behalf ([`AssetResolver::allocate_layer_id`])
+///    owns the IDs of the layers it returns, and also allocates IDs for
+///    layers loaded on its behalf ([`AssetResolver::allocate_layer_id`]),
+///    keeping them below [`LayerId::FIRST_DERIVED`] unless it derives them
+///    from identifiers as a loader does
 /// 4. Deduplicating: repeated resolution of the same path returns the same
 ///    [`LayerId`] with `layer: None`
 ///
 /// The caller is responsible for inserting returned layers into their
 /// [`LayerStore`].
+///
+/// A resolver for a layer read on its own, such as text parsed alone, is
+/// [`NoAssets`].
 ///
 /// Spec: AOUSD Core §9 (asset resolution).
 pub trait AssetResolver {
@@ -566,6 +571,29 @@ pub trait AssetResolver {
             return anchor_asset_path(asset_path, "");
         }
         anchor_asset_path(asset_path, self.resolved_path(anchor)?)
+    }
+}
+
+/// An [`AssetResolver`] that finds no asset: every asset path is
+/// [`AssetResolveError::NotFound`], so the arcs and sublayers a layer
+/// authors resolve to nothing and the layer reads on its own. For parsing
+/// one layer alone (`layerstack_usda::read_usda`), tests and tools.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct NoAssets;
+
+impl AssetResolver for NoAssets {
+    fn resolve(
+        &mut self,
+        _: &str,
+        _: Option<LayerId>,
+        _: &TokenInterner,
+        _: &PathInterner,
+    ) -> Result<ResolvedAsset, AssetResolveError> {
+        Err(AssetResolveError::NotFound)
+    }
+
+    fn resolved_path(&self, _: LayerId) -> Option<&str> {
+        None
     }
 }
 

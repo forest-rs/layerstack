@@ -4,8 +4,7 @@
 //! Retain a textured Preview Surface graph and observe parameter-only changes.
 //! Shader execution, texture anchoring/loading and rendering stay with the host.
 use layerstack::{
-    AssetResolveError, AssetResolver, EditTarget, InMemoryStore, LayerId, LiveStage, PathInterner,
-    ResolvedAsset, StageOptions, TokenInterner, Transaction, Value,
+    EditTarget, InMemoryStore, LayerId, LiveStage, NoAssets, StageOptions, Transaction, Value,
 };
 use layerstack_schemas::{
     Scene, Time,
@@ -13,21 +12,6 @@ use layerstack_schemas::{
 };
 use std::sync::Arc;
 
-struct NoAssets;
-impl AssetResolver for NoAssets {
-    fn resolve(
-        &mut self,
-        _: &str,
-        _: Option<LayerId>,
-        _: &TokenInterner,
-        _: &PathInterner,
-    ) -> Result<ResolvedAsset, AssetResolveError> {
-        Err(AssetResolveError::NotFound)
-    }
-    fn resolved_path(&self, _: LayerId) -> Option<&str> {
-        None
-    }
-}
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut store = InMemoryStore::default();
     let schemas = Arc::new(layerstack_schemas::openusd(store.tokens()));

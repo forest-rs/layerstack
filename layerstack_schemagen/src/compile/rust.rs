@@ -10,7 +10,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 
 use layerstack::schema::{SchemaDeclaration, read_generated_schema};
-use layerstack::{InMemoryStore, LayerId, PropertyKind, PropertyType, Variability};
+use layerstack::{InMemoryStore, LayerId, NoAssets, PropertyKind, PropertyType, Variability};
 
 use super::classes::{ClassInfo, Parsed};
 use super::{CompileError, SchemaClass};
@@ -173,7 +173,7 @@ pub(crate) fn module_text(
         LayerId(1),
         store.tokens(),
         store.paths(),
-        &mut model::NoAssets,
+        &mut NoAssets,
     );
     if !parsed.diagnostics.is_empty() || !emitted.diagnostics.is_empty() {
         return Err(error(format!(

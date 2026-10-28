@@ -190,20 +190,9 @@ impl UsdzResult {
 /// `SdfComputeAssetPathRelativeToLayer` in `pxr/usd/sdf/layerUtils.cpp`.
 ///
 /// ```
-/// use layerstack::{
-///     AssetResolveError, AssetResolver, LayerId, ResolvedAsset,
-///     TokenInterner, PathInterner,
-/// };
+/// use layerstack::{LayerId, NoAssets, PathInterner, TokenInterner};
 /// use layerstack_usdz::{read_usdz, write_usdz, ImportDiagnostic, PackageFile};
 ///
-/// struct NoAssets;
-/// impl AssetResolver for NoAssets {
-///     fn resolve(&mut self, _: &str, _: Option<LayerId>, _: &TokenInterner,
-///                _: &PathInterner) -> Result<ResolvedAsset, AssetResolveError> {
-///         Err(AssetResolveError::NotFound)
-///     }
-///     fn resolved_path(&self, _: LayerId) -> Option<&str> { None }
-/// }
 ///
 /// // Readable text can still lose an invalid authored value during recovery.
 /// let source = b"#usda 1.0\ndef \"Rock\" { float amount = \"wrong\"; }\n";

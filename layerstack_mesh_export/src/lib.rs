@@ -218,7 +218,7 @@
 //!
 //! # References
 //!
-//! Conventions follow the OpenUSD reference implementation (v26.08 headers;
+//! Conventions follow the OpenUSD reference implementation (v26.11 headers;
 //! `pxr/usd/usdGeom/...`), which documents the `UsdGeom` domain schemas
 //! that AOUSD Core (§2.1) leaves out of scope:
 //! [`mesh.h`](https://openusd.org/dev/api/class_usd_geom_mesh.html) (topology,

@@ -197,6 +197,7 @@ mod udim_tiles;
 mod usda_byte_order_marks;
 mod usda_field_order;
 mod usda_openusd_text;
+mod usda_parity;
 mod usdc_binary;
 mod usdc_corpus;
 mod usdc_versions;

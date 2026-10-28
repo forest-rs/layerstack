@@ -1,0 +1,100 @@
+{
+ "cases": {
+  "statements_edits_after_explicit_refs": {
+   "reads": true,
+   "source": "#usda 1.0\n\ndef \"P\" (\n    references = @d.usda@\n    prepend references = @c.usda@\n    prepend references = @e.usda@\n    append references = @f.usda@\n)\n{\n}\n",
+   "text": "#usda 1.0\n\ndef \"P\" (\n    prepend references = @e.usda@\n    append references = @f.usda@\n)\n{\n}\n\n"
+  },
+  "statements_explicit_after_add_connect": {
+   "reads": true,
+   "source": "#usda 1.0\n\ndef \"P\"\n{\n    add float c.connect = </X.y>\n    float c.connect = None\n}\n",
+   "targets": {
+    "/P.c": []
+   },
+   "text": "#usda 1.0\n\ndef \"P\"\n{\n    float c.connect = None\n}\n\n"
+  },
+  "statements_explicit_after_edits_refs": {
+   "reads": true,
+   "source": "#usda 1.0\n\ndef \"P\" (\n    delete references = @a.usda@\n    add references = @b.usda@\n    prepend references = @c.usda@\n    references = @d.usda@\n)\n{\n}\n",
+   "text": "#usda 1.0\n\ndef \"P\" (\n    references = @d.usda@\n)\n{\n}\n\n"
+  },
+  "statements_explicit_after_prepend_meta": {
+   "reads": true,
+   "source": "#usda 1.0\n\ndef \"P\" (\n    prepend apiSchemas = [\"A\"]\n    apiSchemas = []\n)\n{\n}\n",
+   "text": "#usda 1.0\n\ndef \"P\" (\n    apiSchemas = None\n)\n{\n}\n\n"
+  },
+  "statements_explicit_after_prepend_rel": {
+   "reads": true,
+   "source": "#usda 1.0\n\ndef \"P\"\n{\n    prepend rel u = </A>\n    rel u = []\n}\n",
+   "targets": {
+    "/P.u": []
+   },
+   "text": "#usda 1.0\n\ndef \"P\"\n{\n    rel u = None\n}\n\n"
+  },
+  "statements_inherits_in_variant": {
+   "reads": true,
+   "source": "#usda 1.0\n\ndef \"P\" (\n    variants = {\n        string v = \"one\"\n    }\n    prepend variantSets = \"v\"\n)\n{\n    variantSet \"v\" = {\n        \"one\" (\n            inherits = </A>\n            prepend inherits = </B>\n            prepend inherits = </C>\n        ) {\n        }\n    }\n}\n\nclass \"A\"\n{\n}\n\nclass \"B\"\n{\n}\n\nclass \"C\"\n{\n}\n",
+   "text": "#usda 1.0\n\ndef \"P\" (\n    variants = {\n        string v = \"one\"\n    }\n    prepend variantSets = \"v\"\n)\n{\n    variantSet \"v\" = {\n        \"one\" (\n            prepend inherits = </C>\n        ) {\n\n        }\n    }\n}\n\nclass \"A\"\n{\n}\n\nclass \"B\"\n{\n}\n\nclass \"C\"\n{\n}\n\n"
+  },
+  "statements_prepend_after_explicit_connect": {
+   "reads": true,
+   "source": "#usda 1.0\n\ndef \"P\"\n{\n    float c.connect = [</X.a>, </X.b>]\n    prepend float c.connect = </X.c>\n    append float c.connect = </X.d>\n    append float c.connect = </X.e>\n}\n",
+   "targets": {
+    "/P.c": [
+     "/X.c",
+     "/X.e"
+    ]
+   },
+   "text": "#usda 1.0\n\ndef \"P\"\n{\n    prepend float c.connect = </X.c>\n    append float c.connect = </X.e>\n}\n\n"
+  },
+  "statements_prepend_after_explicit_meta": {
+   "reads": true,
+   "source": "#usda 1.0\n\ndef \"P\" (\n    apiSchemas = [\"A\"]\n    prepend apiSchemas = [\"B\"]\n)\n{\n}\n",
+   "text": "#usda 1.0\n\ndef \"P\" (\n    prepend apiSchemas = [\"B\"]\n)\n{\n}\n\n"
+  },
+  "statements_prepend_after_explicit_rel": {
+   "reads": true,
+   "source": "#usda 1.0\n\ndef \"P\"\n{\n    rel s = </A>\n    prepend rel s = </B>\n}\n",
+   "targets": {
+    "/P.s": [
+     "/B"
+    ]
+   },
+   "text": "#usda 1.0\n\ndef \"P\"\n{\n    prepend rel s = </B>\n}\n\n"
+  },
+  "statements_repeated_append_meta": {
+   "reads": true,
+   "source": "#usda 1.0\n\ndef \"P\" (\n    append apiSchemas = [\"A\", \"B\"]\n    prepend apiSchemas = [\"C\"]\n    append apiSchemas = [\"D\"]\n)\n{\n}\n",
+   "text": "#usda 1.0\n\ndef \"P\" (\n    prepend apiSchemas = [\"C\"]\n    append apiSchemas = [\"D\"]\n)\n{\n}\n\n"
+  },
+  "statements_repeated_delete_rel": {
+   "reads": true,
+   "source": "#usda 1.0\n\ndef \"P\"\n{\n    delete rel r = </A>\n    delete rel r = </B>\n    append rel r = [</A>, </B>, </C>]\n}\n",
+   "targets": {
+    "/P.r": [
+     "/A",
+     "/B",
+     "/C"
+    ]
+   },
+   "text": "#usda 1.0\n\ndef \"P\"\n{\n    delete rel r = </B>\n    append rel r = [\n        </A>,\n        </B>,\n        </C>,\n    ]\n}\n\n"
+  },
+  "statements_repeated_prepend_rel": {
+   "reads": true,
+   "source": "#usda 1.0\n\ndef \"P\"\n{\n    prepend rel t = [</A>, </B>]\n    prepend rel t = </C>\n    append rel t = </D>\n}\n",
+   "targets": {
+    "/P.t": [
+     "/C",
+     "/D"
+    ]
+   },
+   "text": "#usda 1.0\n\ndef \"P\"\n{\n    prepend rel t = </C>\n    append rel t = </D>\n}\n\n"
+  },
+  "statements_variant_sets": {
+   "reads": true,
+   "source": "#usda 1.0\n\ndef \"P\" (\n    variantSets = [\"a\", \"b\"]\n    append variantSets = \"c\"\n)\n{\n}\n",
+   "text": "#usda 1.0\n\ndef \"P\" (\n    append variantSets = \"c\"\n)\n{\n}\n\n"
+  }
+ },
+ "openusd_version": "26.11"
+}

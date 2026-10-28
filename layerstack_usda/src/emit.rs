@@ -539,31 +539,25 @@ impl EmitCtx<'_> {
             match meta {
                 ast::PrimMeta::References(arc) => {
                     self.emitted_arcs = true;
-                    spec.references.make_mut().merge(self.emit_arc_listop(
-                        arc,
-                        "Reference",
-                        !sites.is_empty(),
-                    ));
+                    let statement = self.emit_arc_listop(arc, "Reference", !sites.is_empty());
+                    set_statement(spec.references.make_mut(), arc.kind, statement);
                 }
                 ast::PrimMeta::Payload(arc) => {
                     self.emitted_arcs = true;
-                    spec.payloads.make_mut().merge(self.emit_arc_listop(
-                        arc,
-                        "Payload",
-                        !sites.is_empty(),
-                    ));
+                    let statement = self.emit_arc_listop(arc, "Payload", !sites.is_empty());
+                    set_statement(spec.payloads.make_mut(), arc.kind, statement);
                 }
                 ast::PrimMeta::Inherits(paths) => {
-                    spec.rare_mut()
-                        .inherits
-                        .make_mut()
-                        .merge(self.emit_path_listop(paths, prim_path, sites, "Inherit"));
+                    let statement = self.emit_path_listop(paths, prim_path, sites, "Inherit");
+                    set_statement(spec.rare_mut().inherits.make_mut(), paths.kind, statement);
                 }
                 ast::PrimMeta::Specializes(paths) => {
-                    spec.rare_mut()
-                        .specializes
-                        .make_mut()
-                        .merge(self.emit_path_listop(paths, prim_path, sites, "Specializes"));
+                    let statement = self.emit_path_listop(paths, prim_path, sites, "Specializes");
+                    set_statement(
+                        spec.rare_mut().specializes.make_mut(),
+                        paths.kind,
+                        statement,
+                    );
                 }
                 ast::PrimMeta::Variants(selections) => {
                     for sel in selections {
@@ -577,7 +571,11 @@ impl EmitCtx<'_> {
                 ast::PrimMeta::VariantSets(listop) => {
                     let names = self.emit_name_listop(listop);
                     declare_listed_sets(&names, &mut spec.rare_mut().variant_sets);
-                    spec.rare_mut().variant_set_names.make_mut().merge(names);
+                    set_statement(
+                        spec.rare_mut().variant_set_names.make_mut(),
+                        listop.kind,
+                        names,
+                    );
                 }
                 // `instanceable` and `active` have members of their own,
                 // and `typeName` is the spec's type; each reads as its
@@ -669,8 +667,8 @@ impl EmitCtx<'_> {
     /// double, and a literal it cannot hold rejects the layer
     /// ([`MetadataRejection`]); so does a key that is a field of the spec
     /// but not metadata. Any other key keeps its literal's own type, as
-    /// OpenUSD keeps such a field's text. Repeated list-op statements for
-    /// one field combine into a single list op.
+    /// OpenUSD keeps such a field's text. Each list-op statement of a
+    /// field sets its own list of the field's list op ([`set_statement`]).
     ///
     /// Spec: AOUSD Core §7.4 (metadata fields), §12.2.6 (list ops).
     /// OpenUSD: `_KeyValueMetadataStart` and `_KeyValueMetadataEnd`
@@ -686,7 +684,7 @@ impl EmitCtx<'_> {
         };
         match get_field_mut(fields, &key) {
             Some(existing) if value.is_list_op() => {
-                if !merge_field_list_ops(existing, value) {
+                if !set_field_list_op(existing, entry.op, value) {
                     self.diagnostics.push(Diagnostic::error(
                         entry.span,
                         format!(
@@ -826,7 +824,7 @@ impl EmitCtx<'_> {
         let connection = attr
             .connection
             .as_ref()
-            .map(|conn| self.emit_connection_listop(conn, anchor));
+            .map(|conn| (conn.op, self.emit_connection_listop(conn, anchor)));
         let time_samples = attr
             .time_samples
             .as_ref()
@@ -874,9 +872,9 @@ impl EmitCtx<'_> {
             spec.variability = Variability::Uniform;
         }
         set_fields(&mut spec.metadata, metadata);
-        if let Some(listop) = connection {
+        if let Some((kind, listop)) = connection {
             match spec.targets.as_mut() {
-                Some(existing) => existing.merge(listop),
+                Some(existing) => set_statement(existing, kind, listop),
                 None => spec.targets = Some(Box::new(listop)),
             }
         }
@@ -957,7 +955,7 @@ impl EmitCtx<'_> {
         set_fields(&mut spec.metadata, metadata);
         if let Some(listop) = listop {
             match spec.targets.as_mut() {
-                Some(existing) => existing.merge(listop),
+                Some(existing) => set_statement(existing, rel.op, listop),
                 None => spec.targets = Some(Box::new(listop)),
             }
         }
@@ -1119,34 +1117,23 @@ impl EmitCtx<'_> {
             match meta {
                 ast::PrimMeta::References(arc) => {
                     self.emitted_arcs = true;
-                    variant_spec
-                        .references
-                        .make_mut()
-                        .merge(self.emit_arc_listop(arc, "Reference", true));
+                    let statement = self.emit_arc_listop(arc, "Reference", true);
+                    set_statement(variant_spec.references.make_mut(), arc.kind, statement);
                 }
                 ast::PrimMeta::Payload(arc) => {
                     self.emitted_arcs = true;
-                    variant_spec
-                        .payloads
-                        .make_mut()
-                        .merge(self.emit_arc_listop(arc, "Payload", true));
+                    let statement = self.emit_arc_listop(arc, "Payload", true);
+                    set_statement(variant_spec.payloads.make_mut(), arc.kind, statement);
                 }
                 ast::PrimMeta::Inherits(paths) => {
-                    variant_spec
-                        .inherits
-                        .make_mut()
-                        .merge(self.emit_path_listop(paths, prim_path, branch_sites, "Inherit"));
+                    let statement =
+                        self.emit_path_listop(paths, prim_path, branch_sites, "Inherit");
+                    set_statement(variant_spec.inherits.make_mut(), paths.kind, statement);
                 }
                 ast::PrimMeta::Specializes(paths) => {
-                    variant_spec
-                        .specializes
-                        .make_mut()
-                        .merge(self.emit_path_listop(
-                            paths,
-                            prim_path,
-                            branch_sites,
-                            "Specializes",
-                        ));
+                    let statement =
+                        self.emit_path_listop(paths, prim_path, branch_sites, "Specializes");
+                    set_statement(variant_spec.specializes.make_mut(), paths.kind, statement);
                 }
                 ast::PrimMeta::Variants(selections) => {
                     for sel in selections {
@@ -1164,7 +1151,11 @@ impl EmitCtx<'_> {
                     // The sets nested in this branch, as for a prim spec.
                     let names = self.emit_name_listop(listop);
                     declare_listed_sets(&names, &mut variant_spec.variant_sets);
-                    variant_spec.variant_set_names.make_mut().merge(names);
+                    set_statement(
+                        variant_spec.variant_set_names.make_mut(),
+                        listop.kind,
+                        names,
+                    );
                 }
             }
         }
@@ -1933,20 +1924,56 @@ fn absolute_path<'p>(path: &'p str, anchor: &str) -> Cow<'p, str> {
     Cow::Owned(out)
 }
 
-/// Combines a list-op statement into an earlier one for the same field.
-/// Returns `false` when the two have different element types.
-fn merge_field_list_ops(existing: &mut FieldValue, value: FieldValue) -> bool {
+/// Sets the list one list-op statement of a field authors, over the
+/// field's earlier statements. Returns `false` when the two have different
+/// element types.
+fn set_field_list_op(existing: &mut FieldValue, kind: ast::ListOpKind, value: FieldValue) -> bool {
     match (existing, value) {
-        (FieldValue::TokenListOp(a), FieldValue::TokenListOp(b)) => a.merge(*b),
-        (FieldValue::StringListOp(a), FieldValue::StringListOp(b)) => a.merge(*b),
-        (FieldValue::IntListOp(a), FieldValue::IntListOp(b)) => a.merge(*b),
-        (FieldValue::UIntListOp(a), FieldValue::UIntListOp(b)) => a.merge(*b),
-        (FieldValue::Int64ListOp(a), FieldValue::Int64ListOp(b)) => a.merge(*b),
-        (FieldValue::UInt64ListOp(a), FieldValue::UInt64ListOp(b)) => a.merge(*b),
+        (FieldValue::TokenListOp(a), FieldValue::TokenListOp(b)) => set_statement(a, kind, *b),
+        (FieldValue::StringListOp(a), FieldValue::StringListOp(b)) => set_statement(a, kind, *b),
+        (FieldValue::IntListOp(a), FieldValue::IntListOp(b)) => set_statement(a, kind, *b),
+        (FieldValue::UIntListOp(a), FieldValue::UIntListOp(b)) => set_statement(a, kind, *b),
+        (FieldValue::Int64ListOp(a), FieldValue::Int64ListOp(b)) => set_statement(a, kind, *b),
+        (FieldValue::UInt64ListOp(a), FieldValue::UInt64ListOp(b)) => set_statement(a, kind, *b),
         (existing @ FieldValue::Value(_), value) => *existing = value,
         _ => return false,
     }
     true
+}
+
+/// Sets, in `op`, the one list a list-op statement of `kind` authors:
+/// `statement` is that statement alone. Each statement replaces its own
+/// list, an explicit statement drops every edit, and an edit statement
+/// drops an explicit list, so a later `prepend` replaces an earlier one and
+/// `rel r = </A>` then `prepend rel r = </B>` leaves only the prepend.
+///
+/// Spec: AOUSD Core §12.4 (list ops hold an explicit list or edits).
+/// OpenUSD: `_SetListOpItemsWithError` (`pxr/usd/sdf/textParserHelpers.h`)
+/// calls `SdfListOp::SetItems` (`pxr/usd/sdf/listOp.cpp`) per statement.
+fn set_statement<T>(op: &mut ListOp<T>, kind: ast::ListOpKind, statement: ListOp<T>) {
+    let ListOp {
+        explicit,
+        prepend,
+        append,
+        delete,
+        add,
+        reorder,
+    } = statement;
+    if kind == ast::ListOpKind::Explicit || explicit.is_some() {
+        *op = ListOp::explicit(explicit.unwrap_or_default());
+        return;
+    }
+    if op.explicit.is_some() {
+        *op = ListOp::new();
+    }
+    match kind {
+        ast::ListOpKind::Prepend => op.prepend = prepend,
+        ast::ListOpKind::Append => op.append = append,
+        ast::ListOpKind::Add => op.add = add,
+        ast::ListOpKind::Delete => op.delete = delete,
+        ast::ListOpKind::Reorder => op.reorder = reorder,
+        ast::ListOpKind::Explicit => {}
+    }
 }
 
 fn convert_specifier(spec: ast::Specifier) -> Specifier {
@@ -3664,7 +3691,7 @@ def Xform \"A\" (
             Some(&FieldValue::TokenListOp(Box::new(
                 ListOp::prepended(vec![geom]).with_appended(vec![review])
             ))),
-            "list-op statements for one field combine"
+            "a prepend and an append statement each set their own list"
         );
         assert_eq!(
             spec.field(tokens.intern("comment")),
@@ -3723,6 +3750,48 @@ def \"A\"
             variants.allocation_size(),
             3 * size_of::<(TokenId, VariantSpec)>()
         );
+    }
+
+    /// Each list-op statement sets its own list, as OpenUSD's parser calls
+    /// `SdfListOp::SetItems` per statement: a repeated `prepend` replaces
+    /// the earlier one, an explicit statement drops the edits and an edit
+    /// statement the explicit list.
+    #[test]
+    fn each_list_op_statement_sets_its_own_list() {
+        let src = "\
+#usda 1.0
+def \"A\" (
+    apiSchemas = [\"X\"]
+    prepend apiSchemas = [\"Y\"]
+    prepend apiSchemas = [\"Z\"]
+    append apiSchemas = [\"W\"]
+)
+{
+    rel r = </B>
+    prepend rel r = </C>
+    prepend rel s = </B>
+    rel s = None
+}
+";
+        let (result, tokens, paths) = emit_source(src);
+        let spec = prim(&result, &tokens, &paths, "/A");
+        assert_eq!(
+            spec.field(tokens.intern("apiSchemas")),
+            Some(&FieldValue::TokenListOp(Box::new(
+                ListOp::prepended(vec![tokens.intern("Z")]).with_appended(vec![tokens.intern("W")])
+            )))
+        );
+        let target = |path: &str| {
+            let path = Path::parse_absolute(path, &tokens).unwrap();
+            TargetPath::Prim(paths.intern(path))
+        };
+        let r = prop(&spec.properties, &tokens.intern("r"));
+        assert_eq!(
+            r.targets.as_deref(),
+            Some(&ListOp::prepended(vec![target("/C")]))
+        );
+        let s = prop(&spec.properties, &tokens.intern("s"));
+        assert_eq!(s.targets.as_deref(), Some(&ListOp::explicit(Vec::new())));
     }
 
     #[test]

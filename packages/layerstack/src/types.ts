@@ -307,6 +307,36 @@ export interface Changes {
   readonly resynced: readonly string[];
   /** Surviving prims whose opinions changed without a resync of their subtree. */
   readonly changedInfoOnly: readonly string[];
+  /**
+   * For some `changedInfoOnly` prims, every property field that may have
+   * changed: a listener whose dependencies are outside them can skip the
+   * prim. A `changedInfoOnly` prim not listed here may have changed in any
+   * field: re-read it.
+   */
+  readonly properties: readonly PrimPropertyChanges[];
+}
+
+/** The property fields that may have changed on one `changedInfoOnly` prim, ordered by property, then field. */
+export interface PrimPropertyChanges {
+  /** The prim's path. */
+  readonly prim: string;
+  /** Its changed fields. */
+  readonly fields: readonly PropertyChange[];
+}
+
+/** One property field an edit may have changed. */
+export interface PropertyChange {
+  /** The property's name. */
+  readonly property: string;
+  /**
+   * The field: its default value, its animation (time samples and spline
+   * together), its time samples, its targets (connections or relationship
+   * targets), a metadata field, or `other` for a field this package does
+   * not name.
+   */
+  readonly field: "default" | "animation" | "timeSamples" | "targets" | "metadata" | "other";
+  /** The metadata field's name, for `field` `"metadata"`; `null` otherwise. */
+  readonly metadata: string | null;
 }
 
 /** A listener of {@link Stage.onChange}. */

@@ -113,7 +113,7 @@ function plain(key: string, value: unknown): unknown {
 async function roundTrip(edits: Edit[], effect: (stage: Stage) => void): Promise<Stage> {
   const stage = await openScene();
   const before = snapshot(stage);
-  const receipt = stage.apply(stage.root, edits);
+  const receipt = stage.apply(edits, stage.root);
   assert.notEqual(snapshot(stage), before, "the edits change something");
   effect(stage);
   const redo = receipt.undo();
@@ -282,7 +282,7 @@ describe("edit kinds", () => {
 describe("values", () => {
   it("take typed arrays, nested arrays, bigints and values read back", async () => {
     using stage = await openScene();
-    const receipt = stage.apply(stage.root, [
+    const receipt = stage.apply([
       { type: "createAttribute", path: "/World.points", typeName: "point3f[]" },
       { type: "setValue", path: "/World.points", value: { type: "point3f[]", value: new Float32Array([0, 1, 2, 3, 4, 5]) } },
       { type: "createAttribute", path: "/World.ids", typeName: "int64[]", value: { type: "int64[]", value: [9007199254740993n, -1n] } },
@@ -290,7 +290,7 @@ describe("values", () => {
       { type: "createAttribute", path: "/World.uvs", typeName: "texCoord2f[]", value: { type: "texCoord2f[]", value: [[0, 1], [1, 0]] } },
       { type: "createAttribute", path: "/World.tags", typeName: "token[]", value: { type: "token[]", value: ["a", "b"] } },
       { type: "createAttribute", path: "/World.halves", typeName: "half[]", value: { type: "half[]", value: new Uint16Array([0x3c00]) } },
-    ]);
+    ], stage.root);
     assert.deepEqual(Array.from(stage.attribute("/World.points")?.array()?.copy() as Float32Array), [0, 1, 2, 3, 4, 5]);
     assert.deepEqual(Array.from(stage.attribute("/World.ids")?.array()?.copy() as BigInt64Array), [9007199254740993n, -1n]);
     assert.deepEqual(stage.attribute("/World.big")?.get(), { kind: "scalar", type: "uint64", value: 18446744073709551615n });
@@ -300,7 +300,7 @@ describe("values", () => {
     // A value read is sent back as it is.
     const points = stage.attribute("/World.points")?.get();
     assert.ok(points);
-    stage.apply(stage.root, [{ type: "createAttribute", path: "/Spare.points", typeName: "point3f[]", value: points }]);
+    stage.apply([{ type: "createAttribute", path: "/Spare.points", typeName: "point3f[]", value: points }], stage.root);
     assert.deepEqual(Array.from(stage.attribute("/Spare.points")?.array()?.copy() as Float32Array), [0, 1, 2, 3, 4, 5]);
     receipt.release();
   });
@@ -317,7 +317,7 @@ describe("values", () => {
       [{ type: "setValue", path: "/World.size", value: { type: "float", value: 2 } }, "edit.rejected.type_mismatch"],
     ];
     for (const [edit, code] of cases) {
-      const error = failure(() => stage.apply(stage.root, [{ type: "setActive", path: "/World", active: true }, edit]));
+      const error = failure(() => stage.apply([{ type: "setActive", path: "/World", active: true }, edit], stage.root));
       assert.equal(error.code, code, JSON.stringify(edit));
       assert.equal(error.edit, 1, "the error names the edit");
       assert.equal(error.path, "/World.size");
@@ -340,25 +340,30 @@ describe("applying", () => {
       [{ type: "removePrim", path: "/World.size" }, "path.invalid"],
     ] as const;
     for (const [edit, code] of bad) {
-      const error = failure(() => stage.apply(stage.root, [edit as unknown as Edit]));
+      const error = failure(() => stage.apply([edit as unknown as Edit], stage.root));
       assert.equal(error.code, code, JSON.stringify(edit));
       assert.equal(error.edit, 0);
     }
-    assert.equal(failure(() => stage.apply(other.root, [])).code, "layer.affinity");
+    assert.equal(failure(() => stage.apply([], other.root)).code, "layer.affinity");
     const spare = stage.layers().find((layer) => layer.identifier === "spare.usda");
     assert.ok(spare);
-    assert.equal(failure(() => stage.apply(spare, [{ type: "setActive", path: "/Part", active: false }])).code, "layer.outside_stack");
+    assert.equal(failure(() => stage.apply([{ type: "setActive", path: "/Part", active: false }], spare)).code, "layer.outside_stack");
   });
 
   it("undoes once, refuses another stage's receipt and a stale undo", async () => {
     using stage = await openScene();
     using other = await openScene();
-    const first = stage.apply(stage.root, [{ type: "setValue", path: "/World.size", value: { type: "double", value: 3 } }]);
+    const first = stage.apply([{ type: "setValue", path: "/World.size", value: { type: "double", value: 3 } }], stage.root);
     assert.ok(first instanceof EditReceipt);
     assert.equal(first.target, stage.root);
     assert.deepEqual(first.changes.changedInfoOnly, ["/World"]);
+    assert.deepEqual(
+      first.changes.properties,
+      [{ prim: "/World", fields: [{ property: "size", field: "default", metadata: null }] }],
+      "the inventory of what changed on the prim",
+    );
     assert.equal(failure(() => other.undo(first)).code, "receipt.affinity");
-    using later = stage.apply(stage.root, [{ type: "setValue", path: "/World.size", value: { type: "double", value: 4 } }]);
+    using later = stage.apply([{ type: "setValue", path: "/World.size", value: { type: "double", value: 4 } }], stage.root);
     const stale = failure(() => first.undo());
     assert.equal(stale.code, "edit.stale");
     assert.equal(first.released, false, "a stale receipt stays undoable");
@@ -394,7 +399,7 @@ describe("change listeners", () => {
     using stage = await openScene();
     const heard: Changes[] = [];
     const stop = stage.onChange((changes) => heard.push(changes));
-    const receipt = stage.apply(stage.root, [{ type: "definePrim", path: "/Garden" }]);
+    const receipt = stage.apply([{ type: "definePrim", path: "/Garden" }], stage.root);
     assert.equal(heard.length, 1, "one recomposition");
     assert.deepEqual(heard[0]?.created, ["/Garden"]);
     assert.deepEqual(heard[0]?.removed, []);
@@ -406,7 +411,7 @@ describe("change listeners", () => {
     await stage.resolve(mockSource(files));
     assert.ok(heard.length > before, "loading the variant's asset is heard");
     stop();
-    stage.apply(stage.root, [{ type: "setActive", path: "/Spare", active: false }]).release();
+    stage.apply([{ type: "setActive", path: "/Spare", active: false }], stage.root).release();
     assert.equal(heard.length, before + 1, "a removed listener hears nothing");
   });
 
@@ -423,7 +428,7 @@ describe("change listeners", () => {
         throw new Error("listener bug");
       });
       stage.onChange(() => order.push("second"));
-      stage.apply(stage.root, [{ type: "setActive", path: "/Spare", active: false }]).release();
+      stage.apply([{ type: "setActive", path: "/Spare", active: false }], stage.root).release();
       assert.deepEqual(order, ["first", "second"]);
       assert.equal(reported.length, 1);
       const error = reported[0];
@@ -441,10 +446,10 @@ describe("change listeners", () => {
     stage.onChange((changes) => {
       heard.push(changes.created);
       if (changes.created.includes("/Garden")) {
-        stage.apply(stage.root, [{ type: "definePrim", path: "/Garden/Moss" }]).release();
+        stage.apply([{ type: "definePrim", path: "/Garden/Moss" }], stage.root).release();
       }
     });
-    stage.apply(stage.root, [{ type: "definePrim", path: "/Garden" }]).release();
+    stage.apply([{ type: "definePrim", path: "/Garden" }], stage.root).release();
     assert.deepEqual(heard, [["/Garden"], ["/Garden/Moss"]]);
   });
 });
@@ -458,7 +463,7 @@ describe("read-only roots", () => {
   it("refuse edits without a session layer", () => {
     using stage = layerstack.open({ identifier: "model.usdz", bytes: pack() });
     assert.equal(stage.editLayer, null);
-    const error = failure(() => stage.apply(stage.root, [{ type: "setActive", path: "/Model", active: false }]));
+    const error = failure(() => stage.apply([{ type: "setActive", path: "/Model", active: false }], stage.root));
     assert.equal(error.code, "layer.read_only");
     assert.equal(error.identifier, "model.usdz");
     assert.equal(failure(() => stage.setVariantSelection("/Model", "look", "a")).code, "layer.read_only");
@@ -471,7 +476,7 @@ describe("read-only roots", () => {
     assert.notEqual(session, stage.root);
     assert.equal(session.anonymous, true);
     assert.equal(session.readOnly, false);
-    const receipt = stage.apply(session, [{ type: "setValue", path: "/Model.height", value: { type: "float", value: 5 } }]);
+    const receipt = stage.apply([{ type: "setValue", path: "/Model.height", value: { type: "float", value: 5 } }], session);
     assert.deepEqual(stage.attribute("/Model.height")?.get(), { kind: "scalar", type: "float", value: 5 });
     assert.equal(stage.isDirty(session), true);
     assert.equal(stage.isDirty(stage.root), false, "the package stays as it was read");
@@ -485,7 +490,7 @@ describe("read-only roots", () => {
 describe("dictionary values", () => {
   it("author a nested dictionary whole, read it back and undo it", async () => {
     using stage = await openScene();
-    const receipt = stage.apply(stage.root, [
+    const receipt = stage.apply([
       {
         type: "setMetadata",
         path: "/World",
@@ -498,7 +503,7 @@ describe("dictionary values", () => {
           },
         },
       },
-    ]);
+    ], stage.root);
     const read = stage.prim("/World")?.metadata("customData");
     assert.ok(read?.kind === "dictionary");
     assert.deepEqual([...read.value.keys()], ["inner", "note"], "ordered by key");
@@ -513,18 +518,18 @@ describe("dictionary values", () => {
   it("send a dictionary read from a stage back as it is", async () => {
     using stage = await openScene();
     stage
-      .apply(stage.root, [
+      .apply([
         {
           type: "setMetadata",
           path: "/World",
           key: "assetInfo",
           value: { type: "dictionary", value: { name: { type: "string", value: "rock" }, version: { type: "int", value: 2 } } },
         },
-      ])
+      ], stage.root)
       .release();
     const info = stage.prim("/World")?.metadata("assetInfo");
     assert.ok(info);
-    stage.apply(stage.root, [{ type: "setMetadata", path: "/Spare", key: "assetInfo", value: info }]).release();
+    stage.apply([{ type: "setMetadata", path: "/Spare", key: "assetInfo", value: info }], stage.root).release();
     assert.deepEqual(stage.prim("/Spare")?.metadata("assetInfo"), info);
     const saved = stage.save().written[0];
     assert.ok(saved);
@@ -534,7 +539,7 @@ describe("dictionary values", () => {
   it("fail naming the entry and the edit", async () => {
     using stage = await openScene();
     const bad = await failure(() =>
-      stage.apply(stage.root, [
+      stage.apply([
         { type: "setKind", path: "/World", kind: "group" },
         {
           type: "setMetadata",
@@ -542,21 +547,21 @@ describe("dictionary values", () => {
           key: "customData",
           value: { type: "dictionary", value: { count: { type: "int", value: 1.5 } } },
         },
-      ]),
+      ], stage.root),
     );
     assert.equal(bad.code, "value.range");
     assert.equal(bad.edit, 1);
     assert.match(bad.message, /`count`/);
     const notMap = await failure(() =>
-      stage.apply(stage.root, [
+      stage.apply([
         { type: "setMetadata", path: "/World", key: "customData", value: { type: "dictionary", value: [1, 2] } as never },
-      ]),
+      ], stage.root),
     );
     assert.equal(notMap.code, "value.kind");
     const cycle: { type: "dictionary"; value: Record<string, unknown> } = { type: "dictionary", value: {} };
     cycle.value.self = cycle;
     const deep = await failure(() =>
-      stage.apply(stage.root, [{ type: "setMetadata", path: "/World", key: "customData", value: cycle as never }]),
+      stage.apply([{ type: "setMetadata", path: "/World", key: "customData", value: cycle as never }], stage.root),
     );
     assert.equal(deep.code, "value.shape");
     assert.equal(stage.prim("/World")?.metadata("customData"), null, "nothing was authored");

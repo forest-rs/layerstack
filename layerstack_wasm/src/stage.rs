@@ -14,8 +14,8 @@ use alloc::{
 use layerstack::{
     ArcKind, ChangeCursor, Changes, CompositionLimits, Contribution, EditError, FlattenError,
     FlattenRequirements, IgnoreCause, InMemoryStore, Layer, LayerId, OpinionRole, PathId,
-    ResolvedValue, Specifier, StageOptions, Time, Transaction, ValueSource, Variability,
-    asset_dependencies::DependencyTarget,
+    PropertyField, ResolvedValue, Specifier, StageOptions, Time, Transaction, ValueSource,
+    Variability, asset_dependencies::DependencyTarget,
 };
 use layerstack_io::{
     ApplyError, FORMAT_ARGS_DELIMITER, ImportPolicy, IoError, LoadOptions, LoadReport, OpenOptions,
@@ -673,7 +673,7 @@ impl Stage {
     /// Either every edit applies or none does. The receipt holds the
     /// inverse, and its record is `[target, changes, loaded, failures,
     /// unavailable]`: the target layer's id, the composed changes of the
-    /// transaction (`[created, removed, resynced, changedInfoOnly]`), the
+    /// transaction (`[created, removed, resynced, changedInfoOnly, properties]`), the
     /// ids of the layers loaded for it, each asset that failed to load as
     /// `[asset, anchor, code, message]`, and the assets it asks for that
     /// the host has not supplied, as `unavailable` rows.
@@ -748,8 +748,8 @@ impl Stage {
 
     /// The composed changes since the last call, one batch per
     /// recomposition, oldest first, each
-    /// `[created, removed, resynced, changedInfoOnly]` prim paths as text
-    /// ([`Changes`]); an empty list when nothing changed, and `null` when
+    /// `[created, removed, resynced, changedInfoOnly, properties]` record
+    /// (`changes_record`); an empty list when nothing changed, and `null` when
     /// the history the cursor needs was evicted (more than the history
     /// budget changed in one call), which the wrapper reports as a
     /// resync of `/`. With `render` false the batches are consumed
@@ -835,7 +835,7 @@ impl Stage {
     /// The receipt of an applied transaction. Its record is
     /// `[target, changes, loaded, failures, unavailable]`: the target layer's
     /// id, the composed changes of the transaction
-    /// (`[created, removed, resynced, changedInfoOnly]`), the ids of the
+    /// (`[created, removed, resynced, changedInfoOnly, properties]`), the ids of the
     /// layers loaded for it, each asset that failed to load as
     /// `[asset, anchor, code, message]`, and the assets it asks for that
     /// the host has not supplied yet, as [`Self::unavailable`] rows.
@@ -1325,21 +1325,48 @@ impl Stage {
     }
 }
 
-/// `[created, removed, resynced, changedInfoOnly]`: the prim paths of
-/// `changes` as text.
+/// `[created, removed, resynced, changedInfoOnly, properties]`: the prim
+/// paths of `changes` as text, and its property-field inventories
+/// ([`Changes::property_changes`]) as `[prim, fields]`, each field
+/// `[property, field, metadata]` (`field` `default`, `animation`,
+/// `timeSamples`, `targets`, `metadata` with the metadata field's name, or
+/// `other`).
 fn changes_record(changes: &Changes, store: &InMemoryStore) -> Wire {
-    let paths = |ids: &[PathId]| {
-        Wire::List(
-            ids.iter()
-                .map(|&id| Wire::Text(store.paths().display(id, store.tokens())))
-                .collect(),
-        )
-    };
+    let tokens = store.tokens();
+    let path = |id: PathId| Wire::Text(store.paths().display(id, tokens));
+    let paths = |ids: &[PathId]| Wire::List(ids.iter().map(|&id| path(id)).collect());
+    let properties = changes
+        .property_changes
+        .iter()
+        .map(|prim| {
+            let fields = prim
+                .fields
+                .iter()
+                .map(|change| {
+                    let (field, metadata) = match change.field {
+                        PropertyField::Default => ("default", None),
+                        PropertyField::Animation => ("animation", None),
+                        PropertyField::TimeSamples => ("timeSamples", None),
+                        PropertyField::Targets => ("targets", None),
+                        PropertyField::Metadata(key) => ("metadata", Some(key)),
+                        _ => ("other", None),
+                    };
+                    Wire::List(vec![
+                        Wire::text(tokens.resolve(change.name)),
+                        Wire::text(field),
+                        metadata.map_or(Wire::Null, |key| Wire::text(tokens.resolve(key))),
+                    ])
+                })
+                .collect();
+            Wire::List(vec![path(prim.prim), Wire::List(fields)])
+        })
+        .collect();
     Wire::List(vec![
         paths(&changes.created),
         paths(&changes.removed),
         paths(&changes.resynced),
         paths(&changes.changed_info_only),
+        Wire::List(properties),
     ])
 }
 

@@ -7,9 +7,10 @@ crate are an ABI for its wrapper, which decodes their records into typed
 objects.
 
 The module opens a stage from the bytes of its root layer and never fetches.
-The host runs the loop: the stage lists the assets it wants, the host fetches
-them, supplies their bytes (or confirms one absent), and the stage reads them,
-until nothing is wanted. A USDZ package is one supplied source. The stage then
+The host runs the loop: the stage lists the assets it asks for that the host
+has not supplied (unavailable), the host fetches them, supplies their bytes
+(or confirms one absent), and the stage reads them, until none is
+unavailable. A USDZ package is one supplied source. The stage then
 answers prim, child, attribute, relationship, metadata and value queries, and
 explains where a value comes from. Failures carry a stable dotted code
 (`io.unavailable`, `path.invalid`).
@@ -22,7 +23,9 @@ and returns the receipt that redoes. The stage keeps one change cursor, which
 the wrapper drains after each mutating call to dispatch change listeners
 (JavaScript callbacks cannot satisfy `subscribe_changes`' `Send + Sync`). A
 root that cannot be saved, such as a USDZ package, is edited through an
-anonymous session layer opened in front of it.
+anonymous session layer opened in front of it. Saving returns the bytes of
+the dirty layers for the host to persist, and exports return a layer (USDA
+or USDC), the flattened stage or a USDZ package, touching nothing.
 
 ## Building the module
 
@@ -42,7 +45,14 @@ A crate can depend on `layerstack_wasm` as an `rlib` and export functions of
 its own that take `&layerstack_wasm::Stage`, reaching the document through
 `Stage::document`. Its generated module then holds Layerstack's classes and
 its own exports over one memory; pass that module to `loadLayerstack` in
-TypeScript.
+TypeScript (its type is `NativeModule`, from `@forest-rs/layerstack/native`).
+
+## Versions
+
+This crate and the TypeScript package are released together, at the same
+version. The records the module exchanges with the package are versioned by
+`ABI`, 1 in the first release; a release that changes a record's layout
+brings a new ABI, and the package refuses a module of another.
 
 ## Minimum supported Rust Version (MSRV)
 

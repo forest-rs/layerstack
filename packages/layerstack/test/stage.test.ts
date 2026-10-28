@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 
 import { ABI, ArrayHandle, LayerstackError, loadLayerstack } from "../dist/index.js";
-import type { Layerstack, NativeModule, Stage } from "../dist/index.js";
+import type { Layerstack, Stage } from "../dist/index.js";
+import type { NativeModule } from "../dist/native.js";
 import { bytes, mockSource, scene, usdz } from "./fixtures.ts";
 
 const layerstack: Layerstack = await loadLayerstack();
@@ -28,8 +30,9 @@ async function failure(f: () => unknown): Promise<LayerstackError> {
 describe("loading the module", () => {
   it("reports its versions and is one instance", async () => {
     assert.equal(layerstack.version.abi, ABI);
-    assert.equal(layerstack.version.crate, "0.1.0");
-    assert.equal(layerstack.version.package, "0.1.0");
+    const { version } = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string };
+    assert.equal(layerstack.version.package, version);
+    assert.equal(layerstack.version.crate, version, "the package and the crate are released together");
     assert.equal(await loadLayerstack(), layerstack);
   });
 

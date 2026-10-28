@@ -40,10 +40,10 @@ describe("saving", () => {
   it("hands the host each dirty layer, and reopening the saved bytes gives the same stage", async () => {
     using stage = await resolvedScene();
     stage
-      .apply(stage.root, [
+      .apply([
         { type: "setValue", path: "/Ball.size", value: { type: "double", value: 7 } },
         { type: "definePrim", path: "/Garden/Clover", typeName: "Xform" },
-      ])
+      ], stage.root)
       .release();
     assert.ok(stage.isDirty(stage.root));
     const before = layerstack.transfer().bytesOut;
@@ -74,8 +74,8 @@ describe("saving", () => {
     using stage = await resolvedScene();
     const sub = stage.layers().find((layer) => layer.identifier === "sub.usda");
     assert.ok(sub);
-    stage.apply(sub, [{ type: "setValue", path: "/Ball.size", value: { type: "double", value: 6 } }]).release();
-    stage.apply(stage.root, [{ type: "setActive", path: "/Garden", active: false }]).release();
+    stage.apply([{ type: "setValue", path: "/Ball.size", value: { type: "double", value: 6 } }], sub).release();
+    stage.apply([{ type: "setActive", path: "/Garden", active: false }], stage.root).release();
     const saved = stage.save(sub);
     assert.deepEqual(
       saved.written.map((layer) => layer.identifier),
@@ -93,7 +93,7 @@ describe("saving", () => {
     using stage = layerstack.open({ identifier: "ball.usdz", bytes: pack }, { editLayer: "session" });
     const session = stage.editLayer;
     assert.ok(session?.anonymous);
-    stage.apply(session, [{ type: "setValue", path: "/Ball.radius", value: { type: "double", value: 2 } }]).release();
+    stage.apply([{ type: "setValue", path: "/Ball.radius", value: { type: "double", value: 2 } }], session).release();
     const saved = stage.save();
     assert.deepEqual(saved.written, []);
     assert.deepEqual(saved.failures, [], "the package was not edited");
@@ -139,7 +139,7 @@ describe("exporting", () => {
 
   it("packages a layered stage as a USDZ that reopens complete", async () => {
     using stage = await resolvedScene();
-    stage.apply(stage.root, [{ type: "setValue", path: "/Ball.radius", value: { type: "double", value: 3 } }]).release();
+    stage.apply([{ type: "setValue", path: "/Ball.radius", value: { type: "double", value: 3 } }], stage.root).release();
     const packaged = stage.exportPackage();
     assert.ok(packaged.bytes);
     assert.equal(packaged.layers, 4, "the root, its sublayer and two referenced layers");

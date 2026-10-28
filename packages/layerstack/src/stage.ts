@@ -23,6 +23,7 @@ import type {
   LoadResult,
   OpenOptions,
   Opinion,
+  PropertyChange,
   PackageResult,
   ResolveOptions,
   ResolveResult,
@@ -45,7 +46,7 @@ export const PACKAGE_VERSION = "0.1.0";
  * The ABI this package speaks: the version of the records it exchanges
  * with the native module (`layerstack_wasm::ABI`).
  */
-export const ABI = 6;
+export const ABI = 1;
 
 /** The native stage the generated glue exports (`layerstack_wasm::Stage`). Not for app use. */
 export interface NativeStage {
@@ -501,24 +502,33 @@ export class Stage implements Disposable {
   }
 
   /**
-   * Applies `edits` to the layer `target` atomically: every edit applies,
-   * or none does and this throws. Assets the edits ask for that the stage
+   * Applies `edits` to the layer `target`, the {@link Stage.editLayer} by
+   * default, atomically: every edit applies, or none does and this throws. Assets the edits ask for that the stage
    * has not read (a new reference, a variant's payload) are unavailable
    * afterwards: the receipt lists them, and {@link Stage.resolve} fetches
    * them. Change listeners run before this returns.
    *
    * Throws `layer.affinity` (another stage's layer), `layer.read_only` (a
-   * USDZ member: open with `editLayer: "session"`), `layer.outside_stack`,
+   * USDZ member, or no `target` and no edit layer: open with
+   * `editLayer: "session"`), `layer.outside_stack`,
    * `argument.invalid` or `value.*` for a malformed edit, and `edit.*`
    * when the edits are rejected (`edit.rejected.type_mismatch`, ...); the
    * error's `edit` is the index of the edit at fault.
    */
-  apply(target: Layer, edits: readonly Edit[]): EditReceipt {
-    this.#own("apply", target);
+  apply(edits: readonly Edit[], target?: Layer): EditReceipt {
+    const layer = target ?? this.editLayer;
+    if (layer === null) {
+      throw new LayerstackError(
+        "layer.read_only",
+        "apply",
+        'the stage has no edit layer: its root cannot be saved; open it with editLayer: "session"',
+      );
+    }
+    this.#own("apply", layer);
     const batch = this.#ls.batch();
     try {
       lowerEdits(batch, edits, "apply", this.#ls);
-      const native = this.#call("apply", (stage) => stage.apply(target.id, batch));
+      const native = this.#call("apply", (stage) => stage.apply(layer.id, batch));
       const receipt = this.#receipt(native);
       this.#notify();
       return receipt;
@@ -561,15 +571,7 @@ export class Stage implements Disposable {
    */
   setVariantSelection(prim: Prim | string, set: string, variant: string | null, target?: Layer): EditReceipt {
     const path = typeof prim === "string" ? prim : prim.path;
-    const layer = target ?? this.editLayer;
-    if (layer === null) {
-      throw new LayerstackError(
-        "layer.read_only",
-        "setVariantSelection",
-        'the stage has no edit layer: its root cannot be saved; open it with editLayer: "session"',
-      );
-    }
-    return this.apply(layer, [{ type: "setVariantSelection", path, set, variant }]);
+    return this.apply([{ type: "setVariantSelection", path, set, variant }], target);
   }
 
   /**
@@ -744,7 +746,9 @@ export class Stage implements Disposable {
           | Row[]
           | null;
         const batches =
-          record === null ? [{ created: [], removed: [], resynced: ["/"], changedInfoOnly: [] }] : record.map(decodeChanges);
+          record === null
+            ? [{ created: [], removed: [], resynced: ["/"], changedInfoOnly: [], properties: [] }]
+            : record.map(decodeChanges);
         if (batches.length === 0 || this.#listeners.length === 0) return;
         for (const changes of batches) {
           for (const listener of [...this.#listeners]) {
@@ -1076,8 +1080,23 @@ function readMetadata(stage: Stage, path: string, key: string): Value | null {
 }
 
 function decodeChanges(row: unknown): Changes {
-  const [created, removed, resynced, changedInfoOnly] = row as [string[], string[], string[], string[]];
-  return { created, removed, resynced, changedInfoOnly };
+  const [created, removed, resynced, changedInfoOnly, properties] = row as [
+    string[],
+    string[],
+    string[],
+    string[],
+    [string, [string, PropertyChange["field"], string | null][]][],
+  ];
+  return {
+    created,
+    removed,
+    resynced,
+    changedInfoOnly,
+    properties: properties.map(([prim, fields]) => ({
+      prim,
+      fields: fields.map(([property, field, metadata]) => ({ property, field, metadata })),
+    })),
+  };
 }
 
 /** Reports an error that must not interrupt the caller, as the host reports uncaught errors. */

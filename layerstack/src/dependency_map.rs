@@ -226,32 +226,73 @@ impl DependencyRecords {
 }
 
 /// The arcs of `prims` as dependency edges: each prim depends on the
-/// sites it reads, in `OPINION_EDIT`.
+/// sites it reads, in `OPINION_EDIT`. If `source` changes, `target` needs
+/// recomposition.
+///
+/// The graph must be acyclic, as the tracker's topological drains need,
+/// though arcs can make prims depend on each other in a cycle: a depth
+/// first walk of the edges, from each prim in turn, leaves out each edge
+/// back to a prim it is still below, which leaves no cycle (a cycle holds
+/// such an edge in any depth first walk) and every edge that closes none
+/// on the walk's way. The walk visits each prim and edge once; adding each
+/// edge with the graph's own cycle search instead walked everything its
+/// source depends on, once per edge, quadratic in a chain of prims whose
+/// indexes each name the ones above. A self-dependency is left out too.
 fn arc_graph(prims: &HashMap<PathId, PrimDependencies>) -> InvalidationGraph<PathId> {
+    /// Where a walk is at a prim: still below it, or done with it.
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    enum Visit {
+        Below,
+        Done,
+    }
+    /// A prim on the walk's path, and how many of its arcs it has followed.
+    struct Step<'a> {
+        prim: PathId,
+        arcs: &'a [(PathId, ArcKind, LayerId)],
+        next: usize,
+    }
+    let arcs_of = |prim: PathId| prims.get(&prim).map_or(&[][..], |record| &record.arcs[..]);
     let mut graph = InvalidationGraph::new();
-    for (&target, record) in prims {
-        for &(source, _, _) in &record.arcs {
-            add_edge(&mut graph, target, source);
+    let mut visits: HashMap<PathId, Visit> = HashMap::with_capacity(prims.len());
+    let mut path: Vec<Step<'_>> = Vec::new();
+    for &root in prims.keys() {
+        if visits.contains_key(&root) {
+            continue;
+        }
+        visits.insert(root, Visit::Below);
+        path.push(Step {
+            prim: root,
+            arcs: arcs_of(root),
+            next: 0,
+        });
+        while let Some(step) = path.last_mut() {
+            let Some(&(source, _, _)) = step.arcs.get(step.next) else {
+                visits.insert(step.prim, Visit::Done);
+                path.pop();
+                continue;
+            };
+            step.next += 1;
+            let target = step.prim;
+            if source == target {
+                continue;
+            }
+            match visits.get(&source) {
+                // Back to a prim the walk is below: the edge closes a cycle.
+                Some(Visit::Below) => continue,
+                Some(Visit::Done) => {}
+                None => {
+                    visits.insert(source, Visit::Below);
+                    path.push(Step {
+                        prim: source,
+                        arcs: arcs_of(source),
+                        next: 0,
+                    });
+                }
+            }
+            let _ = graph.add_dependency(target, source, OPINION_EDIT, CycleHandling::Allow);
         }
     }
     graph
-}
-
-/// Adds the edge `target` depends on `source`, unless it closes a cycle:
-/// if `source` changes, `target` needs recomposition.
-fn add_edge(graph: &mut InvalidationGraph<PathId>, target: PathId, source: PathId) {
-    // The edge closes a cycle only along a path from `source` to `target`:
-    // when `source` depends on nothing yet, or nothing depends on `target`,
-    // there is none, and the search for one, a walk of everything `source`
-    // depends on, is skipped. A self-dependency is ignored either way.
-    let handling = if graph.has_dependencies(source, OPINION_EDIT)
-        && graph.has_dependents(target, OPINION_EDIT)
-    {
-        CycleHandling::Ignore
-    } else {
-        CycleHandling::Allow
-    };
-    let _ = graph.add_dependency(target, source, OPINION_EDIT, handling);
 }
 
 /// The arcs of `prims`, for diagnostic queries.
@@ -407,31 +448,34 @@ mod tests {
     }
 
     #[test]
-    fn an_arc_closing_a_cycle_is_ignored_wherever_it_is_added() {
-        let mut graph = InvalidationGraph::new();
-        let mut add = |source, target| {
-            add_edge(
-                &mut graph,
-                PathId::from_raw(target),
-                PathId::from_raw(source),
-            );
+    fn an_arc_closing_a_cycle_is_left_out_of_the_graph() {
+        // 2 depends on 1, 3 on 2 and 1 on 3, a cycle; 4 depends on 3, and on
+        // itself.
+        let record = |sources: &[u32]| PrimDependencies {
+            arcs: sources
+                .iter()
+                .map(|&source| (PathId::from_raw(source), ArcKind::Inherits, LayerId(1)))
+                .collect(),
+            ..PrimDependencies::default()
         };
-        // 2 depends on 1, 3 on 2: nothing to search for yet.
-        add(1, 2);
-        add(2, 3);
-        // 1 depending on 3 would close 1 -> 3 -> 2 -> 1.
-        add(3, 1);
-        // 4 depending on 3 closes nothing, though 3 depends on 2.
-        add(3, 4);
-        let depends = |key| {
-            graph
-                .dependencies(PathId::from_raw(key), OPINION_EDIT)
-                .collect::<Vec<_>>()
-        };
-        assert_eq!(depends(1), []);
-        assert_eq!(depends(2), [PathId::from_raw(1)]);
-        assert_eq!(depends(3), [PathId::from_raw(2)]);
-        assert_eq!(depends(4), [PathId::from_raw(3)]);
+        let prims: HashMap<PathId, PrimDependencies> =
+            [(2, &[1][..]), (3, &[2]), (1, &[3]), (4, &[3, 4])]
+                .into_iter()
+                .map(|(target, sources)| (PathId::from_raw(target), record(sources)))
+                .collect();
+        let graph = arc_graph(&prims);
+        let mut edges: Vec<(u32, u32)> = graph
+            .edges(OPINION_EDIT)
+            .map(|(from, to)| (from.get(), to.get()))
+            .collect();
+        edges.sort_unstable();
+        // One edge of the cycle is left out, whichever prim the walk starts
+        // from; 4's edge to 3 closes none, and its self-dependency is left
+        // out.
+        let cycle = [(1, 3), (2, 1), (3, 2)];
+        assert_eq!(edges.len(), 3, "{edges:?}");
+        assert!(edges.contains(&(4, 3)), "{edges:?}");
+        assert_eq!(cycle.iter().filter(|edge| edges.contains(edge)).count(), 2);
     }
 
     #[test]

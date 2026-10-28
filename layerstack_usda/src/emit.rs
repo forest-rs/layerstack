@@ -3553,6 +3553,10 @@ def \"A\" (
         }
     }
 
+    /// OpenUSD 26.11 refuses an attribute typed `dictionary`, a keyword
+    /// of its grammar (`Sdf.Layer.ImportFromString` fails with
+    /// "Expected }"), so parsing reports it; recovery still emits the
+    /// attribute as declared.
     #[test]
     fn emit_dictionary_attribute() {
         let src = "\
@@ -3563,7 +3567,22 @@ def \"A\" {
     }
 }
 ";
-        let (result, tokens, _paths) = emit_source(src);
+        let cst = parse_cst(src);
+        assert_eq!(cst.diagnostics.len(), 1, "{:?}", cst.diagnostics);
+        assert_eq!(
+            cst.diagnostics[0].message,
+            "expected an attribute type, not the keyword `dictionary`"
+        );
+        let ast_result = crate::lower::lower(&cst.tree, src);
+        let tokens = TokenInterner::default();
+        let _paths = PathInterner::default();
+        let result = emit(
+            &ast_result.layer,
+            LayerId(1),
+            &tokens,
+            &_paths,
+            &mut StubResolver::new(),
+        );
         let a_path = Path::parse_absolute("/A", &tokens).unwrap();
         let a_id = _paths.lookup(&a_path).expect("/A");
         let spec = result.layer.prim(a_id).unwrap();

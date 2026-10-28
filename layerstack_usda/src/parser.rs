@@ -133,6 +133,67 @@ enum Nesting {
     Value,
 }
 
+/// The keywords of OpenUSD's text grammar, which no attribute type name
+/// may use (`Keywords`, `pxr/usd/sdf/textFileFormatParser.h`, 26.11).
+const KEYWORDS: &[&str] = &[
+    "add",
+    "AnimationBlock",
+    "append",
+    "bezier",
+    "class",
+    "config",
+    "connect",
+    "curve",
+    "custom",
+    "customData",
+    "default",
+    "def",
+    "delete",
+    "dictionary",
+    "displayUnit",
+    "doc",
+    "held",
+    "hermite",
+    "inherits",
+    "kind",
+    "linear",
+    "loop",
+    "nameChildren",
+    "None",
+    "none",
+    "offset",
+    "oscillate",
+    "over",
+    "payload",
+    "permission",
+    "post",
+    "pre",
+    "prefixSubstitutions",
+    "prepend",
+    "properties",
+    "references",
+    "relocates",
+    "rel",
+    "reorder",
+    "rootPrims",
+    "repeat",
+    "reset",
+    "scale",
+    "sloped",
+    "subLayers",
+    "suffixSubstitutions",
+    "specializes",
+    "spline",
+    "symmetryArguments",
+    "symmetryFunction",
+    "timeSamples",
+    "uniform",
+    "variantSet",
+    "variantSets",
+    "variants",
+    "varying",
+];
+
 /// A parser's position and diagnostic count, which
 /// [`Parser::skip_unparsed`] compares to see whether a loop advanced.
 #[derive(Clone, Copy)]
@@ -1428,6 +1489,25 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
 
     // ── Attributes ─────────────────────────────────────────────────
 
+    /// Reports an attribute type name, `at` the start of `type_name`,
+    /// with a part that is a keyword of the grammar (`dictionary`, `kind`,
+    /// `None`, ...): OpenUSD's `AttributeType` takes an `Identifier`, whose
+    /// parts are `KeywordlessIdentifier`s, so its text parser refuses the
+    /// layer. Recovery reads the attribute on as declared.
+    ///
+    /// Spec: AOUSD Core §16.2 (USDA attribute declarations). OpenUSD 26.11:
+    /// `Keywords` and `KeywordlessIdentifier`,
+    /// `pxr/usd/sdf/textFileFormatParser.h`.
+    fn refuse_keyword_type(&mut self, type_name: &str, at: Span) {
+        if let Some(keyword) = type_name.split("::").find(|part| KEYWORDS.contains(part)) {
+            let span = Span::new(at.start, at.start + type_name.len() as u32);
+            self.error(
+                span,
+                format!("expected an attribute type, not the keyword `{keyword}`"),
+            );
+        }
+    }
+
     fn parse_attribute(&mut self) {
         let errors = self.diagnostics.len();
         let start = self.current_span().start;
@@ -1461,6 +1541,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
         // (`pxr/usd/sdf/textFileFormatParser.h`).
         self.eat_trivia();
         if self.peek() == Some(TokenKind::Ident) {
+            let type_start_span = self.current_span();
             let kind =
                 |parser: &Self, at: usize| parser.tokens.get(parser.pos + at).map(|t| t.kind);
             let namespaced = |parser: &Self, at: usize| {
@@ -1485,6 +1566,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
                 type_name = self.current_text();
                 self.bump();
             }
+            self.refuse_keyword_type(type_name, type_start_span);
         }
 
         // Array suffix `[]`.

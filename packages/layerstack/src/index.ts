@@ -27,6 +27,8 @@ import { LayerstackError } from "./errors.js";
 import { Layerstack } from "./stage.js";
 import type { NativeModule } from "./stage.js";
 
+export { ArrayCopy, ArrayHandle } from "./arrays.js";
+export type { NativeArrayHandle } from "./arrays.js";
 export { LayerstackError } from "./errors.js";
 export type { ErrorCode, ErrorDetails } from "./errors.js";
 export { ABI, Attribute, EditReceipt, Layer, Layerstack, PACKAGE_VERSION, Prim, Relationship, Stage } from "./stage.js";

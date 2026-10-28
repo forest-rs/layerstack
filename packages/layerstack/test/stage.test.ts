@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { ABI, LayerstackError, loadLayerstack } from "../dist/index.js";
+import { ABI, ArrayHandle, LayerstackError, loadLayerstack } from "../dist/index.js";
 import type { Layerstack, NativeModule, Stage } from "../dist/index.js";
 import { bytes, mockSource, scene, usdz } from "./fixtures.ts";
 
@@ -220,23 +220,24 @@ describe("values and explanations", () => {
     assert.equal(weaker?.cause, "shadowed");
   });
 
-  it("copies typed arrays out as one buffer", async () => {
+  it("hands numeric arrays over as a handle, copied only on request", async () => {
     using stage = openScene();
     await stage.resolve(mockSource(scene));
     const before = layerstack.transfer().bytesOut;
-    const points = stage.attribute("/Ball.points")?.array();
-    assert.ok(points);
+    using points = stage.attribute("/Ball.points")?.array();
+    assert.ok(points instanceof ArrayHandle);
     assert.equal(points.type, "point3f[]");
     assert.equal(points.scalar, "f32");
     assert.equal(points.components, 3);
     assert.equal(points.length, 2);
     assert.equal(points.byteLength, 24);
+    assert.equal(layerstack.transfer().bytesOut - before, 0, "reading copies nothing");
     const copy = points.copy();
     assert.ok(copy instanceof Float32Array);
     assert.deepEqual(Array.from(copy), [0, 0, 0, 1, 2, 3]);
     copy[0] = 42;
     assert.equal((points.copy() as Float32Array)[0], 0, "each copy is the module's value");
-    assert.equal(layerstack.transfer().bytesOut - before, 24);
+    assert.equal(layerstack.transfer().bytesOut - before, 48, "each copy counts");
   });
 
   it("keeps 64-bit integers exact as bigint", async () => {

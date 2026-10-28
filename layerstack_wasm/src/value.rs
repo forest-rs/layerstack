@@ -14,8 +14,9 @@
 //! - `"t"`, `[type, "t", numbers]`: a vector, matrix (row-major) or
 //!   quaternion (stored imaginary first, `[i, j, k, r]`).
 //! - `"a"`, `[type, "a", scalar, components, length, data]`: an array,
-//!   `data` one typed array of `length * components` scalars (half floats
-//!   as raw bits, `bool` as bytes) or, for text, a list of strings.
+//!   `data` an [`ArrayHandle`] on its `length * components` scalars (half
+//!   floats as raw bits, `bool` as bytes), which stay in Wasm memory, or,
+//!   for text, a list of strings.
 //! - `"d"`, `[type, "d", [[key, value], ...]]`: a dictionary.
 //! - `"l"`, `[type, "l", [value, ...]]`: a list no buffer holds.
 //! - `"x"`, `[type, "x"]`: a value the bindings do not represent.
@@ -23,7 +24,8 @@
 //! A value the wrapper sends is a [`ValueInput`]: a value type name and
 //! its scalars in one buffer, in the layout `encode` produces (tuples
 //! flattened, matrices row-major, quaternions `[i, j, k, r]`, half floats
-//! as numbers or as raw bits), so a value read can be sent back as it is.
+//! as numbers or as raw bits), so a value read can be sent back as it is;
+//! an [`ArrayHandle`] read is sent back as it is, sharing its buffer.
 //!
 //! Spec: AOUSD Core §6.2–§6.3 (scene description data types).
 
@@ -38,10 +40,7 @@ use alloc::{
 
 use layerstack::{StringArray, TokenInterner, TypedArray, Value, ValueType, half};
 
-use crate::{
-    error::Error,
-    wire::{Elements, Wire},
-};
+use crate::{array::ArrayHandle, error::Error, wire::Wire};
 
 /// `value` as a value record, its type named `type_name` when the attribute
 /// declares one; `None` for no value (a block or `Null`).
@@ -135,7 +134,9 @@ pub(crate) fn encode(
     }))
 }
 
-/// The array record of `array`: its scalars in one buffer, copied once.
+/// The array record of `array`: a numeric array's buffer as an
+/// [`ArrayHandle`] (shared, not copied), a text array's elements as
+/// strings.
 fn encode_array(
     array: &TypedArray,
     type_name: Option<&str>,
@@ -144,123 +145,38 @@ fn encode_array(
     let array = array
         .try_materialize()
         .map_err(|error| Error::new("value.decode", error.to_string()))?;
-    let (default, scalar, components, data) = match array {
-        TypedArray::Bool(items) => (
-            "bool[]",
-            "bool",
-            1,
-            Wire::Elements(Elements::U8(items.iter().map(|b| u8::from(*b)).collect())),
-        ),
-        TypedArray::UChar(items) => (
-            "uchar[]",
-            "u8",
-            1,
-            Wire::Elements(Elements::U8(items.to_vec())),
-        ),
-        TypedArray::Int(items) => (
-            "int[]",
-            "i32",
-            1,
-            Wire::Elements(Elements::I32(items.to_vec())),
-        ),
-        TypedArray::UInt(items) => (
-            "uint[]",
-            "u32",
-            1,
-            Wire::Elements(Elements::U32(items.to_vec())),
-        ),
-        TypedArray::Int64(items) => (
-            "int64[]",
-            "i64",
-            1,
-            Wire::Elements(Elements::I64(items.to_vec())),
-        ),
-        TypedArray::UInt64(items) => (
-            "uint64[]",
-            "u64",
-            1,
-            Wire::Elements(Elements::U64(items.to_vec())),
-        ),
-        TypedArray::Half(items) => (
-            "half[]",
-            "f16",
-            1,
-            Wire::Elements(Elements::U16(items.to_vec())),
-        ),
-        TypedArray::Float(items) => (
-            "float[]",
-            "f32",
-            1,
-            Wire::Elements(Elements::F32(items.to_vec())),
-        ),
-        TypedArray::Double(items) => (
-            "double[]",
-            "f64",
-            1,
-            Wire::Elements(Elements::F64(items.to_vec())),
-        ),
-        TypedArray::TimeCode(items) => (
-            "timecode[]",
-            "f64",
-            1,
-            Wire::Elements(Elements::F64(items.to_vec())),
-        ),
-        TypedArray::Duration(items) => (
-            "duration[]",
-            "f64",
-            1,
-            Wire::Elements(Elements::F64(items.to_vec())),
-        ),
-        TypedArray::Vec2f(items) => ("float2[]", "f32", 2, f32s(items.as_flattened())),
-        TypedArray::Vec3f(items) => ("float3[]", "f32", 3, f32s(items.as_flattened())),
-        TypedArray::Vec4f(items) => ("float4[]", "f32", 4, f32s(items.as_flattened())),
-        TypedArray::Quatf(items) => ("quatf[]", "f32", 4, f32s(items.as_flattened())),
-        TypedArray::Vec2d(items) => ("double2[]", "f64", 2, f64s(items.as_flattened())),
-        TypedArray::Vec3d(items) => ("double3[]", "f64", 3, f64s(items.as_flattened())),
-        TypedArray::Vec4d(items) => ("double4[]", "f64", 4, f64s(items.as_flattened())),
-        TypedArray::Quatd(items) => ("quatd[]", "f64", 4, f64s(items.as_flattened())),
-        TypedArray::Matrix2d(items) => ("matrix2d[]", "f64", 4, f64s(items.as_flattened())),
-        TypedArray::Matrix3d(items) => ("matrix3d[]", "f64", 9, f64s(items.as_flattened())),
-        TypedArray::Matrix4d(items) => ("matrix4d[]", "f64", 16, f64s(items.as_flattened())),
-        TypedArray::Vec2h(items) => ("half2[]", "f16", 2, u16s(items.as_flattened())),
-        TypedArray::Vec3h(items) => ("half3[]", "f16", 3, u16s(items.as_flattened())),
-        TypedArray::Vec4h(items) => ("half4[]", "f16", 4, u16s(items.as_flattened())),
-        TypedArray::Quath(items) => ("quath[]", "f16", 4, u16s(items.as_flattened())),
-        TypedArray::Vec2i(items) => ("int2[]", "i32", 2, i32s(items.as_flattened())),
-        TypedArray::Vec3i(items) => ("int3[]", "i32", 3, i32s(items.as_flattened())),
-        TypedArray::Vec4i(items) => ("int4[]", "i32", 4, i32s(items.as_flattened())),
+    let length = array.len();
+    if let Some(handle) = ArrayHandle::new(type_name, array) {
+        let Wire::List(mut record) = handle.layout() else {
+            unreachable!("a layout is a list")
+        };
+        record.insert(1, Wire::text("a"));
+        record.push(Wire::Array(handle));
+        return Ok(Wire::List(record));
+    }
+    let (default, data) = match array {
         TypedArray::Token(items) => (
             "token[]",
-            "string",
-            1,
-            Wire::List(
-                items
-                    .iter()
-                    .map(|t| Wire::text(tokens.resolve(*t)))
-                    .collect(),
-            ),
+            items
+                .iter()
+                .map(|t| Wire::text(tokens.resolve(*t)))
+                .collect(),
         ),
-        TypedArray::String(items) => (
-            "string[]",
-            "string",
-            1,
-            Wire::List(items.iter().map(Wire::text).collect()),
-        ),
-        TypedArray::Deferred(_) => {
+        TypedArray::String(items) => ("string[]", items.iter().map(Wire::text).collect()),
+        _ => {
             return Err(Error::new(
                 "value.decode",
                 "a retained array materialized to another retained array",
             ));
         }
     };
-    let length = array.len();
     Ok(Wire::List(vec![
         Wire::Text(String::from(type_name.unwrap_or(default))),
         Wire::text("a"),
-        Wire::text(scalar),
-        Wire::Number(f64::from(components)),
+        Wire::text("string"),
+        Wire::Number(1.0),
         Wire::Number(length as f64),
-        data,
+        Wire::List(data),
     ]))
 }
 
@@ -330,6 +246,10 @@ pub(crate) enum InputData {
     HalfBits(Vec<u16>),
     /// Text, for `string`, `token`, `asset` and `pathExpression`.
     Text(Vec<String>),
+    /// A pinned numeric array ([`ArrayHandle`]), for an array type: its
+    /// buffer is shared when the type's storage is the array's, and
+    /// converted as its scalars would be otherwise.
+    Shared(TypedArray),
 }
 
 impl InputData {
@@ -341,6 +261,7 @@ impl InputData {
             Self::UInt64(items) => items.len(),
             Self::HalfBits(items) => items.len(),
             Self::Text(items) => items.len(),
+            Self::Shared(array) => array.len(),
         }
     }
 
@@ -352,6 +273,7 @@ impl InputData {
             Self::Int64(_) | Self::UInt64(_) => "bigints",
             Self::HalfBits(_) => "half float bits",
             Self::Text(_) => "strings",
+            Self::Shared(_) => "an array handle",
         }
     }
 }
@@ -389,6 +311,9 @@ pub(crate) fn decode(input: &ValueInput, tokens: &TokenInterner) -> Result<Value
             ),
         ));
     };
+    if let InputData::Shared(array) = &input.data {
+        return decode_shared(input, is_array, array, tokens);
+    }
     let storage = value_type.storage();
     let components = components(storage);
     if components == 0 {
@@ -554,6 +479,42 @@ pub(crate) fn decode(input: &ValueInput, tokens: &TokenInterner) -> Result<Value
     Ok(value)
 }
 
+/// A shared array as a value of `input`'s type: the array itself when the
+/// type's storage is the array's (a `point3f[]` handle sent as a
+/// `color3f[]`), else its scalars converted as numbers sent for the type
+/// would be (a `float3[]` handle sent as a `double3[]`).
+fn decode_shared(
+    input: &ValueInput,
+    is_array: bool,
+    array: &TypedArray,
+    tokens: &TokenInterner,
+) -> Result<Value, Error> {
+    let name = input.type_name.as_str();
+    if !is_array {
+        return Err(Error::new(
+            "value.shape",
+            format!("`{name}` is not an array type, and an array handle holds an array"),
+        ));
+    }
+    let probe = ValueInput {
+        type_name: input.type_name.clone(),
+        data: InputData::Numbers(Vec::new()),
+    };
+    if let Value::TypedArray(empty) = decode(&probe, tokens)?
+        && core::mem::discriminant(&empty) == core::mem::discriminant(array)
+    {
+        return Ok(Value::TypedArray(array.clone()));
+    }
+    let data = crate::array::input_data(array).ok_or_else(|| kind_error(&input.data, name))?;
+    decode(
+        &ValueInput {
+            type_name: input.type_name.clone(),
+            data,
+        },
+        tokens,
+    )
+}
+
 /// The scalars per element of a role-less value type; 0 for one that
 /// holds no value.
 fn components(storage: ValueType) -> usize {
@@ -697,22 +658,6 @@ fn tuples<T: Copy + Default, const N: usize>(items: &[T]) -> Vec<[T; N]> {
     items.as_chunks::<N>().0.to_vec()
 }
 
-fn f32s(items: &[f32]) -> Wire {
-    Wire::Elements(Elements::F32(items.to_vec()))
-}
-
-fn f64s(items: &[f64]) -> Wire {
-    Wire::Elements(Elements::F64(items.to_vec()))
-}
-
-fn u16s(items: &[u16]) -> Wire {
-    Wire::Elements(Elements::U16(items.to_vec()))
-}
-
-fn i32s(items: &[i32]) -> Wire {
-    Wire::Elements(Elements::I32(items.to_vec()))
-}
-
 #[cfg(test)]
 mod tests {
     use alloc::sync::Arc;
@@ -729,17 +674,25 @@ mod tests {
         let wire = encode(&points, Some("point3f[]"), &tokens)
             .unwrap()
             .unwrap();
+        let record = wire.as_list().unwrap();
         assert_eq!(
-            wire,
-            Wire::List(vec![
+            record[..5],
+            [
                 Wire::text("point3f[]"),
                 Wire::text("a"),
                 Wire::text("f32"),
                 Wire::Number(3.0),
                 Wire::Number(2.0),
-                Wire::Elements(Elements::F32(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0])),
-            ])
+            ]
         );
+        let Wire::Array(handle) = &record[5] else {
+            panic!("{:?}", record[5]);
+        };
+        let Value::TypedArray(array) = &points else {
+            unreachable!()
+        };
+        assert!(handle.array().shares_storage(array), "the buffer is shared");
+        assert_eq!(handle.byte_length(), 24);
     }
 
     #[test]
@@ -791,14 +744,8 @@ mod tests {
                             .collect(),
                     )
                 }
-                (_, _, Some(Wire::Elements(Elements::F32(items)))) => {
-                    InputData::Floats(items.clone())
-                }
-                (_, _, Some(Wire::Elements(Elements::U16(items)))) => {
-                    InputData::HalfBits(items.clone())
-                }
-                (_, _, Some(Wire::Elements(Elements::I64(items)))) => {
-                    InputData::Int64(items.clone())
+                (_, _, Some(Wire::Array(handle))) => {
+                    crate::array::input_data(handle.array()).unwrap()
                 }
                 (_, _, Some(Wire::List(items))) => {
                     InputData::Text(items.iter().map(|t| t.as_text().unwrap().into()).collect())
@@ -927,5 +874,28 @@ mod tests {
         assert_eq!(code("token", InputData::Numbers(vec![1.0])), "value.kind");
         assert_eq!(code("double", InputData::Int64(vec![1])), "value.kind");
         assert_eq!(code("float", InputData::HalfBits(vec![1])), "value.kind");
+    }
+
+    #[test]
+    fn a_shared_array_is_kept_or_converted_by_its_type() {
+        let tokens = TokenInterner::default();
+        let points = TypedArray::Vec3f(Arc::new(vec![[0.5, 1.0, 2.0]]));
+        let decoded = |type_name: &str| {
+            decode(
+                &input(type_name, InputData::Shared(points.clone())),
+                &tokens,
+            )
+        };
+        let Value::TypedArray(shared) = decoded("color3f[]").unwrap() else {
+            panic!("an array");
+        };
+        assert!(shared.shares_storage(&points), "same storage: no copy");
+        assert_eq!(
+            decoded("double3[]").unwrap(),
+            Value::TypedArray(TypedArray::Vec3d(Arc::new(vec![[0.5, 1.0, 2.0]])))
+        );
+        assert_eq!(decoded("float3").unwrap_err().code, "value.shape");
+        assert_eq!(decoded("float2[]").unwrap_err().code, "value.shape");
+        assert_eq!(decoded("token[]").unwrap_err().code, "value.kind");
     }
 }

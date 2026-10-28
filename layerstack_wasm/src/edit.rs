@@ -29,6 +29,7 @@ use layerstack::{
 use wasm_bindgen::prelude::*;
 
 use crate::{
+    array::ArrayHandle,
     error::Error,
     value::{self, InputData, ValueInput},
 };
@@ -206,6 +207,13 @@ impl EditBatch {
     #[wasm_bindgen(js_name = valueText)]
     pub fn value_text(&mut self, type_name: String, data: Vec<String>) -> u32 {
         self.value(type_name, InputData::Text(data))
+    }
+
+    /// Fills a value slot with a pinned array, shared rather than copied
+    /// when `type_name`'s storage is the array's; returns the slot.
+    #[wasm_bindgen(js_name = valueArray)]
+    pub fn value_array(&mut self, type_name: String, handle: &ArrayHandle) -> u32 {
+        self.value(type_name, InputData::Shared(handle.array().clone()))
     }
 
     /// Pushes a `definePrim` edit.

@@ -1,6 +1,7 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
+import type { ArrayHandle } from "./arrays.js";
 import type { Layer } from "./stage.js";
 
 /** The arc that reaches an opinion: the scene description field's name, `local` for a local opinion. */
@@ -136,8 +137,8 @@ export interface OpenOptions {
 /** A scalar's storage type in an array: `f16` is half floats as raw bits, `bool` is bytes of 0 or 1. */
 export type Scalar = "bool" | "u8" | "i32" | "u32" | "i64" | "u64" | "f16" | "f32" | "f64" | "string";
 
-/** The elements of an array, as one typed array of scalars, or strings for text. */
-export type ArrayElements =
+/** The scalars of a numeric array, as one typed array. */
+export type NumericElements =
   | Uint8Array
   | Uint16Array
   | Int32Array
@@ -145,8 +146,10 @@ export type ArrayElements =
   | BigInt64Array
   | BigUint64Array
   | Float32Array
-  | Float64Array
-  | string[];
+  | Float64Array;
+
+/** The elements of an array, as one typed array of scalars, or strings for text. */
+export type ArrayElements = NumericElements | string[];
 
 /**
  * An array value: its layout, and its elements as one buffer.
@@ -154,6 +157,10 @@ export type ArrayElements =
  * `length` elements of `components` scalars each, flattened
  * (`point3f[]` is `f32` with 3 components). Matrices are row-major;
  * quaternions are imaginary first, `[i, j, k, r]`.
+ *
+ * A numeric array is an {@link ArrayHandle}: its elements stay in the
+ * module, and `view()` is a typed array over them, valid until the next
+ * call into the module. A text array's strings are copied out once.
  */
 export interface ArrayData extends Disposable {
   /** The value type name, such as `point3f[]`. */
@@ -166,8 +173,18 @@ export interface ArrayData extends Disposable {
   readonly length: number;
   /** The bytes of the scalars (two per UTF-16 code unit for text). */
   readonly byteLength: number;
+  /** Whether it was released: a released handle no longer reads. */
+  readonly released: boolean;
+  /**
+   * The elements without a copy. For a numeric array, a typed array over
+   * the module's memory: valid until the next call into the module, and
+   * never to be written. For text, the frozen strings.
+   */
+  view(): NumericElements | readonly string[];
   /** A new JS-owned copy of the elements; each call copies. */
   copy(): ArrayElements;
+  /** Releases what it holds natively (a numeric array's pinned buffer). Idempotent. */
+  release(): void;
 }
 
 /** A composed value. `kind` says its shape; `type` is its value type name (`float`, `color3f`, `point3f[]`). */
@@ -522,10 +539,14 @@ export interface Version {
 
 /** Bytes that crossed the boundary through this instance, for measuring transfer costs. */
 export interface Transfer {
-  /** Bytes copied into the module: opened and supplied sources. */
+  /** Bytes copied into the module: opened and supplied sources, and values authored from JS buffers. */
   readonly bytesIn: number;
-  /** Bytes copied out: array elements. */
+  /** Bytes copied out: array copies ({@link ArrayData.copy}), saved and exported bytes. */
   readonly bytesOut: number;
+  /** Views built over the module's memory ({@link ArrayHandle.view}): no copy. */
+  readonly views: number;
+  /** The bytes those views exposed. */
+  readonly bytesViewed: number;
   /** The module's memory now, in bytes (0 when the module does not expose it). */
   readonly memoryBytes: number;
 }

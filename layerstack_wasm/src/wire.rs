@@ -13,6 +13,8 @@ use alloc::{string::String, vec::Vec};
 
 use wasm_bindgen::JsValue;
 
+use crate::array::ArrayHandle;
+
 /// One value handed to JavaScript.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum Wire {
@@ -30,29 +32,9 @@ pub(crate) enum Wire {
     Text(String),
     /// An array of values: a record or a list.
     List(Vec<Self>),
-    /// A typed array, copied out of Wasm memory.
-    Elements(Elements),
-}
-
-/// A numeric buffer that becomes one typed array.
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) enum Elements {
-    /// `Uint8Array`.
-    U8(Vec<u8>),
-    /// `Uint16Array` (half floats as raw bits).
-    U16(Vec<u16>),
-    /// `Int32Array`.
-    I32(Vec<i32>),
-    /// `Uint32Array`.
-    U32(Vec<u32>),
-    /// `BigInt64Array`.
-    I64(Vec<i64>),
-    /// `BigUint64Array`.
-    U64(Vec<u64>),
-    /// `Float32Array`.
-    F32(Vec<f32>),
-    /// `Float64Array`.
-    F64(Vec<f64>),
+    /// A pinned numeric array, which becomes the native `ArrayHandle`
+    /// object: its bytes stay in Wasm memory.
+    Array(ArrayHandle),
 }
 
 impl Wire {
@@ -97,16 +79,7 @@ impl From<Wire> for JsValue {
             Wire::List(items) => {
                 Self::from(items.into_iter().map(Self::from).collect::<Vec<Self>>())
             }
-            Wire::Elements(elements) => match elements {
-                Elements::U8(items) => Self::from(items),
-                Elements::U16(items) => Self::from(items),
-                Elements::I32(items) => Self::from(items),
-                Elements::U32(items) => Self::from(items),
-                Elements::I64(items) => Self::from(items),
-                Elements::U64(items) => Self::from(items),
-                Elements::F32(items) => Self::from(items),
-                Elements::F64(items) => Self::from(items),
-            },
+            Wire::Array(handle) => Self::from(handle),
         }
     }
 }

@@ -1,6 +1,8 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
+import { ArrayCopy, ArrayHandle } from "./arrays.js";
+import type { NativeArrayHandle } from "./arrays.js";
 import { lowerEdits } from "./edits.js";
 import type { NativeEditBatch } from "./edits.js";
 import { LayerstackError } from "./errors.js";
@@ -8,7 +10,6 @@ import type { ErrorCode } from "./errors.js";
 import type {
   ArcKind,
   ArrayData,
-  ArrayElements,
   AssetFailure,
   AssetNeed,
   AssetSource,
@@ -40,7 +41,7 @@ export const PACKAGE_VERSION = "0.1.0";
  * The ABI this package speaks: the version of the records it exchanges
  * with the native module (`layerstack_wasm::ABI`).
  */
-export const ABI = 2;
+export const ABI = 3;
 
 /** The native stage the generated glue exports (`layerstack_wasm::Stage`). Not for app use. */
 export interface NativeStage {
@@ -104,6 +105,8 @@ export class Layerstack {
   #trapped: unknown = undefined;
   #bytesIn = 0;
   #bytesOut = 0;
+  #views = 0;
+  #bytesViewed = 0;
 
   /** Wraps an initialized module, refusing one of another ABI (`module.abi`). */
   constructor(module: NativeModule) {
@@ -155,14 +158,25 @@ export class Layerstack {
     return {
       bytesIn: this.#bytesIn,
       bytesOut: this.#bytesOut,
+      views: this.#views,
+      bytesViewed: this.#bytesViewed,
       memoryBytes: this.#module.memory?.buffer.byteLength ?? 0,
     };
   }
 
-  /** @internal Counts bytes copied in or out. */
-  count(direction: "in" | "out", bytes: number): void {
+  /** @internal The module's memory, if it exposes it. */
+  memory(): WebAssembly.Memory | undefined {
+    return this.#module.memory;
+  }
+
+  /** @internal Counts bytes copied in or out, or a view built over the module's memory. */
+  count(direction: "in" | "out" | "view", bytes: number): void {
     if (direction === "in") this.#bytesIn += bytes;
-    else this.#bytesOut += bytes;
+    else if (direction === "out") this.#bytesOut += bytes;
+    else {
+      this.#views += 1;
+      this.#bytesViewed += bytes;
+    }
   }
 
   /**
@@ -482,7 +496,7 @@ export class Stage implements Disposable {
     this.#own("apply", target);
     const batch = this.#ls.batch();
     try {
-      lowerEdits(batch, edits, "apply");
+      lowerEdits(batch, edits, "apply", this.#ls);
       const native = this.#call("apply", (stage) => stage.apply(target.id, batch));
       const receipt = this.#receipt(native);
       this.#notify();
@@ -782,13 +796,17 @@ export class Attribute {
     Object.freeze(this);
   }
 
-  /** Its composed value at `time`, or `null` when it resolves none. Arrays are copied out once. */
+  /**
+   * Its composed value at `time`, or `null` when it resolves none. A
+   * numeric array is an {@link ArrayHandle} on the stage's buffer, not a
+   * copy; release it when done.
+   */
   get(time?: number): Value | null {
     const record = this.stage.native("get", (native) => native.get(this.path, time));
     return decodeValue(this.stage.layerstack, record);
   }
 
-  /** Its value as array data, or `null` when it is not an array. */
+  /** Its value as array data (an {@link ArrayHandle} for numbers), or `null` when it is not an array. */
   array(time?: number): ArrayData | null {
     const value = this.get(time);
     return value?.kind === "array" ? value.array : null;
@@ -922,34 +940,6 @@ export class EditReceipt implements Disposable {
   }
 }
 
-/** Array data copied out of the module: the elements live in JS memory. */
-class ArrayCopy implements ArrayData {
-  readonly type: string;
-  readonly scalar: Scalar;
-  readonly components: number;
-  readonly length: number;
-  readonly byteLength: number;
-  readonly #elements: ArrayElements;
-
-  constructor(type: string, scalar: Scalar, components: number, length: number, elements: ArrayElements) {
-    this.type = type;
-    this.scalar = scalar;
-    this.components = components;
-    this.length = length;
-    this.#elements = elements;
-    this.byteLength = Array.isArray(elements)
-      ? elements.reduce((sum, text) => sum + 2 * text.length, 0)
-      : elements.byteLength;
-  }
-
-  copy(): ArrayElements {
-    return Array.isArray(this.#elements) ? [...this.#elements] : this.#elements.slice();
-  }
-
-  /** Nothing to release: the elements are JS-owned. */
-  [Symbol.dispose](): void {}
-}
-
 function readMetadata(stage: Stage, path: string, key: string): Value | null {
   const record = stage.native("metadata", (native) => native.metadata(path, key));
   return decodeValue(stage.layerstack, record);
@@ -976,10 +966,13 @@ function decodeValue(layerstack: Layerstack, record: unknown): Value | null {
     case "t":
       return { kind: "tuple", type, value: rest[0] as number[] };
     case "a": {
-      const [scalar, components, length, elements] = rest as [Scalar, number, number, ArrayElements];
-      const array = new ArrayCopy(type, scalar, components, length, elements);
-      layerstack.count("out", array.byteLength);
-      return { kind: "array", type, array };
+      const [scalar, components, length, elements] = rest as [Scalar, number, number, string[] | NativeArrayHandle];
+      if (Array.isArray(elements)) {
+        const array = new ArrayCopy(type, scalar, components, length, elements);
+        layerstack.count("out", array.byteLength);
+        return { kind: "array", type, array };
+      }
+      return { kind: "array", type, array: new ArrayHandle(layerstack, elements) };
     }
     case "d":
       return {

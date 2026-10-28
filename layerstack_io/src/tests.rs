@@ -1157,6 +1157,45 @@ fn prepared_commit_reuses_sources_and_preserves_stage_observers_and_dependencies
     assert!(doc.stage.unsubscribe_changes(&subscription));
 }
 
+#[test]
+fn encoding_a_layer_returns_the_bytes_an_export_writes() {
+    let source =
+        "#usda 1.0\ndef Mesh \"Mesh\" {\n    point3f[] points = [(0, 0, 0), (1, 2, 3)]\n}\n";
+    let mut document = StageDocument::open(
+        Memory::with(&[("mesh.usda", source)]),
+        "mesh.usda",
+        StageOptions::default(),
+    )
+    .unwrap();
+    let root = document.stage().stage().root_layer().unwrap();
+    for target in ["copy.usda", "copy.usdc"] {
+        document.export_layer(root, target).unwrap();
+        let written = document.storage_mut().files.remove(target).unwrap();
+        let layer = document.store().layer(root).unwrap();
+        assert_eq!(
+            document.encode_layer(layer, target).unwrap(),
+            written,
+            "{target}"
+        );
+    }
+    let writes = document.storage().writes.len();
+    let layer = document.store().layer(root).unwrap();
+    assert_eq!(
+        document.encode_layer(layer, "copy.usdz").unwrap_err().kind,
+        IoErrorKind::Unsupported,
+        "a package needs a localization plan"
+    );
+    assert_eq!(
+        document.encode_layer(layer, "copy.txt").unwrap_err().kind,
+        IoErrorKind::Unsupported
+    );
+    assert_eq!(
+        document.storage().writes.len(),
+        writes,
+        "encoding writes nothing"
+    );
+}
+
 fn numeric_usdc() -> Vec<u8> {
     let points = (0..2048)
         .map(|i| format!("({i}, 0, 0)"))

@@ -1390,6 +1390,26 @@ impl<B: Storage> StageDocument<B> {
         let format = identifier_format(&identifier, &self.formats)?;
         self.write_layer(layer, format, &identifier)
     }
+    /// The bytes [`Self::export_layer`] would write for `layer` to
+    /// `target`, returned instead of written: USDA (`.usda`) or USDC
+    /// (`.usd`/`.usdc`), by `target`'s extension, which is not resolved
+    /// and names nothing in storage. `layer` need not be in the store: a
+    /// flattened layer ([`layerstack::Stage::flatten`]) encodes with the
+    /// store's interners, as any layer whose paths and tokens they hold.
+    /// Content a format cannot hold is refused, as a save refuses it.
+    ///
+    /// # Errors
+    ///
+    /// [`IoErrorKind::Unsupported`] for content the format cannot hold, a
+    /// `.usdz` target (a package needs [`Self::prepare_package`]) or an
+    /// unknown extension; [`IoErrorKind::Decode`] for a retained array
+    /// that fails to decode.
+    pub fn encode_layer(&self, layer: &Layer, target: &str) -> Result<Vec<u8>, IoError> {
+        let format = identifier_format(target, &self.formats).map_err(|e| e.at(target))?;
+        let mut bytes = Vec::new();
+        self.encode(layer, format, &mut bytes)?;
+        Ok(bytes)
+    }
     /// Writes an explicit, already localized package plan. Asset selection and
     /// package member naming belong to the caller and existing localization API.
     pub fn export_usdz(
@@ -1440,21 +1460,33 @@ impl<B: Storage> StageDocument<B> {
             .layer(id)
             .ok_or_else(|| IoError::new(IoErrorKind::MissingLayer, "selected layer is absent"))?;
         let (tokens, paths) = (&self.store.tokens, &self.store.paths);
+        if format == Format::Usda {
+            let document =
+                layerstack_usda::save::usda_document(layer, tokens, paths).map_err(save_error)?;
+            return self
+                .storage
+                .write_streamed(identifier, &mut |sink| write_usda(&document, sink))
+                .map_err(|e| e.at(identifier));
+        }
+        let mut bytes = Vec::new();
+        self.encode(layer, format, &mut bytes)?;
+        self.storage
+            .write(identifier, &bytes)
+            .map_err(|e| e.at(identifier))
+    }
+    /// Encodes `layer` in `format` into `sink`, with the store's interners.
+    fn encode(
+        &self,
+        layer: &Layer,
+        format: Format,
+        sink: &mut dyn ByteSink,
+    ) -> Result<(), IoError> {
+        let (tokens, paths) = (&self.store.tokens, &self.store.paths);
         let bytes = match format {
             Format::Usda => {
                 let document = layerstack_usda::save::usda_document(layer, tokens, paths)
                     .map_err(save_error)?;
-                return self
-                    .storage
-                    .write_streamed(identifier, &mut |sink| {
-                        let mut text = TextSink { sink, error: None };
-                        document.write_usda_to(&mut text).map_err(|error| {
-                            text.error.take().unwrap_or_else(|| {
-                                save_error(layerstack_usda::save::SaveError::Document(error))
-                            })
-                        })
-                    })
-                    .map_err(|e| e.at(identifier));
+                return write_usda(&document, sink);
             }
             Format::Usdc => {
                 layerstack_usdc::writer::save_layer(layer, tokens, paths).map_err(|error| {
@@ -1472,9 +1504,7 @@ impl<B: Storage> StageDocument<B> {
             }
             Format::Custom(index) => self.formats.get(index).write(layer, tokens, paths)?,
         };
-        self.storage
-            .write(identifier, &bytes)
-            .map_err(|e| e.at(identifier))
+        sink.write_bytes(&bytes)
     }
     fn session_layers(&self) -> BTreeSet<LayerId> {
         let mut layers = BTreeSet::new();
@@ -2312,6 +2342,19 @@ fn localization_error(error: layerstack_usdz::localize::LocalizationError) -> Io
         ) => save_error(error),
         other => IoError::new(IoErrorKind::Unsupported, other.to_string()),
     }
+}
+/// Streams `document`'s USDA text into `sink`; a failed write fails with
+/// the sink's error.
+fn write_usda(
+    document: &layerstack_usda::writer::Document,
+    sink: &mut dyn ByteSink,
+) -> Result<(), IoError> {
+    let mut text = TextSink { sink, error: None };
+    document.write_usda_to(&mut text).map_err(|error| {
+        text.error
+            .take()
+            .unwrap_or_else(|| save_error(layerstack_usda::save::SaveError::Document(error)))
+    })
 }
 fn save_error(error: layerstack_usda::save::SaveError) -> IoError {
     let message = error.to_string();

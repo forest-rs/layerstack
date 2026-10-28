@@ -16,6 +16,10 @@
 //!   error, which a strict import fails on. A warning is allowed where
 //!   OpenUSD reads a statement and silently ignores it.
 //!
+//! [`DIFFERENCES`] lists the cases layerstack knowingly handles otherwise,
+//! each with its reason and outcome; a listed case whose outcome changes
+//! fails the test too, so the list stays current.
+//!
 //! Spec: AOUSD Core §16 (the USDA text format), §12.4 (list ops).
 
 use layerstack::{
@@ -47,6 +51,48 @@ impl AssetResolver for NoAssets {
         None
     }
 }
+
+/// What layerstack does with a case OpenUSD reads, where it differs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Handling {
+    /// The reader reports an error, so a strict import refuses the layer.
+    Refused,
+    /// The reader reads the layer, and the writer refuses to save it.
+    SaveRefused,
+}
+
+/// A case layerstack knowingly handles otherwise than OpenUSD 26.11.
+struct Difference {
+    /// The case's name.
+    case: &'static str,
+    /// What layerstack does with it.
+    handling: Handling,
+    /// Why.
+    reason: &'static str,
+}
+
+/// The cases layerstack handles otherwise than OpenUSD 26.11, in name
+/// order. Both are strings OpenUSD holds as bytes in a `std::string`,
+/// where a layerstack string is UTF-8 (`Arc<str>`) and the writer never
+/// drops part of a value.
+const DIFFERENCES: &[Difference] = &[
+    Difference {
+        case: "read_string_byte_escapes",
+        handling: Handling::Refused,
+        reason: "escapes that make bytes that are not UTF-8 (`\\xff`) are \
+                 reported, as for `46_weirdStringContent.usda` in `usda_corpus`: \
+                 OpenUSD keeps the bytes and writes them back escaped, and the \
+                 reader refuses to change them rather than keep them",
+    },
+    Difference {
+        case: "write_string_nul",
+        handling: Handling::SaveRefused,
+        reason: "OpenUSD reads `\"a\\x00b\"` whole and writes `\"a\"` \
+                 (`Sdf_FileIOUtility::Quote` stops at the first NUL), so its own \
+                 round trip shortens the value; the writer refuses the string \
+                 (`WriteError::NulInString`) rather than drop the rest of it",
+    },
+];
 
 fn oracle() -> Json {
     let oracle: Json = serde_json::from_str(ORACLE).expect("oracle.json");
@@ -150,6 +196,20 @@ fn cases_read_and_write_as_openusd() {
             .map(|t| t.keys().map(String::as_str).collect())
             .unwrap_or_default();
         let got = outcome(source, &queries);
+        if let Some(difference) = DIFFERENCES.iter().find(|d| d.case == name) {
+            let handling = match (got.diagnostics.is_empty(), &got.saved) {
+                (false, _) => Some(Handling::Refused),
+                (true, Err(_)) => Some(Handling::SaveRefused),
+                (true, Ok(_)) => None,
+            };
+            if !case["reads"].as_bool().unwrap() || handling != Some(difference.handling) {
+                failures.push(format!(
+                    "{name}: listed as {:?} ({}), now {handling:?}",
+                    difference.handling, difference.reason
+                ));
+            }
+            continue;
+        }
         if !case["reads"].as_bool().unwrap() {
             if got.diagnostics.is_empty() {
                 failures.push(format!(
@@ -182,6 +242,11 @@ fn cases_read_and_write_as_openusd() {
                     "{name}: {query} composes {items:?}, OpenUSD {expected:?}"
                 ));
             }
+        }
+    }
+    for difference in DIFFERENCES {
+        if !cases.contains_key(difference.case) {
+            failures.push(format!("{}: listed, but no such case", difference.case));
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n\n"));

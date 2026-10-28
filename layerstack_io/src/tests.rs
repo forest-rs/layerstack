@@ -725,6 +725,12 @@ fn package_preparation_includes_unsaved_layers_and_reports_missing_resources_wit
     let mut output = Memory::default();
     output.files.insert("out.usdz".into(), bytes);
     let reopened = StageDocument::open(output, "out.usdz", StageOptions::default()).unwrap();
+    let package_root = reopened.stage().stage().root_layer().unwrap();
+    assert_eq!(
+        reopened.package_root_member(package_root),
+        Some("scene.usda")
+    );
+    assert_eq!(doc.package_root_member(root), None, "not a package");
     let property = reopened.store.property_path("/Root.answer");
     assert_eq!(
         reopened

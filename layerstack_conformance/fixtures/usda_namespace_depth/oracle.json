@@ -1,0 +1,26 @@
+{
+ "bytes": 2912812,
+ "child_depth": 40,
+ "depth": 600,
+ "fnv1a64": "ee3c249788211385",
+ "head": [
+  "#usda 1.0",
+  "",
+  "def \"A\"",
+  "{",
+  "def \"A\"",
+  "{"
+ ],
+ "lines": 2125,
+ "openusd_version": "26.11",
+ "reads_back": true,
+ "tail": [
+  "}",
+  "}",
+  "}",
+  "}",
+  "",
+  ""
+ ],
+ "variant_depth": 40
+}

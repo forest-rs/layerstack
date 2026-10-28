@@ -113,6 +113,11 @@ struct OpenPrim {
 /// layer as deep. A deeper layer is reported as an error, and nothing
 /// after the limit is read.
 ///
+/// The limit is the reader's alone: a layer authored deeper (through the
+/// layer API, or read from a crate file) saves as USDA at any depth, as
+/// OpenUSD writes it, and OpenUSD reads that text back where this reader
+/// refuses it.
+///
 /// Spec: AOUSD Core §16.2 (USDA), §7.3 (prims nest).
 pub const MAX_NAMESPACE_DEPTH: usize = 256;
 

@@ -12,10 +12,11 @@
 //! AOUSD Core §9, §10.3.1, §12.2–§12.4; OpenUSD
 //! `UsdUtilsFlattenLayerStack` / `UsdFlattenLayerStack` (`usd/flattenUtils.cpp`).
 
+use crate::doc::VariantSelections;
 use crate::listop::append_unique;
 use crate::spec_path::VariantSelectionSite;
 use crate::{
-    CompositionError, FieldEntry, FieldValue, HashMap, Layer, LayerId, LayerOffset, LayerStack,
+    CompositionError, FieldEntry, FieldValue, Layer, LayerId, LayerOffset, LayerStack,
     LayerStackIdentifier, LayerStore, ListOp, PathId, PrimSpec, PropertyEntry, Reference,
     Specifier, TokenId, TokenInterner, Value, VariantSets, VariantSpec,
 };
@@ -817,9 +818,9 @@ fn merge_properties(
     }
     Ok(())
 }
-fn merge_selections(strong: &mut HashMap<TokenId, TokenId>, weak: &HashMap<TokenId, TokenId>) {
-    for (&key, &value) in weak {
-        strong.entry(key).or_insert(value);
+fn merge_selections(strong: &mut VariantSelections, weak: &VariantSelections) {
+    for (set, variant) in weak {
+        strong.as_map_mut().entry(set).or_insert(variant);
     }
 }
 fn merge_variants(

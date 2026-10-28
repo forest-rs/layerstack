@@ -42,6 +42,7 @@
 //! `_EvalRefOrPayloadArcs` (`pxr/usd/pcp/primIndex.cpp`) and
 //! `Pcp_EvaluateVariableExpression` (`pxr/usd/pcp/utils.cpp`).
 
+use crate::doc::VariantSelections;
 use crate::layer_stack::LayerStackIdentifier;
 
 use alloc::{borrow::Cow, collections::BTreeSet, string::String, vec::Vec};
@@ -648,21 +649,21 @@ pub(crate) fn node_variables(
 /// `PcpComposeSiteVariantSelections` in `pxr/usd/pcp/composeSite.cpp`.
 pub(crate) fn site_selections<'m>(
     store: &dyn LayerStore,
-    selections: &'m HashMap<TokenId, TokenId>,
+    selections: &'m VariantSelections,
     context: SiteContext<'_>,
-) -> Cow<'m, HashMap<TokenId, TokenId>> {
+) -> Cow<'m, VariantSelections> {
     let tokens = store.tokens();
     if !tokens.has_expressions()
         || !selections
-            .values()
-            .any(|variant| is_expression(tokens.resolve(*variant)))
+            .iter()
+            .any(|(_, variant)| is_expression(tokens.resolve(variant)))
     {
         return Cow::Borrowed(selections);
     }
     let variables = composed_variables(store, &context.chain());
     let mut evaluated = selections.clone();
     for (set, variant) in selections {
-        let expression = tokens.resolve(*variant);
+        let expression = tokens.resolve(variant);
         if !is_expression(expression) {
             continue;
         }
@@ -672,7 +673,7 @@ pub(crate) fn site_selections<'m>(
         {
             Ok(name) => {
                 let name = name.unwrap_or_default();
-                evaluated.insert(*set, tokens.lookup(&name).unwrap_or(*variant));
+                evaluated.insert(set, tokens.lookup(&name).unwrap_or(variant));
             }
             Err(_) => {
                 evaluated.remove(set);
@@ -688,7 +689,7 @@ pub(crate) fn site_selections<'m>(
 fn authored_source_selections<'s>(
     store: &'s dyn LayerStore,
     source: &OpinionKey,
-) -> Option<&'s HashMap<TokenId, TokenId>> {
+) -> Option<&'s VariantSelections> {
     let spec = store.layer(source.layer_id).and_then(|layer| {
         layer.source_prim_spec(source.lookup_path, &source.spec_path, store.paths())
     })?;
@@ -742,7 +743,7 @@ pub(crate) fn read_selections(
             let Some(selections) = authored_source_selections(store, &source.key) else {
                 continue;
             };
-            let mut selections: Vec<_> = selections.iter().collect();
+            let mut selections: Vec<_> = selections.as_map().iter().collect();
             selections.sort_by(|(a, _), (b, _)| tokens.resolve(**a).cmp(tokens.resolve(**b)));
             for (set, variant) in selections {
                 if !declared.contains(set) || decided.contains(set) {

@@ -96,12 +96,12 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use core::fmt;
 
-use hashbrown::{HashMap, HashSet};
+use hashbrown::HashSet;
 use layerstack::SharedVec;
 use layerstack::doc::{
     FieldEntry, FieldValue, Layer, LayerOffset as LayerLayerOffset, PrimSpec,
     Reference as LayerReference, ReferenceSource, ReferenceTarget, Specifier, Value as LayerValue,
-    VariantSets, VariantSpec,
+    VariantSelections, VariantSets, VariantSpec,
 };
 use layerstack::interner::{TokenId, TokenInterner};
 use layerstack::listop::ListOp as LayerListOp;
@@ -613,10 +613,10 @@ impl Lowering<'_> {
     /// Variant selections, by set name as OpenUSD writes them.
     ///
     /// Spec: AOUSD Core §7.6.2.3.4 (`variantSelection`).
-    fn selections(&self, selections: &HashMap<TokenId, TokenId>) -> Vec<(String, String)> {
+    fn selections(&self, selections: &VariantSelections) -> Vec<(String, String)> {
         let mut out: Vec<(String, String)> = selections
             .iter()
-            .map(|(&set, &variant)| (self.name(set), self.name(variant)))
+            .map(|(set, variant)| (self.name(set), self.name(variant)))
             .collect();
         out.sort();
         out

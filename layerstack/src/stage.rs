@@ -63,6 +63,7 @@ use hashbrown::{HashMap, HashSet};
 
 use invalidation::InvalidationGraph;
 
+use crate::doc::VariantSelections;
 pub(crate) use crate::ident::dictionary_cmp;
 use crate::prim_indexing::Boundaries;
 use crate::variant_fallbacks::VariantFallbacks;
@@ -3436,7 +3437,7 @@ impl Stage {
         &self,
         prim: PathId,
         store: &dyn LayerStore,
-    ) -> HashMap<TokenId, TokenId> {
+    ) -> VariantSelections {
         self.prims
             .get(&prim)
             .map(|index| {
@@ -3485,7 +3486,7 @@ impl Stage {
             }
         }
         sets.into_iter()
-            .map(|set| (set, selections.get(&set).copied()))
+            .map(|set| (set, selections.get(set)))
             .collect()
     }
 

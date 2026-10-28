@@ -251,10 +251,11 @@ pub use doc::{
     AssetAvailability, FieldEntry, FieldValue, InMemoryStore, InterpolationType, Layer, LayerId,
     LayerOffset, LayerPrims, LayerPrimsIntoIter, LayerPrimsIter, LayerPrimsIterMut, LayerStore,
     MaybeSync, PrimSpec, RarePrimFields, Reference, ReferenceSource, ReferenceTarget, Relocate,
-    Specifier, SublayerEntry, Value, VariantBranch, VariantBranches, VariantPrims, VariantSetSpec,
-    VariantSets, VariantSetsIter, VariantSetsIterMut, VariantSpec, Variants, VariantsIter,
-    VariantsIterMut, combine_dictionaries, combine_dictionary_chain, get_field, get_field_mut,
-    insert_field_if_absent, remove_field, set_field_vec,
+    Specifier, SublayerEntry, Value, VariantBranch, VariantBranches, VariantPrims,
+    VariantSelections, VariantSelectionsIter, VariantSetSpec, VariantSets, VariantSetsIter,
+    VariantSetsIterMut, VariantSpec, Variants, VariantsIter, VariantsIterMut, combine_dictionaries,
+    combine_dictionary_chain, get_field, get_field_mut, insert_field_if_absent, remove_field,
+    set_field_vec,
 };
 pub use dynamic_format::{
     DynamicArgs, DynamicDependency, DynamicFileFormat, DynamicFormatContext,

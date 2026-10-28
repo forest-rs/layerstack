@@ -13,8 +13,8 @@
 
 use alloc::vec::Vec;
 
+use crate::doc::VariantSelections;
 use crate::{
-    HashMap,
     doc::{FieldEntry, FieldValue, Layer, PrimSpec, Value, VariantSets, VariantSpec, get_field},
     interner::TokenId,
     path::{PathId, PathInterner},
@@ -163,7 +163,7 @@ impl<'a> SpecRef<'a> {
     pub(crate) fn variant_selection(self, set: TokenId) -> Option<TokenId> {
         match self {
             Self::Prim(spec) => spec.variant_selection(set),
-            Self::Variant(spec) => spec.variant_selections.get(&set).copied(),
+            Self::Variant(spec) => spec.variant_selections.get(set),
         }
     }
 
@@ -206,7 +206,7 @@ impl<'a> SpecMut<'a> {
         }
     }
 
-    pub(crate) fn variant_selections(&mut self) -> &mut HashMap<TokenId, TokenId> {
+    pub(crate) fn variant_selections(&mut self) -> &mut VariantSelections {
         match self {
             Self::Prim(spec) => &mut spec.rare_mut().variant_selections,
             Self::Variant(spec) => &mut spec.variant_selections,

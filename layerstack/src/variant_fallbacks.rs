@@ -21,8 +21,9 @@
 
 use alloc::vec::Vec;
 
-use hashbrown::{HashMap, HashSet};
+use hashbrown::HashSet;
 
+use crate::doc::VariantSelections;
 use crate::{
     doc::{LayerStore, PrimSpec},
     expression_variables::{SiteContext, site_selections},
@@ -62,7 +63,7 @@ pub type VariantFallbacks = alloc::collections::BTreeMap<TokenId, Vec<TokenId>>;
 pub(crate) fn apply_variant_fallbacks(
     store: &dyn LayerStore,
     fallbacks: &VariantFallbacks,
-    selections: &mut HashMap<TokenId, TokenId>,
+    selections: &mut VariantSelections,
     specs: &[(&PrimSpec, SiteContext<'_>)],
     listed: &[ListedSets],
 ) {
@@ -72,7 +73,7 @@ pub(crate) fn apply_variant_fallbacks(
     let mut filled: HashSet<TokenId> = HashSet::new();
     loop {
         let next = declared_sets(listed, selections).into_iter().find(|set| {
-            !selections.contains_key(set) && fallbacks.contains_key(set) && !filled.contains(set)
+            !selections.contains(*set) && fallbacks.contains_key(set) && !filled.contains(set)
         });
         let Some(set) = next else {
             return;
@@ -102,10 +103,10 @@ pub(crate) fn apply_variant_fallbacks(
                 for branch in spec.selected_variant_branches(selections) {
                     let inner = site_selections(store, &branch.spec.variant_selections, *context);
                     for (inner_set, inner_variant) in inner.iter() {
-                        if !selections.contains_key(inner_set)
-                            && !added.iter().any(|(s, _)| s == inner_set)
+                        if !selections.contains(inner_set)
+                            && !added.iter().any(|(s, _)| *s == inner_set)
                         {
-                            added.push((*inner_set, *inner_variant));
+                            added.push((inner_set, inner_variant));
                         }
                     }
                 }
@@ -130,13 +131,13 @@ pub(crate) struct ListedSets {
 /// The variant sets `listed` names under `selections`, nodes strongest
 /// first, each node's in its order, skipping the nodes in branches
 /// `selections` does not select.
-fn declared_sets(listed: &[ListedSets], selections: &HashMap<TokenId, TokenId>) -> Vec<TokenId> {
+fn declared_sets(listed: &[ListedSets], selections: &VariantSelections) -> Vec<TokenId> {
     let mut sets: Vec<TokenId> = Vec::new();
     for node in listed {
         if !node
             .branch
             .iter()
-            .all(|(set, variant)| selections.get(set) == Some(variant))
+            .all(|(set, variant)| selections.get(*set) == Some(*variant))
         {
             continue;
         }
@@ -294,8 +295,8 @@ mod tests {
             .map(|(set, variant)| {
                 format!(
                     "{}={}",
-                    store.tokens.resolve(*set),
-                    store.tokens.resolve(*variant)
+                    store.tokens.resolve(set),
+                    store.tokens.resolve(variant)
                 )
             })
             .collect();

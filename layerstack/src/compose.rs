@@ -13,6 +13,7 @@ use alloc::{borrow::Cow, collections::BTreeSet, vec::Vec};
 
 use hashbrown::{HashMap, HashSet};
 
+use crate::doc::VariantSelections;
 use crate::variant_fallbacks::{ListedSets, VariantFallbacks, apply_variant_fallbacks};
 use crate::{
     composition_checks::{
@@ -196,7 +197,7 @@ pub(crate) fn strength_ordered_variant_selections(
     store: &dyn LayerStore,
     fallbacks: &VariantFallbacks,
     prim_index: &PrimIndex,
-) -> HashMap<TokenId, TokenId> {
+) -> VariantSelections {
     let (graph, sources) = (&prim_index.graph, &prim_index.sources[..]);
     let mut selections = authored_strength_ordered_variant_selections(store, graph, sources);
     apply_fallbacks_at(store, fallbacks, &mut selections, graph, sources, &[]);
@@ -218,7 +219,7 @@ fn authored_strength_ordered_variant_selections(
     store: &dyn LayerStore,
     graph: &PrimIndexGraph,
     sources: &[OpinionSource],
-) -> HashMap<TokenId, TokenId> {
+) -> VariantSelections {
     // Each node lists its sets once, on its strongest source.
     let mut listed: HashMap<NodeId, Vec<TokenId>> =
         node_variant_set_names(store, sources).into_iter().collect();
@@ -239,8 +240,8 @@ fn authored_strength_ordered_variant_selections(
         })
         .collect();
     let mut selections = evaluate_variant_sets(&sites);
-    for (set, variant) in authored_composed_variant_selections(store, graph, sources) {
-        selections.entry(set).or_insert(variant);
+    for (set, variant) in authored_composed_variant_selections(store, graph, sources).iter() {
+        selections.as_map_mut().entry(set).or_insert(variant);
     }
     selections
 }
@@ -257,7 +258,7 @@ struct VariantSite<'a> {
     /// spec itself.
     branch: Vec<(TokenId, TokenId)>,
     /// The selections the site authors, evaluated where it is read.
-    authored: Option<Cow<'a, HashMap<TokenId, TokenId>>>,
+    authored: Option<Cow<'a, VariantSelections>>,
     /// The variant sets the site's node lists, in evaluation order, on the
     /// node's strongest site; empty on its other sites.
     declared: Vec<TokenId>,
@@ -287,10 +288,10 @@ impl<'a> VariantSite<'a> {
     }
 
     /// Whether every branch the site lies in is selected.
-    fn composed(&self, selections: &HashMap<TokenId, TokenId>) -> bool {
+    fn composed(&self, selections: &VariantSelections) -> bool {
         self.branch
             .iter()
-            .all(|(set, variant)| selections.get(set) == Some(variant))
+            .all(|(set, variant)| selections.get(*set) == Some(*variant))
     }
 
     /// The variant sets the site declares, in evaluation order: those its
@@ -368,8 +369,8 @@ pub(crate) fn node_variant_set_names(
 /// left unselected when a new variant arc may author selections
 /// (`_AddVariantArc`, `RetryVariantTasks`), all in
 /// `pxr/usd/pcp/primIndex.cpp`.
-fn evaluate_variant_sets(sites: &[VariantSite<'_>]) -> HashMap<TokenId, TokenId> {
-    let mut selections: HashMap<TokenId, TokenId> = HashMap::new();
+fn evaluate_variant_sets(sites: &[VariantSite<'_>]) -> VariantSelections {
+    let mut selections: VariantSelections = VariantSelections::new();
     // Sets evaluated without a selection, until a new branch composes.
     let mut unselected: HashSet<TokenId> = HashSet::new();
     loop {
@@ -377,14 +378,14 @@ fn evaluate_variant_sets(sites: &[VariantSite<'_>]) -> HashMap<TokenId, TokenId>
             .iter()
             .filter(|site| site.composed(&selections))
             .flat_map(VariantSite::declared)
-            .find(|set| !selections.contains_key(set) && !unselected.contains(set));
+            .find(|set| !selections.contains(*set) && !unselected.contains(set));
         let Some(set) = next else {
             break;
         };
         let found = sites
             .iter()
             .filter(|site| site.composed(&selections))
-            .find_map(|site| site.authored.as_ref()?.get(&set).copied());
+            .find_map(|site| site.authored.as_ref()?.get(set));
         match found {
             Some(variant) => {
                 selections.insert(set, variant);
@@ -405,8 +406,8 @@ fn evaluate_variant_sets(sites: &[VariantSite<'_>]) -> HashMap<TokenId, TokenId>
                 continue;
             }
             for (set, variant) in site.authored.iter().flat_map(|authored| authored.iter()) {
-                if !selections.contains_key(set) && !unselected.contains(set) {
-                    selections.insert(*set, *variant);
+                if !selections.contains(set) && !unselected.contains(&set) {
+                    selections.insert(set, variant);
                     changed = true;
                 }
             }
@@ -426,7 +427,7 @@ fn evaluate_variant_sets(sites: &[VariantSite<'_>]) -> HashMap<TokenId, TokenId>
 fn apply_fallbacks_at(
     store: &dyn LayerStore,
     fallbacks: &VariantFallbacks,
-    selections: &mut HashMap<TokenId, TokenId>,
+    selections: &mut VariantSelections,
     graph: &PrimIndexGraph,
     sources: &[OpinionSource],
     sites: &[(&LayerStack, PathId)],
@@ -474,8 +475,8 @@ fn authored_composed_variant_selections(
     store: &dyn LayerStore,
     graph: &PrimIndexGraph,
     sources: &[OpinionSource],
-) -> HashMap<TokenId, TokenId> {
-    let mut selections: HashMap<TokenId, TokenId> = HashMap::new();
+) -> VariantSelections {
+    let mut selections: VariantSelections = VariantSelections::new();
     for source in sources {
         let Some(layer) = store.layer(source.key.layer_id) else {
             continue;
@@ -491,7 +492,7 @@ fn authored_composed_variant_selections(
         let context = SiteContext::Node(graph, source.key.node);
         let authored = site_selections(store, authored, context);
         for (set, variant) in authored.iter() {
-            selections.entry(*set).or_insert(*variant);
+            selections.as_map_mut().entry(set).or_insert(variant);
         }
     }
 
@@ -513,8 +514,8 @@ fn authored_composed_variant_selections(
             for branch in spec.selected_variant_branches(&selections) {
                 let inner = site_selections(store, &branch.spec.variant_selections, context);
                 for (inner_set, inner_variant) in inner.iter() {
-                    if !selections.contains_key(inner_set) {
-                        new_sels.entry(*inner_set).or_insert(*inner_variant);
+                    if !selections.contains(inner_set) {
+                        new_sels.entry(inner_set).or_insert(inner_variant);
                     }
                 }
             }

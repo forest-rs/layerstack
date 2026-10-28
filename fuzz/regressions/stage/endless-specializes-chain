@@ -1,0 +1,22 @@
+#usda 1.0
+
+def "element" (
+    prepend specializes = </_element_class>
+)
+{
+}
+
+class "_element_class" (
+    specializes = </middleman>
+)
+{
+}
+
+class "middleman"
+{
+    def "element" (
+        prepend specializes = </_element_class>
+    )
+    {
+    }
+}

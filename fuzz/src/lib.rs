@@ -18,9 +18,9 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use layerstack::{
-    AssetResolveError, AssetResolver, FormatArgs, InMemoryStore, LayerId, Path, PathExpression,
-    PathInterner, PropertyPath, ResolvedAsset, SpecPath, StageOptions, TargetPath, Time,
-    TokenInterner, ValueType,
+    AssetResolveError, AssetResolver, CompositionLimits, FormatArgs, InMemoryStore, LayerId, Path,
+    PathExpression, PathInterner, PropertyPath, ResolvedAsset, SpecPath, StageOptions, TargetPath,
+    Time, TokenInterner, ValueType,
     asset::{PackagePath, UdimPattern},
     encoded_bytes::EncodedBytes,
     variable_expression::{ExpressionVariables, VariableExpression},
@@ -266,6 +266,19 @@ pub fn text(data: &[u8]) {
     let _ = layerstack::asset::anchor_asset_path(text, "/fuzz/root.usda");
 }
 
+/// The composition limits a stage of fuzzed input composes within, as a
+/// host composing untrusted input bounds it: scene description can compose
+/// without end, and composition stops at a limit and says so
+/// (`CompositionError::LimitExceeded`). The endless namespaces fuzzing
+/// found (`regressions/stage/`) compose to them within the fuzzer's time
+/// and memory for one input, sanitized; the layers of 64 KiB it reads that
+/// compose an end reach neither.
+const LIMITS: CompositionLimits = CompositionLimits {
+    prim_index_nodes: Some(100_000),
+    nodes_per_prim_index: Some(512),
+    composed_depth: Some(32),
+};
+
 /// Opens the input as the root layer of a stage document, under strict
 /// import and under recovery, then traverses the composed stage and reads
 /// every property.
@@ -283,7 +296,10 @@ pub fn stage(data: &[u8]) {
             storage,
             InMemoryStore::default(),
             identifier,
-            StageOptions::default(),
+            StageOptions {
+                limits: LIMITS,
+                ..StageOptions::default()
+            },
             loading,
         ) else {
             continue;

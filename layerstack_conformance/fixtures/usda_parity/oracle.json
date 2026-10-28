@@ -262,7 +262,7 @@
    "source": "#usda 1.0\n(\n    startFrame = 1 endFrame = 2\n)\n"
   },
   "strict_list_edit_empty_metadata": {
-   "error": "'parse error matching pxrInternal_v0_26_11__pxrReserved___pegtl::pad<pxrInternal_v0_26_11__pxrReserved__::Sdf_TextFileFormatParser::ListOf<pxrInternal_v0_26_11__pxrReserved__::Sdf_TextFileFormatParser::ListValueItem>, pxrInternal_v0_26_11__pxrReserved__::Sdf_TextFileFormatParser::MultilinePadding> at ']' in </A>",
+   "error": "'parse error at ']' in </A>",
    "reads": false,
    "source": "#usda 1.0\ndef \"A\" (\n    prepend apiSchemas = []\n)\n{\n}\n"
   },
@@ -277,7 +277,7 @@
    "source": "#usda 1.0\ndef \"A\"\n{\n    delete rel r = []\n}\n"
   },
   "strict_list_edit_empty_variant_sets": {
-   "error": "'parse error matching pxrInternal_v0_26_11__pxrReserved___pegtl::pad<pxrInternal_v0_26_11__pxrReserved__::Sdf_TextFileFormatParser::ListOf<pxrInternal_v0_26_11__pxrReserved__::Sdf_TextFileFormatParser::String>, pxrInternal_v0_26_11__pxrReserved__::Sdf_TextFileFormatParser::MultilinePadding> at ']' in </A>",
+   "error": "'parse error at ']' in </A>",
    "reads": false,
    "source": "#usda 1.0\ndef \"A\" (\n    prepend variantSets = []\n)\n{\n}\n"
   },
@@ -307,7 +307,7 @@
    "source": "#usda 1.0\ndef \"A\"\n{\n    prepend rel r = None\n}\n"
   },
   "strict_list_op_on_value": {
-   "error": "'parse error matching pxrInternal_v0_26_11__pxrReserved___pegtl::seq<pxrInternal_v0_26_11__pxrReserved__::Sdf_TextFileFormatParser::AttributeDeclaration, pxrInternal_v0_26_11__pxrReserved___pegtl::pad<pxrInternal_v0_26_11__pxrReserved__::Sdf_PathParser::Dot, pxrInternal_v0_26_11__pxrReserved__::Sdf_TextFileFormatParser::InlinePadding>, pxrInternal_v0_26_11__pxrReserved__::Sdf_TextFileFormatParser::KeywordConnect, pxrInternal_v0_26_11__pxrReserved__::Sdf_TextFileFormatParser::Assignment, pxrInternal_v0_26_11__pxrReserved__::Sdf_TextFileFormatParser::ConnectValue> at '= 1' in </A.a>",
+   "error": "'parse error at '= 1' in </A.a>",
    "reads": false,
    "source": "#usda 1.0\ndef \"A\"\n{\n    add float a = 1\n}\n"
   },
@@ -347,17 +347,17 @@
    "source": "#usda 1.0\ndef \"A\"\n{\n    float\n    a = 1\n}\n"
   },
   "strict_newline_before_comma": {
-   "error": "'parse error matching pxrInternal_v0_26_11__pxrReserved__::Sdf_TextFileFormatParser::ListValueClose at ', 2]' in </A.a>",
+   "error": "'parse error at ', 2]' in </A.a>",
    "reads": false,
    "source": "#usda 1.0\ndef \"A\"\n{\n    float[] a = [1\n    , 2]\n}\n"
   },
   "strict_newline_before_prim_name": {
-   "error": "'parse error matching pxrInternal_v0_26_11__pxrReserved___pegtl::internal::eof at 'def Scope' in </>",
+   "error": "'parse error at 'def Scope' in </>",
    "reads": false,
    "source": "#usda 1.0\ndef Scope\n\"A\"\n{\n}\n"
   },
   "strict_newline_in_string": {
-   "error": "'parse error matching pxrInternal_v0_26_11__pxrReserved___pegtl::until<pxrInternal_v0_26_11__pxrReserved___pegtl::one<'\"'>, pxrInternal_v0_26_11__pxrReserved___pegtl::sor<pxrInternal_v0_26_11__pxrReserved___pegtl::two<'\\\\'>, pxrInternal_v0_26_11__pxrReserved___pegtl::string<'\\\\', '\"'>, pxrInternal_v0_26_11__pxrReserved__::Sdf_TextFileFormatParser::Utf8NoEolf>> at '' in </A.s>",
+   "error": "'parse error at '' in </A.s>",
    "reads": false,
    "source": "#usda 1.0\ndef \"A\"\n{\n    string s = \"a\nb\"\n}\n"
   },

@@ -48,6 +48,7 @@ pub enum LightListMode {
 }
 /// An invalid discovery root or cache edit.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum LightListError {
     /// The root prim does not exist. The pseudo-root is valid for discovery.
     MissingPrim(PathId),
@@ -65,6 +66,7 @@ impl core::error::Error for LightListError {}
 
 /// Work performed by a snapshot query since construction or clearing.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct LightListStats {
     /// Calls to compute, including failed queries.
     pub queries: usize,

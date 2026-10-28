@@ -142,6 +142,7 @@ impl From<[[f64; 4]; 4]> for XformOpValue {
 
 /// Why a transform op edit was refused. Nothing is authored.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum XformOpError {
     /// `xformOpOrder` already lists the op.
     ///

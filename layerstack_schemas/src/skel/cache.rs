@@ -15,6 +15,7 @@ use layerstack::{Changes, PathId, PropertyPath, TargetPath};
 /// Cumulative retained evaluator work counters. Clearing entries does not reset
 /// counters; use [`SkelCache::reset_stats`] to start a measurement window.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct SkelCacheStats {
     /// Geometry output queries satisfied by retained arrays.
     pub hits: u64,
@@ -52,6 +53,7 @@ pub struct SkelCacheStats {
 /// Retained array payload occupancy. Bytes include matrix, influence, weight and
 /// output arrays; exclude definitions, strings, hash buckets and Arc headers.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct SkelCacheMemory {
     /// Retained skeleton definitions.
     pub skeletons: usize,

@@ -35,6 +35,7 @@ pub enum RiSplineValues {
 }
 /// Why an authored Ri spline cannot be used as a valid record.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum RiSplineError {
     /// Empty or invalid namespace components.
     InvalidName(String),

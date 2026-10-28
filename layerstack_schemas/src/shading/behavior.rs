@@ -19,6 +19,7 @@ pub struct ConnectableBehavior {
 }
 /// Why a proposed shading connection violates built-in policy.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ConnectionIssue {
     /// The destination is not an existing shading attribute.
     InvalidDestination,
@@ -40,6 +41,7 @@ pub enum ConnectionIssue {
 }
 /// Precise rejection of a proposed connection; no scene edits occur.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ConnectionError {
     /// Destination input/output.
     pub destination: PropertyPath,

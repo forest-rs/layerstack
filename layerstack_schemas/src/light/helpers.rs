@@ -18,6 +18,7 @@ use layerstack::{PathId, PropertyKind, PropertyType, Value};
 
 /// Why blackbody conversion cannot be computed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum BlackbodyError {
     /// Kelvin is NaN or infinite. Finite temperatures are clamped to 1000–10000 K.
     NonFiniteTemperature,
@@ -201,6 +202,7 @@ impl<'a> LightFilter<'a> {
 
 /// Invalid light helper authoring; validation failures collect no operations.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum LightHelperError {
     /// The requested prim does not exist in the scene or this edit.
     MissingPrim(PathId),

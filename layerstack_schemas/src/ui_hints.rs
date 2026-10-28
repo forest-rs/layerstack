@@ -14,6 +14,7 @@ use layerstack::{PathId, PropertyKind, PropertyPath, TargetPath, Value};
 
 /// Invalid UI hint target or data. Failed setters author nothing.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum UiHintError {
     /// The prim or property does not exist.
     MissingObject(TargetPath),

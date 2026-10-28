@@ -139,6 +139,7 @@ impl SkinningQuery<'_> {
 /// reused, and advance when their component is rebuilt/resampled, even if values
 /// happen to compare equal. They are neither content hashes nor scene identities.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct DeformationRevisions {
     /// Shared rig topology, bind/rest transforms and animation mappings.
     pub skeleton_definition: u64,

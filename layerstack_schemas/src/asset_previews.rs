@@ -27,6 +27,7 @@ const DEFAULT_IMAGE: &str = "defaultImage";
 ///
 /// OpenUSD: `UsdMediaAssetPreviewsAPI::Thumbnails`.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct Thumbnails {
     /// The `defaultImage` asset, with the layer whose `assetInfo` opinion
     /// authors it, to anchor it by ([`AssetReference::anchor`]).

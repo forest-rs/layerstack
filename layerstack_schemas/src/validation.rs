@@ -64,6 +64,7 @@ mod tests;
 
 /// A built-in rule; variants exist only when their schema domains are enabled.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
 pub enum BuiltinRule {
     /// Surface composition errors already recorded by the stage.
     CompositionErrors,
@@ -180,6 +181,7 @@ pub struct AttributeTypeName {
 }
 /// Typed violated invariants. Built-in diagnostics do not require prose parsing.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum ValidationProblemKind {
     /// Domain-specific custom finding, with common site/time attribution.
     Custom {
@@ -263,6 +265,7 @@ pub enum ValidationProblemKind {
 }
 /// One error emitted by a selected rule.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct ValidationProblem {
     /// Producing rule.
     pub rule: ValidatorId,
@@ -398,6 +401,7 @@ impl ValidationProblem {
 }
 /// Work counters count actual explicit operations, not estimated elapsed time.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ValidationWork {
     /// Selected composed prims visited, excluding the pseudo-root.
     pub prims: usize,
@@ -420,6 +424,7 @@ pub struct ValidationWork {
 /// Result for selected built-in/custom checks, scope and times. Execution
 /// failures are separate from scene violations; inspect `is_complete` as well.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct ValidationReport {
     /// Rule selection in canonical order.
     pub rules: Vec<ValidatorId>,
@@ -461,6 +466,7 @@ impl ValidationReport {
 }
 /// Invalid request; no partial report is returned.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ValidationError {
     /// The explicit time list is empty or contains a nonfinite numeric time.
     InvalidTimes,

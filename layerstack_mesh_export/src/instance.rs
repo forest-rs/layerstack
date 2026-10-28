@@ -35,6 +35,7 @@ use crate::{CustomAttribute, CustomPrimvar, Primvar, PrimvarData, Transform};
 ///
 /// [`Scene::with_prototype`]: crate::Scene::with_prototype
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct Instance<'a> {
     /// Prim name; must be a USD identifier.
     pub name: Cow<'a, str>,

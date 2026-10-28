@@ -18,6 +18,7 @@ use crate::{
 
 /// An invalid field binding edit; rejected before collecting any operations.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum VolumeError {
     /// The volume's prim is missing from the stage and this edit.
     MissingPrim(PathId),

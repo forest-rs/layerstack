@@ -33,6 +33,7 @@ impl SubsetFamilyType {
 
 /// A subset edit could not be collected; its child group remains unchanged.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum SubsetAuthoringError {
     /// The subset cannot be defined or authored at its path, beneath an
     /// instance or in a prototype
@@ -295,6 +296,7 @@ impl crate::usd_geom::ImageableEdit {
 
 /// Invalid or unreadable geometry needed for a subset query.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum SubsetError {
     /// The element type does not apply to the owning geometry.
     InvalidGeometry,
@@ -326,6 +328,7 @@ impl core::error::Error for SubsetError {
 
 /// One violation of a subset family's contract.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum SubsetProblemKind {
     /// Geometry cannot support the requested element type.
     InvalidGeometry,
@@ -350,6 +353,7 @@ pub enum SubsetProblemKind {
 }
 /// A validation problem with its source prim and stage time.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct SubsetProblem {
     /// Family member, or the owning geometry for family-wide problems.
     pub path: PathId,
@@ -360,6 +364,7 @@ pub struct SubsetProblem {
 }
 /// All problems found while validating a subset family.
 #[derive(Clone, Debug, Default, PartialEq)]
+#[non_exhaustive]
 pub struct SubsetValidation {
     /// Ordered problems, including violations at different sample times.
     pub problems: Vec<SubsetProblem>,
@@ -871,6 +876,7 @@ impl<'a> Imageable<'a> {
 
 /// Invalid mesh index/count storage.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum MeshTopologyError {
     /// Required points, face counts or face indices are absent or incompatible.
     MissingAttribute,

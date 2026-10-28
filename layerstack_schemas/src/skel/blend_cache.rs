@@ -62,6 +62,7 @@ impl BlendShapeInputs<'_> {
 }
 /// Cumulative work for morph-only retained evaluation.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct BlendShapeCacheStats {
     /// Shape binding snapshots constructed.
     pub definition_builds: u64,
@@ -84,6 +85,7 @@ pub struct BlendShapeCacheStats {
 }
 /// Retained morph array occupancy; excludes definitions and container overhead.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct BlendShapeCacheMemory {
     /// Retained geometry bindings.
     pub bindings: usize,

@@ -28,6 +28,7 @@ pub struct AnchoredAsset {
 }
 /// Why an attribute cannot be read as an asset.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum AssetReadError {
     /// No authored or schema attribute exists at this identity.
     MissingAttribute(PropertyPath),
@@ -42,6 +43,7 @@ impl core::fmt::Display for AssetReadError {
 impl core::error::Error for AssetReadError {}
 /// Why a captured asset cannot be anchored without guessing host context.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum AssetAnchorError {
     /// An empty asset path does not request a resource.
     EmptyPath,

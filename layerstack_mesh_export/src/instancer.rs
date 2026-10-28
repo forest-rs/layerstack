@@ -94,6 +94,7 @@ impl OrientationPrecision {
 ///
 /// [`InstancerProblem::UnsupportedProperty`]: crate::InstancerProblem::UnsupportedProperty
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct PointInstancer<'a> {
     /// Prim name; must be a USD identifier.
     pub name: Cow<'a, str>,

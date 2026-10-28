@@ -114,6 +114,7 @@ impl Membership {
 
 /// Why part of a collection's membership was left out, as OpenUSD warns.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum MembershipProblem {
     /// The collection includes a collection that (transitively) includes
     /// it; the inner inclusion is skipped.

@@ -67,6 +67,7 @@ pub fn local_coord_sys_bindings(scene: &Scene<'_>, path: PathId) -> Vec<CoordSys
 
 /// What a [`CoordSysCache`] has done since it was made or cleared.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct CoordSysCacheStats {
     /// Prims whose own bindings were read.
     pub prims_read: usize,

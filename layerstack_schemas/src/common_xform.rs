@@ -157,6 +157,7 @@ pub struct CommonTransformReading {
 /// OpenUSD refuses the same calls (returning `false`, or with a coding
 /// error), though it can leave ops it added before the refusal.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum CommonTransformError {
     /// The ordered ops (after any reset, without entries naming no
     /// attribute) are not a common stack: more than five, out of order,

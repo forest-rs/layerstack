@@ -74,6 +74,7 @@ impl MembershipIndexUpdate {
 
 /// The size of a [`MembershipIndex`] and the work it has done.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct MembershipIndexStats {
     /// Collections indexed.
     pub collections: usize,

@@ -80,6 +80,7 @@ pub struct KindRegistry {
 ///
 /// OpenUSD: `KindRegistry::_Register`.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum KindError {
     /// The name is not an identifier (OpenUSD: "Invalid kind").
     InvalidName(String),

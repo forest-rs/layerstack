@@ -22,6 +22,7 @@ use layerstack::{
 
 /// An ID edit encountered incompatible or unreadable authored data.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum InstanceIdEditError {
     /// Target-local `inactiveIds` is not an int64 list operation.
     InvalidInactiveIds,
@@ -46,6 +47,7 @@ impl core::error::Error for InstanceIdEditError {
 
 /// A visibility mask does not match the array's grouped element layout.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct InstanceMaskError {
     /// Number of values in the array before compaction.
     pub array_len: usize,
@@ -636,6 +638,7 @@ pub struct InstanceTransform {
 }
 /// Invalid instance data; computations never return partial transforms.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum PointInstancerError {
     /// A required array cannot be read with its declared type.
     MissingAttribute(&'static str),

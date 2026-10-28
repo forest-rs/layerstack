@@ -29,6 +29,7 @@ pub struct MembershipDependencies {
 }
 /// Cache-local content stamps; compare only within the same cache instance.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct MembershipRevisions {
     /// Compiled query, dependency evidence or collection problems changed.
     pub query: u64,
@@ -55,6 +56,7 @@ pub struct MembershipSample<'a> {
 }
 /// Observable work since construction or statistics reset.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct MembershipCacheStats {
     /// Capture requests, including invalid requests.
     pub requests: u64,
@@ -71,6 +73,7 @@ pub struct MembershipCacheStats {
 }
 /// Retained work-item counts, rather than estimated heap bytes.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct MembershipCacheMemory {
     /// Retained collection entries.
     pub collections: usize,
@@ -83,6 +86,7 @@ pub struct MembershipCacheMemory {
 }
 /// Why a collection capture request is invalid.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum MembershipCacheError {
     /// The owning prim is absent.
     MissingPrim(PathId),

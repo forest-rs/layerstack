@@ -86,6 +86,7 @@ pub struct CustomPhysicsTypes<'a> {
 }
 /// Structured capture failure; an individual bad object does not discard peers.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum PhysicsSceneError {
     /// No include path was supplied.
     EmptyIncludes,

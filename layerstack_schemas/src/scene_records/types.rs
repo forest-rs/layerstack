@@ -282,6 +282,7 @@ pub enum SceneReset {
 }
 /// Work performed during one successful update; counts are payload entries/tasks.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct SceneWork {
     /// Active namespace prims inspected for supported records.
     pub namespace_prims: usize,
@@ -352,6 +353,7 @@ impl SceneUpdate {
 
 /// A capture failure. The observer keeps its previous successful scene intact.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub enum SceneError {
     /// Store interners differ from the observer or currently composed stage.
     ForeignStore,

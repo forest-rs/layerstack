@@ -44,6 +44,7 @@ pub enum ValidatorTarget {
 }
 /// One custom violated invariant. The producing ID is attached by the context.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct CustomValidationProblem {
     /// Exact composed location and authored source, when the rule knows it.
     /// Path and token IDs must belong to the supplied scene.
@@ -60,6 +61,7 @@ pub struct CustomValidationProblem {
 }
 /// A check could not complete; this is distinct from a violated scene invariant.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ValidatorFailure {
     /// Stable execution-failure code defined by the validator.
     pub code: Arc<str>,
@@ -68,6 +70,7 @@ pub struct ValidatorFailure {
 }
 /// An execution failure with its scheduled rule and target.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ValidationExecutionFailure {
     /// Producing validator, assigned by the context.
     pub rule: ValidatorId,
@@ -107,6 +110,7 @@ pub trait Validator {
 }
 /// Invalid registration leaves the context unchanged.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ValidatorRegistrationError {
     /// Empty ID, missing namespace/name, or whitespace in an ID.
     InvalidId(Arc<str>),

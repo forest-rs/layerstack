@@ -16,6 +16,7 @@ use layerstack::{PathId, PropertyPath, Time, Value};
 
 /// Why a geometry calculation cannot consume its input safely.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum GeometryError {
     /// An attribute is absent, blocked, or incompatible.
     MissingAttribute(&'static str),

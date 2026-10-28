@@ -9,6 +9,7 @@ use crate::gf::decomposition::{self as math, Matrix3};
 
 /// Why a matrix cannot be factored as finite affine data.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum AffineError {
     /// The matrix contains NaN or infinity, or factoring overflowed.
     NonFinite,
@@ -198,6 +199,7 @@ pub struct AffineTrs {
 }
 /// Why a complete affine factorization cannot be represented as checked TRS.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum TrsError {
     /// A finite nonnegative tolerance is required.
     InvalidTolerance,

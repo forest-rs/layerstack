@@ -176,13 +176,9 @@ fn pose_weights_shapes_undo_and_unrelated_edits_have_independent_revisions() {
     cache.apply_changes(&Scene::new(live.stage(), &store), &applied.changes);
     let posed = revisions(&mut cache, &Scene::new(live.stage(), &store), mesh);
     assert_ne!(posed.pose, before.pose);
-    assert_eq!(
-        DeformationRevisions {
-            pose: before.pose,
-            ..posed
-        },
-        before
-    );
+    let mut unposed = posed;
+    unposed.pose = before.pose;
+    assert_eq!(unposed, before);
     let transaction = edit(
         &mut store,
         animation,
@@ -197,13 +193,9 @@ fn pose_weights_shapes_undo_and_unrelated_edits_have_independent_revisions() {
     cache.apply_changes(&Scene::new(live.stage(), &store), &applied.changes);
     let weighted = revisions(&mut cache, &Scene::new(live.stage(), &store), mesh);
     assert_ne!(weighted.blend_weights, posed.blend_weights);
-    assert_eq!(
-        DeformationRevisions {
-            blend_weights: posed.blend_weights,
-            ..weighted
-        },
-        posed
-    );
+    let mut unweighted = weighted;
+    unweighted.blend_weights = posed.blend_weights;
+    assert_eq!(unweighted, posed);
     assert_eq!(
         revisions(&mut cache, &Scene::new(live.stage(), &store), rigid).inputs,
         rigid_before.inputs

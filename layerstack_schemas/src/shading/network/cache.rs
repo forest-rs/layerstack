@@ -7,6 +7,7 @@ use super::*;
 /// Cache-local component versions. They describe captured USD data, never GPU
 /// execution or changed texture bytes at an unchanged authored asset identity.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct MaterialRevisions {
     /// Terminal/context, nodes, declarations, identifiers or connections changed.
     pub topology: u64,
@@ -17,6 +18,7 @@ pub struct MaterialRevisions {
 }
 /// Observable retained work. Counts are requests/records, not heap-byte estimates.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct MaterialCacheStats {
     /// Requests including invalid requests.
     pub requests: u64,

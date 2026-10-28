@@ -31,6 +31,7 @@ use crate::usd::CollectionApi;
 /// Why an authored target, connection, include or exclude names nothing,
 /// as one composed prim reads it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum AuthoredTargetProblem {
     /// The mapped path dangles ([`DanglingKind`]), as it would in the
     /// composed report.
@@ -211,6 +212,7 @@ impl LayerDangling {
 /// assert_eq!(report.layer(LayerId(1)).unwrap().total(), 0);
 /// ```
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct LayerDanglingReport {
     /// Every layer the stage composes, in the order of
     /// [`layerstack::AuthoredTargets::layers`]: the stage's own layer

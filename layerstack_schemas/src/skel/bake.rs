@@ -258,6 +258,7 @@ impl SkinningBake {
 
 /// Why a bake changed nothing.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum SkinningBakeError {
     /// A binding's root is not a `SkelRoot` on the stage.
     NotSkelRoot(PathId),
@@ -320,6 +321,7 @@ pub struct BakedPrim {
 
 /// Something a bake skipped, where OpenUSD warns and goes on.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct BakeProblem {
     /// The prim it concerns.
     pub prim: PathId,
@@ -331,6 +333,7 @@ pub struct BakeProblem {
 
 /// What a [`BakeProblem`] left out.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum BakeProblemReason {
     /// Skel discovery skipped or left out an input ([`SkelProblem`]).
     Discovery(SkelProblem),
@@ -371,6 +374,7 @@ pub struct RetypedRoot {
 /// What a bake did: what it wrote where, at which times, what it skipped,
 /// and the applied transactions.
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct SkinningBakeReport {
     /// Every time the bake considered, in order: [`Time::Default`], then
     /// each time code. Each prim was sampled at some of them

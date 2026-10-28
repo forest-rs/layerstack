@@ -26,6 +26,7 @@ pub type LodExtent = [[f64; 3]; 2];
 
 /// A recoverable input error. No stage or renderer state changes on error.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum LodError {
     /// Missing, incompatible, malformed or nonfinite schema attribute.
     InvalidAttribute(&'static str),

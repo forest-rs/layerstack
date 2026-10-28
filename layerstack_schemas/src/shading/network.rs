@@ -154,6 +154,7 @@ pub struct MaterialResource {
 }
 /// Recoverable graph evidence; unknown nodes remain in the capture.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum MaterialIssue {
     /// Native connection traversal rejected this branch.
     Connection(ShadingIssue),
@@ -198,6 +199,7 @@ pub struct MaterialNetwork {
 }
 /// A capture cannot establish a valid scene/material request.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum MaterialCaptureError {
     /// Stage and supplied store do not share token/path domains.
     SceneDomain,

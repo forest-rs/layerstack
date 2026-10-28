@@ -70,6 +70,7 @@ impl core::error::Error for CannotEdit {}
 /// Why [`SchemaEdit::apply_api`], or an `<Api>::apply`, applies no schema.
 /// Nothing is authored.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ApplyError {
     /// The edit may not author the prim, beneath an instance or in a
     /// prototype; checked first, as OpenUSD's `ApplyAPI` refuses it.
@@ -1863,6 +1864,7 @@ fn value_of(spec: &PropertySpec) -> Value {
 ///
 /// OpenUSD: the errors `UsdObject::SetMetadata` raises.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum MetadataError {
     /// No prim is at the path: none is on the stage or defined earlier in
     /// this edit.

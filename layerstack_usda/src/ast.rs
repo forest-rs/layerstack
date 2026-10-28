@@ -202,6 +202,8 @@ pub struct Relationship<'a> {
     /// Target paths: `None` for a bare declaration (`rel r`), an empty
     /// list for an explicitly empty one (`rel r = None` or `rel r = []`).
     pub targets: Option<Vec<&'a str>>,
+    /// The path of a `.default = <path>` statement, as written.
+    pub default: Option<&'a str>,
     /// Relationship metadata block.
     pub metadata: Vec<MetadataEntry<'a>>,
 }

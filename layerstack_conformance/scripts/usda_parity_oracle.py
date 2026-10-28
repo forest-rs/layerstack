@@ -37,7 +37,9 @@ The cases:
   which OpenUSD keeps as their text (`SdfUnregisteredValue`) and writes
   unquoted; attributes of type names no type registers, C++-namespaced
   ones (`Some::Kind`) among them, whose values OpenUSD keeps as the text
-  its parser records (`Sdf_ParserValueContext`).
+  its parser records (`Sdf_ParserValueContext`); a relationship's legacy
+  `.default = <path>`, which OpenUSD keeps as written and writes after the
+  targets.
   Some are refused, as OpenUSD refuses them: a relative target of a prim
   inside the variant, which anchors at `/P{v=one}Child` and so names a
   variant selection (`<x>`, `<../Other>`), a quoted
@@ -997,6 +999,24 @@ def "P"
 {
     widget g.timeSamples = {
         1: [1, 2],
+    }
+}
+''', []),
+    "read_relationship_default": ('''#usda 1.0
+def "A"
+{
+    rel r.default = </B>
+    rel s = </C>
+    rel s.default = <../D>
+    custom rel t.default = </E>
+    varying rel u (
+        doc = "x"
+    )
+    prepend varying rel u = </F>
+    varying rel u.default = </G>
+    def "Child"
+    {
+        rel v.default = </H>
     }
 }
 ''', []),

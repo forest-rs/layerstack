@@ -1129,6 +1129,12 @@ impl EmitCtx<'_> {
                 None => spec.targets = Some(Box::new(listop)),
             }
         }
+        // `.default = <path>` sets the relationship's `default` to the path
+        // as written, a relative one unanchored
+        // (`TextParserAction<PathRef>`, `pxr/usd/sdf/textFileFormatParser.cpp`).
+        if let Some(path) = rel.default {
+            spec.default = Some(Value::Path(Arc::from(path)));
+        }
     }
 
     /// Returns the property `name` of `kind`, creating it when absent.

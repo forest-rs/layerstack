@@ -145,6 +145,13 @@ pub enum Value {
     /// OpenUSD: `SdfUnregisteredValue`, `Sdf_ParserValueContext`'s recorded
     /// string (`pxr/usd/sdf/parserValueContext.cpp`).
     Unregistered(Arc<str>),
+    /// An `SdfPath` value, as authored: the legacy default of a
+    /// relationship (`rel r.default = </A>`), which OpenUSD's parser keeps
+    /// without anchoring a relative path.
+    ///
+    /// OpenUSD: `SdfFieldKeys->Default` holding an `SdfPath`
+    /// (`TextParserAction<PathRef>`, `pxr/usd/sdf/textFileFormatParser.cpp`).
+    Path(Arc<str>),
     /// A time code value (`timecode`), semantically a time in frames.
     ///
     /// Spec: §6.2.
@@ -317,6 +324,7 @@ impl PartialEq for Value {
             (Self::Asset(a), Self::Asset(b)) => a == b,
             (Self::PathExpression(a), Self::PathExpression(b)) => a == b,
             (Self::Unregistered(a), Self::Unregistered(b)) => a == b,
+            (Self::Path(a), Self::Path(b)) => a == b,
             (Self::TimeCode(a), Self::TimeCode(b)) => a == b,
             (Self::Duration(a), Self::Duration(b)) => a == b,
             (Self::Vec2f(a), Self::Vec2f(b)) => a == b,
@@ -373,6 +381,7 @@ impl fmt::Display for Value {
             Self::Asset(v) => write!(f, "@{v}@"),
             Self::PathExpression(v) => write!(f, "pathExpression({v:?})"),
             Self::Unregistered(v) => write!(f, "unregistered({v:?})"),
+            Self::Path(v) => write!(f, "<{v}>"),
             Self::TimeCode(v) | Self::Duration(v) => write!(f, "{v}"),
             // Vectors
             Self::Vec2d(v) => write!(f, "({}, {})", v[0], v[1]),

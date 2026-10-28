@@ -757,6 +757,7 @@ impl<'a> LowerCtx<'a> {
         let mut varying = false;
         let mut name = "";
         let mut targets = None;
+        let mut default = None;
         let mut metadata = Vec::new();
         let mut idx = 0;
 
@@ -840,6 +841,12 @@ impl<'a> LowerCtx<'a> {
                 SyntaxKind::PrimMetadata => {
                     metadata = self.lower_attribute_metadata(self.node_from(tree, id));
                 }
+                SyntaxKind::DefaultSuffix => {
+                    default = self
+                        .node_from(tree, id)
+                        .child_by_kind(SyntaxKind::PathRef)
+                        .map(|path| self.lower_path_ref(path));
+                }
                 _ => {}
             }
         }
@@ -851,6 +858,7 @@ impl<'a> LowerCtx<'a> {
             op,
             name,
             targets,
+            default,
             metadata,
         }
     }

@@ -172,6 +172,8 @@ pub enum SyntaxKind {
     TimeSamplesSuffix,
     /// `.spline = { ... }` suffix; its value is read by the lowering.
     SplineSuffix,
+    /// A relationship's `.default = <path>` suffix.
+    DefaultSuffix,
     /// Layer offset parameters `( offset = N; scale = N )`.
     LayerOffsetParams,
     /// An error recovery node wrapping unexpected tokens.

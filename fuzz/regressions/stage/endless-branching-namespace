@@ -1,0 +1,28 @@
+#usda 1.0
+
+def "Leaf" (
+    prepend specializes = </_LeafClass>
+)
+{
+}
+
+class "_LeafClass" (
+    specializes = </Branch>
+)
+{
+}
+
+class "Branch"
+{
+    def "Leaf" (
+        prepend specializes = </_LeafClass>
+    )
+    {
+    }
+
+    def "Twig" (
+        prepend specializes = </_LeafClass>
+    )
+    {
+    }
+}

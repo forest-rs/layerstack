@@ -1,0 +1,27 @@
+#usda 1.0
+
+def "C" (
+    specializes = </Base>
+)
+{
+}
+
+class "Base"
+{
+    class "n" (
+        specializes = </SiblingsA>
+    )
+    {
+        def "Cld" (
+            specializes = </Base/I>
+        )
+        {
+        }
+    }
+}
+
+class "SiblingsA" (
+    specializes = </Base>
+)
+{
+}

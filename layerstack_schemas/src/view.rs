@@ -37,7 +37,10 @@ use crate::kind::KindRegistry;
 ///
 /// The stage must be composed with this crate's schemas
 /// ([`crate::openusd`] or [`crate::registry`], as
-/// `StageOptions::schemas`); without schemas no prim is of any schema.
+/// `StageOptions::schemas`); without schemas no prim is of any schema, so
+/// every typed or API view's `get` answers `None` and no fallback is read.
+/// [`Self::has_schemas`] tells that case apart from a prim that is not of
+/// the schema.
 #[derive(Clone, Copy)]
 pub struct Scene<'a> {
     stage: &'a Stage,
@@ -61,6 +64,14 @@ impl<'a> Scene<'a> {
             store,
             kinds: KindRegistry::openusd(),
         }
+    }
+
+    /// Whether the stage was composed with a schema registry
+    /// (`StageOptions::schemas`). Without one, no prim is of any schema and
+    /// every view's `get` answers `None`.
+    #[must_use]
+    pub fn has_schemas(&self) -> bool {
+        self.stage.schemas().is_some()
     }
 
     /// The scene with the kinds `kinds` instead.
@@ -1131,6 +1142,7 @@ mod handle_tests {
 #[cfg(test)]
 mod model_hierarchy_tests {
     use super::*;
+    use alloc::sync::Arc;
     use layerstack::{InMemoryStore, Layer, LayerId, PrimSpec, StageOptions};
 
     #[test]
@@ -1167,5 +1179,23 @@ mod model_hierarchy_tests {
         assert!(!scene.is_group(asset));
         assert!(!scene.is_model(invalid));
         assert!(!scene.is_group(invalid));
+    }
+
+    /// A stage composed without schemas says so, which tells a view's
+    /// `None` apart from a prim that is not of the schema.
+    #[test]
+    fn a_scene_says_whether_its_stage_has_schemas() {
+        let mut store = InMemoryStore::default();
+        let mut layer = Layer::new(LayerId(1));
+        layer.insert_prim(store.path("/Ball"), PrimSpec::def());
+        store.insert_layer(layer);
+        let bare = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+        assert!(!Scene::new(&bare, &store).has_schemas());
+        let options = StageOptions {
+            schemas: Some(Arc::new(crate::openusd(store.tokens()))),
+            ..StageOptions::default()
+        };
+        let typed = Stage::compose(&mut store, LayerId(1), options);
+        assert!(Scene::new(&typed, &store).has_schemas());
     }
 }

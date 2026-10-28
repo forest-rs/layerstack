@@ -95,8 +95,10 @@ pub struct ValidationExecutionFailure {
 ///
 /// Return `Err` when execution cannot complete. Any findings appended by that
 /// invocation are discarded, its failure is recorded, and other checks continue.
-/// No thread-safety bound is imposed: the pipeline does not execute in parallel.
-pub trait Validator {
+/// A validator is `Send + Sync`, as [`crate::extent::ExtentProvider`] is, so a
+/// registry of them can be shared with threads and a later release can
+/// run checks in parallel; the pipeline runs them in order today.
+pub trait Validator: Send + Sync {
     /// Declares stable identity, target domain and temporal coverage.
     fn metadata(&self) -> ValidatorMetadata;
     /// Checks one scheduled target, appending domain-specific violations.

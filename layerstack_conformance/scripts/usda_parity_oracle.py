@@ -98,7 +98,12 @@ The cases:
   whose selection, escapes evaluated, is neither a variant name nor an
   expression (`SdfSchemaBase::IsValidVariantSelection`,
   `pxr/usd/sdf/schema.cpp`); an asset path holding a control character
-  (`_ValidateAssetPathString`, `pxr/usd/sdf/assetPath.cpp`).
+  (`_ValidateAssetPathString`, `pxr/usd/sdf/assetPath.cpp`); a prim name
+  that is not an identifier (`_CreatePrimSpec`,
+  `pxr/usd/sdf/textParserHelpers.cpp`), and a variant or variant set name
+  outside the `VariantName` path grammar
+  (`SdfSchemaBase::IsValidVariantIdentifier`), a space or a control
+  character among them.
 - `statements_*`: several list-op statements for one field, on a
   relationship, a connection, references, inherits, `variantSets` and
   metadata (`apiSchemas`). OpenUSD's parser sets each statement's list
@@ -584,6 +589,36 @@ def "P"
 
 def "P" (
     references = @a\x10b.usda@
+)
+{
+}
+''', []),
+    "strict_prim_name_not_identifier": ('''#usda 1.0
+
+def "a b"
+{
+}
+''', []),
+    "strict_prim_name_control_character": ('''#usda 1.0
+
+def "a\x10"
+{
+}
+''', []),
+    "strict_variant_name_not_identifier": ('''#usda 1.0
+
+def "P"
+{
+    variantSet "v" = {
+        "a b" {
+        }
+    }
+}
+''', []),
+    "strict_variant_set_names_control_character": ('''#usda 1.0
+
+def "P" (
+    variantSets = "v\x10"
 )
 {
 }

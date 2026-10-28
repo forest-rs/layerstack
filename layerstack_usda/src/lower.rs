@@ -19,7 +19,7 @@ use crate::Span;
 use crate::ast::*;
 use crate::cst::{SyntaxKind, SyntaxNode, SyntaxTree};
 use crate::diagnostic::Diagnostic;
-use crate::writer::is_variant_selection;
+use crate::writer::{is_variant_identifier, is_variant_selection};
 
 /// Lowers a CST into an AST, producing diagnostics for semantic errors.
 pub fn lower<'a>(tree: &SyntaxTree, source: &'a str) -> ParseResult<'a> {
@@ -874,7 +874,7 @@ impl<'a> LowerCtx<'a> {
         for child in node.children_no_trivia() {
             match child.kind() {
                 k if is_string_kind(k) => {
-                    name = self.name_literal(child);
+                    name = self.variant_name_literal(child);
                 }
                 SyntaxKind::VariantBranch => {
                     branches.push(self.lower_variant_branch(child));
@@ -901,7 +901,7 @@ impl<'a> LowerCtx<'a> {
         for (kind, id) in &sig {
             match *kind {
                 k if is_string_kind(k) => {
-                    name = self.name_literal(self.node_from(tree, *id));
+                    name = self.variant_name_literal(self.node_from(tree, *id));
                 }
                 SyntaxKind::PrimMetadata => {
                     metadata = self.lower_prim_metadata(self.node_from(tree, *id));
@@ -1087,7 +1087,9 @@ impl<'a> LowerCtx<'a> {
                 items: None,
             };
         }
-        let items = self.lower_name_list(node);
+        let strings = node.children().filter(|c| is_string_kind(c.kind()));
+        let mut items = Vec::with_capacity(strings.clone().count());
+        items.extend(strings.map(|c| self.variant_name_literal(c)));
         ListOp {
             span,
             kind,
@@ -1663,6 +1665,23 @@ impl<'a> LowerCtx<'a> {
             self.error(
                 node.span(),
                 "unsupported: escape sequences in a quoted name are not evaluated",
+            );
+        }
+        name
+    }
+
+    /// A variant set or variant name, in a `variantSet` statement or the
+    /// `variantSets` list, reported unless OpenUSD's
+    /// `SdfSchemaBase::IsValidVariantIdentifier` accepts it
+    /// (`pxr/usd/sdf/textFileFormatParser.cpp`).
+    ///
+    /// Spec: AOUSD Core §16.2.8 (variant names).
+    fn variant_name_literal(&mut self, node: SyntaxNode<'_>) -> &'a str {
+        let name = self.name_literal(node);
+        if !name.contains('\\') && !is_variant_identifier(name) {
+            self.error(
+                node.span(),
+                alloc::format!("{name:?} is not a valid variant name"),
             );
         }
         name
@@ -2430,6 +2449,29 @@ def \"A\" {
             .map(|s| (&*s.set_name, &*s.branch_name))
             .collect();
         assert_eq!(sels, [("s\x10", "`${V}\x10`"), ("t", "dark")]);
+    }
+
+    #[test]
+    fn invalid_variant_names_are_reported() {
+        let source = |set: &str, variant: &str| {
+            format!(
+                "#usda 1.0\ndef \"A\" (\n    variantSets = \"{set}\"\n) {{\n    variantSet \"{set}\" = {{\n        \"{variant}\" {{\n        }}\n    }}\n}}\n"
+            )
+        };
+        // `IsValidVariantIdentifier`: `VariantName` path grammar.
+        for (set, variant) in [("v", "a-b|c"), (".v", ".x"), ("1v", "1")] {
+            let src = source(set, variant);
+            let r = parse(&src);
+            assert!(
+                r.diagnostics.is_empty(),
+                "{set} {variant}: {:?}",
+                r.diagnostics
+            );
+        }
+        assert_eq!(parse(&source("v", "a b")).diagnostics.len(), 1);
+        assert_eq!(parse(&source("v", "a\x10")).diagnostics.len(), 1);
+        // The set name, in `variantSets` and the statement.
+        assert_eq!(parse(&source("a\x10", "x")).diagnostics.len(), 2);
     }
 
     #[test]

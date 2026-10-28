@@ -491,6 +491,16 @@
    "reads": false,
    "source": "#usda 1.0\ndef \"A\"\n{\n} def \"B\"\n{\n}\n"
   },
+  "strict_prim_name_control_character": {
+   "error": "''a\u0010' is not a valid prim name at '\"a\u0010\"' in </>",
+   "reads": false,
+   "source": "#usda 1.0\n\ndef \"a\u0010\"\n{\n}\n"
+  },
+  "strict_prim_name_not_identifier": {
+   "error": "''a b' is not a valid prim name at '\"a b\"' in </>",
+   "reads": false,
+   "source": "#usda 1.0\n\ndef \"a b\"\n{\n}\n"
+  },
   "strict_property_before_brace": {
    "error": "'Expected } at 'double a = 1 }' in </A>",
    "reads": false,
@@ -586,6 +596,11 @@
    "reads": false,
    "source": "#usda 1.0\ndef \"A\"\n{\n    uniform float a = 1\n    float a.connect = </B.c>\n}\n"
   },
+  "strict_variant_name_not_identifier": {
+   "error": "'\"a b\" is not a valid variant name due to ':1:2: parse error at '\"a b\" {' in </P{v=}>",
+   "reads": false,
+   "source": "#usda 1.0\n\ndef \"P\"\n{\n    variantSet \"v\" = {\n        \"a b\" {\n        }\n    }\n}\n"
+  },
   "strict_variant_selection_escaped_control": {
    "error": "'\"a\u0010b\" is not a valid variant name due to ':1:2: parse error at 'variants = {' in </P>",
    "reads": false,
@@ -605,6 +620,11 @@
    "error": "'Expected } at 'variantSet \"v\" = { \"x\" {} } }' in </A>",
    "reads": false,
    "source": "#usda 1.0\ndef \"A\" (\n    variantSets = \"v\"\n)\n{\n    variantSet \"v\" = { \"x\" {} } }\n"
+  },
+  "strict_variant_set_names_control_character": {
+   "error": "'\"v\u0010\" is not a valid variant name due to ':1:2: parse error at '\"v\u0010\"' in </P>",
+   "reads": false,
+   "source": "#usda 1.0\n\ndef \"P\" (\n    variantSets = \"v\u0010\"\n)\n{\n}\n"
   },
   "strict_vector_array_dimension": {
    "error": "'Tuple dimensions error for attribute of type float2[]. at ']' in </A.v>",

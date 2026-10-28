@@ -1631,12 +1631,18 @@ fn is_variant_name(name: &str) -> bool {
 /// may be empty or a lone `.` (`SdfSchemaBase::IsValidVariantSelection`,
 /// `pxr/usd/sdf/schema.cpp`, which the text parser applies to `variants`).
 pub(crate) fn is_variant_selection(selection: &str) -> bool {
-    layerstack::variable_expression::is_expression(selection)
-        || selection
-            .strip_prefix('.')
-            .unwrap_or(selection)
-            .chars()
-            .all(|c| crate::ident::is_continue(c) || c == '|' || c == '-')
+    layerstack::variable_expression::is_expression(selection) || is_variant_identifier(selection)
+}
+
+/// Whether `name` is text of OpenUSD's `VariantName` path grammar
+/// (`pxr/usd/sdf/pathParser.h`): identifier characters, `|` and `-`, after
+/// an optional leading `.`, and possibly empty, as
+/// `SdfSchemaBase::IsValidVariantIdentifier` accepts it.
+pub(crate) fn is_variant_identifier(name: &str) -> bool {
+    name.strip_prefix('.')
+        .unwrap_or(name)
+        .chars()
+        .all(|c| crate::ident::is_continue(c) || c == '|' || c == '-')
 }
 
 /// Colon-joined identifiers — §7.3.3 (`PropertyName`).

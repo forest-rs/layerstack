@@ -1907,17 +1907,18 @@ fn evaluate_escapes(content: &str) -> Result<Cow<'_, str>, String> {
         .map_err(|e| String::from_utf8_lossy(e.as_bytes()).into_owned())
 }
 
+/// The text between `s`'s quotes, when it is quoted, else `s`. A lone
+/// quote, which recovery can lower as a string, opens no string and is
+/// kept whole: its opening and closing quote would be one character.
 fn strip_quotes(s: &str) -> &str {
-    if (s.starts_with("\"\"\"") && s.ends_with("\"\"\""))
-        || (s.starts_with("'''") && s.ends_with("'''"))
-    {
-        &s[3..s.len() - 3]
-    } else if (s.starts_with('"') && s.ends_with('"')) || (s.starts_with('\'') && s.ends_with('\''))
-    {
-        &s[1..s.len() - 1]
-    } else {
-        s
+    for quote in ["\"\"\"", "'''", "\"", "'"] {
+        if s.len() >= 2 * quote.len()
+            && let Some(inner) = s.strip_prefix(quote).and_then(|s| s.strip_suffix(quote))
+        {
+            return inner;
+        }
     }
+    s
 }
 
 fn parse_f64(s: &str) -> f64 {

@@ -370,6 +370,9 @@ impl EmitCtx<'_> {
         // relative paths it authors: each prim's name is pushed while it is.
         let mut prim_path = String::new();
         for prim in &ast.prims {
+            if !self.admits_prim_name(prim) {
+                continue;
+            }
             let name_tok = self.tokens.intern(prim.name);
             root_children.push(name_tok);
             self.emit_prim(
@@ -412,6 +415,21 @@ impl EmitCtx<'_> {
 
     // ── Prims ────────────────────────────────────────────────────────
 
+    /// Whether `prim`'s name is one path segment, which its spec can be
+    /// placed at; a name that is empty or holds `/` names no prim, and
+    /// rejects the layer, as OpenUSD's text parser rejects it
+    /// (`'' is not a valid prim name`, `SdfSchema::IsValidPrimName`).
+    ///
+    /// Spec: AOUSD Core §7.3.3 (prim names are identifiers), §8 (paths).
+    fn admits_prim_name(&mut self, prim: &ast::Prim<'_>) -> bool {
+        if prim.name.is_empty() || prim.name.contains('/') {
+            let message = format!("'{}' is not a valid prim name", prim.name);
+            self.reject(prim.span, message);
+            return false;
+        }
+        true
+    }
+
     /// Emits `prim`, the child `place` of its parent, whose path's text
     /// `prim_path` holds; `prim_path` holds the prim's while it is emitted.
     fn emit_prim(
@@ -425,14 +443,7 @@ impl EmitCtx<'_> {
         let parent_len = prim_path.len();
         prim_path.push('/');
         prim_path.push_str(prim.name);
-        // A name that is no path segment (empty, or holding `/`) is placed
-        // where its path's text parses to, as it always was.
-        let path_id = if prim.name.is_empty() || prim.name.contains('/') {
-            let path = Path::parse_absolute(prim_path, self.tokens).expect("valid prim path");
-            self.paths.intern(path)
-        } else {
-            self.paths.intern_child(place.parent, place.name)
-        };
+        let path_id = self.paths.intern_child(place.parent, place.name);
 
         let mut spec = PrimSpec::default().with_outer_variant_sites(outer_variant_sites.to_vec());
         spec.specifier = Some(convert_specifier(prim.specifier));
@@ -456,6 +467,9 @@ impl EmitCtx<'_> {
                     );
                 }
                 ast::PrimChild::Prim(child_prim) => {
+                    if !self.admits_prim_name(child_prim) {
+                        continue;
+                    }
                     let child_name = self.tokens.intern(child_prim.name);
                     if !spec.authored_children.contains(&child_name) {
                         spec.authored_children.push(child_name);
@@ -1243,6 +1257,9 @@ impl EmitCtx<'_> {
                         );
                     }
                     ast::PrimChild::Prim(child_prim) => {
+                        if !self.admits_prim_name(child_prim) {
+                            continue;
+                        }
                         let child_tok = self.tokens.intern(child_prim.name);
                         if !variant_spec.authored_children.contains(&child_tok) {
                             variant_spec.authored_children.push(child_tok);
@@ -2962,6 +2979,15 @@ def \"Rig\" {
             (
                 "def \"A\"\n{\n    int x.connect = </B{v=x}C.y>\n}\n",
                 "'/B{v=x}C.y' is not a valid prim or property scene path",
+            ),
+            ("def \"A/B\"\n{\n}\n", "'A/B' is not a valid prim name"),
+            (
+                "def \"A\"\n{\n    def \"\"\n    {\n    }\n}\n",
+                "'' is not a valid prim name",
+            ),
+            (
+                "def \"A\" (\n    variantSets = \"v\"\n)\n{\n    variantSet \"v\" = {\n        \"x\" {\n            def \"\"\n            {\n            }\n        }\n    }\n}\n",
+                "'' is not a valid prim name",
             ),
         ];
         for (body, message) in cases {

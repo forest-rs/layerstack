@@ -44,6 +44,7 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
 
+mod array;
 mod edit;
 mod error;
 mod receipt;
@@ -52,6 +53,7 @@ mod storage;
 mod value;
 mod wire;
 
+pub use array::ArrayHandle;
 pub use edit::EditBatch;
 pub use error::Error;
 pub use receipt::EditReceipt;
@@ -66,7 +68,7 @@ use wasm_bindgen::prelude::*;
 /// wrapper. It changes whenever an export's arguments or a record's layout
 /// change incompatibly; the wrapper refuses a module whose ABI differs from
 /// its own (`module.abi`).
-pub const ABI: u32 = 2;
+pub const ABI: u32 = 3;
 
 /// The crate version, the source revision the module was built from
 /// (`LAYERSTACK_REVISION` at build time, `unknown` when unset) and [`ABI`],

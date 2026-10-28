@@ -3,6 +3,8 @@
 
 // Lowering `Edit[]` into the native batch: shapes are checked here, with
 // the edit's index; everything else (paths, types, values) natively.
+import { nativeOf } from "./arrays.js";
+import type { ArrayHost, NativeArrayHandle } from "./arrays.js";
 import { LayerstackError } from "./errors.js";
 import type { ErrorCode } from "./errors.js";
 import type { Edit, ValueInput } from "./types.js";
@@ -17,6 +19,7 @@ export interface NativeEditBatch {
   valueUInt64(type: string, data: ArrayLike<bigint>): number;
   valueHalfBits(type: string, data: Uint16Array): number;
   valueText(type: string, data: string[]): number;
+  valueArray(type: string, handle: NativeArrayHandle): number;
   definePrim(path: string, specifier: string, typeName?: string | null): void;
   removePrim(path: string): void;
   removeProperty(path: string): void;
@@ -59,13 +62,13 @@ class EditFailure {
 }
 
 /** Pushes `edits` into `batch`, throwing `argument.invalid` (or a `value.*` code) naming the first malformed edit. */
-export function lowerEdits(batch: NativeEditBatch, edits: readonly Edit[], operation: string): void {
+export function lowerEdits(batch: NativeEditBatch, edits: readonly Edit[], operation: string, host: ArrayHost): void {
   if (!Array.isArray(edits)) {
     throw new LayerstackError("argument.invalid", operation, "expected an array of edits");
   }
   edits.forEach((edit, index) => {
     try {
-      lowerEdit(batch, edit);
+      lowerEdit(batch, edit, host);
     } catch (error) {
       if (!(error instanceof EditFailure)) throw error;
       const path = typeof edit?.path === "string" ? edit.path : undefined;
@@ -74,7 +77,7 @@ export function lowerEdits(batch: NativeEditBatch, edits: readonly Edit[], opera
   });
 }
 
-function lowerEdit(batch: NativeEditBatch, edit: Edit): void {
+function lowerEdit(batch: NativeEditBatch, edit: Edit, host: ArrayHost): void {
   if (typeof edit !== "object" || edit === null) fail("an edit is an object with a `type`");
   const path = text(edit.path, "path");
   switch (edit.type) {
@@ -94,12 +97,12 @@ function lowerEdit(batch: NativeEditBatch, edit: Edit): void {
     case "createAttribute": {
       const typeName = text(edit.typeName, "typeName");
       const variability = oneOf(edit.variability ?? "varying", "variability", ["varying", "uniform"]);
-      const value = edit.value === undefined ? null : encodeValue(batch, edit.value);
+      const value = edit.value === undefined ? null : encodeValue(batch, edit.value, host);
       batch.createAttribute(path, typeName, variability === "uniform", flag(edit.custom ?? true, "custom"), value);
       return;
     }
     case "setValue":
-      batch.setValue(path, time(edit.time), encodeValue(batch, edit.value));
+      batch.setValue(path, time(edit.time), encodeValue(batch, edit.value, host));
       return;
     case "clearValue":
       batch.clearValue(path, time(edit.time));
@@ -162,7 +165,7 @@ function lowerEdit(batch: NativeEditBatch, edit: Edit): void {
       batch.setKind(path, text(edit.kind, "kind"));
       return;
     case "setMetadata":
-      batch.setMetadata(path, text(edit.key, "key"), encodeValue(batch, edit.value));
+      batch.setMetadata(path, text(edit.key, "key"), encodeValue(batch, edit.value, host));
       return;
     case "clearMetadata":
       batch.clearMetadata(path, text(edit.key, "key"));
@@ -173,7 +176,7 @@ function lowerEdit(batch: NativeEditBatch, edit: Edit): void {
 }
 
 /** Puts `input` into a value slot of `batch` and returns the slot. */
-function encodeValue(batch: NativeEditBatch, input: ValueInput): number {
+function encodeValue(batch: NativeEditBatch, input: ValueInput, host: ArrayHost): number {
   if (typeof input !== "object" || input === null || typeof input.type !== "string") {
     fail("a value is { type, value }, such as { type: \"double\", value: 2 }");
   }
@@ -183,8 +186,11 @@ function encodeValue(batch: NativeEditBatch, input: ValueInput): number {
       case "scalar":
       case "tuple":
         return encodeData(batch, type, input.value);
-      case "array":
+      case "array": {
+        const native = nativeOf(input.array, host);
+        if (native !== undefined) return batch.valueArray(type, native);
         return encodeData(batch, type, input.array.copy());
+      }
       default:
         throw new EditFailure("value.unsupported", `a ${input.kind} value cannot be authored yet`);
     }

@@ -65,10 +65,18 @@ await stage.resolve(source);
   (vectors, row-major matrices, quaternions as `[i, j, k, r]`), `array`,
   `dictionary`, `list`, or `opaque`. `type` is the value type name, roles
   included (`point3f[]`).
-- **Arrays are one buffer.** An array value's `array` has its layout
-  (`scalar`, `components`, `length`, `byteLength`) and `copy()`, which returns
-  a new typed array (`Float32Array` for `point3f[]`, half floats as raw bits
-  in a `Uint16Array`). Rust never builds arrays element by element.
+- **Arrays stay in the module.** A numeric array value's `array` is an
+  `ArrayHandle`: the stage's own buffer, pinned, with its layout (`scalar`,
+  `components`, `length`, `byteLength`). `view()` is a typed array over it
+  with no copy (`Float32Array` for `point3f[]`, half floats as raw bits in a
+  `Uint16Array`); **a view is valid until the next call into the module**,
+  which may grow its memory and detach the view (its `byteLength` becomes
+  0), so call `view()` again rather than keeping one, and never write to it.
+  `copy()` is one `slice` of the view, yours to keep. A handle is a
+  snapshot that later edits do not change, and it outlives its stage;
+  `release()` it (or `using`) when done. Sent back in an edit, a handle is
+  shared, not copied. Text arrays (`token[]`, `string[]`) are copied out
+  once as strings. Rust never builds arrays element by element.
 - **Layer ids are `bigint`** and may exceed 2^53; you rarely need them. A
   `Layer` belongs to its stage: passing it to another stage fails with
   `layer.affinity`.
@@ -108,7 +116,8 @@ await stage.resolve(source);
   `loadSupplied`, each round of `resolve`) returns. A listener that throws
   is reported as `listener.failed` and the others still run.
 - **Transfer is measured.** `layerstack.transfer()` reports the bytes copied
-  in (sources) and out (arrays), and the module's memory.
+  in (sources) and out (array copies, saved and exported bytes), the views
+  built and the bytes they exposed without a copy, and the module's memory.
 
 ## Error codes
 
@@ -126,6 +135,8 @@ await stage.resolve(source);
 | `resolve.limit` | `maxRounds` (100) rounds did not finish. |
 | `receipt.affinity` | A receipt of another stage was passed in. |
 | `receipt.released` | The receipt was undone or released already. |
+| `array.released` | The array handle was released. |
+| `array.no_memory` | The module does not expose its memory, so a handle cannot be read. |
 | `listener.failed` | Reported, not thrown: a change listener threw; `cause` is its error. |
 | `path.invalid` | A path is not an absolute prim path, or not a property path where one is asked for. |
 | `prim.not_found` | No composed prim is at the path. |

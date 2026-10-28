@@ -19,6 +19,9 @@
  * - `resolve.limit`: `resolve` reached its `maxRounds`.
  * - `receipt.affinity`: a receipt of another stage was passed to this one.
  * - `receipt.released`: the receipt was undone or released already.
+ * - `array.released`: the array handle was released.
+ * - `array.no_memory`: the module does not expose its memory, so an array
+ *   handle cannot be viewed or copied.
  * - `listener.failed`: a change listener threw. Not thrown: reported
  *   (`reportError`, else `console.error`) with the listener's error as
  *   `cause`, after the other listeners ran.
@@ -64,6 +67,8 @@ export type ErrorCode =
   | "resolve.limit"
   | "receipt.affinity"
   | "receipt.released"
+  | "array.released"
+  | "array.no_memory"
   | "listener.failed"
   | "path.invalid"
   | "prim.not_found"

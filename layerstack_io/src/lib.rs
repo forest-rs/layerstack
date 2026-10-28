@@ -181,7 +181,10 @@ impl IoErrorKind {
     /// | [`Self::ForeignSchemaRegistry`] | `io.foreign_schema_registry` |
     ///
     /// Codes are part of the public contract: a released code keeps its
-    /// spelling and meaning, and a new variant brings a new code.
+    /// spelling and meaning, and a new variant brings a new code. The
+    /// `io.`, `edit.` and `composition.` codes are the whole contract: the
+    /// format crates' errors have no codes, and reach an [`IoError`] as
+    /// its typed [`IoError::cause`].
     #[must_use]
     pub const fn code(self) -> &'static str {
         match self {
@@ -216,8 +219,50 @@ pub struct IoError {
     /// reader refusing a layer as OpenUSD refuses it, the error diagnostics
     /// of the source it rejected, with their spans; empty otherwise.
     pub diagnostics: Vec<MemberDiagnostic>,
-    /// Original retained-array failure when `kind` is [`IoErrorKind::Decode`].
-    pub array_read_error: Option<layerstack::ArrayReadError>,
+    /// The format crate's typed error behind a failed save or export
+    /// ([`Self::cause`]), shared so that the error stays small and cheap
+    /// to clone.
+    cause: Option<Arc<IoCause>>,
+}
+/// The typed error of a format crate behind an [`IoError`]: what a save,
+/// export or package localization refused, kept whole so that its spec
+/// path and variant are not reduced to a message.
+#[derive(Debug, PartialEq)]
+#[non_exhaustive]
+pub enum IoCause {
+    /// Lowering or writing a layer as USDA, or lowering it for USDC,
+    /// failed ([`IoErrorKind::Rejected`] for a layer that cannot be
+    /// written as it stands, [`IoErrorKind::Decode`] for a retained array
+    /// that could not decode, [`IoErrorKind::Unsupported`] otherwise).
+    Save(layerstack_usda::save::SaveError),
+    /// Writing a layer as USDC failed.
+    UsdcWrite(layerstack_usdc::writer::UsdcWriteError),
+    /// Localizing a package's layers and assets failed.
+    Localization(layerstack_usdz::localize::LocalizationError),
+}
+impl IoCause {
+    /// The cause as an error.
+    fn as_error(&self) -> &(dyn core::error::Error + 'static) {
+        match self {
+            Self::Save(error) => error,
+            Self::UsdcWrite(error) => error,
+            Self::Localization(error) => error,
+        }
+    }
+    /// The save error inside the cause, however it is wrapped.
+    fn save_error(&self) -> Option<&layerstack_usda::save::SaveError> {
+        match self {
+            Self::Save(error)
+            | Self::UsdcWrite(layerstack_usdc::writer::UsdcWriteError::Save(error))
+            | Self::Localization(
+                layerstack_usdz::localize::LocalizationError::Usda(error)
+                | layerstack_usdz::localize::LocalizationError::Usdc(
+                    layerstack_usdc::writer::UsdcWriteError::Save(error),
+                ),
+            ) => Some(error),
+            _ => None,
+        }
+    }
 }
 impl IoError {
     /// Constructs an error for a host storage implementation.
@@ -227,7 +272,24 @@ impl IoError {
             message: message.into(),
             identifier: None,
             diagnostics: Vec::new(),
-            array_read_error: None,
+            cause: None,
+        }
+    }
+    /// The format crate's typed error that caused a failed save or
+    /// export, naming the spec it is about; `None` for other failures.
+    /// [`core::error::Error::source`] returns it too.
+    #[must_use]
+    pub fn cause(&self) -> Option<&IoCause> {
+        self.cause.as_deref()
+    }
+    /// The retained array or deferred value that could not decode, when
+    /// `kind` is [`IoErrorKind::Decode`]: the cause's
+    /// [`layerstack_usda::save::SaveError::ArrayRead`].
+    #[must_use]
+    pub fn array_read_error(&self) -> Option<&layerstack::ArrayReadError> {
+        match self.cause()?.save_error()? {
+            layerstack_usda::save::SaveError::ArrayRead { error, .. } => Some(error),
+            _ => None,
         }
     }
     /// The stable code of the error's kind ([`IoErrorKind::code`]).
@@ -255,9 +317,7 @@ impl core::fmt::Display for IoError {
 }
 impl core::error::Error for IoError {
     fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
-        self.array_read_error
-            .as_ref()
-            .map(|error| error as &dyn core::error::Error)
+        self.cause().map(IoCause::as_error)
     }
 }
 
@@ -1584,14 +1644,8 @@ impl<B: Storage> StageDocument<B> {
                     .map_err(save_error)?;
                 return write_usda(&document, sink);
             }
-            Format::Usdc => {
-                layerstack_usdc::writer::save_layer(layer, tokens, paths).map_err(|error| {
-                    match error {
-                        layerstack_usdc::writer::UsdcWriteError::Save(error) => save_error(error),
-                        error => IoError::new(IoErrorKind::Unsupported, error.to_string()),
-                    }
-                })?
-            }
+            Format::Usdc => layerstack_usdc::writer::save_layer(layer, tokens, paths)
+                .map_err(|error| caused(IoCause::UsdcWrite(error)))?,
             Format::Usdz => {
                 return Err(IoError::new(
                     IoErrorKind::Unsupported,
@@ -2449,13 +2503,7 @@ fn strict_rejection(identifier: &str, diagnostics: &[MemberDiagnostic]) -> IoErr
     error
 }
 fn localization_error(error: layerstack_usdz::localize::LocalizationError) -> IoError {
-    match error {
-        layerstack_usdz::localize::LocalizationError::Usda(error)
-        | layerstack_usdz::localize::LocalizationError::Usdc(
-            layerstack_usdc::writer::UsdcWriteError::Save(error),
-        ) => save_error(error),
-        other => IoError::new(IoErrorKind::Unsupported, other.to_string()),
-    }
+    caused(IoCause::Localization(error))
 }
 /// Streams `document`'s USDA text into `sink`; a failed write fails with
 /// the sink's error.
@@ -2471,14 +2519,24 @@ fn write_usda(
     })
 }
 fn save_error(error: layerstack_usda::save::SaveError) -> IoError {
-    let message = error.to_string();
-    if let layerstack_usda::save::SaveError::ArrayRead { error, .. } = error {
-        IoError {
-            array_read_error: Some(error),
-            ..IoError::new(IoErrorKind::Decode, message)
-        }
-    } else {
-        IoError::new(IoErrorKind::Unsupported, message)
+    caused(IoCause::Save(error))
+}
+/// A failed save or export, keeping `cause` and taking its kind from the
+/// save error inside it: [`IoErrorKind::Decode`] for a retained array
+/// that could not decode, [`IoErrorKind::Rejected`] for a layer that
+/// cannot be written as it stands, [`IoErrorKind::Unsupported`] for the
+/// rest.
+fn caused(cause: IoCause) -> IoError {
+    use layerstack_usda::save::SaveError;
+    let kind = match cause.save_error() {
+        Some(SaveError::ArrayRead { .. }) => IoErrorKind::Decode,
+        Some(SaveError::Invalid { .. }) => IoErrorKind::Rejected,
+        _ => IoErrorKind::Unsupported,
+    };
+    let message = cause.as_error().to_string();
+    IoError {
+        cause: Some(Arc::new(cause)),
+        ..IoError::new(kind, message)
     }
 }
 fn asset_error(error: IoError) -> AssetResolveError {

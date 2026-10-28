@@ -1167,6 +1167,40 @@ fn prepared_commit_reuses_sources_and_preserves_stage_observers_and_dependencies
     assert!(doc.stage.unsubscribe_changes(&subscription));
 }
 
+/// A layer that cannot be written as it stands is rejected, and the error
+/// keeps the save error naming the spec, in either format.
+#[test]
+fn a_layer_that_cannot_be_written_keeps_its_typed_cause() {
+    use layerstack_usda::save::{Invalid, SaveError};
+    let source = "#usda 1.0\ndef \"A\" {\n    int a = 1\n}\n";
+    let document = StageDocument::open(
+        Memory::with(&[("root.usda", source)]),
+        "root.usda",
+        StageOptions::default(),
+    )
+    .unwrap();
+    let root = document.stage().stage().root_layer().unwrap();
+    let mut layer = document.store().layer(root).unwrap().clone();
+    let (tokens, paths) = (document.store().tokens(), document.store().paths());
+    let path = layerstack::PropertyPath::parse("/A.a", tokens, paths).unwrap();
+    layer.property_mut(path).unwrap().type_name = None;
+    let expected = SaveError::Invalid {
+        path: "/A.a".into(),
+        problem: Invalid::MissingTypeName,
+    };
+    for target in ["copy.usda", "copy.usdc"] {
+        let error = document.encode_layer(&layer, target).unwrap_err();
+        assert_eq!(error.code(), "io.rejected", "{target}");
+        let save = match error.cause() {
+            Some(IoCause::Save(save))
+            | Some(IoCause::UsdcWrite(layerstack_usdc::writer::UsdcWriteError::Save(save))) => save,
+            other => panic!("{target}: {other:?}"),
+        };
+        assert_eq!(save, &expected, "{target}");
+        assert!(core::error::Error::source(&error).is_some(), "{target}");
+    }
+}
+
 #[test]
 fn encoding_a_layer_returns_the_bytes_an_export_writes() {
     let source =
@@ -1366,8 +1400,8 @@ fn retained_budget_errors_are_distinct_from_missing_geometry() {
     let failure = document.export_layer(root, "failed.usdc").unwrap_err();
     assert_eq!(failure.kind, IoErrorKind::Decode);
     assert_eq!(
-        failure.array_read_error,
-        Some(layerstack::ArrayReadError::BudgetExceeded { limit })
+        failure.array_read_error(),
+        Some(&layerstack::ArrayReadError::BudgetExceeded { limit })
     );
     assert!(!document.storage().files.contains_key("failed.usdc"));
     for member in ["root.usda", "root.usdc"] {
@@ -1383,8 +1417,8 @@ fn retained_budget_errors_are_distinct_from_missing_geometry() {
         let failure = document.export_usdz("failed.usdz", &plan).unwrap_err();
         assert_eq!(failure.kind, IoErrorKind::Decode);
         assert_eq!(
-            failure.array_read_error,
-            Some(layerstack::ArrayReadError::BudgetExceeded { limit })
+            failure.array_read_error(),
+            Some(&layerstack::ArrayReadError::BudgetExceeded { limit })
         );
         assert!(!document.storage().files.contains_key("failed.usdz"));
         let prepared = document
@@ -1398,8 +1432,8 @@ fn retained_budget_errors_are_distinct_from_missing_geometry() {
             .unwrap_err();
         assert_eq!(failure.kind, IoErrorKind::Decode);
         assert_eq!(
-            failure.array_read_error,
-            Some(layerstack::ArrayReadError::BudgetExceeded { limit })
+            failure.array_read_error(),
+            Some(&layerstack::ArrayReadError::BudgetExceeded { limit })
         );
         assert!(
             !document

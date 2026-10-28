@@ -637,8 +637,9 @@ export class Stage implements Disposable {
    * writes one. The layer keeps its identity and dirty state. Any layer
    * exports, the session layer and package members included.
    *
-   * Throws `argument.invalid` for another format, and `io.unsupported` for
-   * content the format cannot hold.
+   * Throws `argument.invalid` for another format, `io.unsupported` for
+   * content the format cannot hold, and `io.rejected` for a layer that
+   * cannot be written as it stands (an attribute with no type, ...).
    */
   exportLayer(layer: Layer, format: LayerFormat): Uint8Array {
     this.#own("exportLayer", layer);

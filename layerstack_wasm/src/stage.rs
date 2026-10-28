@@ -953,7 +953,9 @@ impl Stage {
     /// # Errors
     ///
     /// `layer.unknown`; `argument.invalid` for another format; the
-    /// writer's `io.unsupported` for content the format cannot hold.
+    /// writer's `io.unsupported` for content the format cannot hold, and
+    /// `io.rejected` for a layer that cannot be written as it stands (an
+    /// attribute with no type, ...).
     pub(crate) fn export_layer(&self, layer: u64, format: &str) -> Result<Vec<u8>, Error> {
         let layer = LayerId(layer);
         self.check_layer(layer)?;

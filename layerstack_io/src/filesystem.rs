@@ -178,6 +178,36 @@ impl Storage for Filesystem {
     fn write(&mut self, identifier: &str, bytes: &[u8]) -> Result<(), IoError> {
         atomic_write(Path::new(identifier), |file| file.write_all(bytes)).map_err(storage_error)
     }
+    /// Streams into the temporary file [`Self::write`] renames over the
+    /// destination; a failure removes it and replaces nothing.
+    fn write_streamed(
+        &mut self,
+        identifier: &str,
+        produce: &mut dyn FnMut(&mut dyn ByteSink) -> Result<(), IoError>,
+    ) -> Result<(), IoError> {
+        let mut failure = None;
+        let written = atomic_write(Path::new(identifier), |file| {
+            produce(&mut FileSink { file }).map_err(|error| {
+                failure = Some(error);
+                std::io::Error::other("the source being written failed")
+            })
+        });
+        match (written, failure) {
+            (Err(_), Some(error)) => Err(error),
+            (written, _) => written.map_err(storage_error),
+        }
+    }
+}
+
+/// The temporary file of a streamed write.
+struct FileSink<'f> {
+    file: &'f mut fs::File,
+}
+
+impl ByteSink for FileSink<'_> {
+    fn write_bytes(&mut self, bytes: &[u8]) -> Result<(), IoError> {
+        self.file.write_all(bytes).map_err(storage_error)
+    }
 }
 
 /// A retained open handle survives atomic replacement. Callers must exclude
@@ -499,6 +529,45 @@ mod tests {
             .write(target.to_str().unwrap(), b"replacement scene")
             .unwrap();
         assert_eq!(fs::read(&target).unwrap(), b"replacement scene");
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn streamed_writes_replace_the_destination_only_when_complete() {
+        #[cfg(target_os = "wasi")]
+        let root = std::env::current_dir()
+            .unwrap()
+            .join("layerstack-streamed-save-wasi");
+        #[cfg(not(target_os = "wasi"))]
+        let root = std::env::temp_dir().join(alloc::format!(
+            "layerstack-streamed-save-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let target = root.join("scene.usda");
+        let identifier = target.to_str().unwrap();
+        fs::write(&target, b"previous scene").unwrap();
+        let mut storage = Filesystem::new(&root, []).unwrap();
+        // A producer failing after some pieces reached the temporary file.
+        let error = storage
+            .write_streamed(identifier, &mut |sink| {
+                sink.write_bytes(b"partial ")?;
+                sink.write_bytes(b"replacement")?;
+                Err(IoError::new(IoErrorKind::Storage, "injected sink failure"))
+            })
+            .unwrap_err();
+        assert_eq!(error.kind, IoErrorKind::Storage);
+        assert_eq!(error.message, "injected sink failure");
+        assert_eq!(fs::read(&target).unwrap(), b"previous scene");
+        assert_eq!(fs::read_dir(&root).unwrap().count(), 1, "no temporary left");
+        storage
+            .write_streamed(identifier, &mut |sink| {
+                sink.write_bytes(b"new ")?;
+                sink.write_bytes(b"scene")
+            })
+            .unwrap();
+        assert_eq!(fs::read(&target).unwrap(), b"new scene");
+        assert_eq!(fs::read_dir(&root).unwrap().count(), 1);
         fs::remove_dir_all(root).unwrap();
     }
 

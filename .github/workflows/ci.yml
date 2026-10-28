@@ -418,7 +418,9 @@ jobs:
         with:
           node-version: "24"
           cache: npm
-          cache-dependency-path: packages/layerstack/package-lock.json
+          cache-dependency-path: |
+            packages/layerstack/package-lock.json
+            packages/demo/package-lock.json
 
       - name: install the package's dev dependencies
         run: npm ci
@@ -438,6 +440,19 @@ jobs:
 
       - name: run the Node tests
         run: npm test
+
+      # The demo links the package built above.
+      - name: install the demo's dev dependencies
+        working-directory: packages/demo
+        run: npm ci
+
+      - name: type-check and build the demo
+        working-directory: packages/demo
+        run: npm run build
+
+      - name: run the demo's script headless
+        working-directory: packages/demo
+        run: npm run acceptance
 
   doc:
     name: cargo doc

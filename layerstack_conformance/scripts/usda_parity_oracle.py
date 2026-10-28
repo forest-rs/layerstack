@@ -78,7 +78,11 @@ The cases:
   spline with both inner loops and a looping extrapolation with a loop
   boundary time, in either order (`TsSpline::_SetInnerLoopParams`,
   `SetPreExtrapolation`, `pxr/base/ts/spline.cpp`), where
-  `read_spline_bounded_loop_and_default_inner_loops` reads each alone.
+  `read_spline_bounded_loop_and_default_inner_loops` reads each alone;
+  an attribute type name that is, or has a part that is, a keyword of the
+  grammar (`dictionary`, `kind`; `KeywordlessIdentifier`), while
+  `read_keyword_like_type_names` reads names that are not (`Dictionary`,
+  and `at`, a keyword only inside a spline).
 - `statements_*`: several list-op statements for one field, on a
   relationship, a connection, references, inherits, `variantSets` and
   metadata (`apiSchemas`). OpenUSD's parser sets each statement's list
@@ -1197,6 +1201,46 @@ def "A" (
     customData = { ; }
 )
 {
+}
+''', []),
+    "strict_dictionary_type": ('''#usda 1.0
+def "P"
+{
+    custom dictionary bag
+}
+''', []),
+    "strict_dictionary_type_with_value": ('''#usda 1.0
+def "P"
+{
+    dictionary bag = {
+        string key = "value"
+    }
+}
+''', []),
+    "strict_dictionary_array_type": ('''#usda 1.0
+def "P"
+{
+    dictionary[] bags
+}
+''', []),
+    "strict_keyword_type": ('''#usda 1.0
+def "P"
+{
+    custom kind k
+}
+''', []),
+    "strict_namespaced_keyword_type": ('''#usda 1.0
+def "P"
+{
+    custom Some::dictionary d
+}
+''', []),
+    "read_keyword_like_type_names": ('''#usda 1.0
+def "P"
+{
+    custom Dictionary a
+    custom at b
+    custom write c
 }
 ''', []),
     "strict_root_prims_then_prim_on_line": ('''#usda 1.0

@@ -30,6 +30,11 @@
    "source": "#usda 1.0\n(\n    relocates = {\n    }\n)\n",
    "text": "#usda 1.0\n(\n    relocates = {\n    }\n)\n\n"
   },
+  "read_keyword_like_type_names": {
+   "reads": true,
+   "source": "#usda 1.0\ndef \"P\"\n{\n    custom Dictionary a\n    custom at b\n    custom write c\n}\n",
+   "text": "#usda 1.0\n\ndef \"P\"\n{\n    custom Dictionary a\n    custom at b\n    custom write c\n}\n\n"
+  },
   "read_legacy_kept_type_names": {
    "reads": true,
    "source": "#usda 1.0\ndef \"P\"\n{\n    custom Transform a = ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (2, 3, 4, 1) )\n    custom PointIndex[] b = [0, 1, 2]\n    custom EdgeIndex c = 3\n    custom FaceIndex[] d.timeSamples = {\n        1: [4, 5],\n    }\n}\n",
@@ -271,6 +276,11 @@
    "reads": false,
    "source": "#usda 1.0\ndef \"A\" { def \"B\" {} }\n"
   },
+  "strict_dictionary_array_type": {
+   "error": "'Expected } at 'dictionary[] bags' in </P>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"P\"\n{\n    dictionary[] bags\n}\n"
+  },
   "strict_dictionary_one_line": {
    "error": "'Expected } at 'int b = 2 }' in </A>",
    "reads": false,
@@ -280,6 +290,16 @@
    "error": "'Expected } at '; }' in </A>",
    "reads": false,
    "source": "#usda 1.0\ndef \"A\" (\n    customData = { ; }\n)\n{\n}\n"
+  },
+  "strict_dictionary_type": {
+   "error": "'Expected } at 'custom dictionary bag' in </P>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"P\"\n{\n    custom dictionary bag\n}\n"
+  },
+  "strict_dictionary_type_with_value": {
+   "error": "'Expected } at 'dictionary bag = {' in </P>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"P\"\n{\n    dictionary bag = {\n        string key = \"value\"\n    }\n}\n"
   },
   "strict_duplicate_connections": {
    "error": "'Duplicate items exist for field 'connectionPaths' at '/A.c' at '[</X.a>, </X.a>]' in </A.c>",
@@ -315,6 +335,11 @@
    "error": "'Inherit paths must be absolute prim paths at '<../../B>' in </A>",
    "reads": false,
    "source": "#usda 1.0\ndef \"A\" (\n    inherits = <../../B>\n)\n{\n}\n"
+  },
+  "strict_keyword_type": {
+   "error": "'Expected } at 'custom kind k' in </P>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"P\"\n{\n    custom kind k\n}\n"
   },
   "strict_layer_metadata_one_line": {
    "error": "'Expected ) at 'endFrame = 2' in </>",
@@ -395,6 +420,11 @@
    "error": "'Expected ) at ';' in </>",
    "reads": false,
    "source": "#usda 1.0\n(\n    doc = \"x\";\n    ;\n)\n"
+  },
+  "strict_namespaced_keyword_type": {
+   "error": "'Expected } at 'custom Some::dictionary d' in </P>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"P\"\n{\n    custom Some::dictionary d\n}\n"
   },
   "strict_newline_after_equals": {
    "error": "'Expected } at 'float a =' in </A>",

@@ -19,6 +19,7 @@ pub(crate) fn dimensioned_value(
     // Strip array suffix for matching: "float3[]" → "float3"; a role
     // matches as its storage type (`color3f` as `float3`, AOUSD Core §6.5).
     let base = storage_name(type_hint.strip_suffix("[]").unwrap_or(type_hint));
+    check_shape(items, base).map_err(|message| alloc::format!("`{base}`: {message}"))?;
     if let Some(component) = component_type(base)
         && let Err(message) = check_components(items, component)
     {
@@ -375,6 +376,47 @@ fn check_components(items: &[ast::Value<'_>], component: &str) -> Result<(), Str
                     Err(alloc::format!("a `{component}` component must be a number"))
                 })?;
             }
+        }
+    }
+    Ok(())
+}
+
+/// Checks that a tuple literal has the dimensions of the vector,
+/// quaternion or matrix type `base`: N scalars, or for a matrix N rows of
+/// N scalars. OpenUSD refuses any other shape ("Error parsing tuple
+/// value", `Sdf_ParserValueContext`, `pxr/usd/sdf/parserValueContext.cpp`).
+///
+/// Spec: AOUSD Core §6.3 (dimensioned types).
+fn check_shape(items: &[ast::Value<'_>], base: &str) -> Result<(), String> {
+    let (count, row) = match base {
+        "double2" | "float2" | "half2" | "int2" => (2, None),
+        "double3" | "float3" | "half3" | "int3" => (3, None),
+        "double4" | "float4" | "half4" | "int4" | "quatd" | "quatf" | "quath" => (4, None),
+        "matrix2d" => (2, Some(2)),
+        "matrix3d" => (3, Some(3)),
+        "matrix4d" => (4, Some(4)),
+        _ => return Ok(()),
+    };
+    if items.len() != count {
+        return Err(alloc::format!(
+            "takes {count} elements, not {}",
+            items.len()
+        ));
+    }
+    for item in items {
+        match (item, row) {
+            (ast::Value::Tuple(_), None) => {
+                return Err(String::from("an element is a tuple, not a number"));
+            }
+            (ast::Value::Tuple(values), Some(row)) => {
+                if values.len() != row || values.iter().any(|v| matches!(v, ast::Value::Tuple(_))) {
+                    return Err(alloc::format!("each row takes {row} numbers"));
+                }
+            }
+            (_, Some(row)) => {
+                return Err(alloc::format!("each row is a tuple of {row} numbers"));
+            }
+            (_, None) => {}
         }
     }
     Ok(())

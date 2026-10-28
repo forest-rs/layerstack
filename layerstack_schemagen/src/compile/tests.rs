@@ -172,7 +172,7 @@ class "Thing" (inherits = [</Typed>, </Other>]) {}"#,
         ),
         (
             r#"class "OneAPI" (inherits = </APISchemaBase>) {}
-class "ThingAPI" (inherits = </APISchemaBase> apiSchemas = ["OneAPI"]) {}"#,
+class "ThingAPI" (inherits = </APISchemaBase>; apiSchemas = ["OneAPI"]) {}"#,
             "/ThingAPI",
             |r| matches!(r, Rule::ApiSchemasNotPrepended),
         ),
@@ -209,13 +209,13 @@ class Thing_1 "Thing_1" (inherits = </Thing>) {}"#,
         ),
         (
             r#"class "ThingAPI" (inherits = </APISchemaBase>
-    customData = {token apiSchemaType = "multipleApply" token[] apiSchemaAutoApplyTo = ["Typed"]}) {}"#,
+    customData = {token apiSchemaType = "multipleApply"; token[] apiSchemaAutoApplyTo = ["Typed"]}) {}"#,
             "/ThingAPI",
             |r| matches!(r, Rule::AutoApplyNotSingleApply),
         ),
         (
             r#"class "ThingAPI" (inherits = </APISchemaBase>
-    customData = {token apiSchemaType = "nonApplied" token[] apiSchemaCanOnlyApplyTo = ["Typed"]}) {}"#,
+    customData = {token apiSchemaType = "nonApplied"; token[] apiSchemaCanOnlyApplyTo = ["Typed"]}) {}"#,
             "/ThingAPI",
             |r| matches!(r, Rule::CanOnlyApplyNotApplied),
         ),
@@ -245,23 +245,23 @@ class "ThingAPI" (inherits = </OneAPI>) {}"#,
         ),
         (
             r#"class "OneAPI" (inherits = </APISchemaBase>) {}
-class "ThingAPI" (inherits = </OneAPI> customData = {token apiSchemaType = "nonApplied"}) {}"#,
+class "ThingAPI" (inherits = </OneAPI>; customData = {token apiSchemaType = "nonApplied"}) {}"#,
             "/ThingAPI",
             |r| matches!(r, Rule::NonAppliedApiBase),
         ),
         (
-            r#"class "Thing" (inherits = </Typed> customData = {token apiSchemaType = "singleApply"}) {}"#,
+            r#"class "Thing" (inherits = </Typed>; customData = {token apiSchemaType = "singleApply"}) {}"#,
             "/Thing",
             |r| matches!(r, Rule::ApiSchemaTypeNotApi),
         ),
         (
-            r#"class "Thing" (inherits = </Typed> customData = {token[] fallbackTypes = ["Old"]}) {}"#,
+            r#"class "Thing" (inherits = </Typed>; customData = {token[] fallbackTypes = ["Old"]}) {}"#,
             "/Thing",
             |r| matches!(r, Rule::FallbackTypesNotConcrete),
         ),
         (
             r#"class "ThingAPI" (inherits = </APISchemaBase>
-    customData = {token apiSchemaType = "multipleApply" token propertyNamespacePrefix = "thing"}) {}"#,
+    customData = {token apiSchemaType = "multipleApply"; token propertyNamespacePrefix = "thing"}) {}"#,
             "/ThingAPI",
             |r| matches!(r, Rule::PrefixWithoutProperties),
         ),
@@ -304,14 +304,14 @@ class "Thing" (inherits = </Base>) { int count (customData = {bool apiSchemaOver
         ),
         (
             r#"class "ThingAPI" (inherits = </APISchemaBase>
-    customData = {token apiSchemaType = "multipleApply" token propertyNamespacePrefix = "p"})
+    customData = {token apiSchemaType = "multipleApply"; token propertyNamespacePrefix = "p"})
 { int a
     int p:__INSTANCE_NAME__:a }"#,
             "/ThingAPI",
             |r| matches!(r, Rule::PrefixedPropertyExists { name } if name == "p:__INSTANCE_NAME__:a"),
         ),
         (
-            r#"class "ThingAPI" (inherits = </APISchemaBase> hidden = true) {}"#,
+            r#"class "ThingAPI" (inherits = </APISchemaBase>; hidden = true) {}"#,
             "/ThingAPI",
             |r| {
                 matches!(
@@ -355,7 +355,7 @@ fn code_generation_rules() {
     let reflecting = |schemas: &str| {
         format!(
             r#"class "MassAPI" (inherits = </APISchemaBase>) {{}}
-class "Body" (inherits = </Typed> customData = {{token[] reflectedAPISchemas = [{schemas}]}}) {{}}"#
+class "Body" (inherits = </Typed>; customData = {{token[] reflectedAPISchemas = [{schemas}]}}) {{}}"#
         )
     };
     let (path, rule) = broken_in(CODEFUL, &reflecting("\"MassAPI\""));
@@ -376,7 +376,7 @@ class "Body" (inherits = </Typed> customData = {{token[] reflectedAPISchemas = [
 fn disallowed_fields_are_listed() {
     let text = format!(
         "{CODELESS}{}",
-        r#"class "Thing" (inherits = </Typed> kind = "model") {
+        r#"class "Thing" (inherits = </Typed>; kind = "model") {
     rel parts = </Typed>
     double size.timeSamples = { 1: 2 }
 }"#

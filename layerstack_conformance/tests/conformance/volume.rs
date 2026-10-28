@@ -267,7 +267,7 @@ fn weaker_custom_binding_is_blocked_without_losing_declaration_and_restored_by_u
 #[test]
 fn variant_target_preserves_local_relationship_metadata_and_child_branch_specs() {
     let (mut store, mut live) = support::scene(
-        "#usda 1.0\ndef Volume \"V\" (variants = { string look = \"a\" } prepend variantSets = \"look\") {\n variantSet \"look\" = {\n  \"a\" {\n   custom rel field:density = </Field> (doc = \"preserve\")\n   def Volume \"Child\" {\n    rel field:density = </Field>\n   }\n  }\n }\n}\ndef Scope \"Field\" {}\n",
+        "#usda 1.0\ndef Volume \"V\" (variants = { string look = \"a\" }; prepend variantSets = \"look\") {\n variantSet \"look\" = {\n  \"a\" {\n   custom rel field:density = </Field> (doc = \"preserve\")\n   def Volume \"Child\" {\n    rel field:density = </Field>\n   }\n  }\n }\n}\ndef Scope \"Field\" {}\n",
     );
     let field = store.path("/Field");
     for (path_text, spec_text) in [("/V", "/V{look=a}"), ("/V/Child", "/V{look=a}Child")] {

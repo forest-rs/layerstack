@@ -202,6 +202,11 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
             } else if !is_trivia(t.kind) {
                 self.line_break = false;
             }
+            if is_string_token(t.kind) && !string_is_terminated(t.text(self.source)) {
+                // A quoted string ends on its own line, a triple-quoted one
+                // anywhere before the end of the file (AOUSD Core §16.2.5).
+                self.error(t.span, "unterminated string");
+            }
         }
         tok
     }
@@ -293,11 +298,61 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
         self.eat_trivia();
         if self.peek() == Some(kind) {
             let tok = self.bump_stored::<STORE>().unwrap();
+            if kind == TokenKind::Equals {
+                self.value_on_the_line(tok.span);
+            }
             Some(tok.text(self.source))
         } else {
             let span = self.current_span();
             self.error(span, format!("expected {kind:?}"));
             None
+        }
+    }
+
+    /// Reports a line break straight after the `=` at `span`: an
+    /// assignment's value starts on its line (`Assignment = pad<Equals,
+    /// InlinePadding>`, `pxr/usd/sdf/textFileFormatParser.h`).
+    fn value_on_the_line(&mut self, span: Span) {
+        let mut index = self.pos;
+        while let Some(tok) = self.tokens.get(index) {
+            match tok.kind {
+                TokenKind::Whitespace | TokenKind::BlockComment => index += 1,
+                TokenKind::Newline | TokenKind::PythonComment | TokenKind::CppComment => {
+                    self.error(span, "unexpected line break after `=`");
+                    return;
+                }
+                _ => return,
+            }
+        }
+    }
+
+    /// Reports a line break crossed by the trivia just eaten, before `what`:
+    /// a prim's or property's declaration is on one line (OpenUSD's
+    /// `TokenSeparator` between its parts is inline padding).
+    fn on_the_line(&mut self, what: &str) {
+        if self.line_break {
+            let span = self.current_span();
+            self.error(span, format!("unexpected line break before {what}"));
+        }
+    }
+
+    /// Reports a metadata or dictionary entry followed on its line by
+    /// anything but `;` or the `close` of its block: entries are separated
+    /// by line breaks or `;` (`StatementSequenceOf`,
+    /// `pxr/usd/sdf/textFileFormatParser.h`), so `( a = 1 b = 2 )` is
+    /// refused.
+    fn expect_entry_end(&mut self, close: TokenKind) {
+        self.eat_trivia();
+        if self.line_break {
+            return;
+        }
+        match self.peek() {
+            None | Some(TokenKind::Semicolon) => {}
+            Some(kind) if kind == close => {}
+            Some(_) => {
+                let span = self.current_span();
+                self.error(span, "expected a line break or `;` between entries");
+            }
         }
     }
 
@@ -467,7 +522,9 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
                 let span = self.current_span();
                 self.error(span, "unexpected token in layer metadata");
                 self.bump();
+                continue;
             }
+            self.expect_entry_end(TokenKind::RightParen);
         }
 
         self.expect(TokenKind::RightParen);
@@ -589,7 +646,15 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
             }
 
             self.parse_relocate_entry();
-            self.eat(TokenKind::Comma);
+            // Pairs are separated by `,` (`RelocatesMapInterior`,
+            // `pxr/usd/sdf/textFileFormatParser.h`); the last may have one.
+            if self.eat(TokenKind::Comma).is_none() {
+                self.eat_trivia();
+                if self.peek() != Some(TokenKind::RightBrace) && self.current().is_some() {
+                    let span = self.current_span();
+                    self.error(span, "expected `,` between relocates");
+                }
+            }
         }
 
         self.expect(TokenKind::RightBrace);
@@ -637,10 +702,13 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
 
         // Optional type name (ident followed by a string).
         self.eat_trivia();
+        self.on_the_line("the prim's type or name");
         if self.peek() == Some(TokenKind::Ident)
             && self.peek_next_non_trivia() == Some(TokenKind::DoubleQuoteString)
         {
             self.bump(); // type name
+            self.eat_trivia();
+            self.on_the_line("the prim's name");
         }
 
         // Prim name (quoted string).
@@ -684,6 +752,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
                 continue;
             }
             self.parse_prim_meta_entry();
+            self.expect_entry_end(TokenKind::RightParen);
         }
 
         self.expect(TokenKind::RightParen);
@@ -1175,9 +1244,11 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
         let start = self.current_span().start;
         self.builder.start_node(SyntaxKind::AttributeDef, start);
 
-        // Optional list-op prefix.
+        // Optional list-op prefix, which only a `.connect` statement takes.
         self.eat_trivia();
+        let mut list_op = None;
         if self.peek() == Some(TokenKind::Ident) && is_list_op_keyword(self.current_text()) {
+            list_op = Some(self.current_span());
             self.bump();
         }
 
@@ -1211,22 +1282,51 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
             self.expect(TokenKind::RightBracket);
         }
 
-        // Attribute name (namespaced).
+        // Attribute name (namespaced), on the type's line.
+        self.eat_trivia();
+        if !type_name.is_empty() {
+            self.on_the_line("the attribute's name");
+        }
         self.parse_namespaced_name();
 
         // What follows: .timeSamples, .connect, =, or metadata (
         self.eat_trivia();
-        if self.peek() == Some(TokenKind::Dot) {
+        let suffixed = self.peek() == Some(TokenKind::Dot);
+        let connect = suffixed
+            && self
+                .peek_past_trivia_from(self.pos + 1)
+                .and_then(|(i, _)| self.tokens.get(i))
+                .is_some_and(|tok| tok.text(self.source) == "connect");
+        if let Some(span) = list_op.filter(|_| !connect) {
+            // OpenUSD: `AttributeSpec` takes a list-op keyword only before
+            // `.connect` (`pxr/usd/sdf/textFileFormatParser.h`).
+            self.error(
+                span,
+                "a list-op keyword applies only to a `.connect` statement",
+            );
+        }
+        if suffixed {
             self.parse_attribute_suffix(start, type_name, is_array);
         } else if self.peek() == Some(TokenKind::Equals) {
+            let equals = self.current_span();
             self.bump(); // =
+            self.value_on_the_line(equals);
             self.parse_attribute_value(start, None, type_name, is_array);
         }
 
         // Optional metadata block, which opens on the property's own line
-        // (OpenUSD rejects one on the next with "Expected }").
+        // (OpenUSD rejects one on the next with "Expected }"); only a
+        // declaration or a default value takes one, not a `.connect`,
+        // `.timeSamples` or `.spline` statement.
         self.eat_trivia();
         if !self.line_break && self.peek() == Some(TokenKind::LeftParen) {
+            if suffixed {
+                let span = self.current_span();
+                self.error(
+                    span,
+                    "metadata cannot follow a `.connect`, `.timeSamples` or `.spline` statement",
+                );
+            }
             self.parse_attribute_metadata();
         }
         self.expect_property_end(errors);
@@ -1467,6 +1567,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
             }
             let entry_end = self.current_span().start;
             self.builder.finish_node(entry_end);
+            self.expect_entry_end(TokenKind::RightParen);
         }
         self.expect(TokenKind::RightParen);
         let end = self.current_span().start;
@@ -1530,7 +1631,9 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
         // Optional assignment.
         self.eat_trivia();
         if self.peek() == Some(TokenKind::Equals) {
+            let equals = self.current_span();
             self.bump();
+            self.value_on_the_line(equals);
             self.eat_trivia();
             if self.peek() == Some(TokenKind::Ident) && self.current_text() == "None" {
                 self.bump();
@@ -1796,6 +1899,13 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
                 break;
             }
             self.parse_value_expr();
+            // A `,` follows its item on the item's line (OpenUSD refuses
+            // `[1\n, 2]` with "parse error matching ListValueClose").
+            self.eat_trivia();
+            if self.line_break && self.peek() == Some(TokenKind::Comma) {
+                let span = self.current_span();
+                self.error(span, "unexpected line break before `,`");
+            }
             self.eat_stored::<LOSSLESS>(TokenKind::Comma);
         }
         self.expect_stored::<LOSSLESS>(TokenKind::RightBracket);
@@ -1987,7 +2097,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
             // Entries are separated by line breaks or `;`
             // (`StatementSequenceOf<DictionaryValueItem>`,
             // `pxr/usd/sdf/textFileFormatParser.h`).
-            self.eat_trivia();
+            self.expect_entry_end(TokenKind::RightBrace);
             self.eat_statement_separator();
         }
 
@@ -2289,11 +2399,19 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
             key = self.current_text();
             self.bump(); // key
         }
-        self.expect(TokenKind::Equals);
         if key == "symmetryFunction" {
+            // Its value may be nothing, so the line may end after `=`.
+            self.eat_trivia();
+            if self.peek() == Some(TokenKind::Equals) {
+                self.bump();
+            } else {
+                let span = self.current_span();
+                self.error(span, "expected Equals");
+            }
             self.parse_symmetry_function();
             return;
         }
+        self.expect(TokenKind::Equals);
 
         self.eat_trivia();
         if self.peek() == Some(TokenKind::Ident) && self.current_text() == "None" {
@@ -2313,6 +2431,43 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
 /// item only when the list lacks it; unlike `append`, it never moves one.
 fn is_list_op_keyword(text: &str) -> bool {
     matches!(text, "prepend" | "append" | "add" | "delete" | "reorder")
+}
+
+fn is_string_token(kind: TokenKind) -> bool {
+    matches!(
+        kind,
+        TokenKind::DoubleQuoteString
+            | TokenKind::SingleQuoteString
+            | TokenKind::MultilineDoubleQuoteString
+            | TokenKind::MultilineSingleQuoteString
+    )
+}
+
+/// Whether the string literal `text`, as the lexer delimits it, ends with
+/// its closing quote (or three), past its escape sequences: the lexer
+/// ends an unterminated quoted string at the line break.
+fn string_is_terminated(text: &str) -> bool {
+    let bytes = text.as_bytes();
+    let Some(&quote) = bytes.first() else {
+        return false;
+    };
+    let delimiter = if bytes.len() >= 3 && bytes[1] == quote && bytes[2] == quote {
+        3
+    } else {
+        1
+    };
+    let mut i = delimiter;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'\\' => i += 2,
+            b if b == quote && bytes[i..].iter().take(delimiter).all(|&c| c == quote) => {
+                return i + delimiter == bytes.len()
+                    && bytes[i..].iter().take(delimiter).count() == delimiter;
+            }
+            _ => i += 1,
+        }
+    }
+    false
 }
 
 fn is_trivia(kind: TokenKind) -> bool {

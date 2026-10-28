@@ -48,6 +48,18 @@ The cases:
   (`SdfLayerOffset::operator==`); empty comments, an empty layer `doc` and
   a false `hasOwnedSubLayers` dropped; `, ` between relocates; `@@@`
   around an asset path holding `@`, with `\\@@@` inside.
+- `strict_*`: text OpenUSD refuses, which a strict import refuses too:
+  `None` or `[]` in a list-edit statement; duplicate items in a target,
+  connection, arc or `variantSets` statement (`_HasDuplicates`,
+  `pxr/usd/sdf/textParserHelpers.h`), though not in a list-op metadata
+  statement (`read_duplicate_metadata_list_items`); an attribute whose
+  statements disagree on its type or variability; an inherit path
+  climbing above the root; a tuple of the wrong dimensions; a line break
+  in a quoted string; `curve(` with no space; a list-op keyword on a
+  value and metadata after `.connect` or `.timeSamples`; two metadata
+  entries, or dictionary entries, on one line without `;`; a line break
+  after `=`, before a list's `,`, after an attribute's type or before a
+  prim's name; relocates without `,` between them.
 - `statements_*`: several list-op statements for one field, on a
   relationship, a connection, references, inherits, `variantSets` and
   metadata (`apiSchemas`). OpenUSD's parser sets each statement's list
@@ -640,6 +652,304 @@ def "P" (
     asset b = @@@a\\@@@b@@@
     asset[] c = [@@@a@b@@@, @plain@]
 }
+''', []),
+    "strict_list_edit_none_refs": ('''#usda 1.0
+def "A" (
+    prepend references = None
+)
+{
+}
+''', []),
+    "strict_list_edit_empty_refs": ('''#usda 1.0
+def "A" (
+    prepend references = []
+)
+{
+}
+''', []),
+    "strict_list_edit_none_payload": ('''#usda 1.0
+def "A" (
+    append payload = None
+)
+{
+}
+''', []),
+    "strict_list_edit_none_inherits": ('''#usda 1.0
+def "A" (
+    add inherits = None
+)
+{
+}
+''', []),
+    "strict_list_edit_empty_variant_sets": ('''#usda 1.0
+def "A" (
+    prepend variantSets = []
+)
+{
+}
+''', []),
+    "strict_list_edit_none_rel": ('''#usda 1.0
+def "A"
+{
+    prepend rel r = None
+}
+''', []),
+    "strict_list_edit_empty_rel": ('''#usda 1.0
+def "A"
+{
+    delete rel r = []
+}
+''', []),
+    "strict_list_edit_none_connect": ('''#usda 1.0
+def "A"
+{
+    delete float c.connect = None
+}
+''', []),
+    "strict_list_edit_empty_metadata": ('''#usda 1.0
+def "A" (
+    prepend apiSchemas = []
+)
+{
+}
+''', []),
+    "strict_duplicate_targets": ('''#usda 1.0
+def "A"
+{
+    rel r = [</B>, </C>, </B>]
+}
+''', []),
+    "strict_duplicate_deleted_targets": ('''#usda 1.0
+def "A"
+{
+    delete rel r = [</B>, </B>]
+}
+''', []),
+    "strict_duplicate_connections": ('''#usda 1.0
+def "A"
+{
+    float c.connect = [</X.a>, </X.a>]
+}
+''', []),
+    "strict_duplicate_references": ('''#usda 1.0
+def "A" (
+    prepend references = [@a.usda@, @a.usda@]
+)
+{
+}
+''', []),
+    "strict_duplicate_inherits": ('''#usda 1.0
+def "A" (
+    prepend inherits = [</B>, </B>]
+)
+{
+}
+''', []),
+    "strict_duplicate_variant_sets": ('''#usda 1.0
+def "A" (
+    prepend variantSets = ["v", "v"]
+)
+{
+}
+''', []),
+    "read_duplicate_metadata_list_items": ('''#usda 1.0
+def "A" (
+    prepend apiSchemas = ["X", "X"]
+)
+{
+}
+''', []),
+    "read_references_differing_offsets": ('''#usda 1.0
+def "A" (
+    references = [@a.usda@, @a.usda@ (offset = 1)]
+)
+{
+}
+''', []),
+    "strict_type_change": ('''#usda 1.0
+def "A"
+{
+    float a = 1
+    double a.timeSamples = {
+        1: 2,
+    }
+}
+''', []),
+    "strict_role_change": ('''#usda 1.0
+def "A"
+{
+    point3d p = (1, 0, 0)
+    normal3d p.timeSamples = {
+        1: (0, 1, 0),
+    }
+}
+''', []),
+    "strict_variability_change": ('''#usda 1.0
+def "A"
+{
+    uniform float a = 1
+    float a.connect = </B.c>
+}
+''', []),
+    "read_variability_restated": ('''#usda 1.0
+def "A"
+{
+    uniform float a = 1
+    uniform float a.connect = </B.c>
+    varying rel r = </B>
+    prepend rel r = </C>
+    custom float b = 1
+    float b.timeSamples = {
+        1: 2,
+    }
+}
+''', []),
+    "strict_inherit_above_root": ('''#usda 1.0
+def "A" (
+    inherits = <../../B>
+)
+{
+}
+''', []),
+    "strict_matrix_row_length": ('''#usda 1.0
+def "A"
+{
+    matrix2d m = ( (1, 0, 0), (0, 1) )
+}
+''', []),
+    "strict_matrix_row_count": ('''#usda 1.0
+def "A"
+{
+    matrix2d m = ( (1, 0), (0, 1), (0, 0) )
+}
+''', []),
+    "strict_vector_dimension": ('''#usda 1.0
+def "A"
+{
+    float3 v = (1, 2)
+}
+''', []),
+    "strict_vector_array_dimension": ('''#usda 1.0
+def "A"
+{
+    float2[] v = [(1, 2), (3, 4, 5)]
+}
+''', []),
+    "strict_newline_in_string": ('''#usda 1.0
+def "A"
+{
+    string s = "a
+b"
+}
+''', []),
+    "strict_spline_curve_spacing": ('''#usda 1.0
+def "A"
+{
+    double a.spline = {
+        bezier,
+        0: 1; post curve(1, 2),
+        1: 2,
+    }
+}
+''', []),
+    "strict_list_op_on_value": ('''#usda 1.0
+def "A"
+{
+    add float a = 1
+}
+''', []),
+    "strict_metadata_after_connect": ('''#usda 1.0
+def "A"
+{
+    float a.connect = </Q.b> (doc = "x")
+}
+''', []),
+    "strict_metadata_after_samples": ('''#usda 1.0
+def "A"
+{
+    float a.timeSamples = {
+        1: 2,
+    } (doc = "x")
+}
+''', []),
+    "strict_layer_metadata_one_line": ('''#usda 1.0
+(
+    startFrame = 1 endFrame = 2
+)
+''', []),
+    "strict_attribute_metadata_one_line": ('''#usda 1.0
+def "A"
+{
+    float a (doc = "x" hidden = true)
+}
+''', []),
+    "strict_dictionary_one_line": ('''#usda 1.0
+def "A" (
+    customData = { int a = 1 int b = 2 }
+)
+{
+}
+''', []),
+    "read_metadata_semicolons": ('''#usda 1.0
+(startFrame = 1; endFrame = 2)
+
+def "A"
+{
+    float a (doc = "x"; hidden = true)
+}
+''', []),
+    "strict_newline_after_equals": ('''#usda 1.0
+def "A"
+{
+    float a =
+        1
+}
+''', []),
+    "strict_newline_after_metadata_equals": ('''#usda 1.0
+def "A" (
+    kind =
+    "x"
+)
+{
+}
+''', []),
+    "strict_newline_before_comma": ('''#usda 1.0
+def "A"
+{
+    float[] a = [1
+    , 2]
+}
+''', []),
+    "read_newline_after_comma": ('''#usda 1.0
+def "A"
+{
+    float[] a = [1,
+    2
+    ]
+    float2 b = (1,
+ 2)
+}
+''', []),
+    "strict_newline_after_type": ('''#usda 1.0
+def "A"
+{
+    float
+    a = 1
+}
+''', []),
+    "strict_newline_before_prim_name": ('''#usda 1.0
+def Scope
+"A"
+{
+}
+''', []),
+    "strict_relocates_without_comma": ('''#usda 1.0
+(
+    relocates = {
+        </a>: </b>
+        </c>: </d>
+    }
+)
 ''', []),
 }
 

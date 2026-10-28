@@ -248,6 +248,9 @@ impl LayerStore for ControlledStore<'_> {
     fn paths(&self) -> &PathInterner {
         self.inner.paths()
     }
+    fn layer_identifier(&self, id: LayerId) -> Option<&str> {
+        self.inner.layer_identifier(id)
+    }
     fn asset_layer(&self, anchor: LayerId, asset: &str) -> Option<LayerId> {
         self.inner.asset_layer(anchor, asset)
     }

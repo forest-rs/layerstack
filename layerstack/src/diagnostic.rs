@@ -75,10 +75,14 @@ impl Names<'_> {
         }
     }
 
-    /// A layer. A store does not name its layers, so this is the id
-    /// (`layer 3`); a host maps it to an identifier.
+    /// A layer: its identifier as OpenUSD writes a layer (`@./set.usda@`)
+    /// when the store names it ([`LayerStore::layer_identifier`]), else
+    /// its id (`layer 3`).
     pub(crate) fn layer(self, id: LayerId) -> String {
-        format!("layer {}", id.0)
+        match self.0.and_then(|store| store.layer_identifier(id)) {
+            Some(identifier) => format!("@{identifier}@"),
+            None => format!("layer {}", id.0),
+        }
     }
 }
 

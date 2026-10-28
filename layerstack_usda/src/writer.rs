@@ -359,7 +359,10 @@ pub struct Prim {
 /// statements).
 #[derive(Clone, Debug, PartialEq)]
 pub struct VariantSet {
-    /// Variant set name; must be a valid identifier (§7.3.3).
+    /// Variant set name: identifier characters, `|` and `-`, after an
+    /// optional leading `.`, or empty, as OpenUSD's text parser reads a set
+    /// name (`SdfSchemaBase::IsValidVariantIdentifier`, the `VariantName`
+    /// path grammar) and its writer writes it back.
     pub name: String,
     /// The variants; at least one, each named once. Written by name in
     /// byte order.
@@ -544,7 +547,7 @@ impl Prim {
         }
         if let Some(op) = &self.variant_set_names {
             validate_arc_list(op, path, "variantSets")?;
-            if let Some(name) = op.items().find(|name| !is_identifier(name)) {
+            if let Some(name) = op.items().find(|name| !is_variant_identifier(name)) {
                 return Err(WriteError::InvalidName {
                     path: alloc::format!("{path}#variantSets"),
                     name: name.clone(),
@@ -560,7 +563,7 @@ impl VariantSet {
     /// the sets `siblings` already named there.
     fn validate<'a>(&'a self, owner: &str, siblings: &mut Vec<&'a str>) -> Result<(), WriteError> {
         let path = alloc::format!("{owner}{{{}=}}", self.name);
-        if !is_identifier(&self.name) {
+        if !is_variant_identifier(&self.name) {
             return Err(WriteError::InvalidName {
                 path,
                 name: self.name.clone(),
@@ -1614,15 +1617,11 @@ pub fn is_identifier(name: &str) -> bool {
 }
 
 /// Whether `name` is a variant name: identifier characters, `|` and `-`,
-/// after an optional leading `.` — OpenUSD's `VariantName` path grammar
-/// (`pxr/usd/sdf/pathParser.h`), less the empty name, which names a variant
-/// set rather than a variant.
+/// after an optional leading `.` (so `.` itself is one) — OpenUSD's
+/// `VariantName` path grammar (`pxr/usd/sdf/pathParser.h`), less the empty
+/// name, which names a variant set rather than a variant.
 fn is_variant_name(name: &str) -> bool {
-    let rest = name.strip_prefix('.').unwrap_or(name);
-    !rest.is_empty()
-        && rest
-            .chars()
-            .all(|c| crate::ident::is_continue(c) || c == '|' || c == '-')
+    !name.is_empty() && is_variant_identifier(name)
 }
 
 /// Whether `selection` is a variant selection OpenUSD reads: a variable
@@ -5385,6 +5384,25 @@ def Xform "Tree" (
             },
             "a prim in a variant follows its selection"
         );
+        // Set names, the `variantSets` list and variant names take what
+        // OpenUSD's text parser reads and its writer writes back: the
+        // `VariantName` grammar, where a set name may be empty and a variant
+        // name `.`.
+        for name in ["a-b", "1a", ".a", "a|b", ""] {
+            let mut named = doc.clone();
+            named.prims[0].variant_sets[0].name = name.into();
+            named.prims[0].variant_set_names = Some(ListOp::prepend(vec![name.into()]));
+            let text = named.to_usda().unwrap();
+            assert!(
+                text.contains(&alloc::format!("variantSet \"{name}\" = {{")),
+                "{text}"
+            );
+            assert!(parse(&text).diagnostics.is_empty(), "{name:?} re-parses");
+        }
+        let mut dot = doc.clone();
+        dot.prims[0].variant_sets[0].variants[0].name = ".".into();
+        let dot = dot.to_usda().unwrap();
+        assert!(dot.contains("        \".\" (\n"), "{dot}");
         let mut empty_selection = doc.clone();
         empty_selection.prims[0].variant_selections[0].1 = String::new();
         assert!(

@@ -1243,6 +1243,23 @@ impl EmitCtx<'_> {
         sets: &mut VariantSets,
         layer: &mut Layer,
     ) {
+        // A variant named "" has the set's own path (`/P{v=}`): OpenUSD's
+        // text parser creates that variant's spec there, then finds the
+        // set's path taken and so neither creates nor lists the set
+        // (`TextParserAction<VariantSetStatement>`,
+        // `pxr/usd/sdf/textFileFormatParser.cpp`). The layer it reads holds
+        // nothing of the statement, so it is left out here, with a warning.
+        if vs.branches.iter().any(|branch| branch.name.is_empty()) {
+            self.diagnostics.push(Diagnostic::warning(
+                vs.span,
+                format!(
+                    "variantSet \"{}\" names a variant \"\", whose path is the set's; \
+                     the statement is ignored",
+                    vs.name
+                ),
+            ));
+            return;
+        }
         // The set spec alone: `variantSetNames` lists the sets that compose
         // (AOUSD Core §7.6.2.3.5), and a `variantSet` block does not list
         // its set, as OpenUSD's text parser does not.
@@ -2903,6 +2920,28 @@ def \"A\" {
             attr_default(&vs.variants.get(&blue_tok).unwrap().properties, &r_tok),
             Some(&(Value::Int(0)))
         );
+    }
+
+    #[test]
+    fn empty_variant_names_drop_their_statement() {
+        // OpenUSD reads the statement into a variant spec at the set's own
+        // path and never lists the set, so its layer holds none of it.
+        let src = "#usda 1.0\ndef \"A\"\n{\n    variantSet \"v\" = {\n        \"\" {\n        }\n        \"x\" {\n            int r = 1\n        }\n    }\n}\n";
+        let (result, tokens, paths) = emit_source(src);
+        assert!(!result.rejected);
+        assert!(
+            result
+                .diagnostics
+                .iter()
+                .all(|d| d.severity == crate::diagnostic::Severity::Warning),
+            "{:?}",
+            result.diagnostics
+        );
+        assert_eq!(result.diagnostics.len(), 1);
+        let a = paths
+            .lookup(&Path::parse_absolute("/A", &tokens).unwrap())
+            .unwrap();
+        assert!(result.layer.prim(a).unwrap().variant_sets().is_empty());
     }
 
     #[test]

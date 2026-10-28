@@ -100,7 +100,7 @@ fn layer_id(doc: &StageDocument<Fixtures>, dir: &str, identifier: &str) -> Layer
         .unwrap_or_else(|| panic!("{identifier} was not read"))
 }
 
-fn prim_id<B: Storage>(doc: &StageDocument<B>, path: &str) -> layerstack::PathId {
+fn prim_id<B: Storage>(doc: &StageDocument<B>, path: &str) -> PathId {
     let store = doc.store();
     store
         .paths()

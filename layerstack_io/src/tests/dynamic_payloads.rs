@@ -862,10 +862,7 @@ pub(super) fn author<B: Storage>(
 }
 
 /// The paths of `prims`, sorted.
-pub(super) fn displayed<B: Storage>(
-    doc: &StageDocument<B>,
-    prims: &[layerstack::PathId],
-) -> Vec<String> {
+pub(super) fn displayed<B: Storage>(doc: &StageDocument<B>, prims: &[PathId]) -> Vec<String> {
     let store = doc.store();
     let mut out: Vec<String> = prims
         .iter()

@@ -149,6 +149,30 @@ fn opening_with_only_the_root_lists_what_the_stage_wants() {
     );
     assert!(doc.view().prim("/Child").is_some());
     assert!(doc.view().prim("/FromSub").is_none());
+    // Each lists the prims composed without it: those whose arcs name it,
+    // the pseudo-root for the stage's own sublayer.
+    let store = doc.store();
+    let mut waiting: Vec<(String, Vec<String>)> = doc
+        .unavailable_assets()
+        .into_iter()
+        .map(|asset| {
+            let prims = asset
+                .prims
+                .iter()
+                .map(|&prim| store.paths().display(prim, store.tokens()))
+                .collect();
+            (asset.asset_path, prims)
+        })
+        .collect();
+    waiting.sort();
+    assert_eq!(
+        waiting,
+        [
+            ("a.usda".into(), vec!["/Model".into()]),
+            ("child.usda".into(), vec!["/Child".into()]),
+            ("sub.usda".into(), vec!["/".into()]),
+        ]
+    );
     assert_eq!(missing(&doc), [("gone.usda".into(), AssetUse::Reference)]);
     let status = doc.asset_status();
     assert_eq!(status.unavailable, doc.unavailable_assets());

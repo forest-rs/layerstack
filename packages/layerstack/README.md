@@ -48,7 +48,9 @@ await stage.resolve(source);
   arc contributes nothing (`status().unresolved`, with the failure's code).
 - **Loading is a loop you can see.** `unavailable()` lists
   `UnavailableAsset`s (`identifier`, the `assetPath` as authored, the
-  `anchor` layer and what it is `usedBy`: a sublayer, reference or payload).
+  `anchor` layer, what it is `usedBy`: a sublayer, reference or payload,
+  and the `prims` composed without it meanwhile, so you can tell which
+  prims are incomplete).
   `supply(identifier, bytes | null)` answers one; `loadSupplied()` reads the
   answers and may make more unavailable. `resolve(source)` runs the loop for
   you, fetching each round's identifiers at once. A USDZ is one buffer: its

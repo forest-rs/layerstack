@@ -26,10 +26,11 @@ println!("Loaded {} layers", document.load_report().layers.len());
 # Ok::<(), layerstack_io::IoError>(())
 ```
 
-For schema fallbacks and typed views, use `StageDocument::open_in`: construct
-`layerstack_schemas::openusd` using the supplied store's tokens, then pass that
-same store and its registry in `StageOptions`. `open` creates a fresh store,
-so it rejects a registry (`IoErrorKind::ForeignSchemaRegistry`): no registry
+For schema fallbacks and typed views, open into a store of your own: construct
+`layerstack_schemas::openusd` using that store's tokens, then pass the same
+store (`OpenOptions::store`) and its registry (`StageOptions::schemas`) to
+`StageDocument::open`. Without a store, `open` creates a fresh one, so it
+rejects a registry (`IoErrorKind::ForeignSchemaRegistry`): no registry
 built beforehand belongs to that store's tokens.
 
 The default `std` feature provides `Filesystem`. Disable default features for
@@ -61,12 +62,11 @@ which opening loads. After an edit selects another variant,
 `parts_mut`, `StageDocument::load_requested_assets` does;
 `VariantArcLoading::All` resolves every branch's arcs up front instead.
 
-For large USDC scenes, `StageDocument::open_with` or `open_in_with` accepts
-`LoadOptions` with `UsdcArrayLoading::Retained` and an optional per-file decoder
+For large USDC scenes, `OpenOptions::loading` takes `LoadOptions` with `UsdcArrayLoading::Retained` and an optional per-file decoder
 budget. The policy also applies to dependencies, package members and reloads.
 `retained_values(layer_id).stats()` exposes decode attempts, failures and work
 remaining. Checked attribute reads preserve deferred failures; save/export
-reports them as `IoErrorKind::Decode` with the original `array_read_error`.
+reports them as `IoErrorKind::Decode` with the original `array_read_error()`.
 Encoded files are still read completely. Package members, including nested
 archives, share checked ranges into one immutable encoded owner. Decoder units are not memory bytes or a scene-wide memory limit.
 Run `cargo run -p layerstack_examples --bin lazy_io` for a complete example.

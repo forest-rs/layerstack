@@ -37,7 +37,8 @@ use std::collections::BTreeMap;
 use layerstack::{ArcKind, CompositionError, Path, PayloadLoadRules, StageOptions, Value};
 use layerstack_conformance::workspace_root;
 use layerstack_io::{
-    ImportPolicy, IoError, IoErrorKind, LoadOptions, ReloadPolicy, StageDocument, Storage,
+    ImportPolicy, IoError, IoErrorKind, LoadOptions, OpenOptions, ReloadPolicy, StageDocument,
+    Storage,
 };
 use serde_json::{Value as Json, json};
 
@@ -132,7 +133,15 @@ fn open_on(
         import_policy: policy,
         ..LoadOptions::default()
     };
-    StageDocument::open_with(storage, root, options(load_none, threads), loading)
+    StageDocument::open(
+        storage,
+        root,
+        OpenOptions {
+            stage: options(load_none, threads),
+            loading,
+            ..OpenOptions::default()
+        },
+    )
 }
 
 /// Errors in the oracle's order: by their JSON text.

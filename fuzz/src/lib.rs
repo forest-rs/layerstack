@@ -26,8 +26,8 @@ use layerstack::{
     variable_expression::{ExpressionVariables, VariableExpression},
 };
 use layerstack_io::{
-    ImportPolicy, IoError, IoErrorKind, LoadOptions, StageDocument, Storage, UsdcArrayLoading,
-    UsdcReadOptions,
+    ImportPolicy, IoError, IoErrorKind, LoadOptions, OpenOptions, StageDocument, Storage,
+    UsdcArrayLoading, UsdcReadOptions,
 };
 use layerstack_usda::diagnostic::Severity;
 use layerstack_usdz::{
@@ -292,15 +292,17 @@ pub fn stage(data: &[u8]) {
             import_policy,
             ..LoadOptions::default()
         };
-        let Ok(document) = StageDocument::open_in_with(
+        let Ok(document) = StageDocument::open(
             storage,
-            InMemoryStore::default(),
             identifier,
-            StageOptions {
-                limits: LIMITS,
-                ..StageOptions::default()
+            OpenOptions {
+                stage: StageOptions {
+                    limits: LIMITS,
+                    ..StageOptions::default()
+                },
+                loading,
+                store: Some(InMemoryStore::default()),
             },
-            loading,
         ) else {
             continue;
         };

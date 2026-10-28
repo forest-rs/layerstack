@@ -7,7 +7,8 @@
 
 use layerstack::{InMemoryStore, LayerId, StageOptions};
 use layerstack_io::{
-    AssetBytes, IoError, IoErrorKind, PreparedReload, ReloadPolicy, StageDocument, Storage,
+    AssetBytes, IoError, IoErrorKind, OpenOptions, PreparedReload, ReloadPolicy, StageDocument,
+    Storage,
 };
 use layerstack_schemas::{Scene, Time, assets::AssetReference, usd_geom::Mesh};
 use std::{collections::BTreeMap, sync::Arc};
@@ -89,15 +90,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "scene.usdz".into(),
         package("(0,0,0)", &[1]),
     )]));
-    let mut document = StageDocument::open_in(
+    let mut document = StageDocument::open(
         backend,
-        store,
         "scene.usdz",
-        StageOptions {
-            schemas: Some(schemas),
-            ..Default::default()
+        OpenOptions {
+            stage: StageOptions {
+                schemas: Some(schemas),
+                ..Default::default()
+            },
+            store: Some(store),
+            ..OpenOptions::default()
         },
-        layerstack_io::ImportPolicy::Strict,
     )?;
     let path = document.store_mut().path("/Mesh");
     let root: LayerId = document

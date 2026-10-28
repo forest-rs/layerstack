@@ -122,14 +122,17 @@ fn render_with(
     import_policy: ImportPolicy,
     variant_arcs: VariantArcLoading,
 ) -> String {
-    let doc = StageDocument::open_with(
+    let doc = StageDocument::open(
         scene(),
         root,
-        options,
-        LoadOptions {
-            import_policy,
-            variant_arcs,
-            ..LoadOptions::default()
+        OpenOptions {
+            stage: options,
+            loading: LoadOptions {
+                import_policy,
+                variant_arcs,
+                ..LoadOptions::default()
+            },
+            ..OpenOptions::default()
         },
     );
     let doc = match doc {
@@ -215,7 +218,16 @@ fn a_stage_opened_on_threads_finds_an_edit_of_a_deep_layer_as_one_thread_does() 
             variant_arcs,
             ..LoadOptions::default()
         };
-        let mut doc = StageDocument::open_with(scene(), "root.usda", options, loading).unwrap();
+        let mut doc = StageDocument::open(
+            scene(),
+            "root.usda",
+            OpenOptions {
+                stage: options,
+                loading,
+                ..OpenOptions::default()
+            },
+        )
+        .unwrap();
         let nested = doc.catalog.ids["nested.usda"];
         let added = doc.store.path("/N/Added");
         let layer = doc.store_mut().layer_mut(nested).unwrap();
@@ -335,9 +347,16 @@ fn opening_on_a_host_executor_reads_the_layers_one_thread_does() {
         import_policy: ImportPolicy::AllowRecovery,
         ..LoadOptions::default()
     };
-    let mut doc =
-        StageDocument::open_with(scene(), "root.usda", StageOptions::default(), loading).unwrap();
-    let root = doc.stage().stage().root_layer().unwrap();
+    let mut doc = StageDocument::open(
+        scene(),
+        "root.usda",
+        OpenOptions {
+            loading,
+            ..OpenOptions::default()
+        },
+    )
+    .unwrap();
+    let root = doc.root_layer();
     let before = jobs();
     drop(LiveStage::compose(&mut doc.store, root, options));
     let composing = jobs() - before;
@@ -357,7 +376,16 @@ fn layers_read_get_the_ids_their_identifiers_derive() {
             import_policy: ImportPolicy::AllowRecovery,
             ..LoadOptions::default()
         };
-        let mut doc = StageDocument::open_with(scene(), "root.usda", options, loading).unwrap();
+        let mut doc = StageDocument::open(
+            scene(),
+            "root.usda",
+            OpenOptions {
+                stage: options,
+                loading,
+                ..OpenOptions::default()
+            },
+        )
+        .unwrap();
         for (identifier, &id) in &doc.catalog.ids {
             assert_eq!(id, layer_ids::candidate(identifier, 0), "{identifier}");
         }
@@ -381,8 +409,16 @@ fn colliding_identifiers_get_the_ids_one_thread_gives_them() {
             import_policy: ImportPolicy::AllowRecovery,
             ..LoadOptions::default()
         };
-        let doc =
-            StageDocument::open_with(scene(), "weak-hash/root.usda", options, loading).unwrap();
+        let doc = StageDocument::open(
+            scene(),
+            "weak-hash/root.usda",
+            OpenOptions {
+                stage: options,
+                loading,
+                ..OpenOptions::default()
+            },
+        )
+        .unwrap();
         let mut ids: Vec<(String, LayerId)> = doc
             .catalog
             .ids
@@ -440,9 +476,16 @@ fn a_derived_id_steps_past_a_host_layer_holding_it() {
             import_policy: ImportPolicy::AllowRecovery,
             ..LoadOptions::default()
         };
-        let doc =
-            StageDocument::open_in_with(scene(), store, "weak-hash/root.usda", options, loading)
-                .unwrap();
+        let doc = StageDocument::open(
+            scene(),
+            "weak-hash/root.usda",
+            OpenOptions {
+                stage: options,
+                loading,
+                store: Some(store),
+            },
+        )
+        .unwrap();
         let root = doc.catalog.ids["weak-hash/root.usda"];
         assert_eq!(root, LayerId(LayerId::FIRST_DERIVED.0 | 1));
         assert_eq!(doc.stage().stage().root_layer(), Some(root));

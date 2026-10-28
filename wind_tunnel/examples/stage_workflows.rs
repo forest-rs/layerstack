@@ -6,8 +6,10 @@
 //! encoded ownership/copies, directory work and numeric decode/cache storage.
 //! Run the built binary under the host memory profiler for peak allocation/RSS;
 //! phase-boundary RSS is not peak memory and is not mapped address space.
-use layerstack::{EditTarget, PrimPredicate, StageOptions, Time, Transaction};
-use layerstack_io::{Filesystem, LoadOptions, StageDocument, UsdcArrayLoading, UsdcReadOptions};
+use layerstack::{EditTarget, PrimPredicate, Time, Transaction};
+use layerstack_io::{
+    Filesystem, LoadOptions, OpenOptions, StageDocument, UsdcArrayLoading, UsdcReadOptions,
+};
 use std::{hint::black_box, time::Instant};
 
 fn report(document: &StageDocument<Filesystem>, phase: &str, started: Instant, units: usize) {
@@ -56,16 +58,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "phase,wall_us,work_units,rss_kib,package_backing_bytes,encoded_copied_bytes,package_opens,index_parses,index_hits,decode_attempts,native_element_bytes,remaining_decode_units"
     );
     let started = Instant::now();
-    let mut document = StageDocument::open_with(
+    let mut document = StageDocument::open(
         storage,
         &source,
-        StageOptions::default(),
-        LoadOptions {
-            usdc: UsdcReadOptions {
-                arrays: UsdcArrayLoading::Retained,
+        OpenOptions {
+            loading: LoadOptions {
+                usdc: UsdcReadOptions {
+                    arrays: UsdcArrayLoading::Retained,
+                    ..Default::default()
+                },
                 ..Default::default()
             },
-            ..Default::default()
+            ..OpenOptions::default()
         },
     )?;
     report(

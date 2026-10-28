@@ -64,7 +64,16 @@ fn open(sublayers: Vec<SublayerEntry>) -> StageDocument<Memory> {
         session_layer: Some(SESSION),
         ..StageOptions::default()
     };
-    StageDocument::open_in(files(), store, "root.usda", options, ImportPolicy::Strict).unwrap()
+    StageDocument::open(
+        files(),
+        "root.usda",
+        OpenOptions {
+            stage: options,
+            store: Some(store),
+            ..OpenOptions::default()
+        },
+    )
+    .unwrap()
 }
 
 /// What one oracle step prints.
@@ -228,7 +237,7 @@ fn sublayers_authored_through_apply_load() {
     assert_eq!(composed(&doc), with_session_sublayers());
     assert!(doc.stage().stage().asset_requests().is_empty());
 
-    let root = doc.stage().stage().root_layer().unwrap();
+    let root = doc.root_layer();
     let mut edit = Transaction::new();
     edit.insert_sublayer(
         root,
@@ -318,7 +327,16 @@ fn session_sublayers_load_when_creating() {
         session_layer: Some(SESSION),
         ..StageOptions::default()
     };
-    let doc = StageDocument::create_in(files(), store, "created.usda", options).unwrap();
+    let doc = StageDocument::create(
+        files(),
+        "created.usda",
+        OpenOptions {
+            stage: options,
+            store: Some(store),
+            ..OpenOptions::default()
+        },
+    )
+    .unwrap();
     let composed = composed(&doc);
     assert_eq!(composed.prims, ["/FromSub"]);
     assert_eq!(
@@ -330,5 +348,5 @@ fn session_sublayers_load_when_creating() {
         [("session".into(), "missing.usda".into())]
     );
     assert_eq!(doc.load_report().asset_failures.len(), 1);
-    assert!(doc.is_dirty(doc.stage().stage().root_layer().unwrap()));
+    assert!(doc.is_dirty(doc.root_layer()));
 }

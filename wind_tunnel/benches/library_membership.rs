@@ -35,7 +35,9 @@ use layerstack::{InMemoryStore, ListOp, PathId, PropertyPath, StageOptions, Targ
 use layerstack_conformance::library_scene::{
     LibraryFormat, LibraryScene, LibraryShape, WrittenLibrary,
 };
-use layerstack_io::{Filesystem, LoadOptions, StageDocument, UsdcArrayLoading, UsdcReadOptions};
+use layerstack_io::{
+    Filesystem, LoadOptions, OpenOptions, StageDocument, UsdcArrayLoading, UsdcReadOptions,
+};
 use layerstack_schemas::usd::CollectionApi;
 use layerstack_schemas::{
     DanglingReport, LayerDanglingReport, MembershipIndex, MembershipQuery, Scene,
@@ -64,17 +66,19 @@ fn open_with(
     let dir = root.parent().expect("a directory");
     let storage = Filesystem::new(dir, []).expect("the directory");
     let name = root.file_name().and_then(|n| n.to_str()).expect("a name");
-    StageDocument::open_in_with(
+    StageDocument::open(
         storage,
-        store,
         name,
-        options,
-        LoadOptions {
-            usdc: UsdcReadOptions {
-                arrays: UsdcArrayLoading::Retained,
-                ..UsdcReadOptions::default()
+        OpenOptions {
+            stage: options,
+            loading: LoadOptions {
+                usdc: UsdcReadOptions {
+                    arrays: UsdcArrayLoading::Retained,
+                    ..UsdcReadOptions::default()
+                },
+                ..LoadOptions::default()
             },
-            ..LoadOptions::default()
+            store: Some(store),
         },
     )
     .expect("the library opens")

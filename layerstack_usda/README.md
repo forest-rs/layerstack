@@ -69,7 +69,7 @@ importing does not author them. `metadata::metadata_value` reads one USDA
 literal as a given metadata type.
 
 For storage-backed stages, pass that store and registry to
-`layerstack_io::StageDocument::open_in` through `StageOptions::schemas`.
+`layerstack_io::StageDocument::open` through `StageOptions::schemas`.
 Initial imports, referenced layers, explicit asset loads, reloads and package
 preparation all use the registry. Asset resolution remains caller-owned.
 

@@ -93,7 +93,7 @@ fn usda_saves_stream_the_text_save_usda_writes() {
         .files
         .insert("root.usda".into(), large_root().into_bytes());
     let mut document = open(storage);
-    let root = document.stage().stage().root_layer().unwrap();
+    let root = document.root_layer();
     let expected = layerstack_usda::save::save_usda(
         document.store().layer(root).unwrap(),
         document.store().tokens(),
@@ -118,7 +118,7 @@ fn a_failing_sink_keeps_the_existing_source_and_reports_its_error() {
         .insert("copy.usda".into(), b"previous text".to_vec());
     storage.fail_after = Some(100_000);
     let mut document = open(storage);
-    let root = document.stage().stage().root_layer().unwrap();
+    let root = document.root_layer();
     let error = document.export_layer(root, "copy.usda").unwrap_err();
     assert_eq!(error.kind, IoErrorKind::Storage);
     assert_eq!(error.message, "injected sink failure");
@@ -143,7 +143,7 @@ fn a_layer_usda_cannot_hold_is_refused_before_the_storage_writes() {
             .to_vec(),
     );
     let mut document = open(storage);
-    let root = document.stage().stage().root_layer().unwrap();
+    let root = document.root_layer();
     let error = document.export_layer(root, "copy.usda").unwrap_err();
     assert_eq!(error.kind, IoErrorKind::Unsupported, "{error}");
     assert_eq!(document.storage().streamed_writes, 0);

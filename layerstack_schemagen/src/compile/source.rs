@@ -6,8 +6,8 @@
 
 use std::path::{Path, PathBuf};
 
-use layerstack::{CompositionError, InMemoryStore, LayerId, Stage, StageOptions};
-use layerstack_io::{Filesystem, ImportPolicy, LoadOptions, StageDocument};
+use layerstack::{CompositionError, InMemoryStore, LayerId, Stage};
+use layerstack_io::{Filesystem, ImportPolicy, LoadOptions, OpenOptions, StageDocument};
 
 use super::CompileError;
 
@@ -40,13 +40,15 @@ impl SchemaStage {
             .ok_or_else(|| read("not a UTF-8 path".into()))?;
         // Recovery keeps going past a missing sublayer, so the error can
         // name it; parse errors are still errors below.
-        let document = StageDocument::open_with(
+        let document = StageDocument::open(
             storage,
             asset,
-            StageOptions::default(),
-            LoadOptions {
-                import_policy: ImportPolicy::AllowRecovery,
-                ..LoadOptions::default()
+            OpenOptions {
+                loading: LoadOptions {
+                    import_policy: ImportPolicy::AllowRecovery,
+                    ..LoadOptions::default()
+                },
+                ..OpenOptions::default()
             },
         )
         .map_err(|e| read(e.to_string()))?;

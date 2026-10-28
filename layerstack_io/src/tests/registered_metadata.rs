@@ -69,8 +69,16 @@ fn stage_registry_types_initial_recursive_explicit_reload_and_package_reads() {
             "#usda 1.0\ndef \"Extra\" (hostScale = 4) {}\n",
         ),
     ]);
-    let mut document =
-        StageDocument::open_in(memory, store, "root.usda", options, ImportPolicy::Strict).unwrap();
+    let mut document = StageDocument::open(
+        memory,
+        "root.usda",
+        OpenOptions {
+            stage: options,
+            store: Some(store),
+            ..OpenOptions::default()
+        },
+    )
+    .unwrap();
     let base = document.catalog.ids["base.usda"];
     let asset = document.catalog.ids["asset.usda"];
     assert_eq!(
@@ -169,8 +177,16 @@ fn strict_import_keeps_a_field_on_a_spec_it_is_not_registered_for_untyped() {
     // reads it rather than rejecting the layer.
     let (memory, store, options) =
         setup(&[("root.usda", "#usda 1.0\n(hostScale = 1)\ndef \"P\" {}\n")]);
-    let document =
-        StageDocument::open_in(memory, store, "root.usda", options, ImportPolicy::Strict).unwrap();
+    let document = StageDocument::open(
+        memory,
+        "root.usda",
+        OpenOptions {
+            stage: options,
+            store: Some(store),
+            ..OpenOptions::default()
+        },
+    )
+    .unwrap();
     let key = document.store.tokens().lookup("hostScale").unwrap();
     let layer = document.store.layers().next().unwrap();
     assert_eq!(
@@ -197,23 +213,36 @@ fn opening_with_a_registry_of_another_store_fails() {
     let (memory, _, options) = setup(&files);
     rejected(StageDocument::open(memory, "rocks.usda", options));
     let (memory, _, options) = setup(&files);
-    rejected(StageDocument::open_in(
+    rejected(StageDocument::open(
         memory,
-        InMemoryStore::default(),
         "rocks.usda",
-        options,
-        ImportPolicy::Strict,
+        OpenOptions {
+            stage: options,
+            store: Some(InMemoryStore::default()),
+            ..OpenOptions::default()
+        },
     ));
     let (memory, _, options) = setup(&files);
-    rejected(StageDocument::create_in(
+    rejected(StageDocument::create(
         memory,
-        InMemoryStore::default(),
         "lights.usda",
-        options,
+        OpenOptions {
+            stage: options,
+            store: Some(InMemoryStore::default()),
+            ..OpenOptions::default()
+        },
     ));
     let (memory, store, options) = setup(&files);
-    let doc = StageDocument::open_in(memory, store, "rocks.usda", options, ImportPolicy::Strict)
-        .expect("the registry belongs to the store it was built on");
+    let doc = StageDocument::open(
+        memory,
+        "rocks.usda",
+        OpenOptions {
+            stage: options,
+            store: Some(store),
+            ..OpenOptions::default()
+        },
+    )
+    .expect("the registry belongs to the store it was built on");
     assert!(doc.stage.stage().composition_errors().is_empty());
     assert!(doc.stage.stage().schemas().is_some());
 }

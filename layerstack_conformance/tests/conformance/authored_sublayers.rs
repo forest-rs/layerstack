@@ -22,7 +22,7 @@ use layerstack::{
     CompositionError, InMemoryStore, Layer, LayerId, LayerOffset, StageOptions, SublayerEntry,
     Time, Transaction,
 };
-use layerstack_io::{Filesystem, ImportPolicy, StageDocument};
+use layerstack_io::{Filesystem, OpenOptions, StageDocument};
 
 /// The files, by path relative to the scratch directory.
 const FILES: [(&str, &str); 7] = [
@@ -169,17 +169,19 @@ fn layerstack_steps(dir: &Path) -> Vec<String> {
         ..StageOptions::default()
     };
     let storage = Filesystem::new(dir, []).unwrap();
-    let mut doc = StageDocument::open_in(
+    let mut doc = StageDocument::open(
         storage,
-        store,
         "scene/root.usda",
-        options,
-        ImportPolicy::Strict,
+        OpenOptions {
+            stage: options,
+            store: Some(store),
+            ..OpenOptions::default()
+        },
     )
     .unwrap();
     let mut steps = vec![step(&doc)];
 
-    let root = doc.stage().stage().root_layer().unwrap();
+    let root = doc.root_layer();
     let mut edit = Transaction::new();
     edit.insert_sublayer(root, 0, by_path("./parts/rootsub.usda"));
     doc.apply(&edit).unwrap();

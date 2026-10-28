@@ -3,7 +3,7 @@
 
 //! Shared setup keeps each runnable tutorial focused on its workflow.
 use layerstack::{EditTarget, InMemoryStore, StageOptions};
-use layerstack_io::{Filesystem, StageDocument};
+use layerstack_io::{Filesystem, OpenOptions, StageDocument};
 use layerstack_schemas::{
     SchemaEdit, XformOpPrecision,
     usd_geom::{Sphere, Xform},
@@ -24,14 +24,17 @@ pub(crate) fn directory() -> PathBuf {
 pub(crate) fn create(directory: &std::path::Path, name: &str) -> Document {
     let store = InMemoryStore::default();
     let schemas = Arc::new(layerstack_schemas::openusd(store.tokens()));
-    StageDocument::create_in(
+    StageDocument::create(
         Filesystem::new(directory, []).unwrap(),
-        store,
         name,
-        StageOptions {
-            schemas: Some(schemas),
-            with_provenance: true,
-            ..Default::default()
+        OpenOptions {
+            stage: StageOptions {
+                schemas: Some(schemas),
+                with_provenance: true,
+                ..Default::default()
+            },
+            store: Some(store),
+            ..OpenOptions::default()
         },
     )
     .unwrap()

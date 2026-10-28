@@ -8,7 +8,7 @@
 //! identifier, as the catalog keys it: the 64-bit FNV-1a hash of the
 //! identifier's bytes, with its top bit set, which places it at or above
 //! [`LayerId::FIRST_DERIVED`]. Ids hosts and stores hand out (anonymous
-//! and session layers, a store [`StageDocument::open_in`] is given) stay
+//! and session layers, a store [`StageDocument::open`] is given) stay
 //! below that, as [`Catalog::allocate`] does, and [`LayerId::UNRESOLVED`]
 //! is never taken. FNV-1a has fixed constants and reads bytes, so an
 //! identifier hashes to the same id on every platform, toolchain and
@@ -25,7 +25,7 @@
 //! hash makes vanishingly rare for distinct identifiers, or past a host's
 //! id in the derived range.
 //!
-//! [`StageDocument::open_in`]: crate::StageDocument::open_in
+//! [`StageDocument::open`]: crate::StageDocument::open
 //! [`Catalog::allocate`]: crate::Catalog::allocate
 
 use layerstack::LayerId;

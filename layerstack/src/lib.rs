@@ -186,6 +186,7 @@ mod diagnostic;
 pub mod encoded_bytes;
 pub use change_history::{ChangeHistoryBudget, ChangeHistoryStats};
 pub mod composition_error;
+pub mod composition_limits;
 mod deferred_value;
 pub mod dependency_map;
 pub use deferred_value::{DeferredValue, DeferredValueSource};
@@ -242,10 +243,11 @@ pub use composition_error::{
     ArcCycle, ArcCycleSite, ArcToProhibitedChild, CompositionError, ExpressionContext,
     InconsistentPropertyType, InvalidAuthoredRelocation, InvalidConflictingRelocation,
     InvalidExternalTargetPath, InvalidInstanceTargetPath, InvalidRelocationReason,
-    InvalidSameTargetRelocations, InvalidSublayerAndOffsetCount, MissingLayer,
+    InvalidSameTargetRelocations, InvalidSublayerAndOffsetCount, LimitExceeded, MissingLayer,
     OpinionAtRelocationSource, RelocationConflict, SublayerCycle, UnresolvedAsset,
     UnresolvedDefaultPrim, UnresolvedPrimPath, UnresolvedSublayer, VariableExpressionError,
 };
+pub use composition_limits::{CompositionLimit, CompositionLimits};
 pub use dependency_map::{ArcDependency, LayerDependencyStorage};
 pub use doc::{
     AssetAvailability, FieldEntry, FieldValue, InMemoryStore, InterpolationType, Layer, LayerId,

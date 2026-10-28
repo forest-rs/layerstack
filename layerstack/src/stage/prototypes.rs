@@ -242,6 +242,10 @@ pub struct CompositionWork {
     pub composed_prim_indexes: usize,
     /// Descendant indexes materialized from a proven equivalent representative.
     pub reused_prim_indexes: usize,
+    /// The nodes of the prim indexes composed (culled nodes included) and
+    /// materialized: the work [`crate::CompositionLimits::prim_index_nodes`]
+    /// bounds. The same on any number of threads.
+    pub prim_index_nodes: usize,
 }
 
 /// Counts retained composed records, excluding payload allocations and graphs.

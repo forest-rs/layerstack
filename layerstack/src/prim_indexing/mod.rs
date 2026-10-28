@@ -26,12 +26,14 @@ pub(crate) mod site;
 pub(crate) mod site_paths;
 
 use alloc::{boxed::Box, sync::Arc, vec::Vec};
+use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use hashbrown::{HashMap, HashSet};
 
 use crate::{
     asset::{AssetRequest, PendingPrim},
-    composition_error::CompositionError,
+    composition_error::{CompositionError, LimitExceeded},
+    composition_limits::CompositionLimit,
     dependency_map::{DependencyRecords, PrimDependencies},
     doc::{LayerId, LayerStore},
     expression_variables::VariableReads,
@@ -75,6 +77,12 @@ pub(crate) struct Composition {
     pub(crate) local_layers: Vec<LayerId>,
     pub(crate) composed_prim_indexes: usize,
     pub(crate) reused_prim_indexes: usize,
+    /// The nodes of the prim indexes composed and copied
+    /// ([`crate::stage::CompositionWork::prim_index_nodes`]).
+    pub(crate) prim_index_nodes: usize,
+    /// Whether composition reached [`crate::CompositionLimits::prim_index_nodes`]
+    /// and stopped: child lists may name prims it did not compose.
+    pub(crate) spent: bool,
     pub(crate) reads: VariableReads,
     /// The whole child list of each requested boundary parent the
     /// composition indexed, whatever its scope lists ([`compose`]).
@@ -285,6 +293,7 @@ pub(crate) fn compose(
         schemas: options.schemas.as_deref(),
         any_type: store.tokens().lookup("__AnyType__"),
         shapes: crate::prim_index_graph::GraphShapes::default(),
+        nodes_per_prim_index: options.limits.nodes_per_prim_index,
     };
     let identifier = LayerStackIdentifier {
         root,
@@ -322,19 +331,21 @@ pub(crate) fn compose(
         keys: ReadLock::default(),
         hasher: hashbrown::DefaultHashBuilder::default(),
     };
+    let budget = Budget::new(options);
     let work = |prim: Pending, added: &mut Vec<Pending>| {
         index_prim(
             &ctx,
             &scope,
             boundaries,
             &claims,
+            &budget,
             options.with_dependencies,
             prim,
             added,
         )
     };
     let threads = options.thread_budget();
-    crate::parallel::with_pool_in(&threads, &work, |pool| {
+    let in_order = crate::parallel::with_pool_in(&threads, &work, |pool| {
         let mut walk = Walk {
             ctx: &ctx,
             pool,
@@ -343,11 +354,28 @@ pub(crate) fn compose(
             scope: &scope,
             checks,
             instances: &mut instances,
+            budget: &budget,
             with_dependencies: options.with_dependencies,
         };
         walk.walk(alloc::vec![root_path], None);
         walk.share_prototypes();
+        pool.in_order()
     });
+    if budget.is_spent() && !in_order {
+        // Which prims threads had indexed when the limit was reached
+        // depends on how they were scheduled: one thread indexes them in
+        // traversal order, so the limit stops composition at the same
+        // prim on any number of threads. The work is bounded by the limit
+        // twice over.
+        *checks = crate::composition_checks::Findings::default();
+        let serial = StageOptions {
+            threads: 1,
+            executor: None,
+            ..options.clone()
+        };
+        return compose(store, root, &serial, scope, boundaries, child_index, checks);
+    }
+    out.spent = budget.is_spent();
 
     if options.with_dependencies {
         // Only the prims the composition keeps depend on anything.
@@ -474,6 +502,93 @@ fn instance_key(graph: &Graph, hasher: &hashbrown::DefaultHashBuilder) -> Instan
     }
 }
 
+/// What one composition may still build ([`StageOptions::limits`]),
+/// shared by the threads indexing its prims.
+///
+/// Spec: AOUSD Core §10.6, §11; OpenUSD has no limit (see
+/// [`crate::composition_limits`]).
+struct Budget {
+    /// [`crate::CompositionLimits::prim_index_nodes`].
+    nodes: Option<usize>,
+    /// [`crate::CompositionLimits::composed_depth`].
+    depth: Option<usize>,
+    /// The nodes of the prim indexes built and copied so far, on every
+    /// thread.
+    used: AtomicUsize,
+    /// Whether `used` reached `nodes`: no prim is indexed after.
+    spent: AtomicBool,
+}
+
+impl Budget {
+    fn new(options: &StageOptions) -> Self {
+        Self {
+            nodes: options.limits.prim_index_nodes,
+            depth: options.limits.composed_depth,
+            used: AtomicUsize::new(0),
+            spent: AtomicBool::new(false),
+        }
+    }
+
+    /// Whether the nodes reached their limit.
+    fn is_spent(&self) -> bool {
+        self.spent.load(Ordering::Relaxed)
+    }
+
+    /// Counts `nodes` more nodes built, and returns the limit when they
+    /// are the first to reach it.
+    fn spend(&self, nodes: usize) -> Option<usize> {
+        let limit = self.nodes?;
+        let used = self.used.fetch_add(nodes, Ordering::Relaxed) + nodes;
+        (used >= limit && !self.spent.swap(true, Ordering::Relaxed)).then_some(limit)
+    }
+
+    /// The limit the prim at `path`, whose index is `graph`, reaches when
+    /// it names children: [`composed_depth`] levels at least. A prim
+    /// shallower than the limit is within it whatever its sites author.
+    fn too_deep(&self, ctx: &Ctx<'_>, path: PathId, graph: &Graph) -> Option<usize> {
+        let limit = self.depth?;
+        let depth = ctx.store.paths().resolve(path).depth();
+        (depth >= limit && composed_depth(ctx, depth, graph) >= limit).then_some(limit)
+    }
+}
+
+/// How many levels a prim `depth` deep, whose index is `graph`, lies below
+/// the deepest spec its layers author at a site of its index or at a
+/// namespace ancestor of one ([`crate::CompositionLimits::composed_depth`]):
+/// zero for a prim a layer authors, one for a referenced asset's child,
+/// however deep either is, but as deep as the prim for a namespace that
+/// arcs make endless, whose sites stay shallow while its prims go deeper.
+///
+/// Spec: AOUSD Core §10 (composition arcs map sites into the prim's
+/// namespace), §11 (stage population).
+fn composed_depth(ctx: &Ctx<'_>, depth: usize, graph: &Graph) -> usize {
+    let paths = ctx.store.paths();
+    let mut deepest = 0;
+    for node in &graph.nodes {
+        // A site's ancestors are no deeper than the site.
+        let mut at = Some(node.site.path.clone());
+        let mut has_specs = node.has_specs;
+        while let Some(site) = at {
+            let site_depth = paths.resolve(site.prim_path()).depth();
+            if site_depth <= deepest {
+                break;
+            }
+            if has_specs {
+                deepest = site_depth;
+                break;
+            }
+            at = site_paths::parent(paths, &site);
+            has_specs = at.as_ref().is_some_and(|parent| {
+                site::has_specs(ctx.store, ctx.stacks.get(node.site.stack), parent)
+            });
+        }
+        if deepest >= depth {
+            return 0;
+        }
+    }
+    depth - deepest
+}
+
 /// The instance keys whose descendants some instance is indexing, while
 /// instances share prototypes.
 struct Claims {
@@ -532,6 +647,11 @@ struct Indexed {
     composed_children: Option<Vec<PathId>>,
     /// Every child, for a requested boundary parent.
     boundary_children: Option<Vec<PathId>>,
+    /// The nodes its index was built with, culled ones included.
+    nodes: usize,
+    /// Whether it was not indexed, the budget spent first: it is not
+    /// composed ([`Budget`]).
+    beyond_budget: bool,
 }
 
 impl Indexed {
@@ -563,6 +683,18 @@ impl Indexed {
             children: Vec::new(),
             composed_children: None,
             boundary_children: None,
+            nodes: 0,
+            beyond_budget: false,
+        }
+    }
+
+    /// The result for the prim at `path`, not indexed because the
+    /// composition's budget was spent first: it is not composed.
+    fn beyond_budget(path: PathId) -> Self {
+        Self {
+            reports: None,
+            beyond_budget: true,
+            ..Self::pending(path, Vec::new())
         }
     }
 }
@@ -637,10 +769,14 @@ fn index_prim(
     scope: &Scope<'_>,
     boundaries: &Boundaries,
     claims: &Claims,
+    budget: &Budget,
     with_dependencies: bool,
     (path, parent): Pending,
     added: &mut Vec<Pending>,
 ) -> Indexed {
+    if budget.is_spent() {
+        return Indexed::beyond_budget(path);
+    }
     let site = Site {
         stack: ctx.stage_stack,
         path: SpecPath::from_prim_path(path),
@@ -667,11 +803,36 @@ fn index_prim(
         .as_deref()
         .and_then(|parent| parent.child_shape.get().or(parent.shape.as_ref()));
     let mut graph = core::mem::take(&mut outputs.graph);
+    let nodes = graph.nodes.len();
+    let spent = budget.spend(nodes);
     cull(&mut graph, ctx.store.paths(), ctx.stage_stack);
     graph.instanceable = path != ctx.root_path && is_instanceable(ctx.store, &ctx.stacks, &graph);
     graph.finalize();
 
-    let names = child_names(ctx, &graph);
+    let mut names = child_names(ctx, &graph);
+    // A prim at a limit composes no children: the prim index nodes ran
+    // out with its own, its index is as large as an index grows, or it is
+    // as far below what its layers author as composition places prims.
+    let limit = match (spent, ctx.nodes_per_prim_index) {
+        (Some(value), _) => Some((CompositionLimit::PrimIndexNodes, value)),
+        (None, Some(value)) if outputs.full => Some((CompositionLimit::NodesPerPrimIndex, value)),
+        _ if names.is_empty() => None,
+        _ => budget
+            .too_deep(ctx, path, &graph)
+            .map(|value| (CompositionLimit::ComposedDepth, value)),
+    };
+    if let Some((limit, value)) = limit {
+        names.clear();
+        outputs
+            .errors
+            .push(Recorded::Error(CompositionError::LimitExceeded(
+                LimitExceeded {
+                    limit,
+                    value,
+                    prim: path,
+                },
+            )));
+    }
     let mut findings = crate::composition_checks::Findings::default();
     // A boundary parent whose index the caller keeps is indexed for its
     // graph alone, which its children start from.
@@ -798,6 +959,8 @@ fn index_prim(
         children,
         composed_children,
         boundary_children,
+        nodes,
+        beyond_budget: false,
     }
 }
 
@@ -855,6 +1018,8 @@ struct Walk<'a, 'c, 'p> {
     scope: &'a Scope<'a>,
     checks: &'a mut crate::composition_checks::Findings,
     instances: &'a mut Instances,
+    /// What the composition may still build.
+    budget: &'a Budget,
     /// Whether each prim records its dependencies.
     with_dependencies: bool,
 }
@@ -918,7 +1083,12 @@ impl Walk<'_, '_, '_> {
             children,
             composed_children,
             boundary_children,
+            nodes,
+            beyond_budget,
         } = prim;
+        if beyond_budget {
+            return;
+        }
         let ctx = self.ctx;
         let out = &mut *self.out;
         if let Some(all) = boundary_children {
@@ -945,6 +1115,7 @@ impl Walk<'_, '_, '_> {
             out.reads.extend(reads);
         }
         out.composed_prim_indexes += 1;
+        out.prim_index_nodes += nodes;
         // A layer stack's use belongs to the prim whose index first adds a
         // node reading it; its descendants inherit the node. Its layers
         // join `used_layers` once the walk is done.
@@ -1077,6 +1248,10 @@ impl Walk<'_, '_, '_> {
         // Composing an instance's descendants can defer the instances nested
         // in them in turn.
         while let Some((instance, representative, graph)) = self.instances.next() {
+            // Once the budget is spent, no prim is composed after.
+            if self.budget.is_spent() {
+                break;
+            }
             let can_share = *shareable
                 .entry(representative)
                 .or_insert_with(|| prototype_is_shareable(self.ctx, self.out, representative));
@@ -1095,7 +1270,14 @@ impl Walk<'_, '_, '_> {
                 self.walk(roots, graph.as_ref());
                 continue;
             }
-            copy_prototype(self.ctx, self.out, self.instances, representative, instance);
+            copy_prototype(
+                self.ctx,
+                self.out,
+                self.instances,
+                self.budget,
+                representative,
+                instance,
+            );
         }
     }
 }
@@ -1245,6 +1427,7 @@ fn copy_prototype(
     ctx: &Ctx<'_>,
     out: &mut Composition,
     instances: &mut Instances,
+    budget: &Budget,
     from: PathId,
     to: PathId,
 ) {
@@ -1260,6 +1443,23 @@ fn copy_prototype(
             pending.extend(children.iter().copied());
         }
     }
+    // The copies count their nodes as the indexes built do: an instance
+    // whose copied descendants reach the limit gets none of them.
+    let nodes: usize = moved
+        .iter()
+        .filter_map(|(source, _)| out.prims.get(source))
+        .map(|index| index.graph.len())
+        .sum();
+    if let Some(value) = budget.spend(nodes) {
+        out.errors
+            .push(CompositionError::LimitExceeded(LimitExceeded {
+                limit: CompositionLimit::PrimIndexNodes,
+                value,
+                prim: to,
+            }));
+        return;
+    }
+    out.prim_index_nodes += nodes;
     for &(source, target) in &moved {
         let Some(index) = out.prims.get(&source) else {
             continue;
@@ -1883,6 +2083,13 @@ fn finish(out: &mut Composition) {
             list.retain(|child| out.prims.contains_key(child));
         }
     }
+    // Prims after the one that spent the budget are not composed.
+    if out.spent {
+        let prims = &out.prims;
+        for list in out.children.values_mut() {
+            list.retain(|child| prims.contains_key(child));
+        }
+    }
     // A prim waiting for layers is not composed.
     if !out.pending.is_empty() {
         let pending: HashSet<PathId> = out.pending.iter().map(|pending| pending.prim).collect();
@@ -1937,6 +2144,7 @@ pub(crate) fn expanded_prim_index(
         schemas: options.schemas.as_deref(),
         any_type: store.tokens().lookup("__AnyType__"),
         shapes: crate::prim_index_graph::GraphShapes::default(),
+        nodes_per_prim_index: options.limits.nodes_per_prim_index,
     };
     let identifier = LayerStackIdentifier {
         root,

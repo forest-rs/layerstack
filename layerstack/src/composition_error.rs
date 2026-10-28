@@ -18,6 +18,7 @@ use core::{cmp::Ordering, fmt};
 use hashbrown::HashMap;
 
 use crate::{
+    composition_limits::CompositionLimit,
     diagnostic::{Describe, Names, with_store},
     doc::{LayerId, LayerStore},
     interner::{TokenId, TokenInterner},
@@ -100,6 +101,14 @@ pub enum CompositionError {
     /// reports loading: the stage's root or session layer, or a sublayer.
     /// It contributed nothing.
     MissingLayer(MissingLayer),
+    /// Composition reached one of its [`StageOptions::limits`] at a prim:
+    /// the prim composed no children, and, for
+    /// [`CompositionLimit::PrimIndexNodes`], no prim composition would
+    /// index after it was composed. The stage holds the prims composed
+    /// before it stopped.
+    ///
+    /// [`StageOptions::limits`]: crate::StageOptions::limits
+    LimitExceeded(LimitExceeded),
 }
 
 impl CompositionError {
@@ -126,6 +135,7 @@ impl CompositionError {
             Self::InvalidExternalTargetPath(error) => Some(error.prim),
             Self::InvalidInstanceTargetPath(error) => Some(error.prim),
             Self::VariableExpressionError(error) => error.prim,
+            Self::LimitExceeded(error) => Some(error.prim),
         }
     }
 
@@ -153,6 +163,7 @@ impl CompositionError {
     /// | [`Self::VariableExpressionError`] | `composition.variable_expression` |
     /// | [`Self::InvalidSublayerAndOffsetCount`] | `composition.invalid_sublayer_and_offset_count` |
     /// | [`Self::MissingLayer`] | `composition.missing_layer` |
+    /// | [`Self::LimitExceeded`] | `composition.limit_exceeded` |
     ///
     /// Codes are part of the public contract: a released code keeps its
     /// spelling and meaning, and a new variant brings a new code.
@@ -186,6 +197,7 @@ impl CompositionError {
             Self::VariableExpressionError(_) => 15,
             Self::InvalidSublayerAndOffsetCount(_) => 16,
             Self::MissingLayer(_) => 17,
+            Self::LimitExceeded(_) => 18,
         }
     }
 }
@@ -202,7 +214,7 @@ impl CompositionError {
 }
 
 /// [`CompositionError::code`] by [`CompositionError::rank`].
-const CODES: [&str; 18] = [
+const CODES: [&str; 19] = [
     "composition.foreign_schema_registry",
     "composition.sublayer_cycle",
     "composition.arc_cycle",
@@ -221,6 +233,7 @@ const CODES: [&str; 18] = [
     "composition.variable_expression",
     "composition.invalid_sublayer_and_offset_count",
     "composition.missing_layer",
+    "composition.limit_exceeded",
 ];
 
 /// The arc as an error names it.
@@ -315,6 +328,32 @@ impl Describe for CompositionError {
                 names.layer(error.layer),
                 error.asset
             ),
+            Self::LimitExceeded(error) => match error.limit {
+                CompositionLimit::PrimIndexNodes => write!(
+                    f,
+                    "{}: composition reached its limit of {} prim index nodes \
+                     (`prim_index_nodes`); the prim's children, and the prims \
+                     after it, are not composed",
+                    names.path(error.prim),
+                    error.value
+                ),
+                CompositionLimit::NodesPerPrimIndex => write!(
+                    f,
+                    "{}: the prim's index reached {} nodes, the limit of one index \
+                     (`nodes_per_prim_index`); it has no more arcs, and its children are \
+                     not composed",
+                    names.path(error.prim),
+                    error.value
+                ),
+                CompositionLimit::ComposedDepth => write!(
+                    f,
+                    "{}: the prim is {} levels below the deepest spec its sites author, \
+                     the composed depth limit (`composed_depth`); its children are not \
+                     composed",
+                    names.path(error.prim),
+                    error.value
+                ),
+            },
             Self::MissingLayer(error) => match error.sublayer_of {
                 Some(parent) => write!(
                     f,
@@ -717,6 +756,37 @@ pub struct MissingLayer {
     /// The layer whose `subLayers` names it; `None` for the root or
     /// session layer of a layer stack.
     pub sublayer_of: Option<LayerId>,
+}
+
+/// A prim at which composition reached one of its
+/// [`StageOptions::limits`] (see [`crate::composition_limits`]).
+///
+/// For [`CompositionLimit::ComposedDepth`], `prim` is `value` levels
+/// below the deepest spec its layers author at a site of its index (or an
+/// ancestor of one) and names children, which are not composed; the
+/// stage's other prims compose as usual. For
+/// [`CompositionLimit::NodesPerPrimIndex`], `prim`'s index holds `value`
+/// nodes and lacks the arcs that would have added more; its children are
+/// not composed, and other prims compose as usual. For
+/// [`CompositionLimit::PrimIndexNodes`], `prim` is the prim whose index
+/// brought the nodes composition built to `value`: it is the last prim
+/// composed, without children. Either way the prim is
+/// on the stage, and the limit is the same on any number of threads.
+///
+/// Spec: AOUSD Core §10.6 (composition errors), §11 (stage population).
+/// OpenUSD has no counterpart: Pcp composes without a limit, until the
+/// process runs out of memory when the namespace is endless.
+///
+/// [`StageOptions::limits`]: crate::StageOptions::limits
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub struct LimitExceeded {
+    /// The limit reached.
+    pub limit: CompositionLimit,
+    /// The limit's value: its field in [`crate::CompositionLimits`].
+    pub value: usize,
+    /// The prim at which composition reached it.
+    pub prim: PathId,
 }
 
 /// A layer whose `subLayers` and `subLayerOffsets` counts differ, found

@@ -69,6 +69,9 @@ pub(crate) struct Ctx<'s> {
     /// The shapes of the prim index graphs composed so far, which graphs
     /// of the same shape share.
     pub(crate) shapes: crate::prim_index_graph::GraphShapes,
+    /// The most nodes one prim index holds
+    /// ([`crate::CompositionLimits::nodes_per_prim_index`]).
+    pub(crate) nodes_per_prim_index: Option<usize>,
 }
 
 /// Whether a prim index's payload was included.
@@ -112,6 +115,9 @@ pub(crate) struct Outputs {
     /// target, each once: an index that reads any is incomplete, and is
     /// not kept ([`crate::LayerStore::is_layer_pending`]).
     pub(crate) pending: Vec<LayerId>,
+    /// Whether the index reached [`Ctx::nodes_per_prim_index`]: an arc
+    /// was not added.
+    pub(crate) full: bool,
 }
 
 impl Outputs {
@@ -132,6 +138,7 @@ impl Outputs {
                 self.pending.push(layer);
             }
         }
+        self.full |= other.full;
     }
 }
 
@@ -782,6 +789,28 @@ impl Indexer<'_, '_, '_> {
         NONE
     }
 
+    /// Whether the prim index being built, its own graph and those of the
+    /// frames it is built for, holds [`Ctx::nodes_per_prim_index`] nodes:
+    /// it adds no more arcs. The work of adding an arc grows with the
+    /// index (`Graph::link_child` orders a new node among its siblings by
+    /// walking the index), so an index growing without end, as an endless
+    /// namespace's do, costs more than its nodes.
+    ///
+    /// Spec: AOUSD Core §10.6, §11; OpenUSD has no limit (see
+    /// [`crate::composition_limits`]).
+    fn is_full(&self) -> bool {
+        let Some(limit) = self.ctx.nodes_per_prim_index else {
+            return false;
+        };
+        let mut nodes = self.outputs.graph.nodes.len();
+        let mut frame = self.previous_frame;
+        while let Some(at) = frame {
+            nodes += at.parent_graph.nodes.len();
+            frame = at.previous;
+        }
+        nodes >= limit
+    }
+
     /// OpenUSD: `_HasClassBasedChild`.
     fn has_class_based_child(&self, node: NodeIndex) -> bool {
         let propagated = self.propagated_specializes_node(node);
@@ -1005,6 +1034,10 @@ impl Indexer<'_, '_, '_> {
     ) -> NodeIndex {
         if let Some(error) = self.check_for_cycle(parent, origin, arc_kind, &site) {
             self.record_error(error);
+            return NONE;
+        }
+        if self.is_full() {
+            self.outputs.full = true;
             return NONE;
         }
         if let Some(frame) = self.previous_frame {

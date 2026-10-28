@@ -51,6 +51,7 @@ mod collision_groups;
 mod common_xform;
 mod common_xform_api;
 mod composition_errors;
+mod composition_limits;
 mod composition_misc;
 mod composition_pcp;
 mod composition_strict;

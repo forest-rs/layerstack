@@ -125,6 +125,11 @@
    "source": "#usda 1.0\nreorder rootPrims = [\"A\"]; def \"A\" { double a = 1; rel r = </A>; }\ndef \"B\"\n{\n    reorder nameChildren = [\"C\"]; def \"C\" { double c = 1; } # a comment\n    variantSet \"v\" = { \"x\" { double x = 1; } \"y\" {} }\n}\ndef \"D\" (\n    customData = { int a = 1; }\n)\n{\n}\ndef \"E\" {}",
    "text": "#usda 1.0\n\ndef \"A\"\n{\n    double a = 1\n    rel r = </A>\n}\n\ndef \"B\"\n{\n    def \"C\"\n    {\n        double c = 1\n    }\n    variantSet \"v\" = {\n        \"x\" {\n            double x = 1\n\n        }\n        \"y\" {\n\n        }\n    }\n}\n\ndef \"D\" (\n    customData = {\n        int a = 1\n    }\n)\n{\n}\n\ndef \"E\"\n{\n}\n\n"
   },
+  "read_string_byte_escapes": {
+   "reads": true,
+   "source": "#usda 1.0\ndef \"P\"\n{\n    string s = \"a\\xffb\"\n}\n",
+   "text": "#usda 1.0\n\ndef \"P\"\n{\n    string s = \"a\\xffb\"\n}\n\n"
+  },
   "read_substitutions_on_one_line": {
    "reads": true,
    "source": "#usda 1.0\ndef \"P\" (\n    prefixSubstitutions = {\"a\":\"b\", 'c' : 'd',}\n    suffixSubstitutions = {\n        \"e\": \"f\",\n        \"g\": \"h\",\n    }\n)\n{\n}\n",
@@ -890,6 +895,11 @@
    "reads": true,
    "source": "#usda 1.0\n(\n    relocates = {\n        </A/B>: </A/C>,\n        </A/D>: </A/E>\n    }\n)\n\ndef \"A\"\n{\n}\n",
    "text": "#usda 1.0\n(\n    relocates = {\n        </A/B>: </A/C>, \n        </A/D>: </A/E>\n    }\n)\n\ndef \"A\"\n{\n}\n\n"
+  },
+  "write_string_nul": {
+   "reads": true,
+   "source": "#usda 1.0\ndef \"P\"\n{\n    string s = \"a\\x00b\"\n}\n",
+   "text": "#usda 1.0\n\ndef \"P\"\n{\n    string s = \"a\"\n}\n\n"
   },
   "write_substitution_maps": {
    "reads": true,

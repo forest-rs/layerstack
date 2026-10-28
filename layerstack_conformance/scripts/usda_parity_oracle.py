@@ -136,6 +136,13 @@ The cases:
   `read_reference_empty_path` reads `<>` in references; and a target or
   connection that is `<>` or the root
   (`IsValidRelationshipTargetPath`, `IsValidAttributeConnectionPath`).
+- `read_string_byte_escapes` and `write_string_nul`: strings whose
+  escapes OpenUSD keeps as bytes in a `std::string`: bytes that are not
+  UTF-8 (`\\xff`), which it writes back escaped, and NUL, which its
+  writer truncates the string at (`Sdf_FileIOUtility::Quote` walks
+  `str.c_str()` to the first NUL, `pxr/usd/sdf/fileIO_Common.cpp`), so the
+  value it reads back is shorter. layerstack handles both otherwise, as
+  `tests/conformance/usda_parity.rs` lists.
 - `statements_*`: several list-op statements for one field, on a
   relationship, a connection, references, inherits, `variantSets` and
   metadata (`apiSchemas`). OpenUSD's parser sets each statement's list
@@ -1806,6 +1813,18 @@ def "P"
         "x" {
         }
     }
+}
+''', []),
+    "read_string_byte_escapes": (r'''#usda 1.0
+def "P"
+{
+    string s = "a\xffb"
+}
+''', []),
+    "write_string_nul": (r'''#usda 1.0
+def "P"
+{
+    string s = "a\x00b"
 }
 ''', []),
 }

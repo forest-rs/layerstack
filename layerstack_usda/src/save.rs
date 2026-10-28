@@ -34,8 +34,8 @@
 //!   value (a value block included), time samples (blocked samples and an
 //!   empty sample map included), explicit or list-edited connections and
 //!   metadata;
-//! - relationship specs with `custom`, explicit or list-edited targets and
-//!   metadata;
+//! - relationship specs with `custom`, `varying`, explicit or list-edited
+//!   targets and metadata;
 //! - properties in one authored order, attributes and relationships
 //!   interleaved;
 //! - values of every scalar, vector, quaternion and matrix type (`half`
@@ -234,8 +234,6 @@ pub enum Unsupported {
     /// A list op that holds an explicit list and edits at once, which the
     /// file formats cannot hold.
     MixedListOp,
-    /// A `varying` relationship.
-    VaryingRelationship,
     /// List-op metadata of this kind (path list ops, which USDA metadata
     /// has no syntax for).
     ListOpMetadata(&'static str),
@@ -250,7 +248,6 @@ impl fmt::Display for Unsupported {
         match self {
             Self::ArrayEdit => f.write_str("sparse array edits"),
             Self::MixedListOp => f.write_str("a list op with an explicit list and edits"),
-            Self::VaryingRelationship => f.write_str("varying relationships"),
             Self::ListOpMetadata(kind) => write!(f, "{kind} metadata"),
             Self::Value(kind) => write!(f, "a {kind} value"),
             Self::Relocates => f.write_str("layer relocates"),
@@ -756,12 +753,10 @@ impl Lowering<'_> {
                 {
                     return invalid(path, Invalid::RelationshipValue);
                 }
-                if spec.variability == Variability::Varying {
-                    return unsupported(path, Unsupported::VaryingRelationship);
-                }
                 Property::Relationship(Relationship {
                     name,
                     custom: spec.custom,
+                    varying: spec.variability == Variability::Varying,
                     targets,
                     metadata,
                 })

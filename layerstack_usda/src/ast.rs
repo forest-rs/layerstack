@@ -192,6 +192,9 @@ pub struct Relationship<'a> {
     pub span: Span,
     /// Whether `custom` was specified.
     pub custom: bool,
+    /// Whether `varying` was specified: a relationship is uniform
+    /// otherwise.
+    pub varying: bool,
     /// List-op kind for this relationship statement.
     pub op: ListOpKind,
     /// Relationship name (may be namespaced).

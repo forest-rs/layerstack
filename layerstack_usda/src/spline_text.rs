@@ -207,8 +207,18 @@ fn tokenize(text: &str) -> Result<Vec<Token>, String> {
     while let Some(&(at, c)) = chars.peek() {
         if c.is_whitespace() {
             chars.next();
-        } else if c == '#' {
+        } else if c == '#' || text[at..].starts_with("//") {
             while chars.next_if(|&(_, c)| c != '\n').is_some() {}
+        } else if text[at..].starts_with("/*") {
+            // A comment is white space, as everywhere in USDA
+            // (`TokenSeparator`, `pxr/usd/sdf/textFileFormatParser.h`).
+            let end = text[at + 2..]
+                .find("*/")
+                .ok_or("unterminated comment in a spline")?;
+            let end = at + 2 + end + 2;
+            while chars.peek().is_some_and(|(i, _)| *i < end) {
+                chars.next();
+            }
         } else if c == '{' && !tokens.is_empty() {
             // Use the USDA lexer for nested braces, strings and comments.
             let mut depth = 0;

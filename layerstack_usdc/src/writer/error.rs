@@ -128,6 +128,15 @@ pub enum UsdcWriteError {
         /// The metadata key.
         key: String,
     },
+    /// A field the crate stores as a type this writer does not encode: an
+    /// attribute's `displayUnit`, which OpenUSD holds as a `TfEnum` of its
+    /// units (`SdfGetUnitFromName`, `pxr/usd/sdf/types.cpp`).
+    UnencodedField {
+        /// Path of the owning spec.
+        path: String,
+        /// The field.
+        key: String,
+    },
     /// A document's metadata value does not have the field's registered
     /// type (a `float` or integer for a `double` field, for example).
     MetadataType {
@@ -179,6 +188,9 @@ impl fmt::Display for UsdcWriteError {
             Self::Save(e) => write!(f, "{e}"),
             Self::UnknownMetadata { path, key } => {
                 write!(f, "{path}: {key:?} is not registered metadata here")
+            }
+            Self::UnencodedField { path, key } => {
+                write!(f, "{path}: the crate writer does not encode {key:?}")
             }
             Self::MetadataType {
                 path,

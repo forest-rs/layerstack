@@ -552,6 +552,7 @@ fn instancer_prim(
     prim.push_property(Relationship {
         name: geom::PointInstancer::PROTOTYPES.into(),
         custom: false,
+        varying: false,
         targets: Some(ListOp::explicit(targets)),
         metadata: Vec::new(),
     });

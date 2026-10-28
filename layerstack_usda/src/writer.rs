@@ -862,6 +862,11 @@ pub struct Relationship {
     pub name: String,
     /// Whether the declaration carries the `custom` keyword.
     pub custom: bool,
+    /// Whether the relationship is `varying`; a relationship is uniform
+    /// otherwise. Every statement of a varying relationship says so, as
+    /// OpenUSD writes it (`Sdf_WriteRelationship`,
+    /// `pxr/usd/sdf/fileIO_Common.h`).
+    pub varying: bool,
     /// Targets (the `targetPaths` field): a list op of absolute prim or
     /// property paths. `None` writes a bare declaration (`rel name`, no
     /// targets authored); an explicit empty list writes `rel name = None`,
@@ -878,6 +883,7 @@ impl Relationship {
         Self {
             name: name.into(),
             custom: false,
+            varying: false,
             targets: Some(ListOp::explicit(alloc::vec![target.into()])),
             metadata: Vec::new(),
         }
@@ -1386,8 +1392,9 @@ pub enum WriteError {
     /// ([`Prim::references`], [`Document::sublayers`], ...) as are the
     /// variant fields ([`Prim::variant_selections`] and
     /// [`Prim::variant_set_names`]), and what this writer does not produce:
-    /// relocates, the identifier-valued `symmetryFunction`, a `permission`
-    /// other than `public` or `private`, and the substitution maps.
+    /// relocates, a bare-spelled `permission`, `symmetryFunction` or
+    /// `displayUnit` whose value that spelling cannot hold, and the
+    /// substitution maps.
     /// A quoted `key = value` statement would not parse.
     ReservedMetadata {
         /// Path of the owning object.
@@ -1690,9 +1697,9 @@ fn validate_order(
 /// Metadata keys with dedicated USDA syntax that a quoted `key = value`
 /// statement cannot express (OpenUSD `pxr/usd/sdf/textFileFormat.peg`):
 /// composition arcs, sublayers and variant fields (written from their own
-/// members), relocates, the identifier-valued `symmetryFunction`, and the
-/// string-to-string substitution maps. `permission` is written bare when
-/// its value is `public` or `private` ([`PERMISSIONS`]).
+/// members), relocates, and the string-to-string substitution maps.
+/// `permission`, `symmetryFunction` and `displayUnit` are written bare
+/// ([`is_bare_metadata`]).
 const RESERVED_METADATA: &[&str] = &[
     "references",
     "payload",
@@ -1702,10 +1709,38 @@ const RESERVED_METADATA: &[&str] = &[
     "variantSets",
     "subLayers",
     "relocates",
-    "symmetryFunction",
     "prefixSubstitutions",
     "suffixSubstitutions",
 ];
+
+/// Whether USDA spells the metadata `key` with a bare identifier rather
+/// than a value: `permission = private`, `symmetryFunction = Ns::mirror`
+/// (or nothing, `symmetryFunction = `) and `displayUnit = mm`.
+///
+/// OpenUSD: `PermissionMetadata`, `SymmetryFunctionMetadata` and
+/// `DisplayUnitMetadata` (`pxr/usd/sdf/textFileFormatParser.h`), written
+/// by `Sdf_WritePrim` and its siblings (`pxr/usd/sdf/fileIO_Common.h`).
+fn is_bare_metadata(key: &str) -> bool {
+    matches!(key, "permission" | "symmetryFunction" | "displayUnit")
+}
+
+/// The identifier a bare-spelled metadatum ([`is_bare_metadata`]) writes,
+/// or `None` when its value is not one that spelling can hold: a
+/// permission of [`PERMISSIONS`], a `displayUnit` that is an identifier,
+/// and a `symmetryFunction` that is empty or identifiers joined by `::`.
+fn bare_identifier(entry: &Metadatum) -> Option<&str> {
+    let (Value::Token(text) | Value::String(text)) = &entry.value else {
+        return None;
+    };
+    let text = text.as_str();
+    let fits = match entry.key.as_str() {
+        "permission" => PERMISSIONS.contains(&text),
+        "displayUnit" => is_identifier(text),
+        "symmetryFunction" => text.is_empty() || text.split("::").all(is_identifier),
+        _ => false,
+    };
+    fits.then_some(text)
+}
 
 /// The values of the `permission` field (`SdfPermission`), which USDA
 /// writes as a bare identifier: `permission = private`.
@@ -1828,10 +1863,8 @@ fn validate_metadata<'a>(
                 name: entry.key.clone(),
             });
         }
-        let permission = entry.key == "permission"
-            && matches!(&entry.value, Value::Token(v) | Value::String(v) if PERMISSIONS.contains(&v.as_str()));
         if RESERVED_METADATA.contains(&entry.key.as_str())
-            || (entry.key == "permission" && !permission)
+            || (is_bare_metadata(&entry.key) && bare_identifier(entry).is_none())
         {
             return Err(WriteError::ReservedMetadata {
                 path: path.into(),
@@ -2658,10 +2691,13 @@ impl Writer<'_> {
         self.indent(depth);
         self.out.push_str(key);
         self.out.push_str(" = ");
-        match (key, &entry.value) {
-            ("permission", Value::Token(v) | Value::String(v)) => self.out.push_str(v),
-            (_, Value::Bool(v)) => self.out.push_str(if *v { "true" } else { "false" }),
-            _ => self.value(&entry.value, depth),
+        if let Some(identifier) = bare_identifier(entry) {
+            self.out.push_str(identifier);
+        } else {
+            match (key, &entry.value) {
+                (_, Value::Bool(v)) => self.out.push_str(if *v { "true" } else { "false" }),
+                _ => self.value(&entry.value, depth),
+            }
         }
         self.out.push('\n');
     }
@@ -3185,6 +3221,9 @@ impl Writer<'_> {
             if relationship.custom {
                 self.out.push_str("custom ");
             }
+            if relationship.varying {
+                self.out.push_str("varying ");
+            }
             self.out.push_str("rel ");
             self.out.push_str(&relationship.name);
             if let Some(targets) = explicit {
@@ -3202,6 +3241,9 @@ impl Writer<'_> {
         if let Some(op) = edits {
             self.list_op_statements(op, depth, |w, keyword, targets| {
                 w.out.push_str(keyword);
+                if relationship.varying {
+                    w.out.push_str("varying ");
+                }
                 w.out.push_str("rel ");
                 w.out.push_str(&relationship.name);
                 w.out.push_str(" = ");
@@ -4548,7 +4590,7 @@ over "P" (
             let mut bad = doc.clone();
             bad.prims[0]
                 .metadata
-                .push(Metadatum::new(key, Value::Token("x".into())));
+                .push(Metadatum::new(key, Value::Token("x y".into())));
             assert_eq!(
                 bad.to_usda(),
                 Err(WriteError::ReservedMetadata {

@@ -21,6 +21,19 @@ error (`error`) with the file's location removed.
 
 The cases:
 
+- `read_*`: syntax OpenUSD reads that layerstack must read too: a
+  relative target in a variant, which anchors at the prim the variant
+  belongs to (`SdfPath::GetPrimPath` drops a path's trailing variant
+  selections, `TextParserAction<PathRef>`,
+  `pxr/usd/sdf/textFileFormatParser.cpp`); `varying rel`;
+  `symmetryFunction` as an identifier, a C++ namespaced one or nothing;
+  `;` between dictionary entries; `displayUnit` as a unit name; list-op
+  statements in property metadata; the legacy type names (`Vec3f`,
+  `NormalFloat`, ...); `yes` and `no` as bools; comments in a spline.
+  Some are refused, as OpenUSD refuses them: a relative target of a prim
+  inside the variant, which anchors at `/P{v=one}Child` and so names a
+  variant selection (`<x>`, `<../Other>`), a quoted
+  `symmetryFunction` and an unknown unit.
 - `statements_*`: several list-op statements for one field, on a
   relationship, a connection, references, inherits, `variantSets` and
   metadata (`apiSchemas`). OpenUSD's parser sets each statement's list
@@ -187,6 +200,207 @@ def "P" (
     append apiSchemas = ["D"]
 )
 {
+}
+''', []),
+    "read_variant_relative_targets": ('''#usda 1.0
+
+def "P" (
+    variants = {
+        string v = "one"
+    }
+    prepend variantSets = "v"
+)
+{
+    variantSet "v" = {
+        "one" (
+            prepend inherits = <Base>
+        ) {
+            rel r = <Child>
+            rel up = <../Other>
+            float c.connect = <Child.x>
+
+            def "Child"
+            {
+                float x
+            }
+        }
+    }
+}
+
+def "Other"
+{
+}
+''', ["/P.r", "/P.up", "/P.c"]),
+    "read_variant_child_relative_target": ('''#usda 1.0
+
+def "P" (
+    variants = {
+        string v = "one"
+    }
+    prepend variantSets = "v"
+)
+{
+    variantSet "v" = {
+        "one" {
+            def "Child"
+            {
+                float x
+                rel side = <x>
+            }
+        }
+    }
+}
+''', []),
+    "read_variant_climbing_target": ('''#usda 1.0
+
+def "P" (
+    variants = {
+        string v = "one"
+    }
+    prepend variantSets = "v"
+)
+{
+    variantSet "v" = {
+        "one" {
+            def "Child"
+            {
+                rel side = <../Other>
+            }
+        }
+    }
+}
+''', []),
+    "read_varying_rel": ('''#usda 1.0
+
+def "P"
+{
+    varying rel a = </A>
+    custom varying rel b
+    delete varying rel c = </A>
+    prepend varying rel c = [</B>, </C>]
+    reorder varying rel c = [</C>, </B>]
+    custom varying rel d = </A> (
+        doc = "varying"
+    )
+    rel e = </A>
+}
+''', ["/P.a", "/P.c", "/P.d", "/P.e"]),
+    "read_symmetry_function": ('''#usda 1.0
+
+def "P" (
+    symmetryFunction = mirror
+)
+{
+    double a = 1 (
+        symmetryFunction = Ns::Inner::flip
+    )
+    rel r (
+        symmetryFunction = 
+    )
+    custom double b = 0 (symmetryFunction = )
+    rel s (permission = private; symmetryFunction = rotate)
+}
+''', []),
+    "read_symmetry_function_string": ('''#usda 1.0
+
+def "P" (
+    symmetryFunction = "mirror"
+)
+{
+}
+''', []),
+    "read_dictionary_semicolons": ('''#usda 1.0
+
+def "P" (
+    customData = { string a = "yes"; int b = 4; dictionary c = { string d = "x"; double e = 1 } }
+)
+{
+    double s.spline = {
+        0: 6; post linear; {},
+        1: 6; {},
+    }
+}
+''', []),
+    "read_display_unit": ('''#usda 1.0
+
+def "P"
+{
+    double a = 1 (displayUnit = mm)
+    double b = 2 (
+        displayUnit = deg
+        doc = "angle"
+    )
+}
+''', []),
+    "read_display_unit_unknown": ('''#usda 1.0
+
+def "P"
+{
+    double a = 1 (displayUnit = furlong)
+}
+''', []),
+    "read_property_metadata_list_ops": ('''#usda 1.0
+
+def "P"
+{
+    double a (
+        delete testIntOps = [1, 2]
+        prepend testIntOps = [3]
+        append testTokenOps = ["x", "y"]
+    )
+    rel r (
+        add testIntOps = [4]
+        reorder testIntOps = [4, 3]
+    )
+}
+''', []),
+    "read_legacy_type_names": ('''#usda 1.0
+
+def "P"
+{
+    custom Vec3f a = (1, 2, 3)
+    custom Vec2d[] b = [(1, 2), (3, 4)]
+    custom PointFloat[] c = [(0, 0, 0)]
+    custom NormalFloat d = (0, 1, 0)
+    custom VectorFloat e = (1, 0, 0)
+    custom Color f = (1, 0.5, 0)
+    custom Quatf g = (1, 0, 0, 0)
+    custom Matrix2d h = ( (1, 0), (0, 1) )
+    custom Frame i = ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1) )
+    custom Vec4h j.timeSamples = {
+        1: (1, 2, 3, 4),
+    }
+    custom double k (
+        customData = {
+            Vec3d offset = (1, 2, 3)
+        }
+    )
+}
+''', []),
+    "read_bool_identifiers": ('''#usda 1.0
+
+def "P"
+{
+    bool a = yes
+    bool b = no
+    bool[] c = [yes, no, true, 0]
+    bool[] d = edit [
+        write yes to [0]
+        minsize 3 fill no
+    ]
+}
+''', []),
+    "read_spline_comments": ('''#usda 1.0
+
+def "P"
+{
+    double a.spline = {
+        bezier,
+        # a comment line
+        7: 5.5; post curve/* inline */(1.1, -1.4),
+        // another comment
+        9: 6,
+    }
 }
 ''', []),
 }

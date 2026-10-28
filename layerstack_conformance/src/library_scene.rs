@@ -377,6 +377,7 @@ fn rel(name: String, targets: ListOp<String>) -> Relationship {
     Relationship {
         name,
         custom: false,
+        varying: false,
         targets: Some(targets),
         metadata: Vec::new(),
     }

@@ -725,6 +725,33 @@ impl EmitCtx<'_> {
             );
             ctx.rejected = true;
         };
+        // Two fields USDA spells with an identifier of their own, not a
+        // value: `symmetryFunction`, any identifier or none at all, and an
+        // attribute's `displayUnit`, the name of one of OpenUSD's units.
+        // Both are kept as tokens. OpenUSD: `SymmetryFunctionMetadata` and
+        // `DisplayUnitMetadata` (`pxr/usd/sdf/textFileFormatParser.h`),
+        // `SdfGetUnitFromName` (`pxr/usd/sdf/types.cpp`).
+        if key_name == "symmetryFunction"
+            || (key_name == "displayUnit" && target == MetadataTarget::Attribute)
+        {
+            let name = match &entry.value {
+                ast::MetadataValue::Value(ast::Value::Identifier(name))
+                    if key_name == "symmetryFunction" || DISPLAY_UNITS.contains(name) =>
+                {
+                    *name
+                }
+                ast::MetadataValue::None if key_name == "symmetryFunction" => "",
+                _ => {
+                    let error = MetadataValueError::Unconvertible { element: None };
+                    reject(self, Some(MetadataType::Value(ValueType::Token)), error);
+                    return None;
+                }
+            };
+            return Some((
+                key,
+                FieldValue::Value(Value::Token(self.tokens.intern(name))),
+            ));
+        }
         // A bare string is the `comment` field (`lower`).
         if key_name != "comment" && layerstack::is_spec_field(key_name, target) {
             reject(self, None, MetadataValueError::NotMetadata);
@@ -952,6 +979,11 @@ impl EmitCtx<'_> {
             return;
         };
         spec.custom |= rel.custom;
+        // A relationship is uniform unless a statement says `varying`
+        // (AOUSD Core §7.6.5; OpenUSD `TextParserAction<KeywordRel>`).
+        if rel.varying {
+            spec.variability = Variability::Varying;
+        }
         set_fields(&mut spec.metadata, metadata);
         if let Some(listop) = listop {
             match spec.targets.as_mut() {
@@ -1453,10 +1485,16 @@ impl EmitCtx<'_> {
     /// variant branches `sites`, absolute, or returns `None` when the result
     /// names one of those variant selections.
     ///
-    /// OpenUSD anchors a relative path at the spec path with its selections
-    /// (`/A{v=x}B`), where each leading `..` removes one element, a prim name
-    /// or a variant selection (`SdfPath::MakeAbsolutePath`): `<../../D>`
-    /// authored on `/A{v=x}C` is `/A/D`, while `<../D>` is `/A{v=x}D`.
+    /// OpenUSD anchors a relative path at the prim path of the spec
+    /// (`SdfPath::GetPrimPath`), which keeps the selections the path passes
+    /// through (`/A{v=x}B`) but drops those it ends with, so a property of
+    /// the variant `/A{v=x}` itself anchors at `/A`: `<C>` is `/A/C`. Each
+    /// leading `..` then removes one element, a prim name or a variant
+    /// selection (`SdfPath::MakeAbsolutePath`): `<../../D>` authored on
+    /// `/A{v=x}C` is `/A/D`, while `<../D>` is `/A{v=x}D`.
+    ///
+    /// OpenUSD: `TextParserAction<PathRef>`
+    /// (`pxr/usd/sdf/textFileFormatParser.cpp`).
     fn variant_anchored<'p>(
         &self,
         path: &'p str,
@@ -1476,6 +1514,9 @@ impl EmitCtx<'_> {
                 .filter(|site| self.paths.resolve(site.host_path).depth() == level + 1)
                 .count();
             elements.extend(core::iter::repeat_n(None, hosted));
+        }
+        while elements.last() == Some(&None) {
+            elements.pop();
         }
         let mut rest = path;
         let mut climbs = 0;
@@ -1923,6 +1964,13 @@ fn absolute_path<'p>(path: &'p str, anchor: &str) -> Cow<'p, str> {
     }
     Cow::Owned(out)
 }
+
+/// The unit names an attribute's `displayUnit` may hold: those of
+/// OpenUSD's length, angular and dimensionless units (`_SDF_UNITS`,
+/// `pxr/usd/sdf/types.h`) that are identifiers.
+const DISPLAY_UNITS: &[&str] = &[
+    "mm", "cm", "dm", "m", "km", "in", "ft", "yd", "mi", "deg", "rad", "default",
+];
 
 /// Sets the list one list-op statement of a field authors, over the
 /// field's earlier statements. Returns `false` when the two have different

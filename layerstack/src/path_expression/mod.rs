@@ -37,7 +37,7 @@
 //!
 //! let mut store = InMemoryStore::default();
 //! let pebble = store.path("/World/Rocks/Pebble");
-//! let points = store.tokens.intern("points");
+//! let points = store.tokens().intern("points");
 //!
 //! let expression = PathExpression::parse("/World//Peb* - /World/Rocks/Pebble.points").unwrap();
 //! assert_eq!(expression.text(), "/World//Peb* - /World/Rocks/Pebble.points");

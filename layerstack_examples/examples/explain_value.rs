@@ -172,7 +172,7 @@ fn print<T: std::fmt::Debug>(
                 format!(
                     "{:?} {}",
                     node.arc_kind(),
-                    node.site().display(&store.paths, &store.tokens)
+                    node.site().display(store.paths(), store.tokens())
                 )
             })
             .unwrap_or_default();
@@ -197,7 +197,7 @@ fn print<T: std::fmt::Debug>(
         };
         println!(
             "  - {layer} {} via {arc} (offset {}, scale {}): {role}",
-            opinion.spec_path().display(&store.paths, &store.tokens),
+            opinion.spec_path().display(store.paths(), store.tokens()),
             offset.offset,
             offset.scale,
         );
@@ -225,7 +225,7 @@ fn main() {
     };
     let root = LayerId(1);
     let layer = resolver
-        .emit("grove.usda", root, &store.tokens, &store.paths)
+        .emit("grove.usda", root, store.tokens(), store.paths())
         .expect("root layer");
     store.insert_layer(layer);
     for layer in resolver.pending.drain(..) {

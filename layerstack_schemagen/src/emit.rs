@@ -286,7 +286,7 @@ fn domain_file(
         &schemas,
         &domain.auto_applies,
         &domain.metadata,
-        &model.tokens,
+        model.tokens(),
         Statics {
             types,
             plugin: domain.plugin,

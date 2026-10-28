@@ -70,8 +70,8 @@
 //! let result = read_usda(
 //!     source,
 //!     LayerId(1),
-//!     &mut store.tokens,
-//!     &mut store.paths,
+//!     store.tokens(),
+//!     store.paths(),
 //!     &mut NoAssets,
 //! );
 //! assert!(result.parse_diagnostics.is_empty());

@@ -57,11 +57,11 @@ fn sparse_reordered_joint_poses_and_bindings_match_cpp() {
         let skel = binding
             .inherited_skeleton()
             .unwrap()
-            .map(|s| store.paths.resolve(s.path()).display(&store.tokens));
+            .map(|s| store.paths().resolve(s.path()).display(store.tokens()));
         let anim = binding
             .inherited_animation_source()
             .unwrap()
-            .map(|s| store.paths.resolve(s.path()).display(&store.tokens));
+            .map(|s| store.paths().resolve(s.path()).display(store.tokens()));
         assert_eq!(serde_json::json!(skel), row["skeleton"]);
         assert_eq!(serde_json::json!(anim), row["animation"]);
     }

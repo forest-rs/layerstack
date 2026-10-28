@@ -58,8 +58,8 @@ fn numeric_import_preserves_integer_minimum_and_rejects_rounded_overflow() {
         let result = read_usda(
             &source,
             LayerId(1),
-            &store.tokens,
-            &store.paths,
+            store.tokens(),
+            store.paths(),
             &mut NoAssets,
         );
         let path = store.path("/P");
@@ -79,7 +79,7 @@ fn numeric_import_preserves_integer_minimum_and_rejects_rounded_overflow() {
             let property = prim
                 .properties
                 .iter()
-                .find(|entry| store.tokens.resolve(entry.name) == name)
+                .find(|entry| store.tokens().resolve(entry.name) == name)
                 .unwrap();
             let value = if sample {
                 property
@@ -105,8 +105,8 @@ fn numeric_import_preserves_integer_minimum_and_rejects_rounded_overflow() {
         let ast = emit::emit(
             &parsed.layer,
             LayerId(1),
-            &store.tokens,
-            &store.paths,
+            store.tokens(),
+            store.paths(),
             &mut NoAssets,
         );
         assert_eq!(

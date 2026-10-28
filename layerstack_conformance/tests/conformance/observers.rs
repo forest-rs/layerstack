@@ -23,7 +23,7 @@ fn fixture() -> (InMemoryStore, LayerId, LiveStage, PropertyPath) {
     let mut store = loaded.store;
     let size = store.property_path("/World/Shape.size");
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(store.tokens()))),
         with_provenance: true,
         ..StageOptions::default()
     };

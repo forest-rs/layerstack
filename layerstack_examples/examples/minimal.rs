@@ -10,7 +10,7 @@ use layerstack::{
 fn main() {
     let mut store = InMemoryStore::default();
 
-    let field_title = store.tokens.intern("title");
+    let field_title = store.tokens().intern("title");
 
     let p = store.path("/Doc");
     let q = store.path("/Template");

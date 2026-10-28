@@ -106,13 +106,13 @@ fn registry(tokens: &TokenInterner) -> SchemaRegistry {
 
 fn stage() -> (InMemoryStore, LiveStage) {
     let mut store = InMemoryStore::default();
-    let schemas = registry(&store.tokens);
+    let schemas = registry(store.tokens());
     assert!(schemas.issues().is_empty(), "{:?}", schemas.issues());
     let read = layerstack_usda::read_usda(
         SCENE,
         LayerId(1),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut NoAssets,
     );
     assert!(
@@ -427,8 +427,8 @@ def Xform "Site" (kind = "lab_station")
 }
 "#,
         LayerId(1),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut NoAssets,
     );
     store.insert_layer(read.emitted.layer);

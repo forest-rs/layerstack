@@ -129,7 +129,7 @@ fn incompatible_family_declarations_reject_without_touching_prior_edits() {
         );
         let (mut store, mut live) = support::scene(&source);
         let mesh = store.path("/M");
-        let family = store.tokens.lookup("subsetFamily:f:familyType").unwrap();
+        let family = store.tokens().lookup("subsetFamily:f:familyType").unwrap();
         let original = store.layer(LayerId(1)).unwrap().prims()[&mesh]
             .property(family)
             .unwrap()

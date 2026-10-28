@@ -13,15 +13,15 @@ fn setup(files: &[(&str, &str)]) -> (Memory, InMemoryStore, StageOptions) {
         builder
             .register_metadata(
                 MetadataDefinition::new(
-                    store.tokens.intern(name),
+                    store.tokens().intern(name),
                     layerstack::MetadataType::parse(ty).unwrap(),
                     [MetadataTarget::Prim],
                 ),
-                &store.tokens,
+                store.tokens(),
             )
             .unwrap();
     }
-    let registry = Arc::new(builder.build(&store.tokens));
+    let registry = Arc::new(builder.build(store.tokens()));
     (
         Memory::with(files),
         store,
@@ -36,13 +36,13 @@ fn scale(layer: &Layer, store: &InMemoryStore, path: &str) -> FieldValue {
     let segments: Vec<_> = path
         .split('/')
         .filter(|name| !name.is_empty())
-        .map(|name| store.tokens.lookup(name).unwrap())
+        .map(|name| store.tokens().lookup(name).unwrap())
         .collect();
     let path = layerstack::Path::root().join(&segments);
-    let path = store.paths.lookup(&path).unwrap();
+    let path = store.paths().lookup(&path).unwrap();
     layerstack::doc::get_field(
         &layer.prims()[&path].fields,
-        &store.tokens.lookup("hostScale").unwrap(),
+        &store.tokens().lookup("hostScale").unwrap(),
     )
     .unwrap()
     .clone()
@@ -171,7 +171,7 @@ fn strict_import_keeps_a_field_on_a_spec_it_is_not_registered_for_untyped() {
         setup(&[("root.usda", "#usda 1.0\n(hostScale = 1)\ndef \"P\" {}\n")]);
     let document =
         StageDocument::open_in(memory, store, "root.usda", options, ImportPolicy::Strict).unwrap();
-    let key = document.store.tokens.lookup("hostScale").unwrap();
+    let key = document.store.tokens().lookup("hostScale").unwrap();
     let layer = document.store.layers().next().unwrap();
     assert_eq!(
         layer.metadata(key),

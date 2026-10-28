@@ -193,7 +193,7 @@ fn prim_stack(loaded: &LoadedStage, stage: &Stage, prim: PathId) -> Vec<(String,
                 layer_name(loaded, key.key.layer_id),
                 key.key
                     .spec_path
-                    .display(&loaded.store.paths, &loaded.store.tokens),
+                    .display(loaded.store.paths(), loaded.store.tokens()),
             )
         })
         .collect()
@@ -213,7 +213,7 @@ fn composed(loaded: &mut LoadedStage, stage: &Stage) -> Vec<(String, Vec<(String
                 .flat_map(|prim| prim.children())
                 .map(|child| child.to_string())
                 .collect();
-            let path = loaded.store.paths.display(prim, &loaded.store.tokens);
+            let path = loaded.store.paths().display(prim, loaded.store.tokens());
             let mut stack = prim_stack(loaded, stage, prim);
             stack.push(("children".into(), children.join(" ")));
             (path, stack)
@@ -229,7 +229,7 @@ fn prim_stacks_compose_relocated_prims_at_their_targets() {
     let mut paths: Vec<String> = stage
         .traverse(pseudo_root)
         .filter(|prim| *prim != pseudo_root)
-        .map(|prim| loaded.store.paths.display(prim, &loaded.store.tokens))
+        .map(|prim| loaded.store.paths().display(prim, loaded.store.tokens()))
         .collect();
     paths.sort();
     let mut expected: Vec<&str> = oracle.prims.iter().map(|p| p.path.as_str()).collect();
@@ -293,7 +293,7 @@ fn relationship_targets_map_through_relocates() {
             .map(|relationship| relationship.targets())
             .unwrap_or_default()
             .iter()
-            .map(|target| target.display(&loaded.store.paths, &loaded.store.tokens))
+            .map(|target| target.display(loaded.store.paths(), loaded.store.tokens()))
             .collect();
         if &targets != expected {
             mismatches.push(format!("{rel}: expected {expected:?}, got {targets:?}"));
@@ -331,7 +331,7 @@ fn composition_errors_match_openusd() {
             kind: error_kind(error).into(),
             prim: error.prim().map_or_else(
                 || "/".into(),
-                |prim| loaded.store.paths.display(prim, &loaded.store.tokens),
+                |prim| loaded.store.paths().display(prim, loaded.store.tokens()),
             ),
         })
         .collect();
@@ -356,8 +356,11 @@ fn composition_errors_match_openusd() {
         .iter()
         .filter_map(|error| match error {
             CompositionError::InvalidExternalTargetPath(error) => Some((
-                loaded.store.paths.display(error.prim, &loaded.store.tokens),
-                loaded.store.tokens.resolve(error.property).to_owned(),
+                loaded
+                    .store
+                    .paths()
+                    .display(error.prim, loaded.store.tokens()),
+                loaded.store.tokens().resolve(error.property).to_owned(),
             )),
             _ => None,
         })
@@ -410,7 +413,7 @@ fn assert_matches_full(live: &mut LiveStage, loaded: &mut LoadedStage, oracle: &
 fn set_int(loaded: &mut LoadedStage, layer: &str, prim: &str, attr: &str, value: i32) -> PathId {
     let layer = layer_id(loaded, layer);
     let prim = loaded.store.path(prim);
-    let name = loaded.store.tokens.intern(attr);
+    let name = loaded.store.tokens().intern(attr);
     let spec = loaded
         .store
         .layer_mut(layer)
@@ -614,12 +617,12 @@ fn switching_variants_applies_only_the_selected_branch_relocates() {
     let pebble = loaded.store.path("/Pebble");
     let chip = loaded.store.path("/Pebble/Chip");
     let flake = loaded.store.path("/Pebble/Flake");
-    let cut = loaded.store.tokens.intern("cut");
+    let cut = loaded.store.tokens().intern("cut");
     assert!(live.stage().prim(chip, &loaded.store).is_some());
     assert!(!live.stage().prim(flake, &loaded.store).is_some());
 
     for (selection, present, absent) in [("moved", flake, chip), ("plain", chip, flake)] {
-        let selection = loaded.store.tokens.intern(selection);
+        let selection = loaded.store.tokens().intern(selection);
         loaded
             .store
             .layer_mut(root_layer)

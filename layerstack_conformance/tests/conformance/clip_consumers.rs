@@ -80,15 +80,15 @@ def "Clip" {
         let emitted = layerstack_usda::emit::emit(
             &parsed.layer,
             id,
-            &store.tokens,
-            &store.paths,
+            store.tokens(),
+            store.paths(),
             &mut NoArcs,
         );
         assert!(emitted.diagnostics.is_empty(), "{:?}", emitted.diagnostics);
         store.insert_layer(emitted.layer);
     }
     store.insert_asset_layer(LayerId(1), "motion.usda", LayerId(2));
-    let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(store.tokens()));
     let stage = Stage::compose(
         &mut store,
         LayerId(1),

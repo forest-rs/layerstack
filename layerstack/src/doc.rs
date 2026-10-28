@@ -561,7 +561,7 @@ impl Value {
     ///     Stage, StageOptions, Time, Value};
     /// let mut store = InMemoryStore::default();
     /// let prim = store.path("/Mesh");
-    /// let points = store.tokens.intern("points");
+    /// let points = store.tokens().intern("points");
     /// let mut layer = Layer::new(LayerId(1));
     /// layer.insert_prim(prim, PrimSpec::def().with_property(points,
     ///     PropertySpec::typed_attribute(PropertyType::parse("point3f[]").unwrap())
@@ -4591,10 +4591,10 @@ pub trait LayerStore: MaybeSync {
 /// A simple in-memory [`LayerStore`] implementation.
 #[derive(Debug, Default)]
 pub struct InMemoryStore {
-    /// Shared token interner for all layers in the store.
-    pub tokens: TokenInterner,
-    /// Shared path interner for all layers in the store.
-    pub paths: PathInterner,
+    /// Shared token interner for all layers in the store ([`Self::tokens`]).
+    pub(crate) tokens: TokenInterner,
+    /// Shared path interner for all layers in the store ([`Self::paths`]).
+    pub(crate) paths: PathInterner,
     /// Layers by id ([`Self::layer`], [`Self::layers`]): looked up on
     /// every composition and query path, so kept hashed, and listed in id
     /// order on demand.
@@ -4606,6 +4606,24 @@ pub struct InMemoryStore {
 }
 
 impl InMemoryStore {
+    /// The token interner every layer of the store shares. Interning
+    /// takes `&self`; the interner itself cannot be replaced, which would
+    /// invalidate the store's [`LayerStore::identity`] and every id its
+    /// layers and stages hold.
+    #[inline]
+    #[must_use]
+    pub fn tokens(&self) -> &TokenInterner {
+        &self.tokens
+    }
+
+    /// The path interner every layer of the store shares; see
+    /// [`Self::tokens`].
+    #[inline]
+    #[must_use]
+    pub fn paths(&self) -> &PathInterner {
+        &self.paths
+    }
+
     /// Copies authored layers, bindings and interners into an independent domain.
     ///
     /// Existing token/path IDs retain their meanings in the snapshot. Future
@@ -4795,7 +4813,7 @@ impl InMemoryStore {
     ///
     /// let store = InMemoryStore::default();
     /// let rock = store.try_path("/World/Rock").unwrap();
-    /// assert_eq!(store.paths.display(rock, &store.tokens), "/World/Rock");
+    /// assert_eq!(store.paths().display(rock, store.tokens()), "/World/Rock");
     /// assert_eq!(store.try_path("World/Rock"), Err(PathError::NotAbsolute));
     /// assert_eq!(store.try_path("/.radius"), Err(PathError::InvalidPrimName));
     /// ```

@@ -38,15 +38,15 @@ class "PipelineSlotAPI" { float pipeline:__INSTANCE_NAME__:gain = 2; }
     let library = layerstack_usda::read_usda(
         source,
         LayerId(9),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut NoAssets,
     )
     .emitted
     .layer;
-    let tint = store.tokens.intern("PipelineTintAPI");
-    let slot = store.tokens.intern("PipelineSlotAPI");
-    let cube = store.tokens.intern("Cube");
+    let tint = store.tokens().intern("PipelineTintAPI");
+    let slot = store.tokens().intern("PipelineSlotAPI");
+    let cube = store.tokens().intern("Cube");
     let mut tint_declaration = SchemaDeclaration::new(tint, SchemaKind::SingleApplyApi);
     tint_declaration.can_only_apply_to.push(cube);
     let declared = [
@@ -54,20 +54,20 @@ class "PipelineSlotAPI" { float pipeline:__INSTANCE_NAME__:gain = 2; }
         SchemaDeclaration::new(slot, SchemaKind::MultipleApplyApi),
     ];
     let definitions =
-        read_generated_schema(&library, &declared, &store.tokens, &store.paths).unwrap();
+        read_generated_schema(&library, &declared, store.tokens(), store.paths()).unwrap();
     let mut builder = SchemaRegistry::builder();
-    layerstack_schemas::register(&mut builder, &[Domain::UsdGeom], &store.tokens).unwrap();
+    layerstack_schemas::register(&mut builder, &[Domain::UsdGeom], store.tokens()).unwrap();
     for definition in definitions {
         builder.register(definition);
     }
-    let schemas = Arc::new(builder.build(&store.tokens));
+    let schemas = Arc::new(builder.build(store.tokens()));
     assert!(
         schemas.issues().is_empty(),
         "runtime declarations form a valid registry"
     );
     let cube_path = store.path("/Cube");
     let sphere_path = store.path("/Sphere");
-    let sphere = store.tokens.intern("Sphere");
+    let sphere = store.tokens().intern("Sphere");
     let mut root = Layer::new(LayerId(1));
     root.insert_prim(cube_path, PrimSpec::def().with_type_name(cube));
     root.insert_prim(sphere_path, PrimSpec::def().with_type_name(sphere));

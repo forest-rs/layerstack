@@ -69,7 +69,7 @@ fn sampled(samples: Vec<(f64, Value)>) -> PropertySpec {
 fn sublayer_strength_local_beats_sublayer() {
     let mut store = InMemoryStore::default();
 
-    let field_x = store.tokens.intern("x");
+    let field_x = store.tokens().intern("x");
     let p = store.path("/P");
 
     let mut root_layer = Layer::new(LayerId(1));
@@ -104,7 +104,7 @@ fn sublayer_strength_local_beats_sublayer() {
 fn property_path_queries_match_prim_plus_field_queries() {
     let mut store = InMemoryStore::default();
 
-    let field_x = store.tokens.intern("x");
+    let field_x = store.tokens().intern("x");
     let prim = store.path("/P");
     let property_path = store.property_path("/P.x");
 
@@ -148,7 +148,7 @@ fn property_path_queries_match_prim_plus_field_queries() {
 fn property_path_time_queries_read_properties_not_metadata() {
     let mut store = InMemoryStore::default();
 
-    let field_x = store.tokens.intern("x");
+    let field_x = store.tokens().intern("x");
     let prim = store.path("/P");
     let property_path = store.property_path("/P.x");
 
@@ -184,7 +184,7 @@ fn property_path_time_queries_read_properties_not_metadata() {
 fn target_list_preserves_property_target_identity() {
     let mut store = InMemoryStore::default();
 
-    let input = store.tokens.intern("inputs:surface");
+    let input = store.tokens().intern("inputs:surface");
     let material = store.path("/Looks/Material");
     let shader = store.path("/Looks/Shader");
     let shader_output = store.property_path("/Looks/Shader.outputs:surface");
@@ -216,7 +216,7 @@ fn target_list_preserves_property_target_identity() {
 fn referenced_property_targets_are_remapped_structurally() {
     let mut store = InMemoryStore::default();
 
-    let input = store.tokens.intern("inputs:surface");
+    let input = store.tokens().intern("inputs:surface");
     let model = store.path("/Model");
     let asset = store.path("/Asset");
     let asset_shader = store.path("/Asset/Shader");
@@ -259,10 +259,10 @@ fn referenced_property_targets_are_remapped_structurally() {
 fn property_path_query_helpers_cover_field_and_target_lists() {
     let mut store = InMemoryStore::default();
 
-    let labels = store.tokens.intern("labels");
-    let input = store.tokens.intern("inputs:surface");
-    let token_a = store.tokens.intern("A");
-    let token_b = store.tokens.intern("B");
+    let labels = store.tokens().intern("labels");
+    let input = store.tokens().intern("inputs:surface");
+    let token_a = store.tokens().intern("A");
+    let token_b = store.tokens().intern("B");
     let prim = store.path("/P");
     let input_path = store.property_path("/P.inputs:surface");
     let shader_output = store.property_path("/Q.outputs:surface");
@@ -365,7 +365,7 @@ fn layer_typed_property_helper_preserves_sparse_array_defaults() {
 fn reference_opinions_are_weaker_than_local() {
     let mut store = InMemoryStore::default();
 
-    let field_x = store.tokens.intern("x");
+    let field_x = store.tokens().intern("x");
     let p = store.path("/P");
     let q = store.path("/Q");
     let q_child = store.path("/Q/Child");
@@ -403,8 +403,8 @@ fn reference_opinions_are_weaker_than_local() {
 fn omitted_reference_target_resolves_through_default_prim() {
     let mut store = InMemoryStore::default();
 
-    let field_x = store.tokens.intern("x");
-    let model = store.tokens.intern("Model");
+    let field_x = store.tokens().intern("x");
+    let model = store.tokens().intern("Model");
     let p = store.path("/P");
     let model_path = store.path("/Model");
 
@@ -433,8 +433,8 @@ fn omitted_reference_target_resolves_through_default_prim() {
 fn omitted_payload_target_resolves_through_default_prim() {
     let mut store = InMemoryStore::default();
 
-    let field_x = store.tokens.intern("x");
-    let model = store.tokens.intern("PayloadRoot");
+    let field_x = store.tokens().intern("x");
+    let model = store.tokens().intern("PayloadRoot");
     let p = store.path("/P");
     let model_path = store.path("/PayloadRoot");
 
@@ -463,12 +463,12 @@ fn omitted_payload_target_resolves_through_default_prim() {
 fn variants_selection_is_strength_ordered() {
     let mut store = InMemoryStore::default();
 
-    let field_x = store.tokens.intern("x");
+    let field_x = store.tokens().intern("x");
     let prim = store.path("/P");
 
-    let set_v = store.tokens.intern("v");
-    let variant_a = store.tokens.intern("A");
-    let variant_b = store.tokens.intern("B");
+    let set_v = store.tokens().intern("v");
+    let variant_a = store.tokens().intern("A");
+    let variant_b = store.tokens().intern("B");
 
     let mut root_layer = Layer::new(LayerId(1));
     *root_layer.sublayers_mut() = vec![SublayerEntry::new(LayerId(2))];
@@ -533,9 +533,9 @@ fn variants_selection_is_strength_ordered() {
 fn listop_chain_is_applied_strong_to_weak() {
     let mut store = InMemoryStore::default();
 
-    let field_classes = store.tokens.intern("classes");
-    let class_a = store.tokens.intern("a");
-    let class_b = store.tokens.intern("b");
+    let field_classes = store.tokens().intern("classes");
+    let class_a = store.tokens().intern("a");
+    let class_b = store.tokens().intern("b");
     let prim = store.path("/P");
 
     let mut root_layer = Layer::new(LayerId(1));
@@ -571,9 +571,9 @@ fn resolve_value_distinguishes_scalar_and_list() {
     let mut store = InMemoryStore::default();
 
     let prim = store.path("/P");
-    let field_x = store.tokens.intern("x");
-    let field_classes = store.tokens.intern("classes");
-    let class_a = store.tokens.intern("a");
+    let field_x = store.tokens().intern("x");
+    let field_classes = store.tokens().intern("classes");
+    let class_a = store.tokens().intern("a");
 
     let mut layer = Layer::new(LayerId(1));
     let mut spec = PrimSpec::default().with_field(field_x, 123_i64);
@@ -640,13 +640,13 @@ fn child_order_reorder_name_children_matches_supplemental_fixture() {
     // `primOrder` (`reorder nameChildren`) semantics.
     let mut store = InMemoryStore::default();
 
-    let a = store.tokens.intern("a");
-    let b = store.tokens.intern("b");
-    let c = store.tokens.intern("c");
-    let f = store.tokens.intern("f");
-    let x = store.tokens.intern("x");
-    let y = store.tokens.intern("y");
-    let z = store.tokens.intern("z");
+    let a = store.tokens().intern("a");
+    let b = store.tokens().intern("b");
+    let c = store.tokens().intern("c");
+    let f = store.tokens().intern("f");
+    let x = store.tokens().intern("x");
+    let y = store.tokens().intern("y");
+    let z = store.tokens().intern("z");
 
     let prim_a = store.path("/A");
     let a_a = store.path("/A/a");
@@ -702,7 +702,7 @@ fn explain_field_returns_sorted_opinion_stack() {
     let mut store = InMemoryStore::default();
 
     let prim = store.path("/P");
-    let field_x = store.tokens.intern("x");
+    let field_x = store.tokens().intern("x");
 
     let mut root_layer = Layer::new(LayerId(1));
     *root_layer.sublayers_mut() = vec![SublayerEntry::new(LayerId(2))];
@@ -741,9 +741,9 @@ fn token_listop_append_reorders_duplicates() {
     let mut store = InMemoryStore::default();
 
     let prim = store.path("/P");
-    let field_classes = store.tokens.intern("classes");
-    let class_a = store.tokens.intern("a");
-    let class_b = store.tokens.intern("b");
+    let field_classes = store.tokens().intern("classes");
+    let class_a = store.tokens().intern("a");
+    let class_b = store.tokens().intern("b");
 
     let mut root_layer = Layer::new(LayerId(1));
     *root_layer.sublayers_mut() = vec![SublayerEntry::new(LayerId(2))];
@@ -780,14 +780,14 @@ fn token_listop_prepend_and_append_match_supplemental_list_editing_order() {
     let mut store = InMemoryStore::default();
 
     let prim = store.path("/A");
-    let field_targets = store.tokens.intern("targets");
+    let field_targets = store.tokens().intern("targets");
 
-    let root_prepend = store.tokens.intern("root_prepend");
-    let sub1_prepend = store.tokens.intern("sub1_prepend");
-    let sub2_prepend = store.tokens.intern("sub2_prepend");
-    let sub2_append = store.tokens.intern("sub2_append");
-    let sub1_append = store.tokens.intern("sub1_append");
-    let root_append = store.tokens.intern("root_append");
+    let root_prepend = store.tokens().intern("root_prepend");
+    let sub1_prepend = store.tokens().intern("sub1_prepend");
+    let sub2_prepend = store.tokens().intern("sub2_prepend");
+    let sub2_append = store.tokens().intern("sub2_append");
+    let sub1_append = store.tokens().intern("sub1_append");
+    let root_append = store.tokens().intern("root_append");
 
     let mut root_layer = Layer::new(LayerId(1));
     *root_layer.sublayers_mut() = vec![
@@ -853,9 +853,9 @@ fn token_listop_prepend_composes_before_explicit() {
     let mut store = InMemoryStore::default();
 
     let prim = store.path("/Card");
-    let api_schemas = store.tokens.intern("apiSchemas");
-    let original = store.tokens.intern("OriginalAPI");
-    let prepended = store.tokens.intern("PrependedAPI");
+    let api_schemas = store.tokens().intern("apiSchemas");
+    let original = store.tokens().intern("OriginalAPI");
+    let prepended = store.tokens().intern("PrependedAPI");
 
     // Sublayer (weaker): explicit apiSchemas = ["OriginalAPI"].
     let mut sub_layer = Layer::new(LayerId(2));
@@ -1000,7 +1000,7 @@ fn value_blocked_suppresses_weaker_opinions() {
     let mut store = InMemoryStore::default();
 
     let prim = store.path("/P");
-    let field_x = store.tokens.intern("x");
+    let field_x = store.tokens().intern("x");
 
     // Strongest layer blocks the field.
     let mut root_layer = Layer::new(LayerId(1));
@@ -1040,8 +1040,8 @@ fn value_blocked_only_affects_blocked_field() {
     let mut store = InMemoryStore::default();
 
     let prim = store.path("/P");
-    let field_x = store.tokens.intern("x");
-    let field_y = store.tokens.intern("y");
+    let field_x = store.tokens().intern("x");
+    let field_y = store.tokens().intern("y");
 
     let mut layer = Layer::new(LayerId(1));
     layer.insert_prim(
@@ -1075,7 +1075,7 @@ fn value_blocked_only_affects_blocked_field() {
 #[test]
 fn time_samples_held_interpolation() {
     let mut store = InMemoryStore::default();
-    let field = store.tokens.intern("x");
+    let field = store.tokens().intern("x");
     let p = store.path("/P");
 
     let mut layer = Layer::new(LayerId(1));
@@ -1159,7 +1159,7 @@ fn time_samples_held_interpolation() {
 #[test]
 fn time_samples_linear_interpolation() {
     let mut store = InMemoryStore::default();
-    let field = store.tokens.intern("x");
+    let field = store.tokens().intern("x");
     let p = store.path("/P");
 
     let mut layer = Layer::new(LayerId(1));
@@ -1237,7 +1237,7 @@ fn time_samples_linear_interpolation() {
 #[test]
 fn time_samples_linear_int_holds() {
     let mut store = InMemoryStore::default();
-    let field = store.tokens.intern("x");
+    let field = store.tokens().intern("x");
     let p = store.path("/P");
 
     let mut layer = Layer::new(LayerId(1));
@@ -1266,7 +1266,7 @@ fn time_samples_linear_int_holds() {
 #[test]
 fn time_samples_non_numeric_falls_back_to_held() {
     let mut store = InMemoryStore::default();
-    let field = store.tokens.intern("name");
+    let field = store.tokens().intern("name");
     let p = store.path("/P");
 
     let mut layer = Layer::new(LayerId(1));
@@ -1374,7 +1374,7 @@ fn blocked_time_sample_applies_only_where_it_is_in_effect() {
 #[test]
 fn time_samples_override_default_value() {
     let mut store = InMemoryStore::default();
-    let field = store.tokens.intern("x");
+    let field = store.tokens().intern("x");
     let p = store.path("/P");
 
     // Root layer: timeSamples.
@@ -1424,7 +1424,7 @@ fn stronger_default_hides_weaker_time_samples() {
     // `ProcessLayerAtTime` stops at the first spec with samples, a spline or
     // a default.
     let mut store = InMemoryStore::default();
-    let field = store.tokens.intern("x");
+    let field = store.tokens().intern("x");
     let p = store.path("/P");
 
     let mut root = Layer::new(LayerId(1));
@@ -1474,7 +1474,7 @@ fn dependency_map_none_by_default() {
 #[test]
 fn dependency_map_records_local_layer_opinions() {
     let mut store = InMemoryStore::default();
-    let field_x = store.tokens.intern("x");
+    let field_x = store.tokens().intern("x");
     let p = store.path("/P");
 
     let mut root = Layer::new(LayerId(1));
@@ -1521,7 +1521,7 @@ fn dependency_map_records_local_layer_opinions() {
 #[test]
 fn dependency_map_records_reference_arc_and_layer() {
     let mut store = InMemoryStore::default();
-    let field_x = store.tokens.intern("x");
+    let field_x = store.tokens().intern("x");
     let p = store.path("/P");
     let q = store.path("/Q");
 
@@ -1564,7 +1564,7 @@ fn dependency_map_records_reference_arc_and_layer() {
 #[test]
 fn dependency_map_records_inherit_arc() {
     let mut store = InMemoryStore::default();
-    let field_x = store.tokens.intern("x");
+    let field_x = store.tokens().intern("x");
     let p = store.path("/P");
     let base = store.path("/Base");
 
@@ -1595,7 +1595,7 @@ fn dependency_map_records_inherit_arc() {
 #[test]
 fn dependency_map_records_specializes_arc() {
     let mut store = InMemoryStore::default();
-    let field_x = store.tokens.intern("x");
+    let field_x = store.tokens().intern("x");
     let p = store.path("/P");
     let base = store.path("/Base");
 
@@ -1638,8 +1638,8 @@ fn deactivated_prim_retained_but_excluded_from_active_traversal() {
     layer.insert_prim(
         root,
         PrimSpec::default().with_children(vec![
-            store.tokens.intern("Active"),
-            store.tokens.intern("Inactive"),
+            store.tokens().intern("Active"),
+            store.tokens().intern("Inactive"),
         ]),
     );
     layer.insert_prim(p, PrimSpec::def());
@@ -1673,9 +1673,9 @@ fn deactivated_prim_descendants_excluded() {
     let child = store.path("/Parent/Child");
     let grandchild = store.path("/Parent/Child/Grandchild");
 
-    let parent_tok = store.tokens.intern("Parent");
-    let child_tok = store.tokens.intern("Child");
-    let gc_tok = store.tokens.intern("Grandchild");
+    let parent_tok = store.tokens().intern("Parent");
+    let child_tok = store.tokens().intern("Child");
+    let gc_tok = store.tokens().intern("Grandchild");
 
     let mut layer = Layer::new(LayerId(1));
     layer.insert_prim(root, PrimSpec::default().with_children(vec![parent_tok]));
@@ -1719,7 +1719,7 @@ fn explicitly_active_prim_remains() {
 
     let root = store.path("/");
     let p = store.path("/P");
-    let p_tok = store.tokens.intern("P");
+    let p_tok = store.tokens().intern("P");
 
     let mut layer = Layer::new(LayerId(1));
     layer.insert_prim(root, PrimSpec::default().with_children(vec![p_tok]));
@@ -1743,8 +1743,8 @@ fn active_strongest_opinion_wins() {
 
     let root = store.path("/");
     let p = store.path("/P");
-    let p_tok = store.tokens.intern("P");
-    let field_x = store.tokens.intern("x");
+    let p_tok = store.tokens().intern("P");
+    let field_x = store.tokens().intern("x");
 
     // Root layer: active = true (stronger).
     let mut root_layer = Layer::new(LayerId(1));
@@ -1785,7 +1785,7 @@ fn weaker_active_false_deactivates() {
 
     let root = store.path("/");
     let p = store.path("/P");
-    let p_tok = store.tokens.intern("P");
+    let p_tok = store.tokens().intern("P");
 
     // Root layer: no active opinion.
     let mut root_layer = Layer::new(LayerId(1));
@@ -1820,9 +1820,9 @@ fn type_name_resolved_from_strongest() {
 
     let root = store.path("/");
     let p = store.path("/P");
-    let p_tok = store.tokens.intern("P");
-    let xform_tok = store.tokens.intern("Xform");
-    let scope_tok = store.tokens.intern("Scope");
+    let p_tok = store.tokens().intern("P");
+    let xform_tok = store.tokens().intern("Xform");
+    let scope_tok = store.tokens().intern("Scope");
 
     // Root layer: type = Xform (stronger).
     let mut root_layer = Layer::new(LayerId(1));
@@ -1855,8 +1855,8 @@ fn type_name_from_reference_when_local_untyped() {
     let root = store.path("/");
     let p = store.path("/P");
     let q = store.path("/Q");
-    let p_tok = store.tokens.intern("P");
-    let mesh_tok = store.tokens.intern("Mesh");
+    let p_tok = store.tokens().intern("P");
+    let mesh_tok = store.tokens().intern("Mesh");
 
     // Root layer: /P is an untyped over with a reference to /Q in layer 2.
     let mut root_layer = Layer::new(LayerId(1));
@@ -1889,7 +1889,7 @@ fn type_name_none_when_untyped() {
 
     let root = store.path("/");
     let p = store.path("/P");
-    let p_tok = store.tokens.intern("P");
+    let p_tok = store.tokens().intern("P");
 
     let mut layer = Layer::new(LayerId(1));
     layer.insert_prim(root, PrimSpec::default().with_children(vec![p_tok]));
@@ -1922,7 +1922,7 @@ fn compose_with_schemas(
     for schema in schemas {
         builder.register(schema);
     }
-    let registry = builder.build(&store.tokens);
+    let registry = builder.build(store.tokens());
     let options = StageOptions {
         schemas: Some(Arc::new(registry)),
         ..StageOptions::default()
@@ -1937,8 +1937,8 @@ fn schema_fallback_provides_value_when_no_opinion() {
     // Spec: AOUSD Core §13.3.2.4 (fallback value resolution).
     let mut store = InMemoryStore::default();
 
-    let mesh_tok = store.tokens.intern("Mesh");
-    let extent_tok = store.tokens.intern("extent");
+    let mesh_tok = store.tokens().intern("Mesh");
+    let extent_tok = store.tokens().intern("extent");
     let p = store.path("/P");
 
     let mut layer = Layer::new(LayerId(1));
@@ -1972,8 +1972,8 @@ fn authored_opinion_beats_schema_fallback() {
     // Spec: AOUSD Core §13.3.2.4.
     let mut store = InMemoryStore::default();
 
-    let mesh_tok = store.tokens.intern("Mesh");
-    let double_sided_tok = store.tokens.intern("doubleSided");
+    let mesh_tok = store.tokens().intern("Mesh");
+    let double_sided_tok = store.tokens().intern("doubleSided");
     let p = store.path("/P");
 
     let mut layer = Layer::new(LayerId(1));
@@ -2007,9 +2007,9 @@ fn schema_isa_inheritance_fallback() {
     // Spec: AOUSD Core §13.3.1 (typed schema inheritance).
     let mut store = InMemoryStore::default();
 
-    let mesh_tok = store.tokens.intern("Mesh");
-    let gprim_tok = store.tokens.intern("Gprim");
-    let visibility_tok = store.tokens.intern("visibility");
+    let mesh_tok = store.tokens().intern("Mesh");
+    let gprim_tok = store.tokens().intern("Gprim");
+    let visibility_tok = store.tokens().intern("visibility");
     let p = store.path("/P");
 
     let mut layer = Layer::new(LayerId(1));
@@ -2038,10 +2038,10 @@ fn schema_applied_api_provides_fallback() {
     // Spec: AOUSD Core §13.3.2 (applied schemas), §13.2.1 (apiSchemas field).
     let mut store = InMemoryStore::default();
 
-    let mesh_tok = store.tokens.intern("Mesh");
-    let collection_api_tok = store.tokens.intern("CollectionAPI");
-    let includes_tok = store.tokens.intern("includes");
-    let api_schemas_tok = store.tokens.intern("apiSchemas");
+    let mesh_tok = store.tokens().intern("Mesh");
+    let collection_api_tok = store.tokens().intern("CollectionAPI");
+    let includes_tok = store.tokens().intern("includes");
+    let api_schemas_tok = store.tokens().intern("apiSchemas");
     let p = store.path("/P");
     let bare = store.path("/Bare");
 
@@ -2089,8 +2089,8 @@ fn schema_no_type_no_fallback() {
     // A prim with no typeName gets no schema fallback.
     let mut store = InMemoryStore::default();
 
-    let extent_tok = store.tokens.intern("extent");
-    let mesh_tok = store.tokens.intern("Mesh");
+    let extent_tok = store.tokens().intern("extent");
+    let mesh_tok = store.tokens().intern("Mesh");
     let p = store.path("/P");
 
     let mut layer = Layer::new(LayerId(1));
@@ -2118,9 +2118,9 @@ fn schema_builtin_api_fallback() {
     // Spec: AOUSD Core §13.3.2.1 (schema inclusions — built-ins).
     let mut store = InMemoryStore::default();
 
-    let mesh_tok = store.tokens.intern("Mesh");
-    let some_api_tok = store.tokens.intern("SomeAPI");
-    let api_field_tok = store.tokens.intern("apiField");
+    let mesh_tok = store.tokens().intern("Mesh");
+    let some_api_tok = store.tokens().intern("SomeAPI");
+    let api_field_tok = store.tokens().intern("apiField");
     let p = store.path("/P");
 
     let mut layer = Layer::new(LayerId(1));
@@ -2153,13 +2153,13 @@ fn schema_builtin_api_fallback() {
 #[test]
 fn property_names_merge_authored_and_defined_properties() {
     let mut store = InMemoryStore::default();
-    let tile = store.tokens.intern("Tile");
-    let slot = store.tokens.intern("SlotAPI");
-    let slot_main = store.tokens.intern("SlotAPI:main");
-    let api_schemas = store.tokens.intern("apiSchemas");
-    let slot_left = store.tokens.intern("SlotAPI:left:upper");
+    let tile = store.tokens().intern("Tile");
+    let slot = store.tokens().intern("SlotAPI");
+    let slot_main = store.tokens().intern("SlotAPI:main");
+    let api_schemas = store.tokens().intern("apiSchemas");
+    let slot_left = store.tokens().intern("SlotAPI:left:upper");
     let [width, zeta, index] =
-        ["width", "zeta", "slot:__INSTANCE_NAME__:index"].map(|name| store.tokens.intern(name));
+        ["width", "zeta", "slot:__INSTANCE_NAME__:index"].map(|name| store.tokens().intern(name));
     let p = store.path("/P");
 
     let mut layer = Layer::new(LayerId(1));
@@ -2206,7 +2206,7 @@ fn property_names_merge_authored_and_defined_properties() {
 fn property_names_apply_reorder_properties() {
     let mut store = InMemoryStore::default();
     let [alpha, beta, gamma, absent] =
-        ["alpha", "beta", "gamma", "absent"].map(|name| store.tokens.intern(name));
+        ["alpha", "beta", "gamma", "absent"].map(|name| store.tokens().intern(name));
     let p = store.path("/P");
     let mut spec = PrimSpec::def()
         .with_property(alpha, PropertySpec::attribute().custom().with_default(1))
@@ -2218,7 +2218,7 @@ fn property_names_apply_reorder_properties() {
     store.insert_layer(layer);
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
     let prim = stage.prim(p, &store).expect("composed");
-    let ordered = [gamma, beta, alpha].map(|name| store.tokens.resolve(name));
+    let ordered = [gamma, beta, alpha].map(|name| store.tokens().resolve(name));
     assert_eq!(prim.property_names(), ordered);
     assert_eq!(prim.authored_property_names(), ordered);
 
@@ -2239,7 +2239,7 @@ fn dict_entry(key: &str, val: Value) -> (Arc<str>, Value) {
 fn dictionary_combining_across_sublayers() {
     // Spec: AOUSD Core §6.6.2.1, §12.2.5 — dictionaries combine across opinions.
     let mut store = InMemoryStore::default();
-    let field = store.tokens.intern("customData");
+    let field = store.tokens().intern("customData");
     let p = store.path("/P");
 
     // Root (stronger): {a: 1}
@@ -2290,7 +2290,7 @@ fn dictionary_combining_across_sublayers() {
 fn dictionary_nested_combining() {
     // Spec: §6.6.2.1 — nested dictionaries combine recursively.
     let mut store = InMemoryStore::default();
-    let field = store.tokens.intern("customData");
+    let field = store.tokens().intern("customData");
     let p = store.path("/P");
 
     let mut root_layer = Layer::new(LayerId(1));
@@ -2348,7 +2348,7 @@ fn dictionary_nested_combining() {
 fn dictionary_combining_across_reference_arc() {
     // Spec: §6.6.2.1, §10 — dictionaries combine across reference arcs.
     let mut store = InMemoryStore::default();
-    let field = store.tokens.intern("customData");
+    let field = store.tokens().intern("customData");
     let p = store.path("/P");
     let q = store.path("/Q");
 
@@ -2398,7 +2398,7 @@ fn dictionary_combining_across_reference_arc() {
 fn dictionary_blocked_value_suppresses() {
     // Spec: §12.3 — a blocked value suppresses weaker dictionary opinions.
     let mut store = InMemoryStore::default();
-    let field = store.tokens.intern("customData");
+    let field = store.tokens().intern("customData");
     let p = store.path("/P");
 
     let mut root_layer = Layer::new(LayerId(1));
@@ -2431,7 +2431,7 @@ fn dictionary_blocked_value_suppresses() {
 fn resolve_value_returns_dictionary_variant() {
     // Verify that resolve_value returns ResolvedValue::Dictionary for dict fields.
     let mut store = InMemoryStore::default();
-    let field = store.tokens.intern("customData");
+    let field = store.tokens().intern("customData");
     let p = store.path("/P");
 
     let mut layer = Layer::new(LayerId(1));
@@ -2470,7 +2470,7 @@ fn dict(entries: &[(&str, Value)]) -> Value {
 /// strongest first, and resolves it.
 fn resolve_custom_data_stack(opinions: Vec<Value>) -> Option<Vec<(Arc<str>, Value)>> {
     let mut store = InMemoryStore::default();
-    let field = store.tokens.intern("customData");
+    let field = store.tokens().intern("customData");
     let p = store.path("/P");
 
     let mut root = Layer::new(LayerId(100));
@@ -2634,8 +2634,8 @@ fn dictionary_combines_over_schema_fallback() {
     // OpenUSD's `MetadataValueComposer::ConsumeUsdFallback`.
     // Spec: AOUSD Core §6.6.2.1, §13.3.2.4.
     let mut store = InMemoryStore::default();
-    let mesh = store.tokens.intern("Mesh");
-    let field = store.tokens.intern("customData");
+    let mesh = store.tokens().intern("Mesh");
+    let field = store.tokens().intern("customData");
     let p = store.path("/P");
 
     let mut layer = Layer::new(LayerId(1));
@@ -2768,7 +2768,7 @@ fn dictionary_resolution_matches_reference_fold_up_to_key_order() {
 fn array_value_strongest_wins() {
     // Array values resolve with strongest-wins like other scalars.
     let mut store = InMemoryStore::default();
-    let field = store.tokens.intern("points");
+    let field = store.tokens().intern("points");
     let p = store.path("/P");
 
     let mut root_layer = Layer::new(LayerId(1));
@@ -2820,9 +2820,9 @@ fn array_value_strongest_wins() {
 fn nested_reference_is_weaker_than_referenced_site_opinions() {
     let mut store = InMemoryStore::default();
 
-    let field_x = store.tokens.intern("x");
-    let child_tok = store.tokens.intern("Child");
-    let proto_tok = store.tokens.intern("Proto");
+    let field_x = store.tokens().intern("x");
+    let child_tok = store.tokens().intern("Child");
+    let proto_tok = store.tokens().intern("Proto");
     let root = store.path("/Root");
     let root_child = store.path("/Root/Child");
     let model = store.path("/Model");
@@ -2909,7 +2909,7 @@ fn nested_reference_is_weaker_than_referenced_site_opinions() {
 fn reference_nested_in_payload_is_weaker_than_payload_site() {
     let mut store = InMemoryStore::default();
 
-    let field_x = store.tokens.intern("x");
+    let field_x = store.tokens().intern("x");
     let p = store.path("/P");
     let model = store.path("/Model");
     let other = store.path("/Other");
@@ -2963,10 +2963,10 @@ fn reference_nested_in_payload_is_weaker_than_payload_site() {
 fn specializes_inside_reference_populates_class_children() {
     let mut store = InMemoryStore::default();
 
-    let field_x = store.tokens.intern("x");
-    let c_tok = store.tokens.intern("C");
-    let cls_tok = store.tokens.intern("Cls");
-    let child_tok = store.tokens.intern("TChild");
+    let field_x = store.tokens().intern("x");
+    let c_tok = store.tokens().intern("C");
+    let cls_tok = store.tokens().intern("Cls");
+    let child_tok = store.tokens().intern("TChild");
     let root = store.path("/R");
     let model = store.path("/Model");
     let model_c = store.path("/Model/C");
@@ -3019,8 +3019,8 @@ fn metadata_property_collision(
 ) -> (Stage, InMemoryStore, layerstack::PathId, TokenId) {
     let mut store = InMemoryStore::default();
     let p = store.path("/P");
-    let kind = store.tokens.intern("kind");
-    let component = store.tokens.intern("component");
+    let kind = store.tokens().intern("kind");
+    let component = store.tokens().intern("component");
     let metadata = PrimSpec::def().with_field(kind, Value::Token(component));
     let property =
         PrimSpec::def().with_property(kind, PropertySpec::attribute().custom().with_default(42.0));
@@ -3060,7 +3060,7 @@ fn metadata_property_collision(
 fn prim_metadata_and_property_with_one_name_stay_separate() {
     for split in [None, Some(true), Some(false)] {
         let (stage, store, p, kind) = metadata_property_collision(split);
-        let component = store.tokens.intern("component");
+        let component = store.tokens().intern("component");
         let attribute = PropertyPath::new(p, kind);
         assert_eq!(
             stage
@@ -3099,9 +3099,9 @@ fn prim_metadata_and_property_with_one_name_stay_separate() {
 fn property_named_api_schemas_does_not_hide_applied_schemas() {
     let mut store = InMemoryStore::default();
     let p = store.path("/P");
-    let api_schemas = store.tokens.intern("apiSchemas");
-    let test_api = store.tokens.intern("TestAPI");
-    let answer = store.tokens.intern("answer");
+    let api_schemas = store.tokens().intern("apiSchemas");
+    let test_api = store.tokens().intern("TestAPI");
+    let answer = store.tokens().intern("answer");
 
     let mut layer = Layer::new(LayerId(1));
     layer.insert_prim(
@@ -3162,11 +3162,11 @@ fn properties_named_like_population_metadata_do_not_affect_population() {
     let child = store.path("/P/Child");
     let r = store.path("/R");
     let r_child = store.path("/R/Child");
-    let active = store.tokens.intern("active");
-    let instanceable = store.tokens.intern("instanceable");
-    let child_name = store.tokens.intern("Child");
-    let p_name = store.tokens.intern("P");
-    let r_name = store.tokens.intern("R");
+    let active = store.tokens().intern("active");
+    let instanceable = store.tokens().intern("instanceable");
+    let child_name = store.tokens().intern("Child");
+    let p_name = store.tokens().intern("P");
+    let r_name = store.tokens().intern("R");
 
     let mut layer = Layer::new(LayerId(1));
     layer.insert_prim(
@@ -3190,7 +3190,7 @@ fn properties_named_like_population_metadata_do_not_affect_population() {
             .with_reference(Reference::new(LayerId(1), p))
             .with_property(instanceable, PropertySpec::attribute().with_default(true)),
     );
-    let marker = store.tokens.intern("marker");
+    let marker = store.tokens().intern("marker");
     layer.insert_prim(
         r_child,
         PrimSpec::over().with_property(marker, PropertySpec::attribute().with_default(1)),

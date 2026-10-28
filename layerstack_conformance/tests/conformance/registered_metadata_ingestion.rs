@@ -55,16 +55,16 @@ fn registry(store: &mut InMemoryStore) -> SchemaRegistry {
         ("hostSigned", "int64listop", vec![MetadataTarget::Prim]),
     ] {
         let mut definition = MetadataDefinition::new(
-            store.tokens.intern(name),
+            store.tokens().intern(name),
             MetadataType::parse(ty).unwrap(),
             targets,
         );
         definition.default = (name == "hostDefault").then_some(Value::Float(99.));
         builder
-            .register_metadata(definition, &store.tokens)
+            .register_metadata(definition, store.tokens())
             .unwrap();
     }
-    builder.build(&store.tokens)
+    builder.build(store.tokens())
 }
 
 fn field<'a>(
@@ -72,7 +72,7 @@ fn field<'a>(
     fields: &'a [layerstack::FieldEntry],
     name: &str,
 ) -> &'a FieldValue {
-    layerstack::doc::get_field(fields, &store.tokens.lookup(name).unwrap()).unwrap()
+    layerstack::doc::get_field(fields, &store.tokens().lookup(name).unwrap()).unwrap()
 }
 
 const VALID: &str = r#"#usda 1.0
@@ -106,8 +106,8 @@ fn registered_literals_use_declared_types_without_authoring_defaults() {
     let legacy = read_usda(
         VALID,
         LayerId(1),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut NoAssets,
     );
     let path = store.path("/P");
@@ -123,8 +123,8 @@ fn registered_literals_use_declared_types_without_authoring_defaults() {
     let compact = read_usda_with_registry(
         VALID,
         LayerId(1),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut NoAssets,
         &registry,
     );
@@ -149,8 +149,8 @@ fn registered_literals_use_declared_types_without_authoring_defaults() {
     let ast = emit::emit_with_registry(
         &parsed.layer,
         LayerId(1),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut NoAssets,
         &registry,
     );
@@ -164,7 +164,7 @@ fn registered_literals_use_declared_types_without_authoring_defaults() {
     );
     assert_eq!(
         field(&store, &prim.fields, "hostToken"),
-        &FieldValue::Value(Value::Token(store.tokens.lookup("blue").unwrap()))
+        &FieldValue::Value(Value::Token(store.tokens().lookup("blue").unwrap()))
     );
     assert_eq!(
         field(&store, &prim.fields, "hostFloat"),
@@ -215,7 +215,7 @@ fn registered_literals_use_declared_types_without_authoring_defaults() {
     let attr = prim
         .properties
         .iter()
-        .find(|entry| store.tokens.resolve(entry.name) == "x")
+        .find(|entry| store.tokens().resolve(entry.name) == "x")
         .unwrap();
     assert_eq!(
         field(&store, &attr.spec.metadata, "hostAttribute"),
@@ -224,14 +224,14 @@ fn registered_literals_use_declared_types_without_authoring_defaults() {
     let rel = prim
         .properties
         .iter()
-        .find(|entry| store.tokens.resolve(entry.name) == "target")
+        .find(|entry| store.tokens().resolve(entry.name) == "target")
         .unwrap();
     assert_eq!(
         field(&store, &rel.spec.metadata, "hostRelationship"),
-        &FieldValue::Value(Value::Token(store.tokens.lookup("edge").unwrap()))
+        &FieldValue::Value(Value::Token(store.tokens().lookup("edge").unwrap()))
     );
     assert!(
-        layerstack::doc::get_field(&prim.fields, &store.tokens.lookup("hostDefault").unwrap())
+        layerstack::doc::get_field(&prim.fields, &store.tokens().lookup("hostDefault").unwrap())
             .is_none(),
         "registered defaults are not authored"
     );
@@ -272,8 +272,8 @@ fn invalid_registered_literals_and_targets_reject_without_foreign_kind_fields() 
         let result = read_usda_with_registry(
             &source,
             LayerId(1),
-            &store.tokens,
-            &store.paths,
+            store.tokens(),
+            store.paths(),
             &mut NoAssets,
             &registry,
         );
@@ -308,8 +308,8 @@ fn a_field_on_a_kind_of_spec_it_is_not_registered_for_is_kept_untyped() {
     let result = read_usda_with_registry(
         "#usda 1.0\ndef \"P\" (hostLayer = 3) {}",
         LayerId(1),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut NoAssets,
         &registry,
     );
@@ -332,8 +332,8 @@ fn registered_list_none_is_an_explicit_empty_op() {
     let result = read_usda_with_registry(
         "#usda 1.0\ndef \"P\" (hostInts = None) {}",
         LayerId(1),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut NoAssets,
         &registry,
     );
@@ -359,8 +359,8 @@ fn integer_list_literals_use_checked_cpp_numeric_coercion() {
     let result = read_usda_with_registry(
         source,
         LayerId(1),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut NoAssets,
         &registry,
     );

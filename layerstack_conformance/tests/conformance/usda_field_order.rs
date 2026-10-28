@@ -100,7 +100,7 @@ fn value(store: &InMemoryStore, json: &Json) -> Value {
         "float" => Value::Float(float(item)),
         "double" => Value::Double(number(item)),
         "timecode" => Value::TimeCode(number(item)),
-        "token" => Value::Token(store.tokens.intern(item.as_str().unwrap())),
+        "token" => Value::Token(store.tokens().intern(item.as_str().unwrap())),
         "string" => Value::String(Arc::from(item.as_str().unwrap())),
         "half[]" => array(&|v| Value::Half(half(v))),
         "float[]" => array(&|v| Value::Float(float(v))),
@@ -136,13 +136,13 @@ fn value(store: &InMemoryStore, json: &Json) -> Value {
 /// The step's call as a transaction on the scene layer.
 fn transaction(store: &InMemoryStore, step: &Json) -> Transaction {
     let text = |key: &str| step[key].as_str().unwrap();
-    let token = |key: &str| store.tokens.intern(text(key));
+    let token = |key: &str| store.tokens().intern(text(key));
     let path = text("path");
     let at = || {
-        let spec = SpecPath::parse(path, &store.tokens, &store.paths).expect("a spec path");
+        let spec = SpecPath::parse(path, store.tokens(), store.paths()).expect("a spec path");
         Address::spec(SCENE, spec)
     };
-    let target = |text: &str| TargetPath::parse(text, &store.tokens, &store.paths).unwrap();
+    let target = |text: &str| TargetPath::parse(text, store.tokens(), store.paths()).unwrap();
     let targets = || {
         let items = step["targets"].as_array().unwrap();
         ListOp::explicit(items.iter().map(|t| target(t.as_str().unwrap())).collect())
@@ -151,7 +151,7 @@ fn transaction(store: &InMemoryStore, step: &Json) -> Transaction {
         let items = step["names"].as_array().unwrap();
         items
             .iter()
-            .map(|n| store.tokens.intern(n.as_str().unwrap()))
+            .map(|n| store.tokens().intern(n.as_str().unwrap()))
             .collect()
     };
     let mut edit = Transaction::new();
@@ -163,7 +163,7 @@ fn transaction(store: &InMemoryStore, step: &Json) -> Transaction {
                 "class" => Specifier::Class,
                 other => panic!("no specifier {other}"),
             };
-            let type_name = step["type"].as_str().map(|t| store.tokens.intern(t));
+            let type_name = step["type"].as_str().map(|t| store.tokens().intern(t));
             edit.create_prim(at(), specifier, type_name)
         }
         "attribute" => {
@@ -271,8 +271,8 @@ fn scrambled_authoring_saves_as_openusd_writes_it() {
         }
         let text = layerstack_usda::save::save_usda(
             store.layer(SCENE).unwrap(),
-            &store.tokens,
-            &store.paths,
+            store.tokens(),
+            store.paths(),
         )
         .expect("saves");
         let expected = case["text"].as_str().unwrap();

@@ -1989,7 +1989,7 @@ pub(crate) fn expanded_prim_index(
 #[cfg(test)]
 mod tests {
     use super::{Scope, Selection};
-    use crate::{InMemoryStore, LayerStore, PathId, stage::PopulationMask};
+    use crate::{InMemoryStore, PathId, stage::PopulationMask};
 
     /// A mask scope includes what [`PopulationMask::includes`] does, and an
     /// exact scope the selected paths and their ancestors, by ancestor

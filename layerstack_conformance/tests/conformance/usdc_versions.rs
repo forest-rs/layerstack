@@ -184,10 +184,10 @@ fn compare_file_with_openusd(root: &std::path::Path, expected: &Json) -> Vec<Mis
 
     let mut mismatches = Vec::new();
     for (prim_path, attributes) in expected["prims"].as_object().expect("prims") {
-        let path = Path::parse_absolute(prim_path, &store.tokens).expect("prim path");
-        let prim = store.paths.intern(path);
+        let path = Path::parse_absolute(prim_path, store.tokens()).expect("prim path");
+        let prim = store.paths().intern(path);
         for (name, record) in attributes.as_object().expect("attributes") {
-            let field = store.tokens.intern(name);
+            let field = store.tokens().intern(name);
             let attribute = format!("{prim_path}.{name}");
 
             let default = scalar(authored_value(
@@ -198,7 +198,7 @@ fn compare_file_with_openusd(root: &std::path::Path, expected: &Json) -> Vec<Mis
             ));
             let openusd = &record["default"];
             let matches = match &default {
-                Some(value) => value_matches(value, openusd, &store.tokens),
+                Some(value) => value_matches(value, openusd, store.tokens()),
                 None => openusd.is_null(),
             };
             if !matches {
@@ -221,7 +221,7 @@ fn compare_file_with_openusd(root: &std::path::Path, expected: &Json) -> Vec<Mis
                 )
                 .map(|resolved| resolved.value);
                 let matches = match &value {
-                    Some(value) => value_matches(value, openusd, &store.tokens),
+                    Some(value) => value_matches(value, openusd, store.tokens()),
                     None => openusd.is_null(),
                 };
                 if !matches {
@@ -732,11 +732,11 @@ fn failing_vectors(vectors: &[Vector]) -> Vec<String> {
         StageOptions::default(),
     );
     let store = &mut loaded.store;
-    let field = store.tokens.intern("attr");
+    let field = store.tokens().intern("attr");
     let mut failing = Vec::new();
     for &(prim, time, expected) in vectors {
-        let path = Path::parse_absolute(prim, &store.tokens).expect("prim path");
-        let prim_id = store.paths.intern(path);
+        let path = Path::parse_absolute(prim, store.tokens()).expect("prim path");
+        let prim_id = store.paths().intern(path);
         let value = match time {
             None => scalar(authored_value(
                 &stage,
@@ -753,7 +753,7 @@ fn failing_vectors(vectors: &[Vector]) -> Vec<String> {
             .map(|resolved| resolved.value),
         };
         let json: Json = serde_json::from_str(expected).expect("vector");
-        if !value.is_some_and(|value| value_matches(&value, &json, &store.tokens)) {
+        if !value.is_some_and(|value| value_matches(&value, &json, store.tokens())) {
             failing.push(format!("{prim} at {time:?}"));
         }
     }

@@ -53,12 +53,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut store = InMemoryStore::default();
     let layer = LayerId(1);
     store.insert_layer(Layer::new(layer));
-    let custom = store.tokens.intern("PaddedBox");
-    let boundable = store.tokens.intern("Boundable");
+    let custom = store.tokens().intern("PaddedBox");
+    let boundable = store.tokens().intern("Boundable");
     let mut builder = SchemaRegistry::builder();
-    layerstack_schemas::register(&mut builder, &[Domain::UsdGeom], &store.tokens)?;
+    layerstack_schemas::register(&mut builder, &[Domain::UsdGeom], store.tokens())?;
     builder.register(SchemaDefinition::typed(custom).with_parent(boundable));
-    let schemas = Arc::new(builder.build(&store.tokens));
+    let schemas = Arc::new(builder.build(store.tokens()));
     assert!(schemas.issues().is_empty(), "{:?}", schemas.issues());
     let padding = Arc::new(AtomicUsize::new(0));
     let evaluations = Arc::new(AtomicUsize::new(0));
@@ -66,7 +66,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     providers
         .register(
             &schemas,
-            &store.tokens,
+            store.tokens(),
             custom,
             Arc::new(PaddedBox {
                 padding_tenths: padding.clone(),

@@ -11,13 +11,13 @@ use std::{process::Command, sync::Arc};
 #[test]
 fn fallback_types_select_concrete_schemas_without_changing_authored_type() {
     let mut store = InMemoryStore::default();
-    let registry = Arc::new(layerstack_schemas::openusd(&store.tokens));
-    let future = store.tokens.intern("FutureMesh");
-    let mesh = store.tokens.intern("Mesh");
-    let unknown = store.tokens.intern("OtherFuture");
-    let abstract_type = store.tokens.intern("Imageable");
-    let sphere = store.tokens.intern("Sphere");
-    let fallback = store.tokens.intern("fallbackPrimTypes");
+    let registry = Arc::new(layerstack_schemas::openusd(store.tokens()));
+    let future = store.tokens().intern("FutureMesh");
+    let mesh = store.tokens().intern("Mesh");
+    let unknown = store.tokens().intern("OtherFuture");
+    let abstract_type = store.tokens().intern("Imageable");
+    let sphere = store.tokens().intern("Sphere");
+    let fallback = store.tokens().intern("fallbackPrimTypes");
     let prim = store.path("/Future");
     let known = store.path("/Known");
     let mut layer = Layer::new(LayerId(1));
@@ -71,7 +71,7 @@ fn fallback_types_select_concrete_schemas_without_changing_authored_type() {
             .unwrap()
             .is_a(sphere)
     );
-    let subdivision = store.tokens.lookup("subdivisionScheme").unwrap();
+    let subdivision = store.tokens().lookup("subdivisionScheme").unwrap();
     assert_eq!(
         stage
             .prim(prim, &store)
@@ -79,7 +79,7 @@ fn fallback_types_select_concrete_schemas_without_changing_authored_type() {
             .and_then(|a| a.get(Time::Default))
             .unwrap()
             .value,
-        Value::Token(store.tokens.lookup("catmullClark").unwrap())
+        Value::Token(store.tokens().lookup("catmullClark").unwrap())
     );
     let python = std::env::var("LAYERSTACK_USD_PYTHON").unwrap_or_else(|_| "python3".into());
     if !Command::new(&python)
@@ -123,8 +123,8 @@ fn stage_metadata_edits_are_atomic_field_scoped_and_session_aware() {
             ..Default::default()
         },
     );
-    let data = store.tokens.intern("customLayerData");
-    let comment = store.tokens.intern("comment");
+    let data = store.tokens().intern("customLayerData");
+    let comment = store.tokens().intern("comment");
     let root_edit = live
         .set_stage_metadata_dict_key(
             &mut store,
@@ -187,7 +187,7 @@ fn stage_metadata_edits_are_atomic_field_scoped_and_session_aware() {
     live.set_frames_per_second(&mut store, LayerId(2), 48.0)
         .unwrap();
     assert_eq!(live.stage().time_codes_per_second(&store), 48.0);
-    let name = store.tokens.intern("World");
+    let name = store.tokens().intern("World");
     let default = live.set_default_prim(&mut store, Some(name)).unwrap();
     assert_eq!(live.stage().default_prim(&mut store), Some(prim));
     live.apply(&mut store, &default.inverse).unwrap();
@@ -216,10 +216,10 @@ fn stage_metadata_edits_are_atomic_field_scoped_and_session_aware() {
 fn fallback_metadata_changes_rebuild_schema_definitions_and_undo() {
     use layerstack::{LiveStage, Transaction};
     let mut store = InMemoryStore::default();
-    let registry = Arc::new(layerstack_schemas::openusd(&store.tokens));
-    let name = store.tokens.intern("Future");
-    let mesh = store.tokens.intern("Mesh");
-    let key = store.tokens.intern("fallbackPrimTypes");
+    let registry = Arc::new(layerstack_schemas::openusd(store.tokens()));
+    let name = store.tokens().intern("Future");
+    let mesh = store.tokens().intern("Mesh");
+    let key = store.tokens().intern("fallbackPrimTypes");
     let prim = store.path("/Object");
     let mut root = Layer::new(LayerId(1));
     root.insert_prim(prim, PrimSpec::def().with_type_name(name));
@@ -288,8 +288,8 @@ fn source_store(source: &str) -> InMemoryStore {
     let result = layerstack_usda::read_usda(
         source,
         LayerId(1),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut NoAssets,
     );
     assert!(!result.emitted.rejected, "{:?}", result.emitted.diagnostics);
@@ -381,7 +381,7 @@ def "Instance" (
     let actual: Vec<_> = default
         .into_iter()
         .filter(|p| *p != root)
-        .map(|p| store.paths.resolve(p).display(&store.tokens))
+        .map(|p| store.paths().resolve(p).display(store.tokens()))
         .collect();
     let python = std::env::var("LAYERSTACK_USD_PYTHON").unwrap_or_else(|_| "python3".into());
     if !Command::new(&python)
@@ -423,7 +423,7 @@ def "D" {}
     let b = store.path("/B");
     let c = store.path("/C");
     let d = store.path("/D");
-    let skip = store.tokens.intern("skip");
+    let skip = store.tokens().intern("skip");
     let mut live = LiveStage::compose(
         &mut store,
         LayerId(1),
@@ -478,7 +478,7 @@ fn selected_relationships_forward_through_unselected_relationship_properties() {
     );
     let a = store.path("/A");
     let c = store.path("/C");
-    let links = store.tokens.intern("links");
+    let links = store.tokens().intern("links");
     let mut live = LiveStage::compose(
         &mut store,
         LayerId(1),
@@ -610,7 +610,7 @@ fn checked_object_queries_preserve_deferred_decode_failures_and_cache_them() {
 #[test]
 fn schema_property_kind_overrides_conflicting_authored_kind() {
     let mut store = source_store("#usda 1.0\ndef Sphere \"S\" {\n rel radius = </Other>\n}\n");
-    let registry = Arc::new(layerstack_schemas::openusd(&store.tokens));
+    let registry = Arc::new(layerstack_schemas::openusd(store.tokens()));
     let prim = store.path("/S");
     let stage = Stage::compose(
         &mut store,

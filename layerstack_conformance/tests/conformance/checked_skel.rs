@@ -277,7 +277,7 @@ fn default_time_skips_incompatible_stronger_values_before_preserving_decode_erro
         ),
     );
     store.insert_layer(session);
-    let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(store.tokens()));
     let stage = layerstack::Stage::compose(
         &mut store,
         LayerId(1),
@@ -371,7 +371,7 @@ fn influence_default_time_retries_typed_sources_and_retains_weaker_decode_failur
                 ),
             );
             store.insert_layer(session);
-            let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
+            let schemas = Arc::new(layerstack_schemas::openusd(store.tokens()));
             let stage = layerstack::Stage::compose(
                 &mut store,
                 LayerId(1),

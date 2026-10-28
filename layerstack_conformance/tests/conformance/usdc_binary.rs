@@ -45,9 +45,14 @@ fn read_usdc_file(path: &Path) -> ParsedUsdc {
     let layer_id = LayerId(1);
     let mut resolver = StubResolver;
 
-    let result =
-        layerstack_usdc::read_usdc(&data, layer_id, &store.tokens, &store.paths, &mut resolver)
-            .unwrap_or_else(|e| panic!("failed to parse {}: {e}", path.display()));
+    let result = layerstack_usdc::read_usdc(
+        &data,
+        layer_id,
+        store.tokens(),
+        store.paths(),
+        &mut resolver,
+    )
+    .unwrap_or_else(|e| panic!("failed to parse {}: {e}", path.display()));
 
     store.insert_layer(result.layer);
 
@@ -67,18 +72,18 @@ struct ParsedUsdc {
 impl ParsedUsdc {
     /// Returns the prim spec at a given path, panicking when absent.
     fn prim(&mut self, prim_path: &str) -> layerstack::PrimSpec {
-        let path = layerstack::path::Path::parse_absolute(prim_path, &self.store.tokens)
+        let path = layerstack::path::Path::parse_absolute(prim_path, self.store.tokens())
             .expect("invalid path");
-        let path_id = self.store.paths.lookup(&path).expect("path interned");
+        let path_id = self.store.paths().lookup(&path).expect("path interned");
         self.store.layer(self.layer_id).unwrap().prims()[&path_id].clone()
     }
 
     /// Returns the authored property spec at a given prim path and name.
     fn property(&mut self, prim_path: &str, name: &str) -> Option<PropertySpec> {
-        let path = layerstack::path::Path::parse_absolute(prim_path, &self.store.tokens)
+        let path = layerstack::path::Path::parse_absolute(prim_path, self.store.tokens())
             .expect("invalid path");
-        let path_id = self.store.paths.lookup(&path)?;
-        let name_tok = self.store.tokens.intern(name);
+        let path_id = self.store.paths().lookup(&path)?;
+        let name_tok = self.store.tokens().intern(name);
         let layer = self.store.layer(self.layer_id)?;
         layer.prim(path_id)?.property(name_tok).cloned()
     }
@@ -99,9 +104,9 @@ impl ParsedUsdc {
 
     /// Helper to check if a prim exists.
     fn has_prim(&mut self, prim_path: &str) -> bool {
-        let path = layerstack::path::Path::parse_absolute(prim_path, &self.store.tokens)
+        let path = layerstack::path::Path::parse_absolute(prim_path, self.store.tokens())
             .expect("invalid path");
-        let Some(path_id) = self.store.paths.lookup(&path) else {
+        let Some(path_id) = self.store.paths().lookup(&path) else {
             return false;
         };
         let Some(layer) = self.store.layer(self.layer_id) else {
@@ -297,7 +302,7 @@ fn gen_token_parses() {
     let single = parsed.expect_value("/root", "single");
     match single {
         Value::Token(tok) => {
-            let name = parsed.store.tokens.resolve(tok);
+            let name = parsed.store.tokens().resolve(tok);
             assert_eq!(name, "Hello/World");
         }
         _ => panic!("expected Token, got {single:?}"),
@@ -325,9 +330,9 @@ fn gen_variants_parses() {
     // Crate paths spell the variant specs `/root{foo=eggs}`.
     let mut parsed = read_gen("variants");
     let root = parsed.prim("/root");
-    let foo = parsed.store.tokens.intern("foo");
-    let eggs = parsed.store.tokens.intern("eggs");
-    let spam = parsed.store.tokens.intern("spam");
+    let foo = parsed.store.tokens().intern("foo");
+    let eggs = parsed.store.tokens().intern("eggs");
+    let spam = parsed.store.tokens().intern("spam");
     assert_eq!(root.variant_selection(foo), Some(eggs));
     let set = root.variant_sets().get(&foo).expect("variant set `foo`");
     assert!(set.variants.contains_key(&eggs));
@@ -401,8 +406,8 @@ fn gen_permissions_reads_permission_as_token() {
     let mut parsed = read_gen("permissions");
     assert!(parsed.diagnostics.is_empty(), "{:?}", parsed.diagnostics);
     let specialize = parsed.prim("/Specialize");
-    let permission = parsed.store.tokens.intern("permission");
-    let private = parsed.store.tokens.intern("private");
+    let permission = parsed.store.tokens().intern("permission");
+    let private = parsed.store.tokens().intern("private");
     assert_eq!(
         specialize.field(permission),
         Some(&layerstack::FieldValue::Value(Value::Token(private)))
@@ -417,8 +422,8 @@ fn gen_listops_parses() {
     // `payload` and `inheritPaths` (`pxr/usd/sdf/schema.h`).
     let mut parsed = read_gen("listops");
     let root = parsed.prim("/root");
-    let api = parsed.store.tokens.intern("apiSchemas");
-    let binding = parsed.store.tokens.intern("MaterialBindingAPI");
+    let api = parsed.store.tokens().intern("apiSchemas");
+    let binding = parsed.store.tokens().intern("MaterialBindingAPI");
     assert_eq!(
         root.field(api),
         Some(&layerstack::FieldValue::TokenListOp(Box::new(
@@ -580,9 +585,9 @@ fn openusd_optional_encodings_decode() {
 
     // `typeName` is `int[]`; the declared type is the element type plus
     // the array flag, as for USDA.
-    let path = layerstack::path::Path::parse_absolute(root, &parsed.store.tokens).unwrap();
-    let prim_id = parsed.store.paths.lookup(&path).unwrap();
-    let name = parsed.store.tokens.intern("ints");
+    let path = layerstack::path::Path::parse_absolute(root, parsed.store.tokens()).unwrap();
+    let prim_id = parsed.store.paths().lookup(&path).unwrap();
+    let name = parsed.store.tokens().intern("ints");
     let layer = &parsed.store.layer(parsed.layer_id).unwrap();
     let spec = layer.prims()[&prim_id]
         .property(name)
@@ -643,9 +648,9 @@ fn read_composition_asset(fixture: &str, file: &str) -> ParsedUsdc {
 
 impl ParsedUsdc {
     fn path_id(&mut self, prim_path: &str) -> layerstack::path::PathId {
-        let path = layerstack::path::Path::parse_absolute(prim_path, &self.store.tokens)
+        let path = layerstack::path::Path::parse_absolute(prim_path, self.store.tokens())
             .expect("invalid path");
-        self.store.paths.intern(path)
+        self.store.paths().intern(path)
     }
 }
 
@@ -658,7 +663,7 @@ fn inherits_and_payloads_are_read_from_their_fields() {
     let left_rig = rig.prim("/Model/LeftRig");
     // The file authors the inherit as a legacy `add`.
     assert_eq!(left_rig.inherits().add, [sym_rig]);
-    let inherit_paths = rig.store.tokens.intern("inheritPaths");
+    let inherit_paths = rig.store.tokens().intern("inheritPaths");
     assert!(left_rig.field(inherit_paths).is_none());
 
     let mut model = read_composition_asset("TrickyRelocationOfPrimFromPayload_root", "model.usd");
@@ -679,7 +684,7 @@ fn variant_set_names_read_as_authored() {
         .variant_set_names()
         .add
         .iter()
-        .map(|name| layer.store.tokens.resolve(*name))
+        .map(|name| layer.store.tokens().resolve(*name))
         .collect();
     assert_eq!(names, ["geotype_selector", "geotype"]);
 }

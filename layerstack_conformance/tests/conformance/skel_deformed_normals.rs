@@ -31,7 +31,7 @@ fn source(corners: bool, dqs: bool) -> String {
 fn edit(store: &mut InMemoryStore, path: PathId, name: &str, value: Value) -> Transaction {
     let mut t = Transaction::new();
     let at = EditTarget::for_layer(LayerId(1))
-        .property(PropertyPath::new(path, store.tokens.intern(name)));
+        .property(PropertyPath::new(path, store.tokens().intern(name)));
     t.set_default(at, value);
     t
 }

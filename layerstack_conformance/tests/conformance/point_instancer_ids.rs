@@ -126,7 +126,7 @@ fn make(edit: &mut SchemaEdit<'_>, path: PathId, call: &[Json]) {
 }
 
 fn authored_list_op(store: &InMemoryStore, path: PathId) -> Option<ListOpRecord> {
-    let token = store.tokens.lookup("inactiveIds")?;
+    let token = store.tokens().lookup("inactiveIds")?;
     let spec = store.layer(LayerId(1)).unwrap().prims().get(&path)?;
     let Some(FieldValue::Int64ListOp(op)) = spec.field(token) else {
         return None;
@@ -150,10 +150,10 @@ fn authored_list_op(store: &InMemoryStore, path: PathId) -> Option<ListOpRecord>
 }
 
 fn authored_invisible(store: &InMemoryStore, path: PathId) -> Option<InvisibleRecord> {
-    let token = store.tokens.lookup("invisibleIds")?;
+    let token = store.tokens().lookup("invisibleIds")?;
     let spec = store.layer(LayerId(1)).unwrap().prims().get(&path)?;
     let property = spec.property(token)?;
-    let read = |value| read_int64_array(value, &store.tokens).expect("int64[] value");
+    let read = |value| read_int64_array(value, store.tokens()).expect("int64[] value");
     Some(InvisibleRecord {
         default: property.default.as_ref().map(read),
         samples: property

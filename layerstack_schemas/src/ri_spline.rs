@@ -257,10 +257,10 @@ mod tests {
         };
         let mut store = InMemoryStore::default();
         let path = store.path("/P");
-        let interpolation = store.tokens.intern("falloff:spline:interpolation");
-        let linear = store.tokens.intern("linear");
-        let positions = store.tokens.intern("falloff:spline:positions");
-        let values = store.tokens.intern("falloff:spline:values");
+        let interpolation = store.tokens().intern("falloff:spline:interpolation");
+        let linear = store.tokens().intern("linear");
+        let positions = store.tokens().intern("falloff:spline:positions");
+        let values = store.tokens().intern("falloff:spline:values");
         let mut layer = Layer::new(LayerId(1));
         layer.insert_prim(
             path,
@@ -275,7 +275,7 @@ mod tests {
                     PropertySpec::typed_attribute(PropertyType::parse("float[]").unwrap())
                         .with_default(crate::value::write_float_array(
                             &[0., 0., 1.],
-                            &store.tokens,
+                            store.tokens(),
                         )),
                 )
                 .with_property(
@@ -283,12 +283,12 @@ mod tests {
                     PropertySpec::typed_attribute(PropertyType::parse("float[]").unwrap())
                         .with_default(crate::value::write_float_array(
                             &[0., 1., 2.],
-                            &store.tokens,
+                            store.tokens(),
                         )),
                 ),
         );
         store.insert_layer(layer);
-        let schemas = crate::openusd(&store.tokens);
+        let schemas = crate::openusd(store.tokens());
         let stage = Stage::compose(
             &mut store,
             LayerId(1),

@@ -49,8 +49,8 @@ fn main() {
             let result = layerstack_usdc::read_usdc_lazy(
                 Arc::from(data.as_slice()),
                 LayerId(1),
-                &store.tokens,
-                &store.paths,
+                store.tokens(),
+                store.paths(),
                 &mut NoAssets,
             )
             .expect("retained USDC");
@@ -69,8 +69,8 @@ fn main() {
             let result = layerstack_usdc::read_usdc(
                 &data,
                 LayerId(1),
-                &store.tokens,
-                &store.paths,
+                store.tokens(),
+                store.paths(),
                 &mut NoAssets,
             )
             .expect("import USDC");
@@ -81,8 +81,8 @@ fn main() {
             let result = layerstack_usdz::read_usdz(
                 &data,
                 LayerId(1),
-                &store.tokens,
-                &store.paths,
+                store.tokens(),
+                store.paths(),
                 &mut NoAssets,
             )
             .expect("import USDZ");

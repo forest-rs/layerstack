@@ -52,7 +52,7 @@ fn load() -> LoadedStage {
 
 fn live_of(loaded: &mut LoadedStage) -> LiveStage {
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&loaded.store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(loaded.store.tokens()))),
         ..StageOptions::default()
     };
     LiveStage::compose(&mut loaded.store, loaded.root_layer, options)
@@ -70,7 +70,7 @@ fn layer_named(loaded: &LoadedStage, name: &str) -> LayerId {
 /// The layer as OpenUSD's `SdfLayer::ExportToString` writes it.
 fn text(loaded: &LoadedStage, layer: LayerId) -> String {
     let store = &loaded.store;
-    layerstack_usda::save::save_usda(store.layer(layer).unwrap(), &store.tokens, &store.paths)
+    layerstack_usda::save::save_usda(store.layer(layer).unwrap(), store.tokens(), store.paths())
         .expect("saves")
 }
 
@@ -79,7 +79,7 @@ fn traversal(stage: &Stage, store: &InMemoryStore, root: PathId) -> Vec<String> 
     stage
         .prim_range(root, store, PrimPredicate::DEFAULT)
         .filter(|&prim| prim != root)
-        .map(|prim| store.paths.display(prim, &store.tokens))
+        .map(|prim| store.paths().display(prim, store.tokens()))
         .collect()
 }
 

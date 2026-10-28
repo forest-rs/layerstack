@@ -20,7 +20,7 @@ def PointInstancer "P" {
 fn authored_id_sequence() -> (layerstack::InMemoryStore, layerstack::LiveStage) {
     let (mut store, mut live) = support::scene(INSTANCER);
     let path = store.path("/P");
-    let inactive = store.tokens.intern("inactiveIds");
+    let inactive = store.tokens().intern("inactiveIds");
     let mut weak = Layer::new(LayerId(2));
     weak.insert_prim(
         path,
@@ -92,7 +92,7 @@ fn id_edits_preserve_future_weaker_opinions_and_group_rollback() {
         &[99],
         "default visibility helpers preserve numeric samples"
     );
-    let inactive = store.tokens.lookup("inactiveIds").unwrap();
+    let inactive = store.tokens().lookup("inactiveIds").unwrap();
     let Some(FieldValue::Int64ListOp(op)) =
         store.layer(LayerId(1)).unwrap().prims()[&path].field(inactive)
     else {
@@ -128,7 +128,7 @@ fn id_edits_preserve_future_weaker_opinions_and_group_rollback() {
 fn explicit_inactive_lists_keep_their_cutoff_after_id_edits() {
     let (mut store, mut live) = support::scene(INSTANCER);
     let path = store.path("/P");
-    let inactive = store.tokens.intern("inactiveIds");
+    let inactive = store.tokens().intern("inactiveIds");
     store
         .layer_mut(LayerId(1))
         .unwrap()
@@ -191,7 +191,7 @@ fn variant_id_edits_read_only_the_mapped_target_site() {
     );
     let (mut store, mut live) = support::scene(&source);
     let path = store.path("/P");
-    let variant = layerstack::SpecPath::parse("/P{mode=a}", &store.tokens, &store.paths).unwrap();
+    let variant = layerstack::SpecPath::parse("/P{mode=a}", store.tokens(), store.paths()).unwrap();
     let target = EditTarget::for_local_variant(LayerId(1), &variant);
     let mut edit = SchemaEdit::new(live.stage(), &mut store, target);
     let point = PointInstancerEdit::new(&edit, path)
@@ -201,11 +201,11 @@ fn variant_id_edits_read_only_the_mapped_target_site() {
     point.activate_ids(&mut edit, &[10]).unwrap();
     let transaction = edit.finish();
     live.apply(&mut store, &transaction).unwrap();
-    let inactive = store.tokens.lookup("inactiveIds").unwrap();
+    let inactive = store.tokens().lookup("inactiveIds").unwrap();
     let branch = store
         .layer(LayerId(1))
         .unwrap()
-        .variant_spec_at(&variant, &store.paths)
+        .variant_spec_at(&variant, store.paths())
         .unwrap();
     let Some(FieldValue::Int64ListOp(op)) = layerstack::get_field(&branch.fields, &inactive) else {
         panic!("variant-local inactive list")

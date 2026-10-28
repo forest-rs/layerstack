@@ -40,8 +40,8 @@ fn emit_into(store: &mut InMemoryStore, id: u64, text: &str) {
     let result = layerstack_usda::emit::emit(
         &parsed.layer,
         LayerId(id),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut AnyAsset::default(),
     );
     assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
@@ -134,7 +134,7 @@ fn saved_explicit_empty_lists_block_weaker_opinions() {
                     })
                     .unwrap_or_default()
                     .iter()
-                    .map(|t| t.display(&store.paths, &store.tokens))
+                    .map(|t| t.display(store.paths(), store.tokens()))
                     .collect()
             })
             .collect();
@@ -200,7 +200,7 @@ fn saved_adds_and_reorders_compose_as_openusd() {
                     })
                     .unwrap_or_default()
                     .iter()
-                    .map(|t| t.display(&store.paths, &store.tokens))
+                    .map(|t| t.display(store.paths(), store.tokens()))
                     .collect()
             })
             .collect();
@@ -666,8 +666,8 @@ fn text_refuses_sparse_edit_kind_changes_while_binary_preserves_retiming() {
             let read = layerstack_usdc::read_usdc(
                 &bytes,
                 LayerId(1),
-                &store.tokens,
-                &store.paths,
+                store.tokens(),
+                store.paths(),
                 &mut AnyAsset::default(),
             )
             .unwrap();

@@ -33,7 +33,7 @@ fn presence_distinguishes_fallbacks_animation_blocks_and_authored_specs() {
     let names = |properties: Vec<layerstack::PropertyPath>| {
         properties
             .into_iter()
-            .map(|p| store.tokens.resolve(p.property()))
+            .map(|p| store.tokens().resolve(p.property()))
             .collect::<Vec<_>>()
     };
     assert_eq!(

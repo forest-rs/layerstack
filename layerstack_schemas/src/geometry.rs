@@ -697,19 +697,19 @@ mod tests {
         let parent = store.path("/Group");
         let model = store.path("/Group/Model");
         let child = store.path("/Group/Model/Child");
-        let kind = store.tokens.intern("kind");
-        let group = store.tokens.intern("assembly");
-        let component = store.tokens.intern("component");
-        let draw = store.tokens.intern("model:drawMode");
-        let cards = store.tokens.intern("cards");
-        let xform_type = store.tokens.intern("Xform");
-        let translate = store.tokens.intern("xformOp:translate");
-        let order = store.tokens.intern("xformOpOrder");
-        let target = store.tokens.intern("constraintTargets:grip");
-        let frame = store.tokens.intern("constraintTargets:frame");
+        let kind = store.tokens().intern("kind");
+        let group = store.tokens().intern("assembly");
+        let component = store.tokens().intern("component");
+        let draw = store.tokens().intern("model:drawMode");
+        let cards = store.tokens().intern("cards");
+        let xform_type = store.tokens().intern("Xform");
+        let translate = store.tokens().intern("xformOp:translate");
+        let order = store.tokens().intern("xformOpOrder");
+        let target = store.tokens().intern("constraintTargets:grip");
+        let frame = store.tokens().intern("constraintTargets:frame");
         let mut local = crate::gf::IDENTITY;
         local[3][0] = 2.;
-        let matrix = crate::value::write_matrix4d(local, &store.tokens);
+        let matrix = crate::value::write_matrix4d(local, store.tokens());
         let mut layer = Layer::new(LayerId(1));
         layer.insert_prim(
             parent,
@@ -753,11 +753,11 @@ mod tests {
             PrimSpec::def().with_type_name(xform_type).with_property(
                 draw,
                 PropertySpec::typed_attribute(PropertyType::parse("token").unwrap())
-                    .with_default(Value::Token(store.tokens.intern("bounds"))),
+                    .with_default(Value::Token(store.tokens().intern("bounds"))),
             ),
         );
         store.insert_layer(layer);
-        let schemas = crate::openusd(&store.tokens);
+        let schemas = crate::openusd(store.tokens());
         let stage = Stage::compose(
             &mut store,
             LayerId(1),

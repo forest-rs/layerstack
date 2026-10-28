@@ -61,11 +61,11 @@ fn write_edit(index: usize, value: f32, instructions: usize) -> Value {
 /// sparse edits, a scalar, a dictionary entry and a token list op.
 fn build(layers: u64, points_len: usize, instructions: usize) -> Scene {
     let mut store = InMemoryStore::default();
-    let points = store.tokens.intern("points");
-    let animated = store.tokens.intern("animated");
-    let size = store.tokens.intern("size");
-    let custom_data = store.tokens.intern("customData");
-    let api_schemas = store.tokens.intern("apiSchemas");
+    let points = store.tokens().intern("points");
+    let animated = store.tokens().intern("animated");
+    let size = store.tokens().intern("size");
+    let custom_data = store.tokens().intern("customData");
+    let api_schemas = store.tokens().intern("apiSchemas");
     let prim = store.path("/P");
     let float_array_type = PropertyType::parse("float[]").unwrap();
 
@@ -100,7 +100,7 @@ fn build(layers: u64, points_len: usize, instructions: usize) -> Scene {
             alloc::format!("layer{id}").into(),
             Value::Dictionary(vec![("strength".into(), Value::Int(id as i32))]),
         )]);
-        let schema = store.tokens.intern(alloc::format!("Api{id}"));
+        let schema = store.tokens().intern(alloc::format!("Api{id}"));
         let spec = PrimSpec::over()
             .with_property(
                 points,

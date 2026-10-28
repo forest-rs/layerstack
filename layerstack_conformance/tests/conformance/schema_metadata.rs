@@ -34,8 +34,8 @@ fn parse(text: &str, id: LayerId, store: &mut InMemoryStore) -> layerstack::Laye
     let emitted = layerstack_usda::emit::emit(
         &parsed.layer,
         id,
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut NoAssets,
     );
     assert!(parsed.diagnostics.is_empty(), "{:?}", parsed.diagnostics);
@@ -70,15 +70,15 @@ fn property_metadata_and_color_precedence_match_native_fixture() {
         ("MetadataWeakAPI", SchemaKind::SingleApplyApi),
         ("MetadataSlotAPI", SchemaKind::MultipleApplyApi),
     ]
-    .map(|(name, kind)| SchemaDeclaration::new(store.tokens.intern(name), kind));
+    .map(|(name, kind)| SchemaDeclaration::new(store.tokens().intern(name), kind));
     let definitions =
-        read_generated_schema(&generated, &declared, &store.tokens, &store.paths).unwrap();
-    let native = layerstack_schemas::openusd(&store.tokens);
+        read_generated_schema(&generated, &declared, store.tokens(), store.paths()).unwrap();
+    let native = layerstack_schemas::openusd(store.tokens());
     let mut builder = SchemaRegistry::builder();
     for definition in native.schemas().chain(definitions.iter()) {
         builder.register(definition.clone());
     }
-    let registry = builder.build(&store.tokens);
+    let registry = builder.build(store.tokens());
     let layer = parse(
         include_str!("../../fixtures/schema_metadata/scene.usda"),
         LayerId(1),
@@ -98,7 +98,7 @@ fn property_metadata_and_color_precedence_match_native_fixture() {
     for row in oracle["properties"].as_array().unwrap() {
         let prim = store.path(row["prim"].as_str().unwrap());
         let property = store
-            .tokens
+            .tokens()
             .lookup(row["property"].as_str().unwrap())
             .unwrap();
         for (field, oracle_field) in [
@@ -107,15 +107,15 @@ fn property_metadata_and_color_precedence_match_native_fixture() {
             ("displayGroup", "display_group"),
             ("settings", "settings"),
         ] {
-            let key = store.tokens.lookup(field).unwrap();
+            let key = store.tokens().lookup(field).unwrap();
             let actual = stage
                 .view(&store)
                 .property(PropertyPath::new(prim, property))
                 .and_then(|p| p.metadata(key))
                 .map(|resolved| match resolved.value {
-                    ResolvedValue::Scalar(value) => json(&value, &store.tokens),
+                    ResolvedValue::Scalar(value) => json(&value, store.tokens()),
                     ResolvedValue::Dictionary(entries) => {
-                        json(&Value::Dictionary(entries), &store.tokens)
+                        json(&Value::Dictionary(entries), store.tokens())
                     }
                     other => panic!("unexpected fixture resolution {other:?}"),
                 })
@@ -132,7 +132,7 @@ fn property_metadata_and_color_precedence_match_native_fixture() {
             ("customData", "custom_data"),
             ("settings", "schema_settings"),
         ] {
-            let key = store.tokens.lookup(field).unwrap();
+            let key = store.tokens().lookup(field).unwrap();
             let actual = stage
                 .view(&store)
                 .property(PropertyPath::new(prim, property))
@@ -140,7 +140,7 @@ fn property_metadata_and_color_precedence_match_native_fixture() {
                 .unwrap()
                 .metadata(key)
                 .map(|value| match value {
-                    FieldValue::Value(value) => json(value, &store.tokens),
+                    FieldValue::Value(value) => json(value, store.tokens()),
                     other => panic!("unexpected fixture field {other:?}"),
                 })
                 .unwrap_or(Json::Null);
@@ -160,8 +160,8 @@ fn property_metadata_and_color_precedence_match_native_fixture() {
 fn bundled_schema_metadata_is_visible_without_an_authored_property() {
     let (store, live) = support_scene::scene("#usda 1.0\ndef Mesh \"Mesh\" {}");
     let prim = store.path("/Mesh");
-    let name = store.tokens.lookup("subdivisionScheme").unwrap();
-    let key = store.tokens.lookup("allowedTokens").unwrap();
+    let name = store.tokens().lookup("subdivisionScheme").unwrap();
+    let key = store.tokens().lookup("allowedTokens").unwrap();
     assert!(
         live.stage()
             .view(&store)

@@ -62,7 +62,7 @@ fn skel_extents_and_bounds_match_openusd() {
     );
     assert!(loaded.invalid.is_empty(), "{:?}", loaded.invalid);
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&loaded.store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(loaded.store.tokens()))),
         ..StageOptions::default()
     };
     let stage = Stage::compose(&mut loaded.store, loaded.root_layer, options);

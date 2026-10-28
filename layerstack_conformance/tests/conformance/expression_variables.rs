@@ -166,12 +166,12 @@ fn prim_stacks(loaded: &mut LoadedStage, stage: &Stage) -> BTreeMap<String, Vec<
                         layer_name(loaded, key.key.layer_id),
                         key.key
                             .spec_path
-                            .display(&loaded.store.paths, &loaded.store.tokens),
+                            .display(loaded.store.paths(), loaded.store.tokens()),
                     )
                 })
                 .collect();
             (
-                loaded.store.paths.display(prim, &loaded.store.tokens),
+                loaded.store.paths().display(prim, loaded.store.tokens()),
                 stack,
             )
         })
@@ -258,7 +258,7 @@ fn errors_match_openusd() {
                     _ => "Other",
                 };
                 let prim = other.prim().map_or_else(String::new, |prim| {
-                    loaded.store.paths.display(prim, &loaded.store.tokens)
+                    loaded.store.paths().display(prim, loaded.store.tokens())
                 });
                 (
                     kind.to_string(),
@@ -291,7 +291,7 @@ fn variant_selection_errors_name_the_prim_reading_them() {
                 if error.context == ExpressionContext::VariantSelection =>
             {
                 Some(error.prim.map_or_else(String::new, |prim| {
-                    loaded.store.paths.display(prim, &loaded.store.tokens)
+                    loaded.store.paths().display(prim, loaded.store.tokens())
                 }))
             }
             _ => None,
@@ -312,7 +312,7 @@ fn live_stage_recomposes_edited_variables() {
     let mut loaded = load(&oracle);
     let root = loaded.root_layer;
     let mut live = LiveStage::compose(&mut loaded.store, root, options());
-    let field = loaded.store.tokens.intern("expressionVariables");
+    let field = loaded.store.tokens().intern("expressionVariables");
     let string = |s: &str| Value::String(s.into());
 
     let set_variables = |loaded: &mut LoadedStage, layer, entries: &[(&str, Value)]| {
@@ -386,7 +386,7 @@ fn live_stage_recomposes_edited_variables() {
             .store
             .layer(root)
             .expect("root")
-            .expression_variables(&loaded.store.tokens)
+            .expression_variables(loaded.store.tokens())
             .get("ROCK"),
         Some(&VariableValue::Value(ExpressionValue::String(
             "basalt".into()
@@ -438,8 +438,8 @@ fn live_stage_reports_a_selection_once_its_branch_is_selected() {
 
     // Select `winter`, whose `soil` selection is malformed.
     let orchard = loaded.store.path("/Orchard");
-    let season = loaded.store.tokens.intern("season");
-    let winter = loaded.store.tokens.intern("winter");
+    let season = loaded.store.tokens().intern("season");
+    let winter = loaded.store.tokens().intern("winter");
     loaded
         .store
         .layer_mut(root)
@@ -491,7 +491,7 @@ fn live_stage_recomposes_referenced_sublayers() {
     assert_eq!(value(live.stage(), &loaded.store), Some(Value::Int(2)));
 
     // The project now sets COLOR to red, as the asset does.
-    let field = loaded.store.tokens.intern("expressionVariables");
+    let field = loaded.store.tokens().intern("expressionVariables");
     let mut variables = match loaded.store.layer(root).and_then(|l| l.metadata(field)) {
         Some(layerstack::FieldValue::Value(Value::Dictionary(entries))) => entries.clone(),
         other => panic!("root expressionVariables: {other:?}"),

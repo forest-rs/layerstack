@@ -161,7 +161,7 @@ fn parse(
 
 /// Reads USDA `text` into `store` as layer `id`, with the layers it names.
 fn load(text: &str, id: LayerId, store: &mut InMemoryStore, files: &mut Files) {
-    let (layer, resolved) = parse(text, id, &store.tokens, &store.paths, files);
+    let (layer, resolved) = parse(text, id, store.tokens(), store.paths(), files);
     store.insert_layer(layer);
     for layer in resolved {
         store.insert_layer(layer);
@@ -222,7 +222,7 @@ fn main() {
     );
 
     // 3. Save it as one USDA file.
-    let text = layerstack_usda::save::save_usda(flat, &store.tokens, &store.paths)
+    let text = layerstack_usda::save::save_usda(flat, store.tokens(), store.paths())
         .expect("the flattened grove saves");
     println!("{text}");
     assert!(!text.contains("references"), "the file names no asset");

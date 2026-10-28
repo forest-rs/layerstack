@@ -23,21 +23,21 @@ impl Fixture {
     fn new(schema: &str, properties: &[(&str, PropertySpec)]) -> Self {
         let mut store = InMemoryStore::default();
         let path = store.path("/Shape");
-        let name = store.tokens.intern(schema);
+        let name = store.tokens().intern(schema);
         let mut prim = PrimSpec::def().with_type_name(name);
         for (name, value) in properties {
             let mut value = value.clone();
             if *name == "axis"
                 && let Some(Value::String(axis)) = &value.default
             {
-                value.default = Some(Value::Token(store.tokens.intern(axis)));
+                value.default = Some(Value::Token(store.tokens().intern(axis)));
             }
-            prim = prim.with_property(store.tokens.intern(name), value);
+            prim = prim.with_property(store.tokens().intern(name), value);
         }
         let mut layer = Layer::new(LayerId(1));
         layer.insert_prim(path, prim);
         store.insert_layer(layer);
-        let schemas = layerstack_schemas::openusd(&store.tokens);
+        let schemas = layerstack_schemas::openusd(store.tokens());
         let live = LiveStage::compose(
             &mut store,
             LayerId(1),
@@ -56,7 +56,7 @@ impl Fixture {
     }
 
     fn edit(&mut self, cache: &mut BoundsCache, name: &str, value: Value) -> layerstack::Changes {
-        let property = PropertyPath::new(self.path, self.store.tokens.intern(name));
+        let property = PropertyPath::new(self.path, self.store.tokens().intern(name));
         let mut edit = Transaction::new();
         edit.set_default(EditTarget::for_layer(LayerId(1)).property(property), value);
         let report = self.live.apply(&mut self.store, &edit).unwrap();

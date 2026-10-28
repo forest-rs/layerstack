@@ -143,7 +143,7 @@ impl Fixture {
 
     /// The prim spec path of `spec`, variant selections included.
     fn display(&self, spec: &SpecPath) -> String {
-        let text = spec.display(&self.loaded.store.paths, &self.loaded.store.tokens);
+        let text = spec.display(self.loaded.store.paths(), self.loaded.store.tokens());
         match text.rfind('.') {
             Some(dot) if !text[dot..].contains(['/', '}']) => text[..dot].to_string(),
             _ => text,
@@ -162,7 +162,7 @@ impl Fixture {
                 .nodes()
                 .find(|(_, node)| {
                     arc_name(node.arc_kind()) == arc
-                        && node.site().display(&store.paths, &store.tokens) == site
+                        && node.site().display(store.paths(), store.tokens()) == site
                 })
                 .map(|(id, _)| id)
                 .unwrap_or_else(|| panic!("{arc} node at {site}"));
@@ -170,7 +170,7 @@ impl Fixture {
                 .expect("edit target");
         }
         if let Some(variant) = &target.variant {
-            let spec = SpecPath::parse(variant, &store.tokens, &store.paths).unwrap();
+            let spec = SpecPath::parse(variant, store.tokens(), store.paths()).unwrap();
             return EditTarget::for_local_variant(layer, &spec);
         }
         EditTarget::for_layer(layer)
@@ -248,7 +248,7 @@ fn inspection_answers_as_openusd_resolves_before_and_after_each_write() {
             .join("layerstack_conformance/fixtures/authoring_inspection")
             .join(&oracle.root),
     );
-    let schemas = Arc::new(layerstack_schemas::openusd(&loaded.store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(loaded.store.tokens()));
     let stage = Stage::compose(
         &mut loaded.store,
         loaded.root_layer,

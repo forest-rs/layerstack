@@ -64,10 +64,10 @@ fn list_op<T>(op: &ListOp<T>, item: impl Fn(&T) -> Json) -> Json {
 /// them.
 fn dump(loaded: &LoadedStage, layer: &Layer) -> Json {
     let store = &loaded.store;
-    let path = |p: &layerstack::PathId| json!(store.paths.display(*p, &store.tokens));
+    let path = |p: &layerstack::PathId| json!(store.paths().display(*p, store.tokens()));
     let target = |t: &TargetPath| match t {
-        TargetPath::Prim(p) => json!(store.paths.display(*p, &store.tokens)),
-        TargetPath::Property(p) => json!(p.display(&store.paths, &store.tokens)),
+        TargetPath::Prim(p) => json!(store.paths().display(*p, store.tokens())),
+        TargetPath::Property(p) => json!(p.display(store.paths(), store.tokens())),
     };
     let properties = |entries: &[layerstack::PropertyEntry]| {
         let mut out = serde_json::Map::new();
@@ -88,7 +88,7 @@ fn dump(loaded: &LoadedStage, layer: &Layer) -> Json {
                 record.insert("targets".into(), list_op(targets, target));
             }
             out.insert(
-                store.tokens.resolve(entry.name).into(),
+                store.tokens().resolve(entry.name).into(),
                 Json::Object(record),
             );
         }
@@ -123,7 +123,7 @@ fn dump(loaded: &LoadedStage, layer: &Layer) -> Json {
                 "references".into(),
                 list_op(refs, |r| {
                     let target = match r.target {
-                        ReferenceTarget::Prim(p) => store.paths.display(p, &store.tokens),
+                        ReferenceTarget::Prim(p) => store.paths().display(p, store.tokens()),
                         _ => String::new(),
                     };
                     json!([r.asset_path().unwrap_or_default(), target])
@@ -144,19 +144,19 @@ fn dump(loaded: &LoadedStage, layer: &Layer) -> Json {
     for (prim, spec) in specs {
         // The spec path: the namespace path with its enclosing selections.
         let mut text = String::new();
-        let segments = store.paths.resolve(*prim).segments().to_vec();
+        let segments = store.paths().resolve(*prim).segments().to_vec();
         for (depth, name) in segments.iter().enumerate() {
             if !text.ends_with('}') {
                 text.push('/');
             }
-            text.push_str(store.tokens.resolve(*name));
+            text.push_str(store.tokens().resolve(*name));
             let host = layerstack::Path::root().join(&segments[..=depth]);
             for site in spec.outer_variant_sites() {
-                if *store.paths.resolve(site.host_path) == host {
+                if *store.paths().resolve(site.host_path) == host {
                     text.push_str(&format!(
                         "{{{}={}}}",
-                        store.tokens.resolve(site.set),
-                        store.tokens.resolve(site.variant)
+                        store.tokens().resolve(site.set),
+                        store.tokens().resolve(site.variant)
                     ));
                 }
             }
@@ -173,7 +173,7 @@ fn dump(loaded: &LoadedStage, layer: &Layer) -> Json {
             &spec.properties,
         );
         if let Some(name) = spec.type_name {
-            record.insert("typeName".into(), json!(store.tokens.resolve(name)));
+            record.insert("typeName".into(), json!(store.tokens().resolve(name)));
         }
         for (set, variants) in spec.variant_sets() {
             for (variant, branch) in &variants.variants {
@@ -187,8 +187,8 @@ fn dump(loaded: &LoadedStage, layer: &Layer) -> Json {
                 );
                 let key = format!(
                     "{text}{{{}={}}}",
-                    store.tokens.resolve(*set),
-                    store.tokens.resolve(*variant)
+                    store.tokens().resolve(*set),
+                    store.tokens().resolve(*variant)
                 );
                 add(key, None, record);
             }
@@ -232,8 +232,8 @@ fn copies_agree_with_openusd_copy_spec() {
             let layer = layer_named(loaded, end[0].as_str().unwrap());
             let path = SpecPath::parse(
                 end[1].as_str().unwrap(),
-                &loaded.store.tokens,
-                &loaded.store.paths,
+                loaded.store.tokens(),
+                loaded.store.paths(),
             )
             .or_else(|_| {
                 // Paths the fixture does not author yet.
@@ -241,7 +241,7 @@ fn copies_agree_with_openusd_copy_spec() {
                 match text.split_once('.') {
                     Some((prim, property)) => {
                         let prim = loaded.store.path(prim);
-                        let property = loaded.store.tokens.intern(property);
+                        let property = loaded.store.tokens().intern(property);
                         Ok::<_, ()>(SpecPath::from_prim_path(prim).with_property(property))
                     }
                     None => Ok(SpecPath::from_prim_path(loaded.store.path(text))),

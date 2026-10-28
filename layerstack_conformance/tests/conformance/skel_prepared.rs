@@ -16,7 +16,7 @@ use layerstack_schemas::{
 };
 
 fn edit(store: &mut InMemoryStore, path: PathId, name: &str, value: Value) -> Transaction {
-    let property = PropertyPath::new(path, store.tokens.intern(name));
+    let property = PropertyPath::new(path, store.tokens().intern(name));
     let mut transaction = Transaction::new();
     transaction.set_default(EditTarget::for_layer(LayerId(1)).property(property), value);
     transaction
@@ -158,7 +158,7 @@ fn pose_weights_shapes_undo_and_unrelated_edits_have_independent_revisions() {
     let rigid_before = revisions(&mut cache, &Scene::new(live.stage(), &store), rigid);
     assert_eq!(before.pose, rigid_before.pose);
     assert_eq!(rigid_before.blend_weights, 0);
-    let guide = store.tokens.intern("guide");
+    let guide = store.tokens().intern("guide");
     let transaction = edit(&mut store, mesh, "purpose", Value::Token(guide));
     let applied = live.apply(&mut store, &transaction).unwrap();
     cache.apply_changes(&Scene::new(live.stage(), &store), &applied.changes);
@@ -328,7 +328,7 @@ fn removal_and_invalid_influences_recover_with_fresh_revisions() {
     assert_ne!(recovered.skeleton_definition, restored.skeleton_definition);
     assert_ne!(recovered.binding_definition, restored.binding_definition);
     assert_ne!(recovered.pose, restored.pose);
-    let property = PropertyPath::new(path, store.tokens.intern("skel:skeleton"));
+    let property = PropertyPath::new(path, store.tokens().intern("skel:skeleton"));
     let mut transaction = Transaction::new();
     transaction.set_targets(
         EditTarget::for_layer(LayerId(1)).property(property),

@@ -295,8 +295,8 @@ fn unresolved_sublayers_are_reported_by_both_readers() {
             let emitted = layerstack_usda::emit::emit(
                 &parsed.layer,
                 root,
-                &store.tokens,
-                &store.paths,
+                store.tokens(),
+                store.paths(),
                 &mut FixtureResolver,
             );
             assert!(emitted.diagnostics.is_empty(), "{:?}", emitted.diagnostics);
@@ -305,8 +305,8 @@ fn unresolved_sublayers_are_reported_by_both_readers() {
             let read = layerstack_usdc::read_usdc(
                 &bytes,
                 root,
-                &store.tokens,
-                &store.paths,
+                store.tokens(),
+                store.paths(),
                 &mut FixtureResolver,
             )
             .unwrap();

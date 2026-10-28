@@ -108,8 +108,8 @@ fn compose(layers: &Layers) -> (InMemoryStore, Stage) {
         let emitted = layerstack_usda::emit::emit(
             &parsed.layer,
             id,
-            &store.tokens,
-            &store.paths,
+            store.tokens(),
+            store.paths(),
             &mut assets,
         );
         assert!(
@@ -131,7 +131,7 @@ fn compose(layers: &Layers) -> (InMemoryStore, Stage) {
             store.insert_asset_layer(anchor, &format!("./{rel}"), id);
         }
     }
-    let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(store.tokens()));
     let stage = Stage::compose(
         &mut store,
         LayerId(1),

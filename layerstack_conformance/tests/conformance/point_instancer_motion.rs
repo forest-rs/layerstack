@@ -197,7 +197,7 @@ fn prepared_instance_outputs_stream_in_chunks_and_reuse_caller_storage() {
         assert_eq!(emitted, expected);
         assert_eq!(scratch.as_ptr(), pointer);
     }
-    let positions = store.tokens.lookup("positions").unwrap();
+    let positions = store.tokens().lookup("positions").unwrap();
     let mut tx = layerstack::edit::Transaction::new();
     tx.set_default(
         layerstack::edit::EditTarget::for_layer(layerstack::LayerId(1))

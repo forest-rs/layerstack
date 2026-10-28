@@ -64,7 +64,7 @@ fn validate(
         }
         let name = candidate
             .store()
-            .tokens
+            .tokens()
             .lookup("texture")
             .ok_or("no texture attribute")?;
         let asset = AssetReference::read(
@@ -86,7 +86,7 @@ fn validate(
 }
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let store = InMemoryStore::default();
-    let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(store.tokens()));
     let backend = Memory(BTreeMap::from([(
         "scene.usdz".into(),
         package("(0,0,0)", &[1]),

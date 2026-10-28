@@ -51,7 +51,7 @@ fn load() -> (LoadedStage, LiveStage) {
     );
     assert!(loaded.invalid.is_empty(), "{:?}", loaded.invalid);
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&loaded.store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(loaded.store.tokens()))),
         ..StageOptions::default()
     };
     let live = LiveStage::compose(&mut loaded.store, loaded.root_layer, options);
@@ -178,8 +178,8 @@ fn oracle_attribute(oracle: &Oracle, prim: &str, name: &str) -> Json {
 }
 
 fn attribute(loaded: &LoadedStage, layer: LayerId, prim: &str, name: &str) -> Json {
-    let path = layerstack::Path::parse_absolute(prim, &loaded.store.tokens).unwrap();
-    let path = loaded.store.paths.lookup(&path).unwrap();
+    let path = layerstack::Path::parse_absolute(prim, loaded.store.tokens()).unwrap();
+    let path = loaded.store.paths().lookup(&path).unwrap();
     let Some(spec) = loaded.store.layer(layer).unwrap().prim(path) else {
         return Json::Null;
     };
@@ -209,7 +209,7 @@ fn each_binding_writes_to_its_layer() {
     loaded.store.insert_layer(root);
     loaded.store.insert_layer(Layer::new(middle));
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&loaded.store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(loaded.store.tokens()))),
         ..StageOptions::default()
     };
     let mut live = LiveStage::compose(&mut loaded.store, top, options);

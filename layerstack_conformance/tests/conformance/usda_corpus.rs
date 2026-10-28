@@ -161,8 +161,8 @@ fn layerstack_text(source: &[u8]) -> Option<String> {
     let read = read_usda(
         source,
         LayerId(1),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut NoAssets,
     );
     let errors = read
@@ -174,12 +174,12 @@ fn layerstack_text(source: &[u8]) -> Option<String> {
     if errors {
         return None;
     }
-    let text = save_usda(&read.emitted.layer, &store.tokens, &store.paths).ok()?;
+    let text = save_usda(&read.emitted.layer, store.tokens(), store.paths()).ok()?;
     let mut streamed = String::new();
     save_usda_to(
         &read.emitted.layer,
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut streamed,
     )
     .expect("streams the layer it saves");

@@ -322,15 +322,15 @@ fn register_plugin(
             _ => continue,
         };
         let name = entry["schemaIdentifier"].as_str().expect("an identifier");
-        let mut declaration = SchemaDeclaration::new(store.tokens.intern(name), kind);
+        let mut declaration = SchemaDeclaration::new(store.tokens().intern(name), kind);
         if kind.is_typed() {
             declaration.parent = entry["bases"][0]
                 .as_str()
                 .and_then(identifier)
-                .map(|base| store.tokens.intern(base));
+                .map(|base| store.tokens().intern(base));
         }
         let intern = |names: Vec<String>| -> Vec<TokenId> {
-            names.iter().map(|n| store.tokens.intern(n)).collect()
+            names.iter().map(|n| store.tokens().intern(n)).collect()
         };
         declaration.can_only_apply_to = intern(strings(&entry["apiSchemaCanOnlyApplyTo"]));
         declaration.allowed_instance_names =
@@ -338,7 +338,7 @@ fn register_plugin(
         if let Some(instances) = entry["apiSchemaInstances"].as_object() {
             for (instance, info) in instances {
                 declaration.instance_can_only_apply_to.push((
-                    store.tokens.intern(instance),
+                    store.tokens().intern(instance),
                     intern(strings(&info["apiSchemaCanOnlyApplyTo"])),
                 ));
             }
@@ -352,19 +352,19 @@ fn register_plugin(
     let layer = layerstack_usda::read_usda(
         &text,
         LayerId(1),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut NoAssets,
     )
     .emitted
     .layer;
-    let definitions = read_generated_schema(&layer, &declarations, &store.tokens, &store.paths)
+    let definitions = read_generated_schema(&layer, &declarations, store.tokens(), store.paths())
         .expect("every declared schema is defined");
     for definition in definitions {
         builder.register(definition);
     }
     for (api, target) in auto_applies {
-        builder.auto_apply(store.tokens.intern(api), store.tokens.intern(target));
+        builder.auto_apply(store.tokens().intern(api), store.tokens().intern(target));
     }
 }
 
@@ -400,14 +400,14 @@ fn fixture_registry_matches_openusd() {
             layerstack_schemas::Domain::Usd,
             layerstack_schemas::Domain::UsdGeom,
         ],
-        &store.tokens,
+        store.tokens(),
     )
     .expect("OpenUSD's schemas");
     for plugin in ["lab", "observatory"] {
         register_plugin(&fixture().join(plugin), &mut builder, &mut store);
     }
-    let registry = builder.build(&store.tokens);
-    assert_matches_oracle(&registry, &store.tokens);
+    let registry = builder.build(store.tokens());
+    assert_matches_oracle(&registry, store.tokens());
 }
 
 /// The Rust modules `compile --rust` generates for the fixtures

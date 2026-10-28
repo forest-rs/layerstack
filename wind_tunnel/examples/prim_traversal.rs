@@ -56,7 +56,7 @@ fn main() {
                 stage
                     .prim_range(root, &store, predicate)
                     .filter(|p| *p != root)
-                    .map(|p| store.paths.display(p, &store.tokens))
+                    .map(|p| store.paths().display(p, store.tokens()))
                     .collect::<Vec<_>>()
             };
             let all_paths = snapshot(PrimPredicate::ALL);

@@ -32,8 +32,8 @@ fn connection_policy_matches_cpp_across_scopes_interfaces_and_container_kinds() 
     assert_eq!(oracle.version, layerstack_schemas::OPENUSD_VERSION);
     let (store, live) = support::scene(include_str!("../../fixtures/lux_connections.usda"));
     for row in oracle.rows {
-        let dest = property(&store.paths, &store.tokens, &row.destination);
-        let source = property(&store.paths, &store.tokens, &row.source);
+        let dest = property(store.paths(), store.tokens(), &row.destination);
+        let source = property(store.paths(), store.tokens(), &row.source);
         let scene = Scene::new(live.stage(), &store);
         assert_eq!(
             scene.validate_shading_connection(dest, source).is_ok(),
@@ -54,7 +54,7 @@ fn connection_policy_matches_cpp_across_scopes_interfaces_and_container_kinds() 
         providers
             .sources
             .iter()
-            .map(|s| s.attribute.display(&store.paths, &store.tokens))
+            .map(|s| s.attribute.display(store.paths(), store.tokens()))
             .collect::<Vec<_>>(),
         oracle.providers
     );

@@ -14,9 +14,9 @@ fn setup() -> (InMemoryStore, LiveStage) {
 fn setup_with_units(units: f64) -> (InMemoryStore, LiveStage) {
     let mut store = InMemoryStore::default();
     let mut layer = Layer::new(LayerId(1));
-    layer.set_metadata(store.tokens.intern("metersPerUnit"), Value::Double(units));
+    layer.set_metadata(store.tokens().intern("metersPerUnit"), Value::Double(units));
     store.insert_layer(layer);
-    let schemas = Arc::new(crate::openusd(&store.tokens));
+    let schemas = Arc::new(crate::openusd(store.tokens()));
     let stage = LiveStage::compose(
         &mut store,
         LayerId(1),
@@ -746,13 +746,13 @@ fn custom_joint_types_are_reported_when_named() {
     let mut store = InMemoryStore::default();
     store.insert_layer(Layer::new(LayerId(1)));
     let mut builder = layerstack::SchemaRegistry::builder();
-    crate::register(&mut builder, &[crate::Domain::UsdPhysics], &store.tokens).unwrap();
-    let joint_type = store.tokens.intern("HostHingeJoint");
+    crate::register(&mut builder, &[crate::Domain::UsdPhysics], store.tokens()).unwrap();
+    let joint_type = store.tokens().intern("HostHingeJoint");
     builder.register(
         layerstack::SchemaDefinition::typed(joint_type)
-            .with_parent(store.tokens.lookup("PhysicsJoint").unwrap()),
+            .with_parent(store.tokens().lookup("PhysicsJoint").unwrap()),
     );
-    let schemas = Arc::new(builder.build(&store.tokens));
+    let schemas = Arc::new(builder.build(store.tokens()));
     let mut stage = LiveStage::compose(
         &mut store,
         LayerId(1),

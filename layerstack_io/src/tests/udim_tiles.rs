@@ -448,8 +448,8 @@ fn values(
         .flat_map(|layer| {
             layerstack::asset_dependencies::extract_layer_dependencies(
                 &layer.layer,
-                &store.paths,
-                &store.tokens,
+                store.paths(),
+                store.tokens(),
             )
             .into_iter()
             .map(|d| (layer.member.to_string(), d.identifier.to_string()))

@@ -228,9 +228,9 @@ struct Parser<'s> {
 impl<'s> Parser<'s> {
     fn new(stage: &'s SchemaStage) -> Self {
         let store = stage.store();
-        let tokens = &store.tokens;
+        let tokens = &store.tokens();
         let global = store
-            .paths
+            .paths()
             .intern(Path::root().join(&[tokens.intern("GLOBAL")]));
         Self {
             stage,

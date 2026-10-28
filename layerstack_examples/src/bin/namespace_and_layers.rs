@@ -25,7 +25,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let used = store.path("/Use");
     let used_part = store.path("/Use/Part");
     let used_renamed = store.path("/Use/Renamed");
-    let size_name = store.tokens.intern("size");
+    let size_name = store.tokens().intern("size");
     let mut geometry = Layer::new(LayerId(5));
     geometry.insert_prim(asset, PrimSpec::def());
     geometry.insert_prim(

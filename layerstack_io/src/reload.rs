@@ -215,7 +215,7 @@ impl<B: Storage> StageDocument<B> {
         reader.reachable_only = root_closure;
         for id in roots {
             let identifier = reader.catalog.sources[&id].identifier.clone();
-            let result = reader.load(&identifier, None, &store.tokens, &store.paths)?;
+            let result = reader.load(&identifier, None, store.tokens(), store.paths())?;
             if let Some(layer) = result.layer {
                 reader.pending.push(layer);
             }

@@ -66,7 +66,7 @@ fn load(name: &str) -> LoadedStage {
 /// author through.
 fn live_of(loaded: &mut LoadedStage) -> LiveStage {
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&loaded.store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(loaded.store.tokens()))),
         ..StageOptions::default()
     };
     LiveStage::compose(&mut loaded.store, loaded.root_layer, options)
@@ -174,18 +174,18 @@ fn addressed(
     name: &str,
 ) -> Json {
     let store = &mut loaded.store;
-    let Some(path) = target.map_to_spec_path(prim, &store.paths) else {
+    let Some(path) = target.map_to_spec_path(prim, store.paths()) else {
         return Json::Null;
     };
     property_at(
         store.layer(target.layer()).unwrap(),
         &path,
         name,
-        &store.paths,
-        &store.tokens,
+        store.paths(),
+        store.tokens(),
     )
     .map_or(Json::Null, |spec| {
-        spec_record(spec, &store.paths, &store.tokens)
+        spec_record(spec, store.paths(), store.tokens())
     })
 }
 
@@ -201,14 +201,14 @@ fn transaction(
     let store = &mut loaded.store;
     let item = TargetPath::parse(
         step["target"].as_str().unwrap(),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
     )
     .expect("a target path");
     let call = step["call"].as_str().unwrap();
     match call {
         "add_target" | "remove_target" | "add_connection" | "remove_connection" => {
-            let name = store.tokens.intern(step["property"].as_str().unwrap());
+            let name = store.tokens().intern(step["property"].as_str().unwrap());
             let at = target.property(PropertyPath::new(prim, name));
             let mut txn = Transaction::new();
             if call.starts_with("add_") {
@@ -313,7 +313,7 @@ fn composed(stage: &Stage, store: &InMemoryStore, prim: layerstack::PathId) -> J
     let names = |targets: Vec<TargetPath>| -> Vec<String> {
         targets
             .iter()
-            .map(|t| t.display(&store.paths, &store.tokens))
+            .map(|t| t.display(store.paths(), store.tokens()))
             .collect()
     };
     json!({

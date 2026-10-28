@@ -87,8 +87,8 @@ struct Fixture {
 impl Fixture {
     fn label(&self, path: TargetPath) -> String {
         match path {
-            TargetPath::Prim(p) => self.store.paths.display(p, &self.store.tokens),
-            TargetPath::Property(p) => p.display(&self.store.paths, &self.store.tokens),
+            TargetPath::Prim(p) => self.store.paths().display(p, self.store.tokens()),
+            TargetPath::Property(p) => p.display(self.store.paths(), self.store.tokens()),
         }
     }
 
@@ -153,11 +153,13 @@ impl Fixture {
         let pseudo_root = self.store.path("/");
         let mut prims: Vec<PathId> = plain
             .traverse_all(pseudo_root)
-            .filter(|p| *p != pseudo_root && self.store.paths.resolve(*p).depth() <= DEPTH)
+            .filter(|p| *p != pseudo_root && self.store.paths().resolve(*p).depth() <= DEPTH)
             .collect();
-        self.store.paths.sort_paths(&mut prims, &self.store.tokens);
+        self.store
+            .paths()
+            .sort_paths(&mut prims, self.store.tokens());
         prims.truncate(PRIMS);
-        let renamed = self.store.tokens.intern("Renamed");
+        let renamed = self.store.tokens().intern("Renamed");
         let mut compared = 0;
         let mut prepared = Vec::new();
         let mut keep = |result: Result<NamespaceEdit, NamespaceError>| {
@@ -167,18 +169,18 @@ impl Fixture {
             }
         };
         for (i, &prim) in prims.iter().enumerate() {
-            let path = self.store.paths.resolve(prim).clone();
+            let path = self.store.paths().resolve(prim).clone();
             let name = path.leaf().unwrap();
             let parent = path.parent().unwrap();
             let mut destinations = vec![
-                self.store.paths.intern(parent.join(&[renamed])),
-                self.store.paths.intern(path.join(&[renamed])),
+                self.store.paths().intern(parent.join(&[renamed])),
+                self.store.paths().intern(path.join(&[renamed])),
             ];
             for other in [prims[(i + 1) % prims.len()], prims[(i + 3) % prims.len()]] {
                 if other != prim {
                     destinations.push(other);
-                    let joined = self.store.paths.resolve(other).join(&[name]);
-                    destinations.push(self.store.paths.intern(joined));
+                    let joined = self.store.paths().resolve(other).join(&[name]);
+                    destinations.push(self.store.paths().intern(joined));
                 }
             }
             for destination in destinations {
@@ -201,8 +203,8 @@ impl Fixture {
                 let from = TargetPath::Property(PropertyPath::new(prim, property));
                 let new_name = self
                     .store
-                    .tokens
-                    .intern(format!("{}Renamed", self.store.tokens.resolve(property)));
+                    .tokens()
+                    .intern(format!("{}Renamed", self.store.tokens().resolve(property)));
                 let other = prims[(i + 1) % prims.len()];
                 for to in [
                     PropertyPath::new(prim, new_name),

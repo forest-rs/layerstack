@@ -193,7 +193,7 @@ fn parse_usdz(data: &[u8]) -> InMemoryStore {
     let mut resolver = StubResolver;
 
     let result =
-        layerstack_usdz::read_usdz(data, layer_id, &store.tokens, &store.paths, &mut resolver)
+        layerstack_usdz::read_usdz(data, layer_id, store.tokens(), store.paths(), &mut resolver)
             .expect("failed to parse USDZ");
 
     for layer in result.resolved_layers {
@@ -211,9 +211,9 @@ fn expect_value(
     field_name: &str,
 ) -> Value {
     let path =
-        layerstack::path::Path::parse_absolute(prim_path, &store.tokens).expect("invalid path");
+        layerstack::path::Path::parse_absolute(prim_path, store.tokens()).expect("invalid path");
     let path_id = store
-        .paths
+        .paths()
         .lookup(&path)
         .unwrap_or_else(|| panic!("path not interned: {prim_path}"));
     let layer = store
@@ -222,7 +222,7 @@ fn expect_value(
     let prim = layer
         .prim(path_id)
         .unwrap_or_else(|| panic!("prim not found: {prim_path}"));
-    let field_tok = store.tokens.intern(field_name);
+    let field_tok = store.tokens().intern(field_name);
     prim.property(field_tok)
         .and_then(|property| property.default.clone())
         .unwrap_or_else(|| panic!("attribute default not found: {field_name} on {prim_path}"))
@@ -230,8 +230,8 @@ fn expect_value(
 
 fn has_prim(store: &mut InMemoryStore, layer_id: LayerId, prim_path: &str) -> bool {
     let path =
-        layerstack::path::Path::parse_absolute(prim_path, &store.tokens).expect("invalid path");
-    let Some(path_id) = store.paths.lookup(&path) else {
+        layerstack::path::Path::parse_absolute(prim_path, store.tokens()).expect("invalid path");
+    let Some(path_id) = store.paths().lookup(&path) else {
         return false;
     };
     let Some(layer) = store.layer(layer_id) else {

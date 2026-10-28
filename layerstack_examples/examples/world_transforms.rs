@@ -28,7 +28,7 @@ fn main() -> Result<(), XformOpError> {
     let mut store = InMemoryStore::default();
     store.insert_layer(Layer::new(LayerId(1)));
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(store.tokens()))),
         ..StageOptions::default()
     };
     let mut live = LiveStage::compose(&mut store, LayerId(1), options);
@@ -100,7 +100,10 @@ fn main() -> Result<(), XformOpError> {
     // --- Read it back at two time codes. ---
     let stage = live.stage();
     let scene = Scene::new(stage, &store);
-    let root = store.paths.lookup(&Path::root()).expect("the pseudo-root");
+    let root = store
+        .paths()
+        .lookup(&Path::root())
+        .expect("the pseudo-root");
     for code in [0.0, 6.0] {
         println!("time code {code}");
         let time = Time::at(code);
@@ -117,7 +120,7 @@ fn main() -> Result<(), XformOpError> {
             let imageable: &Imageable<'_> = &gprim;
             println!(
                 "  {:<36} at ({x:6.2}, {y:6.2}, {z:6.2})  visibility {:<9}  purpose {}",
-                store.paths.display(path, &store.tokens),
+                store.paths().display(path, store.tokens()),
                 imageable.compute_visibility(time).as_str(),
                 imageable.compute_purpose().as_str(),
             );

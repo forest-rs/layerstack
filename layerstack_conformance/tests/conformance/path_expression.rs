@@ -88,7 +88,7 @@ fn load_fixture(name: &str) -> (LoadedStage, Stage) {
     );
     assert!(loaded.invalid.is_empty(), "{:?}", loaded.invalid);
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&loaded.store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(loaded.store.tokens()))),
         ..StageOptions::default()
     };
     let stage = Stage::compose(&mut loaded.store, loaded.root_layer, options);
@@ -126,11 +126,11 @@ fn collection_expressions_match_openusd() {
     let store = &loaded.store;
     let scene = Scene::new(&stage, store);
     let root = store
-        .paths
+        .paths()
         .lookup(&layerstack::Path::root())
         .expect("the pseudo-root");
     let prims: Vec<PathId> = stage.traverse(root).skip(1).collect();
-    let display = |path: TargetPath| path.display(&store.paths, &store.tokens);
+    let display = |path: TargetPath| path.display(store.paths(), store.tokens());
 
     // The same paths as OpenUSD's, by their text.
     let mut universe = vec![TargetPath::Prim(root)];
@@ -297,9 +297,12 @@ fn selection_globs_match_openusd() {
     let (loaded, stage) = load_fixture("selections.usda");
     let store = &loaded.store;
     let scene = Scene::new(&stage, store);
-    let root = store.paths.lookup(&layerstack::Path::root()).expect("root");
+    let root = store
+        .paths()
+        .lookup(&layerstack::Path::root())
+        .expect("root");
     let prims: Vec<PathId> = stage.traverse(root).skip(1).collect();
-    let display = |path: PathId| store.paths.display(path, &store.tokens);
+    let display = |path: PathId| store.paths().display(path, store.tokens());
 
     let mut failures = Vec::new();
     let mut agreed = 0;

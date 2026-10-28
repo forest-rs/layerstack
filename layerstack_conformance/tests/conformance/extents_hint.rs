@@ -162,11 +162,11 @@ fn hint_authoring_accepts_refuses_and_authors_as_cpp() {
             continue;
         }
         live.apply(&mut store, &transaction).unwrap();
-        let token = store.tokens.lookup("extentsHint").unwrap();
+        let token = store.tokens().lookup("extentsHint").unwrap();
         let spec: &PrimSpec = &store.layer(LayerId(1)).unwrap().prims()[&path];
         let property = spec.property(token).unwrap();
         let read = |value| {
-            read_float3_array(value, &store.tokens)
+            read_float3_array(value, store.tokens())
                 .unwrap()
                 .into_iter()
                 .map(|corner| corner.map(f64::from))

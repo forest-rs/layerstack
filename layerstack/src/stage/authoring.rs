@@ -514,7 +514,7 @@ impl Stage {
     ///     edit::EditTarget};
     /// let mut store = InMemoryStore::default();
     /// let prim = store.path("/Settings");
-    /// let gain = store.tokens.intern("gain");
+    /// let gain = store.tokens().intern("gain");
     /// let mut root = Layer::new(LayerId(1));
     /// let animated = PropertySpec::attribute().with_time_samples(vec![(0., Value::Double(1.))]);
     /// root.insert_prim(prim, PrimSpec::def().with_property(gain, animated));

@@ -111,7 +111,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .traverse_all(root)
         .find(|p| *p != root)
         .ok_or("source must contain a prim")?;
-    let documentation = document.store_mut().tokens.intern("documentation");
+    let documentation = document.store_mut().tokens().intern("documentation");
     let mut edit = Transaction::new();
     edit.set_metadata(
         EditTarget::for_layer(root_layer).prim(first),

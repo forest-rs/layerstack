@@ -70,7 +70,7 @@ fn thumbnail(scene: Scene<'_>, prim: PathId) -> Option<String> {
 
 fn local_asset_info(store: &InMemoryStore, prim: PathId) -> Option<Json> {
     let spec = store.layer(LayerId(1)).unwrap().prim(prim)?;
-    match layerstack::get_field(&spec.fields, &store.tokens.lookup("assetInfo")?)? {
+    match layerstack::get_field(&spec.fields, &store.tokens().lookup("assetInfo")?)? {
         FieldValue::Value(value) => Some(to_json(value)),
         other => panic!("unexpected assetInfo {other:?}"),
     }
@@ -151,7 +151,7 @@ fn asset_default_previews_populate_only_the_default_prim() {
     let oracle = oracle();
     let want = &oracle.asset_default_previews;
     let (mut store, _) = support::scene(SCENE);
-    let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(store.tokens()));
     let previews = asset_default_previews(&mut store, LayerId(1), schemas).unwrap();
     assert_eq!(previews.prim, store.path(&want.prim));
     assert_eq!(

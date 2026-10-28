@@ -104,7 +104,7 @@ fn layer_name(loaded: &LoadedStage, layer: layerstack::LayerId) -> String {
 fn pseudo_root(loaded: &LoadedStage) -> PathId {
     loaded
         .store
-        .paths
+        .paths()
         .lookup(&layerstack::Path::root())
         .expect("pseudo-root")
 }
@@ -115,7 +115,7 @@ fn composed_prims(loaded: &LoadedStage, stage: &Stage) -> Vec<String> {
     stage
         .traverse(root)
         .filter(|prim| *prim != root)
-        .map(|prim| loaded.store.paths.display(prim, &loaded.store.tokens))
+        .map(|prim| loaded.store.paths().display(prim, loaded.store.tokens()))
         .collect()
 }
 
@@ -139,7 +139,7 @@ fn prim_stack(loaded: &LoadedStage, stage: &Stage, prim: PathId) -> Vec<(String,
                 layer_name(loaded, key.key.layer_id),
                 key.key
                     .spec_path
-                    .display(&loaded.store.paths, &loaded.store.tokens),
+                    .display(loaded.store.paths(), loaded.store.tokens()),
             )
         })
         .collect()
@@ -214,7 +214,7 @@ fn snapshot(loaded: &LoadedStage, stage: &Stage) -> Vec<String> {
         .map(|prim| {
             format!(
                 "{} {:?} {:?}",
-                loaded.store.paths.display(prim, &loaded.store.tokens),
+                loaded.store.paths().display(prim, loaded.store.tokens()),
                 prim_stack(loaded, stage, prim),
                 children(loaded, stage, prim),
             )
@@ -239,8 +239,8 @@ fn switching_branches_recomposes_like_a_full_compose() {
     ];
     for (prim, set, variant) in edits {
         let prim = loaded.store.path(prim);
-        let set = loaded.store.tokens.intern(set);
-        let variant = loaded.store.tokens.intern(variant);
+        let set = loaded.store.tokens().intern(set);
+        let variant = loaded.store.tokens().intern(variant);
         loaded
             .store
             .layer_mut(root)
@@ -260,8 +260,8 @@ fn switching_branches_recomposes_like_a_full_compose() {
     // selected ones' are composed beside the base children.
     for (prim, set, variant) in &oracle.switched.selections {
         let prim = loaded.store.path(prim);
-        let set = loaded.store.tokens.intern(set);
-        let variant = loaded.store.tokens.intern(variant);
+        let set = loaded.store.tokens().intern(set);
+        let variant = loaded.store.tokens().intern(variant);
         loaded
             .store
             .layer_mut(root)

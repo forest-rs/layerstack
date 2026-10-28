@@ -1068,15 +1068,15 @@ fn full_reader_assembles_the_layer() {
     let result = crate::read_usdc(
         &bytes,
         LayerId(1),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut NoAssets,
     )
     .unwrap();
-    let path = layerstack::path::Path::parse_absolute("/Root", &store.tokens).unwrap();
-    let id = store.paths.lookup(&path).unwrap();
+    let path = layerstack::path::Path::parse_absolute("/Root", store.tokens()).unwrap();
+    let id = store.paths().lookup(&path).unwrap();
     let prim = &result.layer.prims()[&id];
-    let name = store.tokens.intern("points");
+    let name = store.tokens().intern("points");
     assert_eq!(
         prim.property(name).and_then(|spec| spec.default.as_ref()),
         Some(&DocValue::Array(vec![DocValue::Vec3f([0.0, 1.0, 2.0]); 2])),
@@ -1117,8 +1117,8 @@ fn empty_layer_relocates_round_trip_without_a_version_upgrade() {
         crate::read_usdc(
             bytes,
             LayerId(1),
-            &store.tokens,
-            &store.paths,
+            store.tokens(),
+            store.paths(),
             &mut NoAssets,
         )
         .unwrap()
@@ -1372,17 +1372,17 @@ fn variant_specs_round_trip() {
     let result = crate::read_usdc(
         &bytes,
         LayerId(1),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut NoAssets,
     )
     .unwrap();
     assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
     let layer = result.layer;
     let [season, winter, age, old, snow_name] =
-        ["season", "winter", "age", "old", "Snow"].map(|name| store.tokens.intern(name));
-    let root_path = layerstack::path::Path::parse_absolute("/Root", &store.tokens).unwrap();
-    let root_id = store.paths.lookup(&root_path).unwrap();
+        ["season", "winter", "age", "old", "Snow"].map(|name| store.tokens().intern(name));
+    let root_path = layerstack::path::Path::parse_absolute("/Root", store.tokens()).unwrap();
+    let root_id = store.paths().lookup(&root_path).unwrap();
     let prim = &layer.prims()[&root_id];
     assert_eq!(prim.variant_set_names().prepend, [season], "set names");
     assert_eq!(prim.variant_selection(season), Some(winter));
@@ -1408,8 +1408,8 @@ fn variant_specs_round_trip() {
         set: season,
         variant: winter,
     };
-    let snow = layerstack::path::Path::parse_absolute("/Root/Snow", &store.tokens).unwrap();
-    let snow = store.paths.lookup(&snow).unwrap();
+    let snow = layerstack::path::Path::parse_absolute("/Root/Snow", store.tokens()).unwrap();
+    let snow = store.paths().lookup(&snow).unwrap();
     assert!(
         layer.prim_spec_in(snow, &[site]).is_some(),
         "the branch's child prim spec"
@@ -1465,18 +1465,18 @@ fn variants_follow_variant_children_and_empty_samples_stay_authored() {
     let result = crate::read_usdc(
         &bytes,
         LayerId(1),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut NoAssets,
     )
     .unwrap();
     assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
-    let root_path = layerstack::path::Path::parse_absolute("/Root", &store.tokens).unwrap();
-    let prim = &result.layer.prims()[&store.paths.lookup(&root_path).unwrap()];
-    let variants = &prim.variant_sets()[&store.tokens.intern("v")].variants;
+    let root_path = layerstack::path::Path::parse_absolute("/Root", store.tokens()).unwrap();
+    let prim = &result.layer.prims()[&store.paths().lookup(&root_path).unwrap()];
+    let variants = &prim.variant_sets()[&store.tokens().intern("v")].variants;
     let names: Vec<&str> = variants
         .keys()
-        .map(|name| store.tokens.resolve(*name))
+        .map(|name| store.tokens().resolve(*name))
         .collect();
     assert_eq!(names, ["zeta", "alpha", "mid"]);
     assert_eq!(
@@ -1484,7 +1484,7 @@ fn variants_follow_variant_children_and_empty_samples_stay_authored() {
         3 * size_of::<(layerstack::TokenId, layerstack::VariantSpec)>(),
         "sized by `variantChildren`"
     );
-    let quiet = prim.property(store.tokens.intern("quiet")).unwrap();
+    let quiet = prim.property(store.tokens().intern("quiet")).unwrap();
     assert_eq!(quiet.time_samples.get(), Some(&[][..]));
 }
 
@@ -1797,19 +1797,19 @@ fn unregistered_text_round_trips() {
     let read = layerstack_usda::read_usda(
         source,
         LayerId(1),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut NoAssets,
     );
-    let bytes = save_layer(&read.emitted.layer, &store.tokens, &store.paths).expect("saved");
+    let bytes = save_layer(&read.emitted.layer, store.tokens(), store.paths()).expect("saved");
     let back = crate::read_usdc(
         &bytes,
         LayerId(2),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut NoAssets,
     )
     .expect("read back");
-    let text = layerstack_usda::save::save_usda(&back.layer, &store.tokens, &store.paths);
+    let text = layerstack_usda::save::save_usda(&back.layer, store.tokens(), store.paths());
     assert_eq!(text.as_deref(), Ok(source));
 }

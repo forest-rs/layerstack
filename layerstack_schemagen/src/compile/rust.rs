@@ -171,8 +171,8 @@ pub(crate) fn module_text(
     let emitted = layerstack_usda::emit::emit(
         &parsed.layer,
         LayerId(1),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut model::NoAssets,
     );
     if !parsed.diagnostics.is_empty() || !emitted.diagnostics.is_empty() {
@@ -181,7 +181,7 @@ pub(crate) fn module_text(
             parsed.diagnostics, emitted.diagnostics
         )));
     }
-    let tokens = &store.tokens;
+    let tokens = &store.tokens();
     let names = |names: &[String]| names.iter().map(|n| tokens.intern(n)).collect::<Vec<_>>();
     let mut declared = Vec::new();
     let mut left_out = Vec::new();
@@ -213,8 +213,9 @@ pub(crate) fn module_text(
             ..SchemaDeclaration::new(tokens.intern(&class.name), kind)
         });
     }
-    let definitions = read_generated_schema(&emitted.layer, &declared, &store.tokens, &store.paths)
-        .map_err(|e| error(format!("generatedSchema.usda: {e}")))?;
+    let definitions =
+        read_generated_schema(&emitted.layer, &declared, store.tokens(), store.paths())
+            .map_err(|e| error(format!("generatedSchema.usda: {e}")))?;
     let mut schemas = Vec::new();
     for definition in definitions {
         schemas.push(
@@ -223,8 +224,8 @@ pub(crate) fn module_text(
                 definition,
                 &inputs.api_names,
                 None,
-                &store.tokens,
-                &store.paths,
+                store.tokens(),
+                store.paths(),
             )
             .map_err(error)?,
         );
@@ -309,7 +310,7 @@ pub(crate) fn module_text(
     // after its own and usd-core's fields; the module registers those it
     // accepts, so any it refuses is an error.
     let declared = match plug_info_text {
-        Some(text) => crate::metadata::read([("plugInfo.json", text)], &store.tokens)
+        Some(text) => crate::metadata::read([("plugInfo.json", text)], store.tokens())
             .map_err(|e| error(format!("plugInfo.json: {}", e.message)))?,
         None => crate::metadata::PluginMetadata::default(),
     };
@@ -346,7 +347,7 @@ pub(crate) fn module_text(
     dependencies.sort_by_key(|plugin| DOMAINS.iter().position(|(p, _, _)| p == plugin));
 
     let cx = Context {
-        tokens: &store.tokens,
+        tokens: store.tokens(),
         index: &index,
         module: String::new(),
         target: Target::Library,
@@ -358,7 +359,7 @@ pub(crate) fn module_text(
     // The typed views and edit handles of the library's metadata fields.
     items
         .body
-        .push_str(&crate::metadata::library_items(&metadata, &store.tokens).map_err(error)?);
+        .push_str(&crate::metadata::library_items(&metadata, store.tokens()).map_err(error)?);
     check_type_names(&items.body)?;
 
     let mut types = ValueTypes::default();
@@ -368,7 +369,7 @@ pub(crate) fn module_text(
         &ordered,
         &auto_applies,
         &metadata,
-        &store.tokens,
+        store.tokens(),
         Statics {
             types: &mut types,
             plugin: "",

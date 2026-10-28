@@ -24,7 +24,7 @@ fn filtering_matches_cpp_and_snapshots_follow_explicit_recomputation() {
     let names: Vec<_> = table
         .groups()
         .iter()
-        .map(|&p| store.paths.resolve(p).display(&store.tokens).to_string())
+        .map(|&p| store.paths().resolve(p).display(store.tokens()).to_string())
         .collect();
     assert_eq!(serde_json::json!(names), oracle["groups"]);
     for (a, &path_a) in table.groups().iter().enumerate() {

@@ -116,7 +116,7 @@ fn contextual_identifiers_and_link_membership_match_cpp_with_selection_evidence(
 fn contextual_authoring_is_uniform_noncustom_and_reversible() {
     let (mut store, mut live) = support::scene(SCENE);
     let path = store.path("/Light");
-    let name = store.tokens.intern("engine:gpu:light:shaderId");
+    let name = store.tokens().intern("engine:gpu:light:shaderId");
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
     let light = LightApiEdit::new(&edit, path)
         .expect("outside any instance")
@@ -226,8 +226,8 @@ fn filter_context_authoring_and_existing_declarations_preserve_opinions() {
         "#usda 1.0\ndef LightFilter \"Filter\" {\n custom token existing:lightFilter:shaderId = \"Old\"\n}\n",
     );
     let path = store.path("/Filter");
-    let existing = store.tokens.intern("existing:lightFilter:shaderId");
-    let created = store.tokens.intern("new:lightFilter:shaderId");
+    let existing = store.tokens().intern("existing:lightFilter:shaderId");
+    let created = store.tokens().intern("new:lightFilter:shaderId");
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
     let filter = layerstack_schemas::usd_lux::LightFilterEdit::new(&edit, path)
         .expect("outside any instance")

@@ -761,10 +761,10 @@ impl SchemaRegistry {
     ///
     /// let store = InMemoryStore::default();
     /// let mut builder = SchemaRegistry::builder();
-    /// builder.register(SchemaDefinition::typed(store.tokens.intern("Rock")));
-    /// let registry = builder.build(&store.tokens);
-    /// assert!(registry.belongs_to(&store.tokens));
-    /// assert!(!registry.belongs_to(&InMemoryStore::default().tokens));
+    /// builder.register(SchemaDefinition::typed(store.tokens().intern("Rock")));
+    /// let registry = builder.build(store.tokens());
+    /// assert!(registry.belongs_to(store.tokens()));
+    /// assert!(!registry.belongs_to(InMemoryStore::default().tokens()));
     /// ```
     #[must_use]
     pub fn belongs_to(&self, tokens: &TokenInterner) -> bool {

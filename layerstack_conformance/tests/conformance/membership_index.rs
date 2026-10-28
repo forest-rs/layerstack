@@ -64,7 +64,7 @@ struct CollectionRecord {
 
 fn options(store: &mut InMemoryStore) -> StageOptions {
     StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(store.tokens()))),
         ..StageOptions::default()
     }
 }
@@ -201,7 +201,7 @@ fn forward_membership_matches_openusd() {
             seen += 1;
             let name = format!(
                 "{}.collection:{}",
-                store.paths.display(prim, &store.tokens),
+                store.paths().display(prim, store.tokens()),
                 collection.instance()
             );
             let expected = &oracle.collections[&name];
@@ -209,7 +209,7 @@ fn forward_membership_matches_openusd() {
             assert_eq!(query.uses_rule_map(), expected.uses_rule_map, "{name}");
             let included: BTreeSet<&String> = expected.included.iter().collect();
             for path in &paths {
-                let text = path.display(&store.paths, &store.tokens);
+                let text = path.display(store.paths(), store.tokens());
                 let got = query.is_included(&scene, *path).is_included();
                 if got != included.contains(&text) {
                     failures.push(format!("{name} {text}: included {got}"));
@@ -249,7 +249,7 @@ fn the_pebble_is_in_the_collections_openusd_puts_it_in() {
     let index = MembershipIndex::build(&scene);
     let pebble = loaded
         .store
-        .paths
+        .paths()
         .lookup(&path(&loaded.store, "/Parts/Stones/Granite/Pebble"));
     let got = reverse(
         &index,
@@ -316,7 +316,7 @@ fn the_pebble_is_in_the_collections_openusd_puts_it_in() {
 }
 
 fn path(store: &InMemoryStore, text: &str) -> layerstack::Path {
-    layerstack::Path::parse_absolute(text, &store.tokens).expect("a path")
+    layerstack::Path::parse_absolute(text, store.tokens()).expect("a path")
 }
 
 type Names = &'static [&'static str];
@@ -344,7 +344,7 @@ fn property(
     name: &str,
 ) -> layerstack::Address {
     let prim = store.path(prim);
-    EditTarget::for_layer(layer).property(PropertyPath::new(prim, store.tokens.intern(name)))
+    EditTarget::for_layer(layer).property(PropertyPath::new(prim, store.tokens().intern(name)))
 }
 
 fn prim_at(store: &mut InMemoryStore, layer: LayerId, prim: &str) -> layerstack::Address {
@@ -431,7 +431,7 @@ const STEPS: &[Step] = &[
     Step {
         name: "a new member under an included ancestor",
         edit: |store, layers| {
-            let xform = store.tokens.intern("Xform");
+            let xform = store.tokens().intern("Xform");
             let mut tx = Transaction::new();
             let at = prim_at(store, layers.weak, "/Parts/Stones/Granite/Cobble");
             tx.create_prim(at, Specifier::Def, Some(xform));
@@ -444,7 +444,7 @@ const STEPS: &[Step] = &[
         name: "a newly applied collection",
         edit: |store, layers| {
             let seeds = store.path("/Parts/Seeds");
-            let api = store.tokens.intern("CollectionAPI:loose");
+            let api = store.tokens().intern("CollectionAPI:loose");
             let mut tx = Transaction::new();
             let at = prim_at(store, layers.root, "/Terrain");
             tx.add_applied_schema(at, api);
@@ -563,7 +563,7 @@ fn incremental_updates_match_a_fresh_build() {
                 failures.push(format!(
                     "{}: {} kept {:?}, fresh {:?}",
                     step.name,
-                    path.display(&store.paths, &store.tokens),
+                    path.display(store.paths(), store.tokens()),
                     reverse(&index, &scene, *path),
                     reverse(&fresh, &scene, *path)
                 ));
@@ -590,7 +590,7 @@ fn library_answers(loaded: LoadedStage) -> (Vec<String>, Vec<String>, Vec<String
     let options = options(&mut store);
     let stage = Stage::compose(&mut store, loaded.root_layer, options);
     let scene = Scene::new(&stage, &store);
-    let display = |path: PathId| store.paths.display(path, &store.tokens);
+    let display = |path: PathId| store.paths().display(path, store.tokens());
     let prims: Vec<PathId> = stage.traverse_all(root(&scene)).skip(1).collect();
     let mut cache = BindingCache::new(MaterialPurpose::All, BindingOptions::default());
     let bindings = cache
@@ -605,7 +605,7 @@ fn library_answers(loaded: LoadedStage) -> (Vec<String>, Vec<String>, Vec<String
                     display(material),
                     bound
                         .binding
-                        .map(|b| b.relationship.display(&store.paths, &store.tokens))
+                        .map(|b| b.relationship.display(store.paths(), store.tokens()))
                         .unwrap_or_default()
                 )
             })

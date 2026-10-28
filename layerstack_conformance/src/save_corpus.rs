@@ -863,8 +863,8 @@ pub fn composed(root: Root<'_>, assets: &[(&str, &str)]) -> String {
             let result = layerstack_usda::emit::emit(
                 &parsed.layer,
                 LayerId(1),
-                &store.tokens,
-                &store.paths,
+                store.tokens(),
+                store.paths(),
                 &mut resolver,
             );
             assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
@@ -874,8 +874,8 @@ pub fn composed(root: Root<'_>, assets: &[(&str, &str)]) -> String {
             let result = layerstack_usdc::read_usdc(
                 bytes,
                 LayerId(1),
-                &store.tokens,
-                &store.paths,
+                store.tokens(),
+                store.paths(),
                 &mut resolver,
             )
             .expect("USDC reads");
@@ -890,7 +890,7 @@ pub fn composed(root: Root<'_>, assets: &[(&str, &str)]) -> String {
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
 
     let mut out = String::new();
-    let root_path = store.paths.intern(Path::root());
+    let root_path = store.paths().intern(Path::root());
     let view = stage.view(&store);
     for prim in stage.traverse(root_path).filter_map(|prim| view.prim(prim)) {
         let shown = prim.to_string();
@@ -905,21 +905,21 @@ pub fn composed(root: Root<'_>, assets: &[(&str, &str)]) -> String {
             names.extend(
                 properties
                     .iter()
-                    .map(|p| store.tokens.resolve(p.name).to_string()),
+                    .map(|p| store.tokens().resolve(p.name).to_string()),
             );
         }
         for name in names {
             let property = view.property(format!("{shown}.{name}").as_str());
             let attribute = property.and_then(|property| property.as_attribute());
             let value = match attribute.and_then(|a| a.authored_value(Time::Default)) {
-                Some(resolved) => spell(&resolved.value, &store.tokens),
+                Some(resolved) => spell(&resolved.value, store.tokens()),
                 None => "None".into(),
             };
             let _ = write!(out, "  .{name} = {value}");
             for time in PROBE_TIMES {
                 let at = attribute
                     .and_then(|a| a.authored_value(Time::held(time)))
-                    .map(|r| spell(&r.value, &store.tokens));
+                    .map(|r| spell(&r.value, store.tokens()));
                 let _ = write!(out, " @{time}: {at:?}");
             }
             let targets: Vec<String> = match property {
@@ -930,7 +930,7 @@ pub fn composed(root: Root<'_>, assets: &[(&str, &str)]) -> String {
                 None => Vec::new(),
             }
             .iter()
-            .map(|t| t.display(&store.paths, &store.tokens))
+            .map(|t| t.display(store.paths(), store.tokens()))
             .collect();
             let _ = writeln!(out, " targets {targets:?}");
         }
@@ -949,7 +949,7 @@ fn stack_properties<'a>(
 ) -> Option<&'a [PropertyEntry]> {
     let layer = store.layer(layer_id)?;
     if !spec_path.variant_chain().is_empty() {
-        return Some(&layer.variant_spec_at(spec_path, &store.paths)?.properties);
+        return Some(&layer.variant_spec_at(spec_path, store.paths())?.properties);
     }
     let sites: Vec<_> = spec_path.variant_selection_sites().collect();
     Some(

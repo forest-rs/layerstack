@@ -78,8 +78,8 @@ fn packaging_preserves_identity_without_loading_and_keeps_nested_resources() {
     );
     let uses = extract_layer_dependencies(
         &prepared.plan().unwrap().layers[0].layer,
-        &document.store.paths,
-        &document.store.tokens,
+        document.store.paths(),
+        document.store.tokens(),
     );
     assert!(
         uses.iter()
@@ -108,8 +108,8 @@ fn packaging_preserves_identity_without_loading_and_keeps_nested_resources() {
     let reopened_root = reopened.stage.stage().root_layer().unwrap();
     let uses = extract_layer_dependencies(
         reopened.store.layer(reopened_root).unwrap(),
-        &reopened.store.paths,
-        &reopened.store.tokens,
+        reopened.store.paths(),
+        reopened.store.tokens(),
     );
     assert!(
         uses.iter()

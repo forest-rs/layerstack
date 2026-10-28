@@ -1436,12 +1436,12 @@ mod tests {
         let root = store.path("/World");
         let group = store.path("/World/Group");
         let leaves = [store.path("/World/Group/A"), store.path("/World/Group/B")];
-        let xform = store.tokens.intern("Xform");
-        let cube = store.tokens.intern("Cube");
-        let purpose = store.tokens.intern("purpose");
-        let render = store.tokens.intern("render");
-        let proxy = store.tokens.intern("proxy");
-        let schemas = Arc::new(crate::openusd(&store.tokens));
+        let xform = store.tokens().intern("Xform");
+        let cube = store.tokens().intern("Cube");
+        let purpose = store.tokens().intern("purpose");
+        let render = store.tokens().intern("render");
+        let proxy = store.tokens().intern("proxy");
+        let schemas = Arc::new(crate::openusd(store.tokens()));
         let mut cache = BoundsCache::new(
             Time::Default,
             BoundsOptions {
@@ -1509,15 +1509,15 @@ mod tests {
         };
         let mut store = InMemoryStore::default();
         let root = store.path("/World");
-        let xform = store.tokens.intern("Xform");
-        let cube = store.tokens.intern("Cube");
-        let size = store.tokens.intern("size");
-        let purpose = store.tokens.intern("purpose");
-        let visibility = store.tokens.intern("visibility");
-        let render = store.tokens.intern("render");
-        let default = store.tokens.intern("default");
-        let invisible = store.tokens.intern("invisible");
-        let inherited = store.tokens.intern("inherited");
+        let xform = store.tokens().intern("Xform");
+        let cube = store.tokens().intern("Cube");
+        let size = store.tokens().intern("size");
+        let purpose = store.tokens().intern("purpose");
+        let visibility = store.tokens().intern("visibility");
+        let render = store.tokens().intern("render");
+        let default = store.tokens().intern("default");
+        let invisible = store.tokens().intern("invisible");
+        let inherited = store.tokens().intern("inherited");
         let mut layer = Layer::new(LayerId(1));
         layer.insert_prim(root, PrimSpec::def().with_type_name(xform));
         let mut leaves = Vec::new();
@@ -1528,7 +1528,7 @@ mod tests {
         }
         store.insert_layer(layer);
         let options = StageOptions {
-            schemas: Some(Arc::new(crate::openusd(&store.tokens))),
+            schemas: Some(Arc::new(crate::openusd(store.tokens()))),
             ..StageOptions::default()
         };
         let mut live = LiveStage::compose(&mut store, LayerId(1), options);
@@ -1598,7 +1598,7 @@ mod tests {
         // per arbitrary token. Exceeding four buckets falls back to a fold.
         let mut edit = Transaction::new();
         for (i, &leaf) in leaves.iter().take(5).enumerate() {
-            let custom = store.tokens.intern(alloc::format!("custom{i}"));
+            let custom = store.tokens().intern(alloc::format!("custom{i}"));
             edit.set_default(
                 target.property(PropertyPath::new(leaf, purpose)),
                 Value::Token(custom),
@@ -1617,7 +1617,7 @@ mod tests {
         edit.create_prim(
             target.prim(leaves[0]),
             layerstack::Specifier::Def,
-            Some(store.tokens.intern("Mesh")),
+            Some(store.tokens().intern("Mesh")),
         );
         let bad = live.apply(&mut store, &edit).unwrap();
         cache.apply_changes(&Scene::new(live.stage(), &store), &bad.changes);
@@ -1650,10 +1650,10 @@ mod tests {
         let mut store = InMemoryStore::default();
         let path = store.path("/Mesh");
         let missing = store.path("/Missing");
-        let mesh = store.tokens.intern("Mesh");
-        let extent = store.tokens.intern("extent");
-        let scale = store.tokens.intern("xformOp:scale");
-        let order = store.tokens.intern("xformOpOrder");
+        let mesh = store.tokens().intern("Mesh");
+        let extent = store.tokens().intern("extent");
+        let scale = store.tokens().intern("xformOp:scale");
+        let order = store.tokens().intern("xformOpOrder");
         let mut layer = Layer::new(LayerId(1));
         layer.insert_prim(
             path,
@@ -1677,7 +1677,7 @@ mod tests {
         );
         store.insert_layer(layer);
         let options = StageOptions {
-            schemas: Some(Arc::new(crate::openusd(&store.tokens))),
+            schemas: Some(Arc::new(crate::openusd(store.tokens()))),
             ..StageOptions::default()
         };
         let stage = Stage::compose(&mut store, LayerId(1), options);
@@ -1715,9 +1715,9 @@ mod tests {
         let root = store.path("/World");
         let static_leaf = store.path("/World/Static");
         let animated = store.path("/World/Animated");
-        let xform = store.tokens.intern("Xform");
-        let mesh = store.tokens.intern("Mesh");
-        let extent = store.tokens.intern("extent");
+        let xform = store.tokens().intern("Xform");
+        let mesh = store.tokens().intern("Mesh");
+        let extent = store.tokens().intern("extent");
         let value =
             |size: f32| Value::Array(vec![Value::Vec3f([-size; 3]), Value::Vec3f([size; 3])]);
         let mut layer = Layer::new(LayerId(1));
@@ -1739,7 +1739,7 @@ mod tests {
         );
         store.insert_layer(layer);
         let options = StageOptions {
-            schemas: Some(Arc::new(crate::openusd(&store.tokens))),
+            schemas: Some(Arc::new(crate::openusd(store.tokens()))),
             ..StageOptions::default()
         };
         let stage = Stage::compose(&mut store, LayerId(1), options);

@@ -79,7 +79,7 @@ over "P"
 "#;
 
 fn read(store: &mut InMemoryStore, source: &str, id: LayerId) {
-    let read = layerstack_usda::read_usda(source, id, &store.tokens, &store.paths, &mut Weak);
+    let read = layerstack_usda::read_usda(source, id, store.tokens(), store.paths(), &mut Weak);
     assert!(
         read.parse_diagnostics.is_empty() && read.lower_diagnostics.is_empty(),
         "{:?} {:?}",
@@ -99,7 +99,7 @@ fn scene() -> InMemoryStore {
 fn tokens(store: &InMemoryStore, names: &[&str]) -> Value {
     let ids: Vec<TokenId> = names
         .iter()
-        .map(|name| store.tokens.lookup(name).expect("an authored token"))
+        .map(|name| store.tokens().lookup(name).expect("an authored token"))
         .collect();
     Value::from(ids)
 }
@@ -110,10 +110,10 @@ fn strings(texts: &[&str]) -> Value {
 
 fn property(store: &InMemoryStore, name: &str) -> PropertyPath {
     let prim = store
-        .paths
-        .lookup(&layerstack::Path::parse_absolute("/P", &store.tokens).unwrap())
+        .paths()
+        .lookup(&layerstack::Path::parse_absolute("/P", store.tokens()).unwrap())
         .unwrap();
-    PropertyPath::new(prim, store.tokens.lookup(name).unwrap())
+    PropertyPath::new(prim, store.tokens().lookup(name).unwrap())
 }
 
 fn resolved(stage: &Stage, store: &InMemoryStore, name: &str, time: Time) -> Value {
@@ -194,17 +194,17 @@ fn text_arrays_round_trip_through_usda_and_usdc() {
     let mut store = scene();
     let text = {
         let weak = store.layer(LayerId(2)).unwrap();
-        layerstack_usda::save::save_usda(weak, &store.tokens, &store.paths).unwrap()
+        layerstack_usda::save::save_usda(weak, store.tokens(), store.paths()).unwrap()
     };
     // USDA text reads back as the layer it was saved from.
     read(&mut store, &text, LayerId(3));
     let weak = store.layer(LayerId(2)).unwrap();
     let names = ["tags", "labels", "many", "texts", "steps", "names"];
     let prim = store
-        .paths
-        .lookup(&layerstack::Path::parse_absolute("/P", &store.tokens).unwrap())
+        .paths()
+        .lookup(&layerstack::Path::parse_absolute("/P", store.tokens()).unwrap())
         .unwrap();
-    let custom_data = store.tokens.lookup("customData").unwrap();
+    let custom_data = store.tokens().lookup("customData").unwrap();
     let custom = |layer: &Layer| layer.prim(prim).unwrap().field(custom_data).cloned();
     let notes = custom(weak);
     let Some(FieldValue::Value(Value::Dictionary(entries))) = &notes else {
@@ -218,15 +218,15 @@ fn text_arrays_round_trip_through_usda_and_usdc() {
     let from_usda = store.layer(LayerId(3)).unwrap();
 
     // USDC, read eagerly and retained.
-    let bytes = save_layer(weak, &store.tokens, &store.paths).unwrap();
-    let eager = read_usdc(&bytes, LayerId(4), &store.tokens, &store.paths, &mut Weak)
+    let bytes = save_layer(weak, store.tokens(), store.paths()).unwrap();
+    let eager = read_usdc(&bytes, LayerId(4), store.tokens(), store.paths(), &mut Weak)
         .unwrap()
         .layer;
     let retained = read_usdc_lazy(
         bytes.as_slice().into(),
         LayerId(5),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut Weak,
     )
     .unwrap();

@@ -65,7 +65,7 @@ fn parse(scene_name: &str) -> BTreeMap<String, BTreeMap<String, Value>> {
     )));
     assert!(loaded.invalid.is_empty(), "{:?}", loaded.invalid);
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&loaded.store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(loaded.store.tokens()))),
         ..StageOptions::default()
     };
     let stage = Stage::compose(&mut loaded.store, loaded.root_layer, options);
@@ -90,12 +90,12 @@ fn parse(scene_name: &str) -> BTreeMap<String, BTreeMap<String, Value>> {
         },
     )
     .unwrap();
-    let text = |path| store.paths.display(path, &store.tokens).to_string();
+    let text = |path| store.paths().display(path, store.tokens()).to_string();
     let sorted = |mut values: Vec<String>| {
         values.sort();
         values
     };
-    let target = |target: &TargetPath| target.display(&store.paths, &store.tokens).to_string();
+    let target = |target: &TargetPath| target.display(store.paths(), store.tokens()).to_string();
     let mut out: BTreeMap<String, BTreeMap<String, Value>> = BTreeMap::new();
     for key in ["rigid_bodies", "shapes", "joints", "collision_groups"] {
         out.insert(key.into(), BTreeMap::new());

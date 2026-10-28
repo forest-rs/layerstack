@@ -95,8 +95,8 @@ fn load_usda(path: &Path) -> InMemoryStore {
     let result = emit(
         &ast.layer,
         LayerId(1),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut NoAssets,
     );
     let diagnostics: Vec<_> = cst
@@ -118,8 +118,8 @@ fn dump(store: &InMemoryStore) -> Vec<String> {
     dump_layer(
         store.layer(LayerId(1)).unwrap(),
         Names {
-            tokens: &store.tokens,
-            paths: &store.paths,
+            tokens: store.tokens(),
+            paths: store.paths(),
         },
     )
 }
@@ -145,8 +145,8 @@ fn load_usdc(path: &Path) -> InMemoryStore {
     let result = layerstack_usdc::read_usdc(
         &data,
         LayerId(1),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut NoAssets,
     )
     .unwrap_or_else(|e| panic!("failed to read {}: {e}", path.display()));
@@ -223,8 +223,8 @@ fn probe_keeps_every_authored_slot() {
     let a = store.property_path("/Root.a");
     let b = store.property_path("/Root.b");
     let st = store.property_path("/Root.primvars:st");
-    let interpolation = store.tokens.intern("interpolation");
-    let constant = store.tokens.intern("constant");
+    let interpolation = store.tokens().intern("interpolation");
+    let constant = store.tokens().intern("constant");
     let root_a = store.target_path("/Root.a");
 
     let layer = &store.layer(LayerId(1)).unwrap();
@@ -248,7 +248,7 @@ fn probe_keeps_every_authored_slot() {
             .metadata(interpolation),
         Some(&FieldValue::Value(Value::Token(constant)))
     );
-    let meters = store.tokens.intern("metersPerUnit");
+    let meters = store.tokens().intern("metersPerUnit");
     assert_eq!(
         store.layer(LayerId(1)).unwrap().metadata(meters),
         Some(&FieldValue::Value(Value::Double(1.0)))
@@ -312,7 +312,7 @@ fn ui_hint_limits_combine_like_usdcat_flatten() {
     let mut loaded =
         layerstack_conformance::usda_real::load_entry_usda(&assets_dir().join("ui_hints.usda"));
     let prim = loaded.store.path("/Root");
-    let softness = loaded.store.tokens.intern("softness");
+    let softness = loaded.store.tokens().intern("softness");
     let stage = Stage::compose(
         &mut loaded.store,
         loaded.root_layer,
@@ -323,7 +323,7 @@ fn ui_hint_limits_combine_like_usdcat_flatten() {
     let flat_softness = flattened.property_path("/Root.softness");
 
     for key_name in ["limits", "customData"] {
-        let key = loaded.store.tokens.intern(key_name);
+        let key = loaded.store.tokens().intern(key_name);
         let resolved = stage
             .view(&loaded.store)
             .property(PropertyPath::new(prim, softness))
@@ -332,7 +332,7 @@ fn ui_hint_limits_combine_like_usdcat_flatten() {
         let ResolvedValue::Dictionary(entries) = resolved.value else {
             panic!("{key_name} is a dictionary");
         };
-        let flat_key = flattened.tokens.intern(key_name);
+        let flat_key = flattened.tokens().intern(key_name);
         let Some(FieldValue::Value(expected)) = flattened
             .layer(LayerId(1))
             .unwrap()
@@ -344,15 +344,15 @@ fn ui_hint_limits_combine_like_usdcat_flatten() {
         let actual = render_value(
             &Value::Dictionary(entries),
             Names {
-                tokens: &loaded.store.tokens,
-                paths: &loaded.store.paths,
+                tokens: loaded.store.tokens(),
+                paths: loaded.store.paths(),
             },
         );
         let expected = render_value(
             expected,
             Names {
-                tokens: &flattened.tokens,
-                paths: &flattened.paths,
+                tokens: flattened.tokens(),
+                paths: flattened.paths(),
             },
         );
         assert_eq!(actual, expected, "{key_name} differs from usdcat --flatten");
@@ -376,12 +376,12 @@ fn ui_hint_limits_combine_like_usdcat_flatten() {
 fn unknown_schemas_and_uniform_namespaced_properties_survive() {
     let mut store = assert_matches_usdcat("metadata");
     let prim = store.path("/Root");
-    let api = store.tokens.intern("apiSchemas");
-    let review = store.tokens.intern("StudioReviewAPI:main");
-    let tool = store.tokens.intern("authorship:main:tool");
-    let inputs = store.tokens.intern("authorship:main:inputs");
-    let softness = store.tokens.intern("softness");
-    let color = store.tokens.intern("primvars:displayColor");
+    let api = store.tokens().intern("apiSchemas");
+    let review = store.tokens().intern("StudioReviewAPI:main");
+    let tool = store.tokens().intern("authorship:main:tool");
+    let inputs = store.tokens().intern("authorship:main:inputs");
+    let softness = store.tokens().intern("softness");
+    let color = store.tokens().intern("primvars:displayColor");
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
 
     let view = stage.view(&store);
@@ -408,8 +408,8 @@ fn unknown_schemas_and_uniform_namespaced_properties_survive() {
     assert_eq!(
         root.property_order(),
         Some(vec![
-            store.tokens.resolve(softness),
-            store.tokens.resolve(color)
+            store.tokens().resolve(softness),
+            store.tokens().resolve(color)
         ])
     );
 }
@@ -425,9 +425,9 @@ fn variant_branch_specs_at_the_same_path_are_kept() {
     let mut store = assert_matches_usdcat("variant_branches");
     let geom = store.path("/Model/Geom");
     let mesh = store.path("/Model/Geom/Mesh");
-    let detail = store.tokens.intern("detail");
-    let purpose = store.tokens.intern("purpose");
-    let proxy = store.tokens.intern("proxy");
+    let detail = store.tokens().intern("detail");
+    let purpose = store.tokens().intern("purpose");
+    let proxy = store.tokens().intern("proxy");
 
     let layer = &store.layer(LayerId(1)).unwrap();
     assert_eq!(layer.prim_specs(geom).count(), 2, "one `Geom` per branch");
@@ -469,8 +469,8 @@ fn variant_branch_specs_at_the_same_path_are_kept() {
 fn variant_branch_specs_compose_from_usdc() {
     let mut store = load_usdc(&assets_dir().join("variant_branches.usdc"));
     let mesh = store.path("/Model/Geom/Mesh");
-    let purpose = store.tokens.intern("purpose");
-    let proxy = store.tokens.intern("proxy");
+    let purpose = store.tokens().intern("purpose");
+    let proxy = store.tokens().intern("proxy");
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
     assert_eq!(
         authored(
@@ -511,8 +511,8 @@ fn int64_and_string_list_ops_match_usdcat() {
         &assets_dir().join("listops_strong.usda"),
     );
     let prim = loaded.store.path("/Instancer");
-    let inactive = loaded.store.tokens.intern("inactiveIds");
-    let clip_sets = loaded.store.tokens.intern("clipSets");
+    let inactive = loaded.store.tokens().intern("inactiveIds");
+    let clip_sets = loaded.store.tokens().intern("clipSets");
     let stage = Stage::compose(
         &mut loaded.store,
         loaded.root_layer,
@@ -556,15 +556,15 @@ fn declarations_come_from_the_selected_variant_branch() {
     ] {
         let mut store = load_usda(&assets_dir().join(fixture));
         let c = store.path("/P/C");
-        let xform = store.tokens.intern("Xform");
-        let order = store.tokens.intern(order);
+        let xform = store.tokens().intern("Xform");
+        let order = store.tokens().intern(order);
         let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
         let prim = stage.view(&store).prim(c).expect("/P/C");
         assert_eq!(prim.type_name_token(), Some(xform), "{fixture}");
         assert_eq!(prim.specifier(), layerstack::Specifier::Class, "{fixture}");
         assert_eq!(
             prim.property_order(),
-            Some(vec![store.tokens.resolve(order)]),
+            Some(vec![store.tokens().resolve(order)]),
             "{fixture}"
         );
     }

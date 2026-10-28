@@ -46,10 +46,13 @@ fn missing_internal_targets_retain_introducing_sites_and_selected_variants_resol
             Some(loaded.root_layer),
             "the authored layer remains explicit"
         );
-        let name = loaded.store.paths.display(error.prim, &loaded.store.tokens);
+        let name = loaded
+            .store
+            .paths()
+            .display(error.prim, loaded.store.tokens());
         let spec = error
             .introducing_spec
-            .display(&loaded.store.paths, &loaded.store.tokens);
+            .display(loaded.store.paths(), loaded.store.tokens());
         found.insert((name, spec));
     }
     assert_eq!(
@@ -131,7 +134,7 @@ fn an_explicit_identity_offset_deletes_the_omitted_identity_payload() {
     // Empty pseudo-root attribute queries are safe through explicit controls.
     let pseudo_root = loaded.store.path("/");
     for name in ["purpose", "visibility"] {
-        let name = loaded.store.tokens.intern(name);
+        let name = loaded.store.tokens().intern(name);
         let mut query =
             layerstack::AttributeQuery::new(layerstack::PropertyPath::new(pseudo_root, name));
         assert!(
@@ -183,7 +186,7 @@ fn nested_variant_arc_errors_keep_the_variant_qualified_authored_spec() {
         assert_eq!(
             error
                 .introducing_spec
-                .display(&loaded.store.paths, &loaded.store.tokens),
+                .display(loaded.store.paths(), loaded.store.tokens()),
             "/Template{shape=on}Part",
             "source evidence preserves variant selection and authored namespace"
         );

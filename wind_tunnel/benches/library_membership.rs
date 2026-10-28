@@ -50,7 +50,7 @@ const EXAMPLES: usize = 8;
 fn open(root: &Path) -> StageDocument<Filesystem> {
     let store = InMemoryStore::default();
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(store.tokens()))),
         ..StageOptions::default()
     };
     open_with(root, store, options)
@@ -127,7 +127,7 @@ fn bench_library(c: &mut Criterion) {
                 || {
                     let store = InMemoryStore::default();
                     let options = StageOptions {
-                        schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
+                        schemas: Some(Arc::new(layerstack_schemas::openusd(store.tokens()))),
                         ..StageOptions::default()
                     };
                     (store, options)
@@ -319,7 +319,7 @@ fn bench_library(c: &mut Criterion) {
         let leaf = store.path("/Library/Stones/Granite/Granite_000");
         let includes = PropertyPath::new(
             library_prim,
-            store.tokens.intern("collection:set03:includes"),
+            store.tokens().intern("collection:set03:includes"),
         );
         let scene = Scene::new(live.stage(), store);
         let mut index = MembershipIndex::build(&scene);

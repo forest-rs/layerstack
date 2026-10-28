@@ -161,7 +161,7 @@ fn retained_bounds_route_prototype_changes_outside_the_query_namespace() {
             let (store, _) = support::scene(SOURCE);
             let path = store.path("/World/Instances");
             let prototype = store.path("/World/Prototype");
-            let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
+            let schemas = Arc::new(layerstack_schemas::openusd(store.tokens()));
             let mut session = QuerySession::new(
                 store,
                 LayerId(1),
@@ -240,7 +240,7 @@ fn failed_retained_bounds_recover_when_an_external_prototype_is_created() {
     let (store, _) = support::scene(text);
     let path = store.path("/I");
     let missing = store.path("/Missing");
-    let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(store.tokens()));
     let mut session = QuerySession::new(
         store,
         LayerId(1),
@@ -290,7 +290,7 @@ def Cube "Cube" {}
     let path = store.path("/I");
     let inner = store.path("/P/Inner");
     let cube = store.path("/Cube");
-    let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(store.tokens()));
     let mut session = QuerySession::new(
         store,
         LayerId(1),

@@ -88,7 +88,7 @@ impl PreparedPackage {
             .ok_or_else(|| {
                 IoError::new(IoErrorKind::Rejected, "package has unresolved dependencies")
             })?
-            .write_usdz(&self.store.tokens, &self.store.paths)
+            .write_usdz(self.store.tokens(), self.store.paths())
             .map_err(localization_error)
     }
 }
@@ -246,7 +246,7 @@ impl<B: Storage> StageDocument<B> {
                 ));
             }
             report.layers.push(id);
-            for dependency in extract_layer_dependencies(layer, &store.paths, &store.tokens) {
+            for dependency in extract_layer_dependencies(layer, store.paths(), store.tokens()) {
                 // UDIM patterns expand in asset values, not in composition
                 // arcs, as `UsdUtils_LocalizationContext::_ProcessAssetValue`
                 // expands them; an expression is evaluated first and then
@@ -360,8 +360,8 @@ impl<B: Storage> StageDocument<B> {
                     match reader.load(
                         &dependency.identifier,
                         Some(id),
-                        &store.tokens,
-                        &store.paths,
+                        store.tokens(),
+                        store.paths(),
                     ) {
                         Ok(resolved) => {
                             let target = resolved.layer_id;
@@ -475,8 +475,8 @@ impl<B: Storage> StageDocument<B> {
                 let member = names[&id].clone();
                 let copy = rewrite_layer_assets(
                     store.layer(id).expect("inventoried layer"),
-                    &store.paths,
-                    &store.tokens,
+                    store.paths(),
+                    store.tokens(),
                     |dependency| -> Result<Arc<str>, IoError> {
                         let destination = match &resources[dependency] {
                             Resource::Layer(id) => &names[id],

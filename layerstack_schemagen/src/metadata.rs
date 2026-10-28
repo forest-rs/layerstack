@@ -606,7 +606,7 @@ pub(crate) fn files(model: &Model) -> Result<Vec<(String, String)>, String> {
     let mut seen = std::collections::BTreeSet::new();
     for domain in &model.domains {
         for field in &domain.metadata {
-            let name = model.tokens.resolve(field.name);
+            let name = model.tokens().resolve(field.name);
             let method = crate::views::snake(name);
             let (ty, read) = conversion(field.value_type.name())?;
             for (target, view) in [

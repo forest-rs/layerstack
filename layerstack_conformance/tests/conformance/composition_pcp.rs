@@ -130,10 +130,10 @@ fn assert_pcp_composing_except(loaded: &mut LoadedStage, pcp_path: &Path, skippe
         if skipped.contains(&prim_path.as_str()) {
             continue;
         }
-        let prim = layerstack::Path::parse_absolute(&prim_path, &loaded.store.tokens)
+        let prim = layerstack::Path::parse_absolute(&prim_path, loaded.store.tokens())
             .expect("pcp path")
             .clone();
-        let prim_id = loaded.store.paths.intern(prim);
+        let prim_id = loaded.store.paths().intern(prim);
         assert!(
             composed_prim(&stage, &loaded.store, prim_id).is_some(),
             "missing prim {prim_path}"
@@ -148,10 +148,10 @@ fn assert_pcp_composing_except(loaded: &mut LoadedStage, pcp_path: &Path, skippe
             let mut child_ids = Vec::new();
             for child in &children {
                 let child_path = format!("{prim_path}/{child}");
-                let child = layerstack::Path::parse_absolute(&child_path, &loaded.store.tokens)
+                let child = layerstack::Path::parse_absolute(&child_path, loaded.store.tokens())
                     .expect("pcp child path")
                     .clone();
-                let child_id = loaded.store.paths.intern(child);
+                let child_id = loaded.store.paths().intern(child);
                 assert!(
                     composed_prim(&stage, &loaded.store, child_id).is_some(),
                     "missing child prim {child_path}"
@@ -169,10 +169,10 @@ fn assert_pcp_composing_except(loaded: &mut LoadedStage, pcp_path: &Path, skippe
                     .map(|id| {
                         loaded
                             .store
-                            .paths
+                            .paths()
                             .resolve(*id)
                             .leaf()
-                            .map(|tok| loaded.store.tokens.resolve(tok).to_string())
+                            .map(|tok| loaded.store.tokens().resolve(tok).to_string())
                             .unwrap_or_else(|| "<root>".to_string())
                     })
                     .collect::<Vec<_>>()
@@ -198,8 +198,8 @@ fn assert_pcp_composing_except(loaded: &mut LoadedStage, pcp_path: &Path, skippe
 
                 let expected_path = layerstack::SpecPath::parse(
                     &expected_spec,
-                    &loaded.store.tokens,
-                    &loaded.store.paths,
+                    loaded.store.tokens(),
+                    loaded.store.paths(),
                 )
                 .expect("pcp prim stack path");
 
@@ -212,7 +212,7 @@ fn assert_pcp_composing_except(loaded: &mut LoadedStage, pcp_path: &Path, skippe
                         let lname = loaded.layer_names.get(lid).cloned().unwrap_or_default();
                         eprintln!(
                             "    {lname}: {}",
-                            sid.display(&loaded.store.paths, &loaded.store.tokens)
+                            sid.display(loaded.store.paths(), loaded.store.tokens())
                         );
                     }
                 }
@@ -225,7 +225,7 @@ fn assert_pcp_composing_except(loaded: &mut LoadedStage, pcp_path: &Path, skippe
 
         if let Some(props) = expectations.property_names {
             for prop in props {
-                let tok = loaded.store.tokens.intern(&prop);
+                let tok = loaded.store.tokens().intern(&prop);
                 // A declared property need not author a value, so ask for
                 // its opinions rather than a resolved value.
                 assert!(
@@ -240,7 +240,7 @@ fn assert_pcp_composing_except(loaded: &mut LoadedStage, pcp_path: &Path, skippe
                 let suffix = prop_path
                     .strip_prefix(&format!("{prim_path}."))
                     .unwrap_or_else(|| panic!("unexpected property stack key {prop_path}"));
-                let dest_field = loaded.store.tokens.intern(suffix);
+                let dest_field = loaded.store.tokens().intern(suffix);
 
                 let Some(opinions) = opinions(
                     &stage,
@@ -257,8 +257,8 @@ fn assert_pcp_composing_except(loaded: &mut LoadedStage, pcp_path: &Path, skippe
 
                     let expected_spec_path = layerstack::SpecPath::parse(
                         &expected_spec,
-                        &loaded.store.tokens,
-                        &loaded.store.paths,
+                        loaded.store.tokens(),
+                        loaded.store.paths(),
                     )
                     .expect("expected property spec path");
 
@@ -277,7 +277,7 @@ fn assert_pcp_composing_except(loaded: &mut LoadedStage, pcp_path: &Path, skippe
                 let suffix = prop_path
                     .strip_prefix(&format!("{prim_path}."))
                     .unwrap_or_else(|| panic!("unexpected relationship key {prop_path}"));
-                let field = loaded.store.tokens.intern(suffix);
+                let field = loaded.store.tokens().intern(suffix);
 
                 let resolved =
                     target_list(&stage, &loaded.store, PropertyPath::new(prim_id, field))
@@ -286,7 +286,7 @@ fn assert_pcp_composing_except(loaded: &mut LoadedStage, pcp_path: &Path, skippe
                 let expected_targets: Vec<_> = expected
                     .into_iter()
                     .map(|p| {
-                        TargetPath::parse(&p, &loaded.store.tokens, &loaded.store.paths)
+                        TargetPath::parse(&p, loaded.store.tokens(), loaded.store.paths())
                             .expect("target path")
                     })
                     .collect();
@@ -302,7 +302,7 @@ fn assert_pcp_composing_except(loaded: &mut LoadedStage, pcp_path: &Path, skippe
                 let suffix = prop_path
                     .strip_prefix(&format!("{prim_path}."))
                     .unwrap_or_else(|| panic!("unexpected connection key {prop_path}"));
-                let field = loaded.store.tokens.intern(suffix);
+                let field = loaded.store.tokens().intern(suffix);
 
                 let resolved =
                     target_list(&stage, &loaded.store, PropertyPath::new(prim_id, field))
@@ -311,7 +311,7 @@ fn assert_pcp_composing_except(loaded: &mut LoadedStage, pcp_path: &Path, skippe
                 let expected_targets: Vec<_> = expected
                     .into_iter()
                     .map(|p| {
-                        TargetPath::parse(&p, &loaded.store.tokens, &loaded.store.paths)
+                        TargetPath::parse(&p, loaded.store.tokens(), loaded.store.paths())
                             .expect("target path")
                     })
                     .collect();
@@ -981,8 +981,9 @@ fn assert_error_arc_cycle_root_composes(load: fn(&str) -> (LoadedStage, PathBuf)
         ),
     ];
     for (prim, stack, children) in expected {
-        let path = layerstack::Path::parse_absolute(prim, &loaded.store.tokens).expect("prim path");
-        let id = loaded.store.paths.intern(path);
+        let path =
+            layerstack::Path::parse_absolute(prim, loaded.store.tokens()).expect("prim path");
+        let id = loaded.store.paths().intern(path);
         let actual_stack: Vec<String> = composed_prim(&stage, &loaded.store, id)
             .unwrap_or_else(|| panic!("{prim} is not composed"))
             .prim_stack()
@@ -991,7 +992,7 @@ fn assert_error_arc_cycle_root_composes(load: fn(&str) -> (LoadedStage, PathBuf)
                 format!(
                     "{} {}",
                     loaded.layer_names[layer],
-                    spec.display(&loaded.store.paths, &loaded.store.tokens)
+                    spec.display(loaded.store.paths(), loaded.store.tokens())
                 )
             })
             .collect();
@@ -1005,8 +1006,8 @@ fn assert_error_arc_cycle_root_composes(load: fn(&str) -> (LoadedStage, PathBuf)
             .unwrap_or_default()
             .iter()
             .map(|child| {
-                let leaf = loaded.store.paths.resolve(*child).leaf().expect("leaf");
-                loaded.store.tokens.resolve(leaf).to_string()
+                let leaf = loaded.store.paths().resolve(*child).leaf().expect("leaf");
+                loaded.store.tokens().resolve(leaf).to_string()
             })
             .collect();
         assert_eq!(&actual_children, children, "children of {prim}");
@@ -1025,7 +1026,7 @@ fn assert_error_arc_cycle_root_composes(load: fn(&str) -> (LoadedStage, PathBuf)
         "</RelocatedInheritOfChild/Child>: @root.usd@</RelocatedInheritOfChild/Child> CANNOT inherits @root.usd@</RelocatedInheritOfChild/Child/Class>",
         "</RelocatedInheritOfChild/Object>: @root.usd@</RelocatedInheritOfChild/Object> relocates @root.usd@</RelocatedInheritOfChild/Child> CANNOT inherits @root.usd@</RelocatedInheritOfChild/Child/Class>",
     ];
-    let display = |path: PathId| loaded.store.paths.display(path, &loaded.store.tokens);
+    let display = |path: PathId| loaded.store.paths().display(path, loaded.store.tokens());
     let mut actual_errors: Vec<String> = stage
         .composition_errors()
         .iter()
@@ -1170,7 +1171,7 @@ fn assert_targets_and_errors(
         let targets: Vec<String> = target_list(&stage, &loaded.store, path)
             .unwrap_or_default()
             .iter()
-            .map(|target| target.display(&loaded.store.paths, &loaded.store.tokens))
+            .map(|target| target.display(loaded.store.paths(), loaded.store.tokens()))
             .collect();
         assert_eq!(&targets, expected, "{name}: targets of {property}");
     }
@@ -1184,7 +1185,10 @@ fn assert_targets_and_errors(
                 _ => return None,
             };
             let prim = error.prim()?;
-            Some((kind, loaded.store.paths.display(prim, &loaded.store.tokens)))
+            Some((
+                kind,
+                loaded.store.paths().display(prim, loaded.store.tokens()),
+            ))
         })
         .collect();
     errors.sort();

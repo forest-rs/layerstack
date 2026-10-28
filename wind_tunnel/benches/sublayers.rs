@@ -23,8 +23,8 @@ use layerstack::{
 fn build_and_compose(n_layers: usize, n_prims: usize) -> Stage {
     let mut store = InMemoryStore::default();
 
-    let f_value = store.tokens.intern("value");
-    let f_priority = store.tokens.intern("priority");
+    let f_value = store.tokens().intern("value");
+    let f_priority = store.tokens().intern("priority");
 
     // Pre-intern prim paths and child name tokens.
     let root = store.path("/Root");
@@ -32,7 +32,7 @@ fn build_and_compose(n_layers: usize, n_prims: usize) -> Stage {
     let mut child_tokens = Vec::with_capacity(n_prims);
     for i in 0..n_prims {
         let name = alloc::format!("Prim_{i:04}");
-        child_tokens.push(store.tokens.intern(&name));
+        child_tokens.push(store.tokens().intern(&name));
         child_paths.push(store.path(&alloc::format!("/Root/{name}")));
     }
 

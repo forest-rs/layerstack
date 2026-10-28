@@ -106,7 +106,7 @@ fn layer_dependencies(c: &mut Criterion) {
                     .map(|i| store.path(&format!("/World/P{i}")))
                     .collect();
                 let fields: Vec<_> = (0..properties)
-                    .map(|i| store.tokens.intern(format!("transform{i}")))
+                    .map(|i| store.tokens().intern(format!("transform{i}")))
                     .collect();
                 for id in 1..=layers {
                     let mut layer = Layer::new(LayerId(id));

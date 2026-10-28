@@ -126,7 +126,7 @@ fn prim_stacks_and_values_match_openusd() {
     let mut composed: Vec<String> = stage
         .traverse(pseudo_root)
         .filter(|prim| *prim != pseudo_root)
-        .map(|prim| loaded.store.paths.display(prim, &loaded.store.tokens))
+        .map(|prim| loaded.store.paths().display(prim, loaded.store.tokens()))
         .collect();
     composed.sort();
     let mut expected: Vec<&str> = oracle.prims.iter().map(|p| p.path.as_str()).collect();
@@ -144,7 +144,7 @@ fn prim_stacks_and_values_match_openusd() {
                     layer_name(&loaded, key.key.layer_id),
                     key.key
                         .spec_path
-                        .display(&loaded.store.paths, &loaded.store.tokens),
+                        .display(loaded.store.paths(), loaded.store.tokens()),
                 )
             })
             .collect();

@@ -45,7 +45,7 @@ fn dropped_targets_are_explained_with_their_opinion() {
         .iter()
         .filter_map(|e| match e {
             layerstack::CompositionError::InvalidExternalTargetPath(e) => {
-                Some(PropertyPath::new(e.prim, e.property).display(&store.paths, &store.tokens))
+                Some(PropertyPath::new(e.prim, e.property).display(store.paths(), store.tokens()))
             }
             _ => None,
         })

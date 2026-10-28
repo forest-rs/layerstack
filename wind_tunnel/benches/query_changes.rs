@@ -16,8 +16,8 @@ use std::{hint::black_box, sync::Arc};
 fn bench(c: &mut Criterion) {
     let mut store = InMemoryStore::default();
     let root = store.path("/World");
-    let cube = store.tokens.intern("Cube");
-    let roughness = store.tokens.intern("inputs:roughness");
+    let cube = store.tokens().intern("Cube");
+    let roughness = store.tokens().intern("inputs:roughness");
     let mut layer = Layer::new(LayerId(1));
     layer.insert_prim(root, PrimSpec::def());
     let mut paths = Vec::new();
@@ -28,7 +28,7 @@ fn bench(c: &mut Criterion) {
     }
     store.insert_layer(layer);
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(store.tokens()))),
         ..StageOptions::default()
     };
     let stage = Stage::compose(&mut store, LayerId(1), options);

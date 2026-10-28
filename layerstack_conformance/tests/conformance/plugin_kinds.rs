@@ -170,8 +170,8 @@ fn generated_kinds_drive_model_queries() {
     assert_eq!(kinds, before, "the first registrations stand");
     let mut store = InMemoryStore::default();
     let path = store.path("/Model");
-    let kind = store.tokens.intern("kind");
-    let leaf = store.tokens.intern("stack_leaf");
+    let kind = store.tokens().intern("kind");
+    let leaf = store.tokens().intern("stack_leaf");
     let mut layer = Layer::new(LayerId(1));
     layer.insert_prim(
         path,

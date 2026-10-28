@@ -67,7 +67,7 @@ fn edits_undo_removal_and_clear_issue_fresh_component_revisions() {
         (i.definition_revision(), i.weight_revision())
     };
     let initial = get(&mut cache, &Scene::new(live.stage(), &store));
-    let property = PropertyPath::new(path, store.tokens.intern("points"));
+    let property = PropertyPath::new(path, store.tokens().intern("points"));
     let mut t = Transaction::new();
     t.set_default(
         EditTarget::for_layer(LayerId(1)).property(property),
@@ -77,7 +77,7 @@ fn edits_undo_removal_and_clear_issue_fresh_component_revisions() {
     let scene = Scene::new(live.stage(), &store);
     cache.apply_changes(&scene, &edit.changes);
     assert_eq!(get(&mut cache, &scene), initial);
-    let property = PropertyPath::new(anim, store.tokens.intern("blendShapeWeights"));
+    let property = PropertyPath::new(anim, store.tokens().intern("blendShapeWeights"));
     let mut t = Transaction::new();
     t.set_default(
         EditTarget::for_layer(LayerId(1)).property(property),

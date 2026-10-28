@@ -30,7 +30,7 @@ impl AssetResolver for NoAssets {
 }
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut store = InMemoryStore::default();
-    let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(store.tokens()));
     let parsed = layerstack_usda::parser::parse(
         r#"#usda 1.0
  def Material "Paint" {
@@ -64,8 +64,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let emitted = layerstack_usda::emit::emit(
         &parsed.layer,
         LayerId(1),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut NoAssets,
     );
     assert!(emitted.diagnostics.is_empty(), "{:?}", emitted.diagnostics);

@@ -91,7 +91,7 @@ fn with_schemas(store: &mut InMemoryStore, schemas: Vec<SchemaDefinition>) -> St
         builder.register(schema);
     }
     StageOptions {
-        schemas: Some(Arc::new(builder.build(&store.tokens))),
+        schemas: Some(Arc::new(builder.build(store.tokens()))),
         ..StageOptions::default()
     }
 }
@@ -116,7 +116,7 @@ fn defined(name: TokenId, fallback: impl Into<Value>) -> PropertyDefinition {
 #[test]
 fn stronger_dense_value_shadows_weaker_ones() {
     let mut store = InMemoryStore::default();
-    let height = store.tokens.intern("height");
+    let height = store.tokens().intern("height");
     let stage = layered(
         &mut store,
         vec![
@@ -141,7 +141,7 @@ fn stronger_dense_value_shadows_weaker_ones() {
     assert_eq!(
         explained.opinions[0]
             .spec_path()
-            .display(&store.paths, &store.tokens),
+            .display(store.paths(), store.tokens()),
         "/Tree.height"
     );
 }
@@ -149,8 +149,8 @@ fn stronger_dense_value_shadows_weaker_ones() {
 #[test]
 fn block_cuts_off_weaker_opinions() {
     let mut store = InMemoryStore::default();
-    let height = store.tokens.intern("height");
-    let points = store.tokens.intern("points");
+    let height = store.tokens().intern("height");
+    let points = store.tokens().intern("points");
     let stage = layered(
         &mut store,
         vec![
@@ -201,7 +201,7 @@ fn block_cuts_off_weaker_opinions() {
 #[test]
 fn strongest_block_resolves_no_value() {
     let mut store = InMemoryStore::default();
-    let height = store.tokens.intern("height");
+    let height = store.tokens().intern("height");
     let stage = layered(
         &mut store,
         vec![
@@ -228,8 +228,8 @@ fn strongest_block_resolves_no_value() {
 #[test]
 fn sparse_edits_compose_over_a_dense_base_across_layers() {
     let mut store = InMemoryStore::default();
-    let points = store.tokens.intern("points");
-    let color = store.tokens.intern("color");
+    let points = store.tokens().intern("points");
+    let color = store.tokens().intern("color");
     let stage = layered(
         &mut store,
         vec![
@@ -281,7 +281,7 @@ fn dict(entries: Vec<(&str, Value)>) -> Value {
 #[test]
 fn dictionary_opinions_report_what_each_supplied() {
     let mut store = InMemoryStore::default();
-    let custom_data = store.tokens.intern("customData");
+    let custom_data = store.tokens().intern("customData");
     let stage = layered(
         &mut store,
         vec![
@@ -352,7 +352,7 @@ fn dictionary_opinions_report_what_each_supplied() {
 #[test]
 fn time_samples_are_explained_in_stage_time_through_a_layer_offset() {
     let mut store = InMemoryStore::default();
-    let height = store.tokens.intern("height");
+    let height = store.tokens().intern("height");
     let tree = store.path("/Tree");
 
     // The weaker sublayer is offset by 10: its samples at layer times 0 and
@@ -441,7 +441,7 @@ fn time_samples_are_explained_in_stage_time_through_a_layer_offset() {
 #[test]
 fn offset_time_samples_report_stage_times() {
     let mut store = InMemoryStore::default();
-    let points = store.tokens.intern("points");
+    let points = store.tokens().intern("points");
     let tree = store.path("/Tree");
 
     // The weaker layer is offset by 10: its samples at layer times 0 and 10
@@ -553,8 +553,8 @@ fn offset_time_samples_report_stage_times() {
 
 /// A grove references a tree asset, which inherits a class.
 fn grove(store: &mut InMemoryStore) -> (Stage, TokenId, TokenId) {
-    let height = store.tokens.intern("height");
-    let bark = store.tokens.intern("bark");
+    let height = store.tokens().intern("height");
+    let bark = store.tokens().intern("bark");
     let grove = store.path("/Grove");
     let tree = store.path("/Tree");
     let class = store.path("/_class_Tree");
@@ -608,7 +608,7 @@ fn opinions_name_the_arc_that_reaches_them() {
         ]
     );
     let node = height.opinions[1].node.expect("graph node");
-    assert_eq!(node.site().display(&store.paths, &store.tokens), "/Tree");
+    assert_eq!(node.site().display(store.paths(), store.tokens()), "/Tree");
     assert_eq!(node.layer_stack(), LayerId(2));
 
     let bark = attribute_at(&stage, &store, store.property_path("/Grove.bark"))
@@ -619,7 +619,7 @@ fn opinions_name_the_arc_that_reaches_them() {
     let node = bark.opinions[0].node.expect("graph node");
     assert_eq!(node.arc_kind(), ArcKind::Inherits);
     assert_eq!(
-        node.site().display(&store.paths, &store.tokens),
+        node.site().display(store.paths(), store.tokens()),
         "/_class_Tree"
     );
     assert_eq!(bark.opinions[0].layer(), LayerId(2));
@@ -628,9 +628,9 @@ fn opinions_name_the_arc_that_reaches_them() {
 #[test]
 fn schema_fallback_is_explained() {
     let mut store = InMemoryStore::default();
-    let height = store.tokens.intern("height");
-    let points = store.tokens.intern("points");
-    let tree_type = store.tokens.intern("Tree");
+    let height = store.tokens().intern("height");
+    let points = store.tokens().intern("points");
+    let tree_type = store.tokens().intern("Tree");
     let stage = layered_with_schemas(
         &mut store,
         vec![
@@ -682,8 +682,8 @@ fn schema_fallback_is_explained() {
 #[test]
 fn a_block_resolves_the_schema_fallback() {
     let mut store = InMemoryStore::default();
-    let height = store.tokens.intern("height");
-    let tree_type = store.tokens.intern("Tree");
+    let height = store.tokens().intern("height");
+    let tree_type = store.tokens().intern("Tree");
     let stage = layered_with_schemas(
         &mut store,
         vec![
@@ -714,9 +714,9 @@ fn list_ops_report_each_edit() {
     use layerstack::{FieldValue, ListOp};
 
     let mut store = InMemoryStore::default();
-    let api_schemas = store.tokens.intern("apiSchemas");
-    let a = store.tokens.intern("ShadeAPI");
-    let b = store.tokens.intern("WindAPI");
+    let api_schemas = store.tokens().intern("apiSchemas");
+    let a = store.tokens().intern("ShadeAPI");
+    let b = store.tokens().intern("WindAPI");
     let stage = layered(
         &mut store,
         vec![
@@ -747,8 +747,8 @@ fn list_ops_report_each_edit() {
 /// A typed `/Tree` whose schema gives `points` the fallback `[10, 20]` and
 /// `height` none, with the given authored properties.
 fn typed_tree(store: &mut InMemoryStore, properties: Vec<(&str, PropertySpec)>) -> Stage {
-    let points = store.tokens.intern("points");
-    let tree_type = store.tokens.intern("Tree");
+    let points = store.tokens().intern("points");
+    let tree_type = store.tokens().intern("Tree");
     let schemas = vec![SchemaDefinition::typed(tree_type).with_property(defined(
         points,
         Value::Array(vec![Value::Float(10.0), Value::Float(20.0)]),
@@ -756,7 +756,7 @@ fn typed_tree(store: &mut InMemoryStore, properties: Vec<(&str, PropertySpec)>) 
     let tree = store.path("/Tree");
     let mut spec = PrimSpec::def().with_type_name(tree_type);
     for (name, property) in properties {
-        spec = spec.with_property(store.tokens.intern(name), property);
+        spec = spec.with_property(store.tokens().intern(name), property);
     }
     let mut root = Layer::new(LayerId(1));
     root.insert_prim(tree, spec);
@@ -796,9 +796,9 @@ fn blocks_without_a_fallback_are_still_explained() {
         ],
     );
     let tree = store.path("/Tree");
-    let height = store.tokens.intern("height");
-    let width = store.tokens.intern("width");
-    let depth = store.tokens.intern("depth");
+    let height = store.tokens().intern("height");
+    let width = store.tokens().intern("width");
+    let depth = store.tokens().intern("depth");
     let linear = InterpolationType::Linear;
 
     // An authored default block, at a numeric time and at the default time.
@@ -901,7 +901,7 @@ fn check_mixed_samples(samples: Vec<(f64, Value)>, lower_seeded: bool) {
         )],
     );
     let tree = store.path("/Tree");
-    let points = store.tokens.intern("points");
+    let points = store.tokens().intern("points");
     let linear = InterpolationType::Linear;
 
     let explained = stage

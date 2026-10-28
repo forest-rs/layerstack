@@ -171,13 +171,17 @@ fn property_metadata_authoring_matches_openusd_call_by_call() {
         match (&result, call.property.as_str(), call.key.as_str()) {
             (Ok(()), ..) => {
                 let property = store.property_path(&format!("/P.{}", call.property));
-                let key = store.tokens.lookup(&call.key).unwrap();
+                let key = store.tokens().lookup(&call.key).unwrap();
                 let read = live
                     .view(&store)
                     .property(property)
                     .and_then(|property| property.metadata(key))
                     .unwrap();
-                assert_eq!(Some(json(&read.value, &store.tokens)), call.read, "{label}");
+                assert_eq!(
+                    Some(json(&read.value, store.tokens())),
+                    call.read,
+                    "{label}"
+                );
             }
             (Err(error), "nope", _) => assert_eq!(*error, MetadataError::NoSuchProperty),
             (Err(_), _, "unknownKey") => {
@@ -255,7 +259,7 @@ fn property_metadata_clears_only_target_specs() {
     let transaction = edit.finish();
     live.apply(&mut store, &transaction).unwrap();
     let property = store.property_path("/P.a");
-    let key = store.tokens.lookup("displayName").unwrap();
+    let key = store.tokens().lookup("displayName").unwrap();
     assert!(
         live.view(&store)
             .property(property)

@@ -124,7 +124,7 @@ fn tokens(loaded: &mut LoadedStage, value: &Json) -> Vec<layerstack::TokenId> {
     let items = value.as_array().unwrap();
     items
         .iter()
-        .map(|t| loaded.store.tokens.intern(t.as_str().unwrap()))
+        .map(|t| loaded.store.tokens().intern(t.as_str().unwrap()))
         .collect()
 }
 
@@ -200,7 +200,7 @@ fn transaction(
         "set_instanceable" => txn.set_instanceable(at, value.as_bool().unwrap()),
         "set_type_name" if value.is_null() => txn.clear_type_name(at),
         "set_type_name" => {
-            let name = loaded.store.tokens.intern(value.as_str().unwrap());
+            let name = loaded.store.tokens().intern(value.as_str().unwrap());
             txn.set_type_name(at, name)
         }
         "set_specifier" => txn.set_specifier(
@@ -223,11 +223,11 @@ fn transaction(
             txn.set_property_order(at, order)
         }
         "add_applied_schema" => {
-            let name = loaded.store.tokens.intern(step["name"].as_str().unwrap());
+            let name = loaded.store.tokens().intern(step["name"].as_str().unwrap());
             txn.add_applied_schema(at, name)
         }
         "remove_applied_schema" => {
-            let name = loaded.store.tokens.intern(step["name"].as_str().unwrap());
+            let name = loaded.store.tokens().intern(step["name"].as_str().unwrap());
             txn.remove_applied_schema(at, name)
         }
         other => panic!("no call {other}"),
@@ -248,12 +248,12 @@ fn list_op<T>(op: &ListOp<T>, item: impl Fn(&T) -> Json) -> Json {
 /// The fields the oracle records, as it records them.
 fn fields(loaded: &LoadedStage, spec: Spec<'_>) -> Json {
     let store = &loaded.store;
-    let path = |p: &PathId| json!(store.paths.display(*p, &store.tokens));
+    let path = |p: &PathId| json!(store.paths().display(*p, store.tokens()));
     let reference = |r: &Reference| {
         json!({
             "asset": r.asset_path().unwrap_or_default(),
             "path": match r.target {
-                ReferenceTarget::Prim(p) => store.paths.display(p, &store.tokens),
+                ReferenceTarget::Prim(p) => store.paths().display(p, store.tokens()),
                 _ => String::new(),
             },
             "offset": r.layer_offset.offset,
@@ -264,7 +264,7 @@ fn fields(loaded: &LoadedStage, spec: Spec<'_>) -> Json {
         json!(
             names
                 .iter()
-                .map(|n| store.tokens.resolve(*n))
+                .map(|n| store.tokens().resolve(*n))
                 .collect::<Vec<_>>()
         )
     };
@@ -278,7 +278,7 @@ fn fields(loaded: &LoadedStage, spec: Spec<'_>) -> Json {
             };
             out.insert("specifier".into(), json!(specifier));
             if let Some(name) = spec.type_name {
-                out.insert("typeName".into(), json!(store.tokens.resolve(name)));
+                out.insert("typeName".into(), json!(store.tokens().resolve(name)));
             }
             if let Some(active) = spec.active {
                 out.insert("active".into(), json!(active));
@@ -312,7 +312,7 @@ fn fields(loaded: &LoadedStage, spec: Spec<'_>) -> Json {
         }
     };
     for entry in field {
-        let name = store.tokens.resolve(entry.name);
+        let name = store.tokens().resolve(entry.name);
         match (name, &entry.value) {
             (
                 "active" | "instanceable",
@@ -323,7 +323,7 @@ fn fields(loaded: &LoadedStage, spec: Spec<'_>) -> Json {
             ("apiSchemas", layerstack::FieldValue::TokenListOp(list)) => {
                 out.insert(
                     name.into(),
-                    list_op(list, |t| json!(store.tokens.resolve(*t))),
+                    list_op(list, |t| json!(store.tokens().resolve(*t))),
                 );
             }
             _ => {}
@@ -353,7 +353,7 @@ enum Spec<'a> {
 
 fn spec_at<'a>(loaded: &'a LoadedStage, layer: LayerId, path: &SpecPath) -> Option<Spec<'a>> {
     let layer = &loaded.store.layer(layer).unwrap();
-    if let Some(variant) = layer.variant_spec_at(path, &loaded.store.paths) {
+    if let Some(variant) = layer.variant_spec_at(path, loaded.store.paths()) {
         return Some(Spec::Variant(variant));
     }
     let sites: Vec<_> = path.variant_selection_sites().collect();
@@ -363,7 +363,7 @@ fn spec_at<'a>(loaded: &'a LoadedStage, layer: LayerId, path: &SpecPath) -> Opti
 /// Every composed prim (inactive ones too), with its prim stack, whether
 /// it is active and whether it is an instance.
 fn composed(stage: &Stage, store: &InMemoryStore) -> Vec<(String, Vec<String>, bool, bool)> {
-    let root = store.paths.lookup(&Path::root()).unwrap();
+    let root = store.paths().lookup(&Path::root()).unwrap();
     stage
         .traverse_all(root)
         .filter_map(|prim| stage.prim(prim, store))
@@ -372,7 +372,11 @@ fn composed(stage: &Stage, store: &InMemoryStore) -> Vec<(String, Vec<String>, b
             let stack = stack
                 .iter()
                 .map(|(layer, path)| {
-                    format!("{}:{}", layer.0, path.display(&store.paths, &store.tokens))
+                    format!(
+                        "{}:{}",
+                        layer.0,
+                        path.display(store.paths(), store.tokens())
+                    )
                 })
                 .collect();
             (
@@ -411,7 +415,7 @@ fn prim_field_edits_agree_with_openusd_call_by_call() {
         );
         let target = edit_target(&mut loaded, &live, &case["target"]);
         let prim = loaded.store.path(case["prim"].as_str().unwrap());
-        let spec_path = target.map_to_spec_path(prim, &loaded.store.paths);
+        let spec_path = target.map_to_spec_path(prim, loaded.store.paths());
         let authored = |loaded: &LoadedStage| {
             let path = spec_path.as_ref()?;
             spec_at(loaded, target.layer(), path).map(|spec| fields(loaded, spec))

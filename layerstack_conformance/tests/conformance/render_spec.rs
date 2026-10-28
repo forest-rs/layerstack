@@ -42,7 +42,7 @@ fn render_specs_match_openusd() {
         &workspace_root().join("layerstack_conformance/fixtures/render_spec/scene.usda"),
     );
     assert!(loaded.invalid.is_empty(), "{:?}", loaded.invalid);
-    let schemas = Arc::new(layerstack_schemas::openusd(&loaded.store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(loaded.store.tokens()));
     let stage = Stage::compose(
         &mut loaded.store,
         loaded.root_layer,
@@ -56,7 +56,13 @@ fn render_specs_match_openusd() {
         ["/BindingCycle", "/BindingEmptyCycle", "/BindingMissing"].map(|p| loaded.store.path(p));
     let scene = Scene::new(&stage, &loaded.store);
     let settings = RenderSettings::new(&scene, path).unwrap();
-    let path_name = |p| loaded.store.paths.resolve(p).display(&loaded.store.tokens);
+    let path_name = |p| {
+        loaded
+            .store
+            .paths()
+            .resolve(p)
+            .display(loaded.store.tokens())
+    };
     for expected in oracle {
         let namespaces: Vec<_> = expected["namespaces"]
             .as_array()

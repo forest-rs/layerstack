@@ -33,7 +33,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let material_path = store.path("/BaseMaterial");
     let accent_path = store.path("/AccentMaterial");
     let instance_path = store.path("/Instances");
-    let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(store.tokens()));
     let mut live = LiveStage::compose(
         &mut store,
         layer,
@@ -74,7 +74,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     instances.set_positions(&mut edit, &[[0., 0., 0.], [2., 0., 0.], [4., 0., 0.]]);
     let mut transaction = edit.finish();
     // Binding targets and family type use USD's generic property-authoring path.
-    let binding = store.tokens.intern("material:binding");
+    let binding = store.tokens().intern("material:binding");
     for (path, material) in [(mesh_path, material_path), (subset_path, accent_path)] {
         transaction.create_property(
             target.property(PropertyPath::new(path, binding)),
@@ -82,12 +82,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .with_targets(ListOp::explicit(vec![TargetPath::Prim(material)])),
         );
     }
-    let family = store.tokens.intern("subsetFamily:materialBind:familyType");
+    let family = store
+        .tokens()
+        .intern("subsetFamily:materialBind:familyType");
     let mut spec = PropertySpec::typed_attribute(
         PropertyType::parse("token").expect("a registered value type"),
     );
     spec.variability = Variability::Uniform;
-    spec.default = Some(Value::Token(store.tokens.intern("nonOverlapping")));
+    spec.default = Some(Value::Token(store.tokens().intern("nonOverlapping")));
     transaction.create_property(target.property(PropertyPath::new(mesh_path, family)), spec);
     live.apply(&mut store, &transaction)?;
 
@@ -111,7 +113,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap()
         .validated_values(Time::Default)?
         .ok_or("missing texture coordinates")?;
-    let uv = value::try_read_float2_array_shared(st.values(), &store.tokens)?
+    let uv = value::try_read_float2_array_shared(st.values(), store.tokens())?
         .ok_or("incompatible texture coordinates")?;
     // An engine can write directly into its final vertex buffer; no USD flattened
     // array is needed between source values and the expanded vertex attributes.

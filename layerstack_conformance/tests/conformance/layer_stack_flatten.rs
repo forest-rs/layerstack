@@ -132,8 +132,8 @@ fn raw_consolidation_matches_native_and_keeps_composed_stage_values() {
     let mut expected = layerstack_usda::emit::emit(
         &parsed.layer,
         output,
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut NoAssets,
     )
     .layer;
@@ -167,7 +167,7 @@ fn raw_consolidation_matches_native_and_keeps_composed_stage_values() {
                 actual,
                 expected,
                 "{}",
-                store.paths.display(path, &store.tokens)
+                store.paths().display(path, store.tokens())
             );
         }
     }
@@ -190,7 +190,7 @@ fn raw_consolidation_matches_native_and_keeps_composed_stage_values() {
         "specialized",
         "source",
     ] {
-        let name = store.tokens.lookup(name).unwrap();
+        let name = store.tokens().lookup(name).unwrap();
         for time in [Time::Default, Time::at(10.), Time::at(14.)] {
             assert_eq!(
                 original
@@ -204,7 +204,7 @@ fn raw_consolidation_matches_native_and_keeps_composed_stage_values() {
                     .and_then(|attribute| attribute.get(time))
                     .map(|value| value.value),
                 "{} {time:?}",
-                store.tokens.resolve(name)
+                store.tokens().resolve(name)
             );
         }
     }
@@ -213,7 +213,7 @@ fn raw_consolidation_matches_native_and_keeps_composed_stage_values() {
         original.prim(store.path("/P/Inactive"), &store).is_some()
     );
     let clip = store.path("/ClipPrim");
-    let name = store.tokens.lookup("clipValue").unwrap();
+    let name = store.tokens().lookup("clipValue").unwrap();
     for time in [Time::at(10.), Time::at(12.), Time::at(14.)] {
         let path = layerstack::PropertyPath::new(clip, name);
         let read = |stage: &Stage| {

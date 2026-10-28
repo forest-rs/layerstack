@@ -34,8 +34,8 @@ fn main() {
         let transaction = edit.finish();
         live.apply(store, &transaction).unwrap();
     }
-    let set = store.tokens.intern("shadingVariant");
-    let selected = store.tokens.intern("green");
+    let set = store.tokens().intern("shadingVariant");
+    let selected = store.tokens().intern("green");
     let mut edit = Transaction::new();
     edit.set_variant_selection(EditTarget::for_layer(root).prim(hello), set, Some(selected));
     live.apply(store, &edit).unwrap();

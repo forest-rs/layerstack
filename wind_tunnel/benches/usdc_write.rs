@@ -154,7 +154,7 @@ fn bench_layer_save(c: &mut Criterion) {
             let prim = store.path("/Root");
             let mut spec = PrimSpec::def();
             for field in 0..4 {
-                let name = store.tokens.intern(format!("values{field}"));
+                let name = store.tokens().intern(format!("values{field}"));
                 let values = layerstack::Value::TypedArray(TypedArray::Float(Arc::new(
                     (0..len).map(|i| (i % 256 + field) as f32).collect(),
                 )));
@@ -169,7 +169,7 @@ fn bench_layer_save(c: &mut Criterion) {
             }
             let mut layer = Layer::new(LayerId(1));
             let mut root = PrimSpec::default();
-            root.authored_children.push(store.tokens.intern("Root"));
+            root.authored_children.push(store.tokens().intern("Root"));
             layer.insert_prim(store.path("/"), root);
             layer.insert_prim(prim, spec);
             group.bench_function(
@@ -179,16 +179,16 @@ fn bench_layer_save(c: &mut Criterion) {
                         black_box(
                             layerstack_usdc::writer::save_layer(
                                 black_box(&layer),
-                                &store.tokens,
-                                &store.paths,
+                                store.tokens(),
+                                store.paths(),
                             )
                             .unwrap(),
                         );
                     });
                 },
             );
-            let doc =
-                layerstack_usda::save::layer_document(&layer, &store.tokens, &store.paths).unwrap();
+            let doc = layerstack_usda::save::layer_document(&layer, store.tokens(), store.paths())
+                .unwrap();
             group.bench_function(
                 BenchmarkId::new(
                     if animated {

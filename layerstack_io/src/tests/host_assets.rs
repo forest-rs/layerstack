@@ -214,10 +214,10 @@ fn a_variant_switch_after_an_edit_wants_its_source_and_keeps_the_edit() {
     let root = doc.stage().stage().root_layer().unwrap();
     let at = EditTarget::for_layer(root);
     let child = doc.store_mut().path("/Child");
-    let edited = doc.store_mut().tokens.intern("edited");
+    let edited = doc.store_mut().tokens().intern("edited");
     let model = doc.store_mut().path("/Model");
-    let set = doc.store_mut().tokens.intern("look");
-    let b = doc.store_mut().tokens.intern("b");
+    let set = doc.store_mut().tokens().intern("look");
+    let b = doc.store_mut().tokens().intern("b");
 
     let mut edit = Transaction::new();
     edit.create_property(

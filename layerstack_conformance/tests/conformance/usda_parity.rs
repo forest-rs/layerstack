@@ -70,8 +70,8 @@ fn outcome(source: &str, queries: &[&str]) -> Outcome {
     let read = read_usda(
         source,
         LayerId(1),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut NoAssets,
     );
     // Errors, which a strict import fails on; a warning reports what is
@@ -97,12 +97,12 @@ fn outcome(source: &str, queries: &[&str]) -> Outcome {
         )
         .collect();
     let saved =
-        save_usda(&read.emitted.layer, &store.tokens, &store.paths).map_err(|e| format!("{e:?}"));
+        save_usda(&read.emitted.layer, store.tokens(), store.paths()).map_err(|e| format!("{e:?}"));
     let mut streamed = String::new();
     let streaming = save_usda_to(
         &read.emitted.layer,
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut streamed,
     )
     .map(|()| streamed)
@@ -123,7 +123,7 @@ fn outcome(source: &str, queries: &[&str]) -> Outcome {
             };
             let items = items
                 .iter()
-                .map(|t| t.display(&store.paths, &store.tokens))
+                .map(|t| t.display(store.paths(), store.tokens()))
                 .collect();
             (String::from(*query), items)
         })

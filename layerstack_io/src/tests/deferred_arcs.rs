@@ -31,13 +31,13 @@ fn name(doc: &StageDocument<Memory>, prim: &str) -> Option<Value> {
     let segments = prim
         .split('/')
         .filter(|segment| !segment.is_empty())
-        .map(|segment| doc.store.tokens.lookup(segment))
+        .map(|segment| doc.store.tokens().lookup(segment))
         .collect::<Option<Vec<_>>>()?;
     let prim = doc
         .store
-        .paths
+        .paths()
         .lookup(&layerstack::Path::root().join(&segments))?;
-    let property = layerstack::PropertyPath::new(prim, doc.store.tokens.lookup("name")?);
+    let property = layerstack::PropertyPath::new(prim, doc.store.tokens().lookup("name")?);
     doc.view()
         .attribute(property)
         .and_then(|a| a.authored_value(layerstack::Time::Default))
@@ -51,8 +51,8 @@ fn read(doc: &StageDocument<Memory>, identifier: &str) -> bool {
 fn select(doc: &mut StageDocument<Memory>, variant: &str) {
     let root = doc.stage.stage().root_layer().unwrap();
     let model = doc.store.path("/Model");
-    let set = doc.store.tokens.intern("look");
-    let variant = doc.store.tokens.intern(variant);
+    let set = doc.store.tokens().intern("look");
+    let variant = doc.store.tokens().intern(variant);
     let mut edit = Transaction::new();
     edit.set_variant_selection(EditTarget::for_layer(root).prim(model), set, Some(variant));
     let (store, stage) = doc.parts_mut();
@@ -244,7 +244,7 @@ fn missing_assets_in_unselected_branches_are_not_read_or_reported() {
         );
         let spec = error
             .introducing_spec
-            .display(&doc.store.paths, &doc.store.tokens);
+            .display(doc.store.paths(), doc.store.tokens());
         assert_eq!(spec, "/Model{look=b}");
     }
 }
@@ -399,8 +399,8 @@ def "Asset" (
     assert!(!read(&doc, "deform.usda"));
     let root = doc.stage.stage().root_layer().unwrap();
     let prim = doc.store.path("/A");
-    let set = doc.store.tokens.intern("geo");
-    let variant = doc.store.tokens.intern("deform");
+    let set = doc.store.tokens().intern("geo");
+    let variant = doc.store.tokens().intern("deform");
     let mut edit = Transaction::new();
     edit.set_variant_selection(EditTarget::for_layer(root).prim(prim), set, Some(variant));
     let (store, stage) = doc.parts_mut();
@@ -441,8 +441,8 @@ fn layers_loaded_beneath_a_referenced_ancestor_count_as_used() {
     assert!(!read(&doc, "b.usda"));
     let root = doc.stage.stage().root_layer().unwrap();
     let prim = doc.store.path("/Set/Tier/Model");
-    let set = doc.store.tokens.intern("look");
-    let variant = doc.store.tokens.intern("b");
+    let set = doc.store.tokens().intern("look");
+    let variant = doc.store.tokens().intern("b");
     let mut edit = Transaction::new();
     edit.set_variant_selection(EditTarget::for_layer(root).prim(prim), set, Some(variant));
     let (store, stage) = doc.parts_mut();

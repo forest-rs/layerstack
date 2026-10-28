@@ -22,10 +22,10 @@ fn build(
     layerstack::TokenId,
 ) {
     let mut store = InMemoryStore::default();
-    let translate = store.tokens.intern("xformOp:translate");
-    let rotate = store.tokens.intern("xformOp:rotateXYZ");
-    let scale = store.tokens.intern("xformOp:scale");
-    let xform = store.tokens.intern("Xform");
+    let translate = store.tokens().intern("xformOp:translate");
+    let rotate = store.tokens().intern("xformOp:rotateXYZ");
+    let scale = store.tokens().intern("xformOp:scale");
+    let xform = store.tokens().intern("Xform");
     let mut layer = Layer::new(LayerId(1));
     let mut names = vec![String::from("/World")];
     for i in 1..n {
@@ -110,7 +110,7 @@ fn bench_local_structure(c: &mut Criterion) {
                     .prim(world, &store)
                     .unwrap()
                     .children()
-                    .map(|child| store.paths.resolve(child.path()).leaf().unwrap())
+                    .map(|child| store.paths().resolve(child.path()).leaf().unwrap())
                     .collect();
                 let layer = store.layer_mut(LayerId(1)).unwrap();
                 layer.prim_mut(world).unwrap().authored_children = names;
@@ -123,7 +123,7 @@ fn bench_local_structure(c: &mut Criterion) {
             };
             let name = format!(
                 "{}/Chunk",
-                store.paths.resolve(parent).display(&store.tokens)
+                store.paths().resolve(parent).display(store.tokens())
             );
             let target = store.path(&name);
             let mut setup = Transaction::new();
@@ -173,9 +173,9 @@ fn bench_batch_removals(c: &mut Criterion) {
                 leaf
             };
             let prefix = store
-                .paths
+                .paths()
                 .resolve(parent)
-                .display(&store.tokens)
+                .display(store.tokens())
                 .to_string();
             let mut setup = Transaction::new();
             let mut txn = Transaction::new();
@@ -210,15 +210,15 @@ fn bench_bulk_create(c: &mut Criterion) {
         let mut store = InMemoryStore::default();
         let world = store.path("/World");
         let root = store.path("/");
-        let name = store.tokens.intern("World");
+        let name = store.tokens().intern("World");
         let mut layer = Layer::new(LayerId(1));
         layer.insert_prim(world, PrimSpec::def());
         layer.insert_prim(root, PrimSpec::default().with_children(vec![name]));
         store.insert_layer(layer);
         let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
         let target = EditTarget::for_layer(LayerId(1));
-        let cube = store.tokens.intern("Cube");
-        let names = ["x", "y", "z"].map(|name| store.tokens.intern(name));
+        let cube = store.tokens().intern("Cube");
+        let names = ["x", "y", "z"].map(|name| store.tokens().intern(name));
         let mut create = Transaction::new();
         for i in 0..n {
             let path = store.path(&format!("/World/Item{i}"));
@@ -259,13 +259,13 @@ fn many_creates(
     let mut store = InMemoryStore::default();
     let world = store.path("/World");
     let root = store.path("/");
-    let name = store.tokens.intern("World");
+    let name = store.tokens().intern("World");
     let mut layer = Layer::new(LayerId(1));
     let mut children = Vec::new();
     for i in 0..existing {
         let path = store.path(&format!("/World/Rock{i}"));
         layer.insert_prim(path, PrimSpec::def());
-        children.push(store.paths.resolve(path).leaf().unwrap());
+        children.push(store.paths().resolve(path).leaf().unwrap());
     }
     let mut parent = PrimSpec::def();
     if listed {
@@ -336,7 +336,7 @@ fn many_root_creates(
 ) -> (InMemoryStore, LiveStage, Vec<Transaction>) {
     let mut store = InMemoryStore::default();
     let mut layer = Layer::new(LayerId(1));
-    let leaves = ["Moss", "Lichen"].map(|name| store.tokens.intern(name));
+    let leaves = ["Moss", "Lichen"].map(|name| store.tokens().intern(name));
     let mut roots = Vec::new();
     for i in 0..existing {
         let name = format!("/Rock{i}");
@@ -350,7 +350,7 @@ fn many_root_creates(
             spec.authored_children = leaves.to_vec();
         }
         layer.insert_prim(path, spec);
-        roots.push(store.paths.resolve(path).leaf().unwrap());
+        roots.push(store.paths().resolve(path).leaf().unwrap());
     }
     if listed {
         let root = store.path("/");

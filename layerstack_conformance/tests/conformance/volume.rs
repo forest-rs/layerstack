@@ -37,7 +37,7 @@ fn oracle() -> Oracle {
 }
 fn path_string(store: &layerstack::InMemoryStore, path: Option<PathId>) -> String {
     path.map_or_else(String::new, |path| {
-        store.paths.resolve(path).display(&store.tokens)
+        store.paths().resolve(path).display(store.tokens())
     })
 }
 #[test]
@@ -76,13 +76,13 @@ fn field_edit_results_match_cpp_and_preserve_existing_custom_qualifier() {
     let field = store.path("/Field");
     let other = store.path("/Other");
     let root = store.path("/");
-    let chain = PropertyPath::new(store.path("/Links"), store.tokens.intern("chain"));
+    let chain = PropertyPath::new(store.path("/Links"), store.tokens().intern("chain"));
     let target = EditTarget::for_layer(LayerId(1));
     let mut setup = Transaction::new();
     setup.create_property(
         target.property(PropertyPath::new(
             volume,
-            store.tokens.intern("field:noncustom"),
+            store.tokens().intern("field:noncustom"),
         )),
         PropertySpec::relationship(),
     );
@@ -120,7 +120,7 @@ fn field_edit_results_match_cpp_and_preserve_existing_custom_qualifier() {
             live.apply(&mut store, &transaction)
         }
         .unwrap();
-        let name = store.tokens.intern(format!("field:{}", row.name));
+        let name = store.tokens().intern(format!("field:{}", row.name));
         let scene = Scene::new(live.stage(), &store);
         let view = Volume::new(&scene, volume).unwrap();
         assert_eq!(view.has_field_relationship(&row.name), row.exists);
@@ -140,7 +140,7 @@ fn field_edit_results_match_cpp_and_preserve_existing_custom_qualifier() {
             })
             .unwrap_or_default()
             .into_iter()
-            .map(|t| t.display(&store.paths, &store.tokens))
+            .map(|t| t.display(store.paths(), store.tokens()))
             .collect();
         assert_eq!(targets, row.targets);
     }
@@ -227,7 +227,7 @@ fn weaker_custom_binding_is_blocked_without_losing_declaration_and_restored_by_u
         "#usda 1.0\ndef Volume \"Asset\" {\n custom rel field:density = </Field> (doc = \"preserve\")\n}\ndef Volume \"Instance\" (references = </Asset>) {}\ndef Scope \"Field\" {}\n",
     );
     let path = store.path("/Instance");
-    let name = store.tokens.intern("field:density");
+    let name = store.tokens().intern("field:density");
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
     let handle = layerstack_schemas::usd_vol::VolumeEdit::new(&edit, path)
         .expect("outside any instance")
@@ -272,9 +272,9 @@ fn variant_target_preserves_local_relationship_metadata_and_child_branch_specs()
     let field = store.path("/Field");
     for (path_text, spec_text) in [("/V", "/V{look=a}"), ("/V/Child", "/V{look=a}Child")] {
         let path = store.path(path_text);
-        let spec = SpecPath::parse(spec_text, &store.tokens, &store.paths).unwrap();
+        let spec = SpecPath::parse(spec_text, store.tokens(), store.paths()).unwrap();
         let target = EditTarget::for_local_variant(LayerId(1), &spec);
-        let name = store.tokens.intern("field:density");
+        let name = store.tokens().intern("field:density");
         let before = live
             .stage()
             .view(&store)

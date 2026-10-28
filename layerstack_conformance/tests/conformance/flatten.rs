@@ -167,8 +167,8 @@ fn all_cases() -> Vec<Case> {
 fn options(store: &mut InMemoryStore, fallbacks: bool) -> StageOptions {
     let mut options = StageOptions::default();
     if fallbacks {
-        let standin = store.tokens.intern("standin");
-        let render = store.tokens.intern("render");
+        let standin = store.tokens().intern("standin");
+        let render = store.tokens().intern("render");
         options.variant_fallbacks = [(standin, vec![render])].into_iter().collect();
     }
     options
@@ -236,7 +236,7 @@ fn flatten_with(
 /// defines them (`pxr/usd/usdGeom/schema.usda`): `Imageable`'s `visibility`
 /// and uniform `purpose`, and `Xformable`'s uniform `xformOpOrder`.
 fn schemas(store: &mut InMemoryStore) -> SchemaRegistry {
-    let token = |name: &str| store.tokens.intern(name);
+    let token = |name: &str| store.tokens().intern(name);
     let (imageable, xformable, xform) = (token("Imageable"), token("Xformable"), token("Xform"));
     let (visibility, purpose, order) =
         (token("visibility"), token("purpose"), token("xformOpOrder"));
@@ -255,7 +255,7 @@ fn schemas(store: &mut InMemoryStore) -> SchemaRegistry {
                 .with_property(property(order, Value::Array(Vec::new())).uniform()),
         )
         .register(SchemaDefinition::typed(xform).with_parent(xformable));
-    builder.build(&store.tokens)
+    builder.build(store.tokens())
 }
 
 /// The directory of a case's entry layer, canonical as OpenUSD resolves
@@ -342,8 +342,8 @@ fn read_usda(store: &mut InMemoryStore, id: LayerId, text: &str) -> Result<(), S
     let result = layerstack_usda::emit::emit(
         &parsed.layer,
         id,
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut NoAssets,
     );
     if !result.diagnostics.is_empty() {
@@ -355,8 +355,9 @@ fn read_usda(store: &mut InMemoryStore, id: LayerId, text: &str) -> Result<(), S
 
 /// Reads `bytes` back into `store` as layer `id`.
 fn read_usdc(store: &mut InMemoryStore, id: LayerId, bytes: &[u8]) -> Result<(), String> {
-    let result = layerstack_usdc::read_usdc(bytes, id, &store.tokens, &store.paths, &mut NoAssets)
-        .map_err(|e| format!("{e:?}"))?;
+    let result =
+        layerstack_usdc::read_usdc(bytes, id, store.tokens(), store.paths(), &mut NoAssets)
+            .map_err(|e| format!("{e:?}"))?;
     store.insert_layer(result.layer);
     Ok(())
 }
@@ -394,14 +395,14 @@ fn leftover_arcs(layer: &Layer, store: &InMemoryStore) -> Vec<String> {
             || spec.variant_selections().is_some()
             || (spec.references != ListOp::default() && !prototype);
         if arcs {
-            found.push(store.paths.display(path, &store.tokens));
+            found.push(store.paths().display(path, store.tokens()));
         }
     }
     found.extend(
         layer
             .variant_prims()
             .keys()
-            .map(|&path| store.paths.display(path, &store.tokens)),
+            .map(|&path| store.paths().display(path, store.tokens())),
     );
     found.sort();
     found
@@ -701,7 +702,7 @@ fn declarations_follow_the_schema_and_the_weakest_opinion() {
 
 /// The flattened layer saved as USDA and as USDC.
 fn save(layer: &Layer, store: &InMemoryStore) -> (Result<String, String>, Result<Vec<u8>, String>) {
-    let (tokens, paths) = (&store.tokens, &store.paths);
+    let (tokens, paths) = (&store.tokens(), &store.paths());
     (
         layerstack_usda::save::save_usda(layer, tokens, paths).map_err(|e| e.to_string()),
         layerstack_usdc::writer::save_layer(layer, tokens, paths).map_err(|e| e.to_string()),

@@ -23,7 +23,7 @@ pub(crate) fn directory() -> PathBuf {
 }
 pub(crate) fn create(directory: &std::path::Path, name: &str) -> Document {
     let store = InMemoryStore::default();
-    let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(store.tokens()));
     StageDocument::create_in(
         Filesystem::new(directory, []).unwrap(),
         store,
@@ -55,7 +55,7 @@ pub(crate) fn hello(directory: &std::path::Path) -> Document {
     sphere.set_display_color(&mut edit, &[[0.0, 0.0, 1.0]]);
     let transaction = edit.finish();
     live.apply(store, &transaction).unwrap();
-    let name = store.tokens.intern("hello");
+    let name = store.tokens().intern("hello");
     live.set_default_prim(store, Some(name)).unwrap();
     let report = document.save();
     assert!(report.failures.is_empty(), "{:?}", report.failures);

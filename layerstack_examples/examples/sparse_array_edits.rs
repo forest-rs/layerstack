@@ -66,8 +66,8 @@ fn insert_inline_usda(store: &mut InMemoryStore, layer_id: LayerId, source: &str
     let emitted = emit::emit(
         &ast.layer,
         layer_id,
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut resolver,
     );
     assert!(

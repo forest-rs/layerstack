@@ -63,31 +63,31 @@ struct Spec {
 /// Every binding relationship spec of the root layer.
 fn specs(store: &InMemoryStore) -> BTreeMap<String, Spec> {
     let layer = store.layer(LayerId(1)).unwrap();
-    let strength = store.tokens.lookup("bindMaterialAs");
+    let strength = store.tokens().lookup("bindMaterialAs");
     let mut found = BTreeMap::new();
     for (path, prim) in layer.prims().iter() {
         for entry in &prim.properties {
-            let name = store.tokens.resolve(entry.name);
+            let name = store.tokens().resolve(entry.name);
             let spec = &entry.spec;
             if spec.kind != PropertyKind::Relationship || !name.starts_with("material:binding") {
                 continue;
             }
             let targets = spec.targets.as_deref();
             found.insert(
-                format!("{}.{name}", store.paths.display(*path, &store.tokens)),
+                format!("{}.{name}", store.paths().display(*path, store.tokens())),
                 Spec {
                     targets: targets
                         .and_then(|op| op.explicit.as_ref())
                         .into_iter()
                         .flatten()
-                        .map(|target| target.display(&store.paths, &store.tokens).to_string())
+                        .map(|target| target.display(store.paths(), store.tokens()).to_string())
                         .collect(),
                     explicit: targets.is_some_and(|op| op.explicit.is_some()),
                     strength: strength
                         .and_then(|key| spec.metadata(key))
                         .and_then(|field| match field {
                             layerstack::FieldValue::Value(Value::Token(token)) => {
-                                Some(store.tokens.resolve(*token).to_string())
+                                Some(store.tokens().resolve(*token).to_string())
                             }
                             _ => None,
                         }),

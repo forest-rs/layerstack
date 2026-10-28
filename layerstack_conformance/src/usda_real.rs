@@ -54,8 +54,8 @@ pub fn load_entry_usda(entry: &Path) -> LoadedStage {
         let resolved = resolver.resolve(
             &path.asset_path,
             Some(path.anchor),
-            &store.tokens,
-            &store.paths,
+            store.tokens(),
+            store.paths(),
         );
         while let Some(layer) = resolver.pending_layers.pop() {
             store.insert_layer(layer);
@@ -79,8 +79,8 @@ pub fn load_entry_usda(entry: &Path) -> LoadedStage {
             let result = resolver.resolve(
                 &request.identifier,
                 Some(request.anchor),
-                &store.tokens,
-                &store.paths,
+                store.tokens(),
+                store.paths(),
             );
             while let Some(layer) = resolver.pending_layers.pop() {
                 store.insert_layer(layer);
@@ -221,8 +221,8 @@ fn load_file(
     let emit_result = emit::emit(
         &ast_result.layer,
         layer_id,
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         resolver,
     );
     if !emit_result.diagnostics.is_empty() {

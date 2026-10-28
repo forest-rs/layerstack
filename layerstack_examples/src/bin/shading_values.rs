@@ -17,7 +17,7 @@ fn main() {
     store.insert_layer(Layer::new(LayerId(1)));
     let material = store.path("/Material");
     let shader = store.path("/Material/Surface");
-    let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(store.tokens()));
     let mut live = LiveStage::compose(
         &mut store,
         LayerId(1),
@@ -45,7 +45,7 @@ fn main() {
     let shader = Shader::new(&scene, shader).unwrap();
     let sources = shader.input("roughness").unwrap().value_sources();
     for source in sources.sources {
-        let path = source.attribute.display(&store.paths, &store.tokens);
+        let path = source.attribute.display(store.paths(), store.tokens());
         match source.kind {
             ValueSourceKind::AuthoredValue => {
                 let value = Port::get(&scene, source.attribute)

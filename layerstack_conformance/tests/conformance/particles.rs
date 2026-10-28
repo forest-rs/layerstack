@@ -48,7 +48,7 @@ fn all_splat_channels_match_cpp_at_earliest_time() {
                 row.path, channel.channel
             );
             assert_eq!(
-                selected.property.display(&store.paths, &store.tokens),
+                selected.property.display(store.paths(), store.tokens()),
                 channel.property
             );
         }

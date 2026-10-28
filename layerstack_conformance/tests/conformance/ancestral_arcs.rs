@@ -173,7 +173,7 @@ fn prim_stacks_include_the_ancestral_arcs_of_subroot_targets() {
     let mut composed: Vec<String> = stage
         .traverse(pseudo_root)
         .filter(|prim| *prim != pseudo_root)
-        .map(|prim| loaded.store.paths.display(prim, &loaded.store.tokens))
+        .map(|prim| loaded.store.paths().display(prim, loaded.store.tokens()))
         .collect();
     composed.sort();
     let mut expected: Vec<&str> = oracle.prims.iter().map(|p| p.path.as_str()).collect();
@@ -191,7 +191,7 @@ fn prim_stacks_include_the_ancestral_arcs_of_subroot_targets() {
                     layer_name(&loaded, key.key.layer_id),
                     key.key
                         .spec_path
-                        .display(&loaded.store.paths, &loaded.store.tokens),
+                        .display(loaded.store.paths(), loaded.store.tokens()),
                 )
             })
             .collect();
@@ -242,7 +242,7 @@ fn targets_match_openusd() {
         let targets: Vec<String> = target_list(&stage, &loaded.store, path)
             .unwrap_or_default()
             .iter()
-            .map(|target| target.display(&loaded.store.paths, &loaded.store.tokens))
+            .map(|target| target.display(loaded.store.paths(), loaded.store.tokens()))
             .collect();
         if &targets != expected {
             mismatches.push(format!(
@@ -258,7 +258,7 @@ fn targets_match_openusd() {
 
     // The one path OpenUSD drops is reported.
     let tier = loaded.store.path("/Hut/Loft/Tier");
-    let stray = loaded.store.tokens.intern("stray");
+    let stray = loaded.store.tokens().intern("stray");
     let dropped: Vec<_> = stage
         .composition_errors()
         .iter()
@@ -318,11 +318,11 @@ fn snapshot(loaded: &mut LoadedStage, stage: &Stage) -> Vec<String> {
                     layer_name(loaded, key.key.layer_id),
                     key.key
                         .spec_path
-                        .display(&loaded.store.paths, &loaded.store.tokens)
+                        .display(loaded.store.paths(), loaded.store.tokens())
                 )
             })
             .collect();
-        let path = loaded.store.paths.display(prim, &loaded.store.tokens);
+        let path = loaded.store.paths().display(prim, loaded.store.tokens());
         lines.push(format!("{path}: {stack:?}"));
     }
     lines
@@ -346,8 +346,8 @@ fn select(
         .expect("layer")
         .0;
     let prim = loaded.store.path(prim);
-    let set = loaded.store.tokens.intern(set);
-    let variant = loaded.store.tokens.intern(variant);
+    let set = loaded.store.tokens().intern(set);
+    let variant = loaded.store.tokens().intern(variant);
     loaded
         .store
         .layer_mut(layer)

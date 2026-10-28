@@ -141,7 +141,7 @@ fn load(scene: &str, rock: &str) -> InMemoryStore {
         by_name: BTreeMap::new(),
         pending: Vec::new(),
     };
-    let scene = emit_layer(scene, SCENE, &store.tokens, &store.paths, &mut resolver);
+    let scene = emit_layer(scene, SCENE, store.tokens(), store.paths(), &mut resolver);
     store.insert_layer(scene);
     for layer in resolver.pending.drain(..) {
         store.insert_layer(layer);
@@ -179,14 +179,14 @@ fn scalar(stage: &Stage, store: &InMemoryStore, path: PropertyPath) -> Option<Va
 }
 
 fn spec(store: &mut InMemoryStore, text: &str) -> SpecPath {
-    SpecPath::parse(text, &store.tokens, &store.paths).expect("spec path")
+    SpecPath::parse(text, store.tokens(), store.paths()).expect("spec path")
 }
 
 /// The probe of the C++ reference: effective values of both rocks and the
 /// authored state of the edited specs.
 fn probe(stage: &Stage, store: &mut InMemoryStore) -> BTreeMap<String, Probe> {
     let mut out = BTreeMap::new();
-    let shape = store.tokens.intern("shape");
+    let shape = store.tokens().intern("shape");
     for name in ["RockA", "RockB"] {
         let prim = store.path(&format!("/World/{name}"));
         let prop =
@@ -255,7 +255,7 @@ fn probe(stage: &Stage, store: &mut InMemoryStore) -> BTreeMap<String, Probe> {
         .variant_selection_at(&rock_a, shape);
     out.insert(
         "scene:/World/RockA{shape}".into(),
-        Probe::Text(selection.map_or("<absent>".into(), |v| store.tokens.resolve(v).to_string())),
+        Probe::Text(selection.map_or("<absent>".into(), |v| store.tokens().resolve(v).to_string())),
     );
     let spin = spec(store, "/Rock.spin");
     let samples = store
@@ -413,8 +413,8 @@ fn rocks_authoring_session_matches_openusd() {
     let roughness_a = prop(&mut s, "/World/RockA.roughness");
     let spin_b = prop(&mut s, "/World/RockB.spin");
     let (shape, jagged) = (
-        s.store.tokens.intern("shape"),
-        s.store.tokens.intern("jagged"),
+        s.store.tokens().intern("shape"),
+        s.store.tokens().intern("jagged"),
     );
     let mut undo = Vec::new();
 
@@ -431,8 +431,8 @@ fn rocks_authoring_session_matches_openusd() {
     });
     assert_eq!(
         through_b
-            .map_property_to_spec_path(size_b, &s.store.paths)
-            .map(|p| p.display(&s.store.paths, &s.store.tokens))
+            .map_property_to_spec_path(size_b, s.store.paths())
+            .map(|p| p.display(s.store.paths(), s.store.tokens()))
             .as_deref(),
         Some("/Rock.size")
     );
@@ -451,8 +451,8 @@ fn rocks_authoring_session_matches_openusd() {
     });
     assert_eq!(
         in_jagged
-            .map_property_to_spec_path(roughness_a, &s.store.paths)
-            .map(|p| p.display(&s.store.paths, &s.store.tokens))
+            .map_property_to_spec_path(roughness_a, s.store.paths())
+            .map(|p| p.display(s.store.paths(), s.store.tokens()))
             .as_deref(),
         Some("/Rock{shape=jagged}.roughness")
     );
@@ -571,8 +571,8 @@ fn rocks_authoring_session_matches_openusd() {
     let save = |s: &Session, layer: LayerId| {
         layerstack_usda::save::save_usda(
             s.store.layer(layer).unwrap(),
-            &s.store.tokens,
-            &s.store.paths,
+            s.store.tokens(),
+            s.store.paths(),
         )
         .expect("saves")
     };

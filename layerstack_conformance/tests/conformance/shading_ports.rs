@@ -27,7 +27,7 @@ fn layered_connections_match_cpp_and_undo_authored_absence() {
     store.insert_layer(Layer::new(LayerId(2)));
     let material = store.path("/Material");
     let shader = store.path("/Material/Shader");
-    let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(store.tokens()));
     let mut live = LiveStage::compose(
         &mut store,
         LayerId(1),
@@ -79,7 +79,7 @@ fn layered_connections_match_cpp_and_undo_authored_absence() {
         inverses.push(live.apply(&mut store, &transaction).unwrap().inverse);
         let scene = Scene::new(live.stage(), &store);
         let port = Port::get(&scene, path).unwrap();
-        let display = |p: PropertyPath| p.display(&store.paths, &store.tokens);
+        let display = |p: PropertyPath| p.display(store.paths(), store.tokens());
         assert_eq!(
             serde_json::json!(
                 port.connected_sources()
@@ -138,8 +138,8 @@ fn port_preflight_rejects_invalid_names_relationships_and_types_without_edits() 
     let mut store = InMemoryStore::default();
 
     let path = store.path("/Shader");
-    let relationship = store.tokens.intern("inputs:relationship");
-    let shader_type = store.tokens.intern("Shader");
+    let relationship = store.tokens().intern("inputs:relationship");
+    let shader_type = store.tokens().intern("Shader");
     let mut layer = Layer::new(LayerId(1));
     layer.insert_prim(
         path,
@@ -148,7 +148,7 @@ fn port_preflight_rejects_invalid_names_relationships_and_types_without_edits() 
             .with_property(relationship, layerstack::PropertySpec::relationship()),
     );
     store.insert_layer(layer);
-    let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(store.tokens()));
     let live = LiveStage::compose(
         &mut store,
         LayerId(1),

@@ -117,7 +117,7 @@ fn nested_rates_match_openusd_before_and_after_source_edits() {
     assert_eq!(before["/Referenced.rootClock"]["default"], json!(22.0));
     assert_eq!(before["/Internal.ownClock"]["default"], json!(6.0));
 
-    let key = loaded.store.tokens.intern("timeCodesPerSecond");
+    let key = loaded.store.tokens().intern("timeCodesPerSecond");
     loaded
         .store
         .layer_mut(loaded.root_layer)
@@ -219,7 +219,7 @@ fn animation_block_distinguishes_weaker_defaults_and_same_site_samples() {
         ("empty", None, vec![]),
         ("same", Some(Value::Double(150.)), vec![0., 10.]),
     ] {
-        let token = loaded.store.tokens.intern(name);
+        let token = loaded.store.tokens().intern(name);
         assert_eq!(
             stage
                 .view(&loaded.store)

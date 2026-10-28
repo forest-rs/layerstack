@@ -171,7 +171,7 @@ fn snapshot_subset_query_does_not_decode_unselected_topology_samples() {
     );
     let (mut store, _) = support::scene(&source);
     let path = store.path("/M");
-    let counts = store.tokens.lookup("faceVertexCounts").unwrap();
+    let counts = store.tokens().lookup("faceVertexCounts").unwrap();
     let calls = Arc::new(AtomicUsize::new(0));
     let spec = store
         .layer_mut(LayerId(1))
@@ -191,7 +191,7 @@ fn snapshot_subset_query_does_not_decode_unselected_topology_samples() {
         (1., Value::from(vec![3_i32, 3])),
     ]
     .into();
-    let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(store.tokens()));
     let live = layerstack::LiveStage::compose(
         &mut store,
         LayerId(1),
@@ -246,7 +246,7 @@ fn material_subsets_preserve_decode_failure_paths() {
         for (prim, name) in [("/M", "faceVertexCounts"), ("/M/a", "indices")] {
             let (mut store, _) = support::scene(&text("partition", "1", ""));
             let path = store.path(prim);
-            let token = store.tokens.lookup(name).unwrap();
+            let token = store.tokens().lookup(name).unwrap();
             let property = PropertyPath::new(path, token);
             let error = ArrayReadError::InvalidData("invalid retained subset input".into());
             let value = Value::TypedArray(TypedArray::Deferred(Arc::new(Failed(error.clone()))));
@@ -262,7 +262,7 @@ fn material_subsets_preserve_decode_failure_paths() {
             } else {
                 attribute.time_samples = vec![(1., value.clone()), (2., value)].into();
             }
-            let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
+            let schemas = Arc::new(layerstack_schemas::openusd(store.tokens()));
             let live = layerstack::LiveStage::compose(
                 &mut store,
                 LayerId(1),
@@ -365,7 +365,7 @@ fn material_subsets_read_as_openusd_renders_them() {
     );
     let (store, live) = support::scene(SCENE);
     let scene = Scene::new(live.stage(), &store);
-    let display = |path| store.paths.display(path, &store.tokens).to_string();
+    let display = |path| store.paths().display(path, store.tokens()).to_string();
     let mut cache = BindingCache::new(MaterialPurpose::All, BindingOptions::default());
     let meshes = oracle["meshes"].as_object().unwrap();
     assert_eq!(meshes.len(), 8);
@@ -512,7 +512,7 @@ def Mesh "M" (prepend apiSchemas = ["MaterialBindingAPI"])
                     .indices()
                     .unwrap();
                 serde_json::json!({"call": label, "accepted": true, "result": {
-                    "path": store.paths.display(path, &store.tokens).to_string(),
+                    "path": store.paths().display(path, store.tokens()).to_string(),
                     "indices": *indices,
                     "family_type": family,
                 }})
@@ -532,8 +532,8 @@ def Mesh "M" (prepend apiSchemas = ["MaterialBindingAPI"])
         .iter()
         .map(|subset| {
             store
-                .paths
-                .display(subset.path(), &store.tokens)
+                .paths()
+                .display(subset.path(), store.tokens())
                 .to_string()
         })
         .collect();

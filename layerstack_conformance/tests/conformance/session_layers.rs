@@ -43,7 +43,7 @@ fn fixture() -> InMemoryStore {
     let asset = store.path("/Asset");
     let internal = store.path("/Internal");
     let external = store.path("/External");
-    let x = store.tokens.intern("x");
+    let x = store.tokens().intern("x");
     let mut root = Layer::new(LayerId(1));
     root.insert_prim(asset, PrimSpec::def().with_property(x, attr(2)));
     let mut spec = PrimSpec::def();
@@ -214,8 +214,8 @@ fn session_time_domains_include_authoring_offsets_and_root_default_prim() {
         (None, Some(48.0), None, Some(96.0), 96.0),
     ] {
         let mut store = fixture();
-        let tcps = store.tokens.intern("timeCodesPerSecond");
-        let fps = store.tokens.intern("framesPerSecond");
+        let tcps = store.tokens().intern("timeCodesPerSecond");
+        let fps = store.tokens().intern("framesPerSecond");
         for (id, tc, fr) in [
             (LayerId(1), root_tcps, root_fps),
             (LayerId(3), session_tcps, session_fps),
@@ -229,7 +229,7 @@ fn session_time_domains_include_authoring_offsets_and_root_default_prim() {
             }
         }
         let root_rate = root_tcps.or(root_fps).unwrap_or(24.0);
-        let x = store.tokens.intern("animated");
+        let x = store.tokens().intern("animated");
         let mut prop = PropertySpec::typed_attribute(PropertyType::parse("double").unwrap());
         prop.time_samples = vec![(root_rate, Value::Double(2.0))].into();
         let asset = store.path("/Asset");
@@ -237,8 +237,8 @@ fn session_time_domains_include_authoring_offsets_and_root_default_prim() {
             .layer_mut(LayerId(1))
             .unwrap()
             .set_property(layerstack::PropertyPath::new(asset, x), prop);
-        let root_default = store.tokens.intern("Asset");
-        let session_default = store.tokens.intern("Internal");
+        let root_default = store.tokens().intern("Asset");
+        let session_default = store.tokens().intern("Internal");
         store
             .layer_mut(LayerId(1))
             .unwrap()
@@ -278,7 +278,7 @@ fn session_time_domains_include_authoring_offsets_and_root_default_prim() {
 #[test]
 fn session_expression_variables_override_root_and_flow_into_external_stacks() {
     let mut store = fixture();
-    let variables = store.tokens.intern("expressionVariables");
+    let variables = store.tokens().intern("expressionVariables");
     let root = store.layer_mut(LayerId(1)).unwrap();
     root.set_metadata(
         variables,
@@ -293,7 +293,7 @@ fn session_expression_variables_override_root_and_flow_into_external_stacks() {
         Value::Dictionary(vec![("ASSET".into(), Value::String("blue.usda".into()))]),
     );
     let asset = store.path("/Asset");
-    let tint = store.tokens.intern("tint");
+    let tint = store.tokens().intern("tint");
     for (id, value) in [(LayerId(5), 5), (LayerId(6), 6)] {
         let mut layer = Layer::new(id);
         layer.insert_prim(asset, PrimSpec::def().with_property(tint, attr(value)));
@@ -319,7 +319,7 @@ fn session_expression_variables_override_root_and_flow_into_external_stacks() {
             Value::Int(6)
         );
     }
-    let custom = store.tokens.intern("customLayerData");
+    let custom = store.tokens().intern("customLayerData");
     store.layer_mut(LayerId(1)).unwrap().set_metadata(
         custom,
         Value::Dictionary(vec![("shared".into(), Value::Int(1))]),
@@ -359,8 +359,8 @@ fn session_expression_variables_override_root_and_flow_into_external_stacks() {
 #[test]
 fn flatten_preserves_session_metadata_and_effective_time_domain() {
     let mut store = fixture();
-    let tcps = store.tokens.intern("timeCodesPerSecond");
-    let custom = store.tokens.intern("customLayerData");
+    let tcps = store.tokens().intern("timeCodesPerSecond");
+    let custom = store.tokens().intern("customLayerData");
     store
         .layer_mut(LayerId(1))
         .unwrap()
@@ -377,7 +377,7 @@ fn flatten_preserves_session_metadata_and_effective_time_domain() {
             custom,
             Value::Dictionary(vec![("private".into(), Value::Int(2))]),
         );
-    let session_default = store.tokens.intern("Internal");
+    let session_default = store.tokens().intern("Internal");
     store
         .layer_mut(LayerId(3))
         .unwrap()
@@ -412,7 +412,7 @@ fn flatten_preserves_session_metadata_and_effective_time_domain() {
 #[test]
 fn edit_targets_use_captured_offsets_and_exclude_muted_session_layers() {
     let mut store = fixture();
-    let tcps = store.tokens.intern("timeCodesPerSecond");
+    let tcps = store.tokens().intern("timeCodesPerSecond");
     store
         .layer_mut(LayerId(1))
         .unwrap()

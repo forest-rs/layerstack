@@ -23,7 +23,7 @@ fn port(
     source: Option<&str>,
 ) {
     let p = store.path(path);
-    let n = store.tokens.intern(name);
+    let n = store.tokens().intern(name);
     let mut spec = PropertySpec::typed_attribute(PropertyType::parse(ty).unwrap());
     if let Some(value) = value {
         spec = spec.with_default(value);
@@ -37,7 +37,7 @@ fn port(
 }
 fn fixture() -> (InMemoryStore, LiveStage, PathId) {
     let mut store = InMemoryStore::default();
-    let schemas = Arc::new(crate::openusd(&store.tokens));
+    let schemas = Arc::new(crate::openusd(store.tokens()));
     let mut weak = Layer::new(LayerId(2));
     for (path, ty, id) in [
         ("/Library", "Material", None),
@@ -48,10 +48,10 @@ fn fixture() -> (InMemoryStore, LiveStage, PathId) {
         ("/Library/X", "Shader", Some("UsdTransform2d")),
     ] {
         let p = store.path(path);
-        let t = store.tokens.intern(ty);
+        let t = store.tokens().intern(ty);
         weak.insert_prim(p, PrimSpec::def().with_type_name(t));
         if let Some(id) = id {
-            let id = store.tokens.intern(id);
+            let id = store.tokens().intern(id);
             port(
                 &mut store,
                 &mut weak,
@@ -371,7 +371,7 @@ fn retained_identity_revisions_and_missed_change_history_recover() {
     assert_eq!(changed.revisions.topology, resource.revisions.topology);
     assert_ne!(changed.revisions.resources, resource.revisions.resources);
     let id = store.property_path("/Library/T.info:id");
-    let unknown = store.tokens.intern("VendorTexture");
+    let unknown = store.tokens().intern("VendorTexture");
     let mut tx = Transaction::new();
     tx.set_default(
         EditTarget::for_layer(LayerId(2)).property(id),
@@ -506,7 +506,7 @@ fn context_interface_edits_and_deletion_recreation_refresh() {
     let mut tx = Transaction::new();
     tx.create_property(
         EditTarget::for_layer(LayerId(1)).property(terminal),
-        attr(Value::Token(store.tokens.intern("")), "token")
+        attr(Value::Token(store.tokens().intern("")), "token")
             .with_targets(ListOp::explicit(vec![TargetPath::Property(source)])),
     );
     live.apply(&mut store, &tx).unwrap();
@@ -564,9 +564,9 @@ impl layerstack::DeferredArraySource for BrokenArray {
 fn arrays_decode_failures_and_depth_limits_remain_explicit() {
     let (mut store, mut live, mat) = fixture();
     let surface = store.path("/Library/P");
-    let custom = store.tokens.intern("inputs:weights");
-    let broken = store.tokens.intern("inputs:brokenWeights");
-    let roughness = store.tokens.intern("inputs:roughness");
+    let custom = store.tokens().intern("inputs:weights");
+    let broken = store.tokens().intern("inputs:brokenWeights");
+    let roughness = store.tokens().intern("inputs:roughness");
     let mut tx = Transaction::new();
     let target = EditTarget::for_layer(LayerId(2));
     tx.create_property(
@@ -820,7 +820,7 @@ fn expired_notices_and_new_incoming_interfaces_refresh_without_false_hits() {
     assert_eq!(recovered.network.primvars, vec!["incomingUv"]);
     assert_ne!(recovered.revisions.topology, first.revisions.topology);
     let mut other = store.snapshot();
-    let schemas = Arc::new(crate::openusd(&other.tokens));
+    let schemas = Arc::new(crate::openusd(other.tokens()));
     let other_live = LiveStage::compose(
         &mut other,
         LayerId(1),
@@ -850,7 +850,7 @@ fn expired_notices_and_new_incoming_interfaces_refresh_without_false_hits() {
 fn shared_shader_edits_refresh_both_materials_and_unrelated_edits_keep_handles() {
     let (mut store, mut live, mat) = fixture();
     let second = store.path("/Second");
-    let material_type = store.tokens.intern("Material");
+    let material_type = store.tokens().intern("Material");
     let terminal = store.property_path("/Second.outputs:surface");
     let source = store.property_path("/Mat/P.outputs:surface");
     let notes = store.path("/Notes");
@@ -941,7 +941,7 @@ fn composed_type_changes_reselect_terminal_and_restore_shader_defaults() {
         )
         .unwrap();
     let shader = store.path("/Mat/P");
-    let graph_type = store.tokens.intern("NodeGraph");
+    let graph_type = store.tokens().intern("NodeGraph");
     let mut tx = Transaction::new();
     tx.create_prim(
         EditTarget::for_layer(LayerId(1)).prim(shader),
@@ -988,14 +988,14 @@ fn shared_container_outputs_at_different_depths_survive_both_branch_orderings() 
     for swap in [false, true] {
         let (mut store, mut live, mat) = fixture();
         let b = store.path("/Library/B");
-        let shader = store.tokens.intern("Shader");
+        let shader = store.tokens().intern("Shader");
         let graph = store.path("/Library/G");
         let surface = store.path("/Library/P");
         let mut tx = Transaction::new();
         let target = EditTarget::for_layer(LayerId(2));
         tx.create_prim(target.prim(b), layerstack::Specifier::Def, Some(shader));
         let id = store.property_path("/Library/B.info:id");
-        let vendor = store.tokens.intern("VendorMixer");
+        let vendor = store.tokens().intern("VendorMixer");
         tx.create_property(target.property(id), attr(Value::Token(vendor), "token"));
         let output = store.property_path("/Library/B.outputs:r");
         tx.create_property(
@@ -1012,8 +1012,8 @@ fn shared_container_outputs_at_different_depths_survive_both_branch_orderings() 
             PropertySpec::typed_attribute(PropertyType::parse("float").unwrap())
                 .with_targets(ListOp::explicit(vec![TargetPath::Property(b_output)])),
         );
-        let roughness = PropertyPath::new(surface, store.tokens.intern("inputs:roughness"));
-        let metallic = PropertyPath::new(surface, store.tokens.intern("inputs:metallic"));
+        let roughness = PropertyPath::new(surface, store.tokens().intern("inputs:roughness"));
+        let metallic = PropertyPath::new(surface, store.tokens().intern("inputs:metallic"));
         tx.create_property(
             target.property(metallic),
             PropertySpec::typed_attribute(PropertyType::parse("float").unwrap()),
@@ -1046,6 +1046,6 @@ fn shared_container_outputs_at_different_depths_survive_both_branch_orderings() 
                 .iter()
                 .any(|d| d.prim == composed_graph && d.property == "outputs:b")
         );
-        assert_eq!(store.paths.display(graph, &store.tokens), "/Library/G");
+        assert_eq!(store.paths().display(graph, store.tokens()), "/Library/G");
     }
 }

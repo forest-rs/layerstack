@@ -248,7 +248,7 @@ impl MetadataType {
             Self::Value(value_type) => FieldValue::Value(registry_default(value_type)?),
             Self::Array(value_type) => FieldValue::Value(TypedArray::pack_iter(
                 &value_type.zero(),
-                core::iter::empty(),
+                &mut core::iter::empty(),
             )),
             Self::Dictionary => FieldValue::Value(Value::Dictionary(Vec::new())),
             Self::ListOp(ListOpItem::Token) => FieldValue::TokenListOp(Box::default()),

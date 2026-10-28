@@ -42,7 +42,6 @@ env:
   # of the debug info, which is most of each test binary and of its link.
   CARGO_PROFILE_DEV_DEBUG: line-tables-only
 
-
 # Rationale
 #
 # We don't run clippy with --all-targets because then even --lib and --bins are compiled with
@@ -464,17 +463,13 @@ jobs:
           LAYERSTACK_OPENUSD_SOURCE: ${{ github.workspace }}/openusd
         run: cargo test --locked -p layerstack_custom_schemas --test generated
 
-      # The compiled fixture plugins must be what OpenUSD's registry reads.
-      - name: check schema compiler oracle
-        run: python layerstack_conformance/scripts/schema_compiler_oracle.py --check
-
-      # Types with several bases must be what OpenUSD's registry makes of
-      # them, and plugin kinds what its kind registry registers.
-      - name: check schema bases oracle
-        run: python layerstack_conformance/scripts/schema_bases_oracle.py --check
-
-      - name: check plugin kinds oracle
-        run: python layerstack_conformance/scripts/plugin_kinds_oracle.py --check
+      # Every committed OpenUSD oracle must still be what OpenUSD regenerates:
+      # `check_oracles.py` runs each `*_oracle.py` that takes `--check`, so a
+      # new oracle is checked without a step of its own.
+      - name: check OpenUSD oracles
+        env:
+          LAYERSTACK_OPENUSD_SOURCE: openusd
+        run: python layerstack_conformance/scripts/check_oracles.py
 
       # The dynamic file format port must pass OpenUSD's own test cases on
       # its fixtures.
@@ -491,17 +486,6 @@ jobs:
           python layerstack_conformance/scripts/schema_views_oracle.py \
             layerstack_conformance/fixtures/schema_views/scene.usda "$RUNNER_TEMP/oracle.json"
           diff -u layerstack_conformance/fixtures/schema_views/oracle.json "$RUNNER_TEMP/oracle.json"
-
-      - name: check schema metadata oracle
-        run: python layerstack_conformance/scripts/schema_metadata_oracle.py --check
-      - name: check metadata by key oracle
-        run: python layerstack_conformance/scripts/metadata_by_key_oracle.py --check
-
-      - name: check layer stack flatten oracle
-        run: python layerstack_conformance/scripts/layer_stack_flatten_oracle.py --check
-
-      - name: check coordinated namespace oracle
-        run: python layerstack_conformance/scripts/namespace_coordinated_oracle.py --check
 
       # The edit target oracle must be how OpenUSD's edit targets map.
       - name: check edit target maps oracle
@@ -538,87 +522,6 @@ jobs:
             layerstack_conformance/fixtures/copy_spec "$RUNNER_TEMP/copy_spec.json"
           diff -u layerstack_conformance/fixtures/copy_spec/oracle.json "$RUNNER_TEMP/copy_spec.json"
 
-      # The variant set names oracle must be how OpenUSD reads, writes,
-      # composes and authors `variantSetNames`; OpenUSD must also read the
-      # files layerstack saves as it reads the fixtures.
-      - name: check variant set names oracle
-        run: python layerstack_conformance/scripts/variant_set_names_oracle.py --check
-      - name: check variant names oracle
-        run: python layerstack_conformance/scripts/variant_names_oracle.py --check
-
-      # The target list edits oracle must be how OpenUSD's `AddTarget`,
-      # `RemoveTarget`, `AddConnection` and `RemoveConnection` author, call
-      # by call, and how a stack of scope sublayers composes them.
-      - name: check target list edits oracle
-        run: python layerstack_conformance/scripts/target_list_edits_oracle.py --check
-
-      # The define prim oracle must be what OpenUSD's `UsdStage::DefinePrim`
-      # authors and refuses, call by call.
-      - name: check define prim oracle
-        run: python layerstack_conformance/scripts/define_prim_oracle.py --check
-
-      # The authoring inspection oracle must be where OpenUSD's
-      # `UsdAttribute::GetResolveInfo` reads a value before and after each
-      # prospective write.
-      - name: check authoring inspection oracle
-        run: python layerstack_conformance/scripts/authoring_inspection_oracle.py --check
-
-      # The make visible oracle must be what OpenUSD's
-      # `UsdGeomImageable::MakeVisible` and `MakeInvisible` author, call by call.
-      - name: check make visible oracle
-        run: python layerstack_conformance/scripts/make_visible_oracle.py --check
-
-      # The point instancer ID oracle must be what OpenUSD's `ActivateIds`,
-      # `DeactivateIds`, `InvisIds`, `VisIds` and their siblings author, call
-      # by call, and the masks `ComputeMaskAtTime` computes after each.
-      - name: check point instancer IDs oracle
-        run: python layerstack_conformance/scripts/point_instancer_ids_oracle.py --check
-
-      # The point instancer transform oracle must be what OpenUSD's
-      # `ComputeInstanceTransformsAtTime(s)` compute for every option pair.
-      - name: check point instancer transforms oracle
-        run: python layerstack_conformance/scripts/point_instancer_transforms_oracle.py --check
-
-      # The extents hint oracle must be what OpenUSD's `UsdGeomModelAPI`
-      # computes, reads and authors for model extents hints.
-      - name: check extents hint oracle
-        run: python layerstack_conformance/scripts/extents_hint_oracle.py --check
-
-      # The proxy edits oracle must be which authoring calls OpenUSD refuses
-      # on instance proxies and prototype prims, and what the others author.
-      - name: check proxy edits oracle
-        run: python layerstack_conformance/scripts/proxy_edits_oracle.py --check
-
-      # The USDA field order oracle must be the text OpenUSD writes for
-      # layers authored in scrambled orders, and for a scrambled file.
-      - name: check USDA field order oracle
-        run: python layerstack_conformance/scripts/usda_field_order_oracle.py --check
-
-      # The USDA parity oracle must be what OpenUSD reads, writes and
-      # composes for each case.
-      - name: check USDA parity oracle
-        run: python layerstack_conformance/scripts/usda_parity_oracle.py --check
-
-      # The pseudo-root oracle must be what OpenUSD's authoring calls do
-      # when aimed at the pseudo-root, at the Usd and Sdf levels.
-      - name: check pseudo-root edits oracle
-        run: python layerstack_conformance/scripts/pseudo_root_edits_oracle.py --check
-
-      # The value type oracle must be OpenUSD's value type registry, which
-      # tests/conformance/value_types.rs checks layerstack's table against.
-      - name: check value types oracle
-        run: python layerstack_conformance/scripts/value_types_oracle.py --check
-
-      # The missing assets oracle must be what OpenUSD opens, reports and
-      # reloads when a scene's dependencies are missing.
-      - name: check missing assets oracle
-        run: python layerstack_conformance/scripts/missing_assets_oracle.py --check
-
-      # The UDIM oracle must be the tiles OpenUSD finds, lists as
-      # dependencies and packages.
-      - name: check UDIM tiles oracle
-        run: python layerstack_conformance/scripts/udim_tiles_oracle.py --check
-
       # These compare with OpenUSD when a Python with `pxr` is given and
       # skip otherwise, as they do in the test jobs: every conformance test
       # that reads `LAYERSTACK_USD_PYTHON`, found by that name so that a new
@@ -633,53 +536,6 @@ jobs:
           LAYERSTACK_OPENUSD_SOURCE: ${{ github.workspace }}/openusd
         run: bash layerstack_conformance/scripts/test_against_openusd.sh
 
-      # The transform oracle must be what OpenUSD computes, to within the
-      # rounding of the platform's trigonometry.
-      - name: check transform oracle
-        run: python layerstack_conformance/scripts/xform_oracle.py --check
-
-      - name: check transform time query oracle
-        run: python layerstack_conformance/scripts/transform_queries_oracle.py --check
-
-      # The authored transform ops must read, and add, as in OpenUSD.
-      - name: check transform op oracle
-        run: python layerstack_conformance/scripts/xform_ops_oracle.py --check
-
-      - name: check common transform authoring oracle
-        run: python layerstack_conformance/scripts/common_xform_oracle.py --check
-
-      # The common transform API oracle must be what OpenUSD's
-      # `UsdGeomXformCommonAPI` reads, authors and refuses, call by call.
-      - name: check common transform API oracle
-        run: python layerstack_conformance/scripts/common_xform_api_oracle.py --check
-
-      - name: check whole-camera writeback oracle
-        run: python layerstack_conformance/scripts/camera_writeback_oracle.py --check
-
-      - name: check inherited motion settings oracle
-        run: python layerstack_conformance/scripts/motion_oracle.py --check
-
-      - name: check semantic label queries oracle
-        run: python layerstack_conformance/scripts/labels_oracle.py --check
-
-      # The binding oracle must be what OpenUSD binds and collects.
-      - name: check binding oracle
-        run: python layerstack_conformance/scripts/binding_oracle.py --check
-
-      # The dangling target oracle must be what OpenUSD finds at each
-      # target, connection and collection path.
-      - name: check dangling targets oracle
-        run: python layerstack_conformance/scripts/dangling_targets_oracle.py --check
-
-      # The per-layer oracle must be how OpenUSD reads each authored target,
-      # connection and collection path.
-      - name: check layer dangling targets oracle
-        run: python layerstack_conformance/scripts/layer_dangling_targets_oracle.py --check
-
-      - name: check shading port authoring oracle
-        run: python layerstack_conformance/scripts/shading_ports_oracle.py --check
-      - name: check node def sources oracle
-        run: python layerstack_conformance/scripts/shade_node_def_oracle.py --check
       - name: check runnable tutorial outputs with OpenUSD
         run: |
           for tutorial in tutorial_hello_world tutorial_references tutorial_variants tutorial_stage_io; do
@@ -691,35 +547,6 @@ jobs:
         run: |
           cargo run --locked -p layerstack_examples --bin procedural_graph -- "$RUNNER_TEMP/procedural-world"
           python layerstack_conformance/scripts/procedural_graph_oracle.py "$RUNNER_TEMP/procedural-world/procedural_world.usda"
-
-      - name: check retained query oracle
-        run: python layerstack_conformance/scripts/retained_queries_oracle.py --check
-      - name: check shading connection edits oracle
-        run: python layerstack_conformance/scripts/shade_connections_oracle.py --check
-
-      - name: check shading source oracle
-        run: python layerstack_conformance/scripts/shading_oracle.py --check
-      - name: check shading defaults oracle
-        run: python layerstack_conformance/scripts/shading_defaults_oracle.py --check
-
-      - name: check bounds oracle
-        run: python layerstack_conformance/scripts/bounds_oracle.py --check
-      - name: check asset previews oracle
-        run: python layerstack_conformance/scripts/asset_previews_oracle.py --check
-      - name: check intrinsic bounds oracle
-        run: python layerstack_conformance/scripts/intrinsic_bounds_oracle.py --check
-      - name: check render asset settings oracle
-        run: python layerstack_conformance/scripts/render_assets_oracle.py --check
-
-      # The path expression oracle must be what OpenUSD parses and matches.
-      - name: check path expression oracle
-        run: python layerstack_conformance/scripts/path_expression_oracle.py --check
-      - name: check skinning binding properties oracle
-        run: python layerstack_conformance/scripts/skel_binding_properties_oracle.py --check
-
-      # The value matrix must be what OpenUSD resolves across value sources.
-      - name: check value matrix oracle
-        run: python layerstack_conformance/scripts/value_matrix_oracle.py --check
 
   # If this fails, consider changing your text or adding something to .typos.toml.
   typos:

@@ -316,7 +316,7 @@ impl<'a> Lexer<'a> {
         loop {
             match self.peek() {
                 None | Some(b'\n') | Some(b'\r') => break, // unterminated
-                Some(b'\\') => self.advance(2),            // escape sequence
+                Some(b'\\') => self.advance_escape(),
                 Some(b) if b == quote => {
                     self.advance(1);
                     break;
@@ -333,7 +333,7 @@ impl<'a> Lexer<'a> {
         loop {
             match self.peek() {
                 None => break, // unterminated
-                Some(b'\\') => self.advance(2),
+                Some(b'\\') => self.advance_escape(),
                 Some(b)
                     if b == quote
                         && self.peek_at(1) == Some(quote)
@@ -414,6 +414,18 @@ impl<'a> Lexer<'a> {
     }
 
     /// Decodes the current UTF-8 character at `self.pos`.
+    /// Advances past a backslash and the character it escapes, which may
+    /// take several bytes or be missing at the end of the source, where
+    /// skipping two bytes ran past it and the token's text could not be
+    /// sliced.
+    fn advance_escape(&mut self) {
+        self.advance(1);
+        if (self.pos as usize) < self.bytes.len() {
+            let escaped = self.current_char().len_utf8() as u32;
+            self.advance(escaped);
+        }
+    }
+
     fn current_char(&self) -> char {
         let remaining = &self.source[self.pos as usize..];
         remaining.chars().next().unwrap_or('\0')
@@ -600,6 +612,24 @@ mod tests {
                 )
             })
             .collect()
+    }
+
+    /// A backslash ending the source inside a string (a minimized fuzz
+    /// input ends `@./FergusC\`) once ended the token a byte past the
+    /// source, and slicing its text panicked; an escaped character of
+    /// several bytes is skipped whole.
+    #[test]
+    fn escapes_end_on_character_boundaries() {
+        for (source, text) in [
+            ("\"a\\", "\"a\\"),
+            ("'''a\\", "'''a\\"),
+            ("\"\\\u{e9}\"", "\"\\\u{e9}\""),
+            ("'''\\\u{1f600}'''", "'''\\\u{1f600}'''"),
+        ] {
+            let tokens = tok(source);
+            assert_eq!(tokens.len(), 1, "{source:?}: {tokens:?}");
+            assert_eq!(tokens[0].1, text);
+        }
     }
 
     // ── Whitespace and newlines ─────────────────────────────────────

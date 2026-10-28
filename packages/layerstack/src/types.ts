@@ -302,7 +302,9 @@ export type NumericArray =
  * - an array: the elements flattened (`point3f[]` as six numbers for two
  *   points, or `[[0, 0, 0], [1, 2, 3]]`), or one typed array, which is
  *   copied once (`Float32Array` for `point3f[]`, `BigInt64Array` for
- *   `int64[]`, half floats as raw bits in a `Uint16Array`).
+ *   `int64[]`, half floats as raw bits in a `Uint16Array`), or an
+ *   {@link ArrayHandle} read from the stage, which is shared, not copied;
+ * - a dictionary: {@link DictionaryInput}.
  *
  * The type decides the conversion: numbers round to `float` and `half`,
  * and must be exact integers of an integer type (`value.range`).
@@ -314,7 +316,23 @@ export type ValueInput =
       readonly type: string;
       /** The scalars. */
       readonly value: ScalarInput | readonly (ScalarInput | readonly ScalarInput[])[] | NumericArray;
-    };
+    }
+  | DictionaryInput;
+
+/**
+ * A `dictionary` to author (`customData`, `assetInfo`): each entry a
+ * {@link ValueInput} of its own type, nested dictionaries included. It is
+ * authored whole, replacing the field's dictionary in the target layer
+ * (OpenUSD's `UsdObject::SetMetadata`), and kept ordered by key.
+ *
+ * ```ts
+ * { type: "dictionary", value: { note: { type: "string", value: "moss" }, scale: { type: "double3", value: [1, 1, 1] } } }
+ * ```
+ */
+export interface DictionaryInput {
+  readonly type: "dictionary";
+  readonly value: ReadonlyMap<string, ValueInput> | { readonly [key: string]: ValueInput };
+}
 
 /** One scalar of a {@link ValueInput}. */
 export type ScalarInput = boolean | number | bigint | string;

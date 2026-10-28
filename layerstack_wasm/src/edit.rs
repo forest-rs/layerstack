@@ -31,7 +31,7 @@ use wasm_bindgen::prelude::*;
 use crate::{
     array::ArrayHandle,
     error::Error,
-    value::{self, InputData, ValueInput},
+    value::{self, DictionaryEntry, InputData, ValueInput},
 };
 
 /// One edit of an [`EditBatch`], as the wrapper sent it.
@@ -207,6 +207,27 @@ impl EditBatch {
     #[wasm_bindgen(js_name = valueText)]
     pub fn value_text(&mut self, type_name: String, data: Vec<String>) -> u32 {
         self.value(type_name, InputData::Text(data))
+    }
+
+    /// A `dictionary` value whose entry `keys[i]` maps to the value in slot
+    /// `slots[i]`, filled before it; returns its slot. A key without a slot
+    /// (`keys` longer than `slots`) is refused when the batch is applied.
+    #[wasm_bindgen(js_name = valueDictionary)]
+    pub fn value_dictionary(
+        &mut self,
+        type_name: String,
+        keys: Vec<String>,
+        slots: Vec<u32>,
+    ) -> u32 {
+        let entries = keys
+            .into_iter()
+            .enumerate()
+            .map(|(index, key)| DictionaryEntry {
+                key,
+                slot: slots.get(index).copied().unwrap_or(u32::MAX),
+            })
+            .collect();
+        self.value(type_name, InputData::Dictionary(entries))
     }
 
     /// Fills a value slot with a pinned array, shared rather than copied
@@ -445,13 +466,7 @@ fn lower_one(
             )
         })
     };
-    let value = |slot: u32| -> Result<Value, Error> {
-        let input = batch
-            .values
-            .get(slot as usize)
-            .ok_or_else(|| Error::new("argument.invalid", format!("no value in slot {slot}")))?;
-        value::decode(input, &store.tokens)
-    };
+    let value = |slot: u32| value::decode_slot(&batch.values, slot, &store.tokens);
     match edit {
         EditInput::DefinePrim {
             path,
@@ -1546,6 +1561,50 @@ def "Spare" (
             before,
             "clearing what is not authored"
         );
+    }
+
+    #[test]
+    fn dictionary_metadata_is_authored_whole() {
+        let mut batch = EditBatch::new();
+        let name = batch.value_text("string".into(), vec!["moss".into()]);
+        let count = numbers(&mut batch, "int", &[3.0]);
+        let inner = batch.value_dictionary("dictionary".into(), vec!["count".into()], vec![count]);
+        let data = batch.value_dictionary(
+            "dictionary".into(),
+            vec!["name".into(), "inner".into()],
+            vec![name, inner],
+        );
+        batch.set_metadata("/World".into(), "customData".into(), data);
+        round_trip(batch, |stage| {
+            let entries = Wire::List(vec![
+                Wire::List(vec![
+                    Wire::text("inner"),
+                    Wire::List(vec![
+                        Wire::text("dictionary"),
+                        Wire::text("d"),
+                        Wire::List(vec![Wire::List(vec![
+                            Wire::text("count"),
+                            scalar("int", Wire::Number(3.0)),
+                        ])]),
+                    ]),
+                ]),
+                Wire::List(vec![
+                    Wire::text("name"),
+                    scalar("string", Wire::text("moss")),
+                ]),
+            ]);
+            assert_eq!(
+                stage.metadata("/World", "customData").unwrap(),
+                Wire::List(vec![Wire::text("dictionary"), Wire::text("d"), entries])
+            );
+        });
+        let mut stage = open();
+        let target = root(&stage);
+        let mut batch = EditBatch::new();
+        let missing = batch.value_dictionary("dictionary".into(), vec!["a".into()], vec![]);
+        batch.set_metadata("/World".into(), "customData".into(), missing);
+        let error = stage.apply(target.0, &mut batch).unwrap_err();
+        assert_eq!((error.code, error.edit), ("argument.invalid", Some(0)));
     }
 
     #[test]

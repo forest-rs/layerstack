@@ -481,3 +481,84 @@ describe("read-only roots", () => {
     assert.deepEqual(stage.attribute("/Model.height")?.get(), { kind: "scalar", type: "float", value: 3 });
   });
 });
+
+describe("dictionary values", () => {
+  it("author a nested dictionary whole, read it back and undo it", async () => {
+    using stage = await openScene();
+    const receipt = stage.apply(stage.root, [
+      {
+        type: "setMetadata",
+        path: "/World",
+        key: "customData",
+        value: {
+          type: "dictionary",
+          value: {
+            note: { type: "string", value: "moss" },
+            inner: { type: "dictionary", value: new Map([["scale", { type: "double3", value: [1, 2, 3] }]]) },
+          },
+        },
+      },
+    ]);
+    const read = stage.prim("/World")?.metadata("customData");
+    assert.ok(read?.kind === "dictionary");
+    assert.deepEqual([...read.value.keys()], ["inner", "note"], "ordered by key");
+    assert.deepEqual(read.value.get("note"), { kind: "scalar", type: "string", value: "moss" });
+    const inner = read.value.get("inner");
+    assert.ok(inner?.kind === "dictionary");
+    assert.deepEqual(inner.value.get("scale"), { kind: "tuple", type: "double3", value: [1, 2, 3] });
+    receipt.undo().release();
+    assert.equal(stage.prim("/World")?.metadata("customData"), null);
+  });
+
+  it("send a dictionary read from a stage back as it is", async () => {
+    using stage = await openScene();
+    stage
+      .apply(stage.root, [
+        {
+          type: "setMetadata",
+          path: "/World",
+          key: "assetInfo",
+          value: { type: "dictionary", value: { name: { type: "string", value: "rock" }, version: { type: "int", value: 2 } } },
+        },
+      ])
+      .release();
+    const info = stage.prim("/World")?.metadata("assetInfo");
+    assert.ok(info);
+    stage.apply(stage.root, [{ type: "setMetadata", path: "/Spare", key: "assetInfo", value: info }]).release();
+    assert.deepEqual(stage.prim("/Spare")?.metadata("assetInfo"), info);
+    const saved = stage.save().written[0];
+    assert.ok(saved);
+    assert.match(new TextDecoder().decode(saved.bytes), /string name = "rock"/);
+  });
+
+  it("fail naming the entry and the edit", async () => {
+    using stage = await openScene();
+    const bad = await failure(() =>
+      stage.apply(stage.root, [
+        { type: "setKind", path: "/World", kind: "group" },
+        {
+          type: "setMetadata",
+          path: "/World",
+          key: "customData",
+          value: { type: "dictionary", value: { count: { type: "int", value: 1.5 } } },
+        },
+      ]),
+    );
+    assert.equal(bad.code, "value.range");
+    assert.equal(bad.edit, 1);
+    assert.match(bad.message, /`count`/);
+    const notMap = await failure(() =>
+      stage.apply(stage.root, [
+        { type: "setMetadata", path: "/World", key: "customData", value: { type: "dictionary", value: [1, 2] } as never },
+      ]),
+    );
+    assert.equal(notMap.code, "value.kind");
+    const cycle: { type: "dictionary"; value: Record<string, unknown> } = { type: "dictionary", value: {} };
+    cycle.value.self = cycle;
+    const deep = await failure(() =>
+      stage.apply(stage.root, [{ type: "setMetadata", path: "/World", key: "customData", value: cycle as never }]),
+    );
+    assert.equal(deep.code, "value.shape");
+    assert.equal(stage.prim("/World")?.metadata("customData"), null, "nothing was authored");
+  });
+});

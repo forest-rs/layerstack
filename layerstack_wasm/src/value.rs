@@ -250,6 +250,18 @@ pub(crate) enum InputData {
     /// buffer is shared when the type's storage is the array's, and
     /// converted as its scalars would be otherwise.
     Shared(TypedArray),
+    /// A `dictionary`'s entries: each key and the batch slot holding its
+    /// value, filled before the dictionary's ([`decode_slot`]).
+    Dictionary(Vec<DictionaryEntry>),
+}
+
+/// One entry of a dictionary [`ValueInput`].
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct DictionaryEntry {
+    /// The key.
+    pub(crate) key: String,
+    /// The slot of its value in the batch.
+    pub(crate) slot: u32,
 }
 
 impl InputData {
@@ -262,6 +274,7 @@ impl InputData {
             Self::HalfBits(items) => items.len(),
             Self::Text(items) => items.len(),
             Self::Shared(array) => array.len(),
+            Self::Dictionary(entries) => entries.len(),
         }
     }
 
@@ -274,6 +287,7 @@ impl InputData {
             Self::HalfBits(_) => "half float bits",
             Self::Text(_) => "strings",
             Self::Shared(_) => "an array handle",
+            Self::Dictionary(_) => "dictionary entries",
         }
     }
 }
@@ -311,8 +325,10 @@ pub(crate) fn decode(input: &ValueInput, tokens: &TokenInterner) -> Result<Value
             ),
         ));
     };
-    if let InputData::Shared(array) = &input.data {
-        return decode_shared(input, is_array, array, tokens);
+    match &input.data {
+        InputData::Shared(array) => return decode_shared(input, is_array, array, tokens),
+        InputData::Dictionary(_) => return Err(kind_error(&input.data, name)),
+        _ => {}
     }
     let storage = value_type.storage();
     let components = components(storage);
@@ -477,6 +493,77 @@ pub(crate) fn decode(input: &ValueInput, tokens: &TokenInterner) -> Result<Value
         }
     };
     Ok(value)
+}
+
+/// How deep dictionaries may nest in one value: deeper is refused, which
+/// also stops a batch whose dictionary slots name each other.
+const DICTIONARY_DEPTH: usize = 32;
+
+/// The value in slot `slot` of `slots`, as [`decode`] makes it, with a
+/// `dictionary`'s entries read from the slots they name: each entry is a
+/// value of its own type, and the dictionary is ordered by key, as
+/// OpenUSD's `VtDictionary` is.
+///
+/// Spec: AOUSD Core §6.6.2 (dictionary values).
+///
+/// # Errors
+///
+/// `argument.invalid` for a slot never filled; `value.kind` for entries
+/// sent for a type that is not `dictionary`, or the reverse;
+/// `value.shape` for a key given twice, or dictionaries nested deeper
+/// than 32; the errors of [`decode`] for an entry, naming its key.
+pub(crate) fn decode_slot(
+    slots: &[ValueInput],
+    slot: u32,
+    tokens: &TokenInterner,
+) -> Result<Value, Error> {
+    decode_nested(slots, slot, tokens, 0)
+}
+
+fn decode_nested(
+    slots: &[ValueInput],
+    slot: u32,
+    tokens: &TokenInterner,
+    depth: usize,
+) -> Result<Value, Error> {
+    let input = slots
+        .get(slot as usize)
+        .ok_or_else(|| Error::new("argument.invalid", format!("no value in slot {slot}")))?;
+    let name = input.type_name.as_str();
+    let InputData::Dictionary(entries) = &input.data else {
+        if name == "dictionary" {
+            return Err(Error::new(
+                "value.kind",
+                "a `dictionary` takes entries: keys and the values they map to",
+            ));
+        }
+        return decode(input, tokens);
+    };
+    if name != "dictionary" {
+        return Err(kind_error(&input.data, name));
+    }
+    if depth == DICTIONARY_DEPTH {
+        return Err(Error::new(
+            "value.shape",
+            format!("dictionaries nest deeper than {DICTIONARY_DEPTH}"),
+        ));
+    }
+    let mut out: Vec<(Arc<str>, Value)> = Vec::with_capacity(entries.len());
+    for entry in entries {
+        let value = decode_nested(slots, entry.slot, tokens, depth + 1).map_err(|error| Error {
+            message: format!("dictionary key `{}`: {}", entry.key, error.message),
+            ..error
+        })?;
+        out.push((Arc::from(entry.key.as_str()), value));
+    }
+    out.sort_by(|a, b| a.0.cmp(&b.0));
+    if let Some(pair) = out.windows(2).find(|pair| pair[0].0 == pair[1].0) {
+        return Err(Error::new(
+            "value.shape",
+            format!("dictionary key `{}` is given twice", pair[0].0),
+        ));
+    }
+    Ok(Value::Dictionary(out))
 }
 
 /// A shared array as a value of `input`'s type: the array itself when the
@@ -897,5 +984,76 @@ mod tests {
         assert_eq!(decoded("float3").unwrap_err().code, "value.shape");
         assert_eq!(decoded("float2[]").unwrap_err().code, "value.shape");
         assert_eq!(decoded("token[]").unwrap_err().code, "value.kind");
+    }
+
+    #[test]
+    fn dictionaries_read_their_entries_from_earlier_slots() {
+        let tokens = TokenInterner::default();
+        let entry = |key: &str, slot: u32| DictionaryEntry {
+            key: key.into(),
+            slot,
+        };
+        let slots = vec![
+            input("string", InputData::Text(vec!["moss".into()])),
+            input("double3", InputData::Numbers(vec![1.0, 2.0, 3.0])),
+            input("dictionary", InputData::Dictionary(vec![entry("size", 1)])),
+            input(
+                "dictionary",
+                InputData::Dictionary(vec![entry("name", 0), entry("inner", 2)]),
+            ),
+        ];
+        assert_eq!(
+            decode_slot(&slots, 3, &tokens).unwrap(),
+            Value::Dictionary(vec![
+                (
+                    Arc::from("inner"),
+                    Value::Dictionary(vec![(Arc::from("size"), Value::Vec3d([1.0, 2.0, 3.0]))])
+                ),
+                (Arc::from("name"), Value::String(Arc::from("moss"))),
+            ]),
+            "ordered by key"
+        );
+        assert_eq!(
+            decode_slot(&slots, 0, &tokens).unwrap(),
+            Value::String(Arc::from("moss"))
+        );
+        let code = |slots: &[ValueInput]| {
+            decode_slot(slots, u32::try_from(slots.len() - 1).unwrap(), &tokens).unwrap_err()
+        };
+        let twice = [
+            slots[0].clone(),
+            input(
+                "dictionary",
+                InputData::Dictionary(vec![entry("a", 0), entry("a", 0)]),
+            ),
+        ];
+        assert_eq!(code(&twice).code, "value.shape");
+        let cycle = [input(
+            "dictionary",
+            InputData::Dictionary(vec![entry("self", 0)]),
+        )];
+        assert_eq!(
+            code(&cycle).code,
+            "value.shape",
+            "a slot naming itself nests forever"
+        );
+        let bad = [
+            input("int", InputData::Numbers(vec![1.5])),
+            input("dictionary", InputData::Dictionary(vec![entry("count", 0)])),
+        ];
+        let error = code(&bad);
+        assert_eq!(error.code, "value.range");
+        assert!(error.message.contains("`count`"), "{}", error.message);
+        let numbers = [input("dictionary", InputData::Numbers(vec![1.0]))];
+        assert_eq!(code(&numbers).code, "value.kind");
+        let entries = [
+            slots[0].clone(),
+            input("double", InputData::Dictionary(vec![entry("a", 0)])),
+        ];
+        assert_eq!(code(&entries).code, "value.kind");
+        assert_eq!(
+            decode_slot(&slots, 9, &tokens).unwrap_err().code,
+            "argument.invalid"
+        );
     }
 }

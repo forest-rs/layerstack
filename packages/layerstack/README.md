@@ -99,7 +99,11 @@ await stage.resolve(source);
 - **Values to author say their type.** A `ValueInput` is `{ type, value }`
   in the layout values are read in (`{ type: "color3f", value: [1, 0, 0] }`,
   `{ type: "point3f[]", value: new Float32Array(...) }`, a `bigint` for an
-  exact `int64`), or a `Value` read from a stage, sent back as it is.
+  exact `int64`), or a `Value` read from a stage, sent back as it is (an
+  `ArrayHandle` without a copy). A dictionary (`customData`, `assetInfo`)
+  is `{ type: "dictionary", value: { key: ValueInput, ... } }` (or a
+  `Map`), nested dictionaries included; it is authored whole and ordered by
+  key.
 - **Undo is a receipt.** `apply` returns an `EditReceipt` holding the
   native inverse: `receipt.undo()` restores exactly what the edits changed
   and returns the receipt that redoes them. An undo whose slots another
@@ -161,7 +165,7 @@ await stage.resolve(source);
 | `value.kind` | A value's scalars are of the wrong kind (strings for a `float`). |
 | `value.shape` | A scalar or tuple with the wrong number of components, or an array length that is not a multiple of them. |
 | `value.range` | A number that is not an exact integer of the type (past 2^53: send a `bigint`), a `bool` not 0 or 1, a `float` overflow. |
-| `value.unsupported` | A value that cannot be authored yet (a dictionary). |
+| `value.unsupported` | A value that cannot be authored yet (a `list` or `opaque` value read from a stage). |
 | `layer.read_only` | The edits target a layer that cannot be saved; open with `editLayer: "session"`. |
 | `layer.outside_stack` | The edits target a layer the stage reaches only through an arc. |
 | `edit.stale` | An undo whose slots changed since; nothing changed and the receipt is still undoable. |

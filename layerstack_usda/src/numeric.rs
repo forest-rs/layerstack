@@ -283,6 +283,15 @@ pub(crate) fn convert_scalar(value: &ast::Value<'_>, ty: &str) -> Option<Result<
             Number::of(value).expect("a number literal")
         }
         ast::Value::Bool(b) if ty == "bool" => return Some(Ok(Value::Bool(*b))),
+        // `yes` and `no` are bools as identifiers too (`Sdf_BoolFromString`,
+        // `pxr/usd/sdf/parserHelpers.cpp`).
+        ast::Value::Identifier(s) if ty == "bool" => {
+            return Some(
+                bool_from_string(s)
+                    .map(Value::Bool)
+                    .ok_or_else(|| alloc::format!("`{s}` is not a `bool`")),
+            );
+        }
         ast::Value::String(s) if ty == "bool" => {
             return Some(
                 bool_from_string(s)

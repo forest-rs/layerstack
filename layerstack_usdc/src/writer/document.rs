@@ -34,7 +34,7 @@
 //!   `.connect` statements, `timeSamples` (an `SdfTimeSampleMap`) when it
 //!   has time samples, which USDA writes as a `.timeSamples` statement,
 //!   and `spline` (a `TsSpline`) when it has a spline;
-//! - a relationship holds `variability` (always uniform), `custom` only
+//! - a relationship holds `variability` (uniform unless `varying`), `custom` only
 //!   when custom, then `targetPaths` (a path list op, an empty explicit one
 //!   for `rel r = None`) and its metadata: an explicit target list is part
 //!   of the declaration, so it precedes the metadata, while list edits are
@@ -372,8 +372,14 @@ fn attribute_value(declared: Declared, value: &mut UsdaValue) -> Value {
 
 fn lower_relationship(relationship: &mut Relationship, prim: &str) -> Result<Spec, UsdcWriteError> {
     let path = alloc::format!("{prim}.{}", relationship.name);
-    let mut spec = Spec::new(path.clone(), SpecForm::Relationship)
-        .with_field("variability", Value::Variability(Variability::Uniform));
+    let mut spec = Spec::new(path.clone(), SpecForm::Relationship).with_field(
+        "variability",
+        Value::Variability(if relationship.varying {
+            Variability::Varying
+        } else {
+            Variability::Uniform
+        }),
+    );
     if relationship.custom {
         spec = spec.with_field("custom", Value::Bool(true));
     }
@@ -680,6 +686,7 @@ pub fn metadata_field(owner: Owner, key: &str) -> Option<(&'static str, FieldTyp
         (_, "prefix") => Some(("prefix", F::String)),
         (_, "suffix") => Some(("suffix", F::String)),
         (_, "symmetricPeer") => Some(("symmetricPeer", F::String)),
+        (_, "symmetryFunction") => Some(("symmetryFunction", F::Token)),
         _ => None,
     };
     let specific = match owner {
@@ -776,6 +783,12 @@ fn metadatum(
     path: &str,
     entry: &mut Metadatum,
 ) -> Result<super::Field, UsdcWriteError> {
+    if owner == Owner::Attribute && entry.key == "displayUnit" {
+        return Err(UsdcWriteError::UnencodedField {
+            path: path.into(),
+            key: entry.key.clone(),
+        });
+    }
     let Some((name, ty)) = metadata_field(owner, &entry.key) else {
         // OpenUSD's text parser keeps metadata no schema registers as an
         // `SdfUnregisteredValue`: a dictionary as itself, anything else as

@@ -265,24 +265,11 @@ fn rejects_unsupported_features_with_their_source_paths() {
     }
 }
 
-/// Features the USDA importer does not produce (a spline, a variant spec,
-/// a `varying` relationship, a mixed list op), built through the layer API.
+/// A mixed list op, which the USDA importer does not produce, built
+/// through the layer API.
 #[test]
 fn rejects_unsupported_slots_built_through_the_api() {
     let source = "#usda 1.0\ndef \"A\"\n{\n    float a = 1\n    rel r = </A>\n}\n";
-
-    let mut imported = Imported::new(source);
-    imported.property("/A.r").variability = Variability::Varying;
-    assert!(
-        matches!(
-            imported.save(),
-            Err(SaveError::Unsupported {
-                feature: Unsupported::VaryingRelationship,
-                ..
-            })
-        ),
-        "varying relationship"
-    );
 
     let mut imported = Imported::new(source);
     let targets = imported.property("/A.r").targets.as_mut().unwrap();

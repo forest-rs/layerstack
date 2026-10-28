@@ -603,7 +603,7 @@ impl<'a> LowerCtx<'a> {
 
         // type name
         if idx < sig.len() && sig[idx].0 == SyntaxKind::Ident {
-            type_name = self.text(self.node_from(tree, sig[idx].1));
+            type_name = current_type_name(self.text(self.node_from(tree, sig[idx].1)));
             idx += 1;
         }
 
@@ -733,6 +733,7 @@ impl<'a> LowerCtx<'a> {
 
         let mut op = ListOpKind::Explicit;
         let mut custom = false;
+        let mut varying = false;
         let mut name = "";
         let mut targets = None;
         let mut metadata = Vec::new();
@@ -771,6 +772,15 @@ impl<'a> LowerCtx<'a> {
             && self.text(self.node_from(tree, sig[idx].1)) == "custom"
         {
             custom = true;
+            idx += 1;
+        }
+
+        // `varying`
+        if idx < sig.len()
+            && sig[idx].0 == SyntaxKind::Ident
+            && self.text(self.node_from(tree, sig[idx].1)) == "varying"
+        {
+            varying = true;
             idx += 1;
         }
 
@@ -816,6 +826,7 @@ impl<'a> LowerCtx<'a> {
         Relationship {
             span,
             custom,
+            varying,
             op,
             name,
             targets,
@@ -1149,6 +1160,10 @@ impl<'a> LowerCtx<'a> {
             SyntaxKind::DictionaryValue => {
                 Value::Dictionary(self.lower_dictionary(self.node_from(tree, id)))
             }
+            // A C++ namespaced identifier, `Ns::fn` (`symmetryFunction`).
+            SyntaxKind::NamespacedName => {
+                Value::Identifier(self.node_from(tree, id).span().text(self.source))
+            }
             SyntaxKind::Ident => {
                 let text = self.text(self.node_from(tree, id));
                 match text {
@@ -1355,7 +1370,7 @@ impl<'a> LowerCtx<'a> {
             if t == "dictionary" {
                 idx += 1;
             } else {
-                type_name = Some(t);
+                type_name = Some(current_type_name(t));
                 idx += 1;
                 // Skip array suffix.
                 if idx < sig.len() && sig[idx].0 == SyntaxKind::LeftBracket {
@@ -1717,6 +1732,48 @@ impl<'a> LowerCtx<'a> {
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────
+
+/// The value type name OpenUSD reads a legacy one as (`Vec3f` is `float3`,
+/// `NormalFloat` is `normal3f`), else `name` itself. OpenUSD's text parser
+/// still accepts these spellings and stores the current type, which its
+/// writer then spells.
+///
+/// OpenUSD: `_AddLegacyTypesToRegistry` (`pxr/usd/sdf/schema.cpp`) and the
+/// legacy value factories of `Sdf_ParserHelpers` (`parserHelpers.cpp`).
+/// `Transform`, `PointIndex`, `EdgeIndex`, `FaceIndex` and `Schema` keep
+/// their names there, so they stay as they are here too.
+fn current_type_name(name: &str) -> &str {
+    match name {
+        "Vec2i" => "int2",
+        "Vec2h" => "half2",
+        "Vec2f" => "float2",
+        "Vec2d" => "double2",
+        "Vec3i" => "int3",
+        "Vec3h" => "half3",
+        "Vec3f" => "float3",
+        "Vec3d" => "double3",
+        "Vec4i" => "int4",
+        "Vec4h" => "half4",
+        "Vec4f" => "float4",
+        "Vec4d" => "double4",
+        "Point" => "point3d",
+        "PointFloat" => "point3f",
+        "Normal" => "normal3d",
+        "NormalFloat" => "normal3f",
+        "Vector" => "vector3d",
+        "VectorFloat" => "vector3f",
+        "Color" => "color3d",
+        "ColorFloat" => "color3f",
+        "Quath" => "quath",
+        "Quatf" => "quatf",
+        "Quatd" => "quatd",
+        "Matrix2d" => "matrix2d",
+        "Matrix3d" => "matrix3d",
+        "Matrix4d" => "matrix4d",
+        "Frame" => "frame4d",
+        name => name,
+    }
+}
 
 fn is_string_kind(kind: SyntaxKind) -> bool {
     matches!(

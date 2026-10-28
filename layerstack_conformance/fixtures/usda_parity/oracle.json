@@ -1,5 +1,96 @@
 {
  "cases": {
+  "read_bool_identifiers": {
+   "reads": true,
+   "source": "#usda 1.0\n\ndef \"P\"\n{\n    bool a = yes\n    bool b = no\n    bool[] c = [yes, no, true, 0]\n    bool[] d = edit [\n        write yes to [0]\n        minsize 3 fill no\n    ]\n}\n",
+   "text": "#usda 1.0\n\ndef \"P\"\n{\n    bool a = 1\n    bool b = 0\n    bool[] c = [1, 0, 1, 0]\n    bool[] d = edit [write 1 to [0]; minsize 3 fill 0]\n}\n\n"
+  },
+  "read_dictionary_semicolons": {
+   "reads": true,
+   "source": "#usda 1.0\n\ndef \"P\" (\n    customData = { string a = \"yes\"; int b = 4; dictionary c = { string d = \"x\"; double e = 1 } }\n)\n{\n    double s.spline = {\n        0: 6; post linear; {},\n        1: 6; {},\n    }\n}\n",
+   "text": "#usda 1.0\n\ndef \"P\" (\n    customData = {\n        string a = \"yes\"\n        int b = 4\n        dictionary c = {\n            string d = \"x\"\n            double e = 1\n        }\n    }\n)\n{\n    double s.spline = {\n        0: 6; pre (0, 0); post linear,\n        1: 6; post held,\n    }\n}\n\n"
+  },
+  "read_display_unit": {
+   "reads": true,
+   "source": "#usda 1.0\n\ndef \"P\"\n{\n    double a = 1 (displayUnit = mm)\n    double b = 2 (\n        displayUnit = deg\n        doc = \"angle\"\n    )\n}\n",
+   "text": "#usda 1.0\n\ndef \"P\"\n{\n    double a = 1 (\n        displayUnit = mm\n    )\n    double b = 2 (\n        displayUnit = deg\n        doc = \"angle\"\n    )\n}\n\n"
+  },
+  "read_display_unit_unknown": {
+   "error": "''furlong' is not a valid display unit at 'furlong)' in </P.a>",
+   "reads": false,
+   "source": "#usda 1.0\n\ndef \"P\"\n{\n    double a = 1 (displayUnit = furlong)\n}\n"
+  },
+  "read_legacy_type_names": {
+   "reads": true,
+   "source": "#usda 1.0\n\ndef \"P\"\n{\n    custom Vec3f a = (1, 2, 3)\n    custom Vec2d[] b = [(1, 2), (3, 4)]\n    custom PointFloat[] c = [(0, 0, 0)]\n    custom NormalFloat d = (0, 1, 0)\n    custom VectorFloat e = (1, 0, 0)\n    custom Color f = (1, 0.5, 0)\n    custom Quatf g = (1, 0, 0, 0)\n    custom Matrix2d h = ( (1, 0), (0, 1) )\n    custom Frame i = ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1) )\n    custom Vec4h j.timeSamples = {\n        1: (1, 2, 3, 4),\n    }\n    custom double k (\n        customData = {\n            Vec3d offset = (1, 2, 3)\n        }\n    )\n}\n",
+   "text": "#usda 1.0\n\ndef \"P\"\n{\n    custom float3 a = (1, 2, 3)\n    custom double2[] b = [(1, 2), (3, 4)]\n    custom point3f[] c = [(0, 0, 0)]\n    custom normal3f d = (0, 1, 0)\n    custom vector3f e = (1, 0, 0)\n    custom color3d f = (1, 0.5, 0)\n    custom quatf g = (1, 0, 0, 0)\n    custom matrix2d h = ( (1, 0), (0, 1) )\n    custom frame4d i = ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1) )\n    custom half4 j\n    half4 j.timeSamples = {\n        1: (1, 2, 3, 4),\n    }\n    custom double k (\n        customData = {\n            double3 offset = (1, 2, 3)\n        }\n    )\n}\n\n"
+  },
+  "read_property_metadata_list_ops": {
+   "reads": true,
+   "source": "#usda 1.0\n\ndef \"P\"\n{\n    double a (\n        delete testIntOps = [1, 2]\n        prepend testIntOps = [3]\n        append testTokenOps = [\"x\", \"y\"]\n    )\n    rel r (\n        add testIntOps = [4]\n        reorder testIntOps = [4, 3]\n    )\n}\n",
+   "text": "#usda 1.0\n\ndef \"P\"\n{\n    double a (\n        delete testIntOps = [1, 2]\n        prepend testIntOps = [3]\n        append testTokenOps = [\"x\", \"y\"]\n    )\n    rel r (\n        add testIntOps = [4]\n        reorder testIntOps = [4, 3]\n    )\n}\n\n"
+  },
+  "read_spline_comments": {
+   "reads": true,
+   "source": "#usda 1.0\n\ndef \"P\"\n{\n    double a.spline = {\n        bezier,\n        # a comment line\n        7: 5.5; post curve/* inline */(1.1, -1.4),\n        // another comment\n        9: 6,\n    }\n}\n",
+   "text": "#usda 1.0\n\ndef \"P\"\n{\n    double a.spline = {\n        bezier,\n        7: 5.5; pre (0, 0); post curve (1.1, -1.4),\n        9: 6; pre (0, 0); post held,\n    }\n}\n\n"
+  },
+  "read_symmetry_function": {
+   "reads": true,
+   "source": "#usda 1.0\n\ndef \"P\" (\n    symmetryFunction = mirror\n)\n{\n    double a = 1 (\n        symmetryFunction = Ns::Inner::flip\n    )\n    rel r (\n        symmetryFunction = \n    )\n    custom double b = 0 (symmetryFunction = )\n    rel s (permission = private; symmetryFunction = rotate)\n}\n",
+   "text": "#usda 1.0\n\ndef \"P\" (\n    symmetryFunction = mirror\n)\n{\n    double a = 1 (\n        symmetryFunction = Ns::Inner::flip\n    )\n    custom double b = 0 (\n        symmetryFunction = \n    )\n    rel r (\n        symmetryFunction = \n    )\n    rel s (\n        permission = private\n        symmetryFunction = rotate\n    )\n}\n\n"
+  },
+  "read_symmetry_function_string": {
+   "error": "'Expected ) at '\"mirror\"' in </P>",
+   "reads": false,
+   "source": "#usda 1.0\n\ndef \"P\" (\n    symmetryFunction = \"mirror\"\n)\n{\n}\n"
+  },
+  "read_variant_child_relative_target": {
+   "error": "'Relationship target paths cannot contain variant selections at ' = <x>' in </P{v=one}Child.side>",
+   "reads": false,
+   "source": "#usda 1.0\n\ndef \"P\" (\n    variants = {\n        string v = \"one\"\n    }\n    prepend variantSets = \"v\"\n)\n{\n    variantSet \"v\" = {\n        \"one\" {\n            def \"Child\"\n            {\n                float x\n                rel side = <x>\n            }\n        }\n    }\n}\n"
+  },
+  "read_variant_climbing_target": {
+   "error": "'Relationship target paths cannot contain variant selections at ' = <../Other>' in </P{v=one}Child.side>",
+   "reads": false,
+   "source": "#usda 1.0\n\ndef \"P\" (\n    variants = {\n        string v = \"one\"\n    }\n    prepend variantSets = \"v\"\n)\n{\n    variantSet \"v\" = {\n        \"one\" {\n            def \"Child\"\n            {\n                rel side = <../Other>\n            }\n        }\n    }\n}\n"
+  },
+  "read_variant_relative_targets": {
+   "reads": true,
+   "source": "#usda 1.0\n\ndef \"P\" (\n    variants = {\n        string v = \"one\"\n    }\n    prepend variantSets = \"v\"\n)\n{\n    variantSet \"v\" = {\n        \"one\" (\n            prepend inherits = <Base>\n        ) {\n            rel r = <Child>\n            rel up = <../Other>\n            float c.connect = <Child.x>\n\n            def \"Child\"\n            {\n                float x\n            }\n        }\n    }\n}\n\ndef \"Other\"\n{\n}\n",
+   "targets": {
+    "/P.c": [
+     "/P/Child.x"
+    ],
+    "/P.r": [
+     "/P/Child"
+    ],
+    "/P.up": [
+     "/Other"
+    ]
+   },
+   "text": "#usda 1.0\n\ndef \"P\" (\n    variants = {\n        string v = \"one\"\n    }\n    prepend variantSets = \"v\"\n)\n{\n    variantSet \"v\" = {\n        \"one\" (\n            prepend inherits = </P/Base>\n        ) {\n            float c.connect = </P/Child.x>\n            rel r = </P/Child>\n            rel up = </Other>\n\n            def \"Child\"\n            {\n                float x\n            }\n\n        }\n    }\n}\n\ndef \"Other\"\n{\n}\n\n"
+  },
+  "read_varying_rel": {
+   "reads": true,
+   "source": "#usda 1.0\n\ndef \"P\"\n{\n    varying rel a = </A>\n    custom varying rel b\n    delete varying rel c = </A>\n    prepend varying rel c = [</B>, </C>]\n    reorder varying rel c = [</C>, </B>]\n    custom varying rel d = </A> (\n        doc = \"varying\"\n    )\n    rel e = </A>\n}\n",
+   "targets": {
+    "/P.a": [
+     "/A"
+    ],
+    "/P.c": [
+     "/C",
+     "/B"
+    ],
+    "/P.d": [
+     "/A"
+    ],
+    "/P.e": [
+     "/A"
+    ]
+   },
+   "text": "#usda 1.0\n\ndef \"P\"\n{\n    varying rel a = </A>\n    custom varying rel b\n    delete varying rel c = </A>\n    prepend varying rel c = [\n        </B>,\n        </C>,\n    ]\n    reorder varying rel c = [\n        </C>,\n        </B>,\n    ]\n    custom varying rel d = </A> (\n        doc = \"varying\"\n    )\n    rel e = </A>\n}\n\n"
+  },
   "statements_edits_after_explicit_refs": {
    "reads": true,
    "source": "#usda 1.0\n\ndef \"P\" (\n    references = @d.usda@\n    prepend references = @c.usda@\n    prepend references = @e.usda@\n    append references = @f.usda@\n)\n{\n}\n",

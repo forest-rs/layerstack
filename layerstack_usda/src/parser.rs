@@ -1046,7 +1046,9 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
                 self.parse_variant_set();
             } else if self.is_reorder_statement() {
                 self.parse_reorder_statement();
-            } else if (self.peek() == Some(TokenKind::Ident) && self.current_text() == "rel")
+            } else if (self.peek() == Some(TokenKind::Ident)
+                && (self.current_text() == "rel"
+                    || (self.current_text() == "varying" && self.rel_after(self.pos))))
                 || self.is_listop_rel()
             {
                 self.parse_relationship();
@@ -1084,7 +1086,12 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
             .get(i)
             .expect("lookahead checked")
             .text(self.source);
-        text == "rel" || (text == "custom" && self.rel_after(i + 1))
+        match text {
+            "rel" => true,
+            "custom" => self.rel_after(i + 1),
+            "varying" => self.rel_after(i),
+            _ => false,
+        }
     }
 
     /// Check if `custom` keyword is followed (eventually) by `rel`.
@@ -1092,15 +1099,30 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
         self.rel_after(self.pos + 1)
     }
 
+    /// Whether `rel`, or `varying rel`, follows the token at `start`.
     fn rel_after(&self, start: usize) -> bool {
         self.peek_past_trivia_from(start).is_some_and(|(i, kind)| {
-            kind == TokenKind::Ident
-                && self
-                    .tokens
-                    .get(i)
-                    .expect("lookahead checked")
-                    .text(self.source)
-                    == "rel"
+            if kind != TokenKind::Ident {
+                return false;
+            }
+            match self
+                .tokens
+                .get(i)
+                .expect("lookahead checked")
+                .text(self.source)
+            {
+                "rel" => true,
+                "varying" => self.peek_past_trivia_from(i + 1).is_some_and(|(i, kind)| {
+                    kind == TokenKind::Ident
+                        && self
+                            .tokens
+                            .get(i)
+                            .expect("lookahead checked")
+                            .text(self.source)
+                            == "rel"
+                }),
+                _ => false,
+            }
         })
     }
 
@@ -1140,15 +1162,8 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
             .text(self.source)
         {
             "rel" => false,
-            "custom" => self.peek_past_trivia_from(i + 1).is_some_and(|(i, kind)| {
-                kind == TokenKind::Ident
-                    && self
-                        .tokens
-                        .get(i)
-                        .expect("lookahead checked")
-                        .text(self.source)
-                        != "rel"
-            }),
+            "varying" => !self.rel_after(i),
+            "custom" => !self.rel_after(i + 1),
             _ => true,
         }
     }
@@ -1477,16 +1492,34 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
             self.bump();
         }
 
+        // `varying`: a relationship is uniform unless it says so.
+        self.eat_trivia();
+        if self.peek() == Some(TokenKind::Ident) && self.current_text() == "varying" {
+            self.bump();
+        }
+
         // `rel`.
         self.eat_keyword("rel");
 
         // Name.
         self.parse_namespaced_name();
 
-        // Optional `.timeSamples` or `.default` (uncommon but legal per grammar).
+        // `.default = <path>`, a legacy relationship default OpenUSD still
+        // reads (`RelationshipSpec`, `pxr/usd/sdf/textFileFormatParser.h`).
+        // The layer has no path value to hold it, so it is reported rather
+        // than dropped unseen; any other suffix is not relationship syntax.
         self.eat_trivia();
         if self.peek() == Some(TokenKind::Dot) {
+            let span = self.current_span();
             self.bump();
+            if self.at_keyword("default") {
+                self.error(
+                    span,
+                    "unsupported: a relationship's `.default` value is not kept",
+                );
+            } else {
+                self.error(span, "expected `default` after a relationship name");
+            }
             if self.at_keyword("timeSamples") || self.at_keyword("default") {
                 self.bump();
                 self.expect(TokenKind::Equals);
@@ -1951,6 +1984,11 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
                 break;
             }
             self.parse_dictionary_entry();
+            // Entries are separated by line breaks or `;`
+            // (`StatementSequenceOf<DictionaryValueItem>`,
+            // `pxr/usd/sdf/textFileFormatParser.h`).
+            self.eat_trivia();
+            self.eat_statement_separator();
         }
 
         self.expect(TokenKind::RightBrace);
@@ -2131,6 +2169,67 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
     /// rejects them.
     ///
     /// Spec: AOUSD Core §16.2.16 (property declarations).
+    /// The value of `symmetryFunction`: an identifier, which may be C++
+    /// namespaced (`Ns::fn`), or nothing at all (`symmetryFunction = `).
+    ///
+    /// OpenUSD: `SymmetryFunctionMetadata = symmetryFunction Assignment
+    /// (Identifier)?` (`pxr/usd/sdf/textFileFormatParser.h`).
+    fn parse_symmetry_function(&mut self) {
+        while self
+            .peek()
+            .is_some_and(|kind| matches!(kind, TokenKind::Whitespace | TokenKind::BlockComment))
+        {
+            self.bump();
+        }
+        match self.peek() {
+            Some(TokenKind::Ident) => {}
+            None
+            | Some(
+                TokenKind::Newline
+                | TokenKind::RightParen
+                | TokenKind::Semicolon
+                | TokenKind::PythonComment
+                | TokenKind::CppComment,
+            ) => return,
+            Some(_) => {
+                let span = self.current_span();
+                self.error(
+                    span,
+                    "expected an identifier or nothing after `symmetryFunction =`",
+                );
+                return;
+            }
+        }
+        let start = self.current_span().start;
+        self.builder.start_node(SyntaxKind::ValueExpr, start);
+        // `::` at the token `offset` past the current one.
+        let colons = |parser: &Self, offset: usize| {
+            let kind = |at: usize| parser.tokens.get(parser.pos + at).map(|t| t.kind);
+            kind(offset) == Some(TokenKind::Colon) && kind(offset + 1) == Some(TokenKind::Colon)
+        };
+        if colons(self, 1) {
+            self.builder.start_node(SyntaxKind::NamespacedName, start);
+            self.bump();
+            while colons(self, 0) {
+                self.bump();
+                self.bump();
+                if self.peek() == Some(TokenKind::Ident) {
+                    self.bump();
+                } else {
+                    let span = self.current_span();
+                    self.error(span, "expected a name after `::`");
+                    break;
+                }
+            }
+            let end = self.current_span().start;
+            self.builder.finish_node(end);
+        } else {
+            self.bump();
+        }
+        let end = self.current_span().start;
+        self.builder.finish_node(end);
+    }
+
     fn parse_namespaced_name(&mut self) {
         self.eat_trivia();
 
@@ -2174,12 +2273,27 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
     }
 
     fn parse_metadata_entry_inner(&mut self) {
-        // key = value
+        // [list-op keyword] key = value: a property's metadata may list
+        // edit a field as a prim's does (`GeneralListOpMetadata`,
+        // `pxr/usd/sdf/textFileFormatParser.h`).
         self.eat_trivia();
+        if self.peek() == Some(TokenKind::Ident)
+            && is_list_op_keyword(self.current_text())
+            && self.peek_next_non_trivia() == Some(TokenKind::Ident)
+        {
+            self.bump();
+            self.eat_trivia();
+        }
+        let mut key = "";
         if self.peek() == Some(TokenKind::Ident) {
+            key = self.current_text();
             self.bump(); // key
         }
         self.expect(TokenKind::Equals);
+        if key == "symmetryFunction" {
+            self.parse_symmetry_function();
+            return;
+        }
 
         self.eat_trivia();
         if self.peek() == Some(TokenKind::Ident) && self.current_text() == "None" {

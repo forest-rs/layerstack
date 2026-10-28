@@ -957,10 +957,13 @@ def Scope
 
 
 def error_line(error):
-    """The first line of OpenUSD's message, without the file's location."""
+    """The first line of OpenUSD's message, without the file's location or
+    the parser rule it names: that is a demangled template, which each
+    compiler spells differently, so the oracle would differ by platform."""
     lines = [line.strip() for line in str(error).splitlines() if line.strip()]
     text = lines[0] if lines else str(error)
     text = re.sub(r"'[^']*/case\.usda:\d+:\d+: ", "'", text)
+    text = re.sub(r"parse error matching .* at '", "parse error at '", text)
     return re.sub(r"Error in '[^']*' at line \d+ in file [^ ]* : ", "", text)
 
 

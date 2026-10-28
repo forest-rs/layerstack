@@ -105,6 +105,14 @@ struct OpenPrim {
     mark: usize,
 }
 
+/// A parser's position and diagnostic count, which
+/// [`Parser::skip_unparsed`] compares to see whether a loop advanced.
+#[derive(Clone, Copy)]
+struct Progress {
+    pos: usize,
+    diagnostics: usize,
+}
+
 struct Parser<'a, const LOSSLESS: bool> {
     source: &'a str,
     tokens: crate::token_source::TokenSource<'a>,
@@ -413,6 +421,31 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
         self.diagnostics.push(Diagnostic::error(span, message));
     }
 
+    /// Where parsing is, for [`Self::skip_unparsed`].
+    fn progress(&self) -> Progress {
+        Progress {
+            pos: self.pos,
+            diagnostics: self.diagnostics.len(),
+        }
+    }
+
+    /// Skips the current token when an item of a list or body parsed since
+    /// `start` consumed nothing, reporting it unless the item's parser
+    /// already reported why. A parser that cannot start an item at a token
+    /// leaves the token in place, and the loop parsing the list or body
+    /// would otherwise try it again forever.
+    fn skip_unparsed(&mut self, start: Progress) {
+        if self.pos != start.pos || self.current().is_none() {
+            return;
+        }
+        if self.diagnostics.len() == start.diagnostics {
+            let span = self.current_span();
+            let text = self.current_text();
+            self.error(span, format!("unexpected {text:?}"));
+        }
+        self.bump();
+    }
+
     /// Peeks at the next non-trivia token after the current one (without emitting).
     fn peek_next_non_trivia(&self) -> Option<TokenKind> {
         self.peek_past_trivia_from(self.pos + 1)
@@ -549,6 +582,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
         self.expect(TokenKind::LeftParen);
 
         loop {
+            let progress = self.progress();
             self.eat_trivia();
             if self.peek() == Some(TokenKind::RightParen) || self.current().is_none() {
                 break;
@@ -575,6 +609,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
                 continue;
             }
             self.expect_entry_end(TokenKind::RightParen);
+            self.skip_unparsed(progress);
         }
 
         self.expect(TokenKind::RightParen);
@@ -621,6 +656,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
         self.expect(TokenKind::LeftBracket);
 
         loop {
+            let progress = self.progress();
             self.eat_trivia();
             if self.peek() == Some(TokenKind::RightBracket) || self.current().is_none() {
                 break;
@@ -628,6 +664,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
 
             self.parse_sublayer_item();
             self.eat(TokenKind::Comma);
+            self.skip_unparsed(progress);
         }
 
         self.expect(TokenKind::RightBracket);
@@ -657,6 +694,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
             .start_node(SyntaxKind::LayerOffsetParams, start);
         self.bump(); // `(`
         loop {
+            let progress = self.progress();
             self.eat_trivia();
             if self.peek() == Some(TokenKind::RightParen) || self.current().is_none() {
                 break;
@@ -675,6 +713,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
             } else {
                 self.bump();
             }
+            self.skip_unparsed(progress);
         }
         self.expect(TokenKind::RightParen);
         let end = self.current_span().start;
@@ -690,6 +729,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
         self.expect(TokenKind::LeftBrace);
 
         loop {
+            let progress = self.progress();
             self.eat_trivia();
             if self.peek() == Some(TokenKind::RightBrace) || self.current().is_none() {
                 break;
@@ -705,6 +745,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
                     self.error(span, "expected `,` between relocates");
                 }
             }
+            self.skip_unparsed(progress);
         }
 
         self.expect(TokenKind::RightBrace);
@@ -789,6 +830,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
         self.expect(TokenKind::LeftParen);
 
         loop {
+            let progress = self.progress();
             self.eat_trivia();
             if self.peek() == Some(TokenKind::RightParen) || self.current().is_none() {
                 break;
@@ -803,6 +845,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
             }
             self.parse_prim_meta_entry();
             self.expect_entry_end(TokenKind::RightParen);
+            self.skip_unparsed(progress);
         }
 
         self.expect(TokenKind::RightParen);
@@ -832,12 +875,14 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
         if self.peek() == Some(TokenKind::LeftBrace) {
             self.bump();
             loop {
+                let progress = self.progress();
                 self.eat_trivia();
                 if self.peek() == Some(TokenKind::RightBrace) || self.current().is_none() {
                     break;
                 }
                 self.parse_relocate_entry();
                 self.eat(TokenKind::Comma);
+                self.skip_unparsed(progress);
             }
             self.expect(TokenKind::RightBrace);
         }
@@ -946,12 +991,14 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
         } else if self.peek() == Some(TokenKind::LeftBracket) {
             self.bump(); // [
             loop {
+                let progress = self.progress();
                 self.eat_trivia();
                 if self.peek() == Some(TokenKind::RightBracket) || self.current().is_none() {
                     break;
                 }
                 self.parse_arc_ref();
                 self.eat(TokenKind::Comma);
+                self.skip_unparsed(progress);
             }
             self.expect(TokenKind::RightBracket);
         } else {
@@ -999,12 +1046,14 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
         } else if self.peek() == Some(TokenKind::LeftBracket) {
             self.bump(); // [
             loop {
+                let progress = self.progress();
                 self.eat_trivia();
                 if self.peek() == Some(TokenKind::RightBracket) || self.current().is_none() {
                     break;
                 }
                 self.parse_path_ref();
                 self.eat(TokenKind::Comma);
+                self.skip_unparsed(progress);
             }
             self.expect(TokenKind::RightBracket);
         } else {
@@ -1039,6 +1088,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
             self.expect(TokenKind::LeftBracket);
             let mut names = 0_usize;
             loop {
+                let progress = self.progress();
                 self.eat_trivia();
                 if self.peek() == Some(TokenKind::RightBracket) || self.current().is_none() {
                     break;
@@ -1046,6 +1096,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
                 self.parse_string_token();
                 names += 1;
                 self.eat(TokenKind::Comma);
+                self.skip_unparsed(progress);
             }
             self.expect(TokenKind::RightBracket);
             if names == 0 {
@@ -1065,11 +1116,13 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
         self.expect(TokenKind::LeftBrace);
 
         loop {
+            let progress = self.progress();
             self.eat_trivia();
             if self.peek() == Some(TokenKind::RightBrace) || self.current().is_none() {
                 break;
             }
             self.parse_variant_selection_entry();
+            self.skip_unparsed(progress);
         }
 
         self.expect(TokenKind::RightBrace);
@@ -1149,6 +1202,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
         self.builder.start_node(SyntaxKind::PrimBody, start);
 
         loop {
+            let progress = self.progress();
             self.eat_trivia();
             if self.peek() == Some(TokenKind::RightBrace) || self.current().is_none() {
                 break;
@@ -1193,6 +1247,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
                 self.error(span, format!("unexpected token in prim body: {text:?}"));
                 self.bump();
             }
+            self.skip_unparsed(progress);
         }
 
         let end = self.current_span().start;
@@ -1615,12 +1670,14 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
             self.builder.start_node(SyntaxKind::PathList, start);
             self.bump(); // [
             loop {
+                let progress = self.progress();
                 self.eat_trivia();
                 if self.peek() == Some(TokenKind::RightBracket) || self.current().is_none() {
                     break;
                 }
                 self.parse_path_ref();
                 self.eat(TokenKind::Comma);
+                self.skip_unparsed(progress);
             }
             self.expect(TokenKind::RightBracket);
             let end = self.current_span().start;
@@ -1635,6 +1692,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
         self.builder.start_node(SyntaxKind::PrimMetadata, start);
         self.expect(TokenKind::LeftParen);
         loop {
+            let progress = self.progress();
             self.eat_trivia();
             if self.peek() == Some(TokenKind::RightParen) || self.current().is_none() {
                 break;
@@ -1654,6 +1712,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
             let entry_end = self.current_span().start;
             self.builder.finish_node(entry_end);
             self.expect_entry_end(TokenKind::RightParen);
+            self.skip_unparsed(progress);
         }
         self.expect(TokenKind::RightParen);
         let end = self.current_span().start;
@@ -1738,12 +1797,14 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
                 self.builder.start_node(SyntaxKind::PathList, list_start);
                 self.bump(); // [
                 loop {
+                    let progress = self.progress();
                     self.eat_trivia();
                     if self.peek() == Some(TokenKind::RightBracket) || self.current().is_none() {
                         break;
                     }
                     self.parse_path_ref();
                     self.eat(TokenKind::Comma);
+                    self.skip_unparsed(progress);
                 }
                 self.expect(TokenKind::RightBracket);
                 let list_end = self.current_span().start;
@@ -1777,11 +1838,13 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
 
         self.expect(TokenKind::LeftBrace);
         loop {
+            let progress = self.progress();
             self.eat_trivia();
             if self.peek() == Some(TokenKind::RightBrace) || self.current().is_none() {
                 break;
             }
             self.parse_variant_branch();
+            self.skip_unparsed(progress);
         }
         self.expect(TokenKind::RightBrace);
 
@@ -1973,12 +2036,14 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
         self.builder.start_node(SyntaxKind::TupleValue, start);
         self.bump_stored::<LOSSLESS>(); // `(`
         loop {
+            let progress = self.progress();
             self.eat_trivia();
             if self.peek() == Some(TokenKind::RightParen) || self.current().is_none() {
                 break;
             }
             self.parse_value_expr();
             self.eat_stored::<LOSSLESS>(TokenKind::Comma);
+            self.skip_unparsed(progress);
         }
         self.expect_stored::<LOSSLESS>(TokenKind::RightParen);
         let end = self.current_span().start;
@@ -1990,6 +2055,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
         self.builder.start_node(SyntaxKind::ArrayValue, start);
         self.bump_stored::<LOSSLESS>(); // `[`
         loop {
+            let progress = self.progress();
             self.eat_trivia();
             if self.peek() == Some(TokenKind::RightBracket) || self.current().is_none() {
                 break;
@@ -2003,6 +2069,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
                 self.error(span, "unexpected line break before `,`");
             }
             self.eat_stored::<LOSSLESS>(TokenKind::Comma);
+            self.skip_unparsed(progress);
         }
         self.expect_stored::<LOSSLESS>(TokenKind::RightBracket);
         let end = self.current_span().start;
@@ -2022,6 +2089,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
 
         let mut separated = true;
         loop {
+            let progress = self.progress();
             separated |= self.eat_trivia_crossing_newline();
             if self.peek() == Some(TokenKind::RightBracket) || self.current().is_none() {
                 break;
@@ -2039,6 +2107,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
                 self.bump();
                 separated = true;
             }
+            self.skip_unparsed(progress);
         }
 
         self.expect(TokenKind::RightBracket);
@@ -2174,6 +2243,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
         self.expect(TokenKind::LeftBrace);
 
         loop {
+            let progress = self.progress();
             self.eat_trivia();
             if self.peek() == Some(TokenKind::RightBrace) || self.current().is_none() {
                 break;
@@ -2186,6 +2256,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
             // (`StatementSequenceOf<DictionaryValueItem>`,
             // `pxr/usd/sdf/textFileFormatParser.h`).
             self.expect_entry_end(TokenKind::RightBrace);
+            self.skip_unparsed(progress);
         }
 
         self.expect(TokenKind::RightBrace);
@@ -2246,6 +2317,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
 
         let mut sample = 0;
         loop {
+            let progress = self.progress();
             self.eat_trivia();
             if self.peek() == Some(TokenKind::RightBrace) || self.current().is_none() {
                 break;
@@ -2253,6 +2325,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
             self.parse_time_sample_entry(attribute, sample, type_name, is_array);
             sample += 1;
             self.eat(TokenKind::Comma);
+            self.skip_unparsed(progress);
         }
 
         self.expect(TokenKind::RightBrace);
@@ -2693,6 +2766,16 @@ def Xform "Root" (
     /// of `variantSets` and every `reorder` statement.
     #[test]
     fn name_lists_follow_openusd() {
+        // A minimized fuzz input: a name list item that is not a string
+        // once stopped the list from advancing, pushing diagnostics until
+        // memory ran out.
+        let stuck = "#usda 1.0\ndef \"P\" (\n    variantSets = [\"a\"( \"b\"]\n)\n{\n}\n";
+        let diagnostics = parse(stuck).diagnostics;
+        assert!(
+            !diagnostics.is_empty() && diagnostics.len() < 8,
+            "{diagnostics:?}"
+        );
+
         let prim: fn(&str) -> String =
             |field| format!("#usda 1.0\ndef \"P\" (\n    {field}\n)\n{{\n}}\n");
         let body: fn(&str) -> String =

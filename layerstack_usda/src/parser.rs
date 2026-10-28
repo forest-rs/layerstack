@@ -2461,12 +2461,16 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
             }
         }
 
-        // Key: string or identifier.
+        // Key: string or identifier, which OpenUSD's `DictionaryKey`
+        // requires (`pxr/usd/sdf/textFileFormatParser.h`).
         self.eat_trivia();
         if self.at_string() {
             self.bump(); // string key
         } else if self.peek() == Some(TokenKind::Ident) {
             self.bump(); // ident key
+        } else {
+            let span = self.current_span();
+            self.error(span, "expected a dictionary key");
         }
 
         self.expect(TokenKind::Equals);
@@ -2724,6 +2728,11 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
         if self.peek() == Some(TokenKind::Ident) {
             key = self.current_text();
             self.bump(); // key
+        } else {
+            // OpenUSD's grammar has no entry without a name
+            // (`MetadataKey`, `pxr/usd/sdf/textFileFormatParser.h`).
+            let span = self.current_span();
+            self.error(span, "expected a metadata name");
         }
         if key == "symmetryFunction" {
             // Its value may be nothing, so the line may end after `=`.
@@ -2912,6 +2921,27 @@ def Xform "Root" (
                 format!("{actual:?}"),
                 format!("{expected:?}"),
                 "AST content, source spans and diagnostics agree for {source}"
+            );
+        }
+    }
+
+    #[test]
+    fn metadata_and_dictionary_entries_need_names() {
+        // The fuzzer's input: an unnamed entry was kept with an empty name,
+        // which saved as ` = None` and read back as `None = None`.
+        for src in [
+            "#usda 1.0\ndef \"A\" {\n    custom_type x (\n        = bad\n    )\n}\n",
+            "#usda 1.0\ndef \"A\" {\n    rel x (\n        = 1\n    )\n}\n",
+            "#usda 1.0\n(\n    customLayerData = {\n        string = \"a\"\n    }\n)\n",
+        ] {
+            let result = parse(src);
+            assert!(
+                result
+                    .diagnostics
+                    .iter()
+                    .any(|d| d.message.starts_with("expected a ")),
+                "{src}: {:?}",
+                result.diagnostics
             );
         }
     }

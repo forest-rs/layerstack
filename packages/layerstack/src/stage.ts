@@ -65,7 +65,7 @@ export interface NativeStage {
  * crate). Pass it to {@link loadLayerstack} to use that module.
  */
 export interface NativeModule {
-  readonly Stage: { open(identifier: string, bytes: Uint8Array, recover: boolean): NativeStage };
+  readonly Stage: { open(identifier: string, bytes: Uint8Array, recover: boolean, sessionLayer: boolean): NativeStage };
   nativeVersion(): unknown;
   /** The module's memory, for {@link Layerstack.transfer}; optional. */
   readonly memory?: WebAssembly.Memory;
@@ -113,7 +113,7 @@ export class Layerstack {
       throw new LayerstackError("argument.invalid", "open", "expected { identifier: string, bytes: Uint8Array }");
     }
     const recover = options.importPolicy === "recover";
-    const native = this.call("open", () => this.#module.Stage.open(root.identifier, root.bytes, recover));
+    const native = this.call("open", () => this.#module.Stage.open(root.identifier, root.bytes, recover, false));
     this.#bytesIn += root.bytes.byteLength;
     return new Stage(this, native);
   }

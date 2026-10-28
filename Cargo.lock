@@ -433,6 +433,7 @@ dependencies = [
  "layerstack",
  "layerstack_io",
  "layerstack_schemas",
+ "layerstack_usda",
  "wasm-bindgen",
 ]
 

@@ -24,6 +24,20 @@ use crate::wire::Wire;
 /// - `prim.not_found`: no composed prim is at the path.
 /// - `layer.unknown`: no layer of the stage has the id.
 /// - `value.decode`: a retained array failed to decode when read.
+/// - `value.unknown_type`, `value.kind`, `value.shape`, `value.range`,
+///   `value.unsupported`: a value sent for an edit does not make a value
+///   of its type (see `value::decode`).
+/// - `argument.invalid`: an argument the wrapper checks is malformed
+///   (an unknown specifier or list position, a value slot never filled).
+/// - `layer.read_only`: an edit targets a layer that cannot be saved, such
+///   as a package member; open with a session layer to edit it.
+/// - `layer.outside_stack`: an edit targets a layer outside the stage's
+///   layer stack, such as a referenced asset's.
+/// - `edit.*`: [`layerstack::EditError::code`], such as `edit.stale` for
+///   an undo whose guard no longer holds, or
+///   `edit.rejected.type_mismatch`; [`layerstack_io::ApplyError::code`].
+/// - `receipt.affinity`: a receipt of another stage was passed in.
+/// - `receipt.released`: the receipt was already undone or released.
 ///
 /// Codes are part of the public contract: a released code keeps its
 /// spelling and meaning.
@@ -37,6 +51,9 @@ pub struct Error {
     pub identifier: Option<String>,
     /// The prim or property path the failure is about, if any.
     pub path: Option<String>,
+    /// The index of the edit the failure is about, in the edits sent to
+    /// `apply`, if any.
+    pub edit: Option<u32>,
 }
 
 impl Error {
@@ -48,6 +65,7 @@ impl Error {
             message: message.into(),
             identifier: None,
             path: None,
+            edit: None,
         }
     }
 
@@ -58,14 +76,23 @@ impl Error {
         self
     }
 
+    /// This error, naming the edit it is about.
+    #[must_use]
+    pub fn at_edit(mut self, edit: u32) -> Self {
+        self.edit = Some(edit);
+        self
+    }
+
     /// The positional record the wrapper decodes:
-    /// `[code, message, identifier, path]`.
+    /// `[code, message, identifier, path, edit]`.
     pub(crate) fn to_wire(&self) -> Wire {
         Wire::List(alloc::vec![
             Wire::text(self.code),
             Wire::text(self.message.clone()),
             Wire::text_or_null(self.identifier.clone()),
             Wire::text_or_null(self.path.clone()),
+            self.edit
+                .map_or(Wire::Null, |edit| Wire::Number(f64::from(edit))),
         ])
     }
 }
@@ -77,6 +104,7 @@ impl From<IoError> for Error {
             message: error.message,
             identifier: error.identifier,
             path: None,
+            edit: None,
         }
     }
 }

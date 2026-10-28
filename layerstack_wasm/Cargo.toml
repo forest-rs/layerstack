@@ -1,7 +1,7 @@
 [package]
 publish = false
 name = "layerstack_wasm"
-description = "WebAssembly bindings for Layerstack: open, resolve, inspect and explain a stage from JavaScript, with the host supplying asset bytes."
+description = "WebAssembly bindings for Layerstack: open, resolve, inspect, explain and edit a stage from JavaScript, with the host supplying asset bytes."
 readme = "README.md"
 version.workspace = true
 edition.workspace = true
@@ -34,6 +34,10 @@ layerstack_schemas = { features = ["all"], workspace = true }
 # classes. Only this crate depends on it; the CLI that generates the glue
 # must be the version `Cargo.lock` holds.
 wasm-bindgen = { default-features = false, version = "0.2.129" }
+
+[dev-dependencies]
+# Tests compare a layer's USDA text before an edit and after its undo.
+layerstack_usda = { workspace = true }
 
 [lints]
 workspace = true

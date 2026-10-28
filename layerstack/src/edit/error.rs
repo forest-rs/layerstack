@@ -241,6 +241,32 @@ pub enum Rejection {
 }
 
 impl EditError {
+    /// The stable code naming this error's kind, for hosts and bindings
+    /// that branch on it without matching the enum.
+    ///
+    /// | Variant | Code |
+    /// |---|---|
+    /// | [`Self::StaleGeneration`], [`Self::StaleValue`] | `edit.stale` |
+    /// | [`Self::UnresolvedPrecondition`] | `edit.unresolved_precondition` |
+    /// | [`Self::Rejected`] | the reason's [`Rejection::code`], `edit.rejected.` and the reason |
+    /// | [`Self::ForeignStore`] | `edit.foreign_store` |
+    ///
+    /// Both stale guards share `edit.stale`: either way the layer changed
+    /// after the transaction (or the inverse) was made, nothing was
+    /// applied, and the recovery is to read the stage again.
+    ///
+    /// Codes are part of the public contract: a released code keeps its
+    /// spelling and meaning, and a new variant brings a new code.
+    #[must_use]
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::StaleGeneration { .. } | Self::StaleValue { .. } => "edit.stale",
+            Self::UnresolvedPrecondition { .. } => "edit.unresolved_precondition",
+            Self::Rejected { reason, .. } => reason.code(),
+            Self::ForeignStore { .. } => "edit.foreign_store",
+        }
+    }
+
     /// The error in words, its paths, names and slots written as text
     /// with `store`, the store the transaction was applied to ("edit 0
     /// rejected: the value is a `double`, but /World/Sun.inputs:intensity
@@ -325,6 +351,76 @@ impl Describe for Slot {
 }
 
 impl Rejection {
+    /// The stable code naming this rejection: `edit.rejected.` and the
+    /// variant's name in `snake_case`, the code
+    /// [`EditError::code`] gives a rejected edit. Every rejection's code
+    /// starts with `edit.rejected.`.
+    ///
+    /// | Variant | Code |
+    /// |---|---|
+    /// | [`Self::NoSuchLayer`] | `edit.rejected.no_such_layer` |
+    /// | [`Self::Unmappable`] | `edit.rejected.unmappable` |
+    /// | [`Self::UnmappableTarget`] | `edit.rejected.unmappable_target` |
+    /// | [`Self::NotAProperty`] | `edit.rejected.not_a_property` |
+    /// | [`Self::NotAPrim`] | `edit.rejected.not_a_prim` |
+    /// | [`Self::NoSuchSpec`] | `edit.rejected.no_such_spec` |
+    /// | [`Self::SpecExists`] | `edit.rejected.spec_exists` |
+    /// | [`Self::NotAnAttribute`] | `edit.rejected.not_an_attribute` |
+    /// | [`Self::UndeclaredType`] | `edit.rejected.undeclared_type` |
+    /// | [`Self::UnknownValueType`] | `edit.rejected.unknown_value_type` |
+    /// | [`Self::TypeMismatch`] | `edit.rejected.type_mismatch` |
+    /// | [`Self::ReservedField`] | `edit.rejected.reserved_field` |
+    /// | [`Self::PseudoRoot`] | `edit.rejected.pseudo_root` |
+    /// | [`Self::PseudoRootArc`] | `edit.rejected.pseudo_root_arc` |
+    /// | [`Self::NotOnVariant`] | `edit.rejected.not_on_variant` |
+    /// | [`Self::NoSuchSublayer`] | `edit.rejected.no_such_sublayer` |
+    /// | [`Self::EmptySublayerAsset`] | `edit.rejected.empty_sublayer_asset` |
+    /// | [`Self::DuplicateSublayer`] | `edit.rejected.duplicate_sublayer` |
+    /// | [`Self::SublayerCycle`] | `edit.rejected.sublayer_cycle` |
+    /// | [`Self::InvalidRelocate`] | `edit.rejected.invalid_relocate` |
+    /// | [`Self::DuplicateRelocateSource`] | `edit.rejected.duplicate_relocate_source` |
+    /// | [`Self::CopyBetweenKinds`] | `edit.rejected.copy_between_kinds` |
+    /// | [`Self::VariantCopy`] | `edit.rejected.variant_copy` |
+    /// | [`Self::CopyIntoSource`] | `edit.rejected.copy_into_source` |
+    /// | [`Self::UnsupportedCopy`] | `edit.rejected.unsupported_copy` |
+    /// | [`Self::InvalidVariantSetName`] | `edit.rejected.invalid_variant_set_name` |
+    /// | [`Self::Diverged`] | `edit.rejected.diverged` |
+    ///
+    /// Codes are part of the public contract: a released code keeps its
+    /// spelling and meaning, and a new variant brings a new code.
+    #[must_use]
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::NoSuchLayer(_) => "edit.rejected.no_such_layer",
+            Self::Unmappable(_) => "edit.rejected.unmappable",
+            Self::UnmappableTarget(_) => "edit.rejected.unmappable_target",
+            Self::NotAProperty(_) => "edit.rejected.not_a_property",
+            Self::NotAPrim(_) => "edit.rejected.not_a_prim",
+            Self::NoSuchSpec(_) => "edit.rejected.no_such_spec",
+            Self::SpecExists(_) => "edit.rejected.spec_exists",
+            Self::NotAnAttribute(_) => "edit.rejected.not_an_attribute",
+            Self::UndeclaredType(_) => "edit.rejected.undeclared_type",
+            Self::UnknownValueType { .. } => "edit.rejected.unknown_value_type",
+            Self::TypeMismatch { .. } => "edit.rejected.type_mismatch",
+            Self::ReservedField(_) => "edit.rejected.reserved_field",
+            Self::PseudoRoot => "edit.rejected.pseudo_root",
+            Self::PseudoRootArc => "edit.rejected.pseudo_root_arc",
+            Self::NotOnVariant(_) => "edit.rejected.not_on_variant",
+            Self::NoSuchSublayer(_) => "edit.rejected.no_such_sublayer",
+            Self::EmptySublayerAsset(_) => "edit.rejected.empty_sublayer_asset",
+            Self::DuplicateSublayer(_) => "edit.rejected.duplicate_sublayer",
+            Self::SublayerCycle(_) => "edit.rejected.sublayer_cycle",
+            Self::InvalidRelocate { .. } => "edit.rejected.invalid_relocate",
+            Self::DuplicateRelocateSource(_) => "edit.rejected.duplicate_relocate_source",
+            Self::CopyBetweenKinds => "edit.rejected.copy_between_kinds",
+            Self::VariantCopy => "edit.rejected.variant_copy",
+            Self::CopyIntoSource => "edit.rejected.copy_into_source",
+            Self::UnsupportedCopy => "edit.rejected.unsupported_copy",
+            Self::InvalidVariantSetName(_) => "edit.rejected.invalid_variant_set_name",
+            Self::Diverged(_) => "edit.rejected.diverged",
+        }
+    }
+
     /// Why the edit was rejected, its paths and names written as text with
     /// `store`.
     #[must_use]

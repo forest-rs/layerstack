@@ -534,17 +534,17 @@ def Scope "Recipes" {
         );
         import(
             &mut store,
-            "#usda 1.0\nover \"World\" {}\ndef Scope \"Recipes\" { def GenerativeProcedural \"Terrain\" { token proceduralSystem = \"example:terrain\"; float primvars:height = 1 } }\n",
+            "#usda 1.0\nover \"World\" {}\ndef Scope \"Recipes\" {\n    def GenerativeProcedural \"Terrain\" { token proceduralSystem = \"example:terrain\"; float primvars:height = 1; }\n}\n",
             TERRAIN,
         );
         let mut root = String::from(
-            "#usda 1.0\n(\n defaultPrim = \"World\"\n subLayers = [@assets.usd@ (offset = 10; scale = 2), @terrain.usd@]\n)\ndef Xform \"World\" {\n def Scope \"Materials\" { def Material \"Override\" {} }\n",
+            "#usda 1.0\n(\n defaultPrim = \"World\"\n subLayers = [@assets.usd@ (offset = 10; scale = 2), @terrain.usd@]\n)\ndef Xform \"World\" {\n def Scope \"Materials\" {\n  def Material \"Override\" {}\n }\n",
         );
         for i in 0..native_count {
             use std::fmt::Write as _;
             writeln!(root, " def Xform \"Native_{i}\" (instanceable = true; prepend references = </Assets/Tree>; prepend apiSchemas = [\"MaterialBindingAPI\"]) {{\n rel material:binding = </World/Materials/Override> (bindMaterialAs = \"strongerThanDescendants\")\n }}").unwrap();
         }
-        root.push_str(" def PointInstancer \"Scatter\" { rel prototypes = </Assets/Tree> }\n}\n");
+        root.push_str(" def PointInstancer \"Scatter\" { rel prototypes = </Assets/Tree>; }\n}\n");
         import(&mut store, &root, ROOT);
         let options = StageOptions {
             schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),

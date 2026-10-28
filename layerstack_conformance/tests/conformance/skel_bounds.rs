@@ -128,7 +128,7 @@ fn morph_hulls_refresh_on_weights_and_undo_but_world_edits_preserve_reduction() 
 fn empty_mesh_is_empty_and_nonfinite_points_do_not_form_partial_bounds() {
     for (points, valid) in [("[]", true), ("[(nan,0,0)]", false)] {
         let text = format!(
-            "#usda 1.0\ndef Mesh \"Mesh\" (prepend apiSchemas = [\"SkelBindingAPI\"]) {{ uniform token[] skel:blendShapes = [\"empty\"]\nrel skel:blendShapeTargets = [</Shape>]\npoint3f[] points = {points} }} def BlendShape \"Shape\" {{ uniform vector3f[] offsets = [] }}"
+            "#usda 1.0\ndef Mesh \"Mesh\" (prepend apiSchemas = [\"SkelBindingAPI\"]) {{ uniform token[] skel:blendShapes = [\"empty\"]\nrel skel:blendShapeTargets = [</Shape>]\npoint3f[] points = {points}\n}}\ndef BlendShape \"Shape\" {{ uniform vector3f[] offsets = []; }}"
         );
         let (store, live) = support::scene(&text);
         let path = store.path("/Mesh");

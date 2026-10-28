@@ -28,8 +28,8 @@ impl AssetResolver for NoAssets {
 fn scene() -> (InMemoryStore, LiveStage) {
     let mut store = InMemoryStore::default();
     let source = r#"#usda 1.0
-class "PipelineTintAPI" { color3f pipeline:tint = (0.25, 0.5, 1) }
-class "PipelineSlotAPI" { float pipeline:__INSTANCE_NAME__:gain = 2 }
+class "PipelineTintAPI" { color3f pipeline:tint = (0.25, 0.5, 1); }
+class "PipelineSlotAPI" { float pipeline:__INSTANCE_NAME__:gain = 2; }
 "#;
     let library = layerstack_usda::read_usda(
         source,

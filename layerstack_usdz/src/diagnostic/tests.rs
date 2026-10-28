@@ -84,8 +84,8 @@ fn hard_decoder_errors_keep_the_same_cause_at_root_and_in_a_member() {
 fn malformed_text_keeps_each_pipeline_phases_evidence() {
     for (text, phase) in [
         ("#usda 1.0\ndef \"Rock\" { float x = }", 0),
-        ("#usda 1.0\ndef \"Rock\" { string label = \"\\xff\" }", 1),
-        ("#usda 1.0\ndef \"Rock\" { float amount = \"wrong\" }", 2),
+        ("#usda 1.0\ndef \"Rock\" { string label = \"\\xff\"; }", 1),
+        ("#usda 1.0\ndef \"Rock\" { float amount = \"wrong\"; }", 2),
     ] {
         let cst = layerstack_usda::parser::parse_cst(text);
         let ast = layerstack_usda::lower::lower(&cst.tree, text);
@@ -130,7 +130,7 @@ fn malformed_text_keeps_each_pipeline_phases_evidence() {
 fn descendant_diagnostics_are_attributed_once_even_with_repeated_references() {
     let root = b"#usda 1.0\ndef \"A\" (references = @wrapper.usda@</W>) {}\ndef \"B\" (references = @bad.usda@</Rock>) {}\n";
     let wrapper = b"#usda 1.0\ndef \"W\" (references = @bad.usda@</Rock>) {}\n";
-    let bad = b"#usda 1.0\ndef \"Rock\" { float amount = \"wrong\" }\n";
+    let bad = b"#usda 1.0\ndef \"Rock\" { float amount = \"wrong\"; }\n";
     let result = read(&[
         PackageFile::new("root.usda", root),
         PackageFile::new("wrapper.usda", wrapper),

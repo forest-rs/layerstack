@@ -201,7 +201,7 @@ impl UsdzResult {
 /// }
 ///
 /// // Readable text can still lose an invalid authored value during recovery.
-/// let source = b"#usda 1.0\ndef \"Rock\" { float amount = \"wrong\" }\n";
+/// let source = b"#usda 1.0\ndef \"Rock\" { float amount = \"wrong\"; }\n";
 /// let package = write_usdz(&[PackageFile::new("root.usda", source)]).unwrap();
 /// let result = read_usdz(
 ///     &package,

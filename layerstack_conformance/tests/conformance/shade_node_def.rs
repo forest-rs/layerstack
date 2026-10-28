@@ -129,11 +129,11 @@ fn setters_match_cpp_call_by_call() {
         "#usda 1.0\n",
         "def Material \"Mat\" {\n",
         "    def Shader \"S\" {}\n",
-        "    def Shader \"S3\" { uniform token info:implementationSource = \"sourceAsset\" }\n",
+        "    def Shader \"S3\" { uniform token info:implementationSource = \"sourceAsset\"; }\n",
         "    def Shader \"S4\" {}\n",
         "    def Shader \"S5\" {}\n",
         "    def Shader \"S6\" {}\n",
-        "    def Shader \"S7\" { uniform token info:implementationSource = \"sourceAsset\" }\n",
+        "    def Shader \"S7\" { uniform token info:implementationSource = \"sourceAsset\"; }\n",
         "    def \"U\" {}\n",
         "}\n",
         "def PluginLight \"Light\" {}\n",
@@ -191,7 +191,7 @@ fn setters_match_cpp_call_by_call() {
 fn a_mistyped_source_attribute_is_refused_without_edits() {
     let (mut store, live) = support::scene(concat!(
         "#usda 1.0\n",
-        "def Shader \"S\" { uniform token info:osl:sourceAsset = \"a.osl\" }\n",
+        "def Shader \"S\" { uniform token info:osl:sourceAsset = \"a.osl\"; }\n",
     ));
     let prim = store.path("/S");
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));

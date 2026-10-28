@@ -636,7 +636,7 @@ impl From<PropertySpec> for OpinionValue {
 /// The identity of a composed field: a prim metadata field or a property.
 ///
 /// A prim's metadata fields and its properties are different objects even
-/// when they share a name (`def "P" (kind = "component") { double kind }`),
+/// when they share a name (`def "P" (kind = "component") { double kind; }`),
 /// so they are indexed and resolved apart.
 ///
 /// Spec: AOUSD Core §7.3 (property specs are children of the prim spec;

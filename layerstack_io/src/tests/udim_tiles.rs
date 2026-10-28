@@ -561,7 +561,7 @@ fn a_set_without_tiles_is_unresolved_and_prevents_a_plan() {
     let mut tree = scene(&[]).listing();
     tree.files.insert(
         "scene.usda".into(),
-        "#usda 1.0\ndef \"P\" { asset a = @./none.<UDIM>.png@ }\n".into(),
+        "#usda 1.0\ndef \"P\" { asset a = @./none.<UDIM>.png@; }\n".into(),
     );
     let mut document = StageDocument::open(tree, "scene.usda", StageOptions::default()).unwrap();
     let root = document.stage.stage().root_layer().unwrap();
@@ -654,7 +654,7 @@ fn a_tile_a_package_may_not_hold_leaves_its_set_unresolved() {
     let mut tree = scene(&["t.1001.tif"]).listing();
     tree.files.insert(
         "scene.usda".into(),
-        "#usda 1.0\ndef \"P\" { asset a = @./t.<UDIM>.tif@ }\n".into(),
+        "#usda 1.0\ndef \"P\" { asset a = @./t.<UDIM>.tif@; }\n".into(),
     );
     let mut document = StageDocument::open(tree, "scene.usda", StageOptions::default()).unwrap();
     let root = document.stage.stage().root_layer().unwrap();
@@ -775,7 +775,7 @@ fn a_kept_external_set_without_local_tiles_is_anchored_like_any_path() {
     let mut tree = scene(&[]).listing();
     tree.files.insert(
         "models/model.usda".into(),
-        "#usda 1.0\ndef \"Model\" { asset a = @./far/c.<UDIM>.png@ }\n".into(),
+        "#usda 1.0\ndef \"Model\" { asset a = @./far/c.<UDIM>.png@; }\n".into(),
     );
     let (mut document, _) = open(tree);
     let root = document.stage.stage().root_layer().unwrap();
@@ -816,7 +816,7 @@ fn packaging_reads_an_outside_package_once_for_all_its_tiles() {
     tree.files.insert("models/pkg.usdz".into(), package);
     tree.files.insert(
         "models/model.usda".into(),
-        "#usda 1.0\ndef \"Model\" { asset a = @./pkg.usdz[tex/c.<UDIM>.png]@ }\n".into(),
+        "#usda 1.0\ndef \"Model\" { asset a = @./pkg.usdz[tex/c.<UDIM>.png]@; }\n".into(),
     );
     let (mut document, _) = open(tree);
     let root = document.stage.stage().root_layer().unwrap();

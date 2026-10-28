@@ -55,6 +55,11 @@
    "source": "#usda 1.0\n\ndef \"P\"\n{\n    double a.spline = {\n        bezier,\n        # a comment line\n        7: 5.5; post curve/* inline */(1.1, -1.4),\n        // another comment\n        9: 6,\n    }\n}\n",
    "text": "#usda 1.0\n\ndef \"P\"\n{\n    double a.spline = {\n        bezier,\n        7: 5.5; pre (0, 0); post curve (1.1, -1.4),\n        9: 6; pre (0, 0); post held,\n    }\n}\n\n"
   },
+  "read_statements_on_one_line": {
+   "reads": true,
+   "source": "#usda 1.0\nreorder rootPrims = [\"A\"]; def \"A\" { double a = 1; rel r = </A>; }\ndef \"B\"\n{\n    reorder nameChildren = [\"C\"]; def \"C\" { double c = 1; } # a comment\n    variantSet \"v\" = { \"x\" { double x = 1; } \"y\" {} }\n}\ndef \"D\" (\n    customData = { int a = 1; }\n)\n{\n}\ndef \"E\" {}",
+   "text": "#usda 1.0\n\ndef \"A\"\n{\n    double a = 1\n    rel r = </A>\n}\n\ndef \"B\"\n{\n    def \"C\"\n    {\n        double c = 1\n    }\n    variantSet \"v\" = {\n        \"x\" {\n            double x = 1\n\n        }\n        \"y\" {\n\n        }\n    }\n}\n\ndef \"D\" (\n    customData = {\n        int a = 1\n    }\n)\n{\n}\n\ndef \"E\"\n{\n}\n\n"
+  },
   "read_symmetry_function": {
    "reads": true,
    "source": "#usda 1.0\n\ndef \"P\" (\n    symmetryFunction = mirror\n)\n{\n    double a = 1 (\n        symmetryFunction = Ns::Inner::flip\n    )\n    rel r (\n        symmetryFunction = \n    )\n    custom double b = 0 (symmetryFunction = )\n    rel s (permission = private; symmetryFunction = rotate)\n}\n",
@@ -216,10 +221,25 @@
    "reads": false,
    "source": "#usda 1.0\ndef \"A\"\n{\n    float a (doc = \"x\" hidden = true)\n}\n"
   },
+  "strict_child_after_child_on_line": {
+   "error": "'Expected } at 'def \"B\"' in </A>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"A\"\n{\n    def \"B\"\n    {\n    } def \"C\"\n    {\n    }\n}\n"
+  },
+  "strict_child_before_brace": {
+   "error": "'Expected } at 'def \"B\" {} }' in </A>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"A\" { def \"B\" {} }\n"
+  },
   "strict_dictionary_one_line": {
    "error": "'Expected } at 'int b = 2 }' in </A>",
    "reads": false,
    "source": "#usda 1.0\ndef \"A\" (\n    customData = { int a = 1 int b = 2 }\n)\n{\n}\n"
+  },
+  "strict_dictionary_semicolon_alone": {
+   "error": "'Expected } at '; }' in </A>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"A\" (\n    customData = { ; }\n)\n{\n}\n"
   },
   "strict_duplicate_connections": {
    "error": "'Duplicate items exist for field 'connectionPaths' at '/A.c' at '[</X.a>, </X.a>]' in </A.c>",
@@ -331,6 +351,11 @@
    "reads": false,
    "source": "#usda 1.0\ndef \"A\"\n{\n    float a.timeSamples = {\n        1: 2,\n    } (doc = \"x\")\n}\n"
   },
+  "strict_metadata_semicolon_alone": {
+   "error": "'Expected ) at ';' in </>",
+   "reads": false,
+   "source": "#usda 1.0\n(\n    doc = \"x\";\n    ;\n)\n"
+  },
   "strict_newline_after_equals": {
    "error": "'Expected } at 'float a =' in </A>",
    "reads": false,
@@ -361,15 +386,60 @@
    "reads": false,
    "source": "#usda 1.0\ndef \"A\"\n{\n    string s = \"a\nb\"\n}\n"
   },
+  "strict_prim_after_prim_on_line": {
+   "error": "'parse error at 'def \"A\"' in </>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"A\"\n{\n} def \"B\"\n{\n}\n"
+  },
+  "strict_property_before_brace": {
+   "error": "'Expected } at 'double a = 1 }' in </A>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"A\" { double a = 1 }\n"
+  },
+  "strict_relationship_before_brace": {
+   "error": "'Expected } at 'rel r = </A> /* a comment */ }' in </A>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"A\"\n{\n    rel r = </A> /* a comment */ }\n"
+  },
   "strict_relocates_without_comma": {
    "error": "'Expected } at '</c>: </d>' in </>",
    "reads": false,
    "source": "#usda 1.0\n(\n    relocates = {\n        </a>: </b>\n        </c>: </d>\n    }\n)\n"
   },
+  "strict_reorder_before_brace": {
+   "error": "'Expected } at 'reorder nameChildren = [\"B\"] }' in </A>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"A\"\n{\n    reorder nameChildren = [\"B\"] }\n"
+  },
   "strict_role_change": {
    "error": "'attribute 'p' already has type 'point3d', cannot change to 'normal3d' at 'p.timeSamples = {' in </A.p>",
    "reads": false,
    "source": "#usda 1.0\ndef \"A\"\n{\n    point3d p = (1, 0, 0)\n    normal3d p.timeSamples = {\n        1: (0, 1, 0),\n    }\n}\n"
+  },
+  "strict_root_prims_then_prim_on_line": {
+   "error": "'parse error at 'reorder rootPrims = [\"A\"] def \"A\"' in </>",
+   "reads": false,
+   "source": "#usda 1.0\nreorder rootPrims = [\"A\"] def \"A\"\n{\n}\n"
+  },
+  "strict_semicolon_after_child": {
+   "error": "'Expected } at 'def \"B\"' in </A>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"A\"\n{\n    def \"B\"\n    {\n    };\n}\n"
+  },
+  "strict_semicolon_after_prim": {
+   "error": "'parse error at 'def \"A\"' in </>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"A\"\n{\n};\n"
+  },
+  "strict_semicolon_alone": {
+   "error": "'Expected } at ';' in </A>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"A\"\n{\n    double a = 1\n    ;\n}\n"
+  },
+  "strict_semicolon_twice": {
+   "error": "'Expected } at ';' in </A>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"A\"\n{\n    double a = 1;;\n}\n"
   },
   "strict_spline_curve_spacing": {
    "error": "'Expected } at '(1, 2),' in </A.a>",
@@ -385,6 +455,11 @@
    "error": "'attribute 'a' already has variability 'SdfVariabilityUniform', cannot change to 'SdfVariabilityVarying' at 'a.connect = </B.c>' in </A.a>",
    "reads": false,
    "source": "#usda 1.0\ndef \"A\"\n{\n    uniform float a = 1\n    float a.connect = </B.c>\n}\n"
+  },
+  "strict_variant_set_before_brace": {
+   "error": "'Expected } at 'variantSet \"v\" = { \"x\" {} } }' in </A>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"A\" (\n    variantSets = \"v\"\n)\n{\n    variantSet \"v\" = { \"x\" {} } }\n"
   },
   "strict_vector_array_dimension": {
    "error": "'Tuple dimensions error for attribute of type float2[]. at ']' in </A.v>",

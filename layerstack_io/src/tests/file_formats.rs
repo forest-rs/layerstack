@@ -123,11 +123,11 @@ fn scene(root: &str) -> Memory {
         ("field.grid", "north\n"),
         (
             "base.usda",
-            "#usda 1.0\nover \"Grid\" { custom string note = \"base\" }\n",
+            "#usda 1.0\nover \"Grid\" { custom string note = \"base\"; }\n",
         ),
         (
             "part.usda",
-            "#usda 1.0\n(\n    defaultPrim = \"Part\"\n)\ndef \"Part\" { custom int bolts = 4 }\n",
+            "#usda 1.0\n(\n    defaultPrim = \"Part\"\n)\ndef \"Part\" { custom int bolts = 4; }\n",
         ),
     ])
 }

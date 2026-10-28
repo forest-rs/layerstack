@@ -36,7 +36,7 @@ clips = {{
   double2[] active=[(0,0),(10,1)]
   asset manifestAssetPath=@manifest.usda@
  }}
-}}) {{ float[] x }}
+}}) {{ float[] x; }}
 "#,
             if reorder {
                 "reorder clipSets=[\"b\",\"a\"]"
@@ -123,7 +123,7 @@ def "P" (clips = {
   double2[] active=[(0,0)]
   asset manifestAssetPath=@b-manifest.usda@
  }
-}) { double x }
+}) { double x; }
 "#,
             ),
             ("a-manifest.usda", &manifest),
@@ -203,7 +203,7 @@ def "P" (clips = { dictionary default = {
  string primPath = "/C"
  double2[] active = [(0,0)]
  asset manifestAssetPath = @manifest.usda@
- }}) { float[] x }
+ }}) { float[] x; }
 "#,
         ),
         ("manifest.usda", "#usda 1.0\ndef \"C\" {\n float[] x\n}"),
@@ -265,7 +265,7 @@ def "P" (clips = { dictionary default = {
  string primPath = "/C"
  double2[] active = [(0,0)]
  asset manifestAssetPath = @manifest.usda@
- }}) { double x }
+ }}) { double x; }
 "#,
         ),
         ("manifest.usda", "#usda 1.0\ndef \"C\" {\n double x\n}"),
@@ -419,7 +419,7 @@ def "P" (clips = { dictionary default = {
  string primPath = "/C"
  double2[] active = [(0,0),(10,1),(100,2)]
  asset manifestAssetPath = @manifest.usda@
- }}) { double x }
+ }}) { double x; }
 "#,
         ),
         (
@@ -945,8 +945,8 @@ impl Storage for Memory {
 fn rejecting_a_prepared_reload_preserves_sources_bindings_and_freshness() {
     let mut doc = StageDocument::open(
         Memory::with(&[
-            ("root.usda", "#usda 1.0\ndef \"Root\" { int value = 1 }"),
-            ("new.usda", "#usda 1.0\ndef \"Asset\" { int value = 9 }"),
+            ("root.usda", "#usda 1.0\ndef \"Root\" { int value = 1; }"),
+            ("new.usda", "#usda 1.0\ndef \"Asset\" { int value = 9; }"),
         ]),
         "root.usda",
         StageOptions::default(),
@@ -1022,7 +1022,7 @@ fn prepared_commit_reuses_sources_and_preserves_stage_observers_and_dependencies
                 "root.usda",
                 "#usda 1.0\n(subLayers=[@base.usda@])\ndef \"Removed\" {}",
             ),
-            ("base.usda", "#usda 1.0\ndef \"Root\" { int value = 1 }"),
+            ("base.usda", "#usda 1.0\ndef \"Root\" { int value = 1; }"),
         ]),
         "root.usda",
         StageOptions::default(),
@@ -1063,7 +1063,7 @@ fn prepared_commit_reuses_sources_and_preserves_stage_observers_and_dependencies
     );
     doc.storage.files.insert(
         "base.usda".into(),
-        b"#usda 1.0\ndef \"Root\" { int value = 7 }".to_vec(),
+        b"#usda 1.0\ndef \"Root\" { int value = 7; }".to_vec(),
     );
     let report = doc
         .prepare_reload(ReloadPolicy::PreserveDirty)
@@ -1132,7 +1132,7 @@ fn numeric_usdc() -> Vec<u8> {
         .map(|i| format!("({i}, 0, 0)"))
         .collect::<Vec<_>>()
         .join(",");
-    let source = format!("#usda 1.0\ndef Mesh \"Mesh\" {{ point3f[] points = [{points}] }}");
+    let source = format!("#usda 1.0\ndef Mesh \"Mesh\" {{ point3f[] points = [{points}]; }}");
     let mut document = StageDocument::open(
         Memory::with(&[("mesh.usda", &source)]),
         "mesh.usda",
@@ -1654,7 +1654,7 @@ fn value_edits_in_one_variant_branch_refresh_without_recomposing_sibling_branche
         ),
         (
             "asset.usda",
-            "#usda 1.0\ndef \"Asset\" (variantSets = [\"look\"]) {\n variantSet \"look\" = {\n \"red\" { def \"Geom\" { double size = 1 } }\n \"blue\" { def \"Geom\" { double size = 2 } }\n }\n}\n",
+            "#usda 1.0\ndef \"Asset\" (variantSets = [\"look\"]) {\n variantSet \"look\" = {\n \"red\" {\n def \"Geom\" { double size = 1; }\n }\n \"blue\" {\n def \"Geom\" { double size = 2; }\n }\n }\n}\n",
         ),
     ]);
     let mut doc = StageDocument::open(backend, "root.usda", StageOptions::default()).unwrap();
@@ -2062,7 +2062,7 @@ def "P" (clips = { dictionary default = {
  string primPath = "/C"
  double2[] active = [(0,0)]
  asset manifestAssetPath = @manifest.usda@
- }}) { double x }
+ }}) { double x; }
 "#,
         ),
         (
@@ -2314,7 +2314,7 @@ fn explicit_package_bytes_work_without_a_loaded_package_and_keep_decode_errors()
 #[test]
 fn forgetting_a_candidate_leaves_the_published_document_usable() {
     let mut doc = StageDocument::open(
-        Memory::with(&[("root.usda", "#usda 1.0\ndef \"Root\" { int value = 1 }")]),
+        Memory::with(&[("root.usda", "#usda 1.0\ndef \"Root\" { int value = 1; }")]),
         "root.usda",
         StageOptions::default(),
     )
@@ -2463,7 +2463,7 @@ fn root_reload_refreshes_resident_dependencies_and_protects_required_dirty_layer
     let mut doc = StageDocument::open(
         Memory::with(&[
             ("root.usda", "#usda 1.0\n(subLayers=[@a.usda@])"),
-            ("a.usda", "#usda 1.0\ndef \"Asset\" { int value=1 }"),
+            ("a.usda", "#usda 1.0\ndef \"Asset\" { int value=1; }"),
         ]),
         "root.usda",
         StageOptions::default(),
@@ -2473,7 +2473,7 @@ fn root_reload_refreshes_resident_dependencies_and_protects_required_dirty_layer
     let property = doc.store.property_path("/Asset.value");
     doc.storage.files.insert(
         "a.usda".into(),
-        b"#usda 1.0\ndef \"Asset\" { int value=2 }".to_vec(),
+        b"#usda 1.0\ndef \"Asset\" { int value=2; }".to_vec(),
     );
     doc.storage.reads.clear();
     let candidate = doc
@@ -2579,7 +2579,7 @@ fn root_reload_refreshes_expression_dependencies_and_rejects_dirty_sources() {
     let mut doc = StageDocument::open(
         Memory::with(&[
             ("root.usda", "#usda 1.0\n(expressionVariables = { string ASSET = \"asset.usda\" })\ndef \"Host\" (references = @`${ASSET}`@</Asset>) {}"),
-            ("asset.usda", "#usda 1.0\ndef \"Asset\" { int value=1 }"),
+            ("asset.usda", "#usda 1.0\ndef \"Asset\" { int value=1; }"),
         ]),
         "root.usda", StageOptions::default(),
     ).unwrap();
@@ -2588,7 +2588,7 @@ fn root_reload_refreshes_expression_dependencies_and_rejects_dirty_sources() {
     let original_bindings = doc.store.asset_bindings();
     doc.storage.files.insert(
         "asset.usda".into(),
-        b"#usda 1.0\ndef \"Asset\" { int value=2 }".to_vec(),
+        b"#usda 1.0\ndef \"Asset\" { int value=2; }".to_vec(),
     );
     doc.storage.reads.clear();
     {
@@ -2656,14 +2656,14 @@ fn root_reload_refreshes_nested_expression_assets_and_recovers_missing_sources()
         Memory::with(&[
             ("root.usda", "#usda 1.0\n(expressionVariables = { string ASSET = \"asset.usda\"\n string CHILD = \"child.usda\" })\ndef \"Host\" (references = @`${ASSET}`@</Asset>) {}"),
             ("asset.usda", "#usda 1.0\n(subLayers=[@`${CHILD}`@])\ndef \"Asset\" {}"),
-            ("child.usda", "#usda 1.0\ndef \"Asset\" { int value=1 }"),
+            ("child.usda", "#usda 1.0\ndef \"Asset\" { int value=1; }"),
         ]), "root.usda", StageOptions::default(),
     ).unwrap();
     let property = doc.store.property_path("/Host.value");
     let child = doc.catalog.ids["child.usda"];
     doc.storage.files.insert(
         "child.usda".into(),
-        b"#usda 1.0\ndef \"Asset\" { int value=2 }".to_vec(),
+        b"#usda 1.0\ndef \"Asset\" { int value=2; }".to_vec(),
     );
     doc.storage.reads.clear();
     doc.prepare_reload_root(ReloadPolicy::PreserveDirty)
@@ -2709,7 +2709,7 @@ fn root_reload_refreshes_nested_expression_assets_and_recovers_missing_sources()
     );
     doc.storage.files.insert(
         "child.usda".into(),
-        b"#usda 1.0\ndef \"Asset\" { int value=3 }".to_vec(),
+        b"#usda 1.0\ndef \"Asset\" { int value=3; }".to_vec(),
     );
     doc.prepare_reload_root(ReloadPolicy::PreserveDirty)
         .unwrap()

@@ -37,7 +37,7 @@ fn assert_fresh(sample: layerstack_schemas::MembershipSample<'_>, scene: &Scene<
 fn light_defaults_order_and_duplicates_retain_queries_across_parameter_edits() {
     let (mut store, mut live) = support::scene(
         r#"#usda 1.0
-def SphereLight "Light" { float inputs:intensity = 1 }
+def SphereLight "Light" { float inputs:intensity = 1; }
 def Scope "Geo" {}
 def LightFilter "Filter" {}
 "#,
@@ -181,7 +181,7 @@ fn expression_predicates_refresh_after_geometry_metadata_without_changing_compil
 def Scope "Sets" (prepend apiSchemas = ["CollectionAPI:models"]) {
  pathExpression collection:models:membershipExpression = "//{kind:component}"
 }
-def Scope "Geo" (kind = "component") { custom float value = 1 }
+def Scope "Geo" (kind = "component") { custom float value = 1; }
 "#,
     );
     let sets = store.path("/Sets");
@@ -230,7 +230,7 @@ fn missing_expression_reference_repairs_and_clear_does_not_recycle_stamps() {
 def Scope "Sets" (prepend apiSchemas = ["CollectionAPI:outer"]) {
  pathExpression collection:outer:membershipExpression = "%/Other:inner"
 }
-def Scope "Other" { pathExpression collection:inner:membershipExpression = "/Geo" }
+def Scope "Other" { pathExpression collection:inner:membershipExpression = "/Geo"; }
 def Scope "Geo" {}
 "#,
     );

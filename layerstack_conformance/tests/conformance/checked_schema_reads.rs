@@ -24,7 +24,7 @@ impl DeferredArraySource for Failed {
 fn checked_schema_arrays_preserve_decode_errors_at_default_and_numeric_times() {
     for time in [Time::Default, Time::held(1.), Time::at(1.5)] {
         let (mut store, _) =
-            support::scene("#usda 1.0\ndef Mesh \"M\" { point3f[] points = [(1, 2, 3)] }");
+            support::scene("#usda 1.0\ndef Mesh \"M\" { point3f[] points = [(1, 2, 3)]; }");
         let path = store.path("/M");
         let name = store.tokens.lookup("points").unwrap();
         let error = ArrayReadError::BudgetExceeded { limit: 7 };
@@ -68,7 +68,7 @@ fn checked_schema_arrays_preserve_decode_errors_at_default_and_numeric_times() {
 #[test]
 fn checked_schema_reads_share_native_arrays_and_keep_typed_default_selection() {
     let (mut store, mut live) =
-        support::scene("#usda 1.0\ndef Mesh \"M\" { point3f[] points = [(1, 2, 3)] }");
+        support::scene("#usda 1.0\ndef Mesh \"M\" { point3f[] points = [(1, 2, 3)]; }");
     let path = store.path("/M");
     let points = store.tokens.lookup("points").unwrap();
     let buffer = Arc::new(vec![[1_f32, 2., 3.]]);
@@ -133,7 +133,7 @@ fn validated_primvars_preserve_value_and_index_decode_errors() {
     use layerstack_schemas::primvar::{Primvar, PrimvarError};
     for name in ["primvars:x", "primvars:x:indices"] {
         let (mut store, _) = support::scene(
-            "#usda 1.0\ndef Mesh \"M\" { point3f[] primvars:x = [(1,2,3)]\nint[] primvars:x:indices = [0] }",
+            "#usda 1.0\ndef Mesh \"M\" { point3f[] primvars:x = [(1,2,3)]\nint[] primvars:x:indices = [0]; }",
         );
         let path = store.path("/M");
         let token = store.tokens.lookup(name).unwrap();

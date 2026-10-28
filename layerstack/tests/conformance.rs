@@ -3050,7 +3050,7 @@ fn metadata_property_collision(
 }
 
 /// Prim metadata and properties are different objects even when they share
-/// a name: `def "P" (kind = "component") { custom double kind = 42 }`.
+/// a name: `def "P" (kind = "component") { custom double kind = 42; }`.
 /// OpenUSD 26.08 returns 42 for the attribute `/P.kind` and `component` for
 /// the prim's `kind` metadata.
 ///

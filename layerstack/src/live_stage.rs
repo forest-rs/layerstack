@@ -1479,10 +1479,82 @@ impl LiveStage {
     fn recompose_report(
         &mut self,
         store: &mut dyn LayerStore,
-        changes: Option<&mut Changes>,
+        mut changes: Option<&mut Changes>,
     ) -> Vec<PathId> {
-        let recomposed = self.recompose_pending(store, changes);
+        let was_spent = self.stage.reached_node_limit();
+        let mut recomposed = self.recompose_pending(store, changes.as_deref_mut());
+        if !recomposed.is_empty()
+            && !self.work.full_rebuild
+            && (was_spent || self.stage.reached_node_limit())
+        {
+            recomposed = self.rebuild_spent(store, changes, recomposed);
+        }
         self.publish_preparation(store);
+        recomposed
+    }
+
+    /// Recomposes the whole stage after an edit's partial recomposition,
+    /// `recomposed`, when the stage stopped at its node limit
+    /// ([`crate::CompositionLimits::prim_index_nodes`]) before the edit or
+    /// after it: composition stops at the first prim, in traversal order,
+    /// that reaches the limit over the whole stage, which no partial
+    /// recomposition knows, and the prims a stage stopped before are
+    /// composed by none. The stage is then the one a new composition
+    /// builds, and `changes` hold both passes, against the stage before
+    /// the edit. The work stays bounded by the limit, twice over.
+    ///
+    /// Spec: AOUSD Core §10.6, §11; OpenUSD has no limit (see
+    /// [`crate::composition_limits`]).
+    fn rebuild_spent(
+        &mut self,
+        store: &mut dyn LayerStore,
+        mut changes: Option<&mut Changes>,
+        mut recomposed: Vec<PathId>,
+    ) -> Vec<PathId> {
+        let first = changes.as_deref_mut().map(|changes| {
+            (
+                core::mem::take(&mut changes.created),
+                core::mem::take(&mut changes.removed),
+            )
+        });
+        self.needs_full_rebuild = true;
+        recomposed.extend(self.recompose_pending(store, changes.as_deref_mut()));
+        recomposed.sort_unstable();
+        recomposed.dedup();
+        if let (Some(changes), Some((created, removed))) = (changes, first) {
+            // Prims the first pass created and the second removed were
+            // never there, nor were those it removed and the second created.
+            let again: HashSet<PathId> = changes.created.iter().copied().collect();
+            let gone: HashSet<PathId> = changes.removed.iter().copied().collect();
+            let first_created: HashSet<PathId> = created.iter().copied().collect();
+            let first_removed: HashSet<PathId> = removed.iter().copied().collect();
+            let mut net_created: Vec<PathId> = created
+                .into_iter()
+                .filter(|path| !gone.contains(path))
+                .collect();
+            net_created.extend(
+                changes
+                    .created
+                    .iter()
+                    .filter(|path| !first_removed.contains(*path)),
+            );
+            let mut net_removed: Vec<PathId> = removed
+                .into_iter()
+                .filter(|path| !again.contains(path))
+                .collect();
+            net_removed.extend(
+                changes
+                    .removed
+                    .iter()
+                    .filter(|path| !first_created.contains(*path)),
+            );
+            net_created.sort_unstable();
+            net_removed.sort_unstable();
+            changes.created = net_created;
+            changes.removed = net_removed;
+            // The second pass resyncs the pseudo-root.
+            changes.changed_info_only.clear();
+        }
         recomposed
     }
 
@@ -1845,6 +1917,7 @@ impl LiveStage {
             threads: self.options.threads,
             executor: self.options.executor.clone(),
             dynamic_formats: self.options.dynamic_formats.clone(),
+            limits: self.options.limits,
         };
         Stage::compose_retained(
             store,

@@ -61,6 +61,7 @@ use core::hash::Hash;
 
 use hashbrown::{HashMap, HashSet};
 
+use crate::composition_limits::CompositionLimits;
 use crate::doc::VariantSelections;
 pub(crate) use crate::ident::dictionary_cmp;
 use crate::prim_indexing::Boundaries;
@@ -457,6 +458,19 @@ pub struct StageOptions {
     /// OpenUSD finds them among the registered `SdfFileFormat` plugins
     /// (`_GetDynamicFileFormat` in `pxr/usd/pcp/primIndex.cpp`).
     pub dynamic_formats: crate::dynamic_format::DynamicFormats,
+    /// How much work composition may do: the prim index nodes it builds
+    /// and how far below what layers author it places prims. Finite by
+    /// default, so that
+    /// no stage composes without end, as scene description with no arc
+    /// cycle can; [`CompositionLimits::UNLIMITED`] composes to the end, as
+    /// OpenUSD does. Reaching a limit stops composition where
+    /// [`crate::CompositionError::LimitExceeded`] says, and keeps the
+    /// stage composed up to it.
+    ///
+    /// Spec: AOUSD Core §10.6 (composition errors), §11 (stage
+    /// population); OpenUSD has no such limit (see
+    /// [`crate::composition_limits`]).
+    pub limits: CompositionLimits,
 }
 
 impl StageOptions {
@@ -1854,6 +1868,21 @@ impl Stage {
     #[must_use]
     pub fn composition_errors(&self) -> &[CompositionError] {
         &self.errors
+    }
+
+    /// Whether composition stopped at
+    /// [`CompositionLimits::prim_index_nodes`]: the stage lacks the prims
+    /// it would have composed after.
+    pub(crate) fn reached_node_limit(&self) -> bool {
+        self.errors.iter().any(|error| {
+            matches!(
+                error,
+                CompositionError::LimitExceeded(crate::LimitExceeded {
+                    limit: crate::CompositionLimit::PrimIndexNodes,
+                    ..
+                })
+            )
+        })
     }
 
     /// Returns the assets the store does not resolve yet

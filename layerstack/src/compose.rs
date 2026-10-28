@@ -165,6 +165,7 @@ fn compose_indexed(
         .with_composition_work(crate::stage::CompositionWork {
             composed_prim_indexes: composed.composed_prim_indexes,
             reused_prim_indexes: composed.reused_prim_indexes,
+            prim_index_nodes: composed.prim_index_nodes,
         })
         .with_composition_errors(store, errors)
         .with_asset_requests(asset_requests)

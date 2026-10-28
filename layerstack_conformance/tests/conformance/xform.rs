@@ -84,7 +84,7 @@ fn transforms_visibility_and_purpose_match_openusd() {
         load_entry_usda(&workspace_root().join("layerstack_conformance/fixtures/xform/scene.usda"));
     assert!(loaded.invalid.is_empty(), "{:?}", loaded.invalid);
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&loaded.store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(loaded.store.tokens()))),
         ..StageOptions::default()
     };
     let stage = Stage::compose(&mut loaded.store, loaded.root_layer, options);
@@ -97,13 +97,13 @@ fn transforms_visibility_and_purpose_match_openusd() {
     let scene = Scene::new(&stage, store);
 
     let root = store
-        .paths
+        .paths()
         .lookup(&layerstack::Path::root())
         .expect("the pseudo-root");
     let ours: Vec<String> = stage
         .traverse(root)
         .skip(1)
-        .map(|p| store.paths.display(p, &store.tokens))
+        .map(|p| store.paths().display(p, store.tokens()))
         .collect();
     let theirs: Vec<&String> = oracle.prims.keys().collect();
     let mut sorted = ours.clone();
@@ -224,7 +224,7 @@ fn transforms_visibility_and_purpose_match_openusd() {
         }
         let authored_on = info
             .authored_on
-            .map(|p| store.paths.display(p, &store.tokens));
+            .map(|p| store.paths().display(p, store.tokens()));
         if authored_on != expected.authored_on {
             failures.push(format!(
                 "{text}: purpose authored on {authored_on:?}, OpenUSD {:?}",
@@ -260,7 +260,7 @@ fn problem_ops_are_reported() {
         &workspace_root().join("layerstack_conformance/fixtures/xform/problems.usda"),
     );
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&loaded.store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(loaded.store.tokens()))),
         ..StageOptions::default()
     };
     let stage = Stage::compose(&mut loaded.store, loaded.root_layer, options);
@@ -323,17 +323,17 @@ fn an_invalidated_cache_recomputes_the_edited_subtree() {
     let mut loaded =
         load_entry_usda(&workspace_root().join("layerstack_conformance/fixtures/xform/scene.usda"));
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&loaded.store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(loaded.store.tokens()))),
         ..StageOptions::default()
     };
     let mut live = LiveStage::compose(&mut loaded.store, loaded.root_layer, options);
     let root = loaded
         .store
-        .paths
+        .paths()
         .lookup(&layerstack::Path::root())
         .expect("the pseudo-root");
     let hierarchy = loaded.store.path("/Hierarchy");
-    let translate = loaded.store.tokens.intern("xformOp:translate");
+    let translate = loaded.store.tokens().intern("xformOp:translate");
     let all: Vec<PathId> = live.stage().traverse(root).skip(1).collect();
     let under: Vec<PathId> = live.stage().traverse(hierarchy).collect();
 
@@ -361,7 +361,7 @@ fn an_invalidated_cache_recomputes_the_edited_subtree() {
             cache.local_to_world(&scene, *path),
             fresh.local_to_world(&scene, *path),
             "{}",
-            loaded.store.paths.display(*path, &loaded.store.tokens)
+            loaded.store.paths().display(*path, loaded.store.tokens())
         );
     }
     let after = cache.stats();
@@ -384,14 +384,14 @@ fn pure_steps_fold_to_what_the_views_compute() {
     let mut loaded =
         load_entry_usda(&workspace_root().join("layerstack_conformance/fixtures/xform/scene.usda"));
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&loaded.store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(loaded.store.tokens()))),
         ..StageOptions::default()
     };
     let stage = Stage::compose(&mut loaded.store, loaded.root_layer, options);
     let pivot = loaded.store.path("/Ops/Pivot");
     let root = loaded
         .store
-        .paths
+        .paths()
         .lookup(&layerstack::Path::root())
         .expect("the pseudo-root");
     let store = &loaded.store;
@@ -420,8 +420,8 @@ fn pure_steps_fold_to_what_the_views_compute() {
         std::collections::HashMap::new();
     for path in stage.traverse(root).skip(1) {
         let parent = store
-            .paths
-            .lookup(&store.paths.resolve(path).parent().expect("a parent"))
+            .paths()
+            .lookup(&store.paths().resolve(path).parent().expect("a parent"))
             .expect("interned");
         let parent_world = world.get(&parent).copied().unwrap_or([
             [1.0, 0.0, 0.0, 0.0],

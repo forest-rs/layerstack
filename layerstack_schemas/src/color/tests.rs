@@ -71,7 +71,7 @@ fn ancestors_custom_named_definition_and_unknown_assignment_stops_inheritance() 
     use layerstack::{InMemoryStore, Layer, LayerId, LiveStage, StageOptions, edit::EditTarget};
     let mut store = InMemoryStore::default();
     store.insert_layer(Layer::new(LayerId(1)));
-    let schemas = Arc::new(crate::openusd(&store.tokens));
+    let schemas = Arc::new(crate::openusd(store.tokens()));
     let mut stage = LiveStage::compose(
         &mut store,
         LayerId(1),
@@ -129,11 +129,11 @@ fn authored_attribute_metadata_bypasses_name_validation_and_empty_suppresses_inh
     };
     let mut store = InMemoryStore::default();
     let path = store.path("/Prim");
-    let property = store.tokens.intern("tint");
-    let color_space = store.tokens.intern("colorSpace");
-    let unknown = store.tokens.intern("custom-unknown");
-    let empty_name = store.tokens.intern("");
-    let empty_property = store.tokens.intern("emptyTint");
+    let property = store.tokens().intern("tint");
+    let color_space = store.tokens().intern("colorSpace");
+    let unknown = store.tokens().intern("custom-unknown");
+    let empty_name = store.tokens().intern("");
+    let empty_property = store.tokens().intern("emptyTint");
     let mut layer = Layer::new(LayerId(1));
     layer.insert_prim(
         path,
@@ -152,7 +152,7 @@ fn authored_attribute_metadata_bypasses_name_validation_and_empty_suppresses_inh
             ),
     );
     store.insert_layer(layer);
-    let schemas = Arc::new(crate::openusd(&store.tokens));
+    let schemas = Arc::new(crate::openusd(store.tokens()));
     let mut stage = LiveStage::compose(
         &mut store,
         LayerId(1),
@@ -184,7 +184,7 @@ fn authored_attribute_metadata_bypasses_name_validation_and_empty_suppresses_inh
         empty_assignment.source,
         ColorSpaceSource::Attribute(PropertyPath::new(path, empty_property))
     );
-    let missing = PropertyPath::new(path, store.tokens.lookup("colorSpace:name").unwrap());
+    let missing = PropertyPath::new(path, store.tokens().lookup("colorSpace:name").unwrap());
     assert_eq!(
         scene
             .compute_attribute_color_space_name(missing)
@@ -218,19 +218,19 @@ fn schema_metadata_empty_and_block_preserve_color_precedence() {
     let mut store = InMemoryStore::default();
     let parent = store.path("/Parent");
     let child = store.path("/Parent/Child");
-    let type_name = store.tokens.intern("TestColor");
-    let color = store.tokens.intern("colorSpace");
-    let api_schemas = store.tokens.intern("apiSchemas");
-    let api = store.tokens.intern("ColorSpaceAPI");
-    let assignment = store.tokens.intern("colorSpace:name");
-    let ancestor_name = store.tokens.intern("lin_rec709_scene");
-    let unknown = store.tokens.intern("unknown-schema-fallback");
-    let empty = store.tokens.intern("");
-    let tint = store.tokens.intern("tint");
-    let empty_tint = store.tokens.intern("emptyTint");
-    let blocked_tint = store.tokens.intern("blockedTint");
-    let authored_empty = store.tokens.intern("authoredEmpty");
-    let native = crate::openusd(&store.tokens);
+    let type_name = store.tokens().intern("TestColor");
+    let color = store.tokens().intern("colorSpace");
+    let api_schemas = store.tokens().intern("apiSchemas");
+    let api = store.tokens().intern("ColorSpaceAPI");
+    let assignment = store.tokens().intern("colorSpace:name");
+    let ancestor_name = store.tokens().intern("lin_rec709_scene");
+    let unknown = store.tokens().intern("unknown-schema-fallback");
+    let empty = store.tokens().intern("");
+    let tint = store.tokens().intern("tint");
+    let empty_tint = store.tokens().intern("emptyTint");
+    let blocked_tint = store.tokens().intern("blockedTint");
+    let authored_empty = store.tokens().intern("authoredEmpty");
+    let native = crate::openusd(store.tokens());
     let mut builder = SchemaRegistry::builder();
     for definition in native.schemas() {
         builder.register(definition.clone());
@@ -252,7 +252,7 @@ fn schema_metadata_empty_and_block_preserve_color_precedence() {
                     .with_metadata(color, Value::Token(unknown)),
             ),
     );
-    let schemas = Arc::new(builder.build(&store.tokens));
+    let schemas = Arc::new(builder.build(store.tokens()));
     let mut layer = Layer::new(LayerId(1));
     layer.insert_prim(
         parent,

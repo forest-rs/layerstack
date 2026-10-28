@@ -80,7 +80,7 @@ fn prim_stacks_match_openusd() {
     let composed: Vec<String> = stage
         .traverse(pseudo_root)
         .filter(|prim| *prim != pseudo_root)
-        .map(|prim| loaded.store.paths.display(prim, &loaded.store.tokens))
+        .map(|prim| loaded.store.paths().display(prim, loaded.store.tokens()))
         .collect();
     let expected: Vec<&str> = oracle.prims.iter().map(|p| p.path.as_str()).collect();
     assert_eq!(composed, expected, "composed prims");
@@ -96,7 +96,7 @@ fn prim_stacks_match_openusd() {
             .map(|(layer, spec)| {
                 (
                     layer_name(&loaded, layer),
-                    spec.display(&loaded.store.paths, &loaded.store.tokens),
+                    spec.display(loaded.store.paths(), loaded.store.tokens()),
                 )
             })
             .collect();

@@ -197,10 +197,10 @@ fn retained_custom_subsets_keep_scale_flags_local_and_refresh_pose_edits() {
         (
             rigid,
             "primvars:skel:skinningMethod",
-            Value::Token(store.tokens.intern("classicLinear")),
+            Value::Token(store.tokens().intern("classicLinear")),
         ),
     ] {
-        let token = store.tokens.intern(name);
+        let token = store.tokens().intern(name);
         let mut transaction = Transaction::new();
         transaction.set_default(
             EditTarget::for_layer(LayerId(1)).property(PropertyPath::new(path, token)),

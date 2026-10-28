@@ -303,7 +303,7 @@ fn edits_and_undo_refresh_lens_and_shared_ancestor_transforms() {
         (path, "horizontalAperture", Value::Float(72.)),
         (rig, "xformOp:rotateXYZ", Value::Vec3f([0., 0., 0.])),
     ] {
-        let p = PropertyPath::new(path, store.tokens.intern(name));
+        let p = PropertyPath::new(path, store.tokens().intern(name));
         t.set_default(EditTarget::for_layer(LayerId(1)).property(p), value);
     }
     let edit = live.apply(&mut store, &t).unwrap();

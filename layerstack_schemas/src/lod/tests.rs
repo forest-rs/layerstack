@@ -162,7 +162,7 @@ fn captures_owned_uniform_and_sampled_inputs() {
     use layerstack::{InMemoryStore, Layer, LayerId, LiveStage, StageOptions, edit::EditTarget};
     let mut store = InMemoryStore::default();
     store.insert_layer(Layer::new(LayerId(1)));
-    let schemas = Arc::new(crate::openusd(&store.tokens));
+    let schemas = Arc::new(crate::openusd(store.tokens()));
     let mut stage = LiveStage::compose(
         &mut store,
         LayerId(1),
@@ -209,7 +209,7 @@ fn capture_samples_uniform_settings_at_requested_time() {
     use layerstack::{InMemoryStore, Layer, LayerId, LiveStage, StageOptions, edit::EditTarget};
     let mut store = InMemoryStore::default();
     store.insert_layer(Layer::new(LayerId(1)));
-    let schemas = Arc::new(crate::openusd(&store.tokens));
+    let schemas = Arc::new(crate::openusd(store.tokens()));
     let mut stage = LiveStage::compose(
         &mut store,
         LayerId(1),
@@ -240,16 +240,16 @@ fn capture_samples_uniform_settings_at_requested_time() {
         (screen, &[0.8][..], &[0.7][..]),
     ] {
         for (name, values) in [("thresholds", thresholds), ("blendThresholds", blends)] {
-            let token = store.tokens.intern(name);
-            let value = crate::value::write_float_array(values, &store.tokens);
+            let token = store.tokens().intern(name);
+            let value = crate::value::write_float_array(values, store.tokens());
             transaction.set_time_sample(target.property(PropertyPath::new(path, token)), 1., value);
         }
-        let token = store.tokens.intern("lod:domain");
-        let value = crate::value::write_token("sampled", &store.tokens);
+        let token = store.tokens().intern("lod:domain");
+        let value = crate::value::write_token("sampled", store.tokens());
         transaction.set_time_sample(target.property(PropertyPath::new(path, token)), 1., value);
     }
-    let token = store.tokens.intern("projectionMethod");
-    let value = crate::value::write_token("projectedExtent", &store.tokens);
+    let token = store.tokens().intern("projectionMethod");
+    let value = crate::value::write_token("projectedExtent", store.tokens());
     transaction.set_time_sample(target.property(PropertyPath::new(screen, token)), 1., value);
     stage.apply(&mut store, &transaction).unwrap();
     let scene = Scene::new(stage.stage(), &store);

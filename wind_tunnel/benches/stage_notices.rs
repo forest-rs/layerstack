@@ -14,7 +14,7 @@ fn bench(c: &mut Criterion) {
     group.sample_size(10);
     for count in [1000, 10000] {
         let mut store = InMemoryStore::default();
-        let value = store.tokens.intern("value");
+        let value = store.tokens().intern("value");
         let mut layer = Layer::new(LayerId(1));
         let mut paths = Vec::new();
         for i in 0..count {

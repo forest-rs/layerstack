@@ -52,7 +52,7 @@ fn stage() -> (InMemoryStore, LiveStage) {
     let mut store = InMemoryStore::default();
     store.insert_layer(Layer::new(LayerId(1)));
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(store.tokens()))),
         ..StageOptions::default()
     };
     let live = LiveStage::compose(&mut store, LayerId(1), options);
@@ -331,7 +331,7 @@ fn canon(value: &Value, tokens: &layerstack::TokenInterner) -> Json {
 /// The prim's `xformOpOrder` and `xformOp:*` attributes in the root layer,
 /// as the oracle records them.
 fn authored_ops(store: &InMemoryStore, path: PathId) -> Json {
-    let tokens = &store.tokens;
+    let tokens = &store.tokens();
     let mut order = Json::Null;
     let mut attributes = serde_json::Map::new();
     if let Some(prim) = store.layer(LayerId(1)).unwrap().prim(path) {
@@ -391,8 +391,8 @@ fn the_op_api_authors_the_fixture_scene() {
     let (mut store, mut live, _, applied, before) = authored();
     let text = layerstack_usda::save::save_usda(
         store.layer(LayerId(1)).unwrap(),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
     )
     .expect("saves");
     if text != SCENE {
@@ -437,7 +437,7 @@ fn authored_ops_read_and_add_as_in_openusd() {
                         .view()
                         .property(layerstack::PropertyPath::new(
                             paths[text.as_str()],
-                            store.tokens.lookup(op.attribute).expect("interned"),
+                            store.tokens().lookup(op.attribute).expect("interned"),
                         ))
                         .and_then(|p| p.declaration())
                         .and_then(|d| d.type_name)

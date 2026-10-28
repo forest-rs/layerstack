@@ -113,8 +113,8 @@ fn main() {
     let emitted = layerstack_usda::emit::emit(
         &parsed.layer,
         LayerId(1),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut NoAssets,
     );
     assert!(
@@ -124,7 +124,7 @@ fn main() {
         emitted.diagnostics
     );
     store.insert_layer(emitted.layer);
-    let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(store.tokens()));
     let live = LiveStage::compose(
         &mut store,
         LayerId(1),

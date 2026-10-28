@@ -22,11 +22,11 @@
 //! use layerstack::{InMemoryStore, StageOptions};
 //!
 //! let mut store = InMemoryStore::default();
-//! let schemas = layerstack_schemas::openusd(&store.tokens);
+//! let schemas = layerstack_schemas::openusd(store.tokens());
 //! assert!(schemas.issues().is_empty());
 //!
-//! let mesh = store.tokens.intern("Mesh");
-//! let gprim = store.tokens.intern("Gprim");
+//! let mesh = store.tokens().intern("Mesh");
+//! let gprim = store.tokens().intern("Gprim");
 //! assert!(schemas.is_a(mesh, gprim));
 //!
 //! // Compose stages from `store` with them.
@@ -148,7 +148,7 @@
 //! let mut store = InMemoryStore::default();
 //! store.insert_layer(Layer::new(LayerId(1)));
 //! let options = StageOptions {
-//!     schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
+//!     schemas: Some(Arc::new(layerstack_schemas::openusd(store.tokens()))),
 //!     ..StageOptions::default()
 //! };
 //! let mut live = LiveStage::compose(&mut store, LayerId(1), options);
@@ -188,7 +188,7 @@
 //!
 //! let mut store = InMemoryStore::default();
 //! store.insert_layer(Layer::new(LayerId(1)));
-//! let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
+//! let schemas = Arc::new(layerstack_schemas::openusd(store.tokens()));
 //! let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions {
 //!     schemas: Some(schemas), ..StageOptions::default()
 //! });
@@ -290,7 +290,7 @@
 //! let mut store = InMemoryStore::default();
 //! store.insert_layer(Layer::new(LayerId(1)));
 //! let options = StageOptions {
-//!     schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
+//!     schemas: Some(Arc::new(layerstack_schemas::openusd(store.tokens()))),
 //!     ..StageOptions::default()
 //! };
 //! let mut live = LiveStage::compose(&mut store, LayerId(1), options);

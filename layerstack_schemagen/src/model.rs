@@ -124,8 +124,15 @@ pub(crate) struct Model {
     pub(crate) files: Vec<String>,
     /// The domains, in generation order.
     pub(crate) domains: Vec<Domain>,
+    /// The store whose interner the fallback values' tokens are in.
+    pub(crate) store: InMemoryStore,
+}
+
+impl Model {
     /// The interner the fallback values' tokens are in.
-    pub(crate) tokens: TokenInterner,
+    pub(crate) fn tokens(&self) -> &TokenInterner {
+        self.store.tokens()
+    }
 }
 
 /// The domains generated: `(plugin directory, Rust name, where its
@@ -203,7 +210,7 @@ pub(crate) fn read(pxr: &Path, source: &Path) -> Result<Model, String> {
             plugin_metadata
                 .entry(plugin)
                 .or_insert_with(Vec::new)
-                .extend(crate::metadata::read_bundled(plugin, info, &store.tokens)?);
+                .extend(crate::metadata::read_bundled(plugin, info, store.tokens())?);
             if let Some(types_json) = info["Types"].as_object() {
                 for (name, entry) in types_json {
                     types.insert(
@@ -251,8 +258,8 @@ pub(crate) fn read(pxr: &Path, source: &Path) -> Result<Model, String> {
         let emitted = layerstack_usda::emit::emit(
             &parsed.layer,
             LayerId(u64::try_from(index).expect("few domains") + 1),
-            &store.tokens,
-            &store.paths,
+            store.tokens(),
+            store.paths(),
             &mut NoAssets,
         );
         let diagnostics: Vec<String> = parsed
@@ -291,7 +298,7 @@ pub(crate) fn read(pxr: &Path, source: &Path) -> Result<Model, String> {
             } else {
                 None
             };
-            let tokens = &mut store.tokens;
+            let tokens = &mut store.tokens();
             let can_only_apply_to = intern_all(tokens, &info.can_only_apply_to);
             let allowed_instance_names = intern_all(tokens, &info.allowed_instance_names);
             let instance_can_only_apply_to = info
@@ -300,15 +307,15 @@ pub(crate) fn read(pxr: &Path, source: &Path) -> Result<Model, String> {
                 .map(|(instance, types)| (tokens.intern(instance), intern_all(tokens, types)))
                 .collect();
             declared.push(SchemaDeclaration {
-                parent: parent.map(|parent| store.tokens.intern(parent)),
+                parent: parent.map(|parent| store.tokens().intern(parent)),
                 can_only_apply_to,
                 allowed_instance_names,
                 instance_can_only_apply_to,
-                ..SchemaDeclaration::new(store.tokens.intern(identifier), kind)
+                ..SchemaDeclaration::new(store.tokens().intern(identifier), kind)
             });
         }
         let definitions =
-            read_generated_schema(&emitted.layer, &declared, &store.tokens, &store.paths)
+            read_generated_schema(&emitted.layer, &declared, store.tokens(), store.paths())
                 .map_err(|e| format!("{}: {e}", path.display()))?;
 
         let api_names = source_api_names(source, plugin, &mut files)?;
@@ -332,7 +339,7 @@ pub(crate) fn read(pxr: &Path, source: &Path) -> Result<Model, String> {
         };
         let mut schemas = Vec::new();
         for definition in definitions {
-            let name = String::from(store.tokens.resolve(definition.name));
+            let name = String::from(store.tokens().resolve(definition.name));
             let cpp = cpp_of(&name).map(|(class, header, path)| {
                 files.push(path);
                 (class, header)
@@ -340,7 +347,7 @@ pub(crate) fn read(pxr: &Path, source: &Path) -> Result<Model, String> {
             for property in definition.properties.iter().chain(&definition.overrides) {
                 used_api_names.push((
                     name.clone(),
-                    store.tokens.resolve(property.name).to_string(),
+                    store.tokens().resolve(property.name).to_string(),
                 ));
             }
             schemas.push(schema_of(
@@ -348,8 +355,8 @@ pub(crate) fn read(pxr: &Path, source: &Path) -> Result<Model, String> {
                 definition,
                 &api_names,
                 cpp,
-                &store.tokens,
-                &store.paths,
+                store.tokens(),
+                store.paths(),
             )?);
         }
         // Every `apiName` of a generated schema names one of its properties;
@@ -436,7 +443,7 @@ pub(crate) fn read(pxr: &Path, source: &Path) -> Result<Model, String> {
         version,
         files,
         domains,
-        tokens: store.tokens,
+        store,
     })
 }
 
@@ -578,21 +585,21 @@ fn source_api_names(
     let emitted = layerstack_usda::emit::emit(
         &parsed.layer,
         LayerId(1),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut NoAssets,
     );
-    let custom_data = store.tokens.intern("customData");
+    let custom_data = store.tokens().intern("customData");
     let placeholder = layerstack::schema::INSTANCE_NAME_PLACEHOLDER;
     let mut names = BTreeMap::new();
     for (path, spec) in emitted.layer.prims() {
-        let schema_path = store.paths.resolve(*path);
+        let schema_path = store.paths().resolve(*path);
         if schema_path.depth() != 1 {
             continue;
         }
         let Some(schema) = schema_path
             .leaf()
-            .map(|t| store.tokens.resolve(t).to_string())
+            .map(|t| store.tokens().resolve(t).to_string())
         else {
             continue;
         };
@@ -601,7 +608,7 @@ fn source_api_names(
                 entries.iter().find_map(|(k, v)| match v {
                     Value::String(text) if &**k == key => Some(text.to_string()),
                     Value::Token(token) if &**k == key => {
-                        Some(store.tokens.resolve(*token).to_string())
+                        Some(store.tokens().resolve(*token).to_string())
                     }
                     _ => None,
                 })
@@ -613,7 +620,7 @@ fn source_api_names(
             let Some(api_name) = entry(property.spec.metadata(custom_data), "apiName") else {
                 continue;
             };
-            let raw = store.tokens.resolve(property.name);
+            let raw = store.tokens().resolve(property.name);
             let generated = match &prefix {
                 None => raw.to_string(),
                 Some(prefix) if raw == placeholder => format!("{prefix}:{placeholder}"),

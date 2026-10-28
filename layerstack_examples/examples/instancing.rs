@@ -105,13 +105,13 @@ fn main() {
     let mut store = InMemoryStore::default();
 
     // Field tokens.
-    let f_vertices = store.tokens.intern("vertices");
-    let f_display_color = store.tokens.intern("primvars:displayColor");
-    let f_bleach = store.tokens.intern("primvars:bleachFactor");
+    let f_vertices = store.tokens().intern("vertices");
+    let f_display_color = store.tokens().intern("primvars:displayColor");
+    let f_bleach = store.tokens().intern("primvars:bleachFactor");
 
     // Child name tokens.
-    let branches_tok = store.tokens.intern("branches");
-    let polyps_tok = store.tokens.intern("polyps");
+    let branches_tok = store.tokens().intern("branches");
+    let polyps_tok = store.tokens().intern("polyps");
 
     // Paths — asset layer.
     let coral = store.path("/Coral");
@@ -151,10 +151,10 @@ fn main() {
     let mut reef_layer = Layer::new(LayerId(1));
 
     // /Reef parent (just a grouping prim).
-    let c01_tok = store.tokens.intern("Coral_01");
-    let c02_tok = store.tokens.intern("Coral_02");
-    let c03_tok = store.tokens.intern("Coral_03");
-    let hero_tok = store.tokens.intern("Hero_Coral");
+    let c01_tok = store.tokens().intern("Coral_01");
+    let c02_tok = store.tokens().intern("Coral_02");
+    let c03_tok = store.tokens().intern("Coral_03");
+    let hero_tok = store.tokens().intern("Hero_Coral");
     reef_layer.insert_prim(
         reef,
         PrimSpec::def().with_children(vec![c01_tok, c02_tok, c03_tok, hero_tok]),

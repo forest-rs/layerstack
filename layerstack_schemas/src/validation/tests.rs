@@ -11,7 +11,7 @@ fn setup() -> InMemoryStore {
     InMemoryStore::default()
 }
 fn stage(store: &mut InMemoryStore) -> Stage {
-    let schemas = crate::openusd(&store.tokens);
+    let schemas = crate::openusd(store.tokens());
     Stage::compose(
         store,
         LayerId(1),
@@ -28,9 +28,9 @@ fn attr(name: &str, value: Value) -> PropertySpec {
 fn core_type_conflicts_include_weaker_source_and_requests_are_deterministic() {
     let mut store = setup();
     let p = store.path("/Model");
-    let a = store.tokens.intern("weight");
+    let a = store.tokens().intern("weight");
     let mut strong = Layer::new(LayerId(1));
-    strong.set_default_prim(Some(store.tokens.intern("Model")));
+    strong.set_default_prim(Some(store.tokens().intern("Model")));
     strong
         .sublayers_mut()
         .push(layerstack::SublayerEntry::new(LayerId(2)));
@@ -140,7 +140,7 @@ fn stage_errors_and_default_prim_are_scoped_and_preserve_original_details() {
 }
 #[cfg(feature = "usd-geom")]
 fn mesh(store: &mut InMemoryStore) -> PrimSpec {
-    let mut mesh = PrimSpec::def().with_type_name(store.tokens.intern("Mesh"));
+    let mut mesh = PrimSpec::def().with_type_name(store.tokens().intern("Mesh"));
     for (name, ty, value) in [
         (
             "points",
@@ -155,7 +155,7 @@ fn mesh(store: &mut InMemoryStore) -> PrimSpec {
         ),
     ] {
         mesh.set_property(
-            store.tokens.intern(name),
+            store.tokens().intern(name),
             PropertySpec::typed_attribute(PropertyType::parse(&alloc::format!("{ty}[]")).unwrap())
                 .with_default(value),
         );
@@ -172,10 +172,10 @@ fn mesh_checks_use_exact_requested_times_and_subtree_scope() {
     let mut layer = Layer::new(LayerId(1));
     layer.insert_prim(
         p,
-        PrimSpec::def().with_type_name(store.tokens.intern("Xform")),
+        PrimSpec::def().with_type_name(store.tokens().intern("Xform")),
     );
     let mut good = mesh(&mut store);
-    let indices = store.tokens.intern("faceVertexIndices");
+    let indices = store.tokens().intern("faceVertexIndices");
     good.set_property(
         indices,
         PropertySpec::typed_attribute(PropertyType::parse("int[]").unwrap())
@@ -192,7 +192,7 @@ fn mesh_checks_use_exact_requested_times_and_subtree_scope() {
     layer.insert_prim(m, good);
     layer.insert_prim(
         outside,
-        PrimSpec::def().with_type_name(store.tokens.intern("Mesh")),
+        PrimSpec::def().with_type_name(store.tokens().intern("Mesh")),
     );
     store.insert_layer(layer);
     let stage = stage(&mut store);
@@ -236,27 +236,27 @@ fn geometry_metadata_requires_authoring_and_subset_errors_are_structured() {
     let mut layer = Layer::new(LayerId(1));
     let mut m = mesh(&mut store);
     m.set_property(
-        store.tokens.intern("subsetFamily:pieces:familyType"),
-        attr("token", Value::Token(store.tokens.intern("partition"))),
+        store.tokens().intern("subsetFamily:pieces:familyType"),
+        attr("token", Value::Token(store.tokens().intern("partition"))),
     );
     layer.insert_prim(p, m);
-    let mut subset = PrimSpec::def().with_type_name(store.tokens.intern("GeomSubset"));
+    let mut subset = PrimSpec::def().with_type_name(store.tokens().intern("GeomSubset"));
     subset.set_property(
-        store.tokens.intern("elementType"),
-        attr("token", Value::Token(store.tokens.intern("face"))),
+        store.tokens().intern("elementType"),
+        attr("token", Value::Token(store.tokens().intern("face"))),
     );
     subset.set_property(
-        store.tokens.intern("familyName"),
-        attr("token", Value::Token(store.tokens.intern("pieces"))),
+        store.tokens().intern("familyName"),
+        attr("token", Value::Token(store.tokens().intern("pieces"))),
     );
     subset.set_property(
-        store.tokens.intern("indices"),
+        store.tokens().intern("indices"),
         PropertySpec::attribute().with_default(Value::Array(vec![Value::Int(5)])),
     );
     layer.insert_prim(sub, subset);
     layer.insert_prim(
         orphan,
-        PrimSpec::def().with_type_name(store.tokens.intern("GeomSubset")),
+        PrimSpec::def().with_type_name(store.tokens().intern("GeomSubset")),
     );
     store.insert_layer(layer);
     let stage = stage(&mut store);
@@ -309,17 +309,17 @@ fn binding_rules_distinguish_relationships_and_connection_scope() {
     let mut layer = Layer::new(LayerId(1));
     layer.insert_prim(
         material,
-        PrimSpec::def().with_type_name(store.tokens.intern("Material")),
+        PrimSpec::def().with_type_name(store.tokens().intern("Material")),
     );
-    let rel = store.tokens.intern("material:binding");
-    let bad = store.tokens.intern("material:binding:preview");
+    let rel = store.tokens().intern("material:binding");
+    let bad = store.tokens().intern("material:binding:preview");
     let mut bound = PrimSpec::def();
     bound.set_property(rel, PropertySpec::relationship());
     bound.set_property(bad, attr("float", Value::Float(1.)));
     layer.insert_prim(p, bound);
-    let input = store.tokens.intern("inputs:x");
-    let output = store.tokens.intern("outputs:x");
-    let mut sh = PrimSpec::def().with_type_name(store.tokens.intern("Shader"));
+    let input = store.tokens().intern("inputs:x");
+    let output = store.tokens().intern("outputs:x");
+    let mut sh = PrimSpec::def().with_type_name(store.tokens().intern("Shader"));
     sh.set_property(
         input,
         attr("float", Value::Float(0.)).with_targets(layerstack::ListOp::explicit(vec![
@@ -327,7 +327,7 @@ fn binding_rules_distinguish_relationships_and_connection_scope() {
         ])),
     );
     layer.insert_prim(shader, sh);
-    let mut external = PrimSpec::def().with_type_name(store.tokens.intern("Shader"));
+    let mut external = PrimSpec::def().with_type_name(store.tokens().intern("Shader"));
     external.set_property(output, attr("float", Value::Float(0.)));
     layer.insert_prim(outside, external);
     store.insert_layer(layer);
@@ -375,9 +375,9 @@ fn material_subset_policy_matches_authored_presence_and_family_type() {
     let part = store.path("/Mesh/Part");
     let mut layer = Layer::new(LayerId(1));
     layer.insert_prim(parent, mesh(&mut store));
-    let mut subset = PrimSpec::def().with_type_name(store.tokens.intern("GeomSubset"));
+    let mut subset = PrimSpec::def().with_type_name(store.tokens().intern("GeomSubset"));
     subset.set_property(
-        store.tokens.intern("material:binding"),
+        store.tokens().intern("material:binding"),
         PropertySpec::relationship(),
     );
     layer.insert_prim(part, subset.clone());
@@ -396,8 +396,8 @@ fn material_subset_policy_matches_authored_presence_and_family_type() {
         ValidationProblemKind::MissingMaterialSubsetFamilyName
     ));
     subset.set_property(
-        store.tokens.intern("familyName"),
-        attr("token", Value::Token(store.tokens.intern("materialBind"))),
+        store.tokens().intern("familyName"),
+        attr("token", Value::Token(store.tokens().intern("materialBind"))),
     );
     layer.insert_prim(part, subset.clone());
     store.insert_layer(layer.clone());
@@ -416,8 +416,13 @@ fn material_subset_policy_matches_authored_presence_and_family_type() {
     ));
     let mut geom = mesh(&mut store);
     geom.set_property(
-        store.tokens.intern("subsetFamily:materialBind:familyType"),
-        attr("token", Value::Token(store.tokens.intern("nonOverlapping"))),
+        store
+            .tokens()
+            .intern("subsetFamily:materialBind:familyType"),
+        attr(
+            "token",
+            Value::Token(store.tokens().intern("nonOverlapping")),
+        ),
     );
     layer.insert_prim(parent, geom);
     store.insert_layer(layer.clone());
@@ -434,8 +439,8 @@ fn material_subset_policy_matches_authored_presence_and_family_type() {
     );
     // C++ checks familyName's authored presence, not a forced materialBind value.
     subset.set_property(
-        store.tokens.intern("familyName"),
-        attr("token", Value::Token(store.tokens.intern("customFamily"))),
+        store.tokens().intern("familyName"),
+        attr("token", Value::Token(store.tokens().intern("customFamily"))),
     );
     layer.insert_prim(part, subset);
     store.insert_layer(layer);
@@ -457,11 +462,11 @@ fn complete_valid_mesh_scene_passes_all_selected_builtins() {
     let mut store = setup();
     let p = store.path("/Mesh");
     let mut layer = Layer::new(LayerId(1));
-    layer.set_default_prim(Some(store.tokens.intern("Mesh")));
-    layer.set_metadata(store.tokens.intern("metersPerUnit"), Value::Double(1.));
+    layer.set_default_prim(Some(store.tokens().intern("Mesh")));
+    layer.set_metadata(store.tokens().intern("metersPerUnit"), Value::Double(1.));
     layer.set_metadata(
-        store.tokens.intern("upAxis"),
-        Value::Token(store.tokens.intern("Y")),
+        store.tokens().intern("upAxis"),
+        Value::Token(store.tokens().intern("Y")),
     );
     layer.insert_prim(p, mesh(&mut store));
     store.insert_layer(layer);
@@ -484,7 +489,7 @@ fn schema_attribute_type_wins_over_an_incompatible_authored_declaration() {
     let p = store.path("/Mesh");
     let mut layer = Layer::new(LayerId(1));
     let mut m = mesh(&mut store);
-    let points = store.tokens.intern("points");
+    let points = store.tokens().intern("points");
     m.set_property(
         points,
         PropertySpec::typed_attribute(PropertyType::parse("double[]").unwrap()),
@@ -643,12 +648,12 @@ mod third_party {
         let bad = store.path("/Root/BadChild");
         let outside = store.path("/BadOutside");
         let mut layer = Layer::new(LayerId(1));
-        layer.set_default_prim(Some(store.tokens.intern("Root")));
+        layer.set_default_prim(Some(store.tokens().intern("Root")));
         for path in [root, bad, outside] {
             layer.insert_prim(path, PrimSpec::def());
         }
         store.insert_layer(layer);
-        let schemas = crate::openusd(&store.tokens);
+        let schemas = crate::openusd(store.tokens());
         let stage = Stage::compose(
             &mut store,
             LayerId(1),
@@ -839,7 +844,10 @@ mod third_party {
 fn overlay_type_conflicts_name_declared_and_schema_types_per_layer() {
     let mut store = setup();
     let sphere = store.path("/Ball");
-    let (radius, sphere_type) = (store.tokens.intern("radius"), store.tokens.intern("Sphere"));
+    let (radius, sphere_type) = (
+        store.tokens().intern("radius"),
+        store.tokens().intern("Sphere"),
+    );
     let mut overlay = Layer::new(LayerId(1));
     overlay
         .sublayers_mut()
@@ -899,14 +907,14 @@ fn overlay_type_conflicts_name_declared_and_schema_types_per_layer() {
 fn tokens_outside_allowed_tokens_are_reported_with_the_allowed_set() {
     let mut store = setup();
     let rock = store.path("/Rock");
-    let xform = store.tokens.intern("Xform");
+    let xform = store.tokens().intern("Xform");
     let (purpose, visibility, tags) = (
-        store.tokens.intern("purpose"),
-        store.tokens.intern("visibility"),
-        store.tokens.intern("rock:tags"),
+        store.tokens().intern("purpose"),
+        store.tokens().intern("visibility"),
+        store.tokens().intern("rock:tags"),
     );
-    let allowed_key = store.tokens.intern("allowedTokens");
-    let token = |store: &mut InMemoryStore, name: &str| Value::Token(store.tokens.intern(name));
+    let allowed_key = store.tokens().intern("allowedTokens");
+    let token = |store: &mut InMemoryStore, name: &str| Value::Token(store.tokens().intern(name));
     let tag_set = Value::array_from_iter(
         [token(&mut store, "mossy"), token(&mut store, "smooth")],
         None,
@@ -967,7 +975,7 @@ fn tokens_outside_allowed_tokens_are_reported_with_the_allowed_set() {
             );
             let allowed: Vec<&str> = allowed.iter().map(|t| &**t).collect();
             (
-                store.tokens.resolve(problem.site.property.unwrap()),
+                store.tokens().resolve(problem.site.property.unwrap()),
                 problem.time,
                 &**value,
                 *index,

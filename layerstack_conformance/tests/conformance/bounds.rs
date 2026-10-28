@@ -78,7 +78,7 @@ fn authored_bounds_match_cpp() {
     );
     assert!(loaded.invalid.is_empty(), "{:?}", loaded.invalid);
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&loaded.store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(loaded.store.tokens()))),
         ..StageOptions::default()
     };
     let stage = Stage::compose(&mut loaded.store, loaded.root_layer, options);
@@ -160,7 +160,7 @@ fn edits_invalidate_ancestors_and_descendants_but_keep_other_branches() {
         &workspace_root().join("layerstack_conformance/fixtures/bounds/scene.usda"),
     );
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&loaded.store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(loaded.store.tokens()))),
         ..StageOptions::default()
     };
     let mut live = LiveStage::compose(&mut loaded.store, loaded.root_layer, options);
@@ -173,7 +173,7 @@ fn edits_invalidate_ancestors_and_descendants_but_keep_other_branches() {
     cache.world_bound(&scene, root).unwrap();
     let original = cache.world_bound(&scene, leaf).unwrap();
     let other_bound = cache.world_bound(&scene, other).unwrap();
-    let transform = loaded.store.tokens.intern("xformOp:translate");
+    let transform = loaded.store.tokens().intern("xformOp:translate");
     let mut transaction = Transaction::new();
     transaction.set_default(
         EditTarget::for_layer(loaded.root_layer)
@@ -219,10 +219,10 @@ fn unsupported_geometry_reports_an_error_instead_of_an_incomplete_bound() {
     let root = store.path("/Root");
     let mesh = store.path("/Root/Mesh");
     let instancer = store.path("/Instances");
-    let xform_type = store.tokens.intern("Xform");
-    let mesh_type = store.tokens.intern("Mesh");
-    let instancer_type = store.tokens.intern("PointInstancer");
-    let extent = store.tokens.intern("extent");
+    let xform_type = store.tokens().intern("Xform");
+    let mesh_type = store.tokens().intern("Mesh");
+    let instancer_type = store.tokens().intern("PointInstancer");
+    let extent = store.tokens().intern("extent");
     let mut layer = Layer::new(LayerId(1));
     layer.insert_prim(root, PrimSpec::def().with_type_name(xform_type));
     layer.insert_prim(
@@ -235,7 +235,7 @@ fn unsupported_geometry_reports_an_error_instead_of_an_incomplete_bound() {
     layer.insert_prim(instancer, PrimSpec::def().with_type_name(instancer_type));
     store.insert_layer(layer);
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(store.tokens()))),
         ..StageOptions::default()
     };
     let stage = Stage::compose(&mut store, LayerId(1), options);
@@ -262,7 +262,7 @@ fn invalidation_reaches_independently_queried_descendants() {
         &workspace_root().join("layerstack_conformance/fixtures/bounds/scene.usda"),
     );
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&loaded.store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(loaded.store.tokens()))),
         ..StageOptions::default()
     };
     let stage = Stage::compose(&mut loaded.store, loaded.root_layer, options);
@@ -299,13 +299,13 @@ fn excluded_children_track_visibility_type_and_deletion_changes() {
     let root = store.path("/Root");
     let branch = store.path("/Root/Branch");
     let leaf = store.path("/Root/Branch/Leaf");
-    let xform = store.tokens.intern("Xform");
-    let mesh = store.tokens.intern("Mesh");
-    let material = store.tokens.intern("Material");
-    let visibility = store.tokens.intern("visibility");
-    let invisible = store.tokens.intern("invisible");
-    let inherited = store.tokens.intern("inherited");
-    let extent = store.tokens.intern("extent");
+    let xform = store.tokens().intern("Xform");
+    let mesh = store.tokens().intern("Mesh");
+    let material = store.tokens().intern("Material");
+    let visibility = store.tokens().intern("visibility");
+    let invisible = store.tokens().intern("invisible");
+    let inherited = store.tokens().intern("inherited");
+    let extent = store.tokens().intern("extent");
     let mut layer = Layer::new(LayerId(1));
     layer.insert_prim(root, PrimSpec::def().with_type_name(xform));
     layer.insert_prim(
@@ -327,7 +327,7 @@ fn excluded_children_track_visibility_type_and_deletion_changes() {
     );
     store.insert_layer(layer);
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(store.tokens()))),
         ..StageOptions::default()
     };
     let mut cache = BoundsCache::new(Time::Default, BoundsOptions::default());
@@ -432,7 +432,7 @@ fn temporal_bounds_match_fresh_queries_in_any_order() {
         &workspace_root().join("layerstack_conformance/fixtures/bounds/scene.usda"),
     );
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&loaded.store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(loaded.store.tokens()))),
         ..StageOptions::default()
     };
     let stage = Stage::compose(&mut loaded.store, loaded.root_layer, options);

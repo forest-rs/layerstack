@@ -47,7 +47,7 @@ struct Connections {
 }
 
 fn target_text(store: &InMemoryStore, target: &TargetPath) -> String {
-    target.display(&store.paths, &store.tokens)
+    target.display(store.paths(), store.tokens())
 }
 
 /// The root layer's spec of `path`, as the oracle records it.
@@ -128,7 +128,7 @@ fn connection_edits_match_cpp_call_by_call() {
             .connected_sources(consumer)
             .sources
             .iter()
-            .map(|path| path.display(&store.paths, &store.tokens))
+            .map(|path| path.display(store.paths(), store.tokens()))
             .collect();
         assert_eq!(composed, call.composed, "{label}");
     }

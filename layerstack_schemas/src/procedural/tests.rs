@@ -44,8 +44,8 @@ fn setup() -> (InMemoryStore, LiveStage, Procedural<Pick>) {
     let mut store = InMemoryStore::default();
     let recipe = store.path("/Recipe");
     let input = store.path("/Inputs");
-    let ty = store.tokens.intern("GenerativeProcedural");
-    let system = store.tokens.intern("test:pick");
+    let ty = store.tokens().intern("GenerativeProcedural");
+    let system = store.tokens().intern("test:pick");
     let system_property = store.property_path("/Recipe.proceduralSystem");
     let source = store.property_path("/Recipe.primvars:source");
     let a = store.property_path("/Inputs.a");
@@ -73,7 +73,7 @@ fn setup() -> (InMemoryStore, LiveStage, Procedural<Pick>) {
     }
     store.insert_layer(layer);
     let options = StageOptions {
-        schemas: Some(Arc::new(crate::openusd(&store.tokens))),
+        schemas: Some(Arc::new(crate::openusd(store.tokens()))),
         ..Default::default()
     };
     let live = LiveStage::compose(&mut store, ROOT, options);
@@ -232,11 +232,11 @@ fn composed_reads_track_absence_and_replace_dynamic_dependencies() {
             .unwrap(),
         Some(10)
     );
-    let a = store.tokens.lookup("a").unwrap();
+    let a = store.tokens().lookup("a").unwrap();
     assert!(
         !procedural
             .dependencies()
-            .any(|d| store.tokens.lookup(d.property) == Some(a))
+            .any(|d| store.tokens().lookup(d.property) == Some(a))
     );
     let before = procedural.work().evaluations;
     set(&mut store, &mut live, "/Inputs.a", Value::Int(20));
@@ -281,7 +281,7 @@ fn missing_recipes_systems_and_wrong_kinds_never_return_stale_outputs() {
             .unwrap(),
         Some(1)
     );
-    let unsupported = store.tokens.intern("other:system");
+    let unsupported = store.tokens().intern("other:system");
     set(
         &mut store,
         &mut live,
@@ -292,7 +292,7 @@ fn missing_recipes_systems_and_wrong_kinds_never_return_stale_outputs() {
         procedural.evaluate(&Scene::new(live.stage(), &store), Time::Default),
         Err(ProceduralError::System { .. })
     ));
-    let expected = store.tokens.intern("test:pick");
+    let expected = store.tokens().intern("test:pick");
     set(
         &mut store,
         &mut live,

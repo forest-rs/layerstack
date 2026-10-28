@@ -43,7 +43,7 @@ fn fixture() -> Fixture {
     let a = s.property_path("/Material.inputs:a");
     let b = s.property_path("/Material.inputs:b");
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&s.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(s.tokens()))),
         ..StageOptions::default()
     };
     Fixture {
@@ -84,7 +84,7 @@ fn assert_fresh(
         store.insert_layer(layer.clone());
     }
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(store.tokens()))),
         ..StageOptions::default()
     };
     let stage = Stage::compose(&mut store, f.layer, options);
@@ -379,7 +379,7 @@ fn public_cpp_notices_and_computations_match_edit_sequence() {
             for prim in &applied.changes.property_changes {
                 for field in &prim.fields {
                     let path = PropertyPath::new(prim.prim, field.name)
-                        .display(&f.session.store().paths, &f.session.store().tokens);
+                        .display(f.session.store().paths(), f.session.store().tokens());
                     let key = match field.field {
                         layerstack::PropertyField::Default => "default",
                         layerstack::PropertyField::Targets => "connectionPaths",
@@ -436,7 +436,7 @@ fn public_cpp_notices_and_computations_match_edit_sequence() {
         let store = f.session.store();
         let paths: Vec<_> = paths
             .iter()
-            .map(|p| p.display(&store.paths, &store.tokens))
+            .map(|p| p.display(store.paths(), store.tokens()))
             .collect();
         assert_eq!(
             serde_json::json!(paths),
@@ -529,7 +529,7 @@ fn prepared_transform_evidence_excludes_unused_animation_and_handles_root() {
     let layer = f.layer;
     let child = f.reset_child;
     f.session.edit_sources(|store| {
-        let unused = store.tokens.intern("xformOp:translate:unused");
+        let unused = store.tokens().intern("xformOp:translate:unused");
         store.layer_mut(layer).unwrap().set_property(
             PropertyPath::new(child, unused),
             layerstack::PropertySpec::typed_attribute(

@@ -13,7 +13,7 @@ fn bench(c: &mut Criterion) {
     group.sample_size(10);
     for n in [1_000, 10_000, 100_000] {
         let mut store = InMemoryStore::default();
-        let xform = store.tokens.intern("Xform");
+        let xform = store.tokens().intern("Xform");
         let mut layer = Layer::new(LayerId(1));
         let root = store.path("/World");
         layer.insert_prim(root, PrimSpec::def().with_type_name(xform));
@@ -25,7 +25,7 @@ fn bench(c: &mut Criterion) {
         }
         store.insert_layer(layer);
         let options = StageOptions {
-            schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
+            schemas: Some(Arc::new(layerstack_schemas::openusd(store.tokens()))),
             ..StageOptions::default()
         };
         let stage = Stage::compose(&mut store, LayerId(1), options.clone());

@@ -41,7 +41,7 @@ fn every_value_type_flattens_as_cpp_does() {
             .iter()
             .map(|element| match &*element {
                 Value::Asset(path) => serde_json::json!(&**path),
-                Value::Token(token) => serde_json::json!(store.tokens.resolve(*token)),
+                Value::Token(token) => serde_json::json!(store.tokens().resolve(*token)),
                 Value::Bool(v) => serde_json::json!(v),
                 Value::UChar(v) => serde_json::json!(v),
                 Value::Int64(v) => serde_json::json!(v),
@@ -109,7 +109,7 @@ fn inheritance_flattening_and_animation_match_cpp() {
         })
         .unwrap()
         .unwrap();
-    let values = layerstack_schemas::value::read_float_array(&value, &store.tokens).unwrap();
+    let values = layerstack_schemas::value::read_float_array(&value, store.tokens()).unwrap();
     assert_eq!(serde_json::json!(values), expected["animated"]["at1"]);
     assert_eq!(
         prim.find_primvar_with_inheritance("tint")
@@ -117,8 +117,8 @@ fn inheritance_flattening_and_animation_match_cpp() {
             .property()
             .prim_path(),
         store
-            .paths
-            .parent(store.paths.parent(path).unwrap())
+            .paths()
+            .parent(store.paths().parent(path).unwrap())
             .unwrap()
     );
     assert!(prim.find_primvar_with_inheritance("barrier").is_none());
@@ -189,7 +189,7 @@ fn primvar_authoring_and_rejections_preserve_undo() {
     assert_eq!(var.interpolation(), "vertex");
     let flattened = var.compute_flattened(Time::Default).unwrap().unwrap();
     assert_eq!(
-        layerstack_schemas::value::read_float_array(&flattened, &store.tokens),
+        layerstack_schemas::value::read_float_array(&flattened, store.tokens()),
         Some(vec![2., 1.])
     );
     live.apply(&mut store, &applied.inverse).unwrap();
@@ -224,7 +224,7 @@ fn id_targets_and_index_animation_queries_match_cpp() {
             Some(v) => serde_json::json!(
                 layerstack_schemas::value::read_array(
                     &v,
-                    &store.tokens,
+                    store.tokens(),
                     layerstack_schemas::value::read_string
                 )
                 .unwrap()
@@ -339,15 +339,15 @@ fn traversal_fed_inheritance_matches_cpp_and_full_queries() {
                 .map(|pv| [
                     pv.name().to_string(),
                     store
-                        .paths
-                        .display(pv.property().prim_path(), &store.tokens)
+                        .paths()
+                        .display(pv.property().prim_path(), store.tokens())
                 ])
                 .collect::<Vec<_>>()
         )
     };
     for (&path, text) in ids.iter().zip(paths) {
         let prim = PrimView::new(scene, path);
-        let parent = store.paths.parent(path).unwrap();
+        let parent = store.paths().parent(path).unwrap();
         let inherited = PrimView::new(scene, parent).inheritable_primvars();
         let updated = prim.incrementally_inheritable_primvars(&inherited);
         let effective = updated.as_deref().unwrap_or(&inherited);
@@ -405,7 +405,7 @@ fn primvar_groups_discard_failures_and_nonindexed_authoring_masks_weaker_indices
     let mut root = Layer::new(LayerId(1));
     root.sublayers_mut().push(SublayerEntry::new(LayerId(2)));
     store.insert_layer(root);
-    let schemas = std::sync::Arc::new(layerstack_schemas::openusd(&store.tokens));
+    let schemas = std::sync::Arc::new(layerstack_schemas::openusd(store.tokens()));
     let mut live = LiveStage::compose(
         &mut store,
         LayerId(1),
@@ -481,7 +481,7 @@ fn primvar_groups_discard_failures_and_nonindexed_authoring_masks_weaker_indices
     assert_eq!(
         layerstack_schemas::value::read_float_array(
             &var.compute_flattened(Time::Default).unwrap().unwrap(),
-            &store.tokens
+            store.tokens()
         ),
         Some(vec![7., 8.])
     );
@@ -525,7 +525,7 @@ fn primvar_block_erases_local_animation_and_authors_future_indices_barrier() {
     let scene = Scene::new(live.stage(), &store);
     let pv = Primvar::new(&scene, path, "both").unwrap();
     assert!(!pv.has_authored_value() && !pv.is_indexed());
-    let sidecar = store.tokens.lookup("primvars:noIndices:indices").unwrap();
+    let sidecar = store.tokens().lookup("primvars:noIndices:indices").unwrap();
     assert_eq!(
         store.layer(LayerId(1)).unwrap().prims()[&path]
             .property(sidecar)
@@ -582,7 +582,7 @@ fn weaker_primvar_value_and_block_edits_can_precede_metadata() {
         let mut root = Layer::new(LayerId(1));
         root.sublayers_mut().push(SublayerEntry::new(LayerId(2)));
         store.insert_layer(root);
-        let schemas = std::sync::Arc::new(layerstack_schemas::openusd(&store.tokens));
+        let schemas = std::sync::Arc::new(layerstack_schemas::openusd(store.tokens()));
         let mut live = LiveStage::compose(
             &mut store,
             LayerId(1),
@@ -715,7 +715,7 @@ fn removed_primvar_declarations_reveal_weaker_sources_and_group_rollback() {
     use layerstack::{Layer, PrimSpec, PropertySpec, StageOptions, SublayerEntry};
     let (mut store, _) = support::scene("#usda 1.0\ndef Mesh \"P\" {\nfloat primvars:x = 1\n}");
     let path = store.path("/P");
-    let name = store.tokens.lookup("primvars:x").unwrap();
+    let name = store.tokens().lookup("primvars:x").unwrap();
     let mut weak = store.remove_layer(LayerId(1)).unwrap();
     weak.map_layer_ids(|id| if id == LayerId(1) { LayerId(2) } else { id });
     store.insert_layer(weak);
@@ -730,7 +730,7 @@ fn removed_primvar_declarations_reveal_weaker_sources_and_group_rollback() {
         ),
     );
     store.insert_layer(root);
-    let schemas = std::sync::Arc::new(layerstack_schemas::openusd(&store.tokens));
+    let schemas = std::sync::Arc::new(layerstack_schemas::openusd(store.tokens()));
     let mut live = LiveStage::compose(
         &mut store,
         LayerId(1),
@@ -816,7 +816,7 @@ fn removed_primvar_ui_labels_do_not_leak_into_recreated_properties() {
             let mut root = Layer::new(LayerId(1));
             root.sublayers_mut().push(SublayerEntry::new(LayerId(2)));
             store.insert_layer(root);
-            let schemas = std::sync::Arc::new(layerstack_schemas::openusd(&store.tokens));
+            let schemas = std::sync::Arc::new(layerstack_schemas::openusd(store.tokens()));
             live = LiveStage::compose(
                 &mut store,
                 LayerId(1),
@@ -901,10 +901,10 @@ fn validated_primvar_mapping_shares_sources_without_expanding_values() {
             assert_eq!(view.element_range(0), Some(4..6));
             assert_eq!(view.element_range(1), Some(0..2));
             let source = var.value(time).unwrap().unwrap();
-            let a =
-                layerstack_schemas::value::read_float_array_shared(&source, &store.tokens).unwrap();
+            let a = layerstack_schemas::value::read_float_array_shared(&source, store.tokens())
+                .unwrap();
             let b =
-                layerstack_schemas::value::read_float_array_shared(view.values(), &store.tokens)
+                layerstack_schemas::value::read_float_array_shared(view.values(), store.tokens())
                     .unwrap();
             assert!(std::sync::Arc::ptr_eq(&a, &b));
             assert!(std::sync::Arc::ptr_eq(

@@ -762,7 +762,7 @@ impl Catalog {
 /// `store`'s, before anything is read or composed with it.
 fn check_schemas(store: &InMemoryStore, options: &StageOptions) -> Result<(), IoError> {
     match &options.schemas {
-        Some(schemas) if !schemas.belongs_to(&store.tokens) => Err(IoError::new(
+        Some(schemas) if !schemas.belongs_to(store.tokens()) => Err(IoError::new(
             IoErrorKind::ForeignSchemaRegistry,
             "the schema registry was built on another token interner than the store's; \
              build it on the store's `tokens` and open into that store with `open_in`",
@@ -966,12 +966,12 @@ impl<B: Storage> StageDocument<B> {
         reader.formats = loading.formats.clone();
         reader.threads = options.thread_budget();
         #[cfg(feature = "std")]
-        let threaded = reader.load_on_threads(asset, &store.tokens, &store.paths);
+        let threaded = reader.load_on_threads(asset, store.tokens(), store.paths());
         #[cfg(not(feature = "std"))]
         let threaded: Option<Result<ResolvedAsset, IoError>> = None;
         let resolved = match threaded {
             Some(resolved) => resolved?,
-            None => reader.load(asset, None, &store.tokens, &store.paths)?,
+            None => reader.load(asset, None, store.tokens(), store.paths())?,
         };
         if let Some(layer) = resolved.layer {
             reader.pending.push(layer);
@@ -1068,8 +1068,12 @@ impl<B: Storage> StageDocument<B> {
             reader.variant_arcs = self.variant_arcs;
             reader.formats = self.formats.clone();
             for (anchor, asset) in requests {
-                let result =
-                    reader.load(&asset, Some(anchor), &self.store.tokens, &self.store.paths);
+                let result = reader.load(
+                    &asset,
+                    Some(anchor),
+                    self.store.tokens(),
+                    self.store.paths(),
+                );
                 match result {
                     Ok(resolved) => {
                         self.unavailable.remove(&(anchor, asset.clone()));
@@ -1133,7 +1137,7 @@ impl<B: Storage> StageDocument<B> {
         );
         reader.variant_arcs = self.variant_arcs;
         reader.formats = self.formats.clone();
-        let resolved = reader.load(asset, anchor, &self.store.tokens, &self.store.paths)?;
+        let resolved = reader.load(asset, anchor, self.store.tokens(), self.store.paths())?;
         let id = resolved.layer_id;
         if let Some(anchor) = anchor {
             reader.bind(anchor, asset, id);
@@ -1447,7 +1451,7 @@ impl<B: Storage> StageDocument<B> {
             .identify(target, None)
             .map_err(|e| e.at(target))?;
         let bytes = plan
-            .write_usdz(&self.store.tokens, &self.store.paths)
+            .write_usdz(self.store.tokens(), self.store.paths())
             .map_err(localization_error)?;
         self.storage
             .write(&identifier, &bytes)
@@ -1484,7 +1488,7 @@ impl<B: Storage> StageDocument<B> {
             .store
             .layer(id)
             .ok_or_else(|| IoError::new(IoErrorKind::MissingLayer, "selected layer is absent"))?;
-        let (tokens, paths) = (&self.store.tokens, &self.store.paths);
+        let (tokens, paths) = (&self.store.tokens(), &self.store.paths());
         if format == Format::Usda {
             let document =
                 layerstack_usda::save::usda_document(layer, tokens, paths).map_err(save_error)?;
@@ -1506,7 +1510,7 @@ impl<B: Storage> StageDocument<B> {
         format: Format,
         sink: &mut dyn ByteSink,
     ) -> Result<(), IoError> {
-        let (tokens, paths) = (&self.store.tokens, &self.store.paths);
+        let (tokens, paths) = (&self.store.tokens(), &self.store.paths());
         let bytes = match format {
             Format::Usda => {
                 let document = layerstack_usda::save::usda_document(layer, tokens, paths)
@@ -1649,8 +1653,8 @@ impl<'a, B: Storage> Reader<'a, B> {
                 match self.load(
                     &request.asset_path,
                     Some(request.anchor),
-                    &store.tokens,
-                    &store.paths,
+                    store.tokens(),
+                    store.paths(),
                 ) {
                     Ok(resolved) => {
                         self.bind(
@@ -2563,10 +2567,10 @@ impl LayerStore for Overlay<'_> {
         None
     }
     fn tokens(&self) -> &TokenInterner {
-        &self.store.tokens
+        self.store.tokens()
     }
     fn paths(&self) -> &PathInterner {
-        &self.store.paths
+        self.store.paths()
     }
     fn asset_layer(&self, anchor: LayerId, asset: &str) -> Option<LayerId> {
         match self

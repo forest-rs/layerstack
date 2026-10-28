@@ -19,7 +19,7 @@ mod generated;
 fn scene() -> (InMemoryStore, LiveStage) {
     let mut store = InMemoryStore::default();
     store.insert_layer(Layer::new(LayerId(1)));
-    let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(store.tokens()));
     let live = LiveStage::compose(
         &mut store,
         LayerId(1),
@@ -162,9 +162,9 @@ fn incompatible_existing_port_is_rejected_without_appending_edits() {
 fn defining_a_node_overrides_a_weaker_source_asset_implementation() {
     let (mut store, _) = scene();
     let path = store.path("/Surface");
-    let shader = store.tokens.intern("Shader");
-    let implementation = store.tokens.intern("info:implementationSource");
-    let source_asset = store.tokens.intern("sourceAsset");
+    let shader = store.tokens().intern("Shader");
+    let implementation = store.tokens().intern("info:implementationSource");
+    let source_asset = store.tokens().intern("sourceAsset");
     let mut weak = Layer::new(LayerId(2));
     weak.insert_prim(path, layerstack::PrimSpec::def().with_type_name(shader));
     weak.prim_mut(path).unwrap().set_property(
@@ -177,7 +177,7 @@ fn defining_a_node_overrides_a_weaker_source_asset_implementation() {
         .unwrap()
         .sublayers_mut()
         .push(layerstack::SublayerEntry::new(LayerId(2)));
-    let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(store.tokens()));
     let mut live = LiveStage::compose(
         &mut store,
         LayerId(1),
@@ -246,22 +246,22 @@ def NodeGraph "Graph" {
     let emitted = layerstack_usda::emit::emit(
         &parsed.layer,
         LayerId(1),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut NoAssets,
     );
     assert!(emitted.diagnostics.is_empty());
     store.insert_layer(emitted.layer);
     let options = StageOptions {
         with_provenance: true,
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(store.tokens()))),
         ..StageOptions::default()
     };
     let legacy = store.path("/Graph/Legacy");
     let connected = store.path("/Graph/Connected");
     let modern = store.path("/Graph/Modern");
     let bad = store.path("/Graph/Bad");
-    let input = store.tokens.intern("inputs:varname");
+    let input = store.tokens().intern("inputs:varname");
     let stage = Stage::compose(&mut store, LayerId(1), options);
     let scene = Scene::new(&stage, &store);
     let legacy = PrimvarReaderFloat2::new(&scene, legacy).unwrap();

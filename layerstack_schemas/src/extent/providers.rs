@@ -320,15 +320,15 @@ mod tests {
             let shape = store.path("/Root/Shape");
             let root = store.path("/Root");
             let source = store.path("/Inputs");
-            let base = store.tokens.intern("HostBoundable");
-            let derived = store.tokens.intern("DerivedHostBoundable");
-            let size = store.tokens.intern("hostSize");
+            let base = store.tokens().intern("HostBoundable");
+            let derived = store.tokens().intern("DerivedHostBoundable");
+            let size = store.tokens().intern("hostSize");
             let mut builder = SchemaRegistry::builder();
-            crate::register(&mut builder, &[crate::Domain::UsdGeom], &store.tokens).unwrap();
-            let boundable = store.tokens.lookup("Boundable").unwrap();
+            crate::register(&mut builder, &[crate::Domain::UsdGeom], store.tokens()).unwrap();
+            let boundable = store.tokens().lookup("Boundable").unwrap();
             builder.register(SchemaDefinition::typed(base).with_parent(boundable));
             builder.register(SchemaDefinition::typed(derived).with_parent(base));
-            let schemas = Arc::new(builder.build(&store.tokens));
+            let schemas = Arc::new(builder.build(store.tokens()));
             let mut layer = Layer::new(LayerId(1));
             layer.insert_prim(root, PrimSpec::def());
             layer.insert_prim(shape, PrimSpec::def().with_type_name(derived));
@@ -370,7 +370,7 @@ mod tests {
             providers
                 .register(
                     &self.schemas,
-                    &self.store.tokens,
+                    self.store.tokens(),
                     self.base,
                     Arc::new(InputProvider {
                         source: self.source,
@@ -525,10 +525,10 @@ mod tests {
     #[test]
     fn registration_validation_and_nearer_builtin_dispatch() {
         let mut f = Fixture::new(true);
-        let boundable = f.store.tokens.lookup("Boundable").unwrap();
-        let cube_type = f.store.tokens.lookup("Cube").unwrap();
-        let xform = f.store.tokens.lookup("Xform").unwrap();
-        let unknown = f.store.tokens.intern("Unregistered");
+        let boundable = f.store.tokens().lookup("Boundable").unwrap();
+        let cube_type = f.store.tokens().lookup("Cube").unwrap();
+        let xform = f.store.tokens().lookup("Xform").unwrap();
+        let unknown = f.store.tokens().intern("Unregistered");
         let provider = Arc::new(InputProvider {
             source: f.source,
             calls: f.calls.clone(),
@@ -537,19 +537,19 @@ mod tests {
         });
         let mut providers = ExtentProviders::default();
         assert_eq!(
-            providers.register(&f.schemas, &f.store.tokens, unknown, provider.clone()),
+            providers.register(&f.schemas, f.store.tokens(), unknown, provider.clone()),
             Err(ExtentRegistrationError::NotBoundable(unknown))
         );
         assert_eq!(
-            providers.register(&f.schemas, &f.store.tokens, xform, provider.clone()),
+            providers.register(&f.schemas, f.store.tokens(), xform, provider.clone()),
             Err(ExtentRegistrationError::NotBoundable(xform))
         );
         providers
-            .register(&f.schemas, &f.store.tokens, boundable, provider.clone())
+            .register(&f.schemas, f.store.tokens(), boundable, provider.clone())
             .unwrap();
         assert!(providers.contains(boundable));
         assert_eq!(
-            providers.register(&f.schemas, &f.store.tokens, boundable, provider),
+            providers.register(&f.schemas, f.store.tokens(), boundable, provider),
             Err(ExtentRegistrationError::AlreadyRegistered(boundable))
         );
         let cube = f.store.path("/Cube");
@@ -569,12 +569,12 @@ mod tests {
     #[test]
     fn point_based_provider_is_inherited_but_nearer_shape_providers_win() {
         let mut f = Fixture::new(true);
-        let point_based = f.store.tokens.lookup("PointBased").unwrap();
+        let point_based = f.store.tokens().lookup("PointBased").unwrap();
         let mut providers = ExtentProviders::default();
         providers
             .register(
                 &f.schemas,
-                &f.store.tokens,
+                f.store.tokens(),
                 point_based,
                 Arc::new(InputProvider {
                     source: f.source,
@@ -592,7 +592,7 @@ mod tests {
             edit.create_prim(
                 EditTarget::for_layer(LayerId(1)).prim(path),
                 layerstack::Specifier::Def,
-                f.store.tokens.lookup(schema),
+                f.store.tokens().lookup(schema),
             );
             f.edit(&mut cache, &edit);
             if schema == "Points" {
@@ -688,7 +688,7 @@ mod tests {
         providers
             .register(
                 &f.schemas,
-                &f.store.tokens,
+                f.store.tokens(),
                 f.base,
                 Arc::new(PointsProvider(f.source)),
             )
@@ -725,7 +725,7 @@ mod tests {
         ignoring
             .register(
                 &f.schemas,
-                &f.store.tokens,
+                f.store.tokens(),
                 f.base,
                 Arc::new(IgnoredDecode(f.source)),
             )
@@ -743,7 +743,7 @@ mod tests {
     fn retained_authored_extent_and_intrinsic_points_fail_without_partial_bounds() {
         for schema in ["Mesh", "TetMesh"] {
             let mut f = Fixture::new(true);
-            let mesh_type = f.store.tokens.lookup(schema).unwrap();
+            let mesh_type = f.store.tokens().lookup(schema).unwrap();
             let mesh = f.store.path("/Mesh");
             let extent = f.store.property_path("/Mesh.extent");
             let points = f.store.property_path("/Mesh.points");

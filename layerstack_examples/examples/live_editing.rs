@@ -21,9 +21,9 @@ use layerstack::{
 fn main() {
     let mut store = InMemoryStore::default();
 
-    let field_hp = store.tokens.intern("hitpoints");
-    let field_speed = store.tokens.intern("speed");
-    let field_color = store.tokens.intern("color");
+    let field_hp = store.tokens().intern("hitpoints");
+    let field_speed = store.tokens().intern("speed");
+    let field_color = store.tokens().intern("color");
 
     let hero = store.path("/Hero");
     let sword = store.path("/Hero/Sword");
@@ -31,8 +31,8 @@ fn main() {
     let enemy = store.path("/Enemy");
     let power_gem = store.path("/PowerGem");
 
-    let sword_token = store.tokens.intern("Sword");
-    let shield_token = store.tokens.intern("Shield");
+    let sword_token = store.tokens().intern("Sword");
+    let shield_token = store.tokens().intern("Shield");
 
     // -----------------------------------------------------------------------
     // Layer 1 (base): defines the hero with children, and an enemy.
@@ -154,7 +154,7 @@ fn main() {
     println!("\n--- Structural change: add /Treasure ---");
     let treasure = store.path("/Treasure");
     {
-        let value = store.tokens.intern("value");
+        let value = store.tokens().intern("value");
         let layer = store.layer_mut(LayerId(1)).unwrap();
         layer.insert_prim(treasure, PrimSpec::def().with_field(value, 500_i64));
     }

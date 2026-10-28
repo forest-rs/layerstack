@@ -35,10 +35,10 @@ fn assert_matches_fresh(store: &mut InMemoryStore, live: &LiveStage) {
         .collect();
     paths.sort_unstable();
     paths.dedup();
-    let x = store.tokens.intern("x");
+    let x = store.tokens().intern("x");
     let store = &*store;
     for path in paths {
-        let name = store.paths.display(path, &store.tokens);
+        let name = store.paths().display(path, store.tokens());
         assert_eq!(
             live.stage().prim(path, store).is_some(),
             fresh.prim(path, store).is_some(),
@@ -96,7 +96,7 @@ fn replacing_an_anchored_asset_mapping_replaces_its_scene_and_provenance() {
     let new_child = store.path("/Asset/New");
     let old_destination = store.path("/Use/Old");
     let new_destination = store.path("/Use/New");
-    let x = store.tokens.intern("x");
+    let x = store.tokens().intern("x");
     let mut root = Layer::new(LayerId(1));
     root.insert_prim(
         destination,
@@ -171,7 +171,7 @@ fn a_new_sublayer_join_revalidates_existing_relocates() {
     let joined_a = store.path("/Joined/A");
     let joined_b = store.path("/Joined/B");
     let joined_target = store.path("/Joined/Target");
-    let x = store.tokens.intern("x");
+    let x = store.tokens().intern("x");
     let mut base = Layer::new(LayerId(5));
     base.insert_prim(model, PrimSpec::def());
     for (source, value) in [(source_a, 1), (source_b, 2)] {
@@ -259,10 +259,10 @@ fn a_new_sublayer_join_revalidates_existing_relocates() {
 fn a_stronger_selection_masks_a_weaker_expression_error_after_edits() {
     let mut store = InMemoryStore::default();
     let prim = store.path("/P");
-    let v = store.tokens.intern("v");
-    let a = store.tokens.intern("a");
-    let missing = store.tokens.intern("`${MISSING}`");
-    let x = store.tokens.intern("x");
+    let v = store.tokens().intern("v");
+    let a = store.tokens().intern("a");
+    let missing = store.tokens().intern("`${MISSING}`");
+    let x = store.tokens().intern("x");
     let mut weak = Layer::new(LayerId(2));
     let mut spec = PrimSpec::def();
     spec.rare_mut().variant_set_names.make_mut().prepend.push(v);

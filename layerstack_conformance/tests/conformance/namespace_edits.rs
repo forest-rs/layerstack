@@ -19,12 +19,12 @@ fn snapshot(
     root_layer: layerstack::LayerId,
 ) -> Json {
     let stage = live.stage();
-    let root = store.paths.lookup(&Path::root()).unwrap();
+    let root = store.paths().lookup(&Path::root()).unwrap();
     let mut prims = Vec::new();
     let mut properties = BTreeMap::new();
     let mut relative = BTreeMap::new();
     for prim in stage.traverse(root) {
-        let path = store.paths.display(prim, &store.tokens);
+        let path = store.paths().display(prim, store.tokens());
         if path == "/" {
             continue;
         }
@@ -38,10 +38,10 @@ fn snapshot(
             .property_order()
             .unwrap_or_default()
             .iter()
-            .map(|n| store.tokens.resolve(*n))
+            .map(|n| store.tokens().resolve(*n))
             .collect();
         properties.insert(path, json!({"names":names,"order":order}));
-        if let Some(name) = store.tokens.lookup("relative") {
+        if let Some(name) = store.tokens().lookup("relative") {
             let property = PropertyPath::new(prim, name);
             if let Some(value) = stage
                 .view(store)
@@ -50,7 +50,7 @@ fn snapshot(
                 && let Value::PathExpression(text) = value.value
             {
                 relative.insert(
-                    property.display(&store.paths, &store.tokens),
+                    property.display(store.paths(), store.tokens()),
                     text.to_string(),
                 );
             }
@@ -58,27 +58,30 @@ fn snapshot(
     }
     prims.sort();
     let watch = store
-        .paths
-        .lookup(&Path::root().join(&[store.tokens.lookup("Watch").unwrap()]))
+        .paths()
+        .lookup(&Path::root().join(&[store.tokens().lookup("Watch").unwrap()]))
         .unwrap();
     let target_list = |name| {
         stage
             .view(store)
-            .property(PropertyPath::new(watch, store.tokens.lookup(name).unwrap()))
+            .property(PropertyPath::new(
+                watch,
+                store.tokens().lookup(name).unwrap(),
+            ))
             .map(|p| match p.as_attribute() {
                 Some(a) => a.connections(),
                 None => p.as_relationship().map(|r| r.targets()).unwrap_or_default(),
             })
             .unwrap()
             .into_iter()
-            .map(|p| p.display(&store.paths, &store.tokens))
+            .map(|p| p.display(store.paths(), store.tokens()))
             .collect::<Vec<_>>()
     };
     let expression = stage
         .view(store)
         .attribute(PropertyPath::new(
             watch,
-            store.tokens.lookup("expression").unwrap(),
+            store.tokens().lookup("expression").unwrap(),
         ))
         .and_then(|a| a.authored_value(layerstack::Time::Default))
         .unwrap()
@@ -86,7 +89,7 @@ fn snapshot(
     let Value::PathExpression(expression) = expression else {
         panic!("expression");
     };
-    json!({"prims":prims,"defaultPrim":store.tokens.resolve(store.layer(root_layer).unwrap().default_prim().unwrap()),"watchTargets":target_list("look"),"connections":target_list("inputs:value"),"expression":expression.as_ref(),"properties":properties,"relativeExpressions":relative})
+    json!({"prims":prims,"defaultPrim":store.tokens().resolve(store.layer(root_layer).unwrap().default_prim().unwrap()),"watchTargets":target_list("look"),"connections":target_list("inputs:value"),"expression":expression.as_ref(),"properties":properties,"relativeExpressions":relative})
 }
 
 #[test]
@@ -104,14 +107,14 @@ fn namespace_moves_match_native_usd() {
         );
         let source = TargetPath::parse(
             case["source"].as_str().unwrap(),
-            &loaded.store.tokens,
-            &loaded.store.paths,
+            loaded.store.tokens(),
+            loaded.store.paths(),
         )
         .unwrap();
         let destination = TargetPath::parse(
             case["destination"].as_str().unwrap(),
-            &loaded.store.tokens,
-            &loaded.store.paths,
+            loaded.store.tokens(),
+            loaded.store.paths(),
         )
         .unwrap();
         let edit = NamespaceEdit::prepare(

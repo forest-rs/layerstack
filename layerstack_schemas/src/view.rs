@@ -1089,11 +1089,11 @@ mod handle_tests {
     fn views_take_text_paths_and_reach_generic_handles() {
         let mut store = InMemoryStore::default();
         let options = StageOptions {
-            schemas: Some(Arc::new(crate::openusd(&store.tokens))),
+            schemas: Some(Arc::new(crate::openusd(store.tokens()))),
             ..StageOptions::default()
         };
         let ball = store.path("/Ball");
-        let sphere = store.tokens.intern("Sphere");
+        let sphere = store.tokens().intern("Sphere");
         let mut layer = Layer::new(LayerId(1));
         layer.insert_prim(ball, PrimSpec::def().with_type_name(sphere));
         store.insert_layer(layer);
@@ -1127,9 +1127,9 @@ mod model_hierarchy_tests {
     #[test]
     fn model_requires_group_ancestors_through_a_deep_namespace() {
         let mut store = InMemoryStore::default();
-        let kind = store.tokens.intern("kind");
-        let group = store.tokens.intern("group");
-        let component = store.tokens.intern("component");
+        let kind = store.tokens().intern("kind");
+        let group = store.tokens().intern("group");
+        let component = store.tokens().intern("component");
         let mut layer = Layer::new(LayerId(1));
         let mut name = String::new();
         for _ in 0..256 {

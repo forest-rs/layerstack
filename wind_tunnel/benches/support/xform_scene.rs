@@ -13,17 +13,17 @@ pub(crate) fn scene(
     pivot: bool,
 ) -> (InMemoryStore, Stage, Vec<PathId>) {
     let mut store = InMemoryStore::default();
-    let xform = store.tokens.intern("Xform");
-    let order = store.tokens.intern("xformOpOrder");
+    let xform = store.tokens().intern("Xform");
+    let order = store.tokens().intern("xformOpOrder");
     let names = [
         "xformOp:translate",
         "xformOp:rotateXYZ",
         "xformOp:scale",
         "xformOp:translate:pivot",
     ];
-    let tokens = names.map(|name| store.tokens.intern(name));
-    let inverse = store.tokens.intern("!invert!xformOp:translate:pivot");
-    let reset = store.tokens.intern("!resetXformStack!");
+    let tokens = names.map(|name| store.tokens().intern(name));
+    let inverse = store.tokens().intern("!invert!xformOp:translate:pivot");
+    let reset = store.tokens().intern("!resetXformStack!");
     let mut layer = Layer::new(LayerId(1));
     let mut paths = Vec::new();
     for i in 0..n {
@@ -73,7 +73,7 @@ pub(crate) fn scene(
     layer.insert_prim(root, PrimSpec::def().with_type_name(xform));
     store.insert_layer(layer);
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(store.tokens()))),
         ..StageOptions::default()
     };
     let stage = Stage::compose(&mut store, LayerId(1), options);

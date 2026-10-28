@@ -6,8 +6,7 @@
 
 use layerstack::asset_dependencies::{DependencyTarget, collect_dependencies};
 use layerstack::{
-    InMemoryStore, Layer, LayerId, LayerStore, PrimSpec, PropertySpec, PropertyType, Reference,
-    Value,
+    InMemoryStore, Layer, LayerId, PrimSpec, PropertySpec, PropertyType, Reference, Value,
 };
 use layerstack_usdz::localize::{LocalizationTarget, localize_asset};
 use std::error::Error;
@@ -16,8 +15,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut store = InMemoryStore::default();
     let root = store.path("/");
     let model = store.path("/Model");
-    let model_name = store.tokens.intern("Model");
-    let image = store.tokens.intern("image");
+    let model_name = store.tokens().intern("Model");
+    let image = store.tokens().intern("image");
     let mut scene = Layer::new(LayerId(1));
     scene.set_default_prim(Some(model_name));
     scene.insert_prim(root, PrimSpec::default().with_children(vec![model_name]));

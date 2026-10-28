@@ -208,7 +208,7 @@ fn nested_payload_participation_separates_empty_prototypes() {
     let mut options = StageOptions::default();
     options
         .load_rules
-        .unload(loaded.store.paths.resolve(unloaded_instance).clone());
+        .unload(loaded.store.paths().resolve(unloaded_instance).clone());
     let mut live = LiveStage::compose(&mut loaded.store, loaded.root_layer, options);
     let instance = |stage: &Stage, store: &InMemoryStore, path| {
         let prim = stage.prim(path, store).unwrap();

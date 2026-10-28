@@ -381,8 +381,8 @@ impl Composed {
         let layer = emit_layer(
             &sources[root],
             LayerId(1),
-            &store.tokens,
-            &store.paths,
+            store.tokens(),
+            store.paths(),
             &mut resolver,
         );
         store.insert_layer(layer);
@@ -390,16 +390,16 @@ impl Composed {
             store.insert_layer(layer);
         }
         let schemas = schema.map(|schema| {
-            let mut definition = SchemaDefinition::typed(store.tokens.intern(&schema.type_name));
+            let mut definition = SchemaDefinition::typed(store.tokens().intern(&schema.type_name));
             for (name, fallback) in schema_fallbacks(&schema.type_name) {
                 definition = definition.with_property(
-                    PropertyDefinition::attribute(store.tokens.intern(name))
+                    PropertyDefinition::attribute(store.tokens().intern(name))
                         .with_fallback(fallback),
                 );
             }
             let mut builder = SchemaRegistry::builder();
             builder.register(definition);
-            Arc::new(builder.build(&store.tokens))
+            Arc::new(builder.build(store.tokens()))
         });
         let options = StageOptions {
             schemas: schemas.clone(),
@@ -414,7 +414,7 @@ impl Composed {
     }
 
     fn resolve(&mut self, query: &Query) -> Option<Resolved> {
-        let path = PropertyPath::parse(&query.attr, &self.store.tokens, &self.store.paths)
+        let path = PropertyPath::parse(&query.attr, self.store.tokens(), self.store.paths())
             .expect("attribute path");
         let time = match query.time {
             Some(code) => Time::At {

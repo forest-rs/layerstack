@@ -106,7 +106,7 @@ fn counts(counts: DanglingCounts) -> BTreeMap<String, usize> {
 /// The report in the oracle's shape.
 fn record(loaded: &LoadedStage, report: &DanglingReport) -> Record {
     let store = &loaded.store;
-    let (paths, tokens) = (&store.paths, &store.tokens);
+    let (paths, tokens) = (&store.paths(), &store.tokens());
     let groups = |groups: &[DanglingByName]| -> BTreeMap<String, Group> {
         groups
             .iter()
@@ -182,7 +182,7 @@ fn compose(oracle: &Oracle, masked: bool) -> (LoadedStage, Stage) {
     let path = |loaded: &mut LoadedStage, text: &str| loaded.store.path(text);
     let mut load_rules = PayloadLoadRules::default();
     let unloaded = path(&mut loaded, &oracle.unloaded);
-    load_rules.unload(loaded.store.paths.resolve(unloaded).clone());
+    load_rules.unload(loaded.store.paths().resolve(unloaded).clone());
     let mask = masked.then(|| PopulationMask {
         include: oracle
             .mask
@@ -191,7 +191,7 @@ fn compose(oracle: &Oracle, masked: bool) -> (LoadedStage, Stage) {
             .collect(),
     });
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&loaded.store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(loaded.store.tokens()))),
         load_rules,
         mask,
         ..StageOptions::default()
@@ -235,7 +235,7 @@ fn examples_display_as_paths() {
     let oracle: Oracle = serde_json::from_str(ORACLE).expect("the oracle parses");
     let (loaded, stage) = compose(&oracle, false);
     let report = DanglingReport::compute(&Scene::new(&stage, &loaded.store), 3);
-    let (store, tokens) = (&loaded.store, &loaded.store.tokens);
+    let (store, tokens) = (&loaded.store, &loaded.store.tokens());
     let shade = report
         .targets
         .relationships
@@ -355,7 +355,7 @@ fn library_dangling_knob() {
     let _ = std::fs::remove_dir_all(&dir);
     assert!(loaded.invalid.is_empty(), "{:?}", loaded.invalid);
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&loaded.store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(loaded.store.tokens()))),
         ..StageOptions::default()
     };
     let stage = Stage::compose(&mut loaded.store, loaded.root_layer, options);

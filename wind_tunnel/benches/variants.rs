@@ -24,9 +24,9 @@ use layerstack::{
 fn build_and_compose(n_prims: usize, n_variants: usize) -> Stage {
     let mut store = InMemoryStore::default();
 
-    let f_material = store.tokens.intern("material");
-    let f_detail = store.tokens.intern("detailLevel");
-    let vs_name = store.tokens.intern("look");
+    let f_material = store.tokens().intern("material");
+    let f_detail = store.tokens().intern("detailLevel");
+    let vs_name = store.tokens().intern("look");
 
     let root = store.path("/Root");
 
@@ -36,7 +36,7 @@ fn build_and_compose(n_prims: usize, n_variants: usize) -> Stage {
 
     for prim_idx in 0..n_prims {
         let prim_name = alloc::format!("Mesh_{prim_idx:04}");
-        let prim_tok = store.tokens.intern(&prim_name);
+        let prim_tok = store.tokens().intern(&prim_name);
         root_children.push(prim_tok);
         let prim_path = store.path(&alloc::format!("/Root/{prim_name}"));
 
@@ -46,7 +46,7 @@ fn build_and_compose(n_prims: usize, n_variants: usize) -> Stage {
 
         for v in 0..n_variants {
             let branch_name = alloc::format!("v{v:03}");
-            let branch_tok = store.tokens.intern(&branch_name);
+            let branch_tok = store.tokens().intern(&branch_name);
 
             // Select the middle variant.
             if v == n_variants / 2 {
@@ -66,7 +66,7 @@ fn build_and_compose(n_prims: usize, n_variants: usize) -> Stage {
 
             // Each branch introduces a child prim.
             let child_name = alloc::format!("detail_{branch_name}");
-            let child_tok = store.tokens.intern(&child_name);
+            let child_tok = store.tokens().intern(&child_name);
             vspec.authored_children.push(child_tok);
 
             // Intern the child path so composition can find it.

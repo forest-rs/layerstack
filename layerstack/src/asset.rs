@@ -29,8 +29,8 @@
 //! let resolved = resolver.resolve(
 //!     "props/robot.usda",
 //!     Some(root_layer),
-//!     &mut store.tokens,
-//!     &mut store.paths,
+//!     store.tokens(),
+//!     store.paths(),
 //! )?;
 //!
 //! // 3. Insert the layer into your store (if it's new).

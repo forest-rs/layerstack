@@ -9,8 +9,8 @@
 //! Windows path separators explicitly; it does not change the source layer.
 
 use layerstack::{
-    AssetResolveError, AssetResolver, InMemoryStore, LayerId, LayerStore, PathInterner,
-    ResolvedAsset, TokenInterner,
+    AssetResolveError, AssetResolver, InMemoryStore, LayerId, PathInterner, ResolvedAsset,
+    TokenInterner,
 };
 use layerstack_usdz::localize::{LocalizationError, LocalizationTarget, localize_asset};
 use std::{collections::BTreeMap, error::Error, path::PathBuf, sync::Arc, time::Instant};
@@ -41,8 +41,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         let result = layerstack_usdc::read_usdc(
             &data,
             LayerId(1),
-            &store.tokens,
-            &store.paths,
+            store.tokens(),
+            store.paths(),
             &mut NoAssets,
         )?;
         assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
@@ -55,8 +55,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         let result = layerstack_usdz::read_usdz(
             &data,
             LayerId(1),
-            &store.tokens,
-            &store.paths,
+            store.tokens(),
+            store.paths(),
             &mut NoAssets,
         )?;
         assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
@@ -70,8 +70,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         let imported = layerstack_usda::read_usda(
             source,
             LayerId(1),
-            &store.tokens,
-            &store.paths,
+            store.tokens(),
+            store.paths(),
             &mut NoAssets,
         );
         assert!(

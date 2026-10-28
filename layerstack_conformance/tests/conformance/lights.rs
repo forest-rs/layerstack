@@ -45,7 +45,7 @@ fn discovery_matches_cpp_including_forwarding_halt_filters_and_instances() {
         assert_eq!(
             targets
                 .iter()
-                .map(|p| p.display(&store.paths, &store.tokens))
+                .map(|p| p.display(store.paths(), store.tokens()))
                 .collect::<Vec<_>>(),
             row.targets,
             "{} {}",
@@ -98,7 +98,7 @@ fn storing_invalidating_and_undoing_cache_matches_cpp() {
     assert_eq!(
         api.light_list()
             .iter()
-            .map(|p| p.display(&store.paths, &store.tokens))
+            .map(|p| p.display(store.paths(), store.tokens()))
             .collect::<Vec<_>>(),
         oracle.stored
     );
@@ -123,7 +123,7 @@ fn storing_invalidating_and_undoing_cache_matches_cpp() {
     assert_eq!(
         api.light_list()
             .iter()
-            .map(|p| p.display(&store.paths, &store.tokens))
+            .map(|p| p.display(store.paths(), store.tokens()))
             .collect::<Vec<_>>(),
         oracle.retained
     );
@@ -134,7 +134,7 @@ fn storing_invalidating_and_undoing_cache_matches_cpp() {
         layerstack_schemas::usd_lux::LightListApi::get(&scene, root)
             .unwrap()
             .light_list()[0]
-            .display(&store.paths, &store.tokens),
+            .display(store.paths(), store.tokens()),
         "/IgnoredGhost"
     );
 }

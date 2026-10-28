@@ -85,7 +85,7 @@ impl Stage {
         let mut storage = HostStorage::new();
         storage.supply(identifier, bytes);
         let mut store = InMemoryStore::default();
-        let schemas = layerstack_schemas::openusd(&store.tokens);
+        let schemas = layerstack_schemas::openusd(store.tokens());
         if session_layer {
             store.insert_layer(Layer::new(SESSION_LAYER));
         }
@@ -249,7 +249,7 @@ impl Stage {
                     Wire::text(error.code()),
                     Wire::Text(error.display(store).to_string()),
                     error.prim().map_or(Wire::Null, |prim| {
-                        Wire::Text(store.paths.display(prim, &store.tokens))
+                        Wire::Text(store.paths().display(prim, store.tokens()))
                     }),
                 ])
             })
@@ -313,7 +313,7 @@ impl Stage {
         let prim = self.existing_prim(path)?;
         Ok(prim
             .all_children()
-            .map(|child| store.paths.display(child.path(), &store.tokens))
+            .map(|child| store.paths().display(child.path(), store.tokens()))
             .collect())
     }
 
@@ -410,7 +410,7 @@ impl Stage {
             return Ok(Wire::Null);
         };
         Ok(
-            value::encode(&resolved.value, attribute.type_name(), &store.tokens)
+            value::encode(&resolved.value, attribute.type_name(), store.tokens())
                 .map_err(|error| error.at_path(path))?
                 .unwrap_or(Wire::Null),
         )
@@ -462,7 +462,7 @@ impl Stage {
             return Ok(Wire::Null);
         };
         let value = match &why.value {
-            Some(value) => value::encode(value, attribute.type_name(), &store.tokens)
+            Some(value) => value::encode(value, attribute.type_name(), store.tokens())
                 .map_err(|error| error.at_path(path))?
                 .unwrap_or(Wire::Null),
             None => Wire::Null,
@@ -508,7 +508,7 @@ impl Stage {
                 let offset = opinion.layer_offset();
                 Wire::List(vec![
                     Wire::UInt64(opinion.layer().0),
-                    Wire::Text(opinion.spec_path().display(&store.paths, &store.tokens)),
+                    Wire::Text(opinion.spec_path().display(store.paths(), store.tokens())),
                     opinion
                         .arc_kind()
                         .map_or(Wire::Null, |arc| Wire::text(arc_name(arc))),
@@ -576,26 +576,28 @@ impl Stage {
             ])
         };
         let encoded = match resolved.value {
-            ResolvedValue::Scalar(value) => value::encode(&value, None, &store.tokens),
+            ResolvedValue::Scalar(value) => value::encode(&value, None, store.tokens()),
             ResolvedValue::TokenList(items) => Ok(Some(texts(
                 "token[]",
                 items
                     .into_iter()
-                    .map(|token| store.tokens.resolve(token).to_string())
+                    .map(|token| store.tokens().resolve(token).to_string())
                     .collect(),
             ))),
             ResolvedValue::PathList(items) => Ok(Some(texts(
                 "path[]",
                 items
                     .into_iter()
-                    .map(|target| target.display(&store.paths, &store.tokens))
+                    .map(|target| target.display(store.paths(), store.tokens()))
                     .collect(),
             ))),
-            ResolvedValue::Dictionary(entries) => {
-                value::encode(&layerstack::Value::Dictionary(entries), None, &store.tokens)
-            }
+            ResolvedValue::Dictionary(entries) => value::encode(
+                &layerstack::Value::Dictionary(entries),
+                None,
+                store.tokens(),
+            ),
             ResolvedValue::ValueList(items) => {
-                value::encode(&layerstack::Value::Array(items), None, &store.tokens)
+                value::encode(&layerstack::Value::Array(items), None, store.tokens())
             }
             // A resolved form this build does not encode reads as opaque.
             _ => Ok(Some(value::opaque("unknown"))),
@@ -624,7 +626,7 @@ impl Stage {
         let targets = relationship
             .targets()
             .into_iter()
-            .map(|target| Wire::Text(target.display(&store.paths, &store.tokens)))
+            .map(|target| Wire::Text(target.display(store.paths(), store.tokens())))
             .collect();
         Ok(Wire::List(vec![
             Wire::Bool(relationship.is_custom()),
@@ -1275,7 +1277,7 @@ fn changes_record(changes: &Changes, store: &InMemoryStore) -> Wire {
     let paths = |ids: &[PathId]| {
         Wire::List(
             ids.iter()
-                .map(|&id| Wire::Text(store.paths.display(id, &store.tokens)))
+                .map(|&id| Wire::Text(store.paths().display(id, store.tokens())))
                 .collect(),
         )
     };

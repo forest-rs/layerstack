@@ -158,7 +158,7 @@ fn ints(values: &[u32]) -> Value {
 /// Resolves a prim's attribute default on the composed stage.
 fn attr(stage: &Stage, store: &mut InMemoryStore, prim: &str, name: &str) -> Value {
     let prim_id = store.path(prim);
-    let field = store.tokens.intern(name);
+    let field = store.tokens().intern(name);
     stage
         .view(store)
         .attribute(layerstack::PropertyPath::new(prim_id, field))
@@ -170,7 +170,7 @@ fn attr(stage: &Stage, store: &mut InMemoryStore, prim: &str, name: &str) -> Val
 /// Declared type name recorded for an attribute in the root layer.
 fn declared_type(store: &mut InMemoryStore, prim: &str, name: &str) -> String {
     let prim_id = store.path(prim);
-    let field = store.tokens.intern(name);
+    let field = store.tokens().intern(name);
     let layer = store.layer(LayerId(1)).expect("root layer");
     let entry = layer.prims()[&prim_id]
         .property(field)
@@ -187,14 +187,14 @@ fn declared_type(store: &mut InMemoryStore, prim: &str, name: &str) -> String {
 fn assert_stage_matches_scene(store: &mut InMemoryStore) {
     let stage = Stage::compose(store, LayerId(1), StageOptions::default());
 
-    let root_token = store.tokens.intern("Root");
+    let root_token = store.tokens().intern("Root");
     assert_eq!(
         store.layer(LayerId(1)).unwrap().default_prim(),
         Some(root_token),
         "defaultPrim"
     );
     let cube_id = store.path("/Root/Cube");
-    let mesh_type = store.tokens.intern("Mesh");
+    let mesh_type = store.tokens().intern("Mesh");
     assert_eq!(
         stage
             .prim(cube_id, store)
@@ -224,7 +224,7 @@ fn assert_stage_matches_scene(store: &mut InMemoryStore) {
         vec3f(&[[-0.5; 3], [0.5; 3]]),
         "extent"
     );
-    let none = store.tokens.intern("none");
+    let none = store.tokens().intern("none");
     assert_eq!(
         attr(&stage, store, "/Root/Cube", "subdivisionScheme"),
         Value::Token(none),
@@ -280,7 +280,7 @@ fn assert_stage_matches_scene(store: &mut InMemoryStore) {
         Value::Matrix4d(Box::new(core::array::from_fn(|i| rows[i / 4][i % 4]))),
         "xformOp:transform"
     );
-    let op = store.tokens.intern("xformOp:transform");
+    let op = store.tokens().intern("xformOp:transform");
     assert_eq!(
         attr(&stage, store, "/Root", "xformOpOrder"),
         Value::Array(vec![Value::Token(op)]),
@@ -368,8 +368,8 @@ fn usda_roundtrip_through_parser_and_stage() {
     let result = layerstack_usda::emit::emit(
         &parsed.layer,
         LayerId(1),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut NoAssets,
     );
     assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
@@ -386,8 +386,8 @@ fn usdc_roundtrip_through_reader_and_stage() {
     let result = layerstack_usdc::read_usdc(
         &bytes,
         LayerId(1),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut NoAssets,
     )
     .expect("the workspace reader reads the writer's output");
@@ -429,8 +429,8 @@ fn usdz_roundtrip_through_package_reader() {
         let result = layerstack_usdz::read_usdz(
             &bytes,
             LayerId(1),
-            &store.tokens,
-            &store.paths,
+            store.tokens(),
+            store.paths(),
             &mut NoAssets,
         )
         .expect("read_usdz verifies CRCs and layout");
@@ -449,8 +449,8 @@ fn load_usda(text: &str) -> InMemoryStore {
     let result = layerstack_usda::emit::emit(
         &parsed.layer,
         LayerId(1),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut NoAssets,
     );
     assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
@@ -513,7 +513,7 @@ fn quad_and_triangle_topology_round_trips() {
             .all(|&i| (i as usize) < read_points.len()),
         "indices in bounds"
     );
-    let none = store.tokens.intern("none");
+    let none = store.tokens().intern("none");
     assert_eq!(
         attr(&stage, &mut store, "/Root/Panel", "subdivisionScheme"),
         Value::Token(none),
@@ -808,8 +808,8 @@ fn moved_usdz_resolves_every_internal_asset() {
     let result = layerstack_usdz::read_usdz(
         &bytes,
         LayerId(1),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut NoAssets,
     )
     .unwrap();
@@ -847,8 +847,8 @@ fn load_usdz(bytes: &[u8]) -> InMemoryStore {
     let result = layerstack_usdz::read_usdz(
         bytes,
         LayerId(1),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut NoAssets,
     )
     .expect("valid package");
@@ -861,8 +861,8 @@ fn load_usdc(bytes: &[u8]) -> InMemoryStore {
     let result = layerstack_usdc::read_usdc(
         bytes,
         LayerId(1),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut NoAssets,
     )
     .expect("valid crate file");
@@ -873,11 +873,11 @@ fn load_usdc(bytes: &[u8]) -> InMemoryStore {
 /// Targets of a relationship or connection, as path strings.
 fn targets(stage: &Stage, store: &mut InMemoryStore, prim: &str, name: &str) -> Vec<String> {
     let prim_id = store.path(prim);
-    let field = store.tokens.intern(name);
+    let field = store.tokens().intern(name);
     target_list(stage, store, layerstack::PropertyPath::new(prim_id, field))
         .unwrap_or_else(|| panic!("{prim}.{name} has targets"))
         .into_iter()
-        .map(|t| t.display(&store.paths, &store.tokens))
+        .map(|t| t.display(store.paths(), store.tokens()))
         .collect()
 }
 
@@ -892,14 +892,14 @@ fn type_name(stage: &Stage, store: &mut InMemoryStore, prim: &str) -> String {
 
 fn token(stage: &Stage, store: &mut InMemoryStore, prim: &str, name: &str) -> String {
     match attr(stage, store, prim, name) {
-        Value::Token(t) => store.tokens.resolve(t).to_string(),
+        Value::Token(t) => store.tokens().resolve(t).to_string(),
         other => panic!("{prim}.{name}: expected a token, got {other:?}"),
     }
 }
 
 fn api_schemas(stage: &Stage, store: &mut InMemoryStore, prim: &str) -> Vec<String> {
     let prim_id = store.path(prim);
-    let field = store.tokens.intern("apiSchemas");
+    let field = store.tokens().intern("apiSchemas");
     let Some(layerstack::ResolvedValue::TokenList(applied)) = stage
         .prim(prim_id, store)
         .and_then(|prim| prim.metadata(field))
@@ -909,7 +909,7 @@ fn api_schemas(stage: &Stage, store: &mut InMemoryStore, prim: &str) -> Vec<Stri
     };
     applied
         .into_iter()
-        .map(|t| store.tokens.resolve(t).to_string())
+        .map(|t| store.tokens().resolve(t).to_string())
         .collect()
 }
 

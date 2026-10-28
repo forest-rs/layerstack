@@ -46,7 +46,7 @@ const ASSET_LAYER: LayerId = LayerId(2);
 
 /// A prim spec with one variant set, selecting its one variant.
 fn with_variant(store: &mut InMemoryStore, spec: PrimSpec, set: &str, variant: &str) -> PrimSpec {
-    let (set, variant) = (store.tokens.intern(set), store.tokens.intern(variant));
+    let (set, variant) = (store.tokens().intern(set), store.tokens().intern(variant));
     let mut spec = spec;
     let variants = Variants::from([(variant, VariantSpec::default())]);
     spec.rare_mut()
@@ -66,14 +66,14 @@ fn scene() -> InMemoryStore {
     let root = store.path("/");
     let asset_path = store.path("/Asset");
     let mut asset = Layer::new(ASSET_LAYER);
-    let asset_name = store.tokens.intern("Asset");
+    let asset_name = store.tokens().intern("Asset");
     asset.insert_prim(root, PrimSpec::default().with_children(vec![asset_name]));
     let asset_spec = with_variant(&mut store, PrimSpec::def(), "v", "x");
     asset.insert_prim(asset_path, asset_spec);
     store.insert_layer(asset);
 
     let names = ["Class", "Base", "Inst", "Spec", "Rock", "Light", "Ref"];
-    let children = names.map(|n| store.tokens.intern(n)).to_vec();
+    let children = names.map(|n| store.tokens().intern(n)).to_vec();
     let [class, base, inst, spec, rock, light, reference] =
         names.map(|n| store.path(&format!("/{n}")));
     let mut layer = Layer::new(ROOT);
@@ -104,8 +104,8 @@ fn compose(store: &mut InMemoryStore) -> Stage {
 /// The edit target of a case, as the oracle builds OpenUSD's.
 fn edit_target(store: &mut InMemoryStore, stage: &Stage, prim: PathId, arc: &str) -> EditTarget {
     if arc == "local_direct_variant" {
-        let variant =
-            SpecPath::parse("/Rock{look=a}", &store.tokens, &store.paths).expect("a variant path");
+        let variant = SpecPath::parse("/Rock{look=a}", store.tokens(), store.paths())
+            .expect("a variant path");
         return EditTarget::for_local_variant(ROOT, &variant);
     }
     let kind = match arc {
@@ -145,7 +145,7 @@ fn authored_targets(store: &InMemoryStore, layer: LayerId, path: &SpecPath) -> O
         targets
             .explicit?
             .iter()
-            .map(|t| t.display(&store.paths, &store.tokens))
+            .map(|t| t.display(store.paths(), store.tokens()))
             .collect(),
     )
 }
@@ -162,7 +162,7 @@ fn layers(store: &InMemoryStore) -> Vec<Layer> {
 fn the_scene_is_the_fixture() {
     let store = scene();
     let save = |id| {
-        layerstack_usda::save::save_usda(store.layer(id).unwrap(), &store.tokens, &store.paths)
+        layerstack_usda::save::save_usda(store.layer(id).unwrap(), store.tokens(), store.paths())
             .expect("saves")
     };
     for (name, text, fixture) in [
@@ -209,9 +209,9 @@ fn edit_targets_map_as_openusd_does() {
         for (path, expected) in case["spec_paths"].as_object().expect("spec paths") {
             let id = store.path(path);
             let got = target
-                .map_to_spec_path(id, &store.paths)
-                .map(|spec| spec.display(&store.paths, &store.tokens));
-            if target.maps_to_itself(id, &store.paths) != (got.as_deref() == Some(path.as_str())) {
+                .map_to_spec_path(id, store.paths())
+                .map(|spec| spec.display(store.paths(), store.tokens()));
+            if target.maps_to_itself(id, store.paths()) != (got.as_deref() == Some(path.as_str())) {
                 failures.push(format!(
                     "{name}: maps_to_itself({path}) disagrees with MapToSpecPath {got:?}"
                 ));
@@ -223,14 +223,14 @@ fn edit_targets_map_as_openusd_does() {
             }
         }
 
-        let look = store.tokens.intern("look");
+        let look = store.tokens().intern("look");
         let at = PropertyPath::new(prim, look);
         let spec = target
-            .map_property_to_spec_path(at, &store.paths)
+            .map_property_to_spec_path(at, store.paths())
             .expect("the prim maps");
         for (path, expected) in case["targets"].as_object().expect("targets") {
             let wanted =
-                TargetPath::parse(path, &store.tokens, &store.paths).expect("a target path");
+                TargetPath::parse(path, store.tokens(), store.paths()).expect("a target path");
             let before = layers(&store);
             let mut edit = Transaction::new();
             edit.set_targets(target.property(at), ListOp::explicit(vec![wanted]));
@@ -246,7 +246,7 @@ fn edit_targets_map_as_openusd_does() {
                         })
                         .unwrap_or_default()
                         .iter()
-                        .map(|t| t.display(&store.paths, &store.tokens))
+                        .map(|t| t.display(store.paths(), store.tokens()))
                         .collect();
                     let after = layers(&store);
                     let redo = undo.apply(&mut store).expect("undoes");
@@ -288,8 +288,8 @@ fn a_local_variant_node_is_the_local_variant_target() {
     for path in ["/Rock", "/Rock/Pebble", "/Light", "/Class/X"] {
         let path = store.path(path);
         assert_eq!(
-            node.map_to_spec_path(path, &store.paths),
-            local.map_to_spec_path(path, &store.paths)
+            node.map_to_spec_path(path, store.paths()),
+            local.map_to_spec_path(path, store.paths())
         );
     }
 }
@@ -302,7 +302,7 @@ fn authored_targets_compose_as_openusd_composes_them() {
     let oracle: Json = serde_json::from_str(ORACLE).expect("the oracle parses");
     let mut store = scene();
     let stage = compose(&mut store);
-    let look = store.tokens.intern("look");
+    let look = store.tokens().intern("look");
     let mut edit = Transaction::new();
     let mut prims = Vec::new();
     for (name, prim_text, arc) in [
@@ -317,7 +317,9 @@ fn authored_targets_compose_as_openusd_composes_them() {
             .expect("targets")
             .iter()
             .filter(|(_, outcome)| !outcome.is_null())
-            .map(|(path, _)| TargetPath::parse(path, &store.tokens, &store.paths).expect("a path"))
+            .map(|(path, _)| {
+                TargetPath::parse(path, store.tokens(), store.paths()).expect("a path")
+            })
             .collect();
         edit.set_targets(
             target.property(PropertyPath::new(prim, look)),
@@ -328,7 +330,7 @@ fn authored_targets_compose_as_openusd_composes_them() {
     let before = layers(&store);
     let undo = edit.apply(&mut store).expect("every accepted target maps");
     let text =
-        layerstack_usda::save::save_usda(store.layer(ROOT).unwrap(), &store.tokens, &store.paths)
+        layerstack_usda::save::save_usda(store.layer(ROOT).unwrap(), store.tokens(), store.paths())
             .expect("saves");
     if text != AUTHORED {
         let out = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("edit_target_maps.usda");
@@ -350,7 +352,7 @@ fn authored_targets_compose_as_openusd_composes_them() {
             })
             .unwrap_or_default()
             .iter()
-            .map(|t| t.display(&store.paths, &store.tokens))
+            .map(|t| t.display(store.paths(), store.tokens()))
             .collect();
         assert_eq!(json!(reads), oracle["composed"][text], "{text}.look");
     }

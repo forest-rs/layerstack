@@ -29,7 +29,13 @@ fn native_prototypes_preserve_occurrence_targets() {
             let mut instances: Vec<_> = prototype
                 .instances()
                 .iter()
-                .map(|p| store.paths.resolve(*p).display(&store.tokens).to_string())
+                .map(|p| {
+                    store
+                        .paths()
+                        .resolve(*p)
+                        .display(store.tokens())
+                        .to_string()
+                })
                 .collect();
             instances.sort();
             instances
@@ -51,7 +57,7 @@ fn native_prototypes_preserve_occurrence_targets() {
                 json!(
                     value
                         .iter()
-                        .map(|p| p.display(&store.paths, &store.tokens))
+                        .map(|p| p.display(store.paths(), store.tokens()))
                         .collect::<Vec<_>>()
                 ),
             );
@@ -158,7 +164,7 @@ fn incremental_clip_edits_rebuild_prototype_identity() {
     let original = Stage::compose(&mut store, root, StageOptions::default());
     let mut live = layerstack::LiveStage::compose(&mut store, root, StageOptions::default());
     assert_eq!(original.prototypes().count(), 2);
-    let clips = store.tokens.lookup("clips").unwrap();
+    let clips = store.tokens().lookup("clips").unwrap();
     for name in ["First", "Second"] {
         let prim = store.path(&format!("/{name}"));
         let layer = store.layer_mut(root).unwrap();

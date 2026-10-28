@@ -103,7 +103,7 @@ fn specs(store: &InMemoryStore, path: PathId) -> BTreeMap<String, Spec> {
         .map(|entry| {
             let spec = &entry.spec;
             let default = spec.default.as_ref().map(|value| match value {
-                Value::Token(token) => store.tokens.resolve(*token).to_string(),
+                Value::Token(token) => store.tokens().resolve(*token).to_string(),
                 Value::String(text) | Value::Asset(text) => text.to_string(),
                 other => panic!("unexpected default {other:?}"),
             });
@@ -117,7 +117,7 @@ fn specs(store: &InMemoryStore, path: PathId) -> BTreeMap<String, Spec> {
                 uniform: spec.variability == Variability::Uniform,
                 default,
             };
-            (store.tokens.resolve(entry.name).to_string(), rendered)
+            (store.tokens().resolve(entry.name).to_string(), rendered)
         })
         .collect()
 }

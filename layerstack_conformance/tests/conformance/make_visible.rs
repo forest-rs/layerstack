@@ -46,7 +46,7 @@ fn load() -> LoadedStage {
 
 fn live_of(loaded: &mut LoadedStage) -> LiveStage {
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&loaded.store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(loaded.store.tokens()))),
         ..StageOptions::default()
     };
     LiveStage::compose(&mut loaded.store, loaded.root_layer, options)
@@ -57,8 +57,8 @@ fn text(loaded: &LoadedStage) -> String {
     let store = &loaded.store;
     layerstack_usda::save::save_usda(
         store.layer(loaded.root_layer).unwrap(),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
     )
     .expect("saves")
 }

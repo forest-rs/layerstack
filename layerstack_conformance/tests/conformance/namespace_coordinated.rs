@@ -20,8 +20,8 @@ fn stage_snapshot(stage: &Stage, store: &InMemoryStore) -> Json {
     let mut expressions = BTreeMap::new();
     let mut targets = BTreeMap::new();
     let mut connections = BTreeMap::new();
-    for prim in stage.traverse(store.paths.lookup(&layerstack::Path::root()).unwrap()) {
-        let path = store.paths.display(prim, &store.tokens);
+    for prim in stage.traverse(store.paths().lookup(&layerstack::Path::root()).unwrap()) {
+        let path = store.paths().display(prim, store.tokens());
         if path == "/" {
             continue;
         }
@@ -34,7 +34,7 @@ fn stage_snapshot(stage: &Stage, store: &InMemoryStore) -> Json {
             let path = property.to_string();
             let display = |list: Vec<TargetPath>| -> Vec<_> {
                 list.into_iter()
-                    .map(|p| p.display(&store.paths, &store.tokens))
+                    .map(|p| p.display(store.paths(), store.tokens()))
                     .collect()
             };
             if let Some(relationship) = property.as_relationship() {
@@ -72,7 +72,7 @@ fn layer_snapshot(store: &InMemoryStore, layer: LayerId) -> Json {
     let mut specs: Vec<_> = layer
         .prims()
         .keys()
-        .map(|p| store.paths.display(*p, &store.tokens))
+        .map(|p| store.paths().display(*p, store.tokens()))
         .collect();
     specs.push("/".into());
     specs.sort();
@@ -82,9 +82,9 @@ fn layer_snapshot(store: &InMemoryStore, layer: LayerId) -> Json {
         .iter()
         .map(|r| {
             vec![
-                store.paths.display(r.source, &store.tokens),
+                store.paths().display(r.source, store.tokens()),
                 r.target
-                    .map_or(String::new(), |p| store.paths.display(p, &store.tokens)),
+                    .map_or(String::new(), |p| store.paths().display(p, store.tokens())),
             ]
         })
         .collect();
@@ -124,14 +124,14 @@ fn coordinated_namespace_matches_native_usd_and_restores_every_layer() {
             .collect();
         let from = TargetPath::parse(
             evidence["source"].as_str().unwrap(),
-            &loaded.store.tokens,
-            &loaded.store.paths,
+            loaded.store.tokens(),
+            loaded.store.paths(),
         )
         .unwrap();
         let to = TargetPath::parse(
             evidence["destination"].as_str().unwrap(),
-            &loaded.store.tokens,
-            &loaded.store.paths,
+            loaded.store.tokens(),
+            loaded.store.paths(),
         )
         .unwrap();
         let dependent_refs: Vec<_> = dependents.iter().map(LiveStage::stage).collect();

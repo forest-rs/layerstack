@@ -58,13 +58,13 @@ fn rule_name(rule: PayloadRule) -> &'static str {
 fn state(rules: &PayloadLoadRules, paths: &[String], store: &InMemoryStore) -> State {
     let mut literal: Vec<(String, String)> = rules
         .rules()
-        .map(|(path, rule)| (path.display(&store.tokens), rule_name(rule).to_owned()))
+        .map(|(path, rule)| (path.display(store.tokens()), rule_name(rule).to_owned()))
         .collect();
     literal.sort();
     let effective = paths
         .iter()
         .map(|path| {
-            let parsed = Path::parse_absolute(path, &store.tokens).unwrap();
+            let parsed = Path::parse_absolute(path, store.tokens()).unwrap();
             (
                 path.clone(),
                 rule_name(rules.effective_rule(&parsed)).to_owned(),
@@ -88,7 +88,7 @@ fn load_rule_edits_and_minimizing_match_openusd() {
             _ => PayloadLoadRules::load_none(),
         };
         for (at, step) in case.steps.iter().enumerate() {
-            let path = Path::parse_absolute(&step.op[1], &store.tokens).unwrap();
+            let path = Path::parse_absolute(&step.op[1], store.tokens()).unwrap();
             match step.op[0].as_str() {
                 "load_with_descendants" => rules.load_with_descendants(path),
                 "load_without_descendants" => rules.load_without_descendants(path),

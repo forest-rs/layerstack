@@ -81,7 +81,7 @@ fn authored_extents_win_and_dimension_edits_invalidate_retained_bounds() {
             .max,
         [2.; 3]
     );
-    let radius = store.tokens.intern("inputs:radius");
+    let radius = store.tokens().intern("inputs:radius");
     let mut edit = Transaction::new();
     edit.set_default(
         EditTarget::for_layer(LayerId(1)).property(PropertyPath::new(path, radius)),

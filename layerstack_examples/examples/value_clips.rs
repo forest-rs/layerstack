@@ -14,11 +14,11 @@ use layerstack::{
 fn main() {
     let mut store = InMemoryStore::default();
     let model = store.path("/Model");
-    let height = store.tokens.intern("height");
+    let height = store.tokens().intern("height");
     let mut clip = Layer::new(LayerId(10));
     for (name, value) in [("startTimeCode", 0.), ("endTimeCode", 10.)] {
         clip.metadata_fields_mut().push(layerstack::FieldEntry {
-            name: store.tokens.intern(name),
+            name: store.tokens().intern(name),
             value: Value::Double(value).into(),
         });
     }
@@ -50,8 +50,8 @@ fn main() {
             offset: LayerOffset::IDENTITY,
         }],
         &options,
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
     )
     .expect("valid clip sequence");
     store.insert_layer(bundle.root);

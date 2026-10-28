@@ -88,7 +88,7 @@ fn layer_name(loaded: &LoadedStage, layer: layerstack::LayerId) -> String {
 }
 
 fn display(loaded: &LoadedStage, site: &SpecPath) -> String {
-    site.display(&loaded.store.paths, &loaded.store.tokens)
+    site.display(loaded.store.paths(), loaded.store.tokens())
 }
 
 /// `(arc, site)` pairs from the graph's root down to `node`.

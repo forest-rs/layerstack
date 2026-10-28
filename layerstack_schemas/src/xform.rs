@@ -891,7 +891,7 @@ impl PreparedCache {
 /// store.insert_layer(Layer::new(layer));
 /// let parent = store.path("/World");
 /// let child = store.path("/World/Child");
-/// let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
+/// let schemas = Arc::new(layerstack_schemas::openusd(store.tokens()));
 /// let mut live = LiveStage::compose(&mut store, layer,
 ///     StageOptions { schemas: Some(schemas), ..Default::default() });
 /// let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(layer));
@@ -1554,9 +1554,9 @@ mod cache_tests {
         let mut store = InMemoryStore::default();
         let root = store.path("/Root");
         let child = store.path("/Root/Child");
-        let xform = store.tokens.intern("Xform");
-        let order = store.tokens.intern("xformOpOrder");
-        let reset = store.tokens.intern("!resetXformStack!");
+        let xform = store.tokens().intern("Xform");
+        let order = store.tokens().intern("xformOpOrder");
+        let reset = store.tokens().intern("!resetXformStack!");
         let mut layer = Layer::new(LayerId(1));
         layer.insert_prim(root, PrimSpec::def().with_type_name(xform));
         layer.insert_prim(
@@ -1568,7 +1568,7 @@ mod cache_tests {
         );
         store.insert_layer(layer);
         let options = StageOptions {
-            schemas: Some(Arc::new(crate::openusd(&store.tokens))),
+            schemas: Some(Arc::new(crate::openusd(store.tokens()))),
             ..StageOptions::default()
         };
         let live = LiveStage::compose(&mut store, LayerId(1), options);
@@ -1593,10 +1593,10 @@ mod cache_tests {
             "/Other",
         ]
         .map(|name| store.path(name));
-        let xform = store.tokens.intern("Xform");
-        let order = store.tokens.intern("xformOpOrder");
-        let translate = store.tokens.intern("xformOp:translate");
-        let reset = store.tokens.intern(RESET_XFORM_STACK);
+        let xform = store.tokens().intern("Xform");
+        let order = store.tokens().intern("xformOpOrder");
+        let translate = store.tokens().intern("xformOp:translate");
+        let reset = store.tokens().intern(RESET_XFORM_STACK);
         let mut layer = Layer::new(LayerId(1));
         for (i, &path) in paths.iter().enumerate() {
             let ops = if i == 2 {
@@ -1630,7 +1630,7 @@ mod cache_tests {
         }
         store.insert_layer(layer);
         let options = StageOptions {
-            schemas: Some(Arc::new(crate::openusd(&store.tokens))),
+            schemas: Some(Arc::new(crate::openusd(store.tokens()))),
             ..StageOptions::default()
         };
         let live = LiveStage::compose(&mut store, LayerId(1), options);
@@ -1662,8 +1662,8 @@ mod cache_tests {
         assert!(!cache.entries.contains_key(&reset));
         let restored = live.apply(&mut store, &removed.inverse).unwrap();
         cache.apply_changes(&Scene::new(live.stage(), &store), &restored.changes);
-        let translate = store.tokens.intern("xformOp:translate");
-        let order = store.tokens.intern("xformOpOrder");
+        let translate = store.tokens().intern("xformOp:translate");
+        let order = store.tokens().intern("xformOpOrder");
         for round in 0..6 {
             let mut edit = Transaction::new();
             edit.set_default(
@@ -1676,7 +1676,7 @@ mod cache_tests {
                     alloc::vec![Value::Token(translate)]
                 } else {
                     alloc::vec![
-                        Value::Token(store.tokens.intern(RESET_XFORM_STACK)),
+                        Value::Token(store.tokens().intern(RESET_XFORM_STACK)),
                         Value::Token(translate)
                     ]
                 }),
@@ -1717,7 +1717,7 @@ mod cache_tests {
         let held_leaf = world(&cache, leaf);
         let held_other = world(&cache, other);
         let initial = cache.stats();
-        let translate = store.tokens.intern("xformOp:translate");
+        let translate = store.tokens().intern("xformOp:translate");
         let mut tx = Transaction::new();
         tx.set_default(
             EditTarget::for_layer(LayerId(1)).property(PropertyPath::new(root, translate)),
@@ -1744,7 +1744,7 @@ mod cache_tests {
 
         // Turning off this boundary invalidates its world subtree while keeping
         // both the leaf's local transform and unrelated cached branches.
-        let order = store.tokens.intern("xformOpOrder");
+        let order = store.tokens().intern("xformOpOrder");
         let mut tx = Transaction::new();
         tx.set_default(
             EditTarget::for_layer(LayerId(1)).property(PropertyPath::new(reset, order)),
@@ -1822,9 +1822,9 @@ mod cache_tests {
 
         let (mut store, mut live, paths) = transform_scene();
         let mut cache = XformCache::new(Time::Default);
-        let translate = store.tokens.intern("xformOp:translate");
-        let order = store.tokens.intern("xformOpOrder");
-        let reset = store.tokens.intern(RESET_XFORM_STACK);
+        let translate = store.tokens().intern("xformOp:translate");
+        let order = store.tokens().intern("xformOpOrder");
+        let reset = store.tokens().intern(RESET_XFORM_STACK);
         // Several notifications before querying, including an ancestor and a
         // descendant, reset toggles, sparse reads, and interleaved local reads.
         for round in 0..60 {
@@ -2042,7 +2042,7 @@ mod cache_tests {
     #[test]
     fn time_changes_retain_static_locals_and_follow_animated_ancestors() {
         let (mut store, mut live, [root, normal, reset, leaf, other]) = transform_scene();
-        let translate = store.tokens.intern("xformOp:translate");
+        let translate = store.tokens().intern("xformOp:translate");
         let address =
             EditTarget::for_layer(LayerId(1)).property(PropertyPath::new(root, translate));
         let mut tx = Transaction::new();
@@ -2126,7 +2126,7 @@ mod cache_tests {
     #[test]
     fn equal_recipes_share_storage_and_retire_independently_across_clones() {
         let (mut store, mut live, paths) = transform_scene();
-        let translate = store.tokens.intern("xformOp:translate");
+        let translate = store.tokens().intern("xformOp:translate");
         let mut tx = Transaction::new();
         for path in paths {
             let address =
@@ -2169,8 +2169,8 @@ mod cache_tests {
     #[test]
     fn prepared_recipes_follow_source_edits_and_retirement() {
         let (mut store, mut live, [root, normal, _, _, other]) = transform_scene();
-        let translate = store.tokens.intern("xformOp:translate");
-        let order = store.tokens.intern("xformOpOrder");
+        let translate = store.tokens().intern("xformOp:translate");
+        let order = store.tokens().intern("xformOpOrder");
         let target = EditTarget::for_layer(LayerId(1));
         let mut tx = Transaction::new();
         tx.set_time_sample(
@@ -2200,7 +2200,7 @@ mod cache_tests {
             target.property(PropertyPath::new(root, order)),
             Value::Array(alloc::vec![
                 Value::Token(translate),
-                Value::Token(store.tokens.intern("!invert!xformOp:translate"))
+                Value::Token(store.tokens().intern("!invert!xformOp:translate"))
             ]),
         );
         let edited = live.apply(&mut store, &edit).unwrap();

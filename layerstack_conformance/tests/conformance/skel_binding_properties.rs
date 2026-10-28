@@ -44,7 +44,7 @@ fn check(
         return;
     };
     let got = got.unwrap_or_else(|| panic!("{geometry} {label}: none"));
-    let text = got.path.display(&store.paths, &store.tokens);
+    let text = got.path.display(store.paths(), store.tokens());
     match want.strip_prefix("/__Prototype_1/") {
         Some(relative) => {
             // The instance root is the geometry's second-level ancestor.
@@ -61,7 +61,7 @@ fn check(
             let names: Vec<&str> = location
                 .relative_path
                 .iter()
-                .map(|token| store.tokens.resolve(*token))
+                .map(|token| store.tokens().resolve(*token))
                 .collect();
             assert_eq!(names.join("/"), prim, "{geometry} {label}");
         }
@@ -91,7 +91,10 @@ fn binding_properties_match_cpp() {
         .iter()
         .filter_map(|binding| {
             let query = binding.skinning.as_ref()?;
-            Some((store.paths.display(binding.geometry, &store.tokens), query))
+            Some((
+                store.paths().display(binding.geometry, store.tokens()),
+                query,
+            ))
         })
         .collect();
     assert_eq!(queries.len(), oracle.targets.len());

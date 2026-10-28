@@ -56,8 +56,8 @@ fn main() {
         let imported = layerstack_usda::read_usda(
             &source,
             LayerId(1),
-            &store.tokens,
-            &store.paths,
+            store.tokens(),
+            store.paths(),
             &mut NoAssets,
         );
         assert!(
@@ -68,7 +68,7 @@ fn main() {
         );
         store.insert_layer(imported.emitted.layer);
         let options = StageOptions {
-            schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
+            schemas: Some(Arc::new(layerstack_schemas::openusd(store.tokens()))),
             ..StageOptions::default()
         };
         let mut live = LiveStage::compose(&mut store, LayerId(1), options);

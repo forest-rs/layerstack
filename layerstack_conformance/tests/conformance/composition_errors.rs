@@ -139,9 +139,9 @@ fn compose(composition: &Composition) -> (LoadedStage, Stage) {
         .map(|(set, names)| {
             let names: Vec<_> = names
                 .iter()
-                .map(|n| loaded.store.tokens.intern(n))
+                .map(|n| loaded.store.tokens().intern(n))
                 .collect();
-            (loaded.store.tokens.intern(set), names)
+            (loaded.store.tokens().intern(set), names)
         })
         .collect();
     let stage = Stage::compose(
@@ -188,7 +188,7 @@ fn errors_match_openusd() {
             .iter()
             .map(|error| {
                 let prim = error.prim().map_or_else(String::new, |prim| {
-                    loaded.store.paths.display(prim, &loaded.store.tokens)
+                    loaded.store.paths().display(prim, loaded.store.tokens())
                 });
                 (error_kind(error).to_string(), prim)
             })
@@ -211,7 +211,7 @@ fn stacks_targets_and_values_match_openusd() {
         let mut composed: Vec<String> = stage
             .traverse(pseudo_root)
             .filter(|prim| *prim != pseudo_root)
-            .map(|prim| loaded.store.paths.display(prim, &loaded.store.tokens))
+            .map(|prim| loaded.store.paths().display(prim, loaded.store.tokens()))
             .collect();
         composed.sort();
         let mut expected: Vec<&str> = composition.prims.iter().map(|p| p.path.as_str()).collect();
@@ -228,7 +228,7 @@ fn stacks_targets_and_values_match_openusd() {
             let site = |loaded: &LoadedStage, layer, spec: &layerstack::SpecPath| {
                 (
                     layer_name(loaded, layer),
-                    spec.display(&loaded.store.paths, &loaded.store.tokens),
+                    spec.display(loaded.store.paths(), loaded.store.tokens()),
                 )
             };
             let stack: Vec<(String, String)> = stage
@@ -245,7 +245,7 @@ fn stacks_targets_and_values_match_openusd() {
                 ));
             }
             for property in &prim.properties {
-                let name = loaded.store.tokens.intern(&property.name);
+                let name = loaded.store.tokens().intern(&property.name);
                 let path = PropertyPath::new(id, name);
                 let label = format!("{}.{}", prim.path, property.name);
                 let stack: Vec<(String, String)> = stage
@@ -285,7 +285,7 @@ fn stacks_targets_and_values_match_openusd() {
                     .unwrap_or_default()
                     .into_iter()
                     .map(|target: TargetPath| {
-                        target.display(&loaded.store.paths, &loaded.store.tokens)
+                        target.display(loaded.store.paths(), loaded.store.tokens())
                     })
                     .collect();
                 if targets != property.targets {
@@ -335,12 +335,12 @@ fn layers_openusd_rejects_are_rejected() {
 fn selection_snapshot(loaded: &LoadedStage, stage: &Stage) -> Vec<String> {
     let pseudo_root = loaded
         .store
-        .paths
+        .paths()
         .lookup(&layerstack::Path::root())
         .expect("pseudo-root");
     let attributes: Vec<TokenId> = ["scale", "hue"]
         .into_iter()
-        .filter_map(|name| loaded.store.tokens.lookup(name))
+        .filter_map(|name| loaded.store.tokens().lookup(name))
         .collect();
     stage
         .traverse(pseudo_root)
@@ -356,7 +356,7 @@ fn selection_snapshot(loaded: &LoadedStage, stage: &Stage) -> Vec<String> {
                         layer_name(loaded, key.key.layer_id),
                         key.key
                             .spec_path
-                            .display(&loaded.store.paths, &loaded.store.tokens),
+                            .display(loaded.store.paths(), loaded.store.tokens()),
                     )
                 })
                 .collect();
@@ -372,7 +372,7 @@ fn selection_snapshot(loaded: &LoadedStage, stage: &Stage) -> Vec<String> {
                 .collect();
             format!(
                 "{} {stack:?} {values:?}",
-                loaded.store.paths.display(prim, &loaded.store.tokens)
+                loaded.store.paths().display(prim, loaded.store.tokens())
             )
         })
         .collect()
@@ -428,7 +428,7 @@ fn selection_edits_recompose_like_a_full_compose() {
         loaded.store.path("/Hull"),
         loaded.store.path("/Deck"),
     );
-    let tokens = &mut loaded.store.tokens;
+    let tokens = &mut loaded.store.tokens();
     let (shape, size) = (tokens.intern("shape"), tokens.intern("size"));
     let (cube, large, scale) = (
         tokens.intern("cube"),

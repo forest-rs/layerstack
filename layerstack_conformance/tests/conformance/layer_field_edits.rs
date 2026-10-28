@@ -117,8 +117,8 @@ fn transaction(loaded: &mut LoadedStage, step: &Json) -> Transaction {
 fn snapshot(loaded: &LoadedStage, stage: &Stage) -> Json {
     let store = &loaded.store;
     let layer = &store.layer(loaded.root_layer).unwrap();
-    let path = |p: layerstack::PathId| store.paths.display(p, &store.tokens);
-    let root = store.paths.lookup(&Path::root()).unwrap();
+    let path = |p: layerstack::PathId| store.paths().display(p, store.tokens());
+    let root = store.paths().lookup(&Path::root()).unwrap();
     json!({
         "sublayers": layer.sublayers().iter().map(|s| s.asset.clone().unwrap_or_default()).collect::<Vec<_>>(),
         "offsets": layer.sublayers().iter().map(|s| json!([s.offset.offset, s.offset.scale])).collect::<Vec<_>>(),

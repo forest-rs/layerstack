@@ -106,7 +106,7 @@ fn skel_bindings_match_openusd_and_report_problems() {
     let oracle: Oracle = serde_json::from_str(ORACLE).unwrap();
     let (store, live) = support::scene(SCENE);
     let scene = Scene::new(live.stage(), &store);
-    let text = |path| store.paths.display(path, &store.tokens).to_string();
+    let text = |path| store.paths().display(path, store.tokens()).to_string();
     let mut shapes = BlendShapeCache::new(Time::Default);
     for (root, expected) in &oracle.roots {
         let found = SkelRoot::new(&scene, store.path(root)).unwrap().bindings();
@@ -148,7 +148,7 @@ fn skel_bindings_match_openusd_and_report_problems() {
                 .map(|problem| {
                     let property = problem
                         .property
-                        .map(|p| p.display(&store.paths, &store.tokens).to_string());
+                        .map(|p| p.display(store.paths(), store.tokens()).to_string());
                     match &problem.reason {
                         SkelProblemReason::InvalidInbetweenWeight(weight) => {
                             format!("inbetween {weight} {property:?}")

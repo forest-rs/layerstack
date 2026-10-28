@@ -150,7 +150,8 @@ fn registry(names: &Names, alternate: bool, tokens: &TokenInterner) -> SchemaReg
 fn check_stage(label: &str, store: &mut InMemoryStore, root: LayerId, tally: &mut Tally) {
     let names = names(store);
     let mut compose = |schemas: Option<bool>| {
-        let schemas = schemas.map(|alternate| Arc::new(registry(&names, alternate, &store.tokens)));
+        let schemas =
+            schemas.map(|alternate| Arc::new(registry(&names, alternate, store.tokens())));
         let options = StageOptions {
             schemas,
             ..StageOptions::default()
@@ -162,7 +163,7 @@ fn check_stage(label: &str, store: &mut InMemoryStore, root: LayerId, tally: &mu
     let alternate = compose(Some(true));
     let store = &*store;
     let root = store
-        .paths
+        .paths()
         .lookup(&layerstack::Path::root())
         .expect("root path");
     let prims: Vec<PathId> = stage.traverse(root).collect();
@@ -172,21 +173,27 @@ fn check_stage(label: &str, store: &mut InMemoryStore, root: LayerId, tally: &mu
         alternate.view(store),
     );
     for prim in prims {
-        let prim_label = || format!("{label} {}", store.paths.display(prim, &store.tokens));
+        let prim_label = || format!("{label} {}", store.paths().display(prim, store.tokens()));
         let handle = plain.prim(prim).expect("traversed");
         for &field in &names.fields {
             if handle.metadata_opinions(field).is_empty() {
                 continue;
             }
             tally.check(
-                || format!("{} metadata {}", prim_label(), store.tokens.resolve(field)),
+                || {
+                    format!(
+                        "{} metadata {}",
+                        prim_label(),
+                        store.tokens().resolve(field)
+                    )
+                },
                 handle.explain_metadata(field).and_then(|e| e.value),
                 handle.metadata(field).map(|r| r.value),
             );
         }
         for &property in names.properties.keys() {
             let path = PropertyPath::new(prim, property);
-            let name = || format!("{}.{}", prim_label(), store.tokens.resolve(property));
+            let name = || format!("{}.{}", prim_label(), store.tokens().resolve(property));
             // The stage without schemas: what opinions author, explained
             // and read alike.
             let bare = plain.attribute(path);
@@ -442,8 +449,8 @@ fn explanations_resolve_what_resolution_resolves() {
         let layer = emit_layer(
             &case.layers["root.usda"],
             LayerId(1),
-            &store.tokens,
-            &store.paths,
+            store.tokens(),
+            store.paths(),
             &mut resolver,
         );
         store.insert_layer(layer);

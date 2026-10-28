@@ -49,11 +49,11 @@ fn record(store: &layerstack::InMemoryStore, binding: &CoordSysBinding) -> Bindi
         name: format!("{}:binding", binding.name),
         relationship: binding
             .relationship
-            .display(&store.paths, &store.tokens)
+            .display(store.paths(), store.tokens())
             .to_string(),
         target: binding
             .target
-            .display(&store.paths, &store.tokens)
+            .display(store.paths(), store.tokens())
             .to_string(),
     }
 }

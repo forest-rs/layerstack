@@ -19,11 +19,11 @@ fn fixture() -> (InMemoryStore, Layer, Layer, ClipBundleOptions) {
     let store = InMemoryStore::default();
     let model = store.path("/Model");
     let root = store.path("/");
-    let model_name = store.tokens.intern("Model");
-    let animated = store.tokens.intern("animated");
-    let static_name = store.tokens.intern("static");
-    let start = store.tokens.intern("startTimeCode");
-    let end = store.tokens.intern("endTimeCode");
+    let model_name = store.tokens().intern("Model");
+    let animated = store.tokens().intern("animated");
+    let static_name = store.tokens().intern("static");
+    let start = store.tokens().intern("startTimeCode");
+    let end = store.tokens().intern("endTimeCode");
     let layer = |id, begin, finish, initial, final_value, default, static_value| {
         let mut layer = Layer::new(LayerId(id));
         *layer.metadata_fields_mut() = vec![
@@ -40,7 +40,7 @@ fn fixture() -> (InMemoryStore, Layer, Layer, ClipBundleOptions) {
         layer.insert_prim(
             model,
             PrimSpec::def()
-                .with_type_name(store.tokens.intern("Xform"))
+                .with_type_name(store.tokens().intern("Xform"))
                 .with_property(
                     animated,
                     PropertySpec::typed_attribute(PropertyType::parse("float").unwrap())
@@ -104,7 +104,7 @@ fn emitted_offset_bundle_plays_in_openusd() {
             },
         },
     ];
-    let bundle = stitch_clip_sequence(&sources, &options, &store.tokens, &store.paths).unwrap();
+    let bundle = stitch_clip_sequence(&sources, &options, store.tokens(), store.paths()).unwrap();
     let dir =
         std::env::temp_dir().join(format!("layerstack-clip-authoring-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
@@ -115,7 +115,7 @@ fn emitted_offset_bundle_plays_in_openusd() {
         ("root.topology.usda", &bundle.topology),
         ("root.manifest.usda", &bundle.manifest),
     ] {
-        let text = layerstack_usda::save::save_usda(layer, &store.tokens, &store.paths)
+        let text = layerstack_usda::save::save_usda(layer, store.tokens(), store.paths())
             .unwrap_or_else(|error| panic!("cannot serialize {name}: {error:?}"));
         std::fs::write(dir.join(name), text).unwrap();
     }
@@ -231,7 +231,7 @@ fn incompatible_overlapping_clip_maps_return_no_bundle() {
         },
     ];
     assert_eq!(
-        stitch_clip_sequence(&sources, &options, &store.tokens, &store.paths).unwrap_err(),
+        stitch_clip_sequence(&sources, &options, store.tokens(), store.paths()).unwrap_err(),
         ClipAuthoringError::ConflictingTimeMapping
     );
     // Inputs remain detached and unchanged by rejection.

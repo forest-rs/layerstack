@@ -40,7 +40,7 @@ pub(crate) fn layered_scene(weak: &str) -> (InMemoryStore, LiveStage) {
         .push(layerstack::SublayerEntry::new(LayerId(2)));
     store.insert_layer(root);
     let (mut store, _) = scene_in(store, weak, LayerId(2));
-    let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(store.tokens()));
     let live = LiveStage::compose(
         &mut store,
         LayerId(1),
@@ -57,8 +57,8 @@ fn scene_in(mut store: InMemoryStore, text: &str, id: LayerId) -> (InMemoryStore
     let emitted = layerstack_usda::emit::emit(
         &parsed.layer,
         id,
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut NoAssets,
     );
     assert!(
@@ -68,7 +68,7 @@ fn scene_in(mut store: InMemoryStore, text: &str, id: LayerId) -> (InMemoryStore
         emitted.diagnostics
     );
     store.insert_layer(emitted.layer);
-    let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(store.tokens()));
     let live = LiveStage::compose(
         &mut store,
         id,

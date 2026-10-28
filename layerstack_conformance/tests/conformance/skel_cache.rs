@@ -64,7 +64,7 @@ fn compare(
     }
 }
 fn default_edit(store: &mut InMemoryStore, path: PathId, name: &str, value: Value) -> Transaction {
-    let token = store.tokens.intern(name);
+    let token = store.tokens().intern(name);
     let mut t = Transaction::new();
     t.set_default(
         EditTarget::for_layer(LayerId(1)).property(PropertyPath::new(path, token)),
@@ -260,9 +260,9 @@ fn precise_edits_preserve_independent_inputs_and_undo_restores_results() {
     }
     // Unrelated property inventory does not invalidate geometry.
     let mut transaction = Transaction::new();
-    let token = store.tokens.intern("purpose");
+    let token = store.tokens().intern("purpose");
     let at = EditTarget::for_layer(LayerId(1)).property(PropertyPath::new(mesh, token));
-    transaction.set_default(at, Value::Token(store.tokens.intern("render")));
+    transaction.set_default(at, Value::Token(store.tokens().intern("render")));
     let applied = live.apply(&mut store, &transaction).unwrap();
     cache.reset_stats();
     cache.apply_changes(&Scene::new(live.stage(), &store), &applied.changes);
@@ -287,7 +287,7 @@ fn forwarded_animation_alias_edits_and_removals_refresh_definitions() {
         .unwrap()
         .unwrap()
         .to_vec();
-    let token = store.tokens.intern("target");
+    let token = store.tokens().intern("target");
     let at = EditTarget::for_layer(LayerId(1)).property(PropertyPath::new(alias, token));
     let mut transaction = Transaction::new();
     transaction.set_targets(at, ListOp::explicit(vec![]));
@@ -334,7 +334,7 @@ fn influence_errors_recover_and_unbound_queries_retry() {
     let undone = live.apply(&mut store, &bad.inverse).unwrap();
     cache.apply_changes(&Scene::new(live.stage(), &store), &undone.changes);
     compare(&mut cache, &store, &live, &[path], false);
-    let token = store.tokens.intern("skel:skeleton");
+    let token = store.tokens().intern("skel:skeleton");
     let at = EditTarget::for_layer(LayerId(1)).property(PropertyPath::new(path, token));
     let mut t = Transaction::new();
     t.set_targets(at, ListOp::explicit(Vec::<TargetPath>::new()));
@@ -355,7 +355,7 @@ fn normal_subsets_ignore_other_singular_joints_and_preserve_error_indices() {
     let path = store.path("/Rig/Rigid");
     let mut cache = SkelCache::new(Time::Default);
     compare(&mut cache, &store, &live, &[path], true);
-    let b = store.tokens.intern("b");
+    let b = store.tokens().intern("b");
     let transaction = default_edit(
         &mut store,
         path,

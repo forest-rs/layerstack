@@ -60,7 +60,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let light = store.path("/Key");
     let root = store.path("/");
     let dome = store.path("/Environment");
-    let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(store.tokens()));
     let mut live = LiveStage::compose(
         &mut store,
         LayerId(1),
@@ -130,7 +130,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     println!(
         "{}: {:?}",
-        store.paths.display(light, &store.tokens),
+        store.paths().display(light, store.tokens()),
         staging
     );
     let targets = [TargetPath::Prim(light), TargetPath::Prim(dome)];

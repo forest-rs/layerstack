@@ -36,7 +36,7 @@ impl AssetResolver for Locations {
 fn weak_layer_and_retimed_assets_keep_their_actual_anchor() {
     let (mut store, _) = support::scene("#usda 1.0\ndef DomeLight \"Dome\" {}\n");
     let path = store.path("/Dome");
-    let name = store.tokens.intern("inputs:texture:file");
+    let name = store.tokens().intern("inputs:texture:file");
     let mut weak = Layer::new(LayerId(2));
     weak.insert_prim(
         path,
@@ -63,7 +63,7 @@ fn weak_layer_and_retimed_assets_keep_their_actual_anchor() {
                 scale: 2.,
             },
         ));
-    let schemas = std::sync::Arc::new(layerstack_schemas::openusd(&store.tokens));
+    let schemas = std::sync::Arc::new(layerstack_schemas::openusd(store.tokens()));
     let live = LiveStage::compose(
         &mut store,
         LayerId(1),
@@ -122,7 +122,7 @@ fn weak_layer_and_retimed_assets_keep_their_actual_anchor() {
                 .with_type(PropertyType::parse("float").unwrap())
                 .with_default(Value::Float(2.)),
         );
-    let schemas = std::sync::Arc::new(layerstack_schemas::openusd(&store.tokens));
+    let schemas = std::sync::Arc::new(layerstack_schemas::openusd(store.tokens()));
     let live = LiveStage::compose(
         &mut store,
         LayerId(1),
@@ -141,7 +141,7 @@ fn weak_layer_and_retimed_assets_keep_their_actual_anchor() {
         AssetReference::read(&scene, property, Time::at(10.)),
         Err(AssetReadError::InvalidValue(property))
     );
-    let intensity = PropertyPath::new(path, store.tokens.lookup("inputs:intensity").unwrap());
+    let intensity = PropertyPath::new(path, store.tokens().lookup("inputs:intensity").unwrap());
     let fallback = live
         .stage()
         .view(&store)
@@ -166,10 +166,10 @@ def Scope "Bad" { custom float texture = 2; rel relation; }
     );
     let dome = store.path("/Dome");
     let bad = store.path("/Bad");
-    let texture = store.tokens.intern("inputs:texture:file");
-    let custom = store.tokens.intern("texture");
-    let missing = store.tokens.intern("missing");
-    let relation = store.tokens.intern("relation");
+    let texture = store.tokens().intern("inputs:texture:file");
+    let custom = store.tokens().intern("texture");
+    let missing = store.tokens().intern("missing");
+    let relation = store.tokens().intern("relation");
     let scene = Scene::new(live.stage(), &store);
     assert_eq!(
         AssetReference::read(&scene, PropertyPath::new(dome, texture), Time::Default),
@@ -220,7 +220,7 @@ fn anchoring_reports_missing_context_and_preserves_host_search_policy() {
         "#usda 1.0\ndef DomeLight \"Dome\" {\n asset inputs:texture:file = @textures/a.exr@\n}\n",
     );
     let path = store.path("/Dome");
-    let name = store.tokens.intern("inputs:texture:file");
+    let name = store.tokens().intern("inputs:texture:file");
     let asset = AssetReference::read(
         &Scene::new(live.stage(), &store),
         PropertyPath::new(path, name),
@@ -245,7 +245,7 @@ fn anchoring_reports_missing_context_and_preserves_host_search_policy() {
 fn source_only_asset_edits_change_anchors_and_parameter_upload_revisions() {
     let (mut store, _) = support::scene("#usda 1.0\ndef DomeLight \"Dome\" {}\n");
     let path = store.path("/Dome");
-    let name = store.tokens.intern("inputs:texture:file");
+    let name = store.tokens().intern("inputs:texture:file");
     let property = PropertyPath::new(path, name);
     let mut weak = Layer::new(LayerId(2));
     weak.insert_prim(
@@ -263,7 +263,7 @@ fn source_only_asset_edits_change_anchors_and_parameter_upload_revisions() {
         .unwrap()
         .sublayers_mut()
         .push(SublayerEntry::new(LayerId(2)));
-    let schemas = std::sync::Arc::new(layerstack_schemas::openusd(&store.tokens));
+    let schemas = std::sync::Arc::new(layerstack_schemas::openusd(store.tokens()));
     let mut live = LiveStage::compose(
         &mut store,
         LayerId(1),

@@ -54,25 +54,25 @@ fn fixture(n: usize) -> Fixture {
     let world = store.path("/World");
     layer.insert_prim(
         world,
-        PrimSpec::def().with_type_name(store.tokens.intern("Xform")),
+        PrimSpec::def().with_type_name(store.tokens().intern("Xform")),
     );
     let protos = [
         store.path("/World/Protos/Box"),
         store.path("/World/Protos/Ball"),
     ];
     layer.insert_prim(store.path("/World/Protos"), PrimSpec::def());
-    let size = store.tokens.intern("size");
-    let radius = store.tokens.intern("radius");
+    let size = store.tokens().intern("size");
+    let radius = store.tokens().intern("radius");
     layer.insert_prim(
         protos[0],
         PrimSpec::def()
-            .with_type_name(store.tokens.intern("Cube"))
+            .with_type_name(store.tokens().intern("Cube"))
             .with_property(size, typed("double").with_default(Value::Double(0.5))),
     );
     layer.insert_prim(
         protos[1],
         PrimSpec::def()
-            .with_type_name(store.tokens.intern("Sphere"))
+            .with_type_name(store.tokens().intern("Sphere"))
             .with_property(radius, typed("double").with_default(Value::Double(0.25))),
     );
     let count = i64::try_from(n).unwrap();
@@ -92,8 +92,8 @@ fn fixture(n: usize) -> Fixture {
         .collect();
     let velocities: Vec<[f32; 3]> = (0..n).map(|i| [0.0, 0.0, (i % 7) as f32]).collect();
     let spins: Vec<[f32; 3]> = (0..n).map(|i| [0.0, 0.0, (i % 90) as f32]).collect();
-    let prototypes = store.tokens.intern("prototypes");
-    let inactive_ids = store.tokens.intern("inactiveIds");
+    let prototypes = store.tokens().intern("prototypes");
+    let inactive_ids = store.tokens().intern("inactiveIds");
     let names = [
         "protoIndices",
         "ids",
@@ -105,10 +105,10 @@ fn fixture(n: usize) -> Fixture {
         "accelerations",
         "angularVelocities",
     ]
-    .map(|name| store.tokens.intern(name));
+    .map(|name| store.tokens().intern(name));
     let targets = ListOp::explicit(protos.iter().map(|&p| TargetPath::Prim(p)).collect());
-    let mut instancer = |still: bool, inactive: &[i64]| {
-        let tokens = &mut store.tokens;
+    let instancer = |still: bool, inactive: &[i64]| {
+        let tokens = &mut store.tokens();
         let sampled = |spec: PropertySpec, a: Value, b: Value| {
             spec.with_time_samples(vec![(0.0, a), (24.0, b)])
         };
@@ -208,7 +208,7 @@ fn fixture(n: usize) -> Fixture {
     layer.insert_prim(culled, culled_prim);
     store.insert_layer(layer);
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(store.tokens()))),
         ..StageOptions::default()
     };
     let stage = Stage::compose(&mut store, LayerId(1), options);

@@ -59,8 +59,8 @@ fn main() {
     // and memory compact.
     // -----------------------------------------------------------------------
 
-    let position_x = store.tokens.intern("position_x");
-    let opacity = store.tokens.intern("opacity");
+    let position_x = store.tokens().intern("position_x");
+    let opacity = store.tokens().intern("opacity");
     let char_path = store.path("/Character");
 
     // -----------------------------------------------------------------------

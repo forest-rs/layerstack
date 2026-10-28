@@ -31,7 +31,7 @@ fn interval_bounds_select_effective_offset_grids_without_adding_brackets() {
     let (store, live) = support::scene(SOURCE);
     let shape = store.path("/Shape");
     let animation = store.path("/Animation");
-    let transform = store.tokens.lookup("xformOp:translate").unwrap();
+    let transform = store.tokens().lookup("xformOp:translate").unwrap();
     let scene = Scene::new(live.stage(), &store);
     let xform = Xformable::new(&scene, shape).unwrap();
     let primvar = Primvar::new(&scene, shape, "test").unwrap();

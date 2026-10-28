@@ -96,8 +96,8 @@ fn usda_saves_stream_the_text_save_usda_writes() {
     let root = document.stage().stage().root_layer().unwrap();
     let expected = layerstack_usda::save::save_usda(
         document.store().layer(root).unwrap(),
-        &document.store().tokens,
-        &document.store().paths,
+        document.store().tokens(),
+        document.store().paths(),
     )
     .unwrap();
     document.export_layer(root, "copy.usda").unwrap();

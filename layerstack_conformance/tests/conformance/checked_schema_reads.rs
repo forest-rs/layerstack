@@ -26,7 +26,7 @@ fn checked_schema_arrays_preserve_decode_errors_at_default_and_numeric_times() {
         let (mut store, _) =
             support::scene("#usda 1.0\ndef Mesh \"M\" { point3f[] points = [(1, 2, 3)]; }");
         let path = store.path("/M");
-        let name = store.tokens.lookup("points").unwrap();
+        let name = store.tokens().lookup("points").unwrap();
         let error = ArrayReadError::BudgetExceeded { limit: 7 };
         let failed = Value::TypedArray(TypedArray::Deferred(Arc::new(Failed(error.clone()))));
         let spec = store
@@ -42,7 +42,7 @@ fn checked_schema_arrays_preserve_decode_errors_at_default_and_numeric_times() {
             spec.time_samples =
                 vec![(1., failed.clone()), (2., Value::from(vec![[2_f32; 3]]))].into();
         }
-        let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
+        let schemas = Arc::new(layerstack_schemas::openusd(store.tokens()));
         let live = layerstack::LiveStage::compose(
             &mut store,
             LayerId(1),
@@ -55,11 +55,11 @@ fn checked_schema_arrays_preserve_decode_errors_at_default_and_numeric_times() {
         let mesh = Mesh::new(&scene, path).unwrap();
         assert_eq!(mesh.try_points(time), Err(error.clone()));
         assert_eq!(
-            value::try_read_float3_array_shared(&failed, &store.tokens),
+            value::try_read_float3_array_shared(&failed, store.tokens()),
             Err(error.clone())
         );
         assert_eq!(
-            value::try_read_array(&failed, &store.tokens, value::read_float3),
+            value::try_read_array(&failed, store.tokens(), value::read_float3),
             Err(error)
         );
     }
@@ -70,7 +70,7 @@ fn checked_schema_reads_share_native_arrays_and_keep_typed_default_selection() {
     let (mut store, mut live) =
         support::scene("#usda 1.0\ndef Mesh \"M\" { point3f[] points = [(1, 2, 3)]; }");
     let path = store.path("/M");
-    let points = store.tokens.lookup("points").unwrap();
+    let points = store.tokens().lookup("points").unwrap();
     let buffer = Arc::new(vec![[1_f32, 2., 3.]]);
     let property = layerstack::PropertyPath::new(path, points);
     let mut tx = layerstack::edit::Transaction::new();
@@ -111,7 +111,7 @@ fn checked_schema_reads_share_native_arrays_and_keep_typed_default_selection() {
         ),
     );
     store.insert_layer(root);
-    let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(store.tokens()));
     let live = layerstack::LiveStage::compose(
         &mut store,
         LayerId(1),
@@ -136,7 +136,7 @@ fn validated_primvars_preserve_value_and_index_decode_errors() {
             "#usda 1.0\ndef Mesh \"M\" { point3f[] primvars:x = [(1,2,3)]\nint[] primvars:x:indices = [0]; }",
         );
         let path = store.path("/M");
-        let token = store.tokens.lookup(name).unwrap();
+        let token = store.tokens().lookup(name).unwrap();
         let error = ArrayReadError::InvalidData("bad retained primvar buffer".into());
         store
             .layer_mut(LayerId(1))
@@ -148,7 +148,7 @@ fn validated_primvars_preserve_value_and_index_decode_errors() {
             .default = Some(Value::TypedArray(TypedArray::Deferred(Arc::new(Failed(
             error.clone(),
         )))));
-        let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
+        let schemas = Arc::new(layerstack_schemas::openusd(store.tokens()));
         let live = layerstack::LiveStage::compose(
             &mut store,
             LayerId(1),
@@ -177,8 +177,8 @@ fn checked_typed_reads_preserve_deferred_schema_fallback_failure() {
     use layerstack_schemas::PrimView;
     let mut store = InMemoryStore::default();
     let path = store.path("/P");
-    let ty = store.tokens.intern("Custom");
-    let name = store.tokens.intern("points");
+    let ty = store.tokens().intern("Custom");
+    let name = store.tokens().intern("points");
     let error = ArrayReadError::BudgetExceeded { limit: 11 };
     let fallback = Value::TypedArray(TypedArray::Deferred(Arc::new(Failed(error.clone()))));
     let mut registry = SchemaRegistry::builder();
@@ -189,7 +189,7 @@ fn checked_typed_reads_preserve_deferred_schema_fallback_failure() {
                 .with_fallback(fallback),
         ),
     );
-    let schemas = Arc::new(registry.build(&store.tokens));
+    let schemas = Arc::new(registry.build(store.tokens()));
     let mut layer = Layer::new(LayerId(1));
     layer.insert_prim(path, PrimSpec::def().with_type_name(ty));
     store.insert_layer(layer);
@@ -220,8 +220,8 @@ fn checked_default_retry_preserves_weaker_decode_error_before_schema_fallback() 
     for incompatible in [Value::Int(3), Value::from(vec![3_i32])] {
         let mut store = InMemoryStore::default();
         let path = store.path("/M");
-        let ty = store.tokens.intern("Mesh");
-        let points = store.tokens.intern("points");
+        let ty = store.tokens().intern("Mesh");
+        let points = store.tokens().intern("points");
         let error = ArrayReadError::BudgetExceeded { limit: 7 };
         let mut registry = SchemaRegistry::builder();
         registry.register(
@@ -231,7 +231,7 @@ fn checked_default_retry_preserves_weaker_decode_error_before_schema_fallback() 
                     .with_fallback(Value::from(vec![[99_f32; 3]])),
             ),
         );
-        let schemas = Arc::new(registry.build(&store.tokens));
+        let schemas = Arc::new(registry.build(store.tokens()));
         let mut weak = Layer::new(LayerId(2));
         weak.insert_prim(
             path,

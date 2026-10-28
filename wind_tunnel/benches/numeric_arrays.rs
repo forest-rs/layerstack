@@ -46,8 +46,8 @@ fn arrays(c: &mut Criterion) {
         {
             let mut store = InMemoryStore::default();
             let prim = store.path("/Mesh");
-            let name = store.tokens.intern("points");
-            let mesh = store.tokens.intern("Mesh");
+            let name = store.tokens().intern("points");
+            let mesh = store.tokens().intern("Mesh");
             let mut layer = Layer::new(LayerId(1));
             layer.insert_prim(
                 prim,
@@ -60,7 +60,7 @@ fn arrays(c: &mut Criterion) {
             store.insert_layer(layer);
             let options = StageOptions {
                 schemas: Some(std::sync::Arc::new(layerstack_schemas::openusd(
-                    &store.tokens,
+                    store.tokens(),
                 ))),
                 ..StageOptions::default()
             };
@@ -112,7 +112,7 @@ fn arrays(c: &mut Criterion) {
             store.insert_layer(stronger);
             let options = StageOptions {
                 schemas: Some(std::sync::Arc::new(layerstack_schemas::openusd(
-                    &store.tokens,
+                    store.tokens(),
                 ))),
                 ..StageOptions::default()
             };

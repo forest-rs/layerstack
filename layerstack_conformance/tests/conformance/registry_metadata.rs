@@ -391,16 +391,16 @@ fn spec_fields<'a>(
             let prim = &layer.prims()[&prim];
             let set = prim
                 .variant_sets()
-                .get(&store.tokens.lookup("v").unwrap())
+                .get(&store.tokens().lookup("v").unwrap())
                 .unwrap();
-            &set.variants[&store.tokens.lookup("x").unwrap()].fields
+            &set.variants[&store.tokens().lookup("x").unwrap()].fields
         }
         "attribute" | "relationship" => {
             let name = if spec == "attribute" { "a" } else { "r" };
             let prim = &layer.prims()[&prim];
             &layerstack::property::get_property(
                 &prim.properties,
-                store.tokens.lookup(name).unwrap(),
+                store.tokens().lookup(name).unwrap(),
             )
             .unwrap()
             .metadata
@@ -442,13 +442,13 @@ fn metadata_statements_read_and_save_as_openusd_reads_and_writes_them() {
     let oracle = oracle();
     for case in &oracle.reading {
         let store = InMemoryStore::default();
-        let registry = registry(&oracle, &store.tokens);
+        let registry = registry(&oracle, store.tokens());
         let source = layer_text(&case.spec, &case.statement);
         let read = read_usda_with_registry(
             &source,
             LayerId(1),
-            &store.tokens,
-            &store.paths,
+            store.tokens(),
+            store.paths(),
             &mut NoAssets,
             &registry,
         );
@@ -472,7 +472,7 @@ fn metadata_statements_read_and_save_as_openusd_reads_and_writes_them() {
         );
         let field = field_of(&case.statement);
         let layer = &read.emitted.layer;
-        let key = store.tokens.intern(field);
+        let key = store.tokens().intern(field);
         let prim = store.path("/P");
         let value = layerstack::doc::get_field(spec_fields(layer, &store, prim, &case.spec), &key);
         if case.absent {
@@ -493,13 +493,13 @@ fn metadata_statements_read_and_save_as_openusd_reads_and_writes_them() {
                     .is_some_and(|value| value.get("unregistered").is_some());
             if !unregistered {
                 assert_eq!(
-                    Some(encode(value, &store.tokens)),
+                    Some(encode(value, store.tokens())),
                     case.value,
                     "{what}'s value"
                 );
             }
         }
-        let text = save_usda(layer, &store.tokens, &store.paths)
+        let text = save_usda(layer, store.tokens(), store.paths())
             .unwrap_or_else(|e| panic!("{what} saves: {e:?}"));
         assert_eq!(
             Some(written(&text, field)),
@@ -509,8 +509,8 @@ fn metadata_statements_read_and_save_as_openusd_reads_and_writes_them() {
         let again = read_usda_with_registry(
             &text,
             LayerId(1),
-            &store.tokens,
-            &store.paths,
+            store.tokens(),
+            store.paths(),
             &mut NoAssets,
             &registry,
         );
@@ -791,8 +791,8 @@ fn authoring_stage(registry: SchemaRegistry, store: &mut InMemoryStore) -> layer
     let read = read_usda_with_registry(
         text,
         LayerId(1),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut NoAssets,
         &registry,
     );
@@ -813,15 +813,15 @@ fn metadata_edits_are_checked_and_saved_as_openusd_checks_and_writes_them() {
     let oracle = oracle();
     for call in &oracle.authoring {
         let mut store = InMemoryStore::default();
-        let mut live = authoring_stage(registry(&oracle, &store.tokens), &mut store);
-        let value = sample(&call.type_name, &call.value, &store.tokens);
+        let mut live = authoring_stage(registry(&oracle, store.tokens()), &mut store);
+        let value = sample(&call.type_name, &call.value, store.tokens());
         let what = format!(
             "{} on a {} as {} {}",
             call.field, call.spec, call.type_name, call.value
         );
         let prim = store.path("/P");
         let refused: Option<layerstack::MetadataEditError> = if call.spec == "stage" {
-            let key = store.tokens.intern(&call.field);
+            let key = store.tokens().intern(&call.field);
             match live.set_stage_metadata(&mut store, LayerId(1), key, value.clone()) {
                 Ok(_) => None,
                 Err(layerstack::StageMetadataError::Field(error)) => Some(error),
@@ -881,12 +881,12 @@ fn metadata_edits_are_checked_and_saved_as_openusd_checks_and_writes_them() {
         let layer = store.layer(LayerId(1)).unwrap().clone();
         if !value.is_list_op() {
             assert_eq!(
-                Some(encode(&value, &store.tokens)),
+                Some(encode(&value, store.tokens())),
                 call.stored,
                 "{what}: stored"
             );
         }
-        let text = save_usda(&layer, &store.tokens, &store.paths)
+        let text = save_usda(&layer, store.tokens(), store.paths())
             .unwrap_or_else(|e| panic!("{what} saves: {e:?}"));
         assert_eq!(
             Some(written(&text, &call.field)),
@@ -896,10 +896,10 @@ fn metadata_edits_are_checked_and_saved_as_openusd_checks_and_writes_them() {
         let again = read_usda_with_registry(
             &text,
             LayerId(1),
-            &store.tokens,
-            &store.paths,
+            store.tokens(),
+            store.paths(),
             &mut NoAssets,
-            &registry(&oracle, &store.tokens),
+            &registry(&oracle, store.tokens()),
         );
         assert_eq!(again.emitted.layer, layer, "{what} reopens as it was");
     }
@@ -909,7 +909,7 @@ fn metadata_edits_are_checked_and_saved_as_openusd_checks_and_writes_them() {
 fn unauthored_fields_read_as_openusd_reads_them() {
     let oracle = oracle();
     let mut store = InMemoryStore::default();
-    let live = authoring_stage(registry(&oracle, &store.tokens), &mut store);
+    let live = authoring_stage(registry(&oracle, store.tokens()), &mut store);
     let scene = layerstack_schemas::Scene::new(live.stage(), &store);
     let prim = layerstack_schemas::PrimView::new(scene, store.path("/P"));
     for case in &oracle.unauthored {
@@ -917,7 +917,7 @@ fn unauthored_fields_read_as_openusd_reads_them() {
         let (value, has) = match case.object.as_str() {
             "stage" => {
                 let value = scene.metadata().value(&case.field);
-                let key = store.tokens.lookup(&case.field).unwrap();
+                let key = store.tokens().lookup(&case.field).unwrap();
                 (value, live.stage().has_metadata(key, &store))
             }
             "prim" => (prim.metadata_value(&case.field), false),
@@ -931,7 +931,7 @@ fn unauthored_fields_read_as_openusd_reads_them() {
             }
             other => panic!("{other}"),
         };
-        let value = value.map(|value| encode(&FieldValue::Value(value), &store.tokens));
+        let value = value.map(|value| encode(&FieldValue::Value(value), store.tokens()));
         assert_eq!(value, case.value, "{what}");
         if case.object == "stage" {
             assert_eq!(has, case.has, "{what}");

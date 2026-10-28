@@ -34,7 +34,7 @@ fn point_motion_preserves_required_and_optional_decode_failures() {
                 "#usda 1.0\ndef Points \"P\" {\n point3f[] points = [(1,2,3)]\n vector3f[] velocities.timeSamples = { 1: [(1,0,0)], 2: [(1,0,0)] }\n vector3f[] accelerations.timeSamples = { 1: [(1,0,0)], 2: [(1,0,0)] }\n}",
             );
             let path = store.path("/P");
-            let token = store.tokens.lookup(name).unwrap();
+            let token = store.tokens().lookup(name).unwrap();
             let error = ArrayReadError::InvalidData("corrupt point motion".into());
             let failed = Value::TypedArray(TypedArray::Deferred(Arc::new(Failed {
                 error: error.clone(),
@@ -49,7 +49,7 @@ fn point_motion_preserves_required_and_optional_decode_failures() {
                 .unwrap();
             spec.default = Some(failed.clone());
             spec.time_samples = vec![(1., failed.clone()), (2., failed)].into();
-            let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
+            let schemas = Arc::new(layerstack_schemas::openusd(store.tokens()));
             let live = layerstack::LiveStage::compose(
                 &mut store,
                 LayerId(1),
@@ -91,7 +91,7 @@ fn instancer_transform_and_mask_queries_preserve_decode_failures() {
                 "#usda 1.0\ndef PointInstancer \"I\" {\n rel prototypes = </I/P>\n int[] protoIndices = [0]\n point3f[] positions = [(1,2,3)]\n float3[] scales = [(1,1,1)]\n quatf[] orientationsf = [(1,0,0,0)]\n vector3f[] velocities = [(1,0,0)]\n vector3f[] accelerations = [(1,0,0)]\n vector3f[] angularVelocities = [(1,0,0)]\n int64[] ids = [7]\n int64[] invisibleIds = [8]\n def Cube \"P\" {}\n}",
             );
             let path = store.path("/I");
-            let token = store.tokens.lookup(name).unwrap();
+            let token = store.tokens().lookup(name).unwrap();
             let error = ArrayReadError::BudgetExceeded { limit: 17 };
             let failed = Value::TypedArray(TypedArray::Deferred(Arc::new(Failed {
                 error: error.clone(),
@@ -106,7 +106,7 @@ fn instancer_transform_and_mask_queries_preserve_decode_failures() {
                 .unwrap();
             spec.default = Some(failed.clone());
             spec.time_samples = vec![(1., failed.clone()), (2., failed)].into();
-            let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
+            let schemas = Arc::new(layerstack_schemas::openusd(store.tokens()));
             let live = layerstack::LiveStage::compose(
                 &mut store,
                 LayerId(1),

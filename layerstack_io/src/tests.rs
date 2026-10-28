@@ -220,8 +220,8 @@ fn clip_query_planning_does_not_decode_retained_interpolation_endpoints() {
     let root = source.stage().stage().root_layer().unwrap();
     let bytes = layerstack_usdc::writer::save_layer(
         source.store.layer(root).unwrap(),
-        &source.store.tokens,
-        &source.store.paths,
+        source.store.tokens(),
+        source.store.paths(),
     )
     .unwrap();
     let mut memory = Memory::with(&[
@@ -320,8 +320,8 @@ def "P" (clips = { dictionary default = {
     let id = source.stage.stage().root_layer().unwrap();
     let bytes = layerstack_usdc::writer::save_layer(
         source.store.layer(id).unwrap(),
-        &source.store.tokens,
-        &source.store.paths,
+        source.store.tokens(),
+        source.store.paths(),
     )
     .unwrap();
     doc.storage.files.insert("needed.usdc".into(), bytes);
@@ -424,8 +424,8 @@ fn external_package_resources_keep_their_original_filesystem_anchor() {
         .flat_map(|layer| {
             layerstack::asset_dependencies::extract_layer_dependencies(
                 &layer.layer,
-                &document.store.paths,
-                &document.store.tokens,
+                document.store.paths(),
+                document.store.tokens(),
             )
         })
         .find(|dependency| dependency.identifier.ends_with("image.png"))
@@ -506,7 +506,7 @@ def "P" (clips = { dictionary default = {
             .load_attempts,
         0
     );
-    let unknown = PropertyPath::new(property.prim_path(), doc.store.tokens.intern("absent"));
+    let unknown = PropertyPath::new(property.prim_path(), doc.store.tokens().intern("absent"));
     assert!(
         doc.stage
             .stage()
@@ -587,8 +587,8 @@ def "Root" (
     assert_eq!(plan.assets.len(), 2, "duplicate uses share resource bytes");
     let dependencies = layerstack::asset_dependencies::extract_layer_dependencies(
         &plan.layers[0].layer,
-        &doc.store.paths,
-        &doc.store.tokens,
+        doc.store.paths(),
+        doc.store.tokens(),
     );
     assert_eq!(dependencies.len(), 2);
     assert!(
@@ -616,8 +616,8 @@ def "Root" (
     let reopened_root = reopened.stage.stage().root_layer().unwrap();
     let dependencies = layerstack::asset_dependencies::extract_layer_dependencies(
         reopened.store.layer(reopened_root).unwrap(),
-        &reopened.store.paths,
-        &reopened.store.tokens,
+        reopened.store.paths(),
+        reopened.store.tokens(),
     );
     assert_eq!(
         dependencies.len(),
@@ -695,7 +695,7 @@ fn package_preparation_includes_unsaved_layers_and_reports_missing_resources_wit
     let root = doc.stage.stage().root_layer().unwrap();
     let child = *doc.catalog.ids.get("child.usda").unwrap();
     let source = doc.store.path("/Child");
-    let answer = doc.store.tokens.intern("answer");
+    let answer = doc.store.tokens().intern("answer");
     let layer = doc.store.layer_mut(child).unwrap();
     let property = layer
         .prim_mut(source)
@@ -791,7 +791,7 @@ fn nested_packages_resolve_defaults_explicit_layers_relative_dependencies_and_re
         let mut document =
             StageDocument::open(memory, "outer.usdz", StageOptions::default()).unwrap();
         let root = document.store.path("/Root");
-        let answer = document.store.tokens.intern("answer");
+        let answer = document.store.tokens().intern("answer");
         assert_eq!(
             document
                 .view()
@@ -1012,16 +1012,16 @@ fn rejecting_a_prepared_reload_preserves_sources_bindings_and_freshness() {
         let property = layerstack::PropertyPath::new(
             candidate
                 .store()
-                .paths
+                .paths()
                 .lookup(
                     &layerstack::Path::root().join(&[candidate
                         .store()
-                        .tokens
+                        .tokens()
                         .lookup("Root")
                         .unwrap()]),
                 )
                 .unwrap(),
-            candidate.store().tokens.lookup("value").unwrap(),
+            candidate.store().tokens().lookup("value").unwrap(),
         );
         assert_eq!(
             candidate
@@ -1122,15 +1122,19 @@ fn prepared_commit_reuses_sources_and_preserves_stage_observers_and_dependencies
     assert_eq!(
         notices[0].created,
         [doc.store
-            .paths
-            .lookup(&layerstack::Path::root().join(&[doc.store.tokens.lookup("Created").unwrap()]))
+            .paths()
+            .lookup(
+                &layerstack::Path::root().join(&[doc.store.tokens().lookup("Created").unwrap()])
+            )
             .unwrap()]
     );
     assert_eq!(
         notices[0].removed,
         [doc.store
-            .paths
-            .lookup(&layerstack::Path::root().join(&[doc.store.tokens.lookup("Removed").unwrap()]))
+            .paths()
+            .lookup(
+                &layerstack::Path::root().join(&[doc.store.tokens().lookup("Removed").unwrap()])
+            )
             .unwrap()]
     );
     assert_eq!(doc.stage.change_history_budget(), budget);
@@ -1145,11 +1149,11 @@ fn prepared_commit_reuses_sources_and_preserves_stage_observers_and_dependencies
             .stage()
             .prim(
                 doc.store
-                    .paths
+                    .paths()
                     .lookup(
                         &layerstack::Path::root().join(&[doc
                             .store
-                            .tokens
+                            .tokens()
                             .lookup("Created")
                             .unwrap()])
                     )
@@ -1538,10 +1542,10 @@ fn set_value(doc: &mut StageDocument<Memory>, layer: LayerId, value: i32) {
 fn value(doc: &StageDocument<Memory>) -> Value {
     let prim = doc
         .store
-        .paths
-        .lookup(&layerstack::Path::root().join(&[doc.store.tokens.lookup("Root").unwrap()]))
+        .paths()
+        .lookup(&layerstack::Path::root().join(&[doc.store.tokens().lookup("Root").unwrap()]))
         .unwrap();
-    let property = layerstack::PropertyPath::new(prim, doc.store.tokens.lookup("value").unwrap());
+    let property = layerstack::PropertyPath::new(prim, doc.store.tokens().lookup("value").unwrap());
     doc.view()
         .attribute(property)
         .and_then(|a| a.authored_value(layerstack::Time::Default))
@@ -1558,7 +1562,7 @@ fn save_tracks_successful_generations_and_excludes_sessions() {
     let session = LayerId(50);
     let mut layer = Layer::new(session);
     let prim = store.path("/Root");
-    let property = store.tokens.intern("value");
+    let property = store.tokens().intern("value");
     layer.insert_prim(
         prim,
         PrimSpec::over().with_property(
@@ -1570,7 +1574,7 @@ fn save_tracks_successful_generations_and_excludes_sessions() {
     let pseudo = store.path("/");
     layer.insert_prim(
         pseudo,
-        PrimSpec::default().with_children(vec![store.tokens.intern("Root")]),
+        PrimSpec::default().with_children(vec![store.tokens().intern("Root")]),
     );
     store.insert_layer(layer);
     let mut doc = StageDocument::open_in(
@@ -1743,8 +1747,8 @@ fn value_edits_in_one_variant_branch_refresh_without_recomposing_sibling_branche
     let blue = doc.store.property_path("/Blue/Geom.size");
     let spec = layerstack::SpecPath::parse(
         "/Asset{look=red}Geom.size",
-        &doc.store.tokens,
-        &doc.store.paths,
+        doc.store.tokens(),
+        doc.store.paths(),
     )
     .unwrap();
     let mut edit = Transaction::new();
@@ -2409,9 +2413,9 @@ fn forgetting_a_candidate_leaves_the_published_document_usable() {
     );
     core::mem::forget(candidate);
     assert_eq!(doc.store.identity(), identity);
-    assert_eq!(doc.store.paths.display(path, &doc.store.tokens), "/Root");
+    assert_eq!(doc.store.paths().display(path, doc.store.tokens()), "/Root");
     assert_eq!(value(&doc), Value::Int(1));
-    assert!(doc.store.tokens.lookup("CandidateOnly").is_none());
+    assert!(doc.store.tokens().lookup("CandidateOnly").is_none());
     set_value(&mut doc, root, 2);
     assert_eq!(value(&doc), Value::Int(2));
     assert_eq!(doc.save().saved, [root]);

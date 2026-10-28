@@ -130,10 +130,10 @@ fn invalid_inbetween_knots_are_skipped_and_reported() {
         assert_eq!(
             problem
                 .property
-                .map(|p| p.display(&store.paths, &store.tokens).to_string()),
+                .map(|p| p.display(store.paths(), store.tokens()).to_string()),
             Some(format!(
                 "{}.inbetweens:half",
-                store.paths.display(problem.prim, &store.tokens)
+                store.paths().display(problem.prim, store.tokens())
             ))
         );
     }

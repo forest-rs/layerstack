@@ -210,7 +210,7 @@ impl Composed {
             .join(case);
         let mut loaded = load_entry_usda(&dir.join("root.usda"));
         assert!(loaded.invalid.is_empty(), "{case}: {:?}", loaded.invalid);
-        let schemas = Arc::new(layerstack_schemas::openusd(&loaded.store.tokens));
+        let schemas = Arc::new(layerstack_schemas::openusd(loaded.store.tokens()));
         let stage = Stage::compose(
             &mut loaded.store,
             loaded.root_layer,
@@ -261,7 +261,7 @@ impl Composed {
         anchor: &dyn Fn(&[Arc<str>]) -> Option<LayerId>,
         key: &mut Vec<Arc<str>>,
     ) -> Json {
-        let tokens = &self.loaded.store.tokens;
+        let tokens = &self.loaded.store.tokens();
         match value {
             Value::Blocked | Value::Null | Value::AnimationBlock => Json::Null,
             Value::Bool(v) => Json::from(*v),
@@ -349,7 +349,7 @@ impl Composed {
             ArcKind::Specializes => "specializes",
         };
         let store = &self.loaded.store;
-        let site = node.site().display(&store.paths, &store.tokens);
+        let site = node.site().display(store.paths(), store.tokens());
         format!("{arc}|{site}|{}", self.layer_name(node.layer_stack()))
     }
 
@@ -552,7 +552,7 @@ fn check_attribute(
 ) {
     let store = &composed.loaded.store;
     let view = composed.stage.view(store);
-    let path = PropertyPath::parse(&record.attr, &store.tokens, &store.paths).expect("path");
+    let path = PropertyPath::parse(&record.attr, store.tokens(), store.paths()).expect("path");
     let attribute = view.attribute(path);
     let Some(attribute) = attribute.filter(|_| record.defined) else {
         if attribute.is_some() != record.defined {

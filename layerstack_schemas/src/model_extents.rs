@@ -141,7 +141,7 @@ mod tests {
         store.insert_layer(Layer::new(LayerId(1)));
         let path = store.path("/Model");
         let options = StageOptions {
-            schemas: Some(Arc::new(crate::openusd(&store.tokens))),
+            schemas: Some(Arc::new(crate::openusd(store.tokens()))),
             ..StageOptions::default()
         };
         let live = LiveStage::compose(&mut store, LayerId(1), options);

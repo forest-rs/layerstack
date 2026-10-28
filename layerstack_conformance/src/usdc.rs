@@ -45,8 +45,8 @@ pub fn load_entry_usdc(entry: &Path) -> LoadedStage {
         let resolved = resolver.resolve(
             &path.asset_path,
             Some(path.anchor),
-            &store.tokens,
-            &store.paths,
+            store.tokens(),
+            store.paths(),
         );
         while let Some(layer) = resolver.pending_layers.pop() {
             store.insert_layer(layer);
@@ -93,8 +93,9 @@ fn load_usdc_file(
         std::fs::read(path).unwrap_or_else(|e| panic!("failed to read {}: {e}", path.display()));
 
     // Parse through the full USDC pipeline.
-    let result = layerstack_usdc::read_usdc(&data, layer_id, &store.tokens, &store.paths, resolver)
-        .unwrap_or_else(|e| panic!("failed to parse {}: {e}", path.display()));
+    let result =
+        layerstack_usdc::read_usdc(&data, layer_id, store.tokens(), store.paths(), resolver)
+            .unwrap_or_else(|e| panic!("failed to parse {}: {e}", path.display()));
 
     // Insert resolved layers (from sublayer/reference resolution).
     for layer in result.resolved_layers {

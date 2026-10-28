@@ -41,12 +41,12 @@ impl AssetResolver for NoAssets {
 
 fn stage() -> (InMemoryStore, LiveStage) {
     let mut store = InMemoryStore::default();
-    let schemas = fields::registry(&store.tokens).expect("the library's fields register");
+    let schemas = fields::registry(store.tokens()).expect("the library's fields register");
     let read = layerstack_usda::read_usda_with_registry(
         "#usda 1.0\ndef \"P\"\n{\n    custom float a\n    custom rel r\n}\n",
         LayerId(1),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut NoAssets,
         &schemas,
     );
@@ -159,7 +159,7 @@ fn typed_setters_author_what_the_typed_getters_read_and_openusd_writes() {
     assert_eq!(metadata.meta_u_char(), None);
 
     let layer = store.layer(LayerId(1)).unwrap();
-    let text = layerstack_usda::save::save_usda(layer, &store.tokens, &store.paths).unwrap();
+    let text = layerstack_usda::save::save_usda(layer, store.tokens(), store.paths()).unwrap();
     for (field, lines) in [
         ("metaBool", &["metaBool = true"][..]),
         ("metaFloat", &["metaFloat = 0.25"]),

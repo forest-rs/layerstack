@@ -18,7 +18,7 @@ fn names(
 ) -> Vec<String> {
     let mut result: Vec<_> = paths
         .into_iter()
-        .map(|p| store.paths.resolve(p).display(&store.tokens))
+        .map(|p| store.paths().resolve(p).display(store.tokens()))
         .collect();
     result.sort();
     result
@@ -229,9 +229,9 @@ fn population_masks_select_subtrees_ancestors_and_empty_namespace() {
 #[test]
 fn literal_rules_and_convenience_operations_match_native_effective_rules() {
     let store = InMemoryStore::default();
-    let a = Path::parse_absolute("/A", &store.tokens).unwrap();
-    let b = Path::parse_absolute("/A/B", &store.tokens).unwrap();
-    let c = Path::parse_absolute("/A/B/C", &store.tokens).unwrap();
+    let a = Path::parse_absolute("/A", store.tokens()).unwrap();
+    let b = Path::parse_absolute("/A/B", store.tokens()).unwrap();
+    let c = Path::parse_absolute("/A/B/C", store.tokens()).unwrap();
     let mut rules = PayloadLoadRules::load_none();
     rules.load_with_descendants(c.clone());
     assert_eq!(rules.effective_rule(&a), PayloadRule::Only);
@@ -267,8 +267,8 @@ fn inactive_roots_remain_inspectable_and_stage_inventories_ignore_host_residency
     let class = store.path("/Class");
     let undef_child = store.path("/Over/Child");
     let abstract_child = store.path("/Class/Child");
-    let value = store.tokens.intern("value");
-    let default = store.tokens.intern("A");
+    let value = store.tokens().intern("value");
+    let default = store.tokens().intern("A");
     let mut layer = layerstack::Layer::new(LayerId(1));
     let mut inactive = layerstack::PrimSpec::def().with_field(value, layerstack::Value::Int(17));
     inactive.active = Some(false);
@@ -347,7 +347,7 @@ fn inactive_roots_remain_inspectable_and_stage_inventories_ignore_host_residency
         .traverse_all(root)
         .map(|p| {
             json!([
-                store.paths.resolve(p).display(&store.tokens),
+                store.paths().resolve(p).display(store.tokens()),
                 stage.prim(p, &store).is_some_and(|p| p.is_active()),
                 stage.prim(p, &store).is_some_and(|p| p.is_loaded()),
                 stage.prim(p, &store).is_some_and(|p| p.is_defined()),
@@ -436,7 +436,7 @@ fn inactive_payload_is_inspectable_but_not_loadable() {
         assert!(stage.loadable_paths(root, &store).is_empty());
         assert_eq!(
             stage.loaded_payload_paths(&store),
-            if stage.load_rules().is_loaded(store.paths.resolve(a)) {
+            if stage.load_rules().is_loaded(store.paths().resolve(a)) {
                 vec![a]
             } else {
                 vec![]
@@ -483,7 +483,7 @@ fn all_children_never_restore_removed_relocation_sources() {
     let stage = Stage::compose(&mut store, loaded.root_layer, StageOptions::default());
     assert!(stage.prim(plot, &store).is_some());
     assert!(!stage.prim(plot, &store).is_some_and(|p| p.is_active()));
-    for parent in stage.traverse_all(store.paths.lookup(&Path::root()).unwrap()) {
+    for parent in stage.traverse_all(store.paths().lookup(&Path::root()).unwrap()) {
         let children: Vec<_> = stage
             .prim(parent, &store)
             .into_iter()
@@ -494,8 +494,8 @@ fn all_children_never_restore_removed_relocation_sources() {
             assert!(
                 stage.prim(*child, &store).is_some(),
                 "all children includes absent {} under {}",
-                store.paths.resolve(*child).display(&store.tokens),
-                store.paths.resolve(parent).display(&store.tokens)
+                store.paths().resolve(*child).display(store.tokens()),
+                store.paths().resolve(parent).display(store.tokens())
             );
         }
     }

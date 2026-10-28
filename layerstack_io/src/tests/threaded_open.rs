@@ -136,7 +136,7 @@ fn render_with(
         Ok(doc) => doc,
         Err(error) => return format!("{error:?}"),
     };
-    let (tokens, paths) = (&doc.store.tokens, &doc.store.paths);
+    let (tokens, paths) = (&doc.store.tokens(), &doc.store.paths());
     let mut out = String::new();
     let report = doc.load_report();
     writeln!(out, "layers {:?}", report.layers).unwrap();
@@ -223,7 +223,7 @@ fn a_stage_opened_on_threads_finds_an_edit_of_a_deep_layer_as_one_thread_does() 
         let (store, stage) = doc.parts_mut();
         let changed = stage.notify_changed_layers(store);
         stage.synchronize(store);
-        let (tokens, paths) = (&doc.store.tokens, &doc.store.paths);
+        let (tokens, paths) = (&doc.store.tokens(), &doc.store.paths());
         let prims: Vec<String> = doc
             .view()
             .traverse()

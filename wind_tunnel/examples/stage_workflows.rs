@@ -147,7 +147,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .stage()
         .traverse_all(root)
         .find(|prim| *prim != root);
-    let documentation = document.store_mut().tokens.intern("documentation");
+    let documentation = document.store_mut().tokens().intern("documentation");
     let started = Instant::now();
     let mut inverse = None;
     if let Some(prim) = prim {

@@ -107,7 +107,7 @@ pub(crate) fn generate(
     let mut fallback_prim_types: Vec<(String, Vec<String>)> = Vec::new();
     let mut removed = Vec::new();
     for &path in &flat_roots {
-        let name = store.paths.resolve(path).display(&store.tokens);
+        let name = store.paths().resolve(path).display(store.tokens());
         let name = name.trim_start_matches('/');
         let Some(class) = parsed.classes.iter().find(|class| class.name == name) else {
             removed.push(path);
@@ -118,10 +118,10 @@ pub(crate) fn generate(
         let mut properties: Vec<String> = spec
             .properties
             .iter()
-            .map(|entry| store.tokens.resolve(entry.name).to_owned())
+            .map(|entry| store.tokens().resolve(entry.name).to_owned())
             .collect();
         if super::names::family_and_version(name).0.ends_with("API") {
-            let api_schema_type = dict_str(&custom_data, "apiSchemaType", &store.tokens)
+            let api_schema_type = dict_str(&custom_data, "apiSchemaType", store.tokens())
                 .unwrap_or_else(|| SINGLE_APPLY.into());
             if api_schema_type == MULTIPLE_APPLY {
                 properties = rename_with_prefix(
@@ -137,7 +137,7 @@ pub(crate) fn generate(
             check_api_metadata(class, spec, &api_schema_type, &names, store)?;
         }
         if spec.type_name.is_some() {
-            let types = dict_strings(&custom_data, "fallbackTypes", &store.tokens);
+            let types = dict_strings(&custom_data, "fallbackTypes", store.tokens());
             if !types.is_empty() {
                 fallback_prim_types.push((name.to_owned(), types));
             }
@@ -149,7 +149,7 @@ pub(crate) fn generate(
                 class
                     .all_applied_api_schemas
                     .iter()
-                    .map(|s| store.tokens.intern(s))
+                    .map(|s| store.tokens().intern(s))
                     .collect(),
             );
             edit.set_metadata(
@@ -169,7 +169,7 @@ pub(crate) fn generate(
                 Value::Array(
                     overrides
                         .iter()
-                        .map(|n| Value::Token(store.tokens.intern(n)))
+                        .map(|n| Value::Token(store.tokens().intern(n)))
                         .collect(),
                 ),
             ));
@@ -197,7 +197,7 @@ pub(crate) fn generate(
                 })
                 .into_iter()
                 .collect();
-            let at = target.property(PropertyPath::new(path, store.tokens.intern(property)));
+            let at = target.property(PropertyPath::new(path, store.tokens().intern(property)));
             set_custom_data(&mut edit, at, data, &names);
         }
     }
@@ -219,7 +219,7 @@ pub(crate) fn generate(
                     Value::Array(
                         types
                             .iter()
-                            .map(|t| Value::Token(store.tokens.intern(t)))
+                            .map(|t| Value::Token(store.tokens().intern(t)))
                             .collect(),
                     ),
                 )
@@ -227,7 +227,7 @@ pub(crate) fn generate(
             .collect();
         edit.set_layer_metadata(
             flat,
-            store.tokens.intern("fallbackPrimTypes"),
+            store.tokens().intern("fallbackPrimTypes"),
             FieldValue::Value(Value::Dictionary(types)),
         );
     }
@@ -245,7 +245,7 @@ struct Names {
 
 impl Names {
     fn new(store: &layerstack::InMemoryStore) -> Self {
-        let tokens = &store.tokens;
+        let tokens = &store.tokens();
         Self {
             documentation: tokens.intern("documentation"),
             custom_data: tokens.intern("customData"),
@@ -281,13 +281,13 @@ fn apply(edit: &Transaction, store: &mut layerstack::InMemoryStore) -> Result<()
 
 /// The root prims of `layer`, in its order.
 fn root_prims(layer: &Layer, store: &layerstack::InMemoryStore) -> Vec<PathId> {
-    let root = store.paths.intern(Path::root());
+    let root = store.paths().intern(Path::root());
     layer
         .prim(root)
         .map(|spec| {
             spec.authored_children
                 .iter()
-                .map(|&name| store.paths.intern(Path::root().join(&[name])))
+                .map(|&name| store.paths().intern(Path::root().join(&[name])))
                 .collect()
         })
         .unwrap_or_default()
@@ -335,8 +335,8 @@ fn rename_with_prefix(
         return Ok(Vec::new());
     }
     let prefix = dict_get(custom_data, "propertyNamespacePrefix")
-        .filter(|value| is_truthy(value, &store.tokens))
-        .and_then(|value| super::classes::value_str(value, &store.tokens))
+        .filter(|value| is_truthy(value, store.tokens()))
+        .and_then(|value| super::classes::value_str(value, store.tokens()))
         .ok_or_else(|| CompileError::Schema {
             path: format!("/{}", class.name),
             rule: Rule::PropertiesWithoutPrefix,
@@ -356,13 +356,13 @@ fn rename_with_prefix(
             });
         }
         edit.copy_spec(
-            target.property(PropertyPath::new(path, store.tokens.intern(name))),
-            target.property(PropertyPath::new(path, store.tokens.intern(&new))),
+            target.property(PropertyPath::new(path, store.tokens().intern(name))),
+            target.property(PropertyPath::new(path, store.tokens().intern(&new))),
         );
         renamed.push(new);
     }
     for name in properties {
-        edit.remove_spec(target.property(PropertyPath::new(path, store.tokens.intern(name))));
+        edit.remove_spec(target.property(PropertyPath::new(path, store.tokens().intern(name))));
     }
     Ok(renamed)
 }
@@ -390,7 +390,7 @@ fn check_api_metadata(
         .fields
         .iter()
         .filter(|field| field.name != names.documentation)
-        .map(|field| store.tokens.resolve(field.name).to_owned())
+        .map(|field| store.tokens().resolve(field.name).to_owned())
         .collect();
     for (key, present) in [
         ("typeName", spec.type_name.is_some()),
@@ -431,7 +431,7 @@ fn briefs(
 ) -> BTreeMap<(String, Option<String>), String> {
     let mut briefs = BTreeMap::new();
     for path in root_prims(flat, store) {
-        let class = store.paths.resolve(path).display(&store.tokens);
+        let class = store.paths().resolve(path).display(store.tokens());
         let class = class.trim_start_matches('/').to_owned();
         if class == "GLOBAL" {
             continue;
@@ -446,7 +446,7 @@ fn briefs(
             briefs.insert((class.clone(), None), brief);
         }
         for entry in &spec.properties {
-            let property = store.tokens.resolve(entry.name).to_owned();
+            let property = store.tokens().resolve(entry.name).to_owned();
             let user = user_doc.and_then(|doc| doc.custom_data(&class, Some(&property)));
             if let Some(brief) = brief(
                 user.as_deref(),
@@ -516,7 +516,7 @@ impl UserDoc {
             return Ok(None);
         }
         let stage = SchemaStage::open(&path, search)?;
-        let custom_data = stage.store().tokens.intern("customData");
+        let custom_data = stage.store().tokens().intern("customData");
         Ok(Some(Self { stage, custom_data }))
     }
 
@@ -524,8 +524,8 @@ impl UserDoc {
     fn custom_data(&self, class: &str, property: Option<&str>) -> Option<Vec<(Arc<str>, Value)>> {
         let store = self.stage.store();
         let class = store
-            .paths
-            .lookup(&Path::root().join(&[store.tokens.lookup(class)?]))?;
+            .paths()
+            .lookup(&Path::root().join(&[store.tokens().lookup(class)?]))?;
         let class = self.stage.view().prim(class)?;
         let resolved = match property {
             None => class
@@ -533,7 +533,7 @@ impl UserDoc {
                 .and_then(layerstack::Resolved::into_value)
                 .map(|resolved| resolved.value),
             Some(property) => {
-                store.tokens.lookup(property)?;
+                store.tokens().lookup(property)?;
                 class
                     .property(property)
                     .and_then(|property| property.metadata(self.custom_data))
@@ -558,7 +558,7 @@ impl UserDoc {
 /// the layer's comment first, dictionaries in key order, then without the
 /// doxygen commands usdGenSchema removes from the text.
 fn write(layer: &Layer, store: &layerstack::InMemoryStore) -> Result<String, CompileError> {
-    let mut document = layerstack_usda::save::layer_document(layer, &store.tokens, &store.paths)
+    let mut document = layerstack_usda::save::layer_document(layer, store.tokens(), store.paths())
         .map_err(|e| CompileError::Write {
             message: e.to_string(),
         })?;

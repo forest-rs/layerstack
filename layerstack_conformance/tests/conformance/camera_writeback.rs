@@ -142,8 +142,8 @@ fn stronger_last_field_and_untyped_declarations_reject_without_partial_edits() {
             support::scene(include_str!("../../fixtures/camera_writeback.usda"));
         let camera = source(&mut store, &live);
         let path = store.path("/Empty");
-        let field = store.tokens.intern("shutter:close");
-        let ty = store.tokens.intern("Camera");
+        let field = store.tokens().intern("shutter:close");
+        let ty = store.tokens().intern("Camera");
         let prop = if bad_type {
             PropertySpec::attribute().with_default(Value::Double(3.))
         } else {
@@ -201,7 +201,7 @@ fn singular_parent_and_invalid_time_leave_batch_unchanged() {
     let camera = source(&mut store, &live);
     let path = store.path("/DestinationParent/Destination");
     let parent = store.path("/DestinationParent");
-    let scale = store.tokens.intern("xformOp:scale");
+    let scale = store.tokens().intern("xformOp:scale");
     store
         .layer_mut(LayerId(1))
         .unwrap()
@@ -282,7 +282,7 @@ fn reference_target_maps_all_camera_samples_and_matrix_together() {
     let camera = source(&mut store, &live);
     let path = store.path("/Use");
     let asset = store.path("/Asset");
-    let camera_type = store.tokens.intern("Camera");
+    let camera_type = store.tokens().intern("Camera");
     let mut referenced = Layer::new(LayerId(2));
     referenced.insert_prim(asset, PrimSpec::def().with_type_name(camera_type));
     store.insert_layer(referenced);
@@ -322,7 +322,7 @@ fn reference_target_maps_all_camera_samples_and_matrix_together() {
         "shutter:open",
         "clippingPlanes",
     ] {
-        let name = store.tokens.lookup(name).unwrap();
+        let name = store.tokens().lookup(name).unwrap();
         let property = store.layer(LayerId(2)).unwrap().prims()[&asset]
             .property(name)
             .unwrap();
@@ -371,8 +371,8 @@ fn nonfinite_extra_planes_and_unreadable_parent_ops_reject_without_edits() {
         "invalid planes collect no edits"
     );
     let parent = store.path("/DestinationParent");
-    let op = store.tokens.intern("xformOp:missing");
-    let order = store.tokens.lookup("xformOpOrder").unwrap();
+    let op = store.tokens().intern("xformOp:missing");
+    let order = store.tokens().lookup("xformOpOrder").unwrap();
     store
         .layer_mut(LayerId(1))
         .unwrap()

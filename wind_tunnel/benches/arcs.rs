@@ -25,15 +25,15 @@ use layerstack::{
 fn build_forest(n: usize) -> InMemoryStore {
     let mut store = InMemoryStore::default();
 
-    let f_height = store.tokens.intern("height");
-    let f_color = store.tokens.intern("color");
-    let f_roughness = store.tokens.intern("roughness");
-    let f_density = store.tokens.intern("density");
-    let trunk_tok = store.tokens.intern("Trunk");
-    let canopy_tok = store.tokens.intern("Canopy");
-    let season = store.tokens.intern("season");
-    let summer = store.tokens.intern("summer");
-    let autumn = store.tokens.intern("autumn");
+    let f_height = store.tokens().intern("height");
+    let f_color = store.tokens().intern("color");
+    let f_roughness = store.tokens().intern("roughness");
+    let f_density = store.tokens().intern("density");
+    let trunk_tok = store.tokens().intern("Trunk");
+    let canopy_tok = store.tokens().intern("Canopy");
+    let season = store.tokens().intern("season");
+    let summer = store.tokens().intern("summer");
+    let autumn = store.tokens().intern("autumn");
 
     // --- Bark layer (LayerId 3): a material the asset references. ---
     let bark = store.path("/Bark");
@@ -112,7 +112,7 @@ fn build_forest(n: usize) -> InMemoryStore {
     let mut children = Vec::with_capacity(n);
     for i in 0..n {
         let name = alloc::format!("Tree_{i:05}");
-        children.push(store.tokens.intern(&name));
+        children.push(store.tokens().intern(&name));
         let path = store.path(&alloc::format!("/Forest/{name}"));
         let mut spec = PrimSpec::def()
             .with_reference(Reference::new(LayerId(2), tree))
@@ -158,7 +158,7 @@ fn bench_arc_edits(c: &mut Criterion) {
     for &n in &[10, 100, 250] {
         let mut store = build_forest(n);
         let bark = store.path("/Bark");
-        let roughness = store.tokens.intern("roughness");
+        let roughness = store.tokens().intern("roughness");
         let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
         let mut value = 0.25;
         group.bench_function(BenchmarkId::from_parameter(n), |b| {
@@ -186,12 +186,12 @@ fn bench_arc_payloads(c: &mut Criterion) {
                 b.iter_batched(
                     || {
                         let mut store = build_forest(100);
-                        let points = store.tokens.intern("points");
+                        let points = store.tokens().intern("points");
                         let value = Value::Array(vec![Value::Vec3f([1.0, 2.0, 3.0]); len]);
                         if location == "unselected_variant" {
                             let tree = store.path("/Tree");
-                            let season = store.tokens.intern("season");
-                            let winter = store.tokens.intern("winter");
+                            let season = store.tokens().intern("season");
+                            let winter = store.tokens().intern("winter");
                             let spec = store.layer_mut(LayerId(2)).unwrap().prim_mut(tree).unwrap();
                             spec.rare_mut()
                                 .variant_sets

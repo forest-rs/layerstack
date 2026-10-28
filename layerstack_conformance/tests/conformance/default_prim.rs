@@ -112,7 +112,7 @@ fn layer_name(loaded: &LoadedStage, layer: LayerId) -> String {
 }
 
 fn display(loaded: &LoadedStage, path: PathId) -> String {
-    loaded.store.paths.display(path, &loaded.store.tokens)
+    loaded.store.paths().display(path, loaded.store.tokens())
 }
 
 /// Renders an error in the vectors' shape.
@@ -189,8 +189,8 @@ fn default_prim_arcs_match_openusd() {
             let children: Vec<String> = children_of(&stage, &loaded.store, id)
                 .iter()
                 .map(|child| {
-                    let leaf = loaded.store.paths.resolve(*child).leaf().expect("name");
-                    loaded.store.tokens.resolve(leaf).to_string()
+                    let leaf = loaded.store.paths().resolve(*child).leaf().expect("name");
+                    loaded.store.tokens().resolve(leaf).to_string()
                 })
                 .collect();
             assert_eq!(
@@ -206,7 +206,7 @@ fn default_prim_arcs_match_openusd() {
                 .map(|(layer, spec)| {
                     (
                         layer_name(&loaded, layer),
-                        spec.display(&loaded.store.paths, &loaded.store.tokens),
+                        spec.display(loaded.store.paths(), loaded.store.tokens()),
                     )
                 })
                 .collect();
@@ -292,7 +292,7 @@ fn placements_do_not_copy_other_root_prims() {
                 format!(
                     "{} {}",
                     layer_name(&loaded, layer),
-                    spec.display(&loaded.store.paths, &loaded.store.tokens)
+                    spec.display(loaded.store.paths(), loaded.store.tokens())
                 )
             })
             .collect();

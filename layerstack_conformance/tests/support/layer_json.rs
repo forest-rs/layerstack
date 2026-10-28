@@ -26,7 +26,7 @@ pub(crate) fn value(value: &Value, store: &InMemoryStore) -> Json {
         Value::Half(bits) => json!(f64::from(half::to_f32(*bits))),
         Value::Float(v) => json!(f64::from(*v)),
         Value::Double(v) | Value::TimeCode(v) | Value::Duration(v) => json!(v),
-        Value::Token(token) => json!(store.tokens.resolve(*token)),
+        Value::Token(token) => json!(store.tokens().resolve(*token)),
         Value::String(text) | Value::Asset(text) => json!(&**text),
         Value::Vec2f(v) => floats(v.map(f64::from)),
         Value::Vec3f(v) => floats(v.map(f64::from)),
@@ -63,7 +63,7 @@ fn rows(flat: &[f64], n: usize) -> Json {
 fn metadata(spec: &PropertySpec, key: &str, store: &InMemoryStore) -> Json {
     spec.metadata
         .iter()
-        .find(|entry| store.tokens.resolve(entry.name) == key)
+        .find(|entry| store.tokens().resolve(entry.name) == key)
         .map_or(Json::Null, |entry| match &entry.value {
             FieldValue::Value(v) => value(v, store),
             other => panic!("unexpected {key} field {other:?}"),
@@ -107,7 +107,7 @@ pub(crate) fn prim_attributes(store: &InMemoryStore, layer: LayerId, path: PathI
             .filter(|entry| entry.spec.kind == PropertyKind::Attribute)
             .map(|entry| {
                 (
-                    store.tokens.resolve(entry.name).to_string(),
+                    store.tokens().resolve(entry.name).to_string(),
                     attribute(&entry.spec, store),
                 )
             })
@@ -121,7 +121,7 @@ pub(crate) fn prim_attributes(store: &InMemoryStore, layer: LayerId, path: PathI
 pub(crate) fn prim(spec: &PrimSpec, store: &InMemoryStore) -> Json {
     let mut properties = Map::new();
     for entry in &spec.properties {
-        let name = store.tokens.resolve(entry.name).to_string();
+        let name = store.tokens().resolve(entry.name).to_string();
         let property = &entry.spec;
         let rendered = match property.kind {
             PropertyKind::Attribute => {
@@ -134,7 +134,7 @@ pub(crate) fn prim(spec: &PrimSpec, store: &InMemoryStore) -> Json {
                     .targets
                     .iter()
                     .flat_map(|op| op.apply_to(&[]))
-                    .map(|target| target.display(&store.paths, &store.tokens))
+                    .map(|target| target.display(store.paths(), store.tokens()))
                     .collect();
                 json!({ "targets": targets })
             }
@@ -144,24 +144,24 @@ pub(crate) fn prim(spec: &PrimSpec, store: &InMemoryStore) -> Json {
     let field = |key: &str| {
         spec.fields
             .iter()
-            .find(|entry| store.tokens.resolve(entry.name) == key)
+            .find(|entry| store.tokens().resolve(entry.name) == key)
             .map(|entry| &entry.value)
     };
     let api_schemas: Vec<String> = match field("apiSchemas") {
         Some(FieldValue::TokenListOp(op)) => op
             .apply_to(&[])
             .into_iter()
-            .map(|token| store.tokens.resolve(token).to_string())
+            .map(|token| store.tokens().resolve(token).to_string())
             .collect(),
         _ => Vec::new(),
     };
     let kind = match field("kind") {
-        Some(FieldValue::Value(Value::Token(token))) => json!(store.tokens.resolve(*token)),
+        Some(FieldValue::Value(Value::Token(token))) => json!(store.tokens().resolve(*token)),
         _ => Json::Null,
     };
     json!({
         "specifier": spec.specifier.map(|s| format!("{s:?}").to_lowercase()),
-        "type": spec.type_name.map(|ty| store.tokens.resolve(ty).to_string()),
+        "type": spec.type_name.map(|ty| store.tokens().resolve(ty).to_string()),
         "apiSchemas": api_schemas,
         "kind": kind,
         "properties": properties,
@@ -175,7 +175,12 @@ pub(crate) fn layer(store: &InMemoryStore, layer: LayerId) -> Json {
         layer
             .prims()
             .iter()
-            .map(|(path, spec)| (store.paths.display(*path, &store.tokens), prim(spec, store)))
+            .map(|(path, spec)| {
+                (
+                    store.paths().display(*path, store.tokens()),
+                    prim(spec, store),
+                )
+            })
             .filter(|(path, _)| path != "/")
             .collect(),
     )

@@ -108,11 +108,11 @@ fn fixture() -> Fixture {
         store.path("/ScatterOutput"),
         store.path("/UnrelatedOutput"),
     ];
-    let ty = store.tokens.intern("GenerativeProcedural");
-    let system = store.tokens.intern("test:sum");
-    let system_name = store.tokens.intern("proceduralSystem");
-    let seed_name = store.tokens.intern("primvars:seed");
-    let value = store.tokens.intern("value");
+    let ty = store.tokens().intern("GenerativeProcedural");
+    let system = store.tokens().intern("test:sum");
+    let system_name = store.tokens().intern("proceduralSystem");
+    let seed_name = store.tokens().intern("primvars:seed");
+    let value = store.tokens().intern("value");
     let mut layer = Layer::new(ROOT);
     for (i, &recipe) in recipes.iter().enumerate() {
         let mut prim = PrimSpec::def();
@@ -139,7 +139,7 @@ fn fixture() -> Fixture {
     }
     store.insert_layer(layer);
     let options = StageOptions {
-        schemas: Some(Arc::new(crate::openusd(&store.tokens))),
+        schemas: Some(Arc::new(crate::openusd(store.tokens()))),
         ..Default::default()
     };
     let live = LiveStage::compose(&mut store, ROOT, options);
@@ -410,7 +410,7 @@ fn rejected_publication_guards_leave_all_outputs_and_acknowledgements_unchanged(
     assert!(!publisher.acknowledged);
     assert_eq!(f.store.layer(ROOT).unwrap().generation(), before);
     for site in f.outputs {
-        let value = f.store.tokens.lookup("value").unwrap();
+        let value = f.store.tokens().lookup("value").unwrap();
         assert_eq!(authored(&f, PropertyPath::new(site, value)), Value::Int(0));
     }
 }

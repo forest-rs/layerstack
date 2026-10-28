@@ -19,9 +19,9 @@ fn bench(c: &mut Criterion) {
     for n in [1_000, 10_000, 100_000] {
         for (shape, fanout) in [("balanced", 10), ("wide", n)] {
             let mut store = InMemoryStore::default();
-            let xform = store.tokens.intern("Xform");
-            let mesh = store.tokens.intern("Mesh");
-            let extent = store.tokens.intern("extent");
+            let xform = store.tokens().intern("Xform");
+            let mesh = store.tokens().intern("Mesh");
+            let extent = store.tokens().intern("extent");
             let mut layer = Layer::new(LayerId(1));
             let root = store.path("/World");
             let mut names = vec![String::from("/World")];
@@ -47,7 +47,7 @@ fn bench(c: &mut Criterion) {
             }
             store.insert_layer(layer);
             let options = StageOptions {
-                schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
+                schemas: Some(Arc::new(layerstack_schemas::openusd(store.tokens()))),
                 ..StageOptions::default()
             };
             let stage = Stage::compose(&mut store, LayerId(1), options);
@@ -107,9 +107,9 @@ fn animation(c: &mut Criterion) {
     group.sample_size(10);
     for (name, every) in [("static", 0), ("mixed", 10), ("animated", 1)] {
         let mut store = InMemoryStore::default();
-        let xform = store.tokens.intern("Xform");
-        let mesh = store.tokens.intern("Mesh");
-        let extent = store.tokens.intern("extent");
+        let xform = store.tokens().intern("Xform");
+        let mesh = store.tokens().intern("Mesh");
+        let extent = store.tokens().intern("extent");
         let mut layer = Layer::new(LayerId(1));
         let root = store.path("/World");
         layer.insert_prim(root, PrimSpec::def().with_type_name(xform));
@@ -134,7 +134,7 @@ fn animation(c: &mut Criterion) {
         }
         store.insert_layer(layer);
         let options = StageOptions {
-            schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
+            schemas: Some(Arc::new(layerstack_schemas::openusd(store.tokens()))),
             ..StageOptions::default()
         };
         let stage = Stage::compose(&mut store, LayerId(1), options);

@@ -762,8 +762,8 @@ mod tests {
             let read = read_usda(
                 source,
                 LayerId(1),
-                &store.tokens,
-                &store.paths,
+                store.tokens(),
+                store.paths(),
                 &mut NoAssets,
             );
             let errors = read
@@ -783,12 +783,12 @@ mod tests {
         let emitted = crate::emit::emit(
             &parsed.layer,
             LayerId(1),
-            &old.tokens,
-            &old.paths,
+            old.tokens(),
+            old.paths(),
             &mut NoAssets,
         );
         let new = InMemoryStore::default();
-        let imported = read_usda(source, LayerId(1), &new.tokens, &new.paths, &mut NoAssets);
+        let imported = read_usda(source, LayerId(1), new.tokens(), new.paths(), &mut NoAssets);
         let diagnostics: Vec<_> = imported
             .parse_diagnostics
             .into_iter()
@@ -807,8 +807,8 @@ mod tests {
         assert_eq!(emitted.rejected, imported.emitted.rejected);
         // Writer comparison retains declared types, empty array kinds, float
         // precision, signed zero, quaternion order, samples and variant sites.
-        let old_saved = crate::save::save_usda(&emitted.layer, &old.tokens, &old.paths);
-        let new_saved = crate::save::save_usda(&imported.emitted.layer, &new.tokens, &new.paths);
+        let old_saved = crate::save::save_usda(&emitted.layer, old.tokens(), old.paths());
+        let new_saved = crate::save::save_usda(&imported.emitted.layer, new.tokens(), new.paths());
         assert_eq!(old_saved, new_saved, "saved layer: {source}");
         if old_saved.is_err() {
             assert_eq!(
@@ -925,12 +925,18 @@ mod tests {
             let emitted = crate::emit::emit(
                 &parsed.layer,
                 LayerId(1),
-                &old.tokens,
-                &old.paths,
+                old.tokens(),
+                old.paths(),
                 &mut NoAssets,
             );
             let new = InMemoryStore::default();
-            let imported = read_usda(&source, LayerId(1), &new.tokens, &new.paths, &mut NoAssets);
+            let imported = read_usda(
+                &source,
+                LayerId(1),
+                new.tokens(),
+                new.paths(),
+                &mut NoAssets,
+            );
             let value = |layer: &layerstack::Layer| {
                 let prim = layer
                     .prims()
@@ -1128,8 +1134,8 @@ def "D\4" {}
         let imported = read_usda(
             source,
             LayerId(1),
-            &store.tokens,
-            &store.paths,
+            store.tokens(),
+            store.paths(),
             &mut NoAssets,
         );
         assert_eq!(
@@ -1151,8 +1157,8 @@ def "D\4" {}
         let imported = read_usda(
             &source,
             LayerId(1),
-            &store.tokens,
-            &store.paths,
+            store.tokens(),
+            store.paths(),
             &mut NoAssets,
         );
         assert!(imported.parse_diagnostics.is_empty());

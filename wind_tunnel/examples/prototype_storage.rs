@@ -23,12 +23,12 @@ fn main() {
     let asset_path = store.path("/Asset");
     let world = store.path("/World");
     let fields: Vec<_> = (0..4)
-        .map(|i| store.tokens.intern(format!("field{i}")))
+        .map(|i| store.tokens().intern(format!("field{i}")))
         .collect();
     let mut asset = Layer::new(LayerId(2));
     let mut names = Vec::new();
     for i in 0..children {
-        names.push(store.tokens.intern(format!("Child{i}")));
+        names.push(store.tokens().intern(format!("Child{i}")));
         let path = store.path(&format!("/Asset/Child{i}"));
         let mut spec = PrimSpec::def();
         for (n, &field) in fields.iter().enumerate() {
@@ -41,7 +41,7 @@ fn main() {
     let mut layer = Layer::new(LayerId(1));
     let mut names = Vec::new();
     for i in 0..count {
-        names.push(store.tokens.intern(format!("Instance{i}")));
+        names.push(store.tokens().intern(format!("Instance{i}")));
         let path = store.path(&format!("/World/Instance{i}"));
         layer.insert_prim(
             path,

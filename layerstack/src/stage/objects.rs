@@ -338,7 +338,7 @@ impl<'a> Prim<'a> {
     /// };
     ///
     /// let mut store = InMemoryStore::default();
-    /// let (tile, width) = (store.tokens.intern("Tile"), store.tokens.intern("width"));
+    /// let (tile, width) = (store.tokens().intern("Tile"), store.tokens().intern("width"));
     /// let floor = store.path("/Floor");
     /// let mut layer = Layer::new(LayerId(1));
     /// layer.insert_prim(floor, PrimSpec::def().with_type_name(tile));
@@ -349,7 +349,7 @@ impl<'a> Prim<'a> {
     ///     PropertyDefinition::attribute(width).with_fallback(1.0_f32),
     /// ));
     /// let options = StageOptions {
-    ///     schemas: Some(Arc::new(builder.build(&store.tokens))),
+    ///     schemas: Some(Arc::new(builder.build(store.tokens()))),
     ///     ..StageOptions::default()
     /// };
     /// let stage = Stage::compose(&mut store, LayerId(1), options);
@@ -889,7 +889,7 @@ impl<'a> Attribute<'a> {
     /// ```
     /// # use layerstack::{InMemoryStore, Layer, LayerId, PrimSpec, PropertySpec, PropertyType, Stage, StageOptions, Variability};
     /// # let mut store = InMemoryStore::default();
-    /// # let (world, radius) = (store.path("/World"), store.tokens.intern("radius"));
+    /// # let (world, radius) = (store.path("/World"), store.tokens().intern("radius"));
     /// # let mut layer = Layer::new(LayerId(1));
     /// # layer.insert_prim(world, PrimSpec::def().with_property(radius,
     /// #     PropertySpec::typed_attribute(PropertyType::parse("double").unwrap())));
@@ -967,7 +967,7 @@ impl<'a> Attribute<'a> {
     /// ```
     /// # use layerstack::{InMemoryStore, Layer, LayerId, PrimSpec, PropertySpec, PropertyType, Stage, StageOptions, Time, Value};
     /// # let mut store = InMemoryStore::default();
-    /// # let (world, radius) = (store.path("/World"), store.tokens.intern("radius"));
+    /// # let (world, radius) = (store.path("/World"), store.tokens().intern("radius"));
     /// # let double = PropertyType::parse("double").unwrap();
     /// # let mut layer = Layer::new(LayerId(1));
     /// # layer.insert_prim(world, PrimSpec::def().with_property(radius,
@@ -1105,7 +1105,7 @@ impl<'a> Attribute<'a> {
     /// ```
     /// # use layerstack::{InMemoryStore, Layer, LayerId, PrimSpec, PropertySpec, PropertyType, Stage, StageOptions, Time, Value, ValueSource};
     /// # let mut store = InMemoryStore::default();
-    /// # let (world, radius) = (store.path("/World"), store.tokens.intern("radius"));
+    /// # let (world, radius) = (store.path("/World"), store.tokens().intern("radius"));
     /// # let double = PropertyType::parse("double").unwrap();
     /// # let mut layer = Layer::new(LayerId(1));
     /// # layer.insert_prim(world, PrimSpec::def().with_property(radius,

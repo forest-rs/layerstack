@@ -19,7 +19,7 @@ use std::path::PathBuf;
 
 use std::collections::BTreeMap;
 
-use layerstack::{InMemoryStore, LayerId, LayerStore, Stage, StageOptions};
+use layerstack::{InMemoryStore, LayerId, Stage, StageOptions};
 use layerstack_conformance::{
     pcp_txt::load_pcp_txt,
     usda_real::{LoadedStage, load_entry_usda},
@@ -52,8 +52,8 @@ fn render_store(
     layer_names: &BTreeMap<LayerId, String>,
     threads: usize,
 ) -> String {
-    let standin = store.tokens.intern("standin");
-    let render = store.tokens.intern("render");
+    let standin = store.tokens().intern("standin");
+    let render = store.tokens().intern("render");
     let stage = Stage::compose(
         store,
         root,
@@ -201,8 +201,8 @@ fn a_wide_scene_composes_alike_on_any_number_of_threads() {
         let result = layerstack_usda::read_usda(
             &source,
             LayerId(1),
-            &store.tokens,
-            &store.paths,
+            store.tokens(),
+            store.paths(),
             &mut NoAssets,
         );
         assert!(!result.emitted.rejected, "{:?}", result.emitted.diagnostics);

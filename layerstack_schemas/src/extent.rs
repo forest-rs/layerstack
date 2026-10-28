@@ -431,8 +431,8 @@ mod tests {
     fn mesh_points_reject_wrong_native_empty_kind() {
         let mut store = InMemoryStore::default();
         let path = store.path("/Mesh");
-        let mesh = store.tokens.intern("Mesh");
-        let points = store.tokens.intern("points");
+        let mesh = store.tokens().intern("Mesh");
+        let points = store.tokens().intern("points");
         for (value, accepted) in [
             (
                 Value::TypedArray(TypedArray::Vec3f(Arc::new(Vec::new()))),
@@ -455,7 +455,7 @@ mod tests {
                     .with_property(points, PropertySpec::attribute().with_default(value)),
             );
             store.insert_layer(layer);
-            let schemas = crate::openusd(&store.tokens);
+            let schemas = crate::openusd(store.tokens());
             let stage = Stage::compose(
                 &mut store,
                 LayerId(1),
@@ -474,18 +474,18 @@ mod tests {
         let mut store = InMemoryStore::default();
         let path = store.path("/Shape");
         let mut builder = layerstack::SchemaRegistry::builder();
-        crate::register(&mut builder, &[crate::Domain::UsdGeom], &store.tokens).unwrap();
-        let schema = store.tokens.intern("HostPointGeometry");
+        crate::register(&mut builder, &[crate::Domain::UsdGeom], store.tokens()).unwrap();
+        let schema = store.tokens().intern("HostPointGeometry");
         builder.register(
             layerstack::SchemaDefinition::typed(schema)
-                .with_parent(store.tokens.lookup("PointBased").unwrap()),
+                .with_parent(store.tokens().lookup("PointBased").unwrap()),
         );
-        let schemas = builder.build(&store.tokens);
+        let schemas = builder.build(store.tokens());
         let mut layer = Layer::new(LayerId(1));
         layer.insert_prim(
             path,
             PrimSpec::def().with_type_name(schema).with_property(
-                store.tokens.intern("points"),
+                store.tokens().intern("points"),
                 PropertySpec::attribute()
                     .with_default(Value::from(alloc::vec![[-1_f32, 2., 3.], [4., -5., 6.]])),
             ),
@@ -523,7 +523,7 @@ mod tests {
         ] {
             let mut store = InMemoryStore::default();
             let path = store.path("/Shape");
-            let mut prim = PrimSpec::def().with_type_name(store.tokens.intern(schema));
+            let mut prim = PrimSpec::def().with_type_name(store.tokens().intern(schema));
             for (name, value) in [
                 ("width", -6.),
                 ("length", 10.),
@@ -532,14 +532,14 @@ mod tests {
                 ("radiusBottom", -3.),
             ] {
                 prim = prim.with_property(
-                    store.tokens.intern(name),
+                    store.tokens().intern(name),
                     PropertySpec::attribute().with_default(Value::Double(value)),
                 );
             }
             let mut layer = Layer::new(LayerId(1));
             layer.insert_prim(path, prim);
             store.insert_layer(layer);
-            let schemas = crate::openusd(&store.tokens);
+            let schemas = crate::openusd(store.tokens());
             let stage = Stage::compose(
                 &mut store,
                 LayerId(1),

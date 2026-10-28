@@ -58,7 +58,7 @@ fn triangle() -> GeneratedMesh {
 fn fixture() -> (InMemoryStore, LiveStage, layerstack::PathId, GeneratedMesh) {
     let mut store = InMemoryStore::default();
     store.insert_layer(Layer::new(LayerId(1)));
-    let schemas = Arc::new(crate::openusd(&store.tokens));
+    let schemas = Arc::new(crate::openusd(store.tokens()));
     let mut live = LiveStage::compose(
         &mut store,
         LayerId(1),
@@ -280,14 +280,14 @@ fn native_fixture() -> (
 ) {
     use layerstack::{PrimSpec, PropertySpec, PropertyType, Reference};
     let mut store = InMemoryStore::default();
-    let schemas = Arc::new(crate::openusd(&store.tokens));
+    let schemas = Arc::new(crate::openusd(store.tokens()));
     let asset = store.path("/Asset");
     let geometry = store.path("/Asset/Geom");
-    let tint = store.tokens.intern("primvars:tint");
-    let xform = store.tokens.intern("Xform");
-    let mesh_type = store.tokens.intern("Mesh");
+    let tint = store.tokens().intern("primvars:tint");
+    let xform = store.tokens().intern("Xform");
+    let mesh_type = store.tokens().intern("Mesh");
     let mut layer = Layer::new(LayerId(1));
-    let child_name = store.tokens.intern("Geom");
+    let child_name = store.tokens().intern("Geom");
     layer.insert_prim(
         asset,
         PrimSpec::class()
@@ -310,7 +310,7 @@ fn native_fixture() -> (
         ),
     ] {
         spec.set_property(
-            store.tokens.intern(name),
+            store.tokens().intern(name),
             PropertySpec::typed_attribute(PropertyType::parse(&alloc::format!("{ty}[]")).unwrap())
                 .with_default(Value::TypedArray(value)),
         );
@@ -433,7 +433,7 @@ fn inherited_appearance_and_missing_material_target_refresh_without_geometry_wor
     let missing = store.path("/Later");
     let binding = store.property_path("/B.material:binding");
     let visibility = store.property_path("/A.visibility");
-    let invisible = store.tokens.intern("invisible");
+    let invisible = store.tokens().intern("invisible");
     let mut change = Transaction::new();
     change.set_targets(
         EditTarget::for_layer(LayerId(1)).property(binding),
@@ -597,10 +597,10 @@ fn changed_point_count_revalidates_primvars_atomically_before_retry() {
 fn unsupported_geometry_is_explicit_for_ordinary_and_native_instance_roots() {
     for native in [false, true] {
         let mut store = InMemoryStore::default();
-        let schemas = Arc::new(crate::openusd(&store.tokens));
+        let schemas = Arc::new(crate::openusd(store.tokens()));
         let path = store.path("/Sphere");
         let source = store.path("/Asset");
-        let ty = store.tokens.intern("Sphere");
+        let ty = store.tokens().intern("Sphere");
         let mut layer = Layer::new(LayerId(1));
         let mut spec = layerstack::PrimSpec::def().with_type_name(ty);
         if native {
@@ -630,8 +630,8 @@ fn unsupported_geometry_is_explicit_for_ordinary_and_native_instance_roots() {
 #[test]
 fn registry_must_define_geometry_and_shading_not_merely_intern_names() {
     let mut store = InMemoryStore::default();
-    let schemas = Arc::new(crate::registry(&[crate::Domain::UsdGeom], &store.tokens));
-    let material = store.tokens.intern("Material");
+    let schemas = Arc::new(crate::registry(&[crate::Domain::UsdGeom], store.tokens()));
+    let material = store.tokens().intern("Material");
     let path = store.path("/Material");
     let mut layer = Layer::new(LayerId(1));
     layer.insert_prim(path, layerstack::PrimSpec::def().with_type_name(material));
@@ -656,12 +656,12 @@ fn minimal_custom_mesh_registry_reports_missing_property_without_panicking() {
     let mut registry = layerstack::SchemaRegistry::builder();
     for name in ["Mesh", "Material", "PointInstancer"] {
         registry.register(layerstack::SchemaDefinition::typed(
-            store.tokens.intern(name),
+            store.tokens().intern(name),
         ));
     }
-    let schemas = Arc::new(registry.build(&store.tokens));
+    let schemas = Arc::new(registry.build(store.tokens()));
     let path = store.path("/Mesh");
-    let mesh = store.tokens.lookup("Mesh").unwrap();
+    let mesh = store.tokens().lookup("Mesh").unwrap();
     let mut layer = Layer::new(LayerId(1));
     layer.insert_prim(path, layerstack::PrimSpec::def().with_type_name(mesh));
     store.insert_layer(layer);
@@ -903,7 +903,7 @@ fn face_subsets_refresh_material_components_and_report_invalid_families() {
     let transaction = edit.finish();
     live.apply(&mut store, &transaction).unwrap();
     let family = store.property_path("/Mesh.subsetFamily:materialBind:familyType");
-    let non_overlapping = store.tokens.intern("nonOverlapping");
+    let non_overlapping = store.tokens().intern("nonOverlapping");
     let binding = store.property_path("/Mesh/Face.material:binding");
     let target = EditTarget::for_layer(LayerId(1));
     let mut transaction = Transaction::new();
@@ -998,7 +998,7 @@ fn motion_time_change_updates_point_snapshot_without_geometry_revalidation() {
     );
     assert_eq!(later.work.meshes, 0);
     let before_rate = now.transforms.iter().next().unwrap().matrix;
-    let rate = store.tokens.intern("timeCodesPerSecond");
+    let rate = store.tokens().intern("timeCodesPerSecond");
     store
         .layer_mut(LayerId(1))
         .unwrap()
@@ -1034,7 +1034,7 @@ fn replacement_stage_in_same_domain_reports_reset_and_retires_all_handles() {
     let (mut store, mut live, _, _) = fixture();
     let mut observer = SceneObserver::default();
     let old = update(&mut observer, &mut live, &mut store).added[0].clone();
-    let schemas = Arc::new(crate::openusd(&store.tokens));
+    let schemas = Arc::new(crate::openusd(store.tokens()));
     let mut replacement = LiveStage::compose(
         &mut store,
         LayerId(1),

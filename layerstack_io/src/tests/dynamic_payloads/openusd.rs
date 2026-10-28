@@ -103,8 +103,8 @@ fn layer_id(doc: &StageDocument<Fixtures>, dir: &str, identifier: &str) -> Layer
 fn prim_id<B: Storage>(doc: &StageDocument<B>, path: &str) -> layerstack::PathId {
     let store = doc.store();
     store
-        .paths
-        .lookup(&layerstack::Path::parse_absolute(path, &store.tokens).unwrap())
+        .paths()
+        .lookup(&layerstack::Path::parse_absolute(path, store.tokens()).unwrap())
         .unwrap_or_else(|| panic!("{path} is not composed"))
 }
 
@@ -178,11 +178,11 @@ fn test_file_format() {
                 layer: LayerId(1),
                 bytes: Some(&bytes),
                 args,
-                tokens: &store.tokens,
-                paths: &store.paths,
+                tokens: store.tokens(),
+                paths: store.paths(),
             };
             let layer = format.read(&source).unwrap();
-            layerstack_usda::save::save_usda(&layer, &store.tokens, &store.paths).unwrap()
+            layerstack_usda::save::save_usda(&layer, store.tokens(), store.paths()).unwrap()
         };
         let baseline = |store: &InMemoryStore, file: &str, asset: &str| {
             let text = std::fs::read_to_string(format!("{dir}/baseline/{file}"))
@@ -191,13 +191,13 @@ fn test_file_format() {
             let read = layerstack_usda::read_usda_with_registry(
                 &text,
                 LayerId(2),
-                &store.tokens,
-                &store.paths,
+                store.tokens(),
+                store.paths(),
                 &mut NoAssets,
                 &schemas,
             );
             assert!(!read.emitted.rejected);
-            layerstack_usda::save::save_usda(&read.emitted.layer, &store.tokens, &store.paths)
+            layerstack_usda::save::save_usda(&read.emitted.layer, store.tokens(), store.paths())
                 .unwrap()
         };
         let none = FormatArgs::new();
@@ -548,8 +548,8 @@ fn test_ancestral_payloads_map_function() {
         let store = doc.store();
         assert_eq!(
             store
-                .paths
-                .display(payload.site().prim_path(), &store.tokens),
+                .paths()
+                .display(payload.site().prim_path(), store.tokens()),
             "/Model/Class"
         );
     }

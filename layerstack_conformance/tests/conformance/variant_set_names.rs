@@ -148,8 +148,8 @@ fn exists(loaded: &LoadedStage, layer: LayerId, path: &str) -> bool {
         Some((owner, property)) => (owner, Some(property)),
         None => (path, None),
     };
-    let owner = SpecPath::parse(owner, &store.tokens, &store.paths).expect("probe path");
-    let Some(spec) = spec_at(layer, &owner, &store.paths) else {
+    let owner = SpecPath::parse(owner, store.tokens(), store.paths()).expect("probe path");
+    let Some(spec) = spec_at(layer, &owner, store.paths()) else {
         return false;
     };
     let Some(property) = property else {
@@ -161,7 +161,7 @@ fn exists(loaded: &LoadedStage, layer: LayerId, path: &str) -> bool {
     };
     properties
         .iter()
-        .any(|entry| store.tokens.resolve(entry.name) == property)
+        .any(|entry| store.tokens().resolve(entry.name) == property)
 }
 
 fn value(value: &Value) -> Option<Json> {
@@ -230,7 +230,7 @@ fn flattening_combines_the_list_ops() {
     for (path, want) in oracle["flatten"].as_object().unwrap() {
         let prim = store.path(path);
         let spec = flat.layer.prim(prim).expect("flattened prim spec");
-        let got = Spec::Prim(spec).record(&store.tokens);
+        let got = Spec::Prim(spec).record(store.tokens());
         assert_eq!(got, *want, "{path}");
     }
 }
@@ -414,7 +414,7 @@ fn names_op(store: &InMemoryStore, value: &Json) -> ListOp<TokenId> {
                 .as_array()
                 .unwrap()
                 .iter()
-                .map(|name| store.tokens.intern(name.as_str().unwrap()))
+                .map(|name| store.tokens().intern(name.as_str().unwrap()))
                 .collect()
         })
     };
@@ -439,11 +439,11 @@ fn transaction(
     let mut txn = Transaction::new();
     match step["call"].as_str().unwrap() {
         "add_variant_set" => {
-            let name = loaded.store.tokens.intern(step["name"].as_str().unwrap());
+            let name = loaded.store.tokens().intern(step["name"].as_str().unwrap());
             txn.add_variant_set(at, name, position(step))
         }
         "remove_variant_set" => {
-            let name = loaded.store.tokens.intern(step["name"].as_str().unwrap());
+            let name = loaded.store.tokens().intern(step["name"].as_str().unwrap());
             txn.remove_variant_set(at, name)
         }
         "set_variant_set_names" if step["value"].is_null() => txn.clear_variant_set_names(at),
@@ -454,8 +454,8 @@ fn transaction(
         "create_prim_in_layer" => {
             let path = SpecPath::parse(
                 step["path"].as_str().unwrap(),
-                &loaded.store.tokens,
-                &loaded.store.paths,
+                loaded.store.tokens(),
+                loaded.store.paths(),
             )
             .expect("spec path");
             txn.create_prim(Address::spec(target.layer(), path), Specifier::Over, None)
@@ -468,7 +468,7 @@ fn transaction(
 /// Every composed prim with its prim stack, to compare a live stage with a
 /// fresh composition.
 fn composed(stage: &Stage, store: &InMemoryStore) -> Vec<(String, Vec<String>)> {
-    let root = store.paths.lookup(&Path::root()).unwrap();
+    let root = store.paths().lookup(&Path::root()).unwrap();
     stage
         .traverse_all(root)
         .map(|prim| {
@@ -479,10 +479,14 @@ fn composed(stage: &Stage, store: &InMemoryStore) -> Vec<(String, Vec<String>)> 
             let stack = stack
                 .iter()
                 .map(|(layer, path)| {
-                    format!("{}:{}", layer.0, path.display(&store.paths, &store.tokens))
+                    format!(
+                        "{}:{}",
+                        layer.0,
+                        path.display(store.paths(), store.tokens())
+                    )
                 })
                 .collect();
-            (store.paths.display(prim, &store.tokens), stack)
+            (store.paths().display(prim, store.tokens()), stack)
         })
         .collect()
 }
@@ -503,12 +507,13 @@ fn variant_set_edits_agree_with_openusd_call_by_call() {
         );
         let target = edit_target(&mut loaded, &live, &case["target"]);
         let prim = loaded.store.path(case["prim"].as_str().unwrap());
-        let spec_path = target.map_to_spec_path(prim, &loaded.store.paths);
+        let spec_path = target.map_to_spec_path(prim, loaded.store.paths());
         let pseudo_root = case["prim"] == "/";
         let addressed = |loaded: &LoadedStage| {
             let path = spec_path.as_ref().filter(|_| !pseudo_root)?;
             let layer = &loaded.store.layer(target.layer()).unwrap();
-            spec_at(layer, path, &loaded.store.paths).map(|spec| spec.record(&loaded.store.tokens))
+            spec_at(layer, path, loaded.store.paths())
+                .map(|spec| spec.record(loaded.store.tokens()))
         };
         let steps = case["steps"].as_array().unwrap();
         let mut accepted = Vec::new();

@@ -218,7 +218,7 @@ fn render_site(loaded: &LoadedStage, layer: LayerId, spec: &SpecPath) -> String 
     format!(
         "{} {}",
         loaded.layer_names.get(&layer).cloned().unwrap_or_default(),
-        spec.display(&loaded.store.paths, &loaded.store.tokens)
+        spec.display(loaded.store.paths(), loaded.store.tokens())
     )
 }
 
@@ -261,7 +261,7 @@ fn authored_default(loaded: &LoadedStage, layer: LayerId, spec: &SpecPath) -> Au
     let Some(name) = spec.property() else {
         return Authored::Unknown;
     };
-    let components = spec.components(&loaded.store.paths);
+    let components = spec.components(loaded.store.paths());
     let Some(at) = components
         .iter()
         .position(|c| matches!(c, SpecComponent::VariantSelection { .. }))
@@ -284,7 +284,7 @@ fn authored_default(loaded: &LoadedStage, layer: LayerId, spec: &SpecPath) -> Au
         .collect();
     let Some(host_path) = loaded
         .store
-        .paths
+        .paths()
         .lookup(&layerstack::Path::root().join(&host))
     else {
         return Authored::Unknown;
@@ -306,7 +306,7 @@ fn authored_default(loaded: &LoadedStage, layer: LayerId, spec: &SpecPath) -> Au
             let child_path = layerstack::Path::root().join(&host).join(&[*child]);
             loaded
                 .store
-                .paths
+                .paths()
                 .lookup(&child_path)
                 .and_then(|path| layer.prim_spec_in(path, &[site]))
                 .map_or(Authored::Unknown, |spec| {
@@ -341,7 +341,7 @@ fn derive_scalars(
                     continue 'props;
                 };
                 let Ok(spec) =
-                    SpecPath::parse(&site.path, &loaded.store.tokens, &loaded.store.paths)
+                    SpecPath::parse(&site.path, loaded.store.tokens(), loaded.store.paths())
                 else {
                     continue 'props;
                 };
@@ -388,8 +388,8 @@ fn observe(name: &str) -> Observed {
 
     // `testPcpCompositionResults.py`'s variant fallbacks, which `pcp.txt`
     // was composed with.
-    let standin = loaded.store.tokens.intern("standin");
-    let render = loaded.store.tokens.intern("render");
+    let standin = loaded.store.tokens().intern("standin");
+    let render = loaded.store.tokens().intern("render");
     let stage = Stage::compose(
         &mut loaded.store,
         loaded.root_layer,
@@ -402,9 +402,9 @@ fn observe(name: &str) -> Observed {
 
     for prim in &oracle.prims {
         let expected = render_oracle(&prim.prim_stack);
-        let path = layerstack::Path::parse_absolute(&prim.path, &loaded.store.tokens)
+        let path = layerstack::Path::parse_absolute(&prim.path, loaded.store.tokens())
             .expect("oracle prim path");
-        let prim_id = loaded.store.paths.intern(path.clone());
+        let prim_id = loaded.store.paths().intern(path.clone());
         let Some(sources) = stage.prim(prim_id, &loaded.store).map(|p| p.sources()) else {
             observed.prims += 1;
             observed.diffs.insert(Diff::MissingPrim);
@@ -431,7 +431,7 @@ fn observe(name: &str) -> Observed {
         for prop in &prim.property_stacks {
             let expected = render_oracle(&prop.stack);
             let name = prop.property.rsplit_once('.').expect("property path").1;
-            let field = loaded.store.tokens.intern(name);
+            let field = loaded.store.tokens().intern(name);
             let actual: Vec<String> = stage
                 .view(&loaded.store)
                 .property(PropertyPath::new(prim_id, field))
@@ -455,9 +455,9 @@ fn observe(name: &str) -> Observed {
     // The populated namespace must match too: a prim the oracle does not
     // compose (including a prohibited child) is a mismatch.
     let composed: BTreeSet<&str> = oracle.prims.iter().map(|p| p.path.as_str()).collect();
-    let root = loaded.store.paths.intern(layerstack::Path::root());
+    let root = loaded.store.paths().intern(layerstack::Path::root());
     for prim_id in stage.traverse(root).filter(|id| *id != root) {
-        let path = loaded.store.paths.display(prim_id, &loaded.store.tokens);
+        let path = loaded.store.paths().display(prim_id, loaded.store.tokens());
         if !composed.contains(path.as_str()) {
             observed.prims += 1;
             observed.diffs.insert(Diff::ExtraPrim);

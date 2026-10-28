@@ -155,19 +155,19 @@ fn registry(store: &mut InMemoryStore) -> SchemaRegistry {
             "singleApplyAPI" => SchemaKind::SingleApplyApi,
             other => panic!("schema kind {other}"),
         };
-        let mut declaration = SchemaDeclaration::new(store.tokens.intern(identifier), kind);
+        let mut declaration = SchemaDeclaration::new(store.tokens().intern(identifier), kind);
         if kind.is_typed() {
             let mut bases = info
                 .bases
                 .iter()
-                .map(|base| store.tokens.intern(base_name(base, types)));
+                .map(|base| store.tokens().intern(base_name(base, types)));
             declaration.parent = bases.next();
             declaration.additional_bases = bases.collect();
         }
         declaration.can_only_apply_to = info
             .can_only_apply_to
             .iter()
-            .map(|name| store.tokens.intern(name))
+            .map(|name| store.tokens().intern(name))
             .collect();
         declared.push(declaration);
     }
@@ -176,25 +176,26 @@ fn registry(store: &mut InMemoryStore) -> SchemaRegistry {
     let emitted = layerstack_usda::emit::emit(
         &parsed.layer,
         LayerId(u64::MAX),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut NoAssets,
     );
     assert!(emitted.diagnostics.is_empty(), "{:?}", emitted.diagnostics);
-    let definitions = read_generated_schema(&emitted.layer, &declared, &store.tokens, &store.paths)
-        .expect("every declared schema");
+    let definitions =
+        read_generated_schema(&emitted.layer, &declared, store.tokens(), store.paths())
+            .expect("every declared schema");
     let mut builder = SchemaRegistry::builder();
-    layerstack_schemas::register(&mut builder, &[Domain::Usd], &store.tokens).expect("usd");
+    layerstack_schemas::register(&mut builder, &[Domain::Usd], store.tokens()).expect("usd");
     for definition in definitions {
         builder.register(definition);
     }
     for info in types.values() {
         for target in &info.auto_apply_to {
             let api = info.identifier.as_deref().expect("an API schema");
-            builder.auto_apply(store.tokens.intern(api), store.tokens.intern(target));
+            builder.auto_apply(store.tokens().intern(api), store.tokens().intern(target));
         }
     }
-    builder.build(&store.tokens)
+    builder.build(store.tokens())
 }
 
 fn names(ids: &[TokenId], tokens: &TokenInterner) -> Vec<String> {
@@ -208,7 +209,7 @@ fn multiple_bases_answer_as_openusd_does() {
     let oracle: Oracle = serde_json::from_str(&read("oracle.json")).expect("oracle");
     let mut store = InMemoryStore::default();
     let registry = registry(&mut store);
-    let tokens = &store.tokens;
+    let tokens = &store.tokens();
     let typed: Vec<&str> = oracle
         .types
         .keys()

@@ -486,7 +486,7 @@ impl StageOptions {
 /// use layerstack::{InMemoryStore, Layer, LayerId, PrimSpec, Stage, StageOptions, Value};
 ///
 /// let mut store = InMemoryStore::default();
-/// let color = store.tokens.intern("color");
+/// let color = store.tokens().intern("color");
 /// let prim = store.path("/Sphere");
 ///
 /// let mut layer = Layer::new(LayerId(1));

@@ -14,7 +14,7 @@ fn set(
     name: &str,
     value: Value,
 ) -> Transaction {
-    let token = store.tokens.intern(name);
+    let token = store.tokens().intern(name);
     let mut t = Transaction::new();
     t.set_default(
         EditTarget::for_layer(LayerId(1)).property(PropertyPath::new(path, token)),

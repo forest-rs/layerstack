@@ -59,8 +59,8 @@ fn retained_defaults_and_selected_endpoints_share_one_cache() {
     let read = read_usdc_lazy(
         Arc::clone(&input),
         LayerId(1),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut NoAssets,
     )
     .unwrap();
@@ -302,10 +302,10 @@ fn failures_never_select_weaker_defaults_or_hold_a_good_endpoint() {
     to_save.sublayers_mut().clear();
     to_save.insert_prim(
         store.path("/"),
-        PrimSpec::default().with_children(vec![store.tokens.lookup("P").unwrap()]),
+        PrimSpec::default().with_children(vec![store.tokens().lookup("P").unwrap()]),
     );
     let error =
-        layerstack_usda::save::save_usda(&to_save, &store.tokens, &store.paths).unwrap_err();
+        layerstack_usda::save::save_usda(&to_save, store.tokens(), store.paths()).unwrap_err();
     assert!(
         matches!(error, layerstack_usda::save::SaveError::ArrayRead { .. }),
         "{error:?}"
@@ -438,8 +438,8 @@ fn deferred_equality_keeps_nan_semantics_and_bitwise_authored_identity() {
     let read = read_usdc_lazy(
         input,
         LayerId(1),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut NoAssets,
     )
     .unwrap();
@@ -498,8 +498,8 @@ fn retimed_timecode_arrays_only_demand_the_bracketing_frames() {
     let read = read_usdc_lazy(
         input,
         LayerId(2),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut NoAssets,
     )
     .unwrap();

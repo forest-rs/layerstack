@@ -40,7 +40,7 @@ fn fixture(properties: u32, samples: u32, references: u32) -> InMemoryStore {
     let prototype = store.path("/Emitter");
     let mut spec = PrimSpec::def();
     for field in 0..properties {
-        let name = store.tokens.intern(format!("parameter{field}"));
+        let name = store.tokens().intern(format!("parameter{field}"));
         let value = f64::from(field);
         let mut property = PropertySpec::typed_attribute(PropertyType::parse("double").unwrap())
             .with_default(Value::Double(value));
@@ -63,7 +63,7 @@ fn fixture(properties: u32, samples: u32, references: u32) -> InMemoryStore {
         );
     }
     let children = (0..references)
-        .map(|instance| store.tokens.intern(format!("Emitter{instance}")))
+        .map(|instance| store.tokens().intern(format!("Emitter{instance}")))
         .collect();
     let instances = store.path("/Instances");
     layer.insert_prim(instances, PrimSpec::def().with_children(children));
@@ -71,8 +71,8 @@ fn fixture(properties: u32, samples: u32, references: u32) -> InMemoryStore {
     layer.insert_prim(
         root,
         PrimSpec::default().with_children(vec![
-            store.tokens.intern("Emitter"),
-            store.tokens.intern("Instances"),
+            store.tokens().intern("Emitter"),
+            store.tokens().intern("Instances"),
         ]),
     );
     store.insert_layer(layer);
@@ -84,8 +84,8 @@ fn import(bytes: &[u8]) -> InMemoryStore {
     let result = layerstack_usdc::read_usdc(
         bytes,
         LayerId(1),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut NoAssets,
     )
     .unwrap();
@@ -103,8 +103,8 @@ fn bench_storage(c: &mut Criterion) {
         let authored = fixture(properties, samples, 128);
         let bytes = layerstack_usdc::writer::save_layer(
             authored.layer(LayerId(1)).unwrap(),
-            &authored.tokens,
-            &authored.paths,
+            authored.tokens(),
+            authored.paths(),
         )
         .unwrap();
         let mut checked = import(&bytes);
@@ -119,7 +119,7 @@ fn bench_storage(c: &mut Criterion) {
             131,
             "all prototype placements compose"
         );
-        let field = checked.tokens.intern("parameter0");
+        let field = checked.tokens().intern("parameter0");
         let prim = checked.path("/Instances/Emitter0");
         assert_eq!(
             stage

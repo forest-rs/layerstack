@@ -24,7 +24,7 @@ fn stage(build: impl FnOnce(&mut InMemoryStore, &mut Layer)) -> (InMemoryStore, 
     build(&mut store, &mut layer);
     store.insert_layer(layer);
     let options = StageOptions {
-        schemas: Some(Arc::new(crate::openusd(&store.tokens))),
+        schemas: Some(Arc::new(crate::openusd(store.tokens()))),
         ..StageOptions::default()
     };
     let live = LiveStage::compose(&mut store, ROOT, options);
@@ -50,7 +50,7 @@ fn spec(store: &mut InMemoryStore, path: &str) -> Option<(Option<Specifier>, Opt
     let spec = store.layer(ROOT)?.prim(path)?;
     let type_name = spec
         .type_name
-        .map(|ty| String::from(store.tokens.resolve(ty)));
+        .map(|ty| String::from(store.tokens().resolve(ty)));
     Some((spec.specifier, type_name))
 }
 
@@ -58,7 +58,7 @@ fn spec(store: &mut InMemoryStore, path: &str) -> Option<(Option<Specifier>, Opt
 fn undefined_ancestors_are_defined_first() {
     let (mut store, mut live) = stage(|store, layer| {
         let g = store.path("/G");
-        layer.define_prim(g, PrimSpec::over(), &store.paths);
+        layer.define_prim(g, PrimSpec::over(), store.paths());
     });
     define(&mut store, &mut live, &[("/G/H/I", "Xform")]);
     assert_eq!(spec(&mut store, "/G"), Some((Some(Specifier::Def), None)));
@@ -80,10 +80,10 @@ fn undefined_ancestors_are_defined_first() {
 fn an_over_is_upgraded_and_a_defined_prim_left_alone() {
     let (mut store, mut live) = stage(|store, layer| {
         let over = store.path("/Over");
-        layer.define_prim(over, PrimSpec::over(), &store.paths);
-        let xform = store.tokens.intern("Xform");
+        layer.define_prim(over, PrimSpec::over(), store.paths());
+        let xform = store.tokens().intern("Xform");
         let same = store.path("/Same");
-        layer.define_prim(same, PrimSpec::def().with_type_name(xform), &store.paths);
+        layer.define_prim(same, PrimSpec::def().with_type_name(xform), store.paths());
     });
     define(&mut store, &mut live, &[("/Over", "Xform")]);
     assert_eq!(
@@ -140,12 +140,12 @@ fn a_path_beneath_an_instance_or_in_a_prototype_is_refused() {
         let prototype = store.path("/Prototype");
         let child = store.path("/Prototype/Child");
         let instance = store.path("/Instance");
-        layer.define_prim(prototype, PrimSpec::def(), &store.paths);
-        layer.define_prim(child, PrimSpec::def(), &store.paths);
+        layer.define_prim(prototype, PrimSpec::def(), store.paths());
+        layer.define_prim(child, PrimSpec::def(), store.paths());
         let spec = PrimSpec::def()
             .with_instanceable(true)
             .with_reference(Reference::new(ROOT, prototype));
-        layer.define_prim(instance, spec, &store.paths);
+        layer.define_prim(instance, spec, store.paths());
     });
     let instance = store.path("/Instance");
     let proxy = store.path("/Instance/Child");
@@ -185,16 +185,16 @@ fn handles_and_applied_schemas_refuse_instance_proxies() {
         let prototype = store.path("/Prototype");
         let child = store.path("/Prototype/Child");
         let instance = store.path("/Instance");
-        layer.define_prim(prototype, PrimSpec::def(), &store.paths);
+        layer.define_prim(prototype, PrimSpec::def(), store.paths());
         layer.define_prim(
             child,
-            PrimSpec::def().with_type_name(store.tokens.intern("Xform")),
-            &store.paths,
+            PrimSpec::def().with_type_name(store.tokens().intern("Xform")),
+            store.paths(),
         );
         let spec = PrimSpec::def()
             .with_instanceable(true)
             .with_reference(Reference::new(ROOT, prototype));
-        layer.define_prim(instance, spec, &store.paths);
+        layer.define_prim(instance, spec, store.paths());
     });
     let instance = store.path("/Instance");
     let proxy = store.path("/Instance/Child");

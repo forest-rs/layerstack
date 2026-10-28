@@ -178,7 +178,7 @@
 //! store and a stage composed with the registry:
 //!
 //! ```ignore
-//! let registry = schemas::registry(&store.tokens)?;
+//! let registry = schemas::registry(store.tokens())?;
 //! let options = StageOptions { schemas: Some(Arc::new(registry)), ..StageOptions::default() };
 //! // ... compose `stage` from `store` with `options` ...
 //! let scene = Scene::new(stage, &store);
@@ -548,7 +548,7 @@ pub fn compile(source: &Path, options: &CompileOptions) -> Result<CompiledSchema
         });
     }
     if !parsed.library.skip_code_generation {
-        codegen::check(&parsed, &stage.store().tokens)?;
+        codegen::check(&parsed, stage.store().tokens())?;
     }
     let plug_info = if parsed.classes.is_empty() {
         None
@@ -556,7 +556,7 @@ pub fn compile(source: &Path, options: &CompileOptions) -> Result<CompiledSchema
         Some(plug_info::generate(
             &parsed,
             options.existing_plug_info.as_deref(),
-            &stage.store().tokens,
+            stage.store().tokens(),
         )?)
     };
     let generated_schema = registry::generate(&mut stage, &parsed, source, &search)?;

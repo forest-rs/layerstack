@@ -466,7 +466,7 @@ fn lower_one(
             )
         })
     };
-    let value = |slot: u32| value::decode_slot(&batch.values, slot, &store.tokens);
+    let value = |slot: u32| value::decode_slot(&batch.values, slot, store.tokens());
     match edit {
         EditInput::DefinePrim {
             path,
@@ -632,12 +632,12 @@ fn lower_one(
         }
         EditInput::SetVariantSelection { path, set, variant } => {
             let at = at.prim(prim(path)?);
-            let set = store.tokens.intern(set);
+            let set = store.tokens().intern(set);
             // OpenUSD clears the selection for an empty variant name.
             let variant = variant
                 .as_deref()
                 .filter(|name| !name.is_empty())
-                .map(|name| store.tokens.intern(name));
+                .map(|name| store.tokens().intern(name));
             txn.set_variant_selection(at, set, variant);
         }
         EditInput::SetActive { path, active } => {
@@ -648,8 +648,8 @@ fn lower_one(
         }
         EditInput::SetKind { path, kind } => {
             let at = at.prim(prim(path)?);
-            let key = store.tokens.intern("kind");
-            let kind = store.tokens.intern(kind);
+            let key = store.tokens().intern("kind");
+            let kind = store.tokens().intern(kind);
             txn.set_metadata(at, key, FieldValue::Value(Value::Token(kind)));
         }
         EditInput::SetMetadata {
@@ -665,7 +665,7 @@ fn lower_one(
             } else {
                 at.prim(prim(path)?)
             };
-            let key = store.tokens.intern(key);
+            let key = store.tokens().intern(key);
             txn.set_metadata(at, key, FieldValue::Value(value));
         }
         EditInput::ClearMetadata { path, key } => {
@@ -674,7 +674,7 @@ fn lower_one(
             } else {
                 at.prim(prim(path)?)
             };
-            let key = store.tokens.intern(key);
+            let key = store.tokens().intern(key);
             txn.clear_metadata(at, key);
         }
     }
@@ -814,7 +814,7 @@ fn define_prim(
         txn.set_specifier(prim_at.clone(), specifier);
     }
     if let Some(name) = type_name {
-        txn.set_type_name(prim_at, scope.store.tokens.intern(name));
+        txn.set_type_name(prim_at, scope.store.tokens().intern(name));
     }
 }
 
@@ -967,7 +967,7 @@ def "Spare" (
     /// The USDA text of layer `id`.
     fn text(stage: &Stage, id: LayerId) -> String {
         let store = stage.document().store();
-        layerstack_usda::save::save_usda(store.layer(id).unwrap(), &store.tokens, &store.paths)
+        layerstack_usda::save::save_usda(store.layer(id).unwrap(), store.tokens(), store.paths())
             .unwrap()
     }
 
@@ -1204,7 +1204,9 @@ def "Spare" (
                         Some(Specifier::Over) | None => "over",
                         Some(Specifier::Class) => "class",
                     };
-                    let type_name = spec.type_name.map_or("", |name| store.tokens.resolve(name));
+                    let type_name = spec
+                        .type_name
+                        .map_or("", |name| store.tokens().resolve(name));
                     format!("{specifier}:{type_name}")
                 });
                 assert_eq!(found, *expected, "{specifier} {path}: {spec_path}");

@@ -101,8 +101,8 @@ fn scene() -> (InMemoryStore, LiveStage) {
         let emitted = layerstack_usda::emit::emit(
             &parsed.layer,
             id,
-            &store.tokens,
-            &store.paths,
+            store.tokens(),
+            store.paths(),
             &mut NoAssets,
         );
         assert!(
@@ -119,7 +119,7 @@ fn scene() -> (InMemoryStore, LiveStage) {
         .sublayers_mut()
         .push(SublayerEntry::new(LayerId(2)));
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(store.tokens()))),
         ..StageOptions::default()
     };
     let live = LiveStage::compose(&mut store, LayerId(1), options);
@@ -180,7 +180,7 @@ fn authored(store: &InMemoryStore, layer: LayerId, path: PathId) -> Json {
         return out;
     };
     for entry in &spec.properties {
-        let (name, property) = (store.tokens.resolve(entry.name), &*entry.spec);
+        let (name, property) = (store.tokens().resolve(entry.name), &*entry.spec);
         if name == "xformOpOrder" {
             out["order"] = property.default.as_ref().map_or(Json::Null, |value| {
                 Json::Array(
@@ -189,7 +189,7 @@ fn authored(store: &InMemoryStore, layer: LayerId, path: PathId) -> Json {
                         .unwrap()
                         .iter()
                         .map(|token| match &*token {
-                            Value::Token(token) => json!(store.tokens.resolve(*token)),
+                            Value::Token(token) => json!(store.tokens().resolve(*token)),
                             other => panic!("order entry {other:?}"),
                         })
                         .collect(),

@@ -92,7 +92,7 @@ fn load() -> LoadedStage {
 }
 
 fn token(loaded: &mut LoadedStage, name: &str) -> TokenId {
-    loaded.store.tokens.intern(name)
+    loaded.store.tokens().intern(name)
 }
 
 fn names(loaded: &mut LoadedStage, value: &Json) -> Vec<TokenId> {
@@ -221,7 +221,7 @@ fn root_prim_order(store: &InMemoryStore, layer: LayerId, root: PathId) -> Vec<S
     order
         .into_iter()
         .flatten()
-        .map(|name| store.tokens.resolve(*name).to_string())
+        .map(|name| store.tokens().resolve(*name).to_string())
         .collect()
 }
 
@@ -231,15 +231,15 @@ fn root_prims(live: &LiveStage, store: &InMemoryStore, root: PathId) -> Vec<Stri
     children
         .flat_map(|prim| prim.children())
         .map(|child| {
-            let name = store.paths.resolve(child.path()).leaf().unwrap();
-            store.tokens.resolve(name).to_string()
+            let name = store.paths().resolve(child.path()).leaf().unwrap();
+            store.tokens().resolve(name).to_string()
         })
         .collect()
 }
 
 /// The layer metadata field `key` of `layer`, as the oracle records it.
 fn layer_field(store: &InMemoryStore, layer: LayerId, key: &str) -> Json {
-    let key = store.tokens.lookup(key).expect("an interned key");
+    let key = store.tokens().lookup(key).expect("an interned key");
     match store.layer(layer).unwrap().metadata(key) {
         None => Json::Null,
         Some(FieldValue::Value(Value::String(text))) => Json::from(&**text),
@@ -383,8 +383,8 @@ fn pseudo_root_edits_agree_with_openusd() {
         assert_eq!(root_prims(&fresh, &loaded.store, root), composed, "{name}");
         let saved = layerstack_usda::save::save_usda(
             loaded.store.layer(layer).unwrap(),
-            &loaded.store.tokens,
-            &loaded.store.paths,
+            loaded.store.tokens(),
+            loaded.store.paths(),
         );
         assert!(saved.is_ok(), "{name}: {saved:?}");
         live.apply(&mut loaded.store, &applied.inverse).unwrap();

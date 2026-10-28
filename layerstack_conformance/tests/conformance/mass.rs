@@ -53,7 +53,7 @@ fn rigid_body_mass_matches_openusd_callback_evaluation() {
         let body = PhysicsRigidBodyApi::get(&scene, path).unwrap();
         let mut called = Vec::new();
         let result = body.compute_mass_properties(|prim| {
-            let path = store.paths.display(prim.path(), &store.tokens);
+            let path = store.paths().display(prim.path(), store.tokens());
             let input = row.inputs.iter().find(|i| i.path == path).unwrap();
             called.push(path);
             Ok(CollisionMassInformation {

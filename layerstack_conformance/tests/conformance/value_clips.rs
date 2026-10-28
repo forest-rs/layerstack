@@ -98,8 +98,8 @@ fn compose(layers: &Layers) -> (InMemoryStore, Stage) {
         let emitted = layerstack_usda::emit::emit(
             &parsed.layer,
             id,
-            &store.tokens,
-            &store.paths,
+            store.tokens(),
+            store.paths(),
             &mut assets,
         );
         assert!(
@@ -121,7 +121,7 @@ fn compose(layers: &Layers) -> (InMemoryStore, Stage) {
             store.insert_asset_layer(anchor, &format!("./{rel}"), id);
         }
     }
-    let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(store.tokens()));
     let stage = Stage::compose(
         &mut store,
         LayerId(1),
@@ -233,7 +233,7 @@ fn check(
         .collect();
     let actual_default = scalar(read(Time::Default).map(|r| r.value));
     if schema {
-        let field = store.tokens.resolve(field);
+        let field = store.tokens().resolve(field);
         let prim_handle = view.prim(prim).unwrap();
         assert!(
             !prim_handle.authored_property_names().contains(&field),
@@ -1145,7 +1145,7 @@ fn manifest_activation_blocks_exclude_clip_samples_only_when_interpolating_gaps(
 }
 
 fn live(store: &mut InMemoryStore) -> layerstack::LiveStage {
-    let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(store.tokens()));
     layerstack::LiveStage::compose(
         store,
         LayerId(1),
@@ -1331,7 +1331,7 @@ fn live_anchor_metadata_retimes_and_new_asset_bindings_become_visible() {
     let (mut store, _) = compose(&layers);
     let mut live = live(&mut store);
     let property = store.property_path("/P.x");
-    let clips_token = store.tokens.lookup("clips").unwrap();
+    let clips_token = store.tokens().lookup("clips").unwrap();
     let layer = store.layer_mut(LayerId(1)).unwrap();
     let prim = layer.prim_mut(property.prim_path()).unwrap();
     let layerstack::FieldValue::Value(Value::Dictionary(mut sets)) =
@@ -1564,7 +1564,7 @@ fn live_newly_selected_resident_clip_is_watched_on_the_next_edit() {
     let mut live = live(&mut store);
     let property = store.property_path("/P.x");
     assert_eq!(at(live.stage(), &store, property, 0.), Some(1.));
-    let clips_token = store.tokens.lookup("clips").unwrap();
+    let clips_token = store.tokens().lookup("clips").unwrap();
     let prim = store
         .layer_mut(LayerId(1))
         .unwrap()

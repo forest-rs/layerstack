@@ -163,12 +163,12 @@ fn main() {
                 changes
                     .created
                     .iter()
-                    .map(|p| store.paths.display(*p, &store.tokens))
+                    .map(|p| store.paths().display(*p, store.tokens()))
                     .collect::<Vec<_>>(),
                 changes
                     .resynced
                     .iter()
-                    .map(|p| store.paths.display(*p, &store.tokens))
+                    .map(|p| store.paths().display(*p, store.tokens()))
                     .collect::<Vec<_>>()
             );
         }

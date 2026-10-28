@@ -59,11 +59,11 @@ fn layer_specs(loaded: &LoadedStage, layer: &Layer) -> Vec<String> {
     let mut out = Vec::new();
     let mut add = |path: PathId, spec: &PrimSpec| {
         let names: Vec<String> = store
-            .paths
+            .paths()
             .resolve(path)
             .segments()
             .iter()
-            .map(|t| store.tokens.resolve(*t).to_string())
+            .map(|t| store.tokens().resolve(*t).to_string())
             .collect();
         // The branch selections enclosing this spec, after the name of the
         // prim hosting each.
@@ -73,13 +73,13 @@ fn layer_specs(loaded: &LoadedStage, layer: &Layer) -> Vec<String> {
                 text.push('/');
             }
             text.push_str(name);
-            let host = Path::root().join(&store.paths.resolve(path).segments()[..=depth]);
+            let host = Path::root().join(&store.paths().resolve(path).segments()[..=depth]);
             for site in spec.outer_variant_sites() {
-                if store.paths.resolve(site.host_path) == &host {
+                if store.paths().resolve(site.host_path) == &host {
                     text.push_str(&format!(
                         "{{{}={}}}",
-                        store.tokens.resolve(site.set),
-                        store.tokens.resolve(site.variant)
+                        store.tokens().resolve(site.set),
+                        store.tokens().resolve(site.variant)
                     ));
                 }
             }
@@ -94,10 +94,10 @@ fn layer_specs(loaded: &LoadedStage, layer: &Layer) -> Vec<String> {
             out: &mut Vec<String>,
         ) {
             for (set, spec) in sets {
-                let set = store.tokens.resolve(*set);
+                let set = store.tokens().resolve(*set);
                 out.push(format!("{prefix}{{{set}=}}"));
                 for (variant, branch) in &spec.variants {
-                    let path = format!("{prefix}{{{set}={}}}", store.tokens.resolve(*variant));
+                    let path = format!("{prefix}{{{set}={}}}", store.tokens().resolve(*variant));
                     out.push(path.clone());
                     variant_paths(store, &path, &branch.variant_sets, out);
                 }
@@ -145,19 +145,19 @@ fn normalized(mut watch: Json) -> Json {
 
 fn snapshot(loaded: &LoadedStage, stage: &Stage) -> Json {
     let store = &loaded.store;
-    let path = |p: PathId| store.paths.display(p, &store.tokens);
+    let path = |p: PathId| store.paths().display(p, store.tokens());
     let target = |t: &TargetPath| match t {
         TargetPath::Prim(p) => path(*p),
-        TargetPath::Property(p) => p.display(&store.paths, &store.tokens),
+        TargetPath::Property(p) => p.display(store.paths(), store.tokens()),
     };
     let root_layer = &store.layer(loaded.root_layer).unwrap();
     let sub = &store.layer(layer_named(loaded, "sub.usda")).unwrap();
     let watch_path = store
-        .paths
-        .lookup(&Path::parse_absolute("/Watch", &store.tokens).unwrap())
+        .paths()
+        .lookup(&Path::parse_absolute("/Watch", store.tokens()).unwrap())
         .unwrap();
     let spec = &root_layer.prims()[&watch_path];
-    let property = |name: &str| spec.property(store.tokens.lookup(name).unwrap()).unwrap();
+    let property = |name: &str| spec.property(store.tokens().lookup(name).unwrap()).unwrap();
     let arc = |r: &Reference| {
         json!({
             "asset": r.asset_path().unwrap_or_default(),
@@ -181,14 +181,14 @@ fn snapshot(loaded: &LoadedStage, stage: &Stage) -> Json {
             .unwrap()
             .insert("connections".into(), Json::Null);
     }
-    let root = store.paths.lookup(&Path::root()).unwrap();
+    let root = store.paths().lookup(&Path::root()).unwrap();
     json!({
         "layers": {
             "scene.usda": layer_specs(loaded, root_layer),
             "sub.usda": layer_specs(loaded, sub),
         },
         "relocates": root_layer.relocates().iter().map(|r| json!([path(r.source), r.target.map(path).unwrap_or_default()])).collect::<Vec<_>>(),
-        "defaultPrim": root_layer.default_prim().map(|t| store.tokens.resolve(t).to_string()).unwrap_or_default(),
+        "defaultPrim": root_layer.default_prim().map(|t| store.tokens().resolve(t).to_string()).unwrap_or_default(),
         "watch": normalized(watch),
         "prims": stage.traverse_all(root).filter(|p| *p != root).map(path).collect::<Vec<_>>(),
     })
@@ -242,7 +242,7 @@ fn deletes_agree_with_openusd_namespace_editor() {
         let object = match text.split_once('.') {
             Some((prim, property)) => {
                 let prim = loaded.store.path(prim);
-                let property = loaded.store.tokens.intern(property);
+                let property = loaded.store.tokens().intern(property);
                 TargetPath::Property(PropertyPath::new(prim, property))
             }
             None => TargetPath::Prim(loaded.store.path(text)),

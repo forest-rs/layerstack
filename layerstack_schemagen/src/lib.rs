@@ -428,7 +428,7 @@ pub(crate) fn rustfmt(source: &str) -> Result<String, String> {
 pub fn generate_shader_library(path: impl AsRef<Path>) -> Result<String, String> {
     let mut store = layerstack::InMemoryStore::default();
     let nodes = shader_nodes::read_path(path.as_ref(), &mut store)?;
-    render_library(nodes, store.tokens)
+    render_library(nodes, store)
 }
 
 fn generate_shader_text(text: &str) -> Result<String, String> {
@@ -437,8 +437,8 @@ fn generate_shader_text(text: &str) -> Result<String, String> {
     let emitted = layerstack_usda::emit::emit(
         &parsed.layer,
         layerstack::LayerId(0),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut model::NoAssets,
     );
     if !parsed.diagnostics.is_empty() || !emitted.diagnostics.is_empty() {
@@ -449,19 +449,19 @@ fn generate_shader_text(text: &str) -> Result<String, String> {
     }
     store.insert_layer(emitted.layer);
     let nodes = shader_nodes::read_store(layerstack::LayerId(0), &mut store)?;
-    render_library(nodes, store.tokens)
+    render_library(nodes, store)
 }
 
 fn render_library(
     nodes: Vec<shader_nodes::Node>,
-    tokens: layerstack::TokenInterner,
+    store: layerstack::InMemoryStore,
 ) -> Result<String, String> {
     let model = model::Model {
         nodes,
         version: "custom".into(),
         files: Vec::new(),
         domains: Vec::new(),
-        tokens,
+        store,
     };
     Ok(shader_nodes::render(&model, true)?.remove(0).1)
 }

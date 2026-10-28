@@ -150,7 +150,7 @@ fn fixture() -> (LoadedStage, Stage, LayerId) {
         .property_mut(upper)
         .unwrap();
     spec.time_samples.get_mut().unwrap()[1].1 = wrong;
-    let schemas = layerstack_schemas::openusd(&loaded.store.tokens);
+    let schemas = layerstack_schemas::openusd(loaded.store.tokens());
     let stage = Stage::compose(
         &mut loaded.store,
         loaded.root_layer,
@@ -171,7 +171,7 @@ fn typed_defaults_skip_incompatible_opinions_without_numeric_retry() {
     for (text, record) in oracle.as_object().unwrap() {
         let (prim, name) = text.rsplit_once('.').unwrap();
         let path = loaded.store.path(prim);
-        let field = loaded.store.tokens.lookup(name).unwrap();
+        let field = loaded.store.tokens().lookup(name).unwrap();
         let kind = match prim {
             "/Vector" | "/EmptySamplesXform" => "float3",
             "/Array" | "/SparseResizeKind" | "/SparseDeleteKind" => "float3[]",
@@ -363,7 +363,7 @@ fn typed_defaults_skip_incompatible_opinions_without_numeric_retry() {
     }
     // Typed selection does not change the raw value or its stronger source.
     let path = loaded.store.path("/Skip");
-    let field = loaded.store.tokens.lookup("inputs:intensity").unwrap();
+    let field = loaded.store.tokens().lookup("inputs:intensity").unwrap();
     let raw = stage
         .view(&loaded.store)
         .attribute(layerstack::PropertyPath::new(path, field))
@@ -379,7 +379,7 @@ fn typed_numeric_sparse_composition_matches_cpp_without_weaker_retry() {
         serde_json::from_str(include_str!("../../fixtures/typed_reads/oracle.json")).unwrap();
     let (loaded, stage, _) = fixture();
     let path = loaded.store.path("/SparseCompatibleBase");
-    let field = loaded.store.tokens.lookup("value").unwrap();
+    let field = loaded.store.tokens().lookup("value").unwrap();
     let actual = stage
         .view(&loaded.store)
         .attribute(layerstack::PropertyPath::new(path, field))

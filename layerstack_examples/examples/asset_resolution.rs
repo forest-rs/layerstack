@@ -154,13 +154,13 @@ fn main() {
 
     // Resolve assets through the AssetResolver trait.
     let robot_asset = resolver
-        .resolve("props/robot.layer", None, &store.tokens, &store.paths)
+        .resolve("props/robot.layer", None, store.tokens(), store.paths())
         .expect("robot asset should resolve");
     let robot_layer_id = robot_asset.layer_id;
     store.insert_layer(robot_asset.layer.expect("first resolve returns layer"));
 
     let env_asset = resolver
-        .resolve("sets/env.layer", None, &store.tokens, &store.paths)
+        .resolve("sets/env.layer", None, store.tokens(), store.paths())
         .expect("env asset should resolve");
     let env_layer_id = env_asset.layer_id;
     store.insert_layer(env_asset.layer.expect("first resolve returns layer"));
@@ -168,7 +168,7 @@ fn main() {
     // Deduplication: resolving the same URI again returns the same LayerId,
     // with layer = None (no need to re-insert).
     let robot_again = resolver
-        .resolve("props/robot.layer", None, &store.tokens, &store.paths)
+        .resolve("props/robot.layer", None, store.tokens(), store.paths())
         .expect("should deduplicate");
     assert_eq!(
         robot_layer_id, robot_again.layer_id,

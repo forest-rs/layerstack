@@ -161,7 +161,7 @@ fn prim_stacks_repeat_each_occurrence_of_a_site() {
     let mut composed: Vec<String> = stage
         .traverse(pseudo_root)
         .filter(|prim| *prim != pseudo_root)
-        .map(|prim| loaded.store.paths.display(prim, &loaded.store.tokens))
+        .map(|prim| loaded.store.paths().display(prim, loaded.store.tokens()))
         .collect();
     composed.sort();
     let mut expected: Vec<&str> = oracle.prims.iter().map(|p| p.path.as_str()).collect();
@@ -179,7 +179,7 @@ fn prim_stacks_repeat_each_occurrence_of_a_site() {
                     layer_name(&loaded, key.key.layer_id),
                     key.key
                         .spec_path
-                        .display(&loaded.store.paths, &loaded.store.tokens),
+                        .display(loaded.store.paths(), loaded.store.tokens()),
                 )
             })
             .collect();
@@ -217,7 +217,7 @@ fn each_occurrence_keeps_its_own_layer_offset() {
                     opinion
                         .key()
                         .spec_path
-                        .display(&loaded.store.paths, &loaded.store.tokens),
+                        .display(loaded.store.paths(), loaded.store.tokens()),
                     opinion.layer_offset().offset,
                     opinion.layer_offset().scale,
                 )
@@ -294,10 +294,10 @@ fn snapshot(loaded: &mut LoadedStage, stage: &Stage) -> Vec<String> {
         .collect();
     let mut lines = Vec::new();
     for prim in prims {
-        let path = loaded.store.paths.display(prim, &loaded.store.tokens);
+        let path = loaded.store.paths().display(prim, loaded.store.tokens());
         let children: Vec<String> = children_of(stage, &loaded.store, prim)
             .iter()
-            .map(|child| loaded.store.paths.display(*child, &loaded.store.tokens))
+            .map(|child| loaded.store.paths().display(*child, loaded.store.tokens()))
             .collect();
         let stack: Vec<String> = sources(stage, &loaded.store, prim)
             .expect("composed prim")
@@ -308,7 +308,7 @@ fn snapshot(loaded: &mut LoadedStage, stage: &Stage) -> Vec<String> {
                     layer_name(loaded, key.key.layer_id),
                     key.key
                         .spec_path
-                        .display(&loaded.store.paths, &loaded.store.tokens)
+                        .display(loaded.store.paths(), loaded.store.tokens())
                 )
             })
             .collect();
@@ -350,7 +350,7 @@ fn edits_to_a_shared_site_recompose_every_occurrence() {
         ("/Source", "width", 7, ["/Junction", "/Delta"]),
     ] {
         let prim = loaded.store.path(prim);
-        let name = loaded.store.tokens.intern(attr);
+        let name = loaded.store.tokens().intern(attr);
         let spec = loaded
             .store
             .layer_mut(source)

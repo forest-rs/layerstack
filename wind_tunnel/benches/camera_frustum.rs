@@ -29,9 +29,9 @@ use std::{hint::black_box, sync::Arc, time::Duration};
 fn camera(orthographic: bool) -> ComputedCamera {
     let mut store = InMemoryStore::default();
     let path = store.path("/Camera");
-    let schema = store.tokens.intern("Camera");
-    let projection = store.tokens.intern("projection");
-    let projection_value = store.tokens.intern(if orthographic {
+    let schema = store.tokens().intern("Camera");
+    let projection = store.tokens().intern("projection");
+    let projection_value = store.tokens().intern(if orthographic {
         "orthographic"
     } else {
         "perspective"
@@ -46,13 +46,13 @@ fn camera(orthographic: bool) -> ComputedCamera {
                 PropertySpec::attribute().with_default(Value::Token(projection_value)),
             )
             .with_property(
-                store.tokens.intern("clippingRange"),
+                store.tokens().intern("clippingRange"),
                 PropertySpec::attribute().with_default(Value::Vec2f([1., 1000.])),
             ),
     );
     store.insert_layer(layer);
     let schemas =
-        layerstack_schemas::registry(&[layerstack_schemas::Domain::UsdGeom], &store.tokens);
+        layerstack_schemas::registry(&[layerstack_schemas::Domain::UsdGeom], store.tokens());
     let stage = Stage::compose(
         &mut store,
         LayerId(1),

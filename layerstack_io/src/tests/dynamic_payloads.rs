@@ -386,17 +386,17 @@ pub(super) fn registry(store: &mut InMemoryStore) -> Arc<SchemaRegistry> {
                 MetadataDefinition {
                     default,
                     ..MetadataDefinition::new(
-                        store.tokens.intern(name),
+                        store.tokens().intern(name),
                         layerstack::MetadataType::parse(type_name).unwrap(),
                         [MetadataTarget::Prim],
                     )
                     .with_documentation("Used to set number of copies.")
                 },
-                &store.tokens,
+                store.tokens(),
             )
             .unwrap();
     }
-    Arc::new(builder.build(&store.tokens))
+    Arc::new(builder.build(store.tokens()))
 }
 
 /// Opens `root` with the test format registered.
@@ -484,8 +484,8 @@ pub(super) fn verify<B: Storage>(
     let stage = doc.stage().stage();
     let store = doc.store();
     let lookup = |path: &str| {
-        let parsed = layerstack::Path::parse_absolute(path, &store.tokens).ok()?;
-        store.paths.lookup(&parsed)
+        let parsed = layerstack::Path::parse_absolute(path, store.tokens()).ok()?;
+        store.paths().lookup(&parsed)
     };
     let mut expected: Vec<&str> = names.to_vec();
     expected.sort_unstable();
@@ -732,8 +732,8 @@ fn ancestral_payloads_in_variants_read_the_opinions_of_the_arcs_above_them() {
         let store = doc.store();
         let stage = doc.stage().stage();
         let prim = store
-            .paths
-            .lookup(&layerstack::Path::parse_absolute("/SubrootVariant", &store.tokens).unwrap())
+            .paths()
+            .lookup(&layerstack::Path::parse_absolute("/SubrootVariant", store.tokens()).unwrap())
             .unwrap();
         assert!(
             stage
@@ -750,8 +750,8 @@ fn ancestral_payloads_in_variants_read_the_opinions_of_the_arcs_above_them() {
             .find(|&id| doc.identifier(id) == Some(identifier.as_str()))
             .unwrap();
         let generated_prim = store
-            .paths
-            .lookup(&layerstack::Path::parse_absolute("/Root/Xform__2_1", &store.tokens).unwrap())
+            .paths()
+            .lookup(&layerstack::Path::parse_absolute("/Root/Xform__2_1", store.tokens()).unwrap())
             .unwrap();
         assert!(
             doc.view()
@@ -823,7 +823,7 @@ pub(super) fn author<B: Storage>(
         .unwrap();
     let store = doc.store_mut();
     let path = store.path(prim);
-    let token = store.tokens.intern(name);
+    let token = store.tokens().intern(name);
     let mut txn = Transaction::new();
     if attributes {
         let at = Address::spec(
@@ -869,7 +869,7 @@ pub(super) fn displayed<B: Storage>(
     let store = doc.store();
     let mut out: Vec<String> = prims
         .iter()
-        .map(|path| store.paths.display(*path, &store.tokens))
+        .map(|path| store.paths().display(*path, store.tokens()))
         .collect();
     out.sort_unstable();
     out
@@ -999,7 +999,10 @@ fn argument_input_edits_report_the_assets_they_request() {
     );
     assert!(!applied.asset_requests.is_empty());
     for request in &applied.asset_requests {
-        let prim = doc.store().paths.display(request.prim, &doc.store().tokens);
+        let prim = doc
+            .store()
+            .paths()
+            .display(request.prim, doc.store().tokens());
         assert!(prim.starts_with("/Lab"), "{prim}");
         assert_eq!(request.arc, layerstack::ArcKind::Payloads);
         assert!(request.asset_path.contains(FORMAT_ARGS_DELIMITER));
@@ -1014,8 +1017,8 @@ fn argument_inputs_read_beyond_a_prims_own_specs_recompose_it() {
         let prim = |doc: &StageDocument<Memory>, path: &str| {
             let store = doc.store();
             store
-                .paths
-                .lookup(&layerstack::Path::parse_absolute(path, &store.tokens).unwrap())
+                .paths()
+                .lookup(&layerstack::Path::parse_absolute(path, store.tokens()).unwrap())
                 .unwrap()
         };
         let subroot = prim(&doc, "/SubrootVariant");

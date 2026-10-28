@@ -134,7 +134,7 @@ fn prims_compose_in_order() {
     let composed: Vec<String> = stage
         .traverse(pseudo_root)
         .filter(|prim| *prim != pseudo_root)
-        .map(|prim| loaded.store.paths.display(prim, &loaded.store.tokens))
+        .map(|prim| loaded.store.paths().display(prim, loaded.store.tokens()))
         .collect();
     let expected: Vec<&str> = oracle.prims.iter().map(|p| p.path.as_str()).collect();
     assert_eq!(composed, expected);
@@ -155,7 +155,7 @@ fn prim_stacks_hold_every_nested_variant_spec() {
                     layer_name(&loaded, key.key.layer_id),
                     key.key
                         .spec_path
-                        .display(&loaded.store.paths, &loaded.store.tokens),
+                        .display(loaded.store.paths(), loaded.store.tokens()),
                 )
             })
             .collect();

@@ -87,8 +87,8 @@ fn save_both_ways(file: &Path) -> Result<Saved, String> {
     let read = read_usda(
         &source,
         LayerId(1),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut NoAssets,
     );
     let errors = read
@@ -102,8 +102,8 @@ fn save_both_ways(file: &Path) -> Result<Saved, String> {
     }
     let layer = &read.emitted.layer;
     let mut streamed = Pieces::default();
-    let result = save_usda_to(layer, &store.tokens, &store.paths, &mut streamed);
-    match (save_usda(layer, &store.tokens, &store.paths), result) {
+    let result = save_usda_to(layer, store.tokens(), store.paths(), &mut streamed);
+    match (save_usda(layer, store.tokens(), store.paths()), result) {
         (Ok(text), Ok(())) if text == streamed.text => Ok(Saved::Same),
         (Ok(_), Ok(())) => Err("streamed text differs".into()),
         (Err(a), Err(b)) if a == b && streamed.pieces == 0 => Ok(Saved::Refused),

@@ -43,8 +43,8 @@ fn import(c: &mut Criterion) {
                 black_box(layerstack_usda::emit::emit(
                     &parsed.layer,
                     LayerId(1),
-                    &store.tokens,
-                    &store.paths,
+                    store.tokens(),
+                    store.paths(),
                     &mut NoAssets,
                 ));
             });
@@ -55,8 +55,8 @@ fn import(c: &mut Criterion) {
                 black_box(layerstack_usda::read_usda(
                     black_box(source),
                     LayerId(1),
-                    &store.tokens,
-                    &store.paths,
+                    store.tokens(),
+                    store.paths(),
                     &mut NoAssets,
                 ));
             });

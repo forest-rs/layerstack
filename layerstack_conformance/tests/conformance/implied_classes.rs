@@ -110,7 +110,7 @@ fn prim_stacks_rank_implied_classes_with_their_layer_stack() {
     let mut composed: Vec<String> = stage
         .traverse(pseudo_root)
         .filter(|prim| *prim != pseudo_root)
-        .map(|prim| loaded.store.paths.display(prim, &loaded.store.tokens))
+        .map(|prim| loaded.store.paths().display(prim, loaded.store.tokens()))
         .collect();
     composed.sort();
     let mut expected: Vec<&str> = oracle.prims.iter().map(|p| p.path.as_str()).collect();
@@ -130,7 +130,7 @@ fn prim_stacks_rank_implied_classes_with_their_layer_stack() {
                     layer_name(&loaded, key.key.layer_id),
                     key.key
                         .spec_path
-                        .display(&loaded.store.paths, &loaded.store.tokens),
+                        .display(loaded.store.paths(), loaded.store.tokens()),
                 )
             })
             .collect();
@@ -235,11 +235,11 @@ fn snapshot(loaded: &mut LoadedStage, stage: &Stage) -> Vec<String> {
                     layer_name(loaded, key.key.layer_id),
                     key.key
                         .spec_path
-                        .display(&loaded.store.paths, &loaded.store.tokens)
+                        .display(loaded.store.paths(), loaded.store.tokens())
                 )
             })
             .collect();
-        let path = loaded.store.paths.display(prim, &loaded.store.tokens);
+        let path = loaded.store.paths().display(prim, loaded.store.tokens());
         lines.push(format!("{path}: {stack:?}"));
     }
     lines
@@ -263,8 +263,8 @@ fn select(
         .expect("layer")
         .0;
     let prim = loaded.store.path(prim);
-    let set = loaded.store.tokens.intern(set);
-    let variant = loaded.store.tokens.intern(variant);
+    let set = loaded.store.tokens().intern(set);
+    let variant = loaded.store.tokens().intern(variant);
     loaded
         .store
         .layer_mut(layer)

@@ -156,7 +156,7 @@ fn record(doc: &StageDocument<Fixture>) -> Json {
         .map(|error| match error {
             CompositionError::UnresolvedAsset(error) => json!({
                 "type": "InvalidAssetPath",
-                "prim": store.paths.display(error.prim, &store.tokens),
+                "prim": store.paths().display(error.prim, store.tokens()),
                 "arc": match error.arc {
                     ArcKind::References => "reference",
                     ArcKind::Payloads => "payload",
@@ -164,7 +164,7 @@ fn record(doc: &StageDocument<Fixture>) -> Json {
                 },
                 "asset": file_name(&error.asset),
                 "introducing_layer": identifier(error.introducing_layer),
-                "introducing_spec": error.introducing_spec.display(&store.paths, &store.tokens),
+                "introducing_spec": error.introducing_spec.display(store.paths(), store.tokens()),
             }),
             CompositionError::UnresolvedSublayer(error) => json!({
                 "type": "InvalidSublayerPath",
@@ -174,7 +174,7 @@ fn record(doc: &StageDocument<Fixture>) -> Json {
             other => panic!("unexpected composition error {other:?}"),
         })
         .collect();
-    let root = store.paths.lookup(&Path::root()).unwrap();
+    let root = store.paths().lookup(&Path::root()).unwrap();
     let mut prims = serde_json::Map::new();
     for prim in stage.traverse_all(root).filter(|prim| *prim != root) {
         let handle = stage.prim(prim, store).expect("traversed");
@@ -184,7 +184,7 @@ fn record(doc: &StageDocument<Fixture>) -> Json {
             .map(|key| {
                 json!([
                     identifier(key.key.layer_id),
-                    key.key.spec_path.display(&store.paths, &store.tokens)
+                    key.key.spec_path.display(store.paths(), store.tokens())
                 ])
             })
             .collect();
@@ -202,7 +202,7 @@ fn record(doc: &StageDocument<Fixture>) -> Json {
             attributes.insert(property.name().to_owned(), value);
         }
         prims.insert(
-            store.paths.display(prim, &store.tokens),
+            store.paths().display(prim, store.tokens()),
             json!({"stack": stack, "attributes": attributes}),
         );
     }

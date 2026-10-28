@@ -195,16 +195,16 @@ fn main() -> Result<(), Failure> {
     let scatter_recipe = store.path("/Recipes/Scatter");
     let terrain = store.path("/Assets/Terrain");
     let scatter = store.path("/World/Scatter");
-    let ty = store.tokens.intern("GenerativeProcedural");
-    let system_name = store.tokens.intern("proceduralSystem");
-    let system = store.tokens.intern("example:world");
+    let ty = store.tokens().intern("GenerativeProcedural");
+    let system_name = store.tokens().intern("proceduralSystem");
+    let system = store.tokens().intern("example:world");
     let height = store.property_path("/Recipes/Terrain.primvars:height");
     let mut layer = Layer::new(ROOT);
     // Low-level layer authoring includes ordered child lists; schema publication
     // subsequently maintains the output sites under these parents.
     let pseudo_root = PrimSpec::default().with_children(
         ["Recipes", "Assets", "World"]
-            .map(|name| store.tokens.intern(name))
+            .map(|name| store.tokens().intern(name))
             .to_vec(),
     );
     layer.insert_prim(store.path("/"), pseudo_root);
@@ -212,7 +212,7 @@ fn main() -> Result<(), Failure> {
         let mut parent = PrimSpec::def();
         if path == "/Recipes" {
             parent.authored_children = ["Terrain", "Scatter"]
-                .map(|name| store.tokens.intern(name))
+                .map(|name| store.tokens().intern(name))
                 .to_vec();
         }
         layer.insert_prim(store.path(path), parent);
@@ -238,7 +238,7 @@ fn main() -> Result<(), Failure> {
     );
     store.insert_layer(layer);
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(store.tokens()))),
         ..Default::default()
     };
     let mut live = LiveStage::compose(&mut store, ROOT, options);
@@ -344,8 +344,8 @@ fn main() -> Result<(), Failure> {
         std::fs::create_dir_all(&directory)?;
         let document = layerstack_usda::save::layer_document(
             store.layer(ROOT).unwrap(),
-            &store.tokens,
-            &store.paths,
+            store.tokens(),
+            store.paths(),
         )?;
         std::fs::write(
             std::path::Path::new(&directory).join("procedural_world.usda"),

@@ -187,7 +187,7 @@ fn recipes_drive_shared_geometry_material_inputs_and_dependent_bounds() {
         Mesh::new(&scene, native).unwrap().points().unwrap()[2][1],
         6.
     );
-    let quad = generated.store.tokens.intern("quad");
+    let quad = generated.store.tokens().intern("quad");
     recipe_edit(
         &mut generated,
         support::ASSET,
@@ -438,8 +438,8 @@ fn shared_sources_invalidate_native_and_point_instances_and_recover_after_recrea
     assert_eq!(
         generated
             .store
-            .paths
-            .display(bound.material.unwrap(), &generated.store.tokens)
+            .paths()
+            .display(bound.material.unwrap(), generated.store.tokens())
             .to_string(),
         "/World/Materials/Override"
     );
@@ -605,7 +605,7 @@ fn animate(generated: &mut support::GeneratedScene) {
         ),
         "interpolation materializes a new result"
     );
-    let inactive = generated.store.tokens.intern("inactiveIds");
+    let inactive = generated.store.tokens().intern("inactiveIds");
     let mut edit = Transaction::new();
     edit.set_metadata(
         EditTarget::for_layer(support::ROOT).prim(generated.scatter),
@@ -701,13 +701,13 @@ fn report(stage: &Stage, store: &InMemoryStore) -> serde_json::Value {
     let scene = Scene::new(stage, store);
     let find = |text: &str| {
         store
-            .paths
+            .paths()
             .lookup(
                 &layerstack::Path::root().join(
                     &text
                         .split('/')
                         .skip(1)
-                        .map(|s| store.tokens.lookup(s).unwrap())
+                        .map(|s| store.tokens().lookup(s).unwrap())
                         .collect::<Vec<_>>(),
                 ),
             )
@@ -748,7 +748,7 @@ fn report(stage: &Stage, store: &InMemoryStore) -> serde_json::Value {
                 .unwrap()
                 .connections()
                 .into_iter()
-                .map(|target| target.display(&store.paths, &store.tokens))
+                .map(|target| target.display(store.paths(), store.tokens()))
                 .collect()
         })
         .collect();
@@ -759,23 +759,23 @@ fn report(stage: &Stage, store: &InMemoryStore) -> serde_json::Value {
         "counts": &**mesh.face_vertex_counts().unwrap(),
         "indices": &**mesh.face_vertex_indices().unwrap(),
         "uvIndices": &**uv.indices(time).unwrap(),
-        "uv": uv.compute_flattened(time).unwrap().unwrap().array_ref().unwrap().iter().map(|v| layerstack_schemas::value::read_float2(&v, &store.tokens).unwrap()).collect::<Vec<_>>(),
+        "uv": uv.compute_flattened(time).unwrap().unwrap().array_ref().unwrap().iter().map(|v| layerstack_schemas::value::read_float2(&v, store.tokens()).unwrap()).collect::<Vec<_>>(),
         "normalIndices": &**normals.indices(time).unwrap(),
-        "normals": normals.compute_flattened(time).unwrap().unwrap().array_ref().unwrap().iter().map(|v| layerstack_schemas::value::read_float3(&v, &store.tokens).unwrap()).collect::<Vec<_>>(),
+        "normals": normals.compute_flattened(time).unwrap().unwrap().array_ref().unwrap().iter().map(|v| layerstack_schemas::value::read_float3(&v, store.tokens()).unwrap()).collect::<Vec<_>>(),
         "mask": instancer.compute_mask(time),
         "ids": transforms.iter().map(|t| t.id).collect::<Vec<_>>(),
         "transforms": transforms.iter().map(|t| t.matrix).collect::<Vec<_>>(),
         "bounds": [bounds.min,bounds.max],
         "sourceHeight": Mesh::new(&scene, source).unwrap().points_at(Time::at(13.)).unwrap()[2][1],
-        "material": store.paths.display(mesh.compute_bound_material(&MaterialPurpose::All,BindingOptions::default()).material.unwrap(), &store.tokens).to_string(),
+        "material": store.paths().display(mesh.compute_bound_material(&MaterialPurpose::All,BindingOptions::default()).material.unwrap(), store.tokens()).to_string(),
         "userTag": mesh.read_value("user:tag", layerstack_schemas::value::read_int),
         "proceduralSystem": recipe.procedural_system(),
         "recipeHeight": recipe.read_value_at("primvars:height", Time::at(13.), layerstack_schemas::value::read_float),
         "recipeGeneratedPoints": &**generated.geometry.mesh().points,
         "recipeGeneratedCounts": &**generated.geometry.mesh().face_vertex_counts,
         "recipeTexture": generated.texture.as_deref(),
-        "textureAsset": layerstack_schemas::value::read_asset(&texture, &store.tokens).unwrap().as_ref(),
-        "sourceSurface": store.paths.display(source_material.compute_surface_source(&[]).shader.unwrap(), &store.tokens).to_string(),
+        "textureAsset": layerstack_schemas::value::read_asset(&texture, store.tokens()).unwrap().as_ref(),
+        "sourceSurface": store.paths().display(source_material.compute_surface_source(&[]).shader.unwrap(), store.tokens()).to_string(),
         "instanceMaterialConnections": instance_connections,
     })
 }
@@ -800,13 +800,13 @@ def Xform "Asset" (variants = { string shape = "cube" }; prepend variantSets = "
         support::ROOT,
     );
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(store.tokens()))),
         ..Default::default()
     };
     let mut live = layerstack::LiveStage::compose(&mut store, support::ROOT, options);
     let path = store.path("/Asset/Geometry");
     let variant =
-        layerstack::SpecPath::parse("/Asset{shape=mesh}", &store.tokens, &store.paths).unwrap();
+        layerstack::SpecPath::parse("/Asset{shape=mesh}", store.tokens(), store.paths()).unwrap();
     let target = EditTarget::for_local_variant(support::ROOT, &variant);
     let data = support::mesh();
     let update = data
@@ -826,8 +826,8 @@ def Xform "Asset" (variants = { string shape = "cube" }; prepend variantSets = "
         "publication into the hidden branch must not leak to the selected Cube"
     );
     let asset = store.path("/Asset");
-    let shape = store.tokens.intern("shape");
-    let mesh = store.tokens.intern("mesh");
+    let shape = store.tokens().intern("shape");
+    let mesh = store.tokens().intern("mesh");
     let mut selection = Transaction::new();
     selection.set_variant_selection(
         EditTarget::for_layer(support::ROOT).prim(asset),
@@ -864,22 +864,22 @@ def Xform "Asset" (variants = { string shape = "mesh" }; prepend variantSets = "
         support::ROOT,
     );
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(store.tokens()))),
         ..Default::default()
     };
     let mut live = layerstack::LiveStage::compose(&mut store, support::ROOT, options);
     let path = store.path("/Asset/Geometry");
     let variant =
-        layerstack::SpecPath::parse("/Asset{shape=mesh}", &store.tokens, &store.paths).unwrap();
+        layerstack::SpecPath::parse("/Asset{shape=mesh}", store.tokens(), store.paths()).unwrap();
     let target = EditTarget::for_local_variant(support::ROOT, &variant);
     let data = support::mesh();
     let update = data
         .prepare(live.stage(), &mut store, &target, path, &[])
         .unwrap();
     live.apply(&mut store, &update.transaction).unwrap();
-    let mapped = target.map_to_spec_path(path, &store.paths).unwrap();
+    let mapped = target.map_to_spec_path(path, store.paths()).unwrap();
     assert_eq!(
-        store.tokens.resolve(
+        store.tokens().resolve(
             store
                 .layer(support::ROOT)
                 .unwrap()
@@ -891,7 +891,7 @@ def Xform "Asset" (variants = { string shape = "mesh" }; prepend variantSets = "
         "Mesh"
     );
     let variant =
-        layerstack::SpecPath::parse("/Asset{shape=cube}", &store.tokens, &store.paths).unwrap();
+        layerstack::SpecPath::parse("/Asset{shape=cube}", store.tokens(), store.paths()).unwrap();
     let cube_target = EditTarget::for_local_variant(support::ROOT, &variant);
     assert!(
         matches!(data.prepare(live.stage(), &mut store, &cube_target, path, &[]), Err(MeshPublicationError::NotMesh(p)) if p == path)
@@ -901,7 +901,7 @@ def Xform "Asset" (variants = { string shape = "mesh" }; prepend variantSets = "
     let pending = changed
         .prepare(live.stage(), &mut store, &target, path, &update.properties)
         .unwrap();
-    let key = store.tokens.intern("documentation");
+    let key = store.tokens().intern("documentation");
     let mut intervening = Transaction::new();
     intervening.set_metadata(target.prim(path), key, Value::string("another edit").into());
     live.apply(&mut store, &intervening).unwrap();
@@ -1017,15 +1017,15 @@ fn authored_layers_round_trip_in_both_formats_and_match_openusd() {
             let bytes = if binary {
                 layerstack_usdc::writer::save_layer(
                     layer,
-                    &generated.store.tokens,
-                    &generated.store.paths,
+                    generated.store.tokens(),
+                    generated.store.paths(),
                 )
                 .unwrap()
             } else {
                 layerstack_usda::save::save_usda(
                     layer,
-                    &generated.store.tokens,
-                    &generated.store.paths,
+                    generated.store.tokens(),
+                    generated.store.paths(),
                 )
                 .unwrap()
                 .into_bytes()
@@ -1035,8 +1035,8 @@ fn authored_layers_round_trip_in_both_formats_and_match_openusd() {
                 let read = layerstack_usdc::read_usdc(
                     &bytes,
                     id,
-                    &imported.tokens,
-                    &imported.paths,
+                    imported.tokens(),
+                    imported.paths(),
                     &mut support::Sources,
                 )
                 .unwrap();
@@ -1046,7 +1046,7 @@ fn authored_layers_round_trip_in_both_formats_and_match_openusd() {
             }
         }
         let options = StageOptions {
-            schemas: Some(Arc::new(layerstack_schemas::openusd(&imported.tokens))),
+            schemas: Some(Arc::new(layerstack_schemas::openusd(imported.tokens()))),
             ..Default::default()
         };
         let stage = Stage::compose(&mut imported, support::ROOT, options);

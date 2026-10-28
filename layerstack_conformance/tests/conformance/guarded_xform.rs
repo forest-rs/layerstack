@@ -20,18 +20,18 @@ fn fixture(
     let path = store.path("/P");
     let mut root = Layer::new(LayerId(1));
     root.sublayers_mut().push(SublayerEntry::new(LayerId(2)));
-    let mut prim = PrimSpec::def().with_type_name(store.tokens.intern("Xform"));
+    let mut prim = PrimSpec::def().with_type_name(store.tokens().intern("Xform"));
     if let Some(order) = order {
-        prim = prim.with_property(store.tokens.intern("xformOpOrder"), order);
+        prim = prim.with_property(store.tokens().intern("xformOpOrder"), order);
     }
     if let Some(matrix) = matrix {
-        prim = prim.with_property(store.tokens.intern("xformOp:transform"), matrix);
+        prim = prim.with_property(store.tokens().intern("xformOp:transform"), matrix);
     }
     root.insert_prim(path, prim);
     store.insert_layer(root);
     store.insert_layer(Layer::new(LayerId(2)));
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(store.tokens()))),
         ..StageOptions::default()
     };
     let live = LiveStage::compose(&mut store, LayerId(1), options);
@@ -164,12 +164,12 @@ fn referenced_matrix_replacement_maps_namespace_and_stage_time_together() {
     let mut referenced = Layer::new(LayerId(2));
     referenced.insert_prim(
         asset,
-        PrimSpec::def().with_type_name(store.tokens.intern("Xform")),
+        PrimSpec::def().with_type_name(store.tokens().intern("Xform")),
     );
     store.insert_layer(root);
     store.insert_layer(referenced);
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(store.tokens()))),
         ..StageOptions::default()
     };
     let mut live = LiveStage::compose(&mut store, LayerId(1), options);
@@ -194,7 +194,7 @@ fn referenced_matrix_replacement_maps_namespace_and_stage_time_together() {
         .unwrap();
     let transaction = edit.finish();
     let applied = live.apply(&mut store, &transaction).unwrap();
-    let transform = store.tokens.lookup("xformOp:transform").unwrap();
+    let transform = store.tokens().lookup("xformOp:transform").unwrap();
     let spec = store.layer(LayerId(2)).unwrap().prims()[&asset]
         .property(transform)
         .unwrap();

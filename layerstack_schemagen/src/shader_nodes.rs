@@ -71,7 +71,7 @@ pub(crate) fn read_store(
         else {
             return Err("shader definition has no token info:id".into());
         };
-        let id = store.tokens.resolve(id).to_owned();
+        let id = store.tokens().resolve(id).to_owned();
         let mut ports = Vec::new();
         for property in prim.properties() {
             let name = property.name().to_owned();
@@ -408,7 +408,7 @@ pub(crate) fn render(model: &Model, external: bool) -> Result<Vec<(String, Strin
                     {
                         string_array_literal(value, external)?
                     } else {
-                        default_literal(value, &model.tokens, external)?
+                        default_literal(value, model.tokens(), external)?
                     };
                     if port.ty.is_array() && crate::views::shared_array(port.ty.default_scalar()) {
                         literal.push_str(".into()");
@@ -628,7 +628,7 @@ mod tests {
             version: "custom".into(),
             files: Vec::new(),
             domains: Vec::new(),
-            tokens: TokenInterner::default(),
+            store: InMemoryStore::default(),
             nodes: vec![Node {
                 id: "Text".into(),
                 ports: vec![NodePort {
@@ -649,7 +649,7 @@ mod tests {
                 version: "custom".into(),
                 files: Vec::new(),
                 domains: Vec::new(),
-                tokens: TokenInterner::default(),
+                store: InMemoryStore::default(),
                 nodes: vec![Node {
                     id: "Text".into(),
                     ports: vec![NodePort {

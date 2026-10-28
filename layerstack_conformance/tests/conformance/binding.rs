@@ -72,7 +72,7 @@ fn load() -> (layerstack_conformance::usda_real::LoadedStage, Stage) {
     );
     assert!(loaded.invalid.is_empty(), "{:?}", loaded.invalid);
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&loaded.store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(loaded.store.tokens()))),
         ..StageOptions::default()
     };
     let stage = Stage::compose(&mut loaded.store, loaded.root_layer, options);
@@ -83,7 +83,7 @@ fn load() -> (layerstack_conformance::usda_real::LoadedStage, Stage) {
 fn prims(stage: &Stage, loaded: &layerstack_conformance::usda_real::LoadedStage) -> Vec<PathId> {
     let root = loaded
         .store
-        .paths
+        .paths()
         .lookup(&layerstack::Path::root())
         .expect("the pseudo-root");
     stage.traverse(root).skip(1).collect()
@@ -97,8 +97,8 @@ fn bound_materials_match_openusd() {
     let store = &loaded.store;
     let scene = Scene::new(&stage, store);
     let prims = prims(&stage, &loaded);
-    let display = |path: PathId| store.paths.display(path, &store.tokens);
-    let property = |path: PropertyPath| path.display(&store.paths, &store.tokens);
+    let display = |path: PathId| store.paths().display(path, store.tokens());
+    let property = |path: PropertyPath| path.display(store.paths(), store.tokens());
     assert_eq!(prims.len(), oracle.bindings.len(), "the same prims");
 
     let mut failures = Vec::new();
@@ -169,7 +169,10 @@ fn collection_membership_matches_openusd() {
     let scene = Scene::new(&stage, store);
     let prims = prims(&stage, &loaded);
     // The pseudo-root too, which `includeRoot` never makes a member.
-    let root = store.paths.lookup(&layerstack::Path::root()).expect("root");
+    let root = store
+        .paths()
+        .lookup(&layerstack::Path::root())
+        .expect("root");
     let mut paths: Vec<TargetPath> = vec![TargetPath::Prim(root)];
     for prim in &prims {
         paths.push(TargetPath::Prim(*prim));
@@ -181,7 +184,7 @@ fn collection_membership_matches_openusd() {
             paths.push(TargetPath::Property(property.path()));
         }
     }
-    let display = |path: TargetPath| path.display(&store.paths, &store.tokens);
+    let display = |path: TargetPath| path.display(store.paths(), store.tokens());
 
     let mut failures = Vec::new();
     let mut checks = 0;
@@ -191,7 +194,7 @@ fn collection_membership_matches_openusd() {
             seen += 1;
             let name = format!(
                 "{}.collection:{}",
-                store.paths.display(*prim, &store.tokens),
+                store.paths().display(*prim, store.tokens()),
                 collection.instance()
             );
             let Some(expected) = oracle.collections.get(&name) else {
@@ -285,7 +288,7 @@ fn binding_caches_follow_edits() {
 
     let (mut loaded, _) = load();
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&loaded.store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(loaded.store.tokens()))),
         ..StageOptions::default()
     };
     let layer = loaded.root_layer;
@@ -297,7 +300,7 @@ fn binding_caches_follow_edits() {
     let store = &mut loaded.store;
     let property = |store: &mut InMemoryStore, prim: &str, name: &str| {
         let prim = store.path(prim);
-        PropertyPath::new(prim, store.tokens.intern(name))
+        PropertyPath::new(prim, store.tokens().intern(name))
     };
     let target = EditTarget::for_layer(layer);
 
@@ -319,8 +322,8 @@ fn binding_caches_follow_edits() {
     failures.extend(stale(&mut cache, &scene, &prims, "retargeted"));
 
     // Make it stronger than its descendants' bindings.
-    let key = store.tokens.intern("bindMaterialAs");
-    let stronger = store.tokens.intern("strongerThanDescendants");
+    let key = store.tokens().intern("bindMaterialAs");
+    let stronger = store.tokens().intern("strongerThanDescendants");
     let mut tx = Transaction::new();
     tx.set_metadata(
         target.property(direct),
@@ -386,8 +389,8 @@ fn binding_caches_follow_edits() {
 
     // Put `/Ordered`'s `a` binding before `z`.
     let ordered = store.path("/Ordered");
-    let a = store.tokens.intern("material:binding:collection:a");
-    let z = store.tokens.intern("material:binding:collection:z");
+    let a = store.tokens().intern("material:binding:collection:a");
+    let z = store.tokens().intern("material:binding:collection:z");
     store
         .layer_mut(layer)
         .and_then(|layer| layer.prim_mut(ordered))

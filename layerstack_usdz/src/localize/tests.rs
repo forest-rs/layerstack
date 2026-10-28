@@ -10,8 +10,8 @@ use layerstack::{
 fn fixture() -> (InMemoryStore, layerstack::PathId, layerstack::TokenId) {
     let mut store = InMemoryStore::default();
     let model = store.path("/Model");
-    let file = store.tokens.intern("file");
-    let root_name = store.tokens.intern("Model");
+    let file = store.tokens().intern("file");
+    let root_name = store.tokens().intern("Model");
     let pseudo_root = store.path("/");
     let mut root = Layer::new(LayerId(1));
     root.set_default_prim(Some(root_name));
@@ -85,8 +85,11 @@ fn localized_package_round_trips_layers_and_rewrites_paths_from_each_authoring_l
         Some(layerstack::Value::Asset("../textures/albedo.png".into()))
     );
     assert_eq!(*store.layer(LayerId(2)).unwrap(), original);
-    let bytes = plan.write_usdz(&store.tokens, &store.paths).unwrap();
-    assert_eq!(bytes, plan.write_usdz(&store.tokens, &store.paths).unwrap());
+    let bytes = plan.write_usdz(store.tokens(), store.paths()).unwrap();
+    assert_eq!(
+        bytes,
+        plan.write_usdz(store.tokens(), store.paths()).unwrap()
+    );
     let tokens = TokenInterner::default();
     let paths = PathInterner::default();
     let read =
@@ -174,7 +177,7 @@ fn unnamed_layer_links_are_named_and_host_expanded_udims_keep_templates() {
             .default,
         Some(layerstack::Value::Asset("../textures/<UDIM>.png".into()))
     );
-    assert!(plan.write_usdz(&store.tokens, &store.paths).is_ok());
+    assert!(plan.write_usdz(store.tokens(), store.paths()).is_ok());
 }
 
 #[test]

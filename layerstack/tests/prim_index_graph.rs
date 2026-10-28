@@ -22,7 +22,7 @@ fn arc_path(
         path.push((
             entry.arc_kind(),
             entry.layer_stack(),
-            entry.site().display(&store.paths, &store.tokens),
+            entry.site().display(store.paths(), store.tokens()),
         ));
         let Some(parent) = entry.parent() else {
             break;
@@ -38,11 +38,11 @@ fn arc_path(
 /// variant set selected to `summer`; `/Tree/Leaves` is a child of the tree.
 fn grove() -> (InMemoryStore, Stage) {
     let mut store = InMemoryStore::default();
-    let height = store.tokens.intern("height");
-    let color = store.tokens.intern("color");
-    let leaves_tok = store.tokens.intern("Leaves");
-    let season = store.tokens.intern("season");
-    let summer = store.tokens.intern("summer");
+    let height = store.tokens().intern("height");
+    let color = store.tokens().intern("color");
+    let leaves_tok = store.tokens().intern("Leaves");
+    let season = store.tokens().intern("season");
+    let summer = store.tokens().intern("summer");
     let grove = store.path("/Grove");
     let tree = store.path("/Tree");
     let tree_leaves = store.path("/Tree/Leaves");
@@ -202,7 +202,10 @@ fn ancestral_arcs_add_nodes_to_descendants() {
 #[test]
 fn opinion_order_follows_the_graphs_strength_order() {
     let (store, stage) = grove();
-    let root = store.paths.lookup(&layerstack::Path::root()).expect("root");
+    let root = store
+        .paths()
+        .lookup(&layerstack::Path::root())
+        .expect("root");
     for prim in stage.traverse(root).filter(|prim| *prim != root) {
         let handle = stage.prim(prim, &store).expect("composed");
         let graph = handle.composition_graph();
@@ -239,13 +242,13 @@ fn opinion_order_follows_the_graphs_strength_order() {
 fn variant_selections_report_the_strongest_opinion() {
     let (mut store, stage) = grove();
     let grove = store.path("/Grove");
-    let season = store.tokens.intern("season");
-    let summer = store.tokens.intern("summer");
-    let winter = store.tokens.intern("winter");
+    let season = store.tokens().intern("season");
+    let summer = store.tokens().intern("summer");
+    let winter = store.tokens().intern("winter");
     let selections = stage.prim(grove, &store).unwrap().variant_selections();
     assert_eq!(
-        selections.get(store.tokens.resolve(season)),
-        Some(&store.tokens.resolve(summer))
+        selections.get(store.tokens().resolve(season)),
+        Some(&store.tokens().resolve(summer))
     );
     assert_eq!(selections.len(), 1, "one variant set is selected");
     let absent = store.path("/Absent");
@@ -268,6 +271,6 @@ fn variant_selections_report_the_strongest_opinion() {
             .unwrap()
             .variant_selections()
             .get("season"),
-        Some(&store.tokens.resolve(winter))
+        Some(&store.tokens().resolve(winter))
     );
 }

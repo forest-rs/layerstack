@@ -39,7 +39,7 @@ fn to_json(value: &Value, store: &InMemoryStore) -> Json {
         ),
         Value::Int(v) => json!(v),
         Value::String(text) => json!(&**text),
-        Value::Token(token) => json!(store.tokens.resolve(*token)),
+        Value::Token(token) => json!(store.tokens().resolve(*token)),
         Value::Asset(path) => json!({ "asset": &**path }),
         other => panic!("no JSON rendering for {other:?}"),
     }
@@ -57,10 +57,10 @@ fn from_json(value: &Json) -> Value {
 /// The root layer's field `key` on the prim or property spec at `path`.
 fn local(store: &InMemoryStore, prim: PathId, property: Option<&str>, key: &str) -> Option<Json> {
     let spec = store.layer(LayerId(1)).unwrap().prim(prim)?;
-    let key = store.tokens.lookup(key)?;
+    let key = store.tokens().lookup(key)?;
     let fields = match property {
         Some(name) => {
-            let name = store.tokens.lookup(name)?;
+            let name = store.tokens().lookup(name)?;
             spec.properties
                 .iter()
                 .find(|entry| entry.name == name)?

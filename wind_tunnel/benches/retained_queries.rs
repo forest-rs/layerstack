@@ -19,9 +19,9 @@ fn bench(c: &mut Criterion) {
     group.sample_size(10);
     for count in [1000, 10000] {
         let mut store = InMemoryStore::default();
-        let material = store.tokens.intern("Material");
-        let value = store.tokens.intern("inputs:value");
-        let unused = store.tokens.intern("inputs:unused");
+        let material = store.tokens().intern("Material");
+        let value = store.tokens().intern("inputs:value");
+        let unused = store.tokens().intern("inputs:unused");
         let mut layer = Layer::new(LayerId(1));
         let mut paths = Vec::new();
         let ty = PropertyType::parse("float").unwrap();
@@ -47,7 +47,7 @@ fn bench(c: &mut Criterion) {
         }
         store.insert_layer(layer);
         let options = StageOptions {
-            schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
+            schemas: Some(Arc::new(layerstack_schemas::openusd(store.tokens()))),
             ..StageOptions::default()
         };
         // The host-owned path synchronizes once before a batch, including the

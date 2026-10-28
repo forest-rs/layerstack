@@ -67,8 +67,8 @@ pub(crate) fn load(path: &Path, store: &mut InMemoryStore) -> Result<LayerId, St
         .resolve(
             path.to_str().ok_or("non-UTF8 definition path")?,
             None,
-            &store.tokens,
-            &store.paths,
+            store.tokens(),
+            store.paths(),
         )
         .map_err(|e| format!("{}: {e:?}", path.display()))?
         .layer_id;
@@ -80,8 +80,8 @@ pub(crate) fn load(path: &Path, store: &mut InMemoryStore) -> Result<LayerId, St
         let emitted = layerstack_usda::emit::emit(
             &parsed.layer,
             LayerId(cursor as u64),
-            &store.tokens,
-            &store.paths,
+            store.tokens(),
+            store.paths(),
             &mut resolver,
         );
         if !parsed.diagnostics.is_empty() || !emitted.diagnostics.is_empty() {

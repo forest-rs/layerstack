@@ -114,8 +114,8 @@ fn main() {
     ] {
         let text = layerstack_usda::save::save_usda(
             generated.store.layer(id).unwrap(),
-            &generated.store.tokens,
-            &generated.store.paths,
+            generated.store.tokens(),
+            generated.store.paths(),
         )
         .unwrap();
         std::fs::write(directory.join(name), text).unwrap();

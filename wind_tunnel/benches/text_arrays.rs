@@ -87,8 +87,8 @@ fn text_arrays(c: &mut Criterion) {
     for len in [8, 1000] {
         let mut store = InMemoryStore::default();
         let prim = store.path("/Pass");
-        let name = store.tokens.intern("command");
-        let render_pass = store.tokens.intern("RenderPass");
+        let name = store.tokens().intern("command");
+        let render_pass = store.tokens().intern("RenderPass");
         let command = Value::array(
             (0..len)
                 .map(|i| Value::string(format!("--argument-{i}")))
@@ -106,7 +106,7 @@ fn text_arrays(c: &mut Criterion) {
         store.insert_layer(layer);
         let options = StageOptions {
             schemas: Some(std::sync::Arc::new(layerstack_schemas::openusd(
-                &store.tokens,
+                store.tokens(),
             ))),
             ..StageOptions::default()
         };

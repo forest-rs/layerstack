@@ -506,8 +506,8 @@ mod tests {
     fn setup() -> (InMemoryStore, LiveStage, PathId, PropertyPath) {
         let mut store = InMemoryStore::default();
         let path = store.path("/P");
-        let attr = store.tokens.intern("value");
-        let ui = store.tokens.intern("uiHints");
+        let attr = store.tokens().intern("value");
+        let ui = store.tokens().intern("uiHints");
         let mut layer = Layer::new(LayerId(1));
         layer.insert_prim(
             path,
@@ -523,7 +523,7 @@ mod tests {
                 ),
         );
         store.insert_layer(layer);
-        let schemas = crate::openusd(&store.tokens);
+        let schemas = crate::openusd(store.tokens());
         let live = LiveStage::compose(
             &mut store,
             LayerId(1),
@@ -624,7 +624,7 @@ mod tests {
         root.sublayers_mut()
             .push(layerstack::SublayerEntry::new(LayerId(1)));
         store.insert_layer(root);
-        let schemas = crate::openusd(&store.tokens);
+        let schemas = crate::openusd(store.tokens());
         let mut live = LiveStage::compose(
             &mut store,
             LayerId(2),
@@ -647,7 +647,7 @@ mod tests {
             UiHints::prim(&scene, path).unwrap().hint(&["unrelated"]),
             Some(Value::Int(17))
         );
-        let key = store.tokens.lookup("uiHints").unwrap();
+        let key = store.tokens().lookup("uiHints").unwrap();
         let local = store.layer(LayerId(2)).unwrap().prims()[&path]
             .field(key)
             .unwrap();
@@ -687,7 +687,7 @@ mod tests {
     fn mapped_reference_edit_preserves_local_and_weaker_entries() {
         let (mut store, _, source, _) = setup();
         let instance = store.path("/Instance");
-        let ui = store.tokens.intern("uiHints");
+        let ui = store.tokens().intern("uiHints");
         let mut weak = Layer::new(LayerId(3));
         weak.insert_prim(
             source,
@@ -706,7 +706,7 @@ mod tests {
             PrimSpec::def().with_reference(layerstack::Reference::new(LayerId(1), source)),
         );
         store.insert_layer(root);
-        let schemas = crate::openusd(&store.tokens);
+        let schemas = crate::openusd(store.tokens());
         let mut live = LiveStage::compose(
             &mut store,
             LayerId(2),
@@ -756,8 +756,8 @@ mod tests {
     #[test]
     fn legacy_read_fallback_and_explicit_legacy_write_policy() {
         let (mut store, mut live, path, _) = setup();
-        let display = store.tokens.intern("displayName");
-        let hidden = store.tokens.intern("hidden");
+        let display = store.tokens().intern("displayName");
+        let hidden = store.tokens().intern("hidden");
         let mut transaction = layerstack::Transaction::new();
         transaction.set_metadata(
             EditTarget::for_layer(LayerId(1)).prim(path),

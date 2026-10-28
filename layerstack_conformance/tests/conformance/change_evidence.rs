@@ -13,7 +13,7 @@ fn referenced_values_and_undo_report_composed_properties() {
     let source = store.path("/Source");
     let a = store.path("/A");
     let b = store.path("/B");
-    let value = store.tokens.intern("weight");
+    let value = store.tokens().intern("weight");
     let mut asset = Layer::new(LayerId(2));
     asset.insert_prim(
         source,
@@ -81,9 +81,9 @@ fn precise_unrelated_edits_preserve_geometry_caches() {
     let mut store = InMemoryStore::default();
     let root = store.path("/World");
     let child = store.path("/World/Shape");
-    let cube = store.tokens.intern("Cube");
-    let size = store.tokens.intern("size");
-    let color = store.tokens.intern("inputs:roughness");
+    let cube = store.tokens().intern("Cube");
+    let size = store.tokens().intern("size");
+    let color = store.tokens().intern("inputs:roughness");
     let attr = |v| {
         PropertySpec::typed_attribute(layerstack::PropertyType::parse("double").unwrap())
             .with_default(Value::Double(v))
@@ -98,7 +98,7 @@ fn precise_unrelated_edits_preserve_geometry_caches() {
     );
     store.insert_layer(layer);
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(store.tokens()))),
         ..StageOptions::default()
     };
     let mut live = LiveStage::compose(&mut store, LayerId(1), options);

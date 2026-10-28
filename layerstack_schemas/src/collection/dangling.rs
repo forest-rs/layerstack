@@ -138,11 +138,11 @@ impl DanglingCollection {
 ///
 /// let mut store = InMemoryStore::default();
 /// let options = StageOptions {
-///     schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
+///     schemas: Some(Arc::new(layerstack_schemas::openusd(store.tokens()))),
 ///     ..StageOptions::default()
 /// };
 /// let (lamp, gone) = (store.path("/Lamp"), store.path("/Gone"));
-/// let shines_on = store.tokens.intern("shinesOn");
+/// let shines_on = store.tokens().intern("shinesOn");
 /// let mut layer = Layer::new(LayerId(1));
 /// layer.insert_prim(
 ///     lamp,

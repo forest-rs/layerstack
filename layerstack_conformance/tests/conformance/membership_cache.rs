@@ -15,7 +15,8 @@ fn property(
     owner: layerstack::PathId,
     name: &str,
 ) -> layerstack::Address {
-    EditTarget::for_layer(LayerId(1)).property(PropertyPath::new(owner, store.tokens.intern(name)))
+    EditTarget::for_layer(LayerId(1))
+        .property(PropertyPath::new(owner, store.tokens().intern(name)))
 }
 fn assert_fresh(sample: layerstack_schemas::MembershipSample<'_>, scene: &Scene<'_>) {
     let fresh = MembershipQuery::compute(scene, sample.collection.owner, &sample.collection.name);
@@ -206,8 +207,8 @@ def Scope "Geo" (kind = "component") { custom float value = 1; }
             .evaluated
     );
     let mut edit = Transaction::new();
-    let kind = store.tokens.intern("kind");
-    let group = store.tokens.intern("group");
+    let kind = store.tokens().intern("kind");
+    let group = store.tokens().intern("group");
     edit.set_metadata(
         EditTarget::for_layer(LayerId(1)).prim(geo),
         kind,
@@ -245,7 +246,7 @@ def Scope "Geo" {}
     assert!(!first.query.problems().is_empty());
     assert!(!first.membership[0].is_included());
     let mut edit = Transaction::new();
-    let api = store.tokens.intern("CollectionAPI:inner");
+    let api = store.tokens().intern("CollectionAPI:inner");
     edit.add_applied_schema(EditTarget::for_layer(LayerId(1)).prim(other), api);
     let applied = live.apply(&mut store, &edit).unwrap();
     let scene = Scene::new(live.stage(), &store);
@@ -324,7 +325,7 @@ def Scope "Geo" {}
     );
     let sets = store.path("/Sets");
     let geo = store.path("/Geo");
-    let token = store.tokens.intern("link");
+    let token = store.tokens().intern("link");
     let targets = [TargetPath::Property(PropertyPath::new(geo, token))];
     let mut cache = MembershipCache::new();
     let first = cache

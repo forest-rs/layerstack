@@ -52,7 +52,7 @@ fn main() {
             } else {
                 "enter"
             },
-            store.paths.display(visit.prim, &store.tokens)
+            store.paths().display(visit.prim, store.tokens())
         );
         if visit.prim == world && !visit.is_post_visit {
             range.prune_children();

@@ -54,7 +54,7 @@
 //!
 //! let mut store = InMemoryStore::default();
 //! let prim = store.path("/Doc");
-//! let title = store.tokens.intern("title");
+//! let title = store.tokens().intern("title");
 //! let text = |value| {
 //!     PropertySpec::typed_attribute(PropertyType::parse("string").unwrap())
 //!         .with_default(Value::string(value))

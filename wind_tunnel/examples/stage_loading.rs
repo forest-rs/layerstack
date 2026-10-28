@@ -145,7 +145,7 @@ fn main() {
         let mut files = Files::default();
         let start = Instant::now();
         let result = files
-            .resolve(root, None, &store.tokens, &store.paths)
+            .resolve(root, None, store.tokens(), store.paths())
             .expect("load all scene layers without diagnostics");
         assert!(files.errors.is_empty(), "{:?}", files.errors);
         let root = result.layer_id;
@@ -184,8 +184,8 @@ fn main() {
                 );
                 let bytes = layerstack_usdc::writer::save_layer(
                     store.layer(*id).unwrap(),
-                    &store.tokens,
-                    &store.paths,
+                    store.tokens(),
+                    store.paths(),
                 )
                 .expect("save imported layer for field audit");
                 std::fs::write(directory.join(format!("{}.usdc", id.0)), bytes)

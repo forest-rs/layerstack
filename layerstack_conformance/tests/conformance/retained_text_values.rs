@@ -265,8 +265,8 @@ fn composition_and_raw_queries_read_text_arrays_without_decoding_them() {
     let read = read_usdc_lazy(
         bytes.as_slice().into(),
         LayerId(1),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut NoAssets,
     )
     .unwrap();
@@ -281,8 +281,8 @@ fn composition_and_raw_queries_read_text_arrays_without_decoding_them() {
         "composition stays structural"
     );
     // A read decodes the value it selects, once.
-    let tags = store.tokens.lookup("tags").unwrap();
-    let root = store.paths.lookup(&layerstack::Path::root()).unwrap();
+    let tags = store.tokens().lookup("tags").unwrap();
+    let root = store.paths().lookup(&layerstack::Path::root()).unwrap();
     let tagged: Vec<PropertyPath> = stage
         .traverse_all(root)
         .map(|prim| PropertyPath::new(prim, tags))
@@ -293,7 +293,7 @@ fn composition_and_raw_queries_read_text_arrays_without_decoding_them() {
         .attribute(tagged[0])
         .and_then(|attribute| {
             attribute.read(Time::Default, |v| {
-                Vec::<TokenId>::from_value(v, &store.tokens)
+                Vec::<TokenId>::from_value(v, store.tokens())
             })
         })
         .unwrap()
@@ -323,15 +323,15 @@ fn retained_text_arrays_decode_once_across_threads() {
     let read = read_usdc_lazy(
         bytes.as_slice().into(),
         LayerId(1),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut NoAssets,
     )
     .unwrap();
     store.insert_layer(read.assembled.layer);
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
-    let tags = store.tokens.lookup("tags").unwrap();
-    let root = store.paths.lookup(&layerstack::Path::root()).unwrap();
+    let tags = store.tokens().lookup("tags").unwrap();
+    let root = store.paths().lookup(&layerstack::Path::root()).unwrap();
     let tagged: Vec<PropertyPath> = stage
         .traverse_all(root)
         .map(|prim| PropertyPath::new(prim, tags))
@@ -420,16 +420,16 @@ fn edits_replace_and_restore_retained_values() {
     let read = read_usdc_lazy(
         bytes.as_slice().into(),
         LayerId(1),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut NoAssets,
     )
     .unwrap();
     let eager = read_usdc(
         bytes,
         LayerId(1),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut NoAssets,
     )
     .unwrap()
@@ -463,7 +463,7 @@ fn edits_replace_and_restore_retained_values() {
         .expect_default(at.clone(), Some(decoded.clone()))
         .apply(&mut store)
         .expect("the retained value is the decoded one");
-    let rock = store.tokens.intern("rock");
+    let rock = store.tokens().intern("rock");
     let inverse = Transaction::new()
         .set_default(at.clone(), Value::Array(vec![Value::Token(rock)]))
         .apply(&mut store)
@@ -529,8 +529,8 @@ fn a_retained_text_array_that_does_not_decode_is_an_error_when_read() {
         read_usdc(
             &bytes,
             LayerId(1),
-            &store.tokens,
-            &store.paths,
+            store.tokens(),
+            store.paths(),
             &mut NoAssets
         )
         .is_err(),
@@ -539,13 +539,13 @@ fn a_retained_text_array_that_does_not_decode_is_an_error_when_read() {
     let read = read_usdc_lazy(
         bytes.as_slice().into(),
         LayerId(1),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut NoAssets,
     )
     .expect("a retained read leaves the payload for later");
     let saved =
-        layerstack_usda::save::save_usda(&read.assembled.layer, &store.tokens, &store.paths);
+        layerstack_usda::save::save_usda(&read.assembled.layer, store.tokens(), store.paths());
     assert!(
         matches!(
             saved,
@@ -566,7 +566,7 @@ fn a_retained_text_array_that_does_not_decode_is_an_error_when_read() {
         "{checked:?}"
     );
     let typed = tags_attribute.try_read(Time::Default, |v| {
-        Vec::<TokenId>::from_value(v, &store.tokens)
+        Vec::<TokenId>::from_value(v, store.tokens())
     });
     assert!(
         matches!(typed, Err(ArrayReadError::InvalidData(_))),
@@ -603,14 +603,17 @@ fn a_failed_retained_text_array_hides_weaker_values_at_every_time() {
     let read = read_usdc_lazy(
         bytes.as_slice().into(),
         LayerId(1),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut NoAssets,
     )
     .unwrap();
     let mut stronger = read.assembled.layer;
     let rock = store.path("/Rock");
-    let (tags, sizes) = (store.tokens.intern("tags"), store.tokens.intern("sizes"));
+    let (tags, sizes) = (
+        store.tokens().intern("tags"),
+        store.tokens().intern("sizes"),
+    );
     let float_array = PropertyType::parse("float[]").unwrap();
     let broken = ArrayReadError::InvalidData("broken float array".into());
     stronger.prims_mut().get_mut(&rock).unwrap().set_property(
@@ -628,7 +631,7 @@ fn a_failed_retained_text_array_hides_weaker_values_at_every_time() {
                 tags,
                 PropertySpec::typed_attribute(PropertyType::parse("token[]").unwrap())
                     .with_default(Value::array(vec![Value::Token(
-                        store.tokens.intern("pebble"),
+                        store.tokens().intern("pebble"),
                     )])),
             )
             .with_property(
@@ -653,8 +656,8 @@ fn a_failed_retained_text_array_hides_weaker_values_at_every_time() {
     for name in ["/Rock.tags", "/Rock.sizes"] {
         let attribute = view.attribute(store.property_path(name)).unwrap();
         for time in [Time::Default, Time::at(1.0)] {
-            let tokens = attribute.read(time, |v| Vec::<TokenId>::from_value(v, &store.tokens));
-            let numbers = attribute.read(time, |v| Vec::<f32>::from_value(v, &store.tokens));
+            let tokens = attribute.read(time, |v| Vec::<TokenId>::from_value(v, store.tokens()));
+            let numbers = attribute.read(time, |v| Vec::<f32>::from_value(v, store.tokens()));
             assert!(
                 tokens.is_none() && numbers.is_none(),
                 "{name} at {time:?}: {tokens:?} {numbers:?}"

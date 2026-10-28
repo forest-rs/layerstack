@@ -12,9 +12,9 @@ use std::sync::Arc;
 #[test]
 fn generated_metadata_retains_types_targets_and_defaults_without_creating_properties() {
     let store = InMemoryStore::default();
-    let registry = layerstack_schemas::registry(&[Domain::UsdShade], &store.tokens);
+    let registry = layerstack_schemas::registry(&[Domain::UsdShade], store.tokens());
     let render_type = registry
-        .metadata(store.tokens.lookup("renderType").unwrap())
+        .metadata(store.tokens().lookup("renderType").unwrap())
         .unwrap();
     assert_eq!(render_type.value_type.name(), "token");
     assert!(render_type.applies_to(MetadataTarget::Attribute));
@@ -22,26 +22,26 @@ fn generated_metadata_retains_types_targets_and_defaults_without_creating_proper
     assert!(!render_type.applies_to(MetadataTarget::Prim));
     assert!(
         registry
-            .metadata(store.tokens.intern("metersPerUnit"))
+            .metadata(store.tokens().intern("metersPerUnit"))
             .is_none()
     );
     let shader = registry
-        .schema_definition(store.tokens.lookup("Shader").unwrap())
+        .schema_definition(store.tokens().lookup("Shader").unwrap())
         .unwrap();
     assert!(
         shader
-            .property(store.tokens.lookup("connectability").unwrap())
+            .property(store.tokens().lookup("connectability").unwrap())
             .is_none()
     );
     let mut builder = layerstack::SchemaRegistry::builder();
     builder
         .register_metadata(
             layerstack::MetadataDefinition::new(
-                store.tokens.intern("colorSpaceHint"),
+                store.tokens().intern("colorSpaceHint"),
                 layerstack::MetadataType::parse("int").unwrap(),
                 [MetadataTarget::Attribute],
             ),
-            &store.tokens,
+            store.tokens(),
         )
         .unwrap();
     // usdShade's own field, declared otherwise: refused, as OpenUSD keeps
@@ -50,16 +50,16 @@ fn generated_metadata_retains_types_targets_and_defaults_without_creating_proper
         builder
             .register_metadata(
                 layerstack::MetadataDefinition::new(
-                    store.tokens.intern("connectability"),
+                    store.tokens().intern("connectability"),
                     layerstack::MetadataType::parse("int").unwrap(),
                     [MetadataTarget::Attribute],
                 ),
-                &store.tokens,
+                store.tokens(),
             )
             .is_err()
     );
     assert!(
-        layerstack_schemas::register(&mut builder, &[Domain::UsdShade], &store.tokens).is_ok(),
+        layerstack_schemas::register(&mut builder, &[Domain::UsdShade], store.tokens()).is_ok(),
         "usdShade's tables declare its fields as the built-in table does"
     );
 }
@@ -72,15 +72,15 @@ fn composed_metadata_and_layer_defaults_match_cpp() {
     let mut store = InMemoryStore::default();
     let mesh = store.path("/Mesh");
     let missing = store.path("/Missing");
-    let mesh_type = store.tokens.intern("Mesh");
-    let normals = store.tokens.intern("normals");
-    let binding = store.tokens.intern("binding");
-    let interpolation = store.tokens.intern("interpolation");
-    let sdr = store.tokens.intern("sdrMetadata");
-    let render_type = store.tokens.intern("renderType");
-    let inactive = store.tokens.intern("inactiveIds");
-    let meters = store.tokens.intern("metersPerUnit");
-    let registry = Arc::new(layerstack_schemas::openusd(&store.tokens));
+    let mesh_type = store.tokens().intern("Mesh");
+    let normals = store.tokens().intern("normals");
+    let binding = store.tokens().intern("binding");
+    let interpolation = store.tokens().intern("interpolation");
+    let sdr = store.tokens().intern("sdrMetadata");
+    let render_type = store.tokens().intern("renderType");
+    let inactive = store.tokens().intern("inactiveIds");
+    let meters = store.tokens().intern("metersPerUnit");
+    let registry = Arc::new(layerstack_schemas::openusd(store.tokens()));
     let mut root = Layer::new(LayerId(1));
     root.sublayers_mut().push(SublayerEntry::new(LayerId(2)));
     root.insert_prim(mesh, PrimSpec::def().with_type_name(mesh_type));
@@ -136,7 +136,7 @@ fn composed_metadata_and_layer_defaults_match_cpp() {
     weak.properties.push(entry(
         normals,
         PropertySpec::attribute()
-            .with_metadata(interpolation, Value::Token(store.tokens.intern("vertex")))
+            .with_metadata(interpolation, Value::Token(store.tokens().intern("vertex")))
             .with_metadata(
                 sdr,
                 Value::Dictionary(vec![
@@ -149,7 +149,7 @@ fn composed_metadata_and_layer_defaults_match_cpp() {
             ),
     ));
     store.layer_mut(LayerId(2)).unwrap().insert_prim(mesh, weak);
-    let terminal = store.tokens.intern("terminal");
+    let terminal = store.tokens().intern("terminal");
     let root = store.layer_mut(LayerId(1)).unwrap();
     root.set_metadata(meters, Value::Double(0.5));
     let spec = root.prim_mut(mesh).unwrap();
@@ -228,8 +228,8 @@ fn entry(name: layerstack::TokenId, spec: PropertySpec) -> PropertyEntry {
 fn empty_stage_retains_its_root_and_reads_only_layer_applicable_defaults() {
     let mut store = InMemoryStore::default();
     store.insert_layer(Layer::new(LayerId(1)));
-    let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
-    let element_size = store.tokens.lookup("elementSize").unwrap();
+    let schemas = Arc::new(layerstack_schemas::openusd(store.tokens()));
+    let element_size = store.tokens().lookup("elementSize").unwrap();
     let stage = Stage::compose(
         &mut store,
         LayerId(1),
@@ -255,8 +255,8 @@ fn registered_asset_array_metadata_retains_its_crate_type() {
     );
     let bytes = layerstack_usdc::writer::save_layer(
         store.layer(LayerId(1)).unwrap(),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
     )
     .unwrap();
     let mut budget = DecodeBudget::for_input(bytes.len());

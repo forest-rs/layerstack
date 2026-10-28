@@ -22,7 +22,7 @@ fn fixture() -> Result<PathBuf, Box<dyn std::error::Error>> {
     let directory = std::env::temp_dir().join(format!("layerstack-lazy-{}", std::process::id()));
     std::fs::create_dir_all(&directory)?;
     let store = InMemoryStore::default();
-    let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(store.tokens()));
     let mut document = StageDocument::create_in(
         Filesystem::new(&directory, [])?,
         store,
@@ -126,7 +126,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
         let points = layerstack_schemas::value::try_read_float3_array_shared(
             &captured,
-            &document.store().tokens,
+            document.store().tokens(),
         )?
         .ok_or("points have an incompatible type")?;
         assert_eq!(

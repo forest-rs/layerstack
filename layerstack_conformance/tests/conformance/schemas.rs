@@ -190,7 +190,7 @@ fn read(set: &str, file: &str) -> String {
 /// `plugInfo.json` declares.
 fn registry(set: &str, store: &mut InMemoryStore) -> SchemaRegistry {
     if set == "openusd" {
-        return layerstack_schemas::openusd(&store.tokens);
+        return layerstack_schemas::openusd(store.tokens());
     }
     let plug_info: PlugInfo = serde_json::from_str(&read(set, "plugInfo.json")).expect("plugInfo");
     let info = &plug_info.plugins[0].info;
@@ -207,11 +207,11 @@ fn registry(set: &str, store: &mut InMemoryStore) -> SchemaRegistry {
             .bases
             .iter()
             .find_map(|base| info.types.get(base))
-            .map(|base| store.tokens.intern(&base.identifier));
+            .map(|base| store.tokens().intern(&base.identifier));
         let intern_all = |names: &[String]| {
             names
                 .iter()
-                .map(|n| store.tokens.intern(n))
+                .map(|n| store.tokens().intern(n))
                 .collect::<Vec<_>>()
         };
         let can_only_apply_to = intern_all(&info_type.can_only_apply_to);
@@ -221,10 +221,10 @@ fn registry(set: &str, store: &mut InMemoryStore) -> SchemaRegistry {
             .iter()
             .map(|(instance, info)| {
                 (
-                    store.tokens.intern(instance),
+                    store.tokens().intern(instance),
                     info.can_only_apply_to
                         .iter()
-                        .map(|n| store.tokens.intern(n))
+                        .map(|n| store.tokens().intern(n))
                         .collect(),
                 )
             })
@@ -234,7 +234,7 @@ fn registry(set: &str, store: &mut InMemoryStore) -> SchemaRegistry {
             can_only_apply_to,
             allowed_instance_names,
             instance_can_only_apply_to,
-            ..SchemaDeclaration::new(store.tokens.intern(&info_type.identifier), kind)
+            ..SchemaDeclaration::new(store.tokens().intern(&info_type.identifier), kind)
         });
     }
 
@@ -243,19 +243,20 @@ fn registry(set: &str, store: &mut InMemoryStore) -> SchemaRegistry {
     let emitted = layerstack_usda::emit::emit(
         &parsed.layer,
         LayerId(u64::MAX),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
         &mut NoAssets,
     );
     assert!(emitted.diagnostics.is_empty(), "{:?}", emitted.diagnostics);
-    let definitions = read_generated_schema(&emitted.layer, &declared, &store.tokens, &store.paths)
-        .expect("every declared schema");
+    let definitions =
+        read_generated_schema(&emitted.layer, &declared, store.tokens(), store.paths())
+            .expect("every declared schema");
 
     let mut builder = SchemaRegistry::builder();
     for definition in definitions {
         builder.register(definition);
     }
-    let token = |name: &str| store.tokens.intern(name);
+    let token = |name: &str| store.tokens().intern(name);
     for info_type in info.types.values() {
         for target in &info_type.auto_apply_to {
             builder.auto_apply(token(&info_type.identifier), token(target));
@@ -266,7 +267,7 @@ fn registry(set: &str, store: &mut InMemoryStore) -> SchemaRegistry {
             builder.auto_apply(token(schema), token(target));
         }
     }
-    builder.build(&store.tokens)
+    builder.build(store.tokens())
 }
 
 /// A float as the oracle writes it: non-finite values as `inf`, `-inf` and
@@ -382,7 +383,7 @@ fn check_set(set: &str, failures: &mut Vec<String>) {
     let mut composed: Vec<String> = stage
         .traverse(pseudo_root)
         .filter(|prim| *prim != pseudo_root)
-        .map(|prim| store.paths.display(prim, &store.tokens))
+        .map(|prim| store.paths().display(prim, store.tokens()))
         .collect();
     composed.sort();
     let mut expected: Vec<String> = oracle.prims.iter().map(|p| p.path.clone()).collect();
@@ -395,7 +396,7 @@ fn check_set(set: &str, failures: &mut Vec<String>) {
             .prim(store.path(path), &*store)
             .expect("prim on the stage");
         let definition = prim.definition().expect("typed at composition");
-        let tokens = &store.tokens;
+        let tokens = &store.tokens();
         check(
             format!("{path} type name"),
             json!(prim.type_name().unwrap_or("")),
@@ -439,7 +440,7 @@ fn check_set(set: &str, failures: &mut Vec<String>) {
         for (schema, instance, can) in &expected.can_apply {
             let ours = prim
                 .can_apply(
-                    store.tokens.intern(schema),
+                    store.tokens().intern(schema),
                     (!instance.is_empty()).then_some(instance.as_str()),
                 )
                 .is_ok();
@@ -456,7 +457,7 @@ fn check_set(set: &str, failures: &mut Vec<String>) {
         let mut probes: Vec<String> = definition
             .properties()
             .iter()
-            .map(|p| store.tokens.resolve(p.name).to_string())
+            .map(|p| store.tokens().resolve(p.name).to_string())
             .collect();
         for schema in registry.schemas() {
             if let Some(template) = registry.schema_definition(schema.name) {
@@ -464,7 +465,7 @@ fn check_set(set: &str, failures: &mut Vec<String>) {
                     template
                         .properties()
                         .iter()
-                        .map(|p| store.tokens.resolve(p.name).to_string()),
+                        .map(|p| store.tokens().resolve(p.name).to_string()),
                 );
             }
         }
@@ -474,7 +475,7 @@ fn check_set(set: &str, failures: &mut Vec<String>) {
             .collect();
         probes.extend(near);
         for probe in probes {
-            let property = store.tokens.intern(&probe);
+            let property = store.tokens().intern(&probe);
             check(
                 format!("{path} lookup of {probe}"),
                 json!(format!(
@@ -485,7 +486,7 @@ fn check_set(set: &str, failures: &mut Vec<String>) {
             );
         }
 
-        let tokens = &store.tokens;
+        let tokens = &store.tokens();
         check(
             format!("{path} property names"),
             json!(prim.property_names()),
@@ -568,8 +569,8 @@ fn check_set(set: &str, failures: &mut Vec<String>) {
     }
 
     for (schema, instance, allowed) in &oracle.allowed_instance_names {
-        let schema_token = store.tokens.intern(schema);
-        let ours = registry.is_allowed_instance_name(schema_token, instance, &store.tokens);
+        let schema_token = store.tokens().intern(schema);
+        let ours = registry.is_allowed_instance_name(schema_token, instance, store.tokens());
         check(
             format!("IsAllowedAPISchemaInstanceName {schema} {instance:?}"),
             json!(ours),
@@ -577,12 +578,12 @@ fn check_set(set: &str, failures: &mut Vec<String>) {
         );
     }
     for (schema, instance, types) in &oracle.can_only_apply_to {
-        let schema_token = store.tokens.intern(schema);
+        let schema_token = store.tokens().intern(schema);
         let instance = (!instance.is_empty()).then_some(instance.as_str());
         let ours: Vec<&str> = registry
-            .can_only_apply_to(schema_token, instance, &store.tokens)
+            .can_only_apply_to(schema_token, instance, store.tokens())
             .iter()
-            .map(|t| store.tokens.resolve(*t))
+            .map(|t| store.tokens().resolve(*t))
             .collect();
         check(
             format!("GetAPISchemaCanOnlyApplyToTypeNames {schema} {instance:?}"),
@@ -612,7 +613,7 @@ fn prim_definitions_match_openusd() {
 fn registry_reports_what_it_skips() {
     let mut store = InMemoryStore::default();
     let registry = registry("coverage", &mut store);
-    let token = |name: &str| store.tokens.lookup(name).expect("interned");
+    let token = |name: &str| store.tokens().lookup(name).expect("interned");
     let issues = registry.issues();
     for expected in [
         SchemaIssue::IgnoredOverride {

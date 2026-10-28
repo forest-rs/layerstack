@@ -167,7 +167,9 @@ fn summary(doc: &StageDocument<Memory>) -> Vec<String> {
                 let height = row.attribute("height").unwrap().value::<f64>(Time::Default);
                 format!(
                     "{}={height:?}",
-                    doc.store().paths.display(row.path(), &doc.store().tokens)
+                    doc.store()
+                        .paths()
+                        .display(row.path(), doc.store().tokens())
                 )
             })
             .collect();

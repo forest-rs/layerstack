@@ -40,7 +40,7 @@ use crate::{
 /// store.insert_layer(Layer::new(layer));
 /// let parent = store.path("/World");
 /// let child = store.path("/World/Child");
-/// let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
+/// let schemas = Arc::new(layerstack_schemas::openusd(store.tokens()));
 /// let mut live = LiveStage::compose(&mut store, layer,
 ///     StageOptions { schemas: Some(schemas), ..Default::default() });
 /// let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(layer));
@@ -534,7 +534,7 @@ mod tests {
         let mut store = InMemoryStore::default();
         store.insert_layer(Layer::new(LayerId(1)));
         let options = StageOptions {
-            schemas: Some(Arc::new(crate::openusd(&store.tokens))),
+            schemas: Some(Arc::new(crate::openusd(store.tokens()))),
             ..StageOptions::default()
         };
         let mut live = LiveStage::compose(&mut store, LayerId(1), options);

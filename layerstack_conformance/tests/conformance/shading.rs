@@ -44,7 +44,7 @@ fn shading_matches_openusd() {
         &workspace_root().join("layerstack_conformance/fixtures/shading/scene.usda"),
     );
     assert!(loaded.invalid.is_empty(), "{:?}", loaded.invalid);
-    let schemas = Arc::new(layerstack_schemas::openusd(&loaded.store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(loaded.store.tokens()));
     let stage = Stage::compose(
         &mut loaded.store,
         loaded.root_layer,
@@ -54,10 +54,10 @@ fn shading_matches_openusd() {
         },
     );
     for (name, expected) in oracle.connections {
-        let path = PropertyPath::parse(&name, &loaded.store.tokens, &loaded.store.paths).unwrap();
+        let path = PropertyPath::parse(&name, loaded.store.tokens(), loaded.store.paths()).unwrap();
         let scene = Scene::new(&stage, &loaded.store);
         let actual = scene.connected_sources(path);
-        let display = |p: PropertyPath| p.display(&loaded.store.paths, &loaded.store.tokens);
+        let display = |p: PropertyPath| p.display(loaded.store.paths(), loaded.store.tokens());
         assert_eq!(
             actual
                 .sources
@@ -71,7 +71,7 @@ fn shading_matches_openusd() {
             actual
                 .invalid
                 .iter()
-                .map(|p| p.display(&loaded.store.paths, &loaded.store.tokens))
+                .map(|p| p.display(loaded.store.paths(), loaded.store.tokens()))
                 .collect::<Vec<_>>(),
             expected.invalid,
             "invalid {name}"
@@ -116,9 +116,10 @@ fn shading_matches_openusd() {
             _ => unreachable!(),
         };
         let actual = material.compute_terminal_source(terminal, &[&expected.context]);
-        let selected = actual
-            .selected()
-            .map(|s| s.output.display(&loaded.store.paths, &loaded.store.tokens));
+        let selected = actual.selected().map(|s| {
+            s.output
+                .display(loaded.store.paths(), loaded.store.tokens())
+        });
         let selected = selected.filter(|_| actual.shader.is_some());
         assert_eq!(
             selected, expected.selected,
@@ -137,7 +138,7 @@ fn contexts_and_diagnostics_are_inspectable() {
     let multiple = loaded.store.path("/Multiple");
     let invalid = loaded.store.path("/Invalid");
     let only_ri = loaded.store.path("/OnlyRi");
-    let schemas = Arc::new(layerstack_schemas::openusd(&loaded.store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(loaded.store.tokens()));
     let stage = Stage::compose(
         &mut loaded.store,
         loaded.root_layer,
@@ -169,7 +170,7 @@ fn contexts_and_diagnostics_are_inspectable() {
             .selected()
             .unwrap()
             .output
-            .display(&loaded.store.paths, &loaded.store.tokens),
+            .display(loaded.store.paths(), loaded.store.tokens()),
         "/T.outputs:out"
     );
     assert_eq!(
@@ -223,13 +224,17 @@ fn retarget_and_undo_preserve_source_and_dependency_evidence() {
     let material = loaded.store.path("/Through");
     let graph_input = PropertyPath::parse(
         "/Graph.inputs:in",
-        &loaded.store.tokens,
-        &loaded.store.paths,
+        loaded.store.tokens(),
+        loaded.store.paths(),
     )
     .unwrap();
-    let new_output =
-        PropertyPath::parse("/T.outputs:out", &loaded.store.tokens, &loaded.store.paths).unwrap();
-    let schemas = Arc::new(layerstack_schemas::openusd(&loaded.store.tokens));
+    let new_output = PropertyPath::parse(
+        "/T.outputs:out",
+        loaded.store.tokens(),
+        loaded.store.paths(),
+    )
+    .unwrap();
+    let schemas = Arc::new(layerstack_schemas::openusd(loaded.store.tokens()));
     let mut live = LiveStage::compose(
         &mut loaded.store,
         loaded.root_layer,
@@ -273,7 +278,7 @@ fn authored_providers_are_not_evaluated_until_a_time_is_requested() {
     let mut loaded = load_entry_usda(
         &workspace_root().join("layerstack_conformance/fixtures/shading/scene.usda"),
     );
-    let schemas = Arc::new(layerstack_schemas::openusd(&loaded.store.tokens));
+    let schemas = Arc::new(layerstack_schemas::openusd(loaded.store.tokens()));
     let stage = Stage::compose(
         &mut loaded.store,
         loaded.root_layer,

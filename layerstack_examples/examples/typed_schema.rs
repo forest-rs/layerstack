@@ -42,7 +42,7 @@ fn main() {
     store.insert_layer(shot);
     store.insert_layer(Layer::new(LayerId(2)));
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(store.tokens()))),
         with_provenance: true,
         ..StageOptions::default()
     };
@@ -151,7 +151,7 @@ fn main() {
         "  computed purpose  = {:?} (authored on {:?})",
         info.purpose,
         info.authored_on
-            .map(|p| store.paths.display(p, &store.tokens))
+            .map(|p| store.paths().display(p, store.tokens()))
     );
     println!(
         "  visibility        = {:?}",
@@ -187,7 +187,7 @@ fn main() {
         let includes: Vec<String> = collection
             .includes()
             .into_iter()
-            .map(|t| t.display(&store.paths, &store.tokens))
+            .map(|t| t.display(store.paths(), store.tokens()))
             .collect();
         println!(
             "/Robot collection {:?} includes {includes:?} ({:?})",

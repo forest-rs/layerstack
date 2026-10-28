@@ -62,7 +62,7 @@ fn family_validation_and_discovery_match_openusd() {
         assert_eq!(
             g.geom_subsets(None, Some("materialBind"))
                 .into_iter()
-                .map(|s| store.paths.display(s.path(), &store.tokens))
+                .map(|s| store.paths().display(s.path(), store.tokens()))
                 .collect::<Vec<_>>(),
             row.subsets
         );

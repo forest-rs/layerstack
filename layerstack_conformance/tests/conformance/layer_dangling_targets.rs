@@ -100,9 +100,9 @@ fn compose(unloaded: &str) -> (LoadedStage, Stage) {
     assert!(loaded.invalid.is_empty(), "{:?}", loaded.invalid);
     let mut load_rules = PayloadLoadRules::default();
     let unloaded = loaded.store.path(unloaded);
-    load_rules.unload(loaded.store.paths.resolve(unloaded).clone());
+    load_rules.unload(loaded.store.paths().resolve(unloaded).clone());
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&loaded.store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(loaded.store.tokens()))),
         load_rules,
         ..StageOptions::default()
     };
@@ -124,7 +124,7 @@ fn layer_name(loaded: &LoadedStage, layer: LayerId) -> String {
 /// examples (all of them).
 fn reads(loaded: &LoadedStage, stage: &Stage, report: &LayerDanglingReport) -> Vec<Read> {
     let store = &loaded.store;
-    let (paths, tokens) = (&store.paths, &store.tokens);
+    let (paths, tokens) = (&store.paths(), &store.tokens());
     let walk = stage.authored_targets(store);
     let mut out = Vec::new();
     for layer in &walk.layers {
@@ -208,7 +208,7 @@ fn layer_reads_match_openusd() {
         .map(|layer| (layer_name(&loaded, layer.layer), layer.specs))
         .collect();
     assert_eq!(layers, oracle.layers);
-    let (paths, tokens) = (&loaded.store.paths, &loaded.store.tokens);
+    let (paths, tokens) = (&loaded.store.paths(), &loaded.store.tokens());
     let mut unread: Vec<[String; 2]> = walk
         .layers
         .iter()
@@ -231,7 +231,7 @@ fn unread_specs_say_why() {
     let oracle: Oracle = serde_json::from_str(ORACLE).expect("the oracle parses");
     let (loaded, stage) = compose(&oracle.unloaded);
     let report = LayerDanglingReport::compute(&Scene::new(&stage, &loaded.store), 8);
-    let (paths, tokens) = (&loaded.store.paths, &loaded.store.tokens);
+    let (paths, tokens) = (&loaded.store.paths(), &loaded.store.tokens());
     let mut reasons: Vec<(String, String, UnreadReason)> = report
         .layers
         .iter()
@@ -375,7 +375,7 @@ fn scratch_dir(name: &str) -> std::path::PathBuf {
 fn library_report(mut loaded: LoadedStage) -> BTreeMap<String, (usize, usize, usize, Vec<String>)> {
     let store = &mut loaded.store;
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(store.tokens()))),
         ..StageOptions::default()
     };
     let stage = Stage::compose(store, loaded.root_layer, options);

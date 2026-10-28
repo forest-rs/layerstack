@@ -735,7 +735,7 @@ fn domain_file(
 ) -> Result<String, String> {
     table.module = module(domain.plugin);
     let cx = Context {
-        tokens: &model.tokens,
+        tokens: model.tokens(),
         index,
         module: module(domain.plugin),
         target: Target::BuiltIn,

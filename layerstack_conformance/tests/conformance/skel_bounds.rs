@@ -86,7 +86,7 @@ fn morph_hulls_refresh_on_weights_and_undo_but_world_edits_preserve_reduction() 
         .unwrap();
     let before = cache.stats();
     let mut t = Transaction::new();
-    let p = PropertyPath::new(path, store.tokens.intern("xformOp:translate"));
+    let p = PropertyPath::new(path, store.tokens().intern("xformOp:translate"));
     t.set_default(
         EditTarget::for_layer(LayerId(1)).property(p),
         Value::Vec3d([10., 0., 0.]),
@@ -103,7 +103,7 @@ fn morph_hulls_refresh_on_weights_and_undo_but_world_edits_preserve_reduction() 
     assert_eq!(world.min[0], original.min[0] + 10.);
     assert_eq!(cache.stats().bound_evaluations, before.bound_evaluations);
     let mut t = Transaction::new();
-    let p = PropertyPath::new(anim, store.tokens.intern("blendShapeWeights"));
+    let p = PropertyPath::new(anim, store.tokens().intern("blendShapeWeights"));
     t.set_default(
         EditTarget::for_layer(LayerId(1)).property(p),
         Value::array(vec![Value::Float(0.), Value::Float(1.), Value::Float(0.)]),

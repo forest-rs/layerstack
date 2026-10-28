@@ -351,11 +351,11 @@ fn packaging_keeps_every_pattern_and_carries_every_tile() {
             "models/model.usda"
         };
         let layer = store.layer(id).unwrap();
-        for dependency in extract_layer_dependencies(layer, &store.paths, &store.tokens) {
+        for dependency in extract_layer_dependencies(layer, store.paths(), store.tokens()) {
             let spec = dependency.spec.as_ref().unwrap();
-            let mut property = spec.display(&store.paths, &store.tokens);
+            let mut property = spec.display(store.paths(), store.tokens());
             if let Some(field) = dependency.field.filter(|_| !property.contains('.')) {
-                property = format!("{property}.{}", store.tokens.resolve(field));
+                property = format!("{property}.{}", store.tokens().resolve(field));
             }
             let Some(pattern) = UdimPattern::parse(&dependency.identifier) else {
                 assert_eq!(dependency.kind, AssetDependencyKind::Reference);

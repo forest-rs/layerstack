@@ -73,7 +73,7 @@ fn check_file(label: &str, entry: &std::path::Path, tally: &mut Tally) {
         .flat_map(|spec| spec.fields.iter().map(|entry| entry.name))
         .collect();
     let root = store
-        .paths
+        .paths()
         .lookup(&layerstack::Path::root())
         .expect("root path");
     let prims: Vec<PathId> = stage.traverse(root).collect();
@@ -121,10 +121,10 @@ fn check_opinion(
 ) {
     let context = format!(
         "{label} {} {} from layer {} at {}",
-        store.paths.display(prim, &store.tokens),
-        store.tokens.resolve(name),
+        store.paths().display(prim, store.tokens()),
+        store.tokens().resolve(name),
         key.layer_id.0,
-        key.spec_path.display(&store.paths, &store.tokens)
+        key.spec_path.display(store.paths(), store.tokens())
     );
     let node = stage
         .prim(prim, store)
@@ -163,11 +163,11 @@ fn check_opinion(
         return;
     }
     tally.sites += 1;
-    let mapped = target.map_property_to_spec_path(PropertyPath::new(prim, name), &store.paths);
+    let mapped = target.map_property_to_spec_path(PropertyPath::new(prim, name), store.paths());
     if mapped.as_ref() != Some(&key.spec_path) {
         tally.failures.push(format!(
             "{context}: target maps to {:?}",
-            mapped.map(|p| p.display(&store.paths, &store.tokens))
+            mapped.map(|p| p.display(store.paths(), store.tokens()))
         ));
     }
 }

@@ -93,7 +93,13 @@ fn compose(root: &'static str, others: &[(&'static str, &'static str)]) -> Scene
         next_layer_id: 2,
         pending: Vec::new(),
     };
-    let layer = emit_layer(root, LayerId(1), &store.tokens, &store.paths, &mut resolver);
+    let layer = emit_layer(
+        root,
+        LayerId(1),
+        store.tokens(),
+        store.paths(),
+        &mut resolver,
+    );
     store.insert_layer(layer);
     for layer in resolver.pending.drain(..) {
         store.insert_layer(layer);
@@ -117,7 +123,7 @@ impl Scene {
     }
 
     fn display(&self, path: layerstack::PathId) -> String {
-        self.store.paths.display(path, &self.store.tokens)
+        self.store.paths().display(path, self.store.tokens())
     }
 
     fn layer(&self, id: LayerId) -> &str {
@@ -139,7 +145,7 @@ impl Scene {
                 format!(
                     "{} {}",
                     self.layer(*layer),
-                    spec.display(&self.store.paths, &self.store.tokens)
+                    spec.display(self.store.paths(), self.store.tokens())
                 )
             })
             .collect()

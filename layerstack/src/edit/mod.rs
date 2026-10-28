@@ -40,7 +40,7 @@
 //!
 //! // `/World/Rock` references `/Rock` of a rock asset, 10 frames later.
 //! let mut store = InMemoryStore::default();
-//! let spin = store.tokens.intern("spin");
+//! let spin = store.tokens().intern("spin");
 //! let (asset_rock, rock) = (store.path("/Rock"), store.path("/World/Rock"));
 //! let double = PropertyType::parse("double").unwrap();
 //! let mut asset = Layer::new(LayerId(2));

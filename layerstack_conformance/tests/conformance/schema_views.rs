@@ -183,7 +183,7 @@ impl<'a> Readings<'a> {
     pub(crate) fn targets(&mut self, prim: &str, property: &str, got: &[TargetPath]) {
         let got = got
             .iter()
-            .map(|t| json!(t.display(&self.store.paths, &self.store.tokens)))
+            .map(|t| json!(t.display(self.store.paths(), self.store.tokens())))
             .collect();
         self.compare(prim, property, "targets", Json::Array(got));
     }
@@ -224,7 +224,7 @@ fn authored() -> (InMemoryStore, LiveStage, Harness) {
     let mut store = InMemoryStore::default();
     store.insert_layer(Layer::new(LayerId(1)));
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(store.tokens()))),
         ..StageOptions::default()
     };
     let mut live = LiveStage::compose(&mut store, LayerId(1), options);
@@ -247,7 +247,7 @@ fn authored() -> (InMemoryStore, LiveStage, Harness) {
 fn setters_author_the_fixture_scene() {
     let (store, _, _) = authored();
     let layer = store.layer(LayerId(1)).expect("the root layer");
-    let text = layerstack_usda::save::save_usda(layer, &store.tokens, &store.paths)
+    let text = layerstack_usda::save::save_usda(layer, store.tokens(), store.paths())
         .expect("the authored layer saves");
     if text != SCENE {
         let out = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("schema_views.usda");
@@ -334,7 +334,7 @@ fn path_expression_setters_author_what_getters_read() {
     let mut store = InMemoryStore::default();
     store.insert_layer(Layer::new(LayerId(1)));
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(store.tokens()))),
         ..StageOptions::default()
     };
     let mut live = LiveStage::compose(&mut store, LayerId(1), options);
@@ -375,9 +375,9 @@ fn referenced() -> (InMemoryStore, LiveStage, EditTarget) {
     let (asset, light) = (store.path("/Asset"), store.path("/Asset/Light"));
     let instance = store.path("/Instance");
     let (asset_name, instance_name, light_name) = (
-        store.tokens.intern("Asset"),
-        store.tokens.intern("Instance"),
-        store.tokens.intern("Light"),
+        store.tokens().intern("Asset"),
+        store.tokens().intern("Instance"),
+        store.tokens().intern("Light"),
     );
     let mut asset_layer = Layer::new(LayerId(2));
     asset_layer.insert_prim(root, PrimSpec::default().with_children(vec![asset_name]));
@@ -394,7 +394,7 @@ fn referenced() -> (InMemoryStore, LiveStage, EditTarget) {
     main.insert_prim(instance, PrimSpec::def().with_reference(reference));
     store.insert_layer(main);
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(store.tokens()))),
         ..StageOptions::default()
     };
     let live = LiveStage::compose(&mut store, LayerId(1), options);
@@ -433,7 +433,7 @@ fn targets_map_through_the_edit_target() {
     let (mut store, mut live, target) = referenced();
     let instance = store.path("/Instance");
     let light = store.path("/Instance/Light");
-    let intensity = store.tokens.intern("intensity");
+    let intensity = store.tokens().intern("intensity");
     let wanted = vec![
         TargetPath::prim(light),
         TargetPath::Property(PropertyPath::new(light, intensity)),
@@ -455,7 +455,7 @@ fn targets_map_through_the_edit_target() {
 
     // The layers OpenUSD composes.
     let save = |id| {
-        layerstack_usda::save::save_usda(store.layer(id).unwrap(), &store.tokens, &store.paths)
+        layerstack_usda::save::save_usda(store.layer(id).unwrap(), store.tokens(), store.paths())
             .expect("saves")
     };
     let (main, asset) = (save(LayerId(1)), save(LayerId(2)));
@@ -480,7 +480,7 @@ fn targets_map_through_the_edit_target() {
     let oracle: Json = serde_json::from_str(ORACLE).expect("the oracle parses");
     let got: Vec<String> = includes
         .iter()
-        .map(|t| t.display(&store.paths, &store.tokens))
+        .map(|t| t.display(store.paths(), store.tokens()))
         .collect();
     assert_eq!(
         json!(got),
@@ -546,7 +546,7 @@ fn missing_prims_are_not_authored() {
     store.insert_layer(Layer::new(LayerId(1)));
     let (missing, later) = (store.path("/Missing"), store.path("/Later"));
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(store.tokens()))),
         ..StageOptions::default()
     };
     let live = LiveStage::compose(&mut store, LayerId(1), options);
@@ -604,13 +604,13 @@ fn typed_edit_handles_by_path_check_the_type() {
         store.path("/Terrain"),
         store.path("/Moss"),
     );
-    let mesh = store.tokens.intern("Mesh");
+    let mesh = store.tokens().intern("Mesh");
     let mut layer = Layer::new(LayerId(1));
     layer.insert_prim(boulder, PrimSpec::def().with_type_name(mesh));
     layer.insert_prim(terrain, PrimSpec::def());
     store.insert_layer(layer);
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(store.tokens()))),
         ..StageOptions::default()
     };
     let live = LiveStage::compose(&mut store, LayerId(1), options);
@@ -715,10 +715,13 @@ fn local_variant_targets_keep_paths_outside_the_branch() {
     let root = store.path("/");
     let (rock, light) = (store.path("/Rock"), store.path("/Light"));
     let pebble = store.path("/Rock/Pebble");
-    let (rock_name, light_name) = (store.tokens.intern("Rock"), store.tokens.intern("Light"));
-    let (look, a) = (store.tokens.intern("look"), store.tokens.intern("a"));
-    let intensity = store.tokens.intern("intensity");
-    let variant = SpecPath::parse("/Rock{look=a}", &store.tokens, &store.paths).expect("a path");
+    let (rock_name, light_name) = (
+        store.tokens().intern("Rock"),
+        store.tokens().intern("Light"),
+    );
+    let (look, a) = (store.tokens().intern("look"), store.tokens().intern("a"));
+    let intensity = store.tokens().intern("intensity");
+    let variant = SpecPath::parse("/Rock{look=a}", store.tokens(), store.paths()).expect("a path");
     let mut layer = Layer::new(LayerId(1));
     layer.insert_prim(
         root,
@@ -736,7 +739,7 @@ fn local_variant_targets_keep_paths_outside_the_branch() {
     layer.insert_prim(light, PrimSpec::def());
     store.insert_layer(layer);
     let options = StageOptions {
-        schemas: Some(Arc::new(layerstack_schemas::openusd(&store.tokens))),
+        schemas: Some(Arc::new(layerstack_schemas::openusd(store.tokens()))),
         ..StageOptions::default()
     };
     let mut live = LiveStage::compose(&mut store, LayerId(1), options);
@@ -763,8 +766,8 @@ fn local_variant_targets_keep_paths_outside_the_branch() {
 
     let text = layerstack_usda::save::save_usda(
         store.layer(LayerId(1)).unwrap(),
-        &store.tokens,
-        &store.paths,
+        store.tokens(),
+        store.paths(),
     )
     .expect("saves");
     if text != LOCAL_VARIANT {
@@ -779,7 +782,7 @@ fn local_variant_targets_keep_paths_outside_the_branch() {
     let oracle: Json = serde_json::from_str(ORACLE).expect("the oracle parses");
     let got: Vec<String> = includes
         .iter()
-        .map(|t| t.display(&store.paths, &store.tokens))
+        .map(|t| t.display(store.paths(), store.tokens()))
         .collect();
     assert_eq!(
         json!(got),

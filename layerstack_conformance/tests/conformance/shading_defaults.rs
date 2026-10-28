@@ -73,7 +73,9 @@ fn unknown_implementation_source_resolves_by_id_as_cpp_does() {
         let source = Material::new(&scene, material)
             .unwrap()
             .compute_surface_source(&[]);
-        let surface = source.shader.map(|p| store.paths.display(p, &store.tokens));
+        let surface = source
+            .shader
+            .map(|p| store.paths().display(p, store.tokens()));
         assert_eq!(
             surface.as_deref(),
             row.surface.as_deref(),

@@ -251,7 +251,7 @@ fn check(scene: &Path) {
         )
         .unwrap();
     let store = &loaded.store;
-    let text = |path| store.paths.display(path, &store.tokens).to_string();
+    let text = |path| store.paths().display(path, store.tokens()).to_string();
     let mut got = BTreeMap::new();
     for (&path, spec) in flat.layer.prims() {
         for reference in spec.references.explicit.iter().flatten() {

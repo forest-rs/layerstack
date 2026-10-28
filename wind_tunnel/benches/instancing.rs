@@ -15,10 +15,10 @@ use layerstack::{InMemoryStore, Layer, LayerId, PrimSpec, Reference, Stage, Stag
 fn build_and_compose(n: usize) -> Stage {
     let mut store = InMemoryStore::default();
 
-    let f_vertices = store.tokens.intern("vertices");
-    let f_display_color = store.tokens.intern("primvars:displayColor");
-    let branches_tok = store.tokens.intern("branches");
-    let polyps_tok = store.tokens.intern("polyps");
+    let f_vertices = store.tokens().intern("vertices");
+    let f_display_color = store.tokens().intern("primvars:displayColor");
+    let branches_tok = store.tokens().intern("branches");
+    let polyps_tok = store.tokens().intern("polyps");
 
     // --- Asset layer (LayerId 2) ---
     let coral = store.path("/Coral");
@@ -53,7 +53,7 @@ fn build_and_compose(n: usize) -> Stage {
 
     for i in 0..n {
         let name = alloc::format!("Coral_{i:05}");
-        let name_tok = store.tokens.intern(&name);
+        let name_tok = store.tokens().intern(&name);
         reef_children.push(name_tok);
 
         let path = store.path(&alloc::format!("/Reef/{name}"));

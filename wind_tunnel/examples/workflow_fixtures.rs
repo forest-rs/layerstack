@@ -20,7 +20,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let root = store.path("/");
         layer.insert_prim(root, PrimSpec::default());
         let mut parent = root;
-        let name = store.tokens.intern("samples");
+        let name = store.tokens().intern("samples");
         let mut path = String::new();
         let prims = if shape == "wide" { wide_prims } else { 256 };
         for index in 0..prims {
@@ -31,7 +31,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             let id = store.path(&path);
             let child = store
-                .tokens
+                .tokens()
                 .intern(path.rsplit('/').next().expect("prim name"));
             layer
                 .prim_mut(parent)
@@ -64,7 +64,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 parent = id;
             }
         }
-        let bytes = layerstack_usdc::writer::save_layer(&layer, &store.tokens, &store.paths)?;
+        let bytes = layerstack_usdc::writer::save_layer(&layer, store.tokens(), store.paths())?;
         std::fs::write(directory.join(format!("{shape}.usdc")), &bytes)?;
         if shape == "wide" {
             let inner = write_usdz(&[

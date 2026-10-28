@@ -103,6 +103,8 @@ pub fn write_document(doc: &Document) -> Result<Vec<u8>, UsdcWriteError> {
 /// The temporary document shares the layer's numeric buffers, and the crate
 /// specs take a copy of each (`SharedVec::into_vec`); the authored layer and
 /// its retained snapshots are never consumed or rebound.
+/// A namespace of any depth saves, on any thread's stack: neither the
+/// lowering nor the writer recurses through it.
 ///
 /// # Errors
 ///
@@ -125,12 +127,126 @@ pub fn save_usdc(
 /// See [`write_document`].
 pub fn document_specs(doc: &Document) -> Result<Vec<Spec>, UsdcWriteError> {
     doc.validate().map_err(UsdcWriteError::Document)?;
-    lower_document(doc.clone())
+    let root = Document {
+        default_prim: doc.default_prim.clone(),
+        metadata: doc.metadata.clone(),
+        prim_order: doc.prim_order.clone(),
+        sublayers: doc.sublayers.clone(),
+        relocates: doc.relocates.clone(),
+        prims: Vec::new(),
+    };
+    lower_specs(root, doc.prims.iter().map(Source::Borrowed).collect())
 }
 
 // The validated temporary document belongs to serialization. Move its buffers
 // into specs so saving an authored layer does not copy every native array again.
 fn lower_document(mut doc: Document) -> Result<Vec<Spec>, UsdcWriteError> {
+    let prims = core::mem::take(&mut doc.prims);
+    lower_specs(doc, prims.into_iter().map(Source::Owned).collect())
+}
+
+/// A prim spec or a variant still to lower: moved out of a document
+/// [`save_usdc`] owns, or borrowed from the caller's, whose specs are then
+/// cloned one at a time ([`Source::split`]) instead of as a whole tree.
+#[allow(
+    clippy::large_enum_variant,
+    reason = "an owned source is a prim moved out of a `Vec<Prim>` of the same size; \
+              boxing it would allocate once more per spec"
+)]
+enum Source<'a> {
+    Owned(Prim),
+    Borrowed(&'a Prim),
+}
+
+/// The child prims and variant sets of a spec [`Source::split`] took
+/// apart, still to lower.
+struct Nested<'a> {
+    children: Vec<Source<'a>>,
+    sets: Vec<(String, Vec<Source<'a>>)>,
+}
+
+impl<'a> Source<'a> {
+    fn name(&self) -> &str {
+        match self {
+            Self::Owned(prim) => &prim.name,
+            Self::Borrowed(prim) => &prim.name,
+        }
+    }
+
+    /// The spec without its child prims and variant sets, and those.
+    fn split(self) -> (Prim, Nested<'a>) {
+        match self {
+            Self::Owned(mut prim) => {
+                let children = core::mem::take(&mut prim.children);
+                let sets = core::mem::take(&mut prim.variant_sets);
+                let nested = Nested {
+                    children: children.into_iter().map(Self::Owned).collect(),
+                    sets: sets
+                        .into_iter()
+                        .map(|mut set| {
+                            let variants = core::mem::take(&mut set.variants);
+                            let name = core::mem::take(&mut set.name);
+                            (name, variants.into_iter().map(Self::Owned).collect())
+                        })
+                        .collect(),
+                };
+                (prim, nested)
+            }
+            Self::Borrowed(prim) => {
+                let spec = Prim {
+                    specifier: prim.specifier,
+                    type_name: prim.type_name.clone(),
+                    name: prim.name.clone(),
+                    metadata: prim.metadata.clone(),
+                    properties: prim.properties.clone(),
+                    property_order: prim.property_order.clone(),
+                    prim_order: prim.prim_order.clone(),
+                    inherits: prim.inherits.clone(),
+                    payloads: prim.payloads.clone(),
+                    references: prim.references.clone(),
+                    specializes: prim.specializes.clone(),
+                    variant_selections: prim.variant_selections.clone(),
+                    variant_set_names: prim.variant_set_names.clone(),
+                    children: Vec::new(),
+                    variant_sets: Vec::new(),
+                };
+                let nested = Nested {
+                    children: prim.children.iter().map(Self::Borrowed).collect(),
+                    sets: prim
+                        .variant_sets
+                        .iter()
+                        .map(|set| {
+                            let variants = set.variants.iter().map(Self::Borrowed).collect();
+                            (set.name.clone(), variants)
+                        })
+                        .collect(),
+                };
+                (spec, nested)
+            }
+        }
+    }
+}
+
+/// A step of [`lower_specs`] still to take.
+enum Task<'a> {
+    /// A prim spec, the child of the prim or variant at `parent` (empty for
+    /// a root prim).
+    Prim { source: Source<'a>, parent: String },
+    /// A variant spec at `path` (`/P{v=x}`).
+    Variant { source: Source<'a>, path: String },
+    /// A variant set spec, complete.
+    Set(Spec),
+}
+
+/// Lowers the pseudo-root `doc` describes (its `prims` aside) and every
+/// spec below it, `prims` being its root prims.
+///
+/// A namespace has no depth limit (OpenUSD writes and reads any depth), so
+/// the specs still to lower wait on a heap stack, not the call stack; they
+/// are lowered, and the first error found, in the order a depth-first walk
+/// visits them: a spec, its properties, its child prims, then each of its
+/// variant sets and that set's variants.
+fn lower_specs(mut doc: Document, prims: Vec<Source<'_>>) -> Result<Vec<Spec>, UsdcWriteError> {
     let mut root = Spec::new("/", SpecForm::PseudoRoot);
     if let Some(name) = doc.default_prim.take() {
         root = root.with_field("defaultPrim", Value::Token(name));
@@ -159,27 +275,49 @@ fn lower_document(mut doc: Document) -> Result<Vec<Spec>, UsdcWriteError> {
     if let Some(order) = doc.prim_order.take() {
         root = root.with_field("primOrder", Value::TokenVector(order));
     }
-    if !doc.prims.is_empty() {
+    if !prims.is_empty() {
         root = root.with_field(
             "primChildren",
-            Value::TokenVector(doc.prims.iter().map(|p| p.name.clone()).collect()),
+            Value::TokenVector(prims.iter().map(|p| String::from(p.name())).collect()),
         );
     }
     let mut specs = alloc::vec![root];
-    for prim in &mut doc.prims {
-        lower_prim(prim, "", &mut specs)?;
+    let mut tasks: Vec<Task<'_>> = prims
+        .into_iter()
+        .rev()
+        .map(|source| Task::Prim {
+            source,
+            parent: String::new(),
+        })
+        .collect();
+    while let Some(task) = tasks.pop() {
+        match task {
+            Task::Prim { source, parent } => {
+                let (mut prim, nested) = source.split();
+                let spec = prim_spec(&mut prim, &parent);
+                lower_body(&mut prim, spec, nested, &mut specs, &mut tasks)?;
+            }
+            Task::Variant { source, path } => {
+                let (mut prim, nested) = source.split();
+                let spec = Spec::new(path, SpecForm::Variant);
+                lower_body(&mut prim, spec, nested, &mut specs, &mut tasks)?;
+            }
+            Task::Set(spec) => specs.push(spec),
+        }
     }
     Ok(specs)
 }
 
-fn lower_prim(prim: &mut Prim, parent: &str, specs: &mut Vec<Spec>) -> Result<(), UsdcWriteError> {
+/// The prim spec of `prim`, a child of the prim or variant at `parent`,
+/// with its `specifier` and `typeName`.
+fn prim_spec(prim: &mut Prim, parent: &str) -> Spec {
     // A prim in a variant (`/P{v=x}C`) follows its variant's selection.
     let path = if parent.ends_with('}') {
         alloc::format!("{parent}{}", prim.name)
     } else {
         alloc::format!("{parent}/{}", prim.name)
     };
-    let mut spec = Spec::new(path.clone(), SpecForm::Prim).with_field(
+    let mut spec = Spec::new(path, SpecForm::Prim).with_field(
         "specifier",
         Value::Specifier(match prim.specifier {
             UsdaSpecifier::Def => Specifier::Def,
@@ -190,16 +328,18 @@ fn lower_prim(prim: &mut Prim, parent: &str, specs: &mut Vec<Spec>) -> Result<()
     if let Some(type_name) = prim.type_name.take() {
         spec = spec.with_field("typeName", Value::Token(type_name));
     }
-    lower_body(prim, spec, specs)
+    spec
 }
 
 /// Completes `spec`, a prim spec or a variant's (`/P{v=x}`, which has no
-/// `specifier` or `typeName`), with the fields and child specs `prim`
-/// holds, in the order the text parser stores them: the metadata, the
-/// arcs, `variantSelection` and `variantSetNames` (the header), then
+/// `specifier` or `typeName`), with the fields `prim` holds and its
+/// property specs, in the order the text parser stores them: the metadata,
+/// the arcs, `variantSelection` and `variantSetNames` (the header), then
 /// `propertyOrder` and `primOrder` (the `reorder` statements, first in the
 /// body), `variantSetChildren` (set as each `variantSet` statement ends),
-/// and `primChildren` and `properties` (set as the body ends).
+/// and `primChildren` and `properties` (set as the body ends). The
+/// `nested` child prims and variant sets go on `tasks`, to be lowered
+/// next in that order.
 ///
 /// Each variant set is a `SdfSpecTypeVariantSet` spec (`/P{v=}`) holding
 /// `variantChildren`, and each of its variants a `SdfSpecTypeVariant` spec
@@ -207,10 +347,12 @@ fn lower_prim(prim: &mut Prim, parent: &str, specs: &mut Vec<Spec>) -> Result<()
 ///
 /// Spec: AOUSD Core §7.6.2 (prim spec fields), §7.6.6 (variant set spec
 /// fields), §7.6.7 (variant spec fields).
-fn lower_body(
+fn lower_body<'a>(
     prim: &mut Prim,
     mut spec: Spec,
+    nested: Nested<'a>,
     specs: &mut Vec<Spec>,
+    tasks: &mut Vec<Task<'a>>,
 ) -> Result<(), UsdcWriteError> {
     let path = spec.path.clone();
     for entry in &mut prim.metadata {
@@ -243,16 +385,22 @@ fn lower_body(
     if let Some(order) = prim.prim_order.take() {
         spec = spec.with_field("primOrder", Value::TokenVector(order));
     }
-    if !prim.variant_sets.is_empty() {
+    if !nested.sets.is_empty() {
         spec = spec.with_field(
             "variantSetChildren",
-            Value::TokenVector(prim.variant_sets.iter().map(|s| s.name.clone()).collect()),
+            Value::TokenVector(nested.sets.iter().map(|(name, _)| name.clone()).collect()),
         );
     }
-    if !prim.children.is_empty() {
+    if !nested.children.is_empty() {
         spec = spec.with_field(
             "primChildren",
-            Value::TokenVector(prim.children.iter().map(|c| c.name.clone()).collect()),
+            Value::TokenVector(
+                nested
+                    .children
+                    .iter()
+                    .map(|c| String::from(c.name()))
+                    .collect(),
+            ),
         );
     }
     if !prim.properties.is_empty() {
@@ -266,22 +414,24 @@ fn lower_body(
             Property::Relationship(relationship) => lower_relationship(relationship, &path)?,
         });
     }
-    for child in &mut prim.children {
-        lower_prim(child, &path, specs)?;
-    }
-    for set in &mut prim.variant_sets {
-        let names = set.variants.iter().map(|v| v.name.clone()).collect();
-        specs.push(
-            Spec::new(
-                alloc::format!("{path}{{{}=}}", set.name),
-                SpecForm::VariantSet,
-            )
-            .with_field("variantChildren", Value::TokenVector(names)),
-        );
-        for variant in &mut set.variants {
-            let variant_path = alloc::format!("{path}{{{}={}}}", set.name, variant.name);
-            lower_body(variant, Spec::new(variant_path, SpecForm::Variant), specs)?;
+    // Pushed last to first, so the children come off the stack first and
+    // in order, then each set's spec followed by its variants.
+    for (name, variants) in nested.sets.into_iter().rev() {
+        let names = variants.iter().map(|v| String::from(v.name())).collect();
+        for source in variants.into_iter().rev() {
+            let path = alloc::format!("{path}{{{name}={}}}", source.name());
+            tasks.push(Task::Variant { source, path });
         }
+        tasks.push(Task::Set(
+            Spec::new(alloc::format!("{path}{{{name}=}}"), SpecForm::VariantSet)
+                .with_field("variantChildren", Value::TokenVector(names)),
+        ));
+    }
+    for source in nested.children.into_iter().rev() {
+        tasks.push(Task::Prim {
+            source,
+            parent: path.clone(),
+        });
     }
     Ok(())
 }
@@ -1808,6 +1958,61 @@ def Xform "A" (
             matches!(&entries[1], (key, crate::value_rep::CrateValue::String(path)) if key == "primPath" && path.is_empty()),
             "the empty prim path reads back empty: {entries:?}"
         );
+    }
+
+    /// A borrowed document lowers one spec at a time: a namespace far
+    /// deeper than a small stack holds frames for writes every spec, prim
+    /// chain and nested variants alike.
+    #[cfg(feature = "std")]
+    #[test]
+    #[cfg_attr(target_os = "wasi", ignore = "WASI runs tests without threads")]
+    fn deep_documents_write_on_a_small_stack() {
+        const DEPTH: usize = 1000;
+        const VARIANT_DEPTH: usize = 100;
+        let specs = std::thread::Builder::new()
+            .stack_size(128 * 1024)
+            .spawn(|| {
+                let mut variant = Prim::new(UsdaSpecifier::Over, None, "x");
+                for _ in 1..VARIANT_DEPTH {
+                    let mut outer = Prim::new(UsdaSpecifier::Over, None, "x");
+                    outer
+                        .variant_sets
+                        .push(layerstack_usda::writer::VariantSet {
+                            name: String::from("v"),
+                            variants: vec![variant],
+                        });
+                    variant = outer;
+                }
+                let mut prim = Prim::new(UsdaSpecifier::Def, None, "A");
+                prim.variant_sets.push(layerstack_usda::writer::VariantSet {
+                    name: String::from("v"),
+                    variants: vec![variant],
+                });
+                for _ in 1..DEPTH {
+                    let mut parent = Prim::new(UsdaSpecifier::Def, None, "A");
+                    parent.children.push(prim);
+                    prim = parent;
+                }
+                let mut doc = Document::new();
+                doc.prims.push(prim);
+                let bytes = write_document(&doc).unwrap();
+                let header = crate::header::parse_header(&bytes).unwrap();
+                let toc = crate::toc::parse_toc(&bytes, header.toc_offset).unwrap();
+                crate::section::parse_sections(
+                    &bytes,
+                    &toc,
+                    header.crate_version(),
+                    &mut crate::DecodeBudget::with_limit(u64::MAX),
+                )
+                .unwrap()
+                .specs
+                .len()
+            })
+            .unwrap()
+            .join()
+            .expect("fits the small stack");
+        // The pseudo-root, the prims, and a set and a variant per level.
+        assert_eq!(specs, 1 + DEPTH + 2 * VARIANT_DEPTH);
     }
 
     /// An attribute of a type name no type registers holds only the text

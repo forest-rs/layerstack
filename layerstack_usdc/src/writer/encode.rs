@@ -221,14 +221,23 @@ impl<'a> Packer<'a> {
         if let Some(&i) = self.path_index.get(path) {
             return Ok(i);
         }
-        if let Some(parent) = path.parent() {
-            self.path(&parent)?;
+        // The ancestors not yet added, nearest first: a loop, not
+        // `_AddPath`'s recursion, as a namespace has no depth limit.
+        let mut missing = alloc::vec![path.clone()];
+        while let Some(parent) = missing.last().and_then(CratePath::parent) {
+            if self.path_index.contains_key(&parent) {
+                break;
+            }
+            missing.push(parent);
         }
-        self.token(&path.element_token())?;
-        let i = index(self.paths.len())?;
-        self.paths.push(Some(path.clone()));
-        self.path_index.insert(path.clone(), i);
-        Ok(i)
+        let mut added = 0;
+        for path in missing.into_iter().rev() {
+            self.token(&path.element_token())?;
+            added = index(self.paths.len())?;
+            self.paths.push(Some(path.clone()));
+            self.path_index.insert(path, added);
+        }
+        Ok(added)
     }
 
     /// `_AddPath(SdfPath())`: the empty path, a reference or payload's

@@ -142,6 +142,7 @@ mod ray;
 mod registered_metadata_ingestion;
 mod registry_metadata;
 mod relocates;
+mod render_assets;
 mod render_spec;
 mod retained_queries;
 mod retained_text_values;

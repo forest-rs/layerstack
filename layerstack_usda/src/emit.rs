@@ -59,8 +59,8 @@ use layerstack::spec_path::VariantSelectionSite;
 use layerstack::variable_expression::is_expression;
 use layerstack::{
     ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex, AssetResolveError, AssetResolver,
-    ListOpItem, MetadataField, MetadataTarget, MetadataType, PropertyType, ReferenceTarget,
-    ResolvedAsset, SchemaRegistry, SharedVec, StringArray, TypedArray,
+    MetadataField, MetadataTarget, MetadataType, PropertyType, ReferenceTarget, ResolvedAsset,
+    SchemaRegistry, SharedVec, StringArray, TypedArray,
 };
 use smallvec::SmallVec;
 
@@ -800,32 +800,63 @@ impl EmitCtx<'_> {
             };
         }
         if entry.op != ast::ListOpKind::Explicit {
-            // A list-op statement of a field no registration types: an
-            // `int64` list op of integers, else a token list op.
-            let item = if self.metadata_items_are_integers(&entry.value) {
-                ListOpItem::Int64
-            } else {
-                ListOpItem::Token
-            };
-            let tokens = self.tokens;
-            return match crate::metadata::typed(
-                &entry.value,
-                entry.op,
-                MetadataType::ListOp(item),
-                tokens,
-                &mut |_| Value::Null,
-            ) {
-                Ok(value) => Some((key, value)),
-                Err(_) => {
-                    self.diagnostics.push(Diagnostic::error(
-                        entry.span,
-                        format!(
-                            "`{key_name}` list op items do not match its element type; ignored"
-                        ),
-                    ));
-                    None
+            // A list-op statement of a field no registration types: OpenUSD
+            // keeps the text its parser records for the statement's list,
+            // brackets dropped, as the one item of that list of an
+            // `SdfUnregisteredValueListOp`; `None` sets no items
+            // (`_KeyValueMetadataEnd`, `pxr/usd/sdf/textParserHelpers.cpp`).
+            let items: Vec<Arc<str>> = match &entry.value {
+                ast::MetadataValue::None => Vec::new(),
+                ast::MetadataValue::Value(ast::Value::Array(items)) if items.is_empty() => {
+                    // OpenUSD's grammar takes no `[]` here.
+                    self.check_empty_edit(entry.span, entry.key, entry.op, true);
+                    return None;
+                }
+                ast::MetadataValue::Value(ast::Value::Array(items)) => {
+                    let Some(text) = recorded_items_text(items) else {
+                        reject(
+                            self,
+                            None,
+                            MetadataValueError::Unconvertible { element: None },
+                        );
+                        return None;
+                    };
+                    alloc::vec![Arc::from(text)]
+                }
+                ast::MetadataValue::Value(value) => {
+                    let Some(text) = recorded_text(value) else {
+                        reject(
+                            self,
+                            None,
+                            MetadataValueError::Unconvertible { element: None },
+                        );
+                        return None;
+                    };
+                    alloc::vec![Arc::from(text)]
+                }
+                ast::MetadataValue::String(text) => {
+                    let text = recorded_text(&ast::Value::String(text.as_str().into()))?;
+                    alloc::vec![Arc::from(text)]
+                }
+                ast::MetadataValue::Dictionary(_) => {
+                    reject(
+                        self,
+                        None,
+                        MetadataValueError::Unconvertible { element: None },
+                    );
+                    return None;
                 }
             };
+            let mut list = ListOp::default();
+            match entry.op {
+                ast::ListOpKind::Explicit => list.explicit = Some(items),
+                ast::ListOpKind::Prepend => list.prepend = items,
+                ast::ListOpKind::Append => list.append = items,
+                ast::ListOpKind::Add => list.add = items,
+                ast::ListOpKind::Delete => list.delete = items,
+                ast::ListOpKind::Reorder => list.reorder = items,
+            }
+            return Some((key, FieldValue::UnregisteredListOp(Box::new(list))));
         }
         // OpenUSD keeps such a field's text; a number array mixing
         // integers and reals is kept as reals, so it writes back as read.
@@ -843,6 +874,25 @@ impl EmitCtx<'_> {
             ast::MetadataValue::Value(ast::Value::Array(items)) if numbers(items) => "double[]",
             _ => "",
         };
+        // `None` records the text `None` (`TextParserAction<KeywordNone>`,
+        // `pxr/usd/sdf/textFileFormatParser.cpp`), written back as it is;
+        // it blocks nothing.
+        if matches!(entry.value, ast::MetadataValue::None) {
+            return Some((
+                key,
+                FieldValue::Value(Value::Unregistered(Arc::from("None"))),
+            ));
+        }
+        // Integers of which some only `uint64` holds and some only `int64`
+        // (or `uint64` beside `int64`-only ones) have no one type here; the
+        // text OpenUSD records is kept as it is (`[0, 18446744073709551615]`).
+        if let ast::MetadataValue::Value(array @ ast::Value::Array(items)) = &entry.value
+            && items.iter().any(|item| matches!(item, ast::Value::UInt(_)))
+            && items.iter().any(|item| matches!(item, ast::Value::Int(_)))
+            && let Some(text) = recorded_text(array)
+        {
+            return Some((key, FieldValue::Value(Value::Unregistered(Arc::from(text)))));
+        }
         let value = self.checked(entry.span, |ctx| {
             ctx.convert_metadata_value(&entry.value, hint)
         })?;
@@ -879,12 +929,6 @@ impl EmitCtx<'_> {
             ),
             value => value,
         }
-    }
-
-    /// Returns `true` when a metadata value is an array of integers.
-    fn metadata_items_are_integers(&self, value: &ast::MetadataValue<'_>) -> bool {
-        matches!(value, ast::MetadataValue::Value(ast::Value::Array(items))
-            if !items.is_empty() && items.iter().all(|v| matches!(v, ast::Value::Int(_))))
     }
 
     // ── Properties ──────────────────────────────────────────────────
@@ -2117,6 +2161,74 @@ struct PrimPlace {
 
 // ── Specifier conversion ────────────────────────────────────────────────
 
+/// The text OpenUSD's parser records for `value` when it has no type to
+/// read it as: numbers as `TfStringify` writes them, strings quoted,
+/// identifiers as they are, and lists and tuples item by item, `, `
+/// between (`Sdf_ParserValueContext::AppendValue`, `BeginList`,
+/// `BeginTuple`, `pxr/usd/sdf/parserValueContext.cpp`); `None` for a value
+/// that records no text (a block, an array edit, a dictionary).
+fn recorded_text(value: &ast::Value<'_>) -> Option<String> {
+    let mut out = String::new();
+    record_text(value, &mut out)?;
+    Some(out)
+}
+
+/// [`recorded_text`] of the items of a list, without its brackets, as
+/// OpenUSD keeps a list-op statement's items (`1, 2.5`).
+fn recorded_items_text(items: &[ast::Value<'_>]) -> Option<String> {
+    let mut out = String::new();
+    for (i, item) in items.iter().enumerate() {
+        if i > 0 {
+            out.push_str(", ");
+        }
+        record_text(item, &mut out)?;
+    }
+    Some(out)
+}
+
+/// Appends [`recorded_text`] of `value` to `out`.
+fn record_text(value: &ast::Value<'_>, out: &mut String) -> Option<()> {
+    use crate::writer::Value as Text;
+    match value {
+        ast::Value::Number(n) => out.push_str(&Text::Double(*n).to_usda_text()),
+        ast::Value::Int(n) => out.push_str(&Text::Int64(*n).to_usda_text()),
+        ast::Value::UInt(n) => out.push_str(&Text::UInt64(*n).to_usda_text()),
+        ast::Value::String(s) => out.push_str(&Text::String(String::from(&**s)).to_usda_text()),
+        ast::Value::Identifier(s) => out.push_str(s),
+        ast::Value::Bool(b) => out.push_str(if *b { "true" } else { "false" }),
+        ast::Value::Asset(s) => {
+            out.push('@');
+            out.push_str(s);
+            out.push('@');
+        }
+        ast::Value::Path(s) => {
+            out.push('<');
+            out.push_str(s);
+            out.push('>');
+        }
+        ast::Value::Array(items) | ast::Value::Tuple(items) => {
+            let (open, close) = if matches!(value, ast::Value::Array(_)) {
+                ('[', ']')
+            } else {
+                ('(', ')')
+            };
+            out.push(open);
+            for (i, item) in items.iter().enumerate() {
+                if i > 0 {
+                    out.push_str(", ");
+                }
+                record_text(item, out)?;
+            }
+            out.push(close);
+        }
+        ast::Value::ArrayEdit(_)
+        | ast::Value::Dictionary(_)
+        | ast::Value::AnimationBlock
+        | ast::Value::Blocked => return None,
+    }
+    Some(())
+}
+
 /// Returns `true` when `name` is a prim name: an identifier, which may use
 /// characters outside ASCII (AOUSD Core §7.3.3), and so not a variant
 /// selection, property or relative path component.
@@ -2198,7 +2310,8 @@ fn field_list_op_repeats(value: &FieldValue) -> bool {
         FieldValue::Int64ListOp(op) => repeats(op),
         FieldValue::UInt64ListOp(op) => repeats(op),
         FieldValue::PathListOp(op) => repeats(op),
-        FieldValue::Value(_) => false,
+        // Text OpenUSD keeps unchecked.
+        FieldValue::UnregisteredListOp(_) | FieldValue::Value(_) => false,
     }
 }
 
@@ -2212,7 +2325,9 @@ fn field_list_op_is_empty(value: &FieldValue) -> bool {
         FieldValue::Int64ListOp(op) => op.items().next().is_none(),
         FieldValue::UInt64ListOp(op) => op.items().next().is_none(),
         FieldValue::PathListOp(op) => op.items().next().is_none(),
-        FieldValue::Value(_) => false,
+        // A `None` statement, which OpenUSD takes here (an empty list is
+        // refused as it is read).
+        FieldValue::UnregisteredListOp(_) | FieldValue::Value(_) => false,
     }
 }
 
@@ -2234,6 +2349,12 @@ fn set_field_list_op(existing: &mut FieldValue, kind: ast::ListOpKind, value: Fi
         (FieldValue::UIntListOp(a), FieldValue::UIntListOp(b)) => set_statement(a, kind, *b),
         (FieldValue::Int64ListOp(a), FieldValue::Int64ListOp(b)) => set_statement(a, kind, *b),
         (FieldValue::UInt64ListOp(a), FieldValue::UInt64ListOp(b)) => set_statement(a, kind, *b),
+        (FieldValue::UnregisteredListOp(a), FieldValue::UnregisteredListOp(b)) => {
+            set_statement(a, kind, *b);
+        }
+        // OpenUSD keeps an unregistered field's earlier value over a later
+        // list-op statement (`_KeyValueMetadataEnd`).
+        (FieldValue::Value(_), FieldValue::UnregisteredListOp(_)) => {}
         (existing @ FieldValue::Value(_), value) => *existing = value,
         _ => return false,
     }

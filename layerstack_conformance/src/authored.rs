@@ -113,6 +113,9 @@ pub fn render_field(value: &FieldValue, names: Names<'_>) -> String {
         FieldValue::UIntListOp(list) => render_list(list, |v| format!("UInt({v})")),
         FieldValue::Int64ListOp(list) => render_list(list, |v| format!("Int64({v})")),
         FieldValue::UInt64ListOp(list) => render_list(list, |v| format!("UInt64({v})")),
+        FieldValue::UnregisteredListOp(list) => {
+            render_list(list, |s| format!("Unregistered({s:?})"))
+        }
     }
 }
 

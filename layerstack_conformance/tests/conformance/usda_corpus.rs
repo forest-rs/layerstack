@@ -105,13 +105,6 @@ const DIFFERENCES: &[Difference] = &[
                  `127_varyingRelationship`",
     },
     Difference {
-        file: "192_listop_metadata.usda",
-        outcome: Outcome::Error,
-        reason: "unregistered list-op metadata whose items are not all of one type \
-                 (`[-1.1, -2.1]` in an integer list op): OpenUSD keeps the items' \
-                 text, layerstack types them",
-    },
-    Difference {
         file: "229_bad_spline_extrap_loop_boundary.usda",
         outcome: Outcome::Accepts,
         reason: "a spline with both inner loops and a looping extrapolation is read; \

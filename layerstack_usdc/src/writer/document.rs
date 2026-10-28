@@ -506,6 +506,9 @@ fn natural(value: &mut UsdaValue) -> Value {
         U::UIntListOp(op) => Value::UIntListOp(map_list_op(op, |x| *x)),
         U::Int64ListOp(op) => Value::Int64ListOp(map_list_op(op, |x| *x)),
         U::UInt64ListOp(op) => Value::UInt64ListOp(map_list_op(op, |x| *x)),
+        // Not encoded as the `SdfUnregisteredValueListOp` it is: `metadatum`
+        // refuses it first, and no other field holds one.
+        U::UnregisteredListOp(op) => Value::StringListOp(list_op(op)),
         U::ArrayEdit {
             element,
             instructions,
@@ -800,7 +803,8 @@ fn metadatum(
             | UsdaValue::IntListOp(_)
             | UsdaValue::UIntListOp(_)
             | UsdaValue::Int64ListOp(_)
-            | UsdaValue::UInt64ListOp(_) => {
+            | UsdaValue::UInt64ListOp(_)
+            | UsdaValue::UnregisteredListOp(_) => {
                 return Err(UsdcWriteError::UnknownMetadata {
                     path: path.into(),
                     key: entry.key.clone(),

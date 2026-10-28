@@ -940,6 +940,32 @@ def "P" (
     )
 }
 ''', []),
+    "read_unregistered_list_ops": ('''#usda 1.0
+def "A" (
+    prepend mixed = [1, 2.50, "x", y]
+    append mixed = [3]
+    prepend mixed = [4]
+    delete mixed = ["a"]
+    add pairs = [(1, 2), (3, 4)]
+    prepend repeated = [1, 1]
+    kept = [1, 2]
+    prepend kept = [3]
+    prepend replaced = [3]
+    replaced = [1, 2]
+)
+{
+    double a (
+        reorder ints = [3, -1]
+        append ints = [18446744073709551615, -2.5]
+    )
+}
+
+def "B" (
+    prepend nothing = None
+)
+{
+}
+''', []),
     "read_metadata_semicolons": ('''#usda 1.0
 (startFrame = 1; endFrame = 2)
 

@@ -274,6 +274,16 @@ pub(crate) fn chain_field_list<'a>(
             }),
             Value::UInt64,
         ),
+        // OpenUSD keeps such a list op inside an `SdfUnregisteredValue`,
+        // which value resolution does not chain: the strongest opinion's
+        // own items (`_ComposeGeneralMetadataImpl`, `pxr/usd/usd/stage.cpp`).
+        FieldValue::UnregisteredListOp(_) => wrap(
+            chainer.chain(core::iter::once(strongest), |v| match v {
+                FieldValue::UnregisteredListOp(list) => Some(list),
+                _ => None,
+            }),
+            Value::Unregistered,
+        ),
     })
 }
 

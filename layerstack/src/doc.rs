@@ -541,11 +541,11 @@ impl Value {
         match values.next() {
             Some(first) => {
                 let kind = first.clone();
-                crate::TypedArray::pack_iter(&kind, core::iter::once(first).chain(values))
+                crate::TypedArray::pack_iter(&kind, &mut core::iter::once(first).chain(values))
             }
             None => element.map_or_else(
                 || Self::Array(Vec::new()),
-                |kind| crate::TypedArray::pack_iter(kind, core::iter::empty()),
+                |kind| crate::TypedArray::pack_iter(kind, &mut core::iter::empty()),
             ),
         }
     }

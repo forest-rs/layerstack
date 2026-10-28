@@ -352,6 +352,10 @@ impl PopulationMask {
 }
 
 /// Options for stage composition and population.
+///
+/// Build it as a struct literal that names the fields it sets and takes
+/// the rest from `..StageOptions::default()`: a field a later release adds then
+/// keeps its default.
 #[derive(Clone, Debug, Default)]
 pub struct StageOptions {
     /// Optional host-owned session root, stronger than the persistent root and
@@ -441,7 +445,9 @@ pub struct StageOptions {
     /// `WorkSetConcurrencyLimit` sizes (`pxr/base/work/dispatcher.h`,
     /// `pxr/base/work/threadLimits.h`), and a host replaces it only by
     /// configuring TBB.
-    #[cfg(feature = "std")]
+    ///
+    /// The field exists in every build; without the `std` feature
+    /// composition runs on the calling thread and never calls it.
     pub executor: Option<Arc<dyn crate::parallel::Executor>>,
     /// The dynamic file formats payloads compose arguments for: a payload
     /// to an asset with one of their extensions targets the layer its
@@ -460,7 +466,6 @@ impl StageOptions {
     /// layers on the same budget, as `layerstack_io::StageDocument` does,
     /// builds it here, so that reading and composing share one executor.
     pub fn thread_budget(&self) -> crate::parallel::Threads {
-        #[cfg(feature = "std")]
         if let Some(executor) = &self.executor {
             return crate::parallel::Threads::with_executor(self.threads, Arc::clone(executor));
         }

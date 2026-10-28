@@ -35,9 +35,7 @@
 //! (`UsdStage::_ComposeSubtreesInParallel`), and its dispatchers share one
 //! thread pool, sized by `WorkSetConcurrencyLimit`.
 
-use alloc::vec::Vec;
-#[cfg(feature = "std")]
-use alloc::{boxed::Box, sync::Arc};
+use alloc::{boxed::Box, sync::Arc, vec::Vec};
 use core::fmt;
 #[cfg(feature = "std")]
 use core::sync::atomic::{AtomicUsize, Ordering};
@@ -45,6 +43,12 @@ use core::sync::atomic::{AtomicUsize, Ordering};
 /// Where layerstack runs its work beyond the calling thread: a host's job
 /// system, thread pool or dispatch queue, in place of the threads
 /// layerstack starts itself by default.
+///
+/// The trait, [`Scope`] and [`Job`] exist in every build, so a host names
+/// them, and sets [`crate::StageOptions::executor`], whatever features the
+/// crate graph enables. Without the `std` feature work runs on the calling
+/// thread only, and an executor is held but never called, as
+/// [`crate::StageOptions::threads`] is then ignored.
 ///
 /// A budget runs on one ([`Threads::with_executor`]), as composition and
 /// `layerstack_io::StageDocument`'s reading do with
@@ -157,7 +161,6 @@ use core::sync::atomic::{AtomicUsize, Ordering};
 /// let results = with_pool_in(&threads, &tree, |pool| pool.run(vec![3]));
 /// assert_eq!(results.len(), 15);
 /// ```
-#[cfg(feature = "std")]
 pub trait Executor: Send + Sync {
     /// Calls `body` on the calling thread with a scope it may start jobs on,
     /// and returns once `body` and every job started on the scope have
@@ -166,7 +169,6 @@ pub trait Executor: Send + Sync {
     fn scope<'env>(&self, body: &mut (dyn FnMut(&dyn Scope<'env>) + 'env));
 }
 
-#[cfg(feature = "std")]
 impl fmt::Debug for dyn Executor + '_ {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Executor").finish_non_exhaustive()
@@ -176,13 +178,11 @@ impl fmt::Debug for dyn Executor + '_ {
 /// A job layerstack starts on an [`Executor`]'s [`Scope`]: a helper that
 /// may borrow from the caller of [`Executor::scope`] (`'env`) and is given
 /// the scope it runs in, so that it can start more jobs there.
-#[cfg(feature = "std")]
 pub type Job<'env> = Box<dyn FnOnce(&dyn Scope<'env>) + Send + 'env>;
 
 /// What an [`Executor`] gives the body of [`Executor::scope`] and each job
 /// started in it: starts jobs that may borrow from `'env`, all of which
 /// return before `scope` does.
-#[cfg(feature = "std")]
 pub trait Scope<'env>: Sync {
     /// Starts `job`, on any thread of the executor and at any time before
     /// the scope returns, and returns `true`; or returns `false`, dropping
@@ -242,7 +242,7 @@ pub struct Threads {
     #[cfg(feature = "std")]
     spare: AtomicUsize,
     /// The host's executor; `None` starts threads of layerstack's own.
-    #[cfg(feature = "std")]
+    /// Held but unused without `std`.
     executor: Option<Arc<dyn Executor>>,
 }
 
@@ -257,7 +257,6 @@ impl Threads {
             limit,
             #[cfg(feature = "std")]
             spare: AtomicUsize::new(limit - 1),
-            #[cfg(feature = "std")]
             executor: None,
         }
     }
@@ -265,8 +264,9 @@ impl Threads {
     /// A budget of `limit` threads, the calling thread among them, whose
     /// workers run as jobs of `executor`: at most `limit - 1` jobs at once,
     /// on as many threads as the executor gives them. `0` and `1` run every
-    /// pool on the calling thread and start no job.
-    #[cfg(feature = "std")]
+    /// pool on the calling thread and start no job. Without the `std`
+    /// feature every pool runs on the calling thread, and `executor` is
+    /// never called.
     pub fn with_executor(limit: usize, executor: Arc<dyn Executor>) -> Self {
         Self {
             executor: Some(executor),
@@ -329,7 +329,6 @@ impl fmt::Debug for Threads {
         debug
             .field("limit", &self.limit)
             .field("spare", &self.spare());
-        #[cfg(feature = "std")]
         debug.field("executor", &self.executor);
         debug.finish()
     }

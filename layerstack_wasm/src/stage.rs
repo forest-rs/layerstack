@@ -12,9 +12,9 @@ use alloc::{
 };
 
 use layerstack::{
-    ArcKind, ChangeCursor, Changes, Contribution, EditError, FlattenError, FlattenRequirements,
-    IgnoreCause, InMemoryStore, Layer, LayerId, OpinionRole, PathId, ResolvedValue, Specifier,
-    StageOptions, Time, Transaction, ValueSource, Variability,
+    ArcKind, ChangeCursor, Changes, CompositionLimits, Contribution, EditError, FlattenError,
+    FlattenRequirements, IgnoreCause, InMemoryStore, Layer, LayerId, OpinionRole, PathId,
+    ResolvedValue, Specifier, StageOptions, Time, Transaction, ValueSource, Variability,
     asset_dependencies::DependencyTarget,
 };
 use layerstack_io::{
@@ -30,6 +30,22 @@ use crate::{
     storage::HostStorage,
     value,
     wire::Wire,
+};
+
+/// The composition limits a stage opened from TypeScript has unless its
+/// `open` options set others: a browser tab's share of memory and time,
+/// rather than a native host's. 2 million prim index nodes, a tenth of
+/// [`CompositionLimits::DEFAULT_PRIM_INDEX_NODES`] and 15 times those of
+/// the largest production scene measured; 512 nodes in one prim index,
+/// half the native default and 9 times the largest index measured; the
+/// native composed depth
+/// ([`CompositionLimits::DEFAULT_COMPOSED_DEPTH`]). The endless namespaces
+/// fuzzing found compose to them in 2.3 seconds at most natively, holding
+/// 420 MB at most.
+pub const BROWSER_LIMITS: CompositionLimits = CompositionLimits {
+    prim_index_nodes: Some(2_000_000),
+    nodes_per_prim_index: Some(512),
+    composed_depth: Some(CompositionLimits::DEFAULT_COMPOSED_DEPTH),
 };
 
 /// The id the session layer of a stage opened for editing takes: below
@@ -65,7 +81,9 @@ impl Stage {
     /// of rejecting it. `session_layer` puts an empty anonymous session
     /// layer in front of the root, the stage's edit layer
     /// ([`Self::edit_layer`]): the way to edit a root that cannot be saved,
-    /// such as a USDZ package's.
+    /// such as a USDZ package's. The stage composes, and recomposes edits,
+    /// within `limits` ([`StageOptions::limits`]; [`BROWSER_LIMITS`] by
+    /// default in TypeScript).
     ///
     /// Spec: AOUSD Core §10.3.1 (the session layer is the strongest layer
     /// of the root layer stack).
@@ -81,6 +99,7 @@ impl Stage {
         bytes: Vec<u8>,
         recover: bool,
         session_layer: bool,
+        limits: CompositionLimits,
     ) -> Result<Self, Error> {
         let mut storage = HostStorage::new();
         storage.supply(identifier, bytes);
@@ -92,6 +111,7 @@ impl Stage {
         let options = StageOptions {
             schemas: Some(Arc::new(schemas)),
             session_layer: session_layer.then_some(SESSION_LAYER),
+            limits,
             ..StageOptions::default()
         };
         let policy = if recover {
@@ -1109,15 +1129,43 @@ impl Stage {
 /// name, its record and error turned into `JsValue`s.
 #[wasm_bindgen]
 impl Stage {
-    /// Opens a stage ([`Self::open`]).
+    /// Opens a stage ([`Self::open`]) within the limits
+    /// `prim_index_nodes`, `nodes_per_prim_index` and `composed_depth`:
+    /// each `undefined` for its
+    /// [`BROWSER_LIMITS`] value, infinite for no limit, a number for that
+    /// limit (truncated to an integer).
     #[wasm_bindgen(js_name = open)]
     pub fn js_open(
         identifier: &str,
         bytes: Vec<u8>,
         recover: bool,
         session_layer: bool,
+        prim_index_nodes: Option<f64>,
+        nodes_per_prim_index: Option<f64>,
+        composed_depth: Option<f64>,
     ) -> Result<Self, JsValue> {
-        Ok(Self::open(identifier, bytes, recover, session_layer)?)
+        let limit = |given: Option<f64>, default: Option<usize>| match given {
+            None => default,
+            Some(value) if value.is_infinite() => None,
+            #[expect(
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss,
+                reason = "the wrapper passes a non-negative integer"
+            )]
+            Some(value) => Some(value as usize),
+        };
+        let limits = CompositionLimits {
+            prim_index_nodes: limit(prim_index_nodes, BROWSER_LIMITS.prim_index_nodes),
+            nodes_per_prim_index: limit(nodes_per_prim_index, BROWSER_LIMITS.nodes_per_prim_index),
+            composed_depth: limit(composed_depth, BROWSER_LIMITS.composed_depth),
+        };
+        Ok(Self::open(
+            identifier,
+            bytes,
+            recover,
+            session_layer,
+            limits,
+        )?)
     }
 
     /// Applies a batch of edits to a layer ([`Self::apply`]).
@@ -1449,7 +1497,14 @@ def "Ball" {
 
     #[test]
     fn opening_with_only_the_root_wants_its_dependencies() {
-        let mut stage = Stage::open("scene.usda", ROOT.as_bytes().to_vec(), false, false).unwrap();
+        let mut stage = Stage::open(
+            "scene.usda",
+            ROOT.as_bytes().to_vec(),
+            false,
+            false,
+            BROWSER_LIMITS,
+        )
+        .unwrap();
         assert_eq!(
             identifiers(&stage.wanted()),
             ["parts/ball.usda", "sub.usda"]
@@ -1480,7 +1535,14 @@ def "Ball" {
 
     #[test]
     fn explain_names_the_inherit_that_contributes() {
-        let stage = Stage::open("scene.usda", ROOT.as_bytes().to_vec(), false, false).unwrap();
+        let stage = Stage::open(
+            "scene.usda",
+            ROOT.as_bytes().to_vec(),
+            false,
+            false,
+            BROWSER_LIMITS,
+        )
+        .unwrap();
         let why = stage.explain("/Ball.size", None).unwrap();
         let why = why.as_list().unwrap();
         assert_eq!(why[1].as_text(), Some("default"));
@@ -1493,7 +1555,14 @@ def "Ball" {
 
     #[test]
     fn confirmed_absent_assets_are_missing_with_a_code() {
-        let mut stage = Stage::open("scene.usda", ROOT.as_bytes().to_vec(), false, false).unwrap();
+        let mut stage = Stage::open(
+            "scene.usda",
+            ROOT.as_bytes().to_vec(),
+            false,
+            false,
+            BROWSER_LIMITS,
+        )
+        .unwrap();
         stage
             .document_mut()
             .storage_mut()
@@ -1524,7 +1593,14 @@ def "Ball" {
 
     #[test]
     fn bad_input_fails_with_codes_not_panics() {
-        let stage = Stage::open("scene.usda", ROOT.as_bytes().to_vec(), false, false).unwrap();
+        let stage = Stage::open(
+            "scene.usda",
+            ROOT.as_bytes().to_vec(),
+            false,
+            false,
+            BROWSER_LIMITS,
+        )
+        .unwrap();
         for path in ["Ball", "/Ball/", "//Ball", "/Ball.size"] {
             assert_eq!(stage.prim(path).unwrap_err().code, "path.invalid", "{path}");
         }
@@ -1544,15 +1620,28 @@ def "Ball" {
             stage.layer_dirty(u64::MAX).unwrap_err().code,
             "layer.unknown"
         );
-        let rejected =
-            Stage::open("bad.usda", b"#usda 1.0\ndef {".to_vec(), false, false).unwrap_err();
+        let rejected = Stage::open(
+            "bad.usda",
+            b"#usda 1.0\ndef {".to_vec(),
+            false,
+            false,
+            BROWSER_LIMITS,
+        )
+        .unwrap_err();
         assert_eq!(rejected.code, "io.rejected");
         assert_eq!(rejected.identifier.as_deref(), Some("bad.usda"));
     }
 
     #[test]
     fn a_reference_in_a_supplied_layer_is_wanted_next() {
-        let mut stage = Stage::open("scene.usda", ROOT.as_bytes().to_vec(), false, false).unwrap();
+        let mut stage = Stage::open(
+            "scene.usda",
+            ROOT.as_bytes().to_vec(),
+            false,
+            false,
+            BROWSER_LIMITS,
+        )
+        .unwrap();
         let ball =
             "#usda 1.0\ndef \"Ball\" (\n    prepend references = @./trim.usda@</Trim>\n) {\n}\n";
         let trim = "#usda 1.0\ndef \"Trim\" {\n    token tag = \"trim\"\n}\n";
@@ -1611,7 +1700,14 @@ def "World" (
     }
 }
 "#;
-        let stage = Stage::open("scene.usda", root.as_bytes().to_vec(), false, false).unwrap();
+        let stage = Stage::open(
+            "scene.usda",
+            root.as_bytes().to_vec(),
+            false,
+            false,
+            BROWSER_LIMITS,
+        )
+        .unwrap();
         assert_eq!(
             stage.metadata("/World", "kind").unwrap(),
             Wire::List(vec![
@@ -1652,7 +1748,14 @@ def "World" (
 
     /// The scene of the tests above with every dependency supplied.
     fn resolved() -> Stage {
-        let mut stage = Stage::open("scene.usda", ROOT.as_bytes().to_vec(), false, false).unwrap();
+        let mut stage = Stage::open(
+            "scene.usda",
+            ROOT.as_bytes().to_vec(),
+            false,
+            false,
+            BROWSER_LIMITS,
+        )
+        .unwrap();
         let storage = stage.document_mut().storage_mut();
         storage.supply("sub.usda", SUB.as_bytes().to_vec());
         storage.supply("parts/ball.usda", BALL.as_bytes().to_vec());
@@ -1703,7 +1806,7 @@ def "World" (
             "nothing dirty"
         );
 
-        let mut reopened = Stage::open("scene.usda", saved, false, false).unwrap();
+        let mut reopened = Stage::open("scene.usda", saved, false, false, BROWSER_LIMITS).unwrap();
         let storage = reopened.document_mut().storage_mut();
         storage.supply("sub.usda", SUB.as_bytes().to_vec());
         storage.supply("parts/ball.usda", BALL.as_bytes().to_vec());
@@ -1718,7 +1821,14 @@ def "World" (
 
     #[test]
     fn a_session_layer_is_anonymous_to_save_and_exports() {
-        let mut stage = Stage::open("scene.usda", ROOT.as_bytes().to_vec(), false, true).unwrap();
+        let mut stage = Stage::open(
+            "scene.usda",
+            ROOT.as_bytes().to_vec(),
+            false,
+            true,
+            BROWSER_LIMITS,
+        )
+        .unwrap();
         let session = stage.edit_layer().unwrap();
         set_size(&mut stage, session, 9.0);
         let record = stage.save(Some(session.0)).unwrap();
@@ -1749,7 +1859,7 @@ def "World" (
         for format in ["usda", "usdc"] {
             let exported = stage.export_layer(root.0, format).unwrap();
             let identifier = format!("copy.{format}");
-            let copy = Stage::open(&identifier, exported, false, false).unwrap();
+            let copy = Stage::open(&identifier, exported, false, false, BROWSER_LIMITS).unwrap();
             assert_eq!(identifiers(&copy.wanted()), ["parts/ball.usda", "sub.usda"]);
 
             let record = stage.export_flattened(format).unwrap();
@@ -1759,7 +1869,14 @@ def "World" (
             assert_eq!(*lossless, Wire::Bool(true));
             assert!(lost.as_list().unwrap().is_empty());
             let identifier = format!("flat.{format}");
-            let flat = Stage::open(&identifier, bytes(flat).to_vec(), false, false).unwrap();
+            let flat = Stage::open(
+                &identifier,
+                bytes(flat).to_vec(),
+                false,
+                false,
+                BROWSER_LIMITS,
+            )
+            .unwrap();
             assert!(flat.wanted().as_list().unwrap().is_empty(), "no arcs left");
             assert_eq!(size(&flat), size(&stage));
             assert_eq!(
@@ -1790,12 +1907,25 @@ def "World" (
             stage.layer_dirty(root.0).unwrap(),
             "packaging saves nothing"
         );
-        let reopened = Stage::open("scene.usdz", bytes(package).to_vec(), false, false).unwrap();
+        let reopened = Stage::open(
+            "scene.usdz",
+            bytes(package).to_vec(),
+            false,
+            false,
+            BROWSER_LIMITS,
+        )
+        .unwrap();
         assert!(reopened.wanted().as_list().unwrap().is_empty(), "complete");
         assert_eq!(size(&reopened), size(&stage), "with the unsaved edit");
 
-        let mut partial =
-            Stage::open("scene.usda", ROOT.as_bytes().to_vec(), false, false).unwrap();
+        let mut partial = Stage::open(
+            "scene.usda",
+            ROOT.as_bytes().to_vec(),
+            false,
+            false,
+            BROWSER_LIMITS,
+        )
+        .unwrap();
         let record = partial.export_package().unwrap();
         let record = record.as_list().unwrap();
         assert_eq!(

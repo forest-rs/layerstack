@@ -45,7 +45,7 @@ export const PACKAGE_VERSION = "0.1.0";
  * The ABI this package speaks: the version of the records it exchanges
  * with the native module (`layerstack_wasm::ABI`).
  */
-export const ABI = 3;
+export const ABI = 4;
 
 /** The native stage the generated glue exports (`layerstack_wasm::Stage`). Not for app use. */
 export interface NativeStage {
@@ -89,7 +89,17 @@ export interface NativeReceipt {
  * crate). Pass it to {@link loadLayerstack} to use that module.
  */
 export interface NativeModule {
-  readonly Stage: { open(identifier: string, bytes: Uint8Array, recover: boolean, sessionLayer: boolean): NativeStage };
+  readonly Stage: {
+    open(
+      identifier: string,
+      bytes: Uint8Array,
+      recover: boolean,
+      sessionLayer: boolean,
+      primIndexNodes: number | undefined,
+      nodesPerPrimIndex: number | undefined,
+      composedDepth: number | undefined,
+    ): NativeStage;
+  };
   /** The batch of edits `Stage.apply` takes. */
   readonly EditBatch: new () => NativeEditBatch;
   nativeVersion(): unknown;
@@ -151,7 +161,13 @@ export class Layerstack {
     }
     const recover = options.importPolicy === "recover";
     const session = editLayer === "session";
-    const native = this.call("open", () => this.#module.Stage.open(root.identifier, root.bytes, recover, session));
+    const limits = options.limits;
+    const nodes = limit(limits?.primIndexNodes, "primIndexNodes");
+    const perIndex = limit(limits?.nodesPerPrimIndex, "nodesPerPrimIndex");
+    const depth = limit(limits?.composedDepth, "composedDepth");
+    const native = this.call("open", () =>
+      this.#module.Stage.open(root.identifier, root.bytes, recover, session, nodes, perIndex, depth),
+    );
     this.#bytesIn += root.bytes.byteLength;
     return new Stage(this, native);
   }
@@ -1062,6 +1078,16 @@ function decodeChanges(row: unknown): Changes {
 }
 
 /** Reports an error that must not interrupt the caller, as the host reports uncaught errors. */
+/** A limit of `OpenOptions.limits` as the module takes it: `undefined` for its default, `Infinity` for none. */
+function limit(value: number | null | undefined, name: string): number | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return Infinity;
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new LayerstackError("argument.invalid", "open", `limits.${name} must be a non-negative integer or null`);
+  }
+  return value;
+}
+
 function report(error: LayerstackError): void {
   const host = globalThis as { reportError?: (error: unknown) => void };
   if (typeof host.reportError === "function") host.reportError(error);

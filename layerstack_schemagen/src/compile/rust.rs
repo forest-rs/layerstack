@@ -473,10 +473,17 @@ pub(crate) fn module_text(
          pub fn register_kinds(\n    kinds: &mut ::layerstack_schemas::kind::KindRegistry,\n\
          ) -> Vec<::layerstack_schemas::kind::KindError> {{\n    \
          kinds.register_all(KINDS.iter().copied())\n}}\n{statics}\n\
+         // The tables are written in table format {format}, which the\n\
+         // `layerstack_schemas` built against must read.\n\
+         const _: () = assert!(\n    ::layerstack_schemas::table::TABLE_FORMAT == {format},\n    \
+         \"written for another layerstack_schemas table format: regenerate this module \
+         with layerstack_schemagen {version}\",\n);\n\n\
          #[allow(\n    clippy::unreadable_literal,\n    clippy::approx_constant,\n    \
          clippy::excessive_precision,\n    reason = \"values as the schema writes them\"\n)]\n\
          {table}",
         variants = variants.join(", "),
+        format = crate::emit::TABLE_FORMAT,
+        version = env!("CARGO_PKG_VERSION"),
         kinds_table = crate::kinds::table(
             &kinds.accepted,
             "/// The kinds the library's `plugInfo.json` declares (`Kinds`), with their\n\

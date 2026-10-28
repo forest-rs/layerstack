@@ -14,6 +14,14 @@
 //! generated code's to write; their fields are public so that code in
 //! another crate can.
 //!
+//! The table types are tied to this crate's minor version, not to its
+//! semver: a release may add a field or change what one means, and then
+//! bumps [`TABLE_FORMAT`]. A module `layerstack_schemagen compile --rust`
+//! writes asserts the format it was written in at compile time, so a
+//! library built against another format fails with the remedy
+//! (regenerate it with the matching `layerstack_schemagen`) rather than
+//! with a missing field alone.
+//!
 //! Spec: AOUSD Core §13 (schemas); §13.1 leaves how schemas are defined to
 //! the implementation.
 
@@ -21,6 +29,12 @@ use layerstack::{
     MetadataConflict, PropertyDefinition, PropertyKind, PropertyType, SchemaDefinition, SchemaKind,
     SchemaRegistryBuilder, TokenInterner, Value, Variability,
 };
+
+/// The format of the table types ([`ValueType`], [`Property`], [`Schema`],
+/// [`SchemaTables`], [`Metadata`]): their fields and what they mean. It
+/// changes with any of them; generated library modules check it (see the
+/// [module docs](self)).
+pub const TABLE_FORMAT: u32 = 1;
 
 /// Constructs a value, interning its tokens in the interner passed in.
 pub type Construct = fn(&TokenInterner) -> Value;

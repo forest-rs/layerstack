@@ -22,7 +22,7 @@ pub use behavior::{ConnectableBehavior, ConnectionError, ConnectionIssue};
 mod node_def;
 pub use node_def::NodeDefError;
 mod ports;
-pub use ports::{Port, PortEdit, PortError, PortKind};
+pub use ports::{ConnectionModification, Port, PortEdit, PortError, PortKind};
 /// Immutable upstream material capture and caller-owned retention.
 pub mod network;
 /// Bounded standard Preview Surface handoff without shader execution.

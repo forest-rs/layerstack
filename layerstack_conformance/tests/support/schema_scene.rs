@@ -23,11 +23,40 @@ impl AssetResolver for NoAssets {
     }
 }
 pub(crate) fn scene(text: &str) -> (InMemoryStore, LiveStage) {
+    let store = InMemoryStore::default();
+    scene_in(store, text, LayerId(1))
+}
+
+/// An empty root layer, `LayerId(1)`, over `weak` as its sublayer,
+/// `LayerId(2)`: authoring in the root keeps the weak layer's opinions.
+#[allow(
+    dead_code,
+    reason = "the wind tunnel benches include this module without layered scenes"
+)]
+pub(crate) fn layered_scene(weak: &str) -> (InMemoryStore, LiveStage) {
     let mut store = InMemoryStore::default();
+    let mut root = layerstack::Layer::new(LayerId(1));
+    root.sublayers_mut()
+        .push(layerstack::SublayerEntry::new(LayerId(2)));
+    store.insert_layer(root);
+    let (mut store, _) = scene_in(store, weak, LayerId(2));
+    let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
+    let live = LiveStage::compose(
+        &mut store,
+        LayerId(1),
+        StageOptions {
+            schemas: Some(schemas),
+            ..StageOptions::default()
+        },
+    );
+    (store, live)
+}
+
+fn scene_in(mut store: InMemoryStore, text: &str, id: LayerId) -> (InMemoryStore, LiveStage) {
     let parsed = layerstack_usda::parser::parse(text);
     let emitted = layerstack_usda::emit::emit(
         &parsed.layer,
-        LayerId(1),
+        id,
         &store.tokens,
         &store.paths,
         &mut NoAssets,
@@ -42,7 +71,7 @@ pub(crate) fn scene(text: &str) -> (InMemoryStore, LiveStage) {
     let schemas = Arc::new(layerstack_schemas::openusd(&store.tokens));
     let live = LiveStage::compose(
         &mut store,
-        LayerId(1),
+        id,
         StageOptions {
             schemas: Some(schemas),
             ..StageOptions::default()

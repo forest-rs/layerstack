@@ -27,8 +27,10 @@ while the mass computation reads the binding without it.
 `tests/conformance/physics_parse.rs` compares everything.
 """
 import argparse
+import difflib
 import json
 import pathlib
+import sys
 
 from pxr import Gf, Usd, UsdPhysics as P
 
@@ -124,7 +126,12 @@ def main():
     text = json.dumps(result, indent=2, sort_keys=True) + "\n"
     output = ROOT / "oracle.json"
     if args.check:
-        assert output.read_text() == text, "oracle.json is out of date"
+        committed = output.read_text()
+        if committed != text:
+            diff = difflib.unified_diff(committed.splitlines(True), text.splitlines(True),
+                                        "committed", "regenerated", n=2)
+            sys.stdout.writelines(list(diff)[:200])
+            raise SystemExit("oracle.json is out of date")
     else:
         output.write_text(text)
 

@@ -14,7 +14,9 @@ run on their own. NAME limits the run to the scripts whose names
 contain it. A new oracle script is checked as soon as it exists, so
 adding one never needs a CI change.
 
-Every script runs with the same interpreter and environment as this one:
+Every script runs with the same interpreter and environment as this one,
+with OpenUSD limited to one worker thread (`PXR_WORK_THREAD_LIMIT`, unless
+set) so that its output does not depend on thread scheduling:
 CI sets `LAYERSTACK_OPENUSD_SOURCE` for the oracles that read OpenUSD's
 sources. Exits non-zero, after printing each failure's output, when any
 check fails.
@@ -48,9 +50,15 @@ def checkable():
 
 def run(name):
     start = time.monotonic()
+    # OpenUSD's parallel loops (physics parsing among them) report in the
+    # order their threads finish, which can differ between runs on a
+    # many-core machine; one worker thread makes every oracle repeatable.
+    env = dict(os.environ)
+    env.setdefault("PXR_WORK_THREAD_LIMIT", "1")
     result = subprocess.run(
         [sys.executable, os.path.join(SCRIPTS, name), "--check"],
         cwd=ROOT,
+        env=env,
         capture_output=True,
         text=True,
     )

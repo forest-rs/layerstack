@@ -337,6 +337,8 @@ fn children_are_linked_where_a_walk_from_the_strongest_links_them() {
         let mut new = node(&site(&paths), arc_kind, parent, origin, sibling_num);
         new.namespace_depth = u16::try_from(numbers.below(2)).expect("small");
         let index = graph.push_node(new);
+        // What `link_child` records before it compares the node.
+        graph.keep_ancestry(parent, index);
         let expected = front_scan_place(&graph, &paths, parent, index);
         graph.link_child(&paths, parent, index);
         assert_eq!(graph.node(index).next_sibling, expected, "node {index}");
@@ -359,4 +361,121 @@ fn a_child_linked_near_the_end_of_many_siblings_compares_with_few() {
     let made = super::SIBLING_COMPARISONS.with(core::cell::Cell::get) - before;
     // A walk from the strongest would compare each with every earlier one.
     assert!(made <= 6 * usize::from(count), "{made} comparisons");
+}
+
+/// A graph of `count` nodes like [`random_graph`]'s, with specializes
+/// among them: those beneath the root from another node are propagated
+/// specializes (every node has the same site).
+fn graph_with_specializes(paths: &PathInterner, count: usize, numbers: &mut Numbers) -> Graph {
+    let mut graph = Graph::new(site(paths), 0);
+    for at in 1..count {
+        // Half beneath the first few nodes, for many siblings; half
+        // beneath any, for deep walks.
+        let parent = if numbers.below(2) == 0 {
+            super::node_index(numbers.below(at.min(4)))
+        } else {
+            super::node_index(numbers.below(at))
+        };
+        let origin = if numbers.below(3) == 0 {
+            parent
+        } else {
+            super::node_index(numbers.below(at))
+        };
+        let arc_kind =
+            [ArcKind::Inherits, ArcKind::References, ArcKind::Specializes][numbers.below(3)];
+        add(&mut graph, paths, arc_kind, parent, origin, 0);
+    }
+    graph
+}
+
+/// OpenUSD's `_GetOriginRootNode`.
+fn walked_origin_root(graph: &Graph, node: NodeIndex) -> (NodeIndex, usize) {
+    let (mut at, mut count) = (node, 0);
+    while graph.node(at).origin != graph.node(at).parent {
+        at = graph.node(at).origin;
+        count += 1;
+    }
+    (at, count)
+}
+
+/// OpenUSD's `_OriginsAreNestedArcs`.
+fn walked_nesting(graph: &Graph, a: NodeIndex, b: NodeIndex) -> bool {
+    let nested_under = |x: NodeIndex, y: NodeIndex| {
+        let mut at = x;
+        while at != NONE {
+            if at == y {
+                return true;
+            }
+            at = if graph.is_propagated_specializes(at) {
+                graph.node(at).origin
+            } else {
+                graph.node(at).parent
+            };
+        }
+        false
+    };
+    nested_under(a, b) || nested_under(b, a)
+}
+
+/// Asserts that every node's kept ancestry answers as walks do.
+fn assert_ancestries_match_walks(graph: &Graph) {
+    let nodes = || (0..graph.len()).map(super::node_index);
+    for a in nodes() {
+        assert_eq!(
+            graph.origin_root(a),
+            walked_origin_root(graph, a),
+            "node {a}"
+        );
+        for b in nodes() {
+            assert_eq!(
+                graph.origins_are_nested(a, b),
+                walked_nesting(graph, a, b),
+                "{a} and {b}"
+            );
+        }
+    }
+}
+
+#[test]
+fn ancestries_answer_as_walks_of_the_graph_do() {
+    let paths = PathInterner::default();
+    let mut numbers = Numbers(3);
+    let mut graph = graph_with_specializes(&paths, 120, &mut numbers);
+    assert_ancestries_match_walks(&graph);
+    // A finalized subgraph, whose nodes are in strength order, so that
+    // some origins follow the nodes implied from them, grafted beneath
+    // a node of the graph.
+    let mut subgraph = graph_with_specializes(&paths, 80, &mut numbers);
+    subgraph.finalize();
+    assert_ancestries_match_walks(&subgraph);
+    graph.insert_subgraph(
+        &paths,
+        5,
+        subgraph,
+        super::SubgraphArc {
+            arc_kind: ArcKind::References,
+            origin: 5,
+            map_to_parent: crate::prim_indexing::map_function::MapFunction::identity(),
+            namespace_depth: 0,
+            sibling_num: 0,
+        },
+    );
+    assert_ancestries_match_walks(&graph);
+    for _ in 0..40 {
+        let at = graph.len();
+        let origin = super::node_index(numbers.below(at));
+        add(&mut graph, &paths, ArcKind::Specializes, 0, origin, 0);
+    }
+    assert_ancestries_match_walks(&graph);
+    assert!(!graph.ancestries.is_empty());
+    graph.finalize();
+    assert!(graph.ancestries.is_empty());
+    assert_ancestries_match_walks(&graph);
+    // A child prim's graph, in the finalized order, keeps ancestries
+    // again from its first specializes linked beside a sibling.
+    let mut child = graph.for_child();
+    assert_ancestries_match_walks(&child);
+    add(&mut child, &paths, ArcKind::Specializes, 0, 7, 0);
+    assert!(!child.ancestries.is_empty());
+    assert_ancestries_match_walks(&child);
 }

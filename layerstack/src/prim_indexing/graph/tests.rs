@@ -5,10 +5,10 @@
 
 use core::cmp::Ordering;
 
-use super::{Graph, NONE, Node, NodeIndex, Site};
+use super::{Graph, NONE, Node, NodeIndex, NodeLookup, Site};
 use crate::{
-    path::PathInterner, prim_index::ArcKind, prim_indexing::layer_stacks::StackId,
-    spec_path::SpecPath,
+    interner::TokenInterner, path::PathInterner, prim_index::ArcKind,
+    prim_indexing::layer_stacks::StackId, spec_path::SpecPath,
 };
 
 /// A deterministic stream of numbers: a linear congruential generator.
@@ -168,4 +168,122 @@ fn siblings_linked_between_two_others_renumber_in_order() {
     graph.node_mut(1).culled = true;
     graph.finalize();
     assert_sibling_keys_ordered(&graph);
+}
+
+/// A graph of `count` nodes like [`random_graph`]'s, at a few sites, some
+/// of them inert or culled.
+fn graph_at_sites(
+    paths: &PathInterner,
+    sites: &[Site],
+    count: usize,
+    numbers: &mut Numbers,
+) -> Graph {
+    let mut graph = Graph::new(sites[0].clone(), 0);
+    for at in 1..count {
+        let parent = super::node_index(numbers.below(at));
+        let origin = if numbers.below(2) == 0 {
+            parent
+        } else {
+            super::node_index(numbers.below(at))
+        };
+        let arc_kind =
+            [ArcKind::Inherits, ArcKind::References, ArcKind::Specializes][numbers.below(3)];
+        let site = &sites[numbers.below(sites.len())];
+        let index = graph.push_node(node(site, arc_kind, parent, origin, 0));
+        graph.link_child(paths, parent, index);
+        graph.node_mut(index).inert = numbers.below(4) == 0;
+        graph.node_mut(index).culled = numbers.below(8) == 0;
+    }
+    graph
+}
+
+/// Asserts that `graph`'s lookups answer as scans of its nodes do.
+fn assert_lookups_match_scans(graph: &Graph, sites: &[Site]) {
+    let nodes = || (0..graph.len()).map(super::node_index);
+    for site in sites {
+        let scanned = nodes().find(|&n| {
+            let node = graph.node(n);
+            !(node.inert || node.culled) && node.site == *site
+        });
+        assert_eq!(graph.node_using_site(site), scanned, "{site:?}");
+        for parent in nodes() {
+            let scanned = graph
+                .children(parent)
+                .find(|&child| graph.node(child).site == *site);
+            assert_eq!(
+                graph.child_using_site(parent, site),
+                scanned,
+                "{parent}: {site:?}"
+            );
+        }
+    }
+    let propagated = |node: NodeIndex| graph.is_propagated_specializes(node);
+    let any = |_: NodeIndex| true;
+    for parent in nodes() {
+        for origin in nodes() {
+            let scanned: super::ChildList = graph
+                .children(parent)
+                .filter(|&child| graph.node(child).origin == origin)
+                .collect();
+            let strongest = scanned.iter().copied().find(|&child| !propagated(child));
+            let weakest = scanned
+                .iter()
+                .copied()
+                .rev()
+                .find(|&child| propagated(child));
+            assert_eq!(
+                graph.strongest_child_from(parent, origin, |child| !propagated(child)),
+                strongest,
+                "{parent} from {origin}"
+            );
+            assert_eq!(
+                graph.weakest_child_from(parent, origin, propagated),
+                weakest,
+                "{parent} from {origin}"
+            );
+            assert_eq!(
+                graph.strongest_child_from(parent, origin, any),
+                scanned.first().copied()
+            );
+            assert_eq!(
+                graph.weakest_child_from(parent, origin, any),
+                scanned.last().copied()
+            );
+        }
+    }
+}
+
+#[test]
+fn a_large_graph_finds_nodes_as_scans_of_it_do() {
+    let tokens = TokenInterner::default();
+    let paths = PathInterner::default();
+    let site_at = |name: &str| Site {
+        stack: StackId(0),
+        path: SpecPath::from_prim_path(paths.intern_segments(&[tokens.intern(name)])),
+    };
+    let mut sites: alloc::vec::Vec<Site> = ["A", "B", "C", "D"].into_iter().map(site_at).collect();
+    let mut numbers = Numbers(11);
+    let small = graph_at_sites(&paths, &sites, NodeLookup::MIN_NODES, &mut numbers);
+    assert!(small.lookup.is_none());
+    assert_lookups_match_scans(&small, &sites);
+    let mut graph = graph_at_sites(&paths, &sites, 3 * NodeLookup::MIN_NODES, &mut numbers);
+    assert!(graph.lookup.is_some());
+    assert_lookups_match_scans(&graph, &sites);
+    // A child prim's index starts from its parent's, every site one name
+    // deeper.
+    let name = tokens.intern("Child");
+    graph.append_child_name(&paths, name);
+    for site in &mut sites {
+        site.path = site
+            .path
+            .child(paths.intern_joined(site.path.prim_path(), &[name]));
+    }
+    assert_lookups_match_scans(&graph, &sites);
+    // A finished index keeps no lookup. (The indexer culls whole
+    // subtrees; these culled nodes are scattered.)
+    for at in 0..graph.len() {
+        graph.node_mut(super::node_index(at)).culled = false;
+    }
+    graph.finalize();
+    assert!(graph.lookup.is_none());
 }

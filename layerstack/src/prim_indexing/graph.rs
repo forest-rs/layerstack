@@ -14,6 +14,8 @@
 use alloc::vec::Vec;
 use core::cmp::Ordering;
 
+use hashbrown::HashMap;
+
 use crate::{path::PathInterner, prim_index::ArcKind, spec_path::SpecPath};
 
 use super::{layer_stacks::StackId, map_function::MapFunction};
@@ -130,6 +132,50 @@ pub(crate) struct Graph {
     /// The shape of the first of the prim's children's graphs built, for
     /// its siblings to share ([`ChildShape`]).
     pub(crate) child_shape: ChildShape,
+    /// The nodes by site and by origin, once the graph being built holds
+    /// more than [`NodeLookup::MIN_NODES`] nodes; `None` before, and once
+    /// the graph is finalized.
+    lookup: Option<NodeLookup>,
+}
+
+/// A large graph's nodes by site and by origin, each list in arena order.
+///
+/// Adding a node to a prim index looks for nodes of the graph with the
+/// node's site (a duplicate, or a child of the parent already there), or
+/// for the children of a node that a node implied from (`origin`): OpenUSD
+/// scans the graph or the parent's children for each node added, a cost
+/// that grows with the index. A graph past [`Self::MIN_NODES`] nodes
+/// answers these from the lists of the nodes that can match instead; one
+/// smaller, as nearly every production index is, scans its few nodes.
+#[derive(Debug, Default)]
+struct NodeLookup {
+    by_site: HashMap<Site, NodeList>,
+    by_origin: HashMap<NodeIndex, NodeList>,
+}
+
+/// The nodes a [`NodeLookup`] holds for one key, in arena order.
+type NodeList = smallvec::SmallVec<[NodeIndex; 2]>;
+
+impl NodeLookup {
+    /// The node count past which a graph keeps a lookup.
+    const MIN_NODES: usize = 64;
+
+    /// A lookup of every node of `nodes`.
+    fn new(nodes: &[Node]) -> Self {
+        let mut lookup = Self::default();
+        for (at, node) in nodes.iter().enumerate() {
+            lookup.add(node_index(at), node);
+        }
+        lookup
+    }
+
+    /// Adds `node`, at `index`, past every node already held.
+    fn add(&mut self, index: NodeIndex, node: &Node) {
+        self.by_site.entry_ref(&node.site).or_default().push(index);
+        if node.origin != NONE {
+            self.by_origin.entry(node.origin).or_default().push(index);
+        }
+    }
 }
 
 /// The shape of a prim's children's prim index graphs, once one is built:
@@ -206,6 +252,7 @@ impl Graph {
             instanceable: false,
             shape: None,
             child_shape: ChildShape::default(),
+            lookup: None,
         }
     }
 
@@ -230,6 +277,9 @@ impl Graph {
             instanceable: self.instanceable,
             shape: None,
             child_shape: ChildShape::default(),
+            // The child's sites differ from these
+            // ([`Self::append_child_name`]): its lookup is its own.
+            lookup: None,
         }
     }
 
@@ -424,7 +474,25 @@ impl Graph {
     pub(crate) fn push_node(&mut self, node: Node) -> NodeIndex {
         let index = NodeIndex::try_from(self.nodes.len()).expect("prim index node count");
         self.nodes.push(node);
+        self.extend_lookup(index);
         index
+    }
+
+    /// Adds the nodes from `first` on to the graph's [`NodeLookup`],
+    /// making one for every node once the graph holds more than
+    /// [`NodeLookup::MIN_NODES`].
+    fn extend_lookup(&mut self, first: NodeIndex) {
+        match &mut self.lookup {
+            Some(lookup) => {
+                for at in first as usize..self.nodes.len() {
+                    lookup.add(node_index(at), &self.nodes[at]);
+                }
+            }
+            None if self.nodes.len() > NodeLookup::MIN_NODES => {
+                self.lookup = Some(NodeLookup::new(&self.nodes));
+            }
+            None => {}
+        }
     }
 
     /// Appends every node of `subgraph` to this graph, its root reached by
@@ -465,6 +533,7 @@ impl Graph {
             node.last_child = shift(node.last_child);
         }
         self.nodes.append(&mut subgraph.nodes);
+        self.extend_lookup(base);
         self.link_child(paths, parent, base);
         base
     }
@@ -781,6 +850,9 @@ impl Graph {
         // Already in strength order with nothing to erase, as most indexes
         // are (every one without arcs): relinking would rebuild the links
         // the order was read from.
+        // A finished index adds no nodes: its lookup would only hold
+        // memory for as long as the index is kept.
+        self.lookup = None;
         if self.nodes.iter().all(|node| !node.culled) && self.in_strength_order() {
             return;
         }
@@ -889,15 +961,101 @@ impl Graph {
             let child = paths.intern_joined(node.site.path.prim_path(), &[name]);
             node.site.path = node.site.path.child(child);
         }
+        if self.lookup.is_some() {
+            self.lookup = Some(NodeLookup::new(&self.nodes));
+        }
     }
 
     /// The node of this graph using `site`, if any, that is neither inert
     /// nor culled. OpenUSD: `GetNodeUsingSite`.
     pub(crate) fn node_using_site(&self, site: &Site) -> Option<NodeIndex> {
-        self.nodes
+        let contributes = |node: &Node| !(node.inert || node.culled) && node.site == *site;
+        match &self.lookup {
+            Some(lookup) => lookup
+                .by_site
+                .get(site)?
+                .iter()
+                .copied()
+                .find(|&index| contributes(self.node(index))),
+            None => self.nodes.iter().position(contributes).map(node_index),
+        }
+    }
+
+    /// The strongest child of `parent` at `site`, if any.
+    pub(crate) fn child_using_site(&self, parent: NodeIndex, site: &Site) -> Option<NodeIndex> {
+        match &self.lookup {
+            Some(lookup) => self.strongest_child(parent, lookup.by_site.get(site)?),
+            None => self
+                .children(parent)
+                .find(|&child| self.node(child).site == *site),
+        }
+    }
+
+    /// The strongest child of `parent` whose origin is `origin` and that
+    /// `accept` takes.
+    pub(crate) fn strongest_child_from(
+        &self,
+        parent: NodeIndex,
+        origin: NodeIndex,
+        accept: impl Fn(NodeIndex) -> bool,
+    ) -> Option<NodeIndex> {
+        match &self.lookup {
+            Some(lookup) => lookup
+                .by_origin
+                .get(&origin)?
+                .iter()
+                .copied()
+                .filter(|&node| self.is_child_of(node, parent) && accept(node))
+                .min_by(|&a, &b| self.sibling_order(a, b)),
+            None => self
+                .children(parent)
+                .find(|&child| self.node(child).origin == origin && accept(child)),
+        }
+    }
+
+    /// The weakest child of `parent` whose origin is `origin` and that
+    /// `accept` takes.
+    pub(crate) fn weakest_child_from(
+        &self,
+        parent: NodeIndex,
+        origin: NodeIndex,
+        accept: impl Fn(NodeIndex) -> bool,
+    ) -> Option<NodeIndex> {
+        match &self.lookup {
+            Some(lookup) => lookup
+                .by_origin
+                .get(&origin)?
+                .iter()
+                .copied()
+                .filter(|&node| self.is_child_of(node, parent) && accept(node))
+                .max_by(|&a, &b| self.sibling_order(a, b)),
+            None => {
+                let mut child = self.node(parent).last_child;
+                while child != NONE {
+                    if self.node(child).origin == origin && accept(child) {
+                        return Some(child);
+                    }
+                    child = self.node(child).prev_sibling;
+                }
+                None
+            }
+        }
+    }
+
+    /// Whether `node` is linked among `parent`'s children.
+    fn is_child_of(&self, node: NodeIndex, parent: NodeIndex) -> bool {
+        let entry = self.node(node);
+        entry.parent == parent
+            && (entry.prev_sibling != NONE || self.node(parent).first_child == node)
+    }
+
+    /// The strongest of the `nodes` linked among `parent`'s children.
+    fn strongest_child(&self, parent: NodeIndex, nodes: &[NodeIndex]) -> Option<NodeIndex> {
+        nodes
             .iter()
-            .position(|node| !(node.inert || node.culled) && node.site == *site)
-            .map(node_index)
+            .copied()
+            .filter(|&node| self.is_child_of(node, parent))
+            .min_by(|&a, &b| self.sibling_order(a, b))
     }
 }
 

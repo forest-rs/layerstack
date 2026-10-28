@@ -777,16 +777,14 @@ impl Indexer<'_, '_, '_> {
         if graph.node(node).arc_kind != ArcKind::Specializes {
             return NONE;
         }
-        let children = graph.child_list(0);
-        for &child in children.iter().rev() {
-            if graph.node(child).arc_kind != ArcKind::Specializes {
-                break;
-            }
-            if graph.node(child).origin == node && graph.is_propagated_specializes(child) {
-                return child;
-            }
-        }
-        NONE
+        // OpenUSD walks the root's children from the weakest while they
+        // are specializes: children are ordered by arc kind first
+        // (`Graph::cmp_siblings`), specializes last, so every specializes
+        // child of the root is among them, and the weakest child from
+        // `node` that is a propagated specializes is the one it finds.
+        graph
+            .weakest_child_from(0, node, |child| graph.is_propagated_specializes(child))
+            .unwrap_or(NONE)
     }
 
     /// Whether the prim index being built, its own graph and those of the
@@ -2033,9 +2031,7 @@ impl Indexer<'_, '_, '_> {
             path: inherit_path.clone(),
         };
         let matching = if parent_arc_kind != ArcKind::Relocates {
-            self.graph()
-                .children(parent)
-                .find(|child| self.graph().node(*child).site == inherit_site)
+            self.graph().child_using_site(parent, &inherit_site)
         } else {
             let depth_below = self.graph().depth_below_introduction(self.paths(), origin);
             self.graph().children(parent).find(|child| {
@@ -2139,11 +2135,7 @@ impl Indexer<'_, '_, '_> {
     /// OpenUSD: `_PropagateNodeToRoot`.
     fn propagate_node_to_root(&mut self, source: NodeIndex) -> NodeIndex {
         let entry = self.graph().node(source).clone();
-        if let Some(existing) = self
-            .graph()
-            .children(0)
-            .find(|child| self.graph().node(*child).site == entry.site)
-        {
+        if let Some(existing) = self.graph().child_using_site(0, &entry.site) {
             return existing;
         }
         let is_root_prim = self.paths().resolve(entry.site.path.prim_path()).depth() == 1;
@@ -2240,17 +2232,12 @@ impl Indexer<'_, '_, '_> {
                 transfer,
                 &child_entry.map_to_parent,
             );
-            let mut dest_child = NONE;
-            for child in self.graph().child_list(dest) {
-                if self.graph().node(child).origin != source_child {
-                    continue;
-                }
-                if self.graph().is_propagated_specializes(child) {
-                    continue;
-                }
-                dest_child = child;
-                break;
-            }
+            let mut dest_child = self
+                .graph()
+                .strongest_child_from(dest, source_child, |child| {
+                    !self.graph().is_propagated_specializes(child)
+                })
+                .unwrap_or(NONE);
             if dest_child == NONE {
                 let dest_path = self.graph().node(dest).site.path.clone();
                 let inherit_path =

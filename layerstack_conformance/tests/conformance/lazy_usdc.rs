@@ -304,8 +304,7 @@ fn failures_never_select_weaker_defaults_or_hold_a_good_endpoint() {
         store.path("/"),
         PrimSpec::default().with_children(vec![store.tokens().lookup("P").unwrap()]),
     );
-    let error =
-        layerstack_usda::save::save_usda(&to_save, store.tokens(), store.paths()).unwrap_err();
+    let error = layerstack_usda::save_usda(&to_save, store.tokens(), store.paths()).unwrap_err();
     assert!(
         matches!(error, layerstack_usda::save::SaveError::ArrayRead { .. }),
         "{error:?}"
@@ -374,7 +373,7 @@ fn every_native_numeric_kind_and_empty_kind_survives_lazy_save() {
     assert_eq!(read.values.stats().decode_attempts, 0);
     assert_eq!(read.values.stats().live_arrays, kinds.len() * 2);
     assert_eq!(
-        layerstack_usda::save::save_usda(&read.assembled.layer, &tokens, &paths).unwrap(),
+        layerstack_usda::save_usda(&read.assembled.layer, &tokens, &paths).unwrap(),
         expected
     );
     assert_eq!(read.values.stats().materialized_arrays, kinds.len() * 2);

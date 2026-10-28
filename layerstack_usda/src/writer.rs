@@ -1082,7 +1082,7 @@ impl Metadatum {
 /// checked against the value (§6.5.1, type and alias agreement). Arrays of
 /// small vectors are stored packed for large mesh buffers, and numeric
 /// arrays are [`SharedVec`]s: cloning a value shares its buffer, and a
-/// document lowered from a layer ([`crate::save::layer_document`]) shares
+/// document lowered from a layer ([`crate::save::usdc_document`]) shares
 /// the layer's buffers rather than copying them.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {

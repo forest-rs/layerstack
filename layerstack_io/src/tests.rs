@@ -218,7 +218,7 @@ fn clip_query_planning_does_not_decode_retained_interpolation_endpoints() {
     )
     .unwrap();
     let root = source.stage().stage().root_layer().unwrap();
-    let bytes = layerstack_usdc::writer::save_layer(
+    let bytes = layerstack_usdc::save_usdc(
         source.store.layer(root).unwrap(),
         source.store.tokens(),
         source.store.paths(),
@@ -320,7 +320,7 @@ def "P" (clips = { dictionary default = {
     )
     .unwrap();
     let id = source.stage.stage().root_layer().unwrap();
-    let bytes = layerstack_usdc::writer::save_layer(
+    let bytes = layerstack_usdc::save_usdc(
         source.store.layer(id).unwrap(),
         source.store.tokens(),
         source.store.paths(),

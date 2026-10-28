@@ -92,8 +92,7 @@ fn render(bytes: &[u8], threads: usize, retained: bool) -> (String, Vec<String>)
         );
         read.expect("the layer reads")
     };
-    let text =
-        layerstack_usda::save::save_usda(&result.layer, &tokens, &paths).expect("the layer saves");
+    let text = layerstack_usda::save_usda(&result.layer, &tokens, &paths).expect("the layer saves");
     let diagnostics = result
         .diagnostics
         .iter()

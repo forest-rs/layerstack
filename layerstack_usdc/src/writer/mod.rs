@@ -11,7 +11,7 @@
 //! metadata, ...) explicitly, as OpenUSD's `Sdf_CrateData` stores them.
 //! [`write_document`] is such a caller: it lowers an authored
 //! [`layerstack_usda::writer::Document`] to the specs OpenUSD's text parser
-//! stores for the same document's USDA. [`save_layer`] saves an authored
+//! stores for the same document's USDA. [`save_usdc`] saves an authored
 //! [`layerstack::Layer`] through that document, by the same lowering as its
 //! USDA ([`layerstack_usda::save`]).
 //!
@@ -70,7 +70,7 @@ use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec::Vec;
 
-pub use document::{save_layer, write_document};
+pub use document::{save_usdc, write_document};
 pub use error::UsdcWriteError;
 pub use layerstack::doc::Specifier;
 

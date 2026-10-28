@@ -3896,7 +3896,7 @@ def "Other" {}
             "{:?}",
             read.parse_diagnostics
         );
-        let bytes = crate::writer::save_layer(&read.emitted.layer, &tokens, &paths).unwrap();
+        let bytes = crate::save_usdc(&read.emitted.layer, &tokens, &paths).unwrap();
         let header = crate::header::parse_header(&bytes).unwrap();
         let toc = crate::toc::parse_toc(&bytes, header.toc_offset).unwrap();
         let mut budget = DecodeBudget::with_limit(u64::MAX);
@@ -4325,7 +4325,7 @@ def "Other" {}
             let (tokens, paths) = (TokenInterner::default(), PathInterner::default());
             let text =
                 layerstack_usda::read_usda(source, LayerId(1), &tokens, &paths, &mut NoAssets);
-            let bytes = crate::writer::save_layer(&text.emitted.layer, &tokens, &paths).unwrap();
+            let bytes = crate::save_usdc(&text.emitted.layer, &tokens, &paths).unwrap();
             let read =
                 crate::read_usdc(&bytes, LayerId(1), &tokens, &paths, &mut NoAssets).unwrap();
             (read.layer, paths, tokens)
@@ -4380,7 +4380,7 @@ def "T" {}
 "#;
         let (tokens, paths) = (TokenInterner::default(), PathInterner::default());
         let read = layerstack_usda::read_usda(source, LayerId(1), &tokens, &paths, &mut NoAssets);
-        let bytes = crate::writer::save_layer(&read.emitted.layer, &tokens, &paths).unwrap();
+        let bytes = crate::save_usdc(&read.emitted.layer, &tokens, &paths).unwrap();
         let header = crate::header::parse_header(&bytes).unwrap();
         let toc = crate::toc::parse_toc(&bytes, header.toc_offset).unwrap();
         let mut budget = DecodeBudget::with_limit(u64::MAX);

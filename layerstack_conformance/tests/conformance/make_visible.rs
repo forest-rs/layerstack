@@ -55,7 +55,7 @@ fn live_of(loaded: &mut LoadedStage) -> LiveStage {
 /// The root layer as OpenUSD's `SdfLayer::ExportToString` writes it.
 fn text(loaded: &LoadedStage) -> String {
     let store = &loaded.store;
-    layerstack_usda::save::save_usda(
+    layerstack_usda::save_usda(
         store.layer(loaded.root_layer).unwrap(),
         store.tokens(),
         store.paths(),

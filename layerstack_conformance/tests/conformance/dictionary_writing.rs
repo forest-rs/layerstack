@@ -111,7 +111,7 @@ fn dictionary_path_expressions_round_trip_with_openusd() {
         "{:?}",
         read.parse_diagnostics
     );
-    let text = layerstack_usda::save::save_usda(&read.emitted.layer, &tokens, &paths).unwrap();
+    let text = layerstack_usda::save_usda(&read.emitted.layer, &tokens, &paths).unwrap();
     assert_eq!(text, SOURCE, "layerstack's USDA of the text");
 
     let Some(python) = openusd_python() else {
@@ -136,13 +136,13 @@ fn dictionary_path_expressions_round_trip_with_openusd() {
     let read =
         layerstack_usdc::read_usdc(&bytes, LayerId(1), &tokens, &paths, &mut NoAssets).unwrap();
     assert!(read.diagnostics.is_empty(), "{:?}", read.diagnostics);
-    let text = layerstack_usda::save::save_usda(&read.layer, &tokens, &paths).unwrap();
+    let text = layerstack_usda::save_usda(&read.layer, &tokens, &paths).unwrap();
     assert_eq!(text, SOURCE, "layerstack's USDA of OpenUSD's USDC");
 
     let ours_usda = dir.join("layerstack.usda");
     let ours_usdc = dir.join("layerstack.usdc");
     std::fs::write(&ours_usda, &text).unwrap();
-    let crate_bytes = layerstack_usdc::writer::save_layer(&read.layer, &tokens, &paths).unwrap();
+    let crate_bytes = layerstack_usdc::save_usdc(&read.layer, &tokens, &paths).unwrap();
     std::fs::write(&ours_usdc, crate_bytes).unwrap();
     let exported = openusd(
         python.as_str(),
@@ -213,9 +213,9 @@ fn empty_dictionary_entries_are_skipped_as_openusd_skips_them() {
             ),
         ]),
     );
-    let text = layerstack_usda::save::save_usda(&layer, &tokens, &paths).unwrap();
+    let text = layerstack_usda::save_usda(&layer, &tokens, &paths).unwrap();
     assert_eq!(text, WITHOUT_EMPTY_ENTRIES);
-    let refused = layerstack_usdc::writer::save_layer(&layer, &tokens, &paths);
+    let refused = layerstack_usdc::save_usdc(&layer, &tokens, &paths);
     assert!(
         matches!(refused, Err(UsdcWriteError::Save(_))),
         "{refused:?}"

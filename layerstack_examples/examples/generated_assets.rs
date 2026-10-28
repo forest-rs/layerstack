@@ -112,7 +112,7 @@ fn main() {
         (support::ASSET, "assets.usd"),
         (support::TERRAIN, "terrain.usd"),
     ] {
-        let text = layerstack_usda::save::save_usda(
+        let text = layerstack_usda::save_usda(
             generated.store.layer(id).unwrap(),
             generated.store.tokens(),
             generated.store.paths(),

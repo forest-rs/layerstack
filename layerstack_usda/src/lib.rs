@@ -153,5 +153,6 @@ mod token_source;
 pub use read::{ReadResult, ReadStats, read_usda, read_usda_with_registry};
 
 pub mod save;
+pub use save::{save_usda, save_usda_to};
 mod spline_text;
 pub mod writer;

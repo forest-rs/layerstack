@@ -177,7 +177,7 @@ fn bench_layer_save(c: &mut Criterion) {
                 |b| {
                     b.iter(|| {
                         black_box(
-                            layerstack_usdc::writer::save_layer(
+                            layerstack_usdc::save_usdc(
                                 black_box(&layer),
                                 store.tokens(),
                                 store.paths(),
@@ -187,7 +187,7 @@ fn bench_layer_save(c: &mut Criterion) {
                     });
                 },
             );
-            let doc = layerstack_usda::save::layer_document(&layer, store.tokens(), store.paths())
+            let doc = layerstack_usda::save::usdc_document(&layer, store.tokens(), store.paths())
                 .unwrap();
             group.bench_function(
                 BenchmarkId::new(

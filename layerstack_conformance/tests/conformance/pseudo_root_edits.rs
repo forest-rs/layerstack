@@ -381,7 +381,7 @@ fn pseudo_root_edits_agree_with_openusd() {
         );
         let fresh = LiveStage::compose(&mut loaded.store, layer, StageOptions::default());
         assert_eq!(root_prims(&fresh, &loaded.store, root), composed, "{name}");
-        let saved = layerstack_usda::save::save_usda(
+        let saved = layerstack_usda::save_usda(
             loaded.store.layer(layer).unwrap(),
             loaded.store.tokens(),
             loaded.store.paths(),

@@ -269,12 +269,9 @@ fn scrambled_authoring_saves_as_openusd_writes_it() {
                 panic!("{name}: step {i} ({step}) is rejected: {error:?}");
             }
         }
-        let text = layerstack_usda::save::save_usda(
-            store.layer(SCENE).unwrap(),
-            store.tokens(),
-            store.paths(),
-        )
-        .expect("saves");
+        let text =
+            layerstack_usda::save_usda(store.layer(SCENE).unwrap(), store.tokens(), store.paths())
+                .expect("saves");
         let expected = case["text"].as_str().unwrap();
         assert_eq!(text, expected, "{name}");
         // OpenUSD's text reads back as the same layer: every number it

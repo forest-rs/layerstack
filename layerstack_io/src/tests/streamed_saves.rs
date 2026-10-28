@@ -94,7 +94,7 @@ fn usda_saves_stream_the_text_save_usda_writes() {
         .insert("root.usda".into(), large_root().into_bytes());
     let mut document = open(storage);
     let root = document.root_layer();
-    let expected = layerstack_usda::save::save_usda(
+    let expected = layerstack_usda::save_usda(
         document.store().layer(root).unwrap(),
         document.store().tokens(),
         document.store().paths(),

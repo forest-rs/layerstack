@@ -124,13 +124,13 @@ fn durations_round_trip_with_openusd() {
     let (tokens, paths) = (TokenInterner::default(), PathInterner::default());
     let read =
         layerstack_usdc::read_usdc(&bytes, LayerId(1), &tokens, &paths, &mut NoAssets).unwrap();
-    let text = layerstack_usda::save::save_usda(&read.layer, &tokens, &paths).unwrap();
+    let text = layerstack_usda::save_usda(&read.layer, &tokens, &paths).unwrap();
     assert_eq!(text, SOURCE, "layerstack's USDA of OpenUSD's USDC");
 
     let ours_usda = dir.join("layerstack.usda");
     let ours_usdc = dir.join("layerstack.usdc");
     std::fs::write(&ours_usda, &text).unwrap();
-    let crate_bytes = layerstack_usdc::writer::save_layer(&read.layer, &tokens, &paths).unwrap();
+    let crate_bytes = layerstack_usdc::save_usdc(&read.layer, &tokens, &paths).unwrap();
     assert_eq!(
         &crate_bytes[8..11],
         &[0, 16, 0],

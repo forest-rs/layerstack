@@ -569,7 +569,7 @@ fn rocks_authoring_session_matches_openusd() {
     s.apply(&edit);
     s.check("h");
     let save = |s: &Session, layer: LayerId| {
-        layerstack_usda::save::save_usda(
+        layerstack_usda::save_usda(
             s.store.layer(layer).unwrap(),
             s.store.tokens(),
             s.store.paths(),

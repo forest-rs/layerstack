@@ -86,6 +86,7 @@ pub use error::UsdcError;
 pub use reader::{CrateField, CrateFile, CrateSpec};
 pub use value_rep::DecodeBudget;
 pub use version::CrateVersion;
+pub use writer::save_usdc;
 
 /// Reads a USDC binary file from a byte slice and produces a [`Layer`].
 ///

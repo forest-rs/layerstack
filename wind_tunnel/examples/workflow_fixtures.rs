@@ -64,7 +64,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 parent = id;
             }
         }
-        let bytes = layerstack_usdc::writer::save_layer(&layer, store.tokens(), store.paths())?;
+        let bytes = layerstack_usdc::save_usdc(&layer, store.tokens(), store.paths())?;
         std::fs::write(directory.join(format!("{shape}.usdc")), &bytes)?;
         if shape == "wide" {
             let inner = write_usdz(&[

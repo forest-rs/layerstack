@@ -101,7 +101,7 @@ fn bench_storage(c: &mut Criterion) {
     let mut group = c.benchmark_group("composition_storage");
     for (properties, samples) in [(32, 0), (128, 0), (32, 64), (128, 64)] {
         let authored = fixture(properties, samples, 128);
-        let bytes = layerstack_usdc::writer::save_layer(
+        let bytes = layerstack_usdc::save_usdc(
             authored.layer(LayerId(1)).unwrap(),
             authored.tokens(),
             authored.paths(),

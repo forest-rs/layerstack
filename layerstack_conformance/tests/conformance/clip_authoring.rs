@@ -115,7 +115,7 @@ fn emitted_offset_bundle_plays_in_openusd() {
         ("root.topology.usda", &bundle.topology),
         ("root.manifest.usda", &bundle.manifest),
     ] {
-        let text = layerstack_usda::save::save_usda(layer, store.tokens(), store.paths())
+        let text = layerstack_usda::save_usda(layer, store.tokens(), store.paths())
             .unwrap_or_else(|error| panic!("cannot serialize {name}: {error:?}"));
         std::fs::write(dir.join(name), text).unwrap();
     }

@@ -558,10 +558,10 @@ impl UserDoc {
 /// the layer's comment first, dictionaries in key order, then without the
 /// doxygen commands usdGenSchema removes from the text.
 fn write(layer: &Layer, store: &layerstack::InMemoryStore) -> Result<String, CompileError> {
-    let mut document = layerstack_usda::save::layer_document(layer, store.tokens(), store.paths())
+    let mut document = layerstack_usda::save::usdc_document(layer, store.tokens(), store.paths())
         .map_err(|e| CompileError::Write {
-            message: e.to_string(),
-        })?;
+        message: e.to_string(),
+    })?;
     sort_metadata(&mut document.metadata);
     for prim in &mut document.prims {
         sort_prim(prim);

@@ -380,9 +380,8 @@ fn retained_text_arrays_save_as_eager_reads_do() {
     for (name, bytes) in library() {
         let pair = read_both(bytes).unwrap();
         let lazy = &pair.lazy.assembled.layer;
-        let save_usda = |layer| layerstack_usda::save::save_usda(layer, &pair.tokens, &pair.paths);
-        let save_usdc =
-            |layer| layerstack_usdc::writer::save_layer(layer, &pair.tokens, &pair.paths);
+        let save_usda = |layer| layerstack_usda::save_usda(layer, &pair.tokens, &pair.paths);
+        let save_usdc = |layer| layerstack_usdc::save_usdc(layer, &pair.tokens, &pair.paths);
         checked += deferred_defaults(lazy);
         let text = save_usda(lazy).unwrap();
         assert_eq!(text, save_usda(&pair.eager).unwrap(), "{name}: USDA");
@@ -544,8 +543,7 @@ fn a_retained_text_array_that_does_not_decode_is_an_error_when_read() {
         &mut NoAssets,
     )
     .expect("a retained read leaves the payload for later");
-    let saved =
-        layerstack_usda::save::save_usda(&read.assembled.layer, store.tokens(), store.paths());
+    let saved = layerstack_usda::save_usda(&read.assembled.layer, store.tokens(), store.paths());
     assert!(
         matches!(
             saved,

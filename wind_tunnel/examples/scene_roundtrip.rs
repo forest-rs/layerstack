@@ -95,7 +95,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     store.insert_layer(layer);
     drop(data);
     let start = Instant::now();
-    let crate_bytes = layerstack_usdc::writer::save_layer(
+    let crate_bytes = layerstack_usdc::save_usdc(
         store.layer(LayerId(1)).unwrap(),
         store.tokens(),
         store.paths(),

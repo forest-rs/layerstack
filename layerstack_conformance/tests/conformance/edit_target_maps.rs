@@ -162,7 +162,7 @@ fn layers(store: &InMemoryStore) -> Vec<Layer> {
 fn the_scene_is_the_fixture() {
     let store = scene();
     let save = |id| {
-        layerstack_usda::save::save_usda(store.layer(id).unwrap(), store.tokens(), store.paths())
+        layerstack_usda::save_usda(store.layer(id).unwrap(), store.tokens(), store.paths())
             .expect("saves")
     };
     for (name, text, fixture) in [
@@ -330,7 +330,7 @@ fn authored_targets_compose_as_openusd_composes_them() {
     let before = layers(&store);
     let undo = edit.apply(&mut store).expect("every accepted target maps");
     let text =
-        layerstack_usda::save::save_usda(store.layer(ROOT).unwrap(), store.tokens(), store.paths())
+        layerstack_usda::save_usda(store.layer(ROOT).unwrap(), store.tokens(), store.paths())
             .expect("saves");
     if text != AUTHORED {
         let out = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("edit_target_maps.usda");

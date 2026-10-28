@@ -1,0 +1,447 @@
+{
+  "version": "26.11",
+  "scene_reads": [
+    {
+      "path": "/Asset",
+      "effective": "sourceAsset",
+      "shader_id": null,
+      "source_types": [
+        "mdl",
+        "osl"
+      ],
+      "source_asset:": "u.osl",
+      "subidentifier:": "Universal",
+      "source_code:": null,
+      "source_asset:osl": "a.osl",
+      "subidentifier:osl": "Universal",
+      "source_code:osl": null,
+      "source_asset:mdl": null,
+      "subidentifier:mdl": "Local",
+      "source_code:mdl": null,
+      "source_asset:glslfx": "u.osl",
+      "subidentifier:glslfx": "Universal",
+      "source_code:glslfx": null,
+      "source_asset:ri": "u.osl",
+      "subidentifier:ri": "Universal",
+      "source_code:ri": null
+    },
+    {
+      "path": "/Code",
+      "effective": "sourceCode",
+      "shader_id": null,
+      "source_types": [
+        "glslfx"
+      ],
+      "source_asset:": null,
+      "subidentifier:": null,
+      "source_code:": "universal",
+      "source_asset:osl": null,
+      "subidentifier:osl": null,
+      "source_code:osl": "universal",
+      "source_asset:mdl": null,
+      "subidentifier:mdl": null,
+      "source_code:mdl": "universal",
+      "source_asset:glslfx": null,
+      "subidentifier:glslfx": null,
+      "source_code:glslfx": "void main() {}",
+      "source_asset:ri": null,
+      "subidentifier:ri": null,
+      "source_code:ri": "universal"
+    },
+    {
+      "path": "/Unknown",
+      "effective": "id",
+      "shader_id": "UsdPreviewSurface",
+      "source_types": [],
+      "source_asset:": null,
+      "subidentifier:": null,
+      "source_code:": null,
+      "source_asset:osl": null,
+      "subidentifier:osl": null,
+      "source_code:osl": null,
+      "source_asset:mdl": null,
+      "subidentifier:mdl": null,
+      "source_code:mdl": null,
+      "source_asset:glslfx": null,
+      "subidentifier:glslfx": null,
+      "source_code:glslfx": null,
+      "source_asset:ri": null,
+      "subidentifier:ri": null,
+      "source_code:ri": null
+    },
+    {
+      "path": "/Plain",
+      "effective": "id",
+      "shader_id": "UsdPreviewSurface",
+      "source_types": [],
+      "source_asset:": null,
+      "subidentifier:": null,
+      "source_code:": null,
+      "source_asset:osl": null,
+      "subidentifier:osl": null,
+      "source_code:osl": null,
+      "source_asset:mdl": null,
+      "subidentifier:mdl": null,
+      "source_code:mdl": null,
+      "source_asset:glslfx": null,
+      "subidentifier:glslfx": null,
+      "source_code:glslfx": null,
+      "source_asset:ri": null,
+      "subidentifier:ri": null,
+      "source_code:ri": null
+    },
+    {
+      "path": "/Light",
+      "effective": "id",
+      "shader_id": "CustomLight",
+      "source_types": [],
+      "source_asset:": null,
+      "subidentifier:": null,
+      "source_code:": null,
+      "source_asset:osl": null,
+      "subidentifier:osl": null,
+      "source_code:osl": null,
+      "source_asset:mdl": null,
+      "subidentifier:mdl": null,
+      "source_code:mdl": null,
+      "source_asset:glslfx": null,
+      "subidentifier:glslfx": null,
+      "source_code:glslfx": null,
+      "source_asset:ri": null,
+      "subidentifier:ri": null,
+      "source_code:ri": null
+    }
+  ],
+  "calls": [
+    {
+      "call": "set_shader_id",
+      "prim": "/Mat/S",
+      "value": "UsdPreviewSurface",
+      "source_type": "",
+      "accepted": true,
+      "specs": {
+        "info:id": {
+          "type": "token",
+          "custom": false,
+          "uniform": true,
+          "default": "UsdPreviewSurface"
+        }
+      }
+    },
+    {
+      "call": "set_shader_id",
+      "prim": "/Mat/U",
+      "value": "UsdPreviewSurface",
+      "source_type": "",
+      "accepted": false,
+      "specs": {
+        "info:implementationSource": {
+          "type": "token",
+          "custom": false,
+          "uniform": true,
+          "default": "id"
+        }
+      }
+    },
+    {
+      "call": "set_shader_id",
+      "prim": "/Mat/S3",
+      "value": "UsdPreviewSurface",
+      "source_type": "",
+      "accepted": true,
+      "specs": {
+        "info:implementationSource": {
+          "type": "token",
+          "custom": false,
+          "uniform": true,
+          "default": "id"
+        },
+        "info:id": {
+          "type": "token",
+          "custom": false,
+          "uniform": true,
+          "default": "UsdPreviewSurface"
+        }
+      }
+    },
+    {
+      "call": "set_id",
+      "prim": "/Mat/S7",
+      "value": "UsdPreviewSurface",
+      "source_type": "",
+      "accepted": true,
+      "specs": {
+        "info:implementationSource": {
+          "type": "token",
+          "custom": false,
+          "uniform": true,
+          "default": "sourceAsset"
+        },
+        "info:id": {
+          "type": "token",
+          "custom": false,
+          "uniform": true,
+          "default": "UsdPreviewSurface"
+        }
+      }
+    },
+    {
+      "call": "set_source_asset",
+      "prim": "/Mat/S4",
+      "value": "a.osl",
+      "source_type": "osl",
+      "accepted": true,
+      "specs": {
+        "info:implementationSource": {
+          "type": "token",
+          "custom": false,
+          "uniform": true,
+          "default": "sourceAsset"
+        },
+        "info:osl:sourceAsset": {
+          "type": "asset",
+          "custom": false,
+          "uniform": true,
+          "default": "a.osl"
+        }
+      }
+    },
+    {
+      "call": "set_source_asset",
+      "prim": "/Mat/S4",
+      "value": "u.osl",
+      "source_type": "",
+      "accepted": true,
+      "specs": {
+        "info:implementationSource": {
+          "type": "token",
+          "custom": false,
+          "uniform": true,
+          "default": "sourceAsset"
+        },
+        "info:osl:sourceAsset": {
+          "type": "asset",
+          "custom": false,
+          "uniform": true,
+          "default": "a.osl"
+        },
+        "info:sourceAsset": {
+          "type": "asset",
+          "custom": false,
+          "uniform": true,
+          "default": "u.osl"
+        }
+      }
+    },
+    {
+      "call": "set_source_code",
+      "prim": "/Mat/S5",
+      "value": "void main(){}",
+      "source_type": "glslfx",
+      "accepted": true,
+      "specs": {
+        "info:implementationSource": {
+          "type": "token",
+          "custom": false,
+          "uniform": true,
+          "default": "sourceCode"
+        },
+        "info:glslfx:sourceCode": {
+          "type": "string",
+          "custom": false,
+          "uniform": true,
+          "default": "void main(){}"
+        }
+      }
+    },
+    {
+      "call": "set_source_asset_subidentifier",
+      "prim": "/Mat/S6",
+      "value": "Sub",
+      "source_type": "mdl",
+      "accepted": true,
+      "specs": {
+        "info:implementationSource": {
+          "type": "token",
+          "custom": false,
+          "uniform": true,
+          "default": "sourceAsset"
+        },
+        "info:mdl:sourceAsset:subIdentifier": {
+          "type": "token",
+          "custom": false,
+          "uniform": true,
+          "default": "Sub"
+        }
+      }
+    },
+    {
+      "call": "set_shader_id",
+      "prim": "/Light",
+      "value": "CustomLight",
+      "source_type": "",
+      "accepted": true,
+      "specs": {
+        "info:id": {
+          "type": "token",
+          "custom": false,
+          "uniform": true,
+          "default": "CustomLight"
+        }
+      }
+    }
+  ],
+  "edit_reads": [
+    {
+      "path": "/Mat/S",
+      "effective": "id",
+      "shader_id": "UsdPreviewSurface",
+      "source_types": [],
+      "source_asset:": null,
+      "subidentifier:": null,
+      "source_code:": null,
+      "source_asset:osl": null,
+      "subidentifier:osl": null,
+      "source_code:osl": null,
+      "source_asset:mdl": null,
+      "subidentifier:mdl": null,
+      "source_code:mdl": null,
+      "source_asset:glslfx": null,
+      "subidentifier:glslfx": null,
+      "source_code:glslfx": null,
+      "source_asset:ri": null,
+      "subidentifier:ri": null,
+      "source_code:ri": null
+    },
+    {
+      "path": "/Mat/S3",
+      "effective": "id",
+      "shader_id": "UsdPreviewSurface",
+      "source_types": [],
+      "source_asset:": null,
+      "subidentifier:": null,
+      "source_code:": null,
+      "source_asset:osl": null,
+      "subidentifier:osl": null,
+      "source_code:osl": null,
+      "source_asset:mdl": null,
+      "subidentifier:mdl": null,
+      "source_code:mdl": null,
+      "source_asset:glslfx": null,
+      "subidentifier:glslfx": null,
+      "source_code:glslfx": null,
+      "source_asset:ri": null,
+      "subidentifier:ri": null,
+      "source_code:ri": null
+    },
+    {
+      "path": "/Mat/S4",
+      "effective": "sourceAsset",
+      "shader_id": null,
+      "source_types": [
+        "osl"
+      ],
+      "source_asset:": "u.osl",
+      "subidentifier:": null,
+      "source_code:": null,
+      "source_asset:osl": "a.osl",
+      "subidentifier:osl": null,
+      "source_code:osl": null,
+      "source_asset:mdl": "u.osl",
+      "subidentifier:mdl": null,
+      "source_code:mdl": null,
+      "source_asset:glslfx": "u.osl",
+      "subidentifier:glslfx": null,
+      "source_code:glslfx": null,
+      "source_asset:ri": "u.osl",
+      "subidentifier:ri": null,
+      "source_code:ri": null
+    },
+    {
+      "path": "/Mat/S5",
+      "effective": "sourceCode",
+      "shader_id": null,
+      "source_types": [
+        "glslfx"
+      ],
+      "source_asset:": null,
+      "subidentifier:": null,
+      "source_code:": null,
+      "source_asset:osl": null,
+      "subidentifier:osl": null,
+      "source_code:osl": null,
+      "source_asset:mdl": null,
+      "subidentifier:mdl": null,
+      "source_code:mdl": null,
+      "source_asset:glslfx": null,
+      "subidentifier:glslfx": null,
+      "source_code:glslfx": "void main(){}",
+      "source_asset:ri": null,
+      "subidentifier:ri": null,
+      "source_code:ri": null
+    },
+    {
+      "path": "/Mat/S6",
+      "effective": "sourceAsset",
+      "shader_id": null,
+      "source_types": [],
+      "source_asset:": null,
+      "subidentifier:": null,
+      "source_code:": null,
+      "source_asset:osl": null,
+      "subidentifier:osl": null,
+      "source_code:osl": null,
+      "source_asset:mdl": null,
+      "subidentifier:mdl": "Sub",
+      "source_code:mdl": null,
+      "source_asset:glslfx": null,
+      "subidentifier:glslfx": null,
+      "source_code:glslfx": null,
+      "source_asset:ri": null,
+      "subidentifier:ri": null,
+      "source_code:ri": null
+    },
+    {
+      "path": "/Mat/S7",
+      "effective": "sourceAsset",
+      "shader_id": null,
+      "source_types": [],
+      "source_asset:": null,
+      "subidentifier:": null,
+      "source_code:": null,
+      "source_asset:osl": null,
+      "subidentifier:osl": null,
+      "source_code:osl": null,
+      "source_asset:mdl": null,
+      "subidentifier:mdl": null,
+      "source_code:mdl": null,
+      "source_asset:glslfx": null,
+      "subidentifier:glslfx": null,
+      "source_code:glslfx": null,
+      "source_asset:ri": null,
+      "subidentifier:ri": null,
+      "source_code:ri": null
+    },
+    {
+      "path": "/Light",
+      "effective": "id",
+      "shader_id": "CustomLight",
+      "source_types": [],
+      "source_asset:": null,
+      "subidentifier:": null,
+      "source_code:": null,
+      "source_asset:osl": null,
+      "subidentifier:osl": null,
+      "source_code:osl": null,
+      "source_asset:mdl": null,
+      "subidentifier:mdl": null,
+      "source_code:mdl": null,
+      "source_asset:glslfx": null,
+      "subidentifier:glslfx": null,
+      "source_code:glslfx": null,
+      "source_asset:ri": null,
+      "subidentifier:ri": null,
+      "source_code:ri": null
+    }
+  ]
+}

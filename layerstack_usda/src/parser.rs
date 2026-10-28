@@ -2712,7 +2712,7 @@ def Xform "Root" (
             assert_eq!(refs.kind, ListOpKind::Explicit);
             let items = refs.items.as_ref().unwrap();
             assert_eq!(items.len(), 1);
-            assert_eq!(items[0].asset, Some("./ref.usd"));
+            assert_eq!(items[0].asset.as_deref(), Some("./ref.usd"));
             assert_eq!(items[0].prim_path, Some("/Bar"));
         } else {
             panic!("expected References");

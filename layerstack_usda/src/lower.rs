@@ -1502,21 +1502,19 @@ impl<'a> LowerCtx<'a> {
     /// (`pxr/usd/sdf/parserHelpers.cpp`), which strips three `@` from each
     /// end of a triple-delimited path (so one or two further `@` before the
     /// closing three stay in the path) and replaces `\@@@` with `@@@`.
-    fn lower_asset_ref(&mut self, node: SyntaxNode<'_>) -> &'a str {
+    fn lower_asset_ref(&mut self, node: SyntaxNode<'_>) -> Cow<'a, str> {
         let full = node.span().text(self.source);
         if full.len() >= 6 && full.starts_with("@@@") && full.ends_with("@@@") {
             let path = &full[3..full.len() - 3];
             if path.contains("\\@@@") {
-                self.error(
-                    node.span(),
-                    "unsupported: the `\\@@@` escape in an asset path is not evaluated",
-                );
+                Cow::Owned(path.replace("\\@@@", "@@@"))
+            } else {
+                Cow::Borrowed(path)
             }
-            path
         } else if full.len() >= 2 && full.starts_with('@') && full.ends_with('@') {
-            &full[1..full.len() - 1]
+            Cow::Borrowed(&full[1..full.len() - 1])
         } else {
-            full
+            Cow::Borrowed(full)
         }
     }
 
@@ -1529,13 +1527,13 @@ impl<'a> LowerCtx<'a> {
         }
     }
 
-    fn find_asset_ref(&mut self, node: SyntaxNode<'_>) -> &'a str {
+    fn find_asset_ref(&mut self, node: SyntaxNode<'_>) -> Cow<'a, str> {
         for child in node.children_no_trivia() {
             if child.kind() == SyntaxKind::AssetRef {
                 return self.lower_asset_ref(child);
             }
         }
-        ""
+        Cow::Borrowed("")
     }
 
     fn find_string_value(&mut self, node: SyntaxNode<'_>) -> Cow<'a, str> {
@@ -2303,7 +2301,7 @@ def \"A\" {
         if let PrimMeta::References(refs) = &r.layer.prims[0].metadata[0] {
             assert_eq!(refs.kind, ListOpKind::Prepend);
             let items = refs.items.as_ref().unwrap();
-            assert_eq!(items[0].asset, Some("./ref.usd"));
+            assert_eq!(items[0].asset.as_deref(), Some("./ref.usd"));
         } else {
             panic!("expected References");
         }
@@ -2315,7 +2313,7 @@ def \"A\" {
         let r = parse(src);
         if let PrimMeta::Payload(p) = &r.layer.prims[0].metadata[0] {
             let items = p.items.as_ref().unwrap();
-            assert_eq!(items[0].asset, Some("./payload.usd"));
+            assert_eq!(items[0].asset.as_deref(), Some("./payload.usd"));
             assert_eq!(items[0].prim_path, Some("/Root"));
         } else {
             panic!("expected Payload");
@@ -2454,7 +2452,7 @@ def \"A\" (
             PrimChild::Attribute(a) => a,
             other => panic!("expected Attribute, got {other:?}"),
         };
-        assert!(matches!(attr.default, Some(Value::Asset("./texture.png"))));
+        assert!(matches!(&attr.default, Some(Value::Asset(path)) if path == "./texture.png"));
     }
 
     #[test]
@@ -2688,8 +2686,8 @@ def Scope \"root\" {
             .children
             .iter()
             .map(|child| match child {
-                PrimChild::Attribute(a) => match a.default {
-                    Some(Value::Asset(path)) => path,
+                PrimChild::Attribute(a) => match &a.default {
+                    Some(Value::Asset(path)) => &**path,
                     _ => panic!("expected an asset"),
                 },
                 _ => panic!("expected attributes"),
@@ -2697,8 +2695,13 @@ def Scope \"root\" {
             .collect();
         assert_eq!(assets, ["x@y.png", "a@@", ""]);
 
+        // `\@@@` is `@@@` (`Sdf_EvalAssetPath`).
         let r = parse("#usda 1.0\ndef \"P\" {\n    asset a = @@@x\\@@@y@@@\n}\n");
-        assert_eq!(r.diagnostics.len(), 1, "{:?}", r.diagnostics);
+        assert!(r.diagnostics.is_empty(), "{:?}", r.diagnostics);
+        let PrimChild::Attribute(a) = &r.layer.prims[0].children[0] else {
+            panic!("expected an attribute");
+        };
+        assert!(matches!(&a.default, Some(Value::Asset(path)) if path == "x@@@y"));
     }
 
     #[test]

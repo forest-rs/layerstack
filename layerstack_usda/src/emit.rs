@@ -284,15 +284,15 @@ impl EmitCtx<'_> {
                         // A sublayer that does not resolve keeps its place;
                         // composition reports it (AOUSD Core §10.3.1, §10.6;
                         // OpenUSD `PcpErrorInvalidSublayerPath`).
-                        let Some(resolved) = self.resolve_asset(item.asset) else {
+                        let Some(resolved) = self.resolve_asset(&item.asset) else {
                             layer
                                 .sublayers_mut()
-                                .push(SublayerEntry::unresolved(item.asset, offset));
+                                .push(SublayerEntry::unresolved(&*item.asset, offset));
                             continue;
                         };
                         layer.sublayers_mut().push(SublayerEntry::with_asset(
                             resolved.layer_id,
-                            item.asset,
+                            &*item.asset,
                             offset,
                         ));
                         if let Some(sub_layer) = resolved.layer {
@@ -1277,7 +1277,7 @@ impl EmitCtx<'_> {
         //
         // Spec: AOUSD Core §10.3.2.1 (a reference whose layer stack cannot
         // be computed is a composition error and is ignored).
-        let Some(asset) = arc_ref.asset else {
+        let Some(asset) = arc_ref.asset.as_deref() else {
             let internal = ReferenceSource::Layer {
                 layer: self.layer_id,
                 asset: None,
@@ -1686,7 +1686,7 @@ impl EmitCtx<'_> {
                 _ => Value::String(Arc::from(&**s)),
             },
             ast::Value::Identifier(s) => Value::Token(self.tokens.intern(s)),
-            ast::Value::Asset(s) => Value::Asset(Arc::from(*s)),
+            ast::Value::Asset(s) => Value::Asset(Arc::from(&**s)),
             ast::Value::Path(s) => Value::String(Arc::from(*s)),
             ast::Value::Blocked => Value::Blocked,
             ast::Value::AnimationBlock => Value::AnimationBlock,

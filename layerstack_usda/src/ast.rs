@@ -54,8 +54,8 @@ pub enum LayerMeta<'a> {
 /// A sublayer item with optional layer offset.
 #[derive(Debug)]
 pub struct SubLayerItem<'a> {
-    /// Asset path (without `@` delimiters).
-    pub asset: &'a str,
+    /// Asset path (without `@` delimiters, `\@@@` evaluated).
+    pub asset: Cow<'a, str>,
     /// Optional layer offset.
     pub offset: Option<f64>,
     /// Optional layer scale.
@@ -266,8 +266,8 @@ pub enum Value<'a> {
     String(Cow<'a, str>),
     /// An identifier used as a token value.
     Identifier(&'a str),
-    /// An asset reference (contents only, `@` stripped).
-    Asset(&'a str),
+    /// An asset reference (contents only, `@` stripped, `\@@@` evaluated).
+    Asset(Cow<'a, str>),
     /// A path reference (contents only, `<>` stripped).
     Path(&'a str),
     /// `true` or `false`.
@@ -413,7 +413,7 @@ pub struct ArcRef<'a> {
     /// Source span of the arc entry.
     pub span: Span,
     /// Optional asset path.
-    pub asset: Option<&'a str>,
+    pub asset: Option<Cow<'a, str>>,
     /// Target prim path.
     pub prim_path: Option<&'a str>,
     /// Optional layer offset.

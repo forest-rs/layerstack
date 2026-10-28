@@ -173,7 +173,7 @@ fn texture_nodes(text: &str) -> Vec<(String, String, String)> {
         prim.children.iter().find_map(|c| match c {
             ast::PrimChild::Attribute(a) if a.name == name => match &a.default {
                 Some(ast::Value::String(s)) => Some(String::from(&**s)),
-                Some(ast::Value::Asset(s)) => Some(String::from(*s)),
+                Some(ast::Value::Asset(s)) => Some(String::from(&**s)),
                 _ => None,
             },
             _ => None,

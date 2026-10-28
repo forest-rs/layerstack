@@ -185,6 +185,96 @@
    "reads": true,
    "source": "#usda 1.0\n\ndef \"P\" (\n    variantSets = [\"a\", \"b\"]\n    append variantSets = \"c\"\n)\n{\n}\n",
    "text": "#usda 1.0\n\ndef \"P\" (\n    append variantSets = \"c\"\n)\n{\n}\n\n"
+  },
+  "write_any_type": {
+   "reads": true,
+   "source": "#usda 1.0\n\ndef __AnyType__ \"A\"\n{\n}\n\nover __AnyType__ \"B\"\n{\n}\n",
+   "text": "#usda 1.0\n\ndef \"A\"\n{\n}\n\nover \"B\"\n{\n}\n\n"
+  },
+  "write_asset_paths_with_at": {
+   "reads": true,
+   "source": "#usda 1.0\n(\n    subLayers = [\n        @@@./a@b.usda@@@\n    ]\n)\n\ndef \"P\" (\n    prepend references = @@@./x@y.usda@@@\n)\n{\n    asset a = @@@cfg@x.ocio@@@\n    asset b = @@@a\\@@@b@@@\n    asset[] c = [@@@a@b@@@, @plain@]\n}\n",
+   "text": "#usda 1.0\n(\n    subLayers = [\n        @@@./a@b.usda@@@\n    ]\n)\n\ndef \"P\" (\n    prepend references = @@@./x@y.usda@@@\n)\n{\n    asset a = @@@cfg@x.ocio@@@\n    asset b = @@@a\\@@@b@@@\n    asset[] c = [@@@a@b@@@, @plain@]\n}\n\n"
+  },
+  "write_curve_type_last_knot": {
+   "reads": true,
+   "source": "#usda 1.0\n\ndef \"P\"\n{\n    double a.spline = {\n        bezier,\n        0: 6; post held,\n        1: 7; post curve (1, 1),\n    }\n}\n",
+   "text": "#usda 1.0\n\ndef \"P\"\n{\n    double a.spline = {\n        0: 6; pre (0, 0); post held,\n        1: 7; post curve (1, 1),\n    }\n}\n\n"
+  },
+  "write_default_prim_in_sublayer": {
+   "reads": true,
+   "source": "#usda 1.0\n(\n    defaultPrim = \"World\"\n    subLayers = [\n        @./geometry.usda@\n    ]\n)\n",
+   "text": "#usda 1.0\n(\n    defaultPrim = \"World\"\n    subLayers = [\n        @./geometry.usda@\n    ]\n)\n\n"
+  },
+  "write_empty_comments": {
+   "reads": true,
+   "source": "#usda 1.0\n(\n    \"\"\n    doc = \"\"\n    hasOwnedSubLayers = false\n    upAxis = \"Z\"\n)\n\ndef \"A\" (\n    \"\"\n)\n{\n    float f (\n        \"\"\n    )\n    rel r (\n        \"\"\n    )\n    float g (\n        \"\"\n        doc = \"\"\n    )\n}\n",
+   "text": "#usda 1.0\n(\n    upAxis = \"Z\"\n)\n\ndef \"A\"\n{\n    float f\n    float g (\n        doc = \"\"\n    )\n    rel r\n}\n\n"
+  },
+  "write_expression_selection": {
+   "reads": true,
+   "source": "#usda 1.0\n(\n    expressionVariables = {\n        string V = \"one\"\n    }\n)\n\ndef \"P\" (\n    variants = {\n        string v = \"`${V}`\"\n    }\n    prepend variantSets = \"v\"\n)\n{\n    variantSet \"v\" = {\n        \"one\" {\n        }\n    }\n}\n",
+   "text": "#usda 1.0\n(\n    expressionVariables = {\n        string V = \"one\"\n    }\n)\n\ndef \"P\" (\n    variants = {\n        string v = \"`${V}`\"\n    }\n    prepend variantSets = \"v\"\n)\n{\n    variantSet \"v\" = {\n        \"one\" {\n\n        }\n    }\n}\n\n"
+  },
+  "write_knot_custom_data": {
+   "reads": true,
+   "source": "#usda 1.0\n\ndef \"P\"\n{\n    double a.spline = {\n        bezier,\n        0: 6; post curve (1, 2); { string a = \"yes\"; int b = 4; dictionary c = { string d = \"x\" } },\n        1: 6; post held; { double e = 1 },\n        2: 7; post curve (1, 1),\n    }\n}\n",
+   "text": "#usda 1.0\n\ndef \"P\"\n{\n    double a.spline = {\n        bezier,\n        0: 6; pre (0, 0); post curve (1, 2); { string a = \"yes\"; int b = 4; dictionary c = { string d = \"x\" } },\n        1: 6; pre (0, 0); post held; { double e = 1 },\n        2: 7; post curve (1, 1),\n    }\n}\n\n"
+  },
+  "write_layer_header_fields_kept": {
+   "reads": true,
+   "source": "#usda 1.0\n(\n    doc = \"layer doc\"\n    hasOwnedSubLayers = true\n)\n",
+   "text": "#usda 1.0\n(\n    doc = \"layer doc\"\n    hasOwnedSubLayers = true\n)\n\n"
+  },
+  "write_near_identity_offsets": {
+   "reads": true,
+   "source": "#usda 1.0\n(\n    subLayers = [\n        @./s.usda@ (offset = 0.0000001),\n        @./t.usda@ (offset = 2; scale = 1.0000001),\n        @./u.usda@ (scale = 1.0000001)\n    ]\n)\n\ndef \"A\" (\n    prepend references = @./r.usda@ (offset = 0.0000001)\n    prepend payload = @./y.usda@ (scale = 1.0000001)\n)\n{\n}\n\ndef \"B\" (\n    references = @./r.usda@ (\n        offset = 0.0000001\n        customData = {\n            int k = 1\n        }\n    )\n)\n{\n}\n",
+   "text": "#usda 1.0\n(\n    subLayers = [\n        @./s.usda@,\n        @./t.usda@ (offset = 2; scale = 1.0000001),\n        @./u.usda@\n    ]\n)\n\ndef \"A\" (\n    prepend payload = @./y.usda@\n    prepend references = @./r.usda@\n)\n{\n}\n\ndef \"B\" (\n    references = [\n        @./r.usda@ (\n            customData = {\n                int k = 1\n            }\n        )\n    ]\n)\n{\n}\n\n"
+  },
+  "write_prim_connection": {
+   "reads": true,
+   "source": "#usda 1.0\n\ndef \"P\"\n{\n    string a.connect = </Q>\n    float b.connect = [</Q>, </Q.x>]\n}\n",
+   "text": "#usda 1.0\n\ndef \"P\"\n{\n    string a.connect = </Q>\n    float b.connect = [\n        </Q>,\n        </Q.x>,\n    ]\n}\n\n"
+  },
+  "write_relocates": {
+   "reads": true,
+   "source": "#usda 1.0\n(\n    relocates = {\n        </A/B>: </A/C>,\n        </A/D>: </A/E>\n    }\n)\n\ndef \"A\"\n{\n}\n",
+   "text": "#usda 1.0\n(\n    relocates = {\n        </A/B>: </A/C>, \n        </A/D>: </A/E>\n    }\n)\n\ndef \"A\"\n{\n}\n\n"
+  },
+  "write_substitution_maps": {
+   "reads": true,
+   "source": "#usda 1.0\n\ndef \"P\" (\n    prefixSubstitutions = {\n        \"$Left\": \"Right\",\n        \"Left\": \"Right\"\n    }\n    suffixSubstitutions = {\n        \"$NUM\": \"1\",\n    }\n)\n{\n}\n",
+   "text": "#usda 1.0\n\ndef \"P\" (\n    prefixSubstitutions = {\n        \"$Left\": \"Right\", \n        \"Left\": \"Right\"\n    }\n    suffixSubstitutions = {\n        \"$NUM\": \"1\"\n    }\n)\n{\n}\n\n"
+  },
+  "write_version_duration_declaration": {
+   "reads": true,
+   "source": "#usda 1.0\n\ndef \"P\"\n{\n    duration d\n    duration e.spline = {\n        0: 1,\n    }\n}\n",
+   "text": "#usda 1.0\n\ndef \"P\"\n{\n    duration d\n    duration e.spline = {\n        0: 1; pre (0, 0); post held,\n    }\n}\n\n"
+  },
+  "write_version_duration_value": {
+   "reads": true,
+   "source": "#usda 1.0\n\ndef \"P\"\n{\n    duration d = 2.5\n}\n",
+   "text": "#usda 1.4\n\ndef \"P\"\n{\n    duration d = 2.5\n}\n\n"
+  },
+  "write_version_loop_boundary": {
+   "reads": true,
+   "source": "#usda 1.0\n\ndef \"P\"\n{\n    double a.spline = {\n        bezier,\n        post: loop repeat(5),\n        0: 0,\n        5: 1,\n    }\n}\n",
+   "text": "#usda 1.3\n\ndef \"P\"\n{\n    double a.spline = {\n        post: loop repeat(5),\n        0: 0; pre (0, 0); post held,\n        5: 1; post held,\n    }\n}\n\n"
+  },
+  "write_version_numeric_array_edit": {
+   "reads": true,
+   "source": "#usda 1.0\n\ndef \"P\"\n{\n    int[] a = edit [resize 2; insert 4 at [0]; insert 5 at [1]; append 6]\n    double[] b = edit [prepend 1]\n}\n",
+   "text": "#usda 1.0\n\ndef \"P\"\n{\n    int[] a = edit [resize 2; prepend 4; insert 5 at [1]; append 6]\n    double[] b = edit [prepend 1]\n}\n\n"
+  },
+  "write_version_string_array_edit": {
+   "reads": true,
+   "source": "#usda 1.0\n\ndef \"P\"\n{\n    token[] a = edit [append \"x\"]\n    asset[] b = edit [prepend @@@a@b@@@; append @c@]\n}\n",
+   "text": "#usda 1.2\n\ndef \"P\"\n{\n    token[] a = edit [append \"x\"]\n    asset[] b = edit [prepend @@@a@b@@@; append @c@]\n}\n\n"
+  },
+  "write_version_timecode_spline": {
+   "reads": true,
+   "source": "#usda 1.0\n\ndef \"P\"\n{\n    timecode t.spline = {\n        bezier,\n        0: 10; post curve (0.3, 2),\n        2: 20,\n    }\n}\n",
+   "text": "#usda 1.0\n\ndef \"P\"\n{\n    timecode t.spline = {\n        bezier,\n        0: 10; pre (0, 0); post curve (0.3, 2),\n        2: 20; pre (0, 0); post held,\n    }\n}\n\n"
   }
  },
  "openusd_version": "26.11"

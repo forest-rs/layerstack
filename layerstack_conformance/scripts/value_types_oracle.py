@@ -15,7 +15,10 @@ records whether it is an array type, the name of its scalar and of its array
 form (empty when it has none), its role, the C++ type its values hold
 (`SdfValueTypeName::GetCPPTypeName`, which unlike the `TfType` name is the
 same on every platform), and its aliases, the other names
-`Sdf.ValueTypeNames.Find` takes for it.
+`Sdf.ValueTypeNames.Find` takes for it. It records too the legacy types
+the registry keeps under their own names (`LEGACY`,
+`_AddLegacyTypesToRegistry`), which `Sdf.ValueTypeNames` does not list
+but `Find` returns.
 
 `--check` rewrites the oracle into a temporary file and fails unless it
 matches the checked-in one.
@@ -32,12 +35,21 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ORACLE = os.path.normpath(os.path.join(HERE, "..", "fixtures", "value_types", "oracle.json"))
 
 
+# The legacy types with roles no current type has, which keep their names.
+LEGACY = ("Transform", "PointIndex", "EdgeIndex", "FaceIndex")
+
+
 def records():
     types = {}
     for attr in dir(Sdf.ValueTypeNames):
         value = getattr(Sdf.ValueTypeNames, attr)
         if isinstance(value, Sdf.ValueTypeName):
             types[str(value)] = value
+    for name in LEGACY:
+        for spelling in (name, name + "[]"):
+            value = Sdf.ValueTypeNames.Find(spelling)
+            assert str(value) == spelling, spelling
+            types[spelling] = value
     out = []
     for name in sorted(types):
         ty = types[name]

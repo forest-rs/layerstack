@@ -6,7 +6,9 @@
 //!
 //! `scripts/value_types_oracle.py` records every name `Sdf.ValueTypeNames`
 //! registers, with its array-ness, scalar and array forms, role, C++ type
-//! and aliases (`fixtures/value_types/oracle.json`). Here:
+//! and aliases (`fixtures/value_types/oracle.json`), and the legacy types
+//! the registry keeps under their own names (`Transform`, `PointIndex`,
+//! `EdgeIndex`, `FaceIndex`). Here:
 //!
 //! - every registered scalar is a `ValueType` with the same name, array
 //!   form and role, and `ValueType::ALL` holds no other;

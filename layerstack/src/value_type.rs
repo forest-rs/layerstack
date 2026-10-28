@@ -18,6 +18,10 @@
 //! Python's `Sdf.ValueTypeNames`. The capitalized aliases OpenUSD still
 //! registers for a few types (`Vec3f`, `PointFloat`, `Color`, ...) are not
 //! accepted: OpenUSD writes the names here, and so do layerstack's writers.
+//! Four of its legacy types have no current name and keep their own:
+//! `Transform`, a `matrix4d` with the transform role, and `PointIndex`,
+//! `EdgeIndex` and `FaceIndex`, `int`s with an index role
+//! (`_AddLegacyTypesToRegistry`).
 //!
 //! Spec: AOUSD Core §6.2 (scalar types), §6.3 (dimensioned types), §6.5
 //! (semantic roles), §7.6.4.1.1 (`typeName`).
@@ -48,6 +52,14 @@ pub enum ValueRole {
     TextureCoordinate,
     /// A direction (`vector3f`).
     Vector,
+    /// A transform (the legacy `Transform`).
+    Transform,
+    /// The index of a point (the legacy `PointIndex`).
+    PointIndex,
+    /// The index of an edge (the legacy `EdgeIndex`).
+    EdgeIndex,
+    /// The index of a face (the legacy `FaceIndex`).
+    FaceIndex,
 }
 
 impl ValueRole {
@@ -62,6 +74,10 @@ impl ValueRole {
             Self::Point => "Point",
             Self::TextureCoordinate => "TextureCoordinate",
             Self::Vector => "Vector",
+            Self::Transform => "Transform",
+            Self::PointIndex => "PointIndex",
+            Self::EdgeIndex => "EdgeIndex",
+            Self::FaceIndex => "FaceIndex",
         }
     }
 }
@@ -135,7 +151,10 @@ macro_rules! value_types {
     };
 }
 
-use ValueRole::{Color, Frame, Group, Normal, Point, TextureCoordinate, Vector};
+use ValueRole::{
+    Color, EdgeIndex, FaceIndex, Frame, Group, Normal, Point, PointIndex, TextureCoordinate,
+    Transform, Vector,
+};
 
 value_types! {
     Bool = "bool", Some("bool[]"), None, Bool;
@@ -195,6 +214,10 @@ value_types! {
     TexCoord3f = "texCoord3f", Some("texCoord3f[]"), Some(TextureCoordinate), Float3;
     TexCoord3d = "texCoord3d", Some("texCoord3d[]"), Some(TextureCoordinate), Double3;
     Group = "group", None, Some(Group), Opaque;
+    Transform = "Transform", Some("Transform[]"), Some(Transform), Matrix4d;
+    PointIndex = "PointIndex", Some("PointIndex[]"), Some(PointIndex), Int;
+    EdgeIndex = "EdgeIndex", Some("EdgeIndex[]"), Some(EdgeIndex), Int;
+    FaceIndex = "FaceIndex", Some("FaceIndex[]"), Some(FaceIndex), Int;
 }
 
 impl ValueType {
@@ -383,7 +406,7 @@ mod tests {
 
     #[test]
     fn names_parse_back_to_their_types() {
-        assert_eq!(ValueType::ALL.len(), 57);
+        assert_eq!(ValueType::ALL.len(), 61);
         for &ty in ValueType::ALL {
             assert_eq!(ValueType::parse(ty.name()), Some((ty, false)), "{ty}");
             if let Some(array) = ty.array_name() {
@@ -439,6 +462,13 @@ mod tests {
         assert_eq!(ValueType::Color3f.storage(), ValueType::Float3);
         assert_eq!(ValueType::Color3f.role(), Some(Color));
         assert_eq!(ValueType::Frame4d.storage(), ValueType::Matrix4d);
+        assert_eq!(ValueType::Transform.storage(), ValueType::Matrix4d);
+        assert_eq!(ValueType::Transform.role(), Some(Transform));
+        assert_eq!(ValueType::FaceIndex.storage(), ValueType::Int);
+        assert_eq!(
+            ValueType::parse("PointIndex[]"),
+            Some((ValueType::PointIndex, true))
+        );
         assert_eq!(ValueType::Group.storage(), ValueType::Opaque);
         assert_eq!(ValueType::TexCoord2h.zero(), Value::Vec2h([0; 2]));
         assert_eq!(ValueType::Group.zero(), Value::Null);

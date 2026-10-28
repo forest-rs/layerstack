@@ -82,8 +82,14 @@ pub(crate) fn dimensioned_value(
 ///
 /// Spec: AOUSD Core §6.2 (scene description data types).
 pub(crate) fn element_type_hint(hint: &str) -> &str {
-    // Strip array suffix first: "float3[]" → "float3", "int[]" → "int"
+    // Strip array suffix first: "float3[]" → "float3", "int[]" → "int";
+    // a legacy type with a role of its own reads as its storage
+    // (`PointIndex` as `int`, `Transform` as `matrix4d`).
     let base = hint.strip_suffix("[]").unwrap_or(hint);
+    let base = match ValueType::from_name(base) {
+        Some(ty) if ty.name().starts_with(char::is_uppercase) => ty.storage().name(),
+        _ => base,
+    };
 
     // Named compound types with element-type suffixes.
     // color3f, color4f, normal3f, point3f, vector3f, texCoord2f, texCoord3f → float
@@ -256,6 +262,7 @@ impl Number {
 ///
 /// Spec: AOUSD Core §6.3 (scalar value types), §16.2.11 (values).
 pub(crate) fn convert_scalar(value: &ast::Value<'_>, ty: &str) -> Option<Result<Value, String>> {
+    let ty = storage_name(ty);
     if !matches!(
         ty,
         "bool"

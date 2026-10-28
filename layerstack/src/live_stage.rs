@@ -36,12 +36,7 @@ use crate::{
 };
 
 /// Invalidation channel for opinion (field value) edits.
-pub const OPINION_EDIT: Channel = Channel::new(0);
-
-/// Invalidation channel for structural changes (prims added/removed, arcs changed).
-///
-/// Structural changes fall back to a full rebuild.
-pub const STRUCTURAL: Channel = Channel::new(1);
+pub(crate) const OPINION_EDIT: Channel = Channel::new(0);
 
 /// A layer's [`Layer::generation`](crate::Layer::generation) and
 /// [`Layer::structural_generation`](crate::Layer::structural_generation).

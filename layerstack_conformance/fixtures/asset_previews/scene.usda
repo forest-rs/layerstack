@@ -1,0 +1,59 @@
+#usda 1.0
+(
+    defaultPrim = "Asset"
+)
+
+def "WeakAsset" (
+    assetInfo = {
+        dictionary previews = {
+            dictionary thumbnails = {
+                dictionary default = {
+                    asset defaultImage = @./weak_thumb.png@
+                    int sibling = 1
+                }
+            }
+        }
+        string name = "weak"
+    }
+)
+{
+}
+
+def Xform "Asset" (
+    prepend apiSchemas = ["AssetPreviewsAPI"]
+    prepend references = </WeakAsset>
+)
+{
+    def Xform "Child"
+    {
+    }
+}
+
+def Xform "Unapplied" (
+    assetInfo = {
+        dictionary previews = {
+            dictionary thumbnails = {
+                dictionary default = {
+                    asset defaultImage = @./unapplied.png@
+                }
+            }
+        }
+    }
+)
+{
+}
+
+def Xform "StringImage" (
+    prepend apiSchemas = ["AssetPreviewsAPI"]
+    assetInfo = {
+        dictionary previews = {
+            dictionary thumbnails = {
+                dictionary default = {
+                    string defaultImage = "./string.png"
+                }
+            }
+        }
+    }
+)
+{
+}

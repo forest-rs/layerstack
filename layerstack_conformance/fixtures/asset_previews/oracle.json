@@ -1,0 +1,96 @@
+{
+  "version": "26.11",
+  "reads": [
+    {
+      "prim": "/Asset",
+      "default_image": "./weak_thumb.png"
+    },
+    {
+      "prim": "/Unapplied",
+      "default_image": null
+    },
+    {
+      "prim": "/StringImage",
+      "default_image": null
+    }
+  ],
+  "edits": [
+    {
+      "call": "set",
+      "prim": "/Asset",
+      "image": "./strong_thumb.png",
+      "local_asset_info": {
+        "previews": {
+          "thumbnails": {
+            "default": {
+              "defaultImage": {
+                "asset": "./strong_thumb.png"
+              }
+            }
+          }
+        }
+      },
+      "composed_default": {
+        "defaultImage": {
+          "asset": "./strong_thumb.png"
+        },
+        "sibling": 1
+      },
+      "default_image": "./strong_thumb.png"
+    },
+    {
+      "call": "clear",
+      "prim": "/Asset",
+      "image": null,
+      "local_asset_info": null,
+      "composed_default": {
+        "defaultImage": {
+          "asset": "./weak_thumb.png"
+        },
+        "sibling": 1
+      },
+      "default_image": "./weak_thumb.png"
+    },
+    {
+      "call": "set",
+      "prim": "/Unapplied",
+      "image": "./set.png",
+      "local_asset_info": {
+        "previews": {
+          "thumbnails": {
+            "default": {
+              "defaultImage": {
+                "asset": "./set.png"
+              }
+            }
+          }
+        }
+      },
+      "composed_default": {
+        "defaultImage": {
+          "asset": "./set.png"
+        }
+      },
+      "default_image": null
+    },
+    {
+      "call": "clear",
+      "prim": "/Unapplied",
+      "image": null,
+      "local_asset_info": null,
+      "composed_default": {
+        "defaultImage": {
+          "asset": "./unapplied.png"
+        }
+      },
+      "default_image": null
+    }
+  ],
+  "asset_default_previews": {
+    "prim": "/Asset",
+    "default_image": "./weak_thumb.png",
+    "populated": [
+      "/Asset"
+    ]
+  }
+}

@@ -130,8 +130,10 @@ fn reaches(store: &dyn LayerStore, from: LayerId, to: LayerId) -> bool {
     false
 }
 
-/// Replaces the `layerRelocates` of `id` with `relocates`, rejecting an
-/// entry that composition would ignore: one invalid on its own
+/// Replaces the `layerRelocates` of `id` with `relocates`, or removes the
+/// field for `None` (an empty list authors an empty field, as
+/// `SdfLayer::SetRelocates` does), rejecting an entry that composition
+/// would ignore: one invalid on its own
 /// ([`InvalidRelocationReason`](crate::InvalidRelocationReason)), or one whose source another entry of the
 /// list relocates too.
 ///
@@ -143,23 +145,21 @@ fn reaches(store: &dyn LayerStore, from: LayerId, to: LayerId) -> bool {
 pub(crate) fn set_relocates(
     store: &mut dyn LayerStore,
     id: LayerId,
-    relocates: &[Relocate],
+    relocates: Option<&[Relocate]>,
     journal: &mut Journal<'_>,
 ) -> Result<(), Rejection> {
-    if layer(store, id)?.relocates == relocates {
+    if layer(store, id)?.relocates.as_deref() == relocates {
         return Ok(());
     }
-    for (index, relocate) in relocates.iter().enumerate() {
+    let entries = relocates.unwrap_or_default();
+    for (index, relocate) in entries.iter().enumerate() {
         if let Some(reason) = crate::relocates::invalid_reason(store.paths(), *relocate) {
             return Err(Rejection::InvalidRelocate {
                 source: relocate.source,
                 reason,
             });
         }
-        if relocates[..index]
-            .iter()
-            .any(|r| r.source == relocate.source)
-        {
+        if entries[..index].iter().any(|r| r.source == relocate.source) {
             return Err(Rejection::DuplicateRelocateSource(relocate.source));
         }
     }
@@ -167,7 +167,7 @@ pub(crate) fn set_relocates(
         store,
         Raw::LayerRelocates {
             layer: id,
-            relocates: relocates.to_vec(),
+            relocates: relocates.map(<[Relocate]>::to_vec),
         },
     )
 }

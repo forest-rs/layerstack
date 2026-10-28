@@ -258,7 +258,7 @@ struct Displaced {
     slots: Vec<(PathId, Option<PrimSpec>, Option<Vec<PrimSpec>>)>,
     default_prim: Option<TokenId>,
     metadata: Vec<FieldEntry>,
-    relocates: Vec<crate::Relocate>,
+    relocates: Option<Vec<crate::Relocate>>,
 }
 
 /// `store`, with the slots and fields each [`LayerEdit`] changes holding

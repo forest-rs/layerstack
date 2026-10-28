@@ -31,7 +31,9 @@ The cases:
   statements in property metadata; the legacy type names (`Vec3f`,
   `NormalFloat`, ...), and the four that keep their names (`Transform`,
   `PointIndex`, `EdgeIndex`, `FaceIndex`, `_AddLegacyTypesToRegistry`,
-  `pxr/usd/sdf/schema.cpp`); `yes` and `no` as bools; comments in a spline.
+  `pxr/usd/sdf/schema.cpp`); `yes` and `no` as bools; comments in a spline;
+  an authored but empty `relocates`, which OpenUSD keeps
+  (`SdfLayer::HasRelocates`).
   Some are refused, as OpenUSD refuses them: a relative target of a prim
   inside the variant, which anchors at `/P{v=one}Child` and so names a
   variant selection (`<x>`, `<../Other>`), a quoted
@@ -909,6 +911,12 @@ def "P"
         1: [4, 5],
     }
 }
+''', []),
+    "read_empty_relocates": ('''#usda 1.0
+(
+    relocates = {
+    }
+)
 ''', []),
     "read_metadata_semicolons": ('''#usda 1.0
 (startFrame = 1; endFrame = 2)

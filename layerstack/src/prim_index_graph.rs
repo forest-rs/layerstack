@@ -1327,7 +1327,7 @@ mod tests {
                 .with_reference(reference)
                 .with_property(spin, sampled(1.0)),
         );
-        scene.relocates.push(crate::doc::Relocate {
+        scene.relocates_mut().push(crate::doc::Relocate {
             source: world_chip,
             target: Some(moved),
         });

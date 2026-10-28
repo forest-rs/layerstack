@@ -257,7 +257,8 @@ pub enum Value {
     PathExpression(String),
     /// Array of `SdfPathExpression` values.
     PathExpressionArray(Vec<String>),
-    /// Ordered layer relocates (`SdfRelocates`), requiring crate version 0.11.
+    /// Ordered layer relocates (`SdfRelocates`), requiring crate version 0.11
+    /// unless empty.
     Relocates(Vec<(String, String)>),
     /// Native sparse edit, requiring crate version 0.14.
     ArrayEdit {

@@ -165,7 +165,7 @@ fn prepare_with(
             );
         }
         if original.relocates != layer.relocates {
-            relocates.push((id, layer.relocates.clone()));
+            relocates.push((id, layer.relocates().to_vec()));
             push(
                 &mut transaction,
                 Raw::LayerRelocates {
@@ -402,7 +402,13 @@ fn relocate_away(
     }
     let mut moved_here = false;
     for id in stack {
-        for relocate in &mut layers.get_mut(id).expect("edited stack layer").relocates {
+        for relocate in layers
+            .get_mut(id)
+            .expect("edited stack layer")
+            .relocates
+            .iter_mut()
+            .flatten()
+        {
             let beneath =
                 |path: PathId| path != prim && root.is_prefix_of(store.paths().resolve(path));
             if beneath(relocate.source) || relocate.target.is_some_and(beneath) {
@@ -420,7 +426,7 @@ fn relocate_away(
         layers
             .get_mut(&target)
             .expect("edited stack layer")
-            .relocates
+            .relocates_mut()
             .push(Relocate {
                 source: prim,
                 target: None,

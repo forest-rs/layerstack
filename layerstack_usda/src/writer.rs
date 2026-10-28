@@ -144,9 +144,11 @@ pub struct Document {
     ///
     /// Spec: AOUSD Core §10.3.1 (sublayers), §7.6.1 (layer spec fields).
     pub sublayers: Vec<SubLayer>,
-    /// Ordered layer relocates, as absolute prim paths. An empty target removes
-    /// the source prim. Spec: AOUSD Core §7.6.1.2.4, §16.2.18.5.
-    pub relocates: Vec<(String, String)>,
+    /// Ordered layer relocates, as absolute prim paths, or `None` when the
+    /// layer authors no relocates; `Some` with no entries writes an empty
+    /// `relocates = {}`. An empty target removes the source prim. Spec:
+    /// AOUSD Core §7.6.1.2.4, §16.2.18.5.
+    pub relocates: Option<Vec<(String, String)>>,
     /// Root prims, in order.
     pub prims: Vec<Prim>,
 }
@@ -210,7 +212,7 @@ impl Document {
             validate_asset_path(&sublayer.asset, "/")?;
             validate_layer_offset(sublayer.offset, "/")?;
         }
-        for (source, target) in &self.relocates {
+        for (source, target) in self.relocates.iter().flatten() {
             for path in [source, target].into_iter().filter(|p| !p.is_empty()) {
                 if validate_prim_path(path, "/#relocates").is_err() || path == "/" {
                     return Err(WriteError::InvalidArcPath {
@@ -2608,7 +2610,7 @@ impl Writer<'_> {
         if doc.default_prim.is_some()
             || doc.metadata.iter().any(is_written_on_layer)
             || !doc.sublayers.is_empty()
-            || !doc.relocates.is_empty()
+            || doc.relocates.is_some()
         {
             self.out.push_str("(\n");
             if let Some(text) = comment_of(&doc.metadata) {
@@ -2652,16 +2654,16 @@ impl Writer<'_> {
                     }
                 }
             }
-            if !doc.relocates.is_empty() {
+            if let Some(relocates) = &doc.relocates {
                 self.out.push_str("    relocates = {\n");
-                for (i, (source, target)) in doc.relocates.iter().enumerate() {
+                for (i, (source, target)) in relocates.iter().enumerate() {
                     self.indent(2);
                     self.path(source);
                     self.out.push_str(": ");
                     self.path(target);
                     // `, ` after each pair but the last, as `_WriteRelocates`
                     // writes it (`pxr/usd/sdf/fileIO_Common.cpp`).
-                    if i + 1 < doc.relocates.len() {
+                    if i + 1 < relocates.len() {
                         self.out.push_str(", ");
                     }
                     self.out.push('\n');

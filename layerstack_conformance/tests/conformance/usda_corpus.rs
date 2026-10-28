@@ -87,12 +87,6 @@ const DIFFERENCES: &[Difference] = &[
                  has no path value to keep it",
     },
     Difference {
-        file: "148_relocates_empty_map.usda",
-        outcome: Outcome::Differs,
-        reason: "the layer keeps no authored but empty `relocates` map, so \
-                 `relocates = {}` is not written back",
-    },
-    Difference {
         file: "178_invalid_typeName.usda",
         outcome: Outcome::Error,
         reason: "an attribute of an unknown type name (`foobar`, `Some::EnumValue`) \

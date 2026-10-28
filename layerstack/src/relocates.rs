@@ -84,7 +84,7 @@ impl RelocationTable {
             let Some(authored) = store.layer(layer) else {
                 continue;
             };
-            for &relocate in &authored.relocates {
+            for &relocate in authored.relocates() {
                 if let Some(reason) = invalid_reason(paths, relocate) {
                     errors.push(CompositionError::InvalidAuthoredRelocation(
                         InvalidAuthoredRelocation {
@@ -346,9 +346,9 @@ mod tests {
         let mut store = InMemoryStore::default();
         let mut root = Layer::new(LayerId(1));
         root.sublayers = vec![SublayerEntry::new(LayerId(2))];
-        root.relocates = vec![relocate(&mut store, "/A/B", "/A/C")];
+        *root.relocates_mut() = vec![relocate(&mut store, "/A/B", "/A/C")];
         let mut sub = Layer::new(LayerId(2));
-        sub.relocates = vec![
+        *sub.relocates_mut() = vec![
             relocate(&mut store, "/A/B", "/A/D"),
             relocate(&mut store, "/A/E", ""),
         ];
@@ -377,13 +377,13 @@ mod tests {
         // fixture (AOUSD Core §10.3.2.6).
         let mut store = InMemoryStore::default();
         let mut root = Layer::new(LayerId(1));
-        root.relocates = vec![
+        *root.relocates_mut() = vec![
             relocate(&mut store, "/M1/I/T", "/M1/I/T"),
             relocate(&mut store, "/M2/I/T", "/M2/I"),
             relocate(&mut store, "/M3/I", "/M3/I/T"),
             relocate(&mut store, "/M4", "/M5"),
         ];
-        let authored = root.relocates.clone();
+        let authored = root.relocates().to_vec();
         store.insert_layer(root);
 
         let (table, errors) = table(&store, 1);
@@ -413,7 +413,7 @@ mod tests {
     fn conflicting_entries_are_all_ignored() {
         let mut store = InMemoryStore::default();
         let mut root = Layer::new(LayerId(1));
-        root.relocates = vec![
+        *root.relocates_mut() = vec![
             // Two sources, one target.
             relocate(&mut store, "/A/B", "/A/T"),
             relocate(&mut store, "/A/C", "/A/T"),
@@ -498,7 +498,7 @@ mod tests {
         );
         let (r, r_b) = (path(&mut store, "/R"), path(&mut store, "/R/B"));
         let mut root = Layer::new(LayerId(1));
-        root.relocates = vec![Relocate {
+        *root.relocates_mut() = vec![Relocate {
             source: b,
             target: Some(c),
         }];
@@ -555,7 +555,7 @@ mod tests {
             path(&mut store, "/World/Dst"),
         );
         let mut root = Layer::new(LayerId(1));
-        root.relocates = vec![Relocate {
+        *root.relocates_mut() = vec![Relocate {
             source: src,
             target: Some(dst),
         }];
@@ -572,7 +572,7 @@ mod tests {
         let mut store = InMemoryStore::default();
         let mut root = Layer::new(LayerId(1));
         let invalid = relocate(&mut store, "/A", "/B");
-        root.relocates = vec![invalid];
+        *root.relocates_mut() = vec![invalid];
         store.insert_layer(root);
         let stage = crate::Stage::compose(&mut store, LayerId(1), crate::StageOptions::default());
         assert_eq!(
@@ -593,7 +593,7 @@ mod tests {
     fn a_target_beneath_a_source_conflicts() {
         let mut store = InMemoryStore::default();
         let mut root = Layer::new(LayerId(1));
-        root.relocates = vec![
+        *root.relocates_mut() = vec![
             relocate(&mut store, "/A/B", "/A/C"),
             relocate(&mut store, "/D/E", "/A/B/E"),
         ];

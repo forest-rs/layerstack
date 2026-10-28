@@ -171,7 +171,7 @@ pub(crate) enum Op {
     },
     SetRelocates {
         layer: LayerId,
-        relocates: Vec<Relocate>,
+        relocates: Option<Vec<Relocate>>,
     },
     CopySpec {
         from: Address,
@@ -341,14 +341,21 @@ impl Transaction {
     /// [`Rejection::InvalidRelocate`]: super::Rejection::InvalidRelocate
     /// [`Rejection::DuplicateRelocateSource`]: super::Rejection::DuplicateRelocateSource
     pub fn set_layer_relocates(&mut self, layer: LayerId, relocates: Vec<Relocate>) -> &mut Self {
-        self.push(Op::SetRelocates { layer, relocates })
+        self.push(Op::SetRelocates {
+            layer,
+            relocates: Some(relocates),
+        })
     }
 
-    /// Clears the `layerRelocates` of `layer`.
+    /// Clears the `layerRelocates` of `layer`: removes the field, where
+    /// [`Self::set_layer_relocates`] with no entries authors an empty one.
     ///
     /// OpenUSD: `SdfLayer::ClearRelocates`.
     pub fn clear_layer_relocates(&mut self, layer: LayerId) -> &mut Self {
-        self.set_layer_relocates(layer, Vec::new())
+        self.push(Op::SetRelocates {
+            layer,
+            relocates: None,
+        })
     }
 
     /// Clears one authored layer field without erasing weaker stage opinions.

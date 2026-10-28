@@ -1084,6 +1084,52 @@ fn full_reader_assembles_the_layer() {
     );
 }
 
+/// An authored but empty `layerRelocates` is written and read back, as
+/// OpenUSD keeps it (`SdfLayer::HasRelocates`), without the crate 0.11.0
+/// a relocate requests (`Write(SdfRelocate)`, `crateFile.cpp`).
+#[test]
+fn empty_layer_relocates_round_trip_without_a_version_upgrade() {
+    use layerstack::doc::LayerId;
+    use layerstack::{AssetResolveError, AssetResolver, InMemoryStore, ResolvedAsset};
+
+    struct NoAssets;
+    impl AssetResolver for NoAssets {
+        fn resolve(
+            &mut self,
+            _: &str,
+            _: Option<LayerId>,
+            _: &layerstack::TokenInterner,
+            _: &layerstack::PathInterner,
+        ) -> Result<ResolvedAsset, AssetResolveError> {
+            Err(AssetResolveError::NotFound)
+        }
+        fn resolved_path(&self, _: LayerId) -> Option<&str> {
+            None
+        }
+    }
+
+    let pseudo_root = || Spec::new("/", SpecForm::PseudoRoot);
+    let specs = vec![pseudo_root().with_field("layerRelocates", Value::Relocates(Vec::new()))];
+    assert_eq!(required_version(&specs), CrateVersion::NEW_FILE_DEFAULT);
+    let bytes = write_crate(&specs).unwrap();
+    let store = InMemoryStore::default();
+    let read = |bytes: &[u8]| {
+        crate::read_usdc(
+            bytes,
+            LayerId(1),
+            &store.tokens,
+            &store.paths,
+            &mut NoAssets,
+        )
+        .unwrap()
+        .layer
+    };
+    let layer = read(&bytes);
+    assert!(layer.has_relocates() && layer.relocates().is_empty());
+    let bare = read(&write_crate(&[pseudo_root()]).unwrap());
+    assert!(!bare.has_relocates());
+}
+
 #[test]
 fn rejects_invalid_input() {
     let err = |specs: Vec<Spec>| write_crate(&specs).unwrap_err();

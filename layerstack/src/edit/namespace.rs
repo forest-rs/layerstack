@@ -201,7 +201,7 @@ impl NamespaceEdit {
             } else {
                 original.clone()
             };
-            if !edited.relocates.is_empty() {
+            if !edited.relocates().is_empty() {
                 return Err(NamespaceError::UnsupportedComposition(
                     "namespace moves with authored relocates are not supported",
                 ));

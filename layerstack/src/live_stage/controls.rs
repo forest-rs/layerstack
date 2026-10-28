@@ -157,7 +157,7 @@ impl LiveStage {
             || self
                 .relocation_layers
                 .iter()
-                .any(|id| store.layer(*id).is_some_and(|l| !l.relocates.is_empty()))
+                .any(|id| store.layer(*id).is_some_and(|l| !l.relocates().is_empty()))
         {
             return None;
         }
@@ -367,7 +367,7 @@ impl LiveStage {
                 || partial
                     .used_layers(false)
                     .iter()
-                    .any(|id| store.layer(*id).is_some_and(|l| !l.relocates.is_empty()))
+                    .any(|id| store.layer(*id).is_some_and(|l| !l.relocates().is_empty()))
             {
                 return self.full_rebuild(store, changes);
             }

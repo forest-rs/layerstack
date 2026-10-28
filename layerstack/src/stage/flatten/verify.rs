@@ -3,6 +3,7 @@
 
 //! Checking a flattened layer against the stage it was flattened from.
 
+use crate::sort;
 use alloc::{
     format,
     string::{String, ToString},
@@ -238,7 +239,7 @@ impl Stage {
         verifier.out.scope.times = times.to_vec();
         verifier.run(times);
         let mut sample_times = verifier.sample_times;
-        sample_times.sort_by(f64::total_cmp);
+        sort::sort_by(&mut sample_times, f64::total_cmp);
         sample_times.dedup();
         verifier.out.scope.sample_times = sample_times.len();
         verifier.out
@@ -618,7 +619,7 @@ impl Verifier<'_> {
         at.extend(sample_times(flattened, property));
         self.sample_times.extend(at.iter().copied());
         at.extend_from_slice(times);
-        at.sort_by(f64::total_cmp);
+        sort::sort_by(&mut at, f64::total_cmp);
         at.dedup();
         for time in at {
             self.out.scope.values += 1;
@@ -738,7 +739,7 @@ fn metadata_keys(source: &Stage, flattened: &Stage, prim: PathId) -> Vec<TokenId
             FieldKey::Property(_) => None,
         })
         .collect();
-    keys.sort_unstable();
+    sort::sort_unstable(&mut keys);
     keys.dedup();
     keys
 }
@@ -757,7 +758,7 @@ fn property_metadata_keys(
         .filter_map(|opinion| opinion.value().as_property())
         .flat_map(|spec| spec.metadata.iter().map(|entry| entry.name))
         .collect();
-    keys.sort_unstable();
+    sort::sort_unstable(&mut keys);
     keys.dedup();
     keys
 }

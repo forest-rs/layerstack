@@ -12,6 +12,7 @@
 //! site across a layer stack's layers), §12.4 (list ops). OpenUSD:
 //! `pxr/usd/pcp/composeSite.cpp`.
 
+use crate::sort;
 use alloc::{sync::Arc, vec::Vec};
 
 use hashbrown::{HashMap, HashSet};
@@ -762,7 +763,7 @@ impl ChildIndex {
             .flatten()
             .flat_map(|(_, names)| names.iter().copied())
             .collect();
-        names.sort_unstable();
+        sort::sort_unstable(&mut names);
         names.dedup();
         names
     }
@@ -1230,7 +1231,7 @@ fn index_layer(store: &dyn LayerStore, layer: &Layer) -> LayerChildren {
     // stable sort by name then mostly finds the names in order.
     let tokens = store.tokens();
     for (_, names) in index.values_mut().flatten() {
-        names.sort_unstable();
+        sort::sort_unstable(names);
         names.dedup();
         tokens.sort_by_text(names);
     }

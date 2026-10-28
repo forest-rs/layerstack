@@ -8,6 +8,7 @@
 //! selection for a write not yet made, not value evaluation or permission to
 //! write. Raw transactions may deliberately author masked values.
 
+use crate::sort;
 use alloc::{sync::Arc, vec::Vec};
 use core::{fmt, ops::Bound};
 
@@ -930,7 +931,7 @@ impl<'a> Resolution<'a> {
                 clips: Vec::new(),
             });
         }
-        groups.sort_by(|a, b| {
+        sort::sort_by(&mut groups, |a, b| {
             a.place
                 .cmp(&b.place)
                 .then_with(|| index.graph.cmp_keys(&a.key, &b.key))
@@ -982,7 +983,7 @@ impl<'a> Resolution<'a> {
             })
         };
         let mut ids: Vec<(usize, Slot)> = considered().map(|c| (c.group, c.slot)).collect();
-        ids.sort_unstable();
+        sort::sort_unstable(&mut ids);
         ids.dedup();
         let mut shapes: Vec<Option<SourceComposability>> = alloc::vec![None; ids.len()];
         for contribution in considered() {
@@ -1254,7 +1255,7 @@ impl<'a> Resolution<'a> {
             }
         }
         cuts.retain(|time| *time > start && *time < end);
-        cuts.sort_by(f64::total_cmp);
+        sort::sort_by(&mut cuts, f64::total_cmp);
         cuts.dedup();
         let bound = |time: f64| {
             if time.is_finite() {

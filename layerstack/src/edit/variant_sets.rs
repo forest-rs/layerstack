@@ -14,6 +14,7 @@
 //! Spec: AOUSD Core §7.3.6 (prim and variant specs contain variant set
 //! specs), §7.6.2.3.5 (`variantSetNames`), §10.5 (variant selection).
 
+use crate::sort;
 use alloc::vec::Vec;
 
 use super::{
@@ -155,7 +156,7 @@ pub(crate) fn remove_variant_set(
         return Ok(());
     };
     let mut variants: Vec<TokenId> = set.variants.keys().copied().collect();
-    variants.sort_unstable();
+    sort::sort_unstable(&mut variants);
     let host = loc.prim_path();
     for variant in variants {
         let mut sites = loc.sites().to_vec();

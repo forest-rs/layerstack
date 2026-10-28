@@ -25,6 +25,7 @@ mod pending_tests;
 pub(crate) mod site;
 pub(crate) mod site_paths;
 
+use crate::sort;
 use alloc::{boxed::Box, sync::Arc, vec::Vec};
 use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
@@ -986,7 +987,7 @@ fn prim_record(
         .extend(graph.nodes.iter().filter_map(|node| node.authoring_layer));
     // A layer contributes once per spec and arc of the index: each counts
     // once.
-    record.layers.sort_unstable();
+    sort::sort_unstable(&mut record.layers);
     record.layers.dedup();
     record.default_prim_layers = core::mem::take(&mut outputs.default_prim_layers);
     for (at, node) in graph.nodes.iter().enumerate() {
@@ -1955,7 +1956,7 @@ pub(crate) fn order_children(
             (name.and_then(|n| position.get(&n).copied()), child)
         })
         .collect();
-    placed.sort_by(|(pa, a), (pb, b)| match (pa, pb) {
+    sort::sort_by(&mut placed, |(pa, a), (pb, b)| match (pa, pb) {
         (Some(x), Some(y)) => x.cmp(y),
         (Some(_), None) => core::cmp::Ordering::Less,
         (None, Some(_)) => core::cmp::Ordering::Greater,

@@ -10,6 +10,7 @@
 //! Callers mark roots, and propagation to transitive dependents happens at
 //! drain time during [`LiveStage::recompose`].
 
+use crate::sort;
 use alloc::{collections::BTreeSet, sync::Arc, vec::Vec};
 
 mod controls;
@@ -91,7 +92,7 @@ fn minimal_roots(store: &dyn LayerStore, paths: &[PathId]) -> Vec<PathId> {
                 .is_none_or(|parent| !is_beneath_set(store, parent, &set))
         })
         .collect();
-    roots.sort_unstable();
+    sort::sort_unstable(&mut roots);
     roots
 }
 
@@ -667,7 +668,7 @@ impl LiveStage {
                 })
                 .collect();
             let mut affected: Vec<PathId> = dependents.iter().flatten().copied().collect();
-            affected.sort_unstable();
+            sort::sort_unstable(&mut affected);
             affected.dedup();
             // An unnotified source edit may have changed more than this
             // transaction's slots. Leave it to ordinary recomposition.
@@ -814,7 +815,7 @@ impl LiveStage {
             .chain(child_lists.iter().copied())
             .filter(|parent| !in_hierarchy.contains(parent))
             .collect();
-        parents.sort_unstable();
+        sort::sort_unstable(&mut parents);
         parents.dedup();
         // Supporting ancestors supply activation context. A boundary parent
         // keeps its retained index, which a sibling added or removed does
@@ -893,7 +894,7 @@ impl LiveStage {
             .filter(|path| partial.has_prim(*path) && !is_beneath_set(store, *path, &resynced))
             .collect();
         let mut affected: Vec<_> = affected.into_iter().collect();
-        affected.sort_unstable();
+        sort::sort_unstable(&mut affected);
         self.work.replaced_prim_indexes = affected.len();
         let orders = self.stage.merge_local_subtrees(
             store,
@@ -916,7 +917,7 @@ impl LiveStage {
             .insert(self.root, generations_of(store, self.root));
         let mut recomposed = affected;
         recomposed.extend(parents);
-        recomposed.sort_unstable();
+        sort::sort_unstable(&mut recomposed);
         recomposed.dedup();
         Some((recomposed, changes))
     }
@@ -959,7 +960,7 @@ impl LiveStage {
             .filter(|(_, seen, found)| seen != found)
             .map(|(layer, _, found)| (layer, found))
             .collect();
-        changed.sort_unstable_by_key(|(layer, _)| *layer);
+        sort::sort_unstable_by_key(&mut changed, |(layer, _)| *layer);
         for &(layer, found) in &changed {
             let seen = self.generations.insert(layer, found).flatten();
             match (seen, found) {
@@ -1165,7 +1166,7 @@ impl LiveStage {
                 }
             }
         }
-        out.sort_unstable();
+        sort::sort_unstable(&mut out);
         out.dedup();
         out
     }
@@ -1519,7 +1520,7 @@ impl LiveStage {
         });
         self.needs_full_rebuild = true;
         recomposed.extend(self.recompose_pending(store, changes.as_deref_mut()));
-        recomposed.sort_unstable();
+        sort::sort_unstable(&mut recomposed);
         recomposed.dedup();
         if let (Some(changes), Some((created, removed))) = (changes, first) {
             // Prims the first pass created and the second removed were
@@ -1548,8 +1549,8 @@ impl LiveStage {
                     .iter()
                     .filter(|path| !first_created.contains(*path)),
             );
-            net_created.sort_unstable();
-            net_removed.sort_unstable();
+            sort::sort_unstable(&mut net_created);
+            sort::sort_unstable(&mut net_removed);
             changes.created = net_created;
             changes.removed = net_removed;
             // The second pass resyncs the pseudo-root.
@@ -1629,7 +1630,7 @@ impl LiveStage {
                     .scratch(&mut self.traversal_scratch)
                     .run(),
             );
-            affected.sort_unstable();
+            sort::sort_unstable(&mut affected);
             affected.dedup();
         };
 
@@ -1722,7 +1723,7 @@ impl LiveStage {
             );
         }
         recomposed.extend(rest);
-        recomposed.sort_unstable();
+        sort::sort_unstable(&mut recomposed);
         recomposed.dedup();
         recomposed
     }
@@ -1989,7 +1990,7 @@ impl LiveStage {
         // the old stage had and the new one lacks.
         let mut changed: Vec<PathId> = self.stage.prim_paths().collect();
         changed.extend(old_prims.into_iter().filter(|p| !self.stage.has_prim(*p)));
-        changed.sort_unstable();
+        sort::sort_unstable(&mut changed);
         changed
     }
 
@@ -2067,7 +2068,7 @@ impl LiveStage {
                 .map(|(prim, layers)| (*prim, layers.to_vec()))
                 .collect();
             for layers in held.values_mut().chain(recorded.values_mut()) {
-                layers.sort_unstable();
+                sort::sort_unstable(layers);
             }
             assert_eq!(held, recorded, "the layers holding each prim differ");
         });
@@ -2153,7 +2154,7 @@ impl SourceIndex {
         if layers.is_empty() {
             return;
         }
-        layers.sort_unstable();
+        sort::sort_unstable(&mut layers);
         layers.dedup();
         layers.retain(|layer| {
             let share = self.layers.get_mut(layer).expect("asked-for layer");

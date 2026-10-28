@@ -16,6 +16,7 @@
 //! (target paths an arc cannot map), §12.4 (list op resolution: an
 //! explicit list replaces weaker opinions).
 
+use crate::sort;
 use alloc::vec::Vec;
 
 use hashbrown::{HashMap, HashSet};
@@ -401,7 +402,7 @@ impl Stage {
                 }
             }
             if properties.len() > 1 {
-                properties.sort_by(|(a, _), (b, _)| {
+                sort::sort_by(&mut properties, |(a, _), (b, _)| {
                     super::dictionary_cmp(tokens.resolve(*a), tokens.resolve(*b))
                 });
             }
@@ -525,7 +526,7 @@ fn by_first(firsts: impl ExactSizeIterator<Item = u32>, ranks: usize) -> Vec<usi
     let len = firsts.len();
     if len.saturating_mul(8) < ranks {
         let mut pairs: Vec<(u32, usize)> = firsts.zip(0..).collect();
-        pairs.sort_unstable();
+        sort::sort_unstable(&mut pairs);
         return pairs.into_iter().map(|(_, at)| at).collect();
     }
     let mut slots = alloc::vec![usize::MAX; ranks];
@@ -640,7 +641,7 @@ fn sort_specs(specs: &mut [(SpecPath, &PropertySpec)], store: &dyn LayerStore) {
             })
             .collect::<Vec<_>>()
     };
-    specs.sort_by(|(a, _), (b, _)| {
+    sort::sort_by(specs, |(a, _), (b, _)| {
         paths
             .cmp_paths(a.prim_path(), b.prim_path(), tokens)
             .then_with(|| key(a).cmp(&key(b)))

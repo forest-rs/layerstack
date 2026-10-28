@@ -14,6 +14,7 @@
 //! per layer stack). OpenUSD: `PcpLayerStack`, `PcpLayerStackRegistry`
 //! (`pxr/usd/pcp/layerStack.cpp`).
 
+use crate::sort;
 use alloc::{boxed::Box, collections::BTreeSet, sync::Arc, vec::Vec};
 use core::sync::atomic::{AtomicU32, Ordering};
 
@@ -331,6 +332,6 @@ fn combined_relocations(
             .map(|t| store.paths().intern_segments(t));
         out.push((store.paths().intern_segments(&origin), target));
     }
-    out.sort_unstable();
+    sort::sort_unstable(&mut out);
     out
 }

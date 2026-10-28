@@ -6,6 +6,7 @@
 //! Spec: AOUSD Core §6–§7 (scene description data model and opinions), plus §10
 //! for arc-related fields (variants/references).
 
+use crate::sort;
 use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
 use core::{
     fmt,
@@ -3822,7 +3823,7 @@ impl Layer {
                 })
                 .collect::<Vec<_>>()
         };
-        specs.sort_by(|(a, x), (b, y)| {
+        sort::sort_by(&mut specs, |(a, x), (b, y)| {
             paths
                 .cmp_paths(*a, *b, tokens)
                 .then_with(|| site(x).cmp(&site(y)))
@@ -3981,7 +3982,7 @@ impl Layer {
             .filter(|c| c.generation > generation)
             .flat_map(|c| c.scope_ignored.iter().copied())
             .collect();
-        paths.sort_unstable();
+        sort::sort_unstable(&mut paths);
         paths.dedup();
         Some(paths)
     }
@@ -4009,7 +4010,7 @@ impl Layer {
                     .filter(|p| !scoped || !change.scope_ignored.contains(p)),
             );
         }
-        paths.sort_unstable();
+        sort::sort_unstable(&mut paths);
         paths.dedup();
         Some(paths)
     }
@@ -4217,7 +4218,7 @@ impl Layer {
         if !named.iter().all(|named| *named) {
             return None;
         }
-        paths.sort_unstable();
+        sort::sort_unstable(&mut paths);
         paths.dedup();
         Some(paths)
     }
@@ -4734,7 +4735,7 @@ impl InMemoryStore {
     #[must_use]
     pub fn layer_ids(&self) -> Vec<LayerId> {
         let mut ids: Vec<LayerId> = self.layers.keys().copied().collect();
-        ids.sort_unstable();
+        sort::sort_unstable(&mut ids);
         ids
     }
 
@@ -4764,7 +4765,7 @@ impl InMemoryStore {
                     .map(|(path, layer)| (*anchor, path.clone(), *layer))
             })
             .collect();
-        bindings.sort_unstable();
+        sort::sort_unstable(&mut bindings);
         bindings
     }
 

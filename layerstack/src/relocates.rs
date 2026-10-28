@@ -23,6 +23,7 @@
 //!
 //! [`Layer::relocates`]: crate::Layer::relocates
 
+use crate::sort;
 use alloc::vec::Vec;
 use core::cmp::Ordering;
 
@@ -119,10 +120,10 @@ impl RelocationTable {
             .into_iter()
             .filter(|(_, sources)| sources.len() > 1)
             .collect();
-        shared.sort_by(|a, b| cmp_paths(a.0, b.0));
+        sort::sort_by(&mut shared, |a, b| cmp_paths(a.0, b.0));
         let mut same_target = Vec::new();
         for (target, mut sources) in shared {
-            sources.sort_by(|a, b| {
+            sort::sort_by(&mut sources, |a, b| {
                 cmp_paths(entries[*a].relocate.source, entries[*b].relocate.source)
             });
             for &at in &sources {
@@ -169,7 +170,7 @@ impl RelocationTable {
                 }
             }
         }
-        conflicts.sort_by(|a, b| {
+        sort::sort_by(&mut conflicts, |a, b| {
             cmp_paths(entries[a.0].relocate.source, entries[b.0].relocate.source)
                 .then_with(|| a.2.cmp(&b.2))
                 .then_with(|| cmp_paths(entries[a.1].relocate.source, entries[b.1].relocate.source))

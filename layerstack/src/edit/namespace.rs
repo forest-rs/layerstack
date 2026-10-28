@@ -8,6 +8,7 @@
 //! OpenUSD: `UsdNamespaceEditor` validates all required layer edits before
 //! changing specs and repairs relationship targets and attribute connections.
 
+use crate::sort;
 use alloc::{boxed::Box, sync::Arc, vec::Vec};
 use core::fmt;
 
@@ -263,8 +264,10 @@ impl NamespaceEdit {
                 edited_layers.push(layer_id);
             }
         }
-        edited_layers.sort_unstable();
-        specs.sort_unstable_by(|a, b| a.0.cmp(&b.0).then(a.1.prim_path().cmp(&b.1.prim_path())));
+        sort::sort_unstable(&mut edited_layers);
+        sort::sort_unstable_by(&mut specs, |a, b| {
+            a.0.cmp(&b.0).then(a.1.prim_path().cmp(&b.1.prim_path()))
+        });
         Ok(Self {
             transaction,
             source,
@@ -629,7 +632,7 @@ fn validate_authored_subtree(
             }
         }
     }
-    source_layers.sort_unstable();
+    sort::sort_unstable(&mut source_layers);
     source_layers.dedup();
     for id in source_layers {
         let Some(authored) = store.layer(id) else {
@@ -740,7 +743,7 @@ fn reachable_layers(stage: &Stage, store: &dyn LayerStore, root: LayerId) -> Vec
             collect_variant_layers(store, spec.variant_sets(), &mut pending);
         }
     }
-    found.sort_unstable();
+    sort::sort_unstable(&mut found);
     found
 }
 fn collect_ref_layers(store: &dyn LayerStore, refs: &ListOp<Reference>, layers: &mut Vec<LayerId>) {
@@ -1192,7 +1195,7 @@ fn append_delta(
         .chain(edited.variant_prims.keys())
         .copied()
         .collect();
-    paths.sort_unstable();
+    sort::sort_unstable(&mut paths);
     paths.dedup();
     for path in paths {
         let before = Raw::PrimSlots {

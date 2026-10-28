@@ -9,6 +9,7 @@
 //! Spec: AOUSD Core uses tokens pervasively; this crate uses interning to model
 //! token identity efficiently (see AOUSD Core terminology around tokens).
 
+use crate::sort;
 use alloc::{boxed::Box, sync::Arc, vec::Vec};
 use core::sync::atomic::{AtomicBool, Ordering};
 
@@ -109,14 +110,16 @@ impl TokenInterner {
     /// through here, so the program carries one instance of the standard
     /// library's sort for it rather than one per call site.
     pub(crate) fn sort_by_text(&self, ids: &mut [TokenId]) {
-        ids.sort_by(|a, b| self.resolve(*a).cmp(self.resolve(*b)));
+        sort::sort_by(ids, |a, b| self.resolve(*a).cmp(self.resolve(*b)));
     }
 
     /// Sorts `ids` in dictionary order ([`crate::ident::dictionary_cmp`],
     /// OpenUSD's `TfDictionaryLessThan`), stably. Like
     /// [`Self::sort_by_text`], one sort serves every caller.
     pub(crate) fn sort_in_dictionary_order(&self, ids: &mut [TokenId]) {
-        ids.sort_by(|a, b| crate::ident::dictionary_cmp(self.resolve(*a), self.resolve(*b)));
+        sort::sort_by(ids, |a, b| {
+            crate::ident::dictionary_cmp(self.resolve(*a), self.resolve(*b))
+        });
     }
 
     pub(crate) fn snapshot(&self) -> Self {

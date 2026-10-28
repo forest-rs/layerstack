@@ -18,6 +18,7 @@
 //! (`pxr/usd/sdf/propertySpec.h`); the field set per spec form is registered in
 //! `pxr/usd/sdf/schema.cpp`.
 
+use crate::sort;
 use alloc::boxed::Box;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -617,7 +618,7 @@ impl PropertySpec {
 pub(crate) fn sort_samples(mut samples: Vec<TimeSample>) -> Vec<TimeSample> {
     // A stable sort keeps authored order among equal times, so the dedup pass
     // below can keep the last-authored sample.
-    samples.sort_by(|a, b| a.0.total_cmp(&b.0));
+    sort::sort_by(&mut samples, |a, b| a.0.total_cmp(&b.0));
     let mut out: Vec<TimeSample> = Vec::with_capacity(samples.len());
     for sample in samples {
         match out.last_mut() {

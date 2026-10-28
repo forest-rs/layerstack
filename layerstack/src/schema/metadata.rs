@@ -27,6 +27,7 @@
 
 mod builtin;
 
+use crate::sort;
 use alloc::{boxed::Box, format, sync::Arc, vec::Vec};
 use core::fmt;
 
@@ -722,7 +723,7 @@ pub(crate) fn check_builtin(
         && field.value_type == definition.value_type
         && {
             let mut targets = definition.targets.clone();
-            targets.sort_unstable();
+            sort::sort_unstable(&mut targets);
             targets.dedup();
             targets == field.targets
         }

@@ -48,6 +48,7 @@ pub use metadata::{
 pub use definition::{AppliedSchema, PrimDefinition};
 pub use generated::{GeneratedSchemaError, SchemaDeclaration, read_generated_schema};
 
+use crate::sort;
 use alloc::{format, string::String, sync::Arc, vec, vec::Vec};
 
 use hashbrown::{HashMap, HashSet};
@@ -614,7 +615,7 @@ impl SchemaRegistryBuilder {
         mut definition: MetadataDefinition,
         tokens: &TokenInterner,
     ) -> Result<&mut Self, MetadataConflict> {
-        definition.targets.sort_unstable();
+        sort::sort_unstable(&mut definition.targets);
         definition.targets.dedup();
         let name = definition.name;
         metadata::check_builtin(&definition, tokens.resolve(name)).map_err(|registered_by| {
@@ -680,7 +681,7 @@ impl SchemaRegistryBuilder {
             tokens,
         };
         let mut names: Vec<TokenId> = schemas.keys().copied().collect();
-        names.sort_unstable();
+        sort::sort_unstable(&mut names);
         for &name in &names {
             build.ancestry(name, &mut Vec::new());
         }

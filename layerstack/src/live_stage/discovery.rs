@@ -4,6 +4,7 @@
 //! Retained potential arc inventory, including unloaded/muted targets.
 //! USD population includes possible variant branches (AOUSD Core §10–§11).
 use super::*;
+use crate::sort;
 
 #[derive(Debug, Default)]
 pub(super) struct LayerDiscovery {
@@ -31,7 +32,7 @@ impl ArcReads {
                 result.add(store, &branch.spec.references, &branch.spec.payloads);
             }
         }
-        result.targets.sort_unstable();
+        sort::sort_unstable(&mut result.targets);
         result.targets.dedup();
         result
     }

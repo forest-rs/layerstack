@@ -11,6 +11,7 @@
 
 use crate::doc::VariantSelections;
 use crate::listop::append_unique;
+use crate::sort;
 use crate::{
     FieldEntry, FieldValue, Layer, ListOp, PrimSpec, PropertyEntry, PropertySpec, Specifier,
     TimeSamples, TokenId, TokenInterner, Value, VariantSets, VariantSpec,
@@ -90,7 +91,7 @@ pub fn stitch_layers(
         .chain(weak.variant_prims.keys())
         .copied()
         .collect();
-    paths.sort_unstable();
+    sort::sort_unstable(&mut paths);
     paths.dedup();
     for path in paths {
         for source in weak.prim_specs(path) {

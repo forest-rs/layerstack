@@ -12,6 +12,7 @@
 //! ([`ArcKind`], [`LayerId`]) and layer-opinion maps are stored separately for
 //! diagnostic and notification queries.
 
+use crate::sort;
 use alloc::vec::Vec;
 mod layer_sets;
 pub use layer_sets::LayerDependencyStorage;
@@ -99,8 +100,9 @@ pub(crate) struct PrimDependencies {
 impl PrimDependencies {
     /// Lists each arc once, in no particular order.
     pub(crate) fn dedup_arcs(&mut self) {
-        self.arcs
-            .sort_unstable_by_key(|&(source, kind, layer)| (source, kind as u8, layer));
+        sort::sort_unstable_by_key(&mut self.arcs, |&(source, kind, layer)| {
+            (source, kind as u8, layer)
+        });
         self.arcs.dedup();
     }
 }

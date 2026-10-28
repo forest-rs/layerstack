@@ -13,6 +13,7 @@
 //!   ([`plan_brackets_recording`]), then fold the chain once per bracketing sample
 //!   through [`PickedArrayFamily`] and interpolate the composed results.
 
+use crate::sort;
 use alloc::vec::Vec;
 
 use opinionated::{
@@ -513,7 +514,7 @@ fn same_element_kind(a: &Value, b: &Value) -> bool {
 /// fold explanations list them. The recorder and the default-time
 /// explanation share it, and with it one sort.
 fn sort_events_by_opinion(events: &mut [FamilyEvent<ChainPos>]) {
-    events.sort_by_key(|event| match event {
+    sort::sort_by_key(events, |event| match event {
         FamilyEvent::ContributedDense { provenance }
         | FamilyEvent::ContributedSparse { provenance }
         | FamilyEvent::Ignored { provenance, .. }

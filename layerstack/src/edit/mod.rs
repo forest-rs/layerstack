@@ -109,6 +109,7 @@ mod namespace_tests;
 #[cfg(test)]
 mod tests;
 
+use crate::sort;
 use alloc::vec::Vec;
 
 use crate::path::PathId;
@@ -310,10 +311,11 @@ impl Changes {
         ] {
             paths.sort_paths(list, tokens);
         }
-        self.property_changes
-            .sort_by(|a, b| paths.cmp_paths(a.prim, b.prim, tokens));
+        sort::sort_by(&mut self.property_changes, |a, b| {
+            paths.cmp_paths(a.prim, b.prim, tokens)
+        });
         for prim in &mut self.property_changes {
-            prim.fields.sort_unstable_by(|a, b| a.cmp_names(b, tokens));
+            sort::sort_unstable_by(&mut prim.fields, |a, b| a.cmp_names(b, tokens));
             prim.fields.dedup();
         }
     }

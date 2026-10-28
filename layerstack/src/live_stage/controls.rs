@@ -4,6 +4,7 @@
 //! Subtree replacement for authored deltas and stage-local controls. AOUSD Core §10–§11;
 //! OpenUSD `UsdStage::LoadAndUnload`, `PcpChanges` (significant changes).
 use super::*;
+use crate::sort;
 
 /// Index and namespace work performed by the most recent recomposition.
 /// Counts exclude dependency traversal and prototype regrouping; these are
@@ -262,7 +263,7 @@ impl LiveStage {
         let roots = minimal_roots(store, &roots);
         let within: HashSet<PathId> = roots.iter().copied().collect();
         refreshed.retain(|prim| !is_beneath_set(store, *prim, &within));
-        refreshed.sort_unstable();
+        sort::sort_unstable(&mut refreshed);
         refreshed.dedup();
         Some((roots, refreshed))
     }

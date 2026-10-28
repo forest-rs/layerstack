@@ -16,6 +16,7 @@
 //! Spec: AOUSD Core §7.3.3 (properties), §11.3 (population: inactive prims
 //! and unloaded payloads), §12.4 (target list resolution).
 
+use crate::sort;
 use alloc::vec::Vec;
 
 use hashbrown::HashMap;
@@ -385,7 +386,7 @@ impl Stage {
         }
         let tokens = store.tokens();
         for groups in [&mut report.relationships, &mut report.connections] {
-            groups.sort_by(|a, b| {
+            sort::sort_by(groups, |a, b| {
                 super::dictionary_cmp(tokens.resolve(a.name), tokens.resolve(b.name))
             });
         }

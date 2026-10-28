@@ -10,6 +10,7 @@
 //! All input layers share the supplied token and path interners.
 //! AOUSD Core §7.6 (authored specs), §12.2.5 (metadata dictionaries),
 //! §12.3.2.1 (affine time mapping); clip metadata is an OpenUSD extension.
+use crate::sort;
 use crate::stitch::{self, StitchError, StitchReport};
 use crate::{
     FieldEntry, FieldValue, Layer, LayerId, LayerOffset, PathId, PathInterner, PrimSpec,
@@ -493,11 +494,11 @@ pub fn stitch_clip_sequence(
             times.push([stage_end, end]);
         }
     }
-    active.sort_by(|a, b| a[0].total_cmp(&b[0]));
+    sort::sort_by(&mut active, |a, b| a[0].total_cmp(&b[0]));
     if active.windows(2).any(|p| p[0][0] == p[1][0]) {
         return Err(ClipAuthoringError::DuplicateActivation);
     }
-    times.sort_by(|a, b| a[0].total_cmp(&b[0]));
+    sort::sort_by(&mut times, |a, b| a[0].total_cmp(&b[0]));
     if times
         .windows(2)
         .any(|p| p[0][0] == p[1][0] && p[0][1] != p[1][1])

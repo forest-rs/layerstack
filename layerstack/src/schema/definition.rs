@@ -3,6 +3,7 @@
 
 //! Prim definitions: the schemas a prim has and the properties they define.
 
+use crate::sort;
 use alloc::{borrow::Cow, format, vec::Vec};
 
 use hashbrown::HashMap;
@@ -231,7 +232,7 @@ impl PrimDefinition {
                 None => break,
             }
         }
-        found.sort_unstable();
+        sort::sort_unstable(&mut found);
         found.into_iter().map(|i| &self.properties[i]).collect()
     }
 }

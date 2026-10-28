@@ -7,6 +7,7 @@
 //!
 //! Spec: AOUSD Core §8 (paths and namespace ordering).
 
+use crate::sort;
 use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
 
 use core::{borrow::Borrow, cmp::Ordering};
@@ -614,7 +615,7 @@ impl PathInterner {
     /// here, so the program carries one instance of the standard library's
     /// sort for it rather than one per call site.
     pub(crate) fn sort_in_namespace_order(&self, ids: &mut [PathId], tokens: &TokenInterner) {
-        ids.sort_unstable_by(|a, b| self.cmp_paths(*a, *b, tokens));
+        sort::sort_unstable_by(ids, |a, b| self.cmp_paths(*a, *b, tokens));
     }
 
     /// Formats a [`PathId`] as a string (e.g. `/Robot/Arm`).

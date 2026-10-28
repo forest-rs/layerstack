@@ -1614,9 +1614,11 @@ impl<'a> LowerCtx<'a> {
 
     /// The path of a `<...>` reference, without its delimiters.
     ///
-    /// A path holding a control character or `\\` is reported: OpenUSD's
-    /// path grammar has neither (`pxr/usd/sdf/pathParser.h`), so its text
-    /// parser refuses the layer.
+    /// A path outside OpenUSD's path grammar (`</A b>`, `</1A>`, `</A//B>`,
+    /// a control character or `\\`) is reported, as its text parser
+    /// refuses the layer: `PathRef` reads the path with
+    /// `Sdf_PathParser::Path` (`pxr/usd/sdf/pathParser.h`), so see
+    /// [`is_path_text`]. The empty path `<>` is in the grammar.
     ///
     /// Spec: AOUSD Core §8 (paths).
     fn lower_path_ref(&mut self, node: SyntaxNode<'_>) -> &'a str {
@@ -1626,7 +1628,7 @@ impl<'a> LowerCtx<'a> {
         } else {
             full
         };
-        if path.chars().any(|c| c.is_control() || c == '\\') {
+        if !path.is_empty() && !is_path_text(path) {
             self.error(node.span(), alloc::format!("{path:?} is not a valid path"));
         }
         path
@@ -1865,6 +1867,251 @@ impl<'a> LowerCtx<'a> {
     }
 }
 
+// ── Path grammar ───────────────────────────────────────────────────────
+
+/// A parse of [`is_path_text`]'s grammar from some position: the position
+/// after a match, `Ok(None)` for no match (a PEG alternative may try
+/// another), or [`Raised`] where the grammar commits (`if_must`) and the
+/// text does not follow, which no alternative recovers from.
+type PathParse = Result<Option<usize>, Raised>;
+
+/// A committed rule of [`is_path_text`]'s grammar that failed.
+struct Raised;
+
+/// Whether `text` is a path of OpenUSD's path grammar, the
+/// `Sdf_PathParser::Path` rule its text parser reads inside `<...>`
+/// (`pxr/usd/sdf/pathParser.h`): absolute (`/A/B`), `..` steps or
+/// relative names, with prim names that are identifiers, variant
+/// selections (`{set=variant}`, blanks allowed around their parts), a
+/// property name of `:`-joined identifiers, a target in `[...]`, a
+/// relational attribute, and `.mapper[...]` or `.expression`.
+///
+/// The rules are PEG rules: each alternative takes the longest text it
+/// matches and does not give it back, so the whole path must be one
+/// match (`</A b>` matches `/A`, and ` b` is left over).
+///
+/// Spec: AOUSD Core §8 (paths).
+fn is_path_text(text: &str) -> bool {
+    matches!(PathGrammar { text }.path(0), Ok(Some(end)) if end == text.len())
+}
+
+/// The rules of [`is_path_text`], over `text`'s byte positions.
+struct PathGrammar<'t> {
+    text: &'t str,
+}
+
+impl PathGrammar<'_> {
+    fn char_at(&self, at: usize) -> Option<char> {
+        self.text.get(at..).and_then(|rest| rest.chars().next())
+    }
+
+    fn byte(&self, at: usize, byte: u8) -> Option<usize> {
+        (self.text.as_bytes().get(at) == Some(&byte)).then_some(at + 1)
+    }
+
+    /// A required `byte`, after the grammar committed.
+    fn must_byte(&self, at: usize, byte: u8) -> Result<usize, Raised> {
+        self.byte(at, byte).ok_or(Raised)
+    }
+
+    fn blanks(&self, mut at: usize) -> usize {
+        while matches!(self.text.as_bytes().get(at), Some(b' ' | b'\t')) {
+            at += 1;
+        }
+        at
+    }
+
+    /// `star<rule>` over single characters.
+    fn chars_while(&self, mut at: usize, rule: impl Fn(char) -> bool) -> usize {
+        while let Some(c) = self.char_at(at).filter(|&c| rule(c)) {
+            at += c.len_utf8();
+        }
+        at
+    }
+
+    /// `Utf8Identifier`: `_` or `XID_Start`, then `XID_Continue`.
+    fn identifier(&self, at: usize) -> Option<usize> {
+        let first = self.char_at(at).filter(|&c| crate::ident::is_start(c))?;
+        Some(self.chars_while(at + first.len_utf8(), crate::ident::is_continue))
+    }
+
+    /// `PropertyName`: identifiers joined by `:`, which commits.
+    fn property_name(&self, at: usize) -> PathParse {
+        let Some(mut at) = self.identifier(at) else {
+            return Ok(None);
+        };
+        while let Some(next) = self.byte(at, b':') {
+            at = self.identifier(next).ok_or(Raised)?;
+        }
+        Ok(Some(at))
+    }
+
+    /// `VariantSelection`: `{`, which commits, a set name, `=`, a variant
+    /// name or nothing and `}`, with blanks around each.
+    fn variant_selection(&self, at: usize) -> PathParse {
+        let Some(at) = self.byte(self.blanks(at), b'{') else {
+            return Ok(None);
+        };
+        let at = self.blanks(at);
+        let first = self
+            .char_at(at)
+            .filter(|&c| crate::ident::is_start(c))
+            .ok_or(Raised)?;
+        let at = self.chars_while(at + first.len_utf8(), |c| {
+            crate::ident::is_continue(c) || c == '-'
+        });
+        let at = self.blanks(self.must_byte(self.blanks(at), b'=')?);
+        let at = self.byte(at, b'.').unwrap_or(at);
+        let at = self.chars_while(at, |c| crate::ident::is_continue(c) || c == '|' || c == '-');
+        let at = self.blanks(self.must_byte(self.blanks(at), b'}')?);
+        Ok(Some(at))
+    }
+
+    /// `VariantSelections`: one or more.
+    fn variant_selections(&self, at: usize) -> PathParse {
+        let Some(mut at) = self.variant_selection(at)? else {
+            return Ok(None);
+        };
+        while let Some(next) = self.variant_selection(at)? {
+            at = next;
+        }
+        Ok(Some(at))
+    }
+
+    /// `PrimElts`: a prim name, then prim names after `/` (which
+    /// commits) or after variant selections, then variant selections.
+    fn prim_elements(&self, at: usize) -> PathParse {
+        let Some(mut at) = self.identifier(at) else {
+            return Ok(None);
+        };
+        loop {
+            // `VsStep`: selections followed by a prim name.
+            if let Some(selected) = self.variant_selections(at)?
+                && let Some(next) = self.identifier(selected)
+            {
+                at = next;
+            } else if let Some(slash) = self.byte(at, b'/') {
+                at = self.identifier(slash).ok_or(Raised)?;
+            } else {
+                break;
+            }
+        }
+        Ok(Some(self.variant_selections(at)?.unwrap_or(at)))
+    }
+
+    /// `BracketPath`: `[`, which commits, a path and `]`.
+    fn bracket_path(&self, at: usize) -> PathParse {
+        let Some(at) = self.byte(at, b'[') else {
+            return Ok(None);
+        };
+        let at = self.path(at)?.ok_or(Raised)?;
+        Ok(Some(self.must_byte(at, b']')?))
+    }
+
+    /// `ascii::keyword`: `word` not followed by an ASCII identifier
+    /// character.
+    fn keyword(&self, at: usize, word: &str) -> Option<usize> {
+        let end = at + word.len();
+        let follows = |b: &u8| b.is_ascii_alphanumeric() || *b == b'_';
+        (self.text.get(at..end) == Some(word)
+            && !self.text.as_bytes().get(end).is_some_and(follows))
+        .then_some(end)
+    }
+
+    /// `MapperOrExpression`: `expression`, or `mapper`, which commits, a
+    /// bracketed path and an optional `.` and ASCII identifier.
+    fn mapper_or_expression(&self, at: usize) -> PathParse {
+        if let Some(end) = self.keyword(at, "expression") {
+            return Ok(Some(end));
+        }
+        let Some(at) = self.keyword(at, "mapper") else {
+            return Ok(None);
+        };
+        let at = self.bracket_path(at)?.ok_or(Raised)?;
+        let Some(dot) = self.byte(at, b'.') else {
+            return Ok(Some(at));
+        };
+        let ascii = |b: &u8| b.is_ascii_alphabetic() || *b == b'_';
+        if !self.text.as_bytes().get(dot).is_some_and(ascii) {
+            return Err(Raised);
+        }
+        let mut end = dot + 1;
+        while self
+            .text
+            .as_bytes()
+            .get(end)
+            .is_some_and(|b| b.is_ascii_alphanumeric() || *b == b'_')
+        {
+            end += 1;
+        }
+        Ok(Some(end))
+    }
+
+    /// `.` (which commits) and `MapperOrExpression`.
+    fn dot_mapper_or_expression(&self, at: usize) -> PathParse {
+        let Some(at) = self.byte(at, b'.') else {
+            return Ok(None);
+        };
+        Ok(Some(self.mapper_or_expression(at)?.ok_or(Raised)?))
+    }
+
+    /// `PropElts`: `.`, which commits, a property name, then a bracketed
+    /// target and an optional relational attribute (`RelAttrSeq`), or a
+    /// mapper or expression.
+    fn property_elements(&self, at: usize) -> PathParse {
+        let Some(at) = self.byte(at, b'.') else {
+            return Ok(None);
+        };
+        let at = self.property_name(at)?.ok_or(Raised)?;
+        if let Some(at) = self.bracket_path(at)? {
+            // `RelAttrSeq`: `.`, which commits, a property name, then a
+            // bracketed target or a mapper or expression.
+            let Some(dot) = self.byte(at, b'.') else {
+                return Ok(Some(at));
+            };
+            let at = self.property_name(dot)?.ok_or(Raised)?;
+            if let Some(end) = self.bracket_path(at)? {
+                return Ok(Some(end));
+            }
+            return Ok(Some(self.dot_mapper_or_expression(at)?.unwrap_or(at)));
+        }
+        Ok(Some(self.dot_mapper_or_expression(at)?.unwrap_or(at)))
+    }
+
+    /// `PathElts`: prim elements and optional property elements, or
+    /// property elements alone.
+    fn path_elements(&self, at: usize) -> PathParse {
+        match self.prim_elements(at)? {
+            Some(at) => Ok(Some(self.property_elements(at)?.unwrap_or(at))),
+            None => self.property_elements(at),
+        }
+    }
+
+    /// `Path`: `/` and optional path elements starting with a prim;
+    /// `..` steps joined by `/`, then optionally `/` (which commits) and
+    /// path elements; or path elements. (`ReflexiveRelative`, a `.` at
+    /// the end of the input, never matches before the `>` of a `PathRef`.)
+    fn path(&self, at: usize) -> PathParse {
+        if let Some(at) = self.byte(at, b'/') {
+            let Some(prim) = self.prim_elements(at)? else {
+                return Ok(Some(at));
+            };
+            return Ok(Some(self.property_elements(prim)?.unwrap_or(prim)));
+        }
+        if self.text.get(at..at + 2) == Some("..") {
+            let mut at = at + 2;
+            while self.text.get(at..at + 3) == Some("/..") {
+                at += 3;
+            }
+            let Some(slash) = self.byte(at, b'/') else {
+                return Ok(Some(at));
+            };
+            return Ok(Some(self.path_elements(slash)?.ok_or(Raised)?));
+        }
+        self.path_elements(at)
+    }
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────
 
 /// The value type name OpenUSD reads a legacy one as (`Vec3f` is `float3`,
@@ -2039,7 +2286,7 @@ mod tests {
     use crate::ast::*;
     use crate::parser::parse_cst;
 
-    use super::lower;
+    use super::{is_path_text, lower};
 
     /// Helper: parse source through CST then lower to AST.
     fn parse(src: &str) -> ParseResult<'_> {
@@ -2978,5 +3225,54 @@ def Scope \"root\" {
         }
         let r = parse("#usda 1.0\n(\n    \"x\"\n)\ndef \"P\" (\n    \"y\"\n)\n{\n}\n");
         assert!(r.diagnostics.is_empty(), "{:?}", r.diagnostics);
+    }
+
+    #[test]
+    fn paths_follow_the_path_grammar() {
+        // Each as `SdfPath::IsValidPathString` in OpenUSD 26.11 judges it,
+        // which applies the grammar `PathRef` does.
+        for path in [
+            "/",
+            "/A/B",
+            "A",
+            "../..",
+            "../A.b",
+            ".b:c",
+            "/A.b[/C].d",
+            "/A.b[/C].d[/E]",
+            "/A.b.mapper[/C].arg",
+            "/A.b.expression",
+            "/A{v=x}B{w=}",
+            "/A {v=x}",
+            "/A{ v-x = .y|z- }",
+            "/\u{c4}.\u{fc}",
+        ] {
+            assert!(is_path_text(path), "{path}");
+        }
+        for path in [
+            "/A b",
+            "/1A",
+            "/A//B",
+            "/A/",
+            "/A.b:",
+            "/A.b.c",
+            "/A.b[/C",
+            "/A.b.mapper[/C].1",
+            "/A.b.expressionx",
+            "/A{v=..x}",
+            "/A{1=x}",
+            "/A{v=x",
+            "/a\u{b2}",
+            ".",
+            "...",
+            "../",
+            "/..",
+            "/A\\x10",
+        ] {
+            assert!(!is_path_text(path), "{path}");
+        }
+        let r =
+            parse("#usda 1.0\ndef \"P\" (\n    inherits = </A b>\n)\n{\n    rel r = </1A>\n}\n");
+        assert_eq!(r.diagnostics.len(), 2, "{:?}", r.diagnostics);
     }
 }

@@ -16,7 +16,10 @@
 //! Some text parses but is not scene description OpenUSD can hold: an
 //! inherits, specializes, reference or payload path, a relocates path or a
 //! relationship target path with a variant selection (`</A{v=x}B>`), and
-//! an attribute connection path written with one. OpenUSD's text parser
+//! an attribute connection path written with one; an arc path that does
+//! not name a prim (`<>` but for a reference or payload, `</>`, `</A.b>`,
+//! a relative reference path); and a target or connection that is `<>` or
+//! the root. OpenUSD's text parser
 //! (`Sdf_TextFileFormatParser`, validating with `SdfSchema::IsValid*`)
 //! rejects the whole layer, so it never opens. Emitting reports each such
 //! path as a [`Severity::Error`] diagnostic with OpenUSD's message, leaves
@@ -1091,6 +1094,18 @@ impl EmitCtx<'_> {
                 .iter()
                 .copied()
                 .filter_map(|target| {
+                    // `<>` names no target; OpenUSD refuses it before it
+                    // anchors a relative path.
+                    if target.is_empty() {
+                        self.reject(
+                            rel.span,
+                            String::from(
+                                "Relationship target paths must be absolute prim, property or \
+                                 mapper paths: <>",
+                            ),
+                        );
+                        return None;
+                    }
                     let absolute = (!has_variant_selection(target))
                         .then(|| self.variant_anchored(target, anchor, sites))
                         .flatten();
@@ -1107,7 +1122,12 @@ impl EmitCtx<'_> {
                 })
                 .collect();
             let targets: Vec<&str> = targets.iter().map(|target| &**target).collect();
-            let target_paths = self.target_paths(&targets, anchor, rel.span);
+            let target_paths = self.target_paths(
+                &targets,
+                anchor,
+                rel.span,
+                "Relationship target paths must be absolute prim, property or mapper paths",
+            );
             self.check_empty_edit(rel.span, "targetPaths", rel.op, target_paths.is_empty());
             self.check_duplicates(rel.span, "targetPaths", &target_paths);
             let mut listop = ListOp::default();
@@ -1437,8 +1457,30 @@ impl EmitCtx<'_> {
         // the empty path and composes it as an omitted target.
         //
         // Spec: AOUSD Core §10.3.2.1 (references with no prim path).
+        //
+        // Any other path must be an absolute prim path: OpenUSD refuses a
+        // relative one (`Reference prim path <../B> must be either empty or
+        // an absolute prim path`) and the root or a property path
+        // (`SdfSchema::IsValidReference`).
         let target = match arc_ref.prim_path {
             Some(path_str) if !path_str.is_empty() => {
+                if !path_str.starts_with('/') {
+                    self.reject(
+                        arc_ref.span,
+                        format!(
+                            "{arc} prim path <{path_str}> must be either empty or an absolute \
+                             prim path"
+                        ),
+                    );
+                    return None;
+                }
+                if !is_absolute_prim_path(path_str) {
+                    self.reject(
+                        arc_ref.span,
+                        format!("'{path_str}' is not a valid prim path"),
+                    );
+                    return None;
+                }
                 ReferenceTarget::Prim(self.intern_prim_path(path_str)?)
             }
             _ => ReferenceTarget::DefaultPrim,
@@ -1589,14 +1631,19 @@ impl EmitCtx<'_> {
                 );
                 return None;
             };
-            let path = self.intern_prim_path(&absolute);
-            if path.is_none() {
-                self.diagnostics.push(Diagnostic::error(
-                    paths.span,
-                    format!("unsupported: arc path `<{s}>` is not a prim path; ignored"),
-                ));
+            // The path must name a prim: OpenUSD refuses the empty path, the
+            // root and a property path as authored (`'/A.b' is not a valid
+            // prim path`), and a relative path that anchors at the root.
+            if s.is_empty() || !is_absolute_prim_path(&absolute) {
+                let message = if s.starts_with('/') || s.is_empty() {
+                    format!("'{s}' is not a valid prim path")
+                } else {
+                    format!("{arc} paths must be absolute prim paths: <{s}>")
+                };
+                self.reject(paths.span, message);
+                return None;
             }
-            path
+            self.intern_prim_path(&absolute)
         }));
         self.check_duplicates(paths.span, field, &path_ids);
 
@@ -1674,7 +1721,12 @@ impl EmitCtx<'_> {
                 !invalid
             })
             .collect();
-        let target_paths = self.target_paths(&targets, anchor, conn.span);
+        let target_paths = self.target_paths(
+            &targets,
+            anchor,
+            conn.span,
+            "Connection paths must be absolute prim or property paths",
+        );
         self.check_empty_edit(
             conn.span,
             "connectionPaths",
@@ -1832,11 +1884,26 @@ impl EmitCtx<'_> {
     /// against the prim path `anchor`, and unparsable ones are reported.
     ///
     /// Spec: AOUSD Core §8 (paths), §12.4 (targets).
-    fn target_paths(&mut self, targets: &[&str], anchor: &str, span: Span) -> Vec<TargetPath> {
+    ///
+    /// The empty path `<>` and a path that is or anchors at the root are
+    /// refused with `refusal`, OpenUSD's message for the field
+    /// (`SdfSchema::IsValidRelationshipTargetPath`,
+    /// `IsValidAttributeConnectionPath`).
+    fn target_paths(
+        &mut self,
+        targets: &[&str],
+        anchor: &str,
+        span: Span,
+        refusal: &str,
+    ) -> Vec<TargetPath> {
         targets
             .iter()
             .filter_map(|target| {
                 let absolute = absolute_path(target, anchor);
+                if target.is_empty() || absolute == "/" {
+                    self.reject(span, format!("{refusal}: <{target}>"));
+                    return None;
+                }
                 match TargetPath::parse(&absolute, self.tokens, self.paths) {
                     Ok(path) => Some(path),
                     Err(_) => {
@@ -2302,6 +2369,14 @@ fn is_prim_name(name: &str) -> bool {
         .next()
         .is_some_and(|first| !first.is_ascii_digit() && allowed(first))
         && chars.all(allowed)
+}
+
+/// Whether `text` is an absolute path to a prim, not the root: `/` and
+/// identifiers joined by `/` (AOUSD Core §8, §16.2.9), as arcs name their
+/// targets.
+fn is_absolute_prim_path(text: &str) -> bool {
+    text.strip_prefix('/')
+        .is_some_and(|names| names.split('/').all(crate::ident::is_identifier))
 }
 
 /// Makes a USDA path absolute against the prim path `anchor`: `../B`,
@@ -2976,7 +3051,7 @@ def \"Rig\" {
     /// Spec: OpenUSD's text parser rejects the layer (`SdfSchema::IsValid*`);
     /// see the module's "Rejected layers".
     #[test]
-    fn emit_rejects_variant_selections_in_paths() {
+    fn emit_rejects_paths_and_names_openusd_refuses() {
         let cases = [
             (
                 "def \"A\" (\n    inherits = </B{v=x}C>\n)\n{\n}\n",
@@ -3009,6 +3084,42 @@ def \"Rig\" {
             (
                 "def \"A\"\n{\n    int x.connect = </B{v=x}C.y>\n}\n",
                 "'/B{v=x}C.y' is not a valid prim or property scene path",
+            ),
+            (
+                "def \"A\" (\n    inherits = </>\n)\n{\n}\n",
+                "'/' is not a valid prim path",
+            ),
+            (
+                "def \"A\" (\n    inherits = <>\n)\n{\n}\n",
+                "'' is not a valid prim path",
+            ),
+            (
+                "def \"A\" (\n    inherits = <..>\n)\n{\n}\n",
+                "Inherit paths must be absolute prim paths",
+            ),
+            (
+                "def \"A\" (\n    specializes = </B.c>\n)\n{\n}\n",
+                "'/B.c' is not a valid prim path",
+            ),
+            (
+                "def \"A\" (\n    references = <../B>\n)\n{\n}\n",
+                "Reference prim path <../B> must be either empty or an absolute prim path",
+            ),
+            (
+                "def \"A\" (\n    payload = @a.usda@</>\n)\n{\n}\n",
+                "'/' is not a valid prim path",
+            ),
+            (
+                "def \"A\"\n{\n    rel r = <>\n}\n",
+                "Relationship target paths must be absolute prim, property or mapper paths",
+            ),
+            (
+                "def \"A\"\n{\n    rel r = </>\n}\n",
+                "Relationship target paths must be absolute prim, property or mapper paths",
+            ),
+            (
+                "def \"A\"\n{\n    int x.connect = <..>\n}\n",
+                "Connection paths must be absolute prim or property paths",
             ),
             ("def \"A/B\"\n{\n}\n", "'A/B' is not a valid prim name"),
             ("def \"a b\"\n{\n}\n", "'a b' is not a valid prim name"),

@@ -117,7 +117,17 @@ The cases:
   the spacings that are allowed; substitution entries not separated by
   `,`, typed, or with a value that is not a string (`StringDictionary`),
   while `read_substitutions_on_one_line` reads them on one line and with
-  a `,` after the last.
+  a `,` after the last; a `<...>` path outside the path grammar
+  (`Sdf_PathParser::Path`, `pxr/usd/sdf/pathParser.h`), such as a space,
+  a name that is not an identifier, an empty name or a namespace without
+  a name, in any value, while `read_path_grammar` reads names outside
+  ASCII and relative paths; an arc path that names no prim (the root,
+  `<>` but in a reference or payload, a property, a relative inherit
+  path that anchors at the root, a relative reference path,
+  `SdfSchema::IsValidInheritPath`, `IsValidReference`), while
+  `read_reference_empty_path` reads `<>` in references; and a target or
+  connection that is `<>` or the root
+  (`IsValidRelationshipTargetPath`, `IsValidAttributeConnectionPath`).
 - `statements_*`: several list-op statements for one field, on a
   relationship, a connection, references, inherits, `variantSets` and
   metadata (`apiSchemas`). OpenUSD's parser sets each statement's list
@@ -1598,6 +1608,113 @@ def "P" (
     }
 )
 {
+}
+''', []),
+    "strict_path_with_space": ('''#usda 1.0
+def "P"
+{
+    rel r = </A b>
+}
+''', []),
+    "strict_path_name_not_identifier": ('''#usda 1.0
+def "P" (
+    inherits = </1A>
+)
+{
+}
+''', []),
+    "strict_path_empty_name": ('''#usda 1.0
+def "P"
+{
+    rel r = </A//B>
+}
+''', []),
+    "strict_path_namespace_without_name": ('''#usda 1.0
+def "P"
+{
+    float c.connect = </A.b:>
+}
+''', []),
+    "strict_path_value_not_in_grammar": ('''#usda 1.0
+def "P"
+{
+    string p = </A b>
+}
+''', []),
+    "read_path_grammar": ('''#usda 1.0
+def "P" (
+    inherits = [</Ä>, <../B_1>]
+)
+{
+    rel r = [</A.b:c>, <.ü>, <Child>]
+    float c.connect = <../X.y>
+}
+''', ["/P.r", "/P.c"]),
+    "strict_inherit_root": ('''#usda 1.0
+def "P" (
+    inherits = </>
+)
+{
+}
+''', []),
+    "strict_inherit_empty": ('''#usda 1.0
+def "P" (
+    inherits = <>
+)
+{
+}
+''', []),
+    "strict_inherit_anchored_at_root": ('''#usda 1.0
+def "P" (
+    inherits = <..>
+)
+{
+}
+''', []),
+    "strict_specializes_property": ('''#usda 1.0
+def "P" (
+    specializes = </A.b>
+)
+{
+}
+''', []),
+    "strict_reference_relative": ('''#usda 1.0
+def "P" (
+    references = <../B>
+)
+{
+}
+''', []),
+    "strict_payload_root": ('''#usda 1.0
+def "P" (
+    payload = @a.usda@</>
+)
+{
+}
+''', []),
+    "read_reference_empty_path": ('''#usda 1.0
+def "P" (
+    references = [<>, @a.usda@<>]
+)
+{
+}
+''', []),
+    "strict_target_empty": ('''#usda 1.0
+def "P"
+{
+    rel r = <>
+}
+''', []),
+    "strict_target_root": ('''#usda 1.0
+def "P"
+{
+    rel r = <..>
+}
+''', []),
+    "strict_connection_root": ('''#usda 1.0
+def "P"
+{
+    float c.connect = </>
 }
 ''', []),
 }

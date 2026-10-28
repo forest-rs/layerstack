@@ -864,6 +864,7 @@ impl SkelAnimationEdit {
 
 #[doc = "The tokens `primvars:skel:skinningMethod` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum SkelBindingApiSkinningMethod {
     #[doc = "`classicLinear`"]
     ClassicLinear,

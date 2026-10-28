@@ -27,6 +27,7 @@ use crate::{
 };
 #[doc = "The tokens `accessibility:<instance>:priority` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum AccessibilityApiPriority {
     #[doc = "`low`"]
     Low,
@@ -499,6 +500,7 @@ impl BackdropEdit {
 
 #[doc = "The tokens `ui:nodegraph:node:expansionState` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum NodeGraphNodeApiExpansionState {
     #[doc = "`open`"]
     Open,

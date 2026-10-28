@@ -320,6 +320,7 @@ impl RenderPassEdit {
 
 #[doc = "The tokens `productType` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum RenderProductProductType {
     #[doc = "`raster`"]
     Raster,
@@ -859,6 +860,7 @@ impl RenderSettingsEdit {
 
 #[doc = "The tokens `aspectRatioConformPolicy` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum RenderSettingsBaseAspectRatioConformPolicy {
     #[doc = "`expandAperture`"]
     ExpandAperture,
@@ -1250,6 +1252,7 @@ impl RenderSettingsBaseEdit {
 
 #[doc = "The tokens `sourceType` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum RenderVarSourceType {
     #[doc = "`raw`"]
     Raw,

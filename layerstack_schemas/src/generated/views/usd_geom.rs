@@ -27,6 +27,7 @@ use crate::{
 };
 #[doc = "The tokens `backPlate:<instance>:plateVisibility` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum BackPlateApiPlateVisibility {
     #[doc = "`all`"]
     All,
@@ -837,6 +838,7 @@ impl BackPlateApiEdit {
 
 #[doc = "The tokens `basis` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum BasisCurvesBasis {
     #[doc = "`bezier`"]
     Bezier,
@@ -891,6 +893,7 @@ impl BasisCurvesBasis {
 
 #[doc = "The tokens `type` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum BasisCurvesCurveType {
     #[doc = "`linear`"]
     Linear,
@@ -941,6 +944,7 @@ impl BasisCurvesCurveType {
 
 #[doc = "The tokens `wrap` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum BasisCurvesWrap {
     #[doc = "`nonperiodic`"]
     Nonperiodic,
@@ -1358,6 +1362,7 @@ impl BoundableEdit {
 
 #[doc = "The tokens `projection` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum CameraProjection {
     #[doc = "`perspective`"]
     Perspective,
@@ -1408,6 +1413,7 @@ impl CameraProjection {
 
 #[doc = "The tokens `stereoRole` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum CameraStereoRole {
     #[doc = "`mono`"]
     Mono,
@@ -2362,6 +2368,7 @@ impl CameraEdit {
 
 #[doc = "The tokens `axis` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum CapsuleAxis {
     #[doc = "`X`"]
     X,
@@ -2620,6 +2627,7 @@ impl CapsuleEdit {
 
 #[doc = "The tokens `axis` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum Capsule1Axis {
     #[doc = "`X`"]
     X,
@@ -2918,6 +2926,7 @@ impl Capsule1Edit {
 
 #[doc = "The tokens `axis` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum ConeAxis {
     #[doc = "`X`"]
     X,
@@ -3614,6 +3623,7 @@ impl CurvesEdit {
 
 #[doc = "The tokens `axis` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum CylinderAxis {
     #[doc = "`X`"]
     X,
@@ -3872,6 +3882,7 @@ impl CylinderEdit {
 
 #[doc = "The tokens `axis` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum Cylinder1Axis {
     #[doc = "`X`"]
     X,
@@ -4170,6 +4181,7 @@ impl Cylinder1Edit {
 
 #[doc = "The tokens `model:cardGeometry` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum GeomModelApiModelCardGeometry {
     #[doc = "`cross`"]
     Cross,
@@ -4224,6 +4236,7 @@ impl GeomModelApiModelCardGeometry {
 
 #[doc = "The tokens `model:cardVisibility` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum GeomModelApiModelCardVisibility {
     #[doc = "`full`"]
     Full,
@@ -4278,6 +4291,7 @@ impl GeomModelApiModelCardVisibility {
 
 #[doc = "The tokens `model:drawMode` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum GeomModelApiModelDrawMode {
     #[doc = "`origin`"]
     Origin,
@@ -4867,6 +4881,7 @@ impl GeomModelApiEdit {
 
 #[doc = "The tokens `elementType` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum GeomSubsetElementType {
     #[doc = "`face`"]
     Face,
@@ -5187,6 +5202,7 @@ impl GeomSubsetEdit {
 
 #[doc = "The tokens `orientation` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum GprimOrientation {
     #[doc = "`rightHanded`"]
     RightHanded,
@@ -5816,6 +5832,7 @@ impl HermiteCurvesEdit {
 
 #[doc = "The tokens `purpose` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum ImageablePurpose {
     #[doc = "`default`"]
     Default,
@@ -5874,6 +5891,7 @@ impl ImageablePurpose {
 
 #[doc = "The tokens `visibility` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum ImageableVisibility {
     #[doc = "`inherited`"]
     Inherited,
@@ -6132,6 +6150,7 @@ impl ImageableEdit {
 
 #[doc = "The tokens `faceVaryingLinearInterpolation` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum MeshFaceVaryingLinearInterpolation {
     #[doc = "`none`"]
     None,
@@ -6205,6 +6224,7 @@ impl MeshFaceVaryingLinearInterpolation {
 
 #[doc = "The tokens `interpolateBoundary` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum MeshInterpolateBoundary {
     #[doc = "`none`"]
     None,
@@ -6259,6 +6279,7 @@ impl MeshInterpolateBoundary {
 
 #[doc = "The tokens `subdivisionScheme` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum MeshSubdivisionScheme {
     #[doc = "`catmullClark`"]
     CatmullClark,
@@ -6317,6 +6338,7 @@ impl MeshSubdivisionScheme {
 
 #[doc = "The tokens `triangleSubdivisionRule` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum MeshTriangleSubdivisionRule {
     #[doc = "`catmullClark`"]
     CatmullClark,
@@ -8276,6 +8298,7 @@ impl NurbsCurvesEdit {
 
 #[doc = "The tokens `uForm` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum NurbsPatchUForm {
     #[doc = "`open`"]
     Open,
@@ -8330,6 +8353,7 @@ impl NurbsPatchUForm {
 
 #[doc = "The tokens `vForm` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum NurbsPatchVForm {
     #[doc = "`open`"]
     Open,
@@ -9765,6 +9789,7 @@ impl NurbsPatchEdit {
 
 #[doc = "The tokens `axis` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum PlaneAxis {
     #[doc = "`X`"]
     X,
@@ -12573,6 +12598,7 @@ impl TetMeshEdit {
 
 #[doc = "The tokens `guideVisibility` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum VisibilityApiGuideVisibility {
     #[doc = "`inherited`"]
     Inherited,
@@ -12627,6 +12653,7 @@ impl VisibilityApiGuideVisibility {
 
 #[doc = "The tokens `proxyVisibility` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum VisibilityApiProxyVisibility {
     #[doc = "`inherited`"]
     Inherited,
@@ -12681,6 +12708,7 @@ impl VisibilityApiProxyVisibility {
 
 #[doc = "The tokens `renderVisibility` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum VisibilityApiRenderVisibility {
     #[doc = "`inherited`"]
     Inherited,

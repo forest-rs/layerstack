@@ -759,6 +759,7 @@ impl PhysicsDistanceJointEdit {
 
 #[doc = "The tokens `drive:<instance>:physics:type` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum PhysicsDriveApiDriveType {
     #[doc = "`force`"]
     Force,
@@ -2844,6 +2845,7 @@ impl PhysicsMaterialApiEdit {
 
 #[doc = "The tokens `physics:approximation` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum PhysicsMeshCollisionApiApproximation {
     #[doc = "`none`"]
     None,
@@ -3052,6 +3054,7 @@ impl PhysicsMeshCollisionApiEdit {
 
 #[doc = "The tokens `physics:axis` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum PhysicsPrismaticJointAxis {
     #[doc = "`X`"]
     X,
@@ -3313,6 +3316,7 @@ impl PhysicsPrismaticJointEdit {
 
 #[doc = "The tokens `physics:axis` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum PhysicsRevoluteJointAxis {
     #[doc = "`X`"]
     X,
@@ -4115,6 +4119,7 @@ impl PhysicsSceneEdit {
 
 #[doc = "The tokens `physics:axis` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum PhysicsSphericalJointAxis {
     #[doc = "`X`"]
     X,

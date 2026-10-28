@@ -174,6 +174,7 @@ impl MountedOnApiEdit {
 
 #[doc = "The tokens `telescope:mount` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum TelescopeTelescopeMount {
     #[doc = "`altAz`"]
     AltAz,

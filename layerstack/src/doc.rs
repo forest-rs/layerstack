@@ -1088,6 +1088,25 @@ impl SublayerEntry {
             .as_deref()
             .is_some_and(crate::variable_expression::is_expression)
     }
+
+    /// Returns the layer this sublayer of `anchor` names as the store
+    /// resolves it: its layer, or for one with no layer resolved
+    /// ([`SublayerEntry::is_unresolved`]) the layer `store` binds its asset
+    /// path to relative to `anchor` ([`LayerStore::asset_layer`]), as
+    /// gathering the layer stack takes it. `None` while the store binds
+    /// none, and for a variable expression, which only gathering the layer
+    /// stack evaluates.
+    ///
+    /// Spec: AOUSD Core §9.4 (relative asset paths), §10.3.1 (sublayers).
+    pub(crate) fn stored_layer(&self, store: &dyn LayerStore, anchor: LayerId) -> Option<LayerId> {
+        if !self.is_unresolved() {
+            return Some(self.layer);
+        }
+        if self.is_expression() {
+            return None;
+        }
+        store.asset_layer(anchor, self.asset.as_deref()?)
+    }
 }
 
 impl From<LayerId> for SublayerEntry {
@@ -4013,9 +4032,21 @@ impl Layer {
     /// Returns the paths of the prim specs whose deferred references or
     /// payloads ([`Reference::deferred`]) name one of `assets`, in their own
     /// lists or in their variant branches, sorted; `None` when some asset
-    /// is named by no deferred arc, whose binding no prim path bounds.
+    /// is named by no deferred arc, whose binding no prim path bounds, or
+    /// may be one of the layer's sublayers by asset path
+    /// ([`SublayerEntry::unresolved`]), whose binding changes the layer
+    /// stacks holding the layer.
     fn deferred_arc_paths(&self, assets: &[&str]) -> Option<Vec<PathId>> {
-        if self.known_without_reference_arcs() {
+        if self.known_without_reference_arcs()
+            || self.sublayers.iter().any(|sublayer| {
+                sublayer.is_unresolved()
+                    && (sublayer.is_expression()
+                        || sublayer
+                            .asset
+                            .as_deref()
+                            .is_some_and(|asset| assets.contains(&asset)))
+            })
+        {
             return None;
         }
         // A dynamic payload asks for its asset with the arguments
@@ -5029,6 +5060,31 @@ mod tests {
         // as binding that asset alone would not.
         let since = store.layers[&LayerId(1)].generation();
         store.insert_asset_layers(LayerId(1), [("a.usda", LayerId(3)), ("b.usda", LayerId(4))]);
+        assert_eq!(store.layers[&LayerId(1)].changed_paths_since(since), None);
+    }
+
+    /// Binding an asset the layer also sublayers by asset path changes its
+    /// layer stack, so no prim path bounds the change, though a deferred
+    /// arc names the same asset.
+    #[test]
+    fn binding_a_sublayer_asset_bounds_the_change_by_no_prim() {
+        let mut store = InMemoryStore::default();
+        let a = store.path("/A");
+        let mut layer = Layer::new(LayerId(1));
+        layer
+            .sublayers
+            .push(SublayerEntry::unresolved("a.usda", LayerOffset::IDENTITY));
+        let mut spec = PrimSpec::def();
+        spec.references.make_mut().prepend.push(Reference::deferred(
+            LayerId(1),
+            "a.usda",
+            ReferenceTarget::DefaultPrim,
+            LayerOffset::IDENTITY,
+        ));
+        layer.insert_prim(a, spec);
+        store.insert_layer(layer);
+        let since = store.layers[&LayerId(1)].generation();
+        store.insert_asset_layers(LayerId(1), [("a.usda", LayerId(2))]);
         assert_eq!(store.layers[&LayerId(1)].changed_paths_since(since), None);
     }
 

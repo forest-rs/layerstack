@@ -47,6 +47,21 @@ impl ArcReads {
         }
     }
 }
+/// The layers `layer`'s sublayers name as the store resolves them
+/// ([`crate::SublayerEntry::stored_layer`]): a sublayer authored by asset
+/// path reads the layer the store binds it to, so the layer is watched,
+/// and its own sublayers and arcs reached, as the layer stack gathers it.
+///
+/// Spec: AOUSD Core §10.3.1 (sublayers). OpenUSD opens each sublayer as it
+/// computes the layer stack (`PcpLayerStack::_BuildLayerStack`).
+fn sublayer_layers(store: &dyn LayerStore, layer: &crate::Layer) -> Vec<LayerId> {
+    layer
+        .sublayers
+        .iter()
+        .filter_map(|sublayer| sublayer.stored_layer(store, layer.id))
+        .collect()
+}
+
 impl LayerReads {
     /// What `layer` authors that discovery reads, found by visiting its
     /// specs, unless a reader noted that none authors a reference or
@@ -73,7 +88,7 @@ impl LayerReads {
         Self {
             generation: layer.generation(),
             structure: layer.structural_generation(),
-            sublayers: layer.sublayers.iter().map(|s| s.layer).collect(),
+            sublayers: sublayer_layers(store, layer),
             expressions: layer.sublayers.iter().any(|s| s.is_expression()),
             arcs,
         }

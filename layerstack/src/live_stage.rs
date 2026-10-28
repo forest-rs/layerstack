@@ -150,7 +150,7 @@ fn participating_layers(
         };
         for entry in &layer.sublayers {
             expressions |= entry.is_expression();
-            pending.push(entry.layer);
+            pending.extend(entry.stored_layer(store, id));
         }
         for spec in layer
             .prims
@@ -2214,7 +2214,8 @@ mod tests {
 
     use super::*;
     use crate::{
-        FieldValue, HashMap, Layer, PrimSpec, PropertySpec, Reference, SublayerEntry, Value,
+        FieldValue, HashMap, Layer, LayerOffset, PrimSpec, PropertySpec, Reference, SublayerEntry,
+        Value,
         doc::InMemoryStore,
         interner::TokenId,
         path::{Path, PropertyPath},
@@ -2671,6 +2672,90 @@ mod tests {
         late.insert_prim(rock, PrimSpec::def().with_property(size, attr(9)));
         store.insert_layer(late);
         poll(&mut live, &mut store, &[LayerId(4)], size);
+    }
+
+    /// A sublayer authored by asset path on a layer that is itself a
+    /// sublayer bound by asset path: the stage reads the layer stack as
+    /// the store binds it. Binding the nested path regathers the stage's
+    /// layer stack with it; an edit made then to the nested layer through
+    /// its methods is found by polling; muting the layer naming it drops
+    /// both. OpenUSD opens each sublayer as it computes the layer stack
+    /// (`PcpLayerStack::_BuildLayerStack`), AOUSD Core §10.3.1.
+    #[test]
+    fn a_nested_sublayer_by_asset_path_joins_the_layer_stack_once_bound() {
+        let mut store = InMemoryStore::default();
+        let size = store.tokens.intern("size");
+        let ball = p(&mut store, "/Ball");
+        let mut root = Layer::new(LayerId(1));
+        root.sublayers.push(SublayerEntry::unresolved(
+            "./sub.usda",
+            LayerOffset::IDENTITY,
+        ));
+        root.insert_prim(ball, PrimSpec::def().with_property(size, attr(1)));
+        store.insert_layer(root);
+        let mut sub = Layer::new(LayerId(2));
+        sub.sublayers.push(SublayerEntry::unresolved(
+            "./deep/detail.usda",
+            LayerOffset::IDENTITY,
+        ));
+        sub.insert_prim(ball, PrimSpec::over());
+        store.insert_asset_layer(LayerId(1), "./sub.usda", LayerId(2));
+        store.insert_layer(sub);
+        let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+        assert_eq!(live.stage().layer_stack(), [LayerId(1), LayerId(2)]);
+        let anchors: Vec<(LayerId, &str)> = live
+            .stage()
+            .asset_requests()
+            .iter()
+            .map(|request| (request.anchor, request.asset_path.as_str()))
+            .collect();
+        assert_eq!(anchors, [(LayerId(2), "./deep/detail.usda")]);
+
+        let tag = store.tokens.intern("tag");
+        let mut detail = Layer::new(LayerId(3));
+        detail.insert_prim(ball, PrimSpec::over().with_property(tag, attr(3)));
+        store.insert_layer(detail);
+        store.insert_asset_layer(LayerId(2), "./deep/detail.usda", LayerId(3));
+        assert_eq!(live.notify_changed_layers(&store), [LayerId(2)]);
+        live.recompose(&mut store);
+        assert_eq!(
+            live.stage().layer_stack(),
+            [LayerId(1), LayerId(2), LayerId(3)]
+        );
+        assert!(live.stage().asset_requests().is_empty());
+        assert_matches_fresh(&live, &mut store, &[size, tag]);
+        let tag_value = |live: &LiveStage| {
+            live.stage()
+                .resolve_property_path(PropertyPath::new(ball, tag))
+                .map(|resolved| resolved.value)
+        };
+        assert_eq!(
+            tag_value(&live),
+            Some(crate::ResolvedValue::Scalar(Value::Int64(3)))
+        );
+
+        let layer = store.layers.get_mut(&LayerId(3)).unwrap();
+        layer.set_property(PropertyPath::new(ball, tag), attr(4));
+        assert_eq!(live.notify_changed_layers(&store), [LayerId(3)]);
+        assert_eq!(live.recompose(&mut store), [ball]);
+        assert_eq!(
+            tag_value(&live),
+            Some(crate::ResolvedValue::Scalar(Value::Int64(4)))
+        );
+        assert_matches_fresh(&live, &mut store, &[size, tag]);
+
+        assert_eq!(live.mute_layer(LayerId(2)), Ok(true));
+        live.recompose(&mut store);
+        assert_eq!(live.stage().layer_stack(), [LayerId(1)]);
+        assert_eq!(tag_value(&live), None);
+        assert_matches_fresh(&live, &mut store, &[size, tag]);
+        assert!(live.unmute_layer(LayerId(2)));
+        live.recompose(&mut store);
+        assert_eq!(
+            live.stage().layer_stack(),
+            [LayerId(1), LayerId(2), LayerId(3)]
+        );
+        assert_matches_fresh(&live, &mut store, &[size, tag]);
     }
 
     fn layer_touch(store: &mut InMemoryStore, id: LayerId) {

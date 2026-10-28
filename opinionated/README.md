@@ -24,7 +24,7 @@ and seeds.
 
 ```toml
 [dependencies]
-opinionated = "0.1"
+opinionated = "0.2"
 ```
 
 Requires Rust **1.89** or later. The crate uses `no_std` with `alloc`. An

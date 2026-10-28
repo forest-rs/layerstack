@@ -209,9 +209,9 @@ pub struct IoError {
     /// failed. `None` only for a failure no source is involved in, or one a
     /// host [`Storage`] returned directly to its own caller.
     pub identifier: Option<String>,
-    /// For [`IoErrorKind::Rejected`] by a strict import, the error
-    /// diagnostics of the source it rejected, with their spans; empty
-    /// otherwise.
+    /// For [`IoErrorKind::Rejected`] by a strict import, or by a USDA
+    /// reader refusing a layer as OpenUSD refuses it, the error diagnostics
+    /// of the source it rejected, with their spans; empty otherwise.
     pub diagnostics: Vec<MemberDiagnostic>,
     /// Original retained-array failure when `kind` is [`IoErrorKind::Decode`].
     pub array_read_error: Option<layerstack::ArrayReadError>,
@@ -2019,10 +2019,18 @@ fn read_loose(
             .map(member)
             .collect();
         read.layer = if result.emitted.rejected {
-            Err(IoError::new(
-                IoErrorKind::Rejected,
-                alloc::format!("{identifier}: USDA reader rejected the layer"),
-            ))
+            // Named and explained as a strict import's rejection is: OpenUSD
+            // refuses the layer whatever the policy, and why is in its
+            // error diagnostics.
+            let mut error = IoError::new(IoErrorKind::Rejected, "USDA reader rejected the layer")
+                .at(identifier);
+            error.diagnostics = read
+                .diagnostics
+                .iter()
+                .filter(|d| d.diagnostic.is_error())
+                .cloned()
+                .collect();
+            Err(error)
         } else {
             Ok(result.emitted.layer)
         };

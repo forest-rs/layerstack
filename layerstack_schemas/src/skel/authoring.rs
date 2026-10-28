@@ -21,6 +21,7 @@ use layerstack::{PropertyType, half};
 /// OpenUSD: `UsdSkelDecomposeTransforms` ("Failed decomposing transform
 /// %zu. The source transform may be singular.").
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct DecomposeError {
     /// The offending transform's index.
     pub joint: usize,
@@ -40,6 +41,7 @@ impl core::error::Error for DecomposeError {}
 
 /// Why [`SkelBindingApiEdit::set_rigid_joint_influence`] authored nothing.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum RigidInfluenceError {
     /// The joint index is negative (OpenUSD: "Invalid jointIndex").
     NegativeJointIndex(i32),

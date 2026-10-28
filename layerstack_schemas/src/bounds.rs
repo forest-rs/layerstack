@@ -132,6 +132,7 @@ impl BoundingBox {
 
 /// An unsupported or invalid input; no partial bound is returned.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum BoundsError {
     /// No composed prim exists at this path.
     MissingPrim(PathId),
@@ -212,6 +213,7 @@ impl Default for BoundsOptions {
 
 /// Observable work performed since construction or clearing.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct BoundsStats {
     /// Prim bounds evaluated.
     pub computed: usize,

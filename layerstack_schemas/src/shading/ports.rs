@@ -141,6 +141,7 @@ impl<'a> PrimView<'a> {
 
 /// A port edit rejected before adding operations to the transaction.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum PortError {
     /// The owning prim does not exist in this edit's scene.
     MissingPrim(PathId),

@@ -117,6 +117,7 @@ pub enum UpAxis {
 /// rarely match a kernel's conventions, so relying on them is a silent
 /// scale or orientation error.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct StageSettings {
     /// Up axis (`upAxis`).
     pub up_axis: UpAxis,
@@ -153,6 +154,7 @@ pub enum Node<'a> {
 
 /// A transform group, written as an `Xform` prim.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct Xform<'a> {
     /// Prim name; must be a USD identifier.
     pub name: Cow<'a, str>,
@@ -233,6 +235,7 @@ impl<'a> Xform<'a> {
 /// layer's `defaultPrim`, the materials meshes bind by name, and the
 /// shared prototypes instances place by name.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct Scene<'a> {
     /// Stage metadata.
     pub stage: StageSettings,

@@ -60,6 +60,7 @@ impl Wrap {
 /// USD"); UVs with a top-left origin, such as glTF's, need `t` flipped to
 /// `1 - t` before export.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct Texture<'a> {
     /// Asset path of the image.
     pub file: &'a str,
@@ -272,6 +273,7 @@ impl From<f32> for FloatInput<'_> {
 /// fallbacks); `pxr/usd/plugin/usdShaders/shaders/shaderDefs.usda` (input
 /// types).
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct Material<'a> {
     /// Prim name under [`MATERIALS_SCOPE`]; must be a USD identifier and
     /// unique among the scene's materials. Meshes bind the material by this

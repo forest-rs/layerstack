@@ -17,6 +17,7 @@ const EXTENTS_HINT: &str = "extentsHint";
 
 /// Why an `extentsHint` edit was refused. Nothing is authored.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ExtentsHintError {
     /// A hint holds one to four extents, one per purpose in default, render,
     /// proxy, guide order (OpenUSD's "invalid extents size").

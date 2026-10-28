@@ -167,6 +167,7 @@ pub enum PreviewExpression {
 }
 /// Why one requested Preview expression cannot be represented faithfully.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum PreviewIssueKind {
     /// No selected typed Preview Surface terminal exists.
     MissingSurface,
@@ -191,6 +192,7 @@ pub enum PreviewIssueKind {
 }
 /// Structured projection failure tied to its captured node/input.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct PreviewIssue {
     /// Captured prim involved, if any.
     pub node: Option<PathId>,

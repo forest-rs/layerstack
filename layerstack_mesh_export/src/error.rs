@@ -14,6 +14,7 @@ use crate::{Interpolation, UsdzProfile};
 
 /// Why a scene could not be exported.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ExportError {
     /// A mesh's buffers are inconsistent.
     InvalidMesh {
@@ -88,6 +89,7 @@ pub enum ExportError {
 
 /// A specific inconsistency in a mesh's buffers.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum MeshProblem {
     /// A triangle index list whose length is not a multiple of 3.
     PartialTriangle {
@@ -178,6 +180,7 @@ pub enum MeshProblem {
 
 /// A specific problem with a [`PointInstancer`](crate::PointInstancer).
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum InstancerProblem {
     /// The instancer has no prototypes; `prototypes` is required.
     NoPrototypes,
@@ -284,6 +287,7 @@ pub enum InstancerProblem {
 
 /// A specific problem with a material's inputs.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum MaterialProblem {
     /// A constant, scale, bias or threshold is NaN or infinite.
     NonFinite {

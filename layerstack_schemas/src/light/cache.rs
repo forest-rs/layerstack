@@ -13,6 +13,7 @@ use layerstack::{Changes, PathId, PropertyField, TargetPath};
 /// Cache-local component revisions. Compare only within the same cache instance.
 /// Revisions identify capture changes, not actual GPU submission/execution.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct LightRevisions {
     /// World matrix or inherited visibility changed.
     pub transform: u64,
@@ -26,6 +27,7 @@ pub struct LightRevisions {
 }
 /// Observable work performed since construction or stats reset.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct LightCacheStats {
     /// Capture requests, including failures.
     pub requests: u64,
@@ -46,6 +48,7 @@ pub struct LightCacheStats {
 }
 /// Retained storage counts. These are work-item counts, not heap-byte estimates.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct LightCacheMemory {
     /// Retained emitter records.
     pub lights: usize,

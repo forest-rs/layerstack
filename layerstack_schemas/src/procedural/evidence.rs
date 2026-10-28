@@ -8,6 +8,7 @@ use layerstack::{Applied, EditError, LiveStage, Transaction};
 
 /// Why an evaluated result cannot be published against the supplied scene.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub enum EvidenceError {
     /// Token/path domains do not match the binding's original store.
     DifferentStore,
@@ -42,6 +43,7 @@ impl core::error::Error for EvidenceError {}
 
 /// Failure before or during guarded publication of delayed work.
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum EvidenceApplyError {
     /// The current inputs do not justify this result; no transaction was applied.
     Evidence(EvidenceError),

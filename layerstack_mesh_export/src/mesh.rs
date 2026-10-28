@@ -104,6 +104,7 @@ impl Interpolation {
 /// even when their values are equal (`pxr/usd/usdGeom/primvar.h:497`).
 /// Indices are written exactly as given.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct Primvar<'a, V> {
     /// The element values.
     pub values: V,
@@ -313,6 +314,7 @@ pub struct CustomPrimvar<'a> {
 
 /// A custom (non-schema) attribute, written with the `custom` qualifier.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct CustomAttribute<'a> {
     /// Namespaced attribute name (e.g. `scan:sourcePath`). Use a
     /// namespace so it cannot collide with schema attributes.
@@ -398,6 +400,7 @@ pub struct MaterialSubset<'a> {
 /// outlive the scene, or hand over owned ones built for the export.
 /// Borrowed data is not copied until the scene is serialized.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct Mesh<'a> {
     /// Prim name; must be a USD identifier.
     pub name: Cow<'a, str>,

@@ -20,6 +20,7 @@ pub use ray::{PlaneHit, Ray, RayInterval, TriangleHit};
 type Matrix = [[f64; 4]; 4];
 /// Invalid camera parameters or transform; computations return no partial camera.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum CameraError {
     /// A required parameter has no compatible value or is geometrically invalid.
     InvalidAttribute(&'static str),

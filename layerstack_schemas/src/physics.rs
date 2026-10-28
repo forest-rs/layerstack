@@ -15,6 +15,7 @@ use layerstack::{PathId, TargetPath};
 
 /// A malformed filtering relationship or unrepresentable table size.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum CollisionGroupError {
     /// A filter names a property or a group absent from default traversal.
     InvalidFilteredGroup {

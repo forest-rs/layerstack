@@ -57,6 +57,7 @@ pub struct MaterialBindingSubsets {
 }
 /// The mesh's material subsets cannot be read at all.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum MaterialSubsetError {
     /// The prim is not a mesh or tetrahedral mesh supporting face subsets.
     InvalidGeometry(PathId),

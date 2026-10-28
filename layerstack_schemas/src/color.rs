@@ -60,6 +60,7 @@ pub struct ColorSpaceAssignment {
 }
 /// Recovery errors for assignment, definition and numeric transformation.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ColorError {
     /// The requested prim does not exist.
     MissingPrim(PathId),

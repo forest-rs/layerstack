@@ -159,6 +159,7 @@ fn record(loaded: &LoadedStage, report: &DanglingReport) -> Record {
                         match example.problem {
                             CollectionTargetProblem::Dangling(kind) => kind_name(kind),
                             CollectionTargetProblem::NoCollection => "no_collection",
+                            problem => panic!("no name for {problem:?}"),
                         }
                         .to_owned(),
                     ]

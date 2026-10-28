@@ -71,6 +71,7 @@ use layerstack::{PathId, PropertyPath, TargetPath, TokenInterner, Value};
 
 /// Invalid skeletal inputs; evaluation returns no partial result.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum SkelError {
     /// A retained numeric input could not decode; absence fallback is disallowed.
     Decode {
@@ -159,6 +160,7 @@ impl core::error::Error for SkelError {
 /// A malformed skeletal input that was skipped or left out, where OpenUSD
 /// warns and goes on, so one bad input does not hide a whole rig.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct SkelProblem {
     /// The prim the input belongs to.
     pub prim: PathId,
@@ -170,6 +172,7 @@ pub struct SkelProblem {
 
 /// What a [`SkelProblem`] left out.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum SkelProblemReason {
     /// An inbetween's `weight` is 0 or 1 (within `1e-6`), not finite, or
     /// repeats another inbetween's of the same shape: the inbetween is

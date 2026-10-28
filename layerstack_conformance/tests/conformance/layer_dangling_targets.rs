@@ -165,6 +165,7 @@ fn reads(loaded: &LoadedStage, stage: &Stage, report: &LayerDanglingReport) -> V
                                     AuthoredTargetProblem::Dangling(kind) => kind_name(kind),
                                     AuthoredTargetProblem::NoCollection => "no_collection",
                                     AuthoredTargetProblem::Dropped(_) => "dropped",
+                                    problem => panic!("no name for {problem:?}"),
                                 }
                                 .to_owned(),
                             ),

@@ -169,6 +169,7 @@ pub struct XformOps<'a> {
 /// [`XformProblemKind::Singular`], a huge scale) and warns; so does this
 /// crate, and reports it here.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct XformProblem {
     /// The `xformOpOrder` entry.
     pub op: String,
@@ -178,6 +179,7 @@ pub struct XformProblem {
 
 /// What is wrong with an op (see [`XformProblem`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum XformProblemKind {
     /// The prim has no attribute of that name; the op is skipped.
     NoAttribute,
@@ -688,6 +690,7 @@ pub struct RelativeTransform {
 
 /// What an [`XformCache`] has done since it was made or cleared.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct XformCacheStats {
     /// Local transforms computed.
     pub local_computed: usize,

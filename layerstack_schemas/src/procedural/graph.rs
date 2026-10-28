@@ -63,6 +63,7 @@ pub struct ResourceVersion {
 
 /// Invalid registry, dependency request or external resource declaration.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum GraphError {
     /// Supplied stage/store domains differ from the registry's original domain.
     DifferentStore,
@@ -129,6 +130,7 @@ pub trait ProducerPublisher<T> {
 
 /// Failure before or during one producer's build.
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum BuildError<E, P> {
     /// Dependency/affinity preflight failed before any producer was run.
     Graph(GraphError),
@@ -175,6 +177,7 @@ impl<E: core::error::Error, P: core::error::Error> core::error::Error for BuildE
 
 /// Why a detached build result cannot justify a later publication.
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum BuildEvidenceError {
     /// A declared resource revision differs or is now absent.
     Resource {
@@ -344,6 +347,7 @@ impl<T> Default for BuildResult<T> {
 
 /// A failed request and every earlier successful publication from that request.
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct BuildFailure<T, E, P> {
     /// Concrete failure; boxed to keep the result's error representation small.
     pub error: Box<BuildError<E, P>>,
@@ -373,6 +377,7 @@ pub type BuildOutcome<T, E, P> = Result<BuildResult<T>, BuildFailure<T, E, P>>;
 
 /// Cumulative registry work; elapsed time, payload bytes and scheduling belong to the host.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct GraphWork {
     /// Top-level build requests, including preflight failures.
     pub requests: u64,

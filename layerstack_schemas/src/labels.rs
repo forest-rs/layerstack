@@ -74,6 +74,7 @@ impl core::ops::RangeBounds<f64> for LabelInterval {
 
 /// Invalid semantic label query configuration.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum LabelQueryError {
     /// A taxonomy must have a nonempty name.
     EmptyTaxonomy,

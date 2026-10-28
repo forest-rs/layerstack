@@ -56,6 +56,7 @@ pub trait ProceduralEvaluator {
 
 /// Failure to read one procedural input from the composed stage.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ProceduralInputError {
     /// The named property exists with a different kind.
     WrongKind {
@@ -100,6 +101,7 @@ impl core::error::Error for ProceduralInputError {}
 
 /// Failure to evaluate a procedural recipe; no output is published implicitly.
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum ProceduralError<E> {
     /// The supplied store or stage has different token/path domain affinity.
     DifferentStore,
@@ -358,6 +360,7 @@ impl ProceduralInputs<'_> {
 
 /// Cumulative work of one caller-owned procedural, including failed attempts.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ProceduralWork {
     /// Calls into the application evaluator.
     pub evaluations: u64,

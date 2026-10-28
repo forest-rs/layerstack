@@ -35,6 +35,7 @@ pub enum CollectionList {
 
 /// Why a collection's include or exclude names nothing.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum CollectionTargetProblem {
     /// The path dangles as any target can ([`DanglingKind`]). For an
     /// include of a collection path, this is why its prim does not resolve.
@@ -161,6 +162,7 @@ impl DanglingCollection {
 /// assert!(report.collections.is_empty());
 /// ```
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct DanglingReport {
     /// Relationship targets and attribute connections, by property name.
     pub targets: DanglingTargetReport,

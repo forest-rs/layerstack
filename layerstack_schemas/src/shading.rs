@@ -59,6 +59,7 @@ pub struct ShadingDependency {
 
 /// A recoverable problem encountered along a connection branch.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ShadingIssue {
     /// A direct target does not name an existing shading attribute.
     InvalidTarget {

@@ -80,6 +80,7 @@ pub struct MeshSites {
 
 /// Invalid generated geometry or publication site.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum MeshPublicationError {
     /// Count/index consistency or point-index bounds failed.
     Topology(MeshTopologyError),
@@ -548,6 +549,7 @@ fn derive_extent(points: &[[f32; 3]]) -> Arc<Vec<[f32; 3]>> {
 /// Geometry covered by one successful immutable snapshot validation.
 /// Counts describe payload entries, not CPU instructions or allocations.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct MeshValidationWork {
     /// Points checked for finite coordinates.
     pub points: usize,
@@ -612,6 +614,7 @@ impl ValidatedMesh {
 
 /// Planning work of one successfully prepared publication.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct MeshPublicationWork {
     /// Complete geometry validations during this preparation (zero for retained snapshots).
     pub geometry_validations: usize,

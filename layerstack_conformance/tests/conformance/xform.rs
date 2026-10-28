@@ -254,7 +254,7 @@ fn transforms_visibility_and_purpose_match_openusd() {
 /// evaluates them and reported, each with why.
 #[test]
 fn problem_ops_are_reported() {
-    use layerstack_schemas::{XformProblem, XformProblemKind as K};
+    use layerstack_schemas::XformProblemKind as K;
 
     let mut loaded = load_entry_usda(
         &workspace_root().join("layerstack_conformance/fixtures/xform/problems.usda"),
@@ -282,12 +282,14 @@ fn problem_ops_are_reported() {
     );
 
     let local = xformable.local_transform(Time::Default);
-    let problem = |op: &str, kind| XformProblem {
-        op: op.into(),
-        kind,
-    };
+    let problem = |op: &'static str, kind| (op, kind);
+    let problems: Vec<_> = local
+        .problems
+        .iter()
+        .map(|problem| (problem.op.as_str(), problem.kind))
+        .collect();
     assert_eq!(
-        local.problems,
+        problems,
         [
             problem("xformOp:translate:absent", K::NoAttribute),
             problem("xformOp:rotateX:relationship", K::NoAttribute),

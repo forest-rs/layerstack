@@ -458,6 +458,7 @@ impl BoundMaterial {
 
 /// What a [`BindingCache`] has done since it was made or cleared.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct BindingCacheStats {
     /// Prims' binding inputs read.
     pub inputs_read: usize,
@@ -646,6 +647,7 @@ impl<'a> PrimView<'a> {
 
 /// Why a material binding cannot be authored. Nothing is collected.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum MaterialBindingError {
     /// The binding relationship's name is not a property name: the purpose
     /// or binding name holds something other than identifiers. C++ fails to

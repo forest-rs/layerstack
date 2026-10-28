@@ -12,6 +12,7 @@ use layerstack::{
 
 /// A provider cannot produce a complete local extent.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ExtentError {
     /// Retained numeric input failed to decode.
     Decode {
@@ -51,6 +52,7 @@ impl core::error::Error for ExtentError {
 
 /// Invalid registration, leaving the registry unchanged.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ExtentRegistrationError {
     /// The schema is unregistered or does not derive from `Boundable`.
     NotBoundable(TokenId),

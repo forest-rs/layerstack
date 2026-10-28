@@ -85,6 +85,7 @@ pub struct ComputedRenderVar {
 
 /// Recoverable invalid authored render configuration.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum RenderProblem {
     /// A product camera is absent or does not identify a Camera prim.
     /// That product is omitted, matching OpenUSD's computation.

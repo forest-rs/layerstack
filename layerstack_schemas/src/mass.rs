@@ -17,6 +17,7 @@ mod scene;
 pub type Matrix3 = [[f32; 3]; 3];
 /// Invalid inputs to mass evaluation; no partial aggregate is returned.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum MassError {
     /// Mass is negative or nonfinite, or an aggregate has no positive mass.
     InvalidMass,

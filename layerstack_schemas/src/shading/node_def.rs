@@ -20,6 +20,7 @@ const IMPLEMENTATION_SOURCE: &str = "info:implementationSource";
 
 /// Why a `NodeDefAPI` setter authored nothing.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum NodeDefError {
     /// The prim has no `info:id` attribute, authored or defined by its
     /// schemas, for [`NodeDefApiEdit::set_shader_id`] to set. C++

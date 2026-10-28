@@ -12,6 +12,7 @@ use alloc::vec::Vec;
 
 /// Why an influence utility refused its arrays; they are left unchanged.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum InfluenceShapeError {
     /// The number of influences per component is zero (OpenUSD: "number of
     /// influences must be greater than zero").

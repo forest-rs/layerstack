@@ -82,6 +82,7 @@ pub enum QueryCause {
 
 /// Work performed by a session since construction.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct QueryStats {
     /// Queries reconsidered by polling (including cache-answered computation).
     pub evaluated: u64,
@@ -108,6 +109,7 @@ pub enum QueryDependencies<'a> {
 
 /// Actual computation performed during one poll, including bounds' transforms.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct QueryWork {
     /// Local transform evaluations.
     pub local_transforms: usize,

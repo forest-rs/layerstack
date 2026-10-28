@@ -13,6 +13,7 @@ use alloc::vec::Vec;
 
 /// Invalid required point data or query configuration.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum PointMotionError {
     /// The required `points` array cannot be read.
     MissingPoints,

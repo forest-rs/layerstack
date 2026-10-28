@@ -294,6 +294,7 @@ pub enum LightShape {
 }
 /// A typed parameter could not be extracted; inspect its capture for recovery.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct LightParameterError {
     /// Emitter path.
     pub light: PathId,
@@ -316,6 +317,7 @@ impl core::fmt::Display for LightParameterError {
 impl core::error::Error for LightParameterError {}
 /// Failure to capture an emitter. Parameter failures are retained within a successful capture.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum LightCaptureError {
     /// The prim no longer exists.
     MissingPrim(PathId),
@@ -330,6 +332,7 @@ impl core::fmt::Display for LightCaptureError {
 impl core::error::Error for LightCaptureError {}
 /// A relationship branch that requires an engine's recovery policy.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct LightRelationshipIssue {
     /// Full source relationship name.
     pub relationship: PropertyPath,

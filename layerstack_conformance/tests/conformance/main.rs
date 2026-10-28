@@ -153,6 +153,7 @@ mod schemas;
 mod session_layers;
 mod shader_nodes;
 mod shading;
+mod shading_defaults;
 mod shading_ports;
 mod skel_animation_samples;
 mod skel_authoring;

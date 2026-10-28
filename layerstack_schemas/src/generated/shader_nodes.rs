@@ -48,8 +48,8 @@ impl<'a> PreviewSurface<'a> {
         let shader = Shader::new(scene, path)?;
         let definition = shader.node_def_api();
         (definition.id() == Some(Self::ID)
-            && definition.implementation_source() == Some(NodeDefApiImplementationSource::Id))
-        .then_some(Self { shader })
+            && definition.effective_implementation_source() == NodeDefApiImplementationSource::Id)
+            .then_some(Self { shader })
     }
     /// Defines a Shader with this node's `info:id`, as [`Shader::define`] does; inputs remain unauthored.
     ///
@@ -868,8 +868,8 @@ impl<'a> PrimvarReaderFloat<'a> {
         let shader = Shader::new(scene, path)?;
         let definition = shader.node_def_api();
         (definition.id() == Some(Self::ID)
-            && definition.implementation_source() == Some(NodeDefApiImplementationSource::Id))
-        .then_some(Self { shader })
+            && definition.effective_implementation_source() == NodeDefApiImplementationSource::Id)
+            .then_some(Self { shader })
     }
     /// Defines a Shader with this node's `info:id`, as [`Shader::define`] does; inputs remain unauthored.
     ///
@@ -1029,8 +1029,8 @@ impl<'a> PrimvarReaderFloat2<'a> {
         let shader = Shader::new(scene, path)?;
         let definition = shader.node_def_api();
         (definition.id() == Some(Self::ID)
-            && definition.implementation_source() == Some(NodeDefApiImplementationSource::Id))
-        .then_some(Self { shader })
+            && definition.effective_implementation_source() == NodeDefApiImplementationSource::Id)
+            .then_some(Self { shader })
     }
     /// Defines a Shader with this node's `info:id`, as [`Shader::define`] does; inputs remain unauthored.
     ///
@@ -1194,8 +1194,8 @@ impl<'a> PrimvarReaderFloat3<'a> {
         let shader = Shader::new(scene, path)?;
         let definition = shader.node_def_api();
         (definition.id() == Some(Self::ID)
-            && definition.implementation_source() == Some(NodeDefApiImplementationSource::Id))
-        .then_some(Self { shader })
+            && definition.effective_implementation_source() == NodeDefApiImplementationSource::Id)
+            .then_some(Self { shader })
     }
     /// Defines a Shader with this node's `info:id`, as [`Shader::define`] does; inputs remain unauthored.
     ///
@@ -1359,8 +1359,8 @@ impl<'a> PrimvarReaderFloat4<'a> {
         let shader = Shader::new(scene, path)?;
         let definition = shader.node_def_api();
         (definition.id() == Some(Self::ID)
-            && definition.implementation_source() == Some(NodeDefApiImplementationSource::Id))
-        .then_some(Self { shader })
+            && definition.effective_implementation_source() == NodeDefApiImplementationSource::Id)
+            .then_some(Self { shader })
     }
     /// Defines a Shader with this node's `info:id`, as [`Shader::define`] does; inputs remain unauthored.
     ///
@@ -1524,8 +1524,8 @@ impl<'a> PrimvarReaderInt<'a> {
         let shader = Shader::new(scene, path)?;
         let definition = shader.node_def_api();
         (definition.id() == Some(Self::ID)
-            && definition.implementation_source() == Some(NodeDefApiImplementationSource::Id))
-        .then_some(Self { shader })
+            && definition.effective_implementation_source() == NodeDefApiImplementationSource::Id)
+            .then_some(Self { shader })
     }
     /// Defines a Shader with this node's `info:id`, as [`Shader::define`] does; inputs remain unauthored.
     ///
@@ -1685,8 +1685,8 @@ impl<'a> PrimvarReaderMatrix<'a> {
         let shader = Shader::new(scene, path)?;
         let definition = shader.node_def_api();
         (definition.id() == Some(Self::ID)
-            && definition.implementation_source() == Some(NodeDefApiImplementationSource::Id))
-        .then_some(Self { shader })
+            && definition.effective_implementation_source() == NodeDefApiImplementationSource::Id)
+            .then_some(Self { shader })
     }
     /// Defines a Shader with this node's `info:id`, as [`Shader::define`] does; inputs remain unauthored.
     ///
@@ -1855,8 +1855,8 @@ impl<'a> PrimvarReaderNormal<'a> {
         let shader = Shader::new(scene, path)?;
         let definition = shader.node_def_api();
         (definition.id() == Some(Self::ID)
-            && definition.implementation_source() == Some(NodeDefApiImplementationSource::Id))
-        .then_some(Self { shader })
+            && definition.effective_implementation_source() == NodeDefApiImplementationSource::Id)
+            .then_some(Self { shader })
     }
     /// Defines a Shader with this node's `info:id`, as [`Shader::define`] does; inputs remain unauthored.
     ///
@@ -2020,8 +2020,8 @@ impl<'a> PrimvarReaderPoint<'a> {
         let shader = Shader::new(scene, path)?;
         let definition = shader.node_def_api();
         (definition.id() == Some(Self::ID)
-            && definition.implementation_source() == Some(NodeDefApiImplementationSource::Id))
-        .then_some(Self { shader })
+            && definition.effective_implementation_source() == NodeDefApiImplementationSource::Id)
+            .then_some(Self { shader })
     }
     /// Defines a Shader with this node's `info:id`, as [`Shader::define`] does; inputs remain unauthored.
     ///
@@ -2185,8 +2185,8 @@ impl<'a> PrimvarReaderString<'a> {
         let shader = Shader::new(scene, path)?;
         let definition = shader.node_def_api();
         (definition.id() == Some(Self::ID)
-            && definition.implementation_source() == Some(NodeDefApiImplementationSource::Id))
-        .then_some(Self { shader })
+            && definition.effective_implementation_source() == NodeDefApiImplementationSource::Id)
+            .then_some(Self { shader })
     }
     /// Defines a Shader with this node's `info:id`, as [`Shader::define`] does; inputs remain unauthored.
     ///
@@ -2346,8 +2346,8 @@ impl<'a> PrimvarReaderVector<'a> {
         let shader = Shader::new(scene, path)?;
         let definition = shader.node_def_api();
         (definition.id() == Some(Self::ID)
-            && definition.implementation_source() == Some(NodeDefApiImplementationSource::Id))
-        .then_some(Self { shader })
+            && definition.effective_implementation_source() == NodeDefApiImplementationSource::Id)
+            .then_some(Self { shader })
     }
     /// Defines a Shader with this node's `info:id`, as [`Shader::define`] does; inputs remain unauthored.
     ///
@@ -2511,8 +2511,8 @@ impl<'a> Transform2d<'a> {
         let shader = Shader::new(scene, path)?;
         let definition = shader.node_def_api();
         (definition.id() == Some(Self::ID)
-            && definition.implementation_source() == Some(NodeDefApiImplementationSource::Id))
-        .then_some(Self { shader })
+            && definition.effective_implementation_source() == NodeDefApiImplementationSource::Id)
+            .then_some(Self { shader })
     }
     /// Defines a Shader with this node's `info:id`, as [`Shader::define`] does; inputs remain unauthored.
     ///
@@ -2774,8 +2774,8 @@ impl<'a> UvTexture<'a> {
         let shader = Shader::new(scene, path)?;
         let definition = shader.node_def_api();
         (definition.id() == Some(Self::ID)
-            && definition.implementation_source() == Some(NodeDefApiImplementationSource::Id))
-        .then_some(Self { shader })
+            && definition.effective_implementation_source() == NodeDefApiImplementationSource::Id)
+            .then_some(Self { shader })
     }
     /// Defines a Shader with this node's `info:id`, as [`Shader::define`] does; inputs remain unauthored.
     ///

@@ -683,6 +683,8 @@ jobs:
 
       - name: check shading source oracle
         run: python layerstack_conformance/scripts/shading_oracle.py --check
+      - name: check shading defaults oracle
+        run: python layerstack_conformance/scripts/shading_defaults_oracle.py --check
 
       - name: check bounds oracle
         run: python layerstack_conformance/scripts/bounds_oracle.py --check

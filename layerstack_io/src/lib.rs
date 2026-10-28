@@ -1166,6 +1166,16 @@ impl<B: Storage> StageDocument<B> {
     pub fn package_cache_stats(&self) -> PackageCacheStats {
         self.catalog.cache_stats()
     }
+    /// The member path of a package's root layer (`root.usdc`) when
+    /// `layer` is a package read as a layer, whose identifier is the
+    /// package's (`scene.usdz`): what a new package of it names its root.
+    /// `None` for any other layer, a package member included.
+    ///
+    /// Spec: AOUSD Core §16 (the first layer of a package is its root).
+    #[must_use]
+    pub fn package_root_member(&self, layer: LayerId) -> Option<&str> {
+        self.catalog.package_roots.get(&layer).map(String::as_str)
+    }
     /// Authored layers and the document's shared interners.
     pub fn store(&self) -> &InMemoryStore {
         &self.store

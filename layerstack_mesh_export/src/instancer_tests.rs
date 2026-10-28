@@ -350,7 +350,7 @@ fn rejects_motion_masking_and_schema_attributes() {
     let with = |name| {
         PointInstancer::new("Field", &one, &origin)
             .with_prototype(tri())
-            .with_attribute(name, Value::Float3Array(vec![[0.0; 3]]))
+            .with_attribute(name, Value::Float3Array(vec![[0.0; 3]].into()))
     };
     for name in [
         "velocities",

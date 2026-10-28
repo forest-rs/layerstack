@@ -59,6 +59,13 @@ impl<T> From<Vec<T>> for SharedVec<T> {
     }
 }
 
+impl<T> From<Arc<Vec<T>>> for SharedVec<T> {
+    /// Shares `value`'s buffer, copying nothing.
+    fn from(value: Arc<Vec<T>>) -> Self {
+        Self((!value.is_empty()).then_some(value))
+    }
+}
+
 impl<T> FromIterator<T> for SharedVec<T> {
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
         Vec::from_iter(iter).into()

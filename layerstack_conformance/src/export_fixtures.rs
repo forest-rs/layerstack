@@ -194,16 +194,24 @@ fn types() -> Document {
         "frame4d",
         Value::Matrix4d(Transform::from_translation([1.0, 2.0, 3.0]).usd_rows()),
     );
-    add("bools", "bool[]", Value::BoolArray(vec![true, false]));
-    add("ia", "int[]", Value::IntArray(vec![1, -2, 3]));
-    add("ua", "uint[]", Value::UIntArray(vec![1, 2]));
-    add("la", "int64[]", Value::Int64Array(vec![1 << 40]));
+    add(
+        "bools",
+        "bool[]",
+        Value::BoolArray(vec![true, false].into()),
+    );
+    add("ia", "int[]", Value::IntArray(vec![1, -2, 3].into()));
+    add("ua", "uint[]", Value::UIntArray(vec![1, 2].into()));
+    add("la", "int64[]", Value::Int64Array(vec![1 << 40].into()));
     add(
         "fa",
         "float[]",
-        Value::FloatArray(vec![f32::INFINITY, f32::NEG_INFINITY, f32::NAN, -0.0]),
+        Value::FloatArray(vec![f32::INFINITY, f32::NEG_INFINITY, f32::NAN, -0.0].into()),
     );
-    add("da", "double[]", Value::DoubleArray(vec![0.1, 2.5e10]));
+    add(
+        "da",
+        "double[]",
+        Value::DoubleArray(vec![0.1, 2.5e10].into()),
+    );
     add(
         "sa",
         "string[]",
@@ -217,27 +225,31 @@ fn types() -> Document {
     add(
         "pa",
         "point3f[]",
-        Value::Float3Array(vec![[0.0; 3], [1.0; 3]]),
+        Value::Float3Array(vec![[0.0; 3], [1.0; 3]].into()),
     );
     add(
         "na",
         "normal3f[]",
-        Value::Float3Array(vec![[0.0, 0.0, 1.0]]),
+        Value::Float3Array(vec![[0.0, 0.0, 1.0]].into()),
     );
-    add("ca", "color4f[]", Value::Float4Array(vec![[1.0; 4]]));
-    add("sta", "texCoord2f[]", Value::Float2Array(vec![[0.0, 1.0]]));
+    add("ca", "color4f[]", Value::Float4Array(vec![[1.0; 4]].into()));
+    add(
+        "sta",
+        "texCoord2f[]",
+        Value::Float2Array(vec![[0.0, 1.0]].into()),
+    );
     add(
         "d3a",
         "double3[]",
-        Value::Double3Array(vec![[1.0, 2.0, 3.0]]),
+        Value::Double3Array(vec![[1.0, 2.0, 3.0]].into()),
     );
-    add("i2a", "int2[]", Value::Int2Array(vec![[1, 2]]));
+    add("i2a", "int2[]", Value::Int2Array(vec![[1, 2]].into()));
     // `[i, j, k, r]` bits: a 90° turn about Z, and a component (the half
     // nearest 1/3) with no short decimal spelling.
     add(
         "qa",
         "quath[]",
-        Value::QuathArray(vec![[0, 0, 0x39a8, 0x39a8], [0x3555, 0, 0, 0x3c00]]),
+        Value::QuathArray(vec![[0, 0, 0x39a8, 0x39a8], [0x3555, 0, 0, 0x3c00]].into()),
     );
     for (name, ty) in [
         ("h", "half"),
@@ -437,7 +449,7 @@ fn metadata_scalars() -> Document {
     root.metadata
         .push(Metadatum::new("symmetricPeer", Value::String("R".into())));
     root.push_property(
-        Attribute::new("exedra:sizes", "int[]", Value::IntArray(vec![1, 2]))
+        Attribute::new("exedra:sizes", "int[]", Value::IntArray(vec![1, 2].into()))
             .custom()
             .with_metadata("comment", Value::String("An attribute.".into()))
             .with_metadata("arraySizeConstraint", Value::Int64(5_000_000_000))

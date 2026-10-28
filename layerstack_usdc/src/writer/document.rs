@@ -100,8 +100,9 @@ pub fn write_document(doc: &Document) -> Result<Vec<u8>, UsdcWriteError> {
 /// same source fields; the resulting document uses the same validation and
 /// lowering as [`write_document`]. `tokens` and `paths` are the interners the layer's
 /// identifiers belong to.
-/// The temporary document's numeric buffers move into the crate specs; the
-/// authored layer and its retained snapshots are never consumed or rebound.
+/// The temporary document shares the layer's numeric buffers, and the crate
+/// specs take a copy of each (`SharedVec::into_vec`); the authored layer and
+/// its retained snapshots are never consumed or rebound.
 ///
 /// # Errors
 ///
@@ -360,9 +361,13 @@ enum Declared {
 fn attribute_value(declared: Declared, value: &mut UsdaValue) -> Value {
     match (declared, value) {
         (Declared::TimeCode, UsdaValue::Double(v)) => Value::TimeCode(*v),
-        (Declared::TimeCode, UsdaValue::DoubleArray(v)) => Value::TimeCodeArray(core::mem::take(v)),
+        (Declared::TimeCode, UsdaValue::DoubleArray(v)) => {
+            Value::TimeCodeArray(core::mem::take(v).into_vec())
+        }
         (Declared::Duration, UsdaValue::Double(v)) => Value::Duration(*v),
-        (Declared::Duration, UsdaValue::DoubleArray(v)) => Value::DurationArray(core::mem::take(v)),
+        (Declared::Duration, UsdaValue::DoubleArray(v)) => {
+            Value::DurationArray(core::mem::take(v).into_vec())
+        }
         (_, v) => natural(v),
     }
 }
@@ -476,35 +481,35 @@ fn natural(value: &mut UsdaValue) -> Value {
         U::Matrix2d(v) => Value::Matrix2d(*v),
         U::Matrix3d(v) => Value::Matrix3d(*v),
         U::Matrix4d(v) => Value::Matrix4d(*v),
-        U::BoolArray(v) => Value::BoolArray(core::mem::take(v)),
-        U::UCharArray(v) => Value::UCharArray(core::mem::take(v)),
-        U::IntArray(v) => Value::IntArray(core::mem::take(v)),
-        U::UIntArray(v) => Value::UIntArray(core::mem::take(v)),
-        U::Int64Array(v) => Value::Int64Array(core::mem::take(v)),
-        U::UInt64Array(v) => Value::UInt64Array(core::mem::take(v)),
-        U::HalfArray(v) => Value::HalfArray(core::mem::take(v)),
-        U::FloatArray(v) => Value::FloatArray(core::mem::take(v)),
-        U::DoubleArray(v) => Value::DoubleArray(core::mem::take(v)),
-        U::TimeCodeArray(v) => Value::TimeCodeArray(core::mem::take(v)),
-        U::DurationArray(v) => Value::DurationArray(core::mem::take(v)),
+        U::BoolArray(v) => Value::BoolArray(core::mem::take(v).into_vec()),
+        U::UCharArray(v) => Value::UCharArray(core::mem::take(v).into_vec()),
+        U::IntArray(v) => Value::IntArray(core::mem::take(v).into_vec()),
+        U::UIntArray(v) => Value::UIntArray(core::mem::take(v).into_vec()),
+        U::Int64Array(v) => Value::Int64Array(core::mem::take(v).into_vec()),
+        U::UInt64Array(v) => Value::UInt64Array(core::mem::take(v).into_vec()),
+        U::HalfArray(v) => Value::HalfArray(core::mem::take(v).into_vec()),
+        U::FloatArray(v) => Value::FloatArray(core::mem::take(v).into_vec()),
+        U::DoubleArray(v) => Value::DoubleArray(core::mem::take(v).into_vec()),
+        U::TimeCodeArray(v) => Value::TimeCodeArray(core::mem::take(v).into_vec()),
+        U::DurationArray(v) => Value::DurationArray(core::mem::take(v).into_vec()),
         U::StringArray(v) => Value::StringArray(core::mem::take(v)),
         U::TokenArray(v) => Value::TokenArray(core::mem::take(v)),
         U::AssetArray(v) => Value::AssetArray(core::mem::take(v)),
-        U::Float2Array(v) => Value::Vec2fArray(core::mem::take(v)),
-        U::Float3Array(v) => Value::Vec3fArray(core::mem::take(v)),
-        U::Float4Array(v) => Value::Vec4fArray(core::mem::take(v)),
-        U::Double2Array(v) => Value::Vec2dArray(core::mem::take(v)),
-        U::Double3Array(v) => Value::Vec3dArray(core::mem::take(v)),
-        U::Double4Array(v) => Value::Vec4dArray(core::mem::take(v)),
-        U::Int2Array(v) => Value::Vec2iArray(core::mem::take(v)),
-        U::Int3Array(v) => Value::Vec3iArray(core::mem::take(v)),
-        U::Int4Array(v) => Value::Vec4iArray(core::mem::take(v)),
-        U::Half2Array(v) => Value::Vec2hArray(core::mem::take(v)),
-        U::Half3Array(v) => Value::Vec3hArray(core::mem::take(v)),
-        U::Half4Array(v) => Value::Vec4hArray(core::mem::take(v)),
-        U::QuathArray(v) => Value::QuathArray(core::mem::take(v)),
-        U::QuatfArray(v) => Value::QuatfArray(core::mem::take(v)),
-        U::QuatdArray(v) => Value::QuatdArray(core::mem::take(v)),
+        U::Float2Array(v) => Value::Vec2fArray(core::mem::take(v).into_vec()),
+        U::Float3Array(v) => Value::Vec3fArray(core::mem::take(v).into_vec()),
+        U::Float4Array(v) => Value::Vec4fArray(core::mem::take(v).into_vec()),
+        U::Double2Array(v) => Value::Vec2dArray(core::mem::take(v).into_vec()),
+        U::Double3Array(v) => Value::Vec3dArray(core::mem::take(v).into_vec()),
+        U::Double4Array(v) => Value::Vec4dArray(core::mem::take(v).into_vec()),
+        U::Int2Array(v) => Value::Vec2iArray(core::mem::take(v).into_vec()),
+        U::Int3Array(v) => Value::Vec3iArray(core::mem::take(v).into_vec()),
+        U::Int4Array(v) => Value::Vec4iArray(core::mem::take(v).into_vec()),
+        U::Half2Array(v) => Value::Vec2hArray(core::mem::take(v).into_vec()),
+        U::Half3Array(v) => Value::Vec3hArray(core::mem::take(v).into_vec()),
+        U::Half4Array(v) => Value::Vec4hArray(core::mem::take(v).into_vec()),
+        U::QuathArray(v) => Value::QuathArray(core::mem::take(v).into_vec()),
+        U::QuatfArray(v) => Value::QuatfArray(core::mem::take(v).into_vec()),
+        U::QuatdArray(v) => Value::QuatdArray(core::mem::take(v).into_vec()),
         U::Matrix2dArray(v) => Value::Matrix2dArray(core::mem::take(v)),
         U::Matrix3dArray(v) => Value::Matrix3dArray(core::mem::take(v)),
         U::Matrix4dArray(v) => Value::Matrix4dArray(core::mem::take(v)),
@@ -889,14 +894,17 @@ mod tests {
         let numbers_ptr = numbers.as_ptr();
         doc.prims[0].metadata.push(Metadatum::new(
             "customData",
-            UsdaValue::Dictionary(vec![("numbers".into(), UsdaValue::FloatArray(numbers))]),
+            UsdaValue::Dictionary(vec![(
+                "numbers".into(),
+                UsdaValue::FloatArray(numbers.into()),
+            )]),
         ));
         let times = vec![1.0, 2.0];
         let times_ptr = times.as_ptr();
         doc.prims[0].push_property(Attribute::new(
             "times",
             "timecode[]",
-            UsdaValue::DoubleArray(times),
+            UsdaValue::DoubleArray(times.into()),
         ));
         let Property::Attribute(points) = &doc.prims[0].children[0].properties[0] else {
             panic!("points attribute");
@@ -908,6 +916,8 @@ mod tests {
         let snapshot = doc.clone();
         let expected = document_specs(&doc).unwrap();
         assert_eq!(doc, snapshot, "borrowed lowering leaves the input intact");
+        // A clone shares the arrays: lowering moves them only once unique.
+        drop(snapshot);
         let specs = lower_document(doc).unwrap();
         assert_eq!(specs, expected);
         let field = |path: &str, name: &str| {
@@ -943,13 +953,13 @@ mod tests {
         mesh.push_property(Attribute::new(
             "points",
             "point3f[]",
-            UsdaValue::Float3Array(vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]),
+            UsdaValue::Float3Array(vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]].into()),
         ));
         mesh.push_property(
             Attribute::new(
                 "primvars:st",
                 "texCoord2f[]",
-                UsdaValue::Float2Array(vec![[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]]),
+                UsdaValue::Float2Array(vec![[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]].into()),
             )
             .with_metadata("interpolation", UsdaValue::String("vertex".into()))
             .with_metadata("elementSize", UsdaValue::Int(1)),
@@ -1673,7 +1683,7 @@ def Xform "A" (
         root.push_property(Attribute::new(
             "orientations",
             "quath[]",
-            UsdaValue::QuathArray(quats.clone()),
+            UsdaValue::QuathArray(quats.clone().into()),
         ));
         let doc = Document {
             prims: vec![root],

@@ -15,7 +15,7 @@ use core::ops::Deref;
 use layerstack::{PathId, PropertyKind, SchemaKind, Value, Variability};
 
 use ::layerstack_schemas::table::{Property, Schema, SchemaTables, ValueType, fallback};
-use ::layerstack_schemas::{ApplyError, CannotEdit, PrimEdit, PrimView, Scene, SchemaEdit};
+use ::layerstack_schemas::{ApplySchemaError, CannotEdit, PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "What an instrument is mounted on."]
 #[doc = ""]
 #[doc = "The view of the `observatory` library's single-apply API schema `MountedOnAPI`. Get it with [`MountedOnApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
@@ -74,8 +74,11 @@ impl<'a> MountedOnApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
-    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
-    pub fn apply(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<MountedOnApiEdit, ApplyError> {
+    /// [`ApplySchemaError::CannotEdit`] beneath an instance or in a prototype.
+    pub fn apply(
+        edit: &mut SchemaEdit<'_>,
+        path: PathId,
+    ) -> Result<MountedOnApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(MountedOnApiEdit::from_prim)
     }

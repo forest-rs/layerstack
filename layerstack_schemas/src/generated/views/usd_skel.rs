@@ -22,7 +22,7 @@ use core::ops::Deref;
 
 use layerstack::PathId;
 
-use crate::{ApplyError, CannotEdit, PrimEdit, PrimView, Scene, SchemaEdit};
+use crate::{ApplySchemaError, CannotEdit, PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "Describes a target blend shape, possibly containing inbetween shapes."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's concrete typed schema `BlendShape`, inheriting [`crate::usd::Typed`]. Construct it with [`BlendShape::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
@@ -965,13 +965,13 @@ impl<'a> SkelBindingApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
-    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
+    /// [`ApplySchemaError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdSkelBindingAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<SkelBindingApiEdit, ApplyError> {
+    ) -> Result<SkelBindingApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(SkelBindingApiEdit::from_prim)
     }

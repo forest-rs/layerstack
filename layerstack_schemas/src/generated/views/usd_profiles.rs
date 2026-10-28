@@ -22,7 +22,7 @@ use core::ops::Deref;
 
 use layerstack::PathId;
 
-use crate::{ApplyError, CannotEdit, PrimEdit, PrimView, Scene, SchemaEdit};
+use crate::{ApplySchemaError, CannotEdit, PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "An applied API schema that records a prim's profile compatibility claims and per-capability usage declarations."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's single-apply API schema `ClaimsAPI`. Get it with [`ClaimsApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
@@ -75,10 +75,13 @@ impl<'a> ClaimsApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
-    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
+    /// [`ApplySchemaError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdProfilesClaimsAPI::Apply")]
     #[doc(alias = "Apply")]
-    pub fn apply(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<ClaimsApiEdit, ApplyError> {
+    pub fn apply(
+        edit: &mut SchemaEdit<'_>,
+        path: PathId,
+    ) -> Result<ClaimsApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(ClaimsApiEdit::from_prim)
     }

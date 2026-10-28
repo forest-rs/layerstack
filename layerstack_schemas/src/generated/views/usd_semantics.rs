@@ -23,7 +23,7 @@ use core::ops::Deref;
 use layerstack::PathId;
 
 use crate::{
-    ApplyError, CannotEdit, InstanceEdit, InstanceView, PrimEdit, PrimView, Scene, SchemaEdit,
+    ApplySchemaError, CannotEdit, InstanceEdit, InstanceView, PrimEdit, PrimView, Scene, SchemaEdit,
 };
 #[doc = "Application of labels for a prim for a taxonomy specified by the schema's instance name."]
 #[doc = ""]
@@ -113,14 +113,14 @@ impl<'a> SemanticsLabelsApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
-    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
+    /// [`ApplySchemaError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdSemanticsLabelsAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
         instance: &str,
-    ) -> Result<SemanticsLabelsApiEdit, ApplyError> {
+    ) -> Result<SemanticsLabelsApiEdit, ApplySchemaError> {
         let prim = edit.apply_api(path, Self::SCHEMA, Some(instance))?;
         Ok(SemanticsLabelsApiEdit::from_instance(InstanceEdit::new(
             prim, instance,

@@ -22,7 +22,7 @@ use core::ops::Deref;
 
 use layerstack::PathId;
 
-use crate::{ApplyError, CannotEdit, PrimEdit, PrimView, Scene, SchemaEdit};
+use crate::{ApplySchemaError, CannotEdit, PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "This API extends and configures the core UsdProcGenerativeProcedural schema defined within usdProc for use with hydra generative procedurals as defined within hdGp."]
 #[doc = ""]
 #[doc = "The view of OpenUSD's single-apply API schema `HydraGenerativeProceduralAPI`. Get it with [`HydraGenerativeProceduralApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
@@ -75,13 +75,13 @@ impl<'a> HydraGenerativeProceduralApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
-    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
+    /// [`ApplySchemaError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdHydraGenerativeProceduralAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<HydraGenerativeProceduralApiEdit, ApplyError> {
+    ) -> Result<HydraGenerativeProceduralApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(HydraGenerativeProceduralApiEdit::from_prim)
     }
@@ -269,10 +269,13 @@ impl<'a> HydraPrimApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
-    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
+    /// [`ApplySchemaError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdHydraPrimAPI::Apply")]
     #[doc(alias = "Apply")]
-    pub fn apply(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<HydraPrimApiEdit, ApplyError> {
+    pub fn apply(
+        edit: &mut SchemaEdit<'_>,
+        path: PathId,
+    ) -> Result<HydraPrimApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(HydraPrimApiEdit::from_prim)
     }
@@ -394,13 +397,13 @@ impl<'a> HydraRenderPassApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
-    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
+    /// [`ApplySchemaError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdHydraRenderPassAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<HydraRenderPassApiEdit, ApplyError> {
+    ) -> Result<HydraRenderPassApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(HydraRenderPassApiEdit::from_prim)
     }

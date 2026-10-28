@@ -72,7 +72,7 @@ impl core::error::Error for CannotEdit {}
 /// Nothing is authored.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
-pub enum ApplyError {
+pub enum ApplySchemaError {
     /// The edit may not author the prim, beneath an instance or in a
     /// prototype; checked first, as OpenUSD's `ApplyAPI` refuses it.
     CannotEdit(CannotEdit),
@@ -81,7 +81,7 @@ pub enum ApplyError {
     CannotApply(CannotApply),
 }
 
-impl fmt::Display for ApplyError {
+impl fmt::Display for ApplySchemaError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::CannotEdit(error) => error.fmt(f),
@@ -90,7 +90,7 @@ impl fmt::Display for ApplyError {
     }
 }
 
-impl core::error::Error for ApplyError {
+impl core::error::Error for ApplySchemaError {
     fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
         match self {
             Self::CannotEdit(error) => Some(error),
@@ -99,13 +99,13 @@ impl core::error::Error for ApplyError {
     }
 }
 
-impl From<CannotEdit> for ApplyError {
+impl From<CannotEdit> for ApplySchemaError {
     fn from(value: CannotEdit) -> Self {
         Self::CannotEdit(value)
     }
 }
 
-impl From<CannotApply> for ApplyError {
+impl From<CannotApply> for ApplySchemaError {
     fn from(value: CannotApply) -> Self {
         Self::CannotApply(value)
     }
@@ -275,8 +275,8 @@ impl<'s> SchemaEdit<'s> {
     ///
     /// # Errors
     ///
-    /// [`ApplyError::CannotEdit`] when [`Self::can_edit`] refuses `path`,
-    /// checked first; else [`ApplyError::CannotApply`] when no prim is
+    /// [`ApplySchemaError::CannotEdit`] when [`Self::can_edit`] refuses `path`,
+    /// checked first; else [`ApplySchemaError::CannotApply`] when no prim is
     /// there or the schema may not be applied to it.
     #[doc(alias = "ApplyAPI")]
     #[doc(alias = "UsdPrim::ApplyAPI")]
@@ -285,7 +285,7 @@ impl<'s> SchemaEdit<'s> {
         path: PathId,
         schema: &str,
         instance: Option<&str>,
-    ) -> Result<crate::PrimEdit, ApplyError> {
+    ) -> Result<crate::PrimEdit, ApplySchemaError> {
         self.apply(path, schema, instance)?;
         Ok(crate::PrimEdit::from_path_unchecked(path))
     }
@@ -1823,7 +1823,7 @@ impl<'s> SchemaEdit<'s> {
         path: PathId,
         schema: &str,
         instance: Option<&str>,
-    ) -> Result<(), ApplyError> {
+    ) -> Result<(), ApplySchemaError> {
         self.can_edit(path)?;
         if !self.exists(path) {
             return Err(CannotApply::NoSuchPrim.into());

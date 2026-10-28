@@ -179,7 +179,7 @@ fn handles_and_applied_schemas_refuse_instance_proxies() {
 
     use crate::usd_geom::{Xform, XformEdit};
     use crate::usd_lux::ShapingApi;
-    use crate::{ApplyError, PrimEdit};
+    use crate::{ApplySchemaError, PrimEdit};
 
     let (mut store, live) = stage(|store, layer| {
         let prototype = store.path("/Prototype");
@@ -214,18 +214,18 @@ fn handles_and_applied_schemas_refuse_instance_proxies() {
         assert_eq!(XformEdit::new(&edit, path), Err(refusal));
         assert_eq!(
             ShapingApi::apply(&mut edit, path).err(),
-            Some(ApplyError::CannotEdit(refusal))
+            Some(ApplySchemaError::CannotEdit(refusal))
         );
         assert_eq!(
             edit.apply_api(path, "NoSuchAPI", None),
-            Err(ApplyError::CannotEdit(refusal)),
+            Err(ApplySchemaError::CannotEdit(refusal)),
             "checked before the schema"
         );
     }
     assert!(edit.transaction().is_empty(), "a refusal authors nothing");
     assert_eq!(
         edit.apply_api(nowhere, "ShapingAPI", None),
-        Err(ApplyError::CannotApply(CannotApply::NoSuchPrim))
+        Err(ApplySchemaError::CannotApply(CannotApply::NoSuchPrim))
     );
     assert_eq!(edit.can_edit(instance), Ok(()));
     PrimEdit::new(&edit, instance)

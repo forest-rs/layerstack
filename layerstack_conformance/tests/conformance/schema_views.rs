@@ -538,7 +538,7 @@ fn unmappable_targets_are_rejected() {
 #[test]
 fn missing_prims_are_not_authored() {
     use layerstack::CannotApply;
-    use layerstack_schemas::ApplyError;
+    use layerstack_schemas::ApplySchemaError;
     use layerstack_schemas::usd::{CollectionApi, CollectionApiEdit};
     use layerstack_schemas::usd_geom::{Mesh, MeshEdit, Xform};
 
@@ -553,7 +553,7 @@ fn missing_prims_are_not_authored() {
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
     assert_eq!(
         CollectionApi::apply(&mut edit, missing, "lights").err(),
-        Some(ApplyError::CannotApply(CannotApply::NoSuchPrim))
+        Some(ApplySchemaError::CannotApply(CannotApply::NoSuchPrim))
     );
     assert!(
         MeshEdit::new(&edit, missing)

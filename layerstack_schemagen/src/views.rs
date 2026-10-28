@@ -809,7 +809,7 @@ pub(crate) fn module_items(
     Ok(Items {
         layerstack: used(&["CannotApply", "PathId"]),
         schemas: used(&[
-            "ApplyError",
+            "ApplySchemaError",
             "CannotEdit",
             "InstanceEdit",
             "InstanceView",
@@ -1443,8 +1443,8 @@ fn applied_view(
              ///\n    /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.\n    \
              ///\n    /// # Errors\n    ///\n    \
              /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):\n    \
-             /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.\n    \
-             pub fn apply(\n        edit: &mut SchemaEdit<'_>,\n        path: PathId,\n        instance: &str,\n    ) -> Result<{edit}, ApplyError> {{\n        \
+             /// [`ApplySchemaError::CannotEdit`] beneath an instance or in a prototype.\n    \
+             pub fn apply(\n        edit: &mut SchemaEdit<'_>,\n        path: PathId,\n        instance: &str,\n    ) -> Result<{edit}, ApplySchemaError> {{\n        \
              let prim = edit.apply_api(path, Self::SCHEMA, Some(instance))?;\n        \
              Ok({edit}::from_instance(InstanceEdit::new(prim, instance)))\n    }}\n\n"
         )
@@ -1465,8 +1465,8 @@ fn applied_view(
              ///\n    /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.\n    \
              ///\n    /// # Errors\n    ///\n    \
              /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):\n    \
-             /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.\n    \
-             pub fn apply(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<{edit}, ApplyError> {{\n        \
+             /// [`ApplySchemaError::CannotEdit`] beneath an instance or in a prototype.\n    \
+             pub fn apply(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<{edit}, ApplySchemaError> {{\n        \
              edit.apply_api(path, Self::SCHEMA, None).map({edit}::from_prim)\n    }}\n\n"
         )
     };

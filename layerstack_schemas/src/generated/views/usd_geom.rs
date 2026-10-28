@@ -23,7 +23,7 @@ use core::ops::Deref;
 use layerstack::PathId;
 
 use crate::{
-    ApplyError, CannotEdit, InstanceEdit, InstanceView, PrimEdit, PrimView, Scene, SchemaEdit,
+    ApplySchemaError, CannotEdit, InstanceEdit, InstanceView, PrimEdit, PrimView, Scene, SchemaEdit,
 };
 #[doc = "The tokens `backPlate:<instance>:plateVisibility` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -168,14 +168,14 @@ impl<'a> BackPlateApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
-    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
+    /// [`ApplySchemaError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdGeomBackPlateAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
         instance: &str,
-    ) -> Result<BackPlateApiEdit, ApplyError> {
+    ) -> Result<BackPlateApiEdit, ApplySchemaError> {
         let prim = edit.apply_api(path, Self::SCHEMA, Some(instance))?;
         Ok(BackPlateApiEdit::from_instance(InstanceEdit::new(
             prim, instance,
@@ -4405,10 +4405,13 @@ impl<'a> GeomModelApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
-    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
+    /// [`ApplySchemaError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdGeomModelAPI::Apply")]
     #[doc(alias = "Apply")]
-    pub fn apply(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<GeomModelApiEdit, ApplyError> {
+    pub fn apply(
+        edit: &mut SchemaEdit<'_>,
+        path: PathId,
+    ) -> Result<GeomModelApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(GeomModelApiEdit::from_prim)
     }
@@ -7613,10 +7616,13 @@ impl<'a> MotionApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
-    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
+    /// [`ApplySchemaError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdGeomMotionAPI::Apply")]
     #[doc(alias = "Apply")]
-    pub fn apply(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<MotionApiEdit, ApplyError> {
+    pub fn apply(
+        edit: &mut SchemaEdit<'_>,
+        path: PathId,
+    ) -> Result<MotionApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(MotionApiEdit::from_prim)
     }
@@ -12813,10 +12819,13 @@ impl<'a> VisibilityApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
-    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
+    /// [`ApplySchemaError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdGeomVisibilityAPI::Apply")]
     #[doc(alias = "Apply")]
-    pub fn apply(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<VisibilityApiEdit, ApplyError> {
+    pub fn apply(
+        edit: &mut SchemaEdit<'_>,
+        path: PathId,
+    ) -> Result<VisibilityApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(VisibilityApiEdit::from_prim)
     }

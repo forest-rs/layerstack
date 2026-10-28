@@ -23,7 +23,7 @@ use core::ops::Deref;
 use layerstack::PathId;
 
 use crate::{
-    ApplyError, CannotEdit, InstanceEdit, InstanceView, PrimEdit, PrimView, Scene, SchemaEdit,
+    ApplySchemaError, CannotEdit, InstanceEdit, InstanceView, PrimEdit, PrimView, Scene, SchemaEdit,
 };
 #[doc = "The tokens `accessibility:<instance>:priority` allows."]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -168,14 +168,14 @@ impl<'a> AccessibilityApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
-    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
+    /// [`ApplySchemaError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdUIAccessibilityAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
         instance: &str,
-    ) -> Result<AccessibilityApiEdit, ApplyError> {
+    ) -> Result<AccessibilityApiEdit, ApplySchemaError> {
         let prim = edit.apply_api(path, Self::SCHEMA, Some(instance))?;
         Ok(AccessibilityApiEdit::from_instance(InstanceEdit::new(
             prim, instance,
@@ -605,13 +605,13 @@ impl<'a> NodeGraphNodeApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
-    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
+    /// [`ApplySchemaError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdUINodeGraphNodeAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<NodeGraphNodeApiEdit, ApplyError> {
+    ) -> Result<NodeGraphNodeApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(NodeGraphNodeApiEdit::from_prim)
     }
@@ -890,13 +890,13 @@ impl<'a> SceneGraphPrimApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there ([`SchemaEdit::apply_api`]):
-    /// [`ApplyError::CannotEdit`] beneath an instance or in a prototype.
+    /// [`ApplySchemaError::CannotEdit`] beneath an instance or in a prototype.
     #[doc(alias = "UsdUISceneGraphPrimAPI::Apply")]
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
         path: PathId,
-    ) -> Result<SceneGraphPrimApiEdit, ApplyError> {
+    ) -> Result<SceneGraphPrimApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(SceneGraphPrimApiEdit::from_prim)
     }

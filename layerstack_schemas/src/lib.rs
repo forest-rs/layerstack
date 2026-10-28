@@ -103,7 +103,7 @@
 //! including runtime codeless schemas without generated Rust types.
 //! A handle is had only for a prim that exists, on the stage or
 //! defined earlier in the edit: from a concrete schema's `define`, an
-//! applied schema's `apply` (which fails with [`ApplyError::CannotApply`]
+//! applied schema's `apply` (which fails with [`ApplySchemaError::CannotApply`]
 //! for a missing prim), or `new`, which returns `Ok(None)` for one; a view
 //! reads, and its prim's handle is had from the edit by the same path. A typed handle's `new` (`MeshEdit::new(&edit, path)`)
 //! also requires the prim to be of the schema as the edit leaves it
@@ -523,7 +523,7 @@ pub use common_xform::{
     CommonComponent, CommonTransform, CommonTransformError, CommonTransformReading,
     CommonTransformSource, RotationOrder,
 };
-pub use edit::{ApplyError, CannotEdit};
+pub use edit::{ApplySchemaError, CannotEdit};
 
 #[cfg(all(feature = "usd-geom", feature = "usd-shade"))]
 mod material_subsets;

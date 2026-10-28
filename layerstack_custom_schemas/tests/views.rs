@@ -21,7 +21,7 @@ use layerstack_custom_schemas::lab::{
 use layerstack_custom_schemas::observatory::{MountedOnApi, Telescope, TelescopeTelescopeMount};
 use layerstack_custom_schemas::{lab, observatory};
 use layerstack_schemas::usd_geom::{ImageablePurpose, Xformable};
-use layerstack_schemas::{ApplyError, Domain, Scene, SchemaEdit, Time, XformOpPrecision};
+use layerstack_schemas::{ApplySchemaError, Domain, Scene, SchemaEdit, Time, XformOpPrecision};
 
 /// The scene: every lab and observatory schema, authored in USDA.
 const SCENE: &str = r#"#usda 1.0
@@ -335,7 +335,7 @@ fn setters_author_through_a_schema_edit() {
         .set_mode(&mut edit, ChannelApiMode::Other("custom".into()));
     assert_eq!(
         ChannelApi::apply(&mut edit, spectro, "red").map(|_| ()),
-        Err(ApplyError::CannotApply(CannotApply::NotATarget {
+        Err(ApplySchemaError::CannotApply(CannotApply::NotATarget {
             allowed: vec![edit.tokens().intern("ImagingSpectrometer")]
         })),
         "only an imaging spectrometer may have a red channel"
@@ -353,7 +353,7 @@ fn setters_author_through_a_schema_edit() {
         .expect("a translation");
     assert_eq!(
         MountedOnApi::apply(&mut edit, rack).map(|_| ()),
-        Err(ApplyError::CannotApply(CannotApply::NoSuchPrim)),
+        Err(ApplySchemaError::CannotApply(CannotApply::NoSuchPrim)),
         "no edit authors an `over` for a prim that does not exist"
     );
     edit.define_prim(rack, "Xform")

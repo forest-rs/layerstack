@@ -69,8 +69,7 @@ async function instantiate(source: URL | string | BufferSource | WebAssembly.Mod
   let memory: WebAssembly.Memory;
   try {
     if (input instanceof URL && input.protocol === "file:") {
-      const { readFile } = await import("node:fs/promises");
-      input = await readFile(input);
+      input = await readModuleFile(input);
     }
     ({ memory } = await init({ module_or_path: input }));
   } catch (error) {
@@ -80,6 +79,17 @@ async function instantiate(source: URL | string | BufferSource | WebAssembly.Mod
     });
   }
   return new Layerstack({ Stage: GlueStage, EditBatch: GlueEditBatch, nativeVersion, memory });
+}
+
+/**
+ * Reads the module from disk, in Node, where `fetch` does not take `file:`
+ * URLs. The built-in is reached through `process.getBuiltinModule`, not an
+ * `import`, so a bundler building for the browser has nothing to resolve.
+ */
+async function readModuleFile(url: URL): Promise<Uint8Array> {
+  const fs = globalThis.process?.getBuiltinModule?.("fs/promises");
+  if (fs === undefined) throw new Error(`cannot read ${url.href}: no filesystem in this runtime`);
+  return fs.readFile(url);
 }
 
 function isNativeModule(source: unknown): source is NativeModule {

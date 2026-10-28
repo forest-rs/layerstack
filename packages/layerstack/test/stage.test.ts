@@ -36,6 +36,13 @@ describe("loading the module", () => {
     assert.equal(await loadLayerstack(), layerstack);
   });
 
+  it("imports no Node built-in, so a browser bundle resolves nothing extra", () => {
+    for (const file of ["index.js", "stage.js", "arrays.js", "edits.js", "errors.js"]) {
+      const source = readFileSync(new URL(`../dist/${file}`, import.meta.url), "utf8");
+      assert.doesNotMatch(source, /\bimport\s*\(|from\s+["']node:/, file);
+    }
+  });
+
   it("refuses a module of another ABI", async () => {
     const foreign: NativeModule = {
       Stage: { open: () => assert.fail("never opened") },

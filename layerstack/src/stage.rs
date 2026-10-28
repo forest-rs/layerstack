@@ -1856,21 +1856,27 @@ impl Stage {
         &self.errors
     }
 
-    /// Returns the assets of the deferred references and payloads
-    /// ([`Reference::deferred`](crate::Reference::deferred)) composition
-    /// followed but the store does not resolve yet, by anchor layer, then
-    /// asset path, then prim, then arc.
+    /// Returns the assets the store does not resolve yet
+    /// ([`crate::AssetAvailability::Unresolved`]) that composition reached,
+    /// by anchor layer, then asset path, then prim, then arc: those of the
+    /// deferred references and payloads
+    /// ([`Reference::deferred`](crate::Reference::deferred)) it followed,
+    /// and the sublayers by asset path of the layer stacks it read
+    /// ([`SublayerEntry::unresolved`](crate::SublayerEntry::unresolved)),
+    /// such as one a host authors on the session layer.
     ///
-    /// Each such arc contributes nothing yet. A host loads the assets these
-    /// name, records them in the store (for example
-    /// [`InMemoryStore::insert_asset_layer`](crate::InMemoryStore::insert_asset_layer))
-    /// and composes again, until none is left: the layers it loads may
-    /// author deferred arcs of their own. Arcs composition does not follow,
-    /// such as those in variant branches no selection names, ask for
-    /// nothing.
+    /// Each such arc or sublayer contributes nothing yet. A host loads the
+    /// assets these name, records them in the store (for example
+    /// [`InMemoryStore::insert_asset_layer`](crate::InMemoryStore::insert_asset_layer),
+    /// or [`InMemoryStore::mark_asset_missing`](crate::InMemoryStore::mark_asset_missing)
+    /// for one that does not exist) and composes again, until none is
+    /// left: the layers it loads may author deferred arcs of their own.
+    /// Arcs composition does not follow, such as those in variant branches
+    /// no selection names, ask for nothing.
     ///
-    /// Spec: AOUSD Core §10.3.2.1 (references), §10.3.2.2 (payloads),
-    /// §10.3.2.5 (only the selected variant contributes).
+    /// Spec: AOUSD Core §10.3.1 (sublayers), §10.3.2.1 (references),
+    /// §10.3.2.2 (payloads), §10.3.2.5 (only the selected variant
+    /// contributes).
     #[must_use]
     pub fn asset_requests(&self) -> &[crate::AssetRequest] {
         &self.asset_requests

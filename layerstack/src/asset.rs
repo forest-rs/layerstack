@@ -78,11 +78,12 @@ pub struct ExpressionAssetPath {
 }
 
 /// An asset a deferred reference or payload ([`Reference::deferred`]) that
-/// composition followed names, which the store does not resolve yet
-/// ([`crate::AssetAvailability::Unresolved`]); see
+/// composition followed names, or a sublayer by asset path of a layer stack
+/// it read ([`crate::SublayerEntry::unresolved`]), which the store does not
+/// resolve yet ([`crate::AssetAvailability::Unresolved`]); see
 /// [`Stage::asset_requests`](crate::Stage::asset_requests).
 ///
-/// The arc contributes nothing until the host loads `asset_path`, anchored
+/// The arc or sublayer contributes nothing until the host loads `asset_path`, anchored
 /// to `anchor`, records the result for [`LayerStore::asset_layer`] (for
 /// example [`InMemoryStore::insert_asset_layer`], or
 /// [`InMemoryStore::mark_asset_missing`] when it does not exist) and
@@ -92,13 +93,18 @@ pub struct ExpressionAssetPath {
 /// [`InMemoryStore::mark_asset_missing`]: crate::InMemoryStore::mark_asset_missing
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct AssetRequest {
-    /// The layer that authors the arc, which a relative path is anchored to.
+    /// The layer that authors the arc or sublayer, which a relative path is
+    /// anchored to.
     pub anchor: LayerId,
-    /// The authored asset path.
+    /// The authored asset path (for a sublayer authored as a variable
+    /// expression, the path it evaluates to).
     pub asset_path: String,
-    /// The composed prim whose arc reached the asset.
+    /// The composed prim whose arc reached the asset; for a sublayer, the
+    /// first prim to read its layer stack, the pseudo-root for the stage's
+    /// own.
     pub prim: PathId,
-    /// The kind of arc: [`ArcKind::References`] or [`ArcKind::Payloads`].
+    /// The kind of arc: [`ArcKind::References`] or [`ArcKind::Payloads`],
+    /// or [`ArcKind::Local`] for a sublayer of a layer stack.
     pub arc: ArcKind,
 }
 

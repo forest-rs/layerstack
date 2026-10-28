@@ -264,9 +264,10 @@ impl Transaction {
     /// authored asset path) or an empty asset path is rejected, as OpenUSD
     /// rejects it, and so is a layer the store does not hold and a cycle (a
     /// sublayer that is `layer`, or whose own sublayers reach it), which
-    /// OpenUSD accepts and reports only when composing. An entry whose
-    /// asset did not resolve ([`SublayerEntry::unresolved`]) keeps its
-    /// place.
+    /// OpenUSD accepts and reports only when composing. An entry by asset
+    /// path ([`SublayerEntry::unresolved`]) keeps its place, and the stage
+    /// asks for its asset ([`crate::Stage::asset_requests`]) until the store
+    /// resolves it, as OpenUSD opens a sublayer when it recomposes.
     ///
     /// A [`LiveStage`](crate::LiveStage) recomposes from its new layer
     /// stacks.

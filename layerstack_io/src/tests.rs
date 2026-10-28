@@ -3,6 +3,7 @@
 
 use super::*;
 
+mod authored_sublayers;
 mod deferred_arcs;
 #[cfg(feature = "std")]
 mod dynamic_payloads;

@@ -17,8 +17,8 @@ use layerstack::doc::{LayerId, LayerOffset, SublayerEntry};
 use layerstack::interner::TokenInterner;
 use layerstack::path::PathInterner;
 use layerstack::{
-    AssetResolveError, AssetResolver, CompositionError, InMemoryStore, ResolvedAsset, Stage,
-    StageOptions, UnresolvedSublayer, Value,
+    ArcKind, AssetResolveError, AssetResolver, CompositionError, InMemoryStore, ResolvedAsset,
+    Stage, StageOptions, UnresolvedSublayer, Value,
 };
 use layerstack_conformance::authored::{Names, dump_layer};
 use layerstack_conformance::save_corpus::Imported;
@@ -275,10 +275,12 @@ impl AssetResolver for FixtureResolver {
     }
 }
 
-/// A sublayer whose asset does not resolve is kept by both readers and
-/// reported when the layer stack is gathered, and the rest of the layer
-/// stack composes, as OpenUSD reports `PcpErrorInvalidSublayerPath` for the
-/// same files (`generate.py` checks that).
+/// A sublayer whose asset does not resolve is kept by both readers. Until
+/// the host records the miss, composition asks for it
+/// ([`Stage::asset_requests`]); once it does, the sublayer is reported when
+/// the layer stack is gathered, and the rest of the layer stack composes,
+/// as OpenUSD reports `PcpErrorInvalidSublayerPath` for the same files
+/// (`generate.py` checks that).
 ///
 /// Spec: AOUSD Core §10.3.1, §10.6.
 #[test]
@@ -333,6 +335,20 @@ fn unresolved_sublayers_are_reported_by_both_readers() {
             store.insert_layer(layer);
         }
         let stage = Stage::compose(&mut store, root, StageOptions::default());
+        assert!(stage.composition_errors().is_empty(), "{format}");
+        let requested: Vec<(LayerId, &str, ArcKind)> = stage
+            .asset_requests()
+            .iter()
+            .map(|request| (request.anchor, request.asset_path.as_str(), request.arc))
+            .collect();
+        assert_eq!(
+            requested,
+            [(root, "./missing.usda", ArcKind::Local)],
+            "{format}"
+        );
+        store.mark_asset_missing(root, "./missing.usda");
+        let stage = Stage::compose(&mut store, root, StageOptions::default());
+        assert!(stage.asset_requests().is_empty(), "{format}");
         assert_eq!(
             stage.composition_errors(),
             [CompositionError::UnresolvedSublayer(UnresolvedSublayer {

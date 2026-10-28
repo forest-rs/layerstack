@@ -75,8 +75,10 @@ impl<B: Storage> StageDocument<B> {
     ///
     /// An edit can introduce asset requests
     /// ([`Applied::asset_requests`]): a deferred payload or reference it
-    /// adds, a variant selection that reaches one, or a changed input of a
-    /// dynamic file format's arguments. Those arcs contribute nothing until
+    /// adds, a sublayer by asset path it adds to any layer the stage reads
+    /// ([`layerstack::SublayerEntry::unresolved`]), a variant selection
+    /// that reaches one, or a changed input of a dynamic file format's
+    /// arguments. Those arcs contribute nothing until
     /// their assets are loaded, so this loads them before it returns, as
     /// opening the document does. It is the same as
     /// [`Self::parts_mut`], `LiveStage::apply` and

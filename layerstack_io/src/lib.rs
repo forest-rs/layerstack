@@ -31,7 +31,7 @@
 //! that store's tokens. [`Storage`] supports transports without `std`.
 //! [`StageDocument::apply`] authors the document: it applies a
 //! [`layerstack::Transaction`] and loads the assets the edit asks for, such as
-//! a deferred payload it adds. [`StageDocument::parts_mut`] gives the store and
+//! a deferred payload or a sublayer by asset path it adds. [`StageDocument::parts_mut`] gives the store and
 //! live stage apart for lower-level control; saving, exporting and reloading
 //! remain separate operations.
 //!
@@ -626,7 +626,10 @@ impl<B: Storage> StageDocument<B> {
     }
     /// Creates a persistent root alongside host-owned schemas/session layers.
     /// The registry must be built on `store`'s tokens, as for
-    /// [`Self::open_in`].
+    /// [`Self::open_in`]. The assets the new stage asks for, such as the
+    /// session layer's sublayers by asset path, are loaded before it
+    /// returns ([`Self::load_requested_assets`]), and the
+    /// [`Self::load_report`] holds that evidence.
     pub fn create_in(
         storage: B,
         mut store: InMemoryStore,
@@ -660,7 +663,7 @@ impl<B: Storage> StageDocument<B> {
         catalog.states.insert(root, State::Loaded);
         store.insert_layer(Layer::new(root));
         let stage = LiveStage::compose(&mut store, root, options);
-        Ok(Self {
+        let mut document = Self {
             store,
             stage,
             storage,
@@ -671,7 +674,11 @@ impl<B: Storage> StageDocument<B> {
             variant_arcs: VariantArcLoading::default(),
             formats: FileFormats::default(),
             load_report: LoadReport::default(),
-        })
+        };
+        // A host-owned session layer's sublayers by asset path load with
+        // the new stage, as `UsdStage::CreateNew` opens them.
+        document.load_report = document.load_requested_assets()?;
+        Ok(document)
     }
     /// Opens a stage with strict import into a new store.
     ///
@@ -803,26 +810,36 @@ impl<B: Storage> StageDocument<B> {
         document.load_report.merge(requested);
         Ok(document)
     }
-    /// Loads the assets the stage's deferred arcs ask for
+    /// Loads the assets the stage asks for
     /// ([`layerstack::Stage::asset_requests`]), each anchored to the layer
-    /// authoring the arc, and composes again, until none is left: a newly
-    /// loaded layer may author deferred arcs of its own.
+    /// authoring the arc or sublayer, and composes again, until none is
+    /// left: a newly loaded layer may author deferred arcs of its own.
     ///
-    /// Opening a stage does this before it returns. After an edit or a
-    /// reload selects a variant whose arcs import deferred
-    /// ([`VariantArcLoading::Selected`]), those arcs contribute nothing until
-    /// this loads their assets; nothing is read implicitly. Each round
+    /// Opening a stage does this before it returns, so a host-owned session
+    /// layer's sublayers by asset path
+    /// ([`layerstack::SublayerEntry::unresolved`]) load with the stage. After
+    /// an edit or a reload selects a variant whose arcs import deferred
+    /// ([`VariantArcLoading::Selected`]), or adds a sublayer by asset path
+    /// to any layer the stage reads, those arcs and sublayers contribute
+    /// nothing until this loads their assets; nothing is read implicitly,
+    /// and [`Self::apply`] calls this. A relative sublayer path of a layer
+    /// with no identifier, such as an anonymous session layer, is
+    /// identified with no anchor ([`Storage::identify`]). Each round
     /// composes only the prims whose arcs name the loaded assets. An asset
     /// that fails to load is recorded as missing, so composition reports it
-    /// ([`layerstack::CompositionError::UnresolvedAsset`]), and kept in the
+    /// ([`layerstack::CompositionError::UnresolvedAsset`] or
+    /// [`layerstack::CompositionError::UnresolvedSublayer`]), and kept in the
     /// report's [`LoadReport::asset_failures`]. Strict import returns the
     /// error instead, keeping the layers earlier rounds loaded, unless the
     /// asset was not found ([`AssetFailure::is_missing`]).
     ///
     /// Returns the layers loaded, with their diagnostics and failures.
     ///
-    /// Spec: AOUSD Core §10.3.2.1 (references), §10.3.2.2 (payloads),
-    /// §10.3.2.5 (only the selected variant contributes).
+    /// Spec: AOUSD Core §10.3.1 (sublayers), §10.3.2.1 (references),
+    /// §10.3.2.2 (payloads), §10.3.2.5 (only the selected variant
+    /// contributes). OpenUSD opens a sublayer authored on any layer of the
+    /// stage's layer stacks, the session layer's included, when the stage
+    /// recomposes (`PcpLayerStack::_BuildLayerStack`).
     pub fn load_requested_assets(&mut self) -> Result<LoadReport, IoError> {
         let mut report = LoadReport::default();
         let mut attempted = BTreeSet::new();
@@ -960,7 +977,9 @@ impl<B: Storage> StageDocument<B> {
     pub fn store(&self) -> &InMemoryStore {
         &self.store
     }
-    /// Mutable authored store. After direct edits call `synchronize` on each client.
+    /// Mutable authored store. After direct edits call `synchronize` on each
+    /// client, and [`Self::load_requested_assets`] for the assets they ask
+    /// for, such as a sublayer added by asset path.
     pub fn store_mut(&mut self) -> &mut InMemoryStore {
         &mut self.store
     }

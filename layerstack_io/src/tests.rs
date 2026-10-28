@@ -2870,3 +2870,29 @@ fn read_layers_keep_no_change_history_from_their_reading() {
         Some(2.)
     );
 }
+
+/// Diagnostics name the layers a document read by their identifiers, as
+/// OpenUSD 26.11 names them in its composition errors (`@model.usda@`),
+/// rather than by the hashes their ids derive from
+/// ([`LayerStore::layer_identifier`]).
+#[test]
+fn diagnostics_name_layers_by_identifier() {
+    let files = Memory::with(&[
+        (
+            "root.usda",
+            "#usda 1.0\ndef \"Root\" (prepend references = @model.usda@</Absent>) {}\n",
+        ),
+        ("model.usda", "#usda 1.0\ndef \"Asset\" {}\n"),
+    ]);
+    let doc = StageDocument::open(files, "root.usda", StageOptions::default()).unwrap();
+    let root = doc.stage.stage().root_layer().unwrap();
+    assert_eq!(doc.store().layer_identifier(root), doc.identifier(root));
+    let errors = doc.stage.stage().composition_errors();
+    assert_eq!(errors.len(), 1, "{errors:?}");
+    let shown = errors[0].display(doc.store()).to_string();
+    assert!(
+        shown.contains("@root.usda@") && shown.contains("@model.usda@"),
+        "{shown}"
+    );
+    assert!(!shown.contains("layer "), "{shown}");
+}

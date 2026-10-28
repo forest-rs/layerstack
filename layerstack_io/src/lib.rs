@@ -851,6 +851,7 @@ impl<B: Storage> StageDocument<B> {
             },
         );
         catalog.states.insert(root, State::Loaded);
+        store.set_layer_identifier(root, Arc::clone(&catalog.sources[&root].identifier));
         store.insert_layer(Layer::new(root));
         let stage = LiveStage::compose(&mut store, root, options);
         let mut document = Self {
@@ -1747,6 +1748,9 @@ impl<'a, B: Storage> Reader<'a, B> {
                 // A reader records a change for each spec it inserts; no
                 // stage has seen the layer before them.
                 layer.forget_change_history();
+                if let Some(source) = self.catalog.sources.get(&id) {
+                    store.set_layer_identifier(id, Arc::clone(&source.identifier));
+                }
                 store.insert_layer(layer);
             }
         }
@@ -2571,6 +2575,9 @@ impl LayerStore for Overlay<'_> {
     }
     fn paths(&self) -> &PathInterner {
         self.store.paths()
+    }
+    fn layer_identifier(&self, id: LayerId) -> Option<&str> {
+        self.store.layer_identifier(id)
     }
     fn asset_layer(&self, anchor: LayerId, asset: &str) -> Option<LayerId> {
         match self

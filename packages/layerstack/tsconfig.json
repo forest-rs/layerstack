@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "es2022",
+    "lib": ["es2022", "esnext.disposable", "dom"],
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "verbatimModuleSyntax": true,
+    "erasableSyntaxOnly": true,
+    "declaration": true,
+    "stripInternal": true,
+    "sourceMap": false,
+    "rootDir": "src",
+    "outDir": "dist",
+    "types": ["node"],
+    "skipLibCheck": false
+  },
+  "include": ["src/**/*.ts"]
+}

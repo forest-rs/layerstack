@@ -347,3 +347,44 @@ describe("disposal", () => {
     assert.equal(escaped.disposed, true);
   });
 });
+
+describe("composition limits", () => {
+  // A prim that specializes a class specializing its parent: `/Leaf/Leaf/...`
+  // without end, through no arc cycle.
+  const chain = new TextEncoder().encode(`#usda 1.0
+def "Leaf" (prepend specializes = </_LeafClass>) {}
+class "_LeafClass" (specializes = </Branch>) {}
+class "Branch" {
+    def "Leaf" (prepend specializes = </_LeafClass>) {}
+}
+`);
+  const reached = (stage: Stage) =>
+    stage
+      .status()
+      .compositionErrors.filter((issue) => issue.code === "composition.limit_exceeded")
+      .map((issue) => issue.prim);
+
+  it("stops an endless namespace at the browser default", () => {
+    using stage = layerstack.open({ identifier: "chain.usda", bytes: chain });
+    assert.deepEqual(reached(stage), ["/Leaf".repeat(66)]);
+  });
+
+  it("takes the limits from the open options", () => {
+    using stage = layerstack.open({ identifier: "chain.usda", bytes: chain }, { limits: { composedDepth: 8 } });
+    // `/Leaf/Leaf` reads `/Branch/Leaf`, two levels deep, and each prim below it
+    // is a level further below it.
+    assert.deepEqual(reached(stage), ["/Leaf".repeat(10)]);
+    using unlimited = layerstack.open(
+      { identifier: "chain.usda", bytes: chain },
+      { limits: { primIndexNodes: 5000, composedDepth: null } },
+    );
+    assert.equal(reached(unlimited).length, 1);
+  });
+
+  it("refuses a limit that is not a non-negative integer", async () => {
+    const error = await failure(() =>
+      layerstack.open({ identifier: "chain.usda", bytes: chain }, { limits: { primIndexNodes: -1 } }),
+    );
+    assert.equal(error.code, "argument.invalid");
+  });
+});

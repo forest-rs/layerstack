@@ -909,7 +909,11 @@ mod tests {
     use layerstack::LayerId;
 
     use super::*;
-    use crate::{receipt::EditReceipt, stage::Stage, wire::Wire};
+    use crate::{
+        receipt::EditReceipt,
+        stage::{BROWSER_LIMITS, Stage},
+        wire::Wire,
+    };
 
     const SCENE: &str = r#"#usda 1.0
 (
@@ -951,7 +955,14 @@ def "Spare" (
     const SPARE: &str = "#usda 1.0\ndef \"Part\" {\n    int count = 3\n}\n";
 
     fn open() -> Stage {
-        let mut stage = Stage::open("scene.usda", SCENE.as_bytes().to_vec(), false, false).unwrap();
+        let mut stage = Stage::open(
+            "scene.usda",
+            SCENE.as_bytes().to_vec(),
+            false,
+            false,
+            BROWSER_LIMITS,
+        )
+        .unwrap();
         stage
             .document_mut()
             .storage_mut()
@@ -1183,8 +1194,14 @@ def "Spare" (
             specs,
         } in cases
         {
-            let mut stage =
-                Stage::open("defines.usda", DEFINES.as_bytes().to_vec(), false, false).unwrap();
+            let mut stage = Stage::open(
+                "defines.usda",
+                DEFINES.as_bytes().to_vec(),
+                false,
+                false,
+                BROWSER_LIMITS,
+            )
+            .unwrap();
             let target = root(&stage);
             let before = text(&stage, target);
             let mut batch = EditBatch::new();
@@ -1271,8 +1288,14 @@ def "Spare" (
             ),
         ];
         for (label, push, expected) in cases {
-            let mut stage =
-                Stage::open("rock.usda", ROCK.as_bytes().to_vec(), false, true).unwrap();
+            let mut stage = Stage::open(
+                "rock.usda",
+                ROCK.as_bytes().to_vec(),
+                false,
+                true,
+                BROWSER_LIMITS,
+            )
+            .unwrap();
             let session = stage.edit_layer().unwrap();
             let before = text(&stage, session);
             let mut batch = EditBatch::new();
@@ -1680,7 +1703,14 @@ def "Spare" (
 
     #[test]
     fn a_session_layer_takes_edits_in_front_of_the_root() {
-        let mut stage = Stage::open("scene.usda", SCENE.as_bytes().to_vec(), false, true).unwrap();
+        let mut stage = Stage::open(
+            "scene.usda",
+            SCENE.as_bytes().to_vec(),
+            false,
+            true,
+            BROWSER_LIMITS,
+        )
+        .unwrap();
         let session = stage.edit_layer().unwrap();
         assert_ne!(session, root(&stage));
         let root_text = text(&stage, root(&stage));

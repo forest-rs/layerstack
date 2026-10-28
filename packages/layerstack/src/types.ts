@@ -92,7 +92,11 @@ export interface AssetSource {
 
 /** A composition error: not thrown, reported with the stage ({@link Stage.status}). */
 export interface Issue {
-  /** The stable code, `composition.*` (such as `composition.unresolved_asset`). */
+  /**
+   * The stable code, `composition.*` (such as `composition.unresolved_asset`,
+   * or `composition.limit_exceeded` where composition reached one of its
+   * {@link OpenOptions.limits}).
+   */
   readonly code: string;
   /** The error in words, with its paths. */
   readonly message: string;
@@ -132,6 +136,24 @@ export interface OpenOptions {
    *   is how to edit a USDZ package: the package stays as it was read.
    */
   readonly editLayer?: "root" | "session";
+  /**
+   * How much work composition may do (`layerstack::CompositionLimits`), for
+   * the open and every edit after: each limit `undefined` for the module's
+   * browser default (`layerstack_wasm::BROWSER_LIMITS`: 2 million prim index
+   * nodes, 512 nodes in one index, composed depth 64), `null` for none, or a
+   * non-negative integer. Scene description can compose without end;
+   * reaching a limit stops composition and reports a
+   * `composition.limit_exceeded` {@link Issue} at the prim where it stopped,
+   * the stage composed up to it.
+   */
+  readonly limits?: {
+    /** The most prim index nodes composition builds, over all prims. */
+    readonly primIndexNodes?: number | null;
+    /** The most nodes one prim's index holds. */
+    readonly nodesPerPrimIndex?: number | null;
+    /** How many levels below the deepest spec its layers author composition places a prim. */
+    readonly composedDepth?: number | null;
+  };
 }
 
 /** A scalar's storage type in an array: `f16` is half floats as raw bits, `bool` is bytes of 0 or 1. */

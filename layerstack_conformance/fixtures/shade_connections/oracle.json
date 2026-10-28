@@ -1,0 +1,284 @@
+{
+  "version": "26.11",
+  "calls": [
+    {
+      "call": "connect",
+      "consumer": "/Mat/A.inputs:x",
+      "prim": "/Mat/B",
+      "name": "outputs:out",
+      "mode": "replace",
+      "accepted": true,
+      "consumer_spec": {
+        "type": "float",
+        "custom": false,
+        "connections": {
+          "explicit": true,
+          "explicit_items": [
+            "/Mat/B.outputs:out"
+          ],
+          "prepended": [],
+          "appended": [],
+          "deleted": []
+        }
+      },
+      "source_spec": {
+        "type": "float",
+        "custom": false
+      },
+      "composed": [
+        "/Mat/B.outputs:out"
+      ]
+    },
+    {
+      "call": "connect",
+      "consumer": "/Mat/A.inputs:x",
+      "prim": "/Mat/C",
+      "name": "outputs:out",
+      "mode": "prepend",
+      "accepted": true,
+      "consumer_spec": {
+        "type": "float",
+        "custom": false,
+        "connections": {
+          "explicit": true,
+          "explicit_items": [
+            "/Mat/C.outputs:out",
+            "/Mat/B.outputs:out"
+          ],
+          "prepended": [],
+          "appended": [],
+          "deleted": []
+        }
+      },
+      "source_spec": {
+        "type": "float",
+        "custom": false
+      },
+      "composed": [
+        "/Mat/C.outputs:out",
+        "/Mat/B.outputs:out"
+      ]
+    },
+    {
+      "call": "connect",
+      "consumer": "/Mat/A.inputs:x",
+      "prim": "/Mat/D",
+      "name": "outputs:out",
+      "mode": "append",
+      "accepted": true,
+      "consumer_spec": {
+        "type": "float",
+        "custom": false,
+        "connections": {
+          "explicit": true,
+          "explicit_items": [
+            "/Mat/C.outputs:out",
+            "/Mat/B.outputs:out",
+            "/Mat/D.outputs:out"
+          ],
+          "prepended": [],
+          "appended": [],
+          "deleted": []
+        }
+      },
+      "source_spec": {
+        "type": "float",
+        "custom": false
+      },
+      "composed": [
+        "/Mat/C.outputs:out",
+        "/Mat/B.outputs:out",
+        "/Mat/D.outputs:out"
+      ]
+    },
+    {
+      "call": "connect",
+      "consumer": "/Mat/A.inputs:z",
+      "prim": "/Mat",
+      "name": "inputs:z",
+      "mode": "replace",
+      "accepted": true,
+      "consumer_spec": {
+        "type": "color3f",
+        "custom": false,
+        "connections": {
+          "explicit": true,
+          "explicit_items": [
+            "/Mat.inputs:z"
+          ],
+          "prepended": [],
+          "appended": [],
+          "deleted": []
+        }
+      },
+      "source_spec": {
+        "type": "color3f",
+        "custom": false
+      },
+      "composed": [
+        "/Mat.inputs:z"
+      ]
+    },
+    {
+      "call": "disconnect",
+      "consumer": "/Mat/A.inputs:x",
+      "prim": "/Mat/C",
+      "name": "outputs:out",
+      "mode": null,
+      "accepted": true,
+      "consumer_spec": {
+        "type": "float",
+        "custom": false,
+        "connections": {
+          "explicit": true,
+          "explicit_items": [
+            "/Mat/B.outputs:out",
+            "/Mat/D.outputs:out"
+          ],
+          "prepended": [],
+          "appended": [],
+          "deleted": []
+        }
+      },
+      "source_spec": {
+        "type": "float",
+        "custom": false
+      },
+      "composed": [
+        "/Mat/B.outputs:out",
+        "/Mat/D.outputs:out"
+      ]
+    },
+    {
+      "call": "connect",
+      "consumer": "/Mat/A.inputs:w",
+      "prim": "/Mat/B",
+      "name": "outputs:out",
+      "mode": "prepend",
+      "accepted": true,
+      "consumer_spec": {
+        "type": "float",
+        "custom": false,
+        "connections": {
+          "explicit": false,
+          "explicit_items": [],
+          "prepended": [
+            "/Mat/B.outputs:out"
+          ],
+          "appended": [],
+          "deleted": []
+        }
+      },
+      "source_spec": {
+        "type": "float",
+        "custom": false
+      },
+      "composed": [
+        "/Mat/B.outputs:out",
+        "/Mat/E.outputs:out"
+      ]
+    },
+    {
+      "call": "disconnect",
+      "consumer": "/Mat/A.inputs:w",
+      "prim": "/Mat/E",
+      "name": "outputs:out",
+      "mode": null,
+      "accepted": true,
+      "consumer_spec": {
+        "type": "float",
+        "custom": false,
+        "connections": {
+          "explicit": false,
+          "explicit_items": [],
+          "prepended": [
+            "/Mat/B.outputs:out"
+          ],
+          "appended": [],
+          "deleted": [
+            "/Mat/E.outputs:out"
+          ]
+        }
+      },
+      "source_spec": null,
+      "composed": [
+        "/Mat/B.outputs:out"
+      ]
+    },
+    {
+      "call": "connect",
+      "consumer": "/Mat/A.inputs:y",
+      "prim": "/Mat/E",
+      "name": "outputs:out",
+      "mode": "append",
+      "accepted": true,
+      "consumer_spec": {
+        "type": "float",
+        "custom": false,
+        "connections": {
+          "explicit": false,
+          "explicit_items": [],
+          "prepended": [],
+          "appended": [
+            "/Mat/E.outputs:out"
+          ],
+          "deleted": []
+        }
+      },
+      "source_spec": null,
+      "composed": [
+        "/Mat/E.outputs:out"
+      ]
+    },
+    {
+      "call": "connect",
+      "consumer": "/Mat/A.inputs:y",
+      "prim": "/Mat/R",
+      "name": "outputs:out",
+      "mode": "replace",
+      "accepted": false,
+      "consumer_spec": {
+        "type": "float",
+        "custom": false,
+        "connections": {
+          "explicit": false,
+          "explicit_items": [],
+          "prepended": [],
+          "appended": [
+            "/Mat/E.outputs:out"
+          ],
+          "deleted": []
+        }
+      },
+      "source_spec": null,
+      "composed": [
+        "/Mat/E.outputs:out"
+      ]
+    },
+    {
+      "call": "connect",
+      "consumer": "/Mat/A.inputs:y",
+      "prim": "/Mat/Missing",
+      "name": "outputs:out",
+      "mode": "replace",
+      "accepted": false,
+      "consumer_spec": {
+        "type": "float",
+        "custom": false,
+        "connections": {
+          "explicit": false,
+          "explicit_items": [],
+          "prepended": [],
+          "appended": [
+            "/Mat/E.outputs:out"
+          ],
+          "deleted": []
+        }
+      },
+      "source_spec": null,
+      "composed": [
+        "/Mat/E.outputs:out"
+      ]
+    }
+  ]
+}

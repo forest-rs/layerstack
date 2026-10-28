@@ -6,7 +6,7 @@
 use super::{ConnectedSources, ShaderSources, ValueSources, shading_kind};
 use crate::{CannotEdit, PrimEdit, PrimView, Scene, SchemaEdit, Time};
 use alloc::{format, string::String, vec::Vec};
-use layerstack::{ListOp, PathId, PropertyPath, PropertyType, TargetPath, Value};
+use layerstack::{ListOp, ListPosition, PathId, PropertyPath, PropertyType, TargetPath, Value};
 
 /// A shading attribute's namespace, independent of its value type.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -175,13 +175,34 @@ impl core::fmt::Display for PortError {
 }
 impl core::error::Error for PortError {}
 
+/// Where [`PortEdit::connect_to_source`] puts the source among the
+/// connections the edit target's spec authors.
+///
+/// OpenUSD: `UsdShadeConnectionModification`.
+#[doc(alias = "UsdShadeConnectionModification")]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ConnectionModification {
+    /// The source becomes the spec's only connection, an explicit list that
+    /// hides weaker layers' connections.
+    #[default]
+    Replace,
+    /// The source goes to the front of the spec's prepended connections, or
+    /// of its explicit list when it authors one; weaker layers' connections
+    /// stay behind it.
+    Prepend,
+    /// The source goes to the back of the spec's appended connections, or
+    /// of its explicit list when it authors one.
+    Append,
+}
+
 /// A named input or output authored through a [`SchemaEdit`].
 ///
 /// Connections are source opinions: every target is mapped through the edit
 /// target when committed, and undo restores authored absence as well as values.
-/// Semantic `CanConnect` validation and source-attribute auto-creation are not
-/// performed. Sources passed to [`Self::set_sources`] must already exist in the
-/// scene or have been created in this edit.
+/// Semantic `CanConnect` validation is not performed. Sources passed to
+/// [`Self::set_sources`] must already exist in the scene or have been created
+/// in this edit; [`Self::connect_to_source`] creates a missing one, as C++
+/// `ConnectToSource` does.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PortEdit {
     prim: PathId,
@@ -272,6 +293,107 @@ impl PortEdit {
             })
             .collect();
         edit.set_connection_op(self.prim, &self.name, Some(ListOp::explicit(targets)));
+        Ok(self)
+    }
+    /// Connects the source `name` (`outputs:…` or `inputs:…`) of the prim
+    /// `prim`, placing it as `modification` says, and returns the source.
+    /// A source attribute that does not exist yet is created with this
+    /// port's type, not `custom` and with no value, as C++ creates it;
+    /// an existing one keeps its own type, which is not checked against
+    /// this port's.
+    ///
+    /// OpenUSD: `UsdShadeConnectableAPI::ConnectToSource` with a
+    /// `UsdShadeConnectionSourceInfo`. AOUSD Core §7.6.4.2.3 and §12.4
+    /// (connection list composition).
+    ///
+    /// # Errors
+    ///
+    /// Before authoring anything: this port or the source prim does not
+    /// exist, `name` is not a shading attribute name, or a relationship
+    /// already has it.
+    #[doc(alias = "ConnectToSource")]
+    pub fn connect_to_source(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        prim: PathId,
+        name: &str,
+        modification: ConnectionModification,
+    ) -> Result<Self, PortError> {
+        self.validate(edit)?;
+        let source = self.source_port(edit, prim, name)?;
+        let target = TargetPath::Property(PropertyPath::new(prim, edit.tokens().intern(name)));
+        match modification {
+            ConnectionModification::Replace => edit.set_connection_op(
+                self.prim,
+                &self.name,
+                Some(ListOp::explicit(alloc::vec![target])),
+            ),
+            ConnectionModification::Prepend => {
+                edit.add_connection(self.prim, &self.name, target, ListPosition::FrontOfPrepend);
+            }
+            ConnectionModification::Append => {
+                edit.add_connection(self.prim, &self.name, target, ListPosition::BackOfAppend);
+            }
+        }
+        Ok(source)
+    }
+    /// The existing source `name` of `prim`, or one created with this port's type.
+    fn source_port(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        prim: PathId,
+        name: &str,
+    ) -> Result<Self, PortError> {
+        if !edit.exists(prim) {
+            return Err(PortError::MissingPrim(prim));
+        }
+        let Some(kind) = PortKind::of(name) else {
+            return Err(PortError::InvalidName(name.into()));
+        };
+        let base = &name[kind.prefix().len()..];
+        if !base.split(':').all(layerstack::ident::is_identifier) {
+            return Err(PortError::InvalidName(name.into()));
+        }
+        if edit.attribute_type(prim, name).is_none() {
+            if edit.property_kind(prim, name).is_some() {
+                return Err(PortError::InvalidAttribute {
+                    prim,
+                    name: name.into(),
+                });
+            }
+            let ty = edit
+                .attribute_type(self.prim, &self.name)
+                .expect("a validated port has a type");
+            edit.create_attribute(prim, name, ty);
+        }
+        Ok(Self {
+            prim,
+            name: name.into(),
+        })
+    }
+    /// Removes the one source `source` from this port's connections: from
+    /// the edit target's explicit list when it authors one, else as a
+    /// deletion that also removes it from weaker layers' connections. Other
+    /// sources stay connected.
+    ///
+    /// OpenUSD: `UsdShadeConnectableAPI::DisconnectSource` with a source
+    /// attribute (`UsdAttribute::RemoveConnection`). AOUSD Core §12.4.
+    ///
+    /// # Errors
+    ///
+    /// When this port no longer exists.
+    #[doc(alias = "DisconnectSource")]
+    pub fn disconnect_source(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        source: &Self,
+    ) -> Result<&Self, PortError> {
+        self.validate(edit)?;
+        let target = TargetPath::Property(PropertyPath::new(
+            source.prim,
+            edit.tokens().intern(&source.name),
+        ));
+        edit.remove_connection(self.prim, &self.name, target);
         Ok(self)
     }
     /// Disconnects all sources by authoring an explicit empty list.

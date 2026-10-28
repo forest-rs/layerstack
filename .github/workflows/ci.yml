@@ -690,6 +690,8 @@ jobs:
 
       - name: check retained query oracle
         run: python layerstack_conformance/scripts/retained_queries_oracle.py --check
+      - name: check shading connection edits oracle
+        run: python layerstack_conformance/scripts/shade_connections_oracle.py --check
 
       - name: check shading source oracle
         run: python layerstack_conformance/scripts/shading_oracle.py --check

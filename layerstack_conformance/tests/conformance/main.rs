@@ -151,6 +151,7 @@ mod schema_metadata;
 mod schema_views;
 mod schemas;
 mod session_layers;
+mod shade_connections;
 mod shade_node_def;
 mod shader_nodes;
 mod shading;

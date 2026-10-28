@@ -1036,6 +1036,34 @@ impl<'s> SchemaEdit<'s> {
         }
     }
 
+    /// Adds `target` to the connections of the attribute `name` of `path`
+    /// at `position` in the edit target's list op, which keeps the
+    /// connections weaker layers author.
+    ///
+    /// OpenUSD: `UsdAttribute::AddConnection`.
+    #[cfg(feature = "usd-shade")]
+    pub(crate) fn add_connection(
+        &mut self,
+        path: PathId,
+        name: &str,
+        target: TargetPath,
+        position: ListPosition,
+    ) {
+        let at = self.property(path, name);
+        self.transaction.add_target(at, target, position);
+    }
+
+    /// Removes `target` from the connections of the attribute `name` of
+    /// `path`: from the edit target's explicit list, else as a deletion that
+    /// removes it from weaker layers' connections too.
+    ///
+    /// OpenUSD: `UsdAttribute::RemoveConnection`.
+    #[cfg(feature = "usd-shade")]
+    pub(crate) fn remove_connection(&mut self, path: PathId, name: &str, target: TargetPath) {
+        let at = self.property(path, name);
+        self.transaction.remove_target(at, target);
+    }
+
     /// Creates the attribute `name` of `path`, not `custom`, of type `ty`,
     /// with no value.
     ///

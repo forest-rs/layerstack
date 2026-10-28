@@ -91,20 +91,13 @@ fn crate_files(dir: &Path, out: &mut Vec<PathBuf>) {
     }
 }
 
-/// The generated parts library in `shape`, written as USDC into `dir`.
-fn write_library(shape: &LibraryShape, dir: &str) -> Vec<(String, Vec<u8>)> {
-    let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join(dir);
-    let written = LibraryScene::generate(shape)
-        .write(&dir, LibraryFormat::Usdc)
-        .expect("the library writes");
-    written
-        .files
-        .iter()
-        .map(|(path, _)| {
-            let name = path.file_name().unwrap().to_string_lossy().into_owned();
-            (name, std::fs::read(path).expect("a written layer"))
-        })
-        .collect()
+/// The generated parts library in `shape`, encoded as USDC in memory: the
+/// tests here run in separate processes at once, so files written to one
+/// directory could be read half written.
+fn encode_library(shape: &LibraryShape) -> Vec<(String, Vec<u8>)> {
+    LibraryScene::generate(shape)
+        .encode(LibraryFormat::Usdc)
+        .expect("the library encodes")
 }
 
 /// The small parts library with `tags` arrays long enough to be retained:
@@ -117,7 +110,7 @@ fn library() -> &'static [(String, Vec<u8>)] {
             average_tags: 40,
             ..LibraryShape::SMALL
         };
-        write_library(&shape, "retained_text_values/long_tags")
+        encode_library(&shape)
     })
 }
 
@@ -139,10 +132,7 @@ fn corpus() -> Vec<(String, Vec<u8>)> {
             (name, std::fs::read(path).unwrap())
         })
         .collect();
-    files.extend(write_library(
-        &LibraryShape::SMALL,
-        "retained_text_values/small",
-    ));
+    files.extend(encode_library(&LibraryShape::SMALL));
     files.extend(library().iter().cloned());
     files
 }

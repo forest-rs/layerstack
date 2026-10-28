@@ -175,6 +175,11 @@
    "reads": false,
    "source": "#usda 1.0\n\ndef \"P\" (\n    variants = {\n        string v = \"one\"\n    }\n    prepend variantSets = \"v\"\n)\n{\n    variantSet \"v\" = {\n        \"one\" {\n            def \"Child\"\n            {\n                rel side = <../Other>\n            }\n        }\n    }\n}\n"
   },
+  "read_variant_named_empty": {
+   "reads": true,
+   "source": "#usda 1.0\ndef \"P\"\n{\n    variantSet \"v\" = {\n        \"\" {\n            def \"C\"\n            {\n            }\n        }\n        \"x\" {\n            double a = 1\n        }\n    }\n}\n",
+   "text": "#usda 1.0\n\ndef \"P\"\n{\n}\n\n"
+  },
   "read_variant_relative_targets": {
    "reads": true,
    "source": "#usda 1.0\n\ndef \"P\" (\n    variants = {\n        string v = \"one\"\n    }\n    prepend variantSets = \"v\"\n)\n{\n    variantSet \"v\" = {\n        \"one\" (\n            prepend inherits = <Base>\n        ) {\n            rel r = <Child>\n            rel up = <../Other>\n            float c.connect = <Child.x>\n\n            def \"Child\"\n            {\n                float x\n            }\n        }\n    }\n}\n\ndef \"Other\"\n{\n}\n",
@@ -195,6 +200,11 @@
    "reads": true,
    "source": "#usda 1.0\n(\n    expressionVariables = {\n        string V = \"one\"\n    }\n)\n\ndef \"P\" (\n    variants = {\n        string a = \"d\\x61rk\"\n        string \"b\\x10\" = \"\"\n        string c = \"`${V}\\x10`\"\n        string d = \"`${V}\u0010`\"\n        string \"e f\" = \".one\"\n        string \"t\\x6fne\" = \"one\"\n    }\n)\n{\n}\n",
    "text": "#usda 1.0\n(\n    expressionVariables = {\n        string V = \"one\"\n    }\n)\n\ndef \"P\" (\n    variants = {\n        string a = \"dark\"\n        string \"b\\x10\" = \"\"\n        string c = \"`${V}\\x10`\"\n        string d = \"`${V}\\x10`\"\n        string \"e f\" = \".one\"\n        string tone = \"one\"\n    }\n)\n{\n}\n\n"
+  },
+  "read_variant_set_names_not_identifiers": {
+   "reads": true,
+   "source": "#usda 1.0\ndef \"P\" (\n    prepend variantSets = [\"a-b\", \"1a\", \".c\", \"d|e\", \"\"]\n)\n{\n    variantSet \"a-b\" = {\n        \"x\" {\n        }\n    }\n    variantSet \"1a\" = {\n        \".\" {\n        }\n    }\n    variantSet \".c\" = {\n        \"-y\" {\n        }\n    }\n    variantSet \"d|e\" = {\n        \"z\" {\n        }\n    }\n    variantSet \"\" = {\n        \"w\" {\n        }\n    }\n}\n",
+   "text": "#usda 1.0\n\ndef \"P\" (\n    prepend variantSets = [\"a-b\", \"1a\", \".c\", \"d|e\", \"\"]\n)\n{\n    variantSet \"a-b\" = {\n        \"x\" {\n\n        }\n    }\n    variantSet \"1a\" = {\n        \".\" {\n\n        }\n    }\n    variantSet \".c\" = {\n        \"-y\" {\n\n        }\n    }\n    variantSet \"d|e\" = {\n        \"z\" {\n\n        }\n    }\n    variantSet \"\" = {\n        \"w\" {\n\n        }\n    }\n}\n\n"
   },
   "read_varying_rel": {
    "reads": true,

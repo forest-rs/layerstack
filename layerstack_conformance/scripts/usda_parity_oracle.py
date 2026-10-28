@@ -44,7 +44,12 @@ The cases:
   which OpenUSD evaluates as the strings of a dictionary and writes back
   quoted and escaped (`TextParserAction<VariantsMetadata>`,
   `pxr/usd/sdf/textFileFormatParser.cpp`); a `\\` in an asset path, which
-  is not an escape there.
+  is not an escape there; variant set names and variant names that are
+  not identifiers but are in the `VariantName` grammar (`a-b`, `1a`, `.`,
+  the empty set name), which OpenUSD reads and writes back
+  (`SdfSchemaBase::IsValidVariantIdentifier`); and a variant named "",
+  whose spec takes the set's path, so OpenUSD never lists the set and
+  writes nothing of the statement.
   Some are refused, as OpenUSD refuses them: a relative target of a prim
   inside the variant, which anchors at `/P{v=one}Child` and so names a
   variant selection (`<x>`, `<../Other>`), a quoted
@@ -1715,6 +1720,48 @@ def "P"
 def "P"
 {
     float c.connect = </>
+}
+''', []),
+    "read_variant_set_names_not_identifiers": ('''#usda 1.0
+def "P" (
+    prepend variantSets = ["a-b", "1a", ".c", "d|e", ""]
+)
+{
+    variantSet "a-b" = {
+        "x" {
+        }
+    }
+    variantSet "1a" = {
+        "." {
+        }
+    }
+    variantSet ".c" = {
+        "-y" {
+        }
+    }
+    variantSet "d|e" = {
+        "z" {
+        }
+    }
+    variantSet "" = {
+        "w" {
+        }
+    }
+}
+''', []),
+    "read_variant_named_empty": ('''#usda 1.0
+def "P"
+{
+    variantSet "v" = {
+        "" {
+            def "C"
+            {
+            }
+        }
+        "x" {
+            double a = 1
+        }
+    }
 }
 ''', []),
 }

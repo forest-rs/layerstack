@@ -1893,6 +1893,25 @@ impl EmitCtx<'_> {
         type_hint: &str,
         span: Span,
     ) -> Vec<(f64, Value)> {
+        // OpenUSD's parser reads one valued sample of a type no type
+        // registers: its value context forgets the unrecognized type after
+        // the first value (`Sdf_ParserValueContext`,
+        // `pxr/usd/sdf/textFileFormatParser.cpp`), and a second valued
+        // sample fails ("Unrecognized type name"), so the layer does not
+        // open. `None` samples are not values and are read on.
+        if ValueType::from_name(type_hint).is_none()
+            && type_hint != "dictionary"
+            && samples
+                .iter()
+                .filter(|s| s.value.is_some())
+                .nth(1)
+                .is_some()
+        {
+            self.diagnostics.push(Diagnostic::error(
+                span,
+                format!("Unrecognized type name '{type_hint}'"),
+            ));
+        }
         let mut converted = Vec::with_capacity(samples.len());
         converted.extend(samples.iter().enumerate().filter_map(|(index, s)| {
             let value = match &s.value {

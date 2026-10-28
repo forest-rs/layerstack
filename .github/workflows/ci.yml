@@ -21,15 +21,22 @@ env:
     -p layerstack_io
     -p layerstack_mesh_export
   # List of packages that don't support `no_std`.
+  # `layerstack_wasm` is a WebAssembly module; its no_std build is checked
+  # by the gate, and a `cdylib` is not a crate type `x86_64-unknown-none`
+  # supports.
   RUST_NO_STD_PKGS: >-
     --exclude layerstack_conformance
     --exclude layerstack_examples
     --exclude layerstack_schemagen
+    --exclude layerstack_wasm
     --exclude wind_tunnel
   # List of packages that don't support wasip1
+  # `layerstack_wasm`'s exports import wasm-bindgen's JavaScript glue, which
+  # a WASI runtime does not provide; the `typescript` job runs the module.
   RUST_NO_WASIP1_PKGS: >-
     --exclude layerstack_examples
     --exclude layerstack_schemagen
+    --exclude layerstack_wasm
     --exclude wind_tunnel
   # List of packages that don't support wasm32
   RUST_NO_WASM_PKGS: >-
@@ -365,6 +372,72 @@ jobs:
 
       - name: cargo check
         run: cargo hack check ${{ env.RUST_MIN_VER_PKGS }} ${{ env.RUST_NO_WASM_PKGS }} --locked --target wasm32-unknown-unknown --optional-deps --each-feature --ignore-unknown-features --features std
+
+  # The `@layerstack/stage` package over the default module: build the
+  # module as it ships (the `wasm` profile, the `wasm-bindgen` CLI at the
+  # version Cargo.lock holds, `wasm-opt -Oz`), fail over its size budget
+  # (packages/layerstack/size-budget.json), type-check the wrapper and its
+  # tests, and run the tests in Node.
+  typescript:
+    name: typescript package
+    runs-on: ubuntu-latest
+    env:
+      BINARYEN_VERSION: "133"
+    defaults:
+      run:
+        working-directory: packages/layerstack
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: install stable toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_STABLE_VER }}
+          targets: wasm32-unknown-unknown
+
+      - name: restore cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.event_name != 'merge_group' }}
+
+      - name: install the wasm-bindgen CLI at the locked version
+        run: |
+          version=$(awk '/^name = "wasm-bindgen"$/ { getline; gsub(/version = |"/, ""); print; exit }' ../../Cargo.lock)
+          name="wasm-bindgen-$version-x86_64-unknown-linux-musl"
+          curl -sSfL "https://github.com/wasm-bindgen/wasm-bindgen/releases/download/$version/$name.tar.gz" | tar xz -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/$name" >> "$GITHUB_PATH"
+
+      - name: install binaryen
+        run: |
+          name="binaryen-version_$BINARYEN_VERSION"
+          curl -sSfL "https://github.com/WebAssembly/binaryen/releases/download/version_$BINARYEN_VERSION/$name-x86_64-linux.tar.gz" | tar xz -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/$name/bin" >> "$GITHUB_PATH"
+
+      - name: install node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: packages/layerstack/package-lock.json
+
+      - name: install the package's dev dependencies
+        run: npm ci
+
+      - name: build the module
+        env:
+          LAYERSTACK_REVISION: ${{ github.sha }}
+        run: npm run build:wasm
+
+      - name: check the size budget
+        run: npm run size
+
+      - name: build and type-check the wrapper
+        run: |
+          npm run build
+          npm run check
+
+      - name: run the Node tests
+        run: npm test
 
   doc:
     name: cargo doc

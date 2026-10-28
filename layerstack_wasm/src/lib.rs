@@ -1,0 +1,69 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+//! WebAssembly bindings for Layerstack: the native side of the TypeScript
+//! package `@layerstack/stage` (`packages/layerstack`).
+//!
+//! The module opens a stage from the bytes of its root layer and never
+//! fetches. The host runs the loop: the stage lists the assets it wants
+//! (`wanted`), the host fetches them however it likes, supplies their bytes
+//! ([`HostStorage::supply`], or [`HostStorage::confirm_absent`] for one that
+//! does not exist), and the stage reads them (`loadSupplied`), until
+//! nothing is wanted. A USDZ package is one supplied source. The stage then
+//! answers prim, child, attribute and value queries and explains where a
+//! value comes from (`explain`).
+//!
+//! Failures are [`Error`]s with a stable dotted code (`io.unavailable`,
+//! `path.invalid`); the codes of the core crates' errors come from their
+//! `code()` methods ([`layerstack_io::IoErrorKind::code`],
+//! [`layerstack::CompositionError::code`]).
+//!
+//! The exported classes and functions are an ABI for the TypeScript
+//! wrapper, which decodes their positional records into typed objects; the
+//! wrapper is the JavaScript API. [`native_version`] reports [`ABI`], and
+//! the wrapper refuses a module whose ABI it does not speak.
+//!
+//! A downstream crate can link this crate as an `rlib` into a module of its
+//! own, exporting functions that take `&Stage` and reach the document
+//! through [`Stage::document`].
+//!
+//! The bindings are single-threaded: opening and composition run on the
+//! calling thread (`StageOptions::threads` is 0).
+#![no_std]
+extern crate alloc;
+#[cfg(feature = "std")]
+extern crate std;
+
+mod error;
+mod stage;
+mod storage;
+mod value;
+mod wire;
+
+pub use error::Error;
+pub use stage::Stage;
+pub use storage::HostStorage;
+
+use alloc::vec;
+
+use wasm_bindgen::prelude::*;
+
+/// The version of the records the module exchanges with the TypeScript
+/// wrapper. It changes whenever an export's arguments or a record's layout
+/// change incompatibly; the wrapper refuses a module whose ABI differs from
+/// its own (`module.abi`).
+pub const ABI: u32 = 1;
+
+/// The crate version, the source revision the module was built from
+/// (`LAYERSTACK_REVISION` at build time, `unknown` when unset) and [`ABI`],
+/// as `[crate, revision, abi]`.
+#[wasm_bindgen(js_name = nativeVersion)]
+#[must_use]
+pub fn native_version() -> JsValue {
+    wire::Wire::List(vec![
+        wire::Wire::text(env!("CARGO_PKG_VERSION")),
+        wire::Wire::text(option_env!("LAYERSTACK_REVISION").unwrap_or("unknown")),
+        wire::Wire::Number(f64::from(ABI)),
+    ])
+    .into()
+}

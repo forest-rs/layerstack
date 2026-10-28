@@ -427,6 +427,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "layerstack_wasm"
+version = "0.1.0"
+dependencies = [
+ "layerstack",
+ "layerstack_io",
+ "layerstack_schemas",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "libc"
 version = "0.2.190"
 source = "registry+https://github.com/rust-lang/crates.io-index"

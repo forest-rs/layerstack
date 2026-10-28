@@ -58,7 +58,13 @@ The cases:
   variant selection (`<x>`, `<../Other>`), a quoted
   `symmetryFunction` and an unknown unit.
 - `write_*`: layers whose text OpenUSD writes back its own way: a
-  `defaultPrim` the layer does not hold; `prefixSubstitutions` and
+  variant block, whatever it holds (nothing, metadata, properties,
+  `reorder properties`, child prims, nested variant sets), closed by a
+  blank line before its `}` (`Sdf_WriteVariant`,
+  `pxr/usd/sdf/fileIO_Common.h`), with a blank line between its
+  properties and its child prims and between children but none before a
+  variant set (`Sdf_WritePrimBody`); a `defaultPrim` the layer does not
+  hold; `prefixSubstitutions` and
   `suffixSubstitutions` (`_WriteDictionary`, `stringValuesOnly`); a
   connection to a prim; a variant selection that is an expression; the
   header version each feature requests (`RequestWriteVersionUpgrade`,
@@ -521,6 +527,70 @@ def "P"
         7: 5.5; post curve/* inline */(1.1, -1.4),
         // another comment
         9: 6,
+    }
+}
+''', []),
+    "write_variant_blocks": ('''#usda 1.0
+def "P" (
+    variantSets = ["v", "w"]
+)
+{
+    int a = 1
+    def "C" {
+    }
+    variantSet "v" = {
+        "empty" {
+        }
+        "attr" {
+            int a = 1
+            int b = 2
+        }
+        "child" {
+            def "C" {
+            }
+            def "D" {
+                int a = 1
+            }
+        }
+        "both" {
+            int a = 1
+            def "C" {
+            }
+        }
+        "meta" (
+            kind = "x"
+        ) {
+        }
+        "nested" {
+            variantSet "n" = {
+                "x" {
+                }
+                "y" {
+                    int a = 1
+                    variantSet "m" = {
+                        "z" {
+                        }
+                    }
+                }
+            }
+        }
+        "everything" (
+            kind = "y"
+        ) {
+            reorder properties = ["b", "a"]
+            int a = 1
+            int b = 2
+            def "C" {
+            }
+            variantSet "n" = {
+                "x" {
+                }
+            }
+        }
+    }
+    variantSet "w" = {
+        "x" {
+        }
     }
 }
 ''', []),

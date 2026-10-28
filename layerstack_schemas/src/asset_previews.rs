@@ -15,8 +15,8 @@ use crate::{
 };
 use alloc::{string::String, sync::Arc, vec, vec::Vec};
 use layerstack::{
-    FieldValue, LayerId, LayerStore, OpinionValue, Path, PathId, PopulationMask, Provenance,
-    SchemaRegistry, Stage, StageOptions, Value,
+    FieldValue, LayerId, LayerStore, OpinionValue, Path, PathId, PopulationMask, Provenance, Stage,
+    StageOptions, Value,
 };
 
 const ASSET_INFO: &str = "assetInfo";
@@ -127,14 +127,26 @@ impl AssetPreviewsApiEdit {
 /// [`asset_default_previews`].
 #[derive(Debug)]
 pub struct AssetDefaultPreviews {
-    /// The stage, masked to the default prim: its children, references
-    /// and payloads below it are not composed.
-    pub stage: Stage,
-    /// The layer's default prim.
-    pub prim: PathId,
+    stage: Stage,
+    prim: PathId,
 }
 
 impl AssetDefaultPreviews {
+    /// The stage, masked to the default prim: its children, references
+    /// and payloads below it are not composed. Its
+    /// [`Stage::composition_errors`] are those of the default prim and its
+    /// ancestors.
+    #[must_use]
+    pub fn stage(&self) -> &Stage {
+        &self.stage
+    }
+
+    /// The layer's default prim.
+    #[must_use]
+    pub fn prim(&self) -> PathId {
+        self.prim
+    }
+
     /// The default prim's thumbnails ([`AssetPreviewsApi::default_thumbnails`]).
     #[must_use]
     pub fn default_thumbnails(&self, store: &dyn LayerStore) -> Option<Thumbnails> {
@@ -143,30 +155,70 @@ impl AssetDefaultPreviews {
     }
 }
 
+/// Why [`asset_default_previews`] found no default prim to read.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum AssetPreviewsError {
+    /// The store holds no layer with this id.
+    NoSuchLayer(LayerId),
+    /// The layer authors no `defaultPrim`.
+    NoDefaultPrim,
+    /// The layer's `defaultPrim` names no prim path: it is empty, or not a
+    /// prim name or an absolute prim path.
+    InvalidDefaultPrim(String),
+}
+
+impl core::fmt::Display for AssetPreviewsError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::NoSuchLayer(layer) => write!(f, "the store holds no layer {layer:?}"),
+            Self::NoDefaultPrim => f.write_str("the layer names no default prim"),
+            Self::InvalidDefaultPrim(text) => {
+                write!(f, "defaultPrim `{text}` names no prim path")
+            }
+        }
+    }
+}
+
+impl core::error::Error for AssetPreviewsError {}
+
 /// The default previews of the asset whose root layer is `layer`: its
 /// default prim (`defaultPrim`, a root prim name or an absolute prim path)
 /// on a stage masked to `<defaultPrim>/__No_Such_Prim__`, so only the
 /// default prim and its ancestors are populated, not the asset's contents.
-/// `None` when the layer is not in `store` or names no default prim.
 ///
-/// `schemas` must be built on `store`'s tokens, as for any stage.
+/// The stage composes with `options`, the caller's executor, threads,
+/// limits and variant fallbacks included, except that its population mask
+/// is the one above. Its `schemas` must be built on `store`'s tokens, as
+/// for any stage; without them no prim has the previews schema and there
+/// are no thumbnails.
 ///
 /// OpenUSD: `UsdMediaAssetPreviewsAPI::GetAssetDefaultPreviews`.
+///
+/// # Errors
+///
+/// Why there is no default prim to read: no such layer, no `defaultPrim`,
+/// or one that names no prim path.
 #[doc(alias = "GetAssetDefaultPreviews")]
 pub fn asset_default_previews(
     store: &mut dyn LayerStore,
     layer: LayerId,
-    schemas: Arc<SchemaRegistry>,
-) -> Option<AssetDefaultPreviews> {
-    let name = store.layer(layer)?.default_prim()?;
+    options: StageOptions,
+) -> Result<AssetDefaultPreviews, AssetPreviewsError> {
+    let name = store
+        .layer(layer)
+        .ok_or(AssetPreviewsError::NoSuchLayer(layer))?
+        .default_prim()
+        .ok_or(AssetPreviewsError::NoDefaultPrim)?;
     let text = String::from(store.tokens().resolve(name));
+    let invalid = || AssetPreviewsError::InvalidDefaultPrim(text.clone());
     let path = if text.starts_with('/') {
-        Path::parse_absolute(&text, store.tokens()).ok()?
+        Path::parse_absolute(&text, store.tokens()).map_err(|_| invalid())?
     } else {
         Path::root().join(&[name])
     };
     if path.depth() == 0 {
-        return None;
+        return Err(invalid());
     }
     let no_such_prim = store.tokens().intern("__No_Such_Prim__");
     let mask = store.paths().intern(path.join(&[no_such_prim]));
@@ -178,9 +230,8 @@ pub fn asset_default_previews(
             mask: Some(PopulationMask {
                 include: Vec::from([mask]),
             }),
-            schemas: Some(schemas),
-            ..StageOptions::default()
+            ..options
         },
     );
-    Some(AssetDefaultPreviews { stage, prim })
+    Ok(AssetDefaultPreviews { stage, prim })
 }

@@ -4,10 +4,12 @@
 //! `AssetPreviewsAPI` default thumbnails and an asset's default previews
 //! against OpenUSD 26.11.
 use crate::support::schema_scene as support;
-use layerstack::{FieldValue, InMemoryStore, LayerId, PathId, Value, edit::EditTarget};
+use layerstack::{
+    FieldValue, InMemoryStore, LayerId, PathId, StageOptions, Value, edit::EditTarget,
+};
 use layerstack_schemas::{
     PrimView, Scene, SchemaEdit,
-    asset_previews::asset_default_previews,
+    asset_previews::{AssetPreviewsError, asset_default_previews},
     usd_media::{AssetPreviewsApi, AssetPreviewsApiEdit},
 };
 use serde::Deserialize;
@@ -153,8 +155,12 @@ fn asset_default_previews_populate_only_the_default_prim() {
     let want = &oracle.asset_default_previews;
     let (mut store, _) = support::scene(SCENE);
     let schemas = Arc::new(layerstack_schemas::openusd(store.tokens()));
-    let previews = asset_default_previews(&mut store, LayerId(1), schemas).unwrap();
-    assert_eq!(previews.prim, store.path(&want.prim));
+    let options = StageOptions {
+        schemas: Some(schemas),
+        ..StageOptions::default()
+    };
+    let previews = asset_default_previews(&mut store, LayerId(1), options).unwrap();
+    assert_eq!(previews.prim(), store.path(&want.prim));
     assert_eq!(
         previews
             .default_thumbnails(&store)
@@ -169,9 +175,14 @@ fn asset_default_previews_populate_only_the_default_prim() {
         "/StringImage",
     ] {
         assert_eq!(
-            previews.stage.prim(store.path(path), &store).is_some(),
+            previews.stage().prim(store.path(path), &store).is_some(),
             want.populated.iter().any(|p| p == path),
             "{path}"
         );
     }
+    // A layer the store does not hold names why there is nothing to read.
+    assert_eq!(
+        asset_default_previews(&mut store, LayerId(99), StageOptions::default()).unwrap_err(),
+        AssetPreviewsError::NoSuchLayer(LayerId(99))
+    );
 }

@@ -1,0 +1,59 @@
+{
+  "version": "26.11",
+  "targets": [
+    {
+      "geometry": "/World/Copy/Body",
+      "joint_indices": "/__Prototype_1/Body.primvars:skel:jointIndices",
+      "joint_weights": "/__Prototype_1/Body.primvars:skel:jointWeights",
+      "geom_bind_transform": "/__Prototype_1/Body.primvars:skel:geomBindTransform",
+      "skinning_method": null,
+      "blend_shapes": "/__Prototype_1/Body.skel:blendShapes",
+      "blend_shape_targets": "/__Prototype_1/Body.skel:blendShapeTargets"
+    },
+    {
+      "geometry": "/World/Copy/Group/Rigid",
+      "joint_indices": "/__Prototype_1/Group.primvars:skel:jointIndices",
+      "joint_weights": "/__Prototype_1/Group.primvars:skel:jointWeights",
+      "geom_bind_transform": null,
+      "skinning_method": "/World/Copy/Group.primvars:skel:skinningMethod",
+      "blend_shapes": null,
+      "blend_shape_targets": null
+    },
+    {
+      "geometry": "/World/Copy2/Body",
+      "joint_indices": "/__Prototype_1/Body.primvars:skel:jointIndices",
+      "joint_weights": "/__Prototype_1/Body.primvars:skel:jointWeights",
+      "geom_bind_transform": "/__Prototype_1/Body.primvars:skel:geomBindTransform",
+      "skinning_method": null,
+      "blend_shapes": "/__Prototype_1/Body.skel:blendShapes",
+      "blend_shape_targets": "/__Prototype_1/Body.skel:blendShapeTargets"
+    },
+    {
+      "geometry": "/World/Copy2/Group/Rigid",
+      "joint_indices": "/__Prototype_1/Group.primvars:skel:jointIndices",
+      "joint_weights": "/__Prototype_1/Group.primvars:skel:jointWeights",
+      "geom_bind_transform": null,
+      "skinning_method": "/World/Copy2/Group.primvars:skel:skinningMethod",
+      "blend_shapes": null,
+      "blend_shape_targets": null
+    },
+    {
+      "geometry": "/World/Plain/Body",
+      "joint_indices": "/World/Plain/Body.primvars:skel:jointIndices",
+      "joint_weights": "/World/Plain/Body.primvars:skel:jointWeights",
+      "geom_bind_transform": "/World/Plain/Body.primvars:skel:geomBindTransform",
+      "skinning_method": null,
+      "blend_shapes": "/World/Plain/Body.skel:blendShapes",
+      "blend_shape_targets": "/World/Plain/Body.skel:blendShapeTargets"
+    },
+    {
+      "geometry": "/World/Plain/Group/Rigid",
+      "joint_indices": "/World/Plain/Group.primvars:skel:jointIndices",
+      "joint_weights": "/World/Plain/Group.primvars:skel:jointWeights",
+      "geom_bind_transform": null,
+      "skinning_method": "/World/Plain/Group.primvars:skel:skinningMethod",
+      "blend_shapes": null,
+      "blend_shape_targets": null
+    }
+  ]
+}

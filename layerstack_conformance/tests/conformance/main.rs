@@ -163,6 +163,7 @@ mod shading_ports;
 mod skel_animation_samples;
 mod skel_authoring;
 mod skel_bake;
+mod skel_binding_properties;
 mod skel_blend_cache;
 mod skel_blend_shapes;
 mod skel_bounds;

@@ -13,7 +13,7 @@ use crate::{
 };
 use alloc::{sync::Arc, vec, vec::Vec};
 use hashbrown::HashMap;
-use layerstack::{PathId, Specifier};
+use layerstack::{PathId, PropertyPath, Specifier, TokenId, stage::PrototypeId};
 
 /// CPU deformation method authored by `primvars:skel:skinningMethod`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -308,6 +308,57 @@ pub(super) fn inherited_property(
     }
 }
 
+/// A property providing one skinning input: on the geometry, or on the
+/// ancestor whose binding it inherits.
+///
+/// OpenUSD: what `UsdSkelSkinningQuery::GetJointIndicesPrimvar` and its
+/// siblings name.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BindingProperty {
+    /// The property at its stage path; inside a native instance, an
+    /// instance proxy's path.
+    pub path: PropertyPath,
+    /// Inside a native instance, where the property's prim lies in the
+    /// prototype every instance of it shares: equal for every instance, so
+    /// an engine can share the influence buffers between them. C++ names
+    /// the prototype's own property there (`/__Prototype_1/Body.…`).
+    /// `None` outside instances, and for the instance root itself.
+    pub prototype: Option<PrototypeLocation>,
+}
+
+/// A prim's place inside a prototype: the innermost native instance root
+/// above it and the names leading from that root down to the prim.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PrototypeLocation {
+    /// The prototype, valid for the stage snapshot the query was made on.
+    pub prototype: PrototypeId,
+    /// Prim names from the instance root down to the prim; never empty.
+    pub relative_path: Vec<TokenId>,
+}
+
+/// The prototype location of an instance proxy prim, as
+/// [`BindingProperty::prototype`] describes it.
+fn prototype_location(scene: &Scene<'_>, prim: PathId) -> Option<PrototypeLocation> {
+    if !scene.prim(prim)?.is_instance_proxy() {
+        return None;
+    }
+    let paths = scene.store().paths();
+    let mut relative_path = Vec::new();
+    let mut path = prim;
+    loop {
+        relative_path.push(*paths.resolve(path).segments().last()?);
+        let parent = scene.parent(path)?;
+        if let Some(prototype) = scene.prim(parent)?.prototype() {
+            relative_path.reverse();
+            return Some(PrototypeLocation {
+                prototype,
+                relative_path,
+            });
+        }
+        path = parent;
+    }
+}
+
 /// A geometry binding snapshot. Definition and influence metadata are retained;
 /// sampled values resolve at explicit times. Rebuild after scene edits.
 /// Output points are in skeleton space, before the Skeleton's scene Xform.
@@ -479,6 +530,88 @@ impl<'a> SkinningQuery<'a> {
     #[must_use]
     pub fn dependencies(&self) -> &[PathId] {
         &self.definition.dependencies
+    }
+    /// The property named `name` of `prim`, with its prototype location
+    /// when `in_prototype`.
+    fn binding_property(
+        &self,
+        prim: PathId,
+        name: &str,
+        in_prototype: bool,
+    ) -> Option<BindingProperty> {
+        let path = PrimView::new(self.scene, prim).property_path(name)?;
+        Some(BindingProperty {
+            path,
+            prototype: in_prototype
+                .then(|| prototype_location(&self.scene, prim))
+                .flatten(),
+        })
+    }
+    /// The `primvars:skel:jointIndices` providing the influences: the
+    /// geometry's, or the nearest ancestor's it inherits.
+    ///
+    /// OpenUSD: `UsdSkelSkinningQuery::GetJointIndicesPrimvar`.
+    #[doc(alias = "GetJointIndicesPrimvar")]
+    #[must_use]
+    pub fn joint_indices_property(&self) -> BindingProperty {
+        self.binding_property(self.definition.indices, "primvars:skel:jointIndices", true)
+            .expect("a prepared binding names its interned influences")
+    }
+    /// The `primvars:skel:jointWeights` providing the influences, as
+    /// [`Self::joint_indices_property`] finds it.
+    ///
+    /// OpenUSD: `UsdSkelSkinningQuery::GetJointWeightsPrimvar`.
+    #[doc(alias = "GetJointWeightsPrimvar")]
+    #[must_use]
+    pub fn joint_weights_property(&self) -> BindingProperty {
+        self.binding_property(self.definition.weights, "primvars:skel:jointWeights", true)
+            .expect("a prepared binding names its interned influences")
+    }
+    /// The inherited `primvars:skel:geomBindTransform` with an authored
+    /// value, if any (identity applies otherwise).
+    ///
+    /// OpenUSD: `UsdSkelSkinningQuery::GetGeomBindTransformAttr`.
+    #[doc(alias = "GetGeomBindTransformAttr")]
+    #[must_use]
+    pub fn geom_bind_transform_property(&self) -> Option<BindingProperty> {
+        self.binding_property(
+            self.definition.geom_bind?,
+            "primvars:skel:geomBindTransform",
+            true,
+        )
+    }
+    /// The inherited `primvars:skel:skinningMethod` with an authored value,
+    /// if any (classic linear applies otherwise). As in C++, an instance
+    /// proxy's method is named at the proxy, with no prototype location.
+    ///
+    /// OpenUSD: `UsdSkelSkinningQuery::GetSkinningMethodAttr`
+    /// (`UsdSkel_CacheImpl` reads it from the proxy, `cacheImpl.cpp`).
+    #[doc(alias = "GetSkinningMethodAttr")]
+    #[must_use]
+    pub fn skinning_method_property(&self) -> Option<BindingProperty> {
+        self.binding_property(
+            self.definition.method?,
+            "primvars:skel:skinningMethod",
+            false,
+        )
+    }
+    /// The geometry's `skel:blendShapes`, when it binds blend shapes.
+    ///
+    /// OpenUSD: `UsdSkelSkinningQuery::GetBlendShapesAttr`.
+    #[doc(alias = "GetBlendShapesAttr")]
+    #[must_use]
+    pub fn blend_shapes_property(&self) -> Option<BindingProperty> {
+        self.definition.blend_shapes.as_ref()?;
+        self.binding_property(self.definition.geometry, "skel:blendShapes", true)
+    }
+    /// The geometry's `skel:blendShapeTargets`, when it binds blend shapes.
+    ///
+    /// OpenUSD: `UsdSkelSkinningQuery::GetBlendShapeTargetsRel`.
+    #[doc(alias = "GetBlendShapeTargetsRel")]
+    #[must_use]
+    pub fn blend_shape_targets_property(&self) -> Option<BindingProperty> {
+        self.definition.blend_shapes.as_ref()?;
+        self.binding_property(self.definition.geometry, "skel:blendShapeTargets", true)
     }
     /// Number of influences in each constant or vertex block.
     #[must_use]

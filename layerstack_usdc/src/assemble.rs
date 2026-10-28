@@ -1044,7 +1044,7 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
             }
             // Stable: a spec's diagnostics keep their order.
             all.sort_by_key(SpecItem::spec);
-            diagnostics.sort_by_key(|(spec, _)| *spec);
+            sort_by_spec(&mut diagnostics);
             items = alloc::vec![all];
         }
         self.diagnostics
@@ -3631,6 +3631,12 @@ fn put_property(properties: &mut Vec<PropertyEntry>, name: TokenId, spec: Arc<Pr
     }
 }
 
+/// Sorts diagnostics by the spec they are about, stably. Outside the
+/// generic pass, so the prim and property passes share one sort.
+fn sort_by_spec(diagnostics: &mut [(usize, AssembleDiagnostic)]) {
+    diagnostics.sort_by_key(|(spec, _)| *spec);
+}
+
 /// Orders `properties` by their position in `children` (`propertyChildren`),
 /// keeping properties not listed there after the listed ones, in order.
 ///
@@ -3638,26 +3644,41 @@ fn put_property(properties: &mut Vec<PropertyEntry>, name: TokenId, spec: Arc<Pr
 /// searching `children` for each property would take quadratic time.
 fn sort_by_children(properties: &mut [PropertyEntry], children: &[TokenId]) {
     // A short list is searched faster than it is hashed, and most prims
-    // list their properties in the order their specs came in.
-    if children.len() <= 16 {
-        let place = |entry: &PropertyEntry| {
-            children
-                .iter()
-                .position(|child| *child == entry.name)
-                .unwrap_or(usize::MAX)
-        };
-        if !properties.is_sorted_by_key(place) {
-            properties.sort_by_key(place);
+    // list their properties in the order their specs came in. Both
+    // lookups go through one closure, so one sort serves them.
+    let positions = if children.len() <= 16 {
+        Positions::Listed(children)
+    } else {
+        let mut position: HashMap<TokenId, usize> = HashMap::new();
+        for (i, child) in children.iter().enumerate() {
+            position.entry(*child).or_insert(i);
         }
-        return;
-    }
-    let mut position: HashMap<TokenId, usize> = HashMap::new();
-    for (i, child) in children.iter().enumerate() {
-        position.entry(*child).or_insert(i);
-    }
-    let place = |entry: &PropertyEntry| position.get(&entry.name).copied().unwrap_or(usize::MAX);
+        Positions::Indexed(position)
+    };
+    let place = |entry: &PropertyEntry| positions.of(entry.name);
     if !properties.is_sorted_by_key(place) {
         properties.sort_by_key(place);
+    }
+}
+
+/// Where each name is in a prim's `propertyChildren`.
+enum Positions<'a> {
+    /// A short list, searched.
+    Listed(&'a [TokenId]),
+    /// A long list's first positions, by name.
+    Indexed(HashMap<TokenId, usize>),
+}
+
+impl Positions<'_> {
+    /// The position of `name`, `usize::MAX` for a name not listed.
+    fn of(&self, name: TokenId) -> usize {
+        match self {
+            Self::Listed(children) => children
+                .iter()
+                .position(|child| *child == name)
+                .unwrap_or(usize::MAX),
+            Self::Indexed(position) => position.get(&name).copied().unwrap_or(usize::MAX),
+        }
     }
 }
 

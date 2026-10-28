@@ -25,6 +25,11 @@
    "source": "#usda 1.0\ndef \"A\" (\n    prepend apiSchemas = [\"X\", \"X\"]\n)\n{\n}\n",
    "text": "#usda 1.0\n\ndef \"A\"\n{\n}\n\n"
   },
+  "read_legacy_kept_type_names": {
+   "reads": true,
+   "source": "#usda 1.0\ndef \"P\"\n{\n    custom Transform a = ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (2, 3, 4, 1) )\n    custom PointIndex[] b = [0, 1, 2]\n    custom EdgeIndex c = 3\n    custom FaceIndex[] d.timeSamples = {\n        1: [4, 5],\n    }\n}\n",
+   "text": "#usda 1.0\n\ndef \"P\"\n{\n    custom Transform a = ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (2, 3, 4, 1) )\n    custom PointIndex[] b = [0, 1, 2]\n    custom EdgeIndex c = 3\n    custom FaceIndex[] d\n    FaceIndex[] d.timeSamples = {\n        1: [4, 5],\n    }\n}\n\n"
+  },
   "read_legacy_type_names": {
    "reads": true,
    "source": "#usda 1.0\n\ndef \"P\"\n{\n    custom Vec3f a = (1, 2, 3)\n    custom Vec2d[] b = [(1, 2), (3, 4)]\n    custom PointFloat[] c = [(0, 0, 0)]\n    custom NormalFloat d = (0, 1, 0)\n    custom VectorFloat e = (1, 0, 0)\n    custom Color f = (1, 0.5, 0)\n    custom Quatf g = (1, 0, 0, 0)\n    custom Matrix2d h = ( (1, 0), (0, 1) )\n    custom Frame i = ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1) )\n    custom Vec4h j.timeSamples = {\n        1: (1, 2, 3, 4),\n    }\n    custom double k (\n        customData = {\n            Vec3d offset = (1, 2, 3)\n        }\n    )\n}\n",

@@ -81,13 +81,6 @@ struct Difference {
 /// name order.
 const DIFFERENCES: &[Difference] = &[
     Difference {
-        file: "04_general_oldtypes.usda",
-        outcome: Outcome::Error,
-        reason: "the legacy `Transform` type keeps its name in OpenUSD, which no \
-                 layerstack value type has, so its matrix value is not typed and \
-                 the save refuses it",
-    },
-    Difference {
         file: "127_varyingRelationship.usda",
         outcome: Outcome::Error,
         reason: "a relationship's legacy `.default = <path>` is reported: the layer \

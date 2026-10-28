@@ -29,7 +29,9 @@ The cases:
   `symmetryFunction` as an identifier, a C++ namespaced one or nothing;
   `;` between dictionary entries; `displayUnit` as a unit name; list-op
   statements in property metadata; the legacy type names (`Vec3f`,
-  `NormalFloat`, ...); `yes` and `no` as bools; comments in a spline.
+  `NormalFloat`, ...), and the four that keep their names (`Transform`,
+  `PointIndex`, `EdgeIndex`, `FaceIndex`, `_AddLegacyTypesToRegistry`,
+  `pxr/usd/sdf/schema.cpp`); `yes` and `no` as bools; comments in a spline.
   Some are refused, as OpenUSD refuses them: a relative target of a prim
   inside the variant, which anchors at `/P{v=one}Child` and so names a
   variant selection (`<x>`, `<../Other>`), a quoted
@@ -895,6 +897,17 @@ def "A" (
     customData = { int a = 1 int b = 2 }
 )
 {
+}
+''', []),
+    "read_legacy_kept_type_names": ('''#usda 1.0
+def "P"
+{
+    custom Transform a = ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (2, 3, 4, 1) )
+    custom PointIndex[] b = [0, 1, 2]
+    custom EdgeIndex c = 3
+    custom FaceIndex[] d.timeSamples = {
+        1: [4, 5],
+    }
 }
 ''', []),
     "read_metadata_semicolons": ('''#usda 1.0

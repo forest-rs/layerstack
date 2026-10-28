@@ -3,6 +3,78 @@
  "types": [
   {
    "aliases": [],
+   "array": "EdgeIndex[]",
+   "is_array": false,
+   "name": "EdgeIndex",
+   "role": "EdgeIndex",
+   "scalar": "EdgeIndex",
+   "type": "int"
+  },
+  {
+   "aliases": [],
+   "array": "EdgeIndex[]",
+   "is_array": true,
+   "name": "EdgeIndex[]",
+   "role": "EdgeIndex",
+   "scalar": "EdgeIndex",
+   "type": "VtArray<int>"
+  },
+  {
+   "aliases": [],
+   "array": "FaceIndex[]",
+   "is_array": false,
+   "name": "FaceIndex",
+   "role": "FaceIndex",
+   "scalar": "FaceIndex",
+   "type": "int"
+  },
+  {
+   "aliases": [],
+   "array": "FaceIndex[]",
+   "is_array": true,
+   "name": "FaceIndex[]",
+   "role": "FaceIndex",
+   "scalar": "FaceIndex",
+   "type": "VtArray<int>"
+  },
+  {
+   "aliases": [],
+   "array": "PointIndex[]",
+   "is_array": false,
+   "name": "PointIndex",
+   "role": "PointIndex",
+   "scalar": "PointIndex",
+   "type": "int"
+  },
+  {
+   "aliases": [],
+   "array": "PointIndex[]",
+   "is_array": true,
+   "name": "PointIndex[]",
+   "role": "PointIndex",
+   "scalar": "PointIndex",
+   "type": "VtArray<int>"
+  },
+  {
+   "aliases": [],
+   "array": "Transform[]",
+   "is_array": false,
+   "name": "Transform",
+   "role": "Transform",
+   "scalar": "Transform",
+   "type": "GfMatrix4d"
+  },
+  {
+   "aliases": [],
+   "array": "Transform[]",
+   "is_array": true,
+   "name": "Transform[]",
+   "role": "Transform",
+   "scalar": "Transform",
+   "type": "VtArray<GfMatrix4d>"
+  },
+  {
+   "aliases": [],
    "array": "asset[]",
    "is_array": false,
    "name": "asset",

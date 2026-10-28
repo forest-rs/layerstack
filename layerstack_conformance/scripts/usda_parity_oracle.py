@@ -109,7 +109,15 @@ The cases:
   (`MetadataKey`, `DictionaryKey`); `comment` as a metadata key on a
   layer, a prim or a property, a field that is not metadata, which only
   a bare string authors (`_KeyValueMetadataEnd`,
-  `pxr/usd/sdf/textParserHelpers.cpp`).
+  `pxr/usd/sdf/textParserHelpers.cpp`); a dictionary entry without a
+  type, a `"key": "value"` entry outside `prefixSubstitutions` and
+  `suffixSubstitutions`, `dictionary` before a value that is not a
+  dictionary, or a type without a space before the key
+  (`DictionaryValueItem`), while `read_dictionary_entry_spacing` reads
+  the spacings that are allowed; substitution entries not separated by
+  `,`, typed, or with a value that is not a string (`StringDictionary`),
+  while `read_substitutions_on_one_line` reads them on one line and with
+  a `,` after the last.
 - `statements_*`: several list-op statements for one field, on a
   relationship, a connection, references, inherits, `variantSets` and
   metadata (`apiSchemas`). OpenUSD's parser sets each statement's list
@@ -1501,6 +1509,95 @@ def "P"
     double a (
         comment = "x"
     )
+}
+''', []),
+    "strict_dictionary_entry_untyped": ('''#usda 1.0
+(
+    customLayerData = {
+        "k" = 1
+    }
+)
+''', []),
+    "strict_dictionary_entry_untyped_dictionary": ('''#usda 1.0
+(
+    customLayerData = {
+        "d" = {
+            int a = 1
+        }
+    }
+)
+''', []),
+    "strict_dictionary_entry_string_item": ('''#usda 1.0
+def "P" (
+    customData = {
+        "k": "v"
+    }
+)
+{
+}
+''', []),
+    "strict_dictionary_keyword_not_dictionary": ('''#usda 1.0
+(
+    customLayerData = {
+        dictionary d = 1
+    }
+)
+''', []),
+    "strict_dictionary_type_against_key": ('''#usda 1.0
+(
+    customLayerData = {
+        int"k" = 1
+    }
+)
+''', []),
+    "read_dictionary_entry_spacing": ('''#usda 1.0
+(
+    customLayerData = {
+        int [] a = [1]
+        int /* c */ b = 2
+        dictionary 'd' = {
+            string def = "v"
+        }
+    }
+)
+''', []),
+    "read_substitutions_on_one_line": ('''#usda 1.0
+def "P" (
+    prefixSubstitutions = {"a":"b", 'c' : 'd',}
+    suffixSubstitutions = {
+        "e": "f",
+        "g": "h",
+    }
+)
+{
+}
+''', []),
+    "strict_substitutions_without_comma": ('''#usda 1.0
+def "P" (
+    prefixSubstitutions = {
+        "a": "b"
+        "c": "d"
+    }
+)
+{
+}
+''', []),
+    "strict_substitutions_typed_entry": ('''#usda 1.0
+def "P" (
+    suffixSubstitutions = {
+        string a = "b"
+    }
+)
+{
+}
+''', []),
+    "strict_substitutions_value_not_string": ('''#usda 1.0
+def "P" (
+    prefixSubstitutions = {
+        "a": 1
+    }
+)
+{
 }
 ''', []),
 }

@@ -70,10 +70,30 @@
    "source": "#usda 1.0\ndef \"A\"\n{\n    float[] a = [1,\n    2\n    ]\n    float2 b = (1,\n 2)\n}\n",
    "text": "#usda 1.0\n\ndef \"A\"\n{\n    float[] a = [1, 2]\n    float2 b = (1, 2)\n}\n\n"
   },
+  "read_path_grammar": {
+   "reads": true,
+   "source": "#usda 1.0\ndef \"P\" (\n    inherits = [</\u00c4>, <../B_1>]\n)\n{\n    rel r = [</A.b:c>, <.\u00fc>, <Child>]\n    float c.connect = <../X.y>\n}\n",
+   "targets": {
+    "/P.c": [
+     "/X.y"
+    ],
+    "/P.r": [
+     "/A.b:c",
+     "/P.\u00fc",
+     "/P/Child"
+    ]
+   },
+   "text": "#usda 1.0\n\ndef \"P\" (\n    inherits = [\n        </\u00c4>,\n        </B_1>\n    ]\n)\n{\n    float c.connect = </X.y>\n    rel r = [\n        </A.b:c>,\n        </P.\u00fc>,\n        </P/Child>,\n    ]\n}\n\n"
+  },
   "read_property_metadata_list_ops": {
    "reads": true,
    "source": "#usda 1.0\n\ndef \"P\"\n{\n    double a (\n        delete testIntOps = [1, 2]\n        prepend testIntOps = [3]\n        append testTokenOps = [\"x\", \"y\"]\n    )\n    rel r (\n        add testIntOps = [4]\n        reorder testIntOps = [4, 3]\n    )\n}\n",
    "text": "#usda 1.0\n\ndef \"P\"\n{\n    double a (\n        delete testIntOps = [1, 2]\n        prepend testIntOps = [3]\n        append testTokenOps = [\"x\", \"y\"]\n    )\n    rel r (\n        add testIntOps = [4]\n        reorder testIntOps = [4, 3]\n    )\n}\n\n"
+  },
+  "read_reference_empty_path": {
+   "reads": true,
+   "source": "#usda 1.0\ndef \"P\" (\n    references = [<>, @a.usda@<>]\n)\n{\n}\n",
+   "text": "#usda 1.0\n\ndef \"P\" (\n    references = [\n        <>,\n        @a.usda@\n    ]\n)\n{\n}\n\n"
   },
   "read_references_differing_offsets": {
    "reads": true,
@@ -316,6 +336,11 @@
    "reads": false,
    "source": "#usda 1.0\ndef \"A\" { def \"B\" {} }\n"
   },
+  "strict_connection_root": {
+   "error": "''/' is not a valid prim or property scene path at '</>' in </P.c>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"P\"\n{\n    float c.connect = </>\n}\n"
+  },
   "strict_dictionary_array_type": {
    "error": "'Expected } at 'dictionary[] bags' in </P>",
    "reads": false,
@@ -410,6 +435,21 @@
    "error": "'Inherit paths must be absolute prim paths at '<../../B>' in </A>",
    "reads": false,
    "source": "#usda 1.0\ndef \"A\" (\n    inherits = <../../B>\n)\n{\n}\n"
+  },
+  "strict_inherit_anchored_at_root": {
+   "error": "'Inherit paths must be absolute prim paths at '<..>' in </P>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"P\" (\n    inherits = <..>\n)\n{\n}\n"
+  },
+  "strict_inherit_empty": {
+   "error": "''' is not a valid prim path at '<>' in </P>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"P\" (\n    inherits = <>\n)\n{\n}\n"
+  },
+  "strict_inherit_root": {
+   "error": "''/' is not a valid prim path at '</>' in </P>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"P\" (\n    inherits = </>\n)\n{\n}\n"
   },
   "strict_keyword_type": {
    "error": "'Expected } at 'custom kind k' in </P>",
@@ -536,6 +576,36 @@
    "reads": false,
    "source": "#usda 1.0\ndef \"A\"\n{\n    string s = \"a\nb\"\n}\n"
   },
+  "strict_path_empty_name": {
+   "error": "'parse error at '/B>' in </P.r>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"P\"\n{\n    rel r = </A//B>\n}\n"
+  },
+  "strict_path_name_not_identifier": {
+   "error": "'parse error at '1A>' in </P>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"P\" (\n    inherits = </1A>\n)\n{\n}\n"
+  },
+  "strict_path_namespace_without_name": {
+   "error": "'parse error at '>' in </P.c>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"P\"\n{\n    float c.connect = </A.b:>\n}\n"
+  },
+  "strict_path_value_not_in_grammar": {
+   "error": "'parse error at ' b>' in </P.p>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"P\"\n{\n    string p = </A b>\n}\n"
+  },
+  "strict_path_with_space": {
+   "error": "'parse error at ' b>' in </P.r>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"P\"\n{\n    rel r = </A b>\n}\n"
+  },
+  "strict_payload_root": {
+   "error": "''/' is not a valid prim path at '</>' in </P>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"P\" (\n    payload = @a.usda@</>\n)\n{\n}\n"
+  },
   "strict_prim_after_prim_on_line": {
    "error": "'parse error at 'def \"A\"' in </>",
    "reads": false,
@@ -570,6 +640,11 @@
    "error": "'Expected ) at '= bad' in </P.x>",
    "reads": false,
    "source": "#usda 1.0\n\ndef \"P\"\n{\n    custom_type x (\n        = bad\n    )\n}\n"
+  },
+  "strict_reference_relative": {
+   "error": "'Reference prim path <../B> must be either empty or an absolute prim path at '<../B>' in </P>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"P\" (\n    references = <../B>\n)\n{\n}\n"
   },
   "strict_relationship_before_brace": {
    "error": "'Expected } at 'rel r = </A> /* a comment */ }' in </A>",
@@ -616,6 +691,11 @@
    "reads": false,
    "source": "#usda 1.0\ndef \"A\"\n{\n    double a = 1;;\n}\n"
   },
+  "strict_specializes_property": {
+   "error": "''/A.b' is not a valid prim path at '</A.b>' in </P>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"P\" (\n    specializes = </A.b>\n)\n{\n}\n"
+  },
   "strict_spline_bounded_loop_then_inner_loops": {
    "error": "'Cannot set non-default inner loop params when spline has extrapolation looping with non-null loopBoundaryTime.'",
    "reads": false,
@@ -646,10 +726,20 @@
    "reads": false,
    "source": "#usda 1.0\ndef \"P\" (\n    prefixSubstitutions = {\n        \"a\": \"b\"\n        \"c\": \"d\"\n    }\n)\n{\n}\n"
   },
+  "strict_target_empty": {
+   "error": "'Relationship target paths must be absolute prim, property or mapper paths at ' = <>' in </P.r>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"P\"\n{\n    rel r = <>\n}\n"
+  },
   "strict_target_path_control_character": {
    "error": "'parse error at '\u0010>' in </P.r>",
    "reads": false,
    "source": "#usda 1.0\n\ndef \"P\"\n{\n    rel r = </A\u0010>\n}\n"
+  },
+  "strict_target_root": {
+   "error": "'Relationship target paths must be absolute prim, property or mapper paths at ' = <..>' in </P.r>",
+   "reads": false,
+   "source": "#usda 1.0\ndef \"P\"\n{\n    rel r = <..>\n}\n"
   },
   "strict_type_change": {
    "error": "'attribute 'a' already has type 'float', cannot change to 'double' at 'a.timeSamples = {' in </A.a>",

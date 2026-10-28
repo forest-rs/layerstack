@@ -9,9 +9,9 @@ Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.11`.
 Runs `UsdPhysics.LoadUsdPhysicsFromRange` over each scene in
 `fixtures/physics_parse` and records rigid bodies, shapes (kind, custom
 geometry token, body, collision groups and materials), joints and
-collision groups (merged groups and filters), and for each joint the
-bodies its relationships resolve to and its local positions relative to
-them. `disabled_bodies.usda` holds rigid bodies whose
+collision groups (merged groups, filters and inversion), and for each
+joint the bodies its relationships resolve to and its local positions
+relative to them. `disabled_bodies.usda` holds rigid bodies whose
 `physics:rigidBodyEnabled` is false, which OpenUSD 26.11 passes over as
 though `PhysicsRigidBodyAPI` were not applied. `custom.usda` is parsed
 twice: plain, and with custom tokens naming the shape API `MyConvexAPI`,
@@ -23,6 +23,10 @@ physics material gives. The two disagree on bindings: the parse reports a
 collider's material only when the collider (or face subset) has
 `MaterialBindingAPI` applied (`parseUtils.cpp` `_GetMaterialBinding`),
 while the mass computation reads the binding without it.
+
+A collision group's `invert` is null where the group (the lead, for a merge)
+has no `physics:invertFilteredGroups` value, as C++ leaves the field
+uninitialized there (see `invert`).
 
 `tests/conformance/physics_parse.rs` compares everything.
 """
@@ -67,6 +71,30 @@ def mass(prim):
     return round(P.RigidBodyAPI(prim).ComputeMassProperties(unit_volume)[0], 3)
 
 
+def invert(stage, prim, desc):
+    """`invertFilteredGroups`, or None where C++ leaves it undefined.
+
+    `UsdPhysicsCollisionGroupDesc`'s constructor (`parseDesc.h:176-179` in
+    v26.11.1) leaves `invertFilteredGroups` (`parseDesc.h:197`)
+    uninitialized, `_ProcessPhysicsPrims` creates the descriptors with
+    `resize` (`parseUtils.cpp:1681`), and `_ParseCollisionGroupDesc`
+    (`parseUtils.cpp:908-909`) writes the field only through
+    `UsdAttribute::Get`, which leaves the output untouched and returns false
+    when there is no value, as `physics:invertFilteredGroups` declares no
+    schema fallback (`attribute.h:437-440`). The field is then whatever the
+    descriptor's memory held: false on macOS, sometimes true on Linux. A
+    merge (`parseUtils.cpp:2807-2838`) keeps the lead's own field and drops
+    the merged groups' values. The same `Get` here says whether C++ wrote
+    it. Every other field recorded here is initialized by its constructor
+    or is a container.
+    """
+    authored = P.CollisionGroup(stage.GetPrimAtPath(prim)).GetInvertFilteredGroupsAttr().Get()
+    if authored is None:
+        return None
+    assert desc.invertFilteredGroups == authored, prim
+    return desc.invertFilteredGroups
+
+
 def parse(path, custom):
     stage = Usd.Stage.Open(str(path))
     if custom:
@@ -108,7 +136,7 @@ def parse(path, custom):
                 out["collision_groups"][prim] = {
                     "merged_groups": paths(desc.mergedGroups),
                     "filtered_groups": paths(desc.filteredGroups),
-                    "invert": desc.invertFilteredGroups,
+                    "invert": invert(stage, prim, desc),
                 }
     return out
 

@@ -231,7 +231,7 @@
           "filtered_groups": [
             "/World/G1"
           ],
-          "invert": false,
+          "invert": null,
           "merged_groups": []
         },
         "/World/G1": {
@@ -239,7 +239,7 @@
             "/World/G0",
             "/World/G2"
           ],
-          "invert": false,
+          "invert": null,
           "merged_groups": [
             "/World/G1",
             "/World/G3"
@@ -249,26 +249,26 @@
           "filtered_groups": [
             "/World/G0"
           ],
-          "invert": false,
+          "invert": null,
           "merged_groups": []
         },
         "/World/G4": {
           "filtered_groups": [
             "/World/G0"
           ],
-          "invert": false,
+          "invert": null,
           "merged_groups": []
         },
         "/World/G5": {
           "filtered_groups": [],
-          "invert": false,
+          "invert": null,
           "merged_groups": [
             "/World/G5"
           ]
         },
         "/World/G6": {
           "filtered_groups": [],
-          "invert": false,
+          "invert": null,
           "merged_groups": []
         },
         "/World/G8": {

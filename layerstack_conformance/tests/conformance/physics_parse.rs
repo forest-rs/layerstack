@@ -178,12 +178,36 @@ fn parse(scene_name: &str) -> BTreeMap<String, BTreeMap<String, Value>> {
     out
 }
 
+/// Where the oracle's `invert` is null, C++ leaves
+/// `UsdPhysicsCollisionGroupDesc::invertFilteredGroups` uninitialized: the
+/// group (a merge's lead) has no `physics:invertFilteredGroups` value and the
+/// schema declares no fallback (see `scripts/physics_parse_oracle.py`). There
+/// layerstack reports false, the schema's "filter is not inverted unless
+/// set", and the record is compared without it.
+fn undefined_inversions(
+    expected: &BTreeMap<String, Value>,
+    actual: &mut BTreeMap<String, Value>,
+    scene: &str,
+) {
+    for (path, record) in expected {
+        if record["invert"].is_null()
+            && let Some(ours) = actual.get_mut(path)
+        {
+            assert_eq!(ours["invert"], json!(false), "{scene} {path}");
+            ours["invert"] = Value::Null;
+        }
+    }
+}
+
 #[test]
 fn physics_parse_matches_openusd() {
     let oracle: Oracle = serde_json::from_str(ORACLE).unwrap();
     assert_eq!(oracle.openusd_version, layerstack_schemas::OPENUSD_VERSION);
     for (name, expected) in &oracle.scenes {
-        let actual = parse(name);
+        let mut actual = parse(name);
+        if let Some(groups) = expected.get("collision_groups") {
+            undefined_inversions(groups, actual.get_mut("collision_groups").unwrap(), name);
+        }
         for (key, records) in expected {
             assert_eq!(&actual[key], records, "{name} {key}");
         }

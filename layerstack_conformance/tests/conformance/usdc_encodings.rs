@@ -97,3 +97,13 @@ fn assert_saves_as_openusd(case: &str) {
 fn unregistered_list_ops_save_as_openusd_saves_them() {
     assert_saves_as_openusd("unregistered_list_ops");
 }
+
+/// Relationship targets and an attribute connection that are relational
+/// attributes (`</A.b[/C].d>`) or mappers (`</A.b.mapper[/C]>`), some
+/// nested (`</A.b[/C.d[/E].f].g>`) or holding a variant selection in a
+/// bracketed path, save with every element below the property a path of
+/// its own, as OpenUSD saves them, and read back as the same targets.
+#[test]
+fn relational_targets_save_as_openusd_saves_them() {
+    assert_saves_as_openusd("relational_targets");
+}

@@ -364,13 +364,16 @@ impl PathTable {
 }
 
 /// What joins a path's text to its child `element`'s: `.` before a
-/// property, nothing before a variant selection or after one, `/`
-/// otherwise; OpenUSD rebuilds paths with `SdfPath::AppendElementToken`
-/// (`pxr/usd/sdf/crateFile.cpp:4037`), so `/A{v=x}B.attr`.
+/// property, nothing before a variant selection or after one, nothing
+/// before an element below a property (a target `[/C]`, a mapper
+/// `.mapper[/C]` or a relational attribute `.d`, which carry their own
+/// punctuation), `/` otherwise; OpenUSD rebuilds paths with
+/// `SdfPath::AppendElementToken` (`pxr/usd/sdf/crateFile.cpp:4037`), so
+/// `/A{v=x}B.attr` and `/A.b[/C].d`.
 fn separator(parent: &str, element: &str, property: bool) -> &'static str {
     if property {
         "."
-    } else if element.starts_with('{') || parent.ends_with('}') {
+    } else if element.starts_with(['{', '[', '.']) || parent.ends_with('}') {
         ""
     } else {
         "/"
@@ -1106,6 +1109,8 @@ impl Element {
     const DOT: u8 = 16;
     /// The text holds a `}`.
     const CLOSE: u8 = 32;
+    /// The text starts with `[` or `.`: an element below a property.
+    const JOINS: u8 = 64;
 
     fn of(text: &str) -> Self {
         let mut flags = Self::KNOWN;
@@ -1115,6 +1120,7 @@ impl Element {
             (Self::OPEN, text.contains('{')),
             (Self::DOT, text.contains('.')),
             (Self::CLOSE, text.contains('}')),
+            (Self::JOINS, text.starts_with(['[', '.'])),
         ] {
             if holds {
                 flags |= flag;
@@ -1240,7 +1246,7 @@ fn build_paths<I: Copy + Into<i64>>(
                     .unwrap_or((0, false, false));
                 let sep = if is_property {
                     "."
-                } else if element.has(Element::OPENS) || parent_brace {
+                } else if element.has(Element::OPENS | Element::JOINS) || parent_brace {
                     ""
                 } else {
                     "/"

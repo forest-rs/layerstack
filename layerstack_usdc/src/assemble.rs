@@ -2827,6 +2827,18 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
             return self.target_path(self.path_text(index));
         }
         let spelling = |at: usize| sections.paths.spelling(at).unwrap_or_default();
+        if let PathNode::Child {
+            token,
+            property: false,
+            ..
+        } = sections.paths.nodes()[at]
+            && sections
+                .tokens
+                .get(token as usize)
+                .is_some_and(|element| element.starts_with(['[', '.']))
+        {
+            return self.relational_target_at(index);
+        }
         match sections.paths.nodes()[at] {
             PathNode::Child { property: true, .. } => match self.property_owner(index) {
                 Some(PropertyOwner::Prim { owner, name }) => {
@@ -2850,6 +2862,80 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
                 self.target_path(self.path_text(index))
             }
         }
+    }
+
+    /// The target path table entry `index` names when it lies below a
+    /// property: a relational attribute (`/A.b[/C].d`) or a mapper
+    /// (`/A.b.mapper[/C]`, `/A.b[/C].d.mapper[/E]`), kept as the USDA
+    /// reader keeps them, a property target of the prim whose property
+    /// token is the whole property part (`b[/C].d`). The other kinds below
+    /// a property (a target path `/A.b[/C]`, a relational attribute's
+    /// target, a mapper argument), which OpenUSD's text parser refuses as
+    /// targets and connections, and any of a prim in a variant branch, are
+    /// `None`. OpenUSD stores each element below the property as its own
+    /// token (`[/C]`, `.d`, `.mapper[/C]`; `CrateFile::_AddPath`,
+    /// `pxr/usd/sdf/crateFile.cpp`).
+    ///
+    /// Spec: AOUSD Core §8 (paths), §7.6.4 (relationship targets).
+    fn relational_target_at(&mut self, index: u32) -> Option<TargetPath> {
+        #[derive(Clone, Copy, PartialEq, Eq)]
+        enum Kind {
+            Target,
+            Mapper,
+            RelationalAttribute,
+        }
+        use Kind::{Mapper, RelationalAttribute, Target};
+        let sections = self.sections;
+        let nodes = sections.paths.nodes();
+        // The elements below the property, the last first, and the prim.
+        let mut kinds = Vec::new();
+        let mut at = index;
+        let owner = loop {
+            match *nodes.get(at as usize)? {
+                PathNode::Child {
+                    parent,
+                    property: true,
+                    ..
+                } => break parent,
+                PathNode::Child {
+                    parent,
+                    token,
+                    property: false,
+                } => {
+                    let element = sections.tokens.get(token as usize)?;
+                    kinds.push(if element.starts_with('[') {
+                        Target
+                    } else if element.starts_with(".mapper[") {
+                        Mapper
+                    } else if element.starts_with('.') {
+                        RelationalAttribute
+                    } else {
+                        return None;
+                    });
+                    at = parent;
+                }
+                PathNode::Root | PathNode::Unused => return None,
+            }
+        };
+        if !matches!(
+            kinds.as_slice(),
+            [RelationalAttribute, Target] | [Mapper] | [Mapper, RelationalAttribute, Target]
+        ) {
+            return None;
+        }
+        if sections
+            .paths
+            .spelling(owner as usize)
+            .unwrap_or_default()
+            .selection()
+        {
+            return None;
+        }
+        let prim = self.prim_path_at(owner)?;
+        let text = self.path_text(index);
+        let tail = text.get(self.path_text(owner).len() + 1..)?;
+        let property = self.tokens.intern(tail);
+        Some(TargetPath::Property(PropertyPath::new(prim, property)))
     }
 
     /// Parses a target path's text ([`TargetPath::parse`]) once per read.

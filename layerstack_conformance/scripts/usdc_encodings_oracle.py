@@ -29,6 +29,14 @@ same text as the source layer (`same_text`) and that text.
   unregistered dictionary. The crate stores it as such
   (`crateDataTypes.h`, `UnregisteredValueListOp`; `crateFile.cpp`,
   `Write(SdfUnregisteredValue)` through `_RecursiveWrite`).
+- `relational_targets`: `usda_parity_oracle.py`'s
+  `read_relational_targets`, relationship targets and an attribute
+  connection that are relational attributes (`</A.b[/C].d>`) or mappers
+  (`</A.b.mapper[/C]>`), some nested or anchored. The crate stores each
+  element below the property as a path of its own (`/A.b[/C]` with token
+  `[/C]`, then `.d`), adding a target path's bracketed path before its
+  parent (`CrateFile::_AddPath`), and reads them back with
+  `SdfPath::AppendElementToken`.
 
 `--check` regenerates every file into a temporary directory and fails
 unless each matches the checked-in fixture.
@@ -45,6 +53,9 @@ import tempfile
 from pxr import Sdf, Tf, Usd
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+sys.dont_write_bytecode = True
+import usda_parity_oracle  # noqa: E402
 FIXTURES = os.path.normpath(os.path.join(HERE, "..", "fixtures", "usdc_encodings"))
 
 CASES = {
@@ -78,6 +89,7 @@ def "B" (
 {
 }
 """,
+    "relational_targets": usda_parity_oracle.CASES["read_relational_targets"][0],
 }
 
 

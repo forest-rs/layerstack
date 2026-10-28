@@ -2041,21 +2041,27 @@ def Xform "A" (
         );
     }
 
-    /// A relational attribute or mapper target, which USDA reads and
-    /// writes, has no crate path here: the save refuses it before any
-    /// output rather than write a path the crate format cannot spell.
+    /// Relational attribute and mapper targets save as the crate paths
+    /// OpenUSD stores (`/A.b[/C].d`, its target path `/A.b[/C]` and `/C`
+    /// among them) and read back as the targets they were.
     #[test]
-    fn relational_targets_are_refused() {
-        let (layer, tokens, paths) =
-            import_usda("#usda 1.0\ndef \"A\"\n{\n    rel r = </A.b[/C].d>\n}\n");
-        assert!(
-            matches!(
-                save_usdc(&layer, &tokens, &paths),
-                Err(UsdcWriteError::InvalidPath { ref path, .. }) if path == "/A.b[/C].d"
-            ),
-            "{:?}",
-            save_usdc(&layer, &tokens, &paths)
-        );
+    fn relational_targets_read_back() {
+        let source = "#usda 1.0\ndef \"A\"\n{\n    float c.connect = </A.b[/C].d>\n    \
+                      rel r = [</A.b[/C].d>, </A.b.mapper[/C]>, </A.b[/C].d.mapper[/E]>]\n}\n";
+        let (layer, tokens, paths) = import_usda(source);
+        let text = layerstack_usda::save::save_usda(&layer, &tokens, &paths).unwrap();
+        let bytes = save_usdc(&layer, &tokens, &paths).unwrap();
+        let read = crate::read_usdc(
+            &bytes,
+            layerstack::LayerId(2),
+            &tokens,
+            &paths,
+            &mut NoAssets,
+        )
+        .unwrap();
+        assert!(read.diagnostics.is_empty(), "{:?}", read.diagnostics);
+        let reread = layerstack_usda::save::save_usda(&read.layer, &tokens, &paths).unwrap();
+        assert_eq!(reread, text);
     }
 
     /// `opaque` declares an attribute that holds no value, such as

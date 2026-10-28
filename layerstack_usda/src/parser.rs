@@ -105,6 +105,34 @@ struct OpenPrim {
     mark: usize,
 }
 
+/// How deeply prim bodies and variant branches may nest, one inside the
+/// next: a prim at this depth may not hold another. OpenUSD's recursive
+/// text parser has no limit but its stack's, which on a thread of 8 MiB
+/// holds over 10,000 levels; this limit is well above any scene's
+/// namespace and leaves room on a WebAssembly stack for composing the
+/// layer as deep. A deeper layer is reported as an error, and nothing
+/// after the limit is read.
+///
+/// Spec: AOUSD Core §16.2 (USDA), §7.3 (prims nest).
+pub const MAX_NAMESPACE_DEPTH: usize = 256;
+
+/// How deeply tuples, arrays, array edits and dictionaries may nest in a
+/// value, as in a crate file
+/// (`layerstack_usdc::value_rep::MAX_VALUE_DEPTH`). A deeper layer is
+/// reported as an error, and nothing after the limit is read.
+///
+/// Spec: AOUSD Core §16.2 (USDA), §6.6.2 (dictionaries).
+pub const MAX_VALUE_DEPTH: usize = 64;
+
+/// What nests, for [`Parser::nested`]'s limits.
+#[derive(Clone, Copy)]
+enum Nesting {
+    /// Prim bodies and variant branches ([`MAX_NAMESPACE_DEPTH`]).
+    Namespace,
+    /// Tuples, arrays, array edits and dictionaries ([`MAX_VALUE_DEPTH`]).
+    Value,
+}
+
 /// A parser's position and diagnostic count, which
 /// [`Parser::skip_unparsed`] compares to see whether a loop advanced.
 #[derive(Clone, Copy)]
@@ -132,6 +160,15 @@ struct Parser<'a, const LOSSLESS: bool> {
     speculating: bool,
     /// The position from which consumed tokens are next released.
     release_at: usize,
+    /// The prim bodies and variant branches being parsed, one inside the
+    /// next, up to [`MAX_NAMESPACE_DEPTH`].
+    namespace_depth: usize,
+    /// The tuples, arrays, array edits and dictionaries being parsed, one
+    /// inside the next, up to [`MAX_VALUE_DEPTH`].
+    value_depth: usize,
+    /// Whether the layer nests deeper than a limit allows, so its remaining
+    /// tokens were skipped and further diagnostics are not reported.
+    too_deep: bool,
 }
 
 impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
@@ -153,6 +190,9 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
             line_break: false,
             speculating: false,
             release_at: crate::token_source::RELEASE_AFTER,
+            namespace_depth: 0,
+            value_depth: 0,
+            too_deep: false,
         }
     }
 
@@ -418,7 +458,44 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
     }
 
     fn error(&mut self, span: Span, message: impl Into<String>) {
-        self.diagnostics.push(Diagnostic::error(span, message));
+        // Past a nesting limit, every construct still open reports its
+        // missing close at the end of the layer; the limit says why.
+        if !self.too_deep {
+            self.diagnostics.push(Diagnostic::error(span, message));
+        }
+    }
+
+    /// Parses one more level of `nesting` with `parse`, unless that nests
+    /// deeper than its limit: then the layer is reported and its remaining
+    /// tokens are skipped, one at a time, so that no construct inside the
+    /// limit's last level recurses further and every open one ends at the
+    /// end of the layer. The parsers recurse once per level, and a limit
+    /// keeps deep input from exhausting the stack (a WebAssembly module's
+    /// is 1 MiB by default).
+    fn nested(&mut self, nesting: Nesting, parse: fn(&mut Self)) {
+        let (depth, limit) = match nesting {
+            Nesting::Namespace => (&mut self.namespace_depth, MAX_NAMESPACE_DEPTH),
+            Nesting::Value => (&mut self.value_depth, MAX_VALUE_DEPTH),
+        };
+        if *depth >= limit {
+            let span = self.current_span();
+            let what = match nesting {
+                Nesting::Namespace => "prims and variants",
+                Nesting::Value => "values",
+            };
+            self.error(span, format!("{what} nest deeper than {limit} levels"));
+            self.too_deep = true;
+            while self.current().is_some() {
+                self.bump();
+            }
+            return;
+        }
+        *depth += 1;
+        parse(self);
+        match nesting {
+            Nesting::Namespace => self.namespace_depth -= 1,
+            Nesting::Value => self.value_depth -= 1,
+        }
     }
 
     /// Where parsing is, for [`Self::skip_unparsed`].
@@ -709,7 +786,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
                 // Retain the typed reference dictionary per §16.2.17.5.
                 self.bump();
                 self.expect(TokenKind::Equals);
-                self.parse_dictionary_value();
+                self.nested(Nesting::Value, Self::parse_dictionary_value);
             } else {
                 self.bump();
             }
@@ -813,7 +890,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
 
         // Body: { ... }
         self.expect(TokenKind::LeftBrace);
-        self.parse_prim_body();
+        self.nested(Nesting::Namespace, Self::parse_prim_body);
         self.expect(TokenKind::RightBrace);
 
         let end = self.current_span().start;
@@ -1631,7 +1708,9 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
                         self.bump();
                         break;
                     }
-                    Some(TokenKind::LeftBrace) => self.parse_dictionary_value(),
+                    Some(TokenKind::LeftBrace) => {
+                        self.nested(Nesting::Value, Self::parse_dictionary_value);
+                    }
                     None => {
                         self.error(self.current_span(), "unterminated spline");
                         break;
@@ -1865,7 +1944,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
         }
 
         self.expect(TokenKind::LeftBrace);
-        self.parse_prim_body();
+        self.nested(Nesting::Namespace, Self::parse_prim_body);
         self.expect(TokenKind::RightBrace);
 
         let end = self.current_span().start;
@@ -2003,19 +2082,19 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
                 self.parse_path_ref();
             }
             Some(TokenKind::LeftParen) => {
-                self.parse_tuple_value();
+                self.nested(Nesting::Value, Self::parse_tuple_value);
             }
             Some(TokenKind::LeftBracket) => {
-                self.parse_array_value();
+                self.nested(Nesting::Value, Self::parse_array_value);
             }
             Some(TokenKind::LeftBrace) => {
-                self.parse_dictionary_value();
+                self.nested(Nesting::Value, Self::parse_dictionary_value);
             }
             Some(TokenKind::Ident) => {
                 if self.current_text() == "edit"
                     && self.next_non_trivia_kind() == Some(TokenKind::LeftBracket)
                 {
-                    self.parse_array_edit_value();
+                    self.nested(Nesting::Value, Self::parse_array_edit_value);
                 } else {
                     self.bump(); // true/false/None/inf/nan/identifier
                 }
@@ -2577,7 +2656,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
         if self.peek() == Some(TokenKind::Ident) && self.current_text() == "None" {
             self.bump();
         } else if self.peek() == Some(TokenKind::LeftBrace) {
-            self.parse_dictionary_value();
+            self.nested(Nesting::Value, Self::parse_dictionary_value);
         } else {
             self.parse_value_expr();
         }
@@ -2803,6 +2882,81 @@ def Xform "Root" (
                     "{key} = {value}: {diagnostics:?}"
                 );
             }
+        }
+    }
+
+    /// Prims, variants and values nested past their limits are one error,
+    /// and nothing after it is read; at the limits they parse. Fuzzed
+    /// layers nesting them thousands deep overflowed the stack.
+    #[test]
+    fn nesting_is_limited() {
+        /// A layer nesting something `depth` levels, its limit and the
+        /// error past it.
+        struct Case {
+            source: fn(usize) -> String,
+            limit: usize,
+            message: &'static str,
+        }
+        let cases = [
+            Case {
+                source: |depth| {
+                    format!(
+                        "#usda 1.0\n{}{}",
+                        "def \"A\" {\n".repeat(depth),
+                        "}\n".repeat(depth)
+                    )
+                },
+                limit: MAX_NAMESPACE_DEPTH,
+                message: "prims and variants nest deeper",
+            },
+            Case {
+                source: |depth| {
+                    format!(
+                        "#usda 1.0\ndef \"A\" {{\n{}{}}}\n",
+                        "variantSet \"v\" = {\n\"x\" {\n".repeat(depth - 1),
+                        "}\n}\n".repeat(depth - 1)
+                    )
+                },
+                limit: MAX_NAMESPACE_DEPTH,
+                message: "prims and variants nest deeper",
+            },
+            Case {
+                source: |depth| {
+                    format!(
+                        "#usda 1.0\n(\n    customLayerData = {{\n{}{}    }}\n)\n",
+                        "dictionary a = {\n".repeat(depth - 1),
+                        "}\n".repeat(depth - 1)
+                    )
+                },
+                limit: MAX_VALUE_DEPTH,
+                message: "values nest deeper",
+            },
+            Case {
+                source: |depth| {
+                    format!(
+                        "#usda 1.0\n(\n    customLayerData = {{\n        int a = {}1{}\n    }}\n)\n",
+                        "(".repeat(depth - 1),
+                        ")".repeat(depth - 1)
+                    )
+                },
+                limit: MAX_VALUE_DEPTH,
+                message: "values nest deeper",
+            },
+        ];
+        for Case {
+            source,
+            limit,
+            message,
+        } in cases
+        {
+            let at_limit = parse(&source(limit)).diagnostics;
+            assert!(
+                at_limit.iter().all(|d| !d.message.contains(message)),
+                "{message} at {limit}: {at_limit:?}"
+            );
+            let deeper = parse(&source(limit + 1)).diagnostics;
+            assert_eq!(deeper.len(), 1, "{message}: {deeper:?}");
+            assert!(deeper[0].message.starts_with(message), "{deeper:?}");
         }
     }
 

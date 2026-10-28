@@ -18,6 +18,26 @@
     "text": "#usda 1.0\n\ndef \"P\"\n{\n    float c.connect = </A.b[/C].d>\n    rel m = </A.b.mapper[/C]>\n    rel n = </A.b[/C.d[/E].f].g>\n    rel r = </A.b[/C].d>\n    rel s = </A.b[/C/D.e].f:g>\n    rel t = </A.b[/C].d.mapper[/E]>\n    rel u = </P.b[/P/C].d>\n    rel v = </A.b[/C{v=x}].d>\n    prepend rel w = [\n        </A.b[/C].d>,\n        </A.b.mapper[/C]>,\n    ]\n    rel x = </A.b[/C].d>\n}\n\n"
    }
   },
+  "relationship_default": {
+   "export_usdc": {
+    "accepted": false,
+    "errors": [
+     "Attempted to pack unsupported type 'SdfPath' (/A/B)",
+     "Attempted to pack unsupported type 'SdfPath' (/C.x)"
+    ]
+   },
+   "open_usda": {
+    "accepted": true,
+    "errors": []
+   },
+   "open_usdc": {
+    "accepted": false,
+    "errors": [
+     "Attempted to unpack unsupported type enum value 0",
+     "Attempted to unpack unsupported type enum value 0"
+    ]
+   }
+  },
   "unregistered_list_ops": {
    "export_usdc": {
     "accepted": true,

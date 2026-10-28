@@ -1,0 +1,9 @@
+#usda 1.0
+
+def "A"
+{
+    rel r
+    rel r.default = </A/B>
+    rel s = </A>
+    rel s.default = </C.x>
+}

@@ -1,6 +1,8 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
+import { lowerEdits } from "./edits.js";
+import type { NativeEditBatch } from "./edits.js";
 import { LayerstackError } from "./errors.js";
 import type { ErrorCode } from "./errors.js";
 import type {
@@ -10,6 +12,9 @@ import type {
   AssetFailure,
   AssetNeed,
   AssetSource,
+  ChangeListener,
+  Changes,
+  Edit,
   Explanation,
   Issue,
   LoadResult,
@@ -57,6 +62,16 @@ export interface NativeStage {
   explain(path: string, time?: number | null): unknown;
   metadata(path: string, key: string): unknown;
   relationship(path: string): unknown;
+  apply(target: bigint, batch: NativeEditBatch): NativeReceipt;
+  undo(receipt: NativeReceipt): NativeReceipt;
+  takeChanges(render: boolean): unknown;
+}
+
+/** The native receipt the generated glue exports (`layerstack_wasm::EditReceipt`). Not for app use. */
+export interface NativeReceipt {
+  free(): void;
+  record(): unknown;
+  readonly undoable: boolean;
 }
 
 /**
@@ -66,6 +81,8 @@ export interface NativeStage {
  */
 export interface NativeModule {
   readonly Stage: { open(identifier: string, bytes: Uint8Array, recover: boolean, sessionLayer: boolean): NativeStage };
+  /** The batch of edits `Stage.apply` takes. */
+  readonly EditBatch: new () => NativeEditBatch;
   nativeVersion(): unknown;
   /** The module's memory, for {@link Layerstack.transfer}; optional. */
   readonly memory?: WebAssembly.Memory;
@@ -74,6 +91,7 @@ export interface NativeModule {
 type Row = readonly unknown[];
 
 const owners = new WeakMap<object, Stage>();
+const receiptNatives = new WeakMap<EditReceipt, NativeReceipt>();
 
 /**
  * One instance of the native module: opens stages and counts the bytes
@@ -107,15 +125,29 @@ export class Layerstack {
    * the rest ({@link Stage.wanted}, {@link Stage.resolve}).
    *
    * Throws `io.rejected` for a root that does not parse.
+   *
+   * To edit a root that cannot be saved (a USDZ package), pass
+   * `editLayer: "session"`: edits then go to an anonymous session layer in
+   * front of it ({@link Stage.editLayer}).
    */
   open(root: { readonly identifier: string; readonly bytes: Uint8Array }, options: OpenOptions = {}): Stage {
     if (typeof root?.identifier !== "string" || !(root.bytes instanceof Uint8Array)) {
       throw new LayerstackError("argument.invalid", "open", "expected { identifier: string, bytes: Uint8Array }");
     }
+    const editLayer = options.editLayer ?? "root";
+    if (editLayer !== "root" && editLayer !== "session") {
+      throw new LayerstackError("argument.invalid", "open", 'editLayer must be "root" or "session"');
+    }
     const recover = options.importPolicy === "recover";
-    const native = this.call("open", () => this.#module.Stage.open(root.identifier, root.bytes, recover, false));
+    const session = editLayer === "session";
+    const native = this.call("open", () => this.#module.Stage.open(root.identifier, root.bytes, recover, session));
     this.#bytesIn += root.bytes.byteLength;
     return new Stage(this, native);
+  }
+
+  /** @internal A new native batch of edits. */
+  batch(): NativeEditBatch {
+    return new this.#module.EditBatch();
   }
 
   /** The bytes that crossed the boundary through this instance so far. */
@@ -152,10 +184,17 @@ export class Layerstack {
 
   #translate(operation: string, error: unknown): unknown {
     if (Array.isArray(error) && typeof error[0] === "string" && typeof error[1] === "string") {
-      const [code, message, identifier, path] = error as [ErrorCode, string, string | null, string | null];
+      const [code, message, identifier, path, edit] = error as [
+        ErrorCode,
+        string,
+        string | null,
+        string | null,
+        number | null | undefined,
+      ];
       return new LayerstackError(code, operation, message, {
         identifier: identifier ?? undefined,
         path: path ?? undefined,
+        edit: edit ?? undefined,
       });
     }
     if (error instanceof WebAssembly.RuntimeError) {
@@ -202,6 +241,11 @@ export class Layer {
  * An open stage. Reads are synchronous; only {@link Stage.resolve}, which
  * waits on the host's fetches, is asynchronous.
  *
+ * Edits are plain data ({@link Edit}) applied atomically to one layer
+ * ({@link Stage.apply}); each apply returns an {@link EditReceipt} that
+ * undoes it. Listeners ({@link Stage.onChange}) hear every composed change
+ * synchronously, after each call that changes the stage.
+ *
  * Paths are text: prim paths (`/World/Rock`) and property paths
  * (`/World/Rock.size`). A stage owns native memory: dispose it with
  * {@link Stage.free} or `using`; every call after that fails with
@@ -212,6 +256,9 @@ export class Stage implements Disposable {
   #native: NativeStage | null;
   readonly #layers = new Map<bigint, Layer>();
   #root: Layer | null = null;
+  #editLayer: Layer | null | undefined = undefined;
+  readonly #listeners: ChangeListener[] = [];
+  #dispatching = false;
 
   /** @internal Use {@link Layerstack.open}. */
   constructor(layerstack: Layerstack, native: NativeStage) {
@@ -233,6 +280,16 @@ export class Stage implements Disposable {
   get root(): Layer {
     if (this.#root === null) this.layers();
     return this.#root as Layer;
+  }
+
+  /**
+   * The layer edits go to by default: the session layer when opened with
+   * `editLayer: "session"`, else the root when it can be saved, else
+   * `null` (a USDZ root opened without a session layer).
+   */
+  get editLayer(): Layer | null {
+    if (this.#editLayer === undefined) this.layers();
+    return this.#editLayer ?? null;
   }
 
   /** The assets the stage wants now: storage has no answer for them yet. */
@@ -274,6 +331,7 @@ export class Stage implements Disposable {
    */
   loadSupplied(): LoadResult {
     const [loaded, failures] = this.#call("loadSupplied", (native) => native.loadSupplied()) as [bigint[], Row[]];
+    this.#notify();
     return {
       loaded: loaded.map((id) => this.#layer(id)),
       failures: failures.map(([asset, anchor, code, message]) => this.#failure(asset, anchor, code, message)),
@@ -340,11 +398,17 @@ export class Stage implements Disposable {
 
   /** Every layer the stage holds, read or anonymous. */
   layers(): Layer[] {
-    const [root, , rows] = this.#call("layers", (native) => native.layers()) as [bigint, bigint | null, Row[]];
+    const [root, , rows, editLayer] = this.#call("layers", (native) => native.layers()) as [
+      bigint,
+      bigint | null,
+      Row[],
+      bigint | null,
+    ];
     const layers = rows.map(([id, identifier, format, readOnly]) =>
       this.#remember(id as bigint, identifier as string | null, format as string, readOnly as boolean),
     );
     this.#root = this.#layers.get(root) ?? null;
+    this.#editLayer = editLayer === null ? null : (this.#layers.get(editLayer) ?? null);
     return layers;
   }
 
@@ -401,6 +465,100 @@ export class Stage implements Disposable {
     return row === null ? null : new Relationship(this, path, row);
   }
 
+  /**
+   * Applies `edits` to the layer `target` atomically: every edit applies,
+   * or none does and this throws. Assets the edits ask for that the stage
+   * has not read (a new reference, a variant's payload) are wanted
+   * afterwards: the receipt lists them, and {@link Stage.resolve} fetches
+   * them. Change listeners run before this returns.
+   *
+   * Throws `layer.affinity` (another stage's layer), `layer.read_only` (a
+   * USDZ member: open with `editLayer: "session"`), `layer.outside_stack`,
+   * `argument.invalid` or `value.*` for a malformed edit, and `edit.*`
+   * when the edits are rejected (`edit.rejected.type_mismatch`, ...); the
+   * error's `edit` is the index of the edit at fault.
+   */
+  apply(target: Layer, edits: readonly Edit[]): EditReceipt {
+    this.#own("apply", target);
+    const batch = this.#ls.batch();
+    try {
+      lowerEdits(batch, edits, "apply");
+      const native = this.#call("apply", (stage) => stage.apply(target.id, batch));
+      const receipt = this.#receipt(native);
+      this.#notify();
+      return receipt;
+    } finally {
+      batch.free();
+    }
+  }
+
+  /**
+   * Undoes `receipt`: applies its inverse, and returns the receipt of the
+   * undo, whose own `undo()` redoes. `receipt` is spent (released).
+   *
+   * Throws `receipt.affinity` for another stage's receipt (checked before
+   * anything runs), `receipt.released` for a spent one, and `edit.stale`
+   * when a slot the edits wrote changed since: nothing changes, and
+   * `receipt` stays undoable.
+   */
+  undo(receipt: EditReceipt): EditReceipt {
+    if (!(receipt instanceof EditReceipt) || receipt.stage !== this) {
+      throw new LayerstackError("receipt.affinity", "undo", "the receipt belongs to another stage");
+    }
+    const old = receiptNatives.get(receipt);
+    if (old === undefined) {
+      throw new LayerstackError("receipt.released", "undo", "the receipt was undone or released");
+    }
+    const native = this.#call("undo", (stage) => stage.undo(old));
+    receipt.release();
+    const redo = this.#receipt(native);
+    this.#notify();
+    return redo;
+  }
+
+  /**
+   * Selects `variant` of the variant set `set` on `prim` (`null` clears
+   * the selection), in `target` or the {@link Stage.editLayer}: a
+   * `setVariantSelection` edit. A variant whose arcs need assets the stage
+   * has not read leaves them wanted: `await stage.resolve(source)` after.
+   *
+   * Throws `layer.read_only` when there is no `target` and no edit layer.
+   */
+  setVariantSelection(prim: Prim | string, set: string, variant: string | null, target?: Layer): EditReceipt {
+    const path = typeof prim === "string" ? prim : prim.path;
+    const layer = target ?? this.editLayer;
+    if (layer === null) {
+      throw new LayerstackError(
+        "layer.read_only",
+        "setVariantSelection",
+        'the stage has no edit layer: its root cannot be saved; open it with editLayer: "session"',
+      );
+    }
+    return this.apply(layer, [{ type: "setVariantSelection", path, set, variant }]);
+  }
+
+  /**
+   * Calls `listener` with each composed change, synchronously and in
+   * order, after every call that changes the stage: {@link Stage.apply},
+   * {@link Stage.undo}, {@link Stage.loadSupplied} (and so
+   * {@link Stage.resolve}, once per round). A listener that throws does not
+   * stop the others; its error is reported (`reportError`, else
+   * `console.error`) as `listener.failed`. A listener may edit the stage;
+   * those changes are heard after the current ones. Returns the function
+   * that removes the listener.
+   */
+  onChange(listener: ChangeListener): () => void {
+    if (typeof listener !== "function") {
+      throw new LayerstackError("argument.invalid", "onChange", "expected a function");
+    }
+    this.#call("onChange", () => undefined);
+    this.#listeners.push(listener);
+    return () => {
+      const index = this.#listeners.indexOf(listener);
+      if (index >= 0) this.#listeners.splice(index, 1);
+    };
+  }
+
   /** Disposes the native stage. Idempotent. */
   free(): void {
     const native = this.#native;
@@ -421,6 +579,53 @@ export class Stage implements Disposable {
   /** @internal The layer with `id`, from the cache or a fresh inventory. */
   layerOf(id: bigint): Layer {
     return this.#layer(id);
+  }
+
+  #receipt(native: NativeReceipt): EditReceipt {
+    const [target, changes, loaded, failures, wanted] = native.record() as [bigint, Row, bigint[], Row[], Row[]];
+    const receipt = new EditReceipt(
+      this,
+      this.#layer(target),
+      decodeChanges(changes),
+      loaded.map((id) => this.#layer(id)),
+      failures.map(([asset, anchor, code, message]) => this.#failure(asset, anchor, code, message)),
+      wanted.map(([identifier, asset, anchor, arc]) => ({
+        identifier: identifier as string,
+        asset: asset as string,
+        anchor: this.#layer(anchor as bigint),
+        arc: arc as NeedKind,
+      })),
+    );
+    receiptNatives.set(receipt, native);
+    return receipt;
+  }
+
+  /** Drains the native change cursor and calls the listeners, in order. */
+  #notify(): void {
+    if (this.#dispatching || this.#native === null) return;
+    this.#dispatching = true;
+    try {
+      for (;;) {
+        const record = this.#call("onChange", (native) => native.takeChanges(this.#listeners.length > 0)) as
+          | Row[]
+          | null;
+        const batches =
+          record === null ? [{ created: [], removed: [], resynced: ["/"], changedInfoOnly: [] }] : record.map(decodeChanges);
+        if (batches.length === 0 || this.#listeners.length === 0) return;
+        for (const changes of batches) {
+          for (const listener of [...this.#listeners]) {
+            try {
+              listener(changes);
+            } catch (error) {
+              report(new LayerstackError("listener.failed", "onChange", `a change listener threw: ${String(error)}`, { cause: error }));
+            }
+          }
+        }
+        if (this.#native === null) return;
+      }
+    } finally {
+      this.#dispatching = false;
+    }
   }
 
   #call<T>(operation: string, f: (native: NativeStage) => T): T {
@@ -525,7 +730,7 @@ export class Prim {
     return this.stage.attribute(`${this.path}.${name}`);
   }
 
-  /** Its variant sets, their selections and variant names. */
+  /** Its variant sets, their selections and variant names. Select one with {@link Stage.setVariantSelection}. */
   variantSets(): VariantSet[] {
     const rows = this.stage.native("variantSets", (native) => native.variantSets(this.path)) as Row[];
     return rows.map(([name, selection, variants]) => ({
@@ -655,6 +860,68 @@ export class Relationship {
   }
 }
 
+/**
+ * What {@link Stage.apply} (or {@link Stage.undo}) did, holding the
+ * native inverse that undoes it. The app keeps the receipts it wants to
+ * undo; the stage keeps no history.
+ *
+ * Owns native memory: {@link EditReceipt.release} it (or declare it with
+ * `using`) when it will not be undone. Undoing releases it.
+ */
+export class EditReceipt implements Disposable {
+  /** The stage it belongs to. */
+  readonly stage: Stage;
+  /** The layer the edits went to. */
+  readonly target: Layer;
+  /** The composed changes of the edits themselves (loading the assets they ask for is heard separately). */
+  readonly changes: Changes;
+  /** The layers read for the edits: assets the host had supplied already. */
+  readonly loaded: readonly Layer[];
+  /** The assets that failed to read for the edits. */
+  readonly failures: readonly AssetFailure[];
+  /** The assets the edits ask for that the host has not supplied: run {@link Stage.resolve}. */
+  readonly wanted: readonly AssetNeed[];
+
+  /** @internal Use {@link Stage.apply}. */
+  constructor(
+    stage: Stage,
+    target: Layer,
+    changes: Changes,
+    loaded: readonly Layer[],
+    failures: readonly AssetFailure[],
+    wanted: readonly AssetNeed[],
+  ) {
+    this.stage = stage;
+    this.target = target;
+    this.changes = changes;
+    this.loaded = loaded;
+    this.failures = failures;
+    this.wanted = wanted;
+  }
+
+  /** Whether it was undone or released: it can no longer undo. */
+  get released(): boolean {
+    return !receiptNatives.has(this);
+  }
+
+  /** Undoes the edits ({@link Stage.undo}) and returns the receipt that redoes them. */
+  undo(): EditReceipt {
+    return this.stage.undo(this);
+  }
+
+  /** Releases the native inverse; it can no longer undo. Idempotent. */
+  release(): void {
+    const native = receiptNatives.get(this);
+    receiptNatives.delete(this);
+    native?.free();
+  }
+
+  /** Releases it, for `using`. */
+  [Symbol.dispose](): void {
+    this.release();
+  }
+}
+
 /** Array data copied out of the module: the elements live in JS memory. */
 class ArrayCopy implements ArrayData {
   readonly type: string;
@@ -686,6 +953,18 @@ class ArrayCopy implements ArrayData {
 function readMetadata(stage: Stage, path: string, key: string): Value | null {
   const record = stage.native("metadata", (native) => native.metadata(path, key));
   return decodeValue(stage.layerstack, record);
+}
+
+function decodeChanges(row: unknown): Changes {
+  const [created, removed, resynced, changedInfoOnly] = row as [string[], string[], string[], string[]];
+  return { created, removed, resynced, changedInfoOnly };
+}
+
+/** Reports an error that must not interrupt the caller, as the host reports uncaught errors. */
+function report(error: LayerstackError): void {
+  const host = globalThis as { reportError?: (error: unknown) => void };
+  if (typeof host.reportError === "function") host.reportError(error);
+  else console.error(error);
 }
 
 function decodeValue(layerstack: Layerstack, record: unknown): Value | null {

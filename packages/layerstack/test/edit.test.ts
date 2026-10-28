@@ -1,0 +1,483 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+
+import { EditReceipt, LayerstackError, loadLayerstack } from "../dist/index.js";
+import type { Changes, Edit, Layerstack, Stage, Value } from "../dist/index.js";
+import { mockSource, usdz } from "./fixtures.ts";
+
+const layerstack: Layerstack = await loadLayerstack();
+const text = new TextEncoder();
+
+/** A layered scene: a variant set whose `dark` variant references an asset fetched on demand, and a referenced part. */
+const files: Record<string, string> = {
+  "scene.usda": `#usda 1.0
+(
+    defaultPrim = "World"
+)
+def Xform "World" (
+    variants = {
+        string shade = "light"
+    }
+    prepend variantSets = "shade"
+) {
+    double size = 2
+    double spin.timeSamples = {
+        1: 10,
+        2: 20,
+    }
+    rel lookAt = </World/Rock>
+
+    def Sphere "Rock" {
+    }
+
+    variantSet "shade" = {
+        "dark" (
+            prepend references = @./dark.usda@</Dark>
+        ) {
+        }
+        "light" {
+            color3f tint = (1, 1, 1)
+        }
+    }
+}
+
+def "Spare" (
+    doc = "a spare part"
+    prepend references = @./spare.usda@</Part>
+) {
+}
+`,
+  "spare.usda": `#usda 1.0\ndef "Part" {\n    int count = 3\n}\n`,
+  "dark.usda": `#usda 1.0\ndef "Dark" {\n    color3f tint = (0.25, 0.25, 0.25)\n}\n`,
+};
+
+async function openScene(): Promise<Stage> {
+  const stage = layerstack.open({ identifier: "scene.usda", bytes: text.encode(files["scene.usda"]) });
+  await stage.resolve(mockSource({ "spare.usda": files["spare.usda"] as string }));
+  return stage;
+}
+
+/** Runs `f` and returns the `LayerstackError` it throws. */
+function failure(f: () => unknown): LayerstackError {
+  try {
+    f();
+  } catch (error) {
+    assert.ok(error instanceof LayerstackError, `expected a LayerstackError, got ${String(error)}`);
+    return error;
+  }
+  assert.fail("expected a LayerstackError");
+}
+
+/** Every composed prim with its fields, values, samples, targets, variant sets and kind, as text. */
+function snapshot(stage: Stage): string {
+  const lines: string[] = [];
+  const visit = (path: string): void => {
+    const prim = stage.prim(path);
+    lines.push(`${path} ${JSON.stringify(prim, plain)}`);
+    if (path !== "/" && prim !== null) {
+      lines.push(`  variants ${JSON.stringify(prim.variantSets())} kind ${JSON.stringify(prim.metadata("kind"), plain)}`);
+      for (const name of prim.attributeNames()) {
+        const attribute = prim.attribute(name);
+        lines.push(
+          `  .${name} ${JSON.stringify(attribute, plain)} ${JSON.stringify(attribute?.get(), plain)} ${attribute?.timeSamples()}`,
+        );
+      }
+      lines.push(`  doc ${JSON.stringify(prim.metadata("documentation"))}`);
+      for (const name of ["lookAt", "aim"]) {
+        lines.push(`  ${name} ${JSON.stringify(stage.relationship(`${path}.${name}`)?.targets())}`);
+      }
+    }
+    for (const child of stage.children(path)) visit(child);
+  };
+  visit("/");
+  return lines.join("\n");
+}
+
+function plain(key: string, value: unknown): unknown {
+  if (key === "stage") return undefined;
+  if (typeof value === "bigint") return `${value}n`;
+  if (value !== null && typeof value === "object" && "copy" in value) {
+    return Array.from((value as { copy(): ArrayLike<unknown> }).copy() as ArrayLike<number>);
+  }
+  return value;
+}
+
+/**
+ * Applies `edits` to the root, checks `effect`, undoes and checks the
+ * composed stage is exactly as before, then redoes and checks `effect`
+ * again.
+ */
+async function roundTrip(edits: Edit[], effect: (stage: Stage) => void): Promise<Stage> {
+  const stage = await openScene();
+  const before = snapshot(stage);
+  const receipt = stage.apply(stage.root, edits);
+  assert.notEqual(snapshot(stage), before, "the edits change something");
+  effect(stage);
+  const redo = receipt.undo();
+  assert.equal(receipt.released, true, "undoing spends the receipt");
+  assert.equal(snapshot(stage), before, "undo restores the composed stage");
+  redo.undo();
+  effect(stage);
+  return stage;
+}
+
+const double = (value: number): Value => ({ kind: "scalar", type: "double", value });
+
+describe("edit kinds", () => {
+  it("definePrim defines the prim and its ancestors", async () => {
+    using stage = await roundTrip([{ type: "definePrim", path: "/Garden/Moss", typeName: "Cube" }], (stage) => {
+      assert.equal(stage.prim("/Garden/Moss")?.typeName, "Cube");
+      assert.equal(stage.prim("/Garden")?.specifier, "def");
+    });
+    using over = await roundTrip([{ type: "definePrim", path: "/Elsewhere", specifier: "over" }], (stage) => {
+      assert.equal(stage.prim("/Elsewhere")?.specifier, "over");
+    });
+  });
+
+  it("removePrim and removeProperty remove the target layer's specs", async () => {
+    using stage = await roundTrip([{ type: "removePrim", path: "/World/Rock" }], (stage) => {
+      assert.equal(stage.prim("/World/Rock"), null);
+    });
+    using again = await roundTrip([{ type: "removeProperty", path: "/World.size" }], (stage) => {
+      assert.equal(stage.attribute("/World.size"), null);
+    });
+  });
+
+  it("createAttribute declares type, variability, custom and a default", async () => {
+    using stage = await roundTrip(
+      [
+        {
+          type: "createAttribute",
+          path: "/World/Rock.glow",
+          typeName: "color3f",
+          variability: "uniform",
+          custom: false,
+          value: { type: "color3f", value: [0.5, 0.25, 1] },
+        },
+      ],
+      (stage) => {
+        const glow = stage.attribute("/World/Rock.glow");
+        assert.equal(glow?.typeName, "color3f");
+        assert.equal(glow?.variability, "uniform");
+        assert.equal(glow?.custom, false);
+        assert.deepEqual(glow?.get(), { kind: "tuple", type: "color3f", value: [0.5, 0.25, 1] });
+      },
+    );
+  });
+
+  it("setValue authors the default and time samples", async () => {
+    using stage = await roundTrip(
+      [
+        { type: "setValue", path: "/World.size", value: { type: "double", value: 3 } },
+        { type: "setValue", path: "/World.spin", time: 5, value: { type: "double", value: 50 } },
+      ],
+      (stage) => {
+        assert.deepEqual(stage.attribute("/World.size")?.get(), double(3));
+        assert.deepEqual(stage.attribute("/World.spin")?.timeSamples(), [1, 2, 5]);
+        assert.deepEqual(stage.attribute("/World.spin")?.get(5), double(50));
+      },
+    );
+  });
+
+  it("clearValue and blockValue", async () => {
+    using stage = await roundTrip(
+      [
+        { type: "clearValue", path: "/World.size" },
+        { type: "clearValue", path: "/World.spin", time: 1 },
+      ],
+      (stage) => {
+        assert.equal(stage.attribute("/World.size")?.get(), null);
+        assert.deepEqual(stage.attribute("/World.spin")?.timeSamples(), [2]);
+      },
+    );
+    using blocked = await roundTrip([{ type: "blockValue", path: "/World.spin" }], (stage) => {
+      assert.deepEqual(stage.attribute("/World.spin")?.timeSamples(), []);
+      assert.equal(stage.attribute("/World.spin")?.get(1), null);
+    });
+  });
+
+  it("setTargets sets a relationship's targets", async () => {
+    using stage = await roundTrip(
+      [{ type: "setTargets", path: "/World.lookAt", targets: ["/Spare", "/World.size"] }],
+      (stage) => {
+        assert.deepEqual(stage.relationship("/World.lookAt")?.targets(), ["/Spare", "/World.size"]);
+      },
+    );
+    using created = await roundTrip([{ type: "setTargets", path: "/Spare.aim", targets: ["/World"] }], (stage) => {
+      assert.equal(stage.relationship("/Spare.aim")?.custom, true);
+    });
+  });
+
+  it("adds and removes references and payloads", async () => {
+    using stage = await roundTrip(
+      [
+        {
+          type: "addReference",
+          path: "/World/Rock",
+          asset: "./spare.usda",
+          primPath: "/Part",
+          position: "frontOfPrepend",
+        },
+      ],
+      (stage) => {
+        assert.deepEqual(stage.attribute("/World/Rock.count")?.get(), { kind: "scalar", type: "int", value: 3 });
+      },
+    );
+    using internal = await roundTrip(
+      [{ type: "addPayload", path: "/World/Rock", primPath: "/Spare", position: "backOfAppend" }],
+      (stage) => {
+        assert.deepEqual(stage.attribute("/World/Rock.count")?.get(), { kind: "scalar", type: "int", value: 3 });
+      },
+    );
+    using removed = await roundTrip(
+      [{ type: "removeReference", path: "/Spare", asset: "./spare.usda", primPath: "/Part" }],
+      (stage) => {
+        assert.equal(stage.attribute("/Spare.count")?.get() ?? null, null);
+      },
+    );
+  });
+
+  it("setVariantSelection, setActive, setInstanceable and setKind", async () => {
+    using variant = await roundTrip(
+      [{ type: "setVariantSelection", path: "/World", set: "shade", variant: null }],
+      (stage) => {
+        assert.equal(stage.prim("/World")?.variantSets()[0]?.selection, null);
+      },
+    );
+    using active = await roundTrip([{ type: "setActive", path: "/World/Rock", active: false }], (stage) => {
+      assert.equal(stage.prim("/World/Rock")?.active, false);
+    });
+    using instance = await roundTrip([{ type: "setInstanceable", path: "/Spare", instanceable: true }], (stage) => {
+      assert.equal(stage.prim("/Spare")?.instance, true);
+    });
+    using kind = await roundTrip([{ type: "setKind", path: "/World", kind: "assembly" }], (stage) => {
+      assert.deepEqual(stage.prim("/World")?.metadata("kind"), { kind: "scalar", type: "token", value: "assembly" });
+    });
+  });
+
+  it("setMetadata and clearMetadata on prims and properties", async () => {
+    using stage = await roundTrip(
+      [
+        { type: "setMetadata", path: "/World", key: "documentation", value: { type: "string", value: "the main one" } },
+        { type: "setMetadata", path: "/World.size", key: "hidden", value: { type: "bool", value: true } },
+      ],
+      (stage) => {
+        assert.deepEqual(stage.prim("/World")?.metadata("documentation"), {
+          kind: "scalar",
+          type: "string",
+          value: "the main one",
+        });
+        assert.deepEqual(stage.attribute("/World.size")?.metadata("hidden"), { kind: "scalar", type: "bool", value: true });
+      },
+    );
+    using cleared = await roundTrip([{ type: "clearMetadata", path: "/Spare", key: "documentation" }], (stage) => {
+      assert.equal(stage.prim("/Spare")?.metadata("documentation"), null);
+    });
+  });
+});
+
+describe("values", () => {
+  it("take typed arrays, nested arrays, bigints and values read back", async () => {
+    using stage = await openScene();
+    const receipt = stage.apply(stage.root, [
+      { type: "createAttribute", path: "/World.points", typeName: "point3f[]" },
+      { type: "setValue", path: "/World.points", value: { type: "point3f[]", value: new Float32Array([0, 1, 2, 3, 4, 5]) } },
+      { type: "createAttribute", path: "/World.ids", typeName: "int64[]", value: { type: "int64[]", value: [9007199254740993n, -1n] } },
+      { type: "createAttribute", path: "/World.big", typeName: "uint64", value: { type: "uint64", value: 18446744073709551615n } },
+      { type: "createAttribute", path: "/World.uvs", typeName: "texCoord2f[]", value: { type: "texCoord2f[]", value: [[0, 1], [1, 0]] } },
+      { type: "createAttribute", path: "/World.tags", typeName: "token[]", value: { type: "token[]", value: ["a", "b"] } },
+      { type: "createAttribute", path: "/World.halves", typeName: "half[]", value: { type: "half[]", value: new Uint16Array([0x3c00]) } },
+    ]);
+    assert.deepEqual(Array.from(stage.attribute("/World.points")?.array()?.copy() as Float32Array), [0, 1, 2, 3, 4, 5]);
+    assert.deepEqual(Array.from(stage.attribute("/World.ids")?.array()?.copy() as BigInt64Array), [9007199254740993n, -1n]);
+    assert.deepEqual(stage.attribute("/World.big")?.get(), { kind: "scalar", type: "uint64", value: 18446744073709551615n });
+    assert.deepEqual(Array.from(stage.attribute("/World.uvs")?.array()?.copy() as Float32Array), [0, 1, 1, 0]);
+    assert.deepEqual(stage.attribute("/World.tags")?.array()?.copy(), ["a", "b"]);
+    assert.deepEqual(Array.from(stage.attribute("/World.halves")?.array()?.copy() as Uint16Array), [0x3c00]);
+    // A value read is sent back as it is.
+    const points = stage.attribute("/World.points")?.get();
+    assert.ok(points);
+    stage.apply(stage.root, [{ type: "createAttribute", path: "/Spare.points", typeName: "point3f[]", value: points }]);
+    assert.deepEqual(Array.from(stage.attribute("/Spare.points")?.array()?.copy() as Float32Array), [0, 1, 2, 3, 4, 5]);
+    receipt.release();
+  });
+
+  it("fail with value codes naming the edit", async () => {
+    using stage = await openScene();
+    const cases: [Edit, string][] = [
+      [{ type: "setValue", path: "/World.size", value: { type: "dubble", value: 1 } }, "value.unknown_type"],
+      [{ type: "setValue", path: "/World.size", value: { type: "double3", value: [1, 2] } }, "value.shape"],
+      [{ type: "setValue", path: "/World.size", value: { type: "int", value: 1.5 } }, "value.range"],
+      [{ type: "setValue", path: "/World.size", value: { type: "int64", value: 2 ** 53 + 2 } }, "value.range"],
+      [{ type: "setValue", path: "/World.size", value: { type: "double", value: "two" } }, "value.kind"],
+      [{ type: "setValue", path: "/World.size", value: { type: "double", value: [1, "x"] } }, "value.kind"],
+      [{ type: "setValue", path: "/World.size", value: { type: "float", value: 2 } }, "edit.rejected.type_mismatch"],
+    ];
+    for (const [edit, code] of cases) {
+      const error = failure(() => stage.apply(stage.root, [{ type: "setActive", path: "/World", active: true }, edit]));
+      assert.equal(error.code, code, JSON.stringify(edit));
+      assert.equal(error.edit, 1, "the error names the edit");
+      assert.equal(error.path, "/World.size");
+      assert.equal(error.operation, "apply");
+    }
+    assert.equal(stage.prim("/World")?.active, true);
+    assert.deepEqual(stage.attribute("/World.size")?.get(), double(2), "nothing applied");
+  });
+});
+
+describe("applying", () => {
+  it("checks edit shapes, layers and paths with codes", async () => {
+    using stage = await openScene();
+    using other = await openScene();
+    const bad = [
+      [{ type: "explode", path: "/World" }, "argument.invalid"],
+      [{ type: "setActive", path: "/World", active: "yes" }, "argument.invalid"],
+      [{ type: "definePrim", path: "/A", specifier: "maybe" }, "argument.invalid"],
+      [{ type: "removePrim", path: "World" }, "path.invalid"],
+      [{ type: "removePrim", path: "/World.size" }, "path.invalid"],
+    ] as const;
+    for (const [edit, code] of bad) {
+      const error = failure(() => stage.apply(stage.root, [edit as unknown as Edit]));
+      assert.equal(error.code, code, JSON.stringify(edit));
+      assert.equal(error.edit, 0);
+    }
+    assert.equal(failure(() => stage.apply(other.root, [])).code, "layer.affinity");
+    const spare = stage.layers().find((layer) => layer.identifier === "spare.usda");
+    assert.ok(spare);
+    assert.equal(failure(() => stage.apply(spare, [{ type: "setActive", path: "/Part", active: false }])).code, "layer.outside_stack");
+  });
+
+  it("undoes once, refuses another stage's receipt and a stale undo", async () => {
+    using stage = await openScene();
+    using other = await openScene();
+    const first = stage.apply(stage.root, [{ type: "setValue", path: "/World.size", value: { type: "double", value: 3 } }]);
+    assert.ok(first instanceof EditReceipt);
+    assert.equal(first.target, stage.root);
+    assert.deepEqual(first.changes.changedInfoOnly, ["/World"]);
+    assert.equal(failure(() => other.undo(first)).code, "receipt.affinity");
+    using later = stage.apply(stage.root, [{ type: "setValue", path: "/World.size", value: { type: "double", value: 4 } }]);
+    const stale = failure(() => first.undo());
+    assert.equal(stale.code, "edit.stale");
+    assert.equal(first.released, false, "a stale receipt stays undoable");
+    assert.deepEqual(stage.attribute("/World.size")?.get(), double(4));
+    later.undo().release();
+    first.undo().release();
+    assert.deepEqual(stage.attribute("/World.size")?.get(), double(2));
+    assert.equal(failure(() => first.undo()).code, "receipt.released");
+  });
+
+  it("switches a variant and fetches the assets it needs", async () => {
+    using stage = await openScene();
+    const world = stage.prim("/World");
+    assert.ok(world);
+    assert.deepEqual(world.variantSets(), [{ name: "shade", selection: "light", variants: ["dark", "light"] }]);
+    const receipt = stage.setVariantSelection(world, "shade", "dark");
+    assert.deepEqual(
+      receipt.wanted.map((need) => [need.identifier, need.arc]),
+      [["dark.usda", "references"]],
+    );
+    assert.equal(stage.attribute("/World.tint")?.get() ?? null, null, "the variant's asset is not read yet");
+    const source = mockSource(files);
+    await stage.resolve(source);
+    assert.deepEqual(source.asked, ["dark.usda"]);
+    assert.deepEqual(stage.attribute("/World.tint")?.get(), { kind: "tuple", type: "color3f", value: [0.25, 0.25, 0.25] });
+    receipt.undo().release();
+    assert.deepEqual(stage.attribute("/World.tint")?.get(), { kind: "tuple", type: "color3f", value: [1, 1, 1] });
+  });
+});
+
+describe("change listeners", () => {
+  it("hear every change in order, after each call", async () => {
+    using stage = await openScene();
+    const heard: Changes[] = [];
+    const stop = stage.onChange((changes) => heard.push(changes));
+    const receipt = stage.apply(stage.root, [{ type: "definePrim", path: "/Garden" }]);
+    assert.equal(heard.length, 1, "one recomposition");
+    assert.deepEqual(heard[0]?.created, ["/Garden"]);
+    assert.deepEqual(heard[0]?.removed, []);
+    assert.deepEqual(heard[0]?.resynced, ["/Garden"]);
+    receipt.undo().release();
+    assert.deepEqual(heard[1]?.removed, ["/Garden"]);
+    stage.setVariantSelection("/World", "shade", "dark").release();
+    const before = heard.length;
+    await stage.resolve(mockSource(files));
+    assert.ok(heard.length > before, "loading the variant's asset is heard");
+    stop();
+    stage.apply(stage.root, [{ type: "setActive", path: "/Spare", active: false }]).release();
+    assert.equal(heard.length, before + 1, "a removed listener hears nothing");
+  });
+
+  it("keep going when one throws, and report it", async () => {
+    using stage = await openScene();
+    const reported: unknown[] = [];
+    const host = globalThis as { reportError?: ((error: unknown) => void) | undefined };
+    const saved = host.reportError;
+    host.reportError = (error) => reported.push(error);
+    try {
+      const order: string[] = [];
+      stage.onChange(() => {
+        order.push("first");
+        throw new Error("listener bug");
+      });
+      stage.onChange(() => order.push("second"));
+      stage.apply(stage.root, [{ type: "setActive", path: "/Spare", active: false }]).release();
+      assert.deepEqual(order, ["first", "second"]);
+      assert.equal(reported.length, 1);
+      const error = reported[0];
+      assert.ok(error instanceof LayerstackError);
+      assert.equal(error.code, "listener.failed");
+      assert.ok(error.cause instanceof Error);
+    } finally {
+      host.reportError = saved;
+    }
+  });
+
+  it("hear a listener's own edits after the current changes", async () => {
+    using stage = await openScene();
+    const heard: (readonly string[])[] = [];
+    stage.onChange((changes) => {
+      heard.push(changes.created);
+      if (changes.created.includes("/Garden")) {
+        stage.apply(stage.root, [{ type: "definePrim", path: "/Garden/Moss" }]).release();
+      }
+    });
+    stage.apply(stage.root, [{ type: "definePrim", path: "/Garden" }]).release();
+    assert.deepEqual(heard, [["/Garden"], ["/Garden/Moss"]]);
+  });
+});
+
+describe("read-only roots", () => {
+  const pack = (): Uint8Array =>
+    usdz([
+      ["root.usda", `#usda 1.0\ndef "Model" {\n    float height = 3\n}\n`],
+    ]);
+
+  it("refuse edits without a session layer", () => {
+    using stage = layerstack.open({ identifier: "model.usdz", bytes: pack() });
+    assert.equal(stage.editLayer, null);
+    const error = failure(() => stage.apply(stage.root, [{ type: "setActive", path: "/Model", active: false }]));
+    assert.equal(error.code, "layer.read_only");
+    assert.equal(error.identifier, "model.usdz");
+    assert.equal(failure(() => stage.setVariantSelection("/Model", "look", "a")).code, "layer.read_only");
+  });
+
+  it("take edits in an explicit session layer in front", () => {
+    using stage = layerstack.open({ identifier: "model.usdz", bytes: pack() }, { editLayer: "session" });
+    const session = stage.editLayer;
+    assert.ok(session);
+    assert.notEqual(session, stage.root);
+    assert.equal(session.anonymous, true);
+    assert.equal(session.readOnly, false);
+    const receipt = stage.apply(session, [{ type: "setValue", path: "/Model.height", value: { type: "float", value: 5 } }]);
+    assert.deepEqual(stage.attribute("/Model.height")?.get(), { kind: "scalar", type: "float", value: 5 });
+    assert.equal(stage.isDirty(session), true);
+    assert.equal(stage.isDirty(stage.root), false, "the package stays as it was read");
+    const strongest = stage.attribute("/Model.height")?.explain()?.opinions[0];
+    assert.equal(strongest?.layer, session);
+    receipt.undo().release();
+    assert.deepEqual(stage.attribute("/Model.height")?.get(), { kind: "scalar", type: "float", value: 3 });
+  });
+});

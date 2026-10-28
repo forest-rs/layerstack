@@ -12,20 +12,26 @@
  * const size = stage.attribute("/World/Rock.size");
  * size?.get();     // { kind: "scalar", type: "double", value: 2 }
  * size?.explain(); // the opinions, strongest first, with layer, arc and role
+ *
+ * const receipt = stage.apply(stage.editLayer!, [
+ *   { type: "setValue", path: "/World/Rock.size", value: { type: "double", value: 3 } },
+ * ]);
+ * receipt.undo(); // returns the receipt that redoes it
  * ```
  *
  * @module
  */
 
-import init, { Stage as GlueStage, nativeVersion } from "../wasm/layerstack.js";
+import init, { EditBatch as GlueEditBatch, Stage as GlueStage, nativeVersion } from "../wasm/layerstack.js";
 import { LayerstackError } from "./errors.js";
 import { Layerstack } from "./stage.js";
 import type { NativeModule } from "./stage.js";
 
 export { LayerstackError } from "./errors.js";
 export type { ErrorCode, ErrorDetails } from "./errors.js";
-export { ABI, Attribute, Layer, Layerstack, PACKAGE_VERSION, Prim, Relationship, Stage } from "./stage.js";
-export type { NativeModule, NativeStage } from "./stage.js";
+export { ABI, Attribute, EditReceipt, Layer, Layerstack, PACKAGE_VERSION, Prim, Relationship, Stage } from "./stage.js";
+export type { NativeModule, NativeReceipt, NativeStage } from "./stage.js";
+export type { NativeEditBatch } from "./edits.js";
 export type * from "./types.js";
 
 let own: Promise<Layerstack> | undefined;
@@ -71,7 +77,7 @@ async function instantiate(source: URL | string | BufferSource | WebAssembly.Mod
       cause: error,
     });
   }
-  return new Layerstack({ Stage: GlueStage, nativeVersion, memory });
+  return new Layerstack({ Stage: GlueStage, EditBatch: GlueEditBatch, nativeVersion, memory });
 }
 
 function isNativeModule(source: unknown): source is NativeModule {

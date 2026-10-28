@@ -120,6 +120,17 @@ export interface OpenOptions {
    * (`io.rejected`); `"recover"` imports what parses.
    */
   readonly importPolicy?: "strict" | "recover";
+  /**
+   * Where edits go by default ({@link Stage.editLayer}).
+   *
+   * - `"root"` (the default): the root layer, when it can be saved. A
+   *   read-only root (a USDZ package) then has no edit layer, and edits
+   *   targeting it fail with `layer.read_only`.
+   * - `"session"`: an empty anonymous session layer, placed in front of
+   *   the root (the strongest layer of the stage), takes the edits. This
+   *   is how to edit a USDZ package: the package stays as it was read.
+   */
+  readonly editLayer?: "root" | "session";
 }
 
 /** A scalar's storage type in an array: `f16` is half floats as raw bits, `bool` is bytes of 0 or 1. */
@@ -224,6 +235,278 @@ export interface VariantSet {
   /** The set's variant names, in composed order. */
   readonly variants: readonly string[];
 }
+
+/**
+ * What one recomposition changed, as prim paths. A listener registered
+ * with {@link Stage.onChange} receives one per recomposition, in order.
+ *
+ * Re-read what a path covers: a `resynced` path's whole subtree may have
+ * changed; a `changedInfoOnly` prim kept its children, but its fields and
+ * properties may have changed.
+ */
+export interface Changes {
+  /** Prims that exist now and did not before. */
+  readonly created: readonly string[];
+  /** Prims that existed before and do not now. */
+  readonly removed: readonly string[];
+  /** Roots of subtrees whose composed structure may have changed. `/` when the history was lost: re-read everything. */
+  readonly resynced: readonly string[];
+  /** Surviving prims whose opinions changed without a resync of their subtree. */
+  readonly changedInfoOnly: readonly string[];
+}
+
+/** A listener of {@link Stage.onChange}. */
+export type ChangeListener = (changes: Changes) => void;
+
+/** A typed array of numbers or bigints, sent as one buffer. */
+export type NumericArray =
+  | Float32Array
+  | Float64Array
+  | Int8Array
+  | Int16Array
+  | Int32Array
+  | Uint8Array
+  | Uint16Array
+  | Uint32Array
+  | BigInt64Array
+  | BigUint64Array;
+
+/**
+ * A value to author: its value type name and its scalars, or a
+ * {@link Value} read from a stage, sent back as it is.
+ *
+ * `value` is in the layout {@link Value} reads:
+ *
+ * - a scalar: `true`, `2.5`, `9007199254740993n` (a `bigint` keeps
+ *   `int64`/`uint64` exact past 2^53), `"render"` (`string`, `token`,
+ *   `asset`, `pathExpression`);
+ * - a tuple: `[1, 0, 0]` (`double3`, `color3f`), a matrix row-major
+ *   (`matrix4d`), a quaternion `[i, j, k, r]`;
+ * - an array: the elements flattened (`point3f[]` as six numbers for two
+ *   points, or `[[0, 0, 0], [1, 2, 3]]`), or one typed array, which is
+ *   copied once (`Float32Array` for `point3f[]`, `BigInt64Array` for
+ *   `int64[]`, half floats as raw bits in a `Uint16Array`).
+ *
+ * The type decides the conversion: numbers round to `float` and `half`,
+ * and must be exact integers of an integer type (`value.range`).
+ */
+export type ValueInput =
+  | Value
+  | {
+      /** The value type name (`double`, `color3f`, `token[]`), as {@link Attribute.typeName} reads it. */
+      readonly type: string;
+      /** The scalars. */
+      readonly value: ScalarInput | readonly (ScalarInput | readonly ScalarInput[])[] | NumericArray;
+    };
+
+/** One scalar of a {@link ValueInput}. */
+export type ScalarInput = boolean | number | bigint | string;
+
+/** Where an added reference or payload goes in the list op of the prim (OpenUSD's `UsdListPosition`). */
+export type ListPosition = "frontOfPrepend" | "backOfPrepend" | "frontOfAppend" | "backOfAppend";
+
+/**
+ * `UsdStage::DefinePrim` (`specifier` `"def"`, the default),
+ * `OverridePrim` (`"over"`) or `CreateClassPrim` (`"class"`), on the
+ * target layer, reading the stage as it was before the edits:
+ *
+ * - `def`: nothing when the prim is defined and `typeName` is absent or
+ *   its type already; otherwise authors `def` (and `typeName`) on its
+ *   spec, and `def` on each ancestor that is not defined.
+ * - `over`: nothing when the prim exists; otherwise an `over` spec.
+ * - `class`: nothing when the prim is a class; otherwise authors `class`.
+ */
+export interface DefinePrimEdit {
+  readonly type: "definePrim";
+  /** The prim path. */
+  readonly path: string;
+  /** The type name (`Xform`, `Sphere`) to author. */
+  readonly typeName?: string;
+  /** `def` by default. */
+  readonly specifier?: "def" | "over" | "class";
+}
+
+/** `UsdStage::RemovePrim`: removes the prim's spec in the target layer, with everything beneath it. Other layers keep their opinions. */
+export interface RemovePrimEdit {
+  readonly type: "removePrim";
+  readonly path: string;
+}
+
+/** `UsdPrim::RemoveProperty`: removes the property's spec in the target layer. */
+export interface RemovePropertyEdit {
+  readonly type: "removeProperty";
+  /** The property path (`/World/Rock.size`). */
+  readonly path: string;
+}
+
+/**
+ * `UsdPrim::CreateAttribute`: makes sure the target layer has a spec for
+ * the attribute (its prim spec created as an `over` when missing), then
+ * authors `value` as its default when given.
+ *
+ * As in OpenUSD, a spec the target layer already has is kept, and a new
+ * spec copies the prim's schema definition of the attribute, else another
+ * layer's declaration of it: `typeName`, `variability` and `custom` apply
+ * only to an attribute nothing defines or declares yet.
+ */
+export interface CreateAttributeEdit {
+  readonly type: "createAttribute";
+  /** The property path. */
+  readonly path: string;
+  /** A registered value type name (`double`, `color3f[]`). */
+  readonly typeName: string;
+  /** `varying` by default. */
+  readonly variability?: "varying" | "uniform";
+  /** `true` by default, as OpenUSD's `CreateAttribute`; `false` for a property a schema defines. */
+  readonly custom?: boolean;
+  /** A default value. */
+  readonly value?: ValueInput;
+}
+
+/**
+ * `UsdAttribute::Set`: the default value, or the time sample at `time`
+ * (a stage time code), leaving other samples. The value must have the
+ * attribute's declared type (`edit.rejected.type_mismatch`); a missing
+ * attribute spec is created with the composed declaration's type.
+ */
+export interface SetValueEdit {
+  readonly type: "setValue";
+  /** The property path. */
+  readonly path: string;
+  readonly value: ValueInput;
+  /** The time code of a time sample; the default value without one. */
+  readonly time?: number;
+}
+
+/** `UsdAttribute::ClearAtTime`: clears the default value, or with `time` the one time sample there. */
+export interface ClearValueEdit {
+  readonly type: "clearValue";
+  readonly path: string;
+  readonly time?: number;
+}
+
+/** `UsdAttribute::Block`: clears the time samples and authors a blocked default, hiding weaker opinions. */
+export interface BlockValueEdit {
+  readonly type: "blockValue";
+  readonly path: string;
+}
+
+/** `UsdRelationship::SetTargets`: the explicit target list, creating a `custom` relationship when nothing declares it. */
+export interface SetTargetsEdit {
+  readonly type: "setTargets";
+  /** The relationship's property path. */
+  readonly path: string;
+  /** Prim or property paths. */
+  readonly targets: readonly string[];
+}
+
+/**
+ * `UsdReferences::AddReference` / `UsdPayloads::AddPayload`. With `asset`
+ * an external arc (resolved against the target layer, as authored); without
+ * one an internal arc. Without `primPath` it targets the default prim. An
+ * asset the stage has not read is wanted ({@link EditReceipt.wanted}): run
+ * {@link Stage.resolve}.
+ */
+export interface AddArcEdit {
+  readonly type: "addReference" | "addPayload";
+  /** The prim path. */
+  readonly path: string;
+  readonly asset?: string;
+  readonly primPath?: string;
+  /** `backOfPrepend` by default, as OpenUSD's. */
+  readonly position?: ListPosition;
+  /** Time offset and scale across the arc; identity by default. */
+  readonly layerOffset?: { readonly offset?: number; readonly scale?: number };
+}
+
+/**
+ * `UsdReferences::RemoveReference` / `UsdPayloads::RemovePayload`: removes
+ * the arc naming `asset` and `primPath` from the target layer's lists, and
+ * adds it to the deleted items, which removes it from weaker layers too.
+ */
+export interface RemoveArcEdit {
+  readonly type: "removeReference" | "removePayload";
+  readonly path: string;
+  readonly asset?: string;
+  readonly primPath?: string;
+}
+
+/**
+ * `UsdVariantSet::SetVariantSelection`; `null` (or `""`) clears it. Assets
+ * the selected variant needs that the stage has not read are wanted
+ * ({@link EditReceipt.wanted}).
+ */
+export interface SetVariantSelectionEdit {
+  readonly type: "setVariantSelection";
+  readonly path: string;
+  readonly set: string;
+  readonly variant: string | null;
+}
+
+/** `UsdPrim::SetActive`. */
+export interface SetActiveEdit {
+  readonly type: "setActive";
+  readonly path: string;
+  readonly active: boolean;
+}
+
+/** `UsdPrim::SetInstanceable`. */
+export interface SetInstanceableEdit {
+  readonly type: "setInstanceable";
+  readonly path: string;
+  readonly instanceable: boolean;
+}
+
+/** `UsdModelAPI::SetKind`: the `kind` metadata token (`component`, `assembly`, `group`). */
+export interface SetKindEdit {
+  readonly type: "setKind";
+  readonly path: string;
+  readonly kind: string;
+}
+
+/**
+ * `UsdObject::SetMetadata` of a prim (prim path) or property (property
+ * path). A property the target layer has no spec for gets one copied from
+ * its schema definition or declaration, as for {@link CreateAttributeEdit}.
+ * Fields with edits of their own (`active`, `typeName`, `references`,
+ * `variantSelection`, ...) fail with `edit.rejected.reserved_field`.
+ */
+export interface SetMetadataEdit {
+  readonly type: "setMetadata";
+  readonly path: string;
+  readonly key: string;
+  readonly value: ValueInput;
+}
+
+/** `UsdObject::ClearMetadata`. */
+export interface ClearMetadataEdit {
+  readonly type: "clearMetadata";
+  readonly path: string;
+  readonly key: string;
+}
+
+/**
+ * One edit: plain data, so edits can be logged, sent and replayed. A list
+ * of them is applied atomically to one layer by {@link Stage.apply}.
+ * Paths are stage paths; times are stage time codes.
+ */
+export type Edit =
+  | DefinePrimEdit
+  | RemovePrimEdit
+  | RemovePropertyEdit
+  | CreateAttributeEdit
+  | SetValueEdit
+  | ClearValueEdit
+  | BlockValueEdit
+  | SetTargetsEdit
+  | AddArcEdit
+  | RemoveArcEdit
+  | SetVariantSelectionEdit
+  | SetActiveEdit
+  | SetInstanceableEdit
+  | SetKindEdit
+  | SetMetadataEdit
+  | ClearMetadataEdit;
 
 /** The version of this package and of the native module it runs. */
 export interface Version {

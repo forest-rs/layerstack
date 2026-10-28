@@ -36,6 +36,7 @@ describe("loading the module", () => {
   it("refuses a module of another ABI", async () => {
     const foreign: NativeModule = {
       Stage: { open: () => assert.fail("never opened") },
+      EditBatch: class {} as unknown as NativeModule["EditBatch"],
       nativeVersion: () => ["9.9.9", "other", ABI + 1],
     };
     const error = await failure(() => loadLayerstack(foreign));

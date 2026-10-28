@@ -10,9 +10,19 @@ The module opens a stage from the bytes of its root layer and never fetches.
 The host runs the loop: the stage lists the assets it wants, the host fetches
 them, supplies their bytes (or confirms one absent), and the stage reads them,
 until nothing is wanted. A USDZ package is one supplied source. The stage then
-answers prim, child, attribute and value queries, and explains where a value
-comes from. Failures carry a stable dotted code (`io.unavailable`,
-`path.invalid`).
+answers prim, child, attribute, relationship, metadata and value queries, and
+explains where a value comes from. Failures carry a stable dotted code
+(`io.unavailable`, `path.invalid`).
+
+Edits arrive as an `EditBatch` the wrapper fills from its plain-data `Edit[]`,
+and `Stage::apply` lowers it to one atomic `layerstack::Transaction` on the
+target layer, loading what the edits ask for that the host supplied. It
+returns an `EditReceipt` holding the guarded inverse; `Stage::undo` applies it
+and returns the receipt that redoes. The stage keeps one change cursor, which
+the wrapper drains after each mutating call to dispatch change listeners
+(JavaScript callbacks cannot satisfy `subscribe_changes`' `Send + Sync`). A
+root that cannot be saved, such as a USDZ package, is edited through an
+anonymous session layer opened in front of it.
 
 ## Building the module
 

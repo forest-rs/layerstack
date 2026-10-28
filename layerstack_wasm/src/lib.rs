@@ -13,6 +13,16 @@
 //! answers prim, child, attribute and value queries and explains where a
 //! value comes from (`explain`).
 //!
+//! Edits are authored through [`Stage::apply`]: the wrapper fills an
+//! [`EditBatch`] from its plain-data edits, and the batch is lowered to one
+//! atomic [`layerstack::Transaction`] on an explicit target layer of the
+//! stage's layer stack. The [`EditReceipt`] it returns holds the guarded
+//! inverse, which [`Stage::undo`] applies, returning the receipt that
+//! redoes. The stage keeps one [`layerstack::ChangeCursor`], which the
+//! wrapper drains after each call that changes the stage to call its
+//! change listeners. A root that cannot be saved (a USDZ package) is edited
+//! through a session layer opened in front of it ([`Stage::open`]).
+//!
 //! Failures are [`Error`]s with a stable dotted code (`io.unavailable`,
 //! `path.invalid`); the codes of the core crates' errors come from their
 //! `code()` methods ([`layerstack_io::IoErrorKind::code`],
@@ -34,13 +44,17 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
 
+mod edit;
 mod error;
+mod receipt;
 mod stage;
 mod storage;
 mod value;
 mod wire;
 
+pub use edit::EditBatch;
 pub use error::Error;
+pub use receipt::EditReceipt;
 pub use stage::Stage;
 pub use storage::HostStorage;
 

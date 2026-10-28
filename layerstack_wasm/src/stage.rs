@@ -1,7 +1,7 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-//! An open stage: loading, inspection and explanation.
+//! An open stage: loading, inspection, explanation and authoring.
 
 use alloc::{
     string::{String, ToString},
@@ -11,13 +11,27 @@ use alloc::{
 };
 
 use layerstack::{
-    ArcKind, Contribution, IgnoreCause, InMemoryStore, LayerId, OpinionRole, ResolvedValue,
-    Specifier, StageOptions, Time, ValueSource, Variability,
+    ArcKind, ChangeCursor, Changes, Contribution, EditError, IgnoreCause, InMemoryStore, Layer,
+    LayerId, OpinionRole, PathId, ResolvedValue, Specifier, StageOptions, Time, Transaction,
+    ValueSource, Variability,
 };
-use layerstack_io::{FORMAT_ARGS_DELIMITER, ImportPolicy, LoadReport, StageDocument};
+use layerstack_io::{
+    ApplyError, FORMAT_ARGS_DELIMITER, ImportPolicy, IoError, LoadReport, StageDocument,
+};
 use wasm_bindgen::prelude::*;
 
-use crate::{error::Error, storage::HostStorage, value, wire::Wire};
+use crate::{
+    edit::{self, EditBatch, Scope},
+    error::Error,
+    receipt::EditReceipt,
+    storage::HostStorage,
+    value,
+    wire::Wire,
+};
+
+/// The id the session layer of a stage opened for editing takes: below
+/// the ids derived from identifiers, as host-made layers' ids are.
+const SESSION_LAYER: LayerId = LayerId(1);
 
 /// One open stage over a [`HostStorage`]: the native object behind the
 /// TypeScript `Stage`.
@@ -33,6 +47,10 @@ use crate::{error::Error, storage::HostStorage, value, wire::Wire};
 #[derive(Debug)]
 pub struct Stage {
     document: StageDocument<HostStorage>,
+    /// The observer the wrapper drains after each mutating call.
+    cursor: ChangeCursor,
+    /// What a receipt holds to name the stage that made it.
+    identity: Arc<()>,
 }
 
 impl Stage {
@@ -41,7 +59,13 @@ impl Stage {
     /// storage has: only the root, so every dependency is unavailable
     /// until the host supplies it. `recover` imports malformed content the
     /// reader can recover from ([`ImportPolicy::AllowRecovery`]) instead
-    /// of rejecting it.
+    /// of rejecting it. `session_layer` puts an empty anonymous session
+    /// layer in front of the root, the stage's edit layer
+    /// ([`Self::edit_layer`]): the way to edit a root that cannot be saved,
+    /// such as a USDZ package's.
+    ///
+    /// Spec: AOUSD Core §10.3.1 (the session layer is the strongest layer
+    /// of the root layer stack).
     ///
     /// # Errors
     ///
@@ -49,13 +73,22 @@ impl Stage {
     /// (`io.rejected` for a root that does not parse).
     ///
     /// [`IoErrorKind`]: layerstack_io::IoErrorKind
-    pub fn open(identifier: &str, bytes: Vec<u8>, recover: bool) -> Result<Self, Error> {
+    pub fn open(
+        identifier: &str,
+        bytes: Vec<u8>,
+        recover: bool,
+        session_layer: bool,
+    ) -> Result<Self, Error> {
         let mut storage = HostStorage::new();
         storage.supply(identifier, bytes);
-        let store = InMemoryStore::default();
+        let mut store = InMemoryStore::default();
         let schemas = layerstack_schemas::openusd(&store.tokens);
+        if session_layer {
+            store.insert_layer(Layer::new(SESSION_LAYER));
+        }
         let options = StageOptions {
             schemas: Some(Arc::new(schemas)),
+            session_layer: session_layer.then_some(SESSION_LAYER),
             ..StageOptions::default()
         };
         let policy = if recover {
@@ -63,8 +96,13 @@ impl Stage {
         } else {
             ImportPolicy::Strict
         };
-        let document = StageDocument::open_in(storage, store, identifier, options, policy)?;
-        Ok(Self { document })
+        let mut document = StageDocument::open_in(storage, store, identifier, options, policy)?;
+        let cursor = document.parts_mut().1.change_cursor();
+        Ok(Self {
+            document,
+            cursor,
+            identity: Arc::new(()),
+        })
     }
 
     /// The document: its store, live stage and storage.
@@ -117,8 +155,8 @@ impl Stage {
     }
 
     /// Every layer of the document:
-    /// `[root, session, [[id, identifier, format, readOnly, dirty], ...]]`,
-    /// `session` `null` without one. `identifier` is `null` for an
+    /// `[root, session, [[id, identifier, format, readOnly, dirty], ...], editLayer]`,
+    /// `session` `null` without one and `editLayer` as [`Self::edit_layer`]. `identifier` is `null` for an
     /// anonymous layer, `format` the identifier's extension (a package
     /// member's own), and a package's layers are read-only.
     #[must_use]
@@ -148,7 +186,22 @@ impl Stage {
                 .session_layer()
                 .map_or(Wire::Null, |id| Wire::UInt64(id.0)),
             Wire::List(rows),
+            self.edit_layer()
+                .map_or(Wire::Null, |id| Wire::UInt64(id.0)),
         ])
+    }
+
+    /// The layer edits go to unless they name another: the session layer
+    /// when the stage was opened with one, else the root when it can be
+    /// saved, else `None` (a package root opened without a session layer).
+    #[must_use]
+    pub fn edit_layer(&self) -> Option<LayerId> {
+        let stage = self.document.stage().stage();
+        if let Some(session) = stage.session_layer() {
+            return Some(session);
+        }
+        let root = stage.root_layer()?;
+        (!self.read_only(root, self.document.identifier(root))).then_some(root)
     }
 
     /// Whether saving layer `id` would fail as read-only
@@ -575,6 +628,233 @@ impl Stage {
         ]))
     }
 
+    /// Applies the edits of `batch` to the layer `target` as one
+    /// transaction ([`StageDocument::apply`]), which loads the assets the
+    /// edits ask for that the host has supplied; those it has not are
+    /// wanted (`wanted`). `batch` is left empty.
+    ///
+    /// Either every edit applies or none does. The receipt holds the
+    /// inverse, and its record is `[target, changes, loaded, failures,
+    /// wanted]`: the target layer's id, the composed changes of the
+    /// transaction (`[created, removed, resynced, changedInfoOnly]`), the
+    /// ids of the layers loaded for it, each asset that failed to load as
+    /// `[asset, anchor, code, message]`, and the assets it asks for that
+    /// the host has not supplied, as `wanted` rows.
+    ///
+    /// Spec: AOUSD Core §7 (scene description), §10.3.1 (the layer stack
+    /// edits target).
+    ///
+    /// # Errors
+    ///
+    /// - `layer.unknown`, `layer.read_only` (a package member: open with a
+    ///   session layer), `layer.outside_stack` (a layer the stage only
+    ///   reaches through an arc, as OpenUSD's `UsdStage::SetEditTarget`
+    ///   refuses one).
+    /// - The lowering errors, naming the edit: `path.invalid`,
+    ///   `argument.invalid` and the `value.*` codes.
+    /// - `edit.*` when the transaction is rejected
+    ///   ([`EditError::code`]), naming the edit for a rejected one; nothing
+    ///   changed.
+    pub fn apply(&mut self, target: u64, batch: &mut EditBatch) -> Result<EditReceipt, Error> {
+        let target = LayerId(target);
+        self.check_target(target)?;
+        let batch = core::mem::take(batch);
+        let lowered = {
+            let stage = self.document.stage().stage();
+            let scope = Scope {
+                store: self.document.store(),
+                view: self.document.view(),
+                target,
+                stack: stage.layer_stack(),
+            };
+            edit::lower(&batch, &scope)?
+        };
+        self.commit(target, &lowered.transaction, |op| {
+            let index = lowered.edit_of(op)?;
+            let path = batch.edits.get(index as usize).map(edit::EditInput::path)?;
+            Some((index, path))
+        })
+    }
+
+    /// Undoes the edits `receipt` holds: applies its guarded inverse, and
+    /// returns the receipt of the undo, whose inverse redoes them. The
+    /// receipt is spent: it undoes once.
+    ///
+    /// # Errors
+    ///
+    /// - `receipt.affinity` for a receipt of another stage,
+    ///   `receipt.released` for one already undone.
+    /// - `edit.stale` when a slot the edits wrote changed since
+    ///   ([`EditError::StaleValue`]): nothing changed, and the receipt
+    ///   still holds its inverse.
+    pub fn undo(&mut self, receipt: &mut EditReceipt) -> Result<EditReceipt, Error> {
+        if !Arc::ptr_eq(&receipt.stage, &self.identity) {
+            return Err(Error::new(
+                "receipt.affinity",
+                "the receipt belongs to another stage",
+            ));
+        }
+        let Some(inverse) = receipt.inverse.take() else {
+            return Err(Error::new(
+                "receipt.released",
+                "the receipt was already undone",
+            ));
+        };
+        match self.commit(receipt.target, &inverse, |_| None) {
+            Ok(redo) => Ok(redo),
+            Err(error) => {
+                receipt.inverse = Some(inverse);
+                Err(error)
+            }
+        }
+    }
+
+    /// The composed changes since the last call, one batch per
+    /// recomposition, oldest first, each
+    /// `[created, removed, resynced, changedInfoOnly]` prim paths as text
+    /// ([`Changes`]); an empty list when nothing changed, and `null` when
+    /// the history the cursor needs was evicted (more than the history
+    /// budget changed in one call), which the wrapper reports as a
+    /// resync of `/`. With `render` false the batches are consumed
+    /// unrendered and the list is empty.
+    #[must_use]
+    pub(crate) fn take_changes(&mut self, render: bool) -> Wire {
+        let store = self.document.store();
+        match self.document.stage().changes_since(&mut self.cursor) {
+            Ok(batches) => Wire::List(
+                batches
+                    .filter(|_| render)
+                    .map(|changes| changes_record(changes, store))
+                    .collect(),
+            ),
+            Err(_) => Wire::Null,
+        }
+    }
+
+    fn check_target(&self, target: LayerId) -> Result<(), Error> {
+        let identifier = self.document.identifier(target);
+        let named = |error: Error| Error {
+            identifier: identifier.map(ToString::to_string),
+            ..error
+        };
+        if self.document.store().layer(target).is_none() {
+            return Err(Error::new(
+                "layer.unknown",
+                "the stage has no layer with this id",
+            ));
+        }
+        if self.read_only(target, identifier) {
+            return Err(named(Error::new(
+                "layer.read_only",
+                "the layer cannot be saved, so it is not edited: open the stage with a session \
+                 layer (editLayer: \"session\") and edit that",
+            )));
+        }
+        if !self
+            .document
+            .stage()
+            .stage()
+            .layer_stack()
+            .contains(&target)
+        {
+            return Err(named(Error::new(
+                "layer.outside_stack",
+                "the layer is not in the stage's layer stack: the stage reaches it only \
+                 through an arc",
+            )));
+        }
+        Ok(())
+    }
+
+    /// Applies `txn` to `target`, as the receipt of what it did.
+    fn commit<'a>(
+        &mut self,
+        target: LayerId,
+        txn: &Transaction,
+        edit_of: impl Fn(usize) -> Option<(u32, &'a str)>,
+    ) -> Result<EditReceipt, Error> {
+        match self.document.apply(txn) {
+            Ok((applied, report)) => Ok(self.receipt(target, applied, &report, None)),
+            Err(ApplyError::Load { applied, error }) => {
+                Ok(self.receipt(target, *applied, &LoadReport::default(), Some(&error)))
+            }
+            Err(ApplyError::Edit(error)) => {
+                let store = self.document.store();
+                let mut out = Error::new(error.code(), error.display(store).to_string());
+                if let EditError::Rejected { op, .. } = &error
+                    && let Some((index, path)) = edit_of(*op)
+                {
+                    out = out.at_edit(index).at_path(path);
+                }
+                Err(out)
+            }
+        }
+    }
+
+    /// The receipt of an applied transaction. Its record is
+    /// `[target, changes, loaded, failures, wanted]`: the target layer's
+    /// id, the composed changes of the transaction
+    /// (`[created, removed, resynced, changedInfoOnly]`), the ids of the
+    /// layers loaded for it, each asset that failed to load as
+    /// `[asset, anchor, code, message]`, and the assets it asks for that
+    /// the host has not supplied yet, as [`Self::wanted`] rows.
+    fn receipt(
+        &self,
+        target: LayerId,
+        applied: layerstack::Applied,
+        report: &LoadReport,
+        failed: Option<&IoError>,
+    ) -> EditReceipt {
+        let store = self.document.store();
+        let Wire::List(mut result) = load_result(report) else {
+            unreachable!("a load result is a list")
+        };
+        let mut failures = match result.pop() {
+            Some(Wire::List(failures)) => failures,
+            _ => Vec::new(),
+        };
+        let loaded = result.pop().unwrap_or(Wire::List(Vec::new()));
+        if let Some(error) = failed {
+            failures.push(Wire::List(vec![
+                Wire::text(error.identifier.clone().unwrap_or_default()),
+                Wire::Null,
+                Wire::text(error.code()),
+                Wire::text(error.message.clone()),
+            ]));
+        }
+        let wanted = self
+            .document
+            .unavailable_assets()
+            .into_iter()
+            .filter(|need| {
+                applied.asset_requests.iter().any(|request| {
+                    request.anchor == need.anchor && request.asset_path == need.asset
+                })
+            })
+            .map(|need| {
+                Wire::List(vec![
+                    Wire::Text(need.identifier),
+                    Wire::Text(need.asset),
+                    Wire::UInt64(need.anchor.0),
+                    Wire::text(need_arc(need.arc)),
+                ])
+            })
+            .collect();
+        let record = Wire::List(vec![
+            Wire::UInt64(target.0),
+            changes_record(&applied.changes, store),
+            loaded,
+            Wire::List(failures),
+            Wire::List(wanted),
+        ]);
+        EditReceipt {
+            stage: Arc::clone(&self.identity),
+            target,
+            inverse: Some(applied.inverse),
+            record,
+        }
+    }
+
     fn existing_prim(&self, path: &str) -> Result<layerstack::Prim<'_>, Error> {
         check_prim_path(path)?;
         self.document.view().prim(path).ok_or_else(|| {
@@ -589,8 +869,31 @@ impl Stage {
 impl Stage {
     /// Opens a stage ([`Self::open`]).
     #[wasm_bindgen(js_name = open)]
-    pub fn js_open(identifier: &str, bytes: Vec<u8>, recover: bool) -> Result<Self, JsValue> {
-        Ok(Self::open(identifier, bytes, recover)?)
+    pub fn js_open(
+        identifier: &str,
+        bytes: Vec<u8>,
+        recover: bool,
+        session_layer: bool,
+    ) -> Result<Self, JsValue> {
+        Ok(Self::open(identifier, bytes, recover, session_layer)?)
+    }
+
+    /// Applies a batch of edits to a layer ([`Self::apply`]).
+    #[wasm_bindgen(js_name = apply)]
+    pub fn js_apply(&mut self, target: u64, batch: &mut EditBatch) -> Result<EditReceipt, JsValue> {
+        Ok(self.apply(target, batch)?)
+    }
+
+    /// Undoes a receipt's edits ([`Self::undo`]).
+    #[wasm_bindgen(js_name = undo)]
+    pub fn js_undo(&mut self, receipt: &mut EditReceipt) -> Result<EditReceipt, JsValue> {
+        Ok(self.undo(receipt)?)
+    }
+
+    /// The record `take_changes` builds, as documented in `stage.rs`.
+    #[wasm_bindgen(js_name = takeChanges)]
+    pub fn js_take_changes(&mut self, render: bool) -> JsValue {
+        self.take_changes(render).into()
     }
 
     /// The record `metadata` builds, as documented in `stage.rs`.
@@ -700,6 +1003,24 @@ impl Stage {
     pub fn js_supplied_bytes(&self) -> u64 {
         self.supplied_bytes()
     }
+}
+
+/// `[created, removed, resynced, changedInfoOnly]`: the prim paths of
+/// `changes` as text.
+fn changes_record(changes: &Changes, store: &InMemoryStore) -> Wire {
+    let paths = |ids: &[PathId]| {
+        Wire::List(
+            ids.iter()
+                .map(|&id| Wire::Text(store.paths.display(id, &store.tokens)))
+                .collect(),
+        )
+    };
+    Wire::List(vec![
+        paths(&changes.created),
+        paths(&changes.removed),
+        paths(&changes.resynced),
+        paths(&changes.changed_info_only),
+    ])
 }
 
 /// `[loaded, failures]` for a load's report.
@@ -841,7 +1162,7 @@ def "Ball" {
 
     #[test]
     fn opening_with_only_the_root_wants_its_dependencies() {
-        let mut stage = Stage::open("scene.usda", ROOT.as_bytes().to_vec(), false).unwrap();
+        let mut stage = Stage::open("scene.usda", ROOT.as_bytes().to_vec(), false, false).unwrap();
         assert_eq!(
             identifiers(&stage.wanted()),
             ["parts/ball.usda", "sub.usda"]
@@ -872,7 +1193,7 @@ def "Ball" {
 
     #[test]
     fn explain_names_the_inherit_that_contributes() {
-        let stage = Stage::open("scene.usda", ROOT.as_bytes().to_vec(), false).unwrap();
+        let stage = Stage::open("scene.usda", ROOT.as_bytes().to_vec(), false, false).unwrap();
         let why = stage.explain("/Ball.size", None).unwrap();
         let why = why.as_list().unwrap();
         assert_eq!(why[1].as_text(), Some("default"));
@@ -885,7 +1206,7 @@ def "Ball" {
 
     #[test]
     fn confirmed_absent_assets_are_missing_with_a_code() {
-        let mut stage = Stage::open("scene.usda", ROOT.as_bytes().to_vec(), false).unwrap();
+        let mut stage = Stage::open("scene.usda", ROOT.as_bytes().to_vec(), false, false).unwrap();
         stage
             .document_mut()
             .storage_mut()
@@ -916,7 +1237,7 @@ def "Ball" {
 
     #[test]
     fn bad_input_fails_with_codes_not_panics() {
-        let stage = Stage::open("scene.usda", ROOT.as_bytes().to_vec(), false).unwrap();
+        let stage = Stage::open("scene.usda", ROOT.as_bytes().to_vec(), false, false).unwrap();
         for path in ["Ball", "/Ball/", "//Ball", "/Ball.size"] {
             assert_eq!(stage.prim(path).unwrap_err().code, "path.invalid", "{path}");
         }
@@ -936,14 +1257,15 @@ def "Ball" {
             stage.layer_dirty(u64::MAX).unwrap_err().code,
             "layer.unknown"
         );
-        let rejected = Stage::open("bad.usda", b"#usda 1.0\ndef {".to_vec(), false).unwrap_err();
+        let rejected =
+            Stage::open("bad.usda", b"#usda 1.0\ndef {".to_vec(), false, false).unwrap_err();
         assert_eq!(rejected.code, "io.rejected");
         assert_eq!(rejected.identifier.as_deref(), Some("bad.usda"));
     }
 
     #[test]
     fn a_reference_in_a_supplied_layer_is_wanted_next() {
-        let mut stage = Stage::open("scene.usda", ROOT.as_bytes().to_vec(), false).unwrap();
+        let mut stage = Stage::open("scene.usda", ROOT.as_bytes().to_vec(), false, false).unwrap();
         let ball =
             "#usda 1.0\ndef \"Ball\" (\n    prepend references = @./trim.usda@</Trim>\n) {\n}\n";
         let trim = "#usda 1.0\ndef \"Trim\" {\n    token tag = \"trim\"\n}\n";
@@ -1002,7 +1324,7 @@ def "World" (
     }
 }
 "#;
-        let stage = Stage::open("scene.usda", root.as_bytes().to_vec(), false).unwrap();
+        let stage = Stage::open("scene.usda", root.as_bytes().to_vec(), false, false).unwrap();
         assert_eq!(
             stage.metadata("/World", "kind").unwrap(),
             Wire::List(vec![

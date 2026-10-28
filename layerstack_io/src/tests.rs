@@ -16,6 +16,35 @@ mod threaded_open;
 mod udim_tiles;
 
 #[test]
+fn io_error_kinds_have_distinct_stable_codes() {
+    let kinds = [
+        IoErrorKind::NotFound,
+        IoErrorKind::Unavailable,
+        IoErrorKind::Storage,
+        IoErrorKind::Rejected,
+        IoErrorKind::Unsupported,
+        IoErrorKind::Decode,
+        IoErrorKind::ReadOnly,
+        IoErrorKind::DirtyReload,
+        IoErrorKind::MissingLayer,
+        IoErrorKind::IdentityExhausted,
+        IoErrorKind::ForeignSchemaRegistry,
+    ];
+    let mut seen = BTreeSet::new();
+    for kind in kinds {
+        let code = kind.code();
+        let case = code.strip_prefix("io.").expect("the io family");
+        assert!(
+            !case.is_empty() && case.bytes().all(|b| b.is_ascii_lowercase() || b == b'_'),
+            "{code}"
+        );
+        assert!(seen.insert(code), "{code} repeats");
+    }
+    let error = IoError::new(IoErrorKind::Unavailable, "not yet").at("scene.usda");
+    assert_eq!(error.code(), "io.unavailable");
+}
+
+#[test]
 fn sparse_clip_preparation_covers_advanced_weaker_queries_and_set_reordering() {
     use layerstack::Time;
     for reorder in [false, true] {

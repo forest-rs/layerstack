@@ -124,6 +124,40 @@ impl CompositionError {
         }
     }
 
+    /// The stable code naming this error's kind, for hosts and bindings
+    /// that branch on it without matching the enum: `composition.` and the
+    /// variant's name in `snake_case`.
+    ///
+    /// | Variant | Code |
+    /// |---|---|
+    /// | [`Self::ForeignSchemaRegistry`] | `composition.foreign_schema_registry` |
+    /// | [`Self::SublayerCycle`] | `composition.sublayer_cycle` |
+    /// | [`Self::ArcCycle`] | `composition.arc_cycle` |
+    /// | [`Self::UnresolvedDefaultPrim`] | `composition.unresolved_default_prim` |
+    /// | [`Self::UnresolvedPrimPath`] | `composition.unresolved_prim_path` |
+    /// | [`Self::UnresolvedAsset`] | `composition.unresolved_asset` |
+    /// | [`Self::UnresolvedSublayer`] | `composition.unresolved_sublayer` |
+    /// | [`Self::InvalidAuthoredRelocation`] | `composition.invalid_authored_relocation` |
+    /// | [`Self::InvalidConflictingRelocation`] | `composition.invalid_conflicting_relocation` |
+    /// | [`Self::InvalidSameTargetRelocations`] | `composition.invalid_same_target_relocations` |
+    /// | [`Self::OpinionAtRelocationSource`] | `composition.opinion_at_relocation_source` |
+    /// | [`Self::ArcToProhibitedChild`] | `composition.arc_to_prohibited_child` |
+    /// | [`Self::InconsistentPropertyType`] | `composition.inconsistent_property_type` |
+    /// | [`Self::InvalidExternalTargetPath`] | `composition.invalid_external_target_path` |
+    /// | [`Self::InvalidInstanceTargetPath`] | `composition.invalid_instance_target_path` |
+    /// | [`Self::VariableExpressionError`] | `composition.variable_expression_error` |
+    /// | [`Self::InvalidSublayerAndOffsetCount`] | `composition.invalid_sublayer_and_offset_count` |
+    ///
+    /// Codes are part of the public contract: a released code keeps its
+    /// spelling and meaning, and a new variant brings a new code.
+    ///
+    /// Spec: AOUSD Core §10.6 (composition errors). OpenUSD names the same
+    /// kinds `PcpErrorType` (`PcpErrorType_ArcCycle`, ...).
+    #[must_use]
+    pub fn code(&self) -> &'static str {
+        CODES[usize::from(self.rank())]
+    }
+
     /// The position of this error's kind in the order the variants are
     /// declared.
     fn rank(&self) -> u8 {
@@ -159,6 +193,27 @@ impl CompositionError {
         with_store(self, store)
     }
 }
+
+/// [`CompositionError::code`] by [`CompositionError::rank`].
+const CODES: [&str; 17] = [
+    "composition.foreign_schema_registry",
+    "composition.sublayer_cycle",
+    "composition.arc_cycle",
+    "composition.unresolved_default_prim",
+    "composition.unresolved_prim_path",
+    "composition.unresolved_asset",
+    "composition.unresolved_sublayer",
+    "composition.invalid_authored_relocation",
+    "composition.invalid_conflicting_relocation",
+    "composition.invalid_same_target_relocations",
+    "composition.opinion_at_relocation_source",
+    "composition.arc_to_prohibited_child",
+    "composition.inconsistent_property_type",
+    "composition.invalid_external_target_path",
+    "composition.invalid_instance_target_path",
+    "composition.variable_expression_error",
+    "composition.invalid_sublayer_and_offset_count",
+];
 
 /// The arc as an error names it.
 fn arc_name(arc: ArcKind) -> &'static str {
@@ -917,6 +972,29 @@ mod tests {
 
     use super::*;
     use crate::{InMemoryStore, PropertyPath};
+
+    #[test]
+    fn codes_are_distinct_dotted_snake_case() {
+        let mut seen = alloc::collections::BTreeSet::new();
+        for code in CODES {
+            let (family, case) = code.split_once('.').expect("a family and a case");
+            assert_eq!(family, "composition", "{code}");
+            assert!(
+                !case.is_empty() && case.bytes().all(|b| b.is_ascii_lowercase() || b == b'_'),
+                "{code}"
+            );
+            assert!(seen.insert(code), "{code} repeats");
+        }
+        let error = CompositionError::UnresolvedSublayer(UnresolvedSublayer {
+            layer: LayerId(0),
+            asset: "./sub.usda".into(),
+        });
+        assert_eq!(error.code(), "composition.unresolved_sublayer");
+        assert_eq!(
+            CompositionError::ForeignSchemaRegistry.code(),
+            "composition.foreign_schema_registry"
+        );
+    }
 
     #[test]
     fn errors_name_their_paths_in_words() {

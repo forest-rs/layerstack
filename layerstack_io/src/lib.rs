@@ -159,6 +159,44 @@ pub enum IoErrorKind {
     /// other strings there and no prim would match its schemas.
     ForeignSchemaRegistry,
 }
+impl IoErrorKind {
+    /// The stable code naming this kind, for hosts and bindings that branch
+    /// on it without matching the enum: `io.` and the variant's name in
+    /// `snake_case`.
+    ///
+    /// | Variant | Code |
+    /// |---|---|
+    /// | [`Self::NotFound`] | `io.not_found` |
+    /// | [`Self::Unavailable`] | `io.unavailable` |
+    /// | [`Self::Storage`] | `io.storage` |
+    /// | [`Self::Rejected`] | `io.rejected` |
+    /// | [`Self::Unsupported`] | `io.unsupported` |
+    /// | [`Self::Decode`] | `io.decode` |
+    /// | [`Self::ReadOnly`] | `io.read_only` |
+    /// | [`Self::DirtyReload`] | `io.dirty_reload` |
+    /// | [`Self::MissingLayer`] | `io.missing_layer` |
+    /// | [`Self::IdentityExhausted`] | `io.identity_exhausted` |
+    /// | [`Self::ForeignSchemaRegistry`] | `io.foreign_schema_registry` |
+    ///
+    /// Codes are part of the public contract: a released code keeps its
+    /// spelling and meaning, and a new variant brings a new code.
+    #[must_use]
+    pub const fn code(self) -> &'static str {
+        match self {
+            Self::NotFound => "io.not_found",
+            Self::Unavailable => "io.unavailable",
+            Self::Storage => "io.storage",
+            Self::Rejected => "io.rejected",
+            Self::Unsupported => "io.unsupported",
+            Self::Decode => "io.decode",
+            Self::ReadOnly => "io.read_only",
+            Self::DirtyReload => "io.dirty_reload",
+            Self::MissingLayer => "io.missing_layer",
+            Self::IdentityExhausted => "io.identity_exhausted",
+            Self::ForeignSchemaRegistry => "io.foreign_schema_registry",
+        }
+    }
+}
 /// A storage or format failure, naming the source it is about.
 #[derive(Clone, Debug)]
 pub struct IoError {
@@ -188,6 +226,11 @@ impl IoError {
             diagnostics: Vec::new(),
             array_read_error: None,
         }
+    }
+    /// The stable code of the error's kind ([`IoErrorKind::code`]).
+    #[must_use]
+    pub const fn code(&self) -> &'static str {
+        self.kind.code()
     }
     /// This error, naming `identifier` as its source unless it names one
     /// already.

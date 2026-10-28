@@ -2932,3 +2932,36 @@ fn slots_name_their_fields_in_words() {
         assert_eq!(slot.display(&store).to_string(), text);
     }
 }
+
+#[test]
+fn edit_errors_have_stable_codes() {
+    let mut store = rocks();
+    let missing = spec(&mut store, "/Rock.missing");
+    let mut txn = Transaction::new();
+    txn.set_metadata(
+        Address::spec(ROCK, missing),
+        store.tokens.intern("doc"),
+        FieldValue::Value(Value::string("x")),
+    );
+    let error = txn.apply(&mut store).unwrap_err();
+    assert_eq!(error.code(), "edit.rejected.no_such_spec");
+    let stale = EditError::StaleGeneration {
+        layer: ROCK,
+        expected: 1,
+        found: 2,
+    };
+    assert_eq!(stale.code(), "edit.stale");
+    for (reason, code) in [
+        (Rejection::PseudoRoot, "edit.rejected.pseudo_root"),
+        (Rejection::NoSuchLayer(ROCK), "edit.rejected.no_such_layer"),
+        (
+            Rejection::NoSuchSublayer(0),
+            "edit.rejected.no_such_sublayer",
+        ),
+        (Rejection::CopyIntoSource, "edit.rejected.copy_into_source"),
+    ] {
+        assert_eq!(reason.code(), code);
+        let rejected = EditError::Rejected { op: 0, reason };
+        assert_eq!(rejected.code(), code);
+    }
+}

@@ -24,6 +24,17 @@ pub enum ApplyError {
     },
 }
 impl ApplyError {
+    /// The stable code of the failure: the rejected edit's
+    /// ([`EditError::code`], `edit.`...) or the failed load's
+    /// ([`IoError::code`], `io.`...). A load failure's code does not say
+    /// the edit was applied; [`Self::Load`] does.
+    #[must_use]
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::Edit(error) => error.code(),
+            Self::Load { error, .. } => error.code(),
+        }
+    }
     /// The error in words, a rejected edit's paths and names written as
     /// text with `store`, the document's store ([`EditError::display`]).
     #[must_use]

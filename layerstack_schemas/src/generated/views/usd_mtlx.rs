@@ -20,8 +20,6 @@
 
 use core::ops::Deref;
 
-use layerstack::PathId;
-
 use crate::{ApplySchemaError, CannotEdit, PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "MaterialXConfigAPI is an API schema that provides an interface for storing information about the MaterialX environment."]
 #[doc = ""]
@@ -67,8 +65,9 @@ impl<'a> MaterialXConfigApi<'a> {
         Self { base: prim }
     }
 
-    /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
-    /// edit's target) if the prim may have it.
+    /// Applies the schema to the prim at `path` (text, `"/World/Prim"`,
+    /// or an id) as a `prepend apiSchemas` entry in the edit's target, if
+    /// the prim may have it.
     ///
     /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.
     ///
@@ -80,7 +79,7 @@ impl<'a> MaterialXConfigApi<'a> {
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
-        path: PathId,
+        path: impl ::layerstack::PrimPathArg,
     ) -> Result<MaterialXConfigApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(MaterialXConfigApiEdit::from_prim)

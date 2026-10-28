@@ -2505,7 +2505,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         );
     }
     for prim in ["/Fallback_BasisCurves", "/Authored_BasisCurves"] {
-        let _ = usd::Typed::new(scene, h.path(prim)).expect("a Typed at the prim");
+        let _ = usd::Typed::get(scene, h.path(prim)).expect("a Typed at the prim");
     }
     for prim in ["/Fallback_BackPlateAPI", "/Authored_BackPlateAPI"] {
         let v = usd_geom::BackPlateApi::get(scene, h.path(prim), "a")
@@ -2678,7 +2678,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         );
     }
     for prim in ["/Fallback_BasisCurves", "/Authored_BasisCurves"] {
-        let v = usd_geom::BasisCurves::new(scene, h.path(prim)).expect("a BasisCurves at the prim");
+        let v = usd_geom::BasisCurves::get(scene, h.path(prim)).expect("a BasisCurves at the prim");
         r.value(
             prim,
             "basis",
@@ -2704,12 +2704,12 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         r.allowed(prim, "wrap", usd_geom::BasisCurvesWrap::TOKENS);
     }
     for prim in ["/Fallback_BasisCurves", "/Authored_BasisCurves"] {
-        let v = usd_geom::Boundable::new(scene, h.path(prim)).expect("a Boundable at the prim");
+        let v = usd_geom::Boundable::get(scene, h.path(prim)).expect("a Boundable at the prim");
         r.value(prim, "extent", When::Default, v.extent());
         r.value(prim, "extent", When::Sample, v.extent_at(Time::held(2.0)));
     }
     for prim in ["/Fallback_Camera", "/Authored_Camera"] {
-        let v = usd_geom::Camera::new(scene, h.path(prim)).expect("a Camera at the prim");
+        let v = usd_geom::Camera::get(scene, h.path(prim)).expect("a Camera at the prim");
         r.value(prim, "clippingPlanes", When::Default, v.clipping_planes());
         r.value(
             prim,
@@ -2870,7 +2870,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         );
     }
     for prim in ["/Fallback_Capsule", "/Authored_Capsule"] {
-        let v = usd_geom::Capsule::new(scene, h.path(prim)).expect("a Capsule at the prim");
+        let v = usd_geom::Capsule::get(scene, h.path(prim)).expect("a Capsule at the prim");
         r.value(
             prim,
             "axis",
@@ -2884,7 +2884,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         r.value(prim, "radius", When::Sample, v.radius_at(Time::held(2.0)));
     }
     for prim in ["/Fallback_Capsule_1", "/Authored_Capsule_1"] {
-        let v = usd_geom::Capsule1::new(scene, h.path(prim)).expect("a Capsule_1 at the prim");
+        let v = usd_geom::Capsule1::get(scene, h.path(prim)).expect("a Capsule_1 at the prim");
         r.value(
             prim,
             "axis",
@@ -2910,7 +2910,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         );
     }
     for prim in ["/Fallback_Cone", "/Authored_Cone"] {
-        let v = usd_geom::Cone::new(scene, h.path(prim)).expect("a Cone at the prim");
+        let v = usd_geom::Cone::get(scene, h.path(prim)).expect("a Cone at the prim");
         r.value(
             prim,
             "axis",
@@ -2924,12 +2924,12 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         r.value(prim, "radius", When::Sample, v.radius_at(Time::held(2.0)));
     }
     for prim in ["/Fallback_Cube", "/Authored_Cube"] {
-        let v = usd_geom::Cube::new(scene, h.path(prim)).expect("a Cube at the prim");
+        let v = usd_geom::Cube::get(scene, h.path(prim)).expect("a Cube at the prim");
         r.value(prim, "size", When::Default, v.size());
         r.value(prim, "size", When::Sample, v.size_at(Time::held(2.0)));
     }
     for prim in ["/Fallback_BasisCurves", "/Authored_BasisCurves"] {
-        let v = usd_geom::Curves::new(scene, h.path(prim)).expect("a Curves at the prim");
+        let v = usd_geom::Curves::get(scene, h.path(prim)).expect("a Curves at the prim");
         r.value(
             prim,
             "curveVertexCounts",
@@ -2946,7 +2946,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         r.value(prim, "widths", When::Sample, v.widths_at(Time::held(2.0)));
     }
     for prim in ["/Fallback_Cylinder", "/Authored_Cylinder"] {
-        let v = usd_geom::Cylinder::new(scene, h.path(prim)).expect("a Cylinder at the prim");
+        let v = usd_geom::Cylinder::get(scene, h.path(prim)).expect("a Cylinder at the prim");
         r.value(
             prim,
             "axis",
@@ -2960,7 +2960,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         r.value(prim, "radius", When::Sample, v.radius_at(Time::held(2.0)));
     }
     for prim in ["/Fallback_Cylinder_1", "/Authored_Cylinder_1"] {
-        let v = usd_geom::Cylinder1::new(scene, h.path(prim)).expect("a Cylinder_1 at the prim");
+        let v = usd_geom::Cylinder1::get(scene, h.path(prim)).expect("a Cylinder_1 at the prim");
         r.value(
             prim,
             "axis",
@@ -3113,7 +3113,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         );
     }
     for prim in ["/Fallback_GeomSubset", "/Authored_GeomSubset"] {
-        let v = usd_geom::GeomSubset::new(scene, h.path(prim)).expect("a GeomSubset at the prim");
+        let v = usd_geom::GeomSubset::get(scene, h.path(prim)).expect("a GeomSubset at the prim");
         r.value(
             prim,
             "elementType",
@@ -3128,7 +3128,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         r.value(prim, "indices", When::Sample, v.indices_at(Time::held(2.0)));
     }
     for prim in ["/Fallback_BasisCurves", "/Authored_BasisCurves"] {
-        let v = usd_geom::Gprim::new(scene, h.path(prim)).expect("a Gprim at the prim");
+        let v = usd_geom::Gprim::get(scene, h.path(prim)).expect("a Gprim at the prim");
         r.value(prim, "doubleSided", When::Default, v.double_sided());
         r.value(
             prim,
@@ -3166,7 +3166,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     }
     for prim in ["/Fallback_HermiteCurves", "/Authored_HermiteCurves"] {
         let v =
-            usd_geom::HermiteCurves::new(scene, h.path(prim)).expect("a HermiteCurves at the prim");
+            usd_geom::HermiteCurves::get(scene, h.path(prim)).expect("a HermiteCurves at the prim");
         r.value(prim, "tangents", When::Default, v.tangents());
         r.value(
             prim,
@@ -3176,7 +3176,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         );
     }
     for prim in ["/Fallback_BasisCurves", "/Authored_BasisCurves"] {
-        let v = usd_geom::Imageable::new(scene, h.path(prim)).expect("a Imageable at the prim");
+        let v = usd_geom::Imageable::get(scene, h.path(prim)).expect("a Imageable at the prim");
         r.targets(prim, "proxyPrim", &v.proxy_prim());
         r.value(
             prim,
@@ -3204,7 +3204,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         );
     }
     for prim in ["/Fallback_Mesh", "/Authored_Mesh"] {
-        let v = usd_geom::Mesh::new(scene, h.path(prim)).expect("a Mesh at the prim");
+        let v = usd_geom::Mesh::get(scene, h.path(prim)).expect("a Mesh at the prim");
         r.value(prim, "cornerIndices", When::Default, v.corner_indices());
         r.value(
             prim,
@@ -3398,7 +3398,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         );
     }
     for prim in ["/Fallback_NurbsCurves", "/Authored_NurbsCurves"] {
-        let v = usd_geom::NurbsCurves::new(scene, h.path(prim)).expect("a NurbsCurves at the prim");
+        let v = usd_geom::NurbsCurves::get(scene, h.path(prim)).expect("a NurbsCurves at the prim");
         r.value(prim, "knots", When::Default, v.knots());
         r.value(prim, "knots", When::Sample, v.knots_at(Time::held(2.0)));
         r.value(prim, "order", When::Default, v.order());
@@ -3414,7 +3414,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         r.value(prim, "ranges", When::Sample, v.ranges_at(Time::held(2.0)));
     }
     for prim in ["/Fallback_NurbsPatch", "/Authored_NurbsPatch"] {
-        let v = usd_geom::NurbsPatch::new(scene, h.path(prim)).expect("a NurbsPatch at the prim");
+        let v = usd_geom::NurbsPatch::get(scene, h.path(prim)).expect("a NurbsPatch at the prim");
         r.value(prim, "pointWeights", When::Default, v.point_weights());
         r.value(
             prim,
@@ -3531,7 +3531,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         );
     }
     for prim in ["/Fallback_Plane", "/Authored_Plane"] {
-        let v = usd_geom::Plane::new(scene, h.path(prim)).expect("a Plane at the prim");
+        let v = usd_geom::Plane::get(scene, h.path(prim)).expect("a Plane at the prim");
         r.value(
             prim,
             "axis",
@@ -3545,7 +3545,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         r.value(prim, "width", When::Sample, v.width_at(Time::held(2.0)));
     }
     for prim in ["/Fallback_BasisCurves", "/Authored_BasisCurves"] {
-        let v = usd_geom::PointBased::new(scene, h.path(prim)).expect("a PointBased at the prim");
+        let v = usd_geom::PointBased::get(scene, h.path(prim)).expect("a PointBased at the prim");
         r.value(prim, "accelerations", When::Default, v.accelerations());
         r.value(
             prim,
@@ -3566,7 +3566,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         );
     }
     for prim in ["/Fallback_PointInstancer", "/Authored_PointInstancer"] {
-        let v = usd_geom::PointInstancer::new(scene, h.path(prim))
+        let v = usd_geom::PointInstancer::get(scene, h.path(prim))
             .expect("a PointInstancer at the prim");
         r.value(prim, "accelerations", When::Default, v.accelerations());
         r.value(
@@ -3636,22 +3636,22 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         );
     }
     for prim in ["/Fallback_Points", "/Authored_Points"] {
-        let v = usd_geom::Points::new(scene, h.path(prim)).expect("a Points at the prim");
+        let v = usd_geom::Points::get(scene, h.path(prim)).expect("a Points at the prim");
         r.value(prim, "ids", When::Default, v.ids());
         r.value(prim, "ids", When::Sample, v.ids_at(Time::held(2.0)));
         r.value(prim, "widths", When::Default, v.widths());
         r.value(prim, "widths", When::Sample, v.widths_at(Time::held(2.0)));
     }
     for prim in ["/Fallback_Scope", "/Authored_Scope"] {
-        let _ = usd_geom::Scope::new(scene, h.path(prim)).expect("a Scope at the prim");
+        let _ = usd_geom::Scope::get(scene, h.path(prim)).expect("a Scope at the prim");
     }
     for prim in ["/Fallback_Sphere", "/Authored_Sphere"] {
-        let v = usd_geom::Sphere::new(scene, h.path(prim)).expect("a Sphere at the prim");
+        let v = usd_geom::Sphere::get(scene, h.path(prim)).expect("a Sphere at the prim");
         r.value(prim, "radius", When::Default, v.radius());
         r.value(prim, "radius", When::Sample, v.radius_at(Time::held(2.0)));
     }
     for prim in ["/Fallback_TetMesh", "/Authored_TetMesh"] {
-        let v = usd_geom::TetMesh::new(scene, h.path(prim)).expect("a TetMesh at the prim");
+        let v = usd_geom::TetMesh::get(scene, h.path(prim)).expect("a TetMesh at the prim");
         r.value(
             prim,
             "surfaceFaceVertexIndices",
@@ -3721,10 +3721,10 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         );
     }
     for prim in ["/Fallback_Xform", "/Authored_Xform"] {
-        let _ = usd_geom::Xform::new(scene, h.path(prim)).expect("a Xform at the prim");
+        let _ = usd_geom::Xform::get(scene, h.path(prim)).expect("a Xform at the prim");
     }
     for prim in ["/Fallback_BasisCurves", "/Authored_BasisCurves"] {
-        let v = usd_geom::Xformable::new(scene, h.path(prim)).expect("a Xformable at the prim");
+        let v = usd_geom::Xformable::get(scene, h.path(prim)).expect("a Xformable at the prim");
         r.value(prim, "xformOpOrder", When::Default, v.xform_op_order());
     }
     for prim in ["/Fallback_CoordSysAPI", "/Authored_CoordSysAPI"] {
@@ -3739,7 +3739,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         r.targets(prim, "coordSys:a:binding", &v.binding());
     }
     for prim in ["/Fallback_Material", "/Authored_Material"] {
-        let v = usd_shade::Material::new(scene, h.path(prim)).expect("a Material at the prim");
+        let v = usd_shade::Material::get(scene, h.path(prim)).expect("a Material at the prim");
         r.value(
             prim,
             "outputs:displacement",
@@ -3792,20 +3792,20 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         );
     }
     for prim in ["/Fallback_NodeGraph", "/Authored_NodeGraph"] {
-        let _ = usd_shade::NodeGraph::new(scene, h.path(prim)).expect("a NodeGraph at the prim");
+        let _ = usd_shade::NodeGraph::get(scene, h.path(prim)).expect("a NodeGraph at the prim");
     }
     for prim in ["/Fallback_Shader", "/Authored_Shader"] {
-        let v = usd_shade::Shader::new(scene, h.path(prim)).expect("a Shader at the prim");
+        let v = usd_shade::Shader::get(scene, h.path(prim)).expect("a Shader at the prim");
         let _ = v.node_def_api();
     }
     for prim in ["/Fallback_CylinderLight", "/Authored_CylinderLight"] {
-        let v = usd_lux::BoundableLightBase::new(scene, h.path(prim))
+        let v = usd_lux::BoundableLightBase::get(scene, h.path(prim))
             .expect("a BoundableLightBase at the prim");
         let _ = v.light_api();
     }
     for prim in ["/Fallback_CylinderLight", "/Authored_CylinderLight"] {
         let v =
-            usd_lux::CylinderLight::new(scene, h.path(prim)).expect("a CylinderLight at the prim");
+            usd_lux::CylinderLight::get(scene, h.path(prim)).expect("a CylinderLight at the prim");
         r.value(prim, "inputs:length", When::Default, v.length());
         r.value(
             prim,
@@ -3829,7 +3829,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         );
     }
     for prim in ["/Fallback_DiskLight", "/Authored_DiskLight"] {
-        let v = usd_lux::DiskLight::new(scene, h.path(prim)).expect("a DiskLight at the prim");
+        let v = usd_lux::DiskLight::get(scene, h.path(prim)).expect("a DiskLight at the prim");
         r.value(prim, "inputs:radius", When::Default, v.radius());
         r.value(
             prim,
@@ -3840,7 +3840,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     }
     for prim in ["/Fallback_DistantLight", "/Authored_DistantLight"] {
         let v =
-            usd_lux::DistantLight::new(scene, h.path(prim)).expect("a DistantLight at the prim");
+            usd_lux::DistantLight::get(scene, h.path(prim)).expect("a DistantLight at the prim");
         r.value(prim, "inputs:angle", When::Default, v.angle());
         r.value(
             prim,
@@ -3850,7 +3850,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         );
     }
     for prim in ["/Fallback_DomeLight", "/Authored_DomeLight"] {
-        let v = usd_lux::DomeLight::new(scene, h.path(prim)).expect("a DomeLight at the prim");
+        let v = usd_lux::DomeLight::get(scene, h.path(prim)).expect("a DomeLight at the prim");
         r.value(prim, "guideRadius", When::Default, v.guide_radius());
         r.value(
             prim,
@@ -3889,7 +3889,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         r.targets(prim, "portals", &v.portals());
     }
     for prim in ["/Fallback_DomeLight_1", "/Authored_DomeLight_1"] {
-        let v = usd_lux::DomeLight1::new(scene, h.path(prim)).expect("a DomeLight_1 at the prim");
+        let v = usd_lux::DomeLight1::get(scene, h.path(prim)).expect("a DomeLight_1 at the prim");
         r.value(prim, "guideRadius", When::Default, v.guide_radius());
         r.value(
             prim,
@@ -3938,7 +3938,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     }
     for prim in ["/Fallback_GeometryLight", "/Authored_GeometryLight"] {
         let v =
-            usd_lux::GeometryLight::new(scene, h.path(prim)).expect("a GeometryLight at the prim");
+            usd_lux::GeometryLight::get(scene, h.path(prim)).expect("a GeometryLight at the prim");
         r.targets(prim, "geometry", &v.geometry());
     }
     for prim in ["/Fallback_LightAPI", "/Authored_LightAPI"] {
@@ -4026,7 +4026,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         r.value(prim, "light:shaderId", When::Default, v.shader_id());
     }
     for prim in ["/Fallback_LightFilter", "/Authored_LightFilter"] {
-        let v = usd_lux::LightFilter::new(scene, h.path(prim)).expect("a LightFilter at the prim");
+        let v = usd_lux::LightFilter::get(scene, h.path(prim)).expect("a LightFilter at the prim");
         r.value(prim, "lightFilter:shaderId", When::Default, v.shader_id());
     }
     for prim in ["/Fallback_LightListAPI", "/Authored_LightListAPI"] {
@@ -4085,22 +4085,22 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             usd_lux::MeshLightApi::get(scene, h.path(prim)).expect("a MeshLightAPI at the prim");
     }
     for prim in ["/Fallback_DistantLight", "/Authored_DistantLight"] {
-        let v = usd_lux::NonboundableLightBase::new(scene, h.path(prim))
+        let v = usd_lux::NonboundableLightBase::get(scene, h.path(prim))
             .expect("a NonboundableLightBase at the prim");
         let _ = v.light_api();
     }
     for prim in ["/Fallback_PluginLight", "/Authored_PluginLight"] {
-        let v = usd_lux::PluginLight::new(scene, h.path(prim)).expect("a PluginLight at the prim");
+        let v = usd_lux::PluginLight::get(scene, h.path(prim)).expect("a PluginLight at the prim");
         let _ = v.node_def_api();
         let _ = v.light_api();
     }
     for prim in ["/Fallback_PluginLightFilter", "/Authored_PluginLightFilter"] {
-        let v = usd_lux::PluginLightFilter::new(scene, h.path(prim))
+        let v = usd_lux::PluginLightFilter::get(scene, h.path(prim))
             .expect("a PluginLightFilter at the prim");
         let _ = v.node_def_api();
     }
     for prim in ["/Fallback_PortalLight", "/Authored_PortalLight"] {
-        let v = usd_lux::PortalLight::new(scene, h.path(prim)).expect("a PortalLight at the prim");
+        let v = usd_lux::PortalLight::get(scene, h.path(prim)).expect("a PortalLight at the prim");
         r.value(prim, "inputs:height", When::Default, v.height());
         r.value(
             prim,
@@ -4117,7 +4117,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         );
     }
     for prim in ["/Fallback_RectLight", "/Authored_RectLight"] {
-        let v = usd_lux::RectLight::new(scene, h.path(prim)).expect("a RectLight at the prim");
+        let v = usd_lux::RectLight::get(scene, h.path(prim)).expect("a RectLight at the prim");
         r.value(prim, "inputs:height", When::Default, v.height());
         r.value(
             prim,
@@ -4286,7 +4286,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         );
     }
     for prim in ["/Fallback_SphereLight", "/Authored_SphereLight"] {
-        let v = usd_lux::SphereLight::new(scene, h.path(prim)).expect("a SphereLight at the prim");
+        let v = usd_lux::SphereLight::get(scene, h.path(prim)).expect("a SphereLight at the prim");
         r.value(prim, "inputs:radius", When::Default, v.radius());
         r.value(
             prim,
@@ -4307,14 +4307,14 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
             .expect("a VolumeLightAPI at the prim");
     }
     for prim in ["/Fallback_BlendShape", "/Authored_BlendShape"] {
-        let v = usd_skel::BlendShape::new(scene, h.path(prim)).expect("a BlendShape at the prim");
+        let v = usd_skel::BlendShape::get(scene, h.path(prim)).expect("a BlendShape at the prim");
         r.value(prim, "normalOffsets", When::Default, v.normal_offsets());
         r.value(prim, "offsets", When::Default, v.offsets());
         r.value(prim, "pointIndices", When::Default, v.point_indices());
     }
     for prim in ["/Fallback_SkelAnimation", "/Authored_SkelAnimation"] {
         let v =
-            usd_skel::SkelAnimation::new(scene, h.path(prim)).expect("a SkelAnimation at the prim");
+            usd_skel::SkelAnimation::get(scene, h.path(prim)).expect("a SkelAnimation at the prim");
         r.value(prim, "blendShapes", When::Default, v.blend_shapes());
         r.value(
             prim,
@@ -4405,10 +4405,10 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         r.targets(prim, "skel:skeleton", &v.skeleton());
     }
     for prim in ["/Fallback_SkelRoot", "/Authored_SkelRoot"] {
-        let _ = usd_skel::SkelRoot::new(scene, h.path(prim)).expect("a SkelRoot at the prim");
+        let _ = usd_skel::SkelRoot::get(scene, h.path(prim)).expect("a SkelRoot at the prim");
     }
     for prim in ["/Fallback_Skeleton", "/Authored_Skeleton"] {
-        let v = usd_skel::Skeleton::new(scene, h.path(prim)).expect("a Skeleton at the prim");
+        let v = usd_skel::Skeleton::get(scene, h.path(prim)).expect("a Skeleton at the prim");
         r.value(prim, "bindTransforms", When::Default, v.bind_transforms());
         r.value(prim, "jointNames", When::Default, v.joint_names());
         r.value(prim, "joints", When::Default, v.joints());
@@ -4445,7 +4445,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         "/Fallback_PhysicsCollisionGroup",
         "/Authored_PhysicsCollisionGroup",
     ] {
-        let v = usd_physics::PhysicsCollisionGroup::new(scene, h.path(prim))
+        let v = usd_physics::PhysicsCollisionGroup::get(scene, h.path(prim))
             .expect("a PhysicsCollisionGroup at the prim");
         r.targets(prim, "physics:filteredGroups", &v.filtered_groups());
         r.value(
@@ -4477,7 +4477,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         "/Fallback_PhysicsDistanceJoint",
         "/Authored_PhysicsDistanceJoint",
     ] {
-        let v = usd_physics::PhysicsDistanceJoint::new(scene, h.path(prim))
+        let v = usd_physics::PhysicsDistanceJoint::get(scene, h.path(prim))
             .expect("a PhysicsDistanceJoint at the prim");
         r.value(prim, "physics:maxDistance", When::Default, v.max_distance());
         r.value(
@@ -4581,11 +4581,11 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         r.targets(prim, "physics:filteredPairs", &v.filtered_pairs());
     }
     for prim in ["/Fallback_PhysicsFixedJoint", "/Authored_PhysicsFixedJoint"] {
-        let _ = usd_physics::PhysicsFixedJoint::new(scene, h.path(prim))
+        let _ = usd_physics::PhysicsFixedJoint::get(scene, h.path(prim))
             .expect("a PhysicsFixedJoint at the prim");
     }
     for prim in ["/Fallback_PhysicsJoint", "/Authored_PhysicsJoint"] {
-        let v = usd_physics::PhysicsJoint::new(scene, h.path(prim))
+        let v = usd_physics::PhysicsJoint::get(scene, h.path(prim))
             .expect("a PhysicsJoint at the prim");
         r.targets(prim, "physics:body0", &v.body0());
         r.targets(prim, "physics:body1", &v.body1());
@@ -4809,7 +4809,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         "/Fallback_PhysicsPrismaticJoint",
         "/Authored_PhysicsPrismaticJoint",
     ] {
-        let v = usd_physics::PhysicsPrismaticJoint::new(scene, h.path(prim))
+        let v = usd_physics::PhysicsPrismaticJoint::get(scene, h.path(prim))
             .expect("a PhysicsPrismaticJoint at the prim");
         r.value(
             prim,
@@ -4843,7 +4843,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         "/Fallback_PhysicsRevoluteJoint",
         "/Authored_PhysicsRevoluteJoint",
     ] {
-        let v = usd_physics::PhysicsRevoluteJoint::new(scene, h.path(prim))
+        let v = usd_physics::PhysicsRevoluteJoint::get(scene, h.path(prim))
             .expect("a PhysicsRevoluteJoint at the prim");
         r.value(
             prim,
@@ -4931,7 +4931,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         );
     }
     for prim in ["/Fallback_PhysicsScene", "/Authored_PhysicsScene"] {
-        let v = usd_physics::PhysicsScene::new(scene, h.path(prim))
+        let v = usd_physics::PhysicsScene::get(scene, h.path(prim))
             .expect("a PhysicsScene at the prim");
         r.value(
             prim,
@@ -4962,7 +4962,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         "/Fallback_PhysicsSphericalJoint",
         "/Authored_PhysicsSphericalJoint",
     ] {
-        let v = usd_physics::PhysicsSphericalJoint::new(scene, h.path(prim))
+        let v = usd_physics::PhysicsSphericalJoint::get(scene, h.path(prim))
             .expect("a PhysicsSphericalJoint at the prim");
         r.value(
             prim,
@@ -5004,7 +5004,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     }
     for prim in ["/Fallback_Field3DAsset", "/Authored_Field3DAsset"] {
         let v =
-            usd_vol::Field3DAsset::new(scene, h.path(prim)).expect("a Field3DAsset at the prim");
+            usd_vol::Field3DAsset::get(scene, h.path(prim)).expect("a Field3DAsset at the prim");
         r.value(prim, "fieldPurpose", When::Default, v.field_purpose());
         r.value(
             prim,
@@ -5014,14 +5014,14 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         );
     }
     for prim in ["/Fallback_Field3DAsset", "/Authored_Field3DAsset"] {
-        let _ = usd_vol::FieldAsset::new(scene, h.path(prim)).expect("a FieldAsset at the prim");
+        let _ = usd_vol::FieldAsset::get(scene, h.path(prim)).expect("a FieldAsset at the prim");
     }
     for prim in ["/Fallback_Field3DAsset", "/Authored_Field3DAsset"] {
-        let _ = usd_vol::FieldBase::new(scene, h.path(prim)).expect("a FieldBase at the prim");
+        let _ = usd_vol::FieldBase::get(scene, h.path(prim)).expect("a FieldBase at the prim");
     }
     for prim in ["/Fallback_OpenVDBAsset", "/Authored_OpenVDBAsset"] {
         let v =
-            usd_vol::OpenVDBAsset::new(scene, h.path(prim)).expect("a OpenVDBAsset at the prim");
+            usd_vol::OpenVDBAsset::get(scene, h.path(prim)).expect("a OpenVDBAsset at the prim");
         r.value(
             prim,
             "fieldClass",
@@ -5042,13 +5042,13 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     }
     for prim in ["/Fallback_ParticleField", "/Authored_ParticleField"] {
         let _ =
-            usd_vol::ParticleField::new(scene, h.path(prim)).expect("a ParticleField at the prim");
+            usd_vol::ParticleField::get(scene, h.path(prim)).expect("a ParticleField at the prim");
     }
     for prim in [
         "/Fallback_ParticleField3DGaussianSplat",
         "/Authored_ParticleField3DGaussianSplat",
     ] {
-        let v = usd_vol::ParticleField3DGaussianSplat::new(scene, h.path(prim))
+        let v = usd_vol::ParticleField3DGaussianSplat::get(scene, h.path(prim))
             .expect("a ParticleField3DGaussianSplat at the prim");
         let _ = v.particle_field_position_attribute_api();
         let _ = v.particle_field_orientation_attribute_api();
@@ -5237,10 +5237,10 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         );
     }
     for prim in ["/Fallback_Volume", "/Authored_Volume"] {
-        let _ = usd_vol::Volume::new(scene, h.path(prim)).expect("a Volume at the prim");
+        let _ = usd_vol::Volume::get(scene, h.path(prim)).expect("a Volume at the prim");
     }
     for prim in ["/Fallback_Field3DAsset", "/Authored_Field3DAsset"] {
-        let v = usd_vol::VolumeFieldAsset::new(scene, h.path(prim))
+        let v = usd_vol::VolumeFieldAsset::get(scene, h.path(prim))
             .expect("a VolumeFieldAsset at the prim");
         r.value(prim, "fieldDataType", When::Default, v.field_data_type());
         r.value(
@@ -5293,11 +5293,11 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         );
     }
     for prim in ["/Fallback_Field3DAsset", "/Authored_Field3DAsset"] {
-        let _ = usd_vol::VolumeFieldBase::new(scene, h.path(prim))
+        let _ = usd_vol::VolumeFieldBase::get(scene, h.path(prim))
             .expect("a VolumeFieldBase at the prim");
     }
     for prim in ["/Fallback_RenderPass", "/Authored_RenderPass"] {
-        let v = usd_render::RenderPass::new(scene, h.path(prim)).expect("a RenderPass at the prim");
+        let v = usd_render::RenderPass::get(scene, h.path(prim)).expect("a RenderPass at the prim");
         r.value(prim, "command", When::Default, v.command());
         r.value(prim, "fileName", When::Default, v.file_name());
         r.targets(prim, "inputPasses", &v.input_passes());
@@ -5305,7 +5305,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         r.targets(prim, "renderSource", &v.render_source());
     }
     for prim in ["/Fallback_RenderProduct", "/Authored_RenderProduct"] {
-        let v = usd_render::RenderProduct::new(scene, h.path(prim))
+        let v = usd_render::RenderProduct::get(scene, h.path(prim))
             .expect("a RenderProduct at the prim");
         r.targets(prim, "orderedVars", &v.ordered_vars());
         r.value(prim, "productName", When::Default, v.product_name());
@@ -5330,7 +5330,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         );
     }
     for prim in ["/Fallback_RenderSettings", "/Authored_RenderSettings"] {
-        let v = usd_render::RenderSettings::new(scene, h.path(prim))
+        let v = usd_render::RenderSettings::get(scene, h.path(prim))
             .expect("a RenderSettings at the prim");
         r.value(
             prim,
@@ -5353,7 +5353,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         );
     }
     for prim in ["/Fallback_RenderProduct", "/Authored_RenderProduct"] {
-        let v = usd_render::RenderSettingsBase::new(scene, h.path(prim))
+        let v = usd_render::RenderSettingsBase::get(scene, h.path(prim))
             .expect("a RenderSettingsBase at the prim");
         r.value(
             prim,
@@ -5397,7 +5397,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         r.value(prim, "resolution", When::Default, v.resolution());
     }
     for prim in ["/Fallback_RenderVar", "/Authored_RenderVar"] {
-        let v = usd_render::RenderVar::new(scene, h.path(prim)).expect("a RenderVar at the prim");
+        let v = usd_render::RenderVar::get(scene, h.path(prim)).expect("a RenderVar at the prim");
         r.value(prim, "dataType", When::Default, v.data_type());
         r.value(prim, "sourceName", When::Default, v.source_name());
         r.value(
@@ -5414,7 +5414,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         "/Fallback_LODDistanceHeuristic",
         "/Authored_LODDistanceHeuristic",
     ] {
-        let v = usd_lod::LODDistanceHeuristic::new(scene, h.path(prim))
+        let v = usd_lod::LODDistanceHeuristic::get(scene, h.path(prim))
             .expect("a LODDistanceHeuristic at the prim");
         r.value(prim, "blendThresholds", When::Default, v.blend_thresholds());
         r.targets(prim, "boundingVolume", &v.bounding_volume());
@@ -5427,7 +5427,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         "/Authored_LODDistanceHeuristic",
     ] {
         let v =
-            usd_lod::LODHeuristic::new(scene, h.path(prim)).expect("a LODHeuristic at the prim");
+            usd_lod::LODHeuristic::get(scene, h.path(prim)).expect("a LODHeuristic at the prim");
         r.value(prim, "lod:domain", When::Default, v.lod_domain());
     }
     for prim in ["/Fallback_LODOverrideAPI", "/Authored_LODOverrideAPI"] {
@@ -5487,7 +5487,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         "/Fallback_LODScreenSizeHeuristic",
         "/Authored_LODScreenSizeHeuristic",
     ] {
-        let v = usd_lod::LODScreenSizeHeuristic::new(scene, h.path(prim))
+        let v = usd_lod::LODScreenSizeHeuristic::get(scene, h.path(prim))
             .expect("a LODScreenSizeHeuristic at the prim");
         r.value(prim, "blendThresholds", When::Default, v.blend_thresholds());
         r.targets(prim, "boundingVolume", &v.bounding_volume());
@@ -5559,7 +5559,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         );
     }
     for prim in ["/Fallback_Backdrop", "/Authored_Backdrop"] {
-        let v = usd_ui::Backdrop::new(scene, h.path(prim)).expect("a Backdrop at the prim");
+        let v = usd_ui::Backdrop::get(scene, h.path(prim)).expect("a Backdrop at the prim");
         r.value(prim, "ui:description", When::Default, v.description());
     }
     for prim in ["/Fallback_NodeGraphNodeAPI", "/Authored_NodeGraphNodeAPI"] {
@@ -5754,7 +5754,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
     }
     for prim in ["/Fallback_SpatialAudio", "/Authored_SpatialAudio"] {
         let v =
-            usd_media::SpatialAudio::new(scene, h.path(prim)).expect("a SpatialAudio at the prim");
+            usd_media::SpatialAudio::get(scene, h.path(prim)).expect("a SpatialAudio at the prim");
         r.value(
             prim,
             "auralMode",
@@ -5788,7 +5788,7 @@ pub(crate) fn read(scene: &Scene<'_>, h: &Harness, r: &mut Readings<'_>) {
         "/Fallback_GenerativeProcedural",
         "/Authored_GenerativeProcedural",
     ] {
-        let v = usd_proc::GenerativeProcedural::new(scene, h.path(prim))
+        let v = usd_proc::GenerativeProcedural::get(scene, h.path(prim))
             .expect("a GenerativeProcedural at the prim");
         r.value(
             prim,

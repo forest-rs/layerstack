@@ -66,8 +66,9 @@ impl<'a> MountedOnApi<'a> {
         Self { base: prim }
     }
 
-    /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
-    /// edit's target) if the prim may have it.
+    /// Applies the schema to the prim at `path` (text, `"/World/Prim"`,
+    /// or an id) as a `prepend apiSchemas` entry in the edit's target, if
+    /// the prim may have it.
     ///
     /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.
     ///
@@ -77,7 +78,7 @@ impl<'a> MountedOnApi<'a> {
     /// [`ApplySchemaError::CannotEdit`] beneath an instance or in a prototype.
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
-        path: PathId,
+        path: impl ::layerstack::PrimPathArg,
     ) -> Result<MountedOnApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(MountedOnApiEdit::from_prim)
@@ -232,7 +233,7 @@ impl TelescopeTelescopeMount {
 
 #[doc = "A telescope, placed on its pier."]
 #[doc = ""]
-#[doc = "The view of the `observatory` library's concrete typed schema `Telescope`, inheriting [`::layerstack_schemas::usd_geom::Xformable`]. Construct it with [`Telescope::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of the `observatory` library's concrete typed schema `Telescope`, inheriting [`::layerstack_schemas::usd_geom::Xformable`]. Construct it with [`Telescope::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[allow(
     clippy::doc_markdown,
     clippy::too_long_first_doc_paragraph,
@@ -262,7 +263,7 @@ impl<'a> Telescope<'a> {
 
     #[doc = "A view of the prim at `path` (text, `\"/World/Prim\"`, or an id), if it is a `Telescope` or of a schema derived from it."]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -270,7 +271,7 @@ impl<'a> Telescope<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -283,7 +284,8 @@ impl<'a> Telescope<'a> {
     /// Defines the prim at `path` as a `Telescope`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `Telescope` is left as it is.
+    /// already defined as a `Telescope` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///

@@ -160,8 +160,9 @@ impl<'a> BackPlateApi<'a> {
         Self { base: instance }
     }
 
-    /// Applies the instance `instance` of the schema to `path` (a `prepend
-    /// apiSchemas` entry in the edit's target) if the prim may have it.
+    /// Applies the instance `instance` of the schema to the prim at `path`
+    /// (text, `"/World/Prim"`, or an id) as a `prepend apiSchemas`
+    /// entry in the edit's target, if the prim may have it.
     ///
     /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.
     ///
@@ -173,7 +174,7 @@ impl<'a> BackPlateApi<'a> {
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
-        path: PathId,
+        path: impl ::layerstack::PrimPathArg,
         instance: &str,
     ) -> Result<BackPlateApiEdit, ApplySchemaError> {
         let prim = edit.apply_api(path, Self::SCHEMA, Some(instance))?;
@@ -999,7 +1000,7 @@ impl BasisCurvesWrap {
 
 #[doc = "Base schema for all geometric primitives that directly define renderable shapes."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `BasisCurves`, inheriting [`Curves`]. Construct it with [`BasisCurves::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `BasisCurves`, inheriting [`Curves`]. Construct it with [`BasisCurves::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomBasisCurves`."]
 #[doc(alias = "UsdGeomBasisCurves")]
 #[derive(Clone, Copy, Debug)]
@@ -1023,7 +1024,7 @@ impl<'a> BasisCurves<'a> {
     #[doc(alias = "UsdGeomBasisCurves::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -1031,7 +1032,7 @@ impl<'a> BasisCurves<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -1044,7 +1045,8 @@ impl<'a> BasisCurves<'a> {
     /// Defines the prim at `path` as a `BasisCurves`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `BasisCurves` is left as it is.
+    /// already defined as a `BasisCurves` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///
@@ -1177,7 +1179,7 @@ impl BasisCurvesEdit {
 
 #[doc = "Base class for prims that can have rectilinear, local-space extents calculated and cached."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's abstract typed schema `Boundable`, inheriting [`Xformable`]. Construct it with [`Boundable::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's abstract typed schema `Boundable`, inheriting [`Xformable`]. Construct it with [`Boundable::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomBoundable`."]
 #[doc(alias = "UsdGeomBoundable")]
 #[derive(Clone, Copy, Debug)]
@@ -1201,7 +1203,7 @@ impl<'a> Boundable<'a> {
     #[doc(alias = "UsdGeomBoundable::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -1209,7 +1211,7 @@ impl<'a> Boundable<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -1468,7 +1470,7 @@ impl CameraStereoRole {
 
 #[doc = "Base class to endow a prim with a configurable affine transformation (e.g. translate, rotate, scale, etc.)."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `Camera`, inheriting [`Xformable`]. Construct it with [`Camera::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `Camera`, inheriting [`Xformable`]. Construct it with [`Camera::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomCamera`."]
 #[doc(alias = "UsdGeomCamera")]
 #[derive(Clone, Copy, Debug)]
@@ -1492,7 +1494,7 @@ impl<'a> Camera<'a> {
     #[doc(alias = "UsdGeomCamera::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -1500,7 +1502,7 @@ impl<'a> Camera<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -1513,7 +1515,8 @@ impl<'a> Camera<'a> {
     /// Defines the prim at `path` as a `Camera`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `Camera` is left as it is.
+    /// already defined as a `Camera` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///
@@ -2423,7 +2426,7 @@ impl CapsuleAxis {
 
 #[doc = "Base schema for all geometric primitives that directly define renderable shapes."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `Capsule`, inheriting [`Gprim`]. Construct it with [`Capsule::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `Capsule`, inheriting [`Gprim`]. Construct it with [`Capsule::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomCapsule`."]
 #[doc(alias = "UsdGeomCapsule")]
 #[derive(Clone, Copy, Debug)]
@@ -2447,7 +2450,7 @@ impl<'a> Capsule<'a> {
     #[doc(alias = "UsdGeomCapsule::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -2455,7 +2458,7 @@ impl<'a> Capsule<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -2468,7 +2471,8 @@ impl<'a> Capsule<'a> {
     /// Defines the prim at `path` as a `Capsule`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `Capsule` is left as it is.
+    /// already defined as a `Capsule` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///
@@ -2682,7 +2686,7 @@ impl Capsule1Axis {
 
 #[doc = "Base schema for all geometric primitives that directly define renderable shapes."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `Capsule_1`, inheriting [`Gprim`]. Construct it with [`Capsule1::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `Capsule_1`, inheriting [`Gprim`]. Construct it with [`Capsule1::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomCapsule_1`."]
 #[doc(alias = "UsdGeomCapsule_1")]
 #[doc(alias = "Capsule_1")]
@@ -2707,7 +2711,7 @@ impl<'a> Capsule1<'a> {
     #[doc(alias = "UsdGeomCapsule_1::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -2715,7 +2719,7 @@ impl<'a> Capsule1<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -2728,7 +2732,8 @@ impl<'a> Capsule1<'a> {
     /// Defines the prim at `path` as a `Capsule_1`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `Capsule_1` is left as it is.
+    /// already defined as a `Capsule_1` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///
@@ -2981,7 +2986,7 @@ impl ConeAxis {
 
 #[doc = "Base schema for all geometric primitives that directly define renderable shapes."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `Cone`, inheriting [`Gprim`]. Construct it with [`Cone::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `Cone`, inheriting [`Gprim`]. Construct it with [`Cone::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomCone`."]
 #[doc(alias = "UsdGeomCone")]
 #[derive(Clone, Copy, Debug)]
@@ -3005,7 +3010,7 @@ impl<'a> Cone<'a> {
     #[doc(alias = "UsdGeomCone::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -3013,7 +3018,7 @@ impl<'a> Cone<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -3026,7 +3031,8 @@ impl<'a> Cone<'a> {
     /// Defines the prim at `path` as a `Cone`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `Cone` is left as it is.
+    /// already defined as a `Cone` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///
@@ -3185,7 +3191,7 @@ impl ConeEdit {
 
 #[doc = "Base schema for all geometric primitives that directly define renderable shapes."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `Cube`, inheriting [`Gprim`]. Construct it with [`Cube::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `Cube`, inheriting [`Gprim`]. Construct it with [`Cube::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomCube`."]
 #[doc(alias = "UsdGeomCube")]
 #[derive(Clone, Copy, Debug)]
@@ -3209,7 +3215,7 @@ impl<'a> Cube<'a> {
     #[doc(alias = "UsdGeomCube::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -3217,7 +3223,7 @@ impl<'a> Cube<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -3230,7 +3236,8 @@ impl<'a> Cube<'a> {
     /// Defines the prim at `path` as a `Cube`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `Cube` is left as it is.
+    /// already defined as a `Cube` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///
@@ -3324,7 +3331,7 @@ impl CubeEdit {
 
 #[doc = "Base schema for all geometric primitives that directly define renderable shapes."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's abstract typed schema `Curves`, inheriting [`PointBased`]. Construct it with [`Curves::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's abstract typed schema `Curves`, inheriting [`PointBased`]. Construct it with [`Curves::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomCurves`."]
 #[doc(alias = "UsdGeomCurves")]
 #[derive(Clone, Copy, Debug)]
@@ -3348,7 +3355,7 @@ impl<'a> Curves<'a> {
     #[doc(alias = "UsdGeomCurves::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -3356,7 +3363,7 @@ impl<'a> Curves<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -3678,7 +3685,7 @@ impl CylinderAxis {
 
 #[doc = "Base schema for all geometric primitives that directly define renderable shapes."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `Cylinder`, inheriting [`Gprim`]. Construct it with [`Cylinder::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `Cylinder`, inheriting [`Gprim`]. Construct it with [`Cylinder::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomCylinder`."]
 #[doc(alias = "UsdGeomCylinder")]
 #[derive(Clone, Copy, Debug)]
@@ -3702,7 +3709,7 @@ impl<'a> Cylinder<'a> {
     #[doc(alias = "UsdGeomCylinder::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -3710,7 +3717,7 @@ impl<'a> Cylinder<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -3723,7 +3730,8 @@ impl<'a> Cylinder<'a> {
     /// Defines the prim at `path` as a `Cylinder`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `Cylinder` is left as it is.
+    /// already defined as a `Cylinder` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///
@@ -3937,7 +3945,7 @@ impl Cylinder1Axis {
 
 #[doc = "Base schema for all geometric primitives that directly define renderable shapes."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `Cylinder_1`, inheriting [`Gprim`]. Construct it with [`Cylinder1::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `Cylinder_1`, inheriting [`Gprim`]. Construct it with [`Cylinder1::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomCylinder_1`."]
 #[doc(alias = "UsdGeomCylinder_1")]
 #[doc(alias = "Cylinder_1")]
@@ -3962,7 +3970,7 @@ impl<'a> Cylinder1<'a> {
     #[doc(alias = "UsdGeomCylinder_1::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -3970,7 +3978,7 @@ impl<'a> Cylinder1<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -3983,7 +3991,8 @@ impl<'a> Cylinder1<'a> {
     /// Defines the prim at `path` as a `Cylinder_1`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `Cylinder_1` is left as it is.
+    /// already defined as a `Cylinder_1` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///
@@ -4397,8 +4406,9 @@ impl<'a> GeomModelApi<'a> {
         Self { base: prim }
     }
 
-    /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
-    /// edit's target) if the prim may have it.
+    /// Applies the schema to the prim at `path` (text, `"/World/Prim"`,
+    /// or an id) as a `prepend apiSchemas` entry in the edit's target, if
+    /// the prim may have it.
     ///
     /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.
     ///
@@ -4410,7 +4420,7 @@ impl<'a> GeomModelApi<'a> {
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
-        path: PathId,
+        path: impl ::layerstack::PrimPathArg,
     ) -> Result<GeomModelApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(GeomModelApiEdit::from_prim)
@@ -4948,7 +4958,7 @@ impl GeomSubsetElementType {
 
 #[doc = "Encodes a subset of a piece of geometry (i.e."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `GeomSubset`, inheriting [`crate::usd::Typed`]. Construct it with [`GeomSubset::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `GeomSubset`, inheriting [`crate::usd::Typed`]. Construct it with [`GeomSubset::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomSubset`."]
 #[doc(alias = "UsdGeomSubset")]
 #[derive(Clone, Copy, Debug)]
@@ -4972,7 +4982,7 @@ impl<'a> GeomSubset<'a> {
     #[doc(alias = "UsdGeomSubset::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -4980,7 +4990,7 @@ impl<'a> GeomSubset<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -4993,7 +5003,8 @@ impl<'a> GeomSubset<'a> {
     /// Defines the prim at `path` as a `GeomSubset`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `GeomSubset` is left as it is.
+    /// already defined as a `GeomSubset` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///
@@ -5256,7 +5267,7 @@ impl GprimOrientation {
 
 #[doc = "Base schema for all geometric primitives that directly define renderable shapes."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's abstract typed schema `Gprim`, inheriting [`Boundable`]. Construct it with [`Gprim::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's abstract typed schema `Gprim`, inheriting [`Boundable`]. Construct it with [`Gprim::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomGprim`."]
 #[doc(alias = "UsdGeomGprim")]
 #[derive(Clone, Copy, Debug)]
@@ -5280,7 +5291,7 @@ impl<'a> Gprim<'a> {
     #[doc(alias = "UsdGeomGprim::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -5288,7 +5299,7 @@ impl<'a> Gprim<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -5626,7 +5637,7 @@ impl GprimEdit {
 
 #[doc = "Base schema for all geometric primitives that directly define renderable shapes."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `HermiteCurves`, inheriting [`Curves`]. Construct it with [`HermiteCurves::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `HermiteCurves`, inheriting [`Curves`]. Construct it with [`HermiteCurves::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomHermiteCurves`."]
 #[doc(alias = "UsdGeomHermiteCurves")]
 #[derive(Clone, Copy, Debug)]
@@ -5650,7 +5661,7 @@ impl<'a> HermiteCurves<'a> {
     #[doc(alias = "UsdGeomHermiteCurves::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -5658,7 +5669,7 @@ impl<'a> HermiteCurves<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -5671,7 +5682,8 @@ impl<'a> HermiteCurves<'a> {
     /// Defines the prim at `path` as a `HermiteCurves`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `HermiteCurves` is left as it is.
+    /// already defined as a `HermiteCurves` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///
@@ -5945,7 +5957,7 @@ impl ImageableVisibility {
 
 #[doc = "Base class for all prims that can be rendered or displayed in a 3D scene."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's abstract typed schema `Imageable`, inheriting [`crate::usd::Typed`]. Construct it with [`Imageable::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's abstract typed schema `Imageable`, inheriting [`crate::usd::Typed`]. Construct it with [`Imageable::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomImageable`."]
 #[doc(alias = "UsdGeomImageable")]
 #[derive(Clone, Copy, Debug)]
@@ -5969,7 +5981,7 @@ impl<'a> Imageable<'a> {
     #[doc(alias = "UsdGeomImageable::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -5977,7 +5989,7 @@ impl<'a> Imageable<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -6392,7 +6404,7 @@ impl MeshTriangleSubdivisionRule {
 
 #[doc = "Base schema for all geometric primitives that directly define renderable shapes."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `Mesh`, inheriting [`PointBased`]. Construct it with [`Mesh::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `Mesh`, inheriting [`PointBased`]. Construct it with [`Mesh::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomMesh`."]
 #[doc(alias = "UsdGeomMesh")]
 #[derive(Clone, Copy, Debug)]
@@ -6416,7 +6428,7 @@ impl<'a> Mesh<'a> {
     #[doc(alias = "UsdGeomMesh::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -6424,7 +6436,7 @@ impl<'a> Mesh<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -6437,7 +6449,8 @@ impl<'a> Mesh<'a> {
     /// Defines the prim at `path` as a `Mesh`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `Mesh` is left as it is.
+    /// already defined as a `Mesh` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///
@@ -7608,8 +7621,9 @@ impl<'a> MotionApi<'a> {
         Self { base: prim }
     }
 
-    /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
-    /// edit's target) if the prim may have it.
+    /// Applies the schema to the prim at `path` (text, `"/World/Prim"`,
+    /// or an id) as a `prepend apiSchemas` entry in the edit's target, if
+    /// the prim may have it.
     ///
     /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.
     ///
@@ -7621,7 +7635,7 @@ impl<'a> MotionApi<'a> {
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
-        path: PathId,
+        path: impl ::layerstack::PrimPathArg,
     ) -> Result<MotionApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(MotionApiEdit::from_prim)
@@ -7795,7 +7809,7 @@ impl MotionApiEdit {
 
 #[doc = "Base schema for all geometric primitives that directly define renderable shapes."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `NurbsCurves`, inheriting [`Curves`]. Construct it with [`NurbsCurves::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `NurbsCurves`, inheriting [`Curves`]. Construct it with [`NurbsCurves::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomNurbsCurves`."]
 #[doc(alias = "UsdGeomNurbsCurves")]
 #[derive(Clone, Copy, Debug)]
@@ -7819,7 +7833,7 @@ impl<'a> NurbsCurves<'a> {
     #[doc(alias = "UsdGeomNurbsCurves::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -7827,7 +7841,7 @@ impl<'a> NurbsCurves<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -7840,7 +7854,8 @@ impl<'a> NurbsCurves<'a> {
     /// Defines the prim at `path` as a `NurbsCurves`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `NurbsCurves` is left as it is.
+    /// already defined as a `NurbsCurves` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///
@@ -8414,7 +8429,7 @@ impl NurbsPatchVForm {
 
 #[doc = "Base schema for all geometric primitives that directly define renderable shapes."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `NurbsPatch`, inheriting [`PointBased`]. Construct it with [`NurbsPatch::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `NurbsPatch`, inheriting [`PointBased`]. Construct it with [`NurbsPatch::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomNurbsPatch`."]
 #[doc(alias = "UsdGeomNurbsPatch")]
 #[derive(Clone, Copy, Debug)]
@@ -8438,7 +8453,7 @@ impl<'a> NurbsPatch<'a> {
     #[doc(alias = "UsdGeomNurbsPatch::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -8446,7 +8461,7 @@ impl<'a> NurbsPatch<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -8459,7 +8474,8 @@ impl<'a> NurbsPatch<'a> {
     /// Defines the prim at `path` as a `NurbsPatch`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `NurbsPatch` is left as it is.
+    /// already defined as a `NurbsPatch` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///
@@ -9850,7 +9866,7 @@ impl PlaneAxis {
 
 #[doc = "Base schema for all geometric primitives that directly define renderable shapes."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `Plane`, inheriting [`Gprim`]. Construct it with [`Plane::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `Plane`, inheriting [`Gprim`]. Construct it with [`Plane::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomPlane`."]
 #[doc(alias = "UsdGeomPlane")]
 #[derive(Clone, Copy, Debug)]
@@ -9874,7 +9890,7 @@ impl<'a> Plane<'a> {
     #[doc(alias = "UsdGeomPlane::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -9882,7 +9898,7 @@ impl<'a> Plane<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -9895,7 +9911,8 @@ impl<'a> Plane<'a> {
     /// Defines the prim at `path` as a `Plane`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `Plane` is left as it is.
+    /// already defined as a `Plane` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///
@@ -10054,7 +10071,7 @@ impl PlaneEdit {
 
 #[doc = "Base schema for all geometric primitives that directly define renderable shapes."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's abstract typed schema `PointBased`, inheriting [`Gprim`]. Construct it with [`PointBased::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's abstract typed schema `PointBased`, inheriting [`Gprim`]. Construct it with [`PointBased::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomPointBased`."]
 #[doc(alias = "UsdGeomPointBased")]
 #[derive(Clone, Copy, Debug)]
@@ -10078,7 +10095,7 @@ impl<'a> PointBased<'a> {
     #[doc(alias = "UsdGeomPointBased::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -10086,7 +10103,7 @@ impl<'a> PointBased<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -10565,7 +10582,7 @@ impl PointBasedEdit {
 
 #[doc = "Base class for prims that can have rectilinear, local-space extents calculated and cached."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `PointInstancer`, inheriting [`Boundable`]. Construct it with [`PointInstancer::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `PointInstancer`, inheriting [`Boundable`]. Construct it with [`PointInstancer::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomPointInstancer`."]
 #[doc(alias = "UsdGeomPointInstancer")]
 #[derive(Clone, Copy, Debug)]
@@ -10589,7 +10606,7 @@ impl<'a> PointInstancer<'a> {
     #[doc(alias = "UsdGeomPointInstancer::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -10597,7 +10614,7 @@ impl<'a> PointInstancer<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -10610,7 +10627,8 @@ impl<'a> PointInstancer<'a> {
     /// Defines the prim at `path` as a `PointInstancer`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `PointInstancer` is left as it is.
+    /// already defined as a `PointInstancer` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///
@@ -11730,7 +11748,7 @@ impl PointInstancerEdit {
 
 #[doc = "Base schema for all geometric primitives that directly define renderable shapes."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `Points`, inheriting [`PointBased`]. Construct it with [`Points::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `Points`, inheriting [`PointBased`]. Construct it with [`Points::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomPoints`."]
 #[doc(alias = "UsdGeomPoints")]
 #[derive(Clone, Copy, Debug)]
@@ -11754,7 +11772,7 @@ impl<'a> Points<'a> {
     #[doc(alias = "UsdGeomPoints::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -11762,7 +11780,7 @@ impl<'a> Points<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -11775,7 +11793,8 @@ impl<'a> Points<'a> {
     /// Defines the prim at `path` as a `Points`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `Points` is left as it is.
+    /// already defined as a `Points` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///
@@ -12028,7 +12047,7 @@ impl PointsEdit {
 
 #[doc = "Base class for all prims that can be rendered or displayed in a 3D scene."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `Scope`, inheriting [`Imageable`]. Construct it with [`Scope::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `Scope`, inheriting [`Imageable`]. Construct it with [`Scope::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomScope`."]
 #[doc(alias = "UsdGeomScope")]
 #[derive(Clone, Copy, Debug)]
@@ -12052,7 +12071,7 @@ impl<'a> Scope<'a> {
     #[doc(alias = "UsdGeomScope::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -12060,7 +12079,7 @@ impl<'a> Scope<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -12073,7 +12092,8 @@ impl<'a> Scope<'a> {
     /// Defines the prim at `path` as a `Scope`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `Scope` is left as it is.
+    /// already defined as a `Scope` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///
@@ -12128,7 +12148,7 @@ impl ScopeEdit {
 
 #[doc = "A spherical primitive centered at the origin."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `Sphere`, inheriting [`Gprim`]. Construct it with [`Sphere::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `Sphere`, inheriting [`Gprim`]. Construct it with [`Sphere::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomSphere`."]
 #[doc(alias = "UsdGeomSphere")]
 #[derive(Clone, Copy, Debug)]
@@ -12152,7 +12172,7 @@ impl<'a> Sphere<'a> {
     #[doc(alias = "UsdGeomSphere::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -12160,7 +12180,7 @@ impl<'a> Sphere<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -12173,7 +12193,8 @@ impl<'a> Sphere<'a> {
     /// Defines the prim at `path` as a `Sphere`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `Sphere` is left as it is.
+    /// already defined as a `Sphere` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///
@@ -12267,7 +12288,7 @@ impl SphereEdit {
 
 #[doc = "Base schema for all geometric primitives that directly define renderable shapes."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `TetMesh`, inheriting [`PointBased`]. Construct it with [`TetMesh::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `TetMesh`, inheriting [`PointBased`]. Construct it with [`TetMesh::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomTetMesh`."]
 #[doc(alias = "UsdGeomTetMesh")]
 #[derive(Clone, Copy, Debug)]
@@ -12291,7 +12312,7 @@ impl<'a> TetMesh<'a> {
     #[doc(alias = "UsdGeomTetMesh::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -12299,7 +12320,7 @@ impl<'a> TetMesh<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -12312,7 +12333,8 @@ impl<'a> TetMesh<'a> {
     /// Defines the prim at `path` as a `TetMesh`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `TetMesh` is left as it is.
+    /// already defined as a `TetMesh` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///
@@ -12811,8 +12833,9 @@ impl<'a> VisibilityApi<'a> {
         Self { base: prim }
     }
 
-    /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
-    /// edit's target) if the prim may have it.
+    /// Applies the schema to the prim at `path` (text, `"/World/Prim"`,
+    /// or an id) as a `prepend apiSchemas` entry in the edit's target, if
+    /// the prim may have it.
     ///
     /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.
     ///
@@ -12824,7 +12847,7 @@ impl<'a> VisibilityApi<'a> {
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
-        path: PathId,
+        path: impl ::layerstack::PrimPathArg,
     ) -> Result<VisibilityApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(VisibilityApiEdit::from_prim)
@@ -12961,7 +12984,7 @@ impl VisibilityApiEdit {
 
 #[doc = "Base class to endow a prim with a configurable affine transformation (e.g. translate, rotate, scale, etc.)."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `Xform`, inheriting [`Xformable`]. Construct it with [`Xform::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `Xform`, inheriting [`Xformable`]. Construct it with [`Xform::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomXform`."]
 #[doc(alias = "UsdGeomXform")]
 #[derive(Clone, Copy, Debug)]
@@ -12985,7 +13008,7 @@ impl<'a> Xform<'a> {
     #[doc(alias = "UsdGeomXform::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -12993,7 +13016,7 @@ impl<'a> Xform<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -13006,7 +13029,8 @@ impl<'a> Xform<'a> {
     /// Defines the prim at `path` as a `Xform`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `Xform` is left as it is.
+    /// already defined as a `Xform` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///
@@ -13061,7 +13085,7 @@ impl XformEdit {
 
 #[doc = "Base class to endow a prim with a configurable affine transformation (e.g. translate, rotate, scale, etc.)."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's abstract typed schema `Xformable`, inheriting [`Imageable`]. Construct it with [`Xformable::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's abstract typed schema `Xformable`, inheriting [`Imageable`]. Construct it with [`Xformable::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdGeomXformable`."]
 #[doc(alias = "UsdGeomXformable")]
 #[derive(Clone, Copy, Debug)]
@@ -13085,7 +13109,7 @@ impl<'a> Xformable<'a> {
     #[doc(alias = "UsdGeomXformable::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -13093,7 +13117,7 @@ impl<'a> Xformable<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]

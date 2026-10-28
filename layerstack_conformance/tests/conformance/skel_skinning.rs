@@ -28,7 +28,7 @@ fn inherited_indexed_and_constant_influences_match_cpp() {
         .map(|row| store.path(row["path"].as_str().unwrap()))
         .collect();
     let scene = Scene::new(live.stage(), &store);
-    let queries = SkelRoot::new(&scene, root)
+    let queries = SkelRoot::get(&scene, root)
         .unwrap()
         .bindings()
         .skinning_queries()
@@ -169,7 +169,7 @@ fn discovery_inherits_binding_inputs_only_within_its_requested_root() {
     let outside = store.path("/Outside");
     let scene = Scene::new(live.stage(), &store);
     for (root, expected) in rows {
-        let queries = SkelRoot::new(&scene, root)
+        let queries = SkelRoot::get(&scene, root)
             .unwrap()
             .bindings()
             .skinning_queries()

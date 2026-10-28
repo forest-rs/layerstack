@@ -746,7 +746,7 @@ mod tests {
             .prepare(live.stage(), &mut store, &target, path, &[])
             .unwrap();
         live.apply(&mut store, &published.transaction).unwrap();
-        let points = Mesh::new(&Scene::new(live.stage(), &store), path)
+        let points = Mesh::get(&Scene::new(live.stage(), &store), path)
             .unwrap()
             .points()
             .unwrap();
@@ -780,19 +780,19 @@ mod tests {
                 &published.properties,
             )
             .unwrap();
-        let indices_before = Mesh::new(&Scene::new(live.stage(), &store), path)
+        let indices_before = Mesh::get(&Scene::new(live.stage(), &store), path)
             .unwrap()
             .face_vertex_indices()
             .unwrap();
         live.apply(&mut store, &update.transaction).unwrap();
         let scene = Scene::new(live.stage(), &store);
-        let mesh = Mesh::new(&scene, path).unwrap();
+        let mesh = Mesh::get(&scene, path).unwrap();
         assert!(Arc::ptr_eq(
             &indices_before,
             &mesh.face_vertex_indices().unwrap()
         ));
         assert_eq!(
-            Mesh::new(&Scene::new(live.stage(), &store), path)
+            Mesh::get(&Scene::new(live.stage(), &store), path)
                 .unwrap()
                 .points()
                 .unwrap()[1],
@@ -811,7 +811,7 @@ mod tests {
             Err(MeshPublicationError::Topology(_))
         ));
         assert_eq!(
-            Mesh::new(&Scene::new(live.stage(), &store), path)
+            Mesh::get(&Scene::new(live.stage(), &store), path)
                 .unwrap()
                 .points()
                 .unwrap()[1],

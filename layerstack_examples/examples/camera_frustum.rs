@@ -65,7 +65,7 @@ fn main() {
     let scene = Scene::new(live.stage(), &store);
     let frame = 0.;
     let mut xforms = XformCache::new(Time::at(frame));
-    let camera = Camera::new(&scene, camera_path)
+    let camera = Camera::get(&scene, camera_path)
         .unwrap()
         .compute_camera(&mut xforms)
         .unwrap();
@@ -77,7 +77,7 @@ fn main() {
         "shutter [{open}, {close}], corners {:?}",
         camera.frustum_corners()
     );
-    let instancer = PointInstancer::new(&scene, instancer_path).unwrap();
+    let instancer = PointInstancer::get(&scene, instancer_path).unwrap();
     let samples = instancer
         .compute_instance_transforms_at_times(
             &times,

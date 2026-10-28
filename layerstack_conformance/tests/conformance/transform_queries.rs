@@ -41,7 +41,7 @@ fn composed_transform_queries_match_cpp() {
         .collect();
     let scene = Scene::new(&stage, &loaded.store);
     for (record, path) in oracle.records.iter().zip(paths) {
-        let view = Xformable::new(&scene, path).unwrap();
+        let view = Xformable::get(&scene, path).unwrap();
         assert_eq!(
             view.transform_might_be_time_varying(),
             record.varying,

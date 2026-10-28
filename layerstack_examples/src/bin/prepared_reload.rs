@@ -56,7 +56,7 @@ fn validate(
 ) -> Result<Resources, Box<dyn std::error::Error>> {
     let (points, asset) = {
         let scene = Scene::new(candidate.stage().stage(), candidate.store());
-        let mesh = Mesh::new(&scene, path).ok_or("candidate has no mesh")?;
+        let mesh = Mesh::get(&scene, path).ok_or("candidate has no mesh")?;
         let points = mesh
             .try_points(Time::Default)?
             .ok_or("candidate has no points")?;

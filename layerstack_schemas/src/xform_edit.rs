@@ -552,7 +552,7 @@ impl XformableEdit {
             Vec::new()
         } else {
             let scene = edit.scene();
-            Xformable::new(&scene, self.path())
+            Xformable::get(&scene, self.path())
                 .and_then(|prim| prim.xform_op_order())
                 .unwrap_or_default()
                 .into_iter()

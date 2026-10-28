@@ -81,7 +81,7 @@ def LightFilter "Filter" {}
         reordered.illumination.revisions.decisions,
         revisions.0.decisions
     );
-    let view = LightFilter::new(&scene, filter).unwrap();
+    let view = LightFilter::get(&scene, filter).unwrap();
     assert!(
         cache
             .capture_filter_links(&view, &[geo])

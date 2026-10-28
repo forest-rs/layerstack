@@ -147,7 +147,7 @@ impl From<CannotApply> for ApplySchemaError {
 /// live.apply(&mut store, &transaction).expect("applies");
 ///
 /// let scene = Scene::new(live.stage(), &store);
-/// let light = SphereLight::new(&scene, path).expect("a sphere light");
+/// let light = SphereLight::get(&scene, path).expect("a sphere light");
 /// assert_eq!(light.light_api().intensity(), Some(500.0));
 /// ```
 pub struct SchemaEdit<'s> {
@@ -277,15 +277,19 @@ impl<'s> SchemaEdit<'s> {
     ///
     /// [`ApplySchemaError::CannotEdit`] when [`Self::can_edit`] refuses `path`,
     /// checked first; else [`ApplySchemaError::CannotApply`] when no prim is
-    /// there or the schema may not be applied to it.
+    /// there (text naming a path the store has never interned names none)
+    /// or the schema may not be applied to it.
     #[doc(alias = "ApplyAPI")]
     #[doc(alias = "UsdPrim::ApplyAPI")]
     pub fn apply_api(
         &mut self,
-        path: PathId,
+        path: impl PrimPathArg,
         schema: &str,
         instance: Option<&str>,
     ) -> Result<crate::PrimEdit, ApplySchemaError> {
+        let path = self
+            .prim_path(path)
+            .ok_or(ApplySchemaError::CannotApply(CannotApply::NoSuchPrim))?;
         self.apply(path, schema, instance)?;
         Ok(crate::PrimEdit::from_path_unchecked(path))
     }

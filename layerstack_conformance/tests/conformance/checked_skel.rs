@@ -53,7 +53,7 @@ fn malformed_weights_do_not_become_missing_animation() {
     );
     live.apply(&mut store, &edit).unwrap();
     let scene = Scene::new(live.stage(), &store);
-    let result = SkelAnimation::new(&scene, animation)
+    let result = SkelAnimation::get(&scene, animation)
         .unwrap()
         .compute_blend_shape_weights(Time::Default);
     assert_eq!(result, Err(expected(property)));
@@ -84,12 +84,12 @@ fn numeric_pose_inputs_preserve_decode_errors_in_queries_and_retained_cache() {
         let scene = Scene::new(live.stage(), &store);
         cache.apply_changes(&scene, &report.changes);
         assert_eq!(
-            SkelAnimation::new(&scene, animation)
+            SkelAnimation::get(&scene, animation)
                 .unwrap()
                 .compute_joint_local_transform_components(Time::Default),
             Err(expected(property))
         );
-        let query = Skeleton::new(&scene, skeleton).unwrap().query().unwrap();
+        let query = Skeleton::get(&scene, skeleton).unwrap().query().unwrap();
         assert_eq!(
             query.local_transforms(Time::Default),
             Err(expected(property))
@@ -120,7 +120,7 @@ fn rest_and_bind_snapshot_decode_errors_do_not_become_missing_transforms() {
         live.apply(&mut store, &edit).unwrap();
         let scene = Scene::new(live.stage(), &store);
         assert_eq!(
-            Skeleton::new(&scene, skeleton).unwrap().query().map(|_| ()),
+            Skeleton::get(&scene, skeleton).unwrap().query().map(|_| ()),
             Err(expected(property))
         );
         assert_eq!(
@@ -288,7 +288,7 @@ fn default_time_skips_incompatible_stronger_values_before_preserving_decode_erro
         },
     );
     let scene = Scene::new(&stage, &store);
-    let query = SkelAnimation::new(&scene, animation).unwrap();
+    let query = SkelAnimation::get(&scene, animation).unwrap();
     assert_eq!(
         query.compute_blend_shape_weights(Time::Default),
         Err(expected(property))

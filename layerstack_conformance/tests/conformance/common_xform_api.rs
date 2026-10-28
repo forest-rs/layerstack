@@ -366,7 +366,7 @@ fn reads_match_cpp_with_their_source() {
     let (store, live) = scene();
     let scene = Scene::new(live.stage(), &store);
     for (path, expected) in &oracle.reads {
-        let prim = Xformable::new(&scene, store.path(path)).unwrap();
+        let prim = Xformable::get(&scene, store.path(path)).unwrap();
         assert_eq!(
             prim.is_common_transform_compatible(),
             expected.compatible,
@@ -399,7 +399,7 @@ fn reads_match_cpp_with_their_source() {
             );
         }
     }
-    let reduced = Xformable::new(&scene, store.path("/Pivots")).unwrap();
+    let reduced = Xformable::get(&scene, store.path("/Pivots")).unwrap();
     assert_eq!(
         reduced
             .common_transform_by_accumulation(Time::Default)

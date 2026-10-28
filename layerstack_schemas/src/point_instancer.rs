@@ -1071,7 +1071,7 @@ impl PointInstancer<'_> {
             .prototypes
             .iter()
             .map(|path| {
-                path.and_then(|path| crate::usd_geom::Xformable::new(&self.scene(), path))
+                path.and_then(|path| crate::usd_geom::Xformable::get(&self.scene(), path))
                     .map_or(gf::IDENTITY, |prim| prim.local_transform(time).matrix)
             })
             .collect();

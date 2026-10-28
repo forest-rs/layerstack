@@ -105,8 +105,9 @@ impl<'a> CoordSysApi<'a> {
         Self { base: instance }
     }
 
-    /// Applies the instance `instance` of the schema to `path` (a `prepend
-    /// apiSchemas` entry in the edit's target) if the prim may have it.
+    /// Applies the instance `instance` of the schema to the prim at `path`
+    /// (text, `"/World/Prim"`, or an id) as a `prepend apiSchemas`
+    /// entry in the edit's target, if the prim may have it.
     ///
     /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.
     ///
@@ -118,7 +119,7 @@ impl<'a> CoordSysApi<'a> {
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
-        path: PathId,
+        path: impl ::layerstack::PrimPathArg,
         instance: &str,
     ) -> Result<CoordSysApiEdit, ApplySchemaError> {
         let prim = edit.apply_api(path, Self::SCHEMA, Some(instance))?;
@@ -222,7 +223,7 @@ impl CoordSysApiEdit {
 
 #[doc = "A Material provides a container into which multiple \"render contexts\" can add data that defines a \"shading material\" for a renderer."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `Material`, inheriting [`NodeGraph`]. Construct it with [`Material::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `Material`, inheriting [`NodeGraph`]. Construct it with [`Material::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdShadeMaterial`."]
 #[doc(alias = "UsdShadeMaterial")]
 #[derive(Clone, Copy, Debug)]
@@ -246,7 +247,7 @@ impl<'a> Material<'a> {
     #[doc(alias = "UsdShadeMaterial::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -254,7 +255,7 @@ impl<'a> Material<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -267,7 +268,8 @@ impl<'a> Material<'a> {
     /// Defines the prim at `path` as a `Material`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `Material` is left as it is.
+    /// already defined as a `Material` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///
@@ -481,8 +483,9 @@ impl<'a> MaterialBindingApi<'a> {
         Self { base: prim }
     }
 
-    /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
-    /// edit's target) if the prim may have it.
+    /// Applies the schema to the prim at `path` (text, `"/World/Prim"`,
+    /// or an id) as a `prepend apiSchemas` entry in the edit's target, if
+    /// the prim may have it.
     ///
     /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.
     ///
@@ -494,7 +497,7 @@ impl<'a> MaterialBindingApi<'a> {
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
-        path: PathId,
+        path: impl ::layerstack::PrimPathArg,
     ) -> Result<MaterialBindingApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(MaterialBindingApiEdit::from_prim)
@@ -638,8 +641,9 @@ impl<'a> NodeDefApi<'a> {
         Self { base: prim }
     }
 
-    /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
-    /// edit's target) if the prim may have it.
+    /// Applies the schema to the prim at `path` (text, `"/World/Prim"`,
+    /// or an id) as a `prepend apiSchemas` entry in the edit's target, if
+    /// the prim may have it.
     ///
     /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.
     ///
@@ -651,7 +655,7 @@ impl<'a> NodeDefApi<'a> {
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
-        path: PathId,
+        path: impl ::layerstack::PrimPathArg,
     ) -> Result<NodeDefApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(NodeDefApiEdit::from_prim)
@@ -757,7 +761,7 @@ impl NodeDefApiEdit {
 
 #[doc = "A node-graph is a container for shading nodes, as well as other node-graphs."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `NodeGraph`, inheriting [`crate::usd::Typed`]. Construct it with [`NodeGraph::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `NodeGraph`, inheriting [`crate::usd::Typed`]. Construct it with [`NodeGraph::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdShadeNodeGraph`."]
 #[doc(alias = "UsdShadeNodeGraph")]
 #[derive(Clone, Copy, Debug)]
@@ -781,7 +785,7 @@ impl<'a> NodeGraph<'a> {
     #[doc(alias = "UsdShadeNodeGraph::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -789,7 +793,7 @@ impl<'a> NodeGraph<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -802,7 +806,8 @@ impl<'a> NodeGraph<'a> {
     /// Defines the prim at `path` as a `NodeGraph`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `NodeGraph` is left as it is.
+    /// already defined as a `NodeGraph` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///
@@ -857,7 +862,7 @@ impl NodeGraphEdit {
 
 #[doc = "Base class for all USD shaders."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `Shader`, inheriting [`crate::usd::Typed`]. Construct it with [`Shader::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `Shader`, inheriting [`crate::usd::Typed`]. Construct it with [`Shader::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdShadeShader`."]
 #[doc(alias = "UsdShadeShader")]
 #[derive(Clone, Copy, Debug)]
@@ -881,7 +886,7 @@ impl<'a> Shader<'a> {
     #[doc(alias = "UsdShadeShader::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -889,7 +894,7 @@ impl<'a> Shader<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -902,7 +907,8 @@ impl<'a> Shader<'a> {
     /// Defines the prim at `path` as a `Shader`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `Shader` is left as it is.
+    /// already defined as a `Shader` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///

@@ -68,12 +68,12 @@ fn identifier_checks_defaults_connections_samples_and_undo_are_explicit() {
     let transaction = edit.finish();
     let applied = live.apply(&mut store, &transaction).unwrap();
     let scene = Scene::new(live.stage(), &store);
-    let view = PreviewSurface::new(&scene, surface).unwrap();
+    let view = PreviewSurface::get(&scene, surface).unwrap();
     assert!(view.roughness().is_none());
     assert!(view.roughness_input().is_none());
     assert_eq!(PreviewSurface::roughness_default(), 0.5);
-    assert!(PreviewSurface::new(&scene, texture).is_none());
-    assert!(PreviewSurface::new(&scene, missing).is_none());
+    assert!(PreviewSurface::get(&scene, texture).is_none());
+    assert!(PreviewSurface::get(&scene, missing).is_none());
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
     let shader = |edit: &SchemaEdit<'_>, path| {
         ShaderEdit::new(edit, path)
@@ -90,7 +90,7 @@ fn identifier_checks_defaults_connections_samples_and_undo_are_explicit() {
     let transaction = edit.finish();
     let edits = live.apply(&mut store, &transaction).unwrap();
     let scene = Scene::new(live.stage(), &store);
-    let view = PreviewSurface::new(&scene, surface).unwrap();
+    let view = PreviewSurface::get(&scene, surface).unwrap();
     assert!(
         view.roughness().is_none(),
         "samples do not become default values"
@@ -117,11 +117,11 @@ fn identifier_checks_defaults_connections_samples_and_undo_are_explicit() {
     let blocked = live.apply(&mut store, &transaction).unwrap();
     let scene = Scene::new(live.stage(), &store);
     assert!(
-        PreviewSurface::new(&scene, surface).is_none(),
+        PreviewSurface::get(&scene, surface).is_none(),
         "source assets are not identifier-based nodes"
     );
     assert!(
-        Shader::new(&scene, surface)
+        Shader::get(&scene, surface)
             .unwrap()
             .input("roughness")
             .unwrap()
@@ -191,7 +191,7 @@ fn defining_a_node_overrides_a_weaker_source_asset_implementation() {
     let transaction = edit.finish();
     live.apply(&mut store, &transaction).unwrap();
     assert!(
-        PreviewSurface::new(&Scene::new(live.stage(), &store), path).is_some(),
+        PreviewSurface::get(&Scene::new(live.stage(), &store), path).is_some(),
         "node definition selects its identifier implementation over weaker opinions"
     );
 }
@@ -264,7 +264,7 @@ def NodeGraph "Graph" {
     let input = store.tokens().intern("inputs:varname");
     let stage = Stage::compose(&mut store, LayerId(1), options);
     let scene = Scene::new(&stage, &store);
-    let legacy = PrimvarReaderFloat2::new(&scene, legacy).unwrap();
+    let legacy = PrimvarReaderFloat2::get(&scene, legacy).unwrap();
     assert_eq!(legacy.varname().as_deref(), Some("uv"));
     assert_eq!(
         legacy
@@ -275,15 +275,15 @@ def NodeGraph "Graph" {
             .type_name(),
         "token"
     );
-    let modern = PrimvarReaderString::new(&scene, modern).unwrap();
+    let modern = PrimvarReaderString::get(&scene, modern).unwrap();
     assert_eq!(modern.varname().as_deref(), Some("label"));
     assert_eq!(modern.fallback(), None, "general strings remain strict");
     assert_eq!(
-        PrimvarReaderFloat2::new(&scene, bad).unwrap().varname(),
+        PrimvarReaderFloat2::get(&scene, bad).unwrap().varname(),
         None
     );
     assert_eq!(
-        PrimvarReaderFloat2::new(&scene, connected)
+        PrimvarReaderFloat2::get(&scene, connected)
             .unwrap()
             .varname(),
         None,

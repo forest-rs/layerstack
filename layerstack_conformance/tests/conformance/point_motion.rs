@@ -26,7 +26,7 @@ fn batch_point_motion_matches_openusd() {
     for row in oracle.rows {
         let path = store.path(&row.path);
         let scene = Scene::new(live.stage(), &store);
-        let q = PointBased::new(&scene, path).unwrap();
+        let q = PointBased::get(&scene, path).unwrap();
         let base = row.base.map_or(Time::Default, Time::at);
         let times: Vec<_> = row
             .times
@@ -47,7 +47,7 @@ fn sparse_motion_reads_compose_before_integration_and_reject_mixed_times() {
     );
     let path = store.path("/P");
     let scene = Scene::new(live.stage(), &store);
-    let q = PointBased::new(&scene, path).unwrap();
+    let q = PointBased::get(&scene, path).unwrap();
     let inputs = q.motion_inputs(Time::at(0.)).unwrap();
     assert_eq!(inputs.points, [[10., 0., 0.]]);
     assert_eq!(inputs.evaluate(Time::at(1.)).unwrap(), [[12., 0., 0.]]);
@@ -80,7 +80,7 @@ fn velocity_sample_alignment_uses_cpp_absolute_epsilon_tolerance() {
         ));
         let path = store.path("/P");
         let scene = Scene::new(live.stage(), &store);
-        let q = PointBased::new(&scene, path).unwrap();
+        let q = PointBased::get(&scene, path).unwrap();
         assert_eq!(
             q.compute_points_at_time(Time::at(1.), Time::at(1.))
                 .unwrap(),

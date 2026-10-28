@@ -491,7 +491,7 @@ impl crate::usd_geom::CameraEdit {
             }
             let local = {
                 let scene = edit.scene();
-                if Camera::new(&scene, self.path()).is_none() {
+                if Camera::get(&scene, self.path()).is_none() {
                     return Err(CameraWriteError::InvalidDestination);
                 }
                 let mut cache = XformCache::new(query);

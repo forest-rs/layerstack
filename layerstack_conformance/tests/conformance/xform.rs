@@ -131,7 +131,7 @@ fn transforms_visibility_and_purpose_match_openusd() {
             let sample = &record.samples[key];
             let context = format!("{text} {key}");
 
-            let xformable = Xformable::new(&scene, path);
+            let xformable = Xformable::get(&scene, path);
             match (&sample.local, &xformable) {
                 (Some(expected), Some(xformable)) => {
                     let local = xformable.local_transform(time);
@@ -167,7 +167,7 @@ fn transforms_visibility_and_purpose_match_openusd() {
                 ));
             }
 
-            let imageable = Imageable::new(&scene, path);
+            let imageable = Imageable::get(&scene, path);
             match (&sample.visibility, &imageable) {
                 (Some(expected), Some(imageable)) => {
                     if imageable.compute_local_to_world(time) != world {
@@ -213,7 +213,7 @@ fn transforms_visibility_and_purpose_match_openusd() {
         let Some(expected) = &record.purpose else {
             continue;
         };
-        let imageable = Imageable::new(&scene, paths[text]).expect("imageable");
+        let imageable = Imageable::get(&scene, paths[text]).expect("imageable");
         let info = imageable.compute_purpose_info();
         checks += 1;
         if info.purpose.as_str() != expected.purpose || info.inheritable != expected.inheritable {
@@ -266,7 +266,7 @@ fn problem_ops_are_reported() {
     let stage = Stage::compose(&mut loaded.store, loaded.root_layer, options);
     let path = loaded.store.path("/Problems");
     let scene = Scene::new(&stage, &loaded.store);
-    let xformable = Xformable::new(&scene, path).expect("an Xform");
+    let xformable = Xformable::get(&scene, path).expect("an Xform");
 
     let ordered = xformable.ordered_xform_ops();
     let names: Vec<&str> = ordered.ops.iter().map(|op| op.name).collect();
@@ -449,7 +449,7 @@ fn pure_steps_fold_to_what_the_views_compute() {
         );
         purpose.insert(path, info);
 
-        if let Some(imageable) = Imageable::new(&scene, path) {
+        if let Some(imageable) = Imageable::get(&scene, path) {
             assert_eq!(imageable.compute_local_to_world(time), world[&path]);
             assert_eq!(imageable.compute_visibility(time), visibility[&path]);
             assert_eq!(

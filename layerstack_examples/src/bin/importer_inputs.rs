@@ -94,7 +94,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     live.apply(&mut store, &transaction)?;
 
     let scene = Scene::new(live.stage(), &store);
-    let mesh = Mesh::new(&scene, mesh_path).unwrap();
+    let mesh = Mesh::get(&scene, mesh_path).unwrap();
     let points = mesh.try_points(Time::Default)?.ok_or("missing points")?;
     let mut bindings = BindingCache::new(MaterialPurpose::All, BindingOptions::default());
     let materials = bindings.material_binding_subsets(&scene, mesh_path, Time::Default)?;
@@ -127,7 +127,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "indexed values preserve the authored face-corner order"
     );
 
-    let instances = PointInstancer::new(&scene, instance_path)
+    let instances = PointInstancer::get(&scene, instance_path)
         .unwrap()
         .prepare_instance_transforms(
             Time::Default,

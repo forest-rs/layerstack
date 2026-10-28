@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 fn main() {
     let mut generated = support::GeneratedScene::new(100);
-    let source_points = Mesh::new(
+    let source_points = Mesh::get(
         &Scene::new(generated.live.stage(), &generated.store),
         generated.source,
     )
@@ -70,7 +70,7 @@ fn main() {
     assert!(
         Arc::ptr_eq(
             &untouched_topology,
-            &Mesh::new(&scene, generated.source)
+            &Mesh::get(&scene, generated.source)
                 .unwrap()
                 .face_vertex_indices()
                 .unwrap()
@@ -84,7 +84,7 @@ fn main() {
         after.max[1]
     );
     assert!(
-        Mesh::new(&scene, generated.terrain).is_some(),
+        Mesh::get(&scene, generated.terrain).is_some(),
         "the independent terrain producer remains published"
     );
     assert_eq!(

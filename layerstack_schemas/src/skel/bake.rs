@@ -680,7 +680,7 @@ fn own_transform_times(
     path: PathId,
     interval: &(Bound<f64>, Bound<f64>),
 ) -> Vec<f64> {
-    Xformable::new(scene, path)
+    Xformable::get(scene, path)
         .map(|xformable| xformable.transform_time_samples_in_range(*interval))
         .unwrap_or_default()
 }
@@ -765,7 +765,7 @@ impl SkinningBake {
             let prim = scene
                 .prim(binding.root)
                 .ok_or(SkinningBakeError::NotSkelRoot(binding.root))?;
-            let root = SkelRoot::new(scene, binding.root)
+            let root = SkelRoot::get(scene, binding.root)
                 .ok_or(SkinningBakeError::NotSkelRoot(binding.root))?;
             if prim.is_instance() || prim.is_instance_proxy() {
                 return Err(SkinningBakeError::Instanced(binding.root));
@@ -810,7 +810,7 @@ impl SkinningBake {
                 }
                 let rig =
                     *rig_index.entry(bound.skeleton).or_insert_with(|| {
-                        match Skeleton::new(scene, bound.skeleton)
+                        match Skeleton::get(scene, bound.skeleton)
                             .expect("a bound skeleton")
                             .query()
                         {
@@ -1342,7 +1342,7 @@ impl<'a> Target<'a> {
         }
         let parent = if !flags.xforms_with_skinning {
             ParentSpace::Unused
-        } else if Xformable::new(scene, path)
+        } else if Xformable::get(scene, path)
             .is_some_and(|x| x.ordered_xform_ops().resets_xform_stack)
         {
             ParentSpace::Identity

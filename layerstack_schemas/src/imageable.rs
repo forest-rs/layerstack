@@ -50,7 +50,7 @@ use crate::{
 /// let transaction = edit.finish();
 /// live.apply(&mut store, &transaction).expect("valid authored transaction");
 /// let scene = Scene::new(live.stage(), &store);
-/// assert_eq!(Imageable::new(&scene, child).unwrap().compute_visibility(Time::Default), Visibility::Invisible);
+/// assert_eq!(Imageable::get(&scene, child).unwrap().compute_visibility(Time::Default), Visibility::Invisible);
 /// assert_eq!(scene.compute_motion_blur_scale(child, Time::Default), 0.5);
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
@@ -567,7 +567,7 @@ mod tests {
 
         let scene = Scene::new(live.stage(), &store);
         let visibility = |path| {
-            Imageable::new(&scene, path)
+            Imageable::get(&scene, path)
                 .expect("imageable")
                 .compute_visibility(Time::Default)
         };

@@ -109,7 +109,7 @@ fn main() -> Result<(), XformOpError> {
         let time = Time::at(code);
         let mut cache = XformCache::new(time);
         for path in stage.traverse(root) {
-            let Some(gprim) = Gprim::new(&scene, path) else {
+            let Some(gprim) = Gprim::get(&scene, path) else {
                 continue;
             };
             let world = cache

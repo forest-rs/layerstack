@@ -152,7 +152,7 @@ impl ProducerPublisher<Output> for Publisher {
                     });
                 if arrays_match
                     && prototypes_match
-                    && PointInstancer::new(&Scene::new(stage, store), site).is_some()
+                    && PointInstancer::get(&Scene::new(stage, store), site).is_some()
                 {
                     let mut transaction = Transaction::new();
                     transaction.expect_generation(
@@ -323,7 +323,7 @@ fn main() -> Result<(), Failure> {
         rebuilt.steps.iter().all(|s| s.evaluated),
         "heightmap change rebuilds terrain and changed scatter inputs"
     );
-    let mesh = layerstack_schemas::usd_geom::Mesh::new(&Scene::new(live.stage(), &store), terrain)
+    let mesh = layerstack_schemas::usd_geom::Mesh::get(&Scene::new(live.stage(), &store), terrain)
         .ok_or("missing terrain mesh")?;
     assert_eq!(
         mesh.subdivision_scheme().as_ref().map(|v| v.as_str()),
@@ -331,7 +331,7 @@ fn main() -> Result<(), Failure> {
         "publisher authors polygon mesh semantics"
     );
     let scene = Scene::new(live.stage(), &store);
-    let instancer = PointInstancer::new(&scene, scatter).ok_or("missing scatter")?;
+    let instancer = PointInstancer::get(&scene, scatter).ok_or("missing scatter")?;
     assert_eq!(
         instancer
             .try_positions(Time::Default)?

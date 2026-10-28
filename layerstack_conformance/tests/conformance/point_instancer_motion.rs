@@ -29,7 +29,7 @@ fn sparse_defaults_preserve_weaker_motion_grid_and_integrate_composed_values() {
     let (store, live) = support::scene(&source);
     let path = store.path("/I");
     let scene = Scene::new(live.stage(), &store);
-    let q = PointInstancer::new(&scene, path).unwrap();
+    let q = PointInstancer::get(&scene, path).unwrap();
     let samples = q
         .compute_instance_transforms_at_times(
             &[Time::at(2.), Time::at(0.), Time::at(2.)],
@@ -66,7 +66,7 @@ fn sparse_sample_grids_union_and_mixed_dense_samples_mask_weaker_sources() {
         let (store, live) = support::scene(&source);
         let path = store.path("/I");
         let scene = Scene::new(live.stage(), &store);
-        let q = PointInstancer::new(&scene, path).unwrap();
+        let q = PointInstancer::get(&scene, path).unwrap();
         let samples = q
             .compute_instance_transforms(Time::at(time), Time::at(base), OPTIONS)
             .unwrap();
@@ -83,7 +83,7 @@ fn misaligned_sparse_grids_interpolate_normally_and_offsets_use_stage_time() {
     let offset = store.path("/Offset");
     let scene = Scene::new(live.stage(), &store);
     assert_eq!(
-        PointInstancer::new(&scene, path)
+        PointInstancer::get(&scene, path)
             .unwrap()
             .compute_instance_transforms(Time::at(2.5), Time::at(2.), OPTIONS)
             .unwrap()[0]
@@ -92,7 +92,7 @@ fn misaligned_sparse_grids_interpolate_normally_and_offsets_use_stage_time() {
     );
     // In stage order the lower source sample is at 2 (local 4), then 10.
     assert_eq!(
-        PointInstancer::new(&scene, offset)
+        PointInstancer::get(&scene, offset)
             .unwrap()
             .compute_instance_transforms(Time::at(4.), Time::at(3.), OPTIONS)
             .unwrap()[0]
@@ -106,7 +106,7 @@ fn ordered_batches_match_cpp_motion_fixture_and_reject_partial_results() {
         support::scene(include_str!("../../fixtures/point_instancer_behavior.usda"));
     let path = store.path("/World/Instances");
     let scene = Scene::new(live.stage(), &store);
-    let q = PointInstancer::new(&scene, path).unwrap();
+    let q = PointInstancer::get(&scene, path).unwrap();
     let times = [Time::at(0.), Time::at(2.), Time::at(4.), Time::at(2.)];
     let batch = q
         .compute_instance_transforms_at_times(&times, Time::at(0.), OPTIONS)
@@ -163,7 +163,7 @@ fn prepared_instance_outputs_stream_in_chunks_and_reuse_caller_storage() {
         apply_mask: true,
     };
     let scene = Scene::new(live.stage(), &store);
-    let q = PointInstancer::new(&scene, path).unwrap();
+    let q = PointInstancer::get(&scene, path).unwrap();
     let prepared = q
         .prepare_instance_transforms(Time::Default, Time::Default, options)
         .unwrap();
@@ -221,7 +221,7 @@ fn invalid_instance_inputs_leave_reusable_output_unchanged() {
     );
     let path = store.path("/I");
     let scene = Scene::new(live.stage(), &store);
-    let q = PointInstancer::new(&scene, path).unwrap();
+    let q = PointInstancer::get(&scene, path).unwrap();
     let mut output = vec![layerstack_schemas::point_instancer::InstanceTransform {
         index: 99,
         id: 42,

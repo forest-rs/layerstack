@@ -168,7 +168,7 @@ fn authored_invisible(store: &InMemoryStore, path: PathId) -> Option<InvisibleRe
 
 fn masks(store: &InMemoryStore, live: &LiveStage, path: PathId) -> BTreeMap<String, Vec<bool>> {
     let scene = Scene::new(live.stage(), store);
-    let point = PointInstancer::new(&scene, path).unwrap();
+    let point = PointInstancer::get(&scene, path).unwrap();
     let mut out = BTreeMap::new();
     out.insert(
         "default".into(),
@@ -252,7 +252,7 @@ fn explicit_id_masks_match_cpp() {
     let scene = Scene::new(live.stage(), &store);
     for record in &oracle.masks {
         let (path, time, ids) = &record.query;
-        let point = PointInstancer::new(&scene, store.path(path)).unwrap();
+        let point = PointInstancer::get(&scene, store.path(path)).unwrap();
         let time = time.map_or(Time::Default, Time::at);
         let mask = match ids {
             None => point.try_compute_mask(time).unwrap(),

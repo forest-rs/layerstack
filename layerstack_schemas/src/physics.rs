@@ -116,7 +116,7 @@ pub fn compute_collision_group_table(
         if !root && (!prim.is_defined() || prim.is_abstract()) {
             continue;
         }
-        if let Some(group) = PhysicsCollisionGroup::new(scene, path) {
+        if let Some(group) = PhysicsCollisionGroup::get(scene, path) {
             groups.push(group);
         }
         if !prim.is_instance() {

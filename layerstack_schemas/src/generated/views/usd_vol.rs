@@ -25,7 +25,7 @@ use layerstack::PathId;
 use crate::{ApplySchemaError, CannotEdit, PrimEdit, PrimView, Scene, SchemaEdit};
 #[doc = "Field3D field primitive."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `Field3DAsset`, inheriting [`FieldAsset`]. Construct it with [`Field3DAsset::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `Field3DAsset`, inheriting [`FieldAsset`]. Construct it with [`Field3DAsset::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdVolField3DAsset`."]
 #[doc(alias = "UsdVolField3DAsset")]
 #[derive(Clone, Copy, Debug)]
@@ -49,7 +49,7 @@ impl<'a> Field3DAsset<'a> {
     #[doc(alias = "UsdVolField3DAsset::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -57,7 +57,7 @@ impl<'a> Field3DAsset<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -70,7 +70,8 @@ impl<'a> Field3DAsset<'a> {
     /// Defines the prim at `path` as a `Field3DAsset`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `Field3DAsset` is left as it is.
+    /// already defined as a `Field3DAsset` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///
@@ -164,7 +165,7 @@ impl Field3DAssetEdit {
 
 #[doc = "This schema is deprecated and VolumeFieldAsset should be used instead."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's abstract typed schema `FieldAsset`, inheriting [`VolumeFieldAsset`]. Construct it with [`FieldAsset::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's abstract typed schema `FieldAsset`, inheriting [`VolumeFieldAsset`]. Construct it with [`FieldAsset::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdVolFieldAsset`."]
 #[doc(alias = "UsdVolFieldAsset")]
 #[derive(Clone, Copy, Debug)]
@@ -188,7 +189,7 @@ impl<'a> FieldAsset<'a> {
     #[doc(alias = "UsdVolFieldAsset::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -196,7 +197,7 @@ impl<'a> FieldAsset<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -248,7 +249,7 @@ impl FieldAssetEdit {
 
 #[doc = "This schema is deprecated and VolumeFieldBase should be used instead."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's abstract typed schema `FieldBase`, inheriting [`VolumeFieldBase`]. Construct it with [`FieldBase::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's abstract typed schema `FieldBase`, inheriting [`VolumeFieldBase`]. Construct it with [`FieldBase::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdVolFieldBase`."]
 #[doc(alias = "UsdVolFieldBase")]
 #[derive(Clone, Copy, Debug)]
@@ -272,7 +273,7 @@ impl<'a> FieldBase<'a> {
     #[doc(alias = "UsdVolFieldBase::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -280,7 +281,7 @@ impl<'a> FieldBase<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -391,7 +392,7 @@ impl OpenVDBAssetFieldClass {
 
 #[doc = "OpenVDB field primitive."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `OpenVDBAsset`, inheriting [`FieldAsset`]. Construct it with [`OpenVDBAsset::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `OpenVDBAsset`, inheriting [`FieldAsset`]. Construct it with [`OpenVDBAsset::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdVolOpenVDBAsset`."]
 #[doc(alias = "UsdVolOpenVDBAsset")]
 #[derive(Clone, Copy, Debug)]
@@ -415,7 +416,7 @@ impl<'a> OpenVDBAsset<'a> {
     #[doc(alias = "UsdVolOpenVDBAsset::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -423,7 +424,7 @@ impl<'a> OpenVDBAsset<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -436,7 +437,8 @@ impl<'a> OpenVDBAsset<'a> {
     /// Defines the prim at `path` as a `OpenVDBAsset`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `OpenVDBAsset` is left as it is.
+    /// already defined as a `OpenVDBAsset` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///
@@ -539,7 +541,7 @@ impl OpenVDBAssetEdit {
 
 #[doc = "The base schema to describe different types of concrete ParticleField implementations, such as 3D Gaussian Splats."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `ParticleField`, inheriting [`crate::usd_geom::Gprim`]. Construct it with [`ParticleField::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `ParticleField`, inheriting [`crate::usd_geom::Gprim`]. Construct it with [`ParticleField::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdVolParticleField`."]
 #[doc(alias = "UsdVolParticleField")]
 #[derive(Clone, Copy, Debug)]
@@ -563,7 +565,7 @@ impl<'a> ParticleField<'a> {
     #[doc(alias = "UsdVolParticleField::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -571,7 +573,7 @@ impl<'a> ParticleField<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -584,7 +586,8 @@ impl<'a> ParticleField<'a> {
     /// Defines the prim at `path` as a `ParticleField`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `ParticleField` is left as it is.
+    /// already defined as a `ParticleField` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///
@@ -748,7 +751,7 @@ impl ParticleField3DGaussianSplatSortingModeHint {
 
 #[doc = "A ParticleField that represents a 3D Gaussian splat."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `ParticleField3DGaussianSplat`, inheriting [`ParticleField`]. Construct it with [`ParticleField3DGaussianSplat::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `ParticleField3DGaussianSplat`, inheriting [`ParticleField`]. Construct it with [`ParticleField3DGaussianSplat::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdVolParticleField3DGaussianSplat`."]
 #[doc(alias = "UsdVolParticleField3DGaussianSplat")]
 #[derive(Clone, Copy, Debug)]
@@ -772,7 +775,7 @@ impl<'a> ParticleField3DGaussianSplat<'a> {
     #[doc(alias = "UsdVolParticleField3DGaussianSplat::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -780,7 +783,7 @@ impl<'a> ParticleField3DGaussianSplat<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -793,7 +796,8 @@ impl<'a> ParticleField3DGaussianSplat<'a> {
     /// Defines the prim at `path` as a `ParticleField3DGaussianSplat`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `ParticleField3DGaussianSplat` is left as it is.
+    /// already defined as a `ParticleField3DGaussianSplat` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///
@@ -1067,8 +1071,9 @@ impl<'a> ParticleFieldKernelBaseApi<'a> {
         Self { base: prim }
     }
 
-    /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
-    /// edit's target) if the prim may have it.
+    /// Applies the schema to the prim at `path` (text, `"/World/Prim"`,
+    /// or an id) as a `prepend apiSchemas` entry in the edit's target, if
+    /// the prim may have it.
     ///
     /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.
     ///
@@ -1080,7 +1085,7 @@ impl<'a> ParticleFieldKernelBaseApi<'a> {
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
-        path: PathId,
+        path: impl ::layerstack::PrimPathArg,
     ) -> Result<ParticleFieldKernelBaseApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(ParticleFieldKernelBaseApiEdit::from_prim)
@@ -1169,8 +1174,9 @@ impl<'a> ParticleFieldKernelConstantSurfletApi<'a> {
         Self { base: prim }
     }
 
-    /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
-    /// edit's target) if the prim may have it.
+    /// Applies the schema to the prim at `path` (text, `"/World/Prim"`,
+    /// or an id) as a `prepend apiSchemas` entry in the edit's target, if
+    /// the prim may have it.
     ///
     /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.
     ///
@@ -1182,7 +1188,7 @@ impl<'a> ParticleFieldKernelConstantSurfletApi<'a> {
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
-        path: PathId,
+        path: impl ::layerstack::PrimPathArg,
     ) -> Result<ParticleFieldKernelConstantSurfletApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(ParticleFieldKernelConstantSurfletApiEdit::from_prim)
@@ -1271,8 +1277,9 @@ impl<'a> ParticleFieldKernelGaussianEllipsoidApi<'a> {
         Self { base: prim }
     }
 
-    /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
-    /// edit's target) if the prim may have it.
+    /// Applies the schema to the prim at `path` (text, `"/World/Prim"`,
+    /// or an id) as a `prepend apiSchemas` entry in the edit's target, if
+    /// the prim may have it.
     ///
     /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.
     ///
@@ -1284,7 +1291,7 @@ impl<'a> ParticleFieldKernelGaussianEllipsoidApi<'a> {
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
-        path: PathId,
+        path: impl ::layerstack::PrimPathArg,
     ) -> Result<ParticleFieldKernelGaussianEllipsoidApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(ParticleFieldKernelGaussianEllipsoidApiEdit::from_prim)
@@ -1373,8 +1380,9 @@ impl<'a> ParticleFieldKernelGaussianSurfletApi<'a> {
         Self { base: prim }
     }
 
-    /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
-    /// edit's target) if the prim may have it.
+    /// Applies the schema to the prim at `path` (text, `"/World/Prim"`,
+    /// or an id) as a `prepend apiSchemas` entry in the edit's target, if
+    /// the prim may have it.
     ///
     /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.
     ///
@@ -1386,7 +1394,7 @@ impl<'a> ParticleFieldKernelGaussianSurfletApi<'a> {
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
-        path: PathId,
+        path: impl ::layerstack::PrimPathArg,
     ) -> Result<ParticleFieldKernelGaussianSurfletApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(ParticleFieldKernelGaussianSurfletApiEdit::from_prim)
@@ -1475,8 +1483,9 @@ impl<'a> ParticleFieldOpacityAttributeApi<'a> {
         Self { base: prim }
     }
 
-    /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
-    /// edit's target) if the prim may have it.
+    /// Applies the schema to the prim at `path` (text, `"/World/Prim"`,
+    /// or an id) as a `prepend apiSchemas` entry in the edit's target, if
+    /// the prim may have it.
     ///
     /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.
     ///
@@ -1488,7 +1497,7 @@ impl<'a> ParticleFieldOpacityAttributeApi<'a> {
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
-        path: PathId,
+        path: impl ::layerstack::PrimPathArg,
     ) -> Result<ParticleFieldOpacityAttributeApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(ParticleFieldOpacityAttributeApiEdit::from_prim)
@@ -1725,8 +1734,9 @@ impl<'a> ParticleFieldOrientationAttributeApi<'a> {
         Self { base: prim }
     }
 
-    /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
-    /// edit's target) if the prim may have it.
+    /// Applies the schema to the prim at `path` (text, `"/World/Prim"`,
+    /// or an id) as a `prepend apiSchemas` entry in the edit's target, if
+    /// the prim may have it.
     ///
     /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.
     ///
@@ -1738,7 +1748,7 @@ impl<'a> ParticleFieldOrientationAttributeApi<'a> {
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
-        path: PathId,
+        path: impl ::layerstack::PrimPathArg,
     ) -> Result<ParticleFieldOrientationAttributeApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(ParticleFieldOrientationAttributeApiEdit::from_prim)
@@ -1988,8 +1998,9 @@ impl<'a> ParticleFieldPositionAttributeApi<'a> {
         Self { base: prim }
     }
 
-    /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
-    /// edit's target) if the prim may have it.
+    /// Applies the schema to the prim at `path` (text, `"/World/Prim"`,
+    /// or an id) as a `prepend apiSchemas` entry in the edit's target, if
+    /// the prim may have it.
     ///
     /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.
     ///
@@ -2001,7 +2012,7 @@ impl<'a> ParticleFieldPositionAttributeApi<'a> {
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
-        path: PathId,
+        path: impl ::layerstack::PrimPathArg,
     ) -> Result<ParticleFieldPositionAttributeApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(ParticleFieldPositionAttributeApiEdit::from_prim)
@@ -2248,8 +2259,9 @@ impl<'a> ParticleFieldPositionBaseApi<'a> {
         Self { base: prim }
     }
 
-    /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
-    /// edit's target) if the prim may have it.
+    /// Applies the schema to the prim at `path` (text, `"/World/Prim"`,
+    /// or an id) as a `prepend apiSchemas` entry in the edit's target, if
+    /// the prim may have it.
     ///
     /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.
     ///
@@ -2261,7 +2273,7 @@ impl<'a> ParticleFieldPositionBaseApi<'a> {
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
-        path: PathId,
+        path: impl ::layerstack::PrimPathArg,
     ) -> Result<ParticleFieldPositionBaseApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(ParticleFieldPositionBaseApiEdit::from_prim)
@@ -2350,8 +2362,9 @@ impl<'a> ParticleFieldRadianceBaseApi<'a> {
         Self { base: prim }
     }
 
-    /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
-    /// edit's target) if the prim may have it.
+    /// Applies the schema to the prim at `path` (text, `"/World/Prim"`,
+    /// or an id) as a `prepend apiSchemas` entry in the edit's target, if
+    /// the prim may have it.
     ///
     /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.
     ///
@@ -2363,7 +2376,7 @@ impl<'a> ParticleFieldRadianceBaseApi<'a> {
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
-        path: PathId,
+        path: impl ::layerstack::PrimPathArg,
     ) -> Result<ParticleFieldRadianceBaseApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(ParticleFieldRadianceBaseApiEdit::from_prim)
@@ -2452,8 +2465,9 @@ impl<'a> ParticleFieldScaleAttributeApi<'a> {
         Self { base: prim }
     }
 
-    /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
-    /// edit's target) if the prim may have it.
+    /// Applies the schema to the prim at `path` (text, `"/World/Prim"`,
+    /// or an id) as a `prepend apiSchemas` entry in the edit's target, if
+    /// the prim may have it.
     ///
     /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.
     ///
@@ -2465,7 +2479,7 @@ impl<'a> ParticleFieldScaleAttributeApi<'a> {
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
-        path: PathId,
+        path: impl ::layerstack::PrimPathArg,
     ) -> Result<ParticleFieldScaleAttributeApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(ParticleFieldScaleAttributeApiEdit::from_prim)
@@ -2707,8 +2721,9 @@ impl<'a> ParticleFieldSphericalHarmonicsAttributeApi<'a> {
         Self { base: prim }
     }
 
-    /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
-    /// edit's target) if the prim may have it.
+    /// Applies the schema to the prim at `path` (text, `"/World/Prim"`,
+    /// or an id) as a `prepend apiSchemas` entry in the edit's target, if
+    /// the prim may have it.
     ///
     /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.
     ///
@@ -2720,7 +2735,7 @@ impl<'a> ParticleFieldSphericalHarmonicsAttributeApi<'a> {
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
-        path: PathId,
+        path: impl ::layerstack::PrimPathArg,
     ) -> Result<ParticleFieldSphericalHarmonicsAttributeApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(ParticleFieldSphericalHarmonicsAttributeApiEdit::from_prim)
@@ -3012,7 +3027,7 @@ impl ParticleFieldSphericalHarmonicsAttributeApiEdit {
 
 #[doc = "A renderable volume containing one or more volumetric data fields, used to represent a volume effect such as smoke or fire."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `Volume`, inheriting [`crate::usd_geom::Gprim`]. Construct it with [`Volume::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `Volume`, inheriting [`crate::usd_geom::Gprim`]. Construct it with [`Volume::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdVolVolume`."]
 #[doc(alias = "UsdVolVolume")]
 #[derive(Clone, Copy, Debug)]
@@ -3036,7 +3051,7 @@ impl<'a> Volume<'a> {
     #[doc(alias = "UsdVolVolume::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -3044,7 +3059,7 @@ impl<'a> Volume<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -3057,7 +3072,8 @@ impl<'a> Volume<'a> {
     /// Defines the prim at `path` as a `Volume`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `Volume` is left as it is.
+    /// already defined as a `Volume` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///
@@ -3175,7 +3191,7 @@ impl VolumeFieldAssetVectorDataRoleHint {
 
 #[doc = "The base schema class for volume field primitives defined by an external file."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's abstract typed schema `VolumeFieldAsset`, inheriting [`FieldBase`]. Construct it with [`VolumeFieldAsset::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's abstract typed schema `VolumeFieldAsset`, inheriting [`FieldBase`]. Construct it with [`VolumeFieldAsset::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdVolVolumeFieldAsset`."]
 #[doc(alias = "UsdVolVolumeFieldAsset")]
 #[derive(Clone, Copy, Debug)]
@@ -3199,7 +3215,7 @@ impl<'a> VolumeFieldAsset<'a> {
     #[doc(alias = "UsdVolVolumeFieldAsset::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -3207,7 +3223,7 @@ impl<'a> VolumeFieldAsset<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -3478,7 +3494,7 @@ impl VolumeFieldAssetEdit {
 
 #[doc = "The base schema class for volume field primitives."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's abstract typed schema `VolumeFieldBase`, inheriting [`crate::usd_geom::Xformable`]. Construct it with [`VolumeFieldBase::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's abstract typed schema `VolumeFieldBase`, inheriting [`crate::usd_geom::Xformable`]. Construct it with [`VolumeFieldBase::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdVolVolumeFieldBase`."]
 #[doc(alias = "UsdVolVolumeFieldBase")]
 #[derive(Clone, Copy, Debug)]
@@ -3502,7 +3518,7 @@ impl<'a> VolumeFieldBase<'a> {
     #[doc(alias = "UsdVolVolumeFieldBase::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -3510,7 +3526,7 @@ impl<'a> VolumeFieldBase<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]

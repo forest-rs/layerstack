@@ -119,7 +119,7 @@ impl EvaluationEvidence {
             return Err(EvidenceError::Invalidated);
         }
         if !self.recipe_snapshot.is_current(scene.stage())
-            && GenerativeProcedural::new(scene, self.recipe).is_none()
+            && GenerativeProcedural::get(scene, self.recipe).is_none()
         {
             return Err(EvidenceError::NotProcedural(self.recipe));
         }

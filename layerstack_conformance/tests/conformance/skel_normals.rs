@@ -61,7 +61,7 @@ fn normals_rigid_transforms_and_standalone_animation_match_cpp() {
             matrix(&q.compute_rigid_transform(time).unwrap(), &row["transform"]);
         }
     }
-    let anim = SkelAnimation::new(&scene, animation).unwrap();
+    let anim = SkelAnimation::get(&scene, animation).unwrap();
     assert_eq!(
         serde_json::json!(anim.joint_transform_time_samples()),
         expected["joint_samples"]
@@ -153,7 +153,7 @@ fn sample_helpers_apply_offsets_masking_and_single_sample_variability() {
         let (store, live) = support::scene(&text);
         let path = store.path("/Offset");
         let scene = Scene::new(live.stage(), &store);
-        let anim = SkelAnimation::new(&scene, path).unwrap();
+        let anim = SkelAnimation::get(&scene, path).unwrap();
         assert_eq!(anim.joint_transform_time_samples(), expected);
         assert_eq!(anim.joint_transform_time_samples_in_interval(5., 7.), [6.]);
         assert_eq!(anim.blend_shape_weight_time_samples(), [4., 8.]);
@@ -180,7 +180,7 @@ fn unavailable_and_malformed_animation_components_are_distinct() {
     let path = store.path("/Rig/Animation");
     let scene = Scene::new(live.stage(), &store);
     assert!(
-        SkelAnimation::new(&scene, path)
+        SkelAnimation::get(&scene, path)
             .unwrap()
             .compute_joint_local_transforms(Time::Default)
             .unwrap()
@@ -194,7 +194,7 @@ fn unavailable_and_malformed_animation_components_are_distinct() {
     let path = store.path("/Rig/Animation");
     let scene = Scene::new(live.stage(), &store);
     assert!(matches!(
-        SkelAnimation::new(&scene, path)
+        SkelAnimation::get(&scene, path)
             .unwrap()
             .compute_joint_local_transforms(Time::Default),
         Err(SkelError::ArrayLength {

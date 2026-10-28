@@ -47,7 +47,7 @@ fn field_queries_match_cpp_with_forwarding_cycles_and_basename_collisions() {
     let (store, live) = support::scene(include_str!("../../fixtures/volume/scene.usda"));
     let path = store.path("/Volume");
     let scene = Scene::new(live.stage(), &store);
-    let volume = Volume::new(&scene, path).unwrap();
+    let volume = Volume::get(&scene, path).unwrap();
     let fields: BTreeMap<_, _> = volume
         .field_paths()
         .into_iter()
@@ -122,7 +122,7 @@ fn field_edit_results_match_cpp_and_preserve_existing_custom_qualifier() {
         .unwrap();
         let name = store.tokens().intern(format!("field:{}", row.name));
         let scene = Scene::new(live.stage(), &store);
-        let view = Volume::new(&scene, volume).unwrap();
+        let view = Volume::get(&scene, volume).unwrap();
         assert_eq!(view.has_field_relationship(&row.name), row.exists);
         let declaration = live
             .stage()
@@ -174,14 +174,14 @@ fn same_batch_definition_retarget_block_and_undo_are_coherent() {
     }
     .unwrap();
     let scene = Scene::new(live.stage(), &store);
-    let view = Volume::new(&scene, volume).unwrap();
+    let view = Volume::get(&scene, volume).unwrap();
     assert!(view.has_field_relationship("density"));
     assert_eq!(view.field_path("density"), None);
     let undone = live.apply(&mut store, &applied.inverse).unwrap();
     assert!(live.stage().prim(volume, &store).is_none());
     live.apply(&mut store, &undone.inverse).unwrap();
     assert!(
-        Volume::new(&Scene::new(live.stage(), &store), volume)
+        Volume::get(&Scene::new(live.stage(), &store), volume)
             .unwrap()
             .has_field_relationship("density")
     );
@@ -251,14 +251,14 @@ fn weaker_custom_binding_is_blocked_without_losing_declaration_and_restored_by_u
             .custom
     );
     assert_eq!(
-        Volume::new(&Scene::new(live.stage(), &store), path)
+        Volume::get(&Scene::new(live.stage(), &store), path)
             .unwrap()
             .field_path("density"),
         None
     );
     live.apply(&mut store, &applied.inverse).unwrap();
     assert!(
-        Volume::new(&Scene::new(live.stage(), &store), path)
+        Volume::get(&Scene::new(live.stage(), &store), path)
             .unwrap()
             .field_path("density")
             .is_some()
@@ -308,7 +308,7 @@ fn variant_target_preserves_local_relationship_metadata_and_child_branch_specs()
             before.custom
         );
         assert_eq!(
-            Volume::new(&Scene::new(live.stage(), &store), path)
+            Volume::get(&Scene::new(live.stage(), &store), path)
                 .unwrap()
                 .field_path("density"),
             None
@@ -351,11 +351,11 @@ fn reference_edit_target_maps_relationship_and_target_paths_and_undo() {
     let source_field = store.path("/Asset/Field");
     let scene = Scene::new(live.stage(), &store);
     assert_eq!(
-        Volume::new(&scene, path).unwrap().field_path("new"),
+        Volume::get(&scene, path).unwrap().field_path("new"),
         Some(field)
     );
     assert_eq!(
-        Volume::new(&scene, source).unwrap().field_path("new"),
+        Volume::get(&scene, source).unwrap().field_path("new"),
         Some(source_field)
     );
     live.apply(&mut store, &applied.inverse).unwrap();

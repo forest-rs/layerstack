@@ -444,7 +444,7 @@ fn prim_rule(scene: &Scene<'_>, prim: PathId, rule: BuiltinRule, out: &mut Valid
         BuiltinRule::AllowedTokens => allowed_tokens(scene, prim, rule, out),
         #[cfg(feature = "usd-geom")]
         BuiltinRule::MeshTopology => {
-            if let Some(mesh) = crate::usd_geom::Mesh::new(scene, prim) {
+            if let Some(mesh) = crate::usd_geom::Mesh::get(scene, prim) {
                 for time in out.times.clone() {
                     out.work.mesh_time_evaluations += 1;
                     if let Err(problem) = mesh.validate_topology(time) {
@@ -461,7 +461,7 @@ fn prim_rule(scene: &Scene<'_>, prim: PathId, rule: BuiltinRule, out: &mut Valid
         }
         #[cfg(feature = "usd-geom")]
         BuiltinRule::SubsetFamilies => {
-            if let Some(imageable) = crate::usd_geom::Imageable::new(scene, prim) {
+            if let Some(imageable) = crate::usd_geom::Imageable::get(scene, prim) {
                 let families: BTreeSet<_> = imageable
                     .geom_subsets(None, None)
                     .iter()
@@ -621,7 +621,7 @@ fn material_subsets(
     rule: BuiltinRule,
     out: &mut ValidationReport,
 ) {
-    if let Some(subset) = crate::usd_geom::GeomSubset::new(scene, prim) {
+    if let Some(subset) = crate::usd_geom::GeomSubset::get(scene, prim) {
         let bound = properties(scene, prim).into_iter().any(|p| {
             p.name().starts_with("material:binding")
                 && p.declaration()
@@ -638,7 +638,7 @@ fn material_subsets(
             );
         }
     }
-    if let Some(imageable) = crate::usd_geom::Imageable::new(scene, prim)
+    if let Some(imageable) = crate::usd_geom::Imageable::get(scene, prim)
         && !imageable
             .geom_subsets(None, Some("materialBind"))
             .is_empty()

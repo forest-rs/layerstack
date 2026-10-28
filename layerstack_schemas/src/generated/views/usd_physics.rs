@@ -69,8 +69,9 @@ impl<'a> PhysicsArticulationRootApi<'a> {
         Self { base: prim }
     }
 
-    /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
-    /// edit's target) if the prim may have it.
+    /// Applies the schema to the prim at `path` (text, `"/World/Prim"`,
+    /// or an id) as a `prepend apiSchemas` entry in the edit's target, if
+    /// the prim may have it.
     ///
     /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.
     ///
@@ -82,7 +83,7 @@ impl<'a> PhysicsArticulationRootApi<'a> {
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
-        path: PathId,
+        path: impl ::layerstack::PrimPathArg,
     ) -> Result<PhysicsArticulationRootApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(PhysicsArticulationRootApiEdit::from_prim)
@@ -171,8 +172,9 @@ impl<'a> PhysicsCollisionApi<'a> {
         Self { base: prim }
     }
 
-    /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
-    /// edit's target) if the prim may have it.
+    /// Applies the schema to the prim at `path` (text, `"/World/Prim"`,
+    /// or an id) as a `prepend apiSchemas` entry in the edit's target, if
+    /// the prim may have it.
     ///
     /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.
     ///
@@ -184,7 +186,7 @@ impl<'a> PhysicsCollisionApi<'a> {
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
-        path: PathId,
+        path: impl ::layerstack::PrimPathArg,
     ) -> Result<PhysicsCollisionApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(PhysicsCollisionApiEdit::from_prim)
@@ -329,7 +331,7 @@ impl PhysicsCollisionApiEdit {
 
 #[doc = "Defines a collision group for coarse filtering."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `PhysicsCollisionGroup`, inheriting [`crate::usd::Typed`]. Construct it with [`PhysicsCollisionGroup::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `PhysicsCollisionGroup`, inheriting [`crate::usd::Typed`]. Construct it with [`PhysicsCollisionGroup::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdPhysicsCollisionGroup`."]
 #[doc(alias = "UsdPhysicsCollisionGroup")]
 #[derive(Clone, Copy, Debug)]
@@ -353,7 +355,7 @@ impl<'a> PhysicsCollisionGroup<'a> {
     #[doc(alias = "UsdPhysicsCollisionGroup::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -361,7 +363,7 @@ impl<'a> PhysicsCollisionGroup<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -374,7 +376,8 @@ impl<'a> PhysicsCollisionGroup<'a> {
     /// Defines the prim at `path` as a `PhysicsCollisionGroup`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `PhysicsCollisionGroup` is left as it is.
+    /// already defined as a `PhysicsCollisionGroup` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///
@@ -578,7 +581,7 @@ impl PhysicsCollisionGroupEdit {
 
 #[doc = "Predefined distance joint type (Distance between rigid bodies may be limited to given minimum or maximum distance.)."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `PhysicsDistanceJoint`, inheriting [`PhysicsJoint`]. Construct it with [`PhysicsDistanceJoint::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `PhysicsDistanceJoint`, inheriting [`PhysicsJoint`]. Construct it with [`PhysicsDistanceJoint::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdPhysicsDistanceJoint`."]
 #[doc(alias = "UsdPhysicsDistanceJoint")]
 #[derive(Clone, Copy, Debug)]
@@ -602,7 +605,7 @@ impl<'a> PhysicsDistanceJoint<'a> {
     #[doc(alias = "UsdPhysicsDistanceJoint::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -610,7 +613,7 @@ impl<'a> PhysicsDistanceJoint<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -623,7 +626,8 @@ impl<'a> PhysicsDistanceJoint<'a> {
     /// Defines the prim at `path` as a `PhysicsDistanceJoint`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `PhysicsDistanceJoint` is left as it is.
+    /// already defined as a `PhysicsDistanceJoint` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///
@@ -888,8 +892,9 @@ impl<'a> PhysicsDriveApi<'a> {
         Self { base: instance }
     }
 
-    /// Applies the instance `instance` of the schema to `path` (a `prepend
-    /// apiSchemas` entry in the edit's target) if the prim may have it.
+    /// Applies the instance `instance` of the schema to the prim at `path`
+    /// (text, `"/World/Prim"`, or an id) as a `prepend apiSchemas`
+    /// entry in the edit's target, if the prim may have it.
     ///
     /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.
     ///
@@ -901,7 +906,7 @@ impl<'a> PhysicsDriveApi<'a> {
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
-        path: PathId,
+        path: impl ::layerstack::PrimPathArg,
         instance: &str,
     ) -> Result<PhysicsDriveApiEdit, ApplySchemaError> {
         let prim = edit.apply_api(path, Self::SCHEMA, Some(instance))?;
@@ -1255,8 +1260,9 @@ impl<'a> PhysicsFilteredPairsApi<'a> {
         Self { base: prim }
     }
 
-    /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
-    /// edit's target) if the prim may have it.
+    /// Applies the schema to the prim at `path` (text, `"/World/Prim"`,
+    /// or an id) as a `prepend apiSchemas` entry in the edit's target, if
+    /// the prim may have it.
     ///
     /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.
     ///
@@ -1268,7 +1274,7 @@ impl<'a> PhysicsFilteredPairsApi<'a> {
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
-        path: PathId,
+        path: impl ::layerstack::PrimPathArg,
     ) -> Result<PhysicsFilteredPairsApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(PhysicsFilteredPairsApiEdit::from_prim)
@@ -1369,7 +1375,7 @@ impl PhysicsFilteredPairsApiEdit {
 
 #[doc = "Predefined fixed joint type (All degrees of freedom are removed.)."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `PhysicsFixedJoint`, inheriting [`PhysicsJoint`]. Construct it with [`PhysicsFixedJoint::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `PhysicsFixedJoint`, inheriting [`PhysicsJoint`]. Construct it with [`PhysicsFixedJoint::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdPhysicsFixedJoint`."]
 #[doc(alias = "UsdPhysicsFixedJoint")]
 #[derive(Clone, Copy, Debug)]
@@ -1393,7 +1399,7 @@ impl<'a> PhysicsFixedJoint<'a> {
     #[doc(alias = "UsdPhysicsFixedJoint::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -1401,7 +1407,7 @@ impl<'a> PhysicsFixedJoint<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -1414,7 +1420,8 @@ impl<'a> PhysicsFixedJoint<'a> {
     /// Defines the prim at `path` as a `PhysicsFixedJoint`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `PhysicsFixedJoint` is left as it is.
+    /// already defined as a `PhysicsFixedJoint` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///
@@ -1472,7 +1479,7 @@ impl PhysicsFixedJointEdit {
 
 #[doc = "A joint constrains the movement of rigid bodies."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `PhysicsJoint`, inheriting [`crate::usd_geom::Imageable`]. Construct it with [`PhysicsJoint::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `PhysicsJoint`, inheriting [`crate::usd_geom::Imageable`]. Construct it with [`PhysicsJoint::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdPhysicsJoint`."]
 #[doc(alias = "UsdPhysicsJoint")]
 #[derive(Clone, Copy, Debug)]
@@ -1496,7 +1503,7 @@ impl<'a> PhysicsJoint<'a> {
     #[doc(alias = "UsdPhysicsJoint::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -1504,7 +1511,7 @@ impl<'a> PhysicsJoint<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -1517,7 +1524,8 @@ impl<'a> PhysicsJoint<'a> {
     /// Defines the prim at `path` as a `PhysicsJoint`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `PhysicsJoint` is left as it is.
+    /// already defined as a `PhysicsJoint` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///
@@ -2121,8 +2129,9 @@ impl<'a> PhysicsLimitApi<'a> {
         Self { base: instance }
     }
 
-    /// Applies the instance `instance` of the schema to `path` (a `prepend
-    /// apiSchemas` entry in the edit's target) if the prim may have it.
+    /// Applies the instance `instance` of the schema to the prim at `path`
+    /// (text, `"/World/Prim"`, or an id) as a `prepend apiSchemas`
+    /// entry in the edit's target, if the prim may have it.
     ///
     /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.
     ///
@@ -2134,7 +2143,7 @@ impl<'a> PhysicsLimitApi<'a> {
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
-        path: PathId,
+        path: impl ::layerstack::PrimPathArg,
         instance: &str,
     ) -> Result<PhysicsLimitApiEdit, ApplySchemaError> {
         let prim = edit.apply_api(path, Self::SCHEMA, Some(instance))?;
@@ -2307,8 +2316,9 @@ impl<'a> PhysicsMassApi<'a> {
         Self { base: prim }
     }
 
-    /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
-    /// edit's target) if the prim may have it.
+    /// Applies the schema to the prim at `path` (text, `"/World/Prim"`,
+    /// or an id) as a `prepend apiSchemas` entry in the edit's target, if
+    /// the prim may have it.
     ///
     /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.
     ///
@@ -2320,7 +2330,7 @@ impl<'a> PhysicsMassApi<'a> {
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
-        path: PathId,
+        path: impl ::layerstack::PrimPathArg,
     ) -> Result<PhysicsMassApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(PhysicsMassApiEdit::from_prim)
@@ -2619,8 +2629,9 @@ impl<'a> PhysicsMaterialApi<'a> {
         Self { base: prim }
     }
 
-    /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
-    /// edit's target) if the prim may have it.
+    /// Applies the schema to the prim at `path` (text, `"/World/Prim"`,
+    /// or an id) as a `prepend apiSchemas` entry in the edit's target, if
+    /// the prim may have it.
     ///
     /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.
     ///
@@ -2632,7 +2643,7 @@ impl<'a> PhysicsMaterialApi<'a> {
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
-        path: PathId,
+        path: impl ::layerstack::PrimPathArg,
     ) -> Result<PhysicsMaterialApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(PhysicsMaterialApiEdit::from_prim)
@@ -2961,8 +2972,9 @@ impl<'a> PhysicsMeshCollisionApi<'a> {
         Self { base: prim }
     }
 
-    /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
-    /// edit's target) if the prim may have it.
+    /// Applies the schema to the prim at `path` (text, `"/World/Prim"`,
+    /// or an id) as a `prepend apiSchemas` entry in the edit's target, if
+    /// the prim may have it.
     ///
     /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.
     ///
@@ -2974,7 +2986,7 @@ impl<'a> PhysicsMeshCollisionApi<'a> {
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
-        path: PathId,
+        path: impl ::layerstack::PrimPathArg,
     ) -> Result<PhysicsMeshCollisionApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(PhysicsMeshCollisionApiEdit::from_prim)
@@ -3109,7 +3121,7 @@ impl PhysicsPrismaticJointAxis {
 
 #[doc = "Predefined prismatic joint type (translation along prismatic joint axis is permitted.)."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `PhysicsPrismaticJoint`, inheriting [`PhysicsJoint`]. Construct it with [`PhysicsPrismaticJoint::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `PhysicsPrismaticJoint`, inheriting [`PhysicsJoint`]. Construct it with [`PhysicsPrismaticJoint::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdPhysicsPrismaticJoint`."]
 #[doc(alias = "UsdPhysicsPrismaticJoint")]
 #[derive(Clone, Copy, Debug)]
@@ -3133,7 +3145,7 @@ impl<'a> PhysicsPrismaticJoint<'a> {
     #[doc(alias = "UsdPhysicsPrismaticJoint::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -3141,7 +3153,7 @@ impl<'a> PhysicsPrismaticJoint<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -3154,7 +3166,8 @@ impl<'a> PhysicsPrismaticJoint<'a> {
     /// Defines the prim at `path` as a `PhysicsPrismaticJoint`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `PhysicsPrismaticJoint` is left as it is.
+    /// already defined as a `PhysicsPrismaticJoint` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///
@@ -3371,7 +3384,7 @@ impl PhysicsRevoluteJointAxis {
 
 #[doc = "Predefined revolute joint type (rotation along revolute joint axis is permitted.)."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `PhysicsRevoluteJoint`, inheriting [`PhysicsJoint`]. Construct it with [`PhysicsRevoluteJoint::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `PhysicsRevoluteJoint`, inheriting [`PhysicsJoint`]. Construct it with [`PhysicsRevoluteJoint::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdPhysicsRevoluteJoint`."]
 #[doc(alias = "UsdPhysicsRevoluteJoint")]
 #[derive(Clone, Copy, Debug)]
@@ -3395,7 +3408,7 @@ impl<'a> PhysicsRevoluteJoint<'a> {
     #[doc(alias = "UsdPhysicsRevoluteJoint::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -3403,7 +3416,7 @@ impl<'a> PhysicsRevoluteJoint<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -3416,7 +3429,8 @@ impl<'a> PhysicsRevoluteJoint<'a> {
     /// Defines the prim at `path` as a `PhysicsRevoluteJoint`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `PhysicsRevoluteJoint` is left as it is.
+    /// already defined as a `PhysicsRevoluteJoint` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///
@@ -3620,8 +3634,9 @@ impl<'a> PhysicsRigidBodyApi<'a> {
         Self { base: prim }
     }
 
-    /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
-    /// edit's target) if the prim may have it.
+    /// Applies the schema to the prim at `path` (text, `"/World/Prim"`,
+    /// or an id) as a `prepend apiSchemas` entry in the edit's target, if
+    /// the prim may have it.
     ///
     /// OpenUSD: `UsdPrim::CanApplyAPI`, then `UsdPrim::ApplyAPI`.
     ///
@@ -3633,7 +3648,7 @@ impl<'a> PhysicsRigidBodyApi<'a> {
     #[doc(alias = "Apply")]
     pub fn apply(
         edit: &mut SchemaEdit<'_>,
-        path: PathId,
+        path: impl ::layerstack::PrimPathArg,
     ) -> Result<PhysicsRigidBodyApiEdit, ApplySchemaError> {
         edit.apply_api(path, Self::SCHEMA, None)
             .map(PhysicsRigidBodyApiEdit::from_prim)
@@ -3931,7 +3946,7 @@ impl PhysicsRigidBodyApiEdit {
 
 #[doc = "General physics simulation properties, required for simulation."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `PhysicsScene`, inheriting [`crate::usd::Typed`]. Construct it with [`PhysicsScene::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `PhysicsScene`, inheriting [`crate::usd::Typed`]. Construct it with [`PhysicsScene::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdPhysicsScene`."]
 #[doc(alias = "UsdPhysicsScene")]
 #[derive(Clone, Copy, Debug)]
@@ -3955,7 +3970,7 @@ impl<'a> PhysicsScene<'a> {
     #[doc(alias = "UsdPhysicsScene::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -3963,7 +3978,7 @@ impl<'a> PhysicsScene<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -3976,7 +3991,8 @@ impl<'a> PhysicsScene<'a> {
     /// Defines the prim at `path` as a `PhysicsScene`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `PhysicsScene` is left as it is.
+    /// already defined as a `PhysicsScene` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///
@@ -4174,7 +4190,7 @@ impl PhysicsSphericalJointAxis {
 
 #[doc = "Predefined spherical joint type (Removes linear degrees of freedom, cone limit may restrict the motion in a given range.) It allows two limit values, which when equal create a circular, else an elliptic cone limit around the limit axis."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's concrete typed schema `PhysicsSphericalJoint`, inheriting [`PhysicsJoint`]. Construct it with [`PhysicsSphericalJoint::new`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's concrete typed schema `PhysicsSphericalJoint`, inheriting [`PhysicsJoint`]. Construct it with [`PhysicsSphericalJoint::get`], which checks the prim is of the schema (`IsA`); it derefs to the view of the schema it inherits from. For anything it does not offer, read the property by its USD name through the generic handle ([`PrimView::prim`]; `Attribute::get` returns the raw resolved value)."]
 #[doc = "C++ schema class: `UsdPhysicsSphericalJoint`."]
 #[doc(alias = "UsdPhysicsSphericalJoint")]
 #[derive(Clone, Copy, Debug)]
@@ -4198,7 +4214,7 @@ impl<'a> PhysicsSphericalJoint<'a> {
     #[doc(alias = "UsdPhysicsSphericalJoint::Get")]
     #[doc(alias = "Get")]
     #[must_use]
-    pub fn new(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
+    pub fn get(scene: &Scene<'a>, path: impl ::layerstack::PrimPathArg) -> Option<Self> {
         let path = scene.prim_path(path)?;
         scene
             .is_a(path, Self::SCHEMA)
@@ -4206,7 +4222,7 @@ impl<'a> PhysicsSphericalJoint<'a> {
     }
 
     /// A view of `prim` as of the schema, without checking that it is
-    /// (`IsA`), as [`Self::new`] does: a getter reads what the prim
+    /// (`IsA`), as [`Self::get`] does: a getter reads what the prim
     /// authors, and the schema's fallbacks only for a prim of the schema.
     /// For the view of a schema built on this one.
     #[must_use]
@@ -4219,7 +4235,8 @@ impl<'a> PhysicsSphericalJoint<'a> {
     /// Defines the prim at `path` as a `PhysicsSphericalJoint`, and its undefined
     /// ancestors, through the edit's target, as OpenUSD's
     /// `UsdStage::DefinePrim` does ([`SchemaEdit::define_prim`]): a prim
-    /// already defined as a `PhysicsSphericalJoint` is left as it is.
+    /// already defined as a `PhysicsSphericalJoint` is left as it is. `path` is an
+    /// interned id, since the prim may not exist yet.
     ///
     /// # Errors
     ///

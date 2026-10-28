@@ -54,11 +54,11 @@ fn recipes_drive_shared_geometry_material_inputs_and_dependent_bounds() {
     let mut generated = support::GeneratedScene::new(4);
     let native = generated.store.path("/World/Native_0/Geometry");
     let scene = Scene::new(generated.live.stage(), &generated.store);
-    let initial = Mesh::new(&scene, native).unwrap().points().unwrap();
+    let initial = Mesh::get(&scene, native).unwrap().points().unwrap();
     let topology = generated.geometry.face_vertex_indices.clone();
     assert!(Arc::ptr_eq(
         &initial,
-        &Mesh::new(&scene, generated.terrain)
+        &Mesh::get(&scene, generated.terrain)
             .unwrap()
             .points()
             .unwrap()
@@ -113,7 +113,7 @@ fn recipes_drive_shared_geometry_material_inputs_and_dependent_bounds() {
     assert_eq!(height(&mut cache, &scene, generated.scatter), 3.);
     assert!(Arc::ptr_eq(
         &topology,
-        &Mesh::new(&scene, native)
+        &Mesh::get(&scene, native)
             .unwrap()
             .face_vertex_indices()
             .unwrap()
@@ -121,7 +121,7 @@ fn recipes_drive_shared_geometry_material_inputs_and_dependent_bounds() {
     assert!(
         Arc::ptr_eq(
             &initial,
-            &Mesh::new(&scene, generated.terrain)
+            &Mesh::get(&scene, generated.terrain)
                 .unwrap()
                 .points()
                 .unwrap()
@@ -184,7 +184,7 @@ fn recipes_drive_shared_geometry_material_inputs_and_dependent_bounds() {
     cache.apply_changes(&scene, &changes);
     assert_eq!(height(&mut cache, &scene, generated.scatter), 6.);
     assert_eq!(
-        Mesh::new(&scene, native).unwrap().points().unwrap()[2][1],
+        Mesh::get(&scene, native).unwrap().points().unwrap()[2][1],
         6.
     );
     let quad = generated.store.tokens().intern("quad");
@@ -203,7 +203,7 @@ fn recipes_drive_shared_geometry_material_inputs_and_dependent_bounds() {
     generated.evaluate_asset(Time::Default).unwrap();
     let scene = Scene::new(generated.live.stage(), &generated.store);
     assert_eq!(
-        &**Mesh::new(&scene, native)
+        &**Mesh::get(&scene, native)
             .unwrap()
             .face_vertex_counts()
             .unwrap(),
@@ -232,7 +232,7 @@ fn invalid_missing_and_recreated_recipes_preserve_last_good_publication() {
     assert!(generated.evaluate_asset(Time::Default).is_err());
     assert!(Arc::ptr_eq(
         &initial,
-        &Mesh::new(
+        &Mesh::get(
             &Scene::new(generated.live.stage(), &generated.store),
             generated.source
         )
@@ -259,7 +259,7 @@ fn invalid_missing_and_recreated_recipes_preserve_last_good_publication() {
     assert!(generated.evaluate_asset(Time::Default).is_err());
     assert!(Arc::ptr_eq(
         &initial,
-        &Mesh::new(
+        &Mesh::get(
             &Scene::new(generated.live.stage(), &generated.store),
             generated.source
         )
@@ -329,7 +329,7 @@ fn material_publication_uses_owned_opinions_and_rejects_partial_updates() {
     assert!(
         Arc::ptr_eq(
             &initial,
-            &Mesh::new(
+            &Mesh::get(
                 &Scene::new(generated.live.stage(), &generated.store),
                 generated.source
             )
@@ -429,7 +429,7 @@ fn shared_sources_invalidate_native_and_point_instances_and_recover_after_recrea
         matches!(generated.geometry.prepare(generated.live.stage(), &mut generated.store, &EditTarget::for_layer(support::ASSET), proxy, &[]), Err(MeshPublicationError::InstanceProxy(p)) if p == proxy)
     );
     let scene = Scene::new(generated.live.stage(), &generated.store);
-    let mesh = Mesh::new(&scene, proxy).unwrap();
+    let mesh = Mesh::get(&scene, proxy).unwrap();
     assert!(Arc::ptr_eq(
         &mesh.points().unwrap(),
         &generated.geometry.points
@@ -458,7 +458,7 @@ fn shared_sources_invalidate_native_and_point_instances_and_recover_after_recrea
     let mut cache = BoundsCache::new(Time::Default, BoundsOptions::default());
     assert_eq!(height(&mut cache, &scene, generated.scatter), 1.);
     let unchanged_topology = mesh.face_vertex_indices().unwrap();
-    let terrain_points = Mesh::new(&scene, generated.terrain)
+    let terrain_points = Mesh::get(&scene, generated.terrain)
         .unwrap()
         .points()
         .unwrap();
@@ -470,14 +470,14 @@ fn shared_sources_invalidate_native_and_point_instances_and_recover_after_recrea
     assert_eq!(height(&mut cache, &scene, generated.scatter), 3.);
     assert!(Arc::ptr_eq(
         &unchanged_topology,
-        &Mesh::new(&scene, proxy)
+        &Mesh::get(&scene, proxy)
             .unwrap()
             .face_vertex_indices()
             .unwrap()
     ));
     assert!(Arc::ptr_eq(
         &terrain_points,
-        &Mesh::new(&scene, generated.terrain)
+        &Mesh::get(&scene, generated.terrain)
             .unwrap()
             .points()
             .unwrap()
@@ -536,7 +536,7 @@ fn shared_sources_invalidate_native_and_point_instances_and_recover_after_recrea
     generated.geometry.primvars.remove(1);
     generated.publish();
     let scene = Scene::new(generated.live.stage(), &generated.store);
-    let mesh = Mesh::new(&scene, proxy).unwrap();
+    let mesh = Mesh::get(&scene, proxy).unwrap();
     assert_eq!(&**mesh.face_vertex_counts().unwrap(), &[4]);
     assert!(Primvar::new(&scene, proxy, "normals").is_none());
     assert!(
@@ -579,7 +579,7 @@ fn animate(generated: &mut support::GeneratedScene) {
         .apply(&mut generated.store, &transaction)
         .unwrap();
     let scene = Scene::new(generated.live.stage(), &generated.store);
-    let source = Mesh::new(&scene, generated.source).unwrap();
+    let source = Mesh::get(&scene, generated.source).unwrap();
     let owned_sample = source.points_at(Time::at(14.)).unwrap();
     assert_eq!(
         owned_sample.as_ptr(),
@@ -676,7 +676,7 @@ fn missing_prototypes_and_default_republication_retire_previous_samples() {
     let scene = Scene::new(generated.live.stage(), &generated.store);
     cache.apply_changes(&scene, &applied.changes);
     assert_eq!(height(&mut cache, &scene, generated.scatter), 1.);
-    let points = Mesh::new(&scene, generated.source)
+    let points = Mesh::get(&scene, generated.source)
         .unwrap()
         .points_at(Time::at(13.))
         .unwrap();
@@ -716,21 +716,21 @@ fn report(stage: &Stage, store: &InMemoryStore) -> serde_json::Value {
     let source = find("/Assets/Tree/Geometry");
     let proxy = find("/World/Native_0/Geometry");
     let scatter = find("/World/Scatter");
-    let mesh = Mesh::new(&scene, proxy).unwrap();
+    let mesh = Mesh::get(&scene, proxy).unwrap();
     let mut cache = BoundsCache::new(Time::at(13.), BoundsOptions::default());
     let bounds = cache.world_bound(&scene, scatter).unwrap().aligned_range();
-    let instancer = PointInstancer::new(&scene, scatter).unwrap();
+    let instancer = PointInstancer::get(&scene, scatter).unwrap();
     let time = Time::at(13.);
     let transforms = instancer
         .compute_instance_transforms(time, time, InstanceTransformOptions::default())
         .unwrap();
     let uv = Primvar::new(&scene, proxy, "st").unwrap();
     let normals = Primvar::new(&scene, proxy, "normals").unwrap();
-    let recipe = GenerativeProcedural::new(&scene, find("/Recipes/Tree")).unwrap();
+    let recipe = GenerativeProcedural::get(&scene, find("/Recipes/Tree")).unwrap();
     let mut evaluator = support::asset_generator(store, recipe.path());
     let generated = evaluator.evaluate(&scene, time).unwrap();
     let texture_shader = find("/Assets/Tree/Material/Texture");
-    let source_material = Material::new(&scene, find("/Assets/Tree/Material")).unwrap();
+    let source_material = Material::get(&scene, find("/Assets/Tree/Material")).unwrap();
     let texture = stage
         .prim(texture_shader, store)
         .unwrap()
@@ -766,7 +766,7 @@ fn report(stage: &Stage, store: &InMemoryStore) -> serde_json::Value {
         "ids": transforms.iter().map(|t| t.id).collect::<Vec<_>>(),
         "transforms": transforms.iter().map(|t| t.matrix).collect::<Vec<_>>(),
         "bounds": [bounds.min,bounds.max],
-        "sourceHeight": Mesh::new(&scene, source).unwrap().points_at(Time::at(13.)).unwrap()[2][1],
+        "sourceHeight": Mesh::get(&scene, source).unwrap().points_at(Time::at(13.)).unwrap()[2][1],
         "material": store.paths().display(mesh.compute_bound_material(&MaterialPurpose::All,BindingOptions::default()).material.unwrap(), store.tokens()).to_string(),
         "userTag": mesh.read_value("user:tag", layerstack_schemas::value::read_int),
         "proceduralSystem": recipe.procedural_system(),
@@ -814,8 +814,8 @@ def Xform "Asset" (variants = { string shape = "cube" }; prepend variantSets = "
         .expect("the mapped authored Mesh is editable while its sibling Cube is selected");
     live.apply(&mut store, &update.transaction).unwrap();
     let scene = Scene::new(live.stage(), &store);
-    assert!(Mesh::new(&scene, path).is_none());
-    let cube = layerstack_schemas::usd_geom::Cube::new(&scene, path).unwrap();
+    assert!(Mesh::get(&scene, path).is_none());
+    let cube = layerstack_schemas::usd_geom::Cube::get(&scene, path).unwrap();
     assert_eq!(cube.size(), Some(7.));
     assert!(
         live.stage()
@@ -836,7 +836,7 @@ def Xform "Asset" (variants = { string shape = "cube" }; prepend variantSets = "
     );
     live.apply(&mut store, &selection).unwrap();
     assert!(Arc::ptr_eq(
-        &Mesh::new(&Scene::new(live.stage(), &store), path)
+        &Mesh::get(&Scene::new(live.stage(), &store), path)
             .unwrap()
             .points()
             .unwrap(),
@@ -907,7 +907,7 @@ def Xform "Asset" (variants = { string shape = "mesh" }; prepend variantSets = "
     live.apply(&mut store, &intervening).unwrap();
     assert!(live.apply(&mut store, &pending.transaction).is_err());
     assert!(Arc::ptr_eq(
-        &Mesh::new(&Scene::new(live.stage(), &store), path)
+        &Mesh::get(&Scene::new(live.stage(), &store), path)
             .unwrap()
             .points()
             .unwrap(),
@@ -958,7 +958,7 @@ fn authored_layers_round_trip_in_both_formats_and_match_openusd() {
     assert!(
         Arc::ptr_eq(
             &output.geometry.mesh().points,
-            &Mesh::new(
+            &Mesh::get(
                 &Scene::new(generated.live.stage(), &generated.store),
                 generated.terrain
             )

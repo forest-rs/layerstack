@@ -43,7 +43,7 @@ fn family_validation_and_discovery_match_openusd() {
     for row in oracle.rows {
         let p = store.path(&row.path);
         let scene = Scene::new(live.stage(), &store);
-        let g = Imageable::new(&scene, p).unwrap();
+        let g = Imageable::get(&scene, p).unwrap();
         let e = element(&row.element);
         assert_eq!(
             g.validate_subset_family(&e, "materialBind").is_valid(),
@@ -95,7 +95,7 @@ fn malformed_counts_and_unsorted_edges_are_safe_and_deterministic() {
     );
     let path = store.path("/M");
     let scene = Scene::new(live.stage(), &store);
-    let g = Imageable::new(&scene, path).unwrap();
+    let g = Imageable::get(&scene, path).unwrap();
     assert_eq!(
         g.unassigned_subset_indices(&Element::Edge, "edges", Time::Default)
             .unwrap(),
@@ -130,7 +130,7 @@ def Mesh "M" {
     );
     let path = store.path("/M");
     let scene = Scene::new(live.stage(), &store);
-    let g = Imageable::new(&scene, path).unwrap();
+    let g = Imageable::get(&scene, path).unwrap();
     assert_eq!(
         g.unassigned_subset_indices(&Element::Edge, "", Time::Default)
             .unwrap(),

@@ -52,7 +52,7 @@ fn checked_schema_arrays_preserve_decode_errors_at_default_and_numeric_times() {
             },
         );
         let scene = Scene::new(live.stage(), &store);
-        let mesh = Mesh::new(&scene, path).unwrap();
+        let mesh = Mesh::get(&scene, path).unwrap();
         assert_eq!(mesh.try_points(time), Err(error.clone()));
         assert_eq!(
             value::try_read_float3_array_shared(&failed, store.tokens()),
@@ -80,7 +80,7 @@ fn checked_schema_reads_share_native_arrays_and_keep_typed_default_selection() {
     );
     live.apply(&mut store, &tx).unwrap();
     let scene = Scene::new(live.stage(), &store);
-    let mesh = Mesh::new(&scene, path).unwrap();
+    let mesh = Mesh::get(&scene, path).unwrap();
     assert!(Arc::ptr_eq(
         &buffer,
         &mesh.try_points(Time::Default).unwrap().unwrap()
@@ -121,7 +121,7 @@ fn checked_schema_reads_share_native_arrays_and_keep_typed_default_selection() {
         },
     );
     let scene = Scene::new(live.stage(), &store);
-    let mesh = Mesh::new(&scene, path).unwrap();
+    let mesh = Mesh::get(&scene, path).unwrap();
     assert!(Arc::ptr_eq(
         &buffer,
         &mesh.try_points(Time::Default).unwrap().unwrap()
@@ -260,7 +260,7 @@ fn checked_default_retry_preserves_weaker_decode_error_before_schema_fallback() 
             },
         );
         let scene = Scene::new(&stage, &store);
-        let mesh = Mesh::new(&scene, path).unwrap();
+        let mesh = Mesh::get(&scene, path).unwrap();
         assert_eq!(mesh.try_points(Time::Default), Err(error));
         assert_eq!(mesh.points(), None);
     }

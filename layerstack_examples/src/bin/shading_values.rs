@@ -42,7 +42,7 @@ fn main() {
     live.apply(&mut store, &transaction).unwrap();
 
     let scene = Scene::new(live.stage(), &store);
-    let shader = Shader::new(&scene, shader).unwrap();
+    let shader = Shader::get(&scene, shader).unwrap();
     let sources = shader.input("roughness").unwrap().value_sources();
     for source in sources.sources {
         let path = source.attribute.display(store.paths(), store.tokens());

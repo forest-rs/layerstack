@@ -184,13 +184,13 @@ fn captures_owned_uniform_and_sampled_inputs() {
     let transaction = edit.finish();
     stage.apply(&mut store, &transaction).unwrap();
     let scene = Scene::new(stage.stage(), &store);
-    let captured = LODDistanceHeuristic::new(&scene, path)
+    let captured = LODDistanceHeuristic::get(&scene, path)
         .unwrap()
         .capture_query(Time::at(1.))
         .unwrap();
     assert_eq!(captured.center, [1., 2., 3.]);
     assert_eq!(captured.thresholds, [10., 20.]);
-    let captured_screen = LODScreenSizeHeuristic::new(&scene, spath)
+    let captured_screen = LODScreenSizeHeuristic::get(&scene, spath)
         .unwrap()
         .capture_query(Time::Default)
         .unwrap();
@@ -253,7 +253,7 @@ fn capture_samples_uniform_settings_at_requested_time() {
     transaction.set_time_sample(target.property(PropertyPath::new(screen, token)), 1., value);
     stage.apply(&mut store, &transaction).unwrap();
     let scene = Scene::new(stage.stage(), &store);
-    let d = LODDistanceHeuristic::new(&scene, distance).unwrap();
+    let d = LODDistanceHeuristic::get(&scene, distance).unwrap();
     assert_eq!(
         d.capture_query(Time::Default).unwrap().compute_lod(50.),
         Ok(1.)
@@ -262,7 +262,7 @@ fn capture_samples_uniform_settings_at_requested_time() {
     assert_eq!(sampled.compute_lod(50.), Ok(0.));
     assert_eq!(&*sampled.domain, "sampled");
     assert_eq!(sampled.blend_thresholds, [200.]);
-    let s = LODScreenSizeHeuristic::new(&scene, screen).unwrap();
+    let s = LODScreenSizeHeuristic::get(&scene, screen).unwrap();
     assert_eq!(
         s.capture_query(Time::Default).unwrap().projection_method,
         ProjectionMethod::Sphere

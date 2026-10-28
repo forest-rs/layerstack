@@ -151,7 +151,7 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, paths: &[PathId]) {
     node.create_rgb_output(edit).unwrap();
 }
 pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json::Value) {
-    let node = PreviewSurface::new(scene, paths[0]).unwrap();
+    let node = PreviewSurface::get(scene, paths[0]).unwrap();
     assert_eq!(
         node.ports(PortKind::Input).len() + node.ports(PortKind::Output).len(),
         expected["UsdPreviewSurface"].as_object().unwrap().len(),
@@ -457,7 +457,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
             .unwrap(),
         "UsdPreviewSurface.outputs:surface: port type"
     );
-    let node = PrimvarReaderFloat::new(scene, paths[1]).unwrap();
+    let node = PrimvarReaderFloat::get(scene, paths[1]).unwrap();
     assert_eq!(
         node.ports(PortKind::Input).len() + node.ports(PortKind::Output).len(),
         expected["UsdPrimvarReader_float"]
@@ -514,7 +514,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
             .unwrap(),
         "UsdPrimvarReader_float.outputs:result: port type"
     );
-    let node = PrimvarReaderFloat2::new(scene, paths[2]).unwrap();
+    let node = PrimvarReaderFloat2::get(scene, paths[2]).unwrap();
     assert_eq!(
         node.ports(PortKind::Input).len() + node.ports(PortKind::Output).len(),
         expected["UsdPrimvarReader_float2"]
@@ -571,7 +571,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
             .unwrap(),
         "UsdPrimvarReader_float2.outputs:result: port type"
     );
-    let node = PrimvarReaderFloat3::new(scene, paths[3]).unwrap();
+    let node = PrimvarReaderFloat3::get(scene, paths[3]).unwrap();
     assert_eq!(
         node.ports(PortKind::Input).len() + node.ports(PortKind::Output).len(),
         expected["UsdPrimvarReader_float3"]
@@ -628,7 +628,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
             .unwrap(),
         "UsdPrimvarReader_float3.outputs:result: port type"
     );
-    let node = PrimvarReaderFloat4::new(scene, paths[4]).unwrap();
+    let node = PrimvarReaderFloat4::get(scene, paths[4]).unwrap();
     assert_eq!(
         node.ports(PortKind::Input).len() + node.ports(PortKind::Output).len(),
         expected["UsdPrimvarReader_float4"]
@@ -685,7 +685,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
             .unwrap(),
         "UsdPrimvarReader_float4.outputs:result: port type"
     );
-    let node = PrimvarReaderInt::new(scene, paths[5]).unwrap();
+    let node = PrimvarReaderInt::get(scene, paths[5]).unwrap();
     assert_eq!(
         node.ports(PortKind::Input).len() + node.ports(PortKind::Output).len(),
         expected["UsdPrimvarReader_int"].as_object().unwrap().len(),
@@ -739,7 +739,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
             .unwrap(),
         "UsdPrimvarReader_int.outputs:result: port type"
     );
-    let node = PrimvarReaderMatrix::new(scene, paths[6]).unwrap();
+    let node = PrimvarReaderMatrix::get(scene, paths[6]).unwrap();
     assert_eq!(
         node.ports(PortKind::Input).len() + node.ports(PortKind::Output).len(),
         expected["UsdPrimvarReader_matrix"]
@@ -796,7 +796,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
             .unwrap(),
         "UsdPrimvarReader_matrix.outputs:result: port type"
     );
-    let node = PrimvarReaderNormal::new(scene, paths[7]).unwrap();
+    let node = PrimvarReaderNormal::get(scene, paths[7]).unwrap();
     assert_eq!(
         node.ports(PortKind::Input).len() + node.ports(PortKind::Output).len(),
         expected["UsdPrimvarReader_normal"]
@@ -853,7 +853,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
             .unwrap(),
         "UsdPrimvarReader_normal.outputs:result: port type"
     );
-    let node = PrimvarReaderPoint::new(scene, paths[8]).unwrap();
+    let node = PrimvarReaderPoint::get(scene, paths[8]).unwrap();
     assert_eq!(
         node.ports(PortKind::Input).len() + node.ports(PortKind::Output).len(),
         expected["UsdPrimvarReader_point"]
@@ -910,7 +910,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
             .unwrap(),
         "UsdPrimvarReader_point.outputs:result: port type"
     );
-    let node = PrimvarReaderString::new(scene, paths[9]).unwrap();
+    let node = PrimvarReaderString::get(scene, paths[9]).unwrap();
     assert_eq!(
         node.ports(PortKind::Input).len() + node.ports(PortKind::Output).len(),
         expected["UsdPrimvarReader_string"]
@@ -967,7 +967,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
             .unwrap(),
         "UsdPrimvarReader_string.outputs:result: port type"
     );
-    let node = PrimvarReaderVector::new(scene, paths[10]).unwrap();
+    let node = PrimvarReaderVector::get(scene, paths[10]).unwrap();
     assert_eq!(
         node.ports(PortKind::Input).len() + node.ports(PortKind::Output).len(),
         expected["UsdPrimvarReader_vector"]
@@ -1024,7 +1024,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
             .unwrap(),
         "UsdPrimvarReader_vector.outputs:result: port type"
     );
-    let node = Transform2d::new(scene, paths[11]).unwrap();
+    let node = Transform2d::get(scene, paths[11]).unwrap();
     assert_eq!(
         node.ports(PortKind::Input).len() + node.ports(PortKind::Output).len(),
         expected["UsdTransform2d"].as_object().unwrap().len(),
@@ -1114,7 +1114,7 @@ pub(crate) fn compare(scene: &Scene<'_>, paths: &[PathId], expected: &serde_json
             .unwrap(),
         "UsdTransform2d.outputs:result: port type"
     );
-    let node = UvTexture::new(scene, paths[12]).unwrap();
+    let node = UvTexture::get(scene, paths[12]).unwrap();
     assert_eq!(
         node.ports(PortKind::Input).len() + node.ports(PortKind::Output).len(),
         expected["UsdUVTexture"].as_object().unwrap().len(),

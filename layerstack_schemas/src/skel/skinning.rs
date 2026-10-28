@@ -410,7 +410,7 @@ impl<'a> SkinningQuery<'a> {
     /// Indexed primvars are flattened when evaluated, using their element size.
     pub fn new(scene: &Scene<'a>, geometry: PathId) -> Result<Option<Self>, SkelError> {
         Self::prepare(scene, geometry, |path| {
-            Skeleton::new(scene, path)
+            Skeleton::get(scene, path)
                 .expect("validated skeleton target")
                 .query()
         })
@@ -950,7 +950,7 @@ impl<'a> SkelRoot<'a> {
             let query = skeletons
                 .entry(skeleton)
                 .or_insert_with(|| {
-                    Skeleton::new(&scene, skeleton)
+                    Skeleton::get(&scene, skeleton)
                         .expect("validated skeleton target")
                         .query()
                 })

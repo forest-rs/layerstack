@@ -129,7 +129,7 @@ fn main() {
 
     // --- Read the composed robot through the views. ---
     let scene = Scene::new(live.stage(), &store);
-    let mesh = Mesh::new(&scene, arm).expect("the arm is a mesh");
+    let mesh = Mesh::get(&scene, arm).expect("the arm is a mesh");
     println!("/Robot/Arm");
     // The shot layer's opinion is the strongest.
     println!("  displayColor      = {:?}", mesh.display_color());
@@ -141,7 +141,7 @@ fn main() {
     println!("  orientation       = {:?}", mesh.orientation());
     println!("  purpose           = {:?}", mesh.purpose());
     // Any mesh is a `Gprim`, so the abstract view reads it too.
-    let gprim = Gprim::new(&scene, arm).expect("a mesh is a gprim");
+    let gprim = Gprim::get(&scene, arm).expect("a mesh is a gprim");
     println!("  doubleSided       = {:?}", gprim.double_sided());
 
     // What inherits down namespace. The arm authors no purpose; the robot's
@@ -174,7 +174,7 @@ fn main() {
         mesh.compute_local_to_world(Time::at(24.0))
     );
 
-    let light = SphereLight::new(&scene, key).expect("the key is a sphere light");
+    let light = SphereLight::get(&scene, key).expect("the key is a sphere light");
     println!("/Robot/Key");
     println!("  radius            = {:?}", light.radius());
     println!("  intensity         = {:?}", light.light_api().intensity());

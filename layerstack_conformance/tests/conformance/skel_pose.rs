@@ -40,7 +40,7 @@ fn sparse_reordered_joint_poses_and_bindings_match_cpp() {
         .map(|row| store.path(row["path"].as_str().unwrap()))
         .collect();
     let scene = Scene::new(live.stage(), &store);
-    let query = Skeleton::new(&scene, skeleton).unwrap().query().unwrap();
+    let query = Skeleton::get(&scene, skeleton).unwrap().query().unwrap();
     assert_eq!(query.topology().parents(), &[None, Some(0), None]);
     assert_eq!(query.skeleton_path(), skeleton);
     for row in expected["poses"].as_array().unwrap() {
@@ -105,7 +105,7 @@ fn rest_fallback_and_singular_bind_errors_are_explicit() {
     let (store, live) = support::scene(&source);
     let path = store.path("/Rig/Skeleton");
     let scene = Scene::new(live.stage(), &store);
-    let query = Skeleton::new(&scene, path).unwrap().query().unwrap();
+    let query = Skeleton::get(&scene, path).unwrap().query().unwrap();
     assert_eq!(
         query.local_transforms(Time::at(2.)).unwrap(),
         query.rest_transforms().unwrap()
@@ -118,7 +118,7 @@ fn rest_fallback_and_singular_bind_errors_are_explicit() {
     let path = store.path("/Rig/Skeleton");
     let scene = Scene::new(live.stage(), &store);
     assert_eq!(
-        Skeleton::new(&scene, path)
+        Skeleton::get(&scene, path)
             .unwrap()
             .query()
             .unwrap()

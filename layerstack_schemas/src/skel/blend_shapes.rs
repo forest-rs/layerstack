@@ -177,7 +177,7 @@ impl BlendShapeQuery {
                     target,
                 });
             };
-            let shape = BlendShape::new(scene, path).ok_or(SkelError::InvalidTarget {
+            let shape = BlendShape::get(scene, path).ok_or(SkelError::InvalidTarget {
                 prim: geometry,
                 relationship: "skel:blendShapeTargets",
                 target,

@@ -108,7 +108,7 @@ fn instance_transforms_match_cpp_for_every_option_pair() {
     let scene = Scene::new(live.stage(), &store);
     for case in &oracle.cases {
         let (path, at, base) = &case.case;
-        let instancer = PointInstancer::new(&scene, store.path(path)).unwrap();
+        let instancer = PointInstancer::get(&scene, store.path(path)).unwrap();
         for (label, expected) in &case.transforms {
             let expected = expected.as_ref().expect("transforms raise no coding error");
             let actual = instancer
@@ -126,7 +126,7 @@ fn batches_read_their_base_once_and_carry_interpolated_arrays() {
     let scene = Scene::new(live.stage(), &store);
     for batch in &oracle.batches {
         let (path, times, base) = &batch.batch;
-        let instancer = PointInstancer::new(&scene, store.path(path)).unwrap();
+        let instancer = PointInstancer::get(&scene, store.path(path)).unwrap();
         let times: Vec<Time> = times.iter().copied().map(time).collect();
         for (label, expected) in &batch.transforms {
             let expected = expected.as_ref().expect("transforms raise no coding error");
@@ -174,7 +174,7 @@ fn extents_match_cpp_alone_in_batches_and_transformed() {
     let oracle = oracle();
     let (store, live) = support::scene(SCENE);
     let scene = Scene::new(live.stage(), &store);
-    let instancer = |path: &str| PointInstancer::new(&scene, store.path(path)).unwrap();
+    let instancer = |path: &str| PointInstancer::get(&scene, store.path(path)).unwrap();
     for case in &oracle.cases {
         let (path, at, base) = &case.case;
         same_extent(

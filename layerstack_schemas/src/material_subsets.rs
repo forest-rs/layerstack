@@ -101,7 +101,7 @@ impl BindingCache {
         path: PathId,
         time: Time,
     ) -> Result<MaterialBindingSubsets, MaterialSubsetError> {
-        let geom = Imageable::new(scene, path)
+        let geom = Imageable::get(scene, path)
             .filter(|_| scene.is_a(path, "Mesh") || scene.is_a(path, "TetMesh"))
             .ok_or(MaterialSubsetError::InvalidGeometry(path))?;
         let members = geom.geom_subsets(None, Some(MATERIAL_BIND));

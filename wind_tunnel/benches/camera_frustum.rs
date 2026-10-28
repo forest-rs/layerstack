@@ -61,7 +61,7 @@ fn camera(orthographic: bool) -> ComputedCamera {
             ..StageOptions::default()
         },
     );
-    Camera::new(&Scene::new(&stage, &store), path)
+    Camera::get(&Scene::new(&stage, &store), path)
         .unwrap()
         .compute_camera(&mut XformCache::new(Time::Default))
         .unwrap()

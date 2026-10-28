@@ -105,7 +105,7 @@ fn transform_sample_discovery_and_retained_cache_follow_clips() {
     let (store, stage) = scene();
     let world = store.path("/World");
     let scene = Scene::new(&stage, &store);
-    let xform = Xformable::new(&scene, world).unwrap();
+    let xform = Xformable::get(&scene, world).unwrap();
     assert!(xform.transform_might_be_time_varying());
     assert_eq!(xform.transform_time_samples(), [0., 2.]);
     let mut cache = XformCache::new(Time::at(0.));
@@ -118,7 +118,7 @@ fn point_motion_anchors_clipped_points_and_velocities_together() {
     let (store, stage) = scene();
     let path = store.path("/World/Points");
     let scene = Scene::new(&stage, &store);
-    let points = PointBased::new(&scene, path).unwrap();
+    let points = PointBased::get(&scene, path).unwrap();
     let inputs = points.motion_inputs(Time::at(1.)).unwrap();
     assert_eq!(inputs.points, [[0., 0., 0.]]);
     assert_eq!(inputs.velocities, [[24., 0., 0.]]);
@@ -135,7 +135,7 @@ fn skeleton_sample_discovery_reads_inherited_clip_grids() {
     let (store, stage) = scene();
     let path = store.path("/World/Animation");
     let scene = Scene::new(&stage, &store);
-    let animation = SkelAnimation::new(&scene, path).unwrap();
+    let animation = SkelAnimation::get(&scene, path).unwrap();
     assert_eq!(animation.joint_transform_time_samples(), [0., 2.]);
     assert!(animation.joint_transforms_might_be_time_varying());
     assert_eq!(
@@ -166,7 +166,7 @@ fn spline_clip_variability_invalidates_retained_transforms_without_sample_knots(
     let (store, stage) = scene();
     let path = store.path("/World/Spline");
     let scene = Scene::new(&stage, &store);
-    let xform = Xformable::new(&scene, path).unwrap();
+    let xform = Xformable::get(&scene, path).unwrap();
     assert!(xform.transform_time_samples().is_empty());
     assert!(xform.transform_might_be_time_varying());
     let mut cache = XformCache::new(Time::at(0.));

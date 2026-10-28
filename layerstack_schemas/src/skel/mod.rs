@@ -393,7 +393,7 @@ impl<'a> SkelBindingApi<'a> {
     /// that stops inheritance. Only prims applying `SkelBindingAPI` contribute.
     pub fn inherited_skeleton(&self) -> Result<Option<Skeleton<'a>>, SkelError> {
         inherited_target(&self.scene(), self.path(), "skel:skeleton", "Skeleton")
-            .map(|path| path.and_then(|p| Skeleton::new(&self.scene(), p)))
+            .map(|path| path.and_then(|p| Skeleton::get(&self.scene(), p)))
     }
     /// Closest authored animation binding; an empty relationship stops lookup.
     pub fn inherited_animation_source(&self) -> Result<Option<SkelAnimation<'a>>, SkelError> {
@@ -403,7 +403,7 @@ impl<'a> SkelBindingApi<'a> {
             "skel:animationSource",
             "SkelAnimation",
         )
-        .map(|path| path.and_then(|p| SkelAnimation::new(&self.scene(), p)))
+        .map(|path| path.and_then(|p| SkelAnimation::get(&self.scene(), p)))
     }
 }
 
@@ -431,13 +431,13 @@ struct SkeletonDefinition {
 impl SkeletonDefinition {
     fn query<'a>(self: &Arc<Self>, scene: &Scene<'a>) -> Result<SkeletonQuery<'a>, SkelError> {
         let skeleton =
-            Skeleton::new(scene, self.path).ok_or_else(|| invalid(self.path, "joints"))?;
+            Skeleton::get(scene, self.path).ok_or_else(|| invalid(self.path, "joints"))?;
         Ok(SkeletonQuery {
             skeleton,
             definition: Arc::clone(self),
             animation: self
                 .animation_path
-                .and_then(|p| SkelAnimation::new(scene, p)),
+                .and_then(|p| SkelAnimation::get(scene, p)),
         })
     }
     fn validated_bind_transforms(&self) -> Result<&[gf::Matrix4], SkelError> {
@@ -481,7 +481,7 @@ impl<'a> SkeletonQuery<'a> {
             "skel:animationSource",
             "SkelAnimation",
         )?
-        .and_then(|p| SkelAnimation::new(&skeleton.scene(), p));
+        .and_then(|p| SkelAnimation::get(&skeleton.scene(), p));
         let animation_joints = animation
             .as_ref()
             .and_then(|a| tokens(a, "joints"))

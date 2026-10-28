@@ -427,7 +427,7 @@ fn authored_ops_read_and_add_as_in_openusd() {
         let scene = Scene::new(live.stage(), &store);
         assert_eq!(oracle.prims.len(), PRIMS.len());
         for (text, record) in &oracle.prims {
-            let xformable = Xformable::new(&scene, paths[text.as_str()]).expect("an Xform");
+            let xformable = Xformable::get(&scene, paths[text.as_str()]).expect("an Xform");
             let ordered = xformable.ordered_xform_ops();
             let ops: Vec<OpRecord> = ordered
                 .ops

@@ -414,7 +414,7 @@ impl MaterialNetwork {
         if matches!(time,Time::At {code,..} if !code.is_finite()) {
             return Err(MaterialCaptureError::InvalidTime);
         }
-        let material_view = Material::new(scene, material)
+        let material_view = Material::get(scene, material)
             .ok_or(MaterialCaptureError::MissingMaterial(material))?;
         let source = material_view.compute_terminal_source(terminal, contexts);
         let mut capture = Capture {

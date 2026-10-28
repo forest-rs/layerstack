@@ -81,7 +81,7 @@ fn id_edits_preserve_future_weaker_opinions_and_group_rollback() {
     let (mut store, mut live) = authored_id_sequence();
     let path = store.path("/P");
     let scene = Scene::new(live.stage(), &store);
-    let point = PointInstancer::new(&scene, path).unwrap();
+    let point = PointInstancer::get(&scene, path).unwrap();
     assert_eq!(
         point.try_compute_mask(Time::Default).unwrap(),
         vec![false, false, true, false, false, false, true, true]
@@ -117,7 +117,7 @@ fn id_edits_preserve_future_weaker_opinions_and_group_rollback() {
     live.apply(&mut store, &transaction).unwrap();
     let scene = Scene::new(live.stage(), &store);
     assert!(
-        PointInstancer::new(&scene, path)
+        PointInstancer::get(&scene, path)
             .unwrap()
             .compute_mask(Time::Default)
             .is_empty()
@@ -168,7 +168,7 @@ fn explicit_inactive_lists_keep_their_cutoff_after_id_edits() {
     live.synchronize(&mut store);
     let scene = Scene::new(live.stage(), &store);
     assert_eq!(
-        PointInstancer::new(&scene, path)
+        PointInstancer::get(&scene, path)
             .unwrap()
             .compute_mask(Time::Default),
         vec![false, false, true, true, true, true, true, true]
@@ -218,7 +218,7 @@ fn variant_id_edits_read_only_the_mapped_target_site() {
     assert_eq!(op.delete, vec![10]);
     let scene = Scene::new(live.stage(), &store);
     assert_eq!(
-        PointInstancer::new(&scene, path)
+        PointInstancer::get(&scene, path)
             .unwrap()
             .compute_mask(Time::Default),
         vec![true, false, false, true, true, true, true, true]
@@ -273,7 +273,7 @@ fn visibility_edits_preserve_decode_errors_and_prior_collected_operations() {
     let transaction = edit.finish();
     live.apply(&mut store, &transaction).unwrap();
     let scene = Scene::new(live.stage(), &store);
-    let point = PointInstancer::new(&scene, path).unwrap();
+    let point = PointInstancer::get(&scene, path).unwrap();
     assert_eq!(
         point.compute_mask(Time::Default),
         vec![false, true, true, true, true, true, true, true]

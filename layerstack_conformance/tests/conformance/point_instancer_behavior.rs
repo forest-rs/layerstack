@@ -44,7 +44,7 @@ fn masks_motion_and_prototype_local_transforms_match_cpp() {
     let compacted = store.path("/World/Compacted");
     let misaligned = store.path("/World/Misaligned");
     let scene = Scene::new(live.stage(), &store);
-    let instancer = PointInstancer::new(&scene, path).unwrap();
+    let instancer = PointInstancer::get(&scene, path).unwrap();
     assert_eq!(
         serde_json::json!(instancer.compute_mask(Time::Default)),
         expected["mask"]
@@ -69,12 +69,12 @@ fn masks_motion_and_prototype_local_transforms_match_cpp() {
             assert_eq!(instance.id, 100 + i64::try_from(position).unwrap());
         }
     }
-    let implicit = PointInstancer::new(&scene, implicit).unwrap();
+    let implicit = PointInstancer::get(&scene, implicit).unwrap();
     assert_eq!(
         serde_json::json!(implicit.compute_mask(Time::Default)),
         expected["implicitMask"]
     );
-    let interpolated = PointInstancer::new(&scene, interpolated).unwrap();
+    let interpolated = PointInstancer::get(&scene, interpolated).unwrap();
     matrices(
         &interpolated
             .compute_instance_transforms(
@@ -85,7 +85,7 @@ fn masks_motion_and_prototype_local_transforms_match_cpp() {
             .unwrap(),
         &expected["interpolated"],
     );
-    let compacted = PointInstancer::new(&scene, compacted)
+    let compacted = PointInstancer::get(&scene, compacted)
         .unwrap()
         .compute_instance_transforms(
             Time::Default,
@@ -97,7 +97,7 @@ fn masks_motion_and_prototype_local_transforms_match_cpp() {
     assert_eq!(compacted.len(), 1);
     assert_eq!((compacted[0].index, compacted[0].id), (2, 102));
     matrices(
-        &PointInstancer::new(&scene, misaligned)
+        &PointInstancer::get(&scene, misaligned)
             .unwrap()
             .compute_instance_transforms(
                 Time::at(2.),
@@ -212,7 +212,7 @@ fn invalid_topology_and_prototype_cycles_fail_explicitly() {
     ] {
         let (store, live) = support::scene(text);
         let path = store.path("/I");
-        let view = PointInstancer::new(&Scene::new(live.stage(), &store), path).unwrap();
+        let view = PointInstancer::get(&Scene::new(live.stage(), &store), path).unwrap();
         let options = InstanceTransformOptions {
             include_prototype_transform: false,
             apply_mask: false,

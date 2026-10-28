@@ -556,7 +556,7 @@ impl LightInputs {
             world_transform: transforms
                 .local_to_world(scene, light)
                 .unwrap_or(crate::gf::IDENTITY),
-            visibility: Imageable::new(scene, light)
+            visibility: Imageable::get(scene, light)
                 .map_or(Visibility::Inherited, |v| v.compute_visibility(time)),
             meters_per_unit: scene.metadata().meters_per_unit().unwrap_or(0.01),
             up_axis: scene.metadata().up_axis().unwrap_or("Y").into(),

@@ -86,7 +86,10 @@ The cases:
   and `at`, a keyword only inside a spline); a second valued time sample
   of a type no type registers (`Sdf_ParserValueContext` forgets the
   unrecognized type after the first value), while
-  `read_unknown_type_one_valued_sample` reads one among `None`s.
+  `read_unknown_type_one_valued_sample` reads one among `None`s; an asset
+  path without its closing `@` or `@@@` (OpenUSD's `AssetRef`), or whose
+  closing `@@@` is escaped, while `read_asset_path_delimiters` reads `@@`,
+  `@@@a@@@@@` and `@@@@@@`.
 - `statements_*`: several list-op statements for one field, on a
   relationship, a connection, references, inherits, `variantSets` and
   metadata (`apiSchemas`). OpenUSD's parser sets each statement's list
@@ -1277,6 +1280,32 @@ def "P"
         2: alpha,
         3: None,
     }
+}
+''', []),
+    "strict_unterminated_triple_asset_path": ('''#usda 1.0
+def "P"
+{
+    asset a = @@@a b.png@
+}
+''', []),
+    "strict_unterminated_asset_path": ('''#usda 1.0
+def "P"
+{
+    asset a = @a.png
+}
+''', []),
+    "strict_escaped_close_asset_path": ('''#usda 1.0
+def "P"
+{
+    asset a = @@@a\\@@@
+}
+''', []),
+    "read_asset_path_delimiters": ('''#usda 1.0
+def "P"
+{
+    asset a = @@
+    asset b = @@@a@@@@@
+    asset c = @@@@@@
 }
 ''', []),
     "read_keyword_like_type_names": ('''#usda 1.0

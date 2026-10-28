@@ -316,6 +316,11 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
                 // anywhere before the end of the file (AOUSD Core §16.2.5).
                 self.error(t.span, "unterminated string");
             }
+            if t.kind == TokenKind::AssetPath && !asset_path_is_terminated(t.text(self.source)) {
+                // An asset path ends on its own line (AOUSD Core §16.2.9),
+                // as OpenUSD's `AssetRef` rule requires.
+                self.error(t.span, "unterminated asset path");
+            }
         }
         tok
     }
@@ -2762,6 +2767,17 @@ fn is_string_token(kind: TokenKind) -> bool {
             | TokenKind::MultilineDoubleQuoteString
             | TokenKind::MultilineSingleQuoteString
     )
+}
+
+/// Whether the asset path token `text` has its closing delimiter: the
+/// lexer ends a `@@@` path at the first `@@@` no backslash escapes, and an
+/// `@` path at the next `@`, or else at the end of the line.
+fn asset_path_is_terminated(text: &str) -> bool {
+    if text.starts_with("@@@") {
+        text.len() >= 6 && text.ends_with("@@@") && !text.ends_with("\\@@@")
+    } else {
+        text.len() >= 2 && text.ends_with('@')
+    }
 }
 
 /// Whether the string literal `text`, as the lexer delimits it, ends with

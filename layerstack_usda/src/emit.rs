@@ -69,6 +69,7 @@ use crate::ast;
 use crate::diagnostic::Diagnostic;
 use crate::metadata::{MetadataRejection, MetadataValueError};
 use crate::numeric::{convert_scalar, dimensioned_value, element_type_hint};
+use crate::writer::is_identifier;
 use layerstack::value_type::ValueType;
 
 /// Result of emitting a single USDA layer.
@@ -416,14 +417,21 @@ impl EmitCtx<'_> {
 
     // ── Prims ────────────────────────────────────────────────────────
 
-    /// Whether `prim`'s name is one path segment, which its spec can be
-    /// placed at; a name that is empty or holds `/` names no prim, and
-    /// rejects the layer, as OpenUSD's text parser rejects it
-    /// (`'' is not a valid prim name`, `SdfSchema::IsValidPrimName`).
+    /// Whether `prim`'s name is an identifier, which its spec can be placed
+    /// at; any other name (empty, holding `/`, a space or a control
+    /// character) rejects the layer, as OpenUSD's text parser rejects it
+    /// (`'' is not a valid prim name`, `_CreatePrimSpec`,
+    /// `pxr/usd/sdf/textParserHelpers.cpp`: `SdfPath::IsValidIdentifier`).
     ///
     /// Spec: AOUSD Core §7.3.3 (prim names are identifiers), §8 (paths).
     fn admits_prim_name(&mut self, prim: &ast::Prim<'_>) -> bool {
-        if prim.name.is_empty() || prim.name.contains('/') {
+        // The lowering reports an escaped name, which still must not hold `/`.
+        let invalid = if prim.name.contains('\\') {
+            prim.name.contains('/')
+        } else {
+            !is_identifier(prim.name)
+        };
+        if invalid {
             let message = format!("'{}' is not a valid prim name", prim.name);
             self.reject(prim.span, message);
             return false;
@@ -3003,6 +3011,9 @@ def \"Rig\" {
                 "'/B{v=x}C.y' is not a valid prim or property scene path",
             ),
             ("def \"A/B\"\n{\n}\n", "'A/B' is not a valid prim name"),
+            ("def \"a b\"\n{\n}\n", "'a b' is not a valid prim name"),
+            ("def \"1a\"\n{\n}\n", "'1a' is not a valid prim name"),
+            ("def \"a\x10\"\n{\n}\n", "'a\x10' is not a valid prim name"),
             (
                 "def \"A\"\n{\n    def \"\"\n    {\n    }\n}\n",
                 "'' is not a valid prim name",

@@ -1404,3 +1404,53 @@ fn lowering_shares_numeric_array_buffers() {
     };
     assert_eq!(lowered.as_ptr(), points.as_ptr());
 }
+
+/// `IoText` streams into an `io::Write` and keeps the error that stopped
+/// it.
+#[cfg(feature = "std")]
+#[test]
+fn io_text_streams_into_io_writers_and_keeps_their_error() {
+    use crate::writer::IoText;
+
+    /// Takes `room` bytes, then fails.
+    struct Full {
+        room: usize,
+    }
+    impl std::io::Write for Full {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            if bytes.len() > self.room {
+                return Err(std::io::Error::other("device full"));
+            }
+            self.room -= bytes.len();
+            Ok(bytes.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    let imported = Imported::new(&large_source());
+    let text = save_usda(&imported.layer, &imported.tokens, &imported.paths).unwrap();
+    let mut bytes = IoText::new(Vec::new());
+    save_usda_to(
+        &imported.layer,
+        &imported.tokens,
+        &imported.paths,
+        &mut bytes,
+    )
+    .unwrap();
+    assert!(bytes.take_error().is_none());
+    assert_eq!(bytes.into_inner(), text.as_bytes());
+
+    let mut full = IoText::new(Full { room: 100_000 });
+    assert_eq!(
+        save_usda_to(
+            &imported.layer,
+            &imported.tokens,
+            &imported.paths,
+            &mut full
+        ),
+        Err(SaveError::Sink)
+    );
+    assert_eq!(full.take_error().unwrap().to_string(), "device full");
+}

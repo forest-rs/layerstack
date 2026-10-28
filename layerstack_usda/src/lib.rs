@@ -86,10 +86,11 @@
 //! Parsing consumes `&str` buffers. Writing returns an owned string or
 //! streams the text into any [`core::fmt::Write`] a piece at a time
 //! ([`save::save_usda_to`], [`writer::Document::write_usda_to`]), so a caller
-//! can write a file without holding its text. The declared `std` feature
-//! currently adds no APIs; file I/O belongs to the caller (`layerstack_io`
-//! streams saves through its storage). Writer and save errors implement
-//! `core::error::Error` without it.
+//! can write a file without holding its text. The `std` feature adds
+//! [`writer::IoText`], which streams into a `std::io::Write`; opening files
+//! belongs to the caller (`layerstack_io` streams saves through its
+//! storage). Writer and save errors implement `core::error::Error` without
+//! it.
 //!
 //! [`Layer`]: layerstack::Layer
 //! [`PrimSpec`]: layerstack::PrimSpec
@@ -98,6 +99,8 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 extern crate alloc;
+#[cfg(feature = "std")]
+extern crate std;
 
 #[allow(
     clippy::cast_possible_truncation,

@@ -818,7 +818,7 @@ impl Lowering<'_> {
                 // path (`rel r.default = </A>`).
                 let default = match &spec.default {
                     None => None,
-                    Some(LayerValue::Path(default)) => Some(String::from(&**default)),
+                    Some(LayerValue::PathText(default)) => Some(String::from(&**default)),
                     Some(_) => return invalid(path, Invalid::RelationshipValue),
                 };
                 if spec.type_name.is_some() || spec.time_samples.is_authored() {
@@ -986,7 +986,7 @@ impl Lowering<'_> {
         Ok(match value {
             L::Bool(v) => Value::Bool(*v),
             L::Unregistered(text) => Value::Unregistered(String::from(&**text)),
-            L::Path(_) => return no("path"),
+            L::PathText(_) => return no("path"),
             L::UChar(v) => Value::UChar(*v),
             L::Int(v) => Value::Int(*v),
             L::UInt(v) => Value::UInt(*v),

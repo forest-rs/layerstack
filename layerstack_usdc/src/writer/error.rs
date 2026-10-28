@@ -17,6 +17,7 @@ use crate::value_type::SpecForm;
 /// Every check runs before any output is produced, so an error never leaves a
 /// partial file behind.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum UsdcWriteError {
     /// A path is malformed or uses syntax the writer does not support
     /// (variant selections, relationship targets, relative paths).

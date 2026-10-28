@@ -1391,6 +1391,7 @@ impl<T> ListOp<T> {
 
 /// Why a [`Document`] could not be written.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum WriteError {
     /// USDA would regenerate an `AutoEase` tangent and change its stored data.
     StaleAutoEaseTangent {

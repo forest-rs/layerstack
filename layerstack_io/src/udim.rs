@@ -20,6 +20,7 @@ use layerstack::asset::{UdimPattern, UdimTile};
 
 /// One existing tile of a UDIM set.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct UdimTileAsset {
     /// The tile number.
     pub tile: UdimTile,
@@ -37,6 +38,7 @@ pub struct UdimTileAsset {
 
 /// Storage and package index work spent by discovery.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct UdimDiscoveryWork {
     /// [`Storage::identify`] calls.
     pub identifies: usize,
@@ -73,6 +75,7 @@ impl AddAssign for UdimDiscoveryWork {
 
 /// The existing tiles of one UDIM pattern and the work spent finding them.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct UdimTiles {
     /// The resolved identity of the first existing tile, spelled with
     /// `<UDIM>` again (`UsdShadeUdimUtils::ResolveUdimPath`); `None` when

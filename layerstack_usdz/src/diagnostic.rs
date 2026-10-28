@@ -14,6 +14,7 @@ use layerstack_usdc::assemble::AssembleDiagnostic;
 /// The format diagnostic retains its original source span or authored spec
 /// path. Spans are byte offsets in `member`, not in the ZIP archive.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct MemberDiagnostic {
     /// Path inside the package, as listed in its directory.
     pub member: Arc<str>,
@@ -23,12 +24,27 @@ pub struct MemberDiagnostic {
     pub diagnostic: ImportDiagnostic,
 }
 
+impl MemberDiagnostic {
+    /// The diagnostic `diagnostic` of the member at `member`, read as the
+    /// layer `layer_id`: for a reader of members outside this crate, such
+    /// as `layerstack_io`'s loose-file reads, to report in the same shape.
+    #[must_use]
+    pub fn new(member: Arc<str>, layer_id: LayerId, diagnostic: ImportDiagnostic) -> Self {
+        Self {
+            member,
+            layer_id,
+            diagnostic,
+        }
+    }
+}
+
 /// A recoverable problem reported while reading a package layer.
 ///
 /// Format-specific evidence is preserved rather than converted to display
 /// text. Parse and lowering diagnostics can describe incomplete source;
 /// emission and assembly diagnostics can describe omitted authored content.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub enum ImportDiagnostic {
     /// An unresolved package-relative composition dependency.
     AssetResolve {

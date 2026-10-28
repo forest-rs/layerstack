@@ -61,6 +61,7 @@ impl<'a> PackageFile<'a> {
 
 /// Why a package could not be written.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum UsdzWriteError {
     /// No files were given.
     Empty,

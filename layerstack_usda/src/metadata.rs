@@ -80,6 +80,7 @@ pub enum MetadataValueError {
 ///
 /// Spec: AOUSD Core §7.4 (metadata), §16.2 (USDA).
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct MetadataRejection {
     /// The field's name.
     pub field: String,

@@ -35,6 +35,7 @@ pub const MIN_RETAINED_TEXT_ARRAY: u64 = 16;
 
 /// A fully assembled layer whose large payloads remain retained in memory.
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct LazyReadResult {
     /// Authored layer, resolved dependencies and assembly diagnostics.
     pub assembled: AssembleResult,
@@ -50,6 +51,7 @@ pub struct RetainedValues {
 /// Excludes structural tables, allocator overhead, spare vector capacity and
 /// transformed query-result buffers.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct RetainedValueStats {
     /// Encoded file bytes retained by this pool.
     pub input_bytes: usize,

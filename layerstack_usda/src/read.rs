@@ -16,6 +16,7 @@ use crate::{
 
 /// Work counters for one USDA import, excluding recursively resolved layers.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ReadStats {
     /// The most tokens held at once for grammar navigation (lookahead and
     /// the rollback of a speculative parse), including fallback values.
@@ -31,6 +32,7 @@ pub struct ReadStats {
 
 /// A USDA import, preserving diagnostics from each phase.
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct ReadResult {
     /// Authored layer, resolved assets, emission diagnostics and rejection flag.
     pub emitted: EmitResult,

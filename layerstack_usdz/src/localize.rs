@@ -107,6 +107,7 @@ pub struct LocalizationPlan {
 
 /// Why localization could not produce a complete output.
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum LocalizationError {
     /// A source layer is absent from the store.
     MissingLayer {

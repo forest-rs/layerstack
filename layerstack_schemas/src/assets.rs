@@ -10,7 +10,11 @@ use layerstack::{AssetResolver, PropertyKind, PropertyPath, Provenance, Value};
 /// the originating store; retain the resolver's layer-location mapping too.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AssetReference {
-    /// Authored asset spelling, before host resolution or expression evaluation.
+    /// The composed asset path, before host resolution: an expression
+    /// authored in its place is evaluated with the expression variables
+    /// of the layer stack that authors it, and is kept as authored when it
+    /// evaluates to no path (OpenUSD's `SdfAssetPath::GetAssetPath`). The
+    /// authored text stays in the source layer `source` names.
     pub asset_path: String,
     /// Winning authored source, or None for a schema fallback.
     pub source: Option<Provenance>,
@@ -47,8 +51,12 @@ impl core::error::Error for AssetReadError {}
 pub enum AssetAnchorError {
     /// An empty asset path does not request a resource.
     EmptyPath,
-    /// Variable expressions require evaluation in their authoring context.
-    ExpressionRequiresEvaluation,
+    /// The path is still a variable expression: the stage evaluates asset
+    /// path expressions as it composes, and this one evaluated to an empty
+    /// string or to no value, or failed to evaluate (a
+    /// `VariableExpressionError` composition error says why). OpenUSD
+    /// resolves such a path to nothing.
+    UnevaluatedExpression,
     /// Relative identifiers require a winning authored layer.
     MissingSource,
     /// The resolver could not create an identifier (for example, an unknown
@@ -125,7 +133,8 @@ impl AssetReference {
     /// Asks the host resolver to create an anchored identifier, retaining its
     /// authoring evidence. Search-path policy belongs to that resolver. Absolute
     /// paths and URIs without an authored source can be normalized directly.
-    /// Expressions are reported explicitly; this operation performs no loading,
+    /// A path still an expression is reported explicitly
+    /// ([`AssetAnchorError::UnevaluatedExpression`]); this operation performs no loading,
     /// decoding, color conversion or persistent resource allocation.
     /// AOUSD Core §9.2, §9.4–9.7.
     pub fn anchor(&self, resolver: &dyn AssetResolver) -> Result<AnchoredAsset, AssetAnchorError> {
@@ -133,7 +142,7 @@ impl AssetReference {
             return Err(AssetAnchorError::EmptyPath);
         }
         if self.asset_path.starts_with('`') {
-            return Err(AssetAnchorError::ExpressionRequiresEvaluation);
+            return Err(AssetAnchorError::UnevaluatedExpression);
         }
         let identifier = if let Some(source) = &self.source {
             resolver.anchor_asset_path(&self.asset_path, source.layer)

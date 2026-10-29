@@ -1567,7 +1567,9 @@ fn anchor_leaf(
     let Value::Asset(path) = leaf else {
         return None;
     };
-    if path.is_empty() {
+    // An expression composition left as authored, because it evaluates to
+    // no path or fails, is written as authored, as OpenUSD writes it.
+    if path.is_empty() || crate::variable_expression::is_expression(path) {
         return None;
     }
     match resolver.anchor_asset_path(path, layer) {

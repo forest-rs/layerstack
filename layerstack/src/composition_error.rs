@@ -470,6 +470,7 @@ impl Describe for CompositionError {
                     ExpressionContext::Reference => "reference",
                     ExpressionContext::Payload => "payload",
                     ExpressionContext::VariantSelection => "variant selection",
+                    ExpressionContext::AssetValue => "asset value",
                 };
                 write!(
                     f,
@@ -1076,17 +1077,26 @@ pub enum ExpressionContext {
     Payload,
     /// A variant selection.
     VariantSelection,
+    /// An asset path value: an attribute's default or time sample, an
+    /// element of an asset array, or an entry of a metadata dictionary
+    /// such as `customData` or `assetInfo`. It reads as authored, which
+    /// names no asset (see [`crate::variable_expression`]).
+    AssetValue,
 }
 
 /// A variable expression that failed to evaluate: a sublayer, reference or
-/// payload asset path, or a variant selection, authored as an expression
-/// that does not parse, uses a variable that is not set, or does not
-/// evaluate to a string.
+/// payload asset path, a variant selection, or an asset path value,
+/// authored as an expression that does not parse, uses a variable that is
+/// not set, or does not evaluate to a string.
 ///
 /// The sublayer or arc is ignored, and a variant selection is ignored in
 /// favor of the next weaker selection; the rest of the layer stack or prim
 /// composes as normal. An expression that evaluates to no value or to an
 /// empty string is not an error: the sublayer or arc is dropped silently.
+/// An asset path value that fails reads as authored, naming no asset;
+/// OpenUSD reports it as a warning when the value is read
+/// (`Usd_AssetPathContext::ReportErrors` in `pxr/usd/usd/stage.cpp`), with
+/// the context `asset value` here.
 ///
 /// Spec: AOUSD Core §7.6.1.7 reserves `expressionVariables`; §10.6
 /// (composition errors). OpenUSD reports it as

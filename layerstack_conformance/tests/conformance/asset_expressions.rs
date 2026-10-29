@@ -8,7 +8,8 @@
 //! `scene.usda` sets `expressionVariables` and sublayers `sub/sub.usda`;
 //! `/Local`, `/Sub` and `/Root` (which references `ref/ref.usda</Ref>`)
 //! author the same asset defaults, time samples, arrays and dictionary
-//! entries as expressions of every kind. It records what OpenUSD reads
+//! entries as expressions of every kind, and `/Clipped` reads expression
+//! samples from a value clip. It records what OpenUSD reads
 //! for each (`authoredPath`, `evaluatedPath`, `resolvedPath`), the
 //! warnings each read issues, `UsdStage::Flatten`'s text, and
 //! `UsdUtils.FlattenLayerStack`'s.
@@ -19,7 +20,8 @@
 //! anchor each path OpenUSD resolves to the file OpenUSD resolves, and
 //! refuse each expression that evaluated to no path. Each expression
 //! OpenUSD warns about must be a `VariableExpressionError` composition
-//! error of the layer and with the message OpenUSD reports. The stage's
+//! error (for a clip's value, a `ClipIssueKind::AssetExpression`) of the
+//! layer and with the message OpenUSD reports. The stage's
 //! flattened layer must save as OpenUSD's `UsdStage::Flatten` text, and
 //! `flatten_layer_stack`'s as `UsdUtils.FlattenLayerStack`'s, reporting
 //! the expressions OpenUSD warns about. The cases in `DIFFERING` are the
@@ -35,6 +37,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use layerstack::stage::flatten::{AssetPaths, FlattenRequirements};
+use layerstack::value_clips::ClipIssueKind;
 use layerstack::{
     AssetResolveError, AssetResolver, CompositionError, ExpressionContext, FieldValue,
     InMemoryStore, LayerId, LiveStage, PathInterner, PropertyPath, ResolvedAsset, ResolvedValue,
@@ -58,7 +61,9 @@ const ORACLE: &str = include_str!("../../fixtures/asset_expressions/oracle.json"
 /// `flatten`: OpenUSD's flatten writes an evaluated path only where
 /// anchoring changes it (`SdfAnchorAssetPaths` keeps the `SdfAssetPath`
 /// otherwise, and the text format writes its authored path), so an
-/// expression evaluating to an absolute path is written as authored; and
+/// expression evaluating to an absolute path, or to a search path that
+/// names no file (the clip sample `` `"${UNSET}"` ``), is written as
+/// authored; and
 /// it stops anchoring an array at its first empty element (`return` in
 /// `_AnchorOrResolveAssetPaths`), so `[@@, @`"./${NAME}.png"`@]` is
 /// written as authored. Layerstack's composed values hold the evaluated
@@ -193,7 +198,7 @@ fn the_stage_reads_the_paths_openusd_evaluates() {
             checked += 1;
         }
     }
-    assert_eq!(checked, 46, "every attribute is read");
+    assert_eq!(checked, 47, "every attribute is read");
 }
 
 /// Knows where each layer of the fixture is, and anchors a search path
@@ -342,7 +347,7 @@ fn expressions_openusd_warns_about_are_composition_errors() {
         }
     }
     assert!(!warned.is_empty(), "the oracle records warnings");
-    let reported: BTreeSet<(String, String)> = stage
+    let mut reported: BTreeSet<(String, String)> = stage
         .composition_errors()
         .iter()
         .filter_map(|error| match error {
@@ -357,6 +362,18 @@ fn expressions_openusd_warns_about_are_composition_errors() {
             _ => None,
         })
         .collect();
+    // A clip value's expression is evaluated as the clips are prepared.
+    reported.extend(
+        stage
+            .clip_issues()
+            .iter()
+            .filter_map(|issue| match &issue.kind {
+                ClipIssueKind::AssetExpression { layer, error, .. } => {
+                    Some((loaded.layer_names[layer].clone(), error.clone()))
+                }
+                _ => None,
+            }),
+    );
     assert_eq!(reported, warned);
     // Nothing else is an error: the fixture composes cleanly in OpenUSD.
     assert!(
@@ -492,17 +509,20 @@ fn a_live_stage_reads_expressions_with_edited_variables() {
     let root = loaded.root_layer;
     let mut live = LiveStage::compose(&mut loaded.store, root, StageOptions::default());
     let named = loaded.store.property_path("/Local.named");
-    let read = |live: &LiveStage, store: &InMemoryStore| {
+    let clipped = loaded.store.property_path("/Clipped.tex");
+    let read = |live: &LiveStage, store: &InMemoryStore, property, time| {
         live.stage()
             .view(store)
-            .attribute(named)
-            .and_then(|a| a.get(LsTime::Default))
+            .attribute(property)
+            .and_then(|a| a.get(time))
             .map(|resolved| resolved.value)
     };
-    assert_eq!(
-        read(&live, &loaded.store),
-        Some(Value::Asset("./wood.png".into()))
-    );
+    for (property, time) in [(named, LsTime::Default), (clipped, LsTime::at(0.0))] {
+        assert_eq!(
+            read(&live, &loaded.store, property, time),
+            Some(Value::Asset("./wood.png".into()))
+        );
+    }
     let field = loaded.store.tokens().intern("expressionVariables");
     let string = |text: &str| Value::String(text.into());
     let variables = Value::Dictionary(
@@ -524,8 +544,10 @@ fn a_live_stage_reads_expressions_with_edited_variables() {
         .set_metadata(field, variables);
     live.notify_expression_variables_edit(&loaded.store, root);
     assert!(!live.recompose(&mut loaded.store).is_empty());
-    assert_eq!(
-        read(&live, &loaded.store),
-        Some(Value::Asset("./stone.png".into()))
-    );
+    for (property, time) in [(named, LsTime::Default), (clipped, LsTime::at(0.0))] {
+        assert_eq!(
+            read(&live, &loaded.store, property, time),
+            Some(Value::Asset("./stone.png".into()))
+        );
+    }
 }

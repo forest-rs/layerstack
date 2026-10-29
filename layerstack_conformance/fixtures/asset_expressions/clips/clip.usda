@@ -1,0 +1,10 @@
+#usda 1.0
+
+def "Model"
+{
+    asset tex.timeSamples = {
+        0: @`"./${NAME}.png"`@,
+        1: @`"${UNSET}"`@,
+        2: @`${NUM}`@,
+    }
+}

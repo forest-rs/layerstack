@@ -25,6 +25,7 @@ use alloc::sync::Arc;
 use crate::{
     doc::{FieldValue, Value},
     prim_index::OpinionValue,
+    property::PropertySpec,
     variable_expression::is_expression,
 };
 
@@ -50,18 +51,22 @@ pub(crate) fn opinion_holds_asset_expression(value: &OpinionValue) -> bool {
     match value {
         OpinionValue::Field(FieldValue::Value(value)) => holds_asset_expression(value),
         OpinionValue::Field(_) => false,
-        OpinionValue::Property(spec) => {
-            spec.default.as_ref().is_some_and(holds_asset_expression)
-                || spec
-                    .time_samples
-                    .get()
-                    .is_some_and(|samples| samples.iter().any(|(_, v)| holds_asset_expression(v)))
-                || spec
-                    .metadata
-                    .iter()
-                    .any(|entry| entry.value.as_value().is_some_and(holds_asset_expression))
-        }
+        OpinionValue::Property(spec) => property_holds_asset_expression(spec),
     }
+}
+
+/// Whether a property's default, time samples or metadata hold an asset
+/// path expression.
+pub(crate) fn property_holds_asset_expression(spec: &PropertySpec) -> bool {
+    spec.default.as_ref().is_some_and(holds_asset_expression)
+        || spec
+            .time_samples
+            .get()
+            .is_some_and(|samples| samples.iter().any(|(_, v)| holds_asset_expression(v)))
+        || spec
+            .metadata
+            .iter()
+            .any(|entry| entry.value.as_value().is_some_and(holds_asset_expression))
 }
 
 /// Replaces each asset path expression in `value` with the path
@@ -110,41 +115,51 @@ pub(crate) fn evaluate_opinion_asset_expressions(
             evaluate_asset_expressions(value, evaluate);
         }
         OpinionValue::Field(_) => {}
-        OpinionValue::Property(spec) => {
-            let spec = Arc::make_mut(spec);
-            if let Some(default) = spec.default.as_mut()
-                && holds_asset_expression(default)
-            {
-                evaluate_asset_expressions(default, evaluate);
-            }
-            if spec
-                .time_samples
-                .get()
-                .is_some_and(|samples| samples.iter().any(|(_, v)| holds_asset_expression(v)))
-                && let Some(samples) = spec.time_samples.get_mut()
-            {
-                for (_, sample) in samples {
-                    if holds_asset_expression(sample) {
-                        evaluate_asset_expressions(sample, evaluate);
-                    }
-                }
-            }
-            if spec
-                .metadata
-                .iter()
-                .any(|entry| entry.value.as_value().is_some_and(holds_asset_expression))
-            {
-                let mut metadata = spec.metadata.to_vec();
-                for entry in &mut metadata {
-                    if let FieldValue::Value(item) = &mut entry.value
-                        && holds_asset_expression(item)
-                    {
-                        evaluate_asset_expressions(item, evaluate);
-                    }
-                }
-                spec.metadata = metadata.into();
+        OpinionValue::Property(spec) => evaluate_property_asset_expressions(spec, evaluate),
+    }
+}
+
+/// [`evaluate_asset_expressions`] over a property's default, time samples
+/// and metadata; `spec` is copied only when it holds an expression.
+pub(crate) fn evaluate_property_asset_expressions(
+    spec: &mut Arc<PropertySpec>,
+    evaluate: &mut dyn FnMut(&str) -> Option<Arc<str>>,
+) {
+    if !property_holds_asset_expression(spec) {
+        return;
+    }
+    let spec = Arc::make_mut(spec);
+    if let Some(default) = spec.default.as_mut()
+        && holds_asset_expression(default)
+    {
+        evaluate_asset_expressions(default, evaluate);
+    }
+    if spec
+        .time_samples
+        .get()
+        .is_some_and(|samples| samples.iter().any(|(_, v)| holds_asset_expression(v)))
+        && let Some(samples) = spec.time_samples.get_mut()
+    {
+        for (_, sample) in samples {
+            if holds_asset_expression(sample) {
+                evaluate_asset_expressions(sample, evaluate);
             }
         }
+    }
+    if spec
+        .metadata
+        .iter()
+        .any(|entry| entry.value.as_value().is_some_and(holds_asset_expression))
+    {
+        let mut metadata = spec.metadata.to_vec();
+        for entry in &mut metadata {
+            if let FieldValue::Value(item) = &mut entry.value
+                && holds_asset_expression(item)
+            {
+                evaluate_asset_expressions(item, evaluate);
+            }
+        }
+        spec.metadata = metadata.into();
     }
 }
 

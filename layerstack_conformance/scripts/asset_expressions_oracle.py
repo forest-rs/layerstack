@@ -13,7 +13,10 @@ which `tests/conformance/asset_expressions.rs` replays against layerstack.
 The scene: `scene.usda` sets `expressionVariables` and sublayers
 `sub/sub.usda`, which sets variables of its own; `/Local` is authored in
 `scene.usda`, `/Sub` in the sublayer, and `/Root` references
-`ref/ref.usda</Ref>`, whose layer sets variables too. Each of those specs
+`ref/ref.usda</Ref>`, whose layer sets variables too; `/Clipped` reads
+`tex` from the value clip `clips/clip.usda`, whose samples are
+expressions, evaluated with the variables of the node that introduces
+the clips and anchored to the clip layer. Each of those specs
 authors the same asset values: defaults, time samples and arrays whose
 paths are expressions (relative, search, absolute, conditional, empty,
 `None`, of another type, naming an unset variable, malformed) beside
@@ -142,6 +145,39 @@ def "Root" (
 )
 {
 }
+
+def "Clipped" (
+    clips = {
+        dictionary default = {
+            double2[] active = [(0, 0)]
+            asset[] assetPaths = [@./clips/clip.usda@]
+            asset manifestAssetPath = @./clips/manifest.usda@
+            string primPath = "/Model"
+            double2[] times = [(0, 0), (2, 2)]
+        }
+    }
+)
+{
+    custom asset tex
+}
+""",
+    "clips/clip.usda": """#usda 1.0
+
+def "Model"
+{
+    asset tex.timeSamples = {
+        0: @`"./${NAME}.png"`@,
+        1: @`"${UNSET}"`@,
+        2: @`${NUM}`@,
+    }
+}
+""",
+    "clips/manifest.usda": """#usda 1.0
+
+over "Model"
+{
+    asset tex
+}
 """,
     "sub/sub.usda": """#usda 1.0
 (
@@ -167,10 +203,10 @@ FILES = [
     "wood.png", "on.png", "plain.png", "maps/wood.png",
     "sub/wood.png", "sub/on.png", "sub/plain.png", "sub/maps/wood.png",
     "ref/wood.png", "ref/on.png", "ref/plain.png", "ref/maps/wood.png",
-    "ref/only.png",
+    "ref/only.png", "clips/wood.png",
 ]
 
-PRIMS = ["/Local", "/Root", "/Sub"]
+PRIMS = ["/Clipped", "/Local", "/Root", "/Sub"]
 
 
 class Warnings:

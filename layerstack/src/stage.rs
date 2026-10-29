@@ -1143,7 +1143,9 @@ impl Stage {
     /// Records that each prim reading value clips depends on the layers of
     /// its clip sites ([`Self::prepare_clips`]).
     fn record_clip_dependencies(&mut self) {
+        let reads = self.clips.take_expression_reads();
         if let Some(deps) = &mut self.deps {
+            deps.expression_variables.extend(reads);
             for prim in self.prims.keys().copied() {
                 for (layer, _) in self.clips.source_sites(prim) {
                     deps.add_layer_opinion(layer, prim);

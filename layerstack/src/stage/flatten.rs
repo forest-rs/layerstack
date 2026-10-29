@@ -781,14 +781,21 @@ impl Flattener<'_, '_> {
                 // Core §12.3.4: a flattened layer no longer needs the clip
                 // schedule. Refuse unavailable inputs rather than save a gap.
                 if !clips_noted {
-                    let incomplete = stage.clip_issues().iter().any(|issue| issue.owner == prim)
-                        || stage.clip_asset_requests().iter().any(|request| {
-                            request.owner == prim
-                                && !matches!(
-                                    request.status,
-                                    crate::value_clips::ClipAssetStatus::Loaded(_)
-                                )
-                        });
+                    // A clip value's asset expression that fails reads as
+                    // authored, as OpenUSD reads it; the schedule is whole.
+                    let incomplete = stage.clip_issues().iter().any(|issue| {
+                        issue.owner == prim
+                            && !matches!(
+                                issue.kind,
+                                crate::value_clips::ClipIssueKind::AssetExpression { .. }
+                            )
+                    }) || stage.clip_asset_requests().iter().any(|request| {
+                        request.owner == prim
+                            && !matches!(
+                                request.status,
+                                crate::value_clips::ClipAssetStatus::Loaded(_)
+                            )
+                    });
                     if incomplete {
                         self.lost(path.clone(), Loss::ValueClips, source);
                     } else {

@@ -98,6 +98,20 @@ pub enum ClipIssueKind {
     UnsupportedSpline,
     /// The evaluator rejected a malformed sample schedule.
     InvalidSchedule,
+    /// An asset path value a clip layer (or the manifest) authors as a
+    /// variable expression failed to evaluate with the variables of the
+    /// node that introduces the clips; it reads as authored, naming no
+    /// asset. The clip set stays whole: its values read and flatten as
+    /// OpenUSD's. OpenUSD warns when the value is read (`_AssetPathToStage`
+    /// in `pxr/usd/usd/stage.cpp`).
+    AssetExpression {
+        /// The clip or manifest layer that authors the expression.
+        layer: LayerId,
+        /// The expression as authored, backticks included.
+        expression: alloc::string::String,
+        /// The evaluation errors, joined with `"; "`.
+        error: alloc::string::String,
+    },
 }
 /// Structured preparation diagnostic; other independent sets remain usable.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -271,6 +285,9 @@ pub(crate) struct Catalog {
     loaded: HashSet<LayerId>,
     requests: Vec<ClipAssetRequest>,
     issues: Vec<ClipIssue>,
+    /// The expression variables the asset path expressions of clip values
+    /// read, for a live stage to recompose when one changes.
+    expression_reads: crate::expression_variables::VariableReads,
 }
 /// Strong references prevent allocator-address reuse in retained query stamps.
 #[derive(Clone, Debug, Default)]
@@ -619,6 +636,55 @@ impl Catalog {
             identifiers,
         })
     }
+    /// `property`, authored in the clip or manifest layer `layer`, with its
+    /// asset path expressions evaluated with the variables of `node`, the
+    /// node of `graph` that introduces the clips, as OpenUSD evaluates a
+    /// clip value it reads (`_FieldValueToStageXf` with the clip set's node
+    /// and the clip's layer, `pxr/usd/usd/stage.cpp`); see
+    /// [`crate::asset::values`]. One that fails is reported as a
+    /// [`ClipIssueKind::AssetExpression`].
+    fn evaluate_assets(
+        &mut self,
+        store: &dyn LayerStore,
+        graph: &crate::prim_index_graph::PrimIndexGraph,
+        node: NodeId,
+        set: &ReadySet,
+        layer: LayerId,
+        mut property: Arc<PropertySpec>,
+    ) -> Arc<PropertySpec> {
+        if !crate::asset::values::property_holds_asset_expression(&property) {
+            return property;
+        }
+        let stacks = crate::expression_variables::node_chain(graph, node);
+        let mut failures = Vec::new();
+        let reads = &mut self.expression_reads;
+        crate::asset::values::evaluate_property_asset_expressions(
+            &mut property,
+            &mut |expression| match crate::expression_variables::evaluate(
+                store,
+                &stacks,
+                expression,
+                Some(reads),
+            ) {
+                Ok(evaluated) => evaluated.map(Arc::from),
+                Err(error) => {
+                    failures.push((alloc::string::String::from(expression), error));
+                    None
+                }
+            },
+        );
+        for (expression, error) in failures {
+            self.issue(
+                &set.definition,
+                ClipIssueKind::AssetExpression {
+                    layer,
+                    expression,
+                    error,
+                },
+            );
+        }
+        property
+    }
     fn prepare_properties(
         &mut self,
         store: &mut dyn LayerStore,
@@ -725,10 +791,17 @@ impl Catalog {
                 .clips
                 .iter()
                 .map(|c| {
-                    c.as_ref()
-                        .and_then(|(_, layer)| layer.at(clip_path)?.get(&field).cloned())
+                    let (id, layer) = c.as_ref()?;
+                    let property = layer.at(clip_path)?.get(&field).cloned()?;
+                    Some(self.evaluate_assets(&*store, &index.graph, node, set, *id, property))
                 })
                 .collect();
+            let manifest = match &set.manifest {
+                Some((id, _)) => {
+                    self.evaluate_assets(&*store, &index.graph, node, set, *id, manifest)
+                }
+                None => manifest,
+            };
             // Inspect only sample kinds; payload arrays remain shared. Any
             // sparse endpoint requires temporal folding, even if the current
             // interpolated value holds a dense lower endpoint.
@@ -1004,6 +1077,10 @@ impl Catalog {
     }
     pub(crate) fn asset_requests(&self) -> &[ClipAssetRequest] {
         &self.requests
+    }
+    /// Takes the expression variables clip value expressions read.
+    pub(crate) fn take_expression_reads(&mut self) -> crate::expression_variables::VariableReads {
+        core::mem::take(&mut self.expression_reads)
     }
     pub(crate) fn issues(&self) -> &[ClipIssue] {
         &self.issues

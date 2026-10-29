@@ -43,7 +43,7 @@ fn is_time_valued(value: &Value) -> bool {
 fn map_time_array(
     items: &[f64],
     wrap: fn(f64) -> Value,
-    leaf: &mut impl FnMut(&Value) -> Option<Value>,
+    leaf: &mut dyn FnMut(&Value) -> Option<Value>,
 ) -> Option<Value> {
     let (index, first) = items
         .iter()
@@ -63,7 +63,7 @@ fn map_time_array(
 /// the literals of sparse array edits; `None` when none maps.
 pub(crate) fn map_leaves(
     value: &Value,
-    leaf: &mut impl FnMut(&Value) -> Option<Value>,
+    leaf: &mut dyn FnMut(&Value) -> Option<Value>,
 ) -> Option<Value> {
     match value {
         Value::Array(items) => map_all(items, leaf).map(Value::Array),
@@ -166,7 +166,7 @@ pub(crate) fn map_leaves(
     }
 }
 
-fn map_all(items: &[Value], leaf: &mut impl FnMut(&Value) -> Option<Value>) -> Option<Vec<Value>> {
+fn map_all(items: &[Value], leaf: &mut dyn FnMut(&Value) -> Option<Value>) -> Option<Vec<Value>> {
     let mut out: Option<Vec<Value>> = None;
     for (i, item) in items.iter().enumerate() {
         if let Some(mapped) = map_leaves(item, leaf) {
@@ -216,7 +216,7 @@ fn retime_leaf(value: &Value, offset: LayerOffset, duration_scale: f64) -> Optio
 /// The field with every leaf `leaf` maps rewritten; `None` when none maps.
 fn map_field(
     value: &FieldValue,
-    leaf: &mut impl FnMut(&Value) -> Option<Value>,
+    leaf: &mut dyn FnMut(&Value) -> Option<Value>,
 ) -> Option<FieldValue> {
     match value {
         FieldValue::Value(value) => map_leaves(value, leaf).map(FieldValue::Value),
@@ -228,7 +228,7 @@ fn map_field(
 /// sample values and metadata; `None` when none maps.
 fn map_property(
     spec: &PropertySpec,
-    leaf: &mut impl FnMut(&Value) -> Option<Value>,
+    leaf: &mut dyn FnMut(&Value) -> Option<Value>,
 ) -> Option<PropertySpec> {
     let default = spec
         .default
@@ -284,7 +284,7 @@ fn map_property(
 /// samples and metadata; `None` when none maps.
 pub(crate) fn map_opinion(
     opinion: &Opinion,
-    leaf: &mut impl FnMut(&Value) -> Option<Value>,
+    leaf: &mut dyn FnMut(&Value) -> Option<Value>,
 ) -> Option<Opinion> {
     let value = match &opinion.value {
         OpinionValue::Field(field) => OpinionValue::Field(map_field(field, leaf)?),

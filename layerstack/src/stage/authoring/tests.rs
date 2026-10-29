@@ -7,7 +7,7 @@ use crate::{
     PrimSpec, PropertySpec, PropertyType, Reference, StageOptions, SublayerEntry, TypedArray,
     spline::{CurveType, Extrapolation, SplineDataType},
 };
-use alloc::vec;
+use alloc::{string::ToString, vec};
 
 fn fixture(spec: PropertySpec) -> (Stage, InMemoryStore, PropertyPath) {
     let mut store = InMemoryStore::default();
@@ -1143,4 +1143,33 @@ fn a_declared_clip_set_with_clips_not_resident_has_unknown_sample_kinds() {
         AuthoringSourceKind::ValueClips { pending, .. } if pending.is_empty()
     ));
     assert_eq!(result.spans[0].verdict, AuthoringVerdict::Unknown { by: 0 });
+}
+
+#[test]
+fn inspection_errors_name_paths_with_the_store() {
+    let mut store = InMemoryStore::default();
+    let prim = store.path("/World/Rock");
+    let size = store.property_path("/World/Rock.size");
+    store.set_layer_identifier(LayerId(3), "./rock.usda");
+    let cases = [
+        (
+            AuthoringInspectionError::MissingPrim(prim),
+            "no composed prim at /World/Rock",
+        ),
+        (
+            AuthoringInspectionError::MissingLayer(LayerId(3)),
+            "the target @./rock.usda@ is absent",
+        ),
+        (
+            AuthoringInspectionError::Unmappable(size),
+            "edit target does not map /World/Rock.size",
+        ),
+        (
+            AuthoringInspectionError::NotAttribute(size),
+            "/World/Rock.size is a relationship",
+        ),
+    ];
+    for (error, text) in cases {
+        assert_eq!(error.display(&store).to_string(), text);
+    }
 }

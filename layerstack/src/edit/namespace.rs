@@ -12,6 +12,8 @@ use crate::sort;
 use alloc::{boxed::Box, sync::Arc, vec::Vec};
 use core::fmt;
 
+use crate::diagnostic::{Describe, Names, with_store};
+
 mod coordinated;
 mod delete;
 #[cfg(test)]
@@ -115,8 +117,20 @@ pub enum NamespaceError {
     UnsupportedComposition(&'static str),
 }
 
-impl fmt::Display for NamespaceError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl NamespaceError {
+    /// The error in words, its layer and spec written as text with
+    /// `store`, the store the edit was prepared against ("moving split
+    /// source opinions requires coordinated layer edits: /Asset/Rock in
+    /// @./rock.usda@"). `Display` writes the same without a store, with
+    /// ids.
+    #[must_use]
+    pub fn display<'a>(&'a self, store: &'a dyn LayerStore) -> impl fmt::Display + 'a {
+        with_store(self, store)
+    }
+}
+
+impl Describe for NamespaceError {
+    fn describe(&self, f: &mut fmt::Formatter<'_>, names: Names<'_>) -> fmt::Result {
         f.write_str(match self {
             Self::InvalidPaths => "expected two non-root prim paths or two property paths",
             Self::NoSuchObject => "no composed and authored source object",
@@ -125,11 +139,22 @@ impl fmt::Display for NamespaceError {
             Self::Cycle => "a prim cannot move beneath itself",
             Self::InstanceProxy => "cannot edit an instance proxy",
             Self::Unmappable => "the edit target does not map both paths",
-            Self::SplitOpinions { .. } => {
-                "moving split source opinions requires coordinated layer edits"
+            Self::SplitOpinions { layer, spec } => {
+                return write!(
+                    f,
+                    "moving split source opinions requires coordinated layer edits: {} in {}",
+                    names.spec(spec),
+                    names.layer(*layer)
+                );
             }
             Self::UnsupportedComposition(reason) => reason,
         })
+    }
+}
+
+impl fmt::Display for NamespaceError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.describe(f, Names(None))
     }
 }
 impl core::error::Error for NamespaceError {}

@@ -16,6 +16,7 @@ use crate::{
     ArcKind, FieldValue, InterpolationType, LayerId, LayerOffset, LayerStore, NodeId, Opinion,
     OpinionKey, OpinionValue, PathId, PathInterner, PrimIndexGraph, PropertyKind, PropertyPath,
     SpecPath, Stage, Time, TimeSample, TokenId, Value,
+    diagnostic::{Describe, Names, with_store},
     edit::EditTarget,
     prim_index::{OpinionRef, OpinionSource, PrimIndex},
     value_clips::{AuthoringClipSet, ClipAssetRequest},
@@ -453,16 +454,36 @@ pub enum AuthoringInspectionError {
     AnimationAtDefault,
 }
 
+impl AuthoringInspectionError {
+    /// The error in words, its paths and layer written as text with
+    /// `store`, the stage's store ("no composed prim at /World/Rock").
+    /// `Display` writes the same without a store, with ids.
+    #[must_use]
+    pub fn display<'a>(&'a self, store: &'a dyn LayerStore) -> impl fmt::Display + 'a {
+        with_store(self, store)
+    }
+}
+
 impl fmt::Display for AuthoringInspectionError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.describe(f, Names(None))
+    }
+}
+
+impl Describe for AuthoringInspectionError {
+    fn describe(&self, f: &mut fmt::Formatter<'_>, names: Names<'_>) -> fmt::Result {
         match self {
             Self::ForeignStore => {
                 f.write_str("authoring inspection store belongs to another token/path domain")
             }
-            Self::MissingPrim(path) => write!(f, "no composed prim at {path:?}"),
-            Self::MissingLayer(layer) => write!(f, "target layer {layer:?} is absent"),
-            Self::Unmappable(path) => write!(f, "edit target does not map {path:?}"),
-            Self::NotAttribute(path) => write!(f, "{path:?} is a relationship"),
+            Self::MissingPrim(path) => write!(f, "no composed prim at {}", names.path(*path)),
+            Self::MissingLayer(layer) => {
+                write!(f, "the target {} is absent", names.layer(*layer))
+            }
+            Self::Unmappable(path) => {
+                write!(f, "edit target does not map {}", names.property(*path))
+            }
+            Self::NotAttribute(path) => write!(f, "{} is a relationship", names.property(*path)),
             Self::InvalidTime => {
                 f.write_str("authoring inspection requires finite time codes and an ordered range")
             }

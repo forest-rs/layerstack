@@ -101,6 +101,16 @@ impl<T: 'static> SparseListOp<T> {
         self.0.get_or_insert_with(|| Box::new(ListOp::new()))
     }
 
+    /// Whether a list op is authored: one was authored into
+    /// ([`Self::make_mut`]), even if edits in place have since emptied it.
+    /// OpenUSD keeps a list op field whose items an edit removes
+    /// (`SdfListOp::ModifyOperations`) and writes it with no statements,
+    /// as `UsdNamespaceEditor` leaves an arc to a deleted prim.
+    #[must_use]
+    pub fn is_authored(&self) -> bool {
+        self.0.is_some()
+    }
+
     /// The list op, moved out.
     #[must_use]
     pub fn into_inner(self) -> ListOp<T> {

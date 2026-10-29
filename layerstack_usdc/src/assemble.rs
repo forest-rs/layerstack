@@ -1952,6 +1952,9 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
                 "propertyOrder" => {
                     variant.property_order = Some(self.extract_token_names(value));
                 }
+                "primOrder" => {
+                    variant.prim_order = Some(self.extract_token_names(value));
+                }
                 // Nested variant sets are read from their own specs, in
                 // this order.
                 "variantSetChildren" => {

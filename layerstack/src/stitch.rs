@@ -398,6 +398,7 @@ fn variant(
     strong.variant_set_names =
         arc(&strong.variant_set_names, &weak.variant_set_names, report).into();
     fill(&mut strong.property_order, &weak.property_order);
+    fill(&mut strong.prim_order, &weak.prim_order);
     variant_sets(&mut strong.variant_sets, &weak.variant_sets, tokens, report)
 }
 fn prim(

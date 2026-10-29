@@ -250,6 +250,12 @@ fn render_prim_like(
 }
 
 fn render_variant(out: &mut Vec<String>, indent: &str, variant: &VariantSpec, names: Names<'_>) {
+    if let Some(order) = &variant.prim_order {
+        out.push(format!(
+            "{indent}primOrder = {}",
+            render_names(order, names)
+        ));
+    }
     render_prim_like(
         out,
         indent,

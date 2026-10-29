@@ -63,7 +63,13 @@ The cases:
   blank line before its `}` (`Sdf_WriteVariant`,
   `pxr/usd/sdf/fileIO_Common.h`), with a blank line between its
   properties and its child prims and between children but none before a
-  variant set (`Sdf_WritePrimBody`); a `defaultPrim` the layer does not
+  variant set (`Sdf_WritePrimBody`); `reorder nameChildren` and
+  `reorder properties` in a variant, a nested variant and a variant's
+  descendants, kept on each prim spec and written, properties first, only
+  when they name more than one name (`Sdf_WritePrimNamespaceReorders`),
+  the last of two statements winning (`write_variant_reorders_nested`),
+  and in every layout of `variant_reorder_sweep`
+  (`write_variant_reorders_NN`); a `defaultPrim` the layer does not
   hold; `prefixSubstitutions` and
   `suffixSubstitutions` (`_WriteDictionary`, `stringValuesOnly`); a
   connection to a prim; a variant selection that is an expression; the
@@ -177,6 +183,7 @@ unless it matches the checked-in fixture.
 import argparse
 import difflib
 import filecmp
+import itertools
 import json
 import os
 import re
@@ -593,6 +600,72 @@ def "P" (
     }
     variantSet "w" = {
         "x" {
+        }
+    }
+}
+''', []),
+    "write_variant_reorders_nested": ('''#usda 1.0
+def "P" (
+    variantSets = "v"
+)
+{
+    variantSet "v" = {
+        "x" (
+            variantSets = "n"
+        ) {
+            reorder nameChildren = ["B", "A"]
+            def "A" {
+                reorder nameChildren = ["G1", "G0"]
+                reorder properties = ["b", "a"]
+                int a = 1
+                int b = 2
+                def "G0" {
+                }
+                def "G1" {
+                }
+                variantSet "w" = {
+                    "z" {
+                        reorder nameChildren = ["K", "J"]
+                        def "J" {
+                        }
+                        def "K" {
+                        }
+                    }
+                }
+            }
+            def "B" {
+            }
+            variantSet "n" = {
+                "y" {
+                    reorder properties = ["d", "c"]
+                    reorder nameChildren = ["N1", "B", "N0"]
+                    int c = 1
+                    int d = 2
+                    def "N0" {
+                    }
+                    def "N1" {
+                    }
+                }
+                "one" {
+                    reorder nameChildren = ["N0"]
+                    reorder properties = ["c"]
+                    int c = 1
+                }
+                "twice" {
+                    reorder nameChildren = ["N0", "N1"]
+                    reorder nameChildren = ["N1", "N0"]
+                }
+            }
+        }
+    }
+}
+''', []),
+    "strict_variant_reorder_empty": ('''#usda 1.0
+def "P"
+{
+    variantSet "v" = {
+        "x" {
+            reorder nameChildren = []
         }
     }
 }
@@ -1996,6 +2069,59 @@ def "P"
 }
 ''', []),
 }
+
+
+def variant_reorder_sweep():
+    """`write_variant_reorders_NN`: the layouts of a prim body, inside a
+    variant and outside it, that hold `reorder nameChildren` and
+    `reorder properties` among zero to two properties, zero to two
+    children (each holding a property, a child and a variant set one level
+    down), zero to two nested variant sets (whose first branch holds the
+    same one level down), with or without metadata on the variant.
+
+    OpenUSD keeps a variant's `reorder nameChildren` on the variant's prim
+    spec as on any prim spec (`primOrder`,
+    `TextParserAction<ChildOrPropertyOrderStatement>`,
+    `pxr/usd/sdf/textFileFormatParser.cpp`) and writes both reorders of a
+    variant as of a prim, properties first (`Sdf_WritePrimNamespaceReorders`
+    from `Sdf_WriteVariant`, `pxr/usd/sdf/fileIO_Common.h`)."""
+
+    def body(indent, properties, reorder, children, sets, depth):
+        pad = "    " * indent
+        text = ""
+        if reorder:
+            text += (pad + 'reorder nameChildren = ["C1", "C0"]\n'
+                     + pad + 'reorder properties = ["a1", "a0"]\n')
+        for i in range(properties):
+            text += pad + f"int a{i} = {i}\n"
+        for i in range(children):
+            text += pad + f'def "C{i}"\n' + pad + "{\n"
+            if depth < 1:
+                text += body(indent + 1, 1, False, 0, 1, depth + 1)
+            text += pad + "}\n"
+        for i in range(sets):
+            text += pad + f'variantSet "s{i}" = {{\n'
+            for variant in ["x", "y"]:
+                text += pad + f'    "{variant}" {{\n'
+                if depth < 1 and variant == "x":
+                    text += body(indent + 2, 1, False, 1, 1, depth + 1)
+                text += pad + "    }\n"
+            text += pad + "}\n"
+        return text
+
+    cases = {}
+    layouts = itertools.product([0, 1, 2], [0, 1, 2], [0, 1, 2], [False, True])
+    for n, (properties, children, sets, metadata) in enumerate(layouts):
+        meta = ' (\n            kind = "k"\n        )' if metadata else ""
+        source = ('#usda 1.0\n\ndef "P" (\n    variantSets = "v"\n)\n{\n'
+                  '    variantSet "v" = {\n        "only"' + meta + " {\n"
+                  + body(3, properties, True, children, sets, 0) + "        }\n    }\n"
+                  + body(1, properties, True, children, sets, 0) + "}\n")
+        cases[f"write_variant_reorders_{n:02d}"] = (source, [])
+    return cases
+
+
+CASES.update(variant_reorder_sweep())
 
 
 def error_line(error):

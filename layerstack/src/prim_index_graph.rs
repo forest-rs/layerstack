@@ -871,6 +871,29 @@ impl PrimIndexGraph {
         }
     }
 
+    /// The arcs the prim receives opinions through, as composition records
+    /// them for its dependencies: each node's site prim, arc kind and
+    /// layer stack root, but for the root's and those of local and variant
+    /// arcs, sorted and each once ([`PrimDependencies::dedup_arcs`]).
+    ///
+    /// [`PrimDependencies::dedup_arcs`]: crate::dependency_map::PrimDependencies::dedup_arcs
+    pub(crate) fn dependency_arcs(&self) -> Vec<(crate::path::PathId, ArcKind, LayerId)> {
+        let mut arcs = Vec::with_capacity(self.sites.len().saturating_sub(1));
+        arcs.extend(
+            self.shape
+                .iter()
+                .zip(self.sites.iter())
+                .skip(1)
+                .filter(|(node, _)| !matches!(node.arc_kind, ArcKind::Local | ArcKind::Variants))
+                .map(|(node, site)| (site.prim_path(), node.arc_kind, node.layer_stack.root)),
+        );
+        sort::sort_unstable_by_key(&mut arcs, |&(source, kind, layer)| {
+            (source, kind as u8, layer)
+        });
+        arcs.dedup();
+        arcs
+    }
+
     /// `true` when two nodes read the same site of the same layer stack.
     fn same_site(&self, a: NodeId, b: NodeId) -> bool {
         self.shape[a.index()].layer_stack == self.shape[b.index()].layer_stack

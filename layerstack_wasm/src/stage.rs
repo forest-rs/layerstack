@@ -467,7 +467,9 @@ impl Stage {
     /// attribute does not exist. `value` is a value record or `null`;
     /// `source` is `none`, `default`, `timeSamples`, `spline`,
     /// `valueClips` or `fallback`, with the bracketing sample times
-    /// `lower` and `upper` for `timeSamples` (else `null`). Each opinion,
+    /// `lower` and `upper` for `timeSamples` (else `null`); a blocked
+    /// sample held at `time` is `timeSamples` with a `null` value and a
+    /// `block` opinion, as OpenUSD's resolve info names it. Each opinion,
     /// strongest first, is
     /// `[layer, specPath, arc, role, detail, offset, scale]`: the layer
     /// id, the spec path in that layer, the arc that reaches it (`null`

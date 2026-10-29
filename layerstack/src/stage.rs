@@ -5458,7 +5458,9 @@ mod tests {
     }
 
     /// A sampled block in effect says which of its samples blocks the value,
-    /// before the first sample too, while a default block offers none.
+    /// before the first sample too, and its time samples are the source, as
+    /// `UsdAttribute::GetResolveInfo(time)` names them; a default block
+    /// offers no sample and names no source.
     ///
     /// Spec: AOUSD Core §12.3.6.
     #[test]
@@ -5473,7 +5475,12 @@ mod tests {
         for time in [Time::held(0.0), Time::held(3.0), Time::at(3.0)] {
             let explained = stage.explain_property_value(property, time).unwrap();
             assert_eq!(explained.value, None);
-            assert_eq!(explained.source, ValueSource::None);
+            // `UsdAttribute::GetResolveInfo(time)` names the time samples.
+            assert!(
+                matches!(explained.source, ValueSource::TimeSamples { lower, .. } if lower == 2.0),
+                "{:?}",
+                explained.source
+            );
             let block = &explained.opinions[0];
             assert_eq!(block.role, OpinionRole::Block);
             assert_eq!(
@@ -5489,6 +5496,7 @@ mod tests {
         let explained = stage
             .explain_property_value(PropertyPath::new(prim, field), Time::held(3.0))
             .unwrap();
+        assert_eq!(explained.source, ValueSource::None);
         assert_eq!(explained.opinions[0].role, OpinionRole::Block);
         assert!(explained.opinions[0].samples.is_empty());
     }

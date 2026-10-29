@@ -855,7 +855,11 @@ fn blocks_without_a_fallback_are_still_explained() {
         })
         .expect("the blocked sample is explained");
     assert_eq!(sampled.value, None);
-    assert_eq!(sampled.source, ValueSource::None);
+    assert!(
+        matches!(sampled.source, ValueSource::TimeSamples { .. }),
+        "{:?}",
+        sampled.source
+    );
     assert_eq!(
         roles(&sampled.opinions),
         vec![(LayerId(1), OpinionRole::Block)]

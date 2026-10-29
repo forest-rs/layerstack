@@ -59,7 +59,7 @@ the same text as the source layer (`same_text`) and that text.
   `CrateFile::_PackValue` posts "Attempted to pack unsupported type
   'TfEnum'", and the read refuses the invalid value it writes.
 
-Two cases have no USDA source, since the text parser cannot make them:
+Three cases have no USDA source, since the text parser cannot make them:
 each is a layer `Sdf.CopySpec` copies from a USDA source, replacing
 fields' values through its value callback (which sets them as they
 are), and the oracle records its export, the read of that file, the
@@ -73,6 +73,13 @@ exports (`open_text`).
   authoring from making them (`pxr/usd/sdf/schema.cpp`), and the text
   parser refuses them, but the crate stores and reads them as any path,
   and `ExportToString` writes them.
+- `property_tail_targets`: connections and relationship targets of the
+  other paths below a property, which neither `IsValidAttributeConnectionPath`
+  nor `IsValidRelationshipTargetPath` admits: a target path
+  (`</A.b[/C]>`), a relational attribute's target (`</A.b[/C].d[/E]>`), a
+  mapper argument (`</A.b.mapper[/C].arg>`) and expressions
+  (`</A.b.expression>`). The crate stores and reads them as any path,
+  `ExportToString` writes them and the text parser refuses them.
 - `unregistered_typed_list_ops`: typed list ops (`SdfIntListOp`,
   `SdfInt64ListOp`, `SdfUIntListOp`, `SdfUInt64ListOp`, `SdfTokenListOp`,
   `SdfStringListOp`) under metadata keys no schema registers, on a prim
@@ -202,6 +209,25 @@ def "P"
             [Sdf.Path("/A.b.mapper[/C]")]),
         ("/P.d", "connectionPaths"): lambda: Sdf.PathListOp.Create(prependedItems=[
             Sdf.Path("/A.b[/C].d.mapper[/E]"), Sdf.Path("/A.b[/C].d")]),
+    }),
+    "property_tail_targets": ("""#usda 1.0
+def "P"
+{
+    float c.connect = </X.y>
+    float d.connect = </X.y>
+    rel r = </X.y>
+    rel s = </X.y>
+}
+""", {
+        ("/P.c", "connectionPaths"): lambda: Sdf.PathListOp.CreateExplicit(
+            [Sdf.Path("/A.b[/C]")]),
+        ("/P.d", "connectionPaths"): lambda: Sdf.PathListOp.Create(appendedItems=[
+            Sdf.Path("/A.b.mapper[/C].arg"), Sdf.Path("/A.b.expression")]),
+        ("/P.r", "targetPaths"): lambda: Sdf.PathListOp.CreateExplicit([
+            Sdf.Path("/A.b[/C]"), Sdf.Path("/A.b.mapper[/C].arg")]),
+        ("/P.s", "targetPaths"): lambda: Sdf.PathListOp.Create(prependedItems=[
+            Sdf.Path("/A.b[/C].d[/E]"), Sdf.Path("/A.b.expression"),
+            Sdf.Path("/A.b[/C].d.expression")]),
     }),
     "unregistered_typed_list_ops": ("""#usda 1.0
 def "P" (

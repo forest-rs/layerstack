@@ -56,6 +56,26 @@
     "text": "#usda 1.0\n\ndef \"P\"\n{\n    float c.connect = </A.b.mapper[/C]>\n    prepend float d.connect = [\n        </A.b[/C].d.mapper[/E]>,\n        </A.b[/C].d>,\n    ]\n    rel r = </X.y>\n}\n\n"
    }
   },
+  "property_tail_targets": {
+   "export_usdc": {
+    "accepted": true,
+    "errors": []
+   },
+   "metadata_types": {},
+   "open_text": {
+    "accepted": false,
+    "errors": [
+     "'/A.b[/C]' is not a valid prim or property scene path at '</A.b[/C]>' in </P.c>",
+     ":5:23: '/A.b[/C]' is not a valid prim or property scene path at '</A.b[/C]>' in </P.c>"
+    ]
+   },
+   "open_usdc": {
+    "accepted": true,
+    "errors": [],
+    "same_text": true,
+    "text": "#usda 1.0\n\ndef \"P\"\n{\n    float c.connect = </A.b[/C]>\n    append float d.connect = [\n        </A.b.mapper[/C].arg>,\n        </A.b.expression>,\n    ]\n    rel r = [\n        </A.b[/C]>,\n        </A.b.mapper[/C].arg>,\n    ]\n    prepend rel s = [\n        </A.b[/C].d[/E]>,\n        </A.b.expression>,\n        </A.b[/C].d.expression>,\n    ]\n}\n\n"
+   }
+  },
   "relational_targets": {
    "export_usdc": {
     "accepted": true,

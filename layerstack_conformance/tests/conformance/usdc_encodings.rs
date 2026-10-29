@@ -240,6 +240,16 @@ fn mapper_connections_read_and_save_as_openusd() {
     assert_reads_as_openusd("mapper_connections");
 }
 
+/// Connections and targets of the other paths below a property (a target
+/// path, a relational attribute's target, a mapper argument, an
+/// expression), which no text parser reads but OpenUSD's crate stores and
+/// reads, read from OpenUSD's file, write as the text OpenUSD writes and
+/// save as USDC that reads back the same.
+#[test]
+fn property_tail_targets_read_and_save_as_openusd() {
+    assert_reads_as_openusd("property_tail_targets");
+}
+
 /// Typed list ops under metadata keys no schema registers read from
 /// OpenUSD's file, write as list-op statements and save as USDC, each as
 /// its own list-op type, as OpenUSD saves them.

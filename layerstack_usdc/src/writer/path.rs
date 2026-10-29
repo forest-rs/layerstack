@@ -36,9 +36,10 @@ pub(crate) enum Element {
 /// One element of a path's property part.
 ///
 /// The variants are in `Sdf_PathNode::NodeType` order (a prim property,
-/// then a target, a mapper and a relational attribute node), so the
-/// derived ordering is `Sdf_PathNode::Compare`'s: by node type, then a
-/// name by byte order or a bracketed path in `SdfPath` order.
+/// then a target, a mapper, a relational attribute, a mapper argument and
+/// an expression node), so the derived ordering is
+/// `Sdf_PathNode::Compare`'s: by node type, then a name by byte order or a
+/// bracketed path in `SdfPath` order.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum PropertyElement {
     /// The property of a prim or variant (`.b`).
@@ -51,6 +52,11 @@ pub(crate) enum PropertyElement {
     Mapper(CratePath),
     /// A relational attribute (`.d`), after a target.
     RelationalAttribute(String),
+    /// A mapper argument (`.arg`), after a mapper.
+    MapperArg(String),
+    /// An expression (`.expression`), after a property or a relational
+    /// attribute.
+    Expression,
 }
 
 /// An absolute path the writer supports: the pseudo-root, a prim path, a
@@ -88,10 +94,11 @@ impl CratePath {
     /// A variant selection follows a prim or another selection and is
     /// followed by a child prim name, another selection, a property or
     /// the end; a variant set (`{v=}`) ends the path. A property part
-    /// follows `SdfPath`'s grammar (`PropElts`, `pxr/usd/sdf/pathParser.h`)
-    /// as far as these elements go: a property name, then a target or a
-    /// mapper; a relational attribute after a target, then a target or a
-    /// mapper again; the bracketed paths absolute.
+    /// follows `SdfPath`'s grammar (`PropElts`, `pxr/usd/sdf/pathParser.h`):
+    /// a property name, then a target, a mapper or an expression; a
+    /// relational attribute after a target, then a target, a mapper or an
+    /// expression again; a mapper argument after a mapper; the bracketed
+    /// paths absolute.
     pub(crate) fn parse(text: &str) -> Result<Self, UsdcWriteError> {
         let invalid = |reason| UsdcWriteError::InvalidPath {
             path: text.into(),
@@ -233,9 +240,11 @@ impl CratePath {
             (Some(PropertyElement::Mapper(target)), _) => {
                 Cow::Owned(alloc::format!(".mapper[{target}]"))
             }
-            (Some(PropertyElement::RelationalAttribute(name)), _) => {
-                Cow::Owned(alloc::format!(".{name}"))
-            }
+            (
+                Some(PropertyElement::RelationalAttribute(name) | PropertyElement::MapperArg(name)),
+                _,
+            ) => Cow::Owned(alloc::format!(".{name}")),
+            (Some(PropertyElement::Expression), _) => Cow::Borrowed(".expression"),
             (None, Some(Element::Prim(name))) => Cow::Borrowed(name),
             (None, Some(Element::Variant { set, variant })) => {
                 Cow::Owned(alloc::format!("{{{set}={variant}}}"))
@@ -258,32 +267,53 @@ fn parse_property(mut text: &str) -> Result<Vec<PropertyElement>, &'static str> 
     let mut property = alloc::vec![PropertyElement::Property(text[..end].into())];
     text = &text[end..];
     while !text.is_empty() {
-        let after_target = matches!(property.last(), Some(PropertyElement::Target(_)));
-        let after_mapper = matches!(property.last(), Some(PropertyElement::Mapper(_)));
-        if after_mapper {
-            return Err("a mapper ends the path");
-        }
-        if after_target {
-            // Only a relational attribute follows a target.
-            let Some(rest) = text.strip_prefix('.') else {
-                return Err("a target is followed by a relational attribute");
-            };
-            let end = name_end(rest);
-            if !is_property_name(&rest[..end]) {
-                return Err("relational attribute name is not a namespaced identifier");
+        let last = property.last().expect("the property name");
+        match last {
+            PropertyElement::MapperArg(_) | PropertyElement::Expression => {
+                return Err("a mapper argument or an expression ends the path");
             }
-            property.push(PropertyElement::RelationalAttribute(rest[..end].into()));
-            text = &rest[end..];
-        } else if let Some(rest) = text.strip_prefix(".mapper[") {
-            let (target, rest) = bracketed(rest)?;
-            property.push(PropertyElement::Mapper(target));
-            text = rest;
-        } else if let Some(rest) = text.strip_prefix('[') {
-            let (target, rest) = bracketed(rest)?;
-            property.push(PropertyElement::Target(target));
-            text = rest;
-        } else {
-            return Err("a property is followed by a target or a mapper");
+            PropertyElement::Mapper(_) => {
+                // Only a mapper argument follows a mapper.
+                let Some(rest) = text.strip_prefix('.') else {
+                    return Err("a mapper is followed by a mapper argument");
+                };
+                let end = name_end(rest);
+                if !is_name(&rest[..end]) {
+                    return Err("mapper argument name is not an identifier");
+                }
+                property.push(PropertyElement::MapperArg(rest[..end].into()));
+                text = &rest[end..];
+            }
+            PropertyElement::Target(_) => {
+                // Only a relational attribute follows a target.
+                let Some(rest) = text.strip_prefix('.') else {
+                    return Err("a target is followed by a relational attribute");
+                };
+                let end = name_end(rest);
+                if !is_property_name(&rest[..end]) {
+                    return Err("relational attribute name is not a namespaced identifier");
+                }
+                property.push(PropertyElement::RelationalAttribute(rest[..end].into()));
+                text = &rest[end..];
+            }
+            PropertyElement::Property(_) | PropertyElement::RelationalAttribute(_) => {
+                if let Some(rest) = text.strip_prefix(".mapper[") {
+                    let (target, rest) = bracketed(rest)?;
+                    property.push(PropertyElement::Mapper(target));
+                    text = rest;
+                } else if let Some(rest) = text.strip_prefix('[') {
+                    let (target, rest) = bracketed(rest)?;
+                    property.push(PropertyElement::Target(target));
+                    text = rest;
+                } else if let Some(rest) = text.strip_prefix(".expression")
+                    && !rest.starts_with(|c: char| c != '.' && c != '[')
+                {
+                    property.push(PropertyElement::Expression);
+                    text = rest;
+                } else {
+                    return Err("a property is followed by a target, a mapper or an expression");
+                }
+            }
         }
     }
     Ok(property)
@@ -339,9 +369,12 @@ impl core::fmt::Display for CratePath {
         }
         for element in &self.property {
             match element {
-                PropertyElement::Property(name) | PropertyElement::RelationalAttribute(name) => {
+                PropertyElement::Property(name)
+                | PropertyElement::RelationalAttribute(name)
+                | PropertyElement::MapperArg(name) => {
                     write!(f, ".{name}")?;
                 }
+                PropertyElement::Expression => f.write_str(".expression")?,
                 PropertyElement::Target(target) => write!(f, "[{target}]")?,
                 PropertyElement::Mapper(target) => write!(f, ".mapper[{target}]")?,
             }
@@ -465,6 +498,12 @@ mod tests {
             "/A.b[/C.d[/E].f].g",
             "/A.b[/C{v=x}].d",
             "/A{v=a}.b[/C].d",
+            "/A.rel.mapper[/B].arg",
+            "/A.rel.expression",
+            "/A.b[/C].d.expression",
+            "/A.b[/C].d.mapper[/E].f",
+            // A relational attribute named `expression`, as `SdfPath` reads it.
+            "/A.rel[/B].expression",
         ] {
             assert_eq!(p(text).to_string(), text, "{text}");
         }
@@ -488,8 +527,10 @@ mod tests {
             "/A.rel[/B",
             "/A.rel[/B].",
             "/A.rel[/B][/C]",
-            "/A.rel.mapper[/B].arg",
-            "/A.rel.expression",
+            "/A.rel.mapper[/B].arg.c",
+            "/A.rel.mapper[/B][/C]",
+            "/A.rel.expression.c",
+            "/A.rel.expression[/B]",
             "/A B",
         ] {
             assert!(CratePath::parse(bad).is_err(), "{bad:?} rejected");
@@ -540,6 +581,35 @@ mod tests {
             ],
             "prim part first, then property; ancestors first; prims before \
              variant selections; targets before mappers"
+        );
+    }
+
+    #[test]
+    fn orders_mapper_arguments_and_expressions_like_sdf_path() {
+        // `sorted(Sdf.Path(...))` in OpenUSD 26.11.
+        let mut paths = [
+            "/A.b.expression",
+            "/A.b.mapper[/C].z",
+            "/A.b.mapper[/C].a",
+            "/A.b[/C]",
+            "/A.b.mapper[/C]",
+            "/A.b[/C].d.expression",
+            "/A.b[/C].d",
+        ]
+        .map(p);
+        paths.sort();
+        let sorted: Vec<String> = paths.iter().map(ToString::to_string).collect();
+        assert_eq!(
+            sorted,
+            [
+                "/A.b[/C]",
+                "/A.b[/C].d",
+                "/A.b[/C].d.expression",
+                "/A.b.mapper[/C]",
+                "/A.b.mapper[/C].a",
+                "/A.b.mapper[/C].z",
+                "/A.b.expression"
+            ]
         );
     }
 

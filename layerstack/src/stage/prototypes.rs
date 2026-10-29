@@ -1279,8 +1279,12 @@ mod early_reuse_tests {
         let right_child = store.path("/Right/A/B");
         assert!(stage.has_prim(left));
         assert!(!stage.is_active(left));
+        // An inactive instanceable prim is no instance, as OpenUSD's
+        // `UsdPrim::IsInstance` reports.
+        assert!(!stage.is_instance(left));
         assert!(!stage.has_prim(left_child));
         assert!(stage.is_active(right));
+        assert!(stage.is_instance(right));
         assert_eq!(
             stage
                 .resolve_field_path(PropertyPath::new(right_child, field))

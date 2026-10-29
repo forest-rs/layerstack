@@ -347,7 +347,7 @@ pub(crate) fn table_imports(text: &str) -> (Vec<&'static str>, Vec<&'static str>
 /// The `layerstack_schemas::table::TABLE_FORMAT` the tables are written
 /// in. A library module checks it at compile time ([`crate::compile`]'s
 /// `--rust`), so this changes with the table types' fields and meaning.
-pub(crate) const TABLE_FORMAT: u32 = 1;
+pub(crate) const TABLE_FORMAT: u32 = 2;
 
 /// The `TABLES` static of `schemas`, `auto_applies` and `metadata`,
 /// declared with `declaration` (`pub(crate) static`), with a value this
@@ -412,6 +412,15 @@ pub(crate) fn tables(
         );
         for (instance, types) in &schema.instance_can_only_apply_to {
             let _ = write!(out, "({instance:?}, &{types:?}), ");
+        }
+        out.push_str("],\n            plug_info: &[");
+        for (key, value) in &schema.plug_info {
+            match expr(value, tokens) {
+                Ok(value) => {
+                    let _ = write!(out, "({key:?}, {}), ", closure(&value));
+                }
+                Err(why) => failures.push(format!("{}'s plugInfo `{key}`: {why}", schema.name)),
+            }
         }
         out.push_str("],\n        },\n");
     }

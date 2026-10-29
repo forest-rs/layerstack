@@ -483,10 +483,10 @@ static TOKEN: ValueType = ValueType { name: "token" };
 
 static TOKEN_ARRAY: ValueType = ValueType { name: "token[]" };
 
-// The tables are written in table format 1, which the
+// The tables are written in table format 2, which the
 // `layerstack_schemas` built against must read.
 const _: () = assert!(
-    ::layerstack_schemas::table::TABLE_FORMAT == 1,
+    ::layerstack_schemas::table::TABLE_FORMAT == 2,
     "written for another layerstack_schemas table format: regenerate this module with layerstack_schemagen 0.1.0",
 );
 
@@ -515,6 +515,7 @@ static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &["Xformable"],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "Telescope",
@@ -593,6 +594,7 @@ static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
     ],
     auto_applies: &[],

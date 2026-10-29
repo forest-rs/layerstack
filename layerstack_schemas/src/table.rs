@@ -34,7 +34,7 @@ use layerstack::{
 /// [`SchemaTables`], [`Metadata`]): their fields and what they mean. It
 /// changes with any of them; generated library modules check it (see the
 /// [module docs](self)).
-pub const TABLE_FORMAT: u32 = 1;
+pub const TABLE_FORMAT: u32 = 2;
 
 /// Constructs a value, interning its tokens in the interner passed in.
 pub type Construct = fn(&TokenInterner) -> Value;
@@ -106,6 +106,10 @@ pub struct Schema {
     pub allowed_instance_names: &'static [&'static str],
     /// The `apiSchemaCanOnlyApplyTo` of each `apiSchemaInstances` entry.
     pub instance_can_only_apply_to: &'static [(&'static str, &'static [&'static str])],
+    /// The other keys of its `plugInfo.json` type entry, by key
+    /// (`providesUsdShadeConnectableAPIBehavior`, …):
+    /// [`SchemaDefinition::plug_info`].
+    pub plug_info: &'static [(&'static str, Construct)],
 }
 
 /// A schema library's tables: one OpenUSD domain, or a library of one's
@@ -249,6 +253,14 @@ impl Schema {
                     tokens.intern(instance),
                     types.iter().map(|t| tokens.intern(t)).collect(),
                 )
+            })
+            .collect();
+        schema.plug_info = self
+            .plug_info
+            .iter()
+            .map(|(key, construct)| layerstack::FieldEntry {
+                name: tokens.intern(key),
+                value: construct(tokens).into(),
             })
             .collect();
         schema

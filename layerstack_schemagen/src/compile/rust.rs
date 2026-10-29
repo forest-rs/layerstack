@@ -181,6 +181,29 @@ pub(crate) fn module_text(
         )));
     }
     let emitted = read.emitted;
+    let plug_info_text = plug_info;
+    let plug_info = plug_info
+        .map(model::plug_info_text)
+        .transpose()
+        .map_err(|e| error(format!("plugInfo.json: {e}")))?;
+    let plugin_infos = || {
+        plug_info
+            .as_ref()
+            .and_then(|json| json["Plugins"].as_array())
+            .into_iter()
+            .flatten()
+            .map(|plugin| &plugin["Info"])
+    };
+    // The keys of each type entry the registry carries, as OpenUSD reads
+    // them from the installed plugin.
+    let type_plug_info = |name: &str| {
+        plugin_infos()
+            .filter_map(|info| info["Types"].as_object())
+            .flat_map(|types| types.values())
+            .find(|entry| entry["schemaIdentifier"].as_str() == Some(name))
+            .map(model::other_plug_info)
+            .unwrap_or_default()
+    };
     let tokens = &store.tokens();
     let names = |names: &[String]| names.iter().map(|n| tokens.intern(n)).collect::<Vec<_>>();
     let mut declared = Vec::new();
@@ -210,6 +233,7 @@ pub(crate) fn module_text(
                 .iter()
                 .map(|(instance, types)| (tokens.intern(instance), names(types)))
                 .collect(),
+            plug_info: model::plug_info_entries(&type_plug_info(&class.name), tokens),
             ..SchemaDeclaration::new(tokens.intern(&class.name), kind)
         });
     }
@@ -292,19 +316,9 @@ pub(crate) fn module_text(
             }
         }
     }
-    let plug_info_text = plug_info;
-    let plug_info = plug_info
-        .map(model::plug_info_text)
-        .transpose()
-        .map_err(|e| error(format!("plugInfo.json: {e}")))?;
     let mut auto_applies = Vec::new();
-    for plugin in plug_info
-        .as_ref()
-        .and_then(|json| json["Plugins"].as_array())
-        .into_iter()
-        .flatten()
-    {
-        auto_applies.extend(model::auto_applies(&plugin["Info"]));
+    for info in plugin_infos() {
+        auto_applies.extend(model::auto_applies(info));
     }
     // The plugins' `SdfMetadata`, as OpenUSD's `SdfSchema` registers them
     // after its own and usd-core's fields; the module registers those it
@@ -533,6 +547,7 @@ fn upstream_schema(class: &Upstream, upstream: &BTreeMap<&str, &Upstream>) -> Sc
         can_only_apply_to: Vec::new(),
         allowed_instance_names: Vec::new(),
         instance_can_only_apply_to: Vec::new(),
+        plug_info: Vec::new(),
         doc: String::new(),
     }
 }

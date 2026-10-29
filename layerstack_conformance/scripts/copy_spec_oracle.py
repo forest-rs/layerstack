@@ -9,8 +9,9 @@ Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.11`.
 Each case reloads `fixtures/copy_spec/src.usda` and `dst.usda` and makes
 one `Sdf.CopySpec` call, recording whether OpenUSD accepted it and then
 every spec of the destination layer: prim specs with their specifier, type
-name, inherits, specializes and references, and their properties with
-their default value, targets or connections. `scene.usda` only sublayers
+name, inherits, specializes, references and child and property orders (a
+variant's prim spec's included), and their properties with their default
+value, targets or connections. `scene.usda` only sublayers
 both layers, so that `tests/conformance/copy_spec.rs` can load them into one store and
 make the same copies with `Transaction::copy_spec`.
 
@@ -69,6 +70,9 @@ def dump(layer):
         for key in ("inheritPaths", "specializes"):
             if spec.HasInfo(key):
                 record[key] = list_op(spec.GetInfo(key))
+        for key in ("primOrder", "propertyOrder"):
+            if spec.HasInfo(key):
+                record[key] = [str(name) for name in spec.GetInfo(key)]
         if spec.HasInfo("references"):
             record["references"] = list_op(
                 spec.GetInfo("references"), lambda r: [r.assetPath, str(r.primPath)]

@@ -107,11 +107,25 @@ fn dump(loaded: &LoadedStage, layer: &Layer) -> Json {
         }
         out.insert(text, Json::Object(record));
     };
+    let names = |order: &[layerstack::TokenId]| {
+        json!(
+            order
+                .iter()
+                .map(|n| store.tokens().resolve(*n))
+                .collect::<Vec<_>>()
+        )
+    };
     let arcs = |record: &mut serde_json::Map<String, Json>,
                 refs: &ListOp<layerstack::Reference>,
                 inherits: &ListOp<layerstack::PathId>,
                 specializes: &ListOp<layerstack::PathId>,
-                props: &[layerstack::PropertyEntry]| {
+                props: &[layerstack::PropertyEntry],
+                orders: [Option<&[layerstack::TokenId]>; 2]| {
+        for (key, order) in ["primOrder", "propertyOrder"].into_iter().zip(orders) {
+            if let Some(order) = order {
+                record.insert(key.into(), names(order));
+            }
+        }
         if *inherits != ListOp::default() {
             record.insert("inheritPaths".into(), list_op(inherits, path));
         }
@@ -171,6 +185,7 @@ fn dump(loaded: &LoadedStage, layer: &Layer) -> Json {
             spec.inherits(),
             spec.specializes(),
             &spec.properties,
+            [spec.prim_order(), spec.property_order()],
         );
         if let Some(name) = spec.type_name {
             record.insert("typeName".into(), json!(store.tokens().resolve(name)));
@@ -184,6 +199,10 @@ fn dump(loaded: &LoadedStage, layer: &Layer) -> Json {
                     &branch.inherits,
                     &branch.specializes,
                     &branch.properties,
+                    [
+                        branch.prim_order.as_deref(),
+                        branch.property_order.as_deref(),
+                    ],
                 );
                 let key = format!(
                     "{text}{{{}={}}}",

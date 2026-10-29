@@ -75,7 +75,24 @@
     "/A/Cls": {
      "specifier": "class"
     },
-    "/A{v=x}": {},
+    "/A{v=x}": {
+     "primOrder": [
+      "InY",
+      "InX"
+     ],
+     "properties": {
+      "p": {
+       "default": 1.0
+      },
+      "q": {
+       "default": 2.0
+      }
+     },
+     "propertyOrder": [
+      "q",
+      "p"
+     ]
+    },
     "/A{v=x}InX": {
      "properties": {
       "r": {
@@ -89,6 +106,9 @@
        }
       }
      },
+     "specifier": "def"
+    },
+    "/A{v=x}InY": {
      "specifier": "def"
     },
     "/B": {
@@ -159,7 +179,24 @@
     "/B/Cls": {
      "specifier": "class"
     },
-    "/B{v=x}": {},
+    "/B{v=x}": {
+     "primOrder": [
+      "InY",
+      "InX"
+     ],
+     "properties": {
+      "p": {
+       "default": 1.0
+      },
+      "q": {
+       "default": 2.0
+      }
+     },
+     "propertyOrder": [
+      "q",
+      "p"
+     ]
+    },
     "/B{v=x}InX": {
      "properties": {
       "r": {
@@ -173,6 +210,9 @@
        }
       }
      },
+     "specifier": "def"
+    },
+    "/B{v=x}InY": {
      "specifier": "def"
     },
     "/Outside": {
@@ -268,7 +308,24 @@
     "/P/Q/Cls": {
      "specifier": "class"
     },
-    "/P/Q{v=x}": {},
+    "/P/Q{v=x}": {
+     "primOrder": [
+      "InY",
+      "InX"
+     ],
+     "properties": {
+      "p": {
+       "default": 1.0
+      },
+      "q": {
+       "default": 2.0
+      }
+     },
+     "propertyOrder": [
+      "q",
+      "p"
+     ]
+    },
     "/P/Q{v=x}InX": {
      "properties": {
       "r": {
@@ -282,6 +339,9 @@
        }
       }
      },
+     "specifier": "def"
+    },
+    "/P/Q{v=x}InY": {
      "specifier": "def"
     }
    },

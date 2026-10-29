@@ -25,9 +25,18 @@ def "A" (
     }
     variantSet "v" = {
         "x" {
+            reorder properties = ["q", "p"]
+            reorder nameChildren = ["InY", "InX"]
+            double p = 1
+            double q = 2
+
             def "InX"
             {
                 rel r = </A/Child>
+            }
+
+            def "InY"
+            {
             }
 
         }

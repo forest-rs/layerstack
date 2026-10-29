@@ -439,13 +439,15 @@ fn variant_structure(variant: &VariantSpec) -> String {
         variant_sets: _,
         variant_set_names,
         property_order,
+        prim_order,
     } = variant;
     let selections: BTreeMap<_, _> = variant_selections.iter().collect();
     format!(
         "fields {fields:?}\n      properties {properties:?}\n      children \
          {authored_children:?}\n      references {}\n      payloads {}\n      inherits \
          {inherits:?}\n      specializes {specializes:?}\n      selections {selections:?}\n      \
-         variant sets {variant_set_names:?}\n      property order {property_order:?}",
+         variant sets {variant_set_names:?}\n      property order {property_order:?}\n      \
+         prim order {prim_order:?}",
         arc_list(references),
         arc_list(payloads),
     )

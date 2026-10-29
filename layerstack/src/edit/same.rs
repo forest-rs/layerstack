@@ -304,6 +304,7 @@ impl Same for VariantSpec {
             variant_sets,
             variant_set_names,
             property_order,
+            prim_order,
         } = self;
         fields.same(&other.fields)
             && properties.same(&other.properties)
@@ -316,6 +317,7 @@ impl Same for VariantSpec {
             && variant_sets.same(&other.variant_sets)
             && *variant_set_names == other.variant_set_names
             && *property_order == other.property_order
+            && *prim_order == other.prim_order
     }
 }
 

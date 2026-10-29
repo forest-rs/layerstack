@@ -1335,7 +1335,14 @@ impl EmitCtx<'_> {
                         variant_spec.property_order =
                             Some(names.iter().map(|n| self.tokens.intern(n)).collect());
                     }
-                    ast::PrimChild::ReorderNameChildren(_) => {}
+                    // OpenUSD keeps the order on the branch's prim spec,
+                    // as on any prim spec (`primOrder`,
+                    // `TextParserAction<ChildOrPropertyOrderStatement>`,
+                    // `pxr/usd/sdf/textFileFormatParser.cpp`).
+                    ast::PrimChild::ReorderNameChildren(names) => {
+                        variant_spec.prim_order =
+                            Some(names.iter().map(|n| self.tokens.intern(n)).collect());
+                    }
                 }
             }
         }
@@ -4606,6 +4613,7 @@ def \"A\" (
                 doc = \"branch doc\"
             )
             reorder properties = [\"mode\"]
+            reorder nameChildren = [\"C\", \"B\"]
         }
     }
 }
@@ -4613,6 +4621,11 @@ def \"A\" (
         let (result, tokens, paths) = emit_source(src);
         let spec = prim(&result, &tokens, &paths, "/A");
         let branch = &spec.variant_sets()[&tokens.intern("v")].variants[&tokens.intern("one")];
+        // The branch's prim spec keeps its child order, as OpenUSD's does.
+        assert_eq!(
+            branch.prim_order,
+            Some(vec![tokens.intern("C"), tokens.intern("B")])
+        );
         let group = tokens.intern("group");
         assert_eq!(
             get_field(&branch.fields, &tokens.intern("kind")),

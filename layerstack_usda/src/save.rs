@@ -791,6 +791,7 @@ impl Lowering<'_> {
         self.arcs(layer, arcs, &mut prim, &shown)?;
         prim.variant_selections = self.selections(&variant.variant_selections);
         prim.property_order = variant.property_order.as_ref().map(|o| self.names(o));
+        prim.prim_order = variant.prim_order.as_ref().map(|o| self.names(o));
         for entry in &variant.properties {
             prim.properties.push(self.property(entry, &shown)?);
         }

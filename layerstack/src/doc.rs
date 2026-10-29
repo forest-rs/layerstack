@@ -1677,6 +1677,21 @@ pub struct VariantSpec {
     ///
     /// Spec: AOUSD Core §7.6.7 (variant specs contribute prim spec fields).
     pub property_order: Option<Vec<TokenId>>,
+    /// Child ordering authored inside this branch (`reorder nameChildren`,
+    /// the `primOrder` field), as [`PrimSpec::prim_order`] is for a prim
+    /// spec.
+    ///
+    /// Composition applies it to the child names composed so far when it
+    /// reaches this branch's site, weakest site first: OpenUSD reads
+    /// `primOrder` at each site of a prim index, variant sites included
+    /// (`PcpComposeSiteChildNames`, `pxr/usd/pcp/composeSite.cpp`, called
+    /// by `_ComposePrimChildNamesAtNode`, `pxr/usd/pcp/primIndex.cpp`),
+    /// because a variant's prim spec is an `SdfPrimSpec` like any other
+    /// (`SdfVariantSpec::GetPrimSpec`).
+    ///
+    /// Spec: AOUSD Core §7.6.7 (variant specs contribute prim spec fields),
+    /// §7.6.2.4.5 (`primOrder`), §11.3.1 (ordered prim children).
+    pub prim_order: Option<Vec<TokenId>>,
 }
 
 /// Variant selections: for each variant set name, the name of the variant

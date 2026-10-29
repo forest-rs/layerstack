@@ -34,7 +34,7 @@ cargo build -p layerstack_wasm --no-default-features --features standalone \
   --profile wasm --target wasm32-unknown-unknown
 wasm-bindgen --target web --out-dir packages/layerstack/wasm --out-name layerstack \
   target/wasm32-unknown-unknown/wasm/layerstack_wasm.wasm
-wasm-opt -Oz --converge packages/layerstack/wasm/layerstack_bg.wasm -o packages/layerstack/wasm/layerstack_bg.wasm
+wasm-opt -Oz --converge --low-memory-unused packages/layerstack/wasm/layerstack_bg.wasm -o packages/layerstack/wasm/layerstack_bg.wasm
 ```
 
 The module is built without `std`: the `standalone` feature supplies its

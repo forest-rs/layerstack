@@ -275,6 +275,55 @@ fn unspecified_prims_read_and_save_as_openusd() {
     );
 }
 
+/// Dictionary entries holding list ops, which OpenUSD's crate stores and
+/// reads but no layer value holds, are each reported and left out: the
+/// rest reads as OpenUSD reads it, and the text written is OpenUSD's less
+/// the entries' lines (OpenUSD writes `TfStringify` text that its own
+/// parser refuses).
+#[test]
+fn dictionary_list_ops_are_reported_and_left_out() {
+    let text = std::fs::read_to_string(fixtures().join("oracle.json")).unwrap();
+    let oracle: Json = serde_json::from_str(&text).expect("oracle.json");
+    let record = &oracle["cases"]["dictionary_list_ops"];
+    assert_eq!(record["export_usdc"]["accepted"], Json::Bool(true));
+    assert_eq!(record["open_text"]["accepted"], Json::Bool(false));
+    let openusd_text = record["open_usdc"]["text"].as_str().unwrap();
+    let openusd = std::fs::read(fixtures().join("dictionary_list_ops.usdc")).unwrap();
+    let tokens = TokenInterner::default();
+    let paths = PathInterner::default();
+    let read = read_usdc(&openusd, LayerId(1), &tokens, &paths, &mut NoAssets).expect("reads");
+    let reported: Vec<_> = read
+        .diagnostics
+        .iter()
+        .map(|d| (d.spec_path.as_str(), d.field.as_deref(), d.message.as_str()))
+        .collect();
+    let expected = [
+        ("/P", Some("customData"), list_op_entry("a")),
+        ("/P", Some("customData"), list_op_entry("c")),
+        ("/P", Some("customData"), list_op_entry("d/x")),
+        ("/P.v", Some("customData"), list_op_entry("ops")),
+    ];
+    let expected: Vec<_> = expected
+        .iter()
+        .map(|(path, field, message)| (*path, *field, message.as_str()))
+        .collect();
+    assert_eq!(reported, expected);
+    let kept: String = openusd_text
+        .lines()
+        .filter(|line| !line.contains("ListOp("))
+        .map(|line| format!("{line}\n"))
+        .collect();
+    let saved = save_usda(&read.layer, &tokens, &paths).expect("saves as USDA");
+    assert_eq!(saved, kept, "OpenUSD's text less the list-op entries");
+    let ours = save_usdc(&read.layer, &tokens, &paths).expect("saves as USDC");
+    assert_eq!(read_back(&ours), kept, "our file");
+}
+
+/// The diagnostic for a dictionary entry `key` that holds a list op.
+fn list_op_entry(key: &str) -> String {
+    format!("unsupported: dictionary entry `{key}` holds a list op, which is not read")
+}
+
 /// An attribute's `displayUnit` is a `TfEnum` in OpenUSD, which its crate
 /// writer packs as an invalid value and then fails to read; the save
 /// refuses it.

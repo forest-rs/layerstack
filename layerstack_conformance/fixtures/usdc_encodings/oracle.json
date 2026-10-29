@@ -16,6 +16,26 @@
     "text": "#usda 1.0\n\ndef \"P\"\n{\n    def \"Q\"\n    {\n        rel a = </P/Q/C.b[/P/Q/E].d>\n        rel c = </P/Q/C.b[/P/Q/C/D.e[/P/Q/C/D/F].g].h>\n        rel e = </P/S.b[/P/S/T].d>\n        rel f = </P/Q/C.b[/Abs].d.mapper[/P/Q/C/M]>\n        rel g = </P/Q/C.b[/Abs.e[/Abs/F].g].h>\n        float h.connect = </P/Q/C.b[/P/Q/E].d>\n    }\n}\n\n"
    }
   },
+  "dictionary_list_ops": {
+   "export_usdc": {
+    "accepted": true,
+    "errors": []
+   },
+   "metadata_types": {},
+   "open_text": {
+    "accepted": false,
+    "errors": [
+     "Unrecognized value typename 'a' for dictionary at 'a = SdfIntListOp(Prepended Items: [1])' in </P>",
+     ":5:10: Unrecognized value typename 'a' for dictionary at 'a = SdfIntListOp(Prepended Items: [1])' in </P>"
+    ]
+   },
+   "open_usdc": {
+    "accepted": true,
+    "errors": [],
+    "same_text": true,
+    "text": "#usda 1.0\n\ndef \"P\" (\n    customData = {\n         a = SdfIntListOp(Prepended Items: [1])\n         c = SdfTokenListOp(Appended Items: [t])\n        dictionary d = {\n             x = SdfStringListOp(Explicit Items: [s])\n            string y = \"kept\"\n        }\n        int e = 1\n    }\n)\n{\n    float v (\n        customData = {\n             ops = SdfInt64ListOp(Deleted Items: [2])\n        }\n    )\n}\n\n"
+   }
+  },
   "display_unit": {
    "export_usdc": {
     "accepted": false,

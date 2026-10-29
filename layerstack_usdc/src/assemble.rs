@@ -2200,9 +2200,13 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
                 let vals: Vec<Value> = items.iter().map(|v| self.convert_crate_value(v)).collect();
                 Value::array(vals)
             }
+            // An entry of a value no layer value holds is left out, and
+            // reported where the dictionary is a metadata field
+            // ([`unheld_entries`]).
             CrateValue::Dictionary(entries) => {
                 let dict: Vec<(Arc<str>, Value)> = entries
                     .iter()
+                    .filter(|(_, v)| unheld_kind(v).is_none())
                     .map(|(k, v)| (Arc::from(k.as_str()), self.convert_crate_value(v)))
                     .collect();
                 Value::Dictionary(dict)
@@ -2447,6 +2451,18 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
                     "unsupported: this value type is not read as metadata",
                 )?;
                 None
+            }
+            CrateValue::Dictionary(_) => {
+                let mut unheld = Vec::new();
+                unheld_entries(cv, &mut String::new(), &mut unheld);
+                for (key, kind) in unheld {
+                    self.report(
+                        spec_path,
+                        Some(field),
+                        alloc::format!("unsupported: dictionary entry `{key}` holds {kind}, which is not read"),
+                    )?;
+                }
+                Some(FieldValue::Value(self.convert_crate_value(cv)))
             }
             _ => Some(FieldValue::Value(self.convert_crate_value(cv))),
         })
@@ -3665,6 +3681,46 @@ fn split_trailing_selections(path: &str) -> Option<(&str, Vec<(&str, &str)>)> {
 /// an item has an unexpected type.
 ///
 /// Spec: AOUSD Core §16.3.10 (list op encoding).
+/// What a dictionary entry holds when no layer value holds it: a list op,
+/// time samples, a spline, a variant selection map, relocates, a
+/// variability or a permission, which OpenUSD's crate stores in a
+/// `VtDictionary` as any value (`CrateFile::_PackValue`,
+/// `pxr/usd/sdf/crateFile.cpp`); `None` for any other value.
+fn unheld_kind(value: &CrateValue) -> Option<&'static str> {
+    Some(match value {
+        CrateValue::ListOp(_) => "a list op",
+        CrateValue::TimeSamples(_) => "time samples",
+        CrateValue::Spline(..) => "a spline",
+        CrateValue::VariantSelectionMap(_) => "a variant selection map",
+        CrateValue::RelocatesMap(_) => "relocates",
+        CrateValue::Variability(_) => "a variability",
+        CrateValue::Permission(_) => "a permission",
+        _ => return None,
+    })
+}
+
+/// Collects into `found`, by key path (`a/b` for entry `b` of entry `a`),
+/// the entries of `value`, a dictionary, and of the dictionaries it holds,
+/// that [`unheld_kind`] names, with what they hold.
+fn unheld_entries(value: &CrateValue, prefix: &mut String, found: &mut Vec<(String, &'static str)>) {
+    let CrateValue::Dictionary(entries) = value else {
+        return;
+    };
+    for (key, entry) in entries {
+        let len = prefix.len();
+        if !prefix.is_empty() {
+            prefix.push('/');
+        }
+        prefix.push_str(key);
+        if let Some(kind) = unheld_kind(entry) {
+            found.push((prefix.clone(), kind));
+        } else {
+            unheld_entries(entry, prefix, found);
+        }
+        prefix.truncate(len);
+    }
+}
+
 fn convert_scalar_listop<T>(
     listop: &CrateListOp,
     item: impl Fn(&CrateValue) -> Option<T>,

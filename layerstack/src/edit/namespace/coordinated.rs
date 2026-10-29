@@ -1355,13 +1355,24 @@ impl ProjectionScope<'_> {
     /// slot whose child list alone changes adds or removes only children
     /// whose own slots changed. A `defaultPrim` follows the prim it names,
     /// whose slot changes with it. Relocates and layer metadata reach
-    /// beyond the slots that author them, and instances, dynamic payloads
-    /// and value clips share or read composition elsewhere; for those the
-    /// whole stage is composed.
+    /// beyond the slots that author them, and dynamic payloads and value
+    /// clips read composition elsewhere; for those the whole stage is
+    /// composed.
+    ///
+    /// Instances need no more. The instances of one key compose the same
+    /// prototype, read through the same sites, so a prototype the edit
+    /// changes has a changed site in every instance's graphs, which puts
+    /// the changed prims beneath each instance among the roots. An
+    /// instance that copies a representative composed only in part, as
+    /// the ancestor of a root, misses only prims whose composition the
+    /// edit leaves alone: those a current snapshot composes without
+    /// errors, and never the moved objects, which are not beneath an
+    /// instance.
     ///
     /// Spec: AOUSD Core §10 (composition arcs and their sites), §11
-    /// (population). OpenUSD: `PcpChanges::DidChange` maps the same
-    /// significant changes to the prim indexes depending on their sites.
+    /// (population), §11.3.3 (scene graph instancing). OpenUSD:
+    /// `PcpChanges::DidChange` maps the same significant changes to the
+    /// prim indexes depending on their sites, instance proxies included.
     fn roots(
         &self,
         store: &dyn LayerStore,
@@ -1371,7 +1382,6 @@ impl ProjectionScope<'_> {
     ) -> Option<Vec<PathId>> {
         let index = self.indexes.get(i)?;
         if self.edits.values().any(|edit| edit.fields)
-            || stage.composes_instances()
             || !stage.dynamic_layers().is_empty()
             || !stage.clip_layers().is_empty()
             || stage
@@ -1446,9 +1456,6 @@ impl ProjectionScope<'_> {
                 &Boundaries::default(),
                 children,
             );
-            if partial.composes_instances() {
-                return None;
-            }
             // Prims with arcs to the composed namespace, before or after
             // the edit, and parents the edit leaves without children.
             let within: HashSet<PathId> = roots.iter().copied().collect();

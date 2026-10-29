@@ -428,8 +428,8 @@ impl NamespaceEdit {
     /// compose there, as `UsdNamespaceEditor` does. Preparation composes the edited layers to verify the
     /// proposed namespace before returning: where every snapshot is a live
     /// stage's and current, only the prims the edit can change, unless
-    /// relocates, layer metadata, instances, dynamic payloads or value clips
-    /// are involved, which compose the whole stage. All inspected layers
+    /// relocates, layer metadata, dynamic payloads or value clips are
+    /// involved, which compose the whole stage. All inspected layers
     /// receive generation preconditions; application and its guarded
     /// inverse are atomic. Callers
     /// refresh other live stages after applying the shared transaction.

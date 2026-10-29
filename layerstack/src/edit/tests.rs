@@ -217,6 +217,85 @@ fn targets_map_through_reference_and_variant_nodes() {
     );
 }
 
+/// Through `/World/RockB`'s reference (`(offset = 10; scale = 2)`, `/World/RockB`
+/// to `/Rock`), time codes are written in layer time, durations divided
+/// by the scale and path expressions made absolute and mapped to the
+/// asset's namespace, in arrays and dictionaries too; a spec address
+/// writes its values as given. OpenUSD: `_StageValueToFieldXf`.
+#[test]
+fn values_map_into_the_target_layer() {
+    let mut store = rocks();
+    let stage = compose(&mut store);
+    let rock_b = store.path("/World/RockB");
+    let through_b = EditTarget::for_node(&stage, rock_b, node(&stage, rock_b, ArcKind::References))
+        .expect("reference node");
+    let expression = |text: &str| Value::PathExpression(text.into());
+    let stage_value = Value::Dictionary(vec![
+        ("t".into(), Value::TimeCode(30.0).into()),
+        ("d".into(), Value::Duration(8.0).into()),
+        (
+            "nested".into(),
+            Value::Dictionary(vec![(
+                "e".into(),
+                Value::Array(vec![
+                    expression("Pebble"),
+                    expression("/World/RockB/Pebble + /Elsewhere //Any"),
+                ])
+                .into(),
+            )])
+            .into(),
+        ),
+        ("asset".into(), Value::Asset("./bark.png".into()).into()),
+    ]);
+    let layer_value = Value::Dictionary(vec![
+        ("t".into(), Value::TimeCode(10.0).into()),
+        ("d".into(), Value::Duration(4.0).into()),
+        (
+            "nested".into(),
+            Value::Dictionary(vec![(
+                "e".into(),
+                Value::Array(vec![
+                    expression("/Rock/Pebble"),
+                    expression("/Rock/Pebble + //Any"),
+                ])
+                .into(),
+            )])
+            .into(),
+        ),
+        ("asset".into(), Value::Asset("./bark.png".into()).into()),
+    ]);
+    assert_eq!(
+        through_b.map_to_spec_value(rock_b, &stage_value, &store),
+        layer_value
+    );
+    let custom_data = store.tokens.intern("customData");
+    let mut edit = Transaction::new();
+    edit.set_metadata(
+        through_b.prim(rock_b),
+        custom_data,
+        FieldValue::Value(stage_value.clone()),
+    );
+    edit.apply(&mut store).expect("applies");
+    let rock = store.path("/Rock");
+    let written = |store: &InMemoryStore| {
+        crate::doc::get_field(
+            &store.layers[&ROCK].prim(rock).unwrap().fields,
+            &custom_data,
+        )
+        .cloned()
+    };
+    assert_eq!(written(&store), Some(FieldValue::Value(layer_value)));
+    let rock_spec = spec(&mut store, "/Rock");
+    let mut edit = Transaction::new();
+    edit.set_metadata(
+        Address::spec(ROCK, rock_spec),
+        custom_data,
+        FieldValue::Value(stage_value.clone()),
+    );
+    edit.apply(&mut store).expect("applies");
+    assert_eq!(written(&store), Some(FieldValue::Value(stage_value)));
+}
+
 #[test]
 fn edits_write_through_targets_and_undo_exactly() {
     let mut store = rocks();

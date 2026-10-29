@@ -18,7 +18,7 @@ use alloc::borrow::Cow;
 
 use super::*;
 use crate::{
-    HashSet,
+    HashSet, Relocate,
     prim_indexing::ChildIndex,
     stage::preparation::{PreparationIndex, layer_links},
 };
@@ -180,10 +180,34 @@ pub(super) struct LayerEdit {
     /// The prim slots whose content changes, sorted.
     pub(super) slots: Vec<PathId>,
     /// Those of `slots` that change other than in their child lists and
-    /// child order.
+    /// child order, a missing spec counting as a bare `over`.
     pub(super) structural: Vec<PathId>,
-    /// Whether the layer's metadata or relocates change.
-    pub(super) fields: bool,
+    /// Whether the layer's metadata changes.
+    pub(super) metadata: bool,
+    /// The paths whose relocation the layer's `layerRelocates` change
+    /// ([`relocation_changes`]).
+    pub(super) relocated: Vec<PathId>,
+}
+
+/// The paths whose relocation changes from the relocates `old` to `new`:
+/// the source and target of each relocate only one of them authors. A
+/// source relocated elsewhere is one relocate removed and one added.
+///
+/// Spec: AOUSD Core §10.3.2.6 (relocates). OpenUSD:
+/// `_DeterminePathsAffectedByRelocationChanges` (`pxr/usd/pcp/changes.cpp`),
+/// which finds the same paths, less the source of a relocate whose target
+/// alone changes.
+pub(super) fn relocation_changes(old: &[Relocate], new: &[Relocate]) -> Vec<PathId> {
+    let mut paths = Vec::new();
+    for (ours, theirs) in [(old, new), (new, old)] {
+        for relocate in ours.iter().filter(|r| !theirs.contains(r)) {
+            paths.push(relocate.source);
+            paths.extend(relocate.target);
+        }
+    }
+    sort::sort_unstable(&mut paths);
+    paths.dedup();
+    paths
 }
 
 /// Whether `before` and `after` differ in their child lists or child order
@@ -218,19 +242,29 @@ pub(super) fn layer_edit(original: &Layer, edited: &Layer, paths: &[PathId]) -> 
             continue;
         }
         slots.push(path);
-        if !(branches_same && before.zip(after).is_some_and(|(b, a)| children_only(b, a))) {
+        // A bare `over` holds no opinion but its children: creating one
+        // to hold a reparented child, or removing it, changes the child
+        // list alone.
+        let bare = PrimSpec::over();
+        let (b, a) = (before.unwrap_or(&bare), after.unwrap_or(&bare));
+        if !(branches_same && children_only(b, a)) {
             structural.push(path);
         }
     }
-    let fields =
-        !original.metadata.same(&edited.metadata) || original.relocates != edited.relocates;
-    if slots.is_empty() && !fields && original.default_prim == edited.default_prim {
+    let metadata = !original.metadata.same(&edited.metadata);
+    let relocated = relocation_changes(original.relocates(), edited.relocates());
+    if slots.is_empty()
+        && !metadata
+        && relocated.is_empty()
+        && original.default_prim == edited.default_prim
+    {
         return None;
     }
     Some(LayerEdit {
         slots,
         structural,
-        fields,
+        metadata,
+        relocated,
     })
 }
 
@@ -259,7 +293,7 @@ struct Displaced {
     slots: Vec<(PathId, Option<PrimSpec>, Option<Vec<PrimSpec>>)>,
     default_prim: Option<TokenId>,
     metadata: Vec<FieldEntry>,
-    relocates: Option<Vec<crate::Relocate>>,
+    relocates: Option<Vec<Relocate>>,
 }
 
 /// `store`, with the slots and fields each [`LayerEdit`] changes holding

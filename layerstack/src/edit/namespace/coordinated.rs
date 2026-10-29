@@ -1354,10 +1354,16 @@ impl ProjectionScope<'_> {
     /// namespace beneath the prims with a node at an ancestor of it. A
     /// slot whose child list alone changes adds or removes only children
     /// whose own slots changed. A `defaultPrim` follows the prim it names,
-    /// whose slot changes with it. Relocates and layer metadata reach
-    /// beyond the slots that author them, and dynamic payloads and value
-    /// clips read composition elsewhere; for those the whole stage is
-    /// composed.
+    /// whose slot changes with it. Layer metadata reaches beyond the slots
+    /// that author it, and dynamic payloads and value clips read
+    /// composition elsewhere; for those the whole stage is composed.
+    ///
+    /// A changed relocate changes the prims depending on the paths it
+    /// relocates as a changed slot there would, and the prims with a node
+    /// beneath those paths, which name the namespace it moves. Relocates
+    /// the edit leaves alone change nothing more: a prim reads them
+    /// through the nodes they add to its graph, at relocation sources
+    /// the evidence lists like any other site.
     ///
     /// Instances need no more. The instances of one key compose the same
     /// prototype, read through the same sites, so a prototype the edit
@@ -1369,10 +1375,13 @@ impl ProjectionScope<'_> {
     /// errors, and never the moved objects, which are not beneath an
     /// instance.
     ///
-    /// Spec: AOUSD Core §10 (composition arcs and their sites), §11
-    /// (population), §11.3.3 (scene graph instancing). OpenUSD:
-    /// `PcpChanges::DidChange` maps the same significant changes to the
-    /// prim indexes depending on their sites, instance proxies included.
+    /// Spec: AOUSD Core §10 (composition arcs and their sites),
+    /// §10.3.2.6 (relocates), §11 (population), §11.3.3 (scene graph
+    /// instancing). OpenUSD: `PcpChanges::DidChange` maps the same
+    /// significant changes to the prim indexes depending on their sites,
+    /// instance proxies included, and `_DidChangeLayerStackRelocations`
+    /// resyncs the prims `FindSiteDependencies` finds at and beneath the
+    /// relocated paths.
     fn roots(
         &self,
         store: &dyn LayerStore,
@@ -1381,32 +1390,68 @@ impl ProjectionScope<'_> {
         moves: &[PathMove],
     ) -> Option<Vec<PathId>> {
         let index = self.indexes.get(i)?;
-        if self.edits.values().any(|edit| edit.fields)
+        if self.edits.values().any(|edit| edit.metadata)
             || !stage.dynamic_layers().is_empty()
             || !stage.clip_layers().is_empty()
-            || stage
-                .used_layers(false)
-                .iter()
-                .any(|id| store.layer(*id).is_some_and(|l| !l.relocates().is_empty()))
         {
             return None;
         }
+        let used = stage.used_layers(false);
         let mut roots = Vec::new();
-        for (id, edit) in self.edits {
-            let local = stage.layer_stack().contains(id);
-            for &slot in &edit.structural {
-                if local {
-                    roots.push(slot);
-                }
-                let path = store.paths().resolve(slot).clone();
-                for site in retained::at_or_above(store, slot) {
-                    let suffix = path
-                        .strip_prefix(store.paths().resolve(site))
-                        .expect("ancestor");
-                    for prim in index.prims_with_nodes_at(site) {
+        // Whether `prim` has a node whose site `at` admits, in a layer
+        // stack that holds `layer`: the evidence lists the prims with a
+        // node at each site path, in any layer stack.
+        let reads = |prim: PathId, layer: LayerId, at: &dyn Fn(PathId) -> bool| {
+            stage.explain_prim_graph(prim).is_none_or(|graph| {
+                graph.nodes().any(|(_, node)| {
+                    node.arc_kind() != ArcKind::Local
+                        && at(node.site().prim_path())
+                        && node.layer_strength(layer).is_some()
+                })
+            })
+        };
+        // The prim at `site` in the stage's layer stack when `local`, and
+        // the namespace at `site` beneath the prims with a node at or
+        // above it in the layer stack of `layer`.
+        let depending = |roots: &mut Vec<PathId>, site: PathId, layer: LayerId, local: bool| {
+            if local {
+                roots.push(site);
+            }
+            let path = store.paths().resolve(site).clone();
+            for above in retained::at_or_above(store, site) {
+                let suffix = path
+                    .strip_prefix(store.paths().resolve(above))
+                    .expect("ancestor");
+                for prim in index.prims_with_nodes_at(above) {
+                    if reads(prim, layer, &|at| at == above) {
                         roots.push(store.paths().intern_joined(prim, suffix));
                     }
                 }
+            }
+        };
+        for (&id, edit) in self.edits {
+            let local = stage.layer_stack().contains(&id);
+            for &slot in &edit.structural {
+                depending(&mut roots, slot, id, local);
+            }
+            // A source another layer relocates too may move to that
+            // layer's target once this one's changes.
+            let mut relocated = edit.relocated.clone();
+            for layer in used.iter().filter_map(|id| store.layer(*id)) {
+                for relocate in layer.relocates() {
+                    if edit.relocated.contains(&relocate.source) {
+                        relocated.extend(relocate.target);
+                    }
+                }
+            }
+            for &path in &relocated {
+                depending(&mut roots, path, id, local);
+                let beneath = |at| retained::is_beneath(store, at, &HashSet::from_iter([path]));
+                roots.extend(
+                    index
+                        .prims_with_nodes_beneath(path)
+                        .filter(|prim| reads(*prim, id, &beneath)),
+                );
             }
         }
         for mapping in moves {

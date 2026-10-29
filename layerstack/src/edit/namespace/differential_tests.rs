@@ -368,6 +368,102 @@ fn instances_scene(relocated: bool) -> InMemoryStore {
     store
 }
 
+/// Relocates in both layers of the root layer stack and in the asset's:
+/// `/Tier` references the asset's `/Asset`, whose own layer relocates its
+/// `Spare` to `Kept` and whose `Item/Deep` and `Other` relationships
+/// target its children; the root layer relocates `/Tier/Item/Deep` to
+/// `/Tier/Deeper` and `/Tier/Deeper/Tip` on in a chain, and the weaker
+/// layer relocates `/Tier/Other`. `/Second` references `/Tier/Deeper`, and
+/// `/Watch` targets relocated prims.
+fn relocates_scene() -> InMemoryStore {
+    let mut store = InMemoryStore::default();
+    let look = store.tokens.intern("look");
+    let mut asset = Layer::new(ASSET);
+    let asset_root = author(&mut store, &mut asset, "/Asset", PrimSpec::def());
+    author(&mut store, &mut asset, "/Asset/Item", PrimSpec::def());
+    let deep = store.path("/Asset/Item/Deep");
+    let kept = store.path("/Asset/Kept");
+    author(
+        &mut store,
+        &mut asset,
+        "/Asset/Item/Deep",
+        PrimSpec::def().with_property(
+            look,
+            PropertySpec::relationship().with_targets(targets(vec![TargetPath::Prim(kept)])),
+        ),
+    );
+    author(
+        &mut store,
+        &mut asset,
+        "/Asset/Item/Deep/Tip",
+        PrimSpec::def(),
+    );
+    author(&mut store, &mut asset, "/Asset/Spare", PrimSpec::def());
+    author(
+        &mut store,
+        &mut asset,
+        "/Asset/Other",
+        PrimSpec::def().with_property(
+            look,
+            PropertySpec::relationship().with_targets(targets(vec![TargetPath::Prim(deep)])),
+        ),
+    );
+    let spare = store.path("/Asset/Spare");
+    asset.relocates_mut().push(Relocate {
+        source: spare,
+        target: Some(kept),
+    });
+    store.insert_layer(asset);
+    let mut weak = Layer::new(WEAK);
+    author(&mut store, &mut weak, "/Tier", PrimSpec::over());
+    author(&mut store, &mut weak, "/Loose", PrimSpec::def());
+    let other = store.path("/Tier/Other");
+    let other_moved = store.path("/Tier/OtherMoved");
+    weak.relocates_mut().push(Relocate {
+        source: other,
+        target: Some(other_moved),
+    });
+    store.insert_layer(weak);
+    let mut root = Layer::new(ROOT);
+    root.sublayers.push(SublayerEntry::new(WEAK));
+    author(
+        &mut store,
+        &mut root,
+        "/Tier",
+        PrimSpec::def().with_reference(Reference::with_asset(ASSET, asset_root, "asset.usda")),
+    );
+    let deeper = store.path("/Tier/Deeper");
+    let tip = store.path("/Tier/Deeper/Tip");
+    let tip_moved = store.path("/Tier/Tip");
+    for (source, target) in [("/Tier/Item/Deep", deeper), ("/Tier/Deeper/Tip", tip_moved)] {
+        let source = store.path(source);
+        root.relocates_mut().push(Relocate {
+            source,
+            target: Some(target),
+        });
+    }
+    author(
+        &mut store,
+        &mut root,
+        "/Second",
+        PrimSpec::def().with_reference(Reference::new(ROOT, deeper)),
+    );
+    author(
+        &mut store,
+        &mut root,
+        "/Watch",
+        PrimSpec::def().with_property(
+            look,
+            PropertySpec::relationship().with_targets(targets(vec![
+                TargetPath::Prim(tip),
+                TargetPath::Prim(other_moved),
+            ])),
+        ),
+    );
+    store.insert_layer(root);
+    store
+}
+
 fn variants_scene() -> InMemoryStore {
     let mut store = rejections_scene();
     let shape = store.tokens.intern("shape");
@@ -628,6 +724,12 @@ fn retained_preparation_matches_composition_across_arcs_and_dependents() {
         let mut scene = Scene::new(arcs_scene(relocated), StageOptions::default(), &[DEPENDENT]);
         scene.exercise(&[ROOT], 4);
     }
+}
+
+#[test]
+fn retained_preparation_matches_composition_across_relocates() {
+    let mut scene = Scene::new(relocates_scene(), StageOptions::default(), &[]);
+    assert!(scene.exercise(&[ROOT, WEAK], 6) > 0);
 }
 
 /// Every edit is compared against the scene as composed: none is applied,

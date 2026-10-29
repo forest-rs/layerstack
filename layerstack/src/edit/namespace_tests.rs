@@ -194,14 +194,11 @@ fn property_move_repairs_every_list_bucket_and_preserves_authored_property_order
     let dest = store.property_path("/B.inputs:renamed");
     let watch = store.path("/Watch");
     let rel = store.tokens.intern("look");
-    let op = ListOp {
-        explicit: None,
-        prepend: vec![TargetPath::Property(source)],
-        append: vec![TargetPath::Property(source)],
-        delete: vec![TargetPath::Property(source)],
-        add: vec![TargetPath::Property(source)],
-        reorder: vec![TargetPath::Property(source)],
-    };
+    let op = ListOp::prepended(vec![TargetPath::Property(source)])
+        .with_appended(vec![TargetPath::Property(source)])
+        .with_deleted(vec![TargetPath::Property(source)])
+        .with_added(vec![TargetPath::Property(source)])
+        .with_reordered(vec![TargetPath::Property(source)]);
     store
         .layers
         .get_mut(&ROOT)

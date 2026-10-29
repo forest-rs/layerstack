@@ -5,7 +5,7 @@
 
 use opinionated::{
     IgnoreReason, ListOp, OpinionKey, OpinionKind, OpinionOp, Resolution, ResolutionEvent,
-    SparseComposer, UnknownLayer,
+    SparseComposer,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -164,14 +164,12 @@ fn list_ops_compose_strong_to_weak() {
 
 #[test]
 fn explicit_list_makes_other_edits_spurious() {
-    let op = ListOp {
-        explicit: Some(vec!["search", "outline"]),
-        prepend: vec!["theme"],
-        append: vec!["lint"],
-        delete: vec!["outline"],
-        add: vec!["tabs"],
-        reorder: vec!["outline", "search"],
-    };
+    let op = ListOp::explicit(vec!["search", "outline"])
+        .with_prepended(vec!["theme"])
+        .with_appended(vec!["lint"])
+        .with_deleted(vec!["outline"])
+        .with_added(vec!["tabs"])
+        .with_reordered(vec!["outline", "search"]);
 
     assert_eq!(op.apply_to(&["base"]), vec!["search", "outline"]);
 }
@@ -482,28 +480,28 @@ fn unknown_layer_is_rejected() {
     let mut limited =
         SparseComposer::<Layer, Address, Field, Setting>::try_new([Layer::User]).unwrap();
     assert_eq!(
-        limited.set_opinion(
-            Layer::Defaults,
-            Address::Editor,
-            Field::Theme,
-            OpinionOp::Set(Setting::Text("light")),
-            (),
-        ),
-        Err(UnknownLayer {
-            layer: Layer::Defaults
-        })
+        limited
+            .set_opinion(
+                Layer::Defaults,
+                Address::Editor,
+                Field::Theme,
+                OpinionOp::Set(Setting::Text("light")),
+                (),
+            )
+            .map_err(|error| error.layer),
+        Err(Layer::Defaults)
     );
     assert_eq!(
-        limited.remove_opinion(Layer::Defaults, Address::Editor, Field::Theme),
-        Err(UnknownLayer {
-            layer: Layer::Defaults
-        })
+        limited
+            .remove_opinion(Layer::Defaults, Address::Editor, Field::Theme)
+            .map_err(|error| error.layer),
+        Err(Layer::Defaults)
     );
     assert_eq!(
-        limited.clear_layer(Layer::Defaults),
-        Err(UnknownLayer {
-            layer: Layer::Defaults
-        })
+        limited
+            .clear_layer(Layer::Defaults)
+            .map_err(|error| error.layer),
+        Err(Layer::Defaults)
     );
 }
 

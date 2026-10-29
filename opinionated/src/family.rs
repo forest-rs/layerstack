@@ -180,7 +180,11 @@ impl<T, P> FamilyResolution<T, P> {
 ///
 /// Kernel events are deliberately family-agnostic: they name how a member
 /// participated without knowing the family's [`OpinionKind`] altitude.
+///
+/// New events may be added in minor releases, so a `match` needs a
+/// fallback arm.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum FamilyEvent<P> {
     /// A dense member absorbed accumulated edits and terminated the fold.
     ContributedDense {
@@ -206,12 +210,30 @@ pub enum FamilyEvent<P> {
     },
 }
 
+impl<P> FamilyEvent<P> {
+    /// Provenance for the opinion the event is about; every event names
+    /// one.
+    #[must_use]
+    pub const fn provenance(&self) -> &P {
+        match self {
+            Self::ContributedDense { provenance }
+            | Self::ContributedSparse { provenance }
+            | Self::StoppedByBlock { provenance }
+            | Self::Ignored { provenance, .. } => provenance,
+        }
+    }
+}
+
 /// The base selected by a family fold, before applying stronger sparse edits.
 ///
 /// This records a kernel fact. A host may return its own fallback after an
 /// absent or blocked fold; that does not mean the kernel called
 /// [`OpinionFamily::seed`].
+///
+/// New bases may be added in minor releases, so a `match` needs a
+/// fallback arm.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum FamilyBase {
     /// A dense opinion supplied the base and terminated the fold.
     Dense,

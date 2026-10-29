@@ -259,10 +259,7 @@ fn schema_metadata_empty_and_block_preserve_color_precedence() {
         PrimSpec::def()
             .with_field(
                 api_schemas,
-                layerstack::FieldValue::TokenListOp(Box::new(ListOp {
-                    explicit: Some(vec![api]),
-                    ..ListOp::default()
-                })),
+                layerstack::FieldValue::TokenListOp(Box::new(ListOp::explicit(vec![api]))),
             )
             .with_property(
                 assignment,

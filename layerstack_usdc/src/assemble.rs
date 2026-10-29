@@ -3683,17 +3683,17 @@ fn convert_scalar_listop<T>(
     item: impl Fn(&CrateValue) -> Option<T>,
 ) -> Option<ListOp<T>> {
     let items = |values: &[CrateValue]| values.iter().map(&item).collect::<Option<Vec<T>>>();
-    Some(ListOp {
-        explicit: match &listop.explicit_items {
-            Some(values) => Some(items(values)?),
-            None => None,
-        },
-        prepend: items(&listop.prepended_items)?,
-        append: items(&listop.appended_items)?,
-        delete: items(&listop.deleted_items)?,
-        add: items(&listop.added_items)?,
-        reorder: items(&listop.ordered_items)?,
-    })
+    let explicit = match &listop.explicit_items {
+        Some(values) => Some(items(values)?),
+        None => None,
+    };
+    let mut op = ListOp::prepended(items(&listop.prepended_items)?)
+        .with_appended(items(&listop.appended_items)?)
+        .with_deleted(items(&listop.deleted_items)?)
+        .with_added(items(&listop.added_items)?)
+        .with_reordered(items(&listop.ordered_items)?);
+    op.explicit = explicit;
+    Some(op)
 }
 
 /// Whether `text`, holding no variant selection, is the prim path text of a

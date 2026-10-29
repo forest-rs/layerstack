@@ -30,9 +30,29 @@ This release has an [MSRV][] of 1.89.
   same results, but an edit naming `k` items over a list of `n` items takes
   `O(n * k)` time. The API is the same with or without the feature.
   ([#223][] by [@waywardmonkeys][])
+- `ListOp::with_explicit` sets an operation's explicit list, so every list
+  of a `ListOp` has a constructor and a `with_` builder.
+- `ResolutionEvent::provenance`, `FamilyEvent::provenance` and
+  `DictionaryEvent::provenance` return the provenance every event carries,
+  so callers can sort or group events without matching every variant.
 
 ### Changed
 
+- Breaking: `ListOp` is `#[non_exhaustive]`, so a kind of list edit can be
+  added in a minor release. Its fields stay public to read, assign and
+  destructure with `..`; build one with `ListOp::new`, the constructors
+  (`explicit`, `prepended`, `appended`, `deleted`, `added`, `reordered`) and
+  the `with_` builders instead of a struct literal.
+- Breaking: the enums that report or select are `#[non_exhaustive]`, so a
+  `match` on them needs a fallback arm: `ResolutionEvent`, `FamilyEvent`,
+  `DictionaryEvent`, `OpinionKind`, `FamilyBase` and `TemporalMode`,
+  joining `IgnoreReason`. `SamplePick` stays exhaustive: the planner takes
+  a lower and an upper sample, so another pick would need a new planner
+  API.
+- Breaking: the structs the crate returns are `#[non_exhaustive]`, so they
+  can gain fields: `UnknownLayer`, `DuplicateLayer`, `OpinionRef` and
+  `TemporalSelection`, joining `ResolutionReport`, `ListReport`,
+  `FamilyReport` and `DictionaryReport`. Their fields stay public to read.
 - Breaking: list items must implement `Hash`, with or without the
   `hash-tables` feature. The bound is added to `ListOp::apply_to`,
   `ListOp::apply_in_place`, `resolve_list_chain`, `resolve_list_chain_report`,

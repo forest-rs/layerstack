@@ -22,14 +22,12 @@ fn custom_data_arcs(layer: LayerId, path: PathId, prefix: &str) -> ListOp<Refere
             ("templateAssetPath".into(), Value::string("literal.#.usd")),
         ])
     };
-    ListOp {
-        explicit: Some(vec![reference("explicit")]),
-        prepend: vec![reference("prepend")],
-        append: vec![reference("append")],
-        delete: vec![reference("delete")],
-        add: vec![reference("add")],
-        reorder: vec![reference("reorder")],
-    }
+    ListOp::explicit(vec![reference("explicit")])
+        .with_prepended(vec![reference("prepend")])
+        .with_appended(vec![reference("append")])
+        .with_deleted(vec![reference("delete")])
+        .with_added(vec![reference("add")])
+        .with_reordered(vec![reference("reorder")])
 }
 
 #[test]

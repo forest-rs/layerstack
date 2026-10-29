@@ -8,6 +8,10 @@ use alloc::{vec, vec::Vec};
 use core::fmt;
 
 /// Which sample of a participating source a recipe selects.
+///
+/// Exhaustive: [`TemporalPlanner::push`] takes a source's lower and upper
+/// sample, so a pick of any other sample would come with a new planner
+/// API.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SamplePick {
     /// The source's lower sample (also used for a single sample).
@@ -28,7 +32,11 @@ pub struct TemporalSample<T> {
 }
 
 /// How many composed brackets the caller needs to materialize.
+///
+/// New modes may be added in minor releases, so a `match` needs a
+/// fallback arm.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum TemporalMode {
     /// Stop once the lower bracket no longer needs weaker contributions.
     Held,
@@ -38,6 +46,7 @@ pub enum TemporalMode {
 
 /// A recipe for one sample of the composed series.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct TemporalSelection<T> {
     /// Time of this composed sample.
     pub time: T,

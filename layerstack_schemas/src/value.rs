@@ -704,15 +704,7 @@ matrix!(
 
 /// `op` with each item mapped by `item`.
 fn map_list_op<T, U>(op: &ListOp<T>, mut item: impl FnMut(&T) -> U) -> ListOp<U> {
-    let mut all = |items: &[T]| items.iter().map(&mut item).collect::<Vec<_>>();
-    ListOp {
-        explicit: op.explicit.as_deref().map(&mut all),
-        prepend: all(&op.prepend),
-        append: all(&op.append),
-        delete: all(&op.delete),
-        add: all(&op.add),
-        reorder: all(&op.reorder),
-    }
+    op.map_lists(|items| items.iter().map(&mut item).collect())
 }
 
 /// Encodes a list op of tokens, the value of a `tokenlistop` metadata

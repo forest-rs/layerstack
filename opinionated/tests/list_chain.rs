@@ -151,6 +151,10 @@ fn constructors_and_builders_author_each_list() {
     assert_eq!(ListOp::<u32>::new(), ListOp::default());
     assert_eq!(ListOp::new().apply_to(&[4_u32, 5]), vec![4, 5]);
     assert_eq!(ListOp::deleted(vec![4_u32]).apply_to(&[4, 5]), vec![5]);
+    assert_eq!(
+        ListOp::deleted(vec![4_u32]).with_explicit(vec![6]),
+        ListOp::explicit(vec![6]).with_deleted(vec![4])
+    );
 }
 
 #[test]
@@ -351,6 +355,7 @@ fn family_explicit_cutoff_is_dense_and_does_not_classify_weaker_edits() {
         report.events,
         vec![FamilyEvent::ContributedDense { provenance: 0 }]
     );
+    assert_eq!(report.events[0].provenance(), &0);
     assert_eq!(report.resolution.resolved(), Some((vec![1], 0)));
 }
 
@@ -391,7 +396,14 @@ fn list_report_moves_provenance_and_never_applies_hidden_operations() {
             reason: IgnoreReason::WeakerThanExplicit
         })
     ));
-    assert_eq!(report.events.len(), 3);
+    assert_eq!(
+        report
+            .events
+            .iter()
+            .map(|event| event.provenance().0)
+            .collect::<Vec<_>>(),
+        [0, 1, 2]
+    );
 }
 
 #[test]

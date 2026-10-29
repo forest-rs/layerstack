@@ -329,6 +329,14 @@ fn report_names_nested_key_paths_and_ignores_repeated_keys() {
         },
     ];
     assert_eq!(report.events, expected);
+    assert_eq!(
+        report
+            .events
+            .iter()
+            .map(DictionaryEvent::provenance)
+            .collect::<Vec<_>>(),
+        [&0, &1, &1, &1, &1]
+    );
 }
 
 #[test]

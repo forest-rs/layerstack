@@ -138,6 +138,7 @@ fn authored_list_op(store: &InMemoryStore, path: PathId) -> Option<ListOpRecord>
         delete,
         add,
         reorder,
+        ..
     } = (**op).clone();
     Some(ListOpRecord {
         explicit,

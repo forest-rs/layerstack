@@ -54,6 +54,7 @@ where
             resolve_family_chain(&DictionaryFamily, pairs()),
             ResolvedValue::Dictionary,
         ),
+        kind => unimplemented!("no built-in family resolves {kind:?}"),
     }
 }
 

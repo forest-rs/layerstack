@@ -2562,6 +2562,7 @@ fn set_statement<T>(op: &mut ListOp<T>, kind: ast::ListOpKind, statement: ListOp
         delete,
         add,
         reorder,
+        ..
     } = statement;
     if kind == ast::ListOpKind::Explicit || explicit.is_some() {
         *op = ListOp::explicit(explicit.unwrap_or_default());

@@ -30,7 +30,12 @@ external reference, a payload, a reference nested in another asset
 (`outer.usda`), an internal reference, inherits and specializes of a
 class, a variant of the referenced prim, a reference relocated by the
 root layer's `relocates`, a class the asset's own prim inherits, and
-instanceable references. Each authors
+instanceable references, whose prototypes' targets (those of `/Model/C`)
+map to each instance proxy
+(`UsdPrim::_ProtoToInstancePathMap::MapProtoToInstance`, an
+`SdfPath::ReplacePrefix` that fixes target paths), and which a flatten
+keeps as prototypes whose targets it maps there (`_RemapTargetPaths` in
+`pxr/usd/usd/stage.cpp`, the same `ReplacePrefix`). Each authors
 relational attribute targets, mapper targets and connections, nested
 brackets, relative paths (and a bracket `SdfPath::MakeAbsolutePath` leaves
 relative, which maps only where the arc maps every path outside its
@@ -98,6 +103,9 @@ def "Model" (
 
     def "C"
     {
+        rel inner = [</Model/C.b[/Model/E].d>, </Model/C.b.mapper[/Model/C/F]>]
+        float innerConnect.connect = </Model.b[/Model/C/F].d>
+
         def "F"
         {
         }

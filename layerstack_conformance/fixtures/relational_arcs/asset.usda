@@ -30,6 +30,9 @@ def "Model" (
 
     def "C"
     {
+        rel inner = [</Model/C.b[/Model/E].d>, </Model/C.b.mapper[/Model/C/F]>]
+        float innerConnect.connect = </Model.b[/Model/C/F].d>
+
         def "F"
         {
         }

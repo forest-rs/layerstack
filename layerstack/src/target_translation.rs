@@ -76,15 +76,66 @@ pub(crate) fn map_relational(
         elements,
     };
     let translated = translate(paths, &path, map)?;
-    let Prim::Absolute(prim) = translated.prim else {
+    property_path(tokens, paths, target, &path, &translated)
+}
+
+/// `target`, a relational attribute or mapper target ([`is_relational`]),
+/// with the prim path prefix `from` replaced by `to`, as
+/// `SdfPath::ReplacePrefix(from, to)` replaces it: in its prim's path and
+/// in every bracket (`fixTargetPaths`). A token outside the path grammar
+/// replaces the prefix in its prim's path only.
+pub(crate) fn replace_relational_prefix(
+    tokens: &TokenInterner,
+    paths: &PathInterner,
+    target: PropertyPath,
+    from: PathId,
+    to: PathId,
+) -> PropertyPath {
+    let prim_path = |prim: PathId| Tree {
+        prim: Prim::Absolute(prim),
+        elements: Vec::new(),
+    };
+    let text = tokens.resolve(target.property());
+    let Some(elements) = parse_elements(text, tokens, paths) else {
+        let replaced = replace_prefix(
+            paths,
+            &prim_path(target.prim_path()),
+            &prim_path(from),
+            &prim_path(to),
+            true,
+        );
+        let Prim::Absolute(prim) = replaced.prim else {
+            return target;
+        };
+        return PropertyPath::new(prim, target.property());
+    };
+    let path = Tree {
+        prim: Prim::Absolute(target.prim_path()),
+        elements,
+    };
+    let replaced = replace_prefix(paths, &path, &prim_path(from), &prim_path(to), true);
+    property_path(tokens, paths, target, &path, &replaced).unwrap_or(target)
+}
+
+/// The property target `out`, the result of mapping `path`, the parsed
+/// `target`; `target`'s token is kept when the property part is unchanged.
+/// `None` when `out`'s prim part is not an absolute prim path.
+fn property_path(
+    tokens: &TokenInterner,
+    paths: &PathInterner,
+    target: PropertyPath,
+    path: &Tree<'_>,
+    out: &Tree<'_>,
+) -> Option<PropertyPath> {
+    let Prim::Absolute(prim) = out.prim else {
         return None;
     };
-    if translated.elements == path.elements {
+    if out.elements == path.elements {
         return Some(PropertyPath::new(prim, target.property()));
     }
-    let mut out = String::with_capacity(text.len());
-    write_elements(&mut out, &translated.elements, tokens, paths);
-    Some(PropertyPath::new(prim, tokens.intern(&out)))
+    let mut text = String::with_capacity(tokens.resolve(target.property()).len());
+    write_elements(&mut text, &out.elements, tokens, paths);
+    Some(PropertyPath::new(prim, tokens.intern(&text)))
 }
 
 /// A path's prim part.
@@ -537,6 +588,22 @@ mod tests {
         assert_eq!(
             mapped("/Ref.b[C].d.mapper[/Other]", &reference, true).as_deref(),
             Some("/P.b[C].d.mapper[/Other]")
+        );
+    }
+
+    /// A prototype's prefix is replaced in the prim and every bracket.
+    #[test]
+    fn a_replaced_prefix_fixes_every_bracket() {
+        let (tokens, paths) = (TokenInterner::default(), PathInterner::default());
+        let path = |text: &str| paths.intern(Path::parse_absolute(text, &tokens).unwrap());
+        let target = PropertyPath::new(
+            path("/I/C"),
+            tokens.intern("b[/I/E.d[/I/F].g].h.mapper[/X]"),
+        );
+        let replaced = replace_relational_prefix(&tokens, &paths, target, path("/I"), path("/P"));
+        assert_eq!(
+            replaced.display(&paths, &tokens),
+            "/P/C.b[/P/E.d[/P/F].g].h.mapper[/X]"
         );
     }
 

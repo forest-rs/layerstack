@@ -96,6 +96,7 @@ pub use verify::{FlattenVerification, Mismatch, MismatchKind, SkipReason, Skippe
 
 use super::prototypes::InstanceKey;
 use crate::sort;
+use crate::target_translation::{is_relational, replace_relational_prefix};
 
 use alloc::{borrow::Cow, boxed::Box, format, string::String, sync::Arc, vec::Vec};
 
@@ -1288,6 +1289,18 @@ impl Flattener<'_, '_> {
         let prim = self.store.paths().intern(mapped);
         match target {
             TargetPath::Prim(_) => TargetPath::Prim(prim),
+            // `ReplacePrefix` fixes the paths in its brackets too.
+            TargetPath::Property(property)
+                if is_relational(self.store.tokens(), property.property()) =>
+            {
+                TargetPath::Property(replace_relational_prefix(
+                    self.store.tokens(),
+                    self.store.paths(),
+                    property,
+                    remap.from,
+                    remap.to,
+                ))
+            }
             TargetPath::Property(property) => {
                 TargetPath::Property(PropertyPath::new(prim, property.property()))
             }

@@ -34,6 +34,13 @@
   "/Classy.r": [
    "/Classy.b[/Classy/C].d"
   ],
+  "/Flattened_Prototype_1/C.inner": [
+   "/Flattened_Prototype_1/C.b[/Flattened_Prototype_1/E].d",
+   "/Flattened_Prototype_1/C.b.mapper[/Flattened_Prototype_1/C/F]"
+  ],
+  "/Flattened_Prototype_1/C.innerConnect": [
+   "/Flattened_Prototype_1.b[/Flattened_Prototype_1/C/F].d"
+  ],
   "/Inst.back": [
    "/Inst/C"
   ],
@@ -231,6 +238,13 @@
   "/Nested/Inner.variantConnect": [
    "/Nested/Inner/C.b[/Nested/Inner/E].d"
   ],
+  "/Nested/Inner/C.inner": [
+   "/Nested/Inner/C.b[/Nested/Inner/E].d",
+   "/Nested/Inner/C.b.mapper[/Nested/Inner/C/F]"
+  ],
+  "/Nested/Inner/C.innerConnect": [
+   "/Nested/Inner.b[/Nested/Inner/C/F].d"
+  ],
   "/Pay.c": [
    "/Pay.b[/Pay/C].d"
   ],
@@ -279,6 +293,13 @@
   "/Pay.variantConnect": [
    "/Pay/C.b[/Pay/E].d"
   ],
+  "/Pay/C.inner": [
+   "/Pay/C.b[/Pay/E].d",
+   "/Pay/C.b.mapper[/Pay/C/F]"
+  ],
+  "/Pay/C.innerConnect": [
+   "/Pay.b[/Pay/C/F].d"
+  ],
   "/Ref.c": [
    "/Ref.b[/Ref/C].d"
   ],
@@ -326,6 +347,13 @@
   ],
   "/Ref.variantConnect": [
    "/Ref/C.b[/Ref/E].d"
+  ],
+  "/Ref/C.inner": [
+   "/Ref/C.b[/Ref/E].d",
+   "/Ref/C.b.mapper[/Ref/C/F]"
+  ],
+  "/Ref/C.innerConnect": [
+   "/Ref.b[/Ref/C/F].d"
   ],
   "/Reloc.c": [
    "/Reloc.b[/Reloc/D].d"
@@ -377,6 +405,13 @@
   ],
   "/Reloc.variantConnect": [
    "/Reloc/D.b[/Reloc/E].d"
+  ],
+  "/Reloc/D.inner": [
+   "/Reloc/D.b[/Reloc/E].d",
+   "/Reloc/D.b.mapper[/Reloc/D/F]"
+  ],
+  "/Reloc/D.innerConnect": [
+   "/Reloc.b[/Reloc/D/F].d"
   ],
   "/Spec.back": [
    "/Spec.b[/Inst/C].d",
@@ -442,6 +477,13 @@
   ],
   "/Strong.variantConnect": [
    "/Strong/C.b[/Strong/E].d"
+  ],
+  "/Strong/C.inner": [
+   "/Strong/C.b[/Strong/E].d",
+   "/Strong/C.b.mapper[/Strong/C/F]"
+  ],
+  "/Strong/C.innerConnect": [
+   "/Strong.b[/Strong/C/F].d"
   ]
  },
  "openusd_version": "26.11",
@@ -548,6 +590,13 @@
   "/Instances/I1.variantConnect": [
    "/Instances/I1/C.b[/Instances/I1/E].d"
   ],
+  "/Instances/I1/C.inner": [
+   "/Instances/I1/C.b[/Instances/I1/E].d",
+   "/Instances/I1/C.b.mapper[/Instances/I1/C/F]"
+  ],
+  "/Instances/I1/C.innerConnect": [
+   "/Instances/I1.b[/Instances/I1/C/F].d"
+  ],
   "/Instances/I2.c": [
    "/Instances/I2.b[/Instances/I2/C].d"
   ],
@@ -596,6 +645,13 @@
   ],
   "/Instances/I2.variantConnect": [
    "/Instances/I2/C.b[/Instances/I2/E].d"
+  ],
+  "/Instances/I2/C.inner": [
+   "/Instances/I2/C.b[/Instances/I2/E].d",
+   "/Instances/I2/C.b.mapper[/Instances/I2/C/F]"
+  ],
+  "/Instances/I2/C.innerConnect": [
+   "/Instances/I2.b[/Instances/I2/C/F].d"
   ],
   "/Internal.c": [
    "/Internal.b[/Internal/C].d"
@@ -681,6 +737,13 @@
   "/Nested/Inner.variantConnect": [
    "/Nested/Inner/C.b[/Nested/Inner/E].d"
   ],
+  "/Nested/Inner/C.inner": [
+   "/Nested/Inner/C.b[/Nested/Inner/E].d",
+   "/Nested/Inner/C.b.mapper[/Nested/Inner/C/F]"
+  ],
+  "/Nested/Inner/C.innerConnect": [
+   "/Nested/Inner.b[/Nested/Inner/C/F].d"
+  ],
   "/Pay.c": [
    "/Pay.b[/Pay/C].d"
   ],
@@ -730,6 +793,13 @@
   "/Pay.variantConnect": [
    "/Pay/C.b[/Pay/E].d"
   ],
+  "/Pay/C.inner": [
+   "/Pay/C.b[/Pay/E].d",
+   "/Pay/C.b.mapper[/Pay/C/F]"
+  ],
+  "/Pay/C.innerConnect": [
+   "/Pay.b[/Pay/C/F].d"
+  ],
   "/Ref.c": [
    "/Ref.b[/Ref/C].d"
   ],
@@ -778,6 +848,13 @@
   ],
   "/Ref.variantConnect": [
    "/Ref/C.b[/Ref/E].d"
+  ],
+  "/Ref/C.inner": [
+   "/Ref/C.b[/Ref/E].d",
+   "/Ref/C.b.mapper[/Ref/C/F]"
+  ],
+  "/Ref/C.innerConnect": [
+   "/Ref.b[/Ref/C/F].d"
   ],
   "/Reloc.c": [
    "/Reloc.b[/Reloc/D].d"
@@ -830,6 +907,13 @@
   ],
   "/Reloc.variantConnect": [
    "/Reloc/D.b[/Reloc/E].d"
+  ],
+  "/Reloc/D.inner": [
+   "/Reloc/D.b[/Reloc/E].d",
+   "/Reloc/D.b.mapper[/Reloc/D/F]"
+  ],
+  "/Reloc/D.innerConnect": [
+   "/Reloc.b[/Reloc/D/F].d"
   ],
   "/Spec.back": [
    "/Spec.b[/Inst/C].d",
@@ -897,6 +981,13 @@
   ],
   "/Strong.variantConnect": [
    "/Strong/C.b[/Strong/E].d"
+  ],
+  "/Strong/C.inner": [
+   "/Strong/C.b[/Strong/E].d",
+   "/Strong/C.b.mapper[/Strong/C/F]"
+  ],
+  "/Strong/C.innerConnect": [
+   "/Strong.b[/Strong/C/F].d"
   ]
  }
 }

@@ -578,8 +578,27 @@ pub(crate) struct SiteMove {
     pub(crate) layer_stack: LayerStackIdentifier,
     /// The site in the graph moved from.
     pub(crate) from: SpecPath,
+    /// The namespace depth of the prim path of `from`, which re-rooting
+    /// compares against each node's site.
+    pub(crate) from_depth: usize,
     /// The site in the graph moved to.
     pub(crate) to: SpecPath,
+}
+
+/// How many re-rooted prim paths [`PrimIndexGraph::reroot_sites`]
+/// remembers.
+const RECENT_REROOTS: usize = 8;
+
+/// A prim path [`PrimIndexGraph::reroot_sites`] re-rooted.
+struct RecentReroot {
+    /// The prim path re-rooted.
+    old: crate::path::PathId,
+    /// The prim path of the site it was moved from beneath.
+    from: crate::path::PathId,
+    /// The prim path of the site it was moved to beneath.
+    to: crate::path::PathId,
+    /// `old` moved from beneath `from` to beneath `to`.
+    new: crate::path::PathId,
 }
 
 /// The composition graph of one composed prim.
@@ -805,7 +824,8 @@ impl PrimIndexGraph {
 
     /// The sites `other`, a graph of the same shape, reads in place of
     /// this graph's: each node whose site differs, as its layer stack, its
-    /// site here and its site in `other`. `None` when the shapes differ.
+    /// site here (and the namespace depth of its prim path) and its site in
+    /// `other`. `None` when the shapes differ.
     ///
     /// Two instances sharing a prototype whose graphs have one shape reach
     /// it through the same arcs: only the sites of the nodes that cannot
@@ -813,22 +833,28 @@ impl PrimIndexGraph {
     /// instance, and the graphs of their descendants are the same but for
     /// those sites. Instances at other namespace depths are not: their
     /// arcs are authored at other depths ([`PrimNode::namespace_depth`]).
-    pub(crate) fn site_moves(&self, other: &Self) -> Option<Vec<SiteMove>> {
+    pub(crate) fn site_moves(
+        &self,
+        paths: &crate::path::PathInterner,
+        other: &Self,
+    ) -> Option<Vec<SiteMove>> {
         if !self.same_shape(other) {
             return None;
         }
-        Some(
+        let moved = || {
             self.shape
                 .iter()
                 .zip(self.sites.iter().zip(other.sites.iter()))
                 .filter(|(_, (from, to))| from != to)
-                .map(|(node, (from, to))| SiteMove {
-                    layer_stack: node.layer_stack,
-                    from: from.clone(),
-                    to: to.clone(),
-                })
-                .collect(),
-        )
+        };
+        let mut moves = Vec::with_capacity(moved().count());
+        moves.extend(moved().map(|(node, (from, to))| SiteMove {
+            layer_stack: node.layer_stack,
+            from: from.clone(),
+            from_depth: paths.resolve(from.prim_path()).depth(),
+            to: to.clone(),
+        }));
+        Some(moves)
     }
 
     /// Whether `other` has this graph's nodes but for their sites.
@@ -850,24 +876,55 @@ impl PrimIndexGraph {
         if moves.is_empty() {
             return;
         }
+        // The prim paths last re-rooted: one path is often the site of
+        // nodes of several layer stacks, as the implied inherits of a class
+        // are, and moved alike in each.
+        let mut recent: smallvec::SmallVec<[RecentReroot; RECENT_REROOTS]> =
+            smallvec::SmallVec::new();
         for (node, site) in self.shape.iter().zip(self.sites.iter_mut()) {
-            let prim = paths.resolve(site.prim_path());
-            let moved = moves
+            // Most nodes' stacks have no move: their sites are not resolved.
+            let mut stack_moves = moves
                 .iter()
                 .filter(|m| m.layer_stack == node.layer_stack)
-                .filter(|m| {
-                    prim.segments()
-                        .starts_with(paths.resolve(m.from.prim_path()).segments())
-                })
-                .max_by_key(|m| paths.resolve(m.from.prim_path()).depth());
-            if let Some(moved) = moved {
-                *site = crate::prim_indexing::site_paths::replace_prefix(
-                    paths,
-                    site,
-                    &moved.from,
-                    &moved.to,
-                );
+                .peekable();
+            if stack_moves.peek().is_none() {
+                continue;
             }
+            let old = site.prim_path();
+            let prim = paths.resolve(old).segments();
+            let moved = stack_moves
+                .filter(|m| {
+                    m.from_depth <= prim.len()
+                        && paths.resolve(m.from.prim_path()).segments() == &prim[..m.from_depth]
+                })
+                .max_by_key(|m| m.from_depth);
+            let Some(moved) = moved else {
+                continue;
+            };
+            let (from, to) = (moved.from.prim_path(), moved.to.prim_path());
+            let known = recent
+                .iter()
+                .rev()
+                .find(|r| r.old == old && r.from == from && r.to == to);
+            let new = match known {
+                Some(known) => known.new,
+                None => {
+                    let new = paths.intern_joined(to, &prim[moved.from_depth..]);
+                    if recent.len() == RECENT_REROOTS {
+                        recent.remove(0);
+                    }
+                    recent.push(RecentReroot { old, from, to, new });
+                    new
+                }
+            };
+            *site = crate::prim_indexing::site_paths::replace_prefix_to(
+                paths,
+                site,
+                &moved.from,
+                moved.from_depth,
+                &moved.to,
+                new,
+            );
         }
     }
 

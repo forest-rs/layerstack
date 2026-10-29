@@ -102,12 +102,28 @@ pub(crate) fn replace_prefix(
     to: &SpecPath,
 ) -> SpecPath {
     let from_depth = paths.resolve(from.prim_path()).depth();
-    let rest: crate::path::Segments =
-        paths.resolve(site.prim_path()).segments()[from_depth..].into();
-    let prim = paths.intern_joined(to.prim_path(), &rest);
+    let rest = &paths.resolve(site.prim_path()).segments()[from_depth..];
+    let prim = paths.intern_joined(to.prim_path(), rest);
+    replace_prefix_to(paths, site, from, from_depth, to, prim)
+}
+
+/// [`replace_prefix`] with the prim path of the result, `prim`, known, and
+/// the namespace depth of `from`'s, `from_depth`.
+pub(crate) fn replace_prefix_to(
+    paths: &PathInterner,
+    site: &SpecPath,
+    from: &SpecPath,
+    from_depth: usize,
+    to: &SpecPath,
+    prim: PathId,
+) -> SpecPath {
     // The selections of `to`, then those of `site` beyond `from`'s, their
     // hosts moved beneath `to`.
     let skip = from.selection_entries().len();
+    if site.selection_entries().len() <= skip {
+        // None beyond `from`'s: the selections of `to`, as they are.
+        return SpecPath::with_prim_and_selections(prim, to);
+    }
     let mut sites: alloc::vec::Vec<VariantSelectionSite> = to.variant_selection_sites().collect();
     for (host_depth, selection) in
         &site.selection_entries()[skip.min(site.selection_entries().len())..]

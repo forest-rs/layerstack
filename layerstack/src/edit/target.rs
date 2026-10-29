@@ -3,10 +3,13 @@
 
 //! Edit targets: where stage-level edits are written.
 
+use alloc::{string::String, sync::Arc, vec::Vec};
+
 use crate::{
-    doc::{LayerId, LayerOffset, LayerStore},
+    doc::{FieldValue, LayerId, LayerOffset, LayerStore, Value},
     interner::{TokenId, TokenInterner},
     path::{PathId, PathInterner, PropertyPath, TargetPath},
+    path_expression::{PathExpression, value::anchor_and_map_with},
     prim_index::ArcKind,
     prim_index_graph::{NodeId, PrimIndexGraph, PrimNode},
     spec_path::SpecPath,
@@ -320,6 +323,38 @@ impl EditTarget {
         self.offset.map_time(time)
     }
 
+    /// Maps `value`, authored on the stage prim `prim` or one of its
+    /// properties, to the value written in the target layer: what
+    /// [`Transaction::set_default`](crate::Transaction::set_default),
+    /// [`set_time_sample`](crate::Transaction::set_time_sample) and
+    /// [`set_metadata`](crate::Transaction::set_metadata) write through
+    /// the target's addresses.
+    ///
+    /// A `timecode` is mapped to layer time through the inverse of the
+    /// target's layer offset, and a `duration` is divided by its scale. A
+    /// `pathExpression` is made absolute at `prim`, then each pattern
+    /// prefix and expression reference path is mapped to its spec path
+    /// in the target layer, without variant selections; one the target
+    /// does not map matches nothing, and a pattern with a leading `//`
+    /// is kept. Arrays and dictionaries, at any depth, are mapped
+    /// element by element. Asset paths and other values are written as
+    /// given.
+    ///
+    /// OpenUSD: `_StageValueToFieldXf` and `_PathExprToField` in
+    /// `pxr/usd/usd/stage.cpp`, applied through `VtValueTryTransform` by
+    /// `UsdStage::_SetValue` and `UsdStage::_SetMetadataImpl`;
+    /// `SdfPathExpression::MakeAbsolute`, `PcpMapFunction::MapTargetToSource`.
+    /// OpenUSD keeps a variant selection in a mapped prefix
+    /// (`/Rock{look=a}Child`), which names no prim; this strips it, as
+    /// relationship targets are stripped.
+    ///
+    /// Spec: AOUSD Core §12.3.2.1 (layer offsets), §10 (arcs map
+    /// namespace).
+    #[must_use]
+    pub fn map_to_spec_value(&self, prim: PathId, value: &Value, store: &dyn LayerStore) -> Value {
+        map_value(&self.map, self.offset, prim, value, store).unwrap_or_else(|| value.clone())
+    }
+
     /// Addresses the stage prim `path` through this target.
     #[must_use]
     pub fn prim(&self, path: PathId) -> Address {
@@ -498,4 +533,88 @@ impl Address {
     pub(crate) fn layer_time(&self, time: f64) -> f64 {
         self.offset.map_time(time)
     }
+
+    /// Maps a value given with a stage address to the value written in its
+    /// layer, as [`EditTarget::map_to_spec_value`] does; `None` when
+    /// nothing changes, and always for a spec address, whose values are
+    /// the layer's own.
+    pub(crate) fn layer_value(&self, value: &Value, store: &dyn LayerStore) -> Option<Value> {
+        match &self.path {
+            AddressPath::Spec(_) => None,
+            AddressPath::Stage { map, prim, .. } => {
+                map_value(map, self.offset, *prim, value, store)
+            }
+        }
+    }
+
+    /// [`Self::layer_value`] for a field value: only a plain value maps.
+    pub(crate) fn layer_field(
+        &self,
+        value: &FieldValue,
+        store: &dyn LayerStore,
+    ) -> Option<FieldValue> {
+        match value {
+            FieldValue::Value(value) => self.layer_value(value, store).map(FieldValue::Value),
+            _ => None,
+        }
+    }
+}
+
+/// `value`, authored at the stage prim `prim`, in the layer `map` and
+/// `offset` take stage namespace and time to; `None` when nothing changes
+/// (see [`EditTarget::map_to_spec_value`]).
+fn map_value(
+    map: &NamespaceMap,
+    offset: LayerOffset,
+    prim: PathId,
+    value: &Value,
+    store: &dyn LayerStore,
+) -> Option<Value> {
+    let mut anchor: Option<Vec<String>> = None;
+    crate::stage::stage_time::map_leaves(value, &mut |leaf| match leaf {
+        Value::TimeCode(time) if !offset.is_identity() => {
+            Some(Value::TimeCode(offset.map_time(*time)))
+        }
+        // `SdfLayerOffset::operator*(GfDuration)` of the inverse offset
+        // scales by its scale alone.
+        Value::Duration(length) if offset.scale != 1.0 => {
+            Some(Value::Duration(length / offset.scale))
+        }
+        Value::PathExpression(text) => {
+            let anchor = anchor.get_or_insert_with(|| prim_names(store, prim));
+            map_expression(text, anchor, map, store)
+        }
+        _ => None,
+    })
+}
+
+/// The names of the prim path `prim`, root first.
+fn prim_names(store: &dyn LayerStore, prim: PathId) -> Vec<String> {
+    store
+        .paths()
+        .resolve(prim)
+        .segments()
+        .iter()
+        .map(|name| String::from(store.tokens().resolve(*name)))
+        .collect()
+}
+
+/// The expression `text`, made absolute at `anchor` and mapped through
+/// `map` to spec paths without variant selections; `None` when its text
+/// does not change or does not parse.
+fn map_expression(
+    text: &str,
+    anchor: &[String],
+    map: &NamespaceMap,
+    store: &dyn LayerStore,
+) -> Option<Value> {
+    let expression = PathExpression::parse(text).ok()?;
+    let (paths, tokens) = (store.paths(), store.tokens());
+    let mapped = anchor_and_map_with(expression, anchor, &mut |names| {
+        let segments: Vec<TokenId> = names.iter().map(|name| tokens.intern(name)).collect();
+        let spec = map.map_prim(paths.intern_segments(&segments), paths)?;
+        Some(prim_names(store, spec.prim_path()))
+    })
+    .lossless_text();
+    (mapped.as_str() != text).then(|| Value::PathExpression(Arc::from(mapped)))
 }

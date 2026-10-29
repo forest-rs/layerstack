@@ -1002,6 +1002,11 @@ impl Transaction {
     /// declaration of the stage property. A missing attribute spec is
     /// created with that type. [`Value::Blocked`] blocks the value.
     ///
+    /// For a stage address, `value` is a stage value: its time codes,
+    /// durations and path expressions are mapped into the target layer as
+    /// [`EditTarget::map_to_spec_value`](crate::EditTarget::map_to_spec_value)
+    /// maps them. A spec address writes `value` as given.
+    ///
     /// OpenUSD: `UsdAttribute::Set` at the default time,
     /// `SdfAttributeSpec::SetDefaultValue`.
     ///
@@ -1031,8 +1036,8 @@ impl Transaction {
     /// Sets the one time sample at `time` of the attribute at `at`, leaving
     /// every other sample as it is. For a stage address, `time` is a stage
     /// time, mapped through the target's layer offset; for a spec address
-    /// it is a layer time. Types are checked as for
-    /// [`Transaction::set_default`].
+    /// it is a layer time. Types are checked, and `value` is mapped, as
+    /// for [`Transaction::set_default`].
     ///
     /// OpenUSD: `UsdAttribute::Set` at a time, `SdfLayer::SetTimeSample`.
     ///
@@ -1061,6 +1066,10 @@ impl Transaction {
     /// [`PrimField`]s, [`Transaction::set_default`],
     /// [`Transaction::set_targets`], [`Transaction::set_variant_selection`])
     /// or none.
+    ///
+    /// For a stage address, a plain value is mapped into the target layer
+    /// as [`Transaction::set_default`] maps one, through dictionaries at
+    /// any depth (OpenUSD `UsdStage::_SetMetadataImpl`).
     ///
     /// OpenUSD: `SdfSpec::SetInfo`.
     ///
@@ -1113,6 +1122,9 @@ impl Transaction {
 
     /// Requires the default value of the attribute at `at` to be `expected`
     /// (`None`: no default, or no spec) when the transaction is applied.
+    /// `expected` is the value as the layer holds it: for a stage address,
+    /// as [`EditTarget::map_to_spec_value`](crate::EditTarget::map_to_spec_value)
+    /// writes it.
     pub fn expect_default(&mut self, at: Address, expected: Option<Value>) -> &mut Self {
         self.expect(at, Slot::Default, expected.map(Authored::Value))
     }

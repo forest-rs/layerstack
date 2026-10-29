@@ -1447,7 +1447,11 @@ fn apply_op(
             }
             Ok(())
         }
-        Op::SetDefault { at, value } => set_value(store, at, None, value, stage, journal),
+        Op::SetDefault { at, value } => {
+            let mapped = at.layer_value(value, store);
+            let value = mapped.as_ref().unwrap_or(value);
+            set_value(store, at, None, value, stage, journal)
+        }
         Op::SetTargets { at, targets } => set_targets(store, at, targets.as_ref(), stage, journal),
         Op::EditTargetList {
             at,
@@ -1474,6 +1478,8 @@ fn apply_op(
             super::variant_sets::remove_variant_set(store, at, *name, journal)
         }
         Op::SetTimeSample { at, time, value } => {
+            let mapped = at.layer_value(value, store);
+            let value = mapped.as_ref().unwrap_or(value);
             set_value(store, at, Some(at.layer_time(*time)), value, stage, journal)
         }
         Op::ClearDefault { at } => {
@@ -1516,6 +1522,8 @@ fn apply_op(
         }
         Op::SetMetadata { at, key, value } => {
             check_field(store, *key)?;
+            let mapped = at.layer_field(value, store);
+            let value = mapped.as_ref().unwrap_or(value);
             let (path, loc) = resolve(store, at)?;
             let id = at.layer();
             let property = path.property();

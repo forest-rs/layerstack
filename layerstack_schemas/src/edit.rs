@@ -757,21 +757,25 @@ impl<'s> SchemaEdit<'s> {
             Some((ty, variability)) => {
                 let mut spec = PropertySpec::typed_attribute(ty.clone());
                 spec.variability = variability;
+                // The spec is written as given, so its value is mapped
+                // into the target layer here, as `Transaction::set_default`
+                // maps a stage address's (OpenUSD `_StageValueToFieldXf`).
+                let layer_value = self.target.map_to_spec_value(path, &value, &*self.store);
                 match time {
-                    None => spec.default = Some(value),
+                    None => {
+                        spec.default = Some(layer_value);
+                        self.defaults.push((path, token, value));
+                    }
                     Some(time) => {
                         #[cfg(feature = "usd-geom")]
                         self.samples.push(TimeSampleEdit {
                             property: PropertyPath::new(path, token),
                             time,
-                            value: value.clone(),
+                            value,
                         });
                         let time = self.target.map_to_spec_time(time);
-                        spec.time_samples = alloc::vec![(time, value)].into();
+                        spec.time_samples = alloc::vec![(time, layer_value)].into();
                     }
-                }
-                if time.is_none() {
-                    self.defaults.push((path, token, value_of(&spec)));
                 }
                 self.transaction.create_property(at, spec);
                 self.created.push((path, token, Some(ty)));
@@ -1270,8 +1274,11 @@ impl<'s> SchemaEdit<'s> {
     fn replace_dictionary(&mut self, target: TargetPath, key: TokenId, value: Option<&FieldValue>) {
         self.dictionaries
             .retain(|(at, field, _)| (*at, *field) != (target, key));
+        // Kept as the layer holds it, as a by-key edit's dictionary is.
         let dictionary = match value {
-            Some(FieldValue::Value(dictionary @ Value::Dictionary(_))) => dictionary.clone(),
+            Some(FieldValue::Value(dictionary @ Value::Dictionary(_))) => self
+                .target
+                .map_to_spec_value(target.prim_path(), dictionary, &*self.store),
             Some(_) => return,
             None => Value::Dictionary(Vec::new()),
         };
@@ -1332,6 +1339,18 @@ impl<'s> SchemaEdit<'s> {
             // Nothing to erase: C++ authors nothing either.
             return Ok(());
         }
+        // The dictionary holds the layer's values, so only the entry set
+        // is mapped into the target layer, and the whole dictionary is
+        // written to the spec as it is (OpenUSD `_SetMetadataImpl` maps
+        // the value `SetFieldDictValueByKey` sets).
+        let value = value.map(|value| match value {
+            FieldValue::Value(value) => FieldValue::Value(self.target.map_to_spec_value(
+                target.prim_path(),
+                &value,
+                &*self.store,
+            )),
+            other => other,
+        });
         set_dictionary_entry(&mut dictionary, &keys, value);
         // The field must take a dictionary: `customData`, `assetInfo`, or
         // one a plugin registers.
@@ -1347,6 +1366,15 @@ impl<'s> SchemaEdit<'s> {
         if erase && empty {
             self.transaction.clear_metadata(at, field);
         } else {
+            let at = match target {
+                TargetPath::Prim(path) => self.target.map_to_spec_path(path, self.store.paths()),
+                TargetPath::Property(path) => self
+                    .target
+                    .map_property_to_spec_path(path, self.store.paths()),
+            }
+            .map_or(at, |spec| {
+                layerstack::Address::spec(self.target.layer(), spec)
+            });
             self.transaction
                 .set_metadata(at, field, FieldValue::Value(dictionary.clone()));
         }
@@ -1834,10 +1862,6 @@ impl<'s> SchemaEdit<'s> {
 }
 
 /// The default value a created property spec holds.
-fn value_of(spec: &PropertySpec) -> Value {
-    spec.default.clone().unwrap_or(Value::Null)
-}
-
 /// Why a prim or property metadata field cannot be authored. Nothing is
 /// collected.
 ///

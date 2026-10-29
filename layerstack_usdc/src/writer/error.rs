@@ -120,17 +120,6 @@ pub enum UsdcWriteError {
     Document(WriteError),
     /// The authored layer cannot be saved; its USDA save fails the same way.
     Save(SaveError),
-    /// A document's metadata key is not registered for its owner (see
-    /// [`super::document::metadata_field`]) and its value is a typed list
-    /// op (a token or integer list op, say), which an
-    /// `SdfUnregisteredValue` does not hold: it holds an unregistered list
-    /// op's items as text.
-    UnknownMetadata {
-        /// Path of the owning spec.
-        path: String,
-        /// The metadata key.
-        key: String,
-    },
     /// A field the crate stores as a type this writer does not encode: an
     /// attribute's `displayUnit`, which OpenUSD holds as a `TfEnum` of its
     /// units (`SdfGetUnitFromName`, `pxr/usd/sdf/types.cpp`), and a
@@ -194,9 +183,6 @@ impl fmt::Display for UsdcWriteError {
             }
             Self::Document(e) => write!(f, "{e}"),
             Self::Save(e) => write!(f, "{e}"),
-            Self::UnknownMetadata { path, key } => {
-                write!(f, "{path}: {key:?} is not registered metadata here")
-            }
             Self::UnencodedField { path, key } => {
                 write!(f, "{path}: the crate writer does not encode {key:?}")
             }

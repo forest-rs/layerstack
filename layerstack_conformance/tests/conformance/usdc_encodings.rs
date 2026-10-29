@@ -21,7 +21,7 @@
 
 use std::path::PathBuf;
 
-use layerstack::{LayerId, NoAssets, PathInterner, TokenInterner};
+use layerstack::{FieldValue, Layer, LayerId, NoAssets, PathInterner, TargetPath, TokenInterner};
 use layerstack_conformance::usdc::crate_sections;
 use layerstack_conformance::workspace_root;
 use layerstack_usda::read_usda;
@@ -196,6 +196,39 @@ fn assert_reads_as_openusd(case: &str) {
     let read = read_usdc(&openusd, LayerId(1), &tokens, &paths, &mut NoAssets).expect("reads");
     let ours = save_usdc(&read.layer, &tokens, &paths).unwrap_or_else(|e| panic!("{case}: {e}"));
     assert_eq!(read_back(&ours), text, "{case}: our file");
+    let types = record["metadata_types"].as_object().unwrap();
+    for data in [&openusd, &ours] {
+        let read = read_usdc(data, LayerId(4), &tokens, &paths, &mut NoAssets).expect("reads");
+        for (field, expected) in types {
+            let found = metadata_type(&read.layer, field, &tokens, &paths);
+            assert_eq!(Some(expected.as_str().unwrap()), found, "{case}: {field}");
+        }
+    }
+}
+
+/// The type OpenUSD's Python names for the value of `field` (`<path>
+/// <key>`) in `layer`: a typed list op's.
+fn metadata_type(
+    layer: &Layer,
+    field: &str,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
+) -> Option<&'static str> {
+    let (path, key) = field.split_once(' ').unwrap();
+    let key = tokens.intern(key);
+    let value = match TargetPath::parse(path, tokens, paths).unwrap() {
+        TargetPath::Prim(prim) => layer.prim(prim)?.field(key),
+        TargetPath::Property(property) => layer.property(property)?.metadata(key),
+    }?;
+    Some(match value {
+        FieldValue::IntListOp(_) => "IntListOp",
+        FieldValue::UIntListOp(_) => "UIntListOp",
+        FieldValue::Int64ListOp(_) => "Int64ListOp",
+        FieldValue::UInt64ListOp(_) => "UInt64ListOp",
+        FieldValue::TokenListOp(_) => "TokenListOp",
+        FieldValue::StringListOp(_) => "StringListOp",
+        _ => "another type",
+    })
 }
 
 /// Attribute connections to mappers, which OpenUSD's authoring and text
@@ -205,4 +238,12 @@ fn assert_reads_as_openusd(case: &str) {
 #[test]
 fn mapper_connections_read_and_save_as_openusd() {
     assert_reads_as_openusd("mapper_connections");
+}
+
+/// Typed list ops under metadata keys no schema registers read from
+/// OpenUSD's file, write as list-op statements and save as USDC, each as
+/// its own list-op type, as OpenUSD saves them.
+#[test]
+fn unregistered_typed_list_ops_read_and_save_as_openusd() {
+    assert_reads_as_openusd("unregistered_typed_list_ops");
 }

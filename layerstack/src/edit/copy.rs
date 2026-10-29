@@ -17,7 +17,7 @@ use alloc::vec::Vec;
 use super::{
     apply::{Journal, Raw, add_child, ensure, insert_prim_spec, layer, remove_subtree, resolve},
     error::Rejection,
-    namespace::{PathMove, move_specs, repair_prim},
+    namespace::{Dormant, PathMove, move_specs, repair_prim},
     spec::{Loc, spec_at},
     target::Address,
 };
@@ -77,6 +77,7 @@ fn remap(
         LayerId::UNRESOLVED,
         Some(mapping),
         mapping,
+        &Dormant::default(),
     )
     .map_err(|_| Rejection::UnsupportedCopy)
 }

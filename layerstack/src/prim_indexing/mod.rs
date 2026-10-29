@@ -1277,7 +1277,11 @@ impl Walk<'_, '_, '_> {
                     let others = apart.get(&representative).into_iter().flatten();
                     core::iter::once(&representative)
                         .chain(others)
-                        .find_map(|&source| Some((source, site_moves(self.out, source, instance)?)))
+                        .find_map(|&source| {
+                            let moves =
+                                site_moves(self.ctx.store.paths(), self.out, source, instance)?;
+                            Some((source, moves))
+                        })
                 })
                 .flatten();
             match source {
@@ -1331,11 +1335,16 @@ fn same_shape(out: &Composition, a: PathId, b: PathId) -> bool {
 /// The sites the instance `to` reads in place of the instance `from`'s
 /// ([`PrimIndexGraph::site_moves`]); `None` when their graphs have other
 /// shapes, or either is not kept.
-fn site_moves(out: &Composition, from: PathId, to: PathId) -> Option<Vec<SiteMove>> {
+fn site_moves(
+    paths: &crate::path::PathInterner,
+    out: &Composition,
+    from: PathId,
+    to: PathId,
+) -> Option<Vec<SiteMove>> {
     out.prims
         .get(&from)?
         .graph
-        .site_moves(&out.prims.get(&to)?.graph)
+        .site_moves(paths, &out.prims.get(&to)?.graph)
 }
 
 /// Whether the descendants of the instance `representative` compose the

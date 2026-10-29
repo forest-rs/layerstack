@@ -10,7 +10,7 @@ use super::*;
 use crate::prim_indexing::Boundaries;
 use crate::sort;
 use crate::{
-    ArcKind, HashMap, HashSet, NodeId, Relocate, prim_indexing::ChildIndex,
+    ArcKind, HashMap, HashSet, LayerStackIdentifier, NodeId, Relocate, prim_indexing::ChildIndex,
     stage::preparation::PreparationIndex,
 };
 
@@ -754,6 +754,10 @@ fn gather_dependent_moves(
             prims
         }
     };
+    // Whether each layer stack the nodes read holds a source layer: the
+    // prims beneath a moved group share a few layer stacks among many
+    // nodes.
+    let mut holds_source: HashMap<LayerStackIdentifier, bool> = HashMap::new();
     for prim in prims {
         let Some(graph) = stage.explain_prim_graph(prim) else {
             continue;
@@ -767,8 +771,15 @@ fn gather_dependent_moves(
             if matches!(node.arc_kind(), ArcKind::Local | ArcKind::Variants) {
                 continue;
             }
-            let stack = LayerStack::gather_identifier(store, node.layer_stack_identifier());
-            if !stack.layers.iter().any(|id| source_layers.contains(id)) {
+            let holds = *holds_source
+                .entry(node.layer_stack_identifier())
+                .or_insert_with(|| {
+                    LayerStack::gather_identifier(store, node.layer_stack_identifier())
+                        .layers
+                        .iter()
+                        .any(|id| source_layers.contains(id))
+                });
+            if !holds {
                 continue;
             }
             let site = store.paths().resolve(node.site().prim_path()).clone();
@@ -1693,7 +1704,7 @@ struct GraphNodeEvidence {
     kind: ArcKind,
     parent: Option<NodeId>,
     site: SpecPath,
-    stack: crate::LayerStackIdentifier,
+    stack: LayerStackIdentifier,
     depth: u16,
     sibling: u16,
     implied: bool,

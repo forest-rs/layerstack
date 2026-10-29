@@ -10,8 +10,8 @@
 //! `customData.apiSchemaOverridePropertyNames`. A multiple-apply schema's
 //! names hold [`INSTANCE_NAME_PLACEHOLDER`], and its built-ins name
 //! `Other:__INSTANCE_NAME__` (by type) or `Other:__INSTANCE_NAME__:sub`
-//! (by named instance). Each schema's kind, base and auto-applies live in
-//! the plugin's `plugInfo.json` instead, which the caller reads and passes
+//! (by named instance). Each schema's kind, base, auto-applies and other
+//! plugin metadata live in the plugin's `plugInfo.json` instead, which the caller reads and passes
 //! here as [`SchemaDeclaration`]s and
 //! [`SchemaRegistryBuilder::auto_apply`](super::SchemaRegistryBuilder::auto_apply)
 //! calls.
@@ -24,7 +24,7 @@ use alloc::{format, string::String, vec::Vec};
 
 use super::{INSTANCE_NAME_PLACEHOLDER, PropertyDefinition, SchemaDefinition, SchemaKind};
 use crate::{
-    doc::{FieldValue, Layer, Value},
+    doc::{FieldEntry, FieldValue, Layer, Value},
     interner::{TokenId, TokenInterner},
     path::{Path, PathInterner},
     property::PropertyKind,
@@ -33,7 +33,7 @@ use crate::{
 /// What a schema's plugin declares about it, which a generated schema
 /// layer does not hold: its kind, the typed schema it inherits from, and
 /// where an applied schema may be applied.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct SchemaDeclaration {
     /// The schema's name, which is also its prim's name in the layer.
     pub name: TokenId,
@@ -54,6 +54,10 @@ pub struct SchemaDeclaration {
     /// The `apiSchemaCanOnlyApplyTo` of each `apiSchemaInstances` entry
     /// ([`SchemaDefinition::instance_can_only_apply_to`]).
     pub instance_can_only_apply_to: Vec<(TokenId, Vec<TokenId>)>,
+    /// The type entry's other keys, such as
+    /// `providesUsdShadeConnectableAPIBehavior`
+    /// ([`SchemaDefinition::plug_info`]).
+    pub plug_info: Vec<FieldEntry>,
 }
 
 impl SchemaDeclaration {
@@ -68,6 +72,7 @@ impl SchemaDeclaration {
             can_only_apply_to: Vec::new(),
             allowed_instance_names: Vec::new(),
             instance_can_only_apply_to: Vec::new(),
+            plug_info: Vec::new(),
         }
     }
 }
@@ -147,6 +152,7 @@ pub fn read_generated_schema(
             schema
                 .instance_can_only_apply_to
                 .clone_from(&declaration.instance_can_only_apply_to);
+            schema.plug_info.clone_from(&declaration.plug_info);
             if let Some(FieldValue::TokenListOp(list)) = spec.field(api_schemas) {
                 schema.built_ins = list
                     .apply_to(&[])

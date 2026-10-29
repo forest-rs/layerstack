@@ -46,6 +46,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "Material",
@@ -82,6 +83,9 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[("providesUsdShadeConnectableAPIBehavior", |_| {
+                Value::Bool(true)
+            })],
         },
         Schema {
             name: "MaterialBindingAPI",
@@ -93,6 +97,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "NodeDefAPI",
@@ -127,6 +132,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "NodeGraph",
@@ -138,6 +144,9 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[("providesUsdShadeConnectableAPIBehavior", |_| {
+                Value::Bool(true)
+            })],
         },
         Schema {
             name: "Shader",
@@ -149,6 +158,9 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[("providesUsdShadeConnectableAPIBehavior", |_| {
+                Value::Bool(true)
+            })],
         },
     ],
     auto_applies: &[],

@@ -37,6 +37,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "PhysicsCollisionAPI",
@@ -69,6 +70,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "PhysicsCollisionGroup",
@@ -111,6 +113,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "PhysicsDistanceJoint",
@@ -279,6 +282,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "PhysicsDriveAPI",
@@ -351,6 +355,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "PhysicsFilteredPairsAPI",
@@ -371,6 +376,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "PhysicsFixedJoint",
@@ -519,6 +525,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "PhysicsJoint",
@@ -667,6 +674,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "PhysicsLimitAPI",
@@ -695,6 +703,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "PhysicsMassAPI",
@@ -755,6 +764,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "PhysicsMaterialAPI",
@@ -803,6 +813,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "PhysicsMeshCollisionAPI",
@@ -833,6 +844,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "PhysicsPrismaticJoint",
@@ -1014,6 +1026,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "PhysicsRevoluteJoint",
@@ -1195,6 +1208,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "PhysicsRigidBodyAPI",
@@ -1267,6 +1281,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "PhysicsScene",
@@ -1299,6 +1314,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "PhysicsSphericalJoint",
@@ -1484,6 +1500,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
     ],
     auto_applies: &[],

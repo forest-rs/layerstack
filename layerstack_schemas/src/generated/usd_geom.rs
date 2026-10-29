@@ -148,6 +148,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "BasisCurves",
@@ -338,6 +339,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "Boundable",
@@ -402,6 +404,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "Camera",
@@ -613,6 +616,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "Capsule",
@@ -749,6 +753,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[("implementsComputeExtent", |_| Value::Bool(true))],
         },
         Schema {
             name: "Capsule_1",
@@ -893,6 +898,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[("implementsComputeExtent", |_| Value::Bool(true))],
         },
         Schema {
             name: "Cone",
@@ -1029,6 +1035,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[("implementsComputeExtent", |_| Value::Bool(true))],
         },
         Schema {
             name: "Cube",
@@ -1143,6 +1150,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[("implementsComputeExtent", |_| Value::Bool(true))],
         },
         Schema {
             name: "Curves",
@@ -1292,6 +1300,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[("implementsComputeExtent", |_| Value::Bool(true))],
         },
         Schema {
             name: "Cylinder",
@@ -1428,6 +1437,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[("implementsComputeExtent", |_| Value::Bool(true))],
         },
         Schema {
             name: "Cylinder_1",
@@ -1572,6 +1582,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[("implementsComputeExtent", |_| Value::Bool(true))],
         },
         Schema {
             name: "GeomModelAPI",
@@ -1692,6 +1703,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "GeomSubset",
@@ -1736,6 +1748,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "Gprim",
@@ -1837,6 +1850,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "HermiteCurves",
@@ -1994,6 +2008,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "Imageable",
@@ -2042,6 +2057,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "Mesh",
@@ -2298,6 +2314,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "MotionAPI",
@@ -2334,6 +2351,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "NurbsCurves",
@@ -2515,6 +2533,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "NurbsPatch",
@@ -2796,6 +2815,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "Plane",
@@ -2932,6 +2952,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[("implementsComputeExtent", |_| Value::Bool(true))],
         },
         Schema {
             name: "PointBased",
@@ -3065,6 +3086,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[("implementsComputeExtent", |_| Value::Bool(true))],
         },
         Schema {
             name: "PointInstancer",
@@ -3217,6 +3239,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[("implementsComputeExtent", |_| Value::Bool(true))],
         },
         Schema {
             name: "Points",
@@ -3366,6 +3389,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[("implementsComputeExtent", |_| Value::Bool(true))],
         },
         Schema {
             name: "Scope",
@@ -3414,6 +3438,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "Sphere",
@@ -3528,6 +3553,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[("implementsComputeExtent", |_| Value::Bool(true))],
         },
         Schema {
             name: "TetMesh",
@@ -3677,6 +3703,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "VisibilityAPI",
@@ -3731,6 +3758,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &["Imageable"],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "Xform",
@@ -3787,6 +3815,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "Xformable",
@@ -3843,6 +3872,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
     ],
     auto_applies: &[],

@@ -536,6 +536,29 @@ fn rust_modules_name_their_bases_and_dependencies() {
     assert!(module.contains("pub const LIBRARY: &str = \"fixture\";"));
 }
 
+/// A class's `extraPlugInfo` reaches the registry tables as its schema's
+/// `plug_info`, as OpenUSD reads it back from the installed plugin, less
+/// the keys usdGenSchema writes itself.
+#[test]
+fn rust_modules_carry_extra_plug_info() {
+    let compiled = compile_text(&format!(
+        "{CODELESS}class Mixer \"Mixer\" (\n    inherits = </Typed>\n    customData = {{\n        \
+         dictionary extraPlugInfo = {{\n            \
+         bool providesUsdShadeConnectableAPIBehavior = 1\n            \
+         bool isUsdShadeContainer = 1\n            \
+         string bases = \"ignored\"\n        }}\n    }}\n) {{}}\n"
+    ))
+    .unwrap();
+    let module = compiled.rust_module().unwrap();
+    assert!(
+        module.contains(
+            "plug_info: &[(\"isUsdShadeContainer\", |_| Value::Bool(true)), \
+             (\"providesUsdShadeConnectableAPIBehavior\", |_| Value::Bool(true)), ]"
+        ),
+        "{module}"
+    );
+}
+
 /// The kinds an existing `plugInfo.json` declares become the module's
 /// `KINDS`; one OpenUSD's `KindRegistry` refuses fails the module, naming
 /// every refusal.

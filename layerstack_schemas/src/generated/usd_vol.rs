@@ -145,6 +145,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "FieldAsset",
@@ -249,6 +250,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "FieldBase",
@@ -305,6 +307,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "OpenVDBAsset",
@@ -447,6 +450,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "ParticleField",
@@ -548,6 +552,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "ParticleField3DGaussianSplat",
@@ -683,6 +688,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "ParticleFieldKernelBaseAPI",
@@ -694,6 +700,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "ParticleFieldKernelConstantSurfletAPI",
@@ -705,6 +712,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &["ParticleField"],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "ParticleFieldKernelGaussianEllipsoidAPI",
@@ -716,6 +724,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &["ParticleField"],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "ParticleFieldKernelGaussianSurfletAPI",
@@ -727,6 +736,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &["ParticleField"],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "ParticleFieldOpacityAttributeAPI",
@@ -755,6 +765,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &["ParticleField"],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "ParticleFieldOrientationAttributeAPI",
@@ -783,6 +794,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &["ParticleField"],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "ParticleFieldPositionAttributeAPI",
@@ -811,6 +823,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &["ParticleField"],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "ParticleFieldPositionBaseAPI",
@@ -822,6 +835,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "ParticleFieldRadianceBaseAPI",
@@ -833,6 +847,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "ParticleFieldScaleAttributeAPI",
@@ -861,6 +876,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &["ParticleField"],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "ParticleFieldSphericalHarmonicsAttributeAPI",
@@ -897,6 +913,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &["ParticleField"],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "Volume",
@@ -998,6 +1015,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "VolumeFieldAsset",
@@ -1102,6 +1120,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "VolumeFieldBase",
@@ -1158,6 +1177,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
     ],
     auto_applies: &[],

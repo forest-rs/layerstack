@@ -34,6 +34,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
         can_only_apply_to: &[],
         allowed_instance_names: &[],
         instance_can_only_apply_to: &[],
+        plug_info: &[],
     }],
     auto_applies: &[],
     metadata: &[],

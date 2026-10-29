@@ -19,6 +19,8 @@
     reason = "values as OpenUSD writes them"
 )]
 
+use alloc::sync::Arc;
+
 use layerstack::{PropertyKind, SchemaKind, Value, Variability};
 
 use crate::table::{Metadata, Property, Schema, SchemaTables, fallback};
@@ -104,6 +106,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
         Schema {
             name: "ColorSpaceAPI",
@@ -122,6 +125,9 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[("impliesCapabilities", |_| {
+                Value::Array(alloc::vec![Value::String(Arc::from("usd.core.colorspace"))])
+            })],
         },
         Schema {
             name: "ColorSpaceDefinitionAPI",
@@ -190,6 +196,9 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[("impliesCapabilities", |_| {
+                Value::Array(alloc::vec![Value::String(Arc::from("usd.core.colorspace"))])
+            })],
         },
         Schema {
             name: "Typed",
@@ -201,6 +210,7 @@ pub(crate) static TABLES: SchemaTables = SchemaTables {
             can_only_apply_to: &[],
             allowed_instance_names: &[],
             instance_can_only_apply_to: &[],
+            plug_info: &[],
         },
     ],
     auto_applies: &[],

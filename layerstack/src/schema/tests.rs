@@ -719,9 +719,14 @@ fn generated_schema_layers_read_as_definitions() {
     );
 
     let main = t.intern("main");
+    let provides = t.intern("providesUsdShadeConnectableAPIBehavior");
     let declared = [
         SchemaDeclaration {
             allowed_instance_names: vec![main],
+            plug_info: vec![FieldEntry {
+                name: provides,
+                value: Value::Bool(true).into(),
+            }],
             ..SchemaDeclaration::new(slot, SchemaKind::MultipleApplyApi)
         },
         SchemaDeclaration::new(pin, SchemaKind::MultipleApplyApi),
@@ -739,6 +744,9 @@ fn generated_schema_layers_read_as_definitions() {
     );
     assert_eq!(slot_schema.overrides[0].name, offset);
     assert_eq!(slot_schema.allowed_instance_names, [main]);
+    // The plugin's other type keys are carried through, unread.
+    assert_eq!(slot_schema.plug_info(provides), Some(&Value::Bool(true)));
+    assert_eq!(schemas[1].plug_info(provides), None);
 
     let mut builder = SchemaRegistry::builder();
     for schema in schemas {

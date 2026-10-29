@@ -50,9 +50,12 @@ the `wasm-bindgen` CLI is the version `Cargo.lock` holds, which it must be.
 
 A crate can depend on `layerstack_wasm` as an `rlib` and export functions of
 its own that take `&layerstack_wasm::Stage`, reaching the document through
-`Stage::document`. Its generated module then holds Layerstack's classes and
-its own exports over one memory; pass that module to `loadLayerstack` in
-TypeScript (its type is `NativeModule`, from `@forest-rs/layerstack/native`).
+`Stage::document` and `Stage::document_mut`. Its generated module then holds
+Layerstack's classes and its own exports over one memory; pass that module to
+`loadLayerstack` in TypeScript (its type is `NativeModule`, from
+`@forest-rs/layerstack/native`), and call its exports with the stage
+`stage.withNative` lends. Edits made through the document reach the package's
+change listeners and make no undo receipt (see `Stage::document_mut`).
 
 ## Versions
 

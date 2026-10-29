@@ -166,8 +166,28 @@ impl Stage {
         &self.document
     }
 
-    /// The document, mutably. A caller that edits it reports its changes
-    /// to its own users; nothing here observes them.
+    /// The document, mutably, for a crate that links these bindings and
+    /// edits the stage natively.
+    ///
+    /// The live stage records the composed changes of every recomposition,
+    /// and the wrapper hears them through its change cursor: edits applied
+    /// with [`StageDocument::apply`] (or `LiveStage::apply` through
+    /// [`StageDocument::parts_mut`]) and loads recompose at once. Controls
+    /// queued on the live stage, such as `LiveStage::mute_layer`, and
+    /// layers edited in the store directly recompose, and are heard, only
+    /// once [`StageDocument::synchronize`] runs: call it before returning to
+    /// JavaScript. The TypeScript `Stage.withNative` calls its listeners
+    /// with those changes before it returns.
+    ///
+    /// Native edits make no [`EditReceipt`]: the [`layerstack::Applied`]
+    /// inverse the caller gets back is its own to keep or drop. A receipt
+    /// whose guarded inverse covers a spec they changed since (a value it
+    /// set, or a prim it defined that they gave a child) fails to undo with
+    /// `edit.stale` and changes nothing. Content derived natively belongs
+    /// in a layer the user's edits do not target, such as the session
+    /// layer of a stage whose user edits target the root: it then never
+    /// blocks their undo, and saving, which skips the session layer, never
+    /// writes it.
     pub fn document_mut(&mut self) -> &mut StageDocument<HostStorage> {
         &mut self.document
     }
@@ -2276,5 +2296,154 @@ def "World" (
         assert_eq!(error.code, "namespace.not_found");
         let error = stage.move_object(root.0, "/Ball", "Orb").unwrap_err();
         assert_eq!(error.code, "path.invalid");
+    }
+
+    /// A mesh whose attributes come from three layers: the root, its
+    /// sublayer and the asset it references.
+    const MESH_ROOT: &str = r#"#usda 1.0
+(
+    subLayers = [@./edit.usda@]
+)
+def Mesh "Rock" (
+    prepend references = @./rock.usda@</Rock>
+) {
+    int[] faceVertexCounts = [3]
+}
+"#;
+    const MESH_EDIT: &str = r#"#usda 1.0
+over "Rock" {
+    point3f[] points = [(0, 0, 0), (2, 0, 0), (0, 2, 0)]
+}
+"#;
+    const MESH_ASSET: &str = r#"#usda 1.0
+def Mesh "Rock" {
+    point3f[] points = [(0, 0, 0), (1, 0, 0), (0, 1, 0)]
+    int[] faceVertexCounts = [4]
+    int[] faceVertexIndices = [0, 1, 2]
+    normal3f[] primvars:normals = [(0, 0, 1), (0, 0, 1), (0, 0, 1)] (
+        interpolation = "vertex"
+    )
+    custom int[] primvars:ns:nativeFace = [0]
+}
+"#;
+
+    fn mesh_stage(provenance: bool) -> Stage {
+        let mut stage = Stage::open_with_provenance(
+            "root.usda",
+            MESH_ROOT.as_bytes().to_vec(),
+            false,
+            false,
+            BROWSER_LIMITS,
+            provenance,
+        )
+        .unwrap();
+        let storage = stage.document_mut().storage_mut();
+        storage.supply("edit.usda", MESH_EDIT.as_bytes().to_vec());
+        storage.supply("rock.usda", MESH_ASSET.as_bytes().to_vec());
+        stage.load_supplied().unwrap();
+        assert!(stage.unavailable().as_list().unwrap().is_empty());
+        stage
+    }
+
+    /// The `[identifier, spec path, field]` the default value of each of
+    /// `properties` of `/Rock` names as its source.
+    fn sources(stage: &Stage, properties: &[&str]) -> Vec<Option<[String; 3]>> {
+        let document = stage.document();
+        let store = document.store();
+        properties
+            .iter()
+            .map(|name| {
+                let attribute = document.view().attribute(&format!("/Rock.{name}")).unwrap();
+                let resolved = attribute.get(Time::Default).expect("a value");
+                resolved.provenance.map(|source| {
+                    [
+                        document.identifier(source.layer).unwrap().to_string(),
+                        source.spec_path.display(store.paths(), store.tokens()),
+                        store.tokens().resolve(source.field).to_string(),
+                    ]
+                })
+            })
+            .collect()
+    }
+
+    #[test]
+    fn mesh_values_name_the_layer_and_spec_that_gave_them() {
+        const PROPERTIES: [&str; 5] = [
+            "points",
+            "faceVertexCounts",
+            "faceVertexIndices",
+            "primvars:normals",
+            "primvars:ns:nativeFace",
+        ];
+        let source = |layer: &str, name: &str| {
+            Some([
+                String::from(layer),
+                format!("/Rock.{name}"),
+                String::from(name),
+            ])
+        };
+        let stage = mesh_stage(true);
+        assert_eq!(
+            sources(&stage, &PROPERTIES),
+            [
+                source("edit.usda", "points"),
+                source("root.usda", "faceVertexCounts"),
+                source("rock.usda", "faceVertexIndices"),
+                source("rock.usda", "primvars:normals"),
+                source("rock.usda", "primvars:ns:nativeFace"),
+            ]
+        );
+        assert_eq!(
+            sources(&mesh_stage(false), &PROPERTIES),
+            [None, None, None, None, None],
+            "without provenance the values say nothing of their sources"
+        );
+    }
+
+    #[test]
+    fn native_transactions_and_muting_reach_the_change_record() {
+        let mut stage = mesh_stage(true);
+        let _ = stage.take_changes(false);
+        let root = stage.document().root_layer();
+        let mesh = stage.document_mut().store_mut().path("/Rock/Derived");
+        let mut txn = Transaction::new();
+        txn.create_prim(EditTarget::for_layer(root).prim(mesh), Specifier::Def, None);
+        stage.document_mut().apply(&txn).unwrap();
+        let created = |changes: &Wire| -> Vec<String> {
+            changes
+                .as_list()
+                .unwrap()
+                .iter()
+                .flat_map(|batch| batch.as_list().unwrap()[0].as_list().unwrap().iter())
+                .map(|path| path.as_text().unwrap().to_string())
+                .collect()
+        };
+        assert_eq!(created(&stage.take_changes(true)), ["/Rock/Derived"]);
+
+        // Muting is a queued control: heard once the document synchronizes.
+        let edit = stage
+            .document()
+            .store()
+            .layer_ids()
+            .into_iter()
+            .find(|&id| stage.document().identifier(id) == Some("edit.usda"))
+            .unwrap();
+        let (_, live) = stage.document_mut().parts_mut();
+        assert!(live.mute_layer(edit).unwrap());
+        assert!(
+            stage.take_changes(true).as_list().unwrap().is_empty(),
+            "nothing recomposed yet"
+        );
+        stage.document_mut().synchronize();
+        assert!(!stage.take_changes(true).as_list().unwrap().is_empty());
+        assert_eq!(
+            sources(&stage, &["points"]),
+            [Some([
+                String::from("rock.usda"),
+                String::from("/Rock.points"),
+                String::from("points"),
+            ])],
+            "the muted sublayer no longer gives the points"
+        );
     }
 }

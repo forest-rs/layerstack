@@ -32,10 +32,20 @@ or USDC), the flattened stage or a USDZ package, touching nothing.
 ```sh
 cargo build -p layerstack_wasm --no-default-features --features standalone \
   --profile wasm --target wasm32-unknown-unknown
+node packages/layerstack/scripts/strip-sections.mjs \
+  target/wasm32-unknown-unknown/wasm/layerstack_wasm.wasm \
+  target/wasm32-unknown-unknown/wasm/layerstack_wasm.bindgen-input.wasm target_features
 wasm-bindgen --target web --out-dir packages/layerstack/wasm --out-name layerstack \
-  target/wasm32-unknown-unknown/wasm/layerstack_wasm.wasm
-wasm-opt -Oz --converge --low-memory-unused packages/layerstack/wasm/layerstack_bg.wasm -o packages/layerstack/wasm/layerstack_bg.wasm
+  target/wasm32-unknown-unknown/wasm/layerstack_wasm.bindgen-input.wasm
+wasm-opt -Oz --converge --low-memory-unused --reorder-functions-by-name \
+  packages/layerstack/wasm/layerstack_bg.wasm -o packages/layerstack/wasm/layerstack_bg.wasm
 ```
+
+The `wasm` profile keeps the function names, which `wasm-opt` lays the
+functions out by (so similar functions sit together and compress better)
+and then leaves out. It keeps the `target_features` section with them,
+which `strip-sections.mjs` takes out so that wasm-bindgen writes the same
+glue as for a stripped module.
 
 The module is built without `std`: the `standalone` feature supplies its
 global allocator (dlmalloc, the one `std` uses on `wasm32-unknown-unknown`)

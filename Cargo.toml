@@ -109,11 +109,13 @@ debug-assertions = true
 # The WebAssembly module of `@forest-rs/layerstack` (`layerstack_wasm`): small
 # rather than fast, as its size budget asks
 # (`packages/layerstack/size-budget.json`). A panic traps the instance,
-# which the wrapper then refuses to call.
+# which the wrapper then refuses to call. Function names stay in the module
+# for `wasm-opt` to order functions by (`scripts/build-wasm.sh`); its output
+# leaves them out.
 [profile.wasm]
 inherits = "release"
 opt-level = "z"
 lto = true
 codegen-units = 1
 panic = "abort"
-strip = true
+strip = "debuginfo"

@@ -4,10 +4,10 @@
 use super::*;
 use crate::{
     ArcKind, InMemoryStore, Layer, LayerId, ListOp, LiveStage, PrimSpec, PropertyPath,
-    PropertySpec, PropertyType, Reference, ReferenceTarget, Stage, StageOptions, SublayerEntry,
-    TargetPath, Value,
+    PropertySpec, PropertyType, Reference, ReferenceTarget, SpecPath, Stage, StageOptions,
+    SublayerEntry, TargetPath, Value,
 };
-use alloc::{sync::Arc, vec, vec::Vec};
+use alloc::{string::ToString, sync::Arc, vec, vec::Vec};
 
 const ROOT: LayerId = LayerId(1);
 const ASSET: LayerId = LayerId(2);
@@ -1244,7 +1244,7 @@ fn deletes_reject_a_variant_edit_target() {
     let mut store = base();
     let child = store.path("/A/Child");
     let stage = Stage::compose(&mut store, ROOT, StageOptions::default());
-    let variant = crate::SpecPath::parse("/A{v=x}", &store.tokens, &store.paths).unwrap();
+    let variant = SpecPath::parse("/A{v=x}", &store.tokens, &store.paths).unwrap();
     let target = EditTarget::for_local_variant(ROOT, &variant);
     assert_eq!(
         NamespaceEdit::prepare_delete(&stage, &mut store, &target, TargetPath::Prim(child))
@@ -1378,4 +1378,24 @@ fn deletes_take_the_local_specs_that_compose_over_them_through_an_arc() {
     let store = delete("/B.x");
     let x = store.path("/X");
     assert!(store.layers[&ROOT].prims()[&x].properties.is_empty());
+}
+
+#[test]
+fn split_opinions_name_the_layer_and_spec() {
+    let mut store = InMemoryStore::default();
+    store.set_layer_identifier(LayerId(4), "./rock.usda");
+    let spec = SpecPath::from_prim_path(store.path("/Rock/Moss"));
+    let error = NamespaceError::SplitOpinions {
+        layer: LayerId(4),
+        spec,
+    };
+    assert_eq!(
+        error.display(&store).to_string(),
+        "moving split source opinions requires coordinated layer edits: /Rock/Moss in \
+         @./rock.usda@"
+    );
+    assert_eq!(
+        NamespaceError::Collision.display(&store).to_string(),
+        NamespaceError::Collision.to_string()
+    );
 }

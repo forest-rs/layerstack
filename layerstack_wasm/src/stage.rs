@@ -15,8 +15,8 @@ use alloc::{
 use layerstack::{
     ArcKind, ChangeCursor, Changes, CompositionLimits, Contribution, EditError, EditTarget,
     FlattenError, FlattenRequirements, IgnoreCause, InMemoryStore, Layer, LayerId, LayerMuteError,
-    NamespaceEdit, NamespaceError, OpinionRole, PathId, PropertyField, ResolvedValue, Specifier,
-    StageOptions, TargetPath, Time, Transaction, ValueSource, Variability,
+    LayerStore, NamespaceEdit, NamespaceError, OpinionRole, PathId, PropertyField, ResolvedValue,
+    Specifier, StageOptions, TargetPath, Time, Transaction, ValueSource, Variability,
     asset_dependencies::DependencyTarget,
 };
 use layerstack_io::{
@@ -905,7 +905,8 @@ impl Stage {
                 destination,
             )
         };
-        let edit = prepared.map_err(|error| namespace_error(&error, from))?;
+        let edit =
+            prepared.map_err(|error| namespace_error(&error, self.document.store(), from))?;
         self.commit_namespace(target, &edit, from)
     }
 
@@ -936,7 +937,8 @@ impl Stage {
                 object,
             )
         };
-        let edit = prepared.map_err(|error| namespace_error(&error, path))?;
+        let edit =
+            prepared.map_err(|error| namespace_error(&error, self.document.store(), path))?;
         self.commit_namespace(target, &edit, path)
     }
 
@@ -1808,8 +1810,10 @@ fn namespace_code(error: &NamespaceError) -> &'static str {
     }
 }
 
-fn namespace_error(error: &NamespaceError, path: &str) -> Error {
-    Error::new(namespace_code(error), error.to_string()).at_path(path)
+/// `error` as the bindings throw it, its layer and spec written with
+/// `store`.
+fn namespace_error(error: &NamespaceError, store: &dyn LayerStore, path: &str) -> Error {
+    Error::new(namespace_code(error), error.display(store).to_string()).at_path(path)
 }
 
 /// `path` is an absolute prim path: `/`, or `/` and names separated by
@@ -2405,6 +2409,22 @@ def "World" (
         assert_eq!(error.code, "namespace.not_found");
         let error = stage.move_object(root.0, "/Ball", "Orb").unwrap_err();
         assert_eq!(error.code, "path.invalid");
+    }
+
+    #[test]
+    fn rejected_edits_name_their_paths() {
+        let mut stage = resolved();
+        let root = stage.document().stage().stage().root_layer().unwrap();
+        let mut batch = EditBatch::new();
+        let slot = batch.value_numbers("double".into(), vec![1.0]);
+        batch.set_value("/Ball.bogus".into(), None, slot);
+        let error = stage.apply(root.0, &mut batch).unwrap_err();
+        assert_eq!(error.code, "edit.rejected.undeclared_type");
+        assert_eq!(
+            error.message,
+            "edit 0 rejected: /Ball.bogus declares no type; create it with a type first"
+        );
+        assert_eq!(error.path.as_deref(), Some("/Ball.bogus"));
     }
 
     /// A mesh whose attributes come from three layers: the root, its

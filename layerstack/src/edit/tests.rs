@@ -325,6 +325,11 @@ fn edits_write_through_targets_and_undo_exactly() {
             reason: Rejection::UndeclaredType(_)
         }
     ));
+    assert_eq!(
+        inverse.display(&store).to_string(),
+        "edit 0 rejected: /World/RockA.size declares no type; create it with a type first"
+    );
+    assert_eq!(inverse.code(), "edit.rejected.undeclared_type");
     assert_eq!(layers(&store), original, "nothing applied");
 
     let mut edit = Transaction::new();
@@ -3039,4 +3044,67 @@ fn edit_errors_have_stable_codes() {
         let rejected = EditError::Rejected { op: 0, reason };
         assert_eq!(rejected.code(), code);
     }
+}
+
+/// Every rejection that names a path, a name or a layer writes it as text
+/// with the store, never as an interner id.
+#[test]
+fn rejections_name_paths_and_tokens_with_the_store() {
+    let mut store = rocks();
+    let size = SpecPath::from_property_path(store.property_path("/World/RockA.size"));
+    let jagged = spec(&mut store, "/Rock{shape=jagged}.roughness");
+    let rock = store.path("/World/RockA");
+    let kind = store.tokens().intern("kind");
+    let bad_set = store.tokens().intern("not a set");
+    let cases = [
+        (
+            Rejection::UndeclaredType(size.clone()),
+            "/World/RockA.size declares no type; create it with a type first",
+        ),
+        (
+            Rejection::NoSuchSpec(jagged.clone()),
+            "no spec is at /Rock{shape=jagged}.roughness",
+        ),
+        (
+            Rejection::NotAnAttribute(size.clone()),
+            "/World/RockA.size is not an attribute",
+        ),
+        (
+            Rejection::Unmappable(TargetPath::Prim(rock)),
+            "the edit target does not map /World/RockA",
+        ),
+        (
+            Rejection::ReservedField(kind),
+            "`kind` has a dedicated member and edit, not a metadata edit",
+        ),
+        (
+            Rejection::InvalidVariantSetName(bad_set),
+            "`not a set` is not an identifier, so not a variant set name",
+        ),
+        (
+            Rejection::DuplicateRelocateSource(rock),
+            "two relocates move /World/RockA",
+        ),
+        (
+            Rejection::Diverged(jagged.clone()),
+            "the layer no longer matches the inverse at /Rock{shape=jagged}.roughness",
+        ),
+    ];
+    for (reason, text) in cases {
+        let code = reason.code();
+        let error = EditError::Rejected { op: 2, reason };
+        let shown = error.display(&store).to_string();
+        assert_eq!(shown, alloc::format!("edit 2 rejected: {text}"), "{code}");
+        assert!(!shown.contains("Id("), "{shown}");
+    }
+    let stale = EditError::StaleValue {
+        layer: ROCK,
+        path: jagged,
+        slot: Slot::Metadata(kind),
+    };
+    assert_eq!(
+        stale.display(&store).to_string(),
+        "the `kind` metadata of /Rock{shape=jagged}.roughness in layer 2 changed since the \
+         edit was prepared"
+    );
 }

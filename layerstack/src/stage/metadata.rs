@@ -4,7 +4,10 @@
 //! Stage metadata, including authored/fallback distinctions and guarded edits.
 //! AOUSD Core §7.6.1, §12.2.5, §12.2.7; OpenUSD `UsdStage` metadata API.
 use super::*;
-use crate::{Applied, EditError, LiveStage, Transaction};
+use crate::{
+    Applied, EditError, LiveStage, Transaction,
+    diagnostic::{Describe, Names, with_store},
+};
 
 /// Why a stage metadata edit was rejected. Rejection changes no authored state.
 #[derive(Clone, Debug, PartialEq)]
@@ -23,24 +26,40 @@ pub enum StageMetadataError {
     /// The underlying atomic transaction failed.
     Edit(EditError),
 }
-impl core::fmt::Display for StageMetadataError {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+impl StageMetadataError {
+    /// The error in words, its layer, names and a rejected edit's paths
+    /// written as text with `store`, the store the edit was applied to
+    /// ([`EditError::display`]). `Display` writes the same without a store,
+    /// with ids.
+    #[must_use]
+    pub fn display<'a>(&'a self, store: &'a dyn LayerStore) -> impl core::fmt::Display + 'a {
+        with_store(self, store)
+    }
+}
+impl Describe for StageMetadataError {
+    fn describe(&self, f: &mut core::fmt::Formatter<'_>, names: Names<'_>) -> core::fmt::Result {
         match self {
             Self::InvalidLayer(id) => write!(
                 f,
-                "layer {} is not the stage root or primary session layer",
-                id.0
+                "{} is not the stage root or primary session layer",
+                names.layer(*id)
             ),
             Self::InvalidKeyPath => {
                 f.write_str("dictionary key paths require nonempty colon-separated components")
             }
             Self::NotADictionary(key) => write!(
                 f,
-                "metadata {key:?} contains a non-dictionary value along the key path"
+                "metadata `{}` contains a non-dictionary value along the key path",
+                names.token(*key)
             ),
-            Self::Field(error) => error.fmt(f),
-            Self::Edit(error) => error.fmt(f),
+            Self::Field(error) => core::fmt::Display::fmt(error, f),
+            Self::Edit(error) => error.describe(f, names),
         }
+    }
+}
+impl core::fmt::Display for StageMetadataError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        self.describe(f, Names(None))
     }
 }
 impl core::error::Error for StageMetadataError {}
@@ -373,4 +392,40 @@ fn dictionary_set(
         return Err(StageMetadataError::NotADictionary(field));
     };
     dictionary_set(entries, &keys[1..], replacement, field)
+}
+
+#[cfg(test)]
+mod tests {
+    use alloc::string::ToString;
+
+    use super::*;
+    use crate::{InMemoryStore, SpecPath, edit::Rejection};
+
+    #[test]
+    fn errors_name_layers_tokens_and_paths_with_the_store() {
+        let mut store = InMemoryStore::default();
+        store.set_layer_identifier(LayerId(2), "./session.usda");
+        let key = store.tokens().intern("customLayerData");
+        let size = SpecPath::from_property_path(store.property_path("/World/Rock.size"));
+        let cases = [
+            (
+                StageMetadataError::InvalidLayer(LayerId(2)),
+                "@./session.usda@ is not the stage root or primary session layer",
+            ),
+            (
+                StageMetadataError::NotADictionary(key),
+                "metadata `customLayerData` contains a non-dictionary value along the key path",
+            ),
+            (
+                StageMetadataError::Edit(EditError::Rejected {
+                    op: 0,
+                    reason: Rejection::UndeclaredType(size),
+                }),
+                "edit 0 rejected: /World/Rock.size declares no type; create it with a type first",
+            ),
+        ];
+        for (error, text) in cases {
+            assert_eq!(error.display(&store).to_string(), text);
+        }
+    }
 }

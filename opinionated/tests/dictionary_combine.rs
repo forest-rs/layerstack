@@ -346,3 +346,65 @@ fn empty_report_chain_has_no_events() {
     assert!(report.value.is_empty());
     assert!(report.events.is_empty());
 }
+
+/// Values that compose: a negative number adds its magnitude to the weaker
+/// number.
+struct Appending;
+
+impl DictionaryAdapter<&'static str, Host> for Appending {
+    fn entries<'v>(&self, value: &'v Host) -> Option<&'v [(&'static str, Host)]> {
+        HostDictionaries.entries(value)
+    }
+
+    fn dictionary(&self, entries: Vec<(&'static str, Host)>) -> Host {
+        HostDictionaries.dictionary(entries)
+    }
+
+    fn compose(&self, stronger: &Host, weaker: &Host) -> Option<Host> {
+        match (stronger, weaker) {
+            (Host::Int(s), Host::Int(w)) if *s < 0 => Some(Host::Int(w - s)),
+            _ => None,
+        }
+    }
+}
+
+/// A value the adapter composes over a weaker one takes both, and the
+/// report names the weaker one as composed; one it does not compose wins.
+#[test]
+fn adapter_composes_values_at_one_key() {
+    let strong = vec![
+        ("a", int(-1)),
+        ("b", int(2)),
+        ("n", dict(&[("c", int(-3))])),
+    ];
+    let weak = vec![
+        ("a", int(10)),
+        ("b", int(20)),
+        ("n", dict(&[("c", int(30))])),
+    ];
+    assert_eq!(
+        combine_dictionary_chain(&Appending, [&strong, &weak]),
+        vec![
+            ("a", int(11)),
+            ("b", int(2)),
+            ("n", dict(&[("c", int(33))]))
+        ]
+    );
+    let report =
+        combine_dictionary_chain_report(&Appending, [(&strong, "strong"), (&weak, "weak")]);
+    assert_eq!(
+        report.events[3..],
+        [
+            DictionaryEvent::Composed {
+                provenance: "weak",
+                key_path: vec!["a"],
+            },
+            overridden("weak", &["b"]),
+            merged("weak", &["n"]),
+            DictionaryEvent::Composed {
+                provenance: "weak",
+                key_path: vec!["n", "c"],
+            },
+        ]
+    );
+}

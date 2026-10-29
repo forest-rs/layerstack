@@ -68,6 +68,18 @@ pub trait DictionaryAdapter<K, V> {
     /// Called only for values [`DictionaryAdapter::entries`] reported as
     /// dictionaries.
     fn dictionary(&self, entries: Vec<(K, V)>) -> V;
+
+    /// The value `stronger` composes to over `weaker`, two values at one
+    /// key of which at least one is not a dictionary, or `None` when the
+    /// stronger value replaces the weaker one as it is (the default).
+    ///
+    /// A host whose values edit weaker ones, as OpenUSD's list ops do
+    /// (`VtValueTryComposeOver`, which `VtDictionaryOverRecursive` applies
+    /// to the values at one key), composes them here.
+    fn compose(&self, stronger: &V, weaker: &V) -> Option<V> {
+        let _ = (stronger, weaker);
+        None
+    }
 }
 
 /// The shallow overlay policy: values are opaque and never merged.
@@ -93,7 +105,8 @@ impl<K, V> DictionaryAdapter<K, V> for ShallowOverlay {
 ///
 /// Keys from either side are kept; for a key on both sides the stronger value
 /// wins unless `adapter` reports both values as dictionaries, which then
-/// combine recursively. The result is ordered by key at every nesting level.
+/// combine recursively, or composes them ([`DictionaryAdapter::compose`]).
+/// The result is ordered by key at every nesting level.
 #[must_use]
 pub fn combine_dictionaries<K, V, A>(
     adapter: &A,
@@ -114,9 +127,9 @@ where
 ///
 /// Every key from every dictionary is kept. When two dictionaries have the
 /// same key, the stronger value wins, unless both values are themselves
-/// dictionaries, in which case they are combined the same way. `adapter`
-/// says which of your values are dictionaries; see [`DictionaryAdapter`] for
-/// an example. This is AOUSD Core §6.6.2.1 and OpenUSD's
+/// dictionaries, in which case they are combined the same way, or `adapter`
+/// composes them ([`DictionaryAdapter::compose`]). `adapter` says which of
+/// your values are dictionaries; see [`DictionaryAdapter`] for an example. This is AOUSD Core §6.6.2.1 and OpenUSD's
 /// `VtDictionaryOverRecursive`.
 ///
 /// To combine over a default, pass it as the last, weakest dictionary. An
@@ -186,6 +199,14 @@ pub enum DictionaryEvent<K, P> {
         /// Keys from the root to the merged dictionary.
         key_path: Vec<K>,
     },
+    /// The dictionary's value at `key_path` composed under a stronger one
+    /// ([`DictionaryAdapter::compose`]).
+    Composed {
+        /// Provenance for the dictionary whose value composed.
+        provenance: P,
+        /// Keys from the root to the composed entry.
+        key_path: Vec<K>,
+    },
     /// A stronger value at `key_path` won over this dictionary's value.
     Overridden {
         /// Provenance for the overridden dictionary.
@@ -203,6 +224,7 @@ impl<K, P> DictionaryEvent<K, P> {
         match self {
             Self::Supplied { provenance, .. }
             | Self::Merged { provenance, .. }
+            | Self::Composed { provenance, .. }
             | Self::Overridden { provenance, .. } => provenance,
         }
     }
@@ -265,6 +287,9 @@ trait Trace<K> {
     fn enter(&mut self, key: &K);
     /// Ends the nested events of the last [`Trace::enter`].
     fn leave(&mut self);
+    /// The current dictionary's value at `key` composed under a stronger
+    /// one.
+    fn composed(&mut self, key: &K);
     /// A stronger value at `key` overrode the current dictionary's.
     fn overridden(&mut self, key: &K);
 }
@@ -282,6 +307,8 @@ impl<K> Trace<K> for NoTrace {
     fn enter(&mut self, _: &K) {}
     #[inline(always)]
     fn leave(&mut self) {}
+    #[inline(always)]
+    fn composed(&mut self, _: &K) {}
     #[inline(always)]
     fn overridden(&mut self, _: &K) {}
 }
@@ -329,6 +356,13 @@ impl<K: Clone, P: Clone> Trace<K> for Recorder<K, P> {
 
     fn leave(&mut self) {
         self.path.pop();
+    }
+
+    fn composed(&mut self, key: &K) {
+        self.record(key, |provenance, key_path| DictionaryEvent::Composed {
+            provenance,
+            key_path,
+        });
     }
 
     fn overridden(&mut self, key: &K) {
@@ -485,6 +519,9 @@ fn combine_into<K, V, A, T>(
                     combine_into(adapter, &mut merged, weak_entries, trace);
                     trace.leave();
                     *strong_value = adapter.dictionary(merged.into_iter().collect());
+                } else if let Some(composed) = adapter.compose(strong_value, weak_value) {
+                    trace.composed(key);
+                    *strong_value = composed;
                 } else {
                     // Otherwise the stronger value wins as-is.
                     trace.overridden(key);

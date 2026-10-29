@@ -113,6 +113,7 @@ mod motion;
 mod namespace_coordinated;
 mod namespace_deletes;
 mod namespace_edits;
+mod namespace_orders;
 mod namespace_preparation;
 mod nested_arc_depth;
 mod numeric_ingestion_bounds;

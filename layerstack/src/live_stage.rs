@@ -5321,6 +5321,113 @@ mod tests {
         }
     }
 
+    /// Renaming and reparenting a child its parent's `primOrder` lists
+    /// leaves the order as it is, as `UsdNamespaceEditor` does: the moved
+    /// child's old name stays listed and its new one is not, so renaming it
+    /// back, or moving it home, restores the original child order. Each
+    /// edit resyncs the moved prim alone, reports each parent whose child
+    /// list changed, and composes what a fresh composition does.
+    ///
+    /// Spec: AOUSD Core §7.6.2.4.5 (`primOrder`), §11.3.1 (child order).
+    /// OpenUSD: `UsdNamespaceEditor`, which applies `SdfLayer::Apply`
+    /// (`Sdf_ChildrenUtils::MoveChildForBatchNamespaceEdit`).
+    #[test]
+    fn namespace_edits_keep_the_parent_prim_order() {
+        use crate::{EditTarget, NamespaceEdit, TargetPath};
+        let mut store = InMemoryStore::default();
+        let [a, b, c, world_name, other_name] =
+            ["A", "B", "C", "World", "Other"].map(|name| store.tokens.intern(name));
+        let world = p(&mut store, "/World");
+        let mut layer = Layer::new(LayerId(1));
+        let root = p(&mut store, "/");
+        layer.insert_prim(
+            root,
+            PrimSpec::default().with_children(vec![world_name, other_name]),
+        );
+        let parent = PrimSpec::def()
+            .with_children(vec![a, b, c])
+            .with_prim_order(vec![c, a]);
+        layer.insert_prim(world, parent);
+        for name in ["/World/A", "/World/B", "/World/C", "/Other"] {
+            let path = p(&mut store, name);
+            layer.insert_prim(path, PrimSpec::def());
+        }
+        store.insert_layer(layer);
+        let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+        let children =
+            |live: &LiveStage, store: &InMemoryStore, prim: PathId| -> Vec<alloc::string::String> {
+                live.stage()
+                    .children_of(prim)
+                    .unwrap_or_default()
+                    .iter()
+                    .map(|child| store.paths.display(*child, &store.tokens))
+                    .collect()
+            };
+        assert_eq!(
+            children(&live, &store, world),
+            ["/World/C", "/World/A", "/World/B"]
+        );
+        let target = EditTarget::for_layer(LayerId(1));
+        let moves = [
+            (
+                "/World/A",
+                "/World/Z",
+                (3, 3, false),
+                ["/World/A", "/World/Z"],
+                &["/World"][..],
+            ),
+            (
+                "/World/Z",
+                "/World/A",
+                (3, 3, false),
+                ["/World/A", "/World/Z"],
+                &["/World"],
+            ),
+            (
+                "/World/C",
+                "/Other/C",
+                (4, 4, false),
+                ["/Other/C", "/World/C"],
+                &["/Other", "/World"],
+            ),
+            (
+                "/Other/C",
+                "/World/C",
+                (4, 4, false),
+                ["/Other/C", "/World/C"],
+                &["/Other", "/World"],
+            ),
+        ];
+        let mut orders = Vec::new();
+        for (from, to, work, resynced, info) in moves {
+            let (from, to) = (p(&mut store, from), p(&mut store, to));
+            let edit = NamespaceEdit::prepare(
+                live.stage(),
+                &mut store,
+                &target,
+                TargetPath::Prim(from),
+                TargetPath::Prim(to),
+            )
+            .unwrap();
+            let txn = edit.transaction().clone();
+            apply_root_edit(&mut live, &mut store, &txn, work, &resynced, info);
+            assert_eq!(
+                store.layers[&LayerId(1)].prims[&world].prim_order(),
+                Some(&[c, a][..])
+            );
+            orders.push(children(&live, &store, world));
+        }
+        assert_eq!(
+            orders,
+            [
+                vec!["/World/Z", "/World/B", "/World/C"],
+                vec!["/World/C", "/World/A", "/World/B"],
+                vec!["/World/A", "/World/B"],
+                vec!["/World/C", "/World/A", "/World/B"],
+            ]
+        );
+    }
+
     /// On a stage whose arcs keep it off the local path, creating and
     /// removing prims, root prims among them, reports each parent whose
     /// child list gained or lost the prim as changed info, as the local

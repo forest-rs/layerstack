@@ -416,8 +416,9 @@ impl NamespaceEdit {
     /// ([`NamespaceError::Unmappable`]), which `UsdNamespaceEditor` refuses.
     /// Dependent mappings currently require direct, non-implied arcs from
     /// their local stack (or authored in the local variants their prim
-    /// selects) and a destination within that arc's source domain; nested
-    /// arcs or a reparent leaving that domain return an error. Preparation composes the edited layers to verify the
+    /// selects, whose specs then move inside those variants) and a
+    /// destination within that arc's source domain; nested arcs or a
+    /// reparent leaving that domain return an error. Preparation composes the edited layers to verify the
     /// proposed namespace before returning: where every snapshot is a live
     /// stage's and current, only the prims the edit can change, unless
     /// relocates, layer metadata, instances, dynamic payloads or value clips
@@ -954,7 +955,7 @@ fn moves_with(
             .all(|site| source.is_prefix_of(store.paths().resolve(site.host_path)))
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub(super) struct PathMove {
     from: TargetPath,
     to: TargetPath,
@@ -1167,8 +1168,14 @@ impl Dormant {
     fn contains(&self, path: PathId, sites: &[VariantSelectionSite]) -> bool {
         !self.0.is_empty() && self.0.contains(&(path, sites.to_vec()))
     }
-    /// The specs after `mapping` moves those it carries ([`move_specs`]).
-    pub(super) fn after(self, store: &mut dyn LayerStore, mapping: &PathMove) -> Self {
+    /// The specs after `mapping` moves those it carries inside the
+    /// branches `within` ([`move_specs`]).
+    pub(super) fn after(
+        self,
+        store: &mut dyn LayerStore,
+        mapping: &PathMove,
+        within: &[VariantSelectionSite],
+    ) -> Self {
         if self.0.is_empty() || mapping.from.property_path().is_some() {
             return self;
         }
@@ -1176,7 +1183,9 @@ impl Dormant {
         let mut out = Self::default();
         for (path, mut sites) in self.0 {
             let carried = from.is_prefix_of(store.paths().resolve(path))
-                && sites
+                && sites.len() >= within.len()
+                && sites[..within.len()] == *within
+                && sites[within.len()..]
                     .iter()
                     .all(|site| from.is_prefix_of(store.paths().resolve(site.host_path)));
             if !carried {

@@ -179,7 +179,7 @@ export class Layerstack {
       this.#module.Stage.open(root.identifier, root.bytes, recover, session, nodes, perIndex, depth, provenance),
     );
     this.#bytesIn += root.bytes.byteLength;
-    return new Stage(this, native);
+    return new Stage(this, native, provenance);
   }
 
   /** @internal A new native batch of edits. */
@@ -305,18 +305,25 @@ export class Stage implements Disposable {
   readonly #layers = new Map<bigint, Layer>();
   #root: Layer | null = null;
   #editLayer: Layer | null | undefined = undefined;
+  readonly #provenance: boolean;
   readonly #listeners: ChangeListener[] = [];
   #dispatching = false;
 
   /** @internal Use {@link Layerstack.open}. */
-  constructor(layerstack: Layerstack, native: NativeStage) {
+  constructor(layerstack: Layerstack, native: NativeStage, provenance: boolean) {
     this.#ls = layerstack;
     this.#native = native;
+    this.#provenance = provenance;
   }
 
   /** The instance that opened this stage. */
   get layerstack(): Layerstack {
     return this.#ls;
+  }
+
+  /** Whether the stage was opened with {@link OpenOptions.provenance}: whether its native resolved values name their sources. */
+  get provenance(): boolean {
+    return this.#provenance;
   }
 
   /** Whether the stage was disposed. */
@@ -782,6 +789,21 @@ export class Stage implements Disposable {
    * transaction: edits it committed before failing remain committed. A
    * callback failure remains the primary error if draining changes also fails.
    * Native traps poison the module as they do for ordinary stage calls.
+   *
+   * Native edits are heard once the live stage recomposes them: at once for
+   * a transaction (`StageDocument::apply`) or a load, and for a queued control
+   * (layer muting) or a direct store edit only after `StageDocument::synchronize`,
+   * which the extension calls before returning. Their layers become dirty
+   * ({@link Stage.isDirty}, {@link Stage.save}). They make no
+   * {@link EditReceipt}: undo covers only what {@link Stage.apply},
+   * {@link Stage.move} and {@link Stage.delete} did. A receipt whose inverse
+   * covers a spec a native edit changed since (a value both set, or a prim
+   * the receipt defined that native code then gave a child) fails with
+   * `edit.stale` and changes nothing; it undoes once native code puts the
+   * spec back as the receipt left it (removes that child, restores that
+   * value). Content derived natively therefore belongs in a layer the user's
+   * edits do not target, such as the session layer while they target the
+   * root (`layerstack_wasm::Stage::document_mut`).
    */
   withNative<T>(operation: string, f: (native: NativeStage) => T): T {
     if (typeof operation !== "string" || operation.length === 0 || typeof f !== "function") {

@@ -47,21 +47,29 @@ await stage.resolve(source);
   `layerstack_wasm`; its type is in `@forest-rs/layerstack/native`) to use
   that module.
 - **Native extensions share the stage.** A module linking `layerstack_wasm`
-  can export domain functions taking `&layerstack_wasm::Stage`. Call one with
+  can export functions taking `&layerstack_wasm::Stage`, which reach the
+  document through `Stage::document` and `Stage::document_mut`. Call one with
   `stage.withNative("domain.inspect", native => module.inspect(native))`.
-  The callback borrows the actual stage synchronously; it must not retain,
-  free or consume it. Native changes reach `onChange` listeners in the ordinary
-  synchronous order, including when the callback throws after committing an
-  edit; a listener's edits are dispatched after the current change batch.
-  Dispatch can call the module again, so return owned data or a handle rather
-  than a borrowed view into Wasm memory.
-  This is not a transaction or an async lease: committed edits remain, and
-  rejecting a returned promise cannot stop an async continuation already
-  started by the callback. Disposed-stage and native-error diagnostics retain
-  the supplied operation name.
-  Open with `{ provenance: true }` when an extension needs the winning source
-  layer, spec path and field in native resolved values. This evidence is off
-  by default; ordinary `attribute.explain()` queries work either way.
+  The callback borrows the stage synchronously; it must not retain, free or
+  consume it, and must not return a promise. A native error it throws is a
+  `LayerstackError` named for the given operation.
+  Native changes reach `onChange` listeners before `withNative` returns,
+  including when the callback throws after committing an edit; a listener's
+  edits are dispatched after the current change batch. A transaction is heard
+  at once; a queued control such as layer muting, or a direct store edit, once
+  the extension calls `StageDocument::synchronize`. Dispatch can call the
+  module again, so return owned data or a handle rather than a borrowed view
+  into Wasm memory.
+  It is not a transaction: committed edits remain. Native edits make no
+  receipt, and a receipt whose inverse covers a spec they changed since fails
+  to undo with `edit.stale`, changing nothing, so keep natively derived
+  content in a layer the user's edits do not target (the session layer while
+  they target the root).
+  Open with `{ provenance: true }` (read back as `stage.provenance`) when an
+  extension needs the winning source layer, spec path and field in native
+  resolved values. It is off by default, costs no measurable time or memory,
+  and changes none of this package's reads; `attribute.explain()` works
+  either way.
 - **Opening is synchronous and complete.** `open` composes the root layer
   alone. Every dependency it cannot read yet is *unavailable*: it may still
   arrive. One confirmed absent, or whose read failed, is *unresolved*: its

@@ -48,7 +48,8 @@
 //! The TypeScript `Stage` lends its native stage to them for the length of
 //! one synchronous call (`Stage.withNative`) and keeps owning it; an
 //! [`Error`] such an export returns is thrown as a `LayerstackError` with
-//! its code:
+//! its code, and a [`layerstack::LayerId`] it returns names a layer the
+//! TypeScript `Stage.layer(id)` gives back:
 //!
 //! ```
 //! use layerstack::Time;
@@ -71,7 +72,8 @@
 //! ```
 //!
 //! From TypeScript, `stage.withNative("winningLayer", (native) =>
-//! module.winningLayer(native, "/World/Rock.size"))` calls it.
+//! module.winningLayer(native, "/World/Rock.size"))` calls it, and
+//! `stage.layer(id)` is the `Layer` of the id it returns.
 //!
 //! The bindings are single-threaded: opening and composition run on the
 //! calling thread (`StageOptions::threads` is 0).

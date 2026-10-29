@@ -13,6 +13,7 @@ use crate::{
     ArcKind, HashMap, HashSet, LayerStackIdentifier, NodeId, Relocate, prim_indexing::ChildIndex,
     stage::preparation::PreparationIndex,
 };
+use core::cell::RefCell;
 
 pub(super) fn prepare(
     primary: &Stage,
@@ -1542,19 +1543,28 @@ impl ProjectionScope<'_> {
         // The prim at `site` in the stage's layer stack when `local`, and
         // the namespace at `site` beneath the prims with a node at or
         // above it in the layer stack of `layer`.
+        // The prims with a node at each site read in each layer's stack,
+        // found once per site: the slots of one edit share ancestors, and
+        // the root prims of many assets share a site path.
+        let readers: RefCell<HashMap<(PathId, LayerId), Vec<PathId>>> = RefCell::default();
         let depending = |roots: &mut Vec<PathId>, site: PathId, layer: LayerId, local: bool| {
             if local {
                 roots.push(site);
             }
             let path = store.paths().resolve(site).clone();
+            let mut readers = readers.borrow_mut();
             for above in retained::at_or_above(store, site) {
                 let suffix = path
                     .strip_prefix(store.paths().resolve(above))
                     .expect("ancestor");
-                for prim in index.prims_with_nodes_at(above) {
-                    if reads(prim, layer, &|at| at == above) {
-                        roots.push(store.paths().intern_joined(prim, suffix));
-                    }
+                let prims = readers.entry((above, layer)).or_insert_with(|| {
+                    index
+                        .prims_with_nodes_at(above)
+                        .filter(|prim| reads(*prim, layer, &|at| at == above))
+                        .collect()
+                });
+                for &prim in prims.iter() {
+                    roots.push(store.paths().intern_joined(prim, suffix));
                 }
             }
         };

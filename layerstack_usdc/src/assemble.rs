@@ -2868,30 +2868,26 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
     }
 
     /// The target path table entry `index` names when it lies below a
-    /// property: a relational attribute (`/A.b[/C].d`) or a mapper
-    /// (`/A.b.mapper[/C]`, `/A.b[/C].d.mapper[/E]`), kept as the USDA
-    /// reader keeps them, a property target of the prim whose property
-    /// token is the whole property part (`b[/C].d`). The other kinds below
-    /// a property (a target path `/A.b[/C]`, a relational attribute's
-    /// target, a mapper argument), which OpenUSD's text parser refuses as
-    /// targets and connections, and any of a prim in a variant branch, are
-    /// `None`. OpenUSD stores each element below the property as its own
-    /// token (`[/C]`, `.d`, `.mapper[/C]`; `CrateFile::_AddPath`,
+    /// property: a relational attribute (`/A.b[/C].d`), a mapper
+    /// (`/A.b.mapper[/C]`, `/A.b[/C].d.mapper[/E]`), or any other path
+    /// below a property (a target path `/A.b[/C]`, a relational attribute's
+    /// target `/A.b[/C].d[/E]`, a mapper argument `/A.b.mapper[/C].arg`,
+    /// an expression `/A.b.expression`), kept as the USDA reader keeps a
+    /// relational attribute, a property target of the prim whose property
+    /// token is the whole property part (`b[/C].d`). OpenUSD's text parser
+    /// refuses all but the first two as targets and the first as a
+    /// connection, but its crate holds and reads any of them, and its text
+    /// writer writes them, so they are kept; one of a prim in a variant
+    /// branch is `None`. OpenUSD stores each element below the property as
+    /// its own token (`[/C]`, `.d`, `.mapper[/C]`; `CrateFile::_AddPath`,
     /// `pxr/usd/sdf/crateFile.cpp`).
     ///
     /// Spec: AOUSD Core §8 (paths), §7.6.4 (relationship targets).
     fn relational_target_at(&mut self, index: u32) -> Option<TargetPath> {
-        #[derive(Clone, Copy, PartialEq, Eq)]
-        enum Kind {
-            Target,
-            Mapper,
-            RelationalAttribute,
-        }
-        use Kind::{Mapper, RelationalAttribute, Target};
         let sections = self.sections;
         let nodes = sections.paths.nodes();
-        // The elements below the property, the last first, and the prim.
-        let mut kinds = Vec::new();
+        // Walk up the elements below the property, each a bracketed path
+        // (`[/C]`) or a dotted element (`.d`, `.mapper[/C]`), to its prim.
         let mut at = index;
         let owner = loop {
             match *nodes.get(at as usize)? {
@@ -2906,26 +2902,14 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
                     property: false,
                 } => {
                     let element = sections.tokens.get(token as usize)?;
-                    kinds.push(if element.starts_with('[') {
-                        Target
-                    } else if element.starts_with(".mapper[") {
-                        Mapper
-                    } else if element.starts_with('.') {
-                        RelationalAttribute
-                    } else {
+                    if !element.starts_with(['[', '.']) {
                         return None;
-                    });
+                    }
                     at = parent;
                 }
                 PathNode::Root | PathNode::Unused => return None,
             }
         };
-        if !matches!(
-            kinds.as_slice(),
-            [RelationalAttribute, Target] | [Mapper] | [Mapper, RelationalAttribute, Target]
-        ) {
-            return None;
-        }
         if sections
             .paths
             .spelling(owner as usize)

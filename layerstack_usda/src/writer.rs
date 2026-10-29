@@ -1674,26 +1674,28 @@ fn is_property_name(name: &str) -> bool {
 /// connections use (§16.2.9; §16.2.16.9 excludes variant selections from
 /// targets). A connection may name a prim as a relationship may, as
 /// OpenUSD reads and writes it (`SdfSchema::IsValidAttributeConnectionPath`).
-/// A relational attribute (`/A.b[/C].d`) or a mapper (`/A.b.mapper[/C]`)
-/// may be either, each absolute, though a bracketed path may be relative
-/// as OpenUSD keeps one that `SdfPath::MakeAbsolutePath` leaves
+/// A path below a property (a relational attribute `/A.b[/C].d`, a mapper
+/// `/A.b.mapper[/C]`, a target path `/A.b[/C]`, a mapper argument or an
+/// expression) may be either, absolute, though a bracketed path may be
+/// relative as OpenUSD keeps one that `SdfPath::MakeAbsolutePath` leaves
 /// (`</A.b[C].d.mapper[/A/E]>`). Relative paths and variant selections in
 /// the prim part are not produced by this writer.
 ///
-/// A mapper connection is written although no text parser reads one back:
-/// OpenUSD's parser and its authoring refuse it
-/// (`IsValidAttributeConnectionPath` admits prim and property paths only),
-/// but a crate file holds one as any other path, and OpenUSD's text
-/// writer writes what it reads from there as it is (`Sdf_WriteConnectionList`,
-/// `pxr/usd/sdf/fileIO_Common.h`).
+/// Only a relational attribute and, as a target, a mapper read back:
+/// OpenUSD's parser and its authoring refuse the others
+/// (`SdfSchemaBase::IsValidRelationshipTargetPath` and
+/// `IsValidAttributeConnectionPath`, `pxr/usd/sdf/schema.cpp`). A crate
+/// file holds any of them as any other path, though, and OpenUSD's text
+/// writer writes what it reads from there as it is
+/// (`Sdf_WriteConnectionList`, `pxr/usd/sdf/fileIO_Common.h`), so this
+/// writer writes them too.
 fn validate_target(target: &str, path: &str) -> Result<(), WriteError> {
     let invalid = || WriteError::InvalidTargetPath {
         path: path.into(),
         target: target.into(),
     };
-    // A relational attribute (`/A.b[/C].d`) or a mapper (`/A.b.mapper[/C]`),
-    // as `SdfSchema::IsValidRelationshipTargetPath` admits them
-    // (`pxr/usd/sdf/schema.cpp`): absolute, though not every bracketed path.
+    // A path below a property: absolute, of the path grammar, and with no
+    // variant selection in its prim part.
     if target.contains('[') || target.matches('.').nth(1).is_some() {
         if !crate::lower::is_path_text(target)
             || !target.starts_with('/')
@@ -1701,22 +1703,13 @@ fn validate_target(target: &str, path: &str) -> Result<(), WriteError> {
         {
             return Err(invalid());
         }
-        let Some((prim, _, ends)) = crate::lower::split_property_tail(target) else {
+        let Some((prim, _, _)) = crate::lower::split_property_tail(target) else {
             return Err(invalid());
-        };
-        let allowed = match ends {
-            crate::lower::PropertyTail::RelationalAttribute
-            | crate::lower::PropertyTail::Mapper => true,
-            crate::lower::PropertyTail::Other => false,
         };
         let prim_ok = prim
             .strip_prefix('/')
             .is_some_and(|rest| rest.split('/').all(is_identifier));
-        return if allowed && prim_ok {
-            Ok(())
-        } else {
-            Err(invalid())
-        };
+        return if prim_ok { Ok(()) } else { Err(invalid()) };
     }
     let (prim, prop) = match target.split_once('.') {
         Some((prim, prop)) => (prim, Some(prop)),

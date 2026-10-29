@@ -1022,14 +1022,17 @@ impl PathMove {
     /// prefix (`SdfPath::HasPrefix`, which never looks inside brackets), and
     /// then by `SdfPath::ReplacePrefix`, which fixes the paths in a
     /// relational attribute's or mapper's brackets too (`fixTargetPaths`).
+    /// A copy ([`PathFix::Copy`]) replaces the prefix without the test, as
+    /// `SdfShouldCopyValue` does, so it fixes a bracket of any path.
     /// AOUSD Core §8 (paths).
     fn target(&self, store: &mut dyn LayerStore, path: TargetPath) -> TargetPath {
         if let TargetPath::Property(property) = path
-            && self.fix == PathFix::NamespaceEdit
             && is_relational(store.tokens(), property.property())
         {
             let (tokens, paths) = (store.tokens(), store.paths());
-            if !relational_has_prefix(tokens, paths, property, self.from) {
+            if self.fix == PathFix::NamespaceEdit
+                && !relational_has_prefix(tokens, paths, property, self.from)
+            {
                 return path;
             }
             let replaced =

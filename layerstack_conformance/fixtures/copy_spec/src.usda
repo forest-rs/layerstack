@@ -9,6 +9,7 @@ def "A" (
     prepend variantSets = "v"
 )
 {
+    rel brackets = [</A.look[/A/Child].d>, </Outside.b[/A/Child].d>, </Outside.b[/Outside].d>, </A.y.mapper[/A/Child.w]>]
     rel look = [</A/Child>, </Outside>, </A.y>]
     double y = 1
     double z

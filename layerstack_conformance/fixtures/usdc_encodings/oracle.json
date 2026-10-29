@@ -16,6 +16,26 @@
     "text": "#usda 1.0\n\ndef \"P\"\n{\n    def \"Q\"\n    {\n        rel a = </P/Q/C.b[/P/Q/E].d>\n        rel c = </P/Q/C.b[/P/Q/C/D.e[/P/Q/C/D/F].g].h>\n        rel e = </P/S.b[/P/S/T].d>\n        rel f = </P/Q/C.b[/Abs].d.mapper[/P/Q/C/M]>\n        rel g = </P/Q/C.b[/Abs.e[/Abs/F].g].h>\n        float h.connect = </P/Q/C.b[/P/Q/E].d>\n    }\n}\n\n"
    }
   },
+  "display_unit": {
+   "export_usdc": {
+    "accepted": false,
+    "errors": [
+     "Attempted to pack unsupported type 'TfEnum' (SdfLengthUnit::SdfLengthUnitMillimeter)",
+     "Attempted to pack unsupported type 'TfEnum' (SdfAngularUnit::SdfAngularUnitDegrees)"
+    ]
+   },
+   "open_usda": {
+    "accepted": true,
+    "errors": []
+   },
+   "open_usdc": {
+    "accepted": false,
+    "errors": [
+     "Attempted to unpack unsupported type enum value 0",
+     "Attempted to unpack unsupported type enum value 0"
+    ]
+   }
+  },
   "mapper_connections": {
    "export_usdc": {
     "accepted": true,

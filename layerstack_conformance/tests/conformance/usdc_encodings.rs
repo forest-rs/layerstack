@@ -247,3 +247,30 @@ fn mapper_connections_read_and_save_as_openusd() {
 fn unregistered_typed_list_ops_read_and_save_as_openusd() {
     assert_reads_as_openusd("unregistered_typed_list_ops");
 }
+
+/// An attribute's `displayUnit` is a `TfEnum` in OpenUSD, which its crate
+/// writer packs as an invalid value and then fails to read; the save
+/// refuses it.
+#[test]
+fn display_units_are_refused_as_openusd_cannot_read_them() {
+    let record = oracle("display_unit");
+    let export = &record["export_usdc"];
+    assert_eq!(export["accepted"], Json::Bool(false), "{export}");
+    let errors = export["errors"].as_array().unwrap();
+    assert!(
+        errors
+            .iter()
+            .all(|e| e.as_str().unwrap().contains("unsupported type 'TfEnum'")),
+        "{errors:?}"
+    );
+    assert_eq!(record["open_usdc"]["accepted"], Json::Bool(false));
+    assert!(
+        matches!(
+            save("display_unit"),
+            Err(UsdcWriteError::UnencodedField { ref path, ref key })
+                if path == "/P.a" && key == "displayUnit"
+        ),
+        "{:?}",
+        save("display_unit")
+    );
+}

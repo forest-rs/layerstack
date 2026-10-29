@@ -53,6 +53,11 @@ the same text as the source layer (`same_text`) and that text.
   (`GetParentPath`: `Z`, `.`, `..`, `../..`, ...), which never reach the
   absolute root, until the stack overflows. The export runs in a child
   process, and the oracle records that it was killed (`crashed`).
+- `display_unit`: an attribute's `displayUnit`, which the text parser
+  holds as a `TfEnum` of its unit (`SdfGetUnitFromName`,
+  `pxr/usd/sdf/types.cpp`). The crate has no type for a `TfEnum` either:
+  `CrateFile::_PackValue` posts "Attempted to pack unsupported type
+  'TfEnum'", and the read refuses the invalid value it writes.
 
 Two cases have no USDA source, since the text parser cannot make them:
 each is a layer `Sdf.CopySpec` copies from a USDA source, replacing
@@ -165,6 +170,18 @@ def "P"
         rel b = <.b[C].d.mapper[E]>
         rel d = </X/Y.b[Z].d>
     }
+}
+""",
+    "display_unit": """#usda 1.0
+
+def "P"
+{
+    double a (
+        displayUnit = mm
+    )
+    float b (
+        displayUnit = deg
+    )
 }
 """,
 }

@@ -241,10 +241,27 @@ fn prepare_with(
     let mut dormant: HashMap<LayerId, Dormant> = HashMap::new();
     for id in &inspected {
         let original = store.layer(*id).ok_or(NamespaceError::NoSuchObject)?;
+        let local = stages.iter().any(|stage| stage.layer_stack().contains(id));
         let mut layer = match (indexes.first(), links.get(id)) {
             (Some(index), Some(slots)) => {
-                let gone = local_deletes.get(id).map_or(&[][..], Vec::as_slice);
-                let slots = working_slots(store, index, original, slots, local_moves.get(id), gone);
+                let slots = if local {
+                    let gone = local_deletes.get(id).map_or(&[][..], Vec::as_slice);
+                    working_slots(store, index, original, slots, local_moves.get(id), gone)
+                } else {
+                    // Outside every layer stack the edit repairs only the
+                    // arcs into the edited layers: a layer authoring none
+                    // is left as it is, uncopied.
+                    let mut slots: Vec<PathId> = slots
+                        .iter()
+                        .copied()
+                        .filter(|path| retained::arcs_into(store, original, *path, root_layers))
+                        .collect();
+                    if slots.is_empty() {
+                        continue;
+                    }
+                    sort::sort_unstable(&mut slots);
+                    slots
+                };
                 let copy = retained::working_copy(original, &slots);
                 copied.insert(*id, slots);
                 copy
@@ -252,7 +269,7 @@ fn prepare_with(
             _ => original.clone(),
         };
         let mut unused = dormant_variants(store, &stages, indexes, root_layers, &layer);
-        if stages.iter().any(|stage| stage.layer_stack().contains(id)) {
+        if local {
             repair_path_defaults(
                 store,
                 &stages,
@@ -297,7 +314,9 @@ fn prepare_with(
         update_existing_relocates(store, &mut edited, &local_moves)?;
     }
     for id in &inspected {
-        let layer = edited.get_mut(id).unwrap();
+        let Some(layer) = edited.get_mut(id) else {
+            continue;
+        };
         let unused = &dormant[id];
         let moves = local_moves.get(id).map_or(&[][..], Vec::as_slice);
         // A layer used by multiple stages cannot have two meanings for a path.
@@ -395,8 +414,10 @@ fn prepare_with(
     let mut relocates = Vec::new();
     for id in inspected {
         let original = store.layer(id).unwrap();
-        let layer = &edited[&id];
         transaction.expect_generation(id, original.generation());
+        let Some(layer) = edited.get(&id) else {
+            continue;
+        };
         let previous = transaction.len();
         match delta.get(&id) {
             Some(paths) => {

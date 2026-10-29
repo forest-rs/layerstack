@@ -9,7 +9,10 @@
 //! or an arc. Every other spec is left as it is, so preparation edits a
 //! working copy of each layer holding only those slots: the move and
 //! repair steps visit every spec of the copy, as they would of the whole
-//! layer, and the transaction lists the slots whose content changed.
+//! layer, and the transaction lists the slots whose content changed. A
+//! layer outside every stage's layer stack has only its arcs into the
+//! edited layers repaired ([`arcs_into`]), so its copy holds only the
+//! slots authoring those, and a layer authoring none is not copied.
 //!
 //! Spec: AOUSD Core §8 (namespace), §10 (composition arcs).
 
@@ -48,8 +51,9 @@ pub(super) fn reachable_layers(
     let mut found = Vec::new();
     let mut pending = alloc::vec![root];
     pending.extend(index.stack_layers());
+    let mut seen = HashSet::new();
     while let Some(id) = pending.pop() {
-        if found.contains(&id) {
+        if !seen.insert(id) {
             continue;
         }
         let Some(layer) = store.layer(id) else {
@@ -73,6 +77,51 @@ pub(super) fn reachable_layers(
     }
     sort::sort_unstable(&mut found);
     found
+}
+
+/// Whether a spec of `layer` at the prim path `path`, outside variant
+/// branches or in one, has a reference or payload targeting one of
+/// `edited`, or an asset expression.
+///
+/// In a layer outside every stage's layer stack these are the only specs
+/// a namespace edit repairs ([`repair_prim`] with no local move retargets
+/// the arcs into the edited layers and rejects asset expressions), so the
+/// edit copies and visits only them. OpenUSD likewise edits a dependent
+/// layer only at the arcs `PcpGatherDependentNamespaceEdits` finds
+/// targeting the edited site. AOUSD Core §10.3.2.2 (references), §10.3.2.3
+/// (payloads).
+pub(super) fn arcs_into(
+    store: &dyn LayerStore,
+    layer: &Layer,
+    path: PathId,
+    edited: &[LayerId],
+) -> bool {
+    fn repairable(store: &dyn LayerStore, refs: &ListOp<Reference>, edited: &[LayerId]) -> bool {
+        refs.items().any(|r| {
+            r.is_expression()
+                || r.stored_target_layer(store)
+                    .is_some_and(|target| edited.contains(&target))
+        })
+    }
+    fn in_variants(store: &dyn LayerStore, sets: &VariantSets, edited: &[LayerId]) -> bool {
+        sets.values()
+            .flat_map(|set| set.variants.values())
+            .any(|v| {
+                repairable(store, &v.references, edited)
+                    || repairable(store, &v.payloads, edited)
+                    || in_variants(store, &v.variant_sets, edited)
+            })
+    }
+    layer
+        .prims
+        .get(&path)
+        .into_iter()
+        .chain(layer.variant_prims.get(&path).into_iter().flatten())
+        .any(|spec| {
+            repairable(store, &spec.references, edited)
+                || repairable(store, &spec.payloads, edited)
+                || in_variants(store, spec.variant_sets(), edited)
+        })
 }
 
 /// The prim slots `layer` holds at or beneath `root`, in any variant

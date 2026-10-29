@@ -1,0 +1,10 @@
+#usda 1.0
+
+over "World"
+{
+    over "User"
+    {
+        rel across = </World/A/Kid>
+        rel sub = [</World/A.b[/World/C].d>, </World/C.b[/World/A].d>]
+    }
+}

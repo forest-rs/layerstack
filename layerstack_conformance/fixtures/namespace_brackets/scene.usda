@@ -1,0 +1,95 @@
+#usda 1.0
+(
+    subLayers = [
+        @sub.usda@
+    ]
+)
+
+def "World"
+{
+    # The prim whose properties own relational attributes and mappers.
+    def "A"
+    {
+        rel b = </World/C>
+        int x = 1
+
+        def "Kid"
+        {
+            rel b = </World/C>
+        }
+    }
+
+    # The prim the brackets name.
+    def "C"
+    {
+        rel b = </World/A>
+        int y = 1
+    }
+
+    def "Group"
+    {
+    }
+
+    def "User"
+    {
+        # The edited prim or property before the brackets.
+        rel before = [</World/A.b[/World/C].d>, </World/A/Kid.b[/World/C].d>, </World/A.x.mapper[/World/C.y]>]
+        # ... inside them.
+        rel inside = [</World/C.b[/World/A].d>, </World/C.b[/World/A/Kid].d>, </World/C.y.mapper[/World/A.x]>, </World/C.b[/World/C.b[/World/A].d].e>]
+        # ... both.
+        rel both = [</World/A.b[/World/A/Kid].d>, </World/A.x.mapper[/World/A.x]>]
+        # A relative path in the brackets, which the parser keeps as
+        # written beneath an absolute path.
+        rel relative = </World/A.b[../C].d>
+        # The edited property's name as the relational attribute's.
+        rel after = [</World/A.b[/World/C].x>, </World/C.b[/World/A].y>]
+        # Edit list ops.
+        delete rel edits = </World/C.b[/World/A].d>
+        prepend rel edits = [</World/A.b[/World/C].d>, </World/C.b[/World/A].d>]
+        append rel edits = </World/A.x.mapper[/World/C.y]>
+        reorder rel edits = [</World/C.b[/World/A].d>, </World/A.b[/World/C].d>]
+        # A relationship's default, beside a target that depends on the
+        # edit, and one beside a target that does not.
+        rel dependent = [</World/A/Kid>, </World/C.y>, </World/A.x>]
+        rel dependent.default = </World/C.b[/World/A/Kid].d>
+        rel independent = </World/Group>
+        rel independent.default = </World/C.b[/World/A/Kid].d>
+        # A default whose relationship's targets `sub.usda` authors.
+        rel across.default = </World/C.b[/World/A/Kid].d>
+        int conn.connect = [</World/A.b[/World/C].d>, </World/C.b[/World/A].d>, </World/A/Kid.b[/World/C].d>]
+        delete int listed.connect = </World/A/Kid.b[/World/C].d>
+        prepend int listed.connect = </World/A.b[/World/A/Kid].d>
+        append int listed.connect = </World/C.b[/World/A].d>
+        pathExpression expr = "/World/A/Kid /World/C.y /World/A.x"
+    }
+
+    # A selected variant and an unselected one.
+    def "V" (
+        variants = {
+            string s = "on"
+        }
+        prepend variantSets = "s"
+    )
+    {
+        variantSet "s" = {
+            "off" {
+                int c.connect = </World/A.b[/World/C].d>
+                rel r = [</World/A.b[/World/C].d>, </World/C.b[/World/A].d>, </World/A/Kid>]
+
+            }
+            "on" {
+                int c.connect = </World/A.b[/World/C].d>
+                rel r = [</World/A.b[/World/C].d>, </World/C.b[/World/A].d>, </World/A/Kid>]
+
+            }
+        }
+    }
+
+    # Relational attribute and mapper targets across a reference.
+    def "R" (
+        prepend references = @asset.usda@</Asset>
+    )
+    {
+        rel toR = [</World/R.b[/World/R/Part].d>, </World/R/Part.x.mapper[/World/A.x]>]
+    }
+}

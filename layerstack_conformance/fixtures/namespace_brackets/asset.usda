@@ -1,0 +1,16 @@
+#usda 1.0
+(
+    defaultPrim = "Asset"
+)
+
+def "Asset"
+{
+    int c.connect = </Asset/Part.b[/Asset].d>
+    rel r = [</Asset.b[/Asset/Part].d>, </Asset/Part.b[/Asset].d>, </Asset/Part.x.mapper[/Asset/Part.y]>]
+
+    def "Part"
+    {
+        int x = 1
+        int y = 1
+    }
+}

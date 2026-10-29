@@ -111,6 +111,7 @@ mod metadata;
 mod metadata_by_key;
 mod missing_assets;
 mod motion;
+mod namespace_brackets;
 mod namespace_coordinated;
 mod namespace_deletes;
 mod namespace_edits;

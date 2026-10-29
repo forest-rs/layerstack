@@ -308,8 +308,13 @@ impl Document {
 /// Spec: AOUSD Core §7.3.5 (prim specs), §16.2.17 (prim spec grammar).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Prim {
-    /// `def`, `over` or `class`.
-    pub specifier: Specifier,
+    /// `def`, `over` or `class`; `None` for a prim spec that authors no
+    /// specifier, as `Sdf.CreatePrimInLayer` makes one
+    /// (`Sdf_UncheckedCreatePrimInLayer`, `pxr/usd/sdf/primSpec.cpp`).
+    /// OpenUSD reads such a spec's specifier as its fallback, `over`
+    /// (`SdfPrimSpec::GetSpecifier`), which USDA writes, having no
+    /// spelling for none; a crate stores no `specifier` field.
+    pub specifier: Option<Specifier>,
     /// Schema type name (e.g. `Mesh`), or `None` for a typeless prim.
     pub type_name: Option<String>,
     /// Prim name; must be a valid identifier (§7.3.3).
@@ -410,7 +415,7 @@ impl Prim {
     /// Creates a prim with an explicit specifier and optional type name.
     pub fn new(specifier: Specifier, type_name: Option<String>, name: impl Into<String>) -> Self {
         Self {
-            specifier,
+            specifier: Some(specifier),
             type_name,
             name: name.into(),
             metadata: Vec::new(),
@@ -624,7 +629,7 @@ fn validate_variant(variant: &Prim, path: &str, earlier: &[Prim]) -> Result<(), 
     if earlier.iter().any(|sibling| sibling.name == variant.name) {
         return Err(WriteError::Duplicate { path: path.into() });
     }
-    if variant.specifier != Specifier::Over || variant.type_name.is_some() {
+    if variant.specifier != Some(Specifier::Over) || variant.type_name.is_some() {
         return Err(WriteError::InvalidVariant { path: path.into() });
     }
     variant.validate_body(path)
@@ -3102,9 +3107,9 @@ impl Writer<'_> {
         self.spill();
         self.indent(depth);
         self.out.push_str(match prim.specifier {
-            Specifier::Def => "def ",
-            Specifier::Over => "over ",
-            Specifier::Class => "class ",
+            Some(Specifier::Def) => "def ",
+            Some(Specifier::Over) | None => "over ",
+            Some(Specifier::Class) => "class ",
         });
         // `__AnyType__` (`SdfTokens->AnyTypeToken`) is written untyped, as
         // `Sdf_WritePrimPreamble` writes it (`pxr/usd/sdf/fileIO_Common.h`).
@@ -5372,7 +5377,7 @@ def Xform "Tree" (
             bad.to_usda().unwrap_err()
         };
         assert_eq!(
-            bad(|p| p.variant_sets[0].variants[1].specifier = Specifier::Def),
+            bad(|p| p.variant_sets[0].variants[1].specifier = Some(Specifier::Def)),
             WriteError::InvalidVariant {
                 path: "/Tree{season=winter}".into()
             },

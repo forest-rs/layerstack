@@ -258,6 +258,23 @@ fn unregistered_typed_list_ops_read_and_save_as_openusd() {
     assert_reads_as_openusd("unregistered_typed_list_ops");
 }
 
+/// Prim specs with no specifier, as `Sdf.CreatePrimInLayer` makes them,
+/// read from OpenUSD's file, write with OpenUSD's fallback (`over "Q"`) and
+/// save as OpenUSD's file, with no `specifier` field.
+#[test]
+fn unspecified_prims_read_and_save_as_openusd() {
+    assert_reads_as_openusd("unspecified_prims");
+    let openusd = std::fs::read(fixtures().join("unspecified_prims.usdc")).unwrap();
+    let tokens = TokenInterner::default();
+    let paths = PathInterner::default();
+    let read = read_usdc(&openusd, LayerId(1), &tokens, &paths, &mut NoAssets).expect("reads");
+    let ours = save_usdc(&read.layer, &tokens, &paths).unwrap();
+    assert!(
+        crate_sections(&ours).unwrap() == crate_sections(&openusd).unwrap(),
+        "the file OpenUSD writes"
+    );
+}
+
 /// An attribute's `displayUnit` is a `TfEnum` in OpenUSD, which its crate
 /// writer packs as an invalid value and then fails to read; the save
 /// refuses it.

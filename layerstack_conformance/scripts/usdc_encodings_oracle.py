@@ -59,13 +59,13 @@ the same text as the source layer (`same_text`) and that text.
   `CrateFile::_PackValue` posts "Attempted to pack unsupported type
   'TfEnum'", and the read refuses the invalid value it writes.
 
-Three cases have no USDA source, since the text parser cannot make them:
+Four cases have no USDA source, since the text parser cannot make them:
 each is a layer `Sdf.CopySpec` copies from a USDA source, replacing
 fields' values through its value callback (which sets them as they
-are), and the oracle records its export, the read of that file, the
-type `Usd.Stage` reads each replaced metadata field as from it
-(`metadata_types`), and whether the text parser reads the text that read
-exports (`open_text`).
+are), or one built with `Sdf` calls. The oracle records its export, the
+read of that file, the type `Usd.Stage` reads each replaced metadata
+field as from it (`metadata_types`), and whether the text parser reads
+the text that read exports (`open_text`).
 
 - `mapper_connections`: attribute connections to mappers
   (`</A.b.mapper[/C]>`, `</A.b[/C].d.mapper[/E]>`) beside a relational
@@ -86,6 +86,10 @@ exports (`open_text`).
   and an attribute. The crate stores each as its list-op type, not as an
   `SdfUnregisteredValue`; the text writes each as a list-op statement,
   which the text parser reads as an `SdfUnregisteredValueListOp`.
+- `unspecified_prims`: prim specs with no specifier field, as
+  `Sdf.CreatePrimInLayer` makes them. `SdfPrimSpec::GetSpecifier` falls
+  back to `over`, which the text writes (`over "Q"`); the crate stores no
+  field, so the conformance test finds the same file in `save_usdc`'s.
 
 `--check` regenerates every file into a temporary directory and fails
 unless each matches the checked-in fixture; for a crate file, unless
@@ -193,9 +197,21 @@ def "P"
 """,
 }
 
+
+def unspecified_prims():
+    """Prim specs `Sdf.CreatePrimInLayer` makes, with no specifier field
+    (`Sdf_UncheckedCreatePrimInLayer`), and a child whose specifier is
+    set."""
+    layer = Sdf.Layer.CreateAnonymous("unspecified_prims.usda")
+    Sdf.CreatePrimInLayer(layer, "/Q/R")
+    Sdf.CreatePrimInLayer(layer, "/Q/S").specifier = Sdf.SpecifierDef
+    return layer
+
+
 # Layers the text parser cannot make: each copies `source` with
 # `Sdf.CopySpec`, its value callback replacing the value of each
-# `(path, field)` listed by a function of `pxr`'s `Sdf`.
+# `(path, field)` listed by a function of `pxr`'s `Sdf`, or is the layer
+# `source` makes when it is a function.
 BUILT = {
     "mapper_connections": ("""#usda 1.0
 def "P"
@@ -252,6 +268,7 @@ def "P" (
         ("/P", "f"): lambda: Sdf.StringListOp.Create(appendedItems=["s"]),
         ("/P.x", "g"): lambda: Sdf.TokenListOp.Create(prependedItems=["t"]),
     }),
+    "unspecified_prims": (unspecified_prims, {}),
 }
 
 
@@ -349,17 +366,21 @@ def metadata_types(written, fields):
 
 def built(out, name, source, fields):
     """Records `name`: the layer `Sdf.CopySpec` copies from `source`, the
-    value of each of `fields` replaced."""
-    src = Sdf.Layer.CreateAnonymous(f"{name}_source.usda")
-    src.ImportFromString(source)
-    layer = Sdf.Layer.CreateAnonymous(f"{name}.usda")
+    value of each of `fields` replaced, or the layer `source` makes when
+    it is a function."""
+    if callable(source):
+        layer = source()
+    else:
+        src = Sdf.Layer.CreateAnonymous(f"{name}_source.usda")
+        src.ImportFromString(source)
+        layer = Sdf.Layer.CreateAnonymous(f"{name}.usda")
 
-    def value(spec_type, field, src_layer, src_path, in_src, dst_layer, dst_path, in_dst):
-        make = fields.get((str(src_path), field))
-        return (True, make()) if make else True
+        def value(spec_type, field, src_layer, src_path, in_src, dst_layer, dst_path, in_dst):
+            make = fields.get((str(src_path), field))
+            return (True, make()) if make else True
 
-    for prim in src.rootPrims:
-        Sdf.CopySpec(src, prim.path, layer, prim.path, value, lambda *_: True)
+        for prim in src.rootPrims:
+            Sdf.CopySpec(src, prim.path, layer, prim.path, value, lambda *_: True)
     record = {}
     with tempfile.TemporaryDirectory() as tmp:
         written = os.path.join(tmp, f"{name}.usdc")

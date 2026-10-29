@@ -677,16 +677,12 @@ fn rejects_invalid_layers() {
         "a listed child without a spec"
     );
 
+    // A spec with no specifier, as `Sdf.CreatePrimInLayer` makes one, is
+    // written with OpenUSD's fallback, `over`.
     let mut imported = Imported::new(source);
     imported.layer.prim_mut(a).unwrap().specifier = None;
-    assert_eq!(
-        imported.save(),
-        Err(SaveError::Invalid {
-            path: "/A".into(),
-            problem: Invalid::MissingSpecifier
-        }),
-        "no specifier"
-    );
+    let saved = imported.save().expect("no specifier saves");
+    assert!(saved.contains("over \"A\""), "no specifier: {saved}");
 
     let mut imported = Imported::new("#usda 1.0\ndef \"A\"\n{\n    rel r\n}\n");
     imported.property("/A.r").time_samples = vec![(0.0, LayerValue::Bool(true))].into();

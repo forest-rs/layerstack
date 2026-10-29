@@ -3,7 +3,9 @@
 # SPDX-License-Identifier: Apache-2.0 OR MIT
 #
 # Builds the default module into wasm/: `layerstack_wasm` for
-# wasm32-unknown-unknown with the size-tuned `wasm` profile, the glue with
+# wasm32-unknown-unknown with the size-tuned `wasm` profile, without `std`
+# and with the `standalone` feature (its own allocator and a panic handler
+# that traps), the glue with
 # the wasm-bindgen CLI (which must be the version Cargo.lock holds), then
 # `wasm-opt -Oz --converge`. Set WASM_BINDGEN and WASM_OPT to use binaries
 # off PATH.
@@ -21,7 +23,7 @@ fi
 target=${CARGO_TARGET_DIR:-$workspace/target}
 LAYERSTACK_REVISION=${LAYERSTACK_REVISION:-$(git -C "$workspace" rev-parse --short=12 HEAD 2>/dev/null || echo unknown)} \
   cargo build --manifest-path "$workspace/Cargo.toml" --locked -p layerstack_wasm \
-  --profile wasm --target wasm32-unknown-unknown
+  --no-default-features --features standalone --profile wasm --target wasm32-unknown-unknown
 rm -rf "$package/wasm"
 "$wasm_bindgen" --target web --out-dir "$package/wasm" --out-name layerstack \
   "$target/wasm32-unknown-unknown/wasm/layerstack_wasm.wasm"

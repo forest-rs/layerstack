@@ -23,6 +23,14 @@ std = [
     "layerstack_schemas/std",
     "wasm-bindgen/std",
 ]
+# The module `@forest-rs/layerstack` loads, built without `std`: this crate
+# supplies the global allocator (dlmalloc, the one `std` uses on
+# `wasm32-unknown-unknown`) and a panic handler that traps. `std` on that
+# target has no threads, files or clocks, and its panic runtime formats a
+# message nothing reads; leaving it out also leaves out the core crates'
+# `std` paths (threads, retained USDC arrays), which the bindings never
+# take. Only on `wasm32` and without `std`, which brings its own.
+standalone = ["dep:dlmalloc"]
 
 [dependencies]
 layerstack = { workspace = true }
@@ -33,6 +41,11 @@ layerstack_schemas = { features = ["all"], workspace = true }
 # classes. Only this crate depends on it; the CLI that generates the glue
 # must be the version `Cargo.lock` holds.
 wasm-bindgen = { default-features = false, version = "0.2.129" }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+# The allocator of a `standalone` module: the one `std` itself uses on
+# `wasm32-unknown-unknown`, so the module allocates as it did with `std`.
+dlmalloc = { features = ["global"], optional = true, version = "0.2.14" }
 
 [dev-dependencies]
 # Tests compare a layer's USDA text before an edit and after its undo.

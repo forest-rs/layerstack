@@ -574,6 +574,8 @@ pub(crate) type OrderedNode<'a> = (
 /// ([`PrimIndexGraph::site_moves`]).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct SiteMove {
+    /// The position of the node in the graphs.
+    pub(crate) node: usize,
     /// The layer stack of the site.
     pub(crate) layer_stack: LayerStackIdentifier,
     /// The site in the graph moved from.
@@ -583,6 +585,15 @@ pub(crate) struct SiteMove {
     pub(crate) from_depth: usize,
     /// The site in the graph moved to.
     pub(crate) to: SpecPath,
+}
+
+/// A node whose site a move re-roots ([`PrimIndexGraph::reroot_plan`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct Reroot {
+    /// The position of the node in the graph.
+    pub(crate) node: usize,
+    /// The position of the move among the moves.
+    pub(crate) by: usize,
 }
 
 /// How many re-rooted prim paths [`PrimIndexGraph::reroot_sites`]
@@ -844,11 +855,13 @@ impl PrimIndexGraph {
         let moved = || {
             self.shape
                 .iter()
+                .enumerate()
                 .zip(self.sites.iter().zip(other.sites.iter()))
                 .filter(|(_, (from, to))| from != to)
         };
         let mut moves = Vec::with_capacity(moved().count());
-        moves.extend(moved().map(|(node, (from, to))| SiteMove {
+        moves.extend(moved().map(|((at, node), (from, to))| SiteMove {
+            node: at,
             layer_stack: node.layer_stack,
             from: from.clone(),
             from_depth: paths.resolve(from.prim_path()).depth(),
@@ -868,39 +881,64 @@ impl PrimIndexGraph {
                     .all(|(a, b)| a.same(b)))
     }
 
-    /// Moves the site of each node beneath the `from` of a move of its
-    /// layer stack beneath that move's `to`, the longest `from` first: the
-    /// graph of a prototype's descendant, from one instance to another
-    /// ([`Self::site_moves`] of their graphs).
-    pub(crate) fn reroot_sites(&mut self, paths: &crate::path::PathInterner, moves: &[SiteMove]) {
+    /// Which of `moves` moves the site of each node: beneath the `from`
+    /// of a move of its layer stack, the longest `from`
+    /// ([`Self::reroot_sites`]).
+    ///
+    /// Only the `from` sides of the moves are read: the plan holds for
+    /// every graph a copy of this one moves to with moves of the same
+    /// nodes.
+    pub(crate) fn reroot_plan(
+        &self,
+        paths: &crate::path::PathInterner,
+        moves: &[SiteMove],
+    ) -> Vec<Reroot> {
+        let mut plan = Vec::new();
         if moves.is_empty() {
-            return;
+            return plan;
         }
+        for (at, (node, site)) in self.shape.iter().zip(self.sites.iter()).enumerate() {
+            // Most nodes' stacks have no move: their sites are not resolved.
+            let mut stack_moves = moves
+                .iter()
+                .enumerate()
+                .filter(|(_, m)| m.layer_stack == node.layer_stack)
+                .peekable();
+            if stack_moves.peek().is_none() {
+                continue;
+            }
+            let prim = paths.resolve(site.prim_path()).segments();
+            let moved = stack_moves
+                .filter(|(_, m)| {
+                    m.from_depth <= prim.len()
+                        && paths.resolve(m.from.prim_path()).segments() == &prim[..m.from_depth]
+                })
+                .max_by_key(|(_, m)| m.from_depth);
+            if let Some((by, _)) = moved {
+                plan.push(Reroot { node: at, by });
+            }
+        }
+        plan
+    }
+
+    /// Moves the site of each node of `plan` beneath the `to` of its move
+    /// of `moves` ([`Self::reroot_plan`]): the graph of a prototype's
+    /// descendant, from one instance to another ([`Self::site_moves`] of
+    /// their graphs).
+    pub(crate) fn reroot_sites(
+        &mut self,
+        paths: &crate::path::PathInterner,
+        moves: &[SiteMove],
+        plan: &[Reroot],
+    ) {
         // The prim paths last re-rooted: one path is often the site of
         // nodes of several layer stacks, as the implied inherits of a class
         // are, and moved alike in each.
         let mut recent: smallvec::SmallVec<[RecentReroot; RECENT_REROOTS]> =
             smallvec::SmallVec::new();
-        for (node, site) in self.shape.iter().zip(self.sites.iter_mut()) {
-            // Most nodes' stacks have no move: their sites are not resolved.
-            let mut stack_moves = moves
-                .iter()
-                .filter(|m| m.layer_stack == node.layer_stack)
-                .peekable();
-            if stack_moves.peek().is_none() {
-                continue;
-            }
+        for step in plan {
+            let (site, moved) = (&mut self.sites[step.node], &moves[step.by]);
             let old = site.prim_path();
-            let prim = paths.resolve(old).segments();
-            let moved = stack_moves
-                .filter(|m| {
-                    m.from_depth <= prim.len()
-                        && paths.resolve(m.from.prim_path()).segments() == &prim[..m.from_depth]
-                })
-                .max_by_key(|m| m.from_depth);
-            let Some(moved) = moved else {
-                continue;
-            };
             let (from, to) = (moved.from.prim_path(), moved.to.prim_path());
             let known = recent
                 .iter()
@@ -909,7 +947,8 @@ impl PrimIndexGraph {
             let new = match known {
                 Some(known) => known.new,
                 None => {
-                    let new = paths.intern_joined(to, &prim[moved.from_depth..]);
+                    let rest = &paths.resolve(old).segments()[moved.from_depth..];
+                    let new = paths.intern_joined(to, rest);
                     if recent.len() == RECENT_REROOTS {
                         recent.remove(0);
                     }

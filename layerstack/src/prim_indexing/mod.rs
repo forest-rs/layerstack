@@ -42,7 +42,7 @@ use crate::{
     layer_stack::LayerStackIdentifier,
     path::PathId,
     prim_index::{ArcKind, Opinion, OpinionKey, OpinionSource, PrimIndex},
-    prim_index_graph::{NodeArc, NodeId, PrimIndexGraph, SiteMove},
+    prim_index_graph::{NodeArc, NodeId, PrimIndexGraph, Reroot, SiteMove},
     spec_path::SpecPath,
     stage::{InstanceIndexKey, InstanceIndexKeys, StageOptions},
     sync::ReadLock,
@@ -1262,6 +1262,8 @@ impl Walk<'_, '_, '_> {
         // shape, which composed their own descendants: later instances of
         // their shape copy theirs.
         let mut apart: HashMap<PathId, Vec<PathId>> = HashMap::new();
+        // How the copies of each source's descendants re-root their sites.
+        let mut plans: HashMap<PathId, CopyPlan> = HashMap::new();
         // Composing an instance's descendants can defer the instances nested
         // in them in turn.
         while let Some((instance, representative, graph)) = self.instances.next() {
@@ -1293,6 +1295,7 @@ impl Walk<'_, '_, '_> {
                     source,
                     instance,
                     &moves,
+                    plans.entry(source).or_default().for_moves(&moves),
                 ),
                 None => {
                     let children = self
@@ -1486,6 +1489,32 @@ fn reroot_opinion_paths(store: &dyn LayerStore, index: &mut PrimIndex, from: Pat
     }
 }
 
+/// How the copies of one instance's descendants re-root their sites: the
+/// plan of each descendant ([`PrimIndexGraph::reroot_plan`]) for moves of
+/// the sites of `nodes`. Copies to other instances of one shape move the
+/// same nodes, from the same sites: their descendants are re-rooted alike,
+/// and their plans are found once.
+#[derive(Default)]
+struct CopyPlan {
+    /// The positions of the nodes of the instance's graph whose sites the
+    /// moves move ([`SiteMove::node`]).
+    nodes: Vec<usize>,
+    /// The plan of each descendant, by path.
+    descendants: HashMap<PathId, Vec<Reroot>>,
+}
+
+impl CopyPlan {
+    /// This plan for `moves`: kept when they move the sites of the nodes
+    /// the plan's moves did, and started anew otherwise.
+    fn for_moves(&mut self, moves: &[SiteMove]) -> &mut Self {
+        if !self.nodes.iter().copied().eq(moves.iter().map(|m| m.node)) {
+            self.nodes = moves.iter().map(|m| m.node).collect();
+            self.descendants.clear();
+        }
+        self
+    }
+}
+
 /// Copies the descendants of the instance `from` beneath the instance
 /// `to`, re-rooting the sites `moves` names: those where the graph of `to`
 /// reads another site than the graph of `from`
@@ -1505,6 +1534,7 @@ fn copy_prototype(
     from: PathId,
     to: PathId,
     moves: &[SiteMove],
+    plan: &mut CopyPlan,
 ) {
     let mut pending: Vec<PathId> = out.children.get(&from).cloned().unwrap_or_default();
     let mut moved: Vec<(PathId, PathId)> = Vec::new();
@@ -1539,7 +1569,11 @@ fn copy_prototype(
             continue;
         };
         let mut index = index.clone();
-        index.graph.reroot_sites(ctx.store.paths(), moves);
+        let reroot = plan
+            .descendants
+            .entry(source)
+            .or_insert_with(|| index.graph.reroot_plan(ctx.store.paths(), moves));
+        index.graph.reroot_sites(ctx.store.paths(), moves, reroot);
         reroot_opinion_paths(ctx.store, &mut index, from, to);
         let paths = ctx.store.paths();
         // The copy's arcs are those of its re-rooted graph, as composing it

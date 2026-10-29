@@ -144,6 +144,7 @@ mod pseudo_root_edits;
 mod ray;
 mod registered_metadata_ingestion;
 mod registry_metadata;
+mod relational_arcs;
 mod relocates;
 mod render_assets;
 mod render_spec;

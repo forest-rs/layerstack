@@ -1874,6 +1874,7 @@ fn prim_index(
                             arc: node.arc_kind,
                             source: arc_root,
                             map: &map,
+                            root_identity: map_to_root.has_root_identity(),
                         },
                         crate::composition_checks::TargetOwner {
                             prim,

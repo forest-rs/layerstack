@@ -73,6 +73,10 @@ pub struct TokenInterner {
     /// Whether some interned string is a variable expression, so a variant
     /// selection may be one ([`crate::variable_expression::is_expression`]).
     expressions: AtomicBool,
+    /// Whether some interned string holds a `[`, so a property target's
+    /// token may be a relational attribute's or a mapper's
+    /// ([`crate::target_translation::is_relational`]).
+    brackets: AtomicBool,
 }
 
 impl Default for TokenInterner {
@@ -83,6 +87,7 @@ impl Default for TokenInterner {
             ancestry: Vec::new(),
             strings: Interned::default(),
             expressions: AtomicBool::new(false),
+            brackets: AtomicBool::new(false),
         };
         let empty = interner.intern("");
         debug_assert_eq!(empty, TokenId::EMPTY, "the empty token is interned first");
@@ -139,6 +144,7 @@ impl TokenInterner {
             ancestry,
             strings,
             expressions: AtomicBool::new(self.has_expressions()),
+            brackets: AtomicBool::new(self.has_brackets()),
         }
     }
 
@@ -176,6 +182,9 @@ impl TokenInterner {
         if new && crate::variable_expression::is_expression(s) {
             self.expressions.store(true, Ordering::Release);
         }
+        if new && s.contains('[') {
+            self.brackets.store(true, Ordering::Release);
+        }
         TokenId(id)
     }
 
@@ -196,6 +205,13 @@ impl TokenInterner {
     /// selection token may then be.
     pub(crate) fn has_expressions(&self) -> bool {
         self.expressions.load(Ordering::Acquire)
+    }
+
+    /// Returns `true` when some interned string holds a `[`, as the
+    /// property token of a relational attribute or mapper target does
+    /// (`b[/C].d`).
+    pub(crate) fn has_brackets(&self) -> bool {
+        self.brackets.load(Ordering::Acquire)
     }
 }
 

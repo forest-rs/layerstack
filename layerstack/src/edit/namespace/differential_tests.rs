@@ -22,6 +22,7 @@ const WEAK: LayerId = LayerId(2);
 const ASSET: LayerId = LayerId(3);
 const DEPENDENT: LayerId = LayerId(4);
 const SESSION: LayerId = LayerId(5);
+const NESTED: LayerId = LayerId(6);
 
 fn attribute(value: f64) -> PropertySpec {
     PropertySpec::typed_attribute(PropertyType::parse("double").unwrap())
@@ -569,6 +570,135 @@ fn renames_scene() -> InMemoryStore {
     store
 }
 
+/// Groups that come through ancestral references, so that renaming them
+/// authors a relocate, in the shape of a production set: each set
+/// inherits a class named after it and specializes a root type, and
+/// references an asset that does the same, whose group inherits a class
+/// named after the group and holds items referencing a nested asset.
+/// The items target a sibling and a prim beside the group. `/Set`
+/// authors nothing beneath its group; `/Local` overrides an item
+/// (the rename moves it), and its class names a prim `Renamed`, so a
+/// group renamed so lands on an existing prim; `/Hazard` inherits a class
+/// whose opinion about the group's item inherits `/Hazard/Renamed/Item`,
+/// which composes cleanly until the group is renamed `Renamed`, when the
+/// item, relocated, inherits itself.
+fn relocated_renames_scene() -> InMemoryStore {
+    let mut store = InMemoryStore::default();
+    let size = store.tokens.intern("size");
+    let look = store.tokens.intern("look");
+    let mut nested = Layer::new(NESTED);
+    let root_type = author(&mut store, &mut nested, "/_root_type", PrimSpec::class());
+    let leaf = author(
+        &mut store,
+        &mut nested,
+        "/Leaf",
+        PrimSpec::def().with_specialize(root_type),
+    );
+    author(
+        &mut store,
+        &mut nested,
+        "/Leaf/Geo",
+        PrimSpec::def().with_property(size, attribute(1.0)),
+    );
+    store.insert_layer(nested);
+    let mut asset = Layer::new(ASSET);
+    let root_class = store.path("/_class_/Root");
+    let group_class = store.path("/_class_/Group");
+    author(&mut store, &mut asset, "/_class_", PrimSpec::class());
+    author(&mut store, &mut asset, "/_class_/Root", PrimSpec::class());
+    author(
+        &mut store,
+        &mut asset,
+        "/_class_/Group",
+        PrimSpec::class().with_property(size, attribute(2.0)),
+    );
+    let asset_type = author(&mut store, &mut asset, "/_root_type", PrimSpec::class());
+    let asset_root = author(
+        &mut store,
+        &mut asset,
+        "/Root",
+        PrimSpec::def()
+            .with_inherit(root_class)
+            .with_specialize(asset_type),
+    );
+    author(
+        &mut store,
+        &mut asset,
+        "/Root/Group",
+        PrimSpec::def().with_inherit(group_class),
+    );
+    // The item targets its sibling, within the group, and a prim beside
+    // the group: a relocated rename maps the one and keeps the other.
+    let other = store.path("/Root/Group/Other");
+    let spare = store.path("/Root/Spare");
+    for item in ["/Root/Group/Item", "/Root/Group/Other"] {
+        author(
+            &mut store,
+            &mut asset,
+            item,
+            PrimSpec::def()
+                .with_reference(Reference::with_asset(NESTED, leaf, "nested.usda"))
+                .with_property(
+                    look,
+                    PropertySpec::relationship().with_targets(targets(vec![
+                        TargetPath::Prim(other),
+                        TargetPath::Prim(spare),
+                    ])),
+                ),
+        );
+    }
+    author(&mut store, &mut asset, "/Root/Spare", PrimSpec::def());
+    store.insert_layer(asset);
+    let mut root = Layer::new(ROOT);
+    let stage_type = author(&mut store, &mut root, "/_root_type", PrimSpec::class());
+    author(&mut store, &mut root, "/_class_", PrimSpec::class());
+    for set in ["Set", "Local", "Hazard"] {
+        let class = author(
+            &mut store,
+            &mut root,
+            &format!("/_class_/{set}"),
+            PrimSpec::class(),
+        );
+        author(
+            &mut store,
+            &mut root,
+            &format!("/{set}"),
+            PrimSpec::def()
+                .with_inherit(class)
+                .with_reference(Reference::with_asset(ASSET, asset_root, "asset.usda"))
+                .with_specialize(stage_type),
+        );
+    }
+    author(&mut store, &mut root, "/Local/Group", PrimSpec::over());
+    author(
+        &mut store,
+        &mut root,
+        "/Local/Group/Item",
+        PrimSpec::over().with_property(size, attribute(3.0)),
+    );
+    author(
+        &mut store,
+        &mut root,
+        "/_class_/Local/Renamed",
+        PrimSpec::over(),
+    );
+    author(
+        &mut store,
+        &mut root,
+        "/_class_/Hazard/Group",
+        PrimSpec::over(),
+    );
+    let hazard = store.path("/Hazard/Renamed/Item");
+    author(
+        &mut store,
+        &mut root,
+        "/_class_/Hazard/Group/Item",
+        PrimSpec::over().with_inherit(hazard),
+    );
+    store.insert_layer(root);
+    store
+}
+
 /// A scene's live stages: the root layer's, and the dependents'.
 struct Scene {
     store: InMemoryStore,
@@ -816,6 +946,37 @@ fn retained_preparation_matches_composition_across_arcs_and_dependents() {
 fn retained_preparation_matches_composition_for_translated_renames() {
     let mut scene = Scene::new(renames_scene(), StageOptions::default(), &[]);
     assert!(scene.exercise(&[ROOT], 6) > 0);
+}
+
+/// Renames of groups introduced through ancestral references, which
+/// author relocates, find what composing them finds; the hazard's rename
+/// makes its relocated item inherit itself, which only composing the
+/// destination finds, and the move onto a prim named by an implied class
+/// is refused.
+#[test]
+fn retained_preparation_matches_composition_for_relocated_renames() {
+    let mut scene = Scene::new(relocated_renames_scene(), StageOptions::default(), &[]);
+    assert!(scene.primary.stage().composition_errors().is_empty());
+    let rename = |scene: &mut Scene, from: &str, to: &str| {
+        let from = TargetPath::Prim(scene.store.path(from));
+        let to = TargetPath::Prim(scene.store.path(to));
+        scene.compare_move(ROOT, from, to)
+    };
+    let set = rename(&mut scene, "/Set/Group", "/Set/Renamed").unwrap();
+    assert!(
+        set.layers_to_edit().contains(&ROOT),
+        "the rename authors a relocate"
+    );
+    assert!(rename(&mut scene, "/Local/Group", "/Local/Moved").is_ok());
+    assert!(rename(&mut scene, "/Local/Group", "/Local/Renamed").is_err());
+    assert!(rename(&mut scene, "/Hazard/Group", "/Hazard/Moved").is_ok());
+    assert_eq!(
+        rename(&mut scene, "/Hazard/Group", "/Hazard/Renamed"),
+        Err(NamespaceError::UnsupportedComposition(
+            "prepared namespace edit would create invalid composition",
+        ))
+    );
+    assert!(scene.exercise(&[ROOT], 4) > 0);
 }
 
 #[test]

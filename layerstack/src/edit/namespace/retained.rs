@@ -244,11 +244,32 @@ pub(super) struct LayerEdit {
     /// Those of `slots` that change other than in their child lists and
     /// child order, a missing spec counting as a bare `over`.
     pub(super) structural: Vec<PathId>,
+    /// Those of `slots` outside `structural` where a spec appears or
+    /// disappears: a bare `over` holds no opinion, but it is a spec at its
+    /// site, which a relocation source must not hold.
+    pub(super) appeared: Vec<PathId>,
     /// Whether the layer's metadata changes.
     pub(super) metadata: bool,
     /// The paths whose relocation the layer's `layerRelocates` change
     /// ([`relocation_changes`]).
     pub(super) relocated: Vec<PathId>,
+}
+
+impl LayerEdit {
+    /// The slots whose change can change composition, where `sources`
+    /// are the relocation sources the edit leaves: the structural ones,
+    /// and those where a spec appears or disappears at a source.
+    ///
+    /// Spec: AOUSD Core §10.3.2.6 (a relocation source holds no
+    /// opinions). OpenUSD: `_EvalNodeRelocations` reports every spec at
+    /// the source (`PcpErrorOpinionAtRelocationSource`).
+    pub(super) fn changed_slots<'a>(
+        &'a self,
+        sources: &'a HashSet<PathId>,
+    ) -> impl Iterator<Item = PathId> + 'a {
+        let appeared = self.appeared.iter().filter(|p| sources.contains(*p));
+        self.structural.iter().chain(appeared).copied()
+    }
 }
 
 /// The paths whose relocation changes from the relocates `old` to `new`:
@@ -294,6 +315,7 @@ fn children_only(before: &PrimSpec, after: &PrimSpec) -> bool {
 pub(super) fn layer_edit(original: &Layer, edited: &Layer, paths: &[PathId]) -> Option<LayerEdit> {
     let mut slots = Vec::new();
     let mut structural = Vec::new();
+    let mut appeared = Vec::new();
     for &path in paths {
         let (before, after) = (original.prims.get(&path), edited.prims.get(&path));
         let branches_same = original
@@ -311,6 +333,8 @@ pub(super) fn layer_edit(original: &Layer, edited: &Layer, paths: &[PathId]) -> 
         let (b, a) = (before.unwrap_or(&bare), after.unwrap_or(&bare));
         if !(branches_same && children_only(b, a)) {
             structural.push(path);
+        } else if before.is_some() != after.is_some() {
+            appeared.push(path);
         }
     }
     let metadata = !original.metadata.same(&edited.metadata);
@@ -325,6 +349,7 @@ pub(super) fn layer_edit(original: &Layer, edited: &Layer, paths: &[PathId]) -> 
     Some(LayerEdit {
         slots,
         structural,
+        appeared,
         metadata,
         relocated,
     })

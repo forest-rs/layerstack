@@ -23,7 +23,7 @@ use super::*;
 use crate::{
     HashSet, Relocate,
     prim_indexing::ChildIndex,
-    stage::preparation::{PreparationIndex, layer_links},
+    stage::preparation::{LayerArcs, PreparationIndex, layer_arcs, layer_links},
 };
 
 /// The prim slots of `layer` that author paths, from the first of
@@ -40,8 +40,19 @@ pub(super) fn links_of<'a>(
     layer_links(index.or(indexes.first().copied()), layer)
 }
 
+/// The references and payloads of `layer` ([`LayerArcs`]), as
+/// [`links_of`] finds the slots that author paths.
+pub(super) fn arcs_of<'a>(indexes: &[&'a PreparationIndex], layer: &Layer) -> Cow<'a, LayerArcs> {
+    let index = indexes
+        .iter()
+        .copied()
+        .find(|index| index.arcs(layer).is_some());
+    layer_arcs(index.or(indexes.first().copied()), layer)
+}
+
 /// The layers [`reachable_layers`] finds, from a stage's retained opinion
-/// layers and the specs of each layer that author arcs.
+/// layers and the layers each layer's arcs name ([`arcs_of`]): the specs
+/// of arcs the store resolves are read again.
 pub(super) fn reachable_layers(
     store: &dyn LayerStore,
     indexes: &[&PreparationIndex],
@@ -61,7 +72,9 @@ pub(super) fn reachable_layers(
         };
         found.push(id);
         pending.extend(layer.sublayers.iter().map(|s| s.layer));
-        for path in links_of(indexes, layer).iter() {
+        let arcs = arcs_of(indexes, layer);
+        pending.extend(arcs.layers());
+        for path in arcs.unresolved() {
             for spec in layer
                 .prims
                 .get(path)

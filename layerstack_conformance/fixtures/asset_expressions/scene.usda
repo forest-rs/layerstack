@@ -1,0 +1,61 @@
+#usda 1.0
+(
+    expressionVariables = {
+        string DIR = "maps"
+        bool FLAG = 1
+        string NAME = "wood"
+        int NUM = 3
+        string TEX = ""
+    }
+    subLayers = [
+        @./sub/sub.usda@
+    ]
+)
+
+def "Local" (
+    assetInfo = {
+        asset identifier = @`"./${NAME}.usda"`@
+    }
+    customData = {
+        asset a = @`"./${NAME}.png"`@
+        dictionary n = {
+            asset[] l = [@`"${TEX}"`@, @`"./${DIR}/${NAME}.png"`@]
+        }
+    }
+)
+{
+    custom asset absolute = @`"/textures/${NAME}.png"`@
+    custom asset[] arraySamples.timeSamples = {
+        1: [@`"./${NAME}.png"`@, @`${NUM}`@],
+    }
+    custom asset blank = @@
+    custom asset cond = @`if(${FLAG}, "./on.png", "./off.png")`@
+    custom asset empty = @`"${TEX}"`@
+    custom asset[] gap = [@@, @`"./${NAME}.png"`@]
+    custom asset[] list = [@`"${TEX}"`@, @`"./${NAME}.png"`@, @./plain.png@]
+    custom asset malformed = @`"./${NAME.png"`@
+    custom asset missing = @`"./${UNSET}.png"`@
+    custom asset named = @`"./${NAME}.png"`@ (
+        customData = {
+            asset a = @`"./${NAME}.png"`@
+            dictionary n = {
+                asset[] l = [@`"${TEX}"`@, @`"./${DIR}/${NAME}.png"`@]
+            }
+        }
+    )
+    custom asset none = @`None`@
+    custom asset number = @`${NUM}`@
+    custom asset plain = @./plain.png@
+    custom asset samples.timeSamples = {
+        1: @`"./${NAME}.png"`@,
+        2: @`"${TEX}"`@,
+        3: @`"./${UNSET}.png"`@,
+    }
+    custom asset search = @`"${NAME}.png"`@
+}
+
+def "Root" (
+    references = @./ref/ref.usda@</Ref>
+)
+{
+}

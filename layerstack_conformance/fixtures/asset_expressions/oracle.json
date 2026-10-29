@@ -1,0 +1,1222 @@
+{
+ "flatten": "#usda 1.0\n(\n    expressionVariables = {\n        string DIR = \"maps\"\n        bool FLAG = 1\n        string NAME = \"wood\"\n        int NUM = 3\n        string TEX = \"\"\n    }\n)\n\ndef \"Sub\" (\n    assetInfo = {\n        asset identifier = @<dir>/sub/wood.usda@\n    }\n    customData = {\n        asset a = @<dir>/sub/wood.png@\n        dictionary n = {\n            asset[] l = [@`\"${TEX}\"`@, @<dir>/sub/maps/wood.png@]\n        }\n    }\n)\n{\n    custom asset absolute = @`\"/textures/${NAME}.png\"`@\n    custom asset[] arraySamples\n    asset[] arraySamples.timeSamples = {\n        1: [@<dir>/sub/wood.png@, @`${NUM}`@],\n    }\n    custom asset blank = @@\n    custom asset cond = @<dir>/sub/on.png@\n    custom asset empty = @`\"${TEX}\"`@\n    custom asset[] gap = [@@, @`\"./${NAME}.png\"`@]\n    custom asset[] list = [@`\"${TEX}\"`@, @<dir>/sub/wood.png@, @<dir>/sub/plain.png@]\n    custom asset malformed = @`\"./${NAME.png\"`@\n    custom asset missing = @<dir>/sub/${UNSET}.png@\n    custom asset named = @<dir>/sub/wood.png@ (\n        customData = {\n            asset a = @<dir>/sub/wood.png@\n            dictionary n = {\n                asset[] l = [@`\"${TEX}\"`@, @<dir>/sub/maps/wood.png@]\n            }\n        }\n    )\n    custom asset none = @`None`@\n    custom asset number = @`${NUM}`@\n    custom asset plain = @<dir>/sub/plain.png@\n    custom asset samples\n    asset samples.timeSamples = {\n        1: @<dir>/sub/wood.png@,\n        2: @`\"${TEX}\"`@,\n        3: @<dir>/sub/${UNSET}.png@,\n    }\n    custom asset search = @<dir>/sub/wood.png@\n}\n\ndef \"Local\" (\n    assetInfo = {\n        asset identifier = @<dir>/wood.usda@\n    }\n    customData = {\n        asset a = @<dir>/wood.png@\n        dictionary n = {\n            asset[] l = [@`\"${TEX}\"`@, @<dir>/maps/wood.png@]\n        }\n    }\n)\n{\n    custom asset absolute = @`\"/textures/${NAME}.png\"`@\n    custom asset[] arraySamples\n    asset[] arraySamples.timeSamples = {\n        1: [@<dir>/wood.png@, @`${NUM}`@],\n    }\n    custom asset blank = @@\n    custom asset cond = @<dir>/on.png@\n    custom asset empty = @`\"${TEX}\"`@\n    custom asset[] gap = [@@, @`\"./${NAME}.png\"`@]\n    custom asset[] list = [@`\"${TEX}\"`@, @<dir>/wood.png@, @<dir>/plain.png@]\n    custom asset malformed = @`\"./${NAME.png\"`@\n    custom asset missing = @<dir>/${UNSET}.png@\n    custom asset named = @<dir>/wood.png@ (\n        customData = {\n            asset a = @<dir>/wood.png@\n            dictionary n = {\n                asset[] l = [@`\"${TEX}\"`@, @<dir>/maps/wood.png@]\n            }\n        }\n    )\n    custom asset none = @`None`@\n    custom asset number = @`${NUM}`@\n    custom asset plain = @<dir>/plain.png@\n    custom asset samples\n    asset samples.timeSamples = {\n        1: @<dir>/wood.png@,\n        2: @`\"${TEX}\"`@,\n        3: @<dir>/${UNSET}.png@,\n    }\n    custom asset search = @<dir>/wood.png@\n}\n\ndef \"Root\" (\n    assetInfo = {\n        asset identifier = @<dir>/ref/wood.usda@\n    }\n    customData = {\n        asset a = @<dir>/ref/wood.png@\n        dictionary n = {\n            asset[] l = [@`\"${TEX}\"`@, @<dir>/ref/maps/wood.png@]\n        }\n    }\n)\n{\n    custom asset absolute = @`\"/textures/${NAME}.png\"`@\n    custom asset[] arraySamples\n    asset[] arraySamples.timeSamples = {\n        1: [@<dir>/ref/wood.png@, @`${NUM}`@],\n    }\n    custom asset blank = @@\n    custom asset cond = @<dir>/ref/on.png@\n    custom asset empty = @`\"${TEX}\"`@\n    custom asset[] gap = [@@, @`\"./${NAME}.png\"`@]\n    custom asset[] list = [@`\"${TEX}\"`@, @<dir>/ref/wood.png@, @<dir>/ref/plain.png@]\n    custom asset malformed = @`\"./${NAME.png\"`@\n    custom asset missing = @<dir>/ref/${UNSET}.png@\n    custom asset named = @<dir>/ref/wood.png@ (\n        customData = {\n            asset a = @<dir>/ref/wood.png@\n            dictionary n = {\n                asset[] l = [@`\"${TEX}\"`@, @<dir>/ref/maps/wood.png@]\n            }\n        }\n    )\n    custom asset none = @`None`@\n    custom asset number = @`${NUM}`@\n    custom asset only = @<dir>/ref/only.png@\n    custom asset plain = @<dir>/ref/plain.png@\n    custom asset samples\n    asset samples.timeSamples = {\n        1: @<dir>/ref/wood.png@,\n        2: @`\"${TEX}\"`@,\n        3: @<dir>/ref/${UNSET}.png@,\n    }\n    custom asset search = @<dir>/ref/wood.png@\n}\n\n",
+ "flatten_layer_stack": "#usda 1.0\n(\n    expressionVariables = {\n        string DIR = \"maps\"\n        bool FLAG = 1\n        string NAME = \"wood\"\n        int NUM = 3\n        string TEX = \"\"\n    }\n)\n\ndef \"Sub\" (\n    assetInfo = {\n        asset identifier = @`\"./${NAME}.usda\"`@\n    }\n    customData = {\n        asset a = @`\"./${NAME}.png\"`@\n        dictionary n = {\n            asset[] l = [@`\"${TEX}\"`@, @`\"./${DIR}/${NAME}.png\"`@]\n        }\n    }\n)\n{\n    custom asset absolute = @/textures/wood.png@\n    custom asset[] arraySamples\n    asset[] arraySamples.timeSamples = {\n        1: [@<dir>/sub/wood.png@, @@],\n    }\n    custom asset blank = @@\n    custom asset cond = @<dir>/sub/on.png@\n    custom asset empty = @@\n    custom asset[] gap = [@@, @<dir>/sub/wood.png@]\n    custom asset[] list = [@@, @<dir>/sub/wood.png@, @<dir>/sub/plain.png@]\n    custom asset malformed = @@\n    custom asset missing = @<dir>/sub/${UNSET}.png@\n    custom asset named = @<dir>/sub/wood.png@ (\n        customData = {\n            asset a = @`\"./${NAME}.png\"`@\n            dictionary n = {\n                asset[] l = [@`\"${TEX}\"`@, @`\"./${DIR}/${NAME}.png\"`@]\n            }\n        }\n    )\n    custom asset none = @@\n    custom asset number = @@\n    custom asset plain = @<dir>/sub/plain.png@\n    custom asset samples\n    asset samples.timeSamples = {\n        1: @<dir>/sub/wood.png@,\n        2: @@,\n        3: @<dir>/sub/${UNSET}.png@,\n    }\n    custom asset search = @<dir>/sub/wood.png@\n}\n\ndef \"Local\" (\n    assetInfo = {\n        asset identifier = @`\"./${NAME}.usda\"`@\n    }\n    customData = {\n        asset a = @`\"./${NAME}.png\"`@\n        dictionary n = {\n            asset[] l = [@`\"${TEX}\"`@, @`\"./${DIR}/${NAME}.png\"`@]\n        }\n    }\n)\n{\n    custom asset absolute = @/textures/wood.png@\n    custom asset[] arraySamples\n    asset[] arraySamples.timeSamples = {\n        1: [@<dir>/wood.png@, @@],\n    }\n    custom asset blank = @@\n    custom asset cond = @<dir>/on.png@\n    custom asset empty = @@\n    custom asset[] gap = [@@, @<dir>/wood.png@]\n    custom asset[] list = [@@, @<dir>/wood.png@, @<dir>/plain.png@]\n    custom asset malformed = @@\n    custom asset missing = @<dir>/${UNSET}.png@\n    custom asset named = @<dir>/wood.png@ (\n        customData = {\n            asset a = @`\"./${NAME}.png\"`@\n            dictionary n = {\n                asset[] l = [@`\"${TEX}\"`@, @`\"./${DIR}/${NAME}.png\"`@]\n            }\n        }\n    )\n    custom asset none = @@\n    custom asset number = @@\n    custom asset plain = @<dir>/plain.png@\n    custom asset samples\n    asset samples.timeSamples = {\n        1: @<dir>/wood.png@,\n        2: @@,\n        3: @<dir>/${UNSET}.png@,\n    }\n    custom asset search = @<dir>/wood.png@\n}\n\ndef \"Root\" (\n    references = @<dir>/ref/ref.usda@</Ref>\n)\n{\n}\n\n",
+ "flatten_layer_stack_warnings": [
+  "Error evaluating expression `${NUM}`: Expression evaluated to 'int' but expected 'string'",
+  "Error evaluating expression `\"./${NAME.png\"`: Missing ending '}' at character 10",
+  "Error evaluating expression `${NUM}`: Expression evaluated to 'int' but expected 'string'",
+  "Error evaluating expression `${NUM}`: Expression evaluated to 'int' but expected 'string'",
+  "Error evaluating expression `\"./${NAME.png\"`: Missing ending '}' at character 10",
+  "Error evaluating expression `${NUM}`: Expression evaluated to 'int' but expected 'string'"
+ ],
+ "flatten_warnings": [
+  "Expression evaluated to 'int' but expected 'string' (resolving asset path at @sub/sub.usda@</Sub.arraySamples> on stage @scene.usda@)",
+  "Missing ending '}' at character 10 (resolving asset path at @sub/sub.usda@</Sub.malformed> on stage @scene.usda@)",
+  "Missing ending '}' at character 10 (resolving asset path at @sub/sub.usda@</Sub.malformed> on stage @scene.usda@)",
+  "Expression evaluated to 'int' but expected 'string' (resolving asset path at @sub/sub.usda@</Sub.number> on stage @scene.usda@)",
+  "Expression evaluated to 'int' but expected 'string' (resolving asset path at @sub/sub.usda@</Sub.number> on stage @scene.usda@)",
+  "Expression evaluated to 'int' but expected 'string' (resolving asset path at @scene.usda@</Local.arraySamples> on stage @scene.usda@)",
+  "Missing ending '}' at character 10 (resolving asset path at @scene.usda@</Local.malformed> on stage @scene.usda@)",
+  "Missing ending '}' at character 10 (resolving asset path at @scene.usda@</Local.malformed> on stage @scene.usda@)",
+  "Expression evaluated to 'int' but expected 'string' (resolving asset path at @scene.usda@</Local.number> on stage @scene.usda@)",
+  "Expression evaluated to 'int' but expected 'string' (resolving asset path at @scene.usda@</Local.number> on stage @scene.usda@)",
+  "Expression evaluated to 'int' but expected 'string' (resolving asset path at @ref/ref.usda@</Ref.arraySamples> on stage @scene.usda@)",
+  "Missing ending '}' at character 10 (resolving asset path at @ref/ref.usda@</Ref.malformed> on stage @scene.usda@)",
+  "Missing ending '}' at character 10 (resolving asset path at @ref/ref.usda@</Ref.malformed> on stage @scene.usda@)",
+  "Expression evaluated to 'int' but expected 'string' (resolving asset path at @ref/ref.usda@</Ref.number> on stage @scene.usda@)",
+  "Expression evaluated to 'int' but expected 'string' (resolving asset path at @ref/ref.usda@</Ref.number> on stage @scene.usda@)"
+ ],
+ "openusd_version": "26.11",
+ "read": {
+  "/Local": {
+   "assetInfo": {
+    "value": {
+     "dictionary": {
+      "identifier": {
+       "authored": "`\"./${NAME}.usda\"`",
+       "evaluated": "./wood.usda",
+       "resolved": ""
+      }
+     }
+    },
+    "warnings": []
+   },
+   "attributes": {
+    "absolute": {
+     "customData": {
+      "value": {
+       "dictionary": {}
+      },
+      "warnings": []
+     },
+     "default": {
+      "value": {
+       "authored": "`\"/textures/${NAME}.png\"`",
+       "evaluated": "/textures/wood.png",
+       "resolved": ""
+      },
+      "warnings": []
+     },
+     "samples": []
+    },
+    "arraySamples": {
+     "customData": {
+      "value": {
+       "dictionary": {}
+      },
+      "warnings": []
+     },
+     "default": {
+      "value": null,
+      "warnings": []
+     },
+     "samples": [
+      [
+       1.0,
+       {
+        "value": [
+         {
+          "authored": "`\"./${NAME}.png\"`",
+          "evaluated": "./wood.png",
+          "resolved": "<dir>/wood.png"
+         },
+         {
+          "authored": "`${NUM}`",
+          "evaluated": "",
+          "resolved": ""
+         }
+        ],
+        "warnings": [
+         "Expression evaluated to 'int' but expected 'string' (resolving asset path at @scene.usda@</Local.arraySamples> on stage @scene.usda@)"
+        ]
+       }
+      ]
+     ]
+    },
+    "blank": {
+     "customData": {
+      "value": {
+       "dictionary": {}
+      },
+      "warnings": []
+     },
+     "default": {
+      "value": {
+       "authored": "",
+       "evaluated": "",
+       "resolved": ""
+      },
+      "warnings": []
+     },
+     "samples": []
+    },
+    "cond": {
+     "customData": {
+      "value": {
+       "dictionary": {}
+      },
+      "warnings": []
+     },
+     "default": {
+      "value": {
+       "authored": "`if(${FLAG}, \"./on.png\", \"./off.png\")`",
+       "evaluated": "./on.png",
+       "resolved": "<dir>/on.png"
+      },
+      "warnings": []
+     },
+     "samples": []
+    },
+    "empty": {
+     "customData": {
+      "value": {
+       "dictionary": {}
+      },
+      "warnings": []
+     },
+     "default": {
+      "value": {
+       "authored": "`\"${TEX}\"`",
+       "evaluated": "",
+       "resolved": ""
+      },
+      "warnings": []
+     },
+     "samples": []
+    },
+    "gap": {
+     "customData": {
+      "value": {
+       "dictionary": {}
+      },
+      "warnings": []
+     },
+     "default": {
+      "value": [
+       {
+        "authored": "",
+        "evaluated": "",
+        "resolved": ""
+       },
+       {
+        "authored": "`\"./${NAME}.png\"`",
+        "evaluated": "./wood.png",
+        "resolved": "<dir>/wood.png"
+       }
+      ],
+      "warnings": []
+     },
+     "samples": []
+    },
+    "list": {
+     "customData": {
+      "value": {
+       "dictionary": {}
+      },
+      "warnings": []
+     },
+     "default": {
+      "value": [
+       {
+        "authored": "`\"${TEX}\"`",
+        "evaluated": "",
+        "resolved": ""
+       },
+       {
+        "authored": "`\"./${NAME}.png\"`",
+        "evaluated": "./wood.png",
+        "resolved": "<dir>/wood.png"
+       },
+       {
+        "authored": "./plain.png",
+        "evaluated": "",
+        "resolved": "<dir>/plain.png"
+       }
+      ],
+      "warnings": []
+     },
+     "samples": []
+    },
+    "malformed": {
+     "customData": {
+      "value": {
+       "dictionary": {}
+      },
+      "warnings": []
+     },
+     "default": {
+      "value": {
+       "authored": "`\"./${NAME.png\"`",
+       "evaluated": "",
+       "resolved": ""
+      },
+      "warnings": [
+       "Missing ending '}' at character 10 (resolving asset path at @scene.usda@</Local.malformed> on stage @scene.usda@)"
+      ]
+     },
+     "samples": []
+    },
+    "missing": {
+     "customData": {
+      "value": {
+       "dictionary": {}
+      },
+      "warnings": []
+     },
+     "default": {
+      "value": {
+       "authored": "`\"./${UNSET}.png\"`",
+       "evaluated": "./${UNSET}.png",
+       "resolved": ""
+      },
+      "warnings": []
+     },
+     "samples": []
+    },
+    "named": {
+     "customData": {
+      "value": {
+       "dictionary": {
+        "a": {
+         "authored": "`\"./${NAME}.png\"`",
+         "evaluated": "./wood.png",
+         "resolved": "<dir>/wood.png"
+        },
+        "n": {
+         "dictionary": {
+          "l": [
+           {
+            "authored": "`\"${TEX}\"`",
+            "evaluated": "",
+            "resolved": ""
+           },
+           {
+            "authored": "`\"./${DIR}/${NAME}.png\"`",
+            "evaluated": "./maps/wood.png",
+            "resolved": "<dir>/maps/wood.png"
+           }
+          ]
+         }
+        }
+       }
+      },
+      "warnings": []
+     },
+     "default": {
+      "value": {
+       "authored": "`\"./${NAME}.png\"`",
+       "evaluated": "./wood.png",
+       "resolved": "<dir>/wood.png"
+      },
+      "warnings": []
+     },
+     "samples": []
+    },
+    "none": {
+     "customData": {
+      "value": {
+       "dictionary": {}
+      },
+      "warnings": []
+     },
+     "default": {
+      "value": {
+       "authored": "`None`",
+       "evaluated": "",
+       "resolved": ""
+      },
+      "warnings": []
+     },
+     "samples": []
+    },
+    "number": {
+     "customData": {
+      "value": {
+       "dictionary": {}
+      },
+      "warnings": []
+     },
+     "default": {
+      "value": {
+       "authored": "`${NUM}`",
+       "evaluated": "",
+       "resolved": ""
+      },
+      "warnings": [
+       "Expression evaluated to 'int' but expected 'string' (resolving asset path at @scene.usda@</Local.number> on stage @scene.usda@)"
+      ]
+     },
+     "samples": []
+    },
+    "plain": {
+     "customData": {
+      "value": {
+       "dictionary": {}
+      },
+      "warnings": []
+     },
+     "default": {
+      "value": {
+       "authored": "./plain.png",
+       "evaluated": "",
+       "resolved": "<dir>/plain.png"
+      },
+      "warnings": []
+     },
+     "samples": []
+    },
+    "samples": {
+     "customData": {
+      "value": {
+       "dictionary": {}
+      },
+      "warnings": []
+     },
+     "default": {
+      "value": null,
+      "warnings": []
+     },
+     "samples": [
+      [
+       1.0,
+       {
+        "value": {
+         "authored": "`\"./${NAME}.png\"`",
+         "evaluated": "./wood.png",
+         "resolved": "<dir>/wood.png"
+        },
+        "warnings": []
+       }
+      ],
+      [
+       2.0,
+       {
+        "value": {
+         "authored": "`\"${TEX}\"`",
+         "evaluated": "",
+         "resolved": ""
+        },
+        "warnings": []
+       }
+      ],
+      [
+       3.0,
+       {
+        "value": {
+         "authored": "`\"./${UNSET}.png\"`",
+         "evaluated": "./${UNSET}.png",
+         "resolved": ""
+        },
+        "warnings": []
+       }
+      ]
+     ]
+    },
+    "search": {
+     "customData": {
+      "value": {
+       "dictionary": {}
+      },
+      "warnings": []
+     },
+     "default": {
+      "value": {
+       "authored": "`\"${NAME}.png\"`",
+       "evaluated": "wood.png",
+       "resolved": "<dir>/wood.png"
+      },
+      "warnings": []
+     },
+     "samples": []
+    }
+   },
+   "customData": {
+    "value": {
+     "dictionary": {
+      "a": {
+       "authored": "`\"./${NAME}.png\"`",
+       "evaluated": "./wood.png",
+       "resolved": "<dir>/wood.png"
+      },
+      "n": {
+       "dictionary": {
+        "l": [
+         {
+          "authored": "`\"${TEX}\"`",
+          "evaluated": "",
+          "resolved": ""
+         },
+         {
+          "authored": "`\"./${DIR}/${NAME}.png\"`",
+          "evaluated": "./maps/wood.png",
+          "resolved": "<dir>/maps/wood.png"
+         }
+        ]
+       }
+      }
+     }
+    },
+    "warnings": []
+   }
+  },
+  "/Root": {
+   "assetInfo": {
+    "value": {
+     "dictionary": {
+      "identifier": {
+       "authored": "`\"./${NAME}.usda\"`",
+       "evaluated": "./wood.usda",
+       "resolved": ""
+      }
+     }
+    },
+    "warnings": []
+   },
+   "attributes": {
+    "absolute": {
+     "customData": {
+      "value": {
+       "dictionary": {}
+      },
+      "warnings": []
+     },
+     "default": {
+      "value": {
+       "authored": "`\"/textures/${NAME}.png\"`",
+       "evaluated": "/textures/wood.png",
+       "resolved": ""
+      },
+      "warnings": []
+     },
+     "samples": []
+    },
+    "arraySamples": {
+     "customData": {
+      "value": {
+       "dictionary": {}
+      },
+      "warnings": []
+     },
+     "default": {
+      "value": null,
+      "warnings": []
+     },
+     "samples": [
+      [
+       1.0,
+       {
+        "value": [
+         {
+          "authored": "`\"./${NAME}.png\"`",
+          "evaluated": "./wood.png",
+          "resolved": "<dir>/ref/wood.png"
+         },
+         {
+          "authored": "`${NUM}`",
+          "evaluated": "",
+          "resolved": ""
+         }
+        ],
+        "warnings": [
+         "Expression evaluated to 'int' but expected 'string' (resolving asset path at @ref/ref.usda@</Ref.arraySamples> on stage @scene.usda@)"
+        ]
+       }
+      ]
+     ]
+    },
+    "blank": {
+     "customData": {
+      "value": {
+       "dictionary": {}
+      },
+      "warnings": []
+     },
+     "default": {
+      "value": {
+       "authored": "",
+       "evaluated": "",
+       "resolved": ""
+      },
+      "warnings": []
+     },
+     "samples": []
+    },
+    "cond": {
+     "customData": {
+      "value": {
+       "dictionary": {}
+      },
+      "warnings": []
+     },
+     "default": {
+      "value": {
+       "authored": "`if(${FLAG}, \"./on.png\", \"./off.png\")`",
+       "evaluated": "./on.png",
+       "resolved": "<dir>/ref/on.png"
+      },
+      "warnings": []
+     },
+     "samples": []
+    },
+    "empty": {
+     "customData": {
+      "value": {
+       "dictionary": {}
+      },
+      "warnings": []
+     },
+     "default": {
+      "value": {
+       "authored": "`\"${TEX}\"`",
+       "evaluated": "",
+       "resolved": ""
+      },
+      "warnings": []
+     },
+     "samples": []
+    },
+    "gap": {
+     "customData": {
+      "value": {
+       "dictionary": {}
+      },
+      "warnings": []
+     },
+     "default": {
+      "value": [
+       {
+        "authored": "",
+        "evaluated": "",
+        "resolved": ""
+       },
+       {
+        "authored": "`\"./${NAME}.png\"`",
+        "evaluated": "./wood.png",
+        "resolved": "<dir>/ref/wood.png"
+       }
+      ],
+      "warnings": []
+     },
+     "samples": []
+    },
+    "list": {
+     "customData": {
+      "value": {
+       "dictionary": {}
+      },
+      "warnings": []
+     },
+     "default": {
+      "value": [
+       {
+        "authored": "`\"${TEX}\"`",
+        "evaluated": "",
+        "resolved": ""
+       },
+       {
+        "authored": "`\"./${NAME}.png\"`",
+        "evaluated": "./wood.png",
+        "resolved": "<dir>/ref/wood.png"
+       },
+       {
+        "authored": "./plain.png",
+        "evaluated": "",
+        "resolved": "<dir>/ref/plain.png"
+       }
+      ],
+      "warnings": []
+     },
+     "samples": []
+    },
+    "malformed": {
+     "customData": {
+      "value": {
+       "dictionary": {}
+      },
+      "warnings": []
+     },
+     "default": {
+      "value": {
+       "authored": "`\"./${NAME.png\"`",
+       "evaluated": "",
+       "resolved": ""
+      },
+      "warnings": [
+       "Missing ending '}' at character 10 (resolving asset path at @ref/ref.usda@</Ref.malformed> on stage @scene.usda@)"
+      ]
+     },
+     "samples": []
+    },
+    "missing": {
+     "customData": {
+      "value": {
+       "dictionary": {}
+      },
+      "warnings": []
+     },
+     "default": {
+      "value": {
+       "authored": "`\"./${UNSET}.png\"`",
+       "evaluated": "./${UNSET}.png",
+       "resolved": ""
+      },
+      "warnings": []
+     },
+     "samples": []
+    },
+    "named": {
+     "customData": {
+      "value": {
+       "dictionary": {
+        "a": {
+         "authored": "`\"./${NAME}.png\"`",
+         "evaluated": "./wood.png",
+         "resolved": "<dir>/ref/wood.png"
+        },
+        "n": {
+         "dictionary": {
+          "l": [
+           {
+            "authored": "`\"${TEX}\"`",
+            "evaluated": "",
+            "resolved": ""
+           },
+           {
+            "authored": "`\"./${DIR}/${NAME}.png\"`",
+            "evaluated": "./maps/wood.png",
+            "resolved": "<dir>/ref/maps/wood.png"
+           }
+          ]
+         }
+        }
+       }
+      },
+      "warnings": []
+     },
+     "default": {
+      "value": {
+       "authored": "`\"./${NAME}.png\"`",
+       "evaluated": "./wood.png",
+       "resolved": "<dir>/ref/wood.png"
+      },
+      "warnings": []
+     },
+     "samples": []
+    },
+    "none": {
+     "customData": {
+      "value": {
+       "dictionary": {}
+      },
+      "warnings": []
+     },
+     "default": {
+      "value": {
+       "authored": "`None`",
+       "evaluated": "",
+       "resolved": ""
+      },
+      "warnings": []
+     },
+     "samples": []
+    },
+    "number": {
+     "customData": {
+      "value": {
+       "dictionary": {}
+      },
+      "warnings": []
+     },
+     "default": {
+      "value": {
+       "authored": "`${NUM}`",
+       "evaluated": "",
+       "resolved": ""
+      },
+      "warnings": [
+       "Expression evaluated to 'int' but expected 'string' (resolving asset path at @ref/ref.usda@</Ref.number> on stage @scene.usda@)"
+      ]
+     },
+     "samples": []
+    },
+    "only": {
+     "customData": {
+      "value": {
+       "dictionary": {}
+      },
+      "warnings": []
+     },
+     "default": {
+      "value": {
+       "authored": "`\"./${ONLY}.png\"`",
+       "evaluated": "./only.png",
+       "resolved": "<dir>/ref/only.png"
+      },
+      "warnings": []
+     },
+     "samples": []
+    },
+    "plain": {
+     "customData": {
+      "value": {
+       "dictionary": {}
+      },
+      "warnings": []
+     },
+     "default": {
+      "value": {
+       "authored": "./plain.png",
+       "evaluated": "",
+       "resolved": "<dir>/ref/plain.png"
+      },
+      "warnings": []
+     },
+     "samples": []
+    },
+    "samples": {
+     "customData": {
+      "value": {
+       "dictionary": {}
+      },
+      "warnings": []
+     },
+     "default": {
+      "value": null,
+      "warnings": []
+     },
+     "samples": [
+      [
+       1.0,
+       {
+        "value": {
+         "authored": "`\"./${NAME}.png\"`",
+         "evaluated": "./wood.png",
+         "resolved": "<dir>/ref/wood.png"
+        },
+        "warnings": []
+       }
+      ],
+      [
+       2.0,
+       {
+        "value": {
+         "authored": "`\"${TEX}\"`",
+         "evaluated": "",
+         "resolved": ""
+        },
+        "warnings": []
+       }
+      ],
+      [
+       3.0,
+       {
+        "value": {
+         "authored": "`\"./${UNSET}.png\"`",
+         "evaluated": "./${UNSET}.png",
+         "resolved": ""
+        },
+        "warnings": []
+       }
+      ]
+     ]
+    },
+    "search": {
+     "customData": {
+      "value": {
+       "dictionary": {}
+      },
+      "warnings": []
+     },
+     "default": {
+      "value": {
+       "authored": "`\"${NAME}.png\"`",
+       "evaluated": "wood.png",
+       "resolved": "<dir>/ref/wood.png"
+      },
+      "warnings": []
+     },
+     "samples": []
+    }
+   },
+   "customData": {
+    "value": {
+     "dictionary": {
+      "a": {
+       "authored": "`\"./${NAME}.png\"`",
+       "evaluated": "./wood.png",
+       "resolved": "<dir>/ref/wood.png"
+      },
+      "n": {
+       "dictionary": {
+        "l": [
+         {
+          "authored": "`\"${TEX}\"`",
+          "evaluated": "",
+          "resolved": ""
+         },
+         {
+          "authored": "`\"./${DIR}/${NAME}.png\"`",
+          "evaluated": "./maps/wood.png",
+          "resolved": "<dir>/ref/maps/wood.png"
+         }
+        ]
+       }
+      }
+     }
+    },
+    "warnings": []
+   }
+  },
+  "/Sub": {
+   "assetInfo": {
+    "value": {
+     "dictionary": {
+      "identifier": {
+       "authored": "`\"./${NAME}.usda\"`",
+       "evaluated": "./wood.usda",
+       "resolved": ""
+      }
+     }
+    },
+    "warnings": []
+   },
+   "attributes": {
+    "absolute": {
+     "customData": {
+      "value": {
+       "dictionary": {}
+      },
+      "warnings": []
+     },
+     "default": {
+      "value": {
+       "authored": "`\"/textures/${NAME}.png\"`",
+       "evaluated": "/textures/wood.png",
+       "resolved": ""
+      },
+      "warnings": []
+     },
+     "samples": []
+    },
+    "arraySamples": {
+     "customData": {
+      "value": {
+       "dictionary": {}
+      },
+      "warnings": []
+     },
+     "default": {
+      "value": null,
+      "warnings": []
+     },
+     "samples": [
+      [
+       1.0,
+       {
+        "value": [
+         {
+          "authored": "`\"./${NAME}.png\"`",
+          "evaluated": "./wood.png",
+          "resolved": "<dir>/sub/wood.png"
+         },
+         {
+          "authored": "`${NUM}`",
+          "evaluated": "",
+          "resolved": ""
+         }
+        ],
+        "warnings": [
+         "Expression evaluated to 'int' but expected 'string' (resolving asset path at @sub/sub.usda@</Sub.arraySamples> on stage @scene.usda@)"
+        ]
+       }
+      ]
+     ]
+    },
+    "blank": {
+     "customData": {
+      "value": {
+       "dictionary": {}
+      },
+      "warnings": []
+     },
+     "default": {
+      "value": {
+       "authored": "",
+       "evaluated": "",
+       "resolved": ""
+      },
+      "warnings": []
+     },
+     "samples": []
+    },
+    "cond": {
+     "customData": {
+      "value": {
+       "dictionary": {}
+      },
+      "warnings": []
+     },
+     "default": {
+      "value": {
+       "authored": "`if(${FLAG}, \"./on.png\", \"./off.png\")`",
+       "evaluated": "./on.png",
+       "resolved": "<dir>/sub/on.png"
+      },
+      "warnings": []
+     },
+     "samples": []
+    },
+    "empty": {
+     "customData": {
+      "value": {
+       "dictionary": {}
+      },
+      "warnings": []
+     },
+     "default": {
+      "value": {
+       "authored": "`\"${TEX}\"`",
+       "evaluated": "",
+       "resolved": ""
+      },
+      "warnings": []
+     },
+     "samples": []
+    },
+    "gap": {
+     "customData": {
+      "value": {
+       "dictionary": {}
+      },
+      "warnings": []
+     },
+     "default": {
+      "value": [
+       {
+        "authored": "",
+        "evaluated": "",
+        "resolved": ""
+       },
+       {
+        "authored": "`\"./${NAME}.png\"`",
+        "evaluated": "./wood.png",
+        "resolved": "<dir>/sub/wood.png"
+       }
+      ],
+      "warnings": []
+     },
+     "samples": []
+    },
+    "list": {
+     "customData": {
+      "value": {
+       "dictionary": {}
+      },
+      "warnings": []
+     },
+     "default": {
+      "value": [
+       {
+        "authored": "`\"${TEX}\"`",
+        "evaluated": "",
+        "resolved": ""
+       },
+       {
+        "authored": "`\"./${NAME}.png\"`",
+        "evaluated": "./wood.png",
+        "resolved": "<dir>/sub/wood.png"
+       },
+       {
+        "authored": "./plain.png",
+        "evaluated": "",
+        "resolved": "<dir>/sub/plain.png"
+       }
+      ],
+      "warnings": []
+     },
+     "samples": []
+    },
+    "malformed": {
+     "customData": {
+      "value": {
+       "dictionary": {}
+      },
+      "warnings": []
+     },
+     "default": {
+      "value": {
+       "authored": "`\"./${NAME.png\"`",
+       "evaluated": "",
+       "resolved": ""
+      },
+      "warnings": [
+       "Missing ending '}' at character 10 (resolving asset path at @sub/sub.usda@</Sub.malformed> on stage @scene.usda@)"
+      ]
+     },
+     "samples": []
+    },
+    "missing": {
+     "customData": {
+      "value": {
+       "dictionary": {}
+      },
+      "warnings": []
+     },
+     "default": {
+      "value": {
+       "authored": "`\"./${UNSET}.png\"`",
+       "evaluated": "./${UNSET}.png",
+       "resolved": ""
+      },
+      "warnings": []
+     },
+     "samples": []
+    },
+    "named": {
+     "customData": {
+      "value": {
+       "dictionary": {
+        "a": {
+         "authored": "`\"./${NAME}.png\"`",
+         "evaluated": "./wood.png",
+         "resolved": "<dir>/sub/wood.png"
+        },
+        "n": {
+         "dictionary": {
+          "l": [
+           {
+            "authored": "`\"${TEX}\"`",
+            "evaluated": "",
+            "resolved": ""
+           },
+           {
+            "authored": "`\"./${DIR}/${NAME}.png\"`",
+            "evaluated": "./maps/wood.png",
+            "resolved": "<dir>/sub/maps/wood.png"
+           }
+          ]
+         }
+        }
+       }
+      },
+      "warnings": []
+     },
+     "default": {
+      "value": {
+       "authored": "`\"./${NAME}.png\"`",
+       "evaluated": "./wood.png",
+       "resolved": "<dir>/sub/wood.png"
+      },
+      "warnings": []
+     },
+     "samples": []
+    },
+    "none": {
+     "customData": {
+      "value": {
+       "dictionary": {}
+      },
+      "warnings": []
+     },
+     "default": {
+      "value": {
+       "authored": "`None`",
+       "evaluated": "",
+       "resolved": ""
+      },
+      "warnings": []
+     },
+     "samples": []
+    },
+    "number": {
+     "customData": {
+      "value": {
+       "dictionary": {}
+      },
+      "warnings": []
+     },
+     "default": {
+      "value": {
+       "authored": "`${NUM}`",
+       "evaluated": "",
+       "resolved": ""
+      },
+      "warnings": [
+       "Expression evaluated to 'int' but expected 'string' (resolving asset path at @sub/sub.usda@</Sub.number> on stage @scene.usda@)"
+      ]
+     },
+     "samples": []
+    },
+    "plain": {
+     "customData": {
+      "value": {
+       "dictionary": {}
+      },
+      "warnings": []
+     },
+     "default": {
+      "value": {
+       "authored": "./plain.png",
+       "evaluated": "",
+       "resolved": "<dir>/sub/plain.png"
+      },
+      "warnings": []
+     },
+     "samples": []
+    },
+    "samples": {
+     "customData": {
+      "value": {
+       "dictionary": {}
+      },
+      "warnings": []
+     },
+     "default": {
+      "value": null,
+      "warnings": []
+     },
+     "samples": [
+      [
+       1.0,
+       {
+        "value": {
+         "authored": "`\"./${NAME}.png\"`",
+         "evaluated": "./wood.png",
+         "resolved": "<dir>/sub/wood.png"
+        },
+        "warnings": []
+       }
+      ],
+      [
+       2.0,
+       {
+        "value": {
+         "authored": "`\"${TEX}\"`",
+         "evaluated": "",
+         "resolved": ""
+        },
+        "warnings": []
+       }
+      ],
+      [
+       3.0,
+       {
+        "value": {
+         "authored": "`\"./${UNSET}.png\"`",
+         "evaluated": "./${UNSET}.png",
+         "resolved": ""
+        },
+        "warnings": []
+       }
+      ]
+     ]
+    },
+    "search": {
+     "customData": {
+      "value": {
+       "dictionary": {}
+      },
+      "warnings": []
+     },
+     "default": {
+      "value": {
+       "authored": "`\"${NAME}.png\"`",
+       "evaluated": "wood.png",
+       "resolved": "<dir>/sub/wood.png"
+      },
+      "warnings": []
+     },
+     "samples": []
+    }
+   },
+   "customData": {
+    "value": {
+     "dictionary": {
+      "a": {
+       "authored": "`\"./${NAME}.png\"`",
+       "evaluated": "./wood.png",
+       "resolved": "<dir>/sub/wood.png"
+      },
+      "n": {
+       "dictionary": {
+        "l": [
+         {
+          "authored": "`\"${TEX}\"`",
+          "evaluated": "",
+          "resolved": ""
+         },
+         {
+          "authored": "`\"./${DIR}/${NAME}.png\"`",
+          "evaluated": "./maps/wood.png",
+          "resolved": "<dir>/sub/maps/wood.png"
+         }
+        ]
+       }
+      }
+     }
+    },
+    "warnings": []
+   }
+  }
+ }
+}

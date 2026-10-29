@@ -1,7 +1,7 @@
 {
  "before": {
   "asset.usda": "#usda 1.0\n\ndef Xform \"Asset\"\n{\n}\n\ndef Xform \"Other\"\n{\n}\n\n",
-  "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
+  "scene.usda": "#usda 1.0\n(\n    fallbackPrimTypes = {\n        token[] RoundThing = [\"Sphere\"]\n    }\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
   "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\n"
  },
  "cases": [
@@ -17,7 +17,7 @@
      ],
      "texts": {
       "asset.usda": "#usda 1.0\n\ndef Xform \"Asset\"\n{\n}\n\ndef Xform \"Other\"\n{\n}\n\n",
-      "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\ndef Sphere \"New\"\n{\n}\n\n",
+      "scene.usda": "#usda 1.0\n(\n    fallbackPrimTypes = {\n        token[] RoundThing = [\"Sphere\"]\n    }\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\ndef Sphere \"New\"\n{\n}\n\n",
       "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\n"
      },
      "type_name": "Sphere"
@@ -40,7 +40,7 @@
      ],
      "texts": {
       "asset.usda": "#usda 1.0\n\ndef Xform \"Asset\"\n{\n}\n\ndef Xform \"Other\"\n{\n}\n\n",
-      "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\ndef Sphere \"New\"\n{\n    double radius = 2\n}\n\n",
+      "scene.usda": "#usda 1.0\n(\n    fallbackPrimTypes = {\n        token[] RoundThing = [\"Sphere\"]\n    }\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\ndef Sphere \"New\"\n{\n    double radius = 2\n}\n\n",
       "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\n"
      },
      "type_name": "Sphere"
@@ -64,7 +64,7 @@
      ],
      "texts": {
       "asset.usda": "#usda 1.0\n\ndef Xform \"Asset\"\n{\n}\n\ndef Xform \"Other\"\n{\n}\n\n",
-      "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\ndef Sphere \"New\"\n{\n    double radius = 2\n    double radius.timeSamples = {\n        1: 3,\n    }\n}\n\n",
+      "scene.usda": "#usda 1.0\n(\n    fallbackPrimTypes = {\n        token[] RoundThing = [\"Sphere\"]\n    }\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\ndef Sphere \"New\"\n{\n    double radius = 2\n    double radius.timeSamples = {\n        1: 3,\n    }\n}\n\n",
       "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\n"
      },
      "type_name": "Sphere"
@@ -79,13 +79,57 @@
      "accepted": true,
      "applied": [],
      "call": [
+      "define",
+      "/New",
+      "RoundThing"
+     ],
+     "texts": {
+      "asset.usda": "#usda 1.0\n\ndef Xform \"Asset\"\n{\n}\n\ndef Xform \"Other\"\n{\n}\n\n",
+      "scene.usda": "#usda 1.0\n(\n    fallbackPrimTypes = {\n        token[] RoundThing = [\"Sphere\"]\n    }\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\ndef RoundThing \"New\"\n{\n}\n\n",
+      "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\n"
+     },
+     "type_name": "RoundThing"
+    },
+    {
+     "accepted": true,
+     "applied": [],
+     "attribute": {
+      "custom": false,
+      "type": "double",
+      "value": 2.0,
+      "variability": "varying"
+     },
+     "call": [
+      "set",
+      "/New.radius",
+      {
+       "double": 2.0
+      }
+     ],
+     "texts": {
+      "asset.usda": "#usda 1.0\n\ndef Xform \"Asset\"\n{\n}\n\ndef Xform \"Other\"\n{\n}\n\n",
+      "scene.usda": "#usda 1.0\n(\n    fallbackPrimTypes = {\n        token[] RoundThing = [\"Sphere\"]\n    }\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\ndef RoundThing \"New\"\n{\n    double radius = 2\n}\n\n",
+      "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\n"
+     },
+     "type_name": "RoundThing"
+    }
+   ],
+   "name": "define_fallback_type_then_set",
+   "target": "scene.usda"
+  },
+  {
+   "calls": [
+    {
+     "accepted": true,
+     "applied": [],
+     "call": [
       "set_type",
       "/Cube",
       "Sphere"
      ],
      "texts": {
       "asset.usda": "#usda 1.0\n\ndef Xform \"Asset\"\n{\n}\n\ndef Xform \"Other\"\n{\n}\n\n",
-      "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Sphere \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
+      "scene.usda": "#usda 1.0\n(\n    fallbackPrimTypes = {\n        token[] RoundThing = [\"Sphere\"]\n    }\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Sphere \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
       "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\n"
      },
      "type_name": "Sphere"
@@ -108,7 +152,7 @@
      ],
      "texts": {
       "asset.usda": "#usda 1.0\n\ndef Xform \"Asset\"\n{\n}\n\ndef Xform \"Other\"\n{\n}\n\n",
-      "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Sphere \"Cube\"\n{\n    double radius = 3\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
+      "scene.usda": "#usda 1.0\n(\n    fallbackPrimTypes = {\n        token[] RoundThing = [\"Sphere\"]\n    }\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Sphere \"Cube\"\n{\n    double radius = 3\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
       "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\n"
      },
      "type_name": "Sphere"
@@ -129,7 +173,7 @@
      ],
      "texts": {
       "asset.usda": "#usda 1.0\n\ndef Xform \"Asset\"\n{\n}\n\ndef Xform \"Other\"\n{\n}\n\n",
-      "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Sphere \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
+      "scene.usda": "#usda 1.0\n(\n    fallbackPrimTypes = {\n        token[] RoundThing = [\"Sphere\"]\n    }\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Sphere \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
       "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\n"
      },
      "type_name": "Sphere"
@@ -152,7 +196,7 @@
      ],
      "texts": {
       "asset.usda": "#usda 1.0\n\ndef Xform \"Asset\"\n{\n}\n\ndef Xform \"Other\"\n{\n}\n\n",
-      "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Sphere \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
+      "scene.usda": "#usda 1.0\n(\n    fallbackPrimTypes = {\n        token[] RoundThing = [\"Sphere\"]\n    }\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Sphere \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
       "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\n"
      },
      "type_name": "Sphere"
@@ -173,7 +217,7 @@
      ],
      "texts": {
       "asset.usda": "#usda 1.0\n\ndef Xform \"Asset\"\n{\n}\n\ndef Xform \"Other\"\n{\n}\n\n",
-      "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\ndef Sphere \"New\"\n{\n}\n\n",
+      "scene.usda": "#usda 1.0\n(\n    fallbackPrimTypes = {\n        token[] RoundThing = [\"Sphere\"]\n    }\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\ndef Sphere \"New\"\n{\n}\n\n",
       "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\n"
      },
      "type_name": "Sphere"
@@ -191,7 +235,7 @@
      ],
      "texts": {
       "asset.usda": "#usda 1.0\n\ndef Xform \"Asset\"\n{\n}\n\ndef Xform \"Other\"\n{\n}\n\n",
-      "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\ndef Sphere \"New\"\n{\n}\n\n",
+      "scene.usda": "#usda 1.0\n(\n    fallbackPrimTypes = {\n        token[] RoundThing = [\"Sphere\"]\n    }\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\ndef Sphere \"New\"\n{\n}\n\n",
       "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\n"
      },
      "type_name": "Sphere"
@@ -214,7 +258,7 @@
      ],
      "texts": {
       "asset.usda": "#usda 1.0\n\ndef Xform \"Asset\"\n{\n}\n\ndef Xform \"Other\"\n{\n}\n\n",
-      "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\" (\n    prepend apiSchemas = [\"MotionAPI\"]\n)\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
+      "scene.usda": "#usda 1.0\n(\n    fallbackPrimTypes = {\n        token[] RoundThing = [\"Sphere\"]\n    }\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\" (\n    prepend apiSchemas = [\"MotionAPI\"]\n)\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
       "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\n"
      },
      "type_name": "Cube"
@@ -239,7 +283,7 @@
      ],
      "texts": {
       "asset.usda": "#usda 1.0\n\ndef Xform \"Asset\"\n{\n}\n\ndef Xform \"Other\"\n{\n}\n\n",
-      "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\" (\n    prepend apiSchemas = [\"MotionAPI\"]\n)\n{\n    float motion:blurScale = 0.5\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
+      "scene.usda": "#usda 1.0\n(\n    fallbackPrimTypes = {\n        token[] RoundThing = [\"Sphere\"]\n    }\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\" (\n    prepend apiSchemas = [\"MotionAPI\"]\n)\n{\n    float motion:blurScale = 0.5\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
       "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\n"
      },
      "type_name": "Cube"
@@ -257,7 +301,7 @@
      ],
      "texts": {
       "asset.usda": "#usda 1.0\n\ndef Xform \"Asset\"\n{\n}\n\ndef Xform \"Other\"\n{\n}\n\n",
-      "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\" (\n    prepend apiSchemas = [\"MotionAPI\", \"CollectionAPI:look\"]\n)\n{\n    float motion:blurScale = 0.5\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
+      "scene.usda": "#usda 1.0\n(\n    fallbackPrimTypes = {\n        token[] RoundThing = [\"Sphere\"]\n    }\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\" (\n    prepend apiSchemas = [\"MotionAPI\", \"CollectionAPI:look\"]\n)\n{\n    float motion:blurScale = 0.5\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
       "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\n"
      },
      "type_name": "Cube"
@@ -283,7 +327,7 @@
      ],
      "texts": {
       "asset.usda": "#usda 1.0\n\ndef Xform \"Asset\"\n{\n}\n\ndef Xform \"Other\"\n{\n}\n\n",
-      "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\" (\n    prepend apiSchemas = [\"MotionAPI\", \"CollectionAPI:look\"]\n)\n{\n    uniform token collection:look:expansionRule = \"expandPrims\"\n    float motion:blurScale = 0.5\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
+      "scene.usda": "#usda 1.0\n(\n    fallbackPrimTypes = {\n        token[] RoundThing = [\"Sphere\"]\n    }\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\" (\n    prepend apiSchemas = [\"MotionAPI\", \"CollectionAPI:look\"]\n)\n{\n    uniform token collection:look:expansionRule = \"expandPrims\"\n    float motion:blurScale = 0.5\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
       "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\n"
      },
      "type_name": "Cube"
@@ -306,7 +350,7 @@
      ],
      "texts": {
       "asset.usda": "#usda 1.0\n\ndef Xform \"Asset\"\n{\n}\n\ndef Xform \"Other\"\n{\n}\n\n",
-      "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\" (\n    prepend apiSchemas = [\"MaterialBindingAPI\"]\n)\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
+      "scene.usda": "#usda 1.0\n(\n    fallbackPrimTypes = {\n        token[] RoundThing = [\"Sphere\"]\n    }\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\" (\n    prepend apiSchemas = [\"MaterialBindingAPI\"]\n)\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
       "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\n"
      },
      "type_name": "Cube"
@@ -329,7 +373,7 @@
      },
      "texts": {
       "asset.usda": "#usda 1.0\n\ndef Xform \"Asset\"\n{\n}\n\ndef Xform \"Other\"\n{\n}\n\n",
-      "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\" (\n    prepend apiSchemas = [\"MaterialBindingAPI\"]\n)\n{\n    custom rel material:binding\n    prepend rel material:binding = </Looks/Red>\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
+      "scene.usda": "#usda 1.0\n(\n    fallbackPrimTypes = {\n        token[] RoundThing = [\"Sphere\"]\n    }\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\" (\n    prepend apiSchemas = [\"MaterialBindingAPI\"]\n)\n{\n    custom rel material:binding\n    prepend rel material:binding = </Looks/Red>\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
       "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\n"
      },
      "type_name": "Cube"
@@ -352,7 +396,7 @@
      ],
      "texts": {
       "asset.usda": "#usda 1.0\n\ndef Xform \"Asset\"\n{\n}\n\ndef Xform \"Other\"\n{\n}\n\n",
-      "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\" (\n    prepend apiSchemas = [\"CollectionAPI:look\"]\n)\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
+      "scene.usda": "#usda 1.0\n(\n    fallbackPrimTypes = {\n        token[] RoundThing = [\"Sphere\"]\n    }\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\" (\n    prepend apiSchemas = [\"CollectionAPI:look\"]\n)\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
       "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\n"
      },
      "type_name": "Cube"
@@ -375,7 +419,7 @@
      },
      "texts": {
       "asset.usda": "#usda 1.0\n\ndef Xform \"Asset\"\n{\n}\n\ndef Xform \"Other\"\n{\n}\n\n",
-      "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\" (\n    prepend apiSchemas = [\"CollectionAPI:look\"]\n)\n{\n    prepend rel collection:look:includes = </Ref>\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
+      "scene.usda": "#usda 1.0\n(\n    fallbackPrimTypes = {\n        token[] RoundThing = [\"Sphere\"]\n    }\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\" (\n    prepend apiSchemas = [\"CollectionAPI:look\"]\n)\n{\n    prepend rel collection:look:includes = </Ref>\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
       "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\n"
      },
      "type_name": "Cube"
@@ -396,7 +440,7 @@
      ],
      "texts": {
       "asset.usda": "#usda 1.0\n\ndef Xform \"Asset\"\n{\n}\n\ndef Xform \"Other\"\n{\n}\n\n",
-      "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\ndef Xform \"New\"\n{\n}\n\n",
+      "scene.usda": "#usda 1.0\n(\n    fallbackPrimTypes = {\n        token[] RoundThing = [\"Sphere\"]\n    }\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\ndef Xform \"New\"\n{\n}\n\n",
       "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\n"
      },
      "type_name": "Xform"
@@ -417,7 +461,7 @@
      },
      "texts": {
       "asset.usda": "#usda 1.0\n\ndef Xform \"Asset\"\n{\n}\n\ndef Xform \"Other\"\n{\n}\n\n",
-      "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\ndef Xform \"New\"\n{\n    prepend rel proxyPrim = </Cube>\n}\n\n",
+      "scene.usda": "#usda 1.0\n(\n    fallbackPrimTypes = {\n        token[] RoundThing = [\"Sphere\"]\n    }\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\ndef Xform \"New\"\n{\n    prepend rel proxyPrim = </Cube>\n}\n\n",
       "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\n"
      },
      "type_name": "Xform"
@@ -444,7 +488,7 @@
      },
      "texts": {
       "asset.usda": "#usda 1.0\n\ndef Xform \"Asset\"\n{\n}\n\ndef Xform \"Other\"\n{\n}\n\n",
-      "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n    custom rel material:binding\n    prepend rel material:binding = </Looks/Red>\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
+      "scene.usda": "#usda 1.0\n(\n    fallbackPrimTypes = {\n        token[] RoundThing = [\"Sphere\"]\n    }\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n    custom rel material:binding\n    prepend rel material:binding = </Looks/Red>\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
       "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\n"
      },
      "type_name": "Cube"
@@ -467,7 +511,7 @@
      ],
      "texts": {
       "asset.usda": "#usda 1.0\n\ndef Xform \"Asset\"\n{\n}\n\ndef Xform \"Other\"\n{\n}\n\n",
-      "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\" (\n    prepend apiSchemas = [\"MotionAPI\"]\n)\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
+      "scene.usda": "#usda 1.0\n(\n    fallbackPrimTypes = {\n        token[] RoundThing = [\"Sphere\"]\n    }\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\" (\n    prepend apiSchemas = [\"MotionAPI\"]\n)\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
       "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\n"
      },
      "type_name": "Cube"
@@ -482,7 +526,7 @@
      ],
      "texts": {
       "asset.usda": "#usda 1.0\n\ndef Xform \"Asset\"\n{\n}\n\ndef Xform \"Other\"\n{\n}\n\n",
-      "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\" (\n    delete apiSchemas = [\"MotionAPI\"]\n)\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
+      "scene.usda": "#usda 1.0\n(\n    fallbackPrimTypes = {\n        token[] RoundThing = [\"Sphere\"]\n    }\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\" (\n    delete apiSchemas = [\"MotionAPI\"]\n)\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
       "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\n"
      },
      "type_name": "Cube"
@@ -500,7 +544,7 @@
      ],
      "texts": {
       "asset.usda": "#usda 1.0\n\ndef Xform \"Asset\"\n{\n}\n\ndef Xform \"Other\"\n{\n}\n\n",
-      "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\" (\n    delete apiSchemas = [\"MotionAPI\"]\n)\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
+      "scene.usda": "#usda 1.0\n(\n    fallbackPrimTypes = {\n        token[] RoundThing = [\"Sphere\"]\n    }\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\" (\n    delete apiSchemas = [\"MotionAPI\"]\n)\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
       "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\n"
      },
      "type_name": "Cube"
@@ -520,7 +564,7 @@
      ],
      "texts": {
       "asset.usda": "#usda 1.0\n\ndef Xform \"Asset\"\n{\n}\n\ndef Xform \"Other\"\n{\n}\n\n",
-      "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
+      "scene.usda": "#usda 1.0\n(\n    fallbackPrimTypes = {\n        token[] RoundThing = [\"Sphere\"]\n    }\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
       "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\n"
      },
      "type_name": ""
@@ -538,7 +582,7 @@
      ],
      "texts": {
       "asset.usda": "#usda 1.0\n\ndef Xform \"Asset\"\n{\n}\n\ndef Xform \"Other\"\n{\n}\n\n",
-      "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
+      "scene.usda": "#usda 1.0\n(\n    fallbackPrimTypes = {\n        token[] RoundThing = [\"Sphere\"]\n    }\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
       "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\n"
      },
      "type_name": ""
@@ -567,7 +611,7 @@
      ],
      "texts": {
       "asset.usda": "#usda 1.0\n\ndef Xform \"Asset\"\n{\n}\n\ndef Xform \"Other\"\n{\n}\n\n",
-      "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n    double size = 2\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
+      "scene.usda": "#usda 1.0\n(\n    fallbackPrimTypes = {\n        token[] RoundThing = [\"Sphere\"]\n    }\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n    double size = 2\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
       "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\n"
      },
      "type_name": "Cube"
@@ -582,7 +626,7 @@
      ],
      "texts": {
       "asset.usda": "#usda 1.0\n\ndef Xform \"Asset\"\n{\n}\n\ndef Xform \"Other\"\n{\n}\n\n",
-      "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Sphere \"Cube\"\n{\n    double size = 2\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
+      "scene.usda": "#usda 1.0\n(\n    fallbackPrimTypes = {\n        token[] RoundThing = [\"Sphere\"]\n    }\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Sphere \"Cube\"\n{\n    double size = 2\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
       "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\n"
      },
      "type_name": "Sphere"
@@ -605,7 +649,7 @@
      ],
      "texts": {
       "asset.usda": "#usda 1.0\n\ndef Xform \"Asset\"\n{\n}\n\ndef Xform \"Other\"\n{\n}\n\n",
-      "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Sphere \"Cube\"\n{\n    double size = 3\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
+      "scene.usda": "#usda 1.0\n(\n    fallbackPrimTypes = {\n        token[] RoundThing = [\"Sphere\"]\n    }\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Sphere \"Cube\"\n{\n    double size = 3\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
       "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\n"
      },
      "type_name": "Sphere"
@@ -628,7 +672,7 @@
      ],
      "texts": {
       "asset.usda": "#usda 1.0\n\ndef Xform \"Asset\"\n{\n}\n\ndef Xform \"Other\"\n{\n}\n\n",
-      "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Sphere \"Cube\"\n{\n    double radius = 1\n    double size = 3\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
+      "scene.usda": "#usda 1.0\n(\n    fallbackPrimTypes = {\n        token[] RoundThing = [\"Sphere\"]\n    }\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Sphere \"Cube\"\n{\n    double radius = 1\n    double size = 3\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
       "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\n"
      },
      "type_name": "Sphere"
@@ -643,7 +687,7 @@
      ],
      "texts": {
       "asset.usda": "#usda 1.0\n\ndef Xform \"Asset\"\n{\n}\n\ndef Xform \"Other\"\n{\n}\n\n",
-      "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n    double radius = 1\n    double size = 3\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
+      "scene.usda": "#usda 1.0\n(\n    fallbackPrimTypes = {\n        token[] RoundThing = [\"Sphere\"]\n    }\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n    double radius = 1\n    double size = 3\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
       "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\n"
      },
      "type_name": "Cube"
@@ -666,7 +710,7 @@
      ],
      "texts": {
       "asset.usda": "#usda 1.0\n\ndef Xform \"Asset\"\n{\n}\n\ndef Xform \"Other\"\n{\n}\n\n",
-      "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n    double radius = 4\n    double size = 3\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
+      "scene.usda": "#usda 1.0\n(\n    fallbackPrimTypes = {\n        token[] RoundThing = [\"Sphere\"]\n    }\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n    double radius = 4\n    double size = 3\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
       "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\n"
      },
      "type_name": "Cube"
@@ -687,7 +731,7 @@
      ],
      "texts": {
       "asset.usda": "#usda 1.0\n\ndef Xform \"Asset\"\n{\n}\n\ndef Xform \"Other\"\n{\n}\n\n",
-      "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\nover Sphere \"Weak\"\n{\n}\n\n",
+      "scene.usda": "#usda 1.0\n(\n    fallbackPrimTypes = {\n        token[] RoundThing = [\"Sphere\"]\n    }\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\nover Sphere \"Weak\"\n{\n}\n\n",
       "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\n"
      },
      "type_name": "Sphere"
@@ -710,7 +754,7 @@
      ],
      "texts": {
       "asset.usda": "#usda 1.0\n\ndef Xform \"Asset\"\n{\n}\n\ndef Xform \"Other\"\n{\n}\n\n",
-      "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\nover Sphere \"Weak\"\n{\n    double radius = 2\n}\n\n",
+      "scene.usda": "#usda 1.0\n(\n    fallbackPrimTypes = {\n        token[] RoundThing = [\"Sphere\"]\n    }\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\nover Sphere \"Weak\"\n{\n    double radius = 2\n}\n\n",
       "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\n"
      },
      "type_name": "Sphere"
@@ -731,7 +775,7 @@
      ],
      "texts": {
       "asset.usda": "#usda 1.0\n\ndef Xform \"Asset\"\n{\n}\n\ndef Xform \"Other\"\n{\n}\n\n",
-      "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
+      "scene.usda": "#usda 1.0\n(\n    fallbackPrimTypes = {\n        token[] RoundThing = [\"Sphere\"]\n    }\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
       "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\nover Sphere \"Cube\"\n{\n}\n\n"
      },
      "type_name": "Cube"
@@ -749,7 +793,7 @@
      ],
      "texts": {
       "asset.usda": "#usda 1.0\n\ndef Xform \"Asset\"\n{\n}\n\ndef Xform \"Other\"\n{\n}\n\n",
-      "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
+      "scene.usda": "#usda 1.0\n(\n    fallbackPrimTypes = {\n        token[] RoundThing = [\"Sphere\"]\n    }\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
       "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\nover Sphere \"Cube\"\n{\n}\n\n"
      },
      "type_name": "Cube"
@@ -772,7 +816,7 @@
      ],
      "texts": {
       "asset.usda": "#usda 1.0\n\ndef Xform \"Asset\"\n{\n}\n\ndef Xform \"Other\"\n{\n}\n\n",
-      "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
+      "scene.usda": "#usda 1.0\n(\n    fallbackPrimTypes = {\n        token[] RoundThing = [\"Sphere\"]\n    }\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
       "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\nover Sphere \"Cube\"\n{\n    double size = 2\n}\n\n"
      },
      "type_name": "Cube"
@@ -793,7 +837,7 @@
      ],
      "texts": {
       "asset.usda": "#usda 1.0\n\ndef Sphere \"Asset\"\n{\n}\n\ndef Xform \"Other\"\n{\n}\n\n",
-      "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
+      "scene.usda": "#usda 1.0\n(\n    fallbackPrimTypes = {\n        token[] RoundThing = [\"Sphere\"]\n    }\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
       "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\n"
      },
      "type_name": "Sphere"
@@ -816,7 +860,7 @@
      ],
      "texts": {
       "asset.usda": "#usda 1.0\n\ndef Sphere \"Asset\"\n{\n    double radius = 2\n}\n\ndef Xform \"Other\"\n{\n}\n\n",
-      "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
+      "scene.usda": "#usda 1.0\n(\n    fallbackPrimTypes = {\n        token[] RoundThing = [\"Sphere\"]\n    }\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
       "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\n"
      },
      "type_name": "Sphere"
@@ -837,7 +881,7 @@
      ],
      "texts": {
       "asset.usda": "#usda 1.0\n\ndef Xform \"Asset\"\n{\n}\n\ndef Sphere \"Other\"\n{\n}\n\n",
-      "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
+      "scene.usda": "#usda 1.0\n(\n    fallbackPrimTypes = {\n        token[] RoundThing = [\"Sphere\"]\n    }\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
       "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\n"
      },
      "type_name": "Cube"
@@ -855,7 +899,7 @@
      ],
      "texts": {
       "asset.usda": "#usda 1.0\n\ndef Xform \"Asset\"\n{\n}\n\ndef Sphere \"Other\"\n{\n}\n\n",
-      "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
+      "scene.usda": "#usda 1.0\n(\n    fallbackPrimTypes = {\n        token[] RoundThing = [\"Sphere\"]\n    }\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
       "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\n"
      },
      "type_name": "Cube"
@@ -878,7 +922,7 @@
      ],
      "texts": {
       "asset.usda": "#usda 1.0\n\ndef Xform \"Asset\"\n{\n}\n\ndef Sphere \"Other\"\n{\n    double size = 2\n}\n\n",
-      "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
+      "scene.usda": "#usda 1.0\n(\n    fallbackPrimTypes = {\n        token[] RoundThing = [\"Sphere\"]\n    }\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
       "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\n"
      },
      "type_name": "Cube"
@@ -901,7 +945,7 @@
      ],
      "texts": {
       "asset.usda": "#usda 1.0\n\ndef Xform \"Asset\"\n{\n}\n\ndef Xform \"Other\"\n{\n}\n\n",
-      "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" (\n            prepend apiSchemas = [\"MotionAPI\"]\n        ) {\n\n        }\n    }\n}\n\n",
+      "scene.usda": "#usda 1.0\n(\n    fallbackPrimTypes = {\n        token[] RoundThing = [\"Sphere\"]\n    }\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" (\n            prepend apiSchemas = [\"MotionAPI\"]\n        ) {\n\n        }\n    }\n}\n\n",
       "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\n"
      },
      "type_name": ""
@@ -926,7 +970,7 @@
      ],
      "texts": {
       "asset.usda": "#usda 1.0\n\ndef Xform \"Asset\"\n{\n}\n\ndef Xform \"Other\"\n{\n}\n\n",
-      "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" (\n            prepend apiSchemas = [\"MotionAPI\"]\n        ) {\n            float motion:blurScale = 0.5\n\n        }\n    }\n}\n\n",
+      "scene.usda": "#usda 1.0\n(\n    fallbackPrimTypes = {\n        token[] RoundThing = [\"Sphere\"]\n    }\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" (\n            prepend apiSchemas = [\"MotionAPI\"]\n        ) {\n            float motion:blurScale = 0.5\n\n        }\n    }\n}\n\n",
       "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\n"
      },
      "type_name": ""
@@ -947,7 +991,7 @@
      ],
      "texts": {
       "asset.usda": "#usda 1.0\n\ndef Xform \"Asset\"\n{\n}\n\ndef Xform \"Other\"\n{\n}\n\n",
-      "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
+      "scene.usda": "#usda 1.0\n(\n    fallbackPrimTypes = {\n        token[] RoundThing = [\"Sphere\"]\n    }\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
       "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\n"
      },
      "type_name": "Sphere"
@@ -970,7 +1014,7 @@
      ],
      "texts": {
       "asset.usda": "#usda 1.0\n\ndef Xform \"Asset\"\n{\n}\n\ndef Xform \"Other\"\n{\n}\n\n",
-      "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n            double radius = 2\n\n        }\n    }\n}\n\n",
+      "scene.usda": "#usda 1.0\n(\n    fallbackPrimTypes = {\n        token[] RoundThing = [\"Sphere\"]\n    }\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n            double radius = 2\n\n        }\n    }\n}\n\n",
       "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\n"
      },
      "type_name": "Sphere"

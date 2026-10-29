@@ -783,10 +783,23 @@ fn ensure_ancestors(store: &mut dyn LayerStore, layer: &mut Layer, path: Path) {
     if path.segments().is_empty() {
         return;
     }
-    ensure_ancestors(store, layer, path.parent().unwrap());
+    let parent = path.parent().unwrap();
+    ensure_ancestors(store, layer, parent.clone());
+    let name = path.leaf().unwrap();
     let id = store.paths().intern(path);
-    if !layer.prims.contains_key(&id) {
-        layer.insert_prim(id, PrimSpec::over());
+    if layer.prims.contains_key(&id) {
+        return;
+    }
+    layer.insert_prim(id, PrimSpec::over());
+    // The new over is its parent's last child, as `SdfJustCreatePrimInLayer`
+    // lists the specs it creates (`pxr/usd/sdf/primSpec.cpp`), which
+    // `UsdNamespaceEditor` calls for a reparent's new parent. AOUSD Core
+    // §7.6.2.2.1 (`primChildren`).
+    let parent = store.paths().intern(parent);
+    if let Some(spec) = layer.prims.get_mut(&parent)
+        && !spec.authored_children.contains(&name)
+    {
+        spec.authored_children.push(name);
     }
 }
 

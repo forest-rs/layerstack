@@ -4,7 +4,7 @@
 //! Differential tests for instance descendants, child order and path
 //! expressions.
 //!
-//! `fixtures/composition_misc/oracle.json` records what OpenUSD 26.08
+//! `fixtures/composition_misc/oracle.json` records what OpenUSD 26.11
 //! composes from `fixtures/composition_misc/root.usda`
 //! (`scripts/composition_misc_oracle.py`, which also writes those layers).
 //! Layerstack must compose the same prims with the same ordered prim stacks
@@ -48,6 +48,11 @@
 //!   Character classes, root globs, leading stretches and relative
 //!   references each map as OpenUSD maps them; `%_` also composes over
 //!   time samples, and over a block.
+//! - Every attribute's explained source is the one
+//!   `UsdAttribute::GetResolveInfo` names at each time: the strongest
+//!   opinion's slot, whatever composing over weaker opinions makes of it.
+//!   `/Sets.blocked`'s `%_` reaches a block, so it has no default-time
+//!   value, yet its source is the default.
 //!
 //! Spec: AOUSD Core §11.3.3 (scene graph instancing), §11 (stage
 //! population), §10 (composition arcs map namespace), §10.3.2.5 (a variant
@@ -59,7 +64,7 @@
 
 use std::collections::BTreeMap;
 
-use layerstack::{Contribution, OpinionRole, Stage, StageOptions, Time, Value};
+use layerstack::{Contribution, OpinionRole, Stage, StageOptions, Time, Value, ValueSource};
 use layerstack_conformance::{
     usda_real::{LoadedStage, load_entry_usda},
     workspace_root,
@@ -76,6 +81,10 @@ struct Oracle {
     values: BTreeMap<String, Option<OracleValue>>,
     /// Values at numeric times, keyed by the time's text.
     values_at_time: BTreeMap<String, BTreeMap<String, Option<OracleValue>>>,
+    /// `UsdResolveInfoSource` at the default time, snake case.
+    sources: BTreeMap<String, String>,
+    /// `UsdResolveInfoSource` at numeric times, keyed by the time's text.
+    sources_at_time: BTreeMap<String, BTreeMap<String, String>>,
 }
 
 #[derive(Deserialize)]
@@ -276,6 +285,54 @@ fn values_match_openusd() {
     assert!(
         mismatches.is_empty(),
         "values differ from OpenUSD:\n{}",
+        mismatches.join("\n")
+    );
+}
+
+/// The oracle's name for a value source (`UsdResolveInfoSource`).
+fn source_name(source: ValueSource) -> &'static str {
+    match source {
+        ValueSource::None => "none",
+        ValueSource::Default => "default",
+        ValueSource::TimeSamples { .. } => "time_samples",
+        ValueSource::Spline => "spline",
+        ValueSource::ValueClips => "value_clips",
+        ValueSource::Fallback => "fallback",
+    }
+}
+
+/// The explained source is the one `UsdAttribute::GetResolveInfo(time)`
+/// names, at the default time and at numeric times.
+#[test]
+fn value_sources_match_openusd() {
+    let oracle = oracle();
+    let (loaded, stage) = compose(&oracle);
+    let view = stage.view(&loaded.store);
+    let mut mismatches = Vec::new();
+    let mut check = |attr: &str, time: Time, expected: &str| {
+        let property = loaded.store.property_path(attr);
+        let source = view
+            .attribute(property)
+            .and_then(|a| a.explain(time))
+            .map(|explanation| source_name(explanation.source));
+        if source != Some(expected) {
+            mismatches.push(format!(
+                "{attr} at {time:?}: explained {source:?}, expected {expected}"
+            ));
+        }
+    };
+    for (attr, expected) in &oracle.sources {
+        check(attr, Time::Default, expected);
+    }
+    for (time, sources) in &oracle.sources_at_time {
+        let time: f64 = time.parse().expect("time");
+        for (attr, expected) in sources {
+            check(attr, Time::held(time), expected);
+        }
+    }
+    assert!(
+        mismatches.is_empty(),
+        "value sources differ from OpenUSD:\n{}",
         mismatches.join("\n")
     );
 }

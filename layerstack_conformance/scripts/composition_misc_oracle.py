@@ -56,7 +56,13 @@ Writes, under `layerstack_conformance/fixtures/composition_misc` by default:
 For every composed prim, instance proxies included, the vectors record its
 prim stack, repeats included, and its children in order; for every
 attribute, its resolved default and its value at a few numeric times
-(numbers as numbers, path expressions as their text, `null` for no value).
+(numbers as numbers, path expressions as their text, `null` for no value),
+and the source `UsdAttribute::GetResolveInfo(time)` names for each of those
+times (`UsdResolveInfoSource`). The source is the strongest opinion's slot,
+whatever composing over weaker opinions makes of it: `/Sets.blocked`'s
+`%_` reaches a block, so its default-time value is none, yet its source is
+the default (`_ResolveInfoResolver::ProcessLayerAtTime` in
+`pxr/usd/usd/stage.cpp`).
 """
 import json
 import os
@@ -657,6 +663,14 @@ def "Gear"
 
 # Numeric times the values are also resolved at.
 TIMES = [0.0, 5.0, 10.0]
+SOURCES = {
+    Usd.ResolveInfoSourceNone: "none",
+    Usd.ResolveInfoSourceFallback: "fallback",
+    Usd.ResolveInfoSourceDefault: "default",
+    Usd.ResolveInfoSourceTimeSamples: "time_samples",
+    Usd.ResolveInfoSourceValueClips: "value_clips",
+    Usd.ResolveInfoSourceSpline: "spline",
+}
 
 
 def layer_name(identifier):
@@ -687,6 +701,8 @@ def compose(directory):
     prims = []
     values = {}
     values_at_time = {}
+    sources = {}
+    sources_at_time = {}
     for prim in Usd.PrimRange.Stage(stage, predicate):
         prims.append({
             "path": str(prim.GetPath()),
@@ -696,13 +712,19 @@ def compose(directory):
                          for child in prim.GetFilteredChildren(predicate)],
         })
         for attr in prim.GetAttributes():
-            values[str(attr.GetPath())] = json_value(attr.Get())
+            path = str(attr.GetPath())
+            values[path] = json_value(attr.Get())
+            sources[path] = SOURCES[
+                attr.GetResolveInfo(Usd.TimeCode.Default()).GetSource()]
             for time in TIMES:
-                values_at_time.setdefault(str(time), {})[str(attr.GetPath())] = \
+                values_at_time.setdefault(str(time), {})[path] = \
                     json_value(attr.Get(time))
+                sources_at_time.setdefault(str(time), {})[path] = \
+                    SOURCES[attr.GetResolveInfo(time).GetSource()]
     if stage.GetCompositionErrors():
         sys.exit(f"unexpected composition errors: {stage.GetCompositionErrors()}")
-    return {"prims": prims, "values": values, "values_at_time": values_at_time}
+    return {"prims": prims, "values": values, "values_at_time": values_at_time,
+            "sources": sources, "sources_at_time": sources_at_time}
 
 
 def main():

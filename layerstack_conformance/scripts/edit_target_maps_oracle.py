@@ -17,7 +17,10 @@ that arc (or `Usd.EditTarget.ForLocalDirectVariant`), and records:
 - `MapToSpecPath` of each probed stage path (`null` when it does not map);
 - for each target, alone, what `UsdRelationship::SetTargets` authors on
   the prim's `look` relationship through the edit target (`null` when it
-  rejects the target) and what `GetTargets` then reads.
+  rejects the target) and what `GetTargets` then reads. Relational
+  attribute and mapper targets (`</Inst.b[/Inst/Child].d>`) map the paths
+  in their brackets too, and are rejected when one does not map
+  (`UsdEditTarget::MapToSpecPath`).
 
 It also opens `authored.usda`, where the test authored every accepted
 target of the root-layer cases through its own edit targets, and records
@@ -37,15 +40,17 @@ FIXTURES = os.path.normpath(os.path.join(HERE, "..", "fixtures", "edit_target_ma
 # (name, prim, arc, probed stage paths, targets)
 CASES = [
     ("inherit", "/Inst", "inherit", ["/Inst", "/Inst/Child", "/Light", "/Class", "/Class/X"],
-     ["/Light", "/Light.intensity", "/Inst/Child", "/Class/X"]),
+     ["/Light", "/Light.intensity", "/Inst/Child", "/Class/X", "/Inst.b[/Inst/Child].d",
+      "/Light.b[/Inst/Child].d.mapper[/Light]", "/Inst.b.mapper[/Class/X]"]),
     ("specialize", "/Spec", "specialize", ["/Spec", "/Spec/Child", "/Light", "/Base", "/Base/X"],
-     ["/Light", "/Light.intensity", "/Spec/Child", "/Base/X"]),
+     ["/Light", "/Light.intensity", "/Spec/Child", "/Base/X", "/Spec.b[/Spec/Child].d"]),
     ("variant", "/Rock", "variant", ["/Rock", "/Rock/Pebble", "/Light"],
-     ["/Light", "/Light.intensity", "/Rock/Pebble"]),
+     ["/Light", "/Light.intensity", "/Rock/Pebble", "/Rock.b[/Rock/Pebble].d"]),
     ("local_direct_variant", "/Rock", "local_direct_variant", ["/Rock", "/Rock/Pebble", "/Light"],
-     ["/Light", "/Light.intensity", "/Rock/Pebble"]),
+     ["/Light", "/Light.intensity", "/Rock/Pebble", "/Rock.b.mapper[/Rock/Pebble]"]),
     ("variant_under_reference", "/Ref", "variant", ["/Ref", "/Ref/Child", "/Light"],
-     ["/Ref/Child", "/Light"]),
+     ["/Ref/Child", "/Light", "/Ref.b[/Ref/Child].d", "/Ref/Child.b[/Light].d",
+      "/Ref.b[/Ref/Child.d[/Ref].e].f"]),
 ]
 
 

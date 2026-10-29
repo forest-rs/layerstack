@@ -10,6 +10,15 @@
    },
    "targets": {
     "/Class/X": null,
+    "/Inst.b.mapper[/Class/X]": null,
+    "/Inst.b[/Inst/Child].d": {
+     "authored": [
+      "/Class.b[/Class/Child].d"
+     ],
+     "reads": [
+      "/Inst.b[/Inst/Child].d"
+     ]
+    },
     "/Inst/Child": {
      "authored": [
       "/Class/Child"
@@ -24,6 +33,14 @@
      ],
      "reads": [
       "/Light"
+     ]
+    },
+    "/Light.b[/Inst/Child].d.mapper[/Light]": {
+     "authored": [
+      "/Light.b[/Class/Child].d.mapper[/Light]"
+     ],
+     "reads": [
+      "/Light.b[/Inst/Child].d.mapper[/Light]"
      ]
     },
     "/Light.intensity": {
@@ -57,6 +74,14 @@
      ],
      "reads": [
       "/Light.intensity"
+     ]
+    },
+    "/Rock.b.mapper[/Rock/Pebble]": {
+     "authored": [
+      "/Rock.b.mapper[/Rock/Pebble]"
+     ],
+     "reads": [
+      "/Rock.b.mapper[/Rock/Pebble]"
      ]
     },
     "/Rock/Pebble": {
@@ -95,6 +120,14 @@
       "/Light.intensity"
      ]
     },
+    "/Spec.b[/Spec/Child].d": {
+     "authored": [
+      "/Base.b[/Base/Child].d"
+     ],
+     "reads": [
+      "/Spec.b[/Spec/Child].d"
+     ]
+    },
     "/Spec/Child": {
      "authored": [
       "/Base/Child"
@@ -128,6 +161,14 @@
       "/Light.intensity"
      ]
     },
+    "/Rock.b[/Rock/Pebble].d": {
+     "authored": [
+      "/Rock.b[/Rock/Pebble].d"
+     ],
+     "reads": [
+      "/Rock.b[/Rock/Pebble].d"
+     ]
+    },
     "/Rock/Pebble": {
      "authored": [
       "/Rock/Pebble"
@@ -146,6 +187,22 @@
    },
    "targets": {
     "/Light": null,
+    "/Ref.b[/Ref/Child.d[/Ref].e].f": {
+     "authored": [
+      "/Asset.b[/Asset/Child.d[/Asset].e].f"
+     ],
+     "reads": [
+      "/Ref.b[/Ref/Child.d[/Ref].e].f"
+     ]
+    },
+    "/Ref.b[/Ref/Child].d": {
+     "authored": [
+      "/Asset.b[/Asset/Child].d"
+     ],
+     "reads": [
+      "/Ref.b[/Ref/Child].d"
+     ]
+    },
     "/Ref/Child": {
      "authored": [
       "/Asset/Child"
@@ -153,24 +210,29 @@
      "reads": [
       "/Ref/Child"
      ]
-    }
+    },
+    "/Ref/Child.b[/Light].d": null
    }
   }
  },
  "composed": {
   "/Inst": [
+   "/Inst.b[/Inst/Child].d",
    "/Inst/Child",
    "/Light",
+   "/Light.b[/Inst/Child].d.mapper[/Light]",
    "/Light.intensity"
   ],
   "/Rock": [
    "/Light",
    "/Light.intensity",
+   "/Rock.b[/Rock/Pebble].d",
    "/Rock/Pebble"
   ],
   "/Spec": [
    "/Light",
    "/Light.intensity",
+   "/Spec.b[/Spec/Child].d",
    "/Spec/Child"
   ]
  },

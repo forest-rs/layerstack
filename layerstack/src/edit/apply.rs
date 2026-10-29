@@ -1875,7 +1875,7 @@ fn map_target(
     at: &Address,
     target: TargetPath,
 ) -> Result<TargetPath, Rejection> {
-    at.map_target(target, store.paths())
+    at.map_target(target, store.tokens(), store.paths())
         .ok_or(Rejection::UnmappableTarget(target))
 }
 

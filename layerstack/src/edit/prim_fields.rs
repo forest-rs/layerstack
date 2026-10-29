@@ -334,7 +334,7 @@ fn map_arc_path(
     if store.paths().resolve(path).depth() == 0 {
         return Err(Rejection::PseudoRootArc);
     }
-    match at.map_target(TargetPath::Prim(path), store.paths()) {
+    match at.map_target(TargetPath::Prim(path), store.tokens(), store.paths()) {
         Some(TargetPath::Prim(mapped)) => Ok(mapped),
         _ => Err(Rejection::UnmappableTarget(TargetPath::Prim(path))),
     }

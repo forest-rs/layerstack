@@ -14,7 +14,9 @@
 //! - `MapToSpecPath` of stage paths inside the arc's namespace, outside it,
 //!   and in the namespace its target root already maps (`/Class/X`);
 //! - what `SetTargets` authors for each target alone, or that it rejects
-//!   it, and what the stage then reads.
+//!   it, and what the stage then reads; a relational attribute or mapper
+//!   target (`/Inst.b[/Inst/Child].d`) maps the paths in its brackets too,
+//!   and is rejected when one of them does not map.
 //!
 //! Layerstack's `EditTarget::for_node` (and `for_local_variant`) must
 //! agree: a variant, inherit or specialize arc from the root keeps paths
@@ -181,6 +183,21 @@ fn the_scene_is_the_fixture() {
     }
 }
 
+/// The target path `text`; a relational attribute or mapper target
+/// (`/A.b[/C].d`) is a property target whose token is its whole property
+/// part, as the USDA reader keeps one.
+fn target_path(store: &InMemoryStore, text: &str) -> TargetPath {
+    let Some(bracket) = text.find('[') else {
+        return TargetPath::parse(text, store.tokens(), store.paths()).expect("a target path");
+    };
+    let dot = text[..bracket].find('.').expect("a property part");
+    let prim = store.path(&text[..dot]);
+    TargetPath::Property(PropertyPath::new(
+        prim,
+        store.tokens().intern(&text[dot + 1..]),
+    ))
+}
+
 /// Every case maps spec paths and targets as OpenUSD's edit target does,
 /// and each authored target undoes exactly.
 #[test]
@@ -229,8 +246,7 @@ fn edit_targets_map_as_openusd_does() {
             .map_property_to_spec_path(at, store.paths())
             .expect("the prim maps");
         for (path, expected) in case["targets"].as_object().expect("targets") {
-            let wanted =
-                TargetPath::parse(path, store.tokens(), store.paths()).expect("a target path");
+            let wanted = target_path(&store, path);
             let before = layers(&store);
             let mut edit = Transaction::new();
             edit.set_targets(target.property(at), ListOp::explicit(vec![wanted]));
@@ -317,9 +333,7 @@ fn authored_targets_compose_as_openusd_composes_them() {
             .expect("targets")
             .iter()
             .filter(|(_, outcome)| !outcome.is_null())
-            .map(|(path, _)| {
-                TargetPath::parse(path, store.tokens(), store.paths()).expect("a path")
-            })
+            .map(|(path, _)| target_path(&store, path))
             .collect();
         edit.set_targets(
             target.property(PropertyPath::new(prim, look)),

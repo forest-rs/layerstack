@@ -323,8 +323,6 @@ impl fmt::Display for Unsupported {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Invalid {
-    /// A prim spec has no specifier.
-    MissingSpecifier,
     /// An attribute spec has no declared type.
     MissingTypeName,
     /// A prim spec is not listed among the authored children of its parent
@@ -345,7 +343,6 @@ pub enum Invalid {
 impl fmt::Display for Invalid {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
-            Self::MissingSpecifier => "prim spec has no specifier",
             Self::MissingTypeName => "attribute has no type name",
             Self::UnlistedPrim => "prim spec is not among its parent's children",
             Self::MissingChildSpec => "listed child has no prim spec",
@@ -627,18 +624,19 @@ impl Lowering<'_> {
         };
         visited.insert((id, parent.sites.to_vec()));
 
-        let specifier = match spec.specifier {
-            Some(Specifier::Def) => WriterSpecifier::Def,
-            Some(Specifier::Over) => WriterSpecifier::Over,
-            Some(Specifier::Class) => WriterSpecifier::Class,
-            None => return invalid(shown, Invalid::MissingSpecifier),
-        };
-
         let mut prim = Prim::new(
-            specifier,
+            WriterSpecifier::Over,
             spec.type_name.map(|t| self.name(t)),
             self.name(name),
         );
+        // A spec that authors no specifier keeps none: USDA writes the
+        // fallback, `over`, and a crate stores no field, as OpenUSD saves
+        // the prim specs `Sdf.CreatePrimInLayer` makes.
+        prim.specifier = spec.specifier.map(|specifier| match specifier {
+            Specifier::Def => WriterSpecifier::Def,
+            Specifier::Over => WriterSpecifier::Over,
+            Specifier::Class => WriterSpecifier::Class,
+        });
         prim.metadata = self.metadata(&spec.fields, &shown)?;
         // Dedicated members of the layer model, stored as the `active` and
         // `instanceable` fields (AOUSD Core §7.6.2).

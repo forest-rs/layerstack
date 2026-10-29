@@ -319,14 +319,19 @@ fn prim_spec(prim: &mut Prim, parent: &str) -> Spec {
     } else {
         alloc::format!("{parent}/{}", prim.name)
     };
-    let mut spec = Spec::new(path, SpecForm::Prim).with_field(
-        "specifier",
-        Value::Specifier(match prim.specifier {
-            UsdaSpecifier::Def => Specifier::Def,
-            UsdaSpecifier::Over => Specifier::Over,
-            UsdaSpecifier::Class => Specifier::Class,
-        }),
-    );
+    let mut spec = Spec::new(path, SpecForm::Prim);
+    // A prim spec that authors no specifier stores no field, as OpenUSD's
+    // crate stores one `Sdf.CreatePrimInLayer` makes.
+    if let Some(specifier) = prim.specifier {
+        spec = spec.with_field(
+            "specifier",
+            Value::Specifier(match specifier {
+                UsdaSpecifier::Def => Specifier::Def,
+                UsdaSpecifier::Over => Specifier::Over,
+                UsdaSpecifier::Class => Specifier::Class,
+            }),
+        );
+    }
     if let Some(type_name) = prim.type_name.take() {
         spec = spec.with_field("typeName", Value::Token(type_name));
     }

@@ -21,6 +21,7 @@
     "accepted": true,
     "errors": []
    },
+   "metadata_types": {},
    "open_text": {
     "accepted": false,
     "errors": [
@@ -96,6 +97,31 @@
     "errors": [],
     "same_text": true,
     "text": "#usda 1.0\n(\n    prepend layerThing = [\"x\"]\n)\n\ndef \"A\" (\n    append bar = [1, 2.5]\n    delete baz = [\"c\"]\n    prepend foo = [\"a\", \"b\"]\n    reorder quux = [\"d\", \"e\"]\n    add qux = [hello]\n)\n{\n    rel r (\n        append relThing = [3]\n    )\n    int x (\n        prepend attrThing = [\"m\"]\n    )\n}\n\ndef \"B\" (\n    prepend foo = [\"a\", \"b\"]\n    myDict = {\n        int a = 1\n    }\n)\n{\n}\n\n"
+   }
+  },
+  "unregistered_typed_list_ops": {
+   "export_usdc": {
+    "accepted": true,
+    "errors": []
+   },
+   "metadata_types": {
+    "/P a": "IntListOp",
+    "/P b": "Int64ListOp",
+    "/P c": "UIntListOp",
+    "/P d": "UInt64ListOp",
+    "/P e": "TokenListOp",
+    "/P f": "StringListOp",
+    "/P.x g": "TokenListOp"
+   },
+   "open_text": {
+    "accepted": true,
+    "errors": []
+   },
+   "open_usdc": {
+    "accepted": true,
+    "errors": [],
+    "same_text": true,
+    "text": "#usda 1.0\n\ndef \"P\" (\n    prepend a = [1, -2]\n    append b = [3]\n    c = [4]\n    delete d = [5]\n    prepend e = [\"a\", \"b\"]\n    append f = [\"s\"]\n)\n{\n    int x (\n        prepend g = [\"t\"]\n    )\n}\n\n"
    }
   }
  },

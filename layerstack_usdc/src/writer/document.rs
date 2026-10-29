@@ -88,9 +88,8 @@ use super::{ListOp, Reference, Spec, SpecForm, Specifier, Value, Variability, wr
 /// # Errors
 ///
 /// [`UsdcWriteError::Document`] when the USDA writer would reject the
-/// document; [`UsdcWriteError::UnknownMetadata`] for a typed list op
-/// under an unregistered key and [`UsdcWriteError::MetadataType`] for
-/// metadata of the wrong type;
+/// document; [`UsdcWriteError::MetadataType`] for metadata of the wrong
+/// type;
 /// otherwise the errors of [`write_crate`].
 pub fn write_document(doc: &Document) -> Result<Vec<u8>, UsdcWriteError> {
     write_crate(&document_specs(doc)?)
@@ -967,16 +966,20 @@ fn metadatum(
         let value = match &mut entry.value {
             v @ UsdaValue::Dictionary(_) => natural(v),
             UsdaValue::UnregisteredListOp(op) => Value::UnregisteredValueListOp(list_op(op)),
-            // Typed list ops belong to registered fields.
-            UsdaValue::TokenListOp(_)
+            // A typed list op under such a key, which the parser never
+            // makes but a crate holds (`Sdf.CopySpec` sets one as it is),
+            // is stored as its own list-op type, as `CrateFile::_PackValue`
+            // stores any value of a type the crate knows
+            // (`pxr/usd/sdf/crateFile.cpp`).
+            v @ (UsdaValue::TokenListOp(_)
             | UsdaValue::StringListOp(_)
             | UsdaValue::IntListOp(_)
             | UsdaValue::UIntListOp(_)
             | UsdaValue::Int64ListOp(_)
-            | UsdaValue::UInt64ListOp(_) => {
-                return Err(UsdcWriteError::UnknownMetadata {
-                    path: path.into(),
-                    key: entry.key.clone(),
+            | UsdaValue::UInt64ListOp(_)) => {
+                return Ok(super::Field {
+                    name: core::mem::take(&mut entry.key),
+                    value: natural(v),
                 });
             }
             v => Value::String(v.to_usda_text()),
@@ -2093,8 +2096,7 @@ def Xform "A" (
     #[test]
     fn rejects_what_usda_rejects_and_untypable_metadata() {
         // Unregistered metadata is stored as the text parser stores it: the
-        // text of its value; a typed list op under such a key has no crate
-        // form.
+        // text of its value; a typed list op under such a key as itself.
         let mut doc = mesh_doc();
         doc.metadata
             .push(Metadatum::new("fooBar", UsdaValue::String("x".into())));
@@ -2112,13 +2114,17 @@ def Xform "A" (
             "fooBar",
             UsdaValue::TokenListOp(layerstack_usda::writer::ListOp::prepend(vec!["x".into()])),
         ));
-        assert_eq!(
-            document_specs(&doc),
-            Err(UsdcWriteError::UnknownMetadata {
-                path: "/Root".into(),
-                key: "fooBar".into()
-            }),
-            "unregistered list op"
+        assert!(
+            document_specs(&doc).unwrap()[1]
+                .fields
+                .contains(&Field::new(
+                    "fooBar",
+                    Value::TokenListOp(ListOp {
+                        prepended: vec!["x".into()],
+                        ..ListOp::default()
+                    })
+                )),
+            "typed list op under an unregistered key"
         );
         let mut doc = mesh_doc();
         doc.prims[0]

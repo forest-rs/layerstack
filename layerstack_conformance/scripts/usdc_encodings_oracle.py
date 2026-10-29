@@ -54,11 +54,13 @@ the same text as the source layer (`same_text`) and that text.
   absolute root, until the stack overflows. The export runs in a child
   process, and the oracle records that it was killed (`crashed`).
 
-One case has no USDA source, since the text parser cannot make it:
-it is a layer `Sdf.CopySpec` copies from a USDA source, replacing
+Two cases have no USDA source, since the text parser cannot make them:
+each is a layer `Sdf.CopySpec` copies from a USDA source, replacing
 fields' values through its value callback (which sets them as they
-are), and the oracle records its export, the read of that file, and
-whether the text parser reads the text that read exports (`open_text`).
+are), and the oracle records its export, the read of that file, the
+type `Usd.Stage` reads each replaced metadata field as from it
+(`metadata_types`), and whether the text parser reads the text that read
+exports (`open_text`).
 
 - `mapper_connections`: attribute connections to mappers
   (`</A.b.mapper[/C]>`, `</A.b[/C].d.mapper[/E]>`) beside a relational
@@ -66,6 +68,12 @@ whether the text parser reads the text that read exports (`open_text`).
   authoring from making them (`pxr/usd/sdf/schema.cpp`), and the text
   parser refuses them, but the crate stores and reads them as any path,
   and `ExportToString` writes them.
+- `unregistered_typed_list_ops`: typed list ops (`SdfIntListOp`,
+  `SdfInt64ListOp`, `SdfUIntListOp`, `SdfUInt64ListOp`, `SdfTokenListOp`,
+  `SdfStringListOp`) under metadata keys no schema registers, on a prim
+  and an attribute. The crate stores each as its list-op type, not as an
+  `SdfUnregisteredValue`; the text writes each as a list-op statement,
+  which the text parser reads as an `SdfUnregisteredValueListOp`.
 
 `--check` regenerates every file into a temporary directory and fails
 unless each matches the checked-in fixture; for a crate file, unless
@@ -178,6 +186,29 @@ def "P"
         ("/P.d", "connectionPaths"): lambda: Sdf.PathListOp.Create(prependedItems=[
             Sdf.Path("/A.b[/C].d.mapper[/E]"), Sdf.Path("/A.b[/C].d")]),
     }),
+    "unregistered_typed_list_ops": ("""#usda 1.0
+def "P" (
+    prepend a = [1]
+    prepend b = [1]
+    prepend c = [1]
+    prepend d = [1]
+    prepend e = [1]
+    prepend f = [1]
+)
+{
+    int x (
+        prepend g = [1]
+    )
+}
+""", {
+        ("/P", "a"): lambda: Sdf.IntListOp.Create(prependedItems=[1, -2]),
+        ("/P", "b"): lambda: Sdf.Int64ListOp.Create(appendedItems=[3]),
+        ("/P", "c"): lambda: Sdf.UIntListOp.CreateExplicit([4]),
+        ("/P", "d"): lambda: Sdf.UInt64ListOp.Create(deletedItems=[5]),
+        ("/P", "e"): lambda: Sdf.TokenListOp.Create(prependedItems=["a", "b"]),
+        ("/P", "f"): lambda: Sdf.StringListOp.Create(appendedItems=["s"]),
+        ("/P.x", "g"): lambda: Sdf.TokenListOp.Create(prependedItems=["t"]),
+    }),
 }
 
 
@@ -261,6 +292,18 @@ def case(out, name, text):
     return record
 
 
+def metadata_types(written, fields):
+    """The type of each replaced field that `Usd.Stage` reads as metadata
+    from the crate file at `written`, keyed `<path> <field>`."""
+    stage = Usd.Stage.Open(written)
+    found = {}
+    for path, field in fields:
+        value = stage.GetObjectAtPath(path).GetAllMetadata().get(field)
+        if value is not None:
+            found[f"{path} {field}"] = type(value).__name__
+    return found
+
+
 def built(out, name, source, fields):
     """Records `name`: the layer `Sdf.CopySpec` copies from `source`, the
     value of each of `fields` replaced."""
@@ -281,6 +324,8 @@ def built(out, name, source, fields):
         record["export_usdc"] = {"accepted": bool(ok) and not posted, "errors": posted}
         keep(out, name, written, record["export_usdc"])
         text = reread(record, written, layer.ExportToString())
+        if text is not None:
+            record["metadata_types"] = metadata_types(written, fields)
     if text is not None:
         _, posted = call(lambda: Sdf.Layer.CreateAnonymous("reread.usda").ImportFromString(text))
         record["open_text"] = {"accepted": not posted, "errors": posted}

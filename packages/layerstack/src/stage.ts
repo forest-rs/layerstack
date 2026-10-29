@@ -462,6 +462,25 @@ export class Stage implements Disposable {
     return layers;
   }
 
+  /**
+   * The layer with `id`, the same `Layer` every time: for an id that native
+   * code returns, such as the source layer of a resolved value on a stage
+   * opened with {@link OpenOptions.provenance}. Any layer the stage holds
+   * has one, a layer reached only through an arc included
+   * ({@link Stage.layers}).
+   *
+   * Throws `argument.invalid` when `id` is not a `bigint`, and
+   * `layer.unknown` when the stage holds no layer with it (an asset it
+   * has not read yet has none).
+   */
+  layer(id: bigint): Layer {
+    if (typeof id !== "bigint") {
+      throw new LayerstackError("argument.invalid", "layer", "expected a bigint layer id");
+    }
+    this.#call("layer", () => undefined);
+    return this.#layer(id, "layer");
+  }
+
   /** Whether `layer` changed since it was read or last saved. Throws `layer.affinity` for another stage's layer. */
   isDirty(layer: Layer): boolean {
     this.#own("isDirty", layer);
@@ -773,7 +792,8 @@ export class Stage implements Disposable {
   /**
    * Borrows this stage for a synchronous extension linked into the same native
    * module, such as a Rust export taking `&layerstack_wasm::Stage`. `operation`
-   * names that extension in disposed-stage and native-error diagnostics.
+   * names that extension in disposed-stage and native-error diagnostics. A
+   * `LayerId` it returns is {@link Stage.layer}'s `id`.
    *
    * The callback must not retain, free or consume the borrowed native stage.
    * Return an extension result, never a promise or thenable. A returned
@@ -839,11 +859,6 @@ export class Stage implements Disposable {
   /** @internal */
   native<T>(operation: string, f: (native: NativeStage) => T): T {
     return this.#call(operation, f);
-  }
-
-  /** @internal The layer with `id`, from the cache or a fresh inventory. */
-  layerOf(id: bigint): Layer {
-    return this.#layer(id);
   }
 
   /** The layer edits go to: `target`, else the edit layer. */
@@ -918,13 +933,13 @@ export class Stage implements Disposable {
     }
   }
 
-  #layer(id: bigint): Layer {
+  #layer(id: bigint, operation = "layers"): Layer {
     const known = this.#layers.get(id);
     if (known !== undefined) return known;
     this.layers();
     const found = this.#layers.get(id);
     if (found === undefined) {
-      throw new LayerstackError("layer.unknown", "layers", `the stage has no layer ${id}`);
+      throw new LayerstackError("layer.unknown", operation, `the stage has no layer ${id}`);
     }
     return found;
   }
@@ -1105,7 +1120,7 @@ export class Attribute {
       samples: lower === null ? null : { lower: lower as number, upper: upper as number },
       opinions: (opinions as Row[]).map(
         ([layer, specPath, arc, role, detail, offset, scale]): Opinion => ({
-          layer: this.stage.layerOf(layer as bigint),
+          layer: this.stage.layer(layer as bigint),
           specPath: specPath as string,
           arc: arc as ArcKind | null,
           role: role as Opinion["role"],

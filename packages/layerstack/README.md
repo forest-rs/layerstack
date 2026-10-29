@@ -52,7 +52,8 @@ await stage.resolve(source);
   `stage.withNative("domain.inspect", native => module.inspect(native))`.
   The callback borrows the stage synchronously; it must not retain, free or
   consume it, and must not return a promise. A native error it throws is a
-  `LayerstackError` named for the given operation.
+  `LayerstackError` named for the given operation. A `LayerId` it returns
+  is `stage.layer(id)` in TypeScript.
   Native changes reach `onChange` listeners before `withNative` returns,
   including when the callback throws after committing an edit; a listener's
   edits are dispatched after the current change batch. A transaction is heard
@@ -111,9 +112,11 @@ await stage.resolve(source);
   `release()` it (or `using`) when done. Sent back in an edit, a handle is
   shared, not copied. Text arrays (`token[]`, `string[]`) are copied out
   once as strings. Rust never builds arrays element by element.
-- **Layer ids are `bigint`** and may exceed 2^53; you rarely need them. A
-  `Layer` belongs to its stage: passing it to another stage fails with
-  `layer.affinity`.
+- **Layer ids are `bigint`** and may exceed 2^53; you rarely need them.
+  `stage.layer(id)` is the `Layer` of an id native code returns (the same
+  object every time, for any layer the stage holds; `layer.unknown`
+  otherwise). A `Layer` belongs to its stage: passing it to another stage
+  fails with `layer.affinity`.
 - **Everything native is disposable.** A `Stage` owns native memory: call
   `free()` or declare it with `using`. Afterwards every call fails with
   `stage.disposed`.

@@ -374,7 +374,9 @@ impl NamespaceEdit {
     /// authored paths that name the object, and for a prim anything beneath
     /// it, are then dropped: relationship targets, attribute connections,
     /// inherits, specializes, internal references and payloads, path
-    /// expression terms (`/A /B` without `/A` is `/B`) and `defaultPrim`.
+    /// expression terms (`/A /B` without `/A` is `/B`) and `defaultPrim`;
+    /// those in a variant no composed prim index selects stay, as
+    /// `UsdNamespaceEditor` leaves them.
     ///
     /// `target` must address a layer of the root layer stack without
     /// remapping paths ([`NamespaceError::Unmappable`]). The object must be
@@ -1165,7 +1167,7 @@ impl Dormant {
     pub(super) fn insert(&mut self, path: PathId, sites: Vec<VariantSelectionSite>) {
         self.0.insert((path, sites));
     }
-    fn contains(&self, path: PathId, sites: &[VariantSelectionSite]) -> bool {
+    pub(super) fn contains(&self, path: PathId, sites: &[VariantSelectionSite]) -> bool {
         !self.0.is_empty() && self.0.contains(&(path, sites.to_vec()))
     }
     /// The specs after `mapping` moves those it carries inside the

@@ -111,6 +111,13 @@ fn fixtures() -> PathBuf {
     workspace_root().join("layerstack_conformance/fixtures/asset_expressions")
 }
 
+/// `path` with `/` separators, as layer identifiers and anchored asset
+/// paths spell it on every platform (`workspace_root` may be relative, and
+/// Windows joins it with `\`).
+fn slashed(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
+}
+
 fn load() -> (LoadedStage, Stage) {
     let mut loaded = load_entry_usda(&fixtures().join("scene.usda"));
     assert!(loaded.invalid.is_empty(), "{:?}", loaded.invalid);
@@ -300,7 +307,7 @@ fn locations(loaded: &LoadedStage) -> Locations {
         layers: loaded
             .layer_names
             .iter()
-            .map(|(&id, name)| (id, directory.join(name).to_string_lossy().into_owned()))
+            .map(|(&id, name)| (id, slashed(&directory.join(name))))
             .collect(),
     }
 }
@@ -308,7 +315,7 @@ fn locations(loaded: &LoadedStage) -> Locations {
 /// Anchors the asset `reference` names, as `<dir>/...` for a file of the
 /// fixture.
 fn anchored(reference: &AssetReference, resolver: &Locations) -> Result<String, AssetAnchorError> {
-    let directory = format!("{}/", fixtures().to_string_lossy());
+    let directory = format!("{}/", slashed(&fixtures()));
     reference
         .anchor(resolver)
         .map(|asset| asset.identifier.replace(&directory, "<dir>/"))
@@ -464,7 +471,7 @@ fn flatten_text(loaded: &mut LoadedStage, stage: &Stage) -> String {
     let store: &InMemoryStore = &loaded.store;
     let text =
         layerstack_usda::save_usda(&flat.layer, store.tokens(), store.paths()).expect("saves");
-    text.replace(&format!("{}/", fixtures().to_string_lossy()), "<dir>/")
+    text.replace(&format!("{}/", slashed(&fixtures())), "<dir>/")
 }
 
 /// The stage's flattened layer saves as OpenUSD's `UsdStage::Flatten`
@@ -521,7 +528,7 @@ fn flatten_layer_stack_text(loaded: &LoadedStage) -> (String, Vec<(String, Strin
         .map(|error| (error.expression.clone(), error.error.clone()))
         .collect();
     (
-        text.replace(&format!("{}/", fixtures().to_string_lossy()), "<dir>/"),
+        text.replace(&format!("{}/", slashed(&fixtures())), "<dir>/"),
         errors,
     )
 }

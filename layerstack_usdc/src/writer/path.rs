@@ -291,6 +291,13 @@ fn parse_property(mut text: &str) -> Result<Vec<PropertyElement>, &'static str> 
 
 /// Parses the absolute path of a bracketed element, `text` following its
 /// `[`, and returns it with the text after its `]`.
+///
+/// A relative bracketed path, which OpenUSD's text parser keeps where
+/// `SdfPath::MakeAbsolutePath` does not anchor it (`</X/Y.b[Z].d>`), is
+/// refused: OpenUSD 26.11 cannot save one either, its
+/// `CrateFile::_AddPath` adding the bracketed path and then its parents
+/// (`Z`, `.`, `..`, `../..`, ...), which never reach the absolute root,
+/// until the stack overflows (`pxr/usd/sdf/crateFile.cpp`).
 fn bracketed(text: &str) -> Result<(CratePath, &str), &'static str> {
     let mut depth = 0_usize;
     for (at, byte) in text.bytes().enumerate() {

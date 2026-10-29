@@ -1,0 +1,9 @@
+#usda 1.0
+def "P"
+{
+    def "Q"
+    {
+        rel b = <.b[C].d.mapper[E]>
+        rel d = </X/Y.b[Z].d>
+    }
+}

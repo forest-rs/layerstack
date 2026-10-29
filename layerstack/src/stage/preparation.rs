@@ -429,11 +429,6 @@ fn value_names_paths(value: &Value) -> bool {
 }
 
 impl Stage {
-    /// Whether the snapshot composes an instance.
-    pub(crate) fn composes_instances(&self) -> bool {
-        !self.instances.is_empty()
-    }
-
     /// The evidence a live stage retains for preparing namespace edits
     /// against this snapshot; `None` for a stage composed on its own.
     pub(crate) fn preparation(&self, paths: &PathInterner) -> Option<&PreparationIndex> {

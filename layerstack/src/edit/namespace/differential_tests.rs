@@ -278,6 +278,96 @@ fn rejections_scene() -> InMemoryStore {
     store
 }
 
+/// Instances sharing prototypes: `/Group/I1` and `/Group/I2` of the root
+/// layer's `/Proto`, which references the asset and holds a nested
+/// instance, `/Solo` of the asset alone, prims with arcs to an instance
+/// proxy and to the prototype's source, and, when `relocated`, a
+/// relocated instance.
+fn instances_scene(relocated: bool) -> InMemoryStore {
+    let mut store = InMemoryStore::default();
+    let size = store.tokens.intern("size");
+    let look = store.tokens.intern("look");
+    let mut asset = Layer::new(ASSET);
+    let asset_root = author(&mut store, &mut asset, "/Asset", PrimSpec::def());
+    author(
+        &mut store,
+        &mut asset,
+        "/Asset/Leaf",
+        PrimSpec::def().with_property(size, attribute(1.0)),
+    );
+    author(&mut store, &mut asset, "/Asset/Leaf/Tip", PrimSpec::def());
+    store.insert_layer(asset);
+    let mut root = Layer::new(ROOT);
+    let reference = Reference::with_asset(ASSET, asset_root, "asset.usda");
+    let proto = author(
+        &mut store,
+        &mut root,
+        "/Proto",
+        PrimSpec::def().with_reference(reference.clone()),
+    );
+    author(
+        &mut store,
+        &mut root,
+        "/Proto/Part",
+        PrimSpec::def().with_property(size, attribute(2.0)),
+    );
+    author(
+        &mut store,
+        &mut root,
+        "/Proto/Inner",
+        PrimSpec::def()
+            .with_reference(reference.clone())
+            .with_instanceable(true),
+    );
+    author(&mut store, &mut root, "/Group", PrimSpec::def());
+    for name in ["/Group/I1", "/Group/I2"] {
+        author(
+            &mut store,
+            &mut root,
+            name,
+            PrimSpec::def()
+                .with_reference(Reference::new(ROOT, proto))
+                .with_instanceable(true),
+        );
+    }
+    author(
+        &mut store,
+        &mut root,
+        "/Solo",
+        PrimSpec::def()
+            .with_reference(reference)
+            .with_instanceable(true),
+    );
+    let part = store.path("/Group/I1/Part");
+    author(
+        &mut store,
+        &mut root,
+        "/Watch",
+        PrimSpec::def()
+            .with_reference(Reference::new(ROOT, part))
+            .with_property(
+                look,
+                PropertySpec::relationship().with_targets(targets(vec![TargetPath::Prim(part)])),
+            ),
+    );
+    author(
+        &mut store,
+        &mut root,
+        "/Holder",
+        PrimSpec::def().with_inherit(proto),
+    );
+    if relocated {
+        let source = store.path("/Group/I2");
+        let target = store.path("/Group/Moved");
+        root.relocates_mut().push(Relocate {
+            source,
+            target: Some(target),
+        });
+    }
+    store.insert_layer(root);
+    store
+}
+
 fn variants_scene() -> InMemoryStore {
     let mut store = rejections_scene();
     let shape = store.tokens.intern("shape");
@@ -537,6 +627,18 @@ fn retained_preparation_matches_composition_across_arcs_and_dependents() {
     for relocated in [false, true] {
         let mut scene = Scene::new(arcs_scene(relocated), StageOptions::default(), &[DEPENDENT]);
         scene.exercise(&[ROOT], 4);
+    }
+}
+
+/// Every edit is compared against the scene as composed: none is applied,
+/// since a live stage recomposes an instance's descendants on its own
+/// where a new composition copies its representative's, and the snapshot
+/// checks compare their graphs node for node.
+#[test]
+fn retained_preparation_matches_composition_across_instances() {
+    for relocated in [false, true] {
+        let mut scene = Scene::new(instances_scene(relocated), StageOptions::default(), &[]);
+        assert!(scene.exercise(&[ROOT], 0) > 0);
     }
 }
 

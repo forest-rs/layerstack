@@ -18,6 +18,19 @@
       ]
      },
      "properties": {
+      "brackets": {
+       "targets": {
+        "append": [],
+        "delete": [],
+        "explicit": [
+         "/A.look[/A/Child].d",
+         "/Outside.b[/A/Child].d",
+         "/Outside.b[/Outside].d",
+         "/A.y.mapper[/A/Child.w]"
+        ],
+        "prepend": []
+       }
+      },
       "e": {
        "default": "/A/Child /Outside"
       },
@@ -122,6 +135,19 @@
       ]
      },
      "properties": {
+      "brackets": {
+       "targets": {
+        "append": [],
+        "delete": [],
+        "explicit": [
+         "/B.look[/B/Child].d",
+         "/Outside.b[/B/Child].d",
+         "/Outside.b[/Outside].d",
+         "/B.y.mapper[/B/Child.w]"
+        ],
+        "prepend": []
+       }
+      },
       "e": {
        "default": "/A/Child /Outside"
       },
@@ -251,6 +277,19 @@
       ]
      },
      "properties": {
+      "brackets": {
+       "targets": {
+        "append": [],
+        "delete": [],
+        "explicit": [
+         "/P/Q.look[/P/Q/Child].d",
+         "/Outside.b[/P/Q/Child].d",
+         "/Outside.b[/Outside].d",
+         "/P/Q.y.mapper[/P/Q/Child.w]"
+        ],
+        "prepend": []
+       }
+      },
       "e": {
        "default": "/A/Child /Outside"
       },
@@ -420,6 +459,47 @@
    "to": [
     "dst",
     "/P.look"
+   ]
+  },
+  {
+   "accepted": true,
+   "from": [
+    "src",
+    "/A.brackets"
+   ],
+   "layer": {
+    "/P": {
+     "properties": {
+      "brackets": {
+       "targets": {
+        "append": [],
+        "delete": [],
+        "explicit": [
+         "/P.look[/P/Child].d",
+         "/Outside.b[/P/Child].d",
+         "/Outside.b[/Outside].d",
+         "/P.y.mapper[/P/Child.w]"
+        ],
+        "prepend": []
+       }
+      },
+      "keep": {
+       "default": 4.0
+      }
+     },
+     "specifier": "over"
+    },
+    "/P/Q": {
+     "specifier": "def"
+    },
+    "/P/Q/Stale": {
+     "specifier": "def"
+    }
+   },
+   "name": "bracketed_targets_follow_the_prim",
+   "to": [
+    "dst",
+    "/P.brackets"
    ]
   },
   {

@@ -15,6 +15,12 @@ value, targets or connections. `scene.usda` only sublayers
 both layers, so that `tests/conformance/copy_spec.rs` can load them into one store and
 make the same copies with `Transaction::copy_spec`.
 
+`SdfShouldCopyValue` (`pxr/usd/sdf/copyUtils.cpp`) maps each target and
+connection by `SdfPath::ReplacePrefix` with no prefix test, so a
+relational attribute or mapper target (`</Outside.b[/A/Child].d>`) has the
+copied prim's path replaced inside its brackets even where the copy is not
+its prefix.
+
 Writes `fixtures/copy_spec/oracle.json` by default.
 """
 import json
@@ -32,6 +38,7 @@ CASES = [
     ("prim_into_another_layer", "src", "/A", "dst", "/P/Q"),
     ("property", "src", "/A.y", "dst", "/P.y2"),
     ("relationship_targets_follow_the_prim", "src", "/A.look", "dst", "/P.look"),
+    ("bracketed_targets_follow_the_prim", "src", "/A.brackets", "dst", "/P.brackets"),
     ("missing_source", "src", "/Nope", "dst", "/X"),
     ("prim_to_property", "src", "/Outside", "dst", "/P.x"),
     ("property_to_missing_prim", "src", "/A.y", "dst", "/Nope.y"),

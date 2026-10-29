@@ -42,18 +42,10 @@ const LAYERS: [&str; 3] = ["scene.usda", "sub.usda", "asset.usda"];
 /// The cases where layerstack does not yet do what OpenUSD does. Each
 /// must still differ, so that the list stays current.
 ///
-/// Each of these leaves `/World/User.across`'s `default` in `scene.usda`
-/// as it is, where OpenUSD fixes it: only `sub.usda` authors a target that
-/// depends on the edit, and OpenUSD decides whether to fix a property's
-/// fields from every spec of the composed property
-/// (`_DependencyCollector`), where layerstack tests each spec's own paths.
-const DIFFERING: &[&str] = &[
-    "rename_owner",
-    "reparent_owner",
-    "delete_owner",
-    "rename_owner_child",
-    "delete_owner_child",
-];
+/// Each of these deletes the only target of `sub.usda`'s
+/// `delete rel deleted`, which OpenUSD writes as `rel deleted`, and the
+/// USDA writer refuses the emptied list op.
+const DIFFERING: &[&str] = &["delete_owner", "delete_owner_child"];
 
 fn oracle() -> Json {
     let oracle: Json = serde_json::from_str(ORACLE).expect("oracle.json");

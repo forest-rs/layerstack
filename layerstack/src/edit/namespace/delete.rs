@@ -120,10 +120,9 @@ fn prepare_with(
             }
             None => original.clone(),
         };
-        dormant.insert(
-            *id,
-            coordinated::dormant_variants(store, &[stage], &indexes, &stack, &layer),
-        );
+        let unused = coordinated::dormant_variants(store, &[stage], &indexes, &stack, &layer);
+        repair_path_defaults(store, &[stage], &mut layer, object, None, &unused);
+        dormant.insert(*id, unused);
         remove_specs(store, &mut layer, object, &[]);
         for (dependent, within) in &dependents {
             remove_specs(store, &mut layer, *dependent, within);
@@ -711,7 +710,6 @@ fn repair_owner(
 ) -> Result<(), NamespaceError> {
     for entry in owner.properties.iter_mut() {
         let spec = Arc::make_mut(&mut entry.spec);
-        repair_path_default(store, spec, object, None);
         if let Some(targets) = &mut spec.targets {
             retain(targets, |target| !names(store, object, *target));
         }

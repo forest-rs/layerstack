@@ -252,6 +252,16 @@ fn prepare_with(
             _ => original.clone(),
         };
         let mut unused = dormant_variants(store, &stages, indexes, root_layers, &layer);
+        if stages.iter().any(|stage| stage.layer_stack().contains(id)) {
+            repair_path_defaults(
+                store,
+                &stages,
+                &mut layer,
+                source,
+                Some(destination),
+                &unused,
+            );
+        }
         if let Some(moves) = local_moves.get(id) {
             for mapping in moves {
                 validate_authored(&layer, store, mapping)?;

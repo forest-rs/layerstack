@@ -225,6 +225,17 @@ impl NamespaceEdit {
                     "namespace moves with authored relocates are not supported",
                 ));
             }
+            if layer_id != id && root_layers.contains(&layer_id) {
+                // The edit target's layer has moved its specs already.
+                repair_path_defaults(
+                    store,
+                    &[stage],
+                    &mut edited,
+                    source,
+                    Some(destination),
+                    &Dormant::default(),
+                );
+            }
             let local_move = if layer_id == id {
                 Some(&source_move)
             } else if root_layers.contains(&layer_id) {
@@ -1100,9 +1111,6 @@ fn repair_properties(
         let entry_moves =
             owner_moves || moved_property.is_some_and(|m| m.from.prim_path() != m.to.prim_path());
         let spec = Arc::make_mut(&mut entry.spec);
-        if let Some(mapping) = local.filter(|m| m.fix == PathFix::NamespaceEdit) {
-            repair_path_default(store, spec, mapping.from, Some(mapping.to));
-        }
         if let (Some(mapping), Some(targets)) = (local, &mut spec.targets) {
             map_list(targets, |p| *p = mapping.target(store, *p));
         }
@@ -1144,42 +1152,171 @@ pub(super) fn has_prefix(store: &dyn LayerStore, path: TargetPath, prefix: Targe
     }
 }
 
-/// Fixes the `SdfPath` a relationship's legacy `default` holds
-/// ([`Value::PathText`]) for the edit of `from` (to `to`, or a delete), as
-/// OpenUSD does: once any path the property authors (its targets or that
-/// default) has `from` as its prefix, the property depends on the edit
-/// (`_DependencyCollector`, `pxr/usd/usd/namespaceEditor.cpp`), and then
-/// the default is replaced by `SdfPath::ReplacePrefix(from, to)` whether or
-/// not `from` is its own prefix (`_PathReplacePrefix`), which fixes the
-/// paths in its brackets and, for a delete, empties it. Only this spec's
-/// paths are tested, where OpenUSD tests the composed property's.
+/// Fixes the `SdfPath`s that relationships' legacy `default`s hold
+/// ([`Value::PathText`]) in `layer`, of a layer stack of `stages`, for the
+/// edit of `from` (to `to`, or a delete), before any spec moves: as
+/// OpenUSD does, once a composed property depends on the edit, its
+/// default is replaced by `SdfPath::ReplacePrefix(from, to)` whether or not
+/// `from` is its own prefix (`_PathReplacePrefix`,
+/// `pxr/usd/usd/namespaceEditor.cpp`), which fixes the paths in its
+/// brackets and, for a delete, empties it. The variants `dormant` lists
+/// are left as they are, as no composed property reads them.
 /// AOUSD Core §8 (paths).
-pub(super) fn repair_path_default(
-    store: &dyn LayerStore,
-    spec: &mut crate::PropertySpec,
+pub(super) fn repair_path_defaults(
+    store: &mut dyn LayerStore,
+    stages: &[&Stage],
+    layer: &mut Layer,
+    from: TargetPath,
+    to: Option<TargetPath>,
+    dormant: &Dormant,
+) {
+    let holds_default = |properties: &[PropertyEntry]| {
+        properties
+            .iter()
+            .any(|entry| matches!(entry.spec.default, Some(Value::PathText(_))))
+    };
+    for (path, spec) in layer.prims.iter_mut() {
+        if holds_default(&spec.properties) {
+            repair_defaults(store, stages, &mut spec.properties, *path, from, to);
+        }
+        let outer = spec.outer_variant_sites().to_vec();
+        if let Some(rare) = spec.authored_rare_mut() {
+            let mut sites = outer;
+            repair_variant_defaults(
+                store,
+                stages,
+                &mut rare.variant_sets,
+                *path,
+                (from, to),
+                (&mut sites, dormant),
+            );
+        }
+    }
+    for (path, branches) in layer.variant_prims.iter_mut() {
+        for spec in branches {
+            let outer = spec.outer_variant_sites().to_vec();
+            if dormant.contains(*path, &outer) {
+                continue;
+            }
+            if holds_default(&spec.properties) {
+                repair_defaults(store, stages, &mut spec.properties, *path, from, to);
+            }
+            if let Some(rare) = spec.authored_rare_mut() {
+                let mut sites = outer;
+                repair_variant_defaults(
+                    store,
+                    stages,
+                    &mut rare.variant_sets,
+                    *path,
+                    (from, to),
+                    (&mut sites, dormant),
+                );
+            }
+        }
+    }
+}
+
+/// [`repair_path_defaults`] in the variants of `sets`, held by the prim at
+/// `path` inside the branches `sites`, but those `dormant` lists.
+fn repair_variant_defaults(
+    store: &mut dyn LayerStore,
+    stages: &[&Stage],
+    sets: &mut VariantSets,
+    path: PathId,
+    (from, to): (TargetPath, Option<TargetPath>),
+    (sites, dormant): (&mut Vec<VariantSelectionSite>, &Dormant),
+) {
+    for (set, spec) in sets.iter_mut() {
+        for (name, variant) in spec.variants.iter_mut() {
+            sites.push(VariantSelectionSite {
+                host_path: path,
+                set: *set,
+                variant: *name,
+            });
+            if !dormant.contains(path, sites) {
+                repair_defaults(store, stages, &mut variant.properties, path, from, to);
+                repair_variant_defaults(
+                    store,
+                    stages,
+                    &mut variant.variant_sets,
+                    path,
+                    (from, to),
+                    (sites, dormant),
+                );
+            }
+            sites.pop();
+        }
+    }
+}
+
+/// [`repair_path_defaults`] for the properties of the prim at `prim`.
+fn repair_defaults(
+    store: &mut dyn LayerStore,
+    stages: &[&Stage],
+    properties: &mut [PropertyEntry],
+    prim: PathId,
     from: TargetPath,
     to: Option<TargetPath>,
 ) {
-    let Some(Value::PathText(text)) = &spec.default else {
-        return;
-    };
+    for entry in properties {
+        let Some(Value::PathText(text)) = &entry.spec.default else {
+            continue;
+        };
+        let composed = PropertyPath::new(prim, entry.name);
+        if !default_depends(store, stages, &entry.spec, text, composed, from) {
+            continue;
+        }
+        let (tokens, paths) = (store.tokens(), store.paths());
+        let replaced = match to {
+            Some(to) => replace_text_prefix(tokens, paths, text, from, to).map(Arc::from),
+            None => Some(Arc::from("")),
+        };
+        if let Some(replaced) = replaced {
+            Arc::make_mut(&mut entry.spec).default = Some(Value::PathText(replaced));
+        }
+    }
+}
+
+/// Whether the composed property `composed`, which `spec` (whose default
+/// is `text`) contributes to, depends on the edit of `from`: whether
+/// `from` is a prefix of a path any of its opinions authors, the targets
+/// as composition maps them to the stage and the defaults of its stage's
+/// own layer stack (`_DependencyCollector`, which visits every spec of
+/// the composed property).
+fn default_depends(
+    store: &dyn LayerStore,
+    stages: &[&Stage],
+    spec: &crate::PropertySpec,
+    text: &str,
+    composed: PropertyPath,
+    from: TargetPath,
+) -> bool {
     let (tokens, paths) = (store.tokens(), store.paths());
-    let depends = text_has_prefix(tokens, paths, text, from)
-        || spec
-            .targets
+    let authors = |spec: &crate::PropertySpec| {
+        spec.targets
             .iter()
             .flat_map(|targets| targets.items())
-            .any(|target| has_prefix(store, *target, from));
-    if !depends {
-        return;
-    }
-    let replaced = match to {
-        Some(to) => replace_text_prefix(tokens, paths, text, from, to).map(Arc::from),
-        None => Some(Arc::from("")),
+            .any(|target| has_prefix(store, *target, from))
     };
-    if let Some(replaced) = replaced {
-        spec.default = Some(Value::PathText(replaced));
+    if text_has_prefix(tokens, paths, text, from) || authors(spec) {
+        return true;
     }
+    stages.iter().any(|stage| {
+        stage
+            .explain_property_path(composed)
+            .into_iter()
+            .flatten()
+            .any(|opinion| {
+                let Some(spec) = opinion.value().as_property() else {
+                    return false;
+                };
+                let local = stage.layer_stack().contains(&opinion.layer_id());
+                authors(spec)
+                    || (local
+                        && matches!(&spec.default, Some(Value::PathText(text))
+                            if text_has_prefix(tokens, paths, text, from)))
+            })
+    })
 }
 
 fn path_names(store: &dyn LayerStore, path: PathId) -> Vec<alloc::string::String> {

@@ -1,0 +1,28 @@
+#usda 1.0
+(
+    defaultPrim = "Asset"
+)
+
+def "Asset" (
+    variants = {
+        string mode = "one"
+    }
+    prepend variantSets = "mode"
+)
+{
+    variantSet "mode" = {
+        "one" {
+            def "Part"
+            {
+                rel toPart = </Asset/Part>
+            }
+
+        }
+        "two" {
+            def "Other"
+            {
+            }
+
+        }
+    }
+}

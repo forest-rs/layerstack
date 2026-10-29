@@ -1,0 +1,134 @@
+#usda 1.0
+(
+    subLayers = [
+        @sub.usda@
+    ]
+)
+
+def "World"
+{
+    # A prim with a variant set whose selection `sub.usda` authors: `red`
+    # is composed, `blue` is not.
+    def "A" (
+        prepend variantSets = "look"
+    )
+    {
+        int a = 1
+        rel r = </World/A/C>
+
+        def "C"
+        {
+        }
+        variantSet "look" = {
+            "blue" {
+                int a = 3
+                rel toA = </World/A/C>
+                rel toB = </World/B>
+
+                def "D"
+                {
+                    rel toB = </World/B>
+                }
+
+            }
+            "red" {
+                int red = 1
+                rel toB = </World/B>
+
+                def "C"
+                {
+                    rel toA = </World/A>
+                    rel toB = </World/B>
+                }
+
+            }
+        }
+    }
+
+    # The prim the variants target, connect to and inherit.
+    def "B"
+    {
+        int x = 1
+        rel self = </World/B.x>
+
+        def "Kid"
+        {
+        }
+    }
+
+    def "Group"
+    {
+    }
+
+    # The variant set is `sub.usda`'s; the selection is authored here.
+    def "Host" (
+        variants = {
+            string v = "on"
+        }
+    )
+    {
+    }
+
+    # Nested variant sets: `outer=a` selects a variant that authors its
+    # own set and selection, `inner=x`.
+    def "N" (
+        variants = {
+            string outer = "a"
+        }
+        prepend variantSets = "outer"
+    )
+    {
+        variantSet "outer" = {
+            "a" (
+                variants = {
+                    string inner = "x"
+                }
+                prepend variantSets = "inner"
+            ) {
+                variantSet "inner" = {
+                    "x" {
+                        def "Deep"
+                        {
+                            rel toB = </World/B>
+                            rel toN = </World/N/Deep>
+                        }
+
+                    }
+                    "y" {
+                        def "Deep"
+                        {
+                            rel toB = </World/B>
+                        }
+
+                    }
+                }
+
+            }
+            "b" {
+                def "Shallow"
+                {
+                    rel toB = </World/B>
+                }
+
+            }
+        }
+    }
+
+    # Variants across a reference.
+    def "R" (
+        prepend references = @asset.usda@</Asset>
+    )
+    {
+    }
+
+    # `/World/A` across an internal reference, with the variant it does
+    # not compose itself.
+    def "Copy" (
+        variants = {
+            string look = "blue"
+        }
+        prepend references = </World/A>
+    )
+    {
+    }
+}

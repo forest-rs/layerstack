@@ -18,9 +18,10 @@
 //!   local one reaches, and of each namespace above such a site;
 //! - the layers each prim's opinions come from ([`Prim::prim_stack`](crate::Prim::prim_stack));
 //! - for each layer, the prim specs that author a path or a composition
-//!   arc ([`slot_names_paths`]), as of a generation of the layer, found by
-//!   the first preparation that asks for them: an open that never edits
-//!   namespace never visits every spec for them.
+//!   arc ([`slot_names_paths`]), and the layers their references and
+//!   payloads name ([`LayerArcs`]), as of a generation of the layer, found
+//!   by the first preparation that asks for them: an open that never
+//!   edits namespace never visits every spec for them.
 //!
 //! A stage composed by [`Stage::compose`] keeps none of this, and
 //! preparation then composes and scans it as before.
@@ -33,7 +34,10 @@ use alloc::{sync::Arc, vec::Vec};
 use hashbrown::{HashMap, HashSet};
 
 use crate::{
-    doc::{FieldEntry, FieldValue, Layer, LayerId, LayerStore, PrimSpec, Value},
+    ListOp,
+    doc::{
+        FieldEntry, FieldValue, Layer, LayerId, LayerStore, PrimSpec, Reference, Value, VariantSets,
+    },
     path::{PathId, PathInterner},
     prim_index::{ArcKind, PrimIndex},
     prim_indexing::ChildIndex,
@@ -84,7 +88,168 @@ struct ComposedEvidence {
 #[derive(Debug)]
 struct LayerLinks {
     generation: u64,
-    slots: Memo<HashSet<PathId>>,
+    slots: Memo<LinkSlots>,
+}
+
+/// A layer's prim slots that author paths ([`slot_names_paths`]), and
+/// the layers its references and payloads name ([`LayerArcs`]).
+#[derive(Debug, Default, PartialEq)]
+struct LinkSlots {
+    paths: HashSet<PathId>,
+    arcs: LayerArcs,
+}
+
+/// The references and payloads a layer's prim slots author, outside
+/// variant branches or in one, by the layers they name: what namespace
+/// preparation reads of every layer a stage reaches, to follow its arcs,
+/// to reject those that do not resolve, and to find those targeting an
+/// edited layer. The layer an arc the importer resolved names is part of
+/// the layer, so it is kept; an arc the store resolves (a deferred one)
+/// or composition evaluates (an asset expression) is only marked, for
+/// preparation to read from its spec.
+///
+/// Spec: AOUSD Core §10.3.2.2 (references), §10.3.2.3 (payloads), §10.5
+/// (variants).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(crate) struct LayerArcs {
+    /// Each slot authoring a reference or payload, with what it names.
+    slots: HashMap<PathId, SlotArcs>,
+    /// The layers the slots' resolved arcs name, sorted.
+    layers: Vec<LayerId>,
+    /// The layers the resolved arcs of the slots' specs outside variant
+    /// branches name, sorted.
+    main_layers: Vec<LayerId>,
+    /// The slots authoring a deferred or expression arc, sorted.
+    unresolved: Vec<PathId>,
+}
+
+/// The references and payloads one prim slot authors ([`LayerArcs`]).
+#[derive(Clone, Debug, PartialEq)]
+struct SlotArcs {
+    /// The layers its resolved arcs name, sorted.
+    layers: Vec<LayerId>,
+    /// Those named by its specs outside variant branches, sorted.
+    main_layers: Vec<LayerId>,
+    /// Whether it authors a deferred or expression arc.
+    unresolved: bool,
+}
+
+impl SlotArcs {
+    /// The arcs `layer` authors at the prim path `path`, if any.
+    fn of(layer: &Layer, path: PathId) -> Option<Self> {
+        fn visit(refs: &ListOp<Reference>, layers: &mut Vec<LayerId>, unresolved: &mut bool) {
+            for r in refs.items() {
+                if r.deferred || r.is_expression() {
+                    *unresolved = true;
+                } else {
+                    layers.push(r.layer);
+                }
+            }
+        }
+        fn variants(sets: &VariantSets, layers: &mut Vec<LayerId>, unresolved: &mut bool) {
+            for v in sets.values().flat_map(|set| set.variants.values()) {
+                visit(&v.references, layers, unresolved);
+                visit(&v.payloads, layers, unresolved);
+                variants(&v.variant_sets, layers, unresolved);
+            }
+        }
+        let (mut layers, mut main_layers, mut unresolved) = (Vec::new(), Vec::new(), false);
+        let mut any = false;
+        let specs = layer
+            .prims
+            .get(&path)
+            .into_iter()
+            .map(|spec| (spec, true))
+            .chain(
+                layer
+                    .variant_prims
+                    .get(&path)
+                    .into_iter()
+                    .flatten()
+                    .map(|spec| (spec, false)),
+            );
+        for (spec, main) in specs {
+            any |= !spec.references.is_empty() || !spec.payloads.is_empty();
+            if main && spec.outer_variant_sites().is_empty() {
+                visit(&spec.references, &mut main_layers, &mut unresolved);
+                visit(&spec.payloads, &mut main_layers, &mut unresolved);
+            }
+            visit(&spec.references, &mut layers, &mut unresolved);
+            visit(&spec.payloads, &mut layers, &mut unresolved);
+            let before = layers.len();
+            variants(spec.variant_sets(), &mut layers, &mut unresolved);
+            any |= layers.len() != before;
+        }
+        any |= unresolved;
+        if !any {
+            return None;
+        }
+        for list in [&mut layers, &mut main_layers] {
+            sort::sort_unstable(list);
+            list.dedup();
+        }
+        Some(Self {
+            layers,
+            main_layers,
+            unresolved,
+        })
+    }
+}
+
+impl LayerArcs {
+    /// Records the arcs `layer` authors at `path` now, replacing those it
+    /// recorded there.
+    fn refresh(&mut self, layer: &Layer, path: PathId) {
+        match SlotArcs::of(layer, path) {
+            Some(arcs) => self.slots.insert(path, arcs),
+            None => self.slots.remove(&path),
+        };
+    }
+
+    /// Gathers the layers and slots of every recorded slot.
+    fn gather(&mut self) {
+        self.layers.clear();
+        self.main_layers.clear();
+        self.unresolved.clear();
+        for (path, arcs) in &self.slots {
+            self.layers.extend(&arcs.layers);
+            self.main_layers.extend(&arcs.main_layers);
+            if arcs.unresolved {
+                self.unresolved.push(*path);
+            }
+        }
+        for list in [&mut self.layers, &mut self.main_layers] {
+            sort::sort_unstable(list);
+            list.dedup();
+        }
+        sort::sort_unstable(&mut self.unresolved);
+    }
+
+    /// The layers the resolved arcs name, sorted.
+    pub(crate) fn layers(&self) -> &[LayerId] {
+        &self.layers
+    }
+
+    /// The layers the resolved arcs of specs outside variant branches
+    /// name, sorted.
+    pub(crate) fn main_layers(&self) -> &[LayerId] {
+        &self.main_layers
+    }
+
+    /// The slots authoring a deferred or expression arc, whose layers the
+    /// store or composition resolves, sorted.
+    pub(crate) fn unresolved(&self) -> &[PathId] {
+        &self.unresolved
+    }
+
+    /// The slots whose resolved arcs name one of `layers`, unsorted.
+    pub(crate) fn naming<'a>(&'a self, layers: &'a [LayerId]) -> impl Iterator<Item = PathId> + 'a {
+        let any = self.layers.iter().any(|id| layers.contains(id));
+        self.slots
+            .iter()
+            .filter(move |(_, arcs)| any && arcs.layers.iter().any(|id| layers.contains(id)))
+            .map(|(path, _)| *path)
+    }
 }
 
 impl PreparationIndex {
@@ -168,11 +333,13 @@ impl PreparationIndex {
             if let Some(changed) = layer.changed_paths_since(links.generation) {
                 for path in changed {
                     if slot_names_paths(layer, path) {
-                        slots.insert(path);
+                        slots.paths.insert(path);
                     } else {
-                        slots.remove(&path);
+                        slots.paths.remove(&path);
                     }
+                    slots.arcs.refresh(layer, path);
                 }
+                slots.arcs.gather();
                 links.generation = generation;
                 return;
             }
@@ -190,6 +357,16 @@ impl PreparationIndex {
     /// holds the layer at its generation, found by visiting every spec of
     /// the layer the first time they are asked for.
     pub(crate) fn links(&self, layer: &Layer) -> Option<&HashSet<PathId>> {
+        self.link_slots(layer).map(|slots| &slots.paths)
+    }
+
+    /// The references and payloads of `layer` ([`LayerArcs`]), found
+    /// with [`Self::links`].
+    pub(crate) fn arcs(&self, layer: &Layer) -> Option<&LayerArcs> {
+        self.link_slots(layer).map(|slots| &slots.arcs)
+    }
+
+    fn link_slots(&self, layer: &Layer) -> Option<&LinkSlots> {
         self.links
             .get(&layer.id)
             .filter(|links| links.generation == layer.generation())
@@ -327,7 +504,7 @@ impl PreparationIndex {
             if let Some(layer) = store.layer(*id) {
                 assert_eq!(links.generation, layer.generation());
                 assert_eq!(
-                    self.links(layer),
+                    self.link_slots(layer),
                     Some(&scan_links(layer)),
                     "links of {id:?}"
                 );
@@ -351,15 +528,18 @@ fn at_or_above(paths: &PathInterner, path: PathId) -> impl Iterator<Item = PathI
         .filter(|path| paths.parent(*path).is_some())
 }
 
-/// The prim slots of `layer` that author paths ([`slot_names_paths`]).
-fn scan_links(layer: &Layer) -> HashSet<PathId> {
-    layer
-        .prims
-        .keys()
-        .chain(layer.variant_prims.keys())
-        .copied()
-        .filter(|path| slot_names_paths(layer, *path))
-        .collect()
+/// The prim slots of `layer` that author paths ([`slot_names_paths`]),
+/// and their references and payloads ([`LayerArcs`]).
+fn scan_links(layer: &Layer) -> LinkSlots {
+    let mut slots = LinkSlots::default();
+    for &path in layer.prims.keys().chain(layer.variant_prims.keys()) {
+        if slot_names_paths(layer, path) {
+            slots.paths.insert(path);
+            slots.arcs.refresh(layer, path);
+        }
+    }
+    slots.arcs.gather();
+    slots
 }
 
 /// The prim slots of `layer` that author paths ([`slot_names_paths`]):
@@ -371,7 +551,20 @@ pub(crate) fn layer_links<'a>(
 ) -> alloc::borrow::Cow<'a, HashSet<PathId>> {
     match index.and_then(|index| index.links(layer)) {
         Some(links) => alloc::borrow::Cow::Borrowed(links),
-        None => alloc::borrow::Cow::Owned(scan_links(layer)),
+        None => alloc::borrow::Cow::Owned(scan_links(layer).paths),
+    }
+}
+
+/// The references and payloads of `layer` ([`LayerArcs`]): the retained
+/// inventory of `index` when it holds the layer at its generation,
+/// otherwise found by visiting every spec.
+pub(crate) fn layer_arcs<'a>(
+    index: Option<&'a PreparationIndex>,
+    layer: &Layer,
+) -> alloc::borrow::Cow<'a, LayerArcs> {
+    match index.and_then(|index| index.arcs(layer)) {
+        Some(arcs) => alloc::borrow::Cow::Borrowed(arcs),
+        None => alloc::borrow::Cow::Owned(scan_links(layer).arcs),
     }
 }
 
@@ -478,8 +671,8 @@ mod tests {
 
     use super::PreparationIndex;
     use crate::{
-        InMemoryStore, Layer, LayerId, ListOp, PathId, PrimSpec, PropertySpec, TargetPath,
-        prim_indexing::ChildIndex,
+        InMemoryStore, Layer, LayerId, LayerOffset, ListOp, PathId, PrimSpec, PropertySpec,
+        Reference, ReferenceTarget, TargetPath, prim_indexing::ChildIndex,
     };
 
     /// A prim spec with a relationship targeting `target`.
@@ -544,6 +737,49 @@ mod tests {
         index.record_generations(&store, Some(generations(&store, &[LayerId(1)])));
         let layer = store.layer(LayerId(1)).unwrap();
         assert_eq!(index.links(layer), Some(&[b, c].into_iter().collect()));
-        assert_eq!(index.links(layer), Some(&super::scan_links(layer)));
+        assert_eq!(index.links(layer), Some(&super::scan_links(layer).paths));
+    }
+
+    /// The arc summary keeps the layers resolved arcs name, outside variant
+    /// branches and in them, and marks the slots of arcs the store
+    /// resolves, as the layer changes.
+    #[test]
+    fn arc_summaries_follow_their_layer() {
+        let mut store = InMemoryStore::default();
+        let (a, b, target) = (store.path("/A"), store.path("/B"), store.path("/T"));
+        let mut layer = Layer::new(LayerId(1));
+        layer.insert_prim(
+            a,
+            PrimSpec::def().with_reference(Reference::new(LayerId(2), target)),
+        );
+        store.insert_layer(layer);
+        let mut index = PreparationIndex::new(Arc::new(ChildIndex::default()));
+        index.record_generations(&store, Some(generations(&store, &[LayerId(1)])));
+        let arcs = index.arcs(store.layer(LayerId(1)).unwrap()).unwrap();
+        assert_eq!(arcs.layers(), [LayerId(2)]);
+        assert_eq!(arcs.main_layers(), [LayerId(2)]);
+        assert!(arcs.unresolved().is_empty());
+        assert_eq!(arcs.naming(&[LayerId(2)]).collect::<Vec<_>>(), [a]);
+        assert_eq!(arcs.naming(&[LayerId(3)]).count(), 0);
+
+        // A deferred payload, then the reference removed: patched.
+        let deferred = Reference::deferred(
+            LayerId(1),
+            "asset.usda",
+            ReferenceTarget::DefaultPrim,
+            LayerOffset::default(),
+        );
+        let spec = PrimSpec::def().with_payload(deferred);
+        store.layer_mut(LayerId(1)).unwrap().insert_prim(b, spec);
+        store
+            .layer_mut(LayerId(1))
+            .unwrap()
+            .insert_prim(a, PrimSpec::def());
+        index.record_generations(&store, Some(generations(&store, &[LayerId(1)])));
+        let layer = store.layer(LayerId(1)).unwrap();
+        let arcs = index.arcs(layer).unwrap();
+        assert!(arcs.layers().is_empty());
+        assert_eq!(arcs.unresolved(), [b]);
+        assert_eq!(index.link_slots(layer), Some(&super::scan_links(layer)));
     }
 }

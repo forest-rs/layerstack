@@ -117,16 +117,47 @@ fn prepare_with(
     }
     sort::sort_unstable(&mut inspected);
     inspected.dedup();
+    // With retained evidence, the slots that author paths in each layer of
+    // a stage's layer stack, and the slots of each other layer whose arcs
+    // the edit repairs.
     let mut links = HashMap::new();
+    let mut repairable: HashMap<LayerId, Vec<PathId>> = HashMap::new();
     for id in &inspected {
         let layer = store.layer(*id).ok_or(NamespaceError::NoSuchObject)?;
         if retained.is_some() {
             // Only specs that author arcs can fail these checks.
-            let slots = retained::links_of(indexes, layer);
-            for spec in slots.iter().filter_map(|path| layer.prims.get(path)) {
+            let arcs = retained::arcs_of(indexes, layer);
+            if arcs
+                .main_layers()
+                .iter()
+                .any(|id| store.layer(*id).is_none())
+            {
+                return Err(unresolved_arcs());
+            }
+            for spec in arcs
+                .unresolved()
+                .iter()
+                .filter_map(|path| layer.prims.get(path))
+            {
                 validate_arcs(store, spec)?;
             }
-            links.insert(*id, slots);
+            if stages.iter().any(|stage| stage.layer_stack().contains(id)) {
+                links.insert(*id, retained::links_of(indexes, layer));
+            } else {
+                // Outside every layer stack the edit repairs only the arcs
+                // into the edited layers.
+                let mut slots: Vec<PathId> =
+                    arcs.naming(root_layers)
+                        .chain(
+                            arcs.unresolved().iter().copied().filter(|path| {
+                                retained::arcs_into(store, layer, *path, root_layers)
+                            }),
+                        )
+                        .collect();
+                sort::sort_unstable(&mut slots);
+                slots.dedup();
+                repairable.insert(*id, slots);
+            }
             continue;
         }
         for spec in layer.prims.values() {
@@ -243,28 +274,20 @@ fn prepare_with(
     for id in &inspected {
         let original = store.layer(*id).ok_or(NamespaceError::NoSuchObject)?;
         let local = stages.iter().any(|stage| stage.layer_stack().contains(id));
-        let mut layer = match (indexes.first(), links.get(id)) {
-            (Some(index), Some(slots)) => {
-                let slots = if local {
-                    let gone = local_deletes.get(id).map_or(&[][..], Vec::as_slice);
-                    working_slots(store, index, original, slots, local_moves.get(id), gone)
-                } else {
-                    // Outside every layer stack the edit repairs only the
-                    // arcs into the edited layers: a layer authoring none
-                    // is left as it is, uncopied.
-                    let mut slots: Vec<PathId> = slots
-                        .iter()
-                        .copied()
-                        .filter(|path| retained::arcs_into(store, original, *path, root_layers))
-                        .collect();
-                    if slots.is_empty() {
-                        continue;
-                    }
-                    sort::sort_unstable(&mut slots);
-                    slots
-                };
+        let mut layer = match (indexes.first(), links.get(id), repairable.get(id)) {
+            (Some(index), Some(slots), _) => {
+                let gone = local_deletes.get(id).map_or(&[][..], Vec::as_slice);
+                let slots = working_slots(store, index, original, slots, local_moves.get(id), gone);
                 let copy = retained::working_copy(original, &slots);
                 copied.insert(*id, slots);
+                copy
+            }
+            // A layer outside the layer stacks authoring no arc the edit
+            // repairs is left as it is, uncopied.
+            (Some(_), None, Some(slots)) if slots.is_empty() => continue,
+            (Some(_), None, Some(slots)) => {
+                let copy = retained::working_copy(original, slots);
+                copied.insert(*id, slots.clone());
                 copy
             }
             _ => original.clone(),
@@ -606,6 +629,13 @@ pub(super) fn dormant_variants(
     out
 }
 
+/// The error for an arc preparation cannot follow ([`validate_arcs`]).
+fn unresolved_arcs() -> NamespaceError {
+    NamespaceError::UnsupportedComposition(
+        "unloaded or expression-based assets require resolved dependency coordination",
+    )
+}
+
 /// Rejects a spec whose references or payloads target an unloaded or
 /// unresolved layer, or an asset expression. A spec inside a variant
 /// passes: a selected variant's unresolved arc is a composition error the
@@ -625,9 +655,7 @@ fn validate_arcs(store: &dyn LayerStore, spec: &PrimSpec) -> Result<(), Namespac
                 || r.is_expression()
         })
     {
-        return Err(NamespaceError::UnsupportedComposition(
-            "unloaded or expression-based assets require resolved dependency coordination",
-        ));
+        return Err(unresolved_arcs());
     }
     Ok(())
 }

@@ -61,3 +61,18 @@ def "Root" (
 )
 {
 }
+
+def "Clipped" (
+    clips = {
+        dictionary default = {
+            double2[] active = [(0, 0)]
+            asset[] assetPaths = [@./clips/clip.usda@]
+            asset manifestAssetPath = @./clips/manifest.usda@
+            string primPath = "/Model"
+            double2[] times = [(0, 0), (2, 2)]
+        }
+    }
+)
+{
+    custom asset tex
+}

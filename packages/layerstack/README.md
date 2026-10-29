@@ -65,8 +65,9 @@ await stage.resolve(source);
 - **Reads are snapshots, queries are live.** `stage.prim(path)`,
   `stage.attribute(path)` and `stage.relationship(path)` return a `Prim`,
   `Attribute` or `Relationship` whose fields are read once; their methods
-  (`get`, `explain`, `children`, `attributeNames`, `variantSets` with each
-  set's variant names, `targets`, `metadata`) query the stage now.
+  (`get`, `explain`, `children`, `attributeNames`, `relationshipNames`,
+  `variantSets` with each set's variant names, `targets`, `metadata`)
+  query the stage now.
 - **Paths are text**: `/World/Rock` for prims, `/World/Rock.size` for
   properties.
 - **Values say their shape.** `Value` is a union on `kind`: `scalar`

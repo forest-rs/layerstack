@@ -364,6 +364,25 @@ impl Stage {
             .collect())
     }
 
+    /// The names of the prim's relationships, schema-defined and
+    /// authored, in property order.
+    ///
+    /// Spec: AOUSD Core §7.6.5 (relationships).
+    /// OpenUSD: `UsdPrim::GetRelationships`.
+    ///
+    /// # Errors
+    ///
+    /// `path.invalid`, or `prim.not_found` when no prim is at `path`.
+    pub(crate) fn relationship_names(&self, path: &str) -> Result<Vec<String>, Error> {
+        let prim = self.existing_prim(path)?;
+        Ok(prim
+            .properties()
+            .into_iter()
+            .filter(|property| property.as_relationship().is_some())
+            .map(|property| property.name().to_string())
+            .collect())
+    }
+
     /// The variant sets of the prim at `path`, each
     /// `[name, selection, variants]`, `selection` `null` when nothing
     /// selects a variant and `variants` the set's variant names in
@@ -1399,6 +1418,12 @@ impl Stage {
     #[wasm_bindgen(js_name = attributeNames)]
     pub fn js_attribute_names(&self, path: &str) -> Result<Vec<String>, JsValue> {
         Ok(self.attribute_names(path)?)
+    }
+
+    /// The record `relationship_names` builds, as documented in `stage.rs`.
+    #[wasm_bindgen(js_name = relationshipNames)]
+    pub fn js_relationship_names(&self, path: &str) -> Result<Vec<String>, JsValue> {
+        Ok(self.relationship_names(path)?)
     }
 
     /// The record `variant_sets` builds, as documented in `stage.rs`.

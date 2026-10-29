@@ -1,0 +1,46 @@
+#usda 1.0
+
+# The prototype source: references the asset, and holds a nested instance
+# of it.
+def "Proto" (
+    prepend references = @asset.usda@</Asset>
+)
+{
+    def "Part"
+    {
+        double size = 2
+    }
+
+    def "Inner" (
+        instanceable = true
+        prepend references = @asset.usda@</Asset>
+    )
+    {
+    }
+}
+
+# Instances sharing a prototype.
+def "Group"
+{
+    def "I1" (
+        instanceable = true
+        prepend references = </Proto>
+    )
+    {
+    }
+
+    def "I2" (
+        instanceable = true
+        prepend references = </Proto>
+    )
+    {
+    }
+}
+
+# An instance of the asset alone, sharing the nested instances' prototype.
+def "Solo" (
+    instanceable = true
+    prepend references = @asset.usda@</Asset>
+)
+{
+}

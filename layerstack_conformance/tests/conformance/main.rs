@@ -79,6 +79,7 @@ mod guarded_xform;
 mod implied_classes;
 mod incremental_edge_cases;
 mod inner_loops;
+mod instance_proxies;
 mod instanceability;
 mod instanced_references;
 mod internal_arcs;

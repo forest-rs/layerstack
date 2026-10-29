@@ -1,0 +1,8 @@
+#usda 1.0
+
+# The scene's instances through a reference into its layer stack.
+def "Use" (
+    prepend references = @scene.usda@</Group>
+)
+{
+}

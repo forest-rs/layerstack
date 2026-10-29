@@ -6,7 +6,7 @@ import type { NativeArrayHandle } from "./arrays.js";
 import { lowerEdits } from "./edits.js";
 import type { NativeEditBatch } from "./edits.js";
 import { LayerstackError } from "./errors.js";
-import type { ErrorCode } from "./errors.js";
+import type { ErrorCode, HostErrorCode } from "./errors.js";
 import type {
   ArcKind,
   ArrayData,
@@ -235,7 +235,7 @@ export class Layerstack {
   #translate(operation: string, error: unknown): unknown {
     if (Array.isArray(error) && typeof error[0] === "string" && typeof error[1] === "string") {
       const [code, message, identifier, path, edit] = error as [
-        ErrorCode,
+        ErrorCode | HostErrorCode,
         string,
         string | null,
         string | null,
@@ -846,7 +846,9 @@ export class Stage implements Disposable {
   /**
    * Borrows this stage for a synchronous extension linked into the same native
    * module, such as a Rust export taking `&layerstack_wasm::Stage`. `operation`
-   * names that extension in disposed-stage and native-error diagnostics. A
+   * names that extension in disposed-stage and native-error diagnostics: a
+   * `layerstack_wasm::Error` it returns is thrown as a {@link LayerstackError}
+   * with that operation and the error's own code ({@link HostErrorCode}). A
    * `LayerId` it returns is {@link Stage.layer}'s `id`.
    *
    * The callback must not retain, free or consume the borrowed native stage.

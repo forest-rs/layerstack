@@ -52,7 +52,9 @@ await stage.resolve(source);
   `stage.withNative("domain.inspect", native => module.inspect(native))`.
   The callback borrows the stage synchronously; it must not retain, free or
   consume it, and must not return a promise. A native error it throws is a
-  `LayerstackError` named for the given operation. A `LayerId` it returns
+  `LayerstackError` named for the given operation, with the code the
+  extension's Rust gave it (typed `HostErrorCode`, any string: give your
+  codes a family of your own, such as `domain.*`). A `LayerId` it returns
   is `stage.layer(id)` in TypeScript.
   Native changes reach `onChange` listeners before `withNative` returns,
   including when the callback throws after committing an edit; a listener's
@@ -237,7 +239,8 @@ await stage.resolve(source);
 | `io.*` | A read or import failed: `io.rejected` (does not parse), `io.not_found`, `io.unavailable`, ... |
 | `composition.*` | In `status().compositionErrors`: `composition.unresolved_asset`, `composition.arc_cycle`, ... |
 
-A released code keeps its spelling and meaning.
+A released code keeps its spelling and meaning. A native extension's own
+errors, thrown through `withNative`, carry its codes (`HostErrorCode`).
 
 ## Versions
 

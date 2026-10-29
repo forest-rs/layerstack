@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { Layerstack, LayerstackError, loadLayerstack } from "../dist/index.js";
-import type { Changes, Stage } from "../dist/index.js";
+import type { Changes, ErrorCode, HostErrorCode, Stage } from "../dist/index.js";
 import { EditBatch } from "../wasm/layerstack.js";
 import * as nativeModule from "../wasm/layerstack.js";
 import type { Stage as GeneratedStage } from "../wasm/layerstack.js";
@@ -284,5 +284,25 @@ describe("undo across native transactions", () => {
       "saving never writes the derived layer",
     );
     assert.equal(stage.isDirty(session), true);
+  });
+
+  it("throws a native error with the host's own code", () => {
+    using stage = openScene();
+    // The record a `layerstack_wasm::Error` the host's Rust returns is thrown as.
+    const record = ["domain.failed", "the inspection failed", null, "/Ball", null];
+    assert.throws(
+      () =>
+        stage.withNative("domain.inspect", () => {
+          throw record;
+        }),
+      (error: unknown) => {
+        assert.ok(error instanceof LayerstackError);
+        const code: ErrorCode | HostErrorCode = error.code;
+        assert.equal(code, "domain.failed");
+        assert.equal(error.operation, "domain.inspect");
+        assert.equal(error.path, "/Ball");
+        return true;
+      },
+    );
   });
 });

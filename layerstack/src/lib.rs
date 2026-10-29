@@ -273,7 +273,7 @@ pub use composition_error::{
     InconsistentPropertyType, InvalidAuthoredRelocation, InvalidConflictingRelocation,
     InvalidExternalTargetPath, InvalidInstanceTargetPath, InvalidRelocationReason,
     InvalidSameTargetRelocations, InvalidSublayerAndOffsetCount, LimitExceeded, MissingLayer,
-    OpinionAtRelocationSource, RelocationConflict, SublayerCycle, UnresolvedAsset,
+    MutedAsset, OpinionAtRelocationSource, RelocationConflict, SublayerCycle, UnresolvedAsset,
     UnresolvedDefaultPrim, UnresolvedPrimPath, UnresolvedSublayer, VariableExpressionError,
 };
 pub use composition_limits::{CompositionLimit, CompositionLimits};

@@ -3,9 +3,9 @@
 
 //! Differential tests for composition errors and what they drop.
 //!
-//! `fixtures/composition_errors/oracle.json` records what OpenUSD 26.08
+//! `fixtures/composition_errors/oracle.json` records what OpenUSD 26.11
 //! composes from each entry layer in `fixtures/composition_errors`, with
-//! its variant fallbacks, and the layers its text parser rejects
+//! its variant fallbacks and muted layers, and the layers its text parser rejects
 //! (`scripts/composition_errors_oracle.py`, which also writes those
 //! layers). Layerstack must report the same errors, as their
 //! `PcpErrorType` name and composed prim, compose the same prims with the
@@ -53,6 +53,14 @@
 //!   `/Mast`'s and `/Boom`'s `a=x` selects `c=red` and its reference's
 //!   child over the `c=blue` of `b=x`, whichever layer authors each, and
 //!   `/Hull`'s `a=x` reference is stronger than `b=x`'s.
+//! - `muted.usda` is composed with `muted_asset.usda` and `muted_sub.usda`
+//!   muted ([`StageOptions::muted_layers`]): `/Ball`, `/Box` and `/Dot`
+//!   reference or payload the muted layer, `/Pole` reaches it through a
+//!   referenced layer and `/Pin` through an internal reference
+//!   ([`CompositionError::MutedAsset`]); none of them follows the arc. The
+//!   muted sublayer, of the stage's layer stack and of `/Cone`'s
+//!   referenced one, is skipped without an error. [`LiveStage`] mutes and
+//!   unmutes the layer as a full composition does.
 //! - Each `invalid_*.usda` layer authors an arc, relocates or target path
 //!   with a variant selection, which the text parser rejects;
 //!   `variant_connection.usda` authors the relative connection inside a
@@ -87,6 +95,9 @@ struct Oracle {
 struct Composition {
     root: String,
     fallbacks: BTreeMap<String, Vec<String>>,
+    /// The file names of the layers the entry is composed with muted.
+    #[serde(default)]
+    muted: Vec<String>,
     prims: Vec<Prim>,
     errors: BTreeSet<(String, String)>,
 }
@@ -144,16 +155,32 @@ fn compose(composition: &Composition) -> (LoadedStage, Stage) {
             (loaded.store.tokens().intern(set), names)
         })
         .collect();
+    let muted_layers = composition
+        .muted
+        .iter()
+        .map(|name| layer_named(&loaded, name))
+        .collect();
     let stage = Stage::compose(
         &mut loaded.store,
         loaded.root_layer,
         StageOptions {
             with_provenance: true,
             variant_fallbacks,
+            muted_layers,
             ..StageOptions::default()
         },
     );
     (loaded, stage)
+}
+
+/// The layer whose file name is `name`.
+fn layer_named(loaded: &LoadedStage, name: &str) -> LayerId {
+    *loaded
+        .layer_names
+        .iter()
+        .find(|(_, path)| path.rsplit('/').next() == Some(name))
+        .unwrap_or_else(|| panic!("{name} is loaded"))
+        .0
 }
 
 /// A layer's file name without its directory.
@@ -171,6 +198,7 @@ fn error_kind(error: &CompositionError) -> &'static str {
             "UnresolvedPrimPath"
         }
         CompositionError::UnresolvedAsset(_) => "InvalidAssetPath",
+        CompositionError::MutedAsset(_) => "MutedAssetPath",
         CompositionError::UnresolvedSublayer(_) => "InvalidSublayerPath",
         CompositionError::InconsistentPropertyType(_) => "InconsistentPropertyType",
         CompositionError::InvalidExternalTargetPath(_) => "InvalidExternalTargetPath",
@@ -465,4 +493,77 @@ fn selection_edits_recompose_like_a_full_compose() {
             selection_snapshot(&loaded, &fresh)
         );
     }
+}
+
+#[test]
+fn muted_assets_name_the_arc_and_recompose_live() {
+    // Spec: AOUSD Core §10.3.2.1, §10.6; OpenUSD `PcpErrorMutedAssetPath`
+    // ("Asset @muted_asset.usda@ was muted for reference introduced by
+    // @muted.usda@</Ball>").
+    let mut loaded = load("muted.usda");
+    let root = loaded.root_layer;
+    let asset = layer_named(&loaded, "muted_asset.usda");
+    let options = |muted: &[LayerId]| StageOptions {
+        with_provenance: true,
+        muted_layers: muted.iter().copied().collect(),
+        ..StageOptions::default()
+    };
+    let stage = Stage::compose(&mut loaded.store, root, options(&[asset]));
+    let ball = loaded.store.path("/Ball");
+    let error = stage
+        .composition_errors()
+        .iter()
+        .find(|error| error.prim() == Some(ball))
+        .expect("an error on /Ball");
+    assert_eq!(error.code(), "composition.muted_asset");
+    let CompositionError::MutedAsset(muted) = error else {
+        panic!("{error:?}");
+    };
+    assert_eq!(
+        (muted.arc, muted.layer),
+        (layerstack::ArcKind::References, asset)
+    );
+    assert_eq!(muted.introducing_layer, root);
+    // The loader does not name layers in the store, so they are written by
+    // id.
+    assert_eq!(
+        error.display(&loaded.store).to_string(),
+        format!(
+            "/Ball: the reference authored at /Ball in layer {} targets layer {}, \
+             which the stage mutes; it contributes nothing",
+            root.0, asset.0
+        )
+    );
+    assert!(
+        stage
+            .prim(loaded.store.path("/Ball/Inner"), &loaded.store)
+            .is_none()
+    );
+
+    // Unmuting follows the arc; muting again drops it, as a full
+    // composition does.
+    let mut live = LiveStage::compose(&mut loaded.store, root, options(&[asset]));
+    let inner = loaded.store.path("/Ball/Inner");
+    assert!(live.unmute_layer(asset));
+    live.recompose(&mut loaded.store);
+    assert!(live.stage().prim(inner, &loaded.store).is_some());
+    assert!(
+        !live
+            .stage()
+            .composition_errors()
+            .iter()
+            .any(|error| matches!(error, CompositionError::MutedAsset(_)))
+    );
+    assert!(live.mute_layer(asset).expect("not the root layer"));
+    live.recompose(&mut loaded.store);
+    assert!(live.stage().prim(inner, &loaded.store).is_none());
+    let fresh = Stage::compose(&mut loaded.store, root, options(&[asset]));
+    assert_eq!(
+        live.stage().composition_errors(),
+        fresh.composition_errors()
+    );
+    assert_eq!(
+        selection_snapshot(&loaded, live.stage()),
+        selection_snapshot(&loaded, &fresh)
+    );
 }

@@ -25,8 +25,8 @@ use hashbrown::HashSet;
 use crate::{
     asset::{AssetRequest, AssetUse, FormatArgs},
     composition_error::{
-        ArcCycle, ArcCycleSite, ArcToProhibitedChild, CompositionError, OpinionAtRelocationSource,
-        UnresolvedAsset, UnresolvedDefaultPrim, UnresolvedPrimPath,
+        ArcCycle, ArcCycleSite, ArcToProhibitedChild, CompositionError, MutedAsset,
+        OpinionAtRelocationSource, UnresolvedAsset, UnresolvedDefaultPrim, UnresolvedPrimPath,
     },
     doc::{AssetAvailability, LayerId, LayerOffset, LayerStore, ReferenceTarget},
     dynamic_format::{DynamicDependency, DynamicFileFormat, DynamicFormatContext, DynamicFormats},
@@ -1586,6 +1586,19 @@ impl Indexer<'_, '_, '_> {
                 }
                 reference.layer
             };
+            // A muted target is hidden on purpose: the arc is not followed
+            // (AOUSD Core §10.6; OpenUSD `PcpErrorMutedAssetPath` in
+            // `_EvalRefOrPayloadArcs`).
+            if self.ctx.stacks.is_muted(target_layer) {
+                self.record_error(CompositionError::MutedAsset(MutedAsset {
+                    prim,
+                    arc: kind,
+                    layer: target_layer,
+                    introducing_layer: arc.source_layer,
+                    introducing_spec: path_at_intro.clone(),
+                }));
+                return;
+            }
             offset = arc.source_offset.compose(offset);
             let identifier = LayerStackIdentifier {
                 root: target_layer,

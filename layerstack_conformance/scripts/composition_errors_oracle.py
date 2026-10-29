@@ -9,7 +9,8 @@ Writes, under `layerstack_conformance/fixtures/composition_errors` by
 default:
 
 - `*.usda`: the layers below, as authored;
-- `oracle.json`: what OpenUSD composes from each entry layer, which
+- `oracle.json`: what OpenUSD composes from each entry layer, with the
+  layers `MUTED` names muted, which
   `tests/conformance/composition_errors.rs` replays against layerstack.
 
 Each composition is a `Pcp.Cache` in USD mode, the mode `UsdStage` uses,
@@ -1087,6 +1088,107 @@ def "Hill" (
     }
 }
 ''',
+    "muted": '''#usda 1.0
+(
+    subLayers = [@./muted_sub.usda@]
+)
+
+# Composed with `muted_asset.usda` and `muted_sub.usda` muted. A reference
+# to a muted layer reports `MutedAssetPath` and adds no node; `/Ball` keeps
+# only its local opinions.
+def "Ball" (
+    references = @./muted_asset.usda@</Ball>
+)
+{
+    int weight = 1
+}
+
+# A payload to a muted layer.
+def "Box" (
+    payload = @./muted_asset.usda@</Box>
+)
+{
+}
+
+# A reference without a prim path is muted before its `defaultPrim` is
+# looked up.
+def "Dot" (
+    references = @./muted_asset.usda@
+)
+{
+}
+
+# `muted_host.usda /Pole` references the muted layer: the error is reported
+# on `/Pole`, whose composition reaches the arc.
+def "Pole" (
+    references = @./muted_host.usda@</Pole>
+)
+{
+}
+
+# An internal reference is never muted, but `/Ball`'s reference it reaches
+# is.
+def "Pin" (
+    references = </Ball>
+)
+{
+}
+
+# `muted_host.usda` sublayers the muted `muted_sub.usda`: the sublayer is
+# skipped without an error, in the stage's layer stack and in the
+# referenced one alike, and `/Hidden` is not composed.
+def "Cone" (
+    references = @./muted_host.usda@</Cone>
+)
+{
+}
+''',
+    "muted_sub": '''#usda 1.0
+
+def "Hidden"
+{
+}
+
+over "Cone"
+{
+    int hidden = 1
+}
+''',
+    "muted_asset": '''#usda 1.0
+(
+    defaultPrim = "Ball"
+)
+
+def "Ball"
+{
+    int weight = 2
+
+    def "Inner"
+    {
+    }
+}
+
+def "Box"
+{
+    int weight = 3
+}
+''',
+    "muted_host": '''#usda 1.0
+(
+    subLayers = [@./muted_sub.usda@]
+)
+
+def "Pole" (
+    references = @./muted_asset.usda@</Ball>
+)
+{
+}
+
+def "Cone"
+{
+    int weight = 4
+}
+''',
 }
 
 # Entry layers composed, with the variant fallbacks each is composed with.
@@ -1104,6 +1206,13 @@ ENTRIES = {
         "size": ["large", "small"],
     },
     "selection_layers.usda": {},
+    "muted.usda": {},
+}
+
+# The layers each entry is composed with muted (`Pcp.Cache.RequestLayerMuting`,
+# `UsdStage::MuteAndUnmuteLayers`), when any.
+MUTED = {
+    "muted.usda": ["muted_asset.usda", "muted_sub.usda"],
 }
 
 
@@ -1131,6 +1240,11 @@ def compose(directory, entry, fallbacks):
     cache.SetVariantFallbacks(fallbacks)
     Usd.Stage.SetGlobalVariantFallbacks(fallbacks)
     stage = Usd.Stage.Open(root, Usd.Stage.LoadAll)
+    muted = MUTED.get(entry, [])
+    if muted:
+        identifiers = [os.path.join(directory, name) for name in muted]
+        cache.RequestLayerMuting(identifiers, [])
+        stage.MuteAndUnmuteLayers(identifiers, [])
     prims = []
     errors = set()
 
@@ -1186,12 +1300,15 @@ def compose(directory, entry, fallbacks):
 
     walk(Sdf.Path.absoluteRootPath)
     Usd.Stage.SetGlobalVariantFallbacks({})
-    return {
+    composition = {
         "root": entry,
         "fallbacks": fallbacks,
-        "prims": prims,
-        "errors": [list(e) for e in sorted(errors)],
     }
+    if muted:
+        composition["muted"] = muted
+    composition["prims"] = prims
+    composition["errors"] = [list(e) for e in sorted(errors)]
+    return composition
 
 
 def rejection(directory, name):

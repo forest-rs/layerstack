@@ -1,0 +1,15 @@
+#usda 1.0
+(
+    subLayers = [@./muted_sub.usda@]
+)
+
+def "Pole" (
+    references = @./muted_asset.usda@</Ball>
+)
+{
+}
+
+def "Cone"
+{
+    int weight = 4
+}

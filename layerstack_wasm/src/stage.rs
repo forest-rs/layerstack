@@ -1084,13 +1084,17 @@ impl Stage {
             }
             Err(ApplyError::Edit(error)) => {
                 let store = self.document.store();
-                let mut out = Error::new(error.code(), error.display(store).to_string());
-                if let EditError::Rejected { op, .. } = &error
+                // A rejected edit is named by its index among the edits
+                // sent, not among the native edits they expand to.
+                if let EditError::Rejected { op, reason } = &error
                     && let Some((index, path)) = edit_of(*op)
                 {
-                    out = out.at_edit(index).at_path(path);
+                    let message = format!("edit {index} rejected: {}", reason.display(store));
+                    return Err(Error::new(error.code(), message)
+                        .at_edit(index)
+                        .at_path(path));
                 }
-                Err(out)
+                Err(Error::new(error.code(), error.display(store).to_string()))
             }
             Err(error) => {
                 let store = self.document.store();
@@ -2415,16 +2419,20 @@ def "World" (
     fn rejected_edits_name_their_paths() {
         let mut stage = resolved();
         let root = stage.document().stage().stage().root_layer().unwrap();
+        // The definition authors more than one native edit; the message
+        // names the edit as sent, as `edit` does.
         let mut batch = EditBatch::new();
+        batch.define_prim("/Pebble".into(), "def".into(), Some("Sphere".into()));
         let slot = batch.value_numbers("double".into(), vec![1.0]);
-        batch.set_value("/Ball.bogus".into(), None, slot);
+        batch.set_value("/Pebble.bogus".into(), None, slot);
         let error = stage.apply(root.0, &mut batch).unwrap_err();
         assert_eq!(error.code, "edit.rejected.undeclared_type");
         assert_eq!(
             error.message,
-            "edit 0 rejected: /Ball.bogus declares no type; create it with a type first"
+            "edit 1 rejected: /Pebble.bogus declares no type; create it with a type first"
         );
-        assert_eq!(error.path.as_deref(), Some("/Ball.bogus"));
+        assert_eq!(error.edit, Some(1));
+        assert_eq!(error.path.as_deref(), Some("/Pebble.bogus"));
     }
 
     /// A mesh whose attributes come from three layers: the root, its

@@ -154,14 +154,23 @@ describe("edit kinds", () => {
         assert.deepEqual(stage.attribute("/World/Rock.size")?.get(), double(3));
       },
     );
-    const cases: [Edit, string][] = [
-      [{ type: "setValue", path: "/Pebble.bogus", value: { type: "double", value: 1 } }, "edit.rejected.undeclared_type"],
-      [{ type: "setValue", path: "/Pebble.radius", value: { type: "float", value: 1 } }, "edit.rejected.type_mismatch"],
+    const cases: [Edit, string, string][] = [
+      [
+        { type: "setValue", path: "/Pebble.bogus", value: { type: "double", value: 1 } },
+        "edit.rejected.undeclared_type",
+        "apply: edit 1 rejected: /Pebble.bogus declares no type; create it with a type first",
+      ],
+      [
+        { type: "setValue", path: "/Pebble.radius", value: { type: "float", value: 1 } },
+        "edit.rejected.type_mismatch",
+        "apply: edit 1 rejected: the value is a `float`, but /Pebble.radius is a `double`",
+      ],
     ];
-    for (const [edit, code] of cases) {
+    for (const [edit, code, message] of cases) {
       const define: Edit = { type: "definePrim", path: "/Pebble", typeName: "Sphere" };
       const error = failure(() => stage.apply([define, edit], stage.root));
       assert.equal(error.code, code, JSON.stringify(edit));
+      assert.equal(error.message, message, "the message names paths, not ids, and the edit sent");
       assert.equal(error.edit, 1, "the error names the edit");
       assert.equal(stage.prim("/Pebble"), null, "nothing applied");
     }

@@ -55,10 +55,8 @@ const SWITCH: [(&str, &str, &str); 4] = [
 const DIFFERING: &[&str] = &[
     "delete_mixed_child",
     "delete_targeted",
-    "rename_inherited_child",
     "delete_inherited_child",
     "rename_property_with_dormant_opinion",
-    "rename_targeted_property",
     "reparent_targeted_property",
     "delete_targeted_property",
 ];

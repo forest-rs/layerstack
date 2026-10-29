@@ -150,6 +150,7 @@ fn prepare_with(
     }
     let source_move = PathMove::new(source, destination);
     let mut local_moves: HashMap<LayerId, Vec<PathMove>> = HashMap::new();
+    let mut local_variant_moves: HashMap<LayerId, Vec<VariantMove>> = HashMap::new();
     let mut stage_moves = Vec::new();
     for (i, stage) in stages.iter().enumerate() {
         let shares_local_namespace = stage
@@ -165,6 +166,7 @@ fn prepare_with(
         } else {
             Vec::new()
         };
+        let mut variant_moves = Vec::new();
         gather_dependent_moves(
             stage,
             indexes.get(i).copied(),
@@ -172,6 +174,7 @@ fn prepare_with(
             root_layers,
             &source_move,
             &mut mappings,
+            &mut variant_moves,
         )?;
         normalize_moves(store, &mut mappings)?;
         for mapping in &mappings {
@@ -211,6 +214,12 @@ fn prepare_with(
                 }
             }
             normalize_moves(store, moves)?;
+            let within = local_variant_moves.entry(*id).or_default();
+            for mapping in &variant_moves {
+                if !within.contains(mapping) {
+                    within.push(mapping.clone());
+                }
+            }
         }
         stage_moves.push(mappings);
     }
@@ -236,7 +245,20 @@ fn prepare_with(
             for mapping in moves {
                 validate_authored(&layer, store, mapping)?;
                 move_local(store, &mut layer, mapping)?;
-                unused = unused.after(store, mapping);
+                unused = unused.after(store, mapping, &[]);
+            }
+            for moved in local_variant_moves.get(id).into_iter().flatten() {
+                if moves.iter().any(|m| {
+                    *m != moved.mapping
+                        && m.from.property_path().is_none()
+                        && moved.overlaps(store, m.from.prim_path())
+                }) {
+                    return Err(NamespaceError::UnsupportedComposition(
+                        "dependent namespace in a variant of moved namespace is ambiguous",
+                    ));
+                }
+                move_in_variant(store, &mut layer, moved)?;
+                unused = unused.after(store, &moved.mapping, &moved.within);
             }
         }
         dormant.insert(*id, unused);
@@ -649,6 +671,7 @@ fn gather_dependent_moves(
     source_layers: &[LayerId],
     source: &PathMove,
     out: &mut Vec<PathMove>,
+    variant_out: &mut Vec<VariantMove>,
 ) -> Result<(), NamespaceError> {
     let raw_from = store.paths().resolve(source.from.prim_path()).clone();
     let raw_to = store.paths().resolve(source.to.prim_path()).clone();
@@ -727,11 +750,6 @@ fn gather_dependent_moves(
             if source.from.property_path().is_none() && raw_from.is_prefix_of(&raw_mount) {
                 continue;
             }
-            if in_variants {
-                return Err(NamespaceError::UnsupportedComposition(
-                    "dependent namespace beneath an arc authored in a variant requires variant spec moves",
-                ));
-            }
             let Some(dest_suffix) = raw_to.strip_prefix(&raw_mount) else {
                 return Err(NamespaceError::UnsupportedComposition(
                     "dependent namespace reparenting outside an arc's source domain is not supported",
@@ -758,10 +776,39 @@ fn gather_dependent_moves(
             } else {
                 PathMove::new(TargetPath::Prim(from), TargetPath::Prim(to))
             };
-            if mapping.from != mapping.to
-                && !out
-                    .iter()
-                    .any(|m| m.from == mapping.from && m.to == mapping.to)
+            if mapping.from == mapping.to {
+                continue;
+            }
+            // The local specs to move are at the sites of the nodes above
+            // the arc's, each in its own branches: OpenUSD moves the specs
+            // of every node on the way up to the root
+            // (`_PrimIndexDependentNodeEditProcessor::_AddSpecMoveEdits`).
+            if in_variants {
+                let from_path = store.paths().resolve(from).clone();
+                let mut parent = node.parent();
+                while let Some(above) = parent.filter(|id| *id != NodeId::ROOT) {
+                    let above = graph.node(above).ok_or(NamespaceError::Unmappable)?;
+                    let within: Vec<VariantSelectionSite> = above
+                        .site()
+                        .variant_selection_sites()
+                        .filter(|site| {
+                            let host = store.paths().resolve(site.host_path);
+                            host.is_prefix_of(&from_path) && host.depth() < from_path.depth()
+                        })
+                        .collect();
+                    let moved = VariantMove {
+                        mapping: mapping.clone(),
+                        within,
+                    };
+                    if !moved.within.is_empty() && !variant_out.contains(&moved) {
+                        variant_out.push(moved);
+                    }
+                    parent = above.parent();
+                }
+            }
+            if !out
+                .iter()
+                .any(|m| m.from == mapping.from && m.to == mapping.to)
             {
                 out.push(mapping);
             }
@@ -963,6 +1010,69 @@ fn move_local(
         .map_or(to.clone(), |p| to.with_property(p.property()));
     move_specs(store, layer, &from, &to)
 }
+/// A dependent move of the local specs inside the branches `within`, all
+/// hosted above the moved path: those of an arc authored in a selected
+/// variant of an ancestor, whose composed namespace moves with the arc's
+/// target (`/Host{v=on}Inner/Kid` when `/Host/Inner` inherits a moved
+/// `/B/Kid`).
+#[derive(Clone, PartialEq)]
+struct VariantMove {
+    mapping: PathMove,
+    within: Vec<VariantSelectionSite>,
+}
+
+impl VariantMove {
+    /// Whether moving the namespace at `path` moves these specs or the
+    /// variants hosting them.
+    fn overlaps(&self, store: &dyn LayerStore, path: PathId) -> bool {
+        let path = store.paths().resolve(path);
+        path.is_prefix_of(store.paths().resolve(self.mapping.from.prim_path()))
+            || path.is_prefix_of(store.paths().resolve(self.mapping.to.prim_path()))
+            || self
+                .within
+                .iter()
+                .any(|site| path.is_prefix_of(store.paths().resolve(site.host_path)))
+    }
+}
+
+/// Moves `layer`'s specs at `moved`'s source inside its branches, as
+/// [`move_local`] moves those outside every branch. A layer with no spec
+/// there has none to move; the destination's parent must have one.
+fn move_in_variant(
+    store: &mut dyn LayerStore,
+    layer: &mut Layer,
+    moved: &VariantMove,
+) -> Result<(), NamespaceError> {
+    let paths = store.paths();
+    let from = SpecPath::from_variant_selection_sites(
+        moved.mapping.from.prim_path(),
+        &moved.within,
+        paths,
+    );
+    let to =
+        SpecPath::from_variant_selection_sites(moved.mapping.to.prim_path(), &moved.within, paths);
+    let (from, to) = match (
+        moved.mapping.from.property_path(),
+        moved.mapping.to.property_path(),
+    ) {
+        (Some(a), Some(b)) => (
+            from.with_property(a.property()),
+            to.with_property(b.property()),
+        ),
+        _ => (from, to),
+    };
+    let Some(spec) = spec_at(layer, &Loc::of(&from)) else {
+        return Ok(());
+    };
+    if from
+        .property()
+        .is_some_and(|name| !spec.properties().iter().any(|p| p.name == name))
+    {
+        return Ok(());
+    }
+    move_specs(store, layer, &from, &to)
+}
+
 fn ensure_ancestors(store: &mut dyn LayerStore, layer: &mut Layer, path: Path) {
     if path.segments().is_empty() {
         return;

@@ -314,6 +314,14 @@ CASES = [
         {"call": "set_active", "value": False},
         {"call": "set_instanceable", "value": True},
         {"call": "set_property_order", "value": ["b", "a"]},
+        {"call": "set_prim_order", "value": ["y", "x"]},
+    ]),
+    ("variant_branch_orders_cleared", {"kind": "variant", "prim": "/V"}, "/V", [
+        {"call": "set_prim_order", "value": ["y", "x"]},
+        {"call": "set_property_order", "value": ["b", "a"]},
+        {"call": "set_prim_order", "value": None},
+        {"call": "set_prim_order", "value": []},
+        {"call": "set_property_order", "value": None},
     ]),
     ("reference_target_maps_paths", {"kind": "reference", "prim": "/R"}, "/R", [
         {"call": "add_inherit", "path": "/R/Child"},

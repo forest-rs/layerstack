@@ -223,6 +223,12 @@ pub(super) fn read(
         (SpecRef::Variant(spec), PrimField::Instanceable) => {
             PrimValue::Instanceable(variant_bool(&spec.fields, "instanceable"))
         }
+        // A variant's prim spec holds both orders, as any prim spec does
+        // (`SdfPrimSpec::SetNameChildrenOrder` and `SetPropertyOrder` on
+        // `SdfVariantSpec::GetPrimSpec`).
+        (SpecRef::Variant(spec), PrimField::PrimOrder) => {
+            PrimValue::PrimOrder(spec.prim_order.clone())
+        }
         (SpecRef::Variant(spec), PrimField::PropertyOrder) => {
             PrimValue::PropertyOrder(spec.property_order.clone())
         }
@@ -241,10 +247,7 @@ pub(super) fn read(
         (SpecRef::Variant(spec), PrimField::VariantSetNames) => {
             PrimValue::VariantSetNames((*spec.variant_set_names).clone())
         }
-        (
-            SpecRef::Variant(_),
-            PrimField::Specifier | PrimField::TypeName | PrimField::PrimOrder,
-        ) => return None,
+        (SpecRef::Variant(_), PrimField::Specifier | PrimField::TypeName) => return None,
     })
 }
 
@@ -287,6 +290,9 @@ pub(crate) fn swap(spec: SpecMut<'_>, value: PrimValue) -> Result<PrimValue, Pri
         (SpecMut::Prim(spec), PrimValue::VariantSetNames(v)) => PrimValue::VariantSetNames(
             replace(&mut spec.rare_mut().variant_set_names, v.into()).into_inner(),
         ),
+        (SpecMut::Variant(spec), PrimValue::PrimOrder(v)) => {
+            PrimValue::PrimOrder(replace(&mut spec.prim_order, v))
+        }
         (SpecMut::Variant(spec), PrimValue::PropertyOrder(v)) => {
             PrimValue::PropertyOrder(replace(&mut spec.property_order, v))
         }

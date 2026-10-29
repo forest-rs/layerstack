@@ -301,6 +301,9 @@ fn fields(loaded: &LoadedStage, spec: Spec<'_>) -> Json {
         Spec::Variant(spec) => {
             // OpenUSD's variant prim specs are `over`s.
             out.insert("specifier".into(), json!("over"));
+            if let Some(order) = &spec.prim_order {
+                out.insert("primOrder".into(), names(order));
+            }
             (
                 &spec.fields,
                 &spec.references,

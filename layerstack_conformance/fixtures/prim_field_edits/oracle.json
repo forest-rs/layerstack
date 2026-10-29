@@ -1099,6 +1099,7 @@
     true,
     true,
     true,
+    true,
     true
    ],
    "name": "variant_branch",
@@ -1114,6 +1115,10 @@
      ]
     },
     "instanceable": true,
+    "primOrder": [
+     "y",
+     "x"
+    ],
     "propertyOrder": [
      "b",
      "a"
@@ -1157,6 +1162,61 @@
       "b",
       "a"
      ]
+    },
+    {
+     "call": "set_prim_order",
+     "value": [
+      "y",
+      "x"
+     ]
+    }
+   ],
+   "target": {
+    "kind": "variant",
+    "prim": "/V"
+   }
+  },
+  {
+   "accepted": [
+    true,
+    true,
+    true,
+    true,
+    true
+   ],
+   "name": "variant_branch_orders_cleared",
+   "prim": "/V",
+   "spec": {
+    "primOrder": [],
+    "specifier": "over"
+   },
+   "spec_path": "/V{v=x}",
+   "steps": [
+    {
+     "call": "set_prim_order",
+     "value": [
+      "y",
+      "x"
+     ]
+    },
+    {
+     "call": "set_property_order",
+     "value": [
+      "b",
+      "a"
+     ]
+    },
+    {
+     "call": "set_prim_order",
+     "value": null
+    },
+    {
+     "call": "set_prim_order",
+     "value": []
+    },
+    {
+     "call": "set_property_order",
+     "value": null
     }
    ],
    "target": {

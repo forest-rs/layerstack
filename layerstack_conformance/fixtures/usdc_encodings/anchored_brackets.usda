@@ -1,0 +1,13 @@
+#usda 1.0
+def "P"
+{
+    def "Q"
+    {
+        rel a = <C.b[../E].d>
+        rel c = <C.b[D.e[F].g].h>
+        rel e = <../S.b[T].d>
+        rel f = <C.b[/Abs].d.mapper[M]>
+        rel g = <C.b[/Abs.e[F].g].h>
+        float h.connect = <C.b[../E].d>
+    }
+}

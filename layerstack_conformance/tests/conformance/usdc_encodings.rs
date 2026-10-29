@@ -131,3 +131,30 @@ fn relationship_defaults_are_refused_as_openusd_cannot_read_them() {
         save("relationship_default")
     );
 }
+
+/// Relative targets whose bracketed paths the parser anchors with them
+/// (`<C.b[../E].d>` on `/P/Q` is `</P/Q/C.b[/P/Q/E].d>`) save as OpenUSD
+/// saves them.
+#[test]
+fn anchored_brackets_save_as_openusd_saves_them() {
+    assert_saves_as_openusd("anchored_brackets");
+}
+
+/// A target that keeps a relative bracketed path (`</X/Y.b[Z].d>`) kills
+/// OpenUSD's export, whose `CrateFile::_AddPath` walks the relative
+/// path's parents without end; the save refuses it before any output.
+#[test]
+fn relative_brackets_are_refused_as_openusd_cannot_save_them() {
+    let record = oracle("relative_brackets");
+    let export = &record["export_usdc"];
+    assert_eq!(export["crashed"], Json::Bool(true), "{export}");
+    let refused = save("relative_brackets");
+    assert!(
+        matches!(
+            refused,
+            Err(UsdcWriteError::InvalidPath { ref path, .. })
+                if path == "/P/Q.b[C].d.mapper[/P/Q/E]" || path == "/X/Y.b[Z].d"
+        ),
+        "{refused:?}"
+    );
+}

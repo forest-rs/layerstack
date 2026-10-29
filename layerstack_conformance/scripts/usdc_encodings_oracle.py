@@ -41,6 +41,17 @@ the same text as the source layer (`same_text`) and that text.
   for an `SdfPath` value: `CrateFile::_PackValue` posts "Attempted to
   pack unsupported type 'SdfPath'" and writes an invalid value, which the
   read refuses ("Attempted to unpack unsupported type").
+- `anchored_brackets`: the targets of `usda_parity_oracle.py`'s
+  `read_relational_relative_targets` that the parser anchors, brackets
+  and all (`SdfPath::MakeAbsolutePath`), which save and read back.
+- `relative_brackets`: the other two, which keep a relative bracketed
+  path (`</X/Y.b[Z].d>`, and
+  `</P/Q.b[C].d.mapper[/P/Q/E]>` from `<.b[C].d.mapper[E]>`). The export
+  does not return: `CrateFile::_AddPath` adds a target path's bracketed
+  path (`GetTargetPath`, here relative) and then its parents
+  (`GetParentPath`: `Z`, `.`, `..`, `../..`, ...), which never reach the
+  absolute root, until the stack overflows. The export runs in a child
+  process, and the oracle records that it was killed (`crashed`).
 
 `--check` regenerates every file into a temporary directory and fails
 unless each matches the checked-in fixture; for a crate file, unless
@@ -56,6 +67,7 @@ import filecmp
 import json
 import os
 import re
+import subprocess
 import sys
 import tempfile
 
@@ -109,6 +121,30 @@ def "A"
 }
 """,
     "relational_targets": usda_parity_oracle.CASES["read_relational_targets"][0],
+    "anchored_brackets": """#usda 1.0
+def "P"
+{
+    def "Q"
+    {
+        rel a = <C.b[../E].d>
+        rel c = <C.b[D.e[F].g].h>
+        rel e = <../S.b[T].d>
+        rel f = <C.b[/Abs].d.mapper[M]>
+        rel g = <C.b[/Abs.e[F].g].h>
+        float h.connect = <C.b[../E].d>
+    }
+}
+""",
+    "relative_brackets": """#usda 1.0
+def "P"
+{
+    def "Q"
+    {
+        rel b = <.b[C].d.mapper[E]>
+        rel d = </X/Y.b[Z].d>
+    }
+}
+""",
 }
 
 
@@ -131,6 +167,48 @@ def call(fn):
         return None, errors(exc)
 
 
+def export_child(source, written):
+    """Child process: opens `source`, exports it to `written` and prints
+    the errors the export posted, as JSON."""
+    layer = Sdf.Layer.FindOrOpen(source)
+    ok, posted = call(lambda: layer.Export(written))
+    print(json.dumps({"accepted": bool(ok) and not posted, "errors": posted}))
+
+
+def export(source, written):
+    """Exports the layer at `source` to `written` in a child process, so
+    that an export that kills its process is recorded as `crashed`."""
+    child = subprocess.run(
+        [sys.executable, os.path.abspath(__file__), "--export-child", source, written],
+        capture_output=True, text=True, timeout=600)
+    if child.returncode < 0 or child.returncode > 128:
+        return {"accepted": False, "crashed": True, "errors": []}
+    if child.returncode != 0:
+        raise SystemExit(f"export of {source} failed: {child.stderr}")
+    return json.loads(child.stdout.splitlines()[-1])
+
+
+def reread(record, written, source_text):
+    """Records the read of the crate file at `written`."""
+    reread_text, posted = call(lambda: Sdf.Layer.OpenAsAnonymous(written).ExportToString())
+    read = {"accepted": not posted, "errors": posted}
+    if read["accepted"]:
+        read["same_text"] = reread_text == source_text
+        read["text"] = reread_text
+    record["open_usdc"] = read
+    return reread_text if read["accepted"] else None
+
+
+def keep(out, name, written, export_record):
+    """Keeps the crate file at `written` as `<name>.usdc` in `out` when its
+    export was accepted."""
+    if export_record["accepted"]:
+        with open(written, "rb") as f:
+            data = f.read()
+        with open(os.path.join(out, f"{name}.usdc"), "wb") as f:
+            f.write(data)
+
+
 def case(out, name, text):
     source = os.path.join(out, f"{name}.usda")
     with open(source, "w") as f:
@@ -142,21 +220,11 @@ def case(out, name, text):
         return record
     with tempfile.TemporaryDirectory() as tmp:
         written = os.path.join(tmp, f"{name}.usdc")
-        ok, posted = call(lambda: layer.Export(written))
-        export = {"accepted": bool(ok) and not posted, "errors": posted}
-        with open(written, "rb") as f:
-            data = f.read()
-        if export["accepted"]:
-            with open(os.path.join(out, f"{name}.usdc"), "wb") as f:
-                f.write(data)
-        record["export_usdc"] = export
-        # Crate values are read when asked for: the text asks for all.
-        reread_text, posted = call(lambda: Sdf.Layer.OpenAsAnonymous(written).ExportToString())
-    read = {"accepted": not posted, "errors": posted}
-    if read["accepted"]:
-        read["same_text"] = reread_text == layer.ExportToString()
-        read["text"] = reread_text
-    record["open_usdc"] = read
+        record["export_usdc"] = export(source, written)
+        keep(out, name, written, record["export_usdc"])
+        if not record["export_usdc"].get("crashed"):
+            # Crate values are read when asked for: the text asks for all.
+            reread(record, written, layer.ExportToString())
     return record
 
 
@@ -180,8 +248,13 @@ def read_text(path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--check", action="store_true")
+    parser.add_argument("--export-child", nargs=2, metavar=("SOURCE", "WRITTEN"),
+                        help=argparse.SUPPRESS)
     parser.add_argument("out", nargs="?", default=FIXTURES)
     args = parser.parse_args()
+    if args.export_child:
+        export_child(*args.export_child)
+        return
     if not args.check:
         write(args.out)
         return

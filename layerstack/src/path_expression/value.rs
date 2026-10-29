@@ -140,15 +140,100 @@ pub(crate) fn anchor_and_map_with(
     anchor: &[String],
     map: &mut dyn FnMut(&[String]) -> Option<Vec<String>>,
 ) -> PathExpression {
+    map_atoms(expr, Relative::Anchor(anchor), map)
+}
+
+/// What mapping does with a relative pattern prefix or reference path.
+#[derive(Clone, Copy)]
+enum Relative<'a> {
+    /// Made absolute at this prim, then mapped.
+    Anchor(&'a [String]),
+    /// Kept as authored: a map with the root identity maps a path no
+    /// pair covers to itself.
+    Keep,
+    /// Matches nothing: no pair of the map covers it.
+    Nothing,
+}
+
+/// Maps the path expressions of a metadata value in place, alone, in
+/// arrays and in dictionaries at any depth, through `map`.
+///
+/// Metadata is not anchored: a relative pattern or reference path is kept
+/// where the arcs' map has the root identity (`root_identity`) and matches
+/// nothing otherwise, as `PcpMapFunction::MapSourceToTarget` maps a path
+/// none of its pairs covers. OpenUSD: `_PathExprToStage` in
+/// `pxr/usd/usd/stage.cpp`, applied to metadata values through
+/// `VtValueTryTransform`, which visits arrays and dictionaries.
+///
+/// Spec: AOUSD Core §10 (arcs map namespace), §12.2 (metadata
+/// resolution).
+pub(crate) fn map_metadata_value_with(
+    value: &mut Value,
+    root_identity: bool,
+    map: &mut dyn FnMut(&[String]) -> Option<Vec<String>>,
+) {
+    match value {
+        Value::PathExpression(text) => {
+            if let Some(expression) = parse(text) {
+                let relative = if root_identity {
+                    Relative::Keep
+                } else {
+                    Relative::Nothing
+                };
+                *text = Arc::from(map_atoms(expression, relative, map).lossless_text());
+            }
+        }
+        Value::Array(items) => {
+            for item in items.iter_mut().filter(|item| holds_path_expression(item)) {
+                map_metadata_value_with(item, root_identity, map);
+            }
+        }
+        Value::Dictionary(entries) => {
+            for (_, entry) in entries.iter_mut() {
+                if let crate::doc::FieldValue::Value(item) = entry
+                    && holds_path_expression(item)
+                {
+                    map_metadata_value_with(item, root_identity, map);
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Whether `value` holds a path expression: alone, in an array, or in a
+/// dictionary at any depth.
+pub(crate) fn holds_path_expression(value: &Value) -> bool {
+    match value {
+        Value::PathExpression(_) => true,
+        Value::Array(items) => items.iter().any(holds_path_expression),
+        Value::Dictionary(entries) => entries
+            .iter()
+            .any(|(_, entry)| entry.as_value().is_some_and(holds_path_expression)),
+        _ => false,
+    }
+}
+
+fn map_atoms(
+    expr: PathExpression,
+    relative: Relative<'_>,
+    map: &mut dyn FnMut(&[String]) -> Option<Vec<String>>,
+) -> PathExpression {
     expr.rebuild(&mut |atom| match atom {
         Expr::Pattern(mut pattern) => {
             if !pattern.prefix.absolute {
-                let relative = core::mem::take(&mut pattern.prefix.prims);
-                let Some(prims) = anchor_names(anchor, relative) else {
-                    return PathExpression::nothing();
-                };
-                pattern.prefix.prims = prims;
-                pattern.prefix.absolute = true;
+                match relative {
+                    Relative::Anchor(anchor) => {
+                        let names = core::mem::take(&mut pattern.prefix.prims);
+                        let Some(prims) = anchor_names(anchor, names) else {
+                            return PathExpression::nothing();
+                        };
+                        pattern.prefix.prims = prims;
+                        pattern.prefix.absolute = true;
+                    }
+                    Relative::Keep => return PathExpression::pattern(pattern),
+                    Relative::Nothing => return PathExpression::nothing(),
+                }
             }
             // A leading stretch (`//...`) matches anywhere and maps to
             // itself; any other prefix, the root included, maps through
@@ -171,7 +256,14 @@ pub(crate) fn anchor_and_map_with(
             let prims = if path.absolute {
                 Some(path.prims)
             } else {
-                anchor_names(anchor, path.prims)
+                match relative {
+                    Relative::Anchor(anchor) => anchor_names(anchor, path.prims),
+                    Relative::Keep => {
+                        reference.path = Some(path);
+                        return PathExpression::reference(reference);
+                    }
+                    Relative::Nothing => None,
+                }
             };
             match prims.and_then(|prims| map(&prims)) {
                 Some(prims) => {

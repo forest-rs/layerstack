@@ -225,6 +225,7 @@ mod usdz_package;
 mod usdz_packages;
 mod value_clips;
 mod value_matrix;
+mod value_transforms;
 mod value_types;
 mod variant_branch_fields;
 mod variant_children;

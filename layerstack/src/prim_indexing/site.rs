@@ -985,10 +985,28 @@ fn projected_children(
             .get(&path)
             .is_some_and(|spec| spec.outer_variant_sites().is_empty())
     };
+    // The changed slots the projected layer authors a spec at, and their
+    // ancestors: found once, where asking each parent of a moved group
+    // would visit every changed slot.
+    let mut held: HashSet<PathId> = HashSet::new();
+    for &path in changed {
+        if projected_spec(path) {
+            let mut current = Some(path);
+            while let Some(at) = current {
+                if !held.insert(at) {
+                    break;
+                }
+                current = paths.parent(at);
+            }
+        }
+    }
     // Whether the projected layer authors a spec at or beneath `path`. A
     // child path not interned is neither a spec's path nor an ancestor of
     // one, and holds none.
     let holds = |path: PathId| -> bool {
+        if held.contains(&path) {
+            return true;
+        }
         let mut pending = alloc::vec![path];
         while let Some(path) = pending.pop() {
             if projected_spec(path) {
@@ -1004,10 +1022,7 @@ fn projected_children(
                 }
             }
         }
-        let segments = paths.resolve(path).segments();
-        changed.iter().any(|changed| {
-            paths.resolve(*changed).segments().starts_with(segments) && projected_spec(*changed)
-        })
+        false
     };
     // Each parent above a changed slot, with the names of its children
     // on the way to one.

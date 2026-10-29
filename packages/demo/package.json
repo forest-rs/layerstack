@@ -2,7 +2,7 @@
   "name": "@forest-rs/layerstack-demo",
   "version": "0.0.0",
   "private": true,
-  "description": "A scene editor over @forest-rs/layerstack: open, explain, edit, switch a variant, undo, save and reopen, in plain DOM.",
+  "description": "A scene editor over @forest-rs/layerstack: open, explain, edit, switch a variant, define and retype, rename, undo, save and reopen, in plain DOM.",
   "license": "Apache-2.0 OR MIT",
   "type": "module",
   "scripts": {

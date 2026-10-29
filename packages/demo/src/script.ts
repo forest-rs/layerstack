@@ -1,7 +1,7 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-// The demo's six-step script over the sample scene. The page runs it one
+// The demo's script over the sample scene. The page runs it one
 // step at a time; `scripts/acceptance.ts` runs it headless and checks the
 // stage after each step.
 import type { Layerstack } from "@forest-rs/layerstack";
@@ -25,6 +25,21 @@ export const sample = {
   variant: "chrome",
   /** The asset the variant needs. */
   variantAsset: "assets/chrome.usda",
+  /** A prim the script defines as a `Sphere` and sets the schema's radius of, in one edit. */
+  pebble: "/World/Pebble",
+  /** Where the robot is renamed to, with its variant set, and the relationship in the sublayer that names it. */
+  rover: "/World/Rover",
+  roverColor: "/World/Rover.color",
+  aim: "/World/Lamp.aim",
+  /** A lamp attribute sampled in the sublayer, blocked from time 24 on. */
+  lamp: "/World/Lamp",
+  flicker: "/World/Lamp.flicker",
+  /** A time after the block: the blocked sample is held. */
+  blockedTime: 30,
+  /** One of two instances of `assets/beacon.usda`, and a prim inside it: an instance proxy. */
+  instance: "/World/Beacons/North",
+  proxy: "/World/Beacons/North/Bulb",
+  proxyRadius: "/World/Beacons/North/Bulb.radius",
 } as const;
 
 /** What the script needs of its host: the instance, the fetch, and a way to hand saved layers to the user. */
@@ -48,6 +63,8 @@ export class Session {
   prim: string | null = null;
   /** The selected attribute's property path. */
   attribute: string | null = null;
+  /** The time code the inspector and the explanation read at; `null` reads the defaults. */
+  time: number | null = null;
 
   /** The current editor; throws before the first step. */
   get current(): Editor {
@@ -61,10 +78,11 @@ export class Session {
     this.editor = editor;
   }
 
-  /** Selects a prim, and one of its attributes or none. */
-  select(prim: string | null, attribute: string | null = null): void {
+  /** Selects a prim, and one of its attributes or none, read at `time` (the defaults by default). */
+  select(prim: string | null, attribute: string | null = null, time: number | null = null): void {
     this.prim = prim;
     this.attribute = attribute;
+    this.time = time;
   }
 }
 
@@ -77,11 +95,11 @@ export interface Step {
   run(session: Session, host: Host): Promise<void>;
 }
 
-/** The six steps, in order. */
+/** The steps, in order. */
 export const steps: readonly Step[] = [
   {
     title: "Open the layered sample",
-    look: "The asset loop: the root wants its sublayer and the robot's reference; both are fetched in one round.",
+    look: "The asset loop: the root wants its sublayer, the robot's reference and the beacon both instances reference; all are fetched in one round.",
     async run(session, host) {
       session.replace(await Editor.open(host.layerstack, sample.root, host.fetch, { progress: host.progress }));
       session.select(null);
@@ -122,8 +140,52 @@ export const steps: readonly Step[] = [
     },
   },
   {
+    title: "Define a sphere and set its radius in one edit",
+    look: "The undo stack: one action defines /World/Pebble as a Sphere and sets radius, which the Sphere schema types as a double, though the prim did not exist before the edit.",
+    async run(session) {
+      session.current.apply(`define ${sample.pebble} as a Sphere with radius 0.5`, [
+        { type: "definePrim", path: sample.pebble, typeName: "Sphere" },
+        { type: "setValue", path: `${sample.pebble}.radius`, value: { type: "double", value: 0.5 } },
+      ]);
+      session.select(sample.pebble, `${sample.pebble}.radius`);
+    },
+  },
+  {
+    title: "Retype the pebble as a cube and set its size",
+    look: "The inspector: the pebble is a Cube now, and size, a Cube schema attribute, was set in the same edit that retyped it. The radius it authored stays, outside the new schema.",
+    async run(session) {
+      session.current.apply(`retype ${sample.pebble} as a Cube with size 0.8`, [
+        { type: "definePrim", path: sample.pebble, typeName: "Cube" },
+        { type: "setValue", path: `${sample.pebble}.size`, value: { type: "double", value: 0.8 } },
+      ]);
+      session.select(sample.pebble, `${sample.pebble}.size`);
+    },
+  },
+  {
+    title: "Rename the robot to Rover",
+    look: "The explanation: the painted color now comes from /World/Rover{finish=painted}; the variant set moved with the prim. The lamp's aim, in library.usda, targets /World/Rover: one rename edited two layers, and both are dirty.",
+    async run(session) {
+      session.current.move(sample.robot, sample.rover);
+      session.select(sample.rover, sample.roverColor);
+    },
+  },
+  {
+    title: "Read the lamp's flicker after its block",
+    look: "The explanation at time 30: the source is the time samples, held from 24, where a block is authored, so there is no value. Set the time to 6 to read 0.5, between the samples at 0 and 12.",
+    async run(session) {
+      session.select(sample.lamp, sample.flicker, sample.blockedTime);
+    },
+  },
+  {
+    title: "Explain a prim inside an instance",
+    look: "The tree: North and South are instances of one beacon, and Bulb is an instance proxy. Its radius comes from assets/beacon.usda through North's reference, and the reopened stage explains it the same way.",
+    async run(session) {
+      session.select(sample.proxy, sample.proxyRadius);
+    },
+  },
+  {
     title: "Save, download, reopen",
-    look: "The layers: only scene.usda was dirty. The reopened stage reads it from the downloaded bytes and fetches the rest; the override is there.",
+    look: "The layers: scene.usda and library.usda were dirty. The reopened stage reads them from the downloaded bytes and fetches the rest; the override, the pebble and the rename are there.",
     async run(session, host) {
       const editor = session.current;
       editor.save();

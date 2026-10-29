@@ -1,7 +1,7 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-// Runs the demo's six steps headless against the built package, reading
+// Runs the demo's steps headless against the built package, reading
 // the sample from `public/scene/` as the page fetches it, and checks the
 // values and explanations after each step. Run after building
 // `@forest-rs/layerstack` (`npm run build:wasm && npm run build` there).
@@ -56,12 +56,12 @@ function opinions(explanation: Explanation | null): string[] {
   );
 }
 
-/** The attribute's value as the inspector shows it, and its explanation. */
-function read(stage: Stage, path: string): { value: string; opinions: string[]; explanation: Explanation } {
+/** The attribute's value as the inspector shows it at `time` (the default by default), and its explanation. */
+function read(stage: Stage, path: string, time?: number): { value: string; opinions: string[]; explanation: Explanation } {
   const attribute = stage.attribute(path);
   assert.ok(attribute !== null, `${path} exists`);
-  const value: Value | null = attribute.get();
-  const explanation = attribute.explain();
+  const value: Value | null = attribute.get(time);
+  const explanation = attribute.explain(time);
   assert.ok(explanation !== null);
   const shown = formatValue(value);
   assert.equal(formatValue(explanation.value), shown, `${path}: the explanation explains the value read`);
@@ -70,9 +70,12 @@ function read(stage: Stage, path: string): { value: string; opinions: string[]; 
   return { value: shown, opinions: opinions(explanation), explanation };
 }
 
-function selection(stage: Stage): string | null {
-  return stage.prim(sample.robot)?.variantSets().find((set) => set.name === sample.set)?.selection ?? null;
+function selection(stage: Stage, robot: string = sample.robot): string | null {
+  return stage.prim(robot)?.variantSets().find((set) => set.name === sample.set)?.selection ?? null;
 }
+
+/** The instance proxy's radius explanation in the live stage, before the save, for the reopen to match. */
+let proxyBeforeSave: string[] = [];
 
 const session = new Session();
 const checks: ((session: Session) => void)[] = [
@@ -82,12 +85,12 @@ const checks: ((session: Session) => void)[] = [
     assert.equal(status.complete, true, "every asset resolved");
     assert.deepEqual(status.compositionErrors, []);
     const wanted = current.loopLog.filter((entry) => entry.phase === "want").map((entry) => entry.identifier);
-    assert.deepEqual(wanted.sort(), ["assets/robot.usda", "library.usda"]);
+    assert.deepEqual([...new Set(wanted)].sort(), ["assets/beacon.usda", "assets/robot.usda", "library.usda"]);
     const loaded = current.loopLog.filter((entry) => entry.phase === "load").map((entry) => entry.identifier);
-    assert.deepEqual(loaded.sort(), ["assets/robot.usda", "library.usda"]);
+    assert.deepEqual(loaded.sort(), ["assets/beacon.usda", "assets/robot.usda", "library.usda"], "the beacon is read once for both instances");
     assert.ok(!current.loopLog.some((entry) => entry.identifier === sample.variantAsset), "the chrome finish is not fetched yet");
     assert.deepEqual(current.stage.children("/"), ["/Shape", "/World"]);
-    assert.deepEqual(current.stage.children("/World"), ["/World/Lamp", "/World/Rock", "/World/Robot"]);
+    assert.deepEqual(current.stage.children("/World"), ["/World/Lamp", "/World/Rock", "/World/Robot", "/World/Beacons"]);
     assert.equal(current.stage.prim("/Shape")?.abstract, true);
     assert.equal(current.stage.editLayer?.identifier, sample.root);
     assert.equal(current.changeLog.length, 1, "one recomposition for the one round");
@@ -160,18 +163,108 @@ const checks: ((session: Session) => void)[] = [
       `redo set ${sample.radius}`,
     ]);
   },
-  // 6. Saved, downloaded and reopened: the override survives, read from the downloaded bytes.
+  // 6. A typed prim and its schema attribute, defined and set in one edit.
+  ({ current, prim, attribute, time }) => {
+    assert.equal(prim, sample.pebble);
+    assert.equal(attribute, `${sample.pebble}.radius`);
+    assert.equal(time, null);
+    assert.equal(current.stage.prim(sample.pebble)?.typeName, "Sphere");
+    const radius = read(current.stage, `${sample.pebble}.radius`);
+    assert.equal(radius.value, "0.5");
+    assert.equal(current.stage.attribute(`${sample.pebble}.radius`)?.typeName, "double", "the Sphere schema types it");
+    assert.deepEqual(radius.opinions, [`scene.usda ${sample.pebble}.radius local contributed`]);
+    assert.deepEqual(current.undoStack.map((entry) => entry.label), [
+      `set ${sample.radius}`,
+      `define ${sample.pebble} as a Sphere with radius 0.5`,
+    ]);
+    assert.deepEqual(current.changeLog.at(-1)?.changes.created, [sample.pebble]);
+  },
+  // 7. Retyped, with the new type's attribute set in the same edit.
+  ({ current, attribute }) => {
+    assert.equal(attribute, `${sample.pebble}.size`);
+    assert.equal(current.stage.prim(sample.pebble)?.typeName, "Cube");
+    const size = read(current.stage, `${sample.pebble}.size`);
+    assert.equal(size.value, "0.8");
+    assert.deepEqual(size.opinions, [`scene.usda ${sample.pebble}.size local contributed`]);
+    assert.equal(read(current.stage, `${sample.pebble}.radius`).value, "0.5", "the radius it authored stays");
+    assert.equal(current.undoStack.at(-1)?.label, `retype ${sample.pebble} as a Cube with size 0.8`);
+    assert.deepEqual(current.changeLog.at(-1)?.changes.resynced, [sample.pebble]);
+  },
+  // 8. The robot renamed: its variant set, its variant specs and the sublayer's aim move with it.
+  ({ current, prim, attribute }) => {
+    assert.equal(prim, sample.rover);
+    assert.equal(attribute, sample.roverColor);
+    assert.equal(current.stage.prim(sample.robot), null);
+    assert.equal(selection(current.stage, sample.rover), "painted");
+    const color = read(current.stage, sample.roverColor);
+    assert.equal(color.value, "(0.8, 0.2, 0.1)");
+    assert.deepEqual(color.opinions, [
+      `scene.usda ${sample.rover}{finish=painted}.color variants contributed`,
+      "assets/robot.usda /Robot.color references ignored (shadowed)",
+    ]);
+    assert.ok(current.stage.prim(sample.lamp)?.relationshipNames().includes("aim"), "the inspector lists the aim");
+    assert.deepEqual(current.stage.relationship(sample.aim)?.targets(), [sample.rover]);
+    assert.deepEqual(
+      current.dirtyLayers().map((layer) => layer.identifier),
+      [sample.root, "library.usda"],
+      "one rename edited two layers",
+    );
+    assert.equal(current.undoStack.at(-1)?.label, `move ${sample.robot} to ${sample.rover}`);
+    const changes = current.changeLog.at(-1)?.changes;
+    assert.ok(changes?.removed.includes(sample.robot) && changes.created.includes(sample.rover));
+  },
+  // 9. A held blocked sample: the time samples are the source, with no value.
+  ({ current, attribute, time }) => {
+    assert.equal(attribute, sample.flicker);
+    assert.equal(time, sample.blockedTime);
+    const blocked = read(current.stage, sample.flicker, sample.blockedTime);
+    assert.equal(blocked.value, "none");
+    assert.equal(blocked.explanation.source, "timeSamples");
+    assert.deepEqual(blocked.explanation.samples, { lower: 24, upper: 24 });
+    assert.deepEqual(blocked.opinions, [`library.usda ${sample.flicker} local block`]);
+    const between = read(current.stage, sample.flicker, 6);
+    assert.equal(between.value, "0.5");
+    assert.deepEqual(between.explanation.samples, { lower: 0, upper: 12 });
+    assert.deepEqual(between.opinions, [`library.usda ${sample.flicker} local contributed`]);
+  },
+  // 10. An instance proxy explains its own composition.
+  ({ current, prim, attribute }) => {
+    assert.equal(prim, sample.proxy);
+    assert.equal(attribute, sample.proxyRadius);
+    assert.equal(current.stage.prim(sample.instance)?.instance, true);
+    assert.equal(current.stage.prim("/World/Beacons/South")?.instance, true);
+    assert.equal(current.stage.prim(sample.proxy)?.instanceProxy, true);
+    const radius = read(current.stage, sample.proxyRadius);
+    assert.equal(radius.value, "0.25");
+    assert.deepEqual(radius.opinions, ["assets/beacon.usda /Beacon/Bulb.radius references contributed"]);
+    proxyBeforeSave = radius.opinions;
+  },
+  // 11. Saved, downloaded and reopened: every edit survives, read from the downloaded bytes.
   ({ current }) => {
     assert.deepEqual(
-      downloaded.map((file) => file.identifier),
-      [sample.root],
-      "only the edit layer was dirty",
+      downloaded.map((file) => file.identifier).sort(),
+      ["library.usda", sample.root],
+      "the edit layer and the sublayer the rename repaired were dirty",
     );
-    assert.match(new TextDecoder().decode(downloaded[0]?.bytes), /double radius = 3/);
+    const text = (identifier: string) =>
+      new TextDecoder().decode(downloaded.find((file) => file.identifier === identifier)?.bytes);
+    assert.match(text(sample.root), /double radius = 3/);
+    assert.match(text(sample.root), /def Cube "Pebble"/);
+    assert.match(text(sample.root), /def Xform "Rover"/);
+    assert.match(text("library.usda"), /rel aim = <\/World\/Rover>/);
     const root = current.loopLog.find((entry) => entry.phase === "supply" && entry.identifier === sample.root);
     assert.match(root?.detail ?? "", /from the saved layers/, "the root is read from the download");
-    const fetched = current.loopLog.filter((entry) => entry.phase === "fetch").map((entry) => entry.identifier);
-    assert.deepEqual(fetched.sort(), ["assets/robot.usda", "library.usda"], "the rest is fetched; chrome is not selected");
+    const fetches = current.loopLog.filter((entry) => entry.phase === "fetch");
+    assert.deepEqual(
+      fetches.filter((entry) => entry.detail.endsWith("from the saved layers")).map((entry) => entry.identifier),
+      ["library.usda"],
+      "the sublayer is read from the download too",
+    );
+    assert.deepEqual(
+      fetches.filter((entry) => !entry.detail.endsWith("from the saved layers")).map((entry) => entry.identifier).sort(),
+      ["assets/beacon.usda", "assets/robot.usda"],
+      "the rest is fetched; chrome is not selected",
+    );
     assert.equal(current.stage.status().complete, true);
     assert.deepEqual(current.dirtyLayers(), [], "nothing is dirty after the reopen");
     const radius = read(current.stage, sample.radius);
@@ -180,8 +273,17 @@ const checks: ((session: Session) => void)[] = [
       "scene.usda /World/Rock.radius local contributed",
       "library.usda /Shape.radius inherits ignored (shadowed)",
     ]);
-    assert.equal(selection(current.stage), "painted");
-    assert.equal(read(current.stage, sample.color).value, "(0.8, 0.2, 0.1)");
+    assert.equal(current.stage.prim(sample.robot), null);
+    assert.equal(selection(current.stage, sample.rover), "painted");
+    assert.equal(read(current.stage, sample.roverColor).value, "(0.8, 0.2, 0.1)");
+    assert.deepEqual(current.stage.relationship(sample.aim)?.targets(), [sample.rover]);
+    assert.equal(current.stage.prim(sample.pebble)?.typeName, "Cube");
+    assert.equal(read(current.stage, `${sample.pebble}.size`).value, "0.8");
+    assert.deepEqual(
+      read(current.stage, sample.proxyRadius).opinions,
+      proxyBeforeSave,
+      "a fresh open explains the instance proxy as the edited live stage did",
+    );
   },
 ];
 

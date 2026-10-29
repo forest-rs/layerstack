@@ -251,7 +251,7 @@ function renderTree(stage: Stage, waiting: ReadonlyMap<string, readonly string[]
           {
             class: `prim${session.prim === child ? " selected" : ""}${prim.abstract ? " abstract" : ""}${prim.active ? "" : " inactive"}`,
             onclick: () => {
-              session.select(child, session.prim === child ? session.attribute : null);
+              session.select(child, session.prim === child ? session.attribute : null, session.time);
               render();
             },
             title: `${prim.specifier}${prim.typeName === null ? "" : ` ${prim.typeName}`} ${child}`,
@@ -259,6 +259,9 @@ function renderTree(stage: Stage, waiting: ReadonlyMap<string, readonly string[]
           h("span", { class: "name" }, prim.name),
           prim.typeName !== null && h("span", { class: "type" }, prim.typeName),
           prim.specifier !== "def" && h("span", { class: "badge" }, prim.specifier),
+          prim.instance && h("span", { class: "badge instance", title: "An instance: its children compose from a shared prototype" }, "instance"),
+          prim.instanceProxy &&
+            h("span", { class: "badge proxy", title: "An instance proxy: a prim of the prototype, read through this instance" }, "proxy"),
           wants !== undefined && h("span", { class: "badge waiting", title: `Composed without ${wants.join(", ")}` }, "waiting"),
         );
         return h("li", {}, row, stage.children(child).length > 0 && branch(child));
@@ -283,9 +286,10 @@ function renderInspector(editor: Editor): void {
     });
     return h("label", { class: "variant" }, h("span", {}, set.name), select);
   });
+  const time = session.time ?? undefined;
   const rows = prim.attributeNames().map((name) => {
     const attribute = prim.attribute(name) as Attribute;
-    const value = attribute.get();
+    const value = attribute.get(time);
     const shown = formatValue(value);
     releaseValue(value);
     return h(
@@ -293,7 +297,7 @@ function renderInspector(editor: Editor): void {
       {
         class: `${attribute.path === session.attribute ? "selected" : ""}${attribute.authored ? " authored" : ""}`,
         onclick: () => {
-          session.select(prim.path, attribute.path);
+          session.select(prim.path, attribute.path, session.time);
           render();
         },
       },
@@ -302,19 +306,99 @@ function renderInspector(editor: Editor): void {
       h("td", { class: "value" }, shown),
     );
   });
-  fill(target, 
+  // Relationships with targets: a schema's empty ones (a light's link collections) are left out.
+  const relationships = prim.relationshipNames().flatMap((name) => {
+    const targets = prim.relationship(name)?.targets() ?? [];
+    if (targets.length === 0) return [];
+    return [
+      h(
+        "tr",
+        { class: "relationship authored" },
+        h("td", { class: "name" }, name),
+        h("td", { class: "type" }, "rel"),
+        h("td", { class: "value" }, targets.join(", ")),
+      ),
+    ];
+  });
+  fill(target,
     h("div", { class: "heading" }, h("code", {}, prim.path), " ", prim.typeName ?? "typeless", prim.abstract && " (class)"),
     variants.length > 0 && h("div", { class: "variants" }, ...variants),
-    h("table", { class: "attributes" }, h("tbody", {}, ...rows)),
-    h("p", { class: "hint" }, "Bold attributes have authored opinions. Select one to explain and edit it."),
-    session.attribute !== null && editForm(editor, session.attribute),
+    timeForm(),
+    h("table", { class: "attributes" }, h("tbody", {}, ...rows, ...relationships)),
+    h("p", { class: "hint" }, "Bold attributes have authored opinions. Select one to explain and edit it; rel rows are relationships and their targets."),
+    prim.instanceProxy &&
+      h("p", { class: "hint" }, "An instance proxy is read through its instance: edit the asset the instance references, or the instance itself."),
+    !prim.instanceProxy && session.attribute !== null && editForm(editor, session.attribute),
+    !prim.instanceProxy && namespaceForm(editor, prim),
   );
+}
+
+/** The time code the inspector and the explanation read at: empty for the defaults. */
+function timeForm(): HTMLElement {
+  const input = h("input");
+  input.type = "number";
+  input.placeholder = "default";
+  input.value = session.time === null ? "" : String(session.time);
+  input.disabled = busy;
+  input.addEventListener("change", () => {
+    const time = input.value.trim() === "" ? null : Number(input.value);
+    session.time = time !== null && Number.isFinite(time) ? time : null;
+    render();
+  });
+  return h(
+    "label",
+    { class: "time", title: "Read values and explanations at this time code; empty reads the defaults" },
+    h("span", {}, "time"),
+    input,
+  );
+}
+
+/** Rename or delete the prim: namespace edits of the edit layer's stack, undoable. */
+function namespaceForm(editor: Editor, prim: Prim): HTMLElement {
+  const input = h("input");
+  input.value = prim.name;
+  input.disabled = busy;
+  const parent = prim.path.slice(0, prim.path.lastIndexOf("/"));
+  const remove = h(
+    "button",
+    {
+      disabled: busy,
+      title: "Delete the prim from every layer of the stack, and the paths that name it",
+      onclick: () =>
+        void act(() => {
+          editor.delete(prim.path);
+          session.select(parent === "" ? null : parent);
+        }),
+    },
+    "Delete",
+  );
+  // Only Rename submits the form.
+  remove.type = "button";
+  const form = h(
+    "form",
+    { class: "edit namespace" },
+    h("label", {}, "name", input),
+    h("button", { disabled: busy, title: "Rename the prim in every layer of the stack, fixing the paths that name it" }, "Rename"),
+    remove,
+  );
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const to = `${parent}/${input.value.trim()}`;
+    if (to === prim.path) return;
+    void act(() => {
+      editor.move(prim.path, to);
+      const property = session.attribute?.slice(session.attribute.lastIndexOf("."));
+      session.select(to, property === undefined ? null : `${to}${property}`, session.time);
+    });
+  });
+  return form;
 }
 
 function editForm(editor: Editor, path: string): HTMLElement | null {
   const attribute = editor.stage.attribute(path);
   if (attribute === null || attribute.typeName === null) return null;
-  const current = attribute.get();
+  const time = session.time;
+  const current = attribute.get(time ?? undefined);
   const editable = current === null || current.kind === "scalar" || current.kind === "tuple";
   const input = h("input");
   input.value = current === null ? "" : formatValue(current);
@@ -327,15 +411,15 @@ function editForm(editor: Editor, path: string): HTMLElement | null {
     h(
       "button",
       { disabled: busy || !editable },
-      `Set in ${editor.stage.editLayer === null ? "(no edit layer)" : layerName(editor.stage.editLayer)}`,
+      `Set ${time === null ? "" : `at time ${time} `}in ${editor.stage.editLayer === null ? "(no edit layer)" : layerName(editor.stage.editLayer)}`,
     ),
   );
   form.addEventListener("submit", (event) => {
     event.preventDefault();
-    const now = attribute.get();
+    const now = attribute.get(time ?? undefined);
     const value = parseValue(typeName, input.value, now);
     releaseValue(now);
-    void act(() => editor.setValue(path, value));
+    void act(() => editor.setValue(path, value, time));
   });
   releaseValue(current);
   return form;
@@ -344,7 +428,8 @@ function editForm(editor: Editor, path: string): HTMLElement | null {
 function renderExplanation(stage: Stage, waiting: ReadonlyMap<string, readonly string[]>): void {
   const target = panel("explanation-body");
   const attribute = session.attribute === null ? null : stage.attribute(session.attribute);
-  const explanation = attribute?.explain() ?? null;
+  const time = session.time;
+  const explanation = attribute?.explain(time ?? undefined) ?? null;
   if (attribute === null || explanation === null) {
     fill(target, h("p", { class: "hint" }, "Select an attribute."));
     return;
@@ -371,12 +456,23 @@ function renderExplanation(stage: Stage, waiting: ReadonlyMap<string, readonly s
     ),
   );
   fill(target, 
-    h("div", { class: "heading" }, h("code", {}, attribute.path), " = ", h("strong", {}, value)),
+    h(
+      "div",
+      { class: "heading" },
+      h("code", {}, attribute.path),
+      " = ",
+      h("strong", {}, value),
+      ` ${time === null ? "at the default time" : `at time ${formatNumber(time)}`}`,
+    ),
     h(
       "p",
       {},
       `Source: ${explanation.source}`,
-      explanation.samples !== null && `, between samples ${explanation.samples.lower} and ${explanation.samples.upper}`,
+      explanation.samples !== null &&
+        (explanation.samples.lower === explanation.samples.upper
+          ? `, the sample at ${formatNumber(explanation.samples.lower)}`
+          : `, between samples ${formatNumber(explanation.samples.lower)} and ${formatNumber(explanation.samples.upper)}`),
+      explanation.source === "timeSamples" && explanation.value === null && " (a block: the sample held here authors no value)",
       explanation.opinions.length === 0 && explanation.source === "fallback" && " (the schema's fallback; no layer authors it)",
     ),
     wants !== undefined &&

@@ -280,8 +280,38 @@ button:disabled {
   border-color: var(--warn);
 }
 
+.badge.instance,
+.badge.proxy {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
 .heading {
   margin-bottom: 8px;
+}
+
+.time {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.time input {
+  width: 90px;
+  padding: 2px 6px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.edit.namespace {
+  margin-top: 12px;
+}
+
+.edit.namespace input {
+  min-width: 140px;
 }
 
 .variants {

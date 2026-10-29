@@ -59,7 +59,7 @@ the same text as the source layer (`same_text`) and that text.
   `CrateFile::_PackValue` posts "Attempted to pack unsupported type
   'TfEnum'", and the read refuses the invalid value it writes.
 
-Four cases have no USDA source, since the text parser cannot make them:
+Five cases have no USDA source, since the text parser cannot make them:
 each is a layer `Sdf.CopySpec` copies from a USDA source, replacing
 fields' values through its value callback (which sets them as they
 are), or one built with `Sdf` calls. The oracle records its export, the
@@ -90,6 +90,11 @@ the text that read exports (`open_text`).
   `Sdf.CreatePrimInLayer` makes them. `SdfPrimSpec::GetSpecifier` falls
   back to `over`, which the text writes (`over "Q"`); the crate stores no
   field, so the conformance test finds the same file in `save_usdc`'s.
+- `dictionary_list_ops`: dictionary entries holding list ops, which the
+  crate stores and reads as any value. The text writes each as the list
+  op's `TfStringify` text after an empty type name
+  (` a = SdfIntListOp(Prepended Items: [1])`, `Sdf_FileIOUtility::_WriteDictionary`),
+  which the text parser refuses.
 
 `--check` regenerates every file into a temporary directory and fails
 unless each matches the checked-in fixture; for a crate file, unless
@@ -208,6 +213,24 @@ def unspecified_prims():
     return layer
 
 
+def dictionary_list_ops():
+    """`customData` dictionaries holding list ops, on a prim (beside an
+    `int`, and in a nested dictionary beside a string) and an attribute,
+    as `SdfSpec::SetInfo` sets them."""
+    layer = Sdf.Layer.CreateAnonymous("dictionary_list_ops.usda")
+    layer.ImportFromString('#usda 1.0\ndef "P"\n{\n    float v\n}\n')
+    layer.GetPrimAtPath("/P").SetInfo("customData", {
+        "a": Sdf.IntListOp.Create(prependedItems=[1]),
+        "c": Sdf.TokenListOp.Create(appendedItems=["t"]),
+        "d": {"x": Sdf.StringListOp.CreateExplicit(["s"]), "y": "kept"},
+        "e": 1,
+    })
+    layer.GetAttributeAtPath("/P.v").SetInfo("customData", {
+        "ops": Sdf.Int64ListOp.Create(deletedItems=[2]),
+    })
+    return layer
+
+
 # Layers the text parser cannot make: each copies `source` with
 # `Sdf.CopySpec`, its value callback replacing the value of each
 # `(path, field)` listed by a function of `pxr`'s `Sdf`, or is the layer
@@ -269,6 +292,7 @@ def "P" (
         ("/P.x", "g"): lambda: Sdf.TokenListOp.Create(prependedItems=["t"]),
     }),
     "unspecified_prims": (unspecified_prims, {}),
+    "dictionary_list_ops": (dictionary_list_ops, {}),
 }
 
 

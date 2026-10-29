@@ -10,12 +10,13 @@
 //! All input layers share the supplied token and path interners.
 //! AOUSD Core §7.6 (authored specs), §12.2.5 (metadata dictionaries),
 //! §12.3.2.1 (affine time mapping); clip metadata is an OpenUSD extension.
+use crate::diagnostic::{Describe, Names, with_store};
 use crate::sort;
 use crate::stitch::{self, StitchError, StitchReport};
 use crate::{
-    FieldEntry, FieldValue, Layer, LayerId, LayerOffset, PathId, PathInterner, PrimSpec,
-    PropertyKind, PropertyPath, PropertySpec, SublayerEntry, TimeSamples, TokenInterner, Value,
-    VariantSets,
+    FieldEntry, FieldValue, Layer, LayerId, LayerOffset, LayerStore, PathId, PathInterner,
+    PrimSpec, PropertyKind, PropertyPath, PropertySpec, SublayerEntry, TimeSamples, TokenInterner,
+    Value, VariantSets,
 };
 use alloc::{boxed::Box, collections::BTreeMap, format, string::String, sync::Arc, vec::Vec};
 
@@ -101,9 +102,65 @@ pub enum ClipAuthoringError {
     /// Stitching rejected a malformed source description.
     Stitch(StitchError),
 }
+impl ClipAuthoringError {
+    /// The error in words, its paths, layers and a rejected manifest edit's
+    /// paths written as text with `store`, the store holding the input
+    /// layers ([`crate::EditError::display`]). `Display` writes the same
+    /// without a store, with ids.
+    #[must_use]
+    pub fn display<'a>(&'a self, store: &'a dyn LayerStore) -> impl core::fmt::Display + 'a {
+        with_store(self, store)
+    }
+}
+impl Describe for ClipAuthoringError {
+    fn describe(&self, f: &mut core::fmt::Formatter<'_>, names: Names<'_>) -> core::fmt::Result {
+        f.write_str("clip authoring: ")?;
+        match self {
+            Self::EmptySequence => f.write_str("no clip sources were supplied"),
+            Self::InvalidPrimPath(path) => {
+                write!(f, "{} is not a valid clip prim path", names.path(*path))
+            }
+            Self::InvalidClipSet(set) => write!(f, "`{set}` is not a single identifier"),
+            Self::EmptyAssetPath => f.write_str("an asset path is empty"),
+            Self::ConflictingLayerId(layer) => write!(
+                f,
+                "{} is both an output layer and another output or input",
+                names.layer(*layer)
+            ),
+            Self::InvalidOffset(layer) => write!(
+                f,
+                "the offset of {} is not finite or its scale is not positive",
+                names.layer(*layer)
+            ),
+            Self::InvalidTimeRange(layer) => {
+                write!(f, "the time range of {} is invalid", names.layer(*layer))
+            }
+            Self::DuplicateActivation => f.write_str("two clips activate at the same stage time"),
+            Self::ConflictingTimeMapping => {
+                f.write_str("overlapping clips map one stage time to different clip times")
+            }
+            Self::MissingClipPrim(path) => {
+                write!(f, "no input describes the clip prim {}", names.path(*path))
+            }
+            Self::ConflictingDeclaration(path) => write!(
+                f,
+                "the input layers declare {} differently",
+                names.property(*path)
+            ),
+            Self::MissingAttributeType(path) => {
+                write!(f, "{} declares no type", names.property(*path))
+            }
+            Self::ManifestEdit(error) => {
+                f.write_str("the manifest was rejected: ")?;
+                error.describe(f, names)
+            }
+            Self::Stitch(error) => write!(f, "{error}"),
+        }
+    }
+}
 impl core::fmt::Display for ClipAuthoringError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "clip authoring: {self:?}")
+        self.describe(f, Names(None))
     }
 }
 impl core::error::Error for ClipAuthoringError {}
@@ -179,7 +236,7 @@ struct ManifestStore<'a> {
     tokens: &'a TokenInterner,
     paths: &'a PathInterner,
 }
-impl crate::LayerStore for ManifestStore<'_> {
+impl LayerStore for ManifestStore<'_> {
     fn layer(&self, id: LayerId) -> Option<&Layer> {
         (id == self.layer.id).then_some(&self.layer)
     }
@@ -610,8 +667,45 @@ pub fn stitch_clip_sequence(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{InMemoryStore, PropertyType, TypedArray, VariantSetSpec};
-    use alloc::vec;
+    use crate::{
+        EditError, InMemoryStore, PropertyType, SpecPath, TypedArray, VariantSetSpec,
+        edit::Rejection,
+    };
+    use alloc::{string::ToString, vec};
+
+    #[test]
+    fn errors_name_paths_and_layers_with_the_store() {
+        let mut store = InMemoryStore::default();
+        store.set_layer_identifier(LayerId(3), "./clip.usda");
+        let size = store.property_path("/Model.size");
+        let cases = [
+            (
+                ClipAuthoringError::MissingClipPrim(size.prim_path()),
+                "clip authoring: no input describes the clip prim /Model",
+            ),
+            (
+                ClipAuthoringError::MissingAttributeType(size),
+                "clip authoring: /Model.size declares no type",
+            ),
+            (
+                ClipAuthoringError::InvalidOffset(LayerId(3)),
+                "clip authoring: the offset of @./clip.usda@ is not finite or its scale is not \
+                 positive",
+            ),
+            (
+                ClipAuthoringError::ManifestEdit(EditError::Rejected {
+                    op: 4,
+                    reason: Rejection::UndeclaredType(SpecPath::from_property_path(size)),
+                }),
+                "clip authoring: the manifest was rejected: edit 4 rejected: /Model.size \
+                 declares no type; create it with a type first",
+            ),
+        ];
+        for (error, text) in cases {
+            assert_eq!(error.display(&store).to_string(), text);
+            assert!(!error.to_string().contains("Rejected {"), "{error}");
+        }
+    }
     fn fixture() -> (InMemoryStore, PathId, Layer, Layer, ClipBundleOptions) {
         let store = InMemoryStore::default();
         let path = store.path("/Model");

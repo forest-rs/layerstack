@@ -12,10 +12,10 @@ use alloc::{
 };
 
 use layerstack::{
-    ArcKind, ChangeCursor, Changes, CompositionLimits, Contribution, EditError, FlattenError,
-    FlattenRequirements, IgnoreCause, InMemoryStore, Layer, LayerId, OpinionRole, PathId,
-    PropertyField, ResolvedValue, Specifier, StageOptions, Time, Transaction, ValueSource,
-    Variability, asset_dependencies::DependencyTarget,
+    ArcKind, ChangeCursor, Changes, CompositionLimits, Contribution, EditError, EditTarget,
+    FlattenError, FlattenRequirements, IgnoreCause, InMemoryStore, Layer, LayerId, NamespaceEdit,
+    NamespaceError, OpinionRole, PathId, PropertyField, ResolvedValue, Specifier, StageOptions,
+    TargetPath, Time, Transaction, ValueSource, Variability, asset_dependencies::DependencyTarget,
 };
 use layerstack_io::{
     ApplyError, FORMAT_ARGS_DELIMITER, ImportPolicy, IoError, LoadOptions, LoadReport, OpenOptions,
@@ -748,6 +748,124 @@ impl Stage {
         }
     }
 
+    /// Moves the prim or property at `from` to `to`, both in stage
+    /// namespace: a rename when only the last name changes, a reparent
+    /// otherwise. [`NamespaceEdit::prepare`] plans it against the composed
+    /// stage through the layer `target`, then it applies as one
+    /// transaction, as [`Self::apply`] applies edits, and its receipt
+    /// undoes it.
+    ///
+    /// Every opinion of the root layer stack moves together, the prim's
+    /// variant sets and the specs inside its variants with it, and the
+    /// paths that name the moved object (relationship targets,
+    /// connections, internal arcs, path expressions) are repaired. So one
+    /// move may edit several layers of the stack; a layer it would edit
+    /// that cannot be saved fails it with `layer.read_only`.
+    ///
+    /// Spec: AOUSD Core §8 (namespace), §12.4 (path list ops).
+    /// OpenUSD: `UsdNamespaceEditor::MovePrimAtPath` and
+    /// `MovePropertyAtPath`.
+    ///
+    /// # Errors
+    ///
+    /// - `path.invalid` when a path is not a prim or property path.
+    /// - The `target` errors of [`Self::apply`].
+    /// - `namespace.*` when the move cannot be prepared (the codes are
+    ///   listed on [`Error`]); nothing changed.
+    pub fn move_object(&mut self, target: u64, from: &str, to: &str) -> Result<EditReceipt, Error> {
+        let target = LayerId(target);
+        self.check_target(target)?;
+        let source = self.target_path(from)?;
+        let destination = self.target_path(to)?;
+        let prepared = {
+            let (store, live) = self.document.parts_mut();
+            NamespaceEdit::prepare(
+                live.stage(),
+                store,
+                &EditTarget::for_layer(target),
+                source,
+                destination,
+            )
+        };
+        let edit = prepared.map_err(|error| namespace_error(&error, from))?;
+        self.commit_namespace(target, &edit, from)
+    }
+
+    /// Deletes the prim or property at `path` from the composed stage
+    /// through the layer `target`, as one undoable transaction:
+    /// [`NamespaceEdit::prepare_delete`] removes every opinion of the root
+    /// layer stack for it and the paths and arcs that name it, where a
+    /// composed prim depends on them. `removePrim` edits, by contrast,
+    /// remove one spec from one layer.
+    ///
+    /// Spec: AOUSD Core §8 (namespace), §12.4 (path list ops).
+    /// OpenUSD: `UsdNamespaceEditor::DeletePrimAtPath` and
+    /// `DeletePropertyAtPath`.
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::move_object`].
+    pub fn delete_object(&mut self, target: u64, path: &str) -> Result<EditReceipt, Error> {
+        let target = LayerId(target);
+        self.check_target(target)?;
+        let object = self.target_path(path)?;
+        let prepared = {
+            let (store, live) = self.document.parts_mut();
+            NamespaceEdit::prepare_delete(
+                live.stage(),
+                store,
+                &EditTarget::for_layer(target),
+                object,
+            )
+        };
+        let edit = prepared.map_err(|error| namespace_error(&error, path))?;
+        self.commit_namespace(target, &edit, path)
+    }
+
+    /// A prim path (`/World/Rock`) or a property path (`/World/Rock.size`)
+    /// as a namespace edit names it.
+    fn target_path(&self, path: &str) -> Result<TargetPath, Error> {
+        let store = self.document.store();
+        if path.contains('.') {
+            check_property_path(path)?;
+            let property = store.try_property_path(path).map_err(|error| {
+                Error::new("path.invalid", format!("not a property path: {error}")).at_path(path)
+            })?;
+            Ok(TargetPath::Property(property))
+        } else {
+            check_prim_path(path)?;
+            let prim = store.try_path(path).map_err(|error| {
+                Error::new("path.invalid", format!("not a prim path: {error}")).at_path(path)
+            })?;
+            Ok(TargetPath::Prim(prim))
+        }
+    }
+
+    /// Applies a prepared namespace edit, after checking that every layer
+    /// it edits can be saved.
+    fn commit_namespace(
+        &mut self,
+        target: LayerId,
+        edit: &NamespaceEdit,
+        path: &str,
+    ) -> Result<EditReceipt, Error> {
+        for &layer in edit.layers_to_edit() {
+            let identifier = self.document.identifier(layer);
+            if self.read_only(layer, identifier) {
+                return Err(Error {
+                    identifier: identifier.map(ToString::to_string),
+                    ..Error::new(
+                        "layer.read_only",
+                        "the namespace edit would edit a layer that cannot be saved",
+                    )
+                    .at_path(path)
+                });
+            }
+        }
+        self.commit(target, edit.transaction(), |_| None)
+            .map_err(|error| error.at_path(path))
+    }
+
     /// The composed changes since the last call, one batch per
     /// recomposition, oldest first, each
     /// `[created, removed, resynced, changedInfoOnly, properties]` record
@@ -1188,6 +1306,23 @@ impl Stage {
         Ok(self.undo(receipt)?)
     }
 
+    /// Moves a prim or property ([`Self::move_object`]).
+    #[wasm_bindgen(js_name = moveObject)]
+    pub fn js_move_object(
+        &mut self,
+        target: u64,
+        from: &str,
+        to: &str,
+    ) -> Result<EditReceipt, JsValue> {
+        Ok(self.move_object(target, from, to)?)
+    }
+
+    /// Deletes a prim or property ([`Self::delete_object`]).
+    #[wasm_bindgen(js_name = deleteObject)]
+    pub fn js_delete_object(&mut self, target: u64, path: &str) -> Result<EditReceipt, JsValue> {
+        Ok(self.delete_object(target, path)?)
+    }
+
     /// The record `take_changes` builds, as documented in `stage.rs`.
     #[wasm_bindgen(js_name = takeChanges)]
     pub fn js_take_changes(&mut self, render: bool) -> JsValue {
@@ -1464,6 +1599,39 @@ fn package_member(identifier: &str) -> &str {
     let name = identifier.trim_end_matches(']');
     let name = name.rsplit_once('[').map_or(name, |(_, member)| member);
     name.rsplit_once('/').map_or(name, |(_, file)| file)
+}
+
+/// The stable code of a namespace edit that cannot be prepared:
+///
+/// - `namespace.invalid_paths`: not two distinct non-root prims or two
+///   distinct properties.
+/// - `namespace.not_found`: nothing is composed or authored at the source.
+/// - `namespace.collision`: the destination is occupied.
+/// - `namespace.missing_parent`: the destination's parent does not exist.
+/// - `namespace.cycle`: a prim cannot move beneath itself.
+/// - `namespace.instance_proxy`: the object is inside an instance; edit
+///   the instance's prototype source instead.
+/// - `namespace.unmappable`: the edit target does not map both paths.
+/// - `namespace.split_opinions`: the move needs edits in a layer outside
+///   the target.
+/// - `namespace.unsupported`: a composition case the editor cannot yet
+///   change without changing its meaning.
+fn namespace_code(error: &NamespaceError) -> &'static str {
+    match error {
+        NamespaceError::InvalidPaths => "namespace.invalid_paths",
+        NamespaceError::NoSuchObject => "namespace.not_found",
+        NamespaceError::Collision => "namespace.collision",
+        NamespaceError::MissingParent => "namespace.missing_parent",
+        NamespaceError::Cycle => "namespace.cycle",
+        NamespaceError::InstanceProxy => "namespace.instance_proxy",
+        NamespaceError::Unmappable => "namespace.unmappable",
+        NamespaceError::SplitOpinions { .. } => "namespace.split_opinions",
+        _ => "namespace.unsupported",
+    }
+}
+
+fn namespace_error(error: &NamespaceError, path: &str) -> Error {
+    Error::new(namespace_code(error), error.to_string()).at_path(path)
 }
 
 /// `path` is an absolute prim path: `/`, or `/` and names separated by
@@ -1994,5 +2162,27 @@ def "World" (
         assert_eq!(package_member("set/scene.usda"), "scene.usda");
         assert_eq!(package_member("scene.usdz[root.usdc]"), "root.usdc");
         assert_eq!(package_member("a.usdz[b.usdz[sub/c.usda]]"), "c.usda");
+    }
+
+    #[test]
+    fn a_move_renames_in_every_root_stack_layer_and_its_receipt_undoes_it() {
+        let mut stage = resolved();
+        let root = stage.document().stage().stage().root_layer().unwrap();
+        let mut receipt = stage.move_object(root.0, "/Ball", "/Orb").unwrap();
+        assert_eq!(stage.prim("/Ball").unwrap(), Wire::Null);
+        assert_ne!(stage.prim("/Orb").unwrap(), Wire::Null);
+        // The sublayer's over moved with the root's spec.
+        assert!(stage.get("/Orb.serial", None).unwrap() != Wire::Null);
+        stage.undo(&mut receipt).unwrap();
+        assert_ne!(stage.prim("/Ball").unwrap(), Wire::Null);
+        assert_eq!(stage.prim("/Orb").unwrap(), Wire::Null);
+
+        let error = stage.move_object(root.0, "/Ball", "/Base").unwrap_err();
+        assert_eq!(error.code, "namespace.collision");
+        assert_eq!(error.path.as_deref(), Some("/Ball"));
+        let error = stage.delete_object(root.0, "/Gone").unwrap_err();
+        assert_eq!(error.code, "namespace.not_found");
+        let error = stage.move_object(root.0, "/Ball", "Orb").unwrap_err();
+        assert_eq!(error.code, "path.invalid");
     }
 }

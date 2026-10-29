@@ -70,6 +70,8 @@ export interface NativeStage {
   relationship(path: string): unknown;
   apply(target: bigint, batch: NativeEditBatch): NativeReceipt;
   undo(receipt: NativeReceipt): NativeReceipt;
+  moveObject(target: bigint, from: string, to: string): NativeReceipt;
+  deleteObject(target: bigint, path: string): NativeReceipt;
   takeChanges(render: boolean): unknown;
   save(layer?: bigint | null): unknown;
   exportLayer(layer: bigint, format: string): Uint8Array;
@@ -516,15 +518,7 @@ export class Stage implements Disposable {
    * error's `edit` is the index of the edit at fault.
    */
   apply(edits: readonly Edit[], target?: Layer): EditReceipt {
-    const layer = target ?? this.editLayer;
-    if (layer === null) {
-      throw new LayerstackError(
-        "layer.read_only",
-        "apply",
-        'the stage has no edit layer: its root cannot be saved; open it with editLayer: "session"',
-      );
-    }
-    this.#own("apply", layer);
+    const layer = this.#target("apply", target);
     const batch = this.#ls.batch();
     try {
       lowerEdits(batch, edits, "apply", this.#ls);
@@ -572,6 +566,56 @@ export class Stage implements Disposable {
   setVariantSelection(prim: Prim | string, set: string, variant: string | null, target?: Layer): EditReceipt {
     const path = typeof prim === "string" ? prim : prim.path;
     return this.apply([{ type: "setVariantSelection", path, set, variant }], target);
+  }
+
+  /**
+   * Moves the prim or property at `path` to `to`, as OpenUSD's
+   * `UsdNamespaceEditor` moves it: a rename when only the last name
+   * changes (`/World/Rock` to `/World/Boulder`), a reparent otherwise.
+   * Every opinion of the layer stack that `target` (the
+   * {@link Stage.editLayer} by default) is in moves together, the prim's
+   * variant sets and the specs inside its variants with it, and the
+   * paths that name the moved object (relationship targets, connections,
+   * internal arcs, path expressions) are repaired; so one move may edit
+   * several layers of the stack. Atomic, with change listeners run before
+   * it returns; the receipt undoes it.
+   *
+   * Throws `path.invalid`, the target errors of {@link Stage.apply}, and
+   * `namespace.*` when the move cannot be made, nothing changed:
+   * `namespace.collision` (the destination is occupied),
+   * `namespace.missing_parent`, `namespace.not_found`,
+   * `namespace.instance_proxy` (inside an instance), ...
+   */
+  move(path: string, to: string, target?: Layer): EditReceipt {
+    if (typeof path !== "string" || typeof to !== "string") {
+      throw new LayerstackError("argument.invalid", "move", "expected (path: string, to: string)");
+    }
+    const layer = this.#target("move", target);
+    const native = this.#call("move", (stage) => stage.moveObject(layer.id, path, to));
+    const receipt = this.#receipt(native);
+    this.#notify();
+    return receipt;
+  }
+
+  /**
+   * Deletes the prim or property at `path` from the composed stage, as
+   * OpenUSD's `UsdNamespaceEditor` deletes it: every opinion of the layer
+   * stack `target` is in (the {@link Stage.editLayer} by default), and the
+   * paths and arcs that name it where a composed prim depends on them.
+   * A `removePrim` edit, by contrast, removes one spec from one layer.
+   * Atomic; the receipt undoes it.
+   *
+   * Throws as {@link Stage.move}.
+   */
+  delete(path: string, target?: Layer): EditReceipt {
+    if (typeof path !== "string") {
+      throw new LayerstackError("argument.invalid", "delete", "expected (path: string)");
+    }
+    const layer = this.#target("delete", target);
+    const native = this.#call("delete", (stage) => stage.deleteObject(layer.id, path));
+    const receipt = this.#receipt(native);
+    this.#notify();
+    return receipt;
   }
 
   /**
@@ -720,6 +764,20 @@ export class Stage implements Disposable {
   /** @internal The layer with `id`, from the cache or a fresh inventory. */
   layerOf(id: bigint): Layer {
     return this.#layer(id);
+  }
+
+  /** The layer edits go to: `target`, else the edit layer. */
+  #target(operation: string, target: Layer | undefined): Layer {
+    const layer = target ?? this.editLayer;
+    if (layer === null) {
+      throw new LayerstackError(
+        "layer.read_only",
+        operation,
+        'the stage has no edit layer: its root cannot be saved; open it with editLayer: "session"',
+      );
+    }
+    this.#own(operation, layer);
+    return layer;
   }
 
   #receipt(native: NativeReceipt): EditReceipt {

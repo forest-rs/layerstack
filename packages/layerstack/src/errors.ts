@@ -44,6 +44,14 @@
  *   USDZ member); open with `editLayer: "session"`.
  * - `layer.outside_stack`: the edits target a layer the stage reaches only
  *   through an arc.
+ * - `namespace.*`: a {@link Stage.move} or {@link Stage.delete} that
+ *   cannot be made; nothing changed: `namespace.invalid_paths` (not two
+ *   distinct non-root prims or two properties), `namespace.not_found`,
+ *   `namespace.collision` (the destination is occupied),
+ *   `namespace.missing_parent`, `namespace.cycle` (a prim beneath
+ *   itself), `namespace.instance_proxy` (inside an instance),
+ *   `namespace.unmappable`, `namespace.split_opinions`,
+ *   `namespace.unsupported` (a composition case not handled yet).
  * - `flatten.failed`: the stage could not be flattened (it has no root).
  * - `package.failed`: the stage could not be packaged (it has no root).
  * - `edit.*`: the edits were rejected and nothing changed:
@@ -86,6 +94,7 @@ export type ErrorCode =
   | "flatten.failed"
   | "package.failed"
   | `edit.${string}`
+  | `namespace.${string}`
   | `io.${string}`;
 
 /** What a {@link LayerstackError} is about, beyond its code. */

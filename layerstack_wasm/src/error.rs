@@ -36,6 +36,12 @@ use crate::wire::Wire;
 /// - `edit.*`: [`layerstack::EditError::code`], such as `edit.stale` for
 ///   an undo whose guard no longer holds, or
 ///   `edit.rejected.type_mismatch`; [`layerstack_io::ApplyError::code`].
+/// - `namespace.*`: a move or delete that cannot be prepared, from
+///   [`layerstack::NamespaceError`]: `namespace.invalid_paths`,
+///   `namespace.not_found`, `namespace.collision`,
+///   `namespace.missing_parent`, `namespace.cycle`,
+///   `namespace.instance_proxy`, `namespace.unmappable`,
+///   `namespace.split_opinions`, `namespace.unsupported`.
 /// - `flatten.failed`, `package.failed`: the stage has no root layer to
 ///   flatten or package.
 /// - `receipt.affinity`: a receipt of another stage was passed in.

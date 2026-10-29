@@ -30,6 +30,9 @@ const receipt = stage.apply([
 ]);
 const redo = receipt.undo(); // the stage is as it was; redo.undo() redoes
 
+// A rename moves every layer's opinions and repairs the paths naming the prim.
+stage.move("/World/Rock", "/World/Boulder"); // a receipt, like apply's
+
 // Switching a variant may need assets the host has not supplied: resolve fetches them.
 stage.setVariantSelection("/World", "shade", "dark");
 await stage.resolve(source);
@@ -110,7 +113,17 @@ await stage.resolve(source);
   is `{ type: "dictionary", value: { key: ValueInput, ... } }` (or a
   `Map`), nested dictionaries included; it is authored whole and ordered by
   key.
-- **Undo is a receipt.** `apply` returns an `EditReceipt` holding the
+- **Namespace edits move what names the object.** `stage.move(path, to,
+  target?)` renames or reparents a prim or property and `stage.delete(path,
+  target?)` deletes one, as OpenUSD's `UsdNamespaceEditor` does: every
+  opinion of the target's layer stack moves (or goes) together, a prim's
+  variant sets and the specs inside its variants with it, and the
+  relationship targets, connections, internal arcs and path expressions
+  that name it are repaired, so one call may edit several layers. Each is
+  atomic and returns a receipt; one that cannot be made throws a
+  `namespace.*` code and changes nothing. A `removePrim` edit, by
+  contrast, removes one spec from one layer.
+- **Undo is a receipt.** `apply` (and `move`, `delete`) returns an `EditReceipt` holding the
   native inverse: `receipt.undo()` restores exactly what the edits changed
   and returns the receipt that redoes them. An undo whose slots another
   edit changed since fails with `edit.stale` and changes nothing. The app
@@ -176,6 +189,7 @@ await stage.resolve(source);
 | `layer.outside_stack` | The edits target a layer the stage reaches only through an arc. |
 | `edit.stale` | An undo whose slots changed since; nothing changed and the receipt is still undoable. |
 | `edit.rejected.*` | The edits were rejected and nothing changed: `edit.rejected.type_mismatch`, `edit.rejected.reserved_field`, ... |
+| `namespace.*` | A `move` or `delete` cannot be made and nothing changed: `namespace.collision` (the destination is occupied), `namespace.missing_parent`, `namespace.not_found`, `namespace.cycle`, `namespace.instance_proxy`, `namespace.invalid_paths`, `namespace.unmappable`, `namespace.split_opinions`, `namespace.unsupported`. |
 | `io.*` | A read or import failed: `io.rejected` (does not parse), `io.not_found`, `io.unavailable`, ... |
 | `composition.*` | In `status().compositionErrors`: `composition.unresolved_asset`, `composition.arc_cycle`, ... |
 

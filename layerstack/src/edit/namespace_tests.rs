@@ -1288,29 +1288,64 @@ fn reparenting_lists_the_overs_it_creates_in_their_parents() {
     assert_eq!(store.layers[&WEAK].prims[&root].authored_children, [a_name]);
 }
 
+/// `/B` with a child and a property, and `/X` inheriting `/B` with
+/// overrides of both.
+fn inheriting_overrides() -> InMemoryStore {
+    let mut store = InMemoryStore::default();
+    let b = store.path("/B");
+    let kid = store.path("/B/Kid");
+    let g = store.path("/G");
+    let x = store.path("/X");
+    let x_kid = store.path("/X/Kid");
+    let name = store.tokens.intern("x");
+    let mut layer = Layer::new(ROOT);
+    layer.insert_prim(b, PrimSpec::def().with_property(name, attribute(1.0)));
+    layer.insert_prim(kid, PrimSpec::def());
+    layer.insert_prim(g, PrimSpec::def());
+    let mut inherits = PrimSpec::def().with_property(name, attribute(2.0));
+    inherits.rare_mut().inherits.make_mut().prepend.push(b);
+    layer.insert_prim(x, inherits);
+    layer.insert_prim(x_kid, PrimSpec::over());
+    store.insert_layer(layer);
+    store
+}
+
+/// Moving `/B/Kid` or `/B.x` out of `/B` leaves `/X`'s overrides of them
+/// composing over nothing, and `UsdNamespaceEditor` deletes them
+/// (`_MapNewPathToIntroducingNode`).
+#[test]
+fn moves_out_of_an_arcs_domain_delete_the_specs_over_them() {
+    for (from, to) in [("/B/Kid", "/G/Kid"), ("/B.x", "/G.x")] {
+        let mut store = inheriting_overrides();
+        let mut live = LiveStage::compose(&mut store, ROOT, StageOptions::default());
+        let edit = match from.split_once('.') {
+            Some(_) => property_move(live.stage(), &mut store, from, to),
+            None => prim_move(live.stage(), &mut store, from, to),
+        }
+        .unwrap();
+        live.apply(&mut store, edit.transaction()).unwrap();
+        let (x, x_kid) = (store.path("/X"), store.path("/X/Kid"));
+        let prims = store.layers[&ROOT].prims();
+        assert_eq!(
+            prims.get(&x_kid).is_none(),
+            from == "/B/Kid",
+            "{from}: /X/Kid"
+        );
+        assert_eq!(
+            prims[&x].properties.is_empty(),
+            from == "/B.x",
+            "{from}: /X.x"
+        );
+    }
+}
+
 /// A prim inheriting `/B` keeps its specs when `/B` goes and its inherit
 /// is dropped, but its override of `/B/Kid` goes with `/B/Kid`, and its
 /// opinion of `/B.x` with `/B.x`, as `UsdNamespaceEditor` deletes them
 /// (`PcpGatherDependentNamespaceEdits`).
 #[test]
 fn deletes_take_the_local_specs_that_compose_over_them_through_an_arc() {
-    let setup = || {
-        let mut store = InMemoryStore::default();
-        let b = store.path("/B");
-        let kid = store.path("/B/Kid");
-        let x = store.path("/X");
-        let x_kid = store.path("/X/Kid");
-        let name = store.tokens.intern("x");
-        let mut layer = Layer::new(ROOT);
-        layer.insert_prim(b, PrimSpec::def().with_property(name, attribute(1.0)));
-        layer.insert_prim(kid, PrimSpec::def());
-        let mut inherits = PrimSpec::def().with_property(name, attribute(2.0));
-        inherits.rare_mut().inherits.make_mut().prepend.push(b);
-        layer.insert_prim(x, inherits);
-        layer.insert_prim(x_kid, PrimSpec::over());
-        store.insert_layer(layer);
-        store
-    };
+    let setup = inheriting_overrides;
     let delete = |object: &str| {
         let mut store = setup();
         let object = match object.split_once('.') {

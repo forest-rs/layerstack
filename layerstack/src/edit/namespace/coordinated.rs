@@ -151,6 +151,8 @@ fn prepare_with(
     let source_move = PathMove::new(source, destination);
     let mut local_moves: HashMap<LayerId, Vec<PathMove>> = HashMap::new();
     let mut local_variant_moves: HashMap<LayerId, Vec<VariantMove>> = HashMap::new();
+    let mut local_deletes: HashMap<LayerId, Vec<(TargetPath, Vec<VariantSelectionSite>)>> =
+        HashMap::new();
     let mut stage_moves = Vec::new();
     for (i, stage) in stages.iter().enumerate() {
         let shares_local_namespace = stage
@@ -167,6 +169,7 @@ fn prepare_with(
             Vec::new()
         };
         let mut variant_moves = Vec::new();
+        let mut deletes = Vec::new();
         gather_dependent_moves(
             stage,
             indexes.get(i).copied(),
@@ -175,6 +178,7 @@ fn prepare_with(
             &source_move,
             &mut mappings,
             &mut variant_moves,
+            &mut deletes,
         )?;
         normalize_moves(store, &mut mappings)?;
         for mapping in &mappings {
@@ -220,6 +224,12 @@ fn prepare_with(
                     within.push(mapping.clone());
                 }
             }
+            let gone = local_deletes.entry(*id).or_default();
+            for entry in &deletes {
+                if !gone.contains(entry) {
+                    gone.push(entry.clone());
+                }
+            }
         }
         stage_moves.push(mappings);
     }
@@ -233,7 +243,8 @@ fn prepare_with(
         let original = store.layer(*id).ok_or(NamespaceError::NoSuchObject)?;
         let mut layer = match (indexes.first(), links.get(id)) {
             (Some(index), Some(slots)) => {
-                let slots = working_slots(store, index, original, slots, local_moves.get(id));
+                let gone = local_deletes.get(id).map_or(&[][..], Vec::as_slice);
+                let slots = working_slots(store, index, original, slots, local_moves.get(id), gone);
                 let copy = retained::working_copy(original, &slots);
                 copied.insert(*id, slots);
                 copy
@@ -260,6 +271,9 @@ fn prepare_with(
                 move_in_variant(store, &mut layer, moved)?;
                 unused = unused.after(store, &moved.mapping, &moved.within);
             }
+        }
+        for (gone, within) in local_deletes.get(id).into_iter().flatten() {
+            delete::remove_specs(store, &mut layer, *gone, within);
         }
         dormant.insert(*id, unused);
         edited.insert(*id, layer);
@@ -583,8 +597,19 @@ fn working_slots(
     layer: &Layer,
     links: &HashSet<PathId>,
     moves: Option<&Vec<PathMove>>,
+    deletes: &[(TargetPath, Vec<VariantSelectionSite>)],
 ) -> Vec<PathId> {
     let mut slots: HashSet<PathId> = links.clone();
+    for (gone, _) in deletes {
+        let prim = gone.prim_path();
+        slots.extend(retained::slots_beneath(
+            store,
+            index.children(),
+            layer,
+            prim,
+        ));
+        slots.extend(retained::at_or_above(store, prim));
+    }
     for mapping in moves.into_iter().flatten() {
         let (from, to) = (mapping.from.prim_path(), mapping.to.prim_path());
         slots.extend(retained::slots_beneath(
@@ -672,6 +697,7 @@ fn gather_dependent_moves(
     source: &PathMove,
     out: &mut Vec<PathMove>,
     variant_out: &mut Vec<VariantMove>,
+    deleted_out: &mut Vec<(TargetPath, Vec<VariantSelectionSite>)>,
 ) -> Result<(), NamespaceError> {
     let raw_from = store.paths().resolve(source.from.prim_path()).clone();
     let raw_to = store.paths().resolve(source.to.prim_path()).clone();
@@ -737,17 +763,31 @@ fn gather_dependent_moves(
             if source.from.property_path().is_none() && raw_from.is_prefix_of(&raw_mount) {
                 continue;
             }
-            let Some(dest_suffix) = raw_to.strip_prefix(&raw_mount) else {
-                return Err(NamespaceError::UnsupportedComposition(
-                    "dependent namespace reparenting outside an arc's source domain is not supported",
-                ));
-            };
             if suffix.len() > composed.depth() {
                 return Err(NamespaceError::Unmappable);
             }
             let from = store
                 .paths()
                 .intern(Path::root().join(&composed.segments()[..composed.depth() - suffix.len()]));
+            // A destination outside the arc's source domain no longer
+            // composes here, which deletes the local specs over it
+            // (`_MapNewPathToIntroducingNode`,
+            // `pxr/usd/pcp/dependentNamespaceEditUtils.cpp`).
+            let Some(dest_suffix) = raw_to.strip_prefix(&raw_mount) else {
+                let gone = match source.from.property_path() {
+                    Some(p) => TargetPath::Property(PropertyPath::new(from, p.property())),
+                    None => TargetPath::Prim(from),
+                };
+                let mut branches = branches_above(store, graph, node, from);
+                branches.insert(0, Vec::new());
+                for within in branches {
+                    let entry = (gone, within);
+                    if !deleted_out.contains(&entry) {
+                        deleted_out.push(entry);
+                    }
+                }
+                continue;
+            };
             let to = store.paths().intern(
                 Path::root()
                     .join(&composed.segments()[..mount_depth])

@@ -1516,9 +1516,13 @@ impl ProjectionScope<'_> {
     /// namespace beneath the prims with a node at an ancestor of it. A
     /// slot whose child list alone changes adds or removes only children
     /// whose own slots changed. A `defaultPrim` follows the prim it names,
-    /// whose slot changes with it. Layer metadata reaches beyond the slots
-    /// that author it, and dynamic payloads and value clips read
-    /// composition elsewhere; for those the whole stage is composed.
+    /// whose slot changes with it. A spec appearing or disappearing at a
+    /// relocation source, even a bare `over`, changes the prims reading
+    /// that source as a changed slot there would: the relocated prim
+    /// reports any spec there as an opinion it ignores. Layer metadata
+    /// reaches beyond the slots that author it, and dynamic payloads and
+    /// value clips read composition elsewhere; for those the whole stage
+    /// is composed.
     ///
     /// A changed relocate changes the prims depending on the paths it
     /// relocates as a changed slot there would, and the prims with a node
@@ -1562,6 +1566,17 @@ impl ProjectionScope<'_> {
             return None;
         }
         let used = stage.used_layers(false);
+        // The relocation sources as the edit leaves them: a relocated prim
+        // reads the specs at its source to report them
+        // (`CompositionError::OpinionAtRelocationSource`), so a bare
+        // `over` appearing there changes it
+        // (`retained::LayerEdit::changed_slots`).
+        let mut sources = HashSet::new();
+        if self.edits.values().any(|edit| !edit.appeared.is_empty()) {
+            for layer in used.iter().filter_map(|id| store.layer(*id)) {
+                sources.extend(layer.relocates().iter().map(|r| r.source));
+            }
+        }
         let mut roots = Vec::new();
         // Whether `prim` has a node whose site `at` admits, in a layer
         // stack that holds `layer`: the evidence lists the prims with a
@@ -1643,7 +1658,7 @@ impl ProjectionScope<'_> {
         if translated.is_some() {
             let reads_changed = self.edits.iter().any(|(&id, edit)| {
                 let local = stage.layer_stack().contains(&id);
-                edit.structural.iter().any(|&slot| {
+                edit.changed_slots(&sources).any(|slot| {
                     if local && moved(slot) {
                         return false;
                     }
@@ -1658,7 +1673,7 @@ impl ProjectionScope<'_> {
         }
         for (&id, edit) in self.edits {
             let local = stage.layer_stack().contains(&id);
-            for &slot in &edit.structural {
+            for slot in edit.changed_slots(&sources) {
                 if translated.is_some() && local && moved(slot) {
                     // The moved specs: the prims beneath the source read
                     // them translated; the prims elsewhere with arcs to

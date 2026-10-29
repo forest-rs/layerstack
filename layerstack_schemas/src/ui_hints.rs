@@ -11,7 +11,7 @@
 use crate::{CannotEdit, PrimView, Scene, SchemaEdit};
 use alloc::{string::String, sync::Arc, vec::Vec};
 use layerstack::sort;
-use layerstack::{PathId, PropertyKind, PropertyPath, TargetPath, Value};
+use layerstack::{FieldValue, PathId, PropertyKind, PropertyPath, TargetPath, Value};
 
 /// Invalid UI hint target or data. Failed setters author nothing.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -53,19 +53,25 @@ impl From<CannotEdit> for UiHintError {
 }
 
 /// A dictionary in OpenUSD's ordered metadata representation.
-pub type HintDictionary = Vec<(Arc<str>, Value)>;
+pub type HintDictionary = Vec<(Arc<str>, FieldValue)>;
 fn dictionary(value: Option<Value>) -> HintDictionary {
     match value {
         Some(Value::Dictionary(entries)) => entries,
         _ => Vec::new(),
     }
 }
+/// The plain value at `keys` in `dictionary`; `None` for an entry holding
+/// a list op, which no hint is.
 pub(crate) fn entry<'a>(dictionary: &'a Value, keys: &[&str]) -> Option<&'a Value> {
     let (key, rest) = keys.split_first()?;
     let Value::Dictionary(entries) = dictionary else {
         return None;
     };
-    let value = &entries.iter().find(|(name, _)| name.as_ref() == *key)?.1;
+    let value = entries
+        .iter()
+        .find(|(name, _)| name.as_ref() == *key)?
+        .1
+        .as_value()?;
     if rest.is_empty() {
         Some(value)
     } else {
@@ -85,14 +91,20 @@ pub(crate) fn set_dictionary_path(dictionary: &mut Value, keys: &[&str], value: 
     let i = match entries.iter().position(|(name, _)| name.as_ref() == *key) {
         Some(i) => i,
         None => {
-            entries.push((Arc::from(*key), Value::Dictionary(Vec::new())));
+            entries.push((Arc::from(*key), Value::Dictionary(Vec::new()).into()));
             entries.len() - 1
         }
     };
     if rest.is_empty() {
-        entries[i].1 = value;
+        entries[i].1 = value.into();
     } else {
-        set_dictionary_path(&mut entries[i].1, rest, value);
+        let nested = &mut entries[i].1;
+        if !matches!(nested, FieldValue::Value(_)) {
+            *nested = Value::Dictionary(Vec::new()).into();
+        }
+        if let FieldValue::Value(nested) = nested {
+            set_dictionary_path(nested, rest, value);
+        }
     }
     sort::sort_by(entries, |a, b| a.0.cmp(&b.0));
 }
@@ -224,10 +236,9 @@ impl<'a> UiHints<'a> {
     }
     /// A literal group key's expanded state; wrong types and absence mean false.
     pub fn display_group_expanded(&self, group: &str) -> Result<bool, UiHintError> {
-        Ok(self
-            .display_groups_expanded()?
-            .iter()
-            .any(|(name, value)| name.as_ref() == group && matches!(value, Value::Bool(true))))
+        Ok(self.display_groups_expanded()?.iter().any(|(name, value)| {
+            name.as_ref() == group && matches!(value, FieldValue::Value(Value::Bool(true)))
+        }))
     }
     /// Prim group visibility expressions.
     pub fn display_groups_shown_if(&self) -> Result<HintDictionary, UiHintError> {
@@ -409,7 +420,7 @@ impl UiHintsEdit {
             return Err(UiHintError::WrongObjectKind);
         }
         for (name, value) in &expanded {
-            if !matches!(value, Value::Bool(_)) {
+            if !matches!(value, FieldValue::Value(Value::Bool(_))) {
                 return Err(UiHintError::InvalidExpandedGroup(String::from(
                     name.as_ref(),
                 )));
@@ -449,7 +460,7 @@ impl UiHintsEdit {
             return Err(UiHintError::WrongObjectKind);
         }
         for (name, value) in &conditions {
-            if !matches!(value, Value::String(_)) {
+            if !matches!(value, FieldValue::Value(Value::String(_))) {
                 return Err(UiHintError::InvalidShownIfGroup(String::from(
                     name.as_ref(),
                 )));
@@ -515,7 +526,7 @@ mod tests {
             PrimSpec::def()
                 .with_field(
                     ui,
-                    Value::Dictionary(vec![("unrelated".into(), Value::Int(17))]),
+                    Value::Dictionary(vec![("unrelated".into(), Value::Int(17).into())]),
                 )
                 .with_property(
                     attr,
@@ -568,8 +579,8 @@ mod tests {
         hint.set_value_labels(
             &mut edit,
             vec![
-                ("High".into(), Value::Float(8.)),
-                ("Bad".into(), Value::string("wrong")),
+                ("High".into(), Value::Float(8.).into()),
+                ("Bad".into(), Value::string("wrong").into()),
             ],
         )
         .unwrap();
@@ -608,12 +619,15 @@ mod tests {
         let hints = UiHintsEdit::prim(&edit, path).unwrap();
         assert!(
             hints
-                .set_display_groups_expanded(&mut edit, vec![("bad".into(), Value::Int(1))])
+                .set_display_groups_expanded(&mut edit, vec![("bad".into(), Value::Int(1).into())])
                 .is_err()
         );
         assert!(
             hints
-                .set_display_groups_shown_if(&mut edit, vec![("bad".into(), Value::Bool(true))])
+                .set_display_groups_shown_if(
+                    &mut edit,
+                    vec![("bad".into(), Value::Bool(true).into())]
+                )
                 .is_err()
         );
         assert!(edit.transaction().is_empty());
@@ -652,7 +666,7 @@ mod tests {
         let local = store.layer(LayerId(2)).unwrap().prims()[&path]
             .field(key)
             .unwrap();
-        let layerstack::FieldValue::Value(local) = local else {
+        let FieldValue::Value(local) = local else {
             panic!("dictionary")
         };
         assert!(entry(local, &["unrelated"]).is_none());
@@ -671,7 +685,7 @@ mod tests {
                 &mut edit,
                 vec![(
                     "Nested".into(),
-                    Value::Dictionary(vec![("High".into(), Value::Float(9.))]),
+                    Value::Dictionary(vec![("High".into(), Value::Float(9.).into())]).into(),
                 )],
             )
             .unwrap();
@@ -692,8 +706,10 @@ mod tests {
         let mut weak = Layer::new(LayerId(3));
         weak.insert_prim(
             source,
-            PrimSpec::over()
-                .with_field(ui, Value::Dictionary(vec![("weak".into(), Value::Int(4))])),
+            PrimSpec::over().with_field(
+                ui,
+                Value::Dictionary(vec![("weak".into(), Value::Int(4).into())]),
+            ),
         );
         store
             .layer_mut(LayerId(1))
@@ -739,8 +755,7 @@ mod tests {
         assert_eq!(hints.hint(&["weak"]), Some(Value::Int(4)));
         assert_eq!(hints.display_name(), "Reference");
         assert!(hints.hidden());
-        let layerstack::FieldValue::Value(local) = store.layer(LayerId(1)).unwrap().prims()
-            [&source]
+        let FieldValue::Value(local) = store.layer(LayerId(1)).unwrap().prims()[&source]
             .field(ui)
             .unwrap()
         else {

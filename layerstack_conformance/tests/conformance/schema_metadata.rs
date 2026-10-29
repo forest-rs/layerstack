@@ -50,7 +50,12 @@ fn json(value: &Value, tokens: &TokenInterner) -> Json {
         Value::Int(value) => (*value).into(),
         Value::Dictionary(entries) => entries
             .iter()
-            .map(|(key, value)| (key.to_string(), json(value, tokens)))
+            .map(|(key, value)| {
+                (
+                    key.to_string(),
+                    json(value.as_value().expect("a plain entry"), tokens),
+                )
+            })
             .collect::<serde_json::Map<_, _>>()
             .into(),
         other => panic!("unexpected fixture value {other:?}"),

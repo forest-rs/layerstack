@@ -705,7 +705,10 @@ fn authored_assets(layer: &layerstack::Layer) -> Vec<String> {
         match value {
             Value::Asset(path) => out.push(path.to_string()),
             Value::Array(items) => items.iter().for_each(|v| visit(v, out)),
-            Value::Dictionary(entries) => entries.iter().for_each(|(_, v)| visit(v, out)),
+            Value::Dictionary(entries) => entries
+                .iter()
+                .filter_map(|(_, v)| v.as_value())
+                .for_each(|v| visit(v, out)),
             _ => {}
         }
     }

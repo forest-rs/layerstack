@@ -994,7 +994,8 @@ impl EmitCtx<'_> {
                         .map(|e| {
                             (
                                 Arc::from(&*e.key),
-                                self.convert_value(&e.value, e.type_name.unwrap_or("")),
+                                self.convert_value(&e.value, e.type_name.unwrap_or(""))
+                                    .into(),
                             )
                         })
                         .collect();
@@ -1461,7 +1462,7 @@ impl EmitCtx<'_> {
             .map(|e| {
                 (
                     Arc::from(&*e.key),
-                    self.convert_value(&e.value, e.type_name.unwrap_or("")),
+                    FieldValue::Value(self.convert_value(&e.value, e.type_name.unwrap_or(""))),
                 )
             })
             .collect::<Vec<_>>();
@@ -2122,12 +2123,12 @@ impl EmitCtx<'_> {
             ast::Value::Blocked => Value::Blocked,
             ast::Value::AnimationBlock => Value::AnimationBlock,
             ast::Value::Dictionary(entries) => {
-                let dict_entries: Vec<(Arc<str>, Value)> = entries
+                let dict_entries: Vec<(Arc<str>, FieldValue)> = entries
                     .iter()
                     .map(|e| {
                         let key = Arc::from(&*e.key);
                         let val = self.convert_value(&e.value, e.type_name.unwrap_or(""));
-                        (key, val)
+                        (key, val.into())
                     })
                     .collect();
                 Value::Dictionary(dict_entries)
@@ -2262,12 +2263,12 @@ impl EmitCtx<'_> {
             ast::MetadataValue::Value(v) => self.convert_value(v, type_hint),
             ast::MetadataValue::None => Value::Blocked,
             ast::MetadataValue::Dictionary(entries) => {
-                let dict_entries: Vec<(Arc<str>, Value)> = entries
+                let dict_entries: Vec<(Arc<str>, FieldValue)> = entries
                     .iter()
                     .map(|e| {
                         let key = Arc::from(&*e.key);
                         let val = self.convert_value(&e.value, e.type_name.unwrap_or(""));
-                        (key, val)
+                        (key, val.into())
                     })
                     .collect();
                 Value::Dictionary(dict_entries)
@@ -3747,9 +3748,9 @@ def \"A\" (
             FieldValue::Value(Value::Dictionary(entries)) => {
                 assert_eq!(entries.len(), 2);
                 assert_eq!(&*entries[0].0, "foo");
-                assert_eq!(entries[0].1, Value::String(Arc::from("bar")));
+                assert_eq!(entries[0].1, Value::String(Arc::from("bar")).into());
                 assert_eq!(&*entries[1].0, "count");
-                assert_eq!(entries[1].1, Value::Int(42));
+                assert_eq!(entries[1].1, Value::Int(42).into());
             }
             other => panic!("expected Dictionary, got {:?}", other),
         }
@@ -3779,10 +3780,10 @@ def \"A\" (
                 assert_eq!(entries.len(), 1);
                 assert_eq!(&*entries[0].0, "inner");
                 match &entries[0].1 {
-                    Value::Dictionary(inner) => {
+                    FieldValue::Value(Value::Dictionary(inner)) => {
                         assert_eq!(inner.len(), 1);
                         assert_eq!(&*inner[0].0, "val");
-                        assert_eq!(inner[0].1, Value::Double(1.5));
+                        assert_eq!(inner[0].1, Value::Double(1.5).into());
                     }
                     other => panic!("expected nested Dictionary, got {:?}", other),
                 }
@@ -3834,7 +3835,7 @@ def \"A\" {
             FieldValue::Value(Value::Dictionary(entries)) => {
                 assert_eq!(entries.len(), 1);
                 assert_eq!(&*entries[0].0, "key");
-                assert_eq!(entries[0].1, Value::String(Arc::from("value")));
+                assert_eq!(entries[0].1, Value::String(Arc::from("value")).into());
             }
             other => panic!("expected Dictionary, got {:?}", other),
         }
@@ -4369,7 +4370,7 @@ def \"A\" {
             color.metadata(tokens.intern("limits")),
             Some(&FieldValue::Value(Value::Dictionary(vec![(
                 Arc::from("soft"),
-                Value::Dictionary(vec![(Arc::from("minimum"), Value::Float(0.0))]),
+                Value::Dictionary(vec![(Arc::from("minimum"), Value::Float(0.0).into())]).into(),
             )])))
         );
 

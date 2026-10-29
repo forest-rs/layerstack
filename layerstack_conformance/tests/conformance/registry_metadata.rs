@@ -202,7 +202,7 @@ pub(crate) fn encode_value(value: &Value, tokens: &TokenInterner) -> Json {
             json!({
                 "dictionary": sorted
                     .into_iter()
-                    .map(|(k, v)| (k.to_string(), encode_value(v, tokens)))
+                    .map(|(k, v)| (k.to_string(), encode_value(v.as_value().expect("a plain entry"), tokens)))
                     .collect::<serde_json::Map<_, _>>()
             })
         }
@@ -744,7 +744,7 @@ fn sample(ty: &str, sample: &Json, tokens: &TokenInterner) -> FieldValue {
                     let FieldValue::Value(value) = self::sample(ty, value, tokens) else {
                         panic!("a dictionary holds values");
                     };
-                    (key.as_str().into(), value)
+                    (key.as_str().into(), value.into())
                 })
                 .collect(),
         ),

@@ -222,8 +222,9 @@ fn add_clips(store: &mut InMemoryStore, spec: &mut PrimSpec) {
             Arc::from("default"),
             Value::Dictionary(vec![(
                 Arc::from("assetPaths"),
-                Value::Array(vec![Value::Asset(Arc::from("missing.usda"))]),
-            )]),
+                Value::Array(vec![Value::Asset(Arc::from("missing.usda"))]).into(),
+            )])
+            .into(),
         )]),
     );
 }

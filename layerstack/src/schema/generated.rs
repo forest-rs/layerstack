@@ -216,7 +216,7 @@ fn override_names(custom_data: Option<&FieldValue>, tokens: &TokenInterner) -> V
     let Some(names) = entries
         .iter()
         .find(|(key, _)| &**key == "apiSchemaOverridePropertyNames")
-        .and_then(|(_, names)| names.array_ref())
+        .and_then(|(_, names)| names.as_value()?.array_ref())
     else {
         return Vec::new();
     };

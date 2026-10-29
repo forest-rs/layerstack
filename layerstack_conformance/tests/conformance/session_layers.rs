@@ -282,7 +282,10 @@ fn session_expression_variables_override_root_and_flow_into_external_stacks() {
     let root = store.layer_mut(LayerId(1)).unwrap();
     root.set_metadata(
         variables,
-        Value::Dictionary(vec![("ASSET".into(), Value::String("red.usda".into()))]),
+        Value::Dictionary(vec![(
+            "ASSET".into(),
+            Value::String("red.usda".into()).into(),
+        )]),
     );
     root.sublayers_mut().push(SublayerEntry::unresolved(
         "`${ASSET}`",
@@ -290,7 +293,10 @@ fn session_expression_variables_override_root_and_flow_into_external_stacks() {
     ));
     store.layer_mut(LayerId(3)).unwrap().set_metadata(
         variables,
-        Value::Dictionary(vec![("ASSET".into(), Value::String("blue.usda".into()))]),
+        Value::Dictionary(vec![(
+            "ASSET".into(),
+            Value::String("blue.usda".into()).into(),
+        )]),
     );
     let asset = store.path("/Asset");
     let tint = store.tokens().intern("tint");
@@ -322,23 +328,26 @@ fn session_expression_variables_override_root_and_flow_into_external_stacks() {
     let custom = store.tokens().intern("customLayerData");
     store.layer_mut(LayerId(1)).unwrap().set_metadata(
         custom,
-        Value::Dictionary(vec![("shared".into(), Value::Int(1))]),
+        Value::Dictionary(vec![("shared".into(), Value::Int(1).into())]),
     );
     store.layer_mut(LayerId(3)).unwrap().set_metadata(
         custom,
-        Value::Dictionary(vec![("private".into(), Value::Int(2))]),
+        Value::Dictionary(vec![("private".into(), Value::Int(2).into())]),
     );
     live.synchronize(&mut store);
     assert_eq!(
         live.stage().layer_metadata(custom, &store),
         Some(Value::Dictionary(vec![
-            ("private".into(), Value::Int(2)),
-            ("shared".into(), Value::Int(1))
+            ("private".into(), Value::Int(2).into()),
+            ("shared".into(), Value::Int(1).into())
         ]))
     );
     store.layer_mut(LayerId(3)).unwrap().set_metadata(
         variables,
-        Value::Dictionary(vec![("ASSET".into(), Value::String("red.usda".into()))]),
+        Value::Dictionary(vec![(
+            "ASSET".into(),
+            Value::String("red.usda".into()).into(),
+        )]),
     );
     live.synchronize(&mut store);
     for path in ["/Asset", "/Internal", "/External"] {
@@ -367,7 +376,7 @@ fn flatten_preserves_session_metadata_and_effective_time_domain() {
         .set_metadata(tcps, Value::Double(48.0))
         .set_metadata(
             custom,
-            Value::Dictionary(vec![("shared".into(), Value::Int(1))]),
+            Value::Dictionary(vec![("shared".into(), Value::Int(1).into())]),
         );
     store
         .layer_mut(LayerId(3))
@@ -375,7 +384,7 @@ fn flatten_preserves_session_metadata_and_effective_time_domain() {
         .set_metadata(tcps, Value::Double(96.0))
         .set_metadata(
             custom,
-            Value::Dictionary(vec![("private".into(), Value::Int(2))]),
+            Value::Dictionary(vec![("private".into(), Value::Int(2).into())]),
         );
     let session_default = store.tokens().intern("Internal");
     store

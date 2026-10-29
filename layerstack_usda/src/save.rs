@@ -220,7 +220,7 @@ pub fn usda_document(
     paths: &PathInterner,
 ) -> Result<Document, SaveError> {
     let doc = lower(layer, tokens, paths, true)?;
-    crate::writer::validate_text_prims(&doc.prims).map_err(SaveError::Document)?;
+    doc.validate_text_specs().map_err(SaveError::Document)?;
     Ok(doc)
 }
 
@@ -870,7 +870,7 @@ impl Lowering<'_> {
                                 .map(|(key, value)| {
                                     Ok((
                                         String::from(key.as_ref()),
-                                        self.value(value, Site::Metadata, &path)?,
+                                        self.entry_value(value, &path)?,
                                     ))
                                 })
                                 .collect::<Result<_, SaveError>>()?;
@@ -937,12 +937,7 @@ impl Lowering<'_> {
             custom_data: arc
                 .custom_data
                 .iter()
-                .map(|(k, v)| {
-                    Ok((
-                        String::from(k.as_ref()),
-                        self.value(v, Site::Metadata, prim)?,
-                    ))
-                })
+                .map(|(k, v)| Ok((String::from(k.as_ref()), self.entry_value(v, prim)?)))
                 .collect::<Result<_, SaveError>>()?,
         })
     }
@@ -983,32 +978,7 @@ impl Lowering<'_> {
         for field in fields {
             let key = self.tokens.resolve(field.name);
             let path = format!("{owner}#{key}");
-            let value = match &field.value {
-                FieldValue::Value(value) => self.metadata_value(value, key, &path)?,
-                FieldValue::TokenListOp(op) => {
-                    Value::TokenListOp(self.list_op(op, &path, |t| Ok(self.name(*t)))?)
-                }
-                FieldValue::StringListOp(op) => {
-                    Value::StringListOp(self.list_op(op, &path, |s| Ok(String::from(&**s)))?)
-                }
-                FieldValue::IntListOp(op) => Value::IntListOp(self.list_op(op, &path, |x| Ok(*x))?),
-                FieldValue::UIntListOp(op) => {
-                    Value::UIntListOp(self.list_op(op, &path, |x| Ok(*x))?)
-                }
-                FieldValue::Int64ListOp(op) => {
-                    Value::Int64ListOp(self.list_op(op, &path, |x| Ok(*x))?)
-                }
-                FieldValue::UInt64ListOp(op) => {
-                    Value::UInt64ListOp(self.list_op(op, &path, |x| Ok(*x))?)
-                }
-                FieldValue::UnregisteredListOp(op) => {
-                    Value::UnregisteredListOp(self.list_op(op, &path, |s| Ok(String::from(&**s)))?)
-                }
-                FieldValue::PathListOp(_) => {
-                    return unsupported(path, Unsupported::ListOpMetadata("path list op"));
-                }
-                _ => return unsupported(path, Unsupported::Value("field value")),
-            };
+            let value = self.field_value(&field.value, key, &path)?;
             let key = match key {
                 "documentation" => "doc",
                 key => key,
@@ -1016,6 +986,44 @@ impl Lowering<'_> {
             out.push(Metadatum::new(key, value));
         }
         Ok(out)
+    }
+
+    /// A metadata field's value, or a dictionary entry's (`key` empty),
+    /// which may hold a list op as a `VtDictionary` entry may
+    /// (`CrateFile::_PackValue`, `pxr/usd/sdf/crateFile.cpp`).
+    ///
+    /// Spec: AOUSD Core §7.4 (metadata fields), §6.2 (dictionary type).
+    fn field_value(&self, value: &FieldValue, key: &str, path: &str) -> Result<Value, SaveError> {
+        Ok(match value {
+            FieldValue::Value(value) => self.metadata_value(value, key, path)?,
+            FieldValue::TokenListOp(op) => {
+                Value::TokenListOp(self.list_op(op, path, |t| Ok(self.name(*t)))?)
+            }
+            FieldValue::StringListOp(op) => {
+                Value::StringListOp(self.list_op(op, path, |s| Ok(String::from(&**s)))?)
+            }
+            FieldValue::IntListOp(op) => Value::IntListOp(self.list_op(op, path, |x| Ok(*x))?),
+            FieldValue::UIntListOp(op) => Value::UIntListOp(self.list_op(op, path, |x| Ok(*x))?),
+            FieldValue::Int64ListOp(op) => Value::Int64ListOp(self.list_op(op, path, |x| Ok(*x))?),
+            FieldValue::UInt64ListOp(op) => {
+                Value::UInt64ListOp(self.list_op(op, path, |x| Ok(*x))?)
+            }
+            FieldValue::UnregisteredListOp(op) => {
+                Value::UnregisteredListOp(self.list_op(op, path, |s| Ok(String::from(&**s)))?)
+            }
+            FieldValue::PathListOp(_) => {
+                return unsupported(path, Unsupported::ListOpMetadata("path list op"));
+            }
+            _ => return unsupported(path, Unsupported::Value("field value")),
+        })
+    }
+
+    /// An entry of an arc's or a spline knot's custom data.
+    fn entry_value(&self, value: &FieldValue, path: &str) -> Result<Value, SaveError> {
+        match value {
+            FieldValue::Value(value) => self.value(value, Site::Metadata, path),
+            other => self.field_value(other, "", path),
+        }
     }
 
     /// A metadata value. Registered array fields give an empty array its
@@ -1099,10 +1107,12 @@ impl Lowering<'_> {
             L::Dictionary(entries) => Value::Dictionary(
                 entries
                     .iter()
-                    .filter(|(_, v)| !(self.skip_empty_entries && matches!(v, L::Null)))
+                    .filter(|(_, v)| {
+                        !(self.skip_empty_entries && matches!(v, FieldValue::Value(L::Null)))
+                    })
                     .map(|(k, v)| {
                         let path = format!("{path}/{k}");
-                        Ok((String::from(&**k), self.metadata_value(v, "", &path)?))
+                        Ok((String::from(&**k), self.field_value(v, "", &path)?))
                     })
                     .collect::<Result<_, SaveError>>()?,
             ),

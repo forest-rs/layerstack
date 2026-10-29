@@ -166,7 +166,7 @@ fn unsupported_and_invalid_spline_semantics_remain_explicit() {
         .unwrap()[0];
     let original = arc.clone();
     arc.custom_data
-        .push(("nan".into(), Value::Double(f64::NAN)));
+        .push(("nan".into(), Value::Double(f64::NAN).into()));
     assert_ne!(*arc, original);
     assert_eq!(*arc, arc.clone());
     let reordered = arc.clone();
@@ -367,12 +367,12 @@ over "R" (
     );
     assert_eq!(
         expected[0].custom_data,
-        vec![("note".into(), Value::String("only data".into()))],
+        vec![("note".into(), Value::String("only data".into()).into())],
         "metadata-only reference retains its dictionary"
     );
     assert_eq!(
         expected[2].custom_data,
-        vec![("n".into(), Value::Int(1))],
+        vec![("n".into(), Value::Int(1).into())],
         "retimed reference retains its dictionary"
     );
     let text = original.save_usda().unwrap();

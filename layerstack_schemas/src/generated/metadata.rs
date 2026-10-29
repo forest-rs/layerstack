@@ -34,7 +34,7 @@ impl<'a> crate::StageMetadata<'a> {
     #[must_use]
     pub fn fallback_prim_types(
         &self,
-    ) -> Option<::alloc::vec::Vec<(::alloc::sync::Arc<str>, ::layerstack::Value)>> {
+    ) -> Option<::alloc::vec::Vec<(::alloc::sync::Arc<str>, ::layerstack::FieldValue)>> {
         self.read_metadata("fallbackPrimTypes", |v, _| match v {
             ::layerstack::Value::Dictionary(entries) => Some(entries.clone()),
             _ => None,
@@ -147,7 +147,7 @@ impl<'a> crate::PrimView<'a> {
     #[must_use]
     pub fn sdr_metadata(
         &self,
-    ) -> Option<::alloc::vec::Vec<(::alloc::sync::Arc<str>, ::layerstack::Value)>> {
+    ) -> Option<::alloc::vec::Vec<(::alloc::sync::Arc<str>, ::layerstack::FieldValue)>> {
         self.read_metadata("sdrMetadata", |v, _| match v {
             ::layerstack::Value::Dictionary(entries) => Some(entries.clone()),
             _ => None,
@@ -161,7 +161,7 @@ impl<'a> crate::PropertyMetadata<'a> {
     #[must_use]
     pub fn sdr_metadata(
         &self,
-    ) -> Option<::alloc::vec::Vec<(::alloc::sync::Arc<str>, ::layerstack::Value)>> {
+    ) -> Option<::alloc::vec::Vec<(::alloc::sync::Arc<str>, ::layerstack::FieldValue)>> {
         self.read_metadata("sdrMetadata", |v, _| match v {
             ::layerstack::Value::Dictionary(entries) => Some(entries.clone()),
             _ => None,
@@ -202,7 +202,7 @@ impl<'a> crate::PrimView<'a> {
     #[must_use]
     pub fn ui_hints(
         &self,
-    ) -> Option<::alloc::vec::Vec<(::alloc::sync::Arc<str>, ::layerstack::Value)>> {
+    ) -> Option<::alloc::vec::Vec<(::alloc::sync::Arc<str>, ::layerstack::FieldValue)>> {
         self.read_metadata("uiHints", |v, _| match v {
             ::layerstack::Value::Dictionary(entries) => Some(entries.clone()),
             _ => None,
@@ -216,7 +216,7 @@ impl<'a> crate::PropertyMetadata<'a> {
     #[must_use]
     pub fn ui_hints(
         &self,
-    ) -> Option<::alloc::vec::Vec<(::alloc::sync::Arc<str>, ::layerstack::Value)>> {
+    ) -> Option<::alloc::vec::Vec<(::alloc::sync::Arc<str>, ::layerstack::FieldValue)>> {
         self.read_metadata("uiHints", |v, _| match v {
             ::layerstack::Value::Dictionary(entries) => Some(entries.clone()),
             _ => None,

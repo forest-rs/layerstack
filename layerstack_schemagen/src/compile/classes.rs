@@ -27,7 +27,7 @@ pub(crate) const SINGLE_APPLY: &str = "singleApply";
 pub(crate) const MULTIPLE_APPLY: &str = "multipleApply";
 
 /// A dictionary value: its entries.
-pub(crate) type Dictionary = [(Arc<str>, Value)];
+pub(crate) type Dictionary = [(Arc<str>, FieldValue)];
 
 /// What usdGenSchema knows of one schema class (`ClassInfo`).
 #[derive(Debug)]
@@ -46,7 +46,7 @@ pub(crate) struct ClassInfo {
     pub(crate) family: String,
     pub(crate) version: u32,
     /// The class's own customData.
-    pub(crate) custom_data: Vec<(Arc<str>, Value)>,
+    pub(crate) custom_data: Vec<(Arc<str>, FieldValue)>,
     pub(crate) is_applied: bool,
     pub(crate) is_multiple_apply: bool,
     pub(crate) property_namespace: Option<String>,
@@ -140,7 +140,9 @@ pub(crate) fn parse(stage: &SchemaStage) -> Result<Parsed, CompileError> {
             .iter()
             .map(|(token, info)| {
                 let value = match info {
-                    Value::Dictionary(info) => dict_str(info, "value", parser.tokens()),
+                    FieldValue::Value(Value::Dictionary(info)) => {
+                        dict_str(info, "value", parser.tokens())
+                    }
                     _ => None,
                 };
                 (
@@ -273,7 +275,7 @@ impl<'s> Parser<'s> {
     }
 
     /// The spec's own `customData`.
-    fn custom_data(&self, spec: &PrimSpec) -> Vec<(Arc<str>, Value)> {
+    fn custom_data(&self, spec: &PrimSpec) -> Vec<(Arc<str>, FieldValue)> {
         match spec.field(self.custom_data) {
             Some(FieldValue::Value(Value::Dictionary(entries))) => entries.clone(),
             _ => Vec::new(),
@@ -281,7 +283,10 @@ impl<'s> Parser<'s> {
     }
 
     /// `_GetLibMetadata`: the `customData` of the layer's `/GLOBAL`.
-    fn library_metadata(&self, layer: LayerId) -> Result<Vec<(Arc<str>, Value)>, CompileError> {
+    fn library_metadata(
+        &self,
+        layer: LayerId,
+    ) -> Result<Vec<(Arc<str>, FieldValue)>, CompileError> {
         let shown = self.stage.identifier(layer);
         let global = self.spec(layer, self.global).ok_or_else(|| {
             library_error(Rule::MissingGlobalPrim {
@@ -991,7 +996,7 @@ fn instance_can_only_apply_to(
     instances
         .iter()
         .filter_map(|(instance, info)| match info {
-            Value::Dictionary(info) => Some((
+            FieldValue::Value(Value::Dictionary(info)) => Some((
                 instance.to_string(),
                 dict_strings(info, "apiSchemaCanOnlyApplyTo", tokens),
             )),
@@ -1000,12 +1005,12 @@ fn instance_can_only_apply_to(
         .collect()
 }
 
-/// The value of `key` in a dictionary.
+/// The plain value of `key` in a dictionary.
 pub(crate) fn dict_get<'a>(entries: &'a Dictionary, key: &str) -> Option<&'a Value> {
     entries
         .iter()
         .find(|(name, _)| &**name == key)
-        .map(|(_, value)| value)
+        .and_then(|(_, value)| value.as_value())
 }
 
 /// A string or token value.

@@ -32,9 +32,13 @@ fn fallback_types_select_concrete_schemas_without_changing_authored_type() {
                     Value::Token(unknown),
                     Value::Token(abstract_type),
                     Value::Token(mesh),
-                ]),
+                ])
+                .into(),
             ),
-            ("Mesh".into(), Value::Array(vec![Value::Token(sphere)])),
+            (
+                "Mesh".into(),
+                Value::Array(vec![Value::Token(sphere)]).into(),
+            ),
         ])),
     });
     store.insert_layer(layer);
@@ -131,7 +135,7 @@ fn stage_metadata_edits_are_atomic_field_scoped_and_session_aware() {
             LayerId(1),
             data,
             "render:exposure",
-            Some(Value::Double(1.0)),
+            Some(Value::Double(1.0).into()),
         )
         .unwrap();
     live.set_stage_metadata(
@@ -157,7 +161,7 @@ fn stage_metadata_edits_are_atomic_field_scoped_and_session_aware() {
         LayerId(1),
         data,
         "render:exposure",
-        Some(Value::Double(1.0)),
+        Some(Value::Double(1.0).into()),
     )
     .unwrap();
     live.set_stage_metadata_dict_key(
@@ -165,13 +169,13 @@ fn stage_metadata_edits_are_atomic_field_scoped_and_session_aware() {
         LayerId(2),
         data,
         "render:quality",
-        Some(Value::Int(4)),
+        Some(Value::Int(4).into()),
     )
     .unwrap();
     assert_eq!(
         live.stage()
             .metadata_dict_key(data, "render:exposure", &store),
-        Some(Value::Double(1.0))
+        Some(Value::Double(1.0).into())
     );
     assert!(
         live.stage()
@@ -246,7 +250,7 @@ fn fallback_metadata_changes_rebuild_schema_definitions_and_undo() {
         key,
         FieldValue::Value(Value::Dictionary(vec![(
             "Future".into(),
-            Value::Array(vec![Value::Token(mesh)]),
+            Value::Array(vec![Value::Token(mesh)]).into(),
         )])),
     );
     let inverse = live.apply(&mut store, &edit).unwrap().inverse;

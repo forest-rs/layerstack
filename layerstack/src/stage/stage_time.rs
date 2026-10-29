@@ -98,13 +98,15 @@ pub(crate) fn map_leaves(
             let mut changed = false;
             let mapped = entries
                 .iter()
-                .map(|(key, item)| match map_leaves(item, leaf) {
-                    Some(item) => {
-                        changed = true;
-                        (key.clone(), item)
-                    }
-                    None => (key.clone(), item.clone()),
-                })
+                .map(
+                    |(key, item)| match item.as_value().and_then(|item| map_leaves(item, leaf)) {
+                        Some(item) => {
+                            changed = true;
+                            (key.clone(), item.into())
+                        }
+                        None => (key.clone(), item.clone()),
+                    },
+                )
                 .collect();
             changed.then_some(Value::Dictionary(mapped))
         }
@@ -302,7 +304,9 @@ fn holds_time_value(value: &Value) -> bool {
         Value::TimeCode(_) | Value::Duration(_) => true,
         Value::Array(items) => items.iter().any(holds_time_value),
         Value::TypedArray(array) => is_time_valued(&array.element_kind()),
-        Value::Dictionary(entries) => entries.iter().any(|(_, v)| holds_time_value(v)),
+        Value::Dictionary(entries) => entries
+            .iter()
+            .any(|(_, v)| v.as_value().is_some_and(holds_time_value)),
         // Decodes only a value whose kind its source does not know.
         Value::Deferred(deferred) => match deferred.element_kind() {
             Some(kind) => holds_time_value(&kind),
@@ -515,22 +519,22 @@ mod tests {
         };
         assert_eq!(offset.map_time(to_stage_time(offset, 10.0)), 10.0);
         let value = Value::Dictionary(vec![
-            ("cue".into(), Value::TimeCode(5.0)),
+            ("cue".into(), Value::TimeCode(5.0).into()),
             (
                 "marks".into(),
-                Value::Array(vec![Value::TimeCode(1.0), Value::TimeCode(3.0)]),
+                Value::Array(vec![Value::TimeCode(1.0), Value::TimeCode(3.0)]).into(),
             ),
-            ("count".into(), Value::Int(5)),
+            ("count".into(), Value::Int(5).into()),
         ]);
         assert_eq!(
             retime_value(&value, offset),
             Some(Value::Dictionary(vec![
-                ("cue".into(), Value::TimeCode(12.0)),
+                ("cue".into(), Value::TimeCode(12.0).into()),
                 (
                     "marks".into(),
-                    Value::Array(vec![Value::TimeCode(4.0), Value::TimeCode(8.0)]),
+                    Value::Array(vec![Value::TimeCode(4.0), Value::TimeCode(8.0)]).into(),
                 ),
-                ("count".into(), Value::Int(5)),
+                ("count".into(), Value::Int(5).into()),
             ]))
         );
         assert_eq!(retime_value(&Value::Int(5), offset), None);
@@ -562,14 +566,14 @@ mod tests {
             scale: 2.0,
         };
         let value = Value::Dictionary(vec![
-            ("span".into(), Value::Duration(5.0)),
-            ("cue".into(), Value::TimeCode(5.0)),
+            ("span".into(), Value::Duration(5.0).into()),
+            ("cue".into(), Value::TimeCode(5.0).into()),
         ]);
         assert_eq!(
             retime_value(&value, offset),
             Some(Value::Dictionary(vec![
-                ("span".into(), Value::Duration(10.0)),
-                ("cue".into(), Value::TimeCode(12.0)),
+                ("span".into(), Value::Duration(10.0).into()),
+                ("cue".into(), Value::TimeCode(12.0).into()),
             ]))
         );
         let spans = Value::array_from_iter(

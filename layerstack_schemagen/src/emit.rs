@@ -606,8 +606,11 @@ pub(crate) fn expr(value: &Value, tokens: &TokenInterner) -> Result<String, Stri
             let entries = entries
                 .iter()
                 .map(|(key, item)| {
+                    let item = item
+                        .as_value()
+                        .ok_or_else(|| format!("no constructor for {item:?}"))?;
                     Ok(format!(
-                        "(Arc::from({:?}), {})",
+                        "(Arc::from({:?}), {}.into())",
                         &**key,
                         expr(item, tokens)?
                     ))

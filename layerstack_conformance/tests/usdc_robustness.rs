@@ -163,7 +163,11 @@ fn count_values(layer: &Layer) -> u64 {
         1 + match v {
             Value::Array(items) => items.iter().map(value).sum(),
             Value::TypedArray(items) => items.values().map(|v| value(&v)).sum(),
-            Value::Dictionary(entries) => entries.iter().map(|(_, v)| value(v)).sum(),
+            Value::Dictionary(entries) => entries
+                .iter()
+                .filter_map(|(_, v)| v.as_value())
+                .map(value)
+                .sum(),
             _ => 0,
         }
     }

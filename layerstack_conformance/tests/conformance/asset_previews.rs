@@ -54,7 +54,12 @@ fn to_json(value: &Value) -> Json {
         Value::Dictionary(entries) => Json::Object(
             entries
                 .iter()
-                .map(|(key, value)| (key.to_string(), to_json(value)))
+                .map(|(key, value)| {
+                    (
+                        key.to_string(),
+                        to_json(value.as_value().expect("a plain entry")),
+                    )
+                })
                 .collect::<Map<_, _>>(),
         ),
         Value::Int(v) => json!(v),
@@ -121,7 +126,7 @@ fn default_thumbnails_edit_as_cpp_edits_them() {
         assert_eq!(
             view.metadata()
                 .value_by_key("assetInfo", "previews:thumbnails:default")
-                .map(|value| to_json(&value)),
+                .map(|value| to_json(value.as_value().expect("a plain entry"))),
             Some(row.composed_default.clone()),
             "{label}"
         );

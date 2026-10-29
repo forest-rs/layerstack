@@ -9,7 +9,7 @@
 
 use std::collections::BTreeMap;
 
-use layerstack::Value;
+use layerstack::{FieldValue, Value};
 
 use super::classes::{ClassInfo, Parsed, dict_get, dict_str, dict_strings};
 use super::names::{camel_case, is_valid_identifier, make_valid_token};
@@ -304,7 +304,7 @@ fn class_tokens(
     if let Some(Value::Dictionary(schema_tokens)) = dict_get(&class.custom_data, "schemaTokens") {
         for (token, info) in schema_tokens {
             let value = match info {
-                Value::Dictionary(info) => dict_str(info, "value", tokens),
+                FieldValue::Value(Value::Dictionary(info)) => dict_str(info, "value", tokens),
                 _ => None,
             };
             all.add(owner, token, value.as_deref().unwrap_or(token), true)?;

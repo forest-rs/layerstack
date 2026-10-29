@@ -52,7 +52,10 @@ fn fixture() -> (LoadedStage, Stage, LayerId) {
         .unwrap()
         .property_mut(dictionary)
         .unwrap()
-        .default = Some(Value::Dictionary(vec![("key".into(), Value::Int(1))]));
+        .default = Some(Value::Dictionary(vec![(
+        "key".into(),
+        Value::Int(1).into(),
+    )]));
     let timecode = loaded.store.property_path("/MisdeclaredTime.value");
     let weak_marker = loaded.store.property_path("/Skip.inputs:intensity");
     let weak = loaded

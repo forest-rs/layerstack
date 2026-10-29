@@ -694,7 +694,7 @@ fn generated_schema_layers_read_as_definitions() {
                 custom_data,
                 Value::Dictionary(vec![(
                     Arc::from("apiSchemaOverridePropertyNames"),
-                    Value::Array(vec![Value::Token(offset)]),
+                    Value::Array(vec![Value::Token(offset)]).into(),
                 )]),
             )
             .with_property(
@@ -1048,9 +1048,10 @@ fn property_metadata_composes_strong_to_weak_only_for_matching_types() {
             Value::Dictionary(
                 items
                     .iter()
-                    .map(|(key, value)| ((*key).into(), Value::Int(*value)))
+                    .map(|(key, value)| ((*key).into(), Value::Int(*value).into()))
                     .collect(),
-            ),
+            )
+            .into(),
         )])
     };
     let mut builder = SchemaRegistry::builder();
@@ -1116,7 +1117,7 @@ fn property_metadata_override_replaces_dictionary_and_preserves_variability() {
     let weak = tokens.intern("WeakAPI");
     let name = tokens.intern("size");
     let dict = tokens.intern("settings");
-    let dictionary = |key: &str| Value::Dictionary(vec![(key.into(), Value::Int(1))]);
+    let dictionary = |key: &str| Value::Dictionary(vec![(key.into(), Value::Int(1).into())]);
     let float = PropertyType::parse("float").unwrap();
     let mut builder = SchemaRegistry::builder();
     builder.register(
@@ -1165,7 +1166,7 @@ fn stage_property_metadata_fallback_merges_dictionaries_and_respects_blocks() {
         Value::Dictionary(
             items
                 .iter()
-                .map(|(key, value)| ((*key).into(), Value::Int(*value)))
+                .map(|(key, value)| ((*key).into(), Value::Int(*value).into()))
                 .collect(),
         )
     };
@@ -1215,8 +1216,8 @@ fn stage_property_metadata_fallback_merges_dictionaries_and_respects_blocks() {
             .unwrap()
             .value,
         ResolvedValue::Dictionary(vec![
-            ("a".into(), Value::Int(9)),
-            ("b".into(), Value::Int(2))
+            ("a".into(), Value::Int(9).into()),
+            ("b".into(), Value::Int(2).into())
         ])
     );
     assert_eq!(
@@ -1224,7 +1225,7 @@ fn stage_property_metadata_fallback_merges_dictionaries_and_respects_blocks() {
             .resolve_authored_property_metadata(prim, name, settings)
             .unwrap()
             .value,
-        ResolvedValue::Dictionary(vec![("a".into(), Value::Int(9))])
+        ResolvedValue::Dictionary(vec![("a".into(), Value::Int(9).into())])
     );
     assert!(
         stage

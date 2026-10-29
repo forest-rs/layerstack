@@ -98,7 +98,7 @@ fn build(layers: u64, points_len: usize, instructions: usize) -> Scene {
         };
         let entry = Value::Dictionary(vec![(
             alloc::format!("layer{id}").into(),
-            Value::Dictionary(vec![("strength".into(), Value::Int(id as i32))]),
+            Value::Dictionary(vec![("strength".into(), Value::Int(id as i32).into())]).into(),
         )]);
         let schema = store.tokens().intern(alloc::format!("Api{id}"));
         let spec = PrimSpec::over()

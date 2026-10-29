@@ -59,7 +59,7 @@ the same text as the source layer (`same_text`) and that text.
   `CrateFile::_PackValue` posts "Attempted to pack unsupported type
   'TfEnum'", and the read refuses the invalid value it writes.
 
-Five cases have no USDA source, since the text parser cannot make them:
+Eight cases have no USDA source, since the text parser cannot make them:
 each is a layer `Sdf.CopySpec` copies from a USDA source, replacing
 fields' values through its value callback (which sets them as they
 are), or one built with `Sdf` calls. The oracle records its export, the
@@ -95,6 +95,14 @@ the text that read exports (`open_text`).
   op's `TfStringify` text after an empty type name
   (` a = SdfIntListOp(Prepended Items: [1])`, `Sdf_FileIOUtility::_WriteDictionary`),
   which the text parser refuses.
+- `dictionary_list_ops_weak`: a weaker layer of entries over the same
+  specs, some meeting those list ops.
+- `dictionary_unheld_entries`: entries holding a path list op, a payload
+  list op and a variability, which the crate stores and reads too.
+
+`dictionary_composition` records, for the first two, the entries OpenUSD
+reads from each file, from the file a read of the first saves again, and
+composed on a `Usd.Stage` over both (`GetCustomData`).
 
 `--check` regenerates every file into a temporary directory and fails
 unless each matches the checked-in fixture; for a crate file, unless
@@ -114,7 +122,7 @@ import subprocess
 import sys
 import tempfile
 
-from pxr import Sdf, Tf, Usd
+from pxr import Sdf, Tf, Usd, UsdUtils
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -216,17 +224,55 @@ def unspecified_prims():
 def dictionary_list_ops():
     """`customData` dictionaries holding list ops, on a prim (beside an
     `int`, and in a nested dictionary beside a string) and an attribute,
-    as `SdfSpec::SetInfo` sets them."""
+    and `customLayerData` holding one, as `SdfSpec::SetInfo` sets them:
+    a token, string, `int`, `uint`, `int64` and `uint64` list op."""
     layer = Sdf.Layer.CreateAnonymous("dictionary_list_ops.usda")
     layer.ImportFromString('#usda 1.0\ndef "P"\n{\n    float v\n}\n')
+    layer.customLayerData = {"layerOps": Sdf.UIntListOp.Create(appendedItems=[7])}
     layer.GetPrimAtPath("/P").SetInfo("customData", {
         "a": Sdf.IntListOp.Create(prependedItems=[1]),
         "c": Sdf.TokenListOp.Create(appendedItems=["t"]),
         "d": {"x": Sdf.StringListOp.CreateExplicit(["s"]), "y": "kept"},
         "e": 1,
+        "u": Sdf.UInt64ListOp.Create(prependedItems=[3], deletedItems=[4]),
     })
     layer.GetAttributeAtPath("/P.v").SetInfo("customData", {
         "ops": Sdf.Int64ListOp.Create(deletedItems=[2]),
+    })
+    return layer
+
+
+def dictionary_list_ops_weak():
+    """A weaker layer over `dictionary_list_ops`'s specs, for
+    `dictionary_composition`: its entries meet the stronger layer's list
+    ops at `a`, `d/x` and `ops`, with a list op, a value and a dictionary,
+    and add entries of their own."""
+    layer = Sdf.Layer.CreateAnonymous("dictionary_list_ops_weak.usda")
+    layer.ImportFromString('#usda 1.0\nover "P"\n{\n    float v\n}\n')
+    layer.GetPrimAtPath("/P").SetInfo("customData", {
+        "a": Sdf.IntListOp.Create(appendedItems=[9]),
+        "d": {"x": "weak", "z": Sdf.TokenListOp.Create(prependedItems=["w"])},
+        "e": Sdf.StringListOp.Create(appendedItems=["under"]),
+        "w": Sdf.UIntListOp.CreateExplicit([5]),
+    })
+    layer.GetAttributeAtPath("/P.v").SetInfo("customData", {
+        "ops": {"nested": 1},
+        "weak": Sdf.IntListOp.Create(deletedItems=[8]),
+    })
+    return layer
+
+
+def dictionary_unheld_entries():
+    """`customData` entries holding values a crate stores but layerstack
+    does not hold in a dictionary: a path and a payload list op and a
+    variability, beside an `int`."""
+    layer = Sdf.Layer.CreateAnonymous("dictionary_unheld_entries.usda")
+    layer.ImportFromString('#usda 1.0\ndef "P"\n{\n}\n')
+    layer.GetPrimAtPath("/P").SetInfo("customData", {
+        "kept": 1,
+        "paths": Sdf.PathListOp.Create(appendedItems=[Sdf.Path("/A")]),
+        "payloads": Sdf.PayloadListOp.Create(appendedItems=[Sdf.Payload("a.usda")]),
+        "variability": Sdf.VariabilityUniform,
     })
     return layer
 
@@ -293,6 +339,8 @@ def "P" (
     }),
     "unspecified_prims": (unspecified_prims, {}),
     "dictionary_list_ops": (dictionary_list_ops, {}),
+    "dictionary_list_ops_weak": (dictionary_list_ops_weak, {}),
+    "dictionary_unheld_entries": (dictionary_unheld_entries, {}),
 }
 
 
@@ -420,6 +468,80 @@ def built(out, name, source, fields):
     return record
 
 
+LIST_OPS = (Sdf.IntListOp, Sdf.UIntListOp, Sdf.Int64ListOp, Sdf.UInt64ListOp,
+            Sdf.TokenListOp, Sdf.StringListOp)
+
+
+def entry_json(value):
+    """A dictionary entry as JSON: a dictionary by key, a list op as its
+    type and each list it authors (`isExplicit` and its items, or the
+    prepended, appended and deleted items), any other value as itself."""
+    if isinstance(value, dict):
+        return {key: entry_json(value[key]) for key in sorted(value)}
+    if isinstance(value, LIST_OPS):
+        found = {"listOp": type(value).__name__}
+        if value.isExplicit:
+            found["explicitItems"] = list(value.explicitItems)
+        for name in ("prependedItems", "appendedItems", "deletedItems"):
+            items = list(getattr(value, name))
+            if items:
+                found[name] = items
+        return found
+    return value
+
+
+# Each spec's dictionary field the dictionary cases read, keyed `<path> <field>`.
+DICTIONARY_FIELDS = (("/", "customLayerData"), ("/P", "customData"), ("/P.v", "customData"))
+
+
+def layer_entries(layer):
+    """The entries `Sdf` reads of each of `DICTIONARY_FIELDS` in `layer`."""
+    found = {}
+    for path, field in DICTIONARY_FIELDS:
+        spec = layer.pseudoRoot if path == "/" else layer.GetObjectAtPath(path)
+        if spec is not None and spec.HasInfo(field):
+            found[f"{path} {field}"] = entry_json(spec.GetInfo(field))
+    return found
+
+
+def dictionary_composition(out):
+    """What OpenUSD reads of the dictionary cases' crate files in `out`:
+    each file's entries (`read`); for `dictionary_list_ops`, the entries
+    of the file a read of it saves again (`save_again`); and the `customData`
+    a `Usd.Stage` composes of a root layer whose sublayers are
+    `dictionary_list_ops` over `dictionary_list_ops_weak` (`composed`, and
+    by key, `composed_by_key`); the `customLayerData` a stage of
+    `dictionary_list_ops` reads (`stage_metadata`); and the entries of
+    `UsdUtils.FlattenLayerStack` and `UsdStage::Flatten` of that stage."""
+    strong = os.path.join(out, "dictionary_list_ops.usdc")
+    weak = os.path.join(out, "dictionary_list_ops_weak.usdc")
+    record = {"read": {}}
+    for name in ("dictionary_list_ops", "dictionary_list_ops_weak"):
+        layer = Sdf.Layer.OpenAsAnonymous(os.path.join(out, f"{name}.usdc"))
+        record["read"][name] = layer_entries(layer)
+    with tempfile.TemporaryDirectory() as tmp:
+        again = os.path.join(tmp, "again.usdc")
+        ok, posted = call(lambda: Sdf.Layer.OpenAsAnonymous(strong).Export(again))
+        record["save_again"] = {"accepted": bool(ok) and not posted, "errors": posted,
+                                "entries": layer_entries(Sdf.Layer.OpenAsAnonymous(again))}
+    root = Sdf.Layer.CreateAnonymous("root.usda")
+    root.subLayerPaths = [strong, weak]
+    stage = Usd.Stage.Open(root)
+    record["composed"] = {
+        path: entry_json(stage.GetObjectAtPath(path).GetCustomData())
+        for path in ("/P", "/P.v")
+    }
+    prim = stage.GetPrimAtPath("/P")
+    record["composed_by_key"] = {
+        key: entry_json(prim.GetCustomDataByKey(key)) for key in ("a", "d:x", "d:z", "e")
+    }
+    record["stage_metadata"] = entry_json(
+        Usd.Stage.Open(strong).GetMetadata("customLayerData"))
+    record["flattened_layer_stack"] = layer_entries(UsdUtils.FlattenLayerStack(stage))
+    record["flattened_stage"] = layer_entries(stage.Flatten())
+    return record
+
+
 def write(out):
     os.makedirs(out, exist_ok=True)
     _, minor, patch = Usd.GetVersion()
@@ -430,6 +552,7 @@ def write(out):
             **{name: built(out, name, *spec) for name, spec in BUILT.items()},
         },
     }
+    oracle["dictionary_composition"] = dictionary_composition(out)
     with open(os.path.join(out, "oracle.json"), "w") as f:
         json.dump(oracle, f, indent=1, sort_keys=True)
         f.write("\n")

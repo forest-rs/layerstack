@@ -451,7 +451,7 @@ mod tests {
         let array = |x: f32| Value::Array(vec![Value::Vec3f([1.0, x, 2.0])]);
         assert!(array(f32::NAN).same(&array(f32::NAN)));
         assert!(!array(0.0).same(&array(-0.0)));
-        let dict = |x| Value::Dictionary(vec![("k".into(), Value::Double(x))]);
+        let dict = |x| Value::Dictionary(vec![("k".into(), Value::Double(x).into())]);
         assert!(dict(nan).same(&dict(nan)));
         assert!(!dict(0.0).same(&dict(-0.0)));
         let spec = |x| PropertySpec::attribute().with_time_samples(vec![(x, Value::Double(x))]);

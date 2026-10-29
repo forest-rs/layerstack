@@ -171,7 +171,7 @@ pub enum ResolvedValue {
     /// A dictionary value resolved by combining opinions.
     ///
     /// Spec: AOUSD Core §6.6.2.1 (dictionary combining), §12.2.5.
-    Dictionary(Vec<(Arc<str>, Value)>),
+    Dictionary(Vec<(Arc<str>, FieldValue)>),
     /// A string or integer list resolved by chaining `ListOps` (for
     /// example `clipSets` or `inactiveIds`); each element keeps its value
     /// type (`Value::String`, `Value::Int`, `Value::UInt`, `Value::Int64` or
@@ -1032,7 +1032,7 @@ impl Stage {
                 if concrete(name) {
                     return None;
                 }
-                let candidates = candidates.array_ref()?;
+                let candidates = candidates.as_value()?.array_ref()?;
                 // Sdf's field is a token array, not a string array.
                 if candidates
                     .iter()
@@ -4507,8 +4507,8 @@ fn spline_to_value(spline: &SplineData, val: f64) -> Value {
 /// Spec: AOUSD Core §6.6.2.1 (dictionary combining), §12.2.5.
 fn resolve_dictionary_chain(
     opinions: &[Opinion],
-    fallback: Option<&[(Arc<str>, Value)]>,
-) -> Vec<(Arc<str>, Value)> {
+    fallback: Option<&[(Arc<str>, FieldValue)]>,
+) -> Vec<(Arc<str>, FieldValue)> {
     let authored = dictionary_chain(opinions).map(|(_, entries)| entries);
     combine_dictionary_chain(authored.chain(fallback))
 }
@@ -4518,7 +4518,7 @@ fn resolve_dictionary_chain(
 /// stronger than the strongest blocking default.
 pub(crate) fn dictionary_chain(
     opinions: &[Opinion],
-) -> impl Iterator<Item = (usize, &[(Arc<str>, Value)])> {
+) -> impl Iterator<Item = (usize, &[(Arc<str>, FieldValue)])> {
     opinions
         .iter()
         .enumerate()
@@ -5166,15 +5166,15 @@ mod tests {
             ),
             (
                 vec![
-                    Value::Dictionary(vec![("a".into(), Value::Int(1))]),
-                    Value::Dictionary(vec![("b".into(), Value::Int(2))]),
+                    Value::Dictionary(vec![("a".into(), Value::Int(1).into())]),
+                    Value::Dictionary(vec![("b".into(), Value::Int(2).into())]),
                 ],
-                Value::Dictionary(vec![("c".into(), Value::Int(3))]),
+                Value::Dictionary(vec![("c".into(), Value::Int(3).into())]),
                 PropertyType::parse("dictionary").unwrap_or_else(PropertyType::unregistered),
                 Value::Dictionary(vec![
-                    ("a".into(), Value::Int(1)),
-                    ("b".into(), Value::Int(2)),
-                    ("c".into(), Value::Int(3)),
+                    ("a".into(), Value::Int(1).into()),
+                    ("b".into(), Value::Int(2).into()),
+                    ("c".into(), Value::Int(3).into()),
                 ]),
             ),
             (
@@ -5510,7 +5510,7 @@ mod tests {
     fn property_metadata_explanations_name_each_entry_supplier() {
         let store = crate::doc::InMemoryStore::default();
         let custom = store.tokens.intern("customData");
-        let entry = |key: &str, value: Value| (Arc::<str>::from(key), value);
+        let entry = |key: &str, value: Value| (Arc::<str>::from(key), FieldValue::Value(value));
         let strong = PropertySpec::attribute().with_metadata(
             custom,
             Value::Dictionary(vec![entry("a", Value::String("strong".into()))]),
@@ -5726,7 +5726,7 @@ mod tests {
             PrimSpec::def()
                 .with_field(
                     custom_data,
-                    Value::Dictionary(vec![("budded".into(), Value::TimeCode(2.0))]),
+                    Value::Dictionary(vec![("budded".into(), Value::TimeCode(2.0).into())]),
                 )
                 .with_property(
                     bloom,
@@ -5734,7 +5734,7 @@ mod tests {
                         .with_default(Value::TimeCode(4.0))
                         .with_metadata(
                             custom_data,
-                            Value::Dictionary(vec![("peak".into(), Value::TimeCode(6.0))]),
+                            Value::Dictionary(vec![("peak".into(), Value::TimeCode(6.0).into())]),
                         ),
                 )
                 .with_property(
@@ -5763,12 +5763,12 @@ mod tests {
                 .map(|r| r.value),
             Some(ResolvedValue::Dictionary(vec![(
                 "peak".into(),
-                Value::TimeCode(17.0)
+                Value::TimeCode(17.0).into()
             )]))
         );
         let budded = Some(ResolvedValue::Dictionary(vec![(
             "budded".into(),
-            Value::TimeCode(9.0),
+            Value::TimeCode(9.0).into(),
         )]));
         assert_eq!(
             stage.resolve_value(tree, custom_data).map(|r| r.value),

@@ -194,7 +194,7 @@ fn empty_dictionary_entries_are_skipped_as_openusd_skips_them() {
         layerstack_usda::read_usda("#usda 1.0\n", LayerId(1), &tokens, &paths, &mut NoAssets)
             .emitted
             .layer;
-    let entry = |key: &str, value: Value| (key.into(), value);
+    let entry = |key: &str, value: Value| (key.into(), layerstack::FieldValue::Value(value));
     layer.set_metadata(
         tokens.intern("customLayerData"),
         Value::Dictionary(vec![

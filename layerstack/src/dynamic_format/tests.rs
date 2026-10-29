@@ -77,7 +77,7 @@ fn dictionary(store: &InMemoryStore, keys: &[&str]) -> Value {
     let _ = store;
     Value::Dictionary(
         keys.iter()
-            .map(|key| (Arc::from(*key), Value::Int(1)))
+            .map(|key| (Arc::from(*key), Value::Int(1).into()))
             .collect(),
     )
 }

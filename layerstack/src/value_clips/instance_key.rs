@@ -90,7 +90,9 @@ pub(crate) fn instance_keys(
                                 | "templateActiveOffset"
                         )
                     })
-                    .map(|(name, value)| (name, ClipParameter::capture(&value)))
+                    .filter_map(|(name, value)| {
+                        Some((name, ClipParameter::capture(value.as_value()?)))
+                    })
                     .collect(),
             }
         })

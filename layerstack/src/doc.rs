@@ -266,15 +266,24 @@ pub enum Value {
     /// Cloning shares the buffer; mutation uses copy-on-write. USD aliases
     /// remain on the property type. See [`crate::TypedArray`].
     TypedArray(crate::TypedArray),
-    /// A dictionary of string-keyed values, maintaining insertion order.
+    /// A dictionary of string-keyed entries, maintaining insertion order.
+    ///
+    /// An entry holds what a metadata field holds ([`FieldValue`]): almost
+    /// always a plain value ([`FieldValue::Value`], read with
+    /// [`FieldValue::as_value`]), but OpenUSD's `VtDictionary` holds any
+    /// value, and its crate files store and read entries holding list ops
+    /// (`CrateFile::_PackValue`, `pxr/usd/sdf/crateFile.cpp`), so an entry
+    /// may hold one of [`FieldValue`]'s list ops.
     ///
     /// Dictionary-valued fields use combining semantics during value
     /// resolution: dictionaries from multiple opinions are recursively
-    /// merged rather than using strongest-wins.
+    /// merged rather than using strongest-wins. A list-op entry is a leaf,
+    /// which the stronger opinion's entry replaces whole, as
+    /// `VtDictionaryOverRecursive` does.
     ///
     /// Spec: AOUSD Core §6.2 (dictionary type), §6.6.2.1 (dictionary
     /// combining), §12.2.5 (dictionary-valued metadata combining).
-    Dictionary(Vec<(Arc<str>, Self)>),
+    Dictionary(Vec<(Arc<str>, FieldValue)>),
     /// A sparse array edit composed over a weaker array opinion.
     ///
     /// Resolved attribute values never expose this directly; it exists in
@@ -636,6 +645,21 @@ impl Value {
         crate::edit::same::Same::same(self, other)
     }
 
+    /// Creates a dictionary of `entries`, in their order, each a plain
+    /// [`Value`] or any other [`FieldValue`].
+    ///
+    /// Spec: AOUSD Core §6.2 (dictionary type).
+    pub fn dictionary<K: Into<Arc<str>>, V: Into<FieldValue>>(
+        entries: impl IntoIterator<Item = (K, V)>,
+    ) -> Self {
+        Self::Dictionary(
+            entries
+                .into_iter()
+                .map(|(key, value)| (key.into(), value.into()))
+                .collect(),
+        )
+    }
+
     /// Creates a string value.
     pub fn string(s: impl Into<Arc<str>>) -> Self {
         Self::String(s.into())
@@ -682,18 +706,24 @@ impl From<f64> for Value {
 ///
 /// `layerstack` keeps its own [`Value`] representation and USD opinion
 /// selection; the recursive combining algorithm itself is `opinionated`'s.
+/// An entry holding a list op composes over a weaker list op of its kind
+/// ([`FieldValue::compose_over`]); any other leaf is replaced.
 pub(crate) struct ValueDictionaries;
 
-impl opinionated::DictionaryAdapter<Arc<str>, Value> for ValueDictionaries {
-    fn entries<'v>(&self, value: &'v Value) -> Option<&'v [(Arc<str>, Value)]> {
+impl opinionated::DictionaryAdapter<Arc<str>, FieldValue> for ValueDictionaries {
+    fn entries<'v>(&self, value: &'v FieldValue) -> Option<&'v [(Arc<str>, FieldValue)]> {
         match value {
-            Value::Dictionary(entries) => Some(entries),
+            FieldValue::Value(Value::Dictionary(entries)) => Some(entries),
             _ => None,
         }
     }
 
-    fn dictionary(&self, entries: Vec<(Arc<str>, Value)>) -> Value {
-        Value::Dictionary(entries)
+    fn dictionary(&self, entries: Vec<(Arc<str>, FieldValue)>) -> FieldValue {
+        FieldValue::Value(Value::Dictionary(entries))
+    }
+
+    fn compose(&self, stronger: &FieldValue, weaker: &FieldValue) -> Option<FieldValue> {
+        stronger.compose_over(weaker)
     }
 }
 
@@ -702,7 +732,10 @@ impl opinionated::DictionaryAdapter<Arc<str>, Value> for ValueDictionaries {
 /// Rules:
 /// - Keys present on only one side are kept.
 /// - For a key on both sides the stronger value wins, unless both values are
-///   dictionaries, which combine recursively.
+///   dictionaries, which combine recursively, or list ops of one kind, which
+///   compose ([`FieldValue::compose_over`]), as OpenUSD 26.11's
+///   `VtDictionaryOverRecursive` composes the values at a key
+///   (`VtValueTryComposeOver`).
 /// - The result is ordered by key at every nesting level, including nested
 ///   dictionaries contributed by only one side, matching OpenUSD's
 ///   `VtDictionary`.
@@ -712,9 +745,9 @@ impl opinionated::DictionaryAdapter<Arc<str>, Value> for ValueDictionaries {
 /// Spec: AOUSD Core §6.6.2.1, §12.2.5.
 #[must_use]
 pub fn combine_dictionaries(
-    stronger: &[(Arc<str>, Value)],
-    weaker: &[(Arc<str>, Value)],
-) -> Vec<(Arc<str>, Value)> {
+    stronger: &[(Arc<str>, FieldValue)],
+    weaker: &[(Arc<str>, FieldValue)],
+) -> Vec<(Arc<str>, FieldValue)> {
     opinionated::combine_dictionaries(&ValueDictionaries, stronger, weaker)
 }
 
@@ -725,18 +758,41 @@ pub fn combine_dictionaries(
 /// non-dictionary in another, and the spec does not say how a chain is folded,
 /// so OpenUSD governs (AOUSD Core §4.2): `MetadataValueComposer` in
 /// `pxr/usd/usd/stage.cpp` composes the stronger partial result over each
-/// weaker opinion via `VtDictionaryOverRecursive`. A schema fallback is the
-/// last, weakest element of the chain. The result is ordered by key at every
-/// nesting level, including for a single-opinion chain.
+/// weaker opinion via `VtDictionaryOverRecursive`, list ops of one kind at a
+/// key composing as [`combine_dictionaries`] composes them. A schema
+/// fallback is the last, weakest element of the chain. The result is
+/// ordered by key at every nesting level, including for a single-opinion
+/// chain.
+///
+/// The result is a resolved value: each list op in it, at any depth, is the
+/// explicit list op of the items it gives an empty list, as
+/// `MetadataValueComposer::Finalize` composes it over `VtBackground`
+/// (`SdfListOp`'s registered `VtValueTryComposeOver`,
+/// `pxr/usd/sdf/listOp.cpp`).
 ///
 /// Delegates to [`opinionated::combine_dictionary_chain`].
 ///
 /// Spec: AOUSD Core §6.6.2.1 (dictionary combining), §12.2.5.
 #[must_use]
 pub fn combine_dictionary_chain(
-    opinions: impl IntoIterator<Item = impl AsRef<[(Arc<str>, Value)]>>,
-) -> Vec<(Arc<str>, Value)> {
-    opinionated::combine_dictionary_chain(&ValueDictionaries, opinions)
+    opinions: impl IntoIterator<Item = impl AsRef<[(Arc<str>, FieldValue)]>>,
+) -> Vec<(Arc<str>, FieldValue)> {
+    let mut combined = opinionated::combine_dictionary_chain(&ValueDictionaries, opinions);
+    finalize_dictionary(&mut combined);
+    combined
+}
+
+/// Makes each list op in `entries`, at any depth, the explicit list op of
+/// the items it gives an empty list, as `MetadataValueComposer::Finalize`
+/// does (see [`combine_dictionary_chain`]).
+pub(crate) fn finalize_dictionary(entries: &mut [(Arc<str>, FieldValue)]) {
+    for (_, entry) in entries {
+        match entry {
+            FieldValue::Value(Value::Dictionary(nested)) => finalize_dictionary(nested),
+            FieldValue::Value(_) => {}
+            list_op => list_op.finalize(),
+        }
+    }
 }
 
 /// A named field entry: one authored metadata field on a layer, prim,
@@ -754,13 +810,21 @@ pub struct FieldEntry {
     pub value: FieldValue,
 }
 
-/// The value of one authored metadata field.
+/// The value of one authored metadata field, or of one dictionary entry
+/// ([`Value::Dictionary`]).
+///
+/// A field or an entry holds a plain [`Value`] or a list op, as an
+/// OpenUSD `VtValue` in scene description or in a `VtDictionary` may; an
+/// attribute's value is a [`Value`] alone. In a dictionary a list op
+/// composes over a weaker list op of its kind and resolves to an explicit
+/// one ([`combine_dictionary_chain`]).
 ///
 /// The list-op variants are boxed: most fields hold a [`Value`], and a
 /// field no larger than one keeps every [`FieldEntry`] and composed
 /// opinion small.
 ///
-/// Spec: AOUSD Core §7.4 (metadata fields), §12.2 (metadata resolution).
+/// Spec: AOUSD Core §7.4 (metadata fields), §12.2 (metadata resolution),
+/// §6.2 (dictionary type).
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub enum FieldValue {
@@ -794,6 +858,68 @@ pub enum FieldValue {
 }
 
 impl FieldValue {
+    /// The plain value this holds, or `None` for a list op.
+    #[must_use]
+    pub fn as_value(&self) -> Option<&Value> {
+        match self {
+            Self::Value(value) => Some(value),
+            _ => None,
+        }
+    }
+
+    /// The plain value this holds, or `None` for a list op.
+    #[must_use]
+    pub fn into_value(self) -> Option<Value> {
+        match self {
+            Self::Value(value) => Some(value),
+            _ => None,
+        }
+    }
+
+    /// This list op composed over `weaker`, a list op of the same kind, as
+    /// `SdfListOp::ApplyOperations(const SdfListOp&)` composes them; `None`
+    /// for a plain value, list ops of different kinds, or ones no single
+    /// list op composes to (an add or a reorder), where the stronger value
+    /// stands as it is, as OpenUSD's registered `VtValueTryComposeOver`
+    /// keeps it (`pxr/usd/sdf/listOp.cpp`).
+    ///
+    /// Spec: AOUSD Core §6.6.3 (list ops).
+    #[must_use]
+    pub fn compose_over(&self, weaker: &Self) -> Option<Self> {
+        Some(match (self, weaker) {
+            (Self::TokenListOp(s), Self::TokenListOp(w)) => Self::from(s.compose_over(w)?),
+            (Self::PathListOp(s), Self::PathListOp(w)) => Self::from(s.compose_over(w)?),
+            (Self::StringListOp(s), Self::StringListOp(w)) => Self::from(s.compose_over(w)?),
+            (Self::IntListOp(s), Self::IntListOp(w)) => Self::from(s.compose_over(w)?),
+            (Self::UIntListOp(s), Self::UIntListOp(w)) => Self::from(s.compose_over(w)?),
+            (Self::Int64ListOp(s), Self::Int64ListOp(w)) => Self::from(s.compose_over(w)?),
+            (Self::UInt64ListOp(s), Self::UInt64ListOp(w)) => Self::from(s.compose_over(w)?),
+            (Self::UnregisteredListOp(s), Self::UnregisteredListOp(w)) => {
+                Self::UnregisteredListOp(Box::new(s.compose_over(w)?))
+            }
+            _ => return None,
+        })
+    }
+
+    /// Replaces a list op with the explicit list op of the items it gives
+    /// an empty list; a plain value is left as it is.
+    fn finalize(&mut self) {
+        fn explicit<T: Clone + Eq + Hash>(op: &mut ListOp<T>) {
+            *op = ListOp::explicit(op.apply_to(&[]));
+        }
+        match self {
+            Self::Value(_) => {}
+            Self::TokenListOp(op) => explicit(op),
+            Self::PathListOp(op) => explicit(op),
+            Self::StringListOp(op) => explicit(op),
+            Self::IntListOp(op) => explicit(op),
+            Self::UIntListOp(op) => explicit(op),
+            Self::Int64ListOp(op) => explicit(op),
+            Self::UInt64ListOp(op) => explicit(op),
+            Self::UnregisteredListOp(op) => explicit(op),
+        }
+    }
+
     /// Returns `true` for the list-op variants.
     ///
     /// Reference and payload list ops are composition arcs and live in
@@ -801,6 +927,24 @@ impl FieldValue {
     #[must_use]
     pub fn is_list_op(&self) -> bool {
         !matches!(self, Self::Value(_))
+    }
+}
+
+/// Formats a plain value as [`Value`]'s `Display` does, and a list op as
+/// its kind and items (`int list op ListOp { .. }`), for diagnostics.
+impl fmt::Display for FieldValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Value(value) => write!(f, "{value}"),
+            Self::TokenListOp(op) => write!(f, "token list op {op:?}"),
+            Self::PathListOp(op) => write!(f, "path list op {op:?}"),
+            Self::StringListOp(op) => write!(f, "string list op {op:?}"),
+            Self::IntListOp(op) => write!(f, "int list op {op:?}"),
+            Self::UIntListOp(op) => write!(f, "uint list op {op:?}"),
+            Self::Int64ListOp(op) => write!(f, "int64 list op {op:?}"),
+            Self::UInt64ListOp(op) => write!(f, "uint64 list op {op:?}"),
+            Self::UnregisteredListOp(op) => write!(f, "unregistered list op {op:?}"),
+        }
     }
 }
 
@@ -1237,7 +1381,7 @@ pub struct Reference {
     /// Time offset applied across this reference boundary (§12.3.2.1).
     pub layer_offset: LayerOffset,
     /// Authored reference custom data (AOUSD Core §16.2.17.5). Payloads have none.
-    pub custom_data: Vec<(Arc<str>, Value)>,
+    pub custom_data: Vec<(Arc<str>, FieldValue)>,
     /// Whether the importer left `asset` for composition to resolve,
     /// relative to `layer` (see [`Reference::deferred`]).
     pub(crate) deferred: bool,
@@ -1379,7 +1523,7 @@ impl Reference {
     }
 
     /// Sets the authored custom data, preserving it through unresolved arcs.
-    pub fn with_custom_data(mut self, custom_data: Vec<(Arc<str>, Value)>) -> Self {
+    pub fn with_custom_data(mut self, custom_data: Vec<(Arc<str>, FieldValue)>) -> Self {
         self.custom_data = custom_data;
         self
     }
@@ -5204,7 +5348,7 @@ mod tests {
         // Rewriting the source keeps the target, offset and custom data.
         let localized =
             Reference::deferred(scene, "./plant.usda", ReferenceTarget::DefaultPrim, at(2.0))
-                .with_custom_data(vec![("note".into(), Value::Bool(true))])
+                .with_custom_data(vec![("note".into(), Value::Bool(true).into())])
                 .with_source(ReferenceSource::Layer {
                     layer: rock,
                     asset: Some("plant.usda"),
@@ -5217,8 +5361,8 @@ mod tests {
     use alloc::sync::Arc;
     use alloc::vec;
 
-    fn entry(key: &str, val: Value) -> (Arc<str>, Value) {
-        (Arc::from(key), val)
+    fn entry(key: &str, val: Value) -> (Arc<str>, FieldValue) {
+        (Arc::from(key), val.into())
     }
 
     /// `Layer::insert_prims` places specs as `Layer::insert_prim` does each,
@@ -5618,6 +5762,45 @@ mod tests {
         );
     }
 
+    /// List ops of one kind at a key compose, as `VtDictionaryOverRecursive`
+    /// composes them; a chain resolves each to the explicit list op of what
+    /// it gives an empty list, as `MetadataValueComposer::Finalize` does.
+    #[test]
+    fn dictionary_list_ops_compose_and_resolve() {
+        let op = |key: &str, op: ListOp<i32>| (Arc::from(key), FieldValue::from(op));
+        let stronger = vec![
+            op("a", ListOp::default().with_prepended(vec![1])),
+            op("b", ListOp::default().with_deleted(vec![2])),
+            entry("c", Value::Int(3)),
+        ];
+        let weaker = vec![
+            op("a", ListOp::default().with_appended(vec![9])),
+            entry("b", Value::Int(4)),
+            op("c", ListOp::default().with_appended(vec![5])),
+        ];
+        assert_eq!(
+            combine_dictionaries(&stronger, &weaker),
+            vec![
+                op(
+                    "a",
+                    ListOp::default()
+                        .with_prepended(vec![1])
+                        .with_appended(vec![9])
+                ),
+                op("b", ListOp::default().with_deleted(vec![2])),
+                entry("c", Value::Int(3)),
+            ]
+        );
+        assert_eq!(
+            combine_dictionary_chain([&stronger, &weaker]),
+            vec![
+                op("a", ListOp::explicit(vec![1, 9])),
+                op("b", ListOp::explicit(Vec::new())),
+                entry("c", Value::Int(3)),
+            ]
+        );
+    }
+
     #[test]
     fn combine_nested_dictionaries_recurse() {
         let stronger = vec![entry(
@@ -5672,7 +5855,7 @@ mod tests {
 
     #[test]
     fn combine_empty_stronger() {
-        let stronger: Vec<(Arc<str>, Value)> = vec![];
+        let stronger: Vec<(Arc<str>, FieldValue)> = vec![];
         let weaker = vec![entry("a", Value::Int(1))];
         let result = combine_dictionaries(&stronger, &weaker);
         assert_eq!(result, vec![entry("a", Value::Int(1))]);
@@ -5681,7 +5864,7 @@ mod tests {
     #[test]
     fn combine_empty_weaker() {
         let stronger = vec![entry("a", Value::Int(1))];
-        let weaker: Vec<(Arc<str>, Value)> = vec![];
+        let weaker: Vec<(Arc<str>, FieldValue)> = vec![];
         let result = combine_dictionaries(&stronger, &weaker);
         assert_eq!(result, vec![entry("a", Value::Int(1))]);
     }
@@ -5704,7 +5887,7 @@ mod tests {
 
     #[test]
     fn combine_chain_empty_yields_default() {
-        let result = combine_dictionary_chain(Vec::<Vec<(Arc<str>, Value)>>::new());
+        let result = combine_dictionary_chain(Vec::<Vec<(Arc<str>, FieldValue)>>::new());
         assert!(result.is_empty());
     }
 

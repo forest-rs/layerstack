@@ -211,7 +211,9 @@ fn text_arrays_round_trip_through_usda_and_usdc() {
         panic!("customData");
     };
     assert!(
-        entries.iter().all(|(_, value)| native_text(value)),
+        entries
+            .iter()
+            .all(|(_, value)| value.as_value().is_some_and(native_text)),
         "{entries:?}"
     );
 
@@ -269,6 +271,9 @@ fn text_arrays_round_trip_through_usda_and_usdc() {
         let entries = sorted(custom(layer));
         assert_eq!(entries, sorted(notes.clone()));
         for ((_, a), (_, b)) in entries.iter().zip(&sorted(notes.clone())) {
+            let (Some(a), Some(b)) = (a.as_value(), b.as_value()) else {
+                panic!("{a:?} {b:?}");
+            };
             assert!(a.same_representation(b), "{a:?} {b:?}");
         }
     }

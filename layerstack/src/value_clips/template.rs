@@ -1,7 +1,7 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use super::{Arc, Value, Vec, get};
+use super::{Arc, FieldValue, Value, Vec, get};
 use alloc::{format, string::String};
 
 pub(super) struct Expansion {
@@ -10,7 +10,7 @@ pub(super) struct Expansion {
     pub(super) front: Option<f64>,
     pub(super) back: Option<f64>,
 }
-fn number(dictionary: &[(Arc<str>, Value)], field: &str) -> Result<f64, ()> {
+fn number(dictionary: &[(Arc<str>, FieldValue)], field: &str) -> Result<f64, ()> {
     match get(dictionary, field) {
         Some(Value::Double(v)) if v.is_finite() => Ok(*v),
         _ => Err(()),
@@ -19,7 +19,10 @@ fn number(dictionary: &[(Arc<str>, Value)], field: &str) -> Result<f64, ()> {
 /// Bounded pure filename enumeration; host availability later compacts the
 /// schedule. Native `clipSetDefinition.cpp::_DeriveClipInfo` accumulates in
 /// 1/10000 units before formatting, and uses truncation for the integer group.
-pub(super) fn expand(dictionary: &[(Arc<str>, Value)], pattern: &str) -> Result<Expansion, ()> {
+pub(super) fn expand(
+    dictionary: &[(Arc<str>, FieldValue)],
+    pattern: &str,
+) -> Result<Expansion, ()> {
     let start = number(dictionary, "templateStartTime")?;
     let end = number(dictionary, "templateEndTime")?;
     let stride = number(dictionary, "templateStride")?;
@@ -102,11 +105,11 @@ mod tests {
     use super::*;
     use alloc::vec;
 
-    fn metadata(start: f64, end: f64, stride: f64) -> Vec<(Arc<str>, Value)> {
+    fn metadata(start: f64, end: f64, stride: f64) -> Vec<(Arc<str>, FieldValue)> {
         vec![
-            ("templateStartTime".into(), Value::Double(start)),
-            ("templateEndTime".into(), Value::Double(end)),
-            ("templateStride".into(), Value::Double(stride)),
+            ("templateStartTime".into(), Value::Double(start).into()),
+            ("templateEndTime".into(), Value::Double(end).into()),
+            ("templateStride".into(), Value::Double(stride).into()),
         ]
     }
 
@@ -140,13 +143,13 @@ mod tests {
     #[test]
     fn explicitly_authored_zero_offset_adds_endpoint_knots() {
         let mut dictionary = metadata(1., 2., 1.);
-        dictionary.push(("templateActiveOffset".into(), Value::Double(0.)));
+        dictionary.push(("templateActiveOffset".into(), Value::Double(0.).into()));
         let result = expand(&dictionary, "clip.##.usd").unwrap();
         assert_eq!(
             (result.front, result.back, result.active_offset),
             (Some(1.), Some(2.), 0.)
         );
-        dictionary.last_mut().unwrap().1 = Value::Double(-0.5);
+        dictionary.last_mut().unwrap().1 = Value::Double(-0.5).into();
         let result = expand(&dictionary, "clip.##.usd").unwrap();
         assert_eq!(
             (result.front, result.back, result.active_offset),
@@ -174,7 +177,7 @@ mod tests {
             assert!(expand(&dictionary, "clip.#.usd").is_err());
         }
         let mut dictionary = metadata(0., 1., 1.);
-        dictionary.push(("templateActiveOffset".into(), Value::Double(2.)));
+        dictionary.push(("templateActiveOffset".into(), Value::Double(2.).into()));
         assert!(expand(&dictionary, "clip.#.usd").is_err());
     }
 }

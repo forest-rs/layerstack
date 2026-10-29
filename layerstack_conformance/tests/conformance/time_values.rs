@@ -359,14 +359,16 @@ fn oracle() -> Option<Json> {
 }
 
 /// A resolved dictionary as [`ORACLE`] renders one.
-fn dictionary(entries: &[(Arc<str>, Value)], store: &InMemoryStore) -> Json {
+fn dictionary(entries: &[(Arc<str>, layerstack::FieldValue)], store: &InMemoryStore) -> Json {
     Json::Object(
         entries
             .iter()
             .map(|(key, value)| {
                 let value = match value {
-                    Value::Dictionary(inner) => dictionary(inner, store),
-                    value => layer_json::value(value, store),
+                    layerstack::FieldValue::Value(Value::Dictionary(inner)) => {
+                        dictionary(inner, store)
+                    }
+                    value => layer_json::value(value.as_value().expect("a plain entry"), store),
                 };
                 ((**key).to_owned(), value)
             })

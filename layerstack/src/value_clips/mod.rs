@@ -208,7 +208,7 @@ struct Definition {
     /// layer [`Self::offset`] belongs to (OpenUSD 26.11 `timesOffset`).
     times_offset: Option<LayerOffset>,
     /// The composed clip metadata, `active` and `times` in stage time.
-    dictionary: Vec<(Arc<str>, Value)>,
+    dictionary: Vec<(Arc<str>, FieldValue)>,
     order: usize,
     sources: Vec<(LayerId, PathId)>,
 }
@@ -1203,11 +1203,11 @@ fn auto_manifest_declaration(spec: &PropertySpec, samples: bool) -> PropertySpec
     };
     declaration
 }
-fn get<'a>(dictionary: &'a [(Arc<str>, Value)], name: &str) -> Option<&'a Value> {
+fn get<'a>(dictionary: &'a [(Arc<str>, FieldValue)], name: &str) -> Option<&'a Value> {
     dictionary
         .iter()
         .find(|(n, _)| &**n == name)
-        .map(|(_, v)| v)
+        .and_then(|(_, v)| v.as_value())
 }
 fn assets(value: Option<&Value>) -> Option<Vec<Arc<str>>> {
     value?
@@ -1250,11 +1250,17 @@ fn map_pairs(value: &Value, map: impl Fn(f64) -> f64) -> Option<Value> {
         None,
     ))
 }
-fn over(strong: &[(Arc<str>, Value)], weak: &[(Arc<str>, Value)]) -> Vec<(Arc<str>, Value)> {
+fn over(
+    strong: &[(Arc<str>, FieldValue)],
+    weak: &[(Arc<str>, FieldValue)],
+) -> Vec<(Arc<str>, FieldValue)> {
     let mut result: BTreeMap<_, _> = weak.iter().cloned().collect();
     for (name, value) in strong {
         let value = match (value, result.get(name)) {
-            (Value::Dictionary(s), Some(Value::Dictionary(w))) => Value::Dictionary(over(s, w)),
+            (
+                FieldValue::Value(Value::Dictionary(s)),
+                Some(FieldValue::Value(Value::Dictionary(w))),
+            ) => FieldValue::Value(Value::Dictionary(over(s, w))),
             _ => value.clone(),
         };
         result.insert(name.clone(), value);
@@ -1307,7 +1313,7 @@ fn definitions(
             };
             let mut added = Vec::new();
             for (name, value) in dictionary {
-                let Value::Dictionary(value) = value else {
+                let FieldValue::Value(Value::Dictionary(value)) = value else {
                     issues.push(ClipIssue {
                         owner,
                         set_name: name.clone(),
@@ -1390,6 +1396,7 @@ fn definitions(
                     definition.times_offset = Some(times);
                     for (field, value) in &mut definition.dictionary {
                         if &**field == "times"
+                            && let FieldValue::Value(value) = value
                             && let Some(mapped) =
                                 map_pairs(value, |time| reanchor(offset, times, time))
                         {
@@ -1421,6 +1428,7 @@ fn definitions(
             let offset = definition.offset;
             for (field, value) in &mut definition.dictionary {
                 if (&**field == "active" || &**field == "times")
+                    && let FieldValue::Value(value) = value
                     && let Some(mapped) = map_pairs(value, |time| external(offset, time))
                 {
                     *value = mapped;
@@ -1499,15 +1507,16 @@ mod tests {
         let metadata = Value::Dictionary(vec![(
             "default".into(),
             Value::Dictionary(vec![
-                ("primPath".into(), Value::String("/Clip".into())),
+                ("primPath".into(), Value::String("/Clip".into()).into()),
                 (
                     "templateAssetPath".into(),
-                    Value::String("clip.#.usda".into()),
+                    Value::String("clip.#.usda".into()).into(),
                 ),
-                ("templateStartTime".into(), Value::Double(0.)),
-                ("templateEndTime".into(), Value::Double(2.)),
-                ("templateStride".into(), Value::Double(1.)),
-            ]),
+                ("templateStartTime".into(), Value::Double(0.).into()),
+                ("templateEndTime".into(), Value::Double(2.).into()),
+                ("templateStride".into(), Value::Double(1.).into()),
+            ])
+            .into(),
         )]);
         let mut root = Layer::new(LayerId(1));
         root.prims.insert(

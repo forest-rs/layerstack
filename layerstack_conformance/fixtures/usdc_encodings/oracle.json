@@ -25,15 +25,55 @@
    "open_text": {
     "accepted": false,
     "errors": [
-     "Unrecognized value typename 'a' for dictionary at 'a = SdfIntListOp(Prepended Items: [1])' in </P>",
-     ":5:10: Unrecognized value typename 'a' for dictionary at 'a = SdfIntListOp(Prepended Items: [1])' in </P>"
+     "Unrecognized value typename 'layerOps' for dictionary at 'layerOps = SdfUIntListOp(Appended Items: [7])' in </>",
+     ":4:10: Unrecognized value typename 'layerOps' for dictionary at 'layerOps = SdfUIntListOp(Appended Items: [7])' in </>"
     ]
    },
    "open_usdc": {
     "accepted": true,
     "errors": [],
     "same_text": true,
-    "text": "#usda 1.0\n\ndef \"P\" (\n    customData = {\n         a = SdfIntListOp(Prepended Items: [1])\n         c = SdfTokenListOp(Appended Items: [t])\n        dictionary d = {\n             x = SdfStringListOp(Explicit Items: [s])\n            string y = \"kept\"\n        }\n        int e = 1\n    }\n)\n{\n    float v (\n        customData = {\n             ops = SdfInt64ListOp(Deleted Items: [2])\n        }\n    )\n}\n\n"
+    "text": "#usda 1.0\n(\n    customLayerData = {\n         layerOps = SdfUIntListOp(Appended Items: [7])\n    }\n)\n\ndef \"P\" (\n    customData = {\n         a = SdfIntListOp(Prepended Items: [1])\n         c = SdfTokenListOp(Appended Items: [t])\n        dictionary d = {\n             x = SdfStringListOp(Explicit Items: [s])\n            string y = \"kept\"\n        }\n        int e = 1\n         u = SdfUInt64ListOp(Deleted Items: [4], Prepended Items: [3])\n    }\n)\n{\n    float v (\n        customData = {\n             ops = SdfInt64ListOp(Deleted Items: [2])\n        }\n    )\n}\n\n"
+   }
+  },
+  "dictionary_list_ops_weak": {
+   "export_usdc": {
+    "accepted": true,
+    "errors": []
+   },
+   "metadata_types": {},
+   "open_text": {
+    "accepted": false,
+    "errors": [
+     "Unrecognized value typename 'a' for dictionary at 'a = SdfIntListOp(Appended Items: [9])' in </P>",
+     ":5:10: Unrecognized value typename 'a' for dictionary at 'a = SdfIntListOp(Appended Items: [9])' in </P>"
+    ]
+   },
+   "open_usdc": {
+    "accepted": true,
+    "errors": [],
+    "same_text": true,
+    "text": "#usda 1.0\n\nover \"P\" (\n    customData = {\n         a = SdfIntListOp(Appended Items: [9])\n        dictionary d = {\n            string x = \"weak\"\n             z = SdfTokenListOp(Prepended Items: [w])\n        }\n         e = SdfStringListOp(Appended Items: [under])\n         w = SdfUIntListOp(Explicit Items: [5])\n    }\n)\n{\n    float v (\n        customData = {\n            dictionary ops = {\n                int nested = 1\n            }\n             weak = SdfIntListOp(Deleted Items: [8])\n        }\n    )\n}\n\n"
+   }
+  },
+  "dictionary_unheld_entries": {
+   "export_usdc": {
+    "accepted": true,
+    "errors": []
+   },
+   "metadata_types": {},
+   "open_text": {
+    "accepted": false,
+    "errors": [
+     "Unrecognized value typename 'paths' for dictionary at 'paths = SdfPathListOp(Appended Items: [/A])' in </P>",
+     ":6:10: Unrecognized value typename 'paths' for dictionary at 'paths = SdfPathListOp(Appended Items: [/A])' in </P>"
+    ]
+   },
+   "open_usdc": {
+    "accepted": true,
+    "errors": [],
+    "same_text": true,
+    "text": "#usda 1.0\n\ndef \"P\" (\n    customData = {\n        int kept = 1\n         paths = SdfPathListOp(Appended Items: [/A])\n         payloads = SdfPayloadListOp(Appended Items: [SdfPayload(a.usda, , SdfLayerOffset(0, 1))])\n         variability = SdfVariabilityUniform\n    }\n)\n{\n}\n\n"
    }
   },
   "display_unit": {
@@ -199,6 +239,365 @@
     "errors": [],
     "same_text": true,
     "text": "#usda 1.0\n\nover \"Q\"\n{\n    over \"R\"\n    {\n    }\n\n    def \"S\"\n    {\n    }\n}\n\n"
+   }
+  }
+ },
+ "dictionary_composition": {
+  "composed": {
+   "/P": {
+    "a": {
+     "explicitItems": [
+      1,
+      9
+     ],
+     "listOp": "IntListOp"
+    },
+    "c": {
+     "explicitItems": [
+      "t"
+     ],
+     "listOp": "TokenListOp"
+    },
+    "d": {
+     "x": {
+      "explicitItems": [
+       "s"
+      ],
+      "listOp": "StringListOp"
+     },
+     "y": "kept",
+     "z": {
+      "explicitItems": [
+       "w"
+      ],
+      "listOp": "TokenListOp"
+     }
+    },
+    "e": 1,
+    "u": {
+     "explicitItems": [
+      3
+     ],
+     "listOp": "UInt64ListOp"
+    },
+    "w": {
+     "explicitItems": [
+      5
+     ],
+     "listOp": "UIntListOp"
+    }
+   },
+   "/P.v": {
+    "ops": {
+     "explicitItems": [],
+     "listOp": "Int64ListOp"
+    },
+    "weak": {
+     "explicitItems": [],
+     "listOp": "IntListOp"
+    }
+   }
+  },
+  "composed_by_key": {
+   "a": {
+    "explicitItems": [
+     1,
+     9
+    ],
+    "listOp": "IntListOp"
+   },
+   "d:x": "weak",
+   "d:z": {
+    "explicitItems": [
+     "w"
+    ],
+    "listOp": "TokenListOp"
+   },
+   "e": 1
+  },
+  "flattened_layer_stack": {
+   "/ customLayerData": {
+    "layerOps": {
+     "appendedItems": [
+      7
+     ],
+     "listOp": "UIntListOp"
+    }
+   },
+   "/P customData": {
+    "a": {
+     "appendedItems": [
+      9
+     ],
+     "listOp": "IntListOp",
+     "prependedItems": [
+      1
+     ]
+    },
+    "c": {
+     "appendedItems": [
+      "t"
+     ],
+     "listOp": "TokenListOp"
+    },
+    "d": {
+     "x": {
+      "explicitItems": [
+       "s"
+      ],
+      "listOp": "StringListOp"
+     },
+     "y": "kept",
+     "z": {
+      "listOp": "TokenListOp",
+      "prependedItems": [
+       "w"
+      ]
+     }
+    },
+    "e": 1,
+    "u": {
+     "deletedItems": [
+      4
+     ],
+     "listOp": "UInt64ListOp",
+     "prependedItems": [
+      3
+     ]
+    },
+    "w": {
+     "explicitItems": [
+      5
+     ],
+     "listOp": "UIntListOp"
+    }
+   },
+   "/P.v customData": {
+    "ops": {
+     "deletedItems": [
+      2
+     ],
+     "listOp": "Int64ListOp"
+    },
+    "weak": {
+     "deletedItems": [
+      8
+     ],
+     "listOp": "IntListOp"
+    }
+   }
+  },
+  "flattened_stage": {
+   "/P customData": {
+    "a": {
+     "explicitItems": [
+      1,
+      9
+     ],
+     "listOp": "IntListOp"
+    },
+    "c": {
+     "explicitItems": [
+      "t"
+     ],
+     "listOp": "TokenListOp"
+    },
+    "d": {
+     "x": {
+      "explicitItems": [
+       "s"
+      ],
+      "listOp": "StringListOp"
+     },
+     "y": "kept",
+     "z": {
+      "explicitItems": [
+       "w"
+      ],
+      "listOp": "TokenListOp"
+     }
+    },
+    "e": 1,
+    "u": {
+     "explicitItems": [
+      3
+     ],
+     "listOp": "UInt64ListOp"
+    },
+    "w": {
+     "explicitItems": [
+      5
+     ],
+     "listOp": "UIntListOp"
+    }
+   },
+   "/P.v customData": {
+    "ops": {
+     "explicitItems": [],
+     "listOp": "Int64ListOp"
+    },
+    "weak": {
+     "explicitItems": [],
+     "listOp": "IntListOp"
+    }
+   }
+  },
+  "read": {
+   "dictionary_list_ops": {
+    "/ customLayerData": {
+     "layerOps": {
+      "appendedItems": [
+       7
+      ],
+      "listOp": "UIntListOp"
+     }
+    },
+    "/P customData": {
+     "a": {
+      "listOp": "IntListOp",
+      "prependedItems": [
+       1
+      ]
+     },
+     "c": {
+      "appendedItems": [
+       "t"
+      ],
+      "listOp": "TokenListOp"
+     },
+     "d": {
+      "x": {
+       "explicitItems": [
+        "s"
+       ],
+       "listOp": "StringListOp"
+      },
+      "y": "kept"
+     },
+     "e": 1,
+     "u": {
+      "deletedItems": [
+       4
+      ],
+      "listOp": "UInt64ListOp",
+      "prependedItems": [
+       3
+      ]
+     }
+    },
+    "/P.v customData": {
+     "ops": {
+      "deletedItems": [
+       2
+      ],
+      "listOp": "Int64ListOp"
+     }
+    }
+   },
+   "dictionary_list_ops_weak": {
+    "/P customData": {
+     "a": {
+      "appendedItems": [
+       9
+      ],
+      "listOp": "IntListOp"
+     },
+     "d": {
+      "x": "weak",
+      "z": {
+       "listOp": "TokenListOp",
+       "prependedItems": [
+        "w"
+       ]
+      }
+     },
+     "e": {
+      "appendedItems": [
+       "under"
+      ],
+      "listOp": "StringListOp"
+     },
+     "w": {
+      "explicitItems": [
+       5
+      ],
+      "listOp": "UIntListOp"
+     }
+    },
+    "/P.v customData": {
+     "ops": {
+      "nested": 1
+     },
+     "weak": {
+      "deletedItems": [
+       8
+      ],
+      "listOp": "IntListOp"
+     }
+    }
+   }
+  },
+  "save_again": {
+   "accepted": true,
+   "entries": {
+    "/ customLayerData": {
+     "layerOps": {
+      "appendedItems": [
+       7
+      ],
+      "listOp": "UIntListOp"
+     }
+    },
+    "/P customData": {
+     "a": {
+      "listOp": "IntListOp",
+      "prependedItems": [
+       1
+      ]
+     },
+     "c": {
+      "appendedItems": [
+       "t"
+      ],
+      "listOp": "TokenListOp"
+     },
+     "d": {
+      "x": {
+       "explicitItems": [
+        "s"
+       ],
+       "listOp": "StringListOp"
+      },
+      "y": "kept"
+     },
+     "e": 1,
+     "u": {
+      "deletedItems": [
+       4
+      ],
+      "listOp": "UInt64ListOp",
+      "prependedItems": [
+       3
+      ]
+     }
+    },
+    "/P.v customData": {
+     "ops": {
+      "deletedItems": [
+       2
+      ],
+      "listOp": "Int64ListOp"
+     }
+    }
+   },
+   "errors": []
+  },
+  "stage_metadata": {
+   "layerOps": {
+    "explicitItems": [
+     7
+    ],
+    "listOp": "UIntListOp"
    }
   }
  },

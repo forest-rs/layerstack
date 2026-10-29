@@ -140,10 +140,10 @@ fn composed_metadata_and_layer_defaults_match_cpp() {
             .with_metadata(
                 sdr,
                 Value::Dictionary(vec![
-                    ("weak".into(), Value::string("yes")),
+                    ("weak".into(), Value::string("yes").into()),
                     (
                         "nested".into(),
-                        Value::Dictionary(vec![("left".into(), Value::Int(1))]),
+                        Value::Dictionary(vec![("left".into(), Value::Int(1).into())]).into(),
                     ),
                 ]),
             ),
@@ -160,10 +160,10 @@ fn composed_metadata_and_layer_defaults_match_cpp() {
     Arc::make_mut(&mut spec.properties[0].spec).set_metadata(
         sdr,
         Value::Dictionary(vec![
-            ("strong".into(), Value::string("yes")),
+            ("strong".into(), Value::string("yes").into()),
             (
                 "nested".into(),
-                Value::Dictionary(vec![("right".into(), Value::Int(2))]),
+                Value::Dictionary(vec![("right".into(), Value::Int(2).into())]).into(),
             ),
         ]),
     );
@@ -205,7 +205,12 @@ fn composed_metadata_and_layer_defaults_match_cpp() {
             Value::Dictionary(entries) => serde_json::Value::Object(
                 entries
                     .iter()
-                    .map(|(key, value)| (key.to_string(), json(value)))
+                    .map(|(key, value)| {
+                        (
+                            key.to_string(),
+                            json(value.as_value().expect("a plain entry")),
+                        )
+                    })
                     .collect(),
             ),
             other => panic!("unexpected fixture value: {other:?}"),

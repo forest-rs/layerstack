@@ -664,7 +664,7 @@ fn collect_assets(
                 }
             }
             Value::Dictionary(v) => {
-                for (_, v) in v {
+                for v in v.iter().filter_map(|(_, v)| v.as_value()) {
                     visit(v, property, source, out);
                 }
             }

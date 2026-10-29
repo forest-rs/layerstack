@@ -1238,3 +1238,38 @@ fn deletes_reject_a_variant_edit_target() {
         NamespaceError::Unmappable
     );
 }
+
+/// A reparent that needs an over for its new parent in a weaker layer
+/// lists the over among its parent's children, as `SdfJustCreatePrimInLayer`
+/// does, so the layer's child lists name every prim spec it holds.
+#[test]
+fn reparenting_lists_the_overs_it_creates_in_their_parents() {
+    const WEAK: LayerId = LayerId(3);
+    let mut store = base();
+    let (root, a, child, b) = (
+        store.path("/"),
+        store.path("/A"),
+        store.path("/A/Child"),
+        store.path("/B"),
+    );
+    let [a_name, b_name, child_name] = ["A", "B", "Child"].map(|n| store.tokens.intern(n));
+    let mut weak = Layer::new(WEAK);
+    weak.insert_prim(root, PrimSpec::default().with_children(vec![a_name]));
+    weak.insert_prim(a, PrimSpec::over().with_children(vec![child_name]));
+    weak.insert_prim(child, PrimSpec::over());
+    store.insert_layer(weak);
+    store
+        .layer_mut(ROOT)
+        .unwrap()
+        .sublayers
+        .push(SublayerEntry::new(WEAK));
+    let mut live = LiveStage::compose(&mut store, ROOT, StageOptions::default());
+    let edit = prim_move(live.stage(), &mut store, "/A/Child", "/B/Child").unwrap();
+    let applied = live.apply(&mut store, edit.transaction()).unwrap();
+    let weak = &store.layers[&WEAK];
+    assert_eq!(weak.prims[&root].authored_children, [a_name, b_name]);
+    assert!(weak.prims[&a].authored_children.is_empty());
+    assert_eq!(weak.prims[&b].authored_children, [child_name]);
+    live.apply(&mut store, &applied.inverse).unwrap();
+    assert_eq!(store.layers[&WEAK].prims[&root].authored_children, [a_name]);
+}

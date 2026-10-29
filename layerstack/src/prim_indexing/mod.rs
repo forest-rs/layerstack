@@ -1533,6 +1533,20 @@ fn copy_prototype(
         index.graph.reroot_sites(ctx.store.paths(), moves);
         reroot_opinion_paths(ctx.store, &mut index, from, to);
         let paths = ctx.store.paths();
+        // The copy's arcs are those of its re-rooted graph, as composing it
+        // records them (`record_dependencies`).
+        let record = out.records.get(&source).map(|record| {
+            debug_assert_eq!(
+                record.arcs,
+                out.prims[&source].graph.dependency_arcs(),
+                "a record's arcs are its graph's"
+            );
+            PrimDependencies {
+                layers: record.layers.clone(),
+                default_prim_layers: record.default_prim_layers.clone(),
+                arcs: index.graph.dependency_arcs(),
+            }
+        });
         out.prims.insert(target, index);
         out.reused_prim_indexes += 1;
         // A nested instance still waiting for its descendants gives them
@@ -1562,37 +1576,7 @@ fn copy_prototype(
         if let Some(layers) = out.used_layer_sites.get(&source).cloned() {
             out.used_layer_sites.insert(target, layers);
         }
-        if let Some(record) = out.records.get(&source).cloned() {
-            let record = PrimDependencies {
-                arcs: record
-                    .arcs
-                    .into_iter()
-                    .map(|(site, kind, layer)| {
-                        let moved = moves
-                            .iter()
-                            .filter(|m| m.layer_stack.root == layer)
-                            .map(|m| {
-                                let (from, to) = (m.from.prim_path(), m.to.prim_path());
-                                (paths.resolve(from).depth(), from, to)
-                            })
-                            .filter(|(_, from, _)| {
-                                paths
-                                    .resolve(site)
-                                    .segments()
-                                    .starts_with(paths.resolve(*from).segments())
-                            })
-                            .max_by_key(|(depth, ..)| *depth);
-                        let site = match moved {
-                            Some((_, from, to)) => {
-                                paths.intern_reparented(site, from, to).unwrap_or(site)
-                            }
-                            None => site,
-                        };
-                        (site, kind, layer)
-                    })
-                    .collect(),
-                ..record
-            };
+        if let Some(record) = record {
             out.records.insert(target, record);
         }
     }

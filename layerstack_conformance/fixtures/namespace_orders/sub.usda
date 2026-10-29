@@ -1,0 +1,17 @@
+#usda 1.0
+
+# A weaker opinion on `/P` with an order of its own.
+over "P"
+{
+    reorder nameChildren = ["B", "A"]
+    reorder properties = ["x", "y"]
+    int y = 5
+
+    over "A"
+    {
+    }
+
+    over "B"
+    {
+    }
+}

@@ -1,0 +1,23 @@
+#usda 1.0
+
+def "V" (
+    variants = {
+        string v = "x"
+    }
+    prepend variantSets = "v"
+)
+{
+    variantSet "v" = {
+        "x" {
+            reorder nameChildren = ["G", "F"]
+            def "F"
+            {
+            }
+
+            def "G"
+            {
+            }
+
+        }
+    }
+}

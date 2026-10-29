@@ -135,6 +135,12 @@ impl NamespaceEdit {
     /// uses relocates. A mapped source-asset target edits that asset directly
     /// and requires its destination parent to have an authored spec.
     ///
+    /// Only child and property lists change: every spec's `primOrder` and
+    /// `propertyOrder` stay as authored, so the moved object's old name
+    /// stays listed and its new one is not, as `UsdNamespaceEditor` leaves
+    /// them (unlike `SdfPrimSpec::SetName`, which renames the parent's
+    /// `primOrder` entry).
+    ///
     /// ```
     /// use layerstack::{EditTarget, InMemoryStore, Layer, LayerId, LiveStage,
     ///     NamespaceEdit, PrimSpec, StageOptions, TargetPath};
@@ -850,14 +856,15 @@ pub(super) fn move_specs(
         .prims
         .get(&source_parent)
         .and_then(|s| s.authored_children.iter().position(|n| *n == old_name));
+    // Only the child lists change: the parents' `primOrder` keeps the old
+    // name and lists no new one, as `SdfLayer::Apply` moves a child
+    // (`Sdf_ChildrenUtils::MoveChildForBatchNamespaceEdit`,
+    // `pxr/usd/sdf/childrenUtils.cpp`), which `UsdNamespaceEditor` applies
+    // to each layer (`_ApplyLayerSpecMove`, `pxr/usd/usd/namespaceEditor.cpp`).
+    // `SdfPrimSpec::SetName` alone renames the entry. AOUSD Core
+    // §7.6.2.4.5 (`primOrder`).
     if let Some(s) = layer.prims.get_mut(&source_parent) {
         s.authored_children.retain(|n| *n != old_name);
-        if let Some(order) = s
-            .authored_rare_mut()
-            .and_then(|rare| rare.prim_order.as_mut())
-        {
-            order.retain(|n| *n != old_name);
-        }
     }
     if let Some(s) = layer.prims.get_mut(&parent) {
         let index = if parent == source_parent {

@@ -1158,6 +1158,12 @@ fn family_role<P>(event: &FamilyEvent<P>) -> (&P, OpinionRole) {
         FamilyEvent::Ignored { provenance, .. } => {
             (provenance, OpinionRole::Ignored(IgnoreCause::Incompatible))
         }
+        // An event this mapping predates still names an opinion; being
+        // ignored as `Incompatible` is the least specific role.
+        _ => (
+            event.provenance(),
+            OpinionRole::Ignored(IgnoreCause::Incompatible),
+        ),
     }
 }
 
@@ -1174,6 +1180,9 @@ fn chain_role(event: &ResolutionEvent<usize>) -> (usize, OpinionRole) {
                 opinionated::OpinionKind::Set | opinionated::OpinionKind::Block => {
                     Contribution::Value
                 }
+                // A kind this mapping predates still contributed;
+                // `Value` is the least specific contribution.
+                _ => Contribution::Value,
             }),
         ),
         ResolutionEvent::StoppedByBlock { provenance } => (*provenance, OpinionRole::Block),
@@ -1191,6 +1200,12 @@ fn chain_role(event: &ResolutionEvent<usize>) -> (usize, OpinionRole) {
                 // `Incompatible` is the least specific cause.
                 _ => IgnoreCause::Incompatible,
             }),
+        ),
+        // An event this mapping predates still names an opinion; being
+        // ignored as `Incompatible` is the least specific role.
+        _ => (
+            *event.provenance(),
+            OpinionRole::Ignored(IgnoreCause::Incompatible),
         ),
     }
 }
@@ -1449,6 +1464,9 @@ impl<'s> Roles<'s> {
                     provenance,
                     key_path,
                 } => (provenance, key_path, |m| &mut m.overridden),
+                // An event this mapping predates has no list in a
+                // `DictionaryMerge` to record it in.
+                _ => continue,
             };
             if let Some(position) = provenance {
                 list(merges[position].get_or_insert_with(DictionaryMerge::default)).push(key_path);

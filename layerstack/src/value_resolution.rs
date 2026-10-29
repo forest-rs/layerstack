@@ -514,12 +514,7 @@ fn same_element_kind(a: &Value, b: &Value) -> bool {
 /// fold explanations list them. The recorder and the default-time
 /// explanation share it, and with it one sort.
 fn sort_events_by_opinion(events: &mut [FamilyEvent<ChainPos>]) {
-    sort::sort_by_key(events, |event| match event {
-        FamilyEvent::ContributedDense { provenance }
-        | FamilyEvent::ContributedSparse { provenance }
-        | FamilyEvent::Ignored { provenance, .. }
-        | FamilyEvent::StoppedByBlock { provenance } => provenance.opinion,
-    });
+    sort::sort_by_key(events, |event| event.provenance().opinion);
 }
 
 /// Actual storage kinds, not declaration names: role aliases share a kind.
@@ -3293,11 +3288,7 @@ mod tests {
                 }
                 for fold in &explained.folds {
                     for event in &fold.events {
-                        let (FamilyEvent::ContributedDense { provenance }
-                        | FamilyEvent::ContributedSparse { provenance }
-                        | FamilyEvent::StoppedByBlock { provenance }
-                        | FamilyEvent::Ignored { provenance, .. }) = event;
-                        assert!(provenance.opinion < opinions.len());
+                        assert!(event.provenance().opinion < opinions.len());
                     }
                 }
             }

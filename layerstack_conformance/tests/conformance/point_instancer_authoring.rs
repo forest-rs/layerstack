@@ -35,11 +35,7 @@ fn authored_id_sequence() -> (layerstack::InMemoryStore, layerstack::LiveStage) 
         .push(layerstack::SublayerEntry::new(LayerId(2)));
     root.prim_mut(path).unwrap().set_field(
         inactive,
-        FieldValue::Int64ListOp(Box::new(ListOp {
-            add: vec![30, 10],
-            delete: vec![20],
-            ..ListOp::default()
-        })),
+        FieldValue::Int64ListOp(Box::new(ListOp::added(vec![30, 10]).with_deleted(vec![20]))),
     );
     live.synchronize(&mut store);
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));

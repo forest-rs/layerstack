@@ -418,14 +418,15 @@ fn names_op(store: &InMemoryStore, value: &Json) -> ListOp<TokenId> {
                 .collect()
         })
     };
-    ListOp {
-        explicit: names("explicit"),
-        prepend: names("prepend").unwrap_or_default(),
-        append: names("append").unwrap_or_default(),
-        delete: names("delete").unwrap_or_default(),
-        add: names("add").unwrap_or_default(),
-        reorder: names("reorder").unwrap_or_default(),
-    }
+    // Interned in this order, so token ids follow it.
+    let explicit = names("explicit");
+    let mut op = ListOp::prepended(names("prepend").unwrap_or_default())
+        .with_appended(names("append").unwrap_or_default())
+        .with_deleted(names("delete").unwrap_or_default())
+        .with_added(names("add").unwrap_or_default())
+        .with_reordered(names("reorder").unwrap_or_default());
+    op.explicit = explicit;
+    op
 }
 
 /// The transaction making the step's call at `prim` through `target`.

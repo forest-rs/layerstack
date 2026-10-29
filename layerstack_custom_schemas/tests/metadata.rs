@@ -77,20 +77,10 @@ fn typed_setters_author_what_the_typed_getters_read_and_openusd_writes() {
         .unwrap()
         .set_meta_token_list(
             &mut edit,
-            ListOp {
-                prepend: vec!["a"],
-                delete: vec!["b"],
-                ..ListOp::default()
-            },
+            ListOp::prepended(vec!["a"]).with_deleted(vec!["b"]),
         )
         .unwrap()
-        .set_meta_int_list(
-            &mut edit,
-            ListOp {
-                append: vec![i32::MIN],
-                ..ListOp::default()
-            },
-        )
+        .set_meta_int_list(&mut edit, ListOp::appended(vec![i32::MIN]))
         .unwrap();
     PropertyMetadataEdit::of(handle, "r")
         .set_meta_token(&mut edit, "medium")

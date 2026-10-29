@@ -164,7 +164,11 @@ where
 ///
 /// Events name a `key_path`: the keys from the combined dictionary's root
 /// down to the entry, one per nesting level.
+///
+/// New events may be added in minor releases, so a `match` needs a
+/// fallback arm.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum DictionaryEvent<K, P> {
     /// The dictionary supplied the entry at `key_path`, which no stronger
     /// dictionary holds. A supplied nested dictionary is supplied whole.
@@ -189,6 +193,19 @@ pub enum DictionaryEvent<K, P> {
         /// Keys from the root to the overridden entry.
         key_path: Vec<K>,
     },
+}
+
+impl<K, P> DictionaryEvent<K, P> {
+    /// Provenance for the dictionary the event is about; every event names
+    /// one.
+    #[must_use]
+    pub const fn provenance(&self) -> &P {
+        match self {
+            Self::Supplied { provenance, .. }
+            | Self::Merged { provenance, .. }
+            | Self::Overridden { provenance, .. } => provenance,
+        }
+    }
 }
 
 /// A combined dictionary paired with the events that explain it.

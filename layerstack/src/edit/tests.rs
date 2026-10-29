@@ -1912,12 +1912,11 @@ fn targets_are_added_and_removed_one_at_a_time() {
         Some((
             PropertyKind::Relationship,
             true,
-            Some(ListOp {
-                prepend: vec![a, b],
-                append: vec![a],
-                delete: vec![c],
-                ..ListOp::default()
-            })
+            Some(
+                ListOp::prepended(vec![a, b])
+                    .with_appended(vec![a])
+                    .with_deleted(vec![c])
+            )
         )),
         "a relationship nothing declares is created custom"
     );
@@ -1949,10 +1948,7 @@ fn targets_are_added_and_removed_one_at_a_time() {
     let pebble = TargetPath::Prim(store.path("/Rock/Pebble"));
     assert_eq!(
         targets(&store, rock, shine).and_then(|(_, _, targets)| targets),
-        Some(ListOp {
-            delete: vec![pebble],
-            ..ListOp::default()
-        })
+        Some(ListOp::deleted(vec![pebble]))
     );
     let mut outside = Transaction::new();
     outside.add_target(
@@ -2006,14 +2002,11 @@ fn targets_map_through_the_edit_target() {
     let mut edit = Transaction::new();
     edit.set_targets(
         through_b.property(PropertyPath::new(rock_b, look)),
-        ListOp {
-            prepend: vec![
-                TargetPath::Prim(pebble_b),
-                TargetPath::Property(PropertyPath::new(rock_b, size)),
-            ],
-            delete: vec![TargetPath::Prim(rock_b)],
-            ..ListOp::default()
-        },
+        ListOp::prepended(vec![
+            TargetPath::Prim(pebble_b),
+            TargetPath::Property(PropertyPath::new(rock_b, size)),
+        ])
+        .with_deleted(vec![TargetPath::Prim(rock_b)]),
     )
     .set_targets(
         in_round.property(PropertyPath::new(rock_a, look)),
@@ -2028,14 +2021,13 @@ fn targets_map_through_the_edit_target() {
         .and_then(|entry| entry.spec.targets.clone());
     assert_eq!(
         authored,
-        Some(Box::new(ListOp {
-            prepend: vec![
+        Some(Box::new(
+            ListOp::prepended(vec![
                 TargetPath::Prim(pebble),
                 TargetPath::Property(PropertyPath::new(rock, size)),
-            ],
-            delete: vec![TargetPath::Prim(rock)],
-            ..ListOp::default()
-        }))
+            ])
+            .with_deleted(vec![TargetPath::Prim(rock)])
+        ))
     );
     let round = store.tokens.intern("round");
     let shape = store.tokens.intern("shape");

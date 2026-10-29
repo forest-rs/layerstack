@@ -883,10 +883,7 @@ def "A" (
     let target = TargetPath::parse("/A", &imported.tokens, &imported.paths).unwrap();
     imported.layer.prim_mut(a).unwrap().set_field(
         key,
-        FieldValue::PathListOp(Box::new(LayerListOp {
-            explicit: Some(vec![target]),
-            ..LayerListOp::default()
-        })),
+        FieldValue::PathListOp(Box::new(LayerListOp::explicit(vec![target]))),
     );
     assert_eq!(
         imported.save(),
@@ -1199,10 +1196,7 @@ fn keeps_interleaved_property_order() {
         PropertyEntry {
             name: y,
             spec: PropertySpec::relationship()
-                .with_targets(LayerListOp {
-                    explicit: Some(vec![target]),
-                    ..LayerListOp::default()
-                })
+                .with_targets(LayerListOp::explicit(vec![target]))
                 .into(),
         },
     );

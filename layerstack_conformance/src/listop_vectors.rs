@@ -35,14 +35,12 @@ pub struct ListOpData {
 
 impl ListOpData {
     pub fn to_listop(&self) -> layerstack::ListOp<u32> {
-        layerstack::ListOp {
-            explicit: self.explicit_items.clone(),
-            prepend: self.prepended_items.clone(),
-            append: self.appended_items.clone(),
-            delete: self.deleted_items.clone(),
-            add: Vec::new(),
-            reorder: self.ordered_items.clone(),
-        }
+        let mut op = layerstack::ListOp::prepended(self.prepended_items.clone())
+            .with_appended(self.appended_items.clone())
+            .with_deleted(self.deleted_items.clone())
+            .with_reordered(self.ordered_items.clone());
+        op.explicit.clone_from(&self.explicit_items);
+        op
     }
 
     pub fn expected_ordered_elements(&self) -> Vec<u32> {

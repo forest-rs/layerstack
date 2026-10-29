@@ -556,13 +556,7 @@ fn lower_one(
                     )
                 })?);
             }
-            txn.set_targets(
-                at,
-                ListOp {
-                    explicit: Some(list),
-                    ..ListOp::default()
-                },
-            );
+            txn.set_targets(at, ListOp::explicit(list));
         }
         EditInput::AddArc {
             payload,

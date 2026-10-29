@@ -184,11 +184,9 @@ fn registered_literals_use_declared_types_without_authoring_defaults() {
     );
     assert_eq!(
         field(&store, &prim.fields, "hostNames"),
-        &FieldValue::StringListOp(Box::new(layerstack::ListOp {
-            prepend: vec!["first".into()],
-            append: vec!["last".into()],
-            ..Default::default()
-        }))
+        &FieldValue::StringListOp(Box::new(
+            layerstack::ListOp::prepended(vec!["first".into()]).with_appended(vec!["last".into()])
+        ))
     );
     assert_eq!(
         field(&store, &prim.fields, "hostInts"),

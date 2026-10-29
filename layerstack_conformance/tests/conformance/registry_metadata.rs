@@ -645,15 +645,7 @@ fn sample(ty: &str, sample: &Json, tokens: &TokenInterner) -> FieldValue {
         op
     };
     fn map<T>(op: ListOp<Json>, item: impl Fn(&Json) -> T) -> Box<ListOp<T>> {
-        let all = |items: &[Json]| items.iter().map(&item).collect();
-        Box::new(ListOp {
-            explicit: op.explicit.as_deref().map(all),
-            prepend: all(&op.prepend),
-            append: all(&op.append),
-            delete: all(&op.delete),
-            add: all(&op.add),
-            reorder: all(&op.reorder),
-        })
+        Box::new(op.map_lists(|items| items.iter().map(&item).collect()))
     }
     FieldValue::Value(match ty {
         "bool" => Value::Bool(sample.as_bool().unwrap()),

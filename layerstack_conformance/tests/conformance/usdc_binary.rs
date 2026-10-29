@@ -427,10 +427,7 @@ fn gen_listops_parses() {
     assert_eq!(
         root.field(api),
         Some(&layerstack::FieldValue::TokenListOp(Box::new(
-            layerstack::ListOp {
-                explicit: Some(vec![binding]),
-                ..layerstack::ListOp::default()
-            }
+            layerstack::ListOp::explicit(vec![binding])
         )))
     );
     assert_eq!(root.payloads.append.len(), 1, "{:?}", root.payloads);

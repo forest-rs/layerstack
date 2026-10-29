@@ -29,8 +29,9 @@
 //!   scans make at most 1,024 comparisons in all, and hashes beyond that.
 //!   Without the feature every lookup scans: results are the same, but an
 //!   edit naming `k` items over a list of `n` items takes `O(n * k)` time,
-//!   quadratic for long lists. The API is the same either way; list items
-//!   need `Hash` in both.
+//!   quadratic for long lists. The API is the same either way: list items
+//!   need `Hash` with or without the feature, so turning it on or off never
+//!   changes which item types compile.
 //!
 //! # Concepts
 //!
@@ -252,7 +253,27 @@ impl<A, F> OpinionKey<A, F> {
 /// [`ListOp::added`] or [`ListOp::reordered`], adding the others with the
 /// `with_` builders; read
 /// every item it names with [`ListOp::items`].
+///
+/// New kinds of edit may be added in minor releases, so the struct is
+/// `#[non_exhaustive]`: its fields stay public to read and assign, but it
+/// is built with [`ListOp::new`] and the constructors and builders above
+/// rather than a struct literal, and a pattern that destructures it needs
+/// `..`.
+///
+/// ```
+/// use opinionated::ListOp;
+/// let op = ListOp::prepended(vec![1, 2])
+///     .with_appended(vec![5])
+///     .with_deleted(vec![3]);
+/// assert_eq!(op.apply_to(&[3, 4]), vec![1, 2, 4, 5]);
+///
+/// // An explicit list that may be absent is assigned to the field.
+/// let mut op = ListOp::deleted(vec![1]);
+/// op.explicit = Some(vec![2]);
+/// assert_eq!(op.apply_to(&[1]), vec![2]);
+/// ```
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub struct ListOp<T> {
     /// Optional explicit list replacement. Application keeps only the first
     /// occurrence of each item. When present, the other edits are spurious.
@@ -370,6 +391,14 @@ impl<T> ListOp<T> {
             add: Vec::new(),
             reorder: items,
         }
+    }
+
+    /// This operation with `items` as its explicit list, which replaces
+    /// the whole list and makes the other edits spurious.
+    #[must_use]
+    pub fn with_explicit(mut self, items: Vec<T>) -> Self {
+        self.explicit = Some(items);
+        self
     }
 
     /// This operation with `items` as the items it moves or inserts at the
@@ -729,7 +758,11 @@ pub enum OpinionOp<V, I = V, K = String> {
 }
 
 /// The operation family authored by an [`OpinionOp`].
+///
+/// New kinds may be added in minor releases, so a `match` needs a
+/// fallback arm.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum OpinionKind {
     /// A strongest-wins scalar set.
     Set,
@@ -847,7 +880,11 @@ pub struct ResolutionReport<V, I = V, K = String, P = ()> {
 }
 
 /// One event in a [`ResolutionReport`].
+///
+/// New events may be added in minor releases, so a `match` needs a
+/// fallback arm.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum ResolutionEvent<P = ()> {
     /// An opinion contributed to the resolved value.
     Contributed {
@@ -868,6 +905,19 @@ pub enum ResolutionEvent<P = ()> {
         /// Reason the opinion did not contribute.
         reason: IgnoreReason,
     },
+}
+
+impl<P> ResolutionEvent<P> {
+    /// Provenance for the opinion the event is about; every event names
+    /// one.
+    #[must_use]
+    pub const fn provenance(&self) -> &P {
+        match self {
+            Self::Contributed { provenance, .. }
+            | Self::StoppedByBlock { provenance }
+            | Self::Ignored { provenance, .. } => provenance,
+        }
+    }
 }
 
 /// Why an opinion in a chain did not contribute to the resolved value.
@@ -900,6 +950,7 @@ pub enum IgnoreReason {
 
 /// Error returned when addressing a layer outside the composer's layer order.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub struct UnknownLayer<L> {
     /// The layer that was not present in the composer layer order.
     pub layer: L,
@@ -919,6 +970,7 @@ impl<L: fmt::Debug> core::error::Error for UnknownLayer<L> {}
 
 /// Error returned when constructing a composer with duplicate layers.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub struct DuplicateLayer<L> {
     /// The duplicated layer.
     pub layer: L,
@@ -938,6 +990,7 @@ impl<L: fmt::Debug> core::error::Error for DuplicateLayer<L> {}
 
 /// A borrowed opinion in strength order.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub struct OpinionRef<'a, L, V, I = V, K = String, P = ()> {
     /// The layer that authored the opinion.
     pub layer: &'a L,

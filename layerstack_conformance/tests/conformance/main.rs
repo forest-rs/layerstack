@@ -206,6 +206,7 @@ mod threaded_usdc_read;
 mod time_values;
 mod time_varying;
 mod token_order;
+mod transaction_schemas;
 mod transform_queries;
 mod typed_reads;
 mod udim_tiles;

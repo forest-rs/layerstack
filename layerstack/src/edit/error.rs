@@ -178,10 +178,13 @@ pub enum Rejection {
     ///
     /// Spec: AOUSD Core §10 (composition arcs).
     PseudoRootArc,
-    /// A variant spec does not hold this prim field: its specifier, type
-    /// name and child order belong to the prim spec hosting the variant set.
-    /// OpenUSD accepts such an edit inside a variant edit context and
-    /// authors nothing.
+    /// A variant spec does not hold this prim field: its specifier and type
+    /// name belong to the prim spec hosting the variant set. OpenUSD
+    /// 26.11's `UsdPrim::SetSpecifier` and `SetTypeName` in a variant edit
+    /// context author the field on the variant's prim spec, which
+    /// `SdfLayer::ExportToString` then leaves out (`Sdf_WriteVariant`,
+    /// `pxr/usd/sdf/fileIO_Common.h`, writes a variant's metadata and body
+    /// but not the preamble that holds them).
     ///
     /// Spec: AOUSD Core §7.6.7 (variant specs).
     NotOnVariant(super::PrimField),

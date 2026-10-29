@@ -691,10 +691,9 @@ impl Transaction {
         self.set_field(at, PrimValue::Instanceable(None))
     }
 
-    /// Sets the child order (`reorder nameChildren`) of the prim spec at
-    /// `at`, creating the spec as an `over` if needed. Names are authored
-    /// as given; an empty order is authored too. A variant spec has none.
-    /// On the pseudo-root this is the layer's root prim order (`reorder
+    /// Sets the child order (`reorder nameChildren`) of the prim or variant
+    /// spec at `at`, creating the spec as an `over` if needed. Names are
+    /// authored as given; an empty order is authored too. On the pseudo-root this is the layer's root prim order (`reorder
     /// rootPrims`), the one prim field the pseudo-root holds.
     ///
     /// OpenUSD: `UsdPrim::SetChildrenReorder`; on the pseudo-root,
@@ -705,7 +704,7 @@ impl Transaction {
         self.set_field(at, PrimValue::PrimOrder(Some(order)))
     }
 
-    /// Clears the child order of the prim spec at `at`.
+    /// Clears the child order of the prim or variant spec at `at`.
     ///
     /// OpenUSD: `UsdPrim::ClearChildrenReorder`.
     pub fn clear_prim_order(&mut self, at: Address) -> &mut Self {

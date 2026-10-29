@@ -365,6 +365,15 @@ fn instances_scene(relocated: bool) -> InMemoryStore {
         });
     }
     store.insert_layer(root);
+    let mut dependent = Layer::new(DEPENDENT);
+    let group = store.path("/Group");
+    author(
+        &mut store,
+        &mut dependent,
+        "/Use",
+        PrimSpec::def().with_reference(Reference::with_asset(ROOT, group, "root.usda")),
+    );
+    store.insert_layer(dependent);
     store
 }
 
@@ -686,19 +695,20 @@ impl Scene {
                 .apply(&mut self.store, edit.transaction())
                 .unwrap();
             self.synchronize();
-            // The live stage keeps its evidence as a new composition
+            // Each live stage keeps its evidence as a new composition
             // would build it.
-            let root = self.primary.stage().root_layer().unwrap();
-            let options = self.primary.options().clone();
-            let fresh = LiveStage::compose(&mut self.store, root, options);
-            self.primary
-                .stage()
-                .preparation(&self.store.paths)
-                .unwrap()
-                .assert_current_as(
-                    fresh.stage().preparation(&self.store.paths).unwrap(),
-                    &self.store,
-                );
+            for live in core::iter::once(&self.primary).chain(&self.dependents) {
+                let root = live.stage().root_layer().unwrap();
+                let options = live.options().clone();
+                let fresh = LiveStage::compose(&mut self.store, root, options);
+                live.stage()
+                    .preparation(&self.store.paths)
+                    .unwrap()
+                    .assert_current_as(
+                        fresh.stage().preparation(&self.store.paths).unwrap(),
+                        &self.store,
+                    );
+            }
         }
         compared
     }
@@ -732,15 +742,20 @@ fn retained_preparation_matches_composition_across_relocates() {
     assert!(scene.exercise(&[ROOT, WEAK], 6) > 0);
 }
 
-/// Every edit is compared against the scene as composed: none is applied,
-/// since a live stage recomposes an instance's descendants on its own
-/// where a new composition copies its representative's, and the snapshot
+/// Edits applied on an instanced stage, and on a stage referencing its
+/// instances, leave each live stage's graphs as a new composition builds
+/// them: a live stage composes an instance's descendants on its own,
+/// where a new composition copies a representative's, and the snapshot
 /// checks compare their graphs node for node.
 #[test]
 fn retained_preparation_matches_composition_across_instances() {
     for relocated in [false, true] {
-        let mut scene = Scene::new(instances_scene(relocated), StageOptions::default(), &[]);
-        assert!(scene.exercise(&[ROOT], 0) > 0);
+        let mut scene = Scene::new(
+            instances_scene(relocated),
+            StageOptions::default(),
+            &[DEPENDENT],
+        );
+        assert!(scene.exercise(&[ROOT], 6) > 0);
     }
 }
 

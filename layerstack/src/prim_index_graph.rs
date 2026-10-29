@@ -570,6 +570,18 @@ pub(crate) type OrderedNode<'a> = (
     &'a StackOffsets,
 );
 
+/// A site one graph reads where another reads `from`
+/// ([`PrimIndexGraph::site_moves`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct SiteMove {
+    /// The layer stack of the site.
+    pub(crate) layer_stack: LayerStackIdentifier,
+    /// The site in the graph moved from.
+    pub(crate) from: SpecPath,
+    /// The site in the graph moved to.
+    pub(crate) to: SpecPath,
+}
+
 /// The composition graph of one composed prim.
 ///
 /// See the [module docs](self) for how it relates to strength order.
@@ -791,32 +803,71 @@ impl PrimIndexGraph {
         &self.shape
     }
 
-    /// Moves the sites of `stage_stack`'s nodes beneath `from` to beneath
-    /// `to`: the graph of a prototype's descendant, from one instance to
-    /// another.
-    pub(crate) fn reroot_stage_sites(
-        &mut self,
-        paths: &crate::path::PathInterner,
-        stage_stack: LayerStackIdentifier,
-        from: crate::path::PathId,
-        to: crate::path::PathId,
-    ) {
-        let (from_site, to_site) = (SpecPath::from_prim_path(from), SpecPath::from_prim_path(to));
+    /// The sites `other`, a graph of the same shape, reads in place of
+    /// this graph's: each node whose site differs, as its layer stack, its
+    /// site here and its site in `other`. `None` when the shapes differ.
+    ///
+    /// Two instances sharing a prototype whose graphs have one shape reach
+    /// it through the same arcs: only the sites of the nodes that cannot
+    /// contribute beneath an instance (the root, ancestral arcs) name the
+    /// instance, and the graphs of their descendants are the same but for
+    /// those sites. Instances at other namespace depths are not: their
+    /// arcs are authored at other depths ([`PrimNode::namespace_depth`]).
+    pub(crate) fn site_moves(&self, other: &Self) -> Option<Vec<SiteMove>> {
+        if !self.same_shape(other) {
+            return None;
+        }
+        Some(
+            self.shape
+                .iter()
+                .zip(self.sites.iter().zip(other.sites.iter()))
+                .filter(|(_, (from, to))| from != to)
+                .map(|(node, (from, to))| SiteMove {
+                    layer_stack: node.layer_stack,
+                    from: from.clone(),
+                    to: to.clone(),
+                })
+                .collect(),
+        )
+    }
+
+    /// Whether `other` has this graph's nodes but for their sites.
+    pub(crate) fn same_shape(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.shape, &other.shape)
+            || (self.shape.len() == other.shape.len()
+                && self
+                    .shape
+                    .iter()
+                    .zip(other.shape.iter())
+                    .all(|(a, b)| a.same(b)))
+    }
+
+    /// Moves the site of each node beneath the `from` of a move of its
+    /// layer stack beneath that move's `to`, the longest `from` first: the
+    /// graph of a prototype's descendant, from one instance to another
+    /// ([`Self::site_moves`] of their graphs).
+    pub(crate) fn reroot_sites(&mut self, paths: &crate::path::PathInterner, moves: &[SiteMove]) {
+        if moves.is_empty() {
+            return;
+        }
         for (node, site) in self.shape.iter().zip(self.sites.iter_mut()) {
-            if node.layer_stack != stage_stack {
-                continue;
+            let prim = paths.resolve(site.prim_path());
+            let moved = moves
+                .iter()
+                .filter(|m| m.layer_stack == node.layer_stack)
+                .filter(|m| {
+                    prim.segments()
+                        .starts_with(paths.resolve(m.from.prim_path()).segments())
+                })
+                .max_by_key(|m| paths.resolve(m.from.prim_path()).depth());
+            if let Some(moved) = moved {
+                *site = crate::prim_indexing::site_paths::replace_prefix(
+                    paths,
+                    site,
+                    &moved.from,
+                    &moved.to,
+                );
             }
-            let prim = site.prim_path();
-            if prim != from
-                && !paths
-                    .resolve(prim)
-                    .segments()
-                    .starts_with(paths.resolve(from).segments())
-            {
-                continue;
-            }
-            *site =
-                crate::prim_indexing::site_paths::replace_prefix(paths, site, &from_site, &to_site);
         }
     }
 

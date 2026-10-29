@@ -7,8 +7,9 @@
 # and with the `standalone` feature (its own allocator and a panic handler
 # that traps), the glue with
 # the wasm-bindgen CLI (which must be the version Cargo.lock holds), then
-# `wasm-opt -Oz --converge --low-memory-unused --reorder-functions-by-name`.
-# Set WASM_BINDGEN and WASM_OPT to use binaries off PATH.
+# `wasm-opt -Oz --converge --low-memory-unused`, with the functions laid out
+# so that similar ones sit together. Set WASM_BINDGEN and WASM_OPT to use
+# binaries off PATH.
 set -euo pipefail
 package=$(cd "$(dirname "$0")/.." && pwd)
 workspace=$(cd "$package/../.." && pwd)
@@ -47,9 +48,18 @@ node "$package/scripts/strip-sections.mjs" "$package/wasm/layerstack_bg.wasm" \
 # `--reorder-functions-by-name` then lays the functions out by their Rust
 # names, which puts the functions of one module, and the instances of one
 # generic type's methods, next to each other, where gzip and brotli find
-# their repeats. The order changes no behaviour; the output leaves the
-# names out.
-"$wasm_opt" -Oz --converge --low-memory-unused --reorder-functions-by-name \
-  --enable-bulk-memory --enable-mutable-globals --enable-nontrapping-float-to-int \
-  --enable-sign-ext --enable-reference-types --enable-multivalue \
-  "$package/wasm/layerstack_bg.wasm" -o "$package/wasm/layerstack_bg.wasm"
+# their repeats. `order-functions.mjs` refines that order by the functions'
+# bodies, renaming each function to its place, and a second `wasm-opt` run
+# moves them there without optimizing again; the optimize and shrink levels
+# and the StackIR flags keep its output as compact as the first run's. The
+# order changes no behaviour; the output leaves the names out.
+features="--enable-bulk-memory --enable-mutable-globals --enable-nontrapping-float-to-int \
+  --enable-sign-ext --enable-reference-types --enable-multivalue"
+ordered="${module%.wasm}.ordered.wasm"
+# shellcheck disable=SC2086 # `features` is a list of flags.
+"$wasm_opt" -Oz --converge --low-memory-unused --reorder-functions-by-name -g $features \
+  "$package/wasm/layerstack_bg.wasm" -o "$ordered"
+node "$package/scripts/order-functions.mjs" "$ordered" "$ordered"
+# shellcheck disable=SC2086
+"$wasm_opt" --optimize-level=2 --shrink-level=2 --generate-stack-ir --optimize-stack-ir \
+  --reorder-functions-by-name $features "$ordered" -o "$package/wasm/layerstack_bg.wasm"

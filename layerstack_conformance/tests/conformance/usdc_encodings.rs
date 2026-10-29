@@ -74,11 +74,6 @@ fn assert_saves_as_openusd(case: &str) {
     let export = &record["export_usdc"];
     assert_eq!(export["accepted"], Json::Bool(true), "{case}: {export}");
     let openusd = std::fs::read(fixtures().join(format!("{case}.usdc"))).unwrap();
-    assert_eq!(
-        Some(openusd.len() as u64),
-        export["bytes"].as_u64(),
-        "{case}: fixture"
-    );
     let ours = save(case).unwrap_or_else(|e| panic!("{case}: {e}"));
     assert!(
         crate_sections(&ours).unwrap() == crate_sections(&openusd).unwrap(),

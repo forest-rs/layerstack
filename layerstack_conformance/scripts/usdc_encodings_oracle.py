@@ -17,9 +17,8 @@ the source, `SdfLayer::Export` to a `.usdc`, and `Sdf.Layer.OpenAsAnonymous`
 of that file followed by `ExportToString`, which reads every value. A
 call that posts errors is recorded as refused, with each error's
 commentary (`Tf.ErrorException` lists them); one that does not is
-recorded as accepted, the export with the file's length and 64-bit
-FNV-1a hash and the read with whether the layer it reads exports the
-same text as the source layer (`same_text`) and that text.
+recorded as accepted, the read with whether the layer it reads exports
+the same text as the source layer (`same_text`) and that text.
 
 - `unregistered_list_ops`: list-op metadata no schema registers, which
   the text parser keeps as an `SdfUnregisteredValue` holding an
@@ -44,7 +43,12 @@ same text as the source layer (`same_text`) and that text.
   read refuses ("Attempted to unpack unsupported type").
 
 `--check` regenerates every file into a temporary directory and fails
-unless each matches the checked-in fixture.
+unless each matches the checked-in fixture; for a crate file, unless
+OpenUSD reads the same text from both. The crate's bytes depend on how
+OpenUSD was built (the Linux source build and the macOS wheel of 26.11.1
+write files of the same length with different bytes), so the check
+compares what OpenUSD reads from them; the Rust test compares
+`save_usdc` with the checked-in file.
 """
 import argparse
 import difflib
@@ -108,14 +112,6 @@ def "A"
 }
 
 
-def fnv1a64(data):
-    h = 0xcbf29ce484222325
-    for byte in data:
-        h ^= byte
-        h = (h * 0x100000001b3) & 0xFFFFFFFFFFFFFFFF
-    return f"{h:016x}"
-
-
 def errors(exc):
     """The commentary of each error `exc` lists, without the function,
     file and line OpenUSD names before it."""
@@ -151,8 +147,6 @@ def case(out, name, text):
         with open(written, "rb") as f:
             data = f.read()
         if export["accepted"]:
-            export["bytes"] = len(data)
-            export["fnv1a64"] = fnv1a64(data)
             with open(os.path.join(out, f"{name}.usdc"), "wb") as f:
                 f.write(data)
         record["export_usdc"] = export
@@ -178,6 +172,11 @@ def write(out):
         f.write("\n")
 
 
+def read_text(path):
+    """The text of the layer OpenUSD reads from the crate file at `path`."""
+    return Sdf.Layer.OpenAsAnonymous(path).ExportToString()
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--check", action="store_true")
@@ -197,7 +196,10 @@ def main():
             committed = os.path.join(FIXTURES, name)
             if filecmp.cmp(fresh, committed, shallow=False):
                 continue
-            if not name.endswith(".usdc"):
+            if name.endswith(".usdc"):
+                if read_text(fresh) == read_text(committed):
+                    continue
+            else:
                 with open(committed) as a, open(fresh) as b:
                     diff = difflib.unified_diff(a.readlines(), b.readlines(),
                                                 "committed", "regenerated", n=2)

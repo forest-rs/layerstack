@@ -52,7 +52,7 @@ const SWITCH: [(&str, &str, &str); 4] = [
 
 /// The cases where layerstack does not yet do what OpenUSD does. Each
 /// must still differ, so that the list stays current.
-const DIFFERING: &[&str] = &["delete_targeted", "rename_property_with_dormant_opinion"];
+const DIFFERING: &[&str] = &["delete_targeted"];
 
 fn oracle() -> Json {
     let oracle: Json = serde_json::from_str(ORACLE).expect("oracle.json");

@@ -803,7 +803,9 @@ fn gather_dependent_moves(
             } else {
                 PathMove::new(TargetPath::Prim(from), TargetPath::Prim(to))
             };
-            if mapping.from == mapping.to {
+            if mapping.from == mapping.to
+                || unedited_property_opinion(stage, store, prim, source_layers, source)
+            {
                 continue;
             }
             // The local specs to move are at the sites of the nodes above
@@ -828,6 +830,40 @@ fn gather_dependent_moves(
         }
     }
     Ok(())
+}
+
+/// Whether the dependent `prim` composes the moved property from a spec
+/// the edit leaves: neither its own local specs nor the moved one
+/// (`/World/Copy.a` from `/World/A{look=blue}.a`, where `/World/Copy`
+/// references `/World/A` selecting a variant `/World/A` does not).
+/// OpenUSD then leaves the prim's specs where they are, as moving them
+/// would split its opinions, and warns
+/// (`_PrimIndexDependentNodeEditProcessor::_HasUneditedUpstreamSpecConflicts`);
+/// the prim keeps composing the property at the old path.
+fn unedited_property_opinion(
+    stage: &Stage,
+    store: &dyn LayerStore,
+    prim: PathId,
+    source_layers: &[LayerId],
+    source: &PathMove,
+) -> bool {
+    let Some(property) = source.from.property_path() else {
+        return false;
+    };
+    let moved = SpecPath::from_prim_path(property.prim_path());
+    stage
+        .prim_stack(prim)
+        .unwrap_or_default()
+        .iter()
+        .any(|(layer, site)| {
+            let own = site.prim_path() == prim && stage.layer_stack().contains(layer);
+            let edited = source_layers.contains(layer) && *site == moved;
+            !own && !edited
+                && store
+                    .layer(*layer)
+                    .and_then(|l| spec_at(l, &Loc::of(site)))
+                    .is_some_and(|s| s.properties().iter().any(|p| p.name == property.property()))
+        })
 }
 
 /// The branches holding the local specs of the prim at `path` (or an

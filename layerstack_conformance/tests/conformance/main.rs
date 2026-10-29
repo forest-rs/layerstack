@@ -25,6 +25,7 @@ mod animation_rates;
 mod arc_cycles;
 mod arc_target_sites;
 mod asset_capture;
+mod asset_expressions;
 mod asset_previews;
 mod authored_animation;
 mod authored_sublayers;

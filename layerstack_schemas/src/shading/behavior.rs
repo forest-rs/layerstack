@@ -1,11 +1,22 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-//! Built-in `UsdShade` and `UsdLux` connectability policies.
+//! `UsdShade` and `UsdLux` connectability policies: OpenUSD's built-in
+//! behaviors, and the default behavior a schema's plugin metadata
+//! configures.
 use crate::{PrimView, Scene};
-use layerstack::{PathId, PropertyKind, PropertyPath};
+use layerstack::{
+    PathId, PropertyKind, PropertyPath, SchemaDefinition, SchemaKind, SchemaRegistry, TokenId,
+    TokenInterner, Value,
+};
 
-/// Built-in connection behavior. Custom C++ behavior plugins are not loaded.
+/// How a prim's inputs and outputs may connect: one of OpenUSD's built-in
+/// behaviors (`Material`, `NodeGraph`, `Shader`, `LightFilter`,
+/// `LightAPI`), or the default behavior a schema's plugin metadata
+/// configures ([`Scene::connectable_behavior`]). Behaviors registered by
+/// C++ code of other plugins are not loaded.
+///
+/// OpenUSD: `UsdShadeConnectableAPIBehavior`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ConnectableBehavior {
     /// Interface inputs and outputs can forward to upstream providers.
@@ -60,66 +71,187 @@ impl core::fmt::Display for ConnectionError {
     }
 }
 impl core::error::Error for ConnectionError {}
+/// The plugin metadata key that gives a schema a default connectable
+/// behavior (`plugInfo.json`, `SchemaDefinition::plug_info`).
+const PROVIDES_CONNECTABLE_BEHAVIOR: &str = "providesUsdShadeConnectableAPIBehavior";
+/// The plugin metadata key that makes a schema's default connectable
+/// behavior a container; `false` when absent or not a boolean.
+const IS_CONTAINER: &str = "isUsdShadeContainer";
+/// The plugin metadata key that sets whether a schema's default
+/// connectable behavior requires encapsulation; `true` when absent or not
+/// a boolean.
+const REQUIRES_ENCAPSULATION: &str = "requiresUsdShadeEncapsulation";
+
+impl ConnectableBehavior {
+    const MATERIAL: Self = Self {
+        is_container: true,
+        requires_encapsulation: true,
+        outputs_connectable: true,
+        derived_container: true,
+    };
+    const NODE_GRAPH: Self = Self {
+        is_container: true,
+        requires_encapsulation: true,
+        outputs_connectable: true,
+        derived_container: false,
+    };
+    const SHADER: Self = Self {
+        is_container: false,
+        requires_encapsulation: true,
+        outputs_connectable: false,
+        derived_container: false,
+    };
+    #[cfg(feature = "usd-lux")]
+    const LIGHT_FILTER: Self = Self {
+        is_container: true,
+        requires_encapsulation: true,
+        outputs_connectable: false,
+        derived_container: true,
+    };
+    #[cfg(feature = "usd-lux")]
+    const LIGHT_API: Self = Self {
+        is_container: true,
+        requires_encapsulation: false,
+        outputs_connectable: true,
+        derived_container: true,
+    };
+
+    /// The default behavior `schema`'s plugin metadata configures, if its
+    /// `providesUsdShadeConnectableAPIBehavior` is `true`: a container when
+    /// `isUsdShadeContainer` is `true`, requiring encapsulation unless
+    /// `requiresUsdShadeEncapsulation` is `false` (a key that is not a
+    /// boolean counts as absent), whose outputs accept connections and
+    /// whose inputs connect as a basic node's.
+    ///
+    /// ```
+    /// use layerstack::{SchemaDefinition, TokenInterner};
+    /// use layerstack_schemas::shading::ConnectableBehavior;
+    ///
+    /// let tokens = TokenInterner::default();
+    /// let mixer = SchemaDefinition::typed(tokens.intern("Mixer"))
+    ///     .with_plug_info(tokens.intern("providesUsdShadeConnectableAPIBehavior"), true)
+    ///     .with_plug_info(tokens.intern("isUsdShadeContainer"), true);
+    /// let behavior = ConnectableBehavior::from_plug_info(&mixer, &tokens).unwrap();
+    /// assert!(behavior.is_container && behavior.requires_encapsulation);
+    /// ```
+    ///
+    /// OpenUSD: `_BehaviorRegistry::RegisterPlugConfiguredBehaviorForType`
+    /// and `_LoadPluginDefiningBehaviorForType` (`connectableAPIBehavior.cpp`),
+    /// with the base `UsdShadeConnectableAPIBehavior` policies.
+    #[must_use]
+    pub fn from_plug_info(schema: &SchemaDefinition, tokens: &TokenInterner) -> Option<Self> {
+        let flag = |key: &str| match tokens.lookup(key).and_then(|key| schema.plug_info(key)) {
+            Some(Value::Bool(value)) => Some(*value),
+            _ => None,
+        };
+        flag(PROVIDES_CONNECTABLE_BEHAVIOR)
+            .filter(|provides| *provides)
+            .map(|_| Self {
+                is_container: flag(IS_CONTAINER).unwrap_or(false),
+                requires_encapsulation: flag(REQUIRES_ENCAPSULATION).unwrap_or(true),
+                outputs_connectable: true,
+                derived_container: false,
+            })
+    }
+}
+
+/// The behavior registered for the schema `name` itself, not its
+/// ancestors: a built-in behavior OpenUSD registers in code, which wins
+/// over plugin metadata, or else the one its plugin metadata configures.
+/// An applied schema counts only when it is single-apply, as only those
+/// impart a behavior.
+///
+/// OpenUSD: `_BehaviorRegistry::_FindBehaviorForType`,
+/// `_FindBehaviorForApiSchema`, and the `TF_REGISTRY_FUNCTION`s of
+/// `UsdShadeMaterial`, `UsdShadeNodeGraph`, `UsdShadeShader`,
+/// `UsdLuxLightFilter` and `UsdLuxLightAPI`.
+fn schema_behavior(
+    name: TokenId,
+    applied: bool,
+    registry: Option<&SchemaRegistry>,
+    tokens: &TokenInterner,
+) -> Option<ConnectableBehavior> {
+    let built_in = match (applied, tokens.resolve(name)) {
+        (false, "Material") => Some(ConnectableBehavior::MATERIAL),
+        (false, "NodeGraph") => Some(ConnectableBehavior::NODE_GRAPH),
+        (false, "Shader") => Some(ConnectableBehavior::SHADER),
+        #[cfg(feature = "usd-lux")]
+        (false, "LightFilter") => Some(ConnectableBehavior::LIGHT_FILTER),
+        #[cfg(feature = "usd-lux")]
+        (true, "LightAPI") => Some(ConnectableBehavior::LIGHT_API),
+        _ => None,
+    };
+    built_in.or_else(|| {
+        let schema = registry?.schema(name)?;
+        if applied && schema.kind != SchemaKind::SingleApplyApi {
+            return None;
+        }
+        ConnectableBehavior::from_plug_info(schema, tokens)
+    })
+}
+
 impl Scene<'_> {
-    /// Built-in `UsdShade`/`UsdLux` behavior for this prim, including applied `LightAPI`.
-    /// `None` means unsupported behavior, not a promise that C++ would reject it.
+    /// The connectability behavior of the prim at `path`, `None` when it
+    /// has none, as for a prim no schema gives one (C++
+    /// `UsdShadeConnectableAPI` is then not compatible with it).
+    ///
+    /// The behavior is the first found of:
+    ///
+    /// 1. the behavior of the prim's type, or else of the nearest of the
+    ///    typed schemas it derives from that has one, overridden by the
+    ///    first of the applied schemas the prim's `apiSchemas` authors, in
+    ///    strength order, that has one (not their built-ins);
+    /// 2. without a typed behavior, the first of all the prim's applied
+    ///    schemas that has one, its type's built-ins and auto-applies
+    ///    first ([`layerstack::PrimDefinition::applied_schemas`]).
+    ///
+    /// A schema has a behavior when OpenUSD registers one for it in code
+    /// (`Material`, `NodeGraph`, `Shader`, `LightFilter`, `LightAPI`), or
+    /// when its plugin metadata configures one
+    /// ([`ConnectableBehavior::from_plug_info`]), as a custom schema's
+    /// `plugInfo.json` does with `providesUsdShadeConnectableAPIBehavior`.
+    /// Only single-apply schemas impart one. A prim typed with an abstract
+    /// schema is typeless here, so only its applied schemas are consulted.
+    ///
+    /// Spec: AOUSD Core §12.4 (shading connections), §13.3 (schema types and
+    /// applied schemas). OpenUSD: `_BehaviorRegistry::_GetBehaviorForPrimTypeId`
+    /// (`pxr/usd/usdShade/connectableAPIBehavior.cpp`).
     #[must_use]
     pub fn connectable_behavior(&self, path: PathId) -> Option<ConnectableBehavior> {
-        // Explicit authored LightAPI behavior overrides a typed schema's
-        // behavior; built-in/indirect APIs are consulted only without a typed
-        // behavior. OpenUSD _BehaviorRegistry::_GetBehaviorForPrimTypeId.
-        #[cfg(feature = "usd-lux")]
-        if PrimView::new(*self,path).metadata().value("apiSchemas").and_then(|v|v.array_ref().map(|a|a.iter().any(|v|matches!(&*v,layerstack::Value::Token(t) if self.store().tokens().resolve(*t)=="LightAPI")))).unwrap_or(false) {
-            return Some(ConnectableBehavior {is_container:true,requires_encapsulation:false,outputs_connectable:true,derived_container:true});
-        }
-        #[cfg(feature = "usd-lux")]
-        if self.is_a(path, "LightFilter") {
-            return Some(ConnectableBehavior {
-                is_container: true,
-                requires_encapsulation: true,
-                outputs_connectable: false,
-                derived_container: true,
-            });
-        }
-        if self.is_a(path, "Material") {
-            Some(ConnectableBehavior {
-                is_container: true,
-                requires_encapsulation: true,
-                outputs_connectable: true,
-                derived_container: true,
-            })
-        } else if self.is_a(path, "NodeGraph") {
-            Some(ConnectableBehavior {
-                is_container: true,
-                requires_encapsulation: true,
-                outputs_connectable: true,
-                derived_container: false,
-            })
-        } else if self.is_a(path, "Shader") {
-            Some(ConnectableBehavior {
-                is_container: false,
-                requires_encapsulation: true,
-                outputs_connectable: false,
-                derived_container: false,
-            })
-        } else {
-            #[cfg(feature = "usd-lux")]
-            if self.has_api(path, "LightAPI", None) {
-                return Some(ConnectableBehavior {
-                    is_container: true,
-                    requires_encapsulation: false,
-                    outputs_connectable: true,
-                    derived_container: true,
+        let definition = self.definition(path)?;
+        let registry = self.stage().schemas();
+        let tokens = self.store().tokens();
+        let typed = definition
+            .ancestors()
+            .iter()
+            .find_map(|&schema| schema_behavior(schema, false, registry, tokens));
+        if let Some(typed) = typed {
+            let authored = PrimView::new(*self, path)
+                .metadata()
+                .value("apiSchemas")
+                .and_then(|value| {
+                    value.array_ref().and_then(|names| {
+                        names.iter().find_map(|name| match &*name {
+                            Value::Token(name) => schema_behavior(*name, true, registry, tokens),
+                            _ => None,
+                        })
+                    })
                 });
-            }
-            None
+            return Some(authored.unwrap_or(typed));
         }
+        definition
+            .applied_schemas()
+            .iter()
+            .filter(|applied| applied.instance.is_none())
+            .find_map(|applied| schema_behavior(applied.schema, true, registry, tokens))
     }
-    /// Checks a proposed connection against C++'s built-in `CanConnect` policies.
+    /// Checks a proposed connection against C++'s `CanConnect` policies, for
+    /// the destination prim's [`Self::connectable_behavior`].
     /// This is advisory: source-opinion authoring remains explicit and accepts
     /// invalid networks for interchange. It checks topology and connectability,
     /// not type compatibility or renderer shader support. AOUSD Core §12.4;
-    /// OpenUSD `UsdShadeConnectableAPIBehavior`, `UsdLuxLightAPI/LightFilter`.
+    /// OpenUSD `UsdShadeConnectableAPIBehavior::CanConnectInputToSource` and
+    /// `CanConnectOutputToSource`, and those of `UsdLuxLightAPI/LightFilter`.
     pub fn validate_shading_connection(
         &self,
         destination: PropertyPath,

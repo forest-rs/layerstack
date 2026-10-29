@@ -1,0 +1,446 @@
+#usda 1.0
+
+def ProbeContainer "Box"
+{
+    float inputs:in
+    float outputs:out
+
+    def Shader "Inner"
+    {
+        float inputs:x
+        float outputs:out
+    }
+
+    def ProbeNode "Leaf"
+    {
+        float inputs:x
+        float outputs:out
+    }
+}
+
+def ProbeOpenContainer "Open"
+{
+    float inputs:in
+    float outputs:out
+
+    def Shader "Inner"
+    {
+        float inputs:x
+        float outputs:out
+    }
+}
+
+def ProbeDerivedContainer "Derived"
+{
+    float inputs:in
+    float outputs:out
+
+    def Shader "Inner"
+    {
+        float inputs:x
+        float outputs:out
+    }
+}
+
+def ProbeDerivedNode "DerivedNode"
+{
+    float inputs:in
+    float outputs:out
+
+    def Shader "Inner"
+    {
+        float inputs:x
+        float outputs:out
+    }
+}
+
+def ProbeNode "Node"
+{
+    float inputs:in
+    float outputs:out
+
+    def Shader "Inner"
+    {
+        float inputs:x
+        float outputs:out
+    }
+}
+
+def ProbeShader "PShader"
+{
+    float inputs:in
+    float outputs:out
+
+    def Shader "Inner"
+    {
+        float inputs:x
+        float outputs:out
+    }
+}
+
+def ProbeShaderContainer "PShaderContainer"
+{
+    float inputs:in
+    float outputs:out
+
+    def Shader "Inner"
+    {
+        float inputs:x
+        float outputs:out
+    }
+}
+
+def ProbePlain "Plain"
+{
+    float inputs:in
+    float outputs:out
+
+    def Shader "Inner"
+    {
+        float inputs:x
+        float outputs:out
+    }
+}
+
+def ProbeNotProvided "NotProvided"
+{
+    float inputs:in
+    float outputs:out
+
+    def Shader "Inner"
+    {
+        float inputs:x
+        float outputs:out
+    }
+}
+
+def ProbeDeclined "Declined"
+{
+    float inputs:in
+    float outputs:out
+
+    def Shader "Inner"
+    {
+        float inputs:x
+        float outputs:out
+    }
+}
+
+def ProbeLooseFlags "LooseFlags"
+{
+    float inputs:in
+    float outputs:out
+
+    def Shader "Inner"
+    {
+        float inputs:x
+        float outputs:out
+    }
+}
+
+def ProbeAutoTarget "AutoTarget"
+{
+    float inputs:in
+    float outputs:out
+
+    def Shader "Inner"
+    {
+        float inputs:x
+        float outputs:out
+    }
+}
+
+def Xform "Applied" (
+    prepend apiSchemas = ["ProbeContainerAPI"]
+)
+{
+    float inputs:in
+    float outputs:out
+
+    def Shader "Inner"
+    {
+        float inputs:x
+        float outputs:out
+    }
+}
+
+def Xform "AppliedOpen" (
+    prepend apiSchemas = ["ProbeOpenAPI"]
+)
+{
+    float inputs:in
+    float outputs:out
+
+    def Shader "Inner"
+    {
+        float inputs:x
+        float outputs:out
+    }
+}
+
+def "Typeless" (
+    prepend apiSchemas = ["ProbeContainerAPI"]
+)
+{
+    float inputs:in
+    float outputs:out
+
+    def Shader "Inner"
+    {
+        float inputs:x
+        float outputs:out
+    }
+}
+
+def Bogus "Unknown" (
+    prepend apiSchemas = ["ProbeContainerAPI"]
+)
+{
+    float inputs:in
+    float outputs:out
+
+    def Shader "Inner"
+    {
+        float inputs:x
+        float outputs:out
+    }
+}
+
+def Shader "ShaderApplied" (
+    prepend apiSchemas = ["ProbeContainerAPI"]
+)
+{
+    float inputs:in
+    float outputs:out
+
+    def Shader "Inner"
+    {
+        float inputs:x
+        float outputs:out
+    }
+}
+
+def Shader "ShaderQuiet" (
+    prepend apiSchemas = ["ProbeQuietAPI"]
+)
+{
+    float inputs:in
+    float outputs:out
+
+    def Shader "Inner"
+    {
+        float inputs:x
+        float outputs:out
+    }
+}
+
+def Shader "ShaderOrder" (
+    prepend apiSchemas = ["ProbeOpenAPI", "ProbeContainerAPI"]
+)
+{
+    float inputs:in
+    float outputs:out
+
+    def Shader "Inner"
+    {
+        float inputs:x
+        float outputs:out
+    }
+}
+
+def ProbeNode "NodeApplied" (
+    prepend apiSchemas = ["ProbeContainerAPI"]
+)
+{
+    float inputs:in
+    float outputs:out
+
+    def Shader "Inner"
+    {
+        float inputs:x
+        float outputs:out
+    }
+}
+
+def Material "MaterialApplied" (
+    prepend apiSchemas = ["ProbeOpenAPI"]
+)
+{
+    float inputs:in
+    float outputs:out
+
+    def Shader "Inner"
+    {
+        float inputs:x
+        float outputs:out
+    }
+}
+
+def Xform "XformMulti" (
+    prepend apiSchemas = ["ProbeMultiAPI:one"]
+)
+{
+    float inputs:in
+    float outputs:out
+
+    def Shader "Inner"
+    {
+        float inputs:x
+        float outputs:out
+    }
+}
+
+def Xform "BundleXform" (
+    prepend apiSchemas = ["ProbeBundleAPI"]
+)
+{
+    float inputs:in
+    float outputs:out
+
+    def Shader "Inner"
+    {
+        float inputs:x
+        float outputs:out
+    }
+}
+
+def Shader "BundleShader" (
+    prepend apiSchemas = ["ProbeBundleAPI"]
+)
+{
+    float inputs:in
+    float outputs:out
+
+    def Shader "Inner"
+    {
+        float inputs:x
+        float outputs:out
+    }
+}
+
+def SphereLight "LightApplied" (
+    prepend apiSchemas = ["ProbeContainerAPI"]
+)
+{
+    float inputs:in
+    float outputs:out
+
+    def Shader "Inner"
+    {
+        float inputs:x
+        float outputs:out
+    }
+}
+
+def Xform "XformLightFirst" (
+    prepend apiSchemas = ["ProbeContainerAPI", "LightAPI"]
+)
+{
+    float inputs:in
+    float outputs:out
+
+    def Shader "Inner"
+    {
+        float inputs:x
+        float outputs:out
+    }
+}
+
+def Xform "XformLightSecond" (
+    prepend apiSchemas = ["LightAPI", "ProbeContainerAPI"]
+)
+{
+    float inputs:in
+    float outputs:out
+
+    def Shader "Inner"
+    {
+        float inputs:x
+        float outputs:out
+    }
+}
+
+def Material "BuiltinMaterial"
+{
+    float inputs:in
+    float outputs:out
+
+    def Shader "Inner"
+    {
+        float inputs:x
+        float outputs:out
+    }
+}
+
+def NodeGraph "BuiltinGraph"
+{
+    float inputs:in
+    float outputs:out
+
+    def Shader "Inner"
+    {
+        float inputs:x
+        float outputs:out
+    }
+}
+
+def Shader "BuiltinShader"
+{
+    float inputs:in
+    float outputs:out
+
+    def Shader "Inner"
+    {
+        float inputs:x
+        float outputs:out
+    }
+}
+
+def Xform "Plainform"
+{
+    float inputs:in
+    float outputs:out
+
+    def Shader "Inner"
+    {
+        float inputs:x
+        float outputs:out
+    }
+}
+
+def Shader "Outside"
+{
+    float inputs:in
+    float outputs:out
+}
+def ProbeContainer "Chain"
+{
+    float inputs:in.connect = </Outside.outputs:out>
+
+    def Shader "Inner"
+    {
+        float inputs:x.connect = </Chain.inputs:in>
+    }
+}
+
+def Xform "AppliedChain" (
+    prepend apiSchemas = ["ProbeContainerAPI"]
+)
+{
+    float inputs:in.connect = </Outside.outputs:out>
+
+    def Shader "Inner"
+    {
+        float inputs:x.connect = </AppliedChain.inputs:in>
+    }
+}
+
+def ProbePlain "Stop"
+{
+    float inputs:in.connect = </Outside.outputs:out>
+
+    def Shader "Inner"
+    {
+        float inputs:x.connect = </Stop.inputs:in>
+    }
+}

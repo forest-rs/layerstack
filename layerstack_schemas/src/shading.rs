@@ -8,8 +8,10 @@
 //! and `UsdShadeMaterial::ComputeSurfaceSource`: node graphs pass connections
 //! through; outputs on non-container prims terminate them. This module neither
 //! evaluates shaders nor validates whether a renderer supports them. Container
-//! behavior covers the built-in `UsdShade` and `UsdLux` policies; custom OpenUSD
-//! connectability plugins are not loaded.
+//! behavior covers the built-in `UsdShade` and `UsdLux` policies and the default
+//! behavior a schema's plugin metadata configures
+//! ([`Scene::connectable_behavior`]); behaviors OpenUSD plugins register in C++
+//! code are not loaded.
 
 /// Typed views and authoring handles for OpenUSD's standard shader nodes.
 /// Node defaults are separate from authored USD attribute values.
@@ -253,8 +255,10 @@ impl Scene<'_> {
         result
     }
 
-    /// Traces connections to non-container outputs through built-in
-    /// containers (`NodeGraphs`, Materials, lights and light filters). Constants are intentionally excluded.
+    /// Traces connections to non-container outputs through containers
+    /// ([`Self::connectable_behavior`]: node graphs, materials, lights, light
+    /// filters, and the containers schema plugin metadata configures).
+    /// Constants are intentionally excluded.
     /// Traversal uses an explicit stack and branch-local cycle detection.
     #[must_use]
     pub fn shader_sources(&self, attribute: PropertyPath) -> ShaderSources {
@@ -277,8 +281,8 @@ impl Scene<'_> {
     /// A default block is not an authored value; time samples and splines are.
     /// This selects attributes, not values at a time (AOUSD Core §12.3–12.4).
     /// Cycles terminate only their branch; order and duplicate paths through
-    /// separate branches are preserved. Custom connectability plugins are not
-    /// loaded, as for [`Self::shader_sources`].
+    /// separate branches are preserved. Containers are those
+    /// [`Self::connectable_behavior`] finds, as for [`Self::shader_sources`].
     #[must_use]
     pub fn value_sources(&self, attribute: PropertyPath) -> ValueSources {
         let result = self.trace_sources(attribute, true, |attribute, kind, chain| ValueSource {

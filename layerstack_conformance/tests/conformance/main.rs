@@ -56,6 +56,7 @@ mod composition_limits;
 mod composition_misc;
 mod composition_pcp;
 mod composition_strict;
+mod connectable_plug;
 mod coord_sys;
 mod copy_spec;
 mod custom_nodes;

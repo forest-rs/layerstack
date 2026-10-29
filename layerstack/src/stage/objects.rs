@@ -698,9 +698,18 @@ impl<'a> Prim<'a> {
     /// one of its nodes; see [`PrimIndexGraph`] for how it relates to
     /// strength order.
     ///
+    /// An instance proxy's graph is the one its own path composes, with the
+    /// prototype's nodes and, as the nodes that are not instanceable, its
+    /// own instance's sites, which contribute nothing beneath an instance.
+    /// OpenUSD's `UsdPrim::GetPrimIndex` reports the prim index of the
+    /// prototype's source instance for every proxy instead, whichever
+    /// instance that is: the two agree but for those inert nodes, and on
+    /// every opinion and source.
+    ///
     /// OpenUSD: `PcpPrimIndex::GetGraph`.
     ///
-    /// Spec: AOUSD Core §10.4 (strength ordering).
+    /// Spec: AOUSD Core §10.4 (strength ordering), §11.3.3 (scene graph
+    /// instancing).
     #[doc(alias = "UsdPrim::GetPrimIndex")]
     #[doc(alias = "GetPrimIndex")]
     pub fn composition_graph(self) -> &'a PrimIndexGraph {

@@ -42,7 +42,7 @@ use crate::{
     layer_stack::LayerStackIdentifier,
     path::PathId,
     prim_index::{ArcKind, Opinion, OpinionKey, OpinionSource, PrimIndex},
-    prim_index_graph::{NodeArc, NodeId, PrimIndexGraph},
+    prim_index_graph::{NodeArc, NodeId, PrimIndexGraph, SiteMove},
     spec_path::SpecPath,
     stage::{InstanceIndexKey, InstanceIndexKeys, StageOptions},
     sync::ReadLock,
@@ -429,6 +429,9 @@ struct Instances {
     deferred: Vec<(PathId, PathId, Option<Arc<Graph>>)>,
     /// The representative of each instance of `deferred`, by instance.
     waiting: HashMap<PathId, PathId>,
+    /// The copies of each waiting instance (in `waiting`), made while it
+    /// waited: each copies its descendants once it has them.
+    followers: HashMap<PathId, Vec<PathId>>,
 }
 
 impl Instances {
@@ -1210,11 +1213,17 @@ impl Walk<'_, '_, '_> {
     }
     /// Gives each deferred instance its descendants: copies of its
     /// representative's, re-rooted, when their records do not depend on where
-    /// the instance is; composed otherwise.
+    /// the instance is and the two instances' graphs have one shape; composed
+    /// otherwise, for later instances of that shape to copy.
     ///
     /// Instances with one key read the same specs below them through the same
-    /// sites: only the sites of the stage's own layer stack, which contribute
-    /// nothing beneath an instance, name the instance.
+    /// sites: only the sites of the nodes that are not instanceable (the
+    /// root, ancestral arcs), which contribute nothing beneath an instance,
+    /// name the instance. Each copy is then the index its own path composes,
+    /// as a partial composition, which shares nothing, builds it. OpenUSD
+    /// instead reports the source instance's indexes for every instance
+    /// proxy (`Usd_PrimData::GetPrimIndex`), whichever instance registered
+    /// first; they differ only in those inert nodes.
     ///
     /// Spec: AOUSD Core §11.3.3 (instances share prototypes). OpenUSD:
     /// `Usd_InstanceCache`, `PcpInstanceKey`.
@@ -1226,14 +1235,14 @@ impl Walk<'_, '_, '_> {
         // its own only after every instance copying that representative.
         let mut shareable: HashMap<PathId, bool> = HashMap::new();
         let mut spent = Vec::new();
-        for (_, representative, graph) in &mut self.instances.deferred {
+        for (instance, representative, graph) in &mut self.instances.deferred {
             let can_share = *shareable
                 .entry(*representative)
                 .or_insert_with(|| prototype_is_shareable(self.ctx, self.out, *representative));
             // The index of an instance that copies its representative's
             // descendants is not read again: it is freed on a spare thread
             // while the copies are made.
-            if can_share {
+            if can_share && same_shape(self.out, *representative, *instance) {
                 spent.extend(graph.take());
             }
         }
@@ -1249,6 +1258,10 @@ impl Walk<'_, '_, '_> {
     /// [`Self::share_prototypes`]), `shareable` holding whether the
     /// descendants of the representatives decided so far can be shared.
     fn give_descendants(&mut self, mut shareable: HashMap<PathId, bool>) {
+        // The instances of each representative whose graphs have another
+        // shape, which composed their own descendants: later instances of
+        // their shape copy theirs.
+        let mut apart: HashMap<PathId, Vec<PathId>> = HashMap::new();
         // Composing an instance's descendants can defer the instances nested
         // in them in turn.
         while let Some((instance, representative, graph)) = self.instances.next() {
@@ -1259,31 +1272,70 @@ impl Walk<'_, '_, '_> {
             let can_share = *shareable
                 .entry(representative)
                 .or_insert_with(|| prototype_is_shareable(self.ctx, self.out, representative));
-            if !can_share {
-                let children = self
-                    .out
-                    .children
-                    .get(&instance)
-                    .cloned()
-                    .unwrap_or_default();
-                let paths = self.ctx.store.paths();
-                let roots: Vec<PathId> = children
-                    .into_iter()
-                    .filter(|child| self.scope.includes(paths, *child))
-                    .collect();
-                self.walk(roots, graph.as_ref());
-                continue;
+            let source = can_share
+                .then(|| {
+                    let others = apart.get(&representative).into_iter().flatten();
+                    core::iter::once(&representative)
+                        .chain(others)
+                        .find_map(|&source| Some((source, site_moves(self.out, source, instance)?)))
+                })
+                .flatten();
+            match source {
+                Some((source, moves)) => copy_prototype(
+                    self.ctx,
+                    self.out,
+                    self.instances,
+                    self.budget,
+                    source,
+                    instance,
+                    &moves,
+                ),
+                None => {
+                    let children = self
+                        .out
+                        .children
+                        .get(&instance)
+                        .cloned()
+                        .unwrap_or_default();
+                    let paths = self.ctx.store.paths();
+                    let roots: Vec<PathId> = children
+                        .into_iter()
+                        .filter(|child| self.scope.includes(paths, *child))
+                        .collect();
+                    self.walk(roots, graph.as_ref());
+                    if can_share && prototype_is_shareable(self.ctx, self.out, instance) {
+                        apart.entry(representative).or_default().push(instance);
+                    }
+                }
             }
-            copy_prototype(
-                self.ctx,
-                self.out,
-                self.instances,
-                self.budget,
-                representative,
-                instance,
-            );
+            // The copies made of the instance while it waited copy its
+            // descendants now.
+            if let Some(followers) = self.instances.followers.remove(&instance) {
+                for follower in followers.into_iter().rev() {
+                    self.instances.defer(follower, instance, None);
+                }
+            }
         }
     }
+}
+
+/// Whether the instances `a` and `b` have graphs of one shape
+/// ([`PrimIndexGraph::same_shape`]).
+fn same_shape(out: &Composition, a: PathId, b: PathId) -> bool {
+    match (out.prims.get(&a), out.prims.get(&b)) {
+        (Some(a), Some(b)) => a.graph.same_shape(&b.graph),
+        _ => false,
+    }
+}
+
+/// The sites the instance `to` reads in place of the instance `from`'s
+/// ([`PrimIndexGraph::site_moves`]); `None` when their graphs have other
+/// shapes, or either is not kept.
+fn site_moves(out: &Composition, from: PathId, to: PathId) -> Option<Vec<SiteMove>> {
+    out.prims
+        .get(&from)?
+        .graph
+        .site_moves(&out.prims.get(&to)?.graph)
 }
 
 /// Whether the descendants of the instance `representative` compose the
@@ -1426,7 +1478,16 @@ fn reroot_opinion_paths(store: &dyn LayerStore, index: &mut PrimIndex, from: Pat
 }
 
 /// Copies the descendants of the instance `from` beneath the instance
-/// `to`, re-rooting the sites of the stage's layer stack.
+/// `to`, re-rooting the sites `moves` names: those where the graph of `to`
+/// reads another site than the graph of `from`
+/// ([`PrimIndexGraph::site_moves`]). Each copy is then the index composing
+/// its own path builds: the nodes that name the instance cannot contribute
+/// beneath it, and the rest are the prototype's.
+///
+/// Spec: AOUSD Core §11.3.3 (instances share prototypes). OpenUSD:
+/// `Usd_InstanceCache` (instance proxies read the prototype's prims), and
+/// `Pcp_DisableNonInstanceableNodesVisitor` in `pxr/usd/pcp/primIndex.cpp`
+/// (the nodes beneath an instance that are not instanceable are inert).
 fn copy_prototype(
     ctx: &Ctx<'_>,
     out: &mut Composition,
@@ -1434,8 +1495,8 @@ fn copy_prototype(
     budget: &Budget,
     from: PathId,
     to: PathId,
+    moves: &[SiteMove],
 ) {
-    let stage_stack = ctx.stacks.get(ctx.stage_stack).identifier;
     let mut pending: Vec<PathId> = out.children.get(&from).cloned().unwrap_or_default();
     let mut moved: Vec<(PathId, PathId)> = Vec::new();
     while let Some(source) = pending.pop() {
@@ -1469,19 +1530,15 @@ fn copy_prototype(
             continue;
         };
         let mut index = index.clone();
-        index
-            .graph
-            .reroot_stage_sites(ctx.store.paths(), stage_stack, from, to);
+        index.graph.reroot_sites(ctx.store.paths(), moves);
         reroot_opinion_paths(ctx.store, &mut index, from, to);
         let paths = ctx.store.paths();
         out.prims.insert(target, index);
         out.reused_prim_indexes += 1;
-        // A nested instance still waiting for its own representative's
-        // descendants waits beneath the copy too.
-        if let Some(&nested) = instances.waiting.get(&source) {
-            // The copy's index is not kept apart: its descendants, if
-            // composed, start from indexes of their ancestors built anew.
-            instances.defer(target, nested, None);
+        // A nested instance still waiting for its descendants gives them
+        // to its copy once it has them.
+        if instances.waiting.contains_key(&source) {
+            instances.followers.entry(source).or_default().push(target);
         }
         let map = |path: PathId, paths: &crate::path::PathInterner| {
             paths.intern_reparented(path, from, to).unwrap_or(path)
@@ -1511,10 +1568,25 @@ fn copy_prototype(
                     .arcs
                     .into_iter()
                     .map(|(site, kind, layer)| {
-                        let site = if layer == stage_stack.root {
-                            map(site, paths)
-                        } else {
-                            site
+                        let moved = moves
+                            .iter()
+                            .filter(|m| m.layer_stack.root == layer)
+                            .map(|m| {
+                                let (from, to) = (m.from.prim_path(), m.to.prim_path());
+                                (paths.resolve(from).depth(), from, to)
+                            })
+                            .filter(|(_, from, _)| {
+                                paths
+                                    .resolve(site)
+                                    .segments()
+                                    .starts_with(paths.resolve(*from).segments())
+                            })
+                            .max_by_key(|(depth, ..)| *depth);
+                        let site = match moved {
+                            Some((_, from, to)) => {
+                                paths.intern_reparented(site, from, to).unwrap_or(site)
+                            }
+                            None => site,
                         };
                         (site, kind, layer)
                     })

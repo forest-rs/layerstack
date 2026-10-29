@@ -905,7 +905,10 @@ fn native_instance_fixture_reuses_descendants_before_composition() {
         .find(|case| case.name == "instance_reuse")
         .unwrap();
     let flattened = flatten(&case).unwrap();
-    // `/Right` and `/Group/Deep` reach `/Asset` as `/Left` does and reuse
-    // its four descendants; `/Offset`'s offset keys a prototype of its own.
-    assert_eq!(flattened.stage.composition_work().reused_prim_indexes, 8);
+    // `/Right` reaches `/Asset` as `/Left` does and reuses its four
+    // descendants. `/Group/Deep` shares their prototype, but its arc is
+    // authored at another namespace depth, which its descendants' graphs
+    // record: it composes its own. `/Offset`'s offset keys a prototype of
+    // its own.
+    assert_eq!(flattened.stage.composition_work().reused_prim_indexes, 4);
 }

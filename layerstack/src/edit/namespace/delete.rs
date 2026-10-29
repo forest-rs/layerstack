@@ -341,7 +341,7 @@ fn composes(
 /// every spec at or beneath it there (a branch of an ancestor is an arc,
 /// so the specs of other branches stay) and its name from its parent's
 /// children; for a property, the property of the prim's spec there.
-fn remove_specs(
+pub(super) fn remove_specs(
     store: &mut dyn LayerStore,
     layer: &mut Layer,
     object: TargetPath,

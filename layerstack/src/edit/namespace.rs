@@ -422,9 +422,10 @@ impl NamespaceEdit {
     /// ([`NamespaceError::Unmappable`]), which `UsdNamespaceEditor` refuses.
     /// Dependent mappings currently require direct, non-implied arcs from
     /// their local stack (or authored in the local variants their prim
-    /// selects, whose specs then move inside those variants) and a
-    /// destination within that arc's source domain; nested arcs or a
-    /// reparent leaving that domain return an error. Preparation composes the edited layers to verify the
+    /// selects, whose specs then move inside those variants); nested arcs
+    /// return an error. A reparent leaving an arc's source domain deletes
+    /// the dependent specs over the moved namespace, which no longer
+    /// compose there, as `UsdNamespaceEditor` does. Preparation composes the edited layers to verify the
     /// proposed namespace before returning: where every snapshot is a live
     /// stage's and current, only the prims the edit can change, unless
     /// relocates, layer metadata, instances, dynamic payloads or value clips

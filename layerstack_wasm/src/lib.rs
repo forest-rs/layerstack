@@ -43,8 +43,35 @@
 //! the wrapper refuses a module whose ABI it does not speak.
 //!
 //! A downstream crate can link this crate as an `rlib` into a module of its
-//! own, exporting functions that take `&Stage` and reach the document
-//! through [`Stage::document`].
+//! own, exporting functions that take `&Stage` (or `&mut Stage`) and reach
+//! the document through [`Stage::document`] and [`Stage::document_mut`].
+//! The TypeScript `Stage` lends its native stage to them for the length of
+//! one synchronous call (`Stage.withNative`) and keeps owning it; an
+//! [`Error`] such an export returns is thrown as a `LayerstackError` with
+//! its code:
+//!
+//! ```
+//! use layerstack::Time;
+//! use layerstack_wasm::{Error, Stage};
+//! use wasm_bindgen::prelude::*;
+//!
+//! /// The id of the layer whose opinion gives the default value of the
+//! /// attribute at `path`, on a stage opened with provenance
+//! /// ([`Stage::open_with_provenance`]); `None` without.
+//! #[wasm_bindgen(js_name = winningLayer)]
+//! pub fn winning_layer(stage: &Stage, path: &str) -> Result<Option<u64>, JsValue> {
+//!     let Some(attribute) = stage.document().view().attribute(path) else {
+//!         return Err(Error::new("prim.not_found", "no attribute there").at_path(path).into());
+//!     };
+//!     Ok(attribute
+//!         .get(Time::Default)
+//!         .and_then(|resolved| resolved.provenance)
+//!         .map(|source| source.layer.0))
+//! }
+//! ```
+//!
+//! From TypeScript, `stage.withNative("winningLayer", (native) =>
+//! module.winningLayer(native, "/World/Rock.size"))` calls it.
 //!
 //! The bindings are single-threaded: opening and composition run on the
 //! calling thread (`StageOptions::threads` is 0).

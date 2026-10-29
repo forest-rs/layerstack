@@ -402,3 +402,61 @@ of nine runs in ms:
 The deformation of each sample runs on the worker threads; reading the stage,
 writing the results and applying them stay on the calling thread, so every
 thread count writes the same layer.
+
+## Procedural batches
+
+`examples/procedural_batch.rs` times a procedural batch applied to a
+`LiveStage` composed with the OpenUSD schemas: 10,000 typed prims (`Sphere`
+and `Cube`, alternating) under four `Xform` groups, three schema attributes
+set on each (`radius` or `size`, `purpose`, `doubleSided`), and on every
+tenth prim a `look` variant set whose selected branch applies `MotionAPI` and
+sets `motion:blurScale`. Each run starts from a fresh store; building the
+transactions is not timed, and each time covers `LiveStage::apply`, edits and
+recomposition together.
+
+- `planned` is the batch as one transaction: each value edit is planned
+  against the type or applied schema an earlier edit of the transaction
+  authors.
+- `split` applies the structure (prims, variant sets, selections, applied
+  schemas) and then the values as a second transaction; before a
+  transaction could plan against its own schema edits, this was the way to
+  author the batch.
+- `existing` times the values over prims the structure already composed,
+  each variant prim's `MotionAPI` applied again first, so every value edit
+  after it checks its prim's sites for a changed definition.
+- `check` asserts that the three author the same root layer text, and that
+  the live stage composes the prims a fresh composition does.
+
+```sh
+cargo build --release -p wind_tunnel --example procedural_batch
+target/release/examples/procedural_batch check 10000
+target/release/examples/procedural_batch planned 10000 7
+/usr/bin/time -l target/release/examples/procedural_batch planned 10000 1
+```
+
+Measured on an Apple M3 Max, macOS 27.0.1, Rust 1.99.0, release profile,
+2026-10-30, medians of seven runs alternated over three rounds, in ms;
+"before" is the parent of the commit that plans against earlier schema
+edits (`ca71b304`), which rejects `planned` with `UndeclaredType`:
+
+| Batch | Ops | Before | After |
+|---|---:|---:|---:|
+| `planned` | 44,005 | rejected | 40.0–41.8 |
+| `split`, structure + values | 13,005 + 31,000 | 48.6–54.4 | 48.8–49.6 |
+| `split`, values alone | 31,000 | 25.7–28.1 | 25.9–26.2 |
+| `existing` | 32,000 | 26.2–26.6 | 26.5–26.8 |
+
+`planned` scales linearly: 4.0 ms for 1,000 prims, 41.8 for 10,000, 171 for
+40,000 and 445 for 100,000 (`split`: 4.6, 50.1, 243 and 657). It is faster
+than `split` because the stage recomposes once. Process peak memory
+(`/usr/bin/time -l`, one run of 10,000 prims) is 106–107 MB for `planned`
+and 77–95 MB for `split` either side of the change; the macOS allocator's
+peaks fall into two clusters across identical runs. `planned` holds the
+journal and inverse of all 44,005 edits at once.
+
+A `sample` profile of `planned` over 40,000 prims puts `planned_definition`
+at about a seventh of the edits' time (306 of 2,113 samples) and a tenth of
+`LiveStage::apply` (3,188), mostly the schema registry's
+`property_definition` cloning the definition it returns; the edits'
+bookkeeping (`Raw::change_path`, collecting the inverse) and the
+recomposition (847) cost more.

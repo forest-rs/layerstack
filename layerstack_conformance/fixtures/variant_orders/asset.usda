@@ -1,0 +1,30 @@
+#usda 1.0
+
+def "Asset" (
+    variants = {
+        string v = "x"
+    }
+    prepend variantSets = "v"
+)
+{
+    def "R0"
+    {
+    }
+
+    def "R1"
+    {
+    }
+    variantSet "v" = {
+        "x" {
+            reorder properties = ["t", "s"]
+            reorder nameChildren = ["L", "R1", "V", "R0"]
+            int s = 0
+            int t = 1
+
+            def "V"
+            {
+            }
+
+        }
+    }
+}

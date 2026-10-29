@@ -428,7 +428,7 @@ impl Verifier<'_> {
     /// Spec: AOUSD Core §12.2 (metadata resolution), §7.6.2.2
     /// (`primChildren`, `propertyChildren` orders).
     fn dedicated(&self, stage: &Stage, prim: PathId) -> [(&'static str, String); 4] {
-        let (mut active, mut instanceable, mut prim_order) = (None, None, None);
+        let (mut active, mut instanceable) = (None, None);
         if let Some(index) = stage.prims.get(&prim) {
             for OpinionSource { key: source, .. } in &index.sources {
                 let Some(spec) = self.store.layer(source.layer_id).and_then(|layer| {
@@ -438,9 +438,6 @@ impl Verifier<'_> {
                 };
                 active = active.or(spec.active);
                 instanceable = instanceable.or(spec.instanceable);
-                if prim_order.is_none() {
-                    prim_order = spec.prim_order().map(<[TokenId]>::to_vec);
-                }
             }
         }
         let names = |order: Option<Vec<TokenId>>| {
@@ -451,7 +448,10 @@ impl Verifier<'_> {
         [
             ("active", format!("{active:?}")),
             ("instanceable", format!("{instanceable:?}")),
-            ("primOrder", names(prim_order)),
+            (
+                "primOrder",
+                names(stage.resolve_prim_order(prim, self.store)),
+            ),
             (
                 "propertyOrder",
                 names(stage.resolve_property_order(prim, self.store)),

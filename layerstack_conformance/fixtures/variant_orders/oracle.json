@@ -1,0 +1,1402 @@
+{
+ "composed": {
+  "/E": {
+   "children": [
+    "D",
+    "B",
+    "C",
+    "A"
+   ],
+   "primOrder": null,
+   "properties": [
+    "a",
+    "b",
+    "c"
+   ],
+   "propertyOrder": []
+  },
+  "/E/A": {
+   "children": [],
+   "primOrder": null,
+   "properties": [],
+   "propertyOrder": []
+  },
+  "/E/B": {
+   "children": [],
+   "primOrder": null,
+   "properties": [],
+   "propertyOrder": []
+  },
+  "/E/C": {
+   "children": [],
+   "primOrder": null,
+   "properties": [],
+   "propertyOrder": []
+  },
+  "/E/D": {
+   "children": [],
+   "primOrder": null,
+   "properties": [],
+   "propertyOrder": []
+  },
+  "/P": {
+   "children": [
+    "N1",
+    "N0",
+    "W",
+    "C1",
+    "C0",
+    "A",
+    "B"
+   ],
+   "primOrder": [
+    "A",
+    "B"
+   ],
+   "properties": [
+    "a1",
+    "a0",
+    "b0",
+    "b1",
+    "w",
+    "z"
+   ],
+   "propertyOrder": [
+    "a1",
+    "a0"
+   ]
+  },
+  "/P/A": {
+   "children": [],
+   "primOrder": null,
+   "properties": [],
+   "propertyOrder": []
+  },
+  "/P/B": {
+   "children": [],
+   "primOrder": null,
+   "properties": [],
+   "propertyOrder": []
+  },
+  "/P/C0": {
+   "children": [
+    "K",
+    "J",
+    "G1",
+    "G0"
+   ],
+   "primOrder": [
+    "G1",
+    "G0"
+   ],
+   "properties": [
+    "k",
+    "j"
+   ],
+   "propertyOrder": [
+    "k",
+    "j"
+   ]
+  },
+  "/P/C0/G0": {
+   "children": [],
+   "primOrder": null,
+   "properties": [],
+   "propertyOrder": []
+  },
+  "/P/C0/G1": {
+   "children": [],
+   "primOrder": null,
+   "properties": [],
+   "propertyOrder": []
+  },
+  "/P/C0/J": {
+   "children": [],
+   "primOrder": null,
+   "properties": [],
+   "propertyOrder": []
+  },
+  "/P/C0/K": {
+   "children": [],
+   "primOrder": null,
+   "properties": [],
+   "propertyOrder": []
+  },
+  "/P/C1": {
+   "children": [],
+   "primOrder": null,
+   "properties": [],
+   "propertyOrder": []
+  },
+  "/P/N0": {
+   "children": [],
+   "primOrder": null,
+   "properties": [],
+   "propertyOrder": []
+  },
+  "/P/N1": {
+   "children": [],
+   "primOrder": null,
+   "properties": [],
+   "propertyOrder": []
+  },
+  "/P/W": {
+   "children": [],
+   "primOrder": null,
+   "properties": [],
+   "propertyOrder": []
+  },
+  "/Q": {
+   "children": [
+    "V",
+    "R0",
+    "R1",
+    "L"
+   ],
+   "primOrder": [
+    "L",
+    "R1",
+    "V",
+    "R0"
+   ],
+   "properties": [
+    "t",
+    "s"
+   ],
+   "propertyOrder": [
+    "t",
+    "s"
+   ]
+  },
+  "/Q/L": {
+   "children": [],
+   "primOrder": null,
+   "properties": [],
+   "propertyOrder": []
+  },
+  "/Q/R0": {
+   "children": [],
+   "primOrder": null,
+   "properties": [],
+   "propertyOrder": []
+  },
+  "/Q/R1": {
+   "children": [],
+   "primOrder": null,
+   "properties": [],
+   "propertyOrder": []
+  },
+  "/Q/V": {
+   "children": [],
+   "primOrder": null,
+   "properties": [],
+   "propertyOrder": []
+  },
+  "/S": {
+   "children": [
+    "X",
+    "Y",
+    "Z"
+   ],
+   "primOrder": [
+    "Z",
+    "X"
+   ],
+   "properties": [],
+   "propertyOrder": []
+  },
+  "/S/X": {
+   "children": [],
+   "primOrder": null,
+   "properties": [],
+   "propertyOrder": []
+  },
+  "/S/Y": {
+   "children": [],
+   "primOrder": null,
+   "properties": [],
+   "propertyOrder": []
+  },
+  "/S/Z": {
+   "children": [],
+   "primOrder": null,
+   "properties": [],
+   "propertyOrder": []
+  }
+ },
+ "edits": [
+  {
+   "accepted": [
+    true
+   ],
+   "calls": [
+    [
+     "set_prim_order",
+     [
+      "C",
+      "B",
+      "A"
+     ]
+    ]
+   ],
+   "composed": {
+    "children": [
+     "D",
+     "C",
+     "B",
+     "A"
+    ],
+    "primOrder": [
+     "C",
+     "B",
+     "A"
+    ],
+    "properties": [
+     "a",
+     "b",
+     "c"
+    ],
+    "propertyOrder": []
+   },
+   "name": "set_prim_order",
+   "spec": {
+    "primOrder": [
+     "C",
+     "B",
+     "A"
+    ],
+    "propertyOrder": null
+   },
+   "text": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef \"P\" (\n    variants = {\n        string v = \"x\"\n    }\n    prepend variantSets = \"v\"\n)\n{\n    reorder nameChildren = [\"A\", \"B\"]\n    int z = 0\n\n    def \"A\"\n    {\n    }\n\n    def \"B\"\n    {\n    }\n    variantSet \"v\" = {\n        \"x\" (\n            variants = {\n                string n = \"y\"\n            }\n            prepend variantSets = \"n\"\n        ) {\n            reorder properties = [\"a1\", \"a0\"]\n            reorder nameChildren = [\"C1\", \"C0\"]\n            int a0 = 0\n            int a1 = 1\n\n            def \"C0\" (\n                variants = {\n                    string w = \"z\"\n                }\n                prepend variantSets = \"w\"\n            )\n            {\n                reorder nameChildren = [\"G1\", \"G0\"]\n                def \"G0\"\n                {\n                }\n\n                def \"G1\"\n                {\n                }\n                variantSet \"w\" = {\n                    \"z\" {\n                        reorder properties = [\"k\", \"j\"]\n                        reorder nameChildren = [\"K\", \"G0\", \"J\"]\n                        int j = 0\n                        int k = 1\n\n                        def \"J\"\n                        {\n                        }\n\n                        def \"K\"\n                        {\n                        }\n\n                    }\n                }\n            }\n\n            def \"C1\"\n            {\n            }\n            variantSet \"n\" = {\n                \"y\" {\n                    reorder properties = [\"b1\", \"a0\"]\n                    reorder nameChildren = [\"N1\", \"B\", \"N0\"]\n                    int b0 = 0\n                    int b1 = 1\n\n                    def \"N0\"\n                    {\n                    }\n\n                    def \"N1\"\n                    {\n                    }\n\n                }\n            }\n\n        }\n    }\n}\n\ndef \"Q\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n    def \"L\"\n    {\n    }\n}\n\ndef \"S\" (\n    variants = {\n        string look = \"a\"\n    }\n    prepend variantSets = \"look\"\n)\n{\n    def \"X\"\n    {\n    }\n\n    def \"Y\"\n    {\n    }\n\n    def \"Z\"\n    {\n    }\n    variantSet \"look\" = {\n        \"a\" {\n            reorder nameChildren = [\"Z\", \"X\"]\n\n        }\n        \"b\" {\n            reorder properties = [\"q\", \"p\"]\n            reorder nameChildren = [\"Y\", \"Z\", \"X\"]\n            int p = 0\n            int q = 1\n\n        }\n    }\n}\n\ndef \"E\" (\n    variants = {\n        string v = \"x\"\n    }\n    prepend variantSets = \"v\"\n)\n{\n    def \"A\"\n    {\n    }\n    variantSet \"v\" = {\n        \"x\" (\n            variants = {\n                string n = \"y\"\n            }\n            prepend variantSets = \"n\"\n        ) {\n            reorder nameChildren = [\"C\", \"B\", \"A\"]\n            int a = 1\n            int b = 2\n\n            def \"B\"\n            {\n            }\n\n            def \"C\"\n            {\n            }\n            variantSet \"n\" = {\n                \"y\" {\n                    int c = 3\n\n                    def \"D\"\n                    {\n                    }\n\n                }\n            }\n\n        }\n    }\n}\n\n",
+   "variant": "/E{v=x}"
+  },
+  {
+   "accepted": [
+    true,
+    true
+   ],
+   "calls": [
+    [
+     "set_prim_order",
+     [
+      "C",
+      "B"
+     ]
+    ],
+    [
+     "set_prim_order",
+     null
+    ]
+   ],
+   "composed": {
+    "children": [
+     "D",
+     "B",
+     "C",
+     "A"
+    ],
+    "primOrder": null,
+    "properties": [
+     "a",
+     "b",
+     "c"
+    ],
+    "propertyOrder": []
+   },
+   "name": "set_and_clear_prim_order",
+   "spec": {
+    "primOrder": null,
+    "propertyOrder": null
+   },
+   "text": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef \"P\" (\n    variants = {\n        string v = \"x\"\n    }\n    prepend variantSets = \"v\"\n)\n{\n    reorder nameChildren = [\"A\", \"B\"]\n    int z = 0\n\n    def \"A\"\n    {\n    }\n\n    def \"B\"\n    {\n    }\n    variantSet \"v\" = {\n        \"x\" (\n            variants = {\n                string n = \"y\"\n            }\n            prepend variantSets = \"n\"\n        ) {\n            reorder properties = [\"a1\", \"a0\"]\n            reorder nameChildren = [\"C1\", \"C0\"]\n            int a0 = 0\n            int a1 = 1\n\n            def \"C0\" (\n                variants = {\n                    string w = \"z\"\n                }\n                prepend variantSets = \"w\"\n            )\n            {\n                reorder nameChildren = [\"G1\", \"G0\"]\n                def \"G0\"\n                {\n                }\n\n                def \"G1\"\n                {\n                }\n                variantSet \"w\" = {\n                    \"z\" {\n                        reorder properties = [\"k\", \"j\"]\n                        reorder nameChildren = [\"K\", \"G0\", \"J\"]\n                        int j = 0\n                        int k = 1\n\n                        def \"J\"\n                        {\n                        }\n\n                        def \"K\"\n                        {\n                        }\n\n                    }\n                }\n            }\n\n            def \"C1\"\n            {\n            }\n            variantSet \"n\" = {\n                \"y\" {\n                    reorder properties = [\"b1\", \"a0\"]\n                    reorder nameChildren = [\"N1\", \"B\", \"N0\"]\n                    int b0 = 0\n                    int b1 = 1\n\n                    def \"N0\"\n                    {\n                    }\n\n                    def \"N1\"\n                    {\n                    }\n\n                }\n            }\n\n        }\n    }\n}\n\ndef \"Q\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n    def \"L\"\n    {\n    }\n}\n\ndef \"S\" (\n    variants = {\n        string look = \"a\"\n    }\n    prepend variantSets = \"look\"\n)\n{\n    def \"X\"\n    {\n    }\n\n    def \"Y\"\n    {\n    }\n\n    def \"Z\"\n    {\n    }\n    variantSet \"look\" = {\n        \"a\" {\n            reorder nameChildren = [\"Z\", \"X\"]\n\n        }\n        \"b\" {\n            reorder properties = [\"q\", \"p\"]\n            reorder nameChildren = [\"Y\", \"Z\", \"X\"]\n            int p = 0\n            int q = 1\n\n        }\n    }\n}\n\ndef \"E\" (\n    variants = {\n        string v = \"x\"\n    }\n    prepend variantSets = \"v\"\n)\n{\n    def \"A\"\n    {\n    }\n    variantSet \"v\" = {\n        \"x\" (\n            variants = {\n                string n = \"y\"\n            }\n            prepend variantSets = \"n\"\n        ) {\n            int a = 1\n            int b = 2\n\n            def \"B\"\n            {\n            }\n\n            def \"C\"\n            {\n            }\n            variantSet \"n\" = {\n                \"y\" {\n                    int c = 3\n\n                    def \"D\"\n                    {\n                    }\n\n                }\n            }\n\n        }\n    }\n}\n\n",
+   "variant": "/E{v=x}"
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "calls": [
+    [
+     "set_prim_order",
+     []
+    ]
+   ],
+   "composed": {
+    "children": [
+     "D",
+     "B",
+     "C",
+     "A"
+    ],
+    "primOrder": [],
+    "properties": [
+     "a",
+     "b",
+     "c"
+    ],
+    "propertyOrder": []
+   },
+   "name": "empty_prim_order",
+   "spec": {
+    "primOrder": [],
+    "propertyOrder": null
+   },
+   "text": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef \"P\" (\n    variants = {\n        string v = \"x\"\n    }\n    prepend variantSets = \"v\"\n)\n{\n    reorder nameChildren = [\"A\", \"B\"]\n    int z = 0\n\n    def \"A\"\n    {\n    }\n\n    def \"B\"\n    {\n    }\n    variantSet \"v\" = {\n        \"x\" (\n            variants = {\n                string n = \"y\"\n            }\n            prepend variantSets = \"n\"\n        ) {\n            reorder properties = [\"a1\", \"a0\"]\n            reorder nameChildren = [\"C1\", \"C0\"]\n            int a0 = 0\n            int a1 = 1\n\n            def \"C0\" (\n                variants = {\n                    string w = \"z\"\n                }\n                prepend variantSets = \"w\"\n            )\n            {\n                reorder nameChildren = [\"G1\", \"G0\"]\n                def \"G0\"\n                {\n                }\n\n                def \"G1\"\n                {\n                }\n                variantSet \"w\" = {\n                    \"z\" {\n                        reorder properties = [\"k\", \"j\"]\n                        reorder nameChildren = [\"K\", \"G0\", \"J\"]\n                        int j = 0\n                        int k = 1\n\n                        def \"J\"\n                        {\n                        }\n\n                        def \"K\"\n                        {\n                        }\n\n                    }\n                }\n            }\n\n            def \"C1\"\n            {\n            }\n            variantSet \"n\" = {\n                \"y\" {\n                    reorder properties = [\"b1\", \"a0\"]\n                    reorder nameChildren = [\"N1\", \"B\", \"N0\"]\n                    int b0 = 0\n                    int b1 = 1\n\n                    def \"N0\"\n                    {\n                    }\n\n                    def \"N1\"\n                    {\n                    }\n\n                }\n            }\n\n        }\n    }\n}\n\ndef \"Q\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n    def \"L\"\n    {\n    }\n}\n\ndef \"S\" (\n    variants = {\n        string look = \"a\"\n    }\n    prepend variantSets = \"look\"\n)\n{\n    def \"X\"\n    {\n    }\n\n    def \"Y\"\n    {\n    }\n\n    def \"Z\"\n    {\n    }\n    variantSet \"look\" = {\n        \"a\" {\n            reorder nameChildren = [\"Z\", \"X\"]\n\n        }\n        \"b\" {\n            reorder properties = [\"q\", \"p\"]\n            reorder nameChildren = [\"Y\", \"Z\", \"X\"]\n            int p = 0\n            int q = 1\n\n        }\n    }\n}\n\ndef \"E\" (\n    variants = {\n        string v = \"x\"\n    }\n    prepend variantSets = \"v\"\n)\n{\n    def \"A\"\n    {\n    }\n    variantSet \"v\" = {\n        \"x\" (\n            variants = {\n                string n = \"y\"\n            }\n            prepend variantSets = \"n\"\n        ) {\n            int a = 1\n            int b = 2\n\n            def \"B\"\n            {\n            }\n\n            def \"C\"\n            {\n            }\n            variantSet \"n\" = {\n                \"y\" {\n                    int c = 3\n\n                    def \"D\"\n                    {\n                    }\n\n                }\n            }\n\n        }\n    }\n}\n\n",
+   "variant": "/E{v=x}"
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "calls": [
+    [
+     "set_property_order",
+     [
+      "b",
+      "a"
+     ]
+    ]
+   ],
+   "composed": {
+    "children": [
+     "D",
+     "B",
+     "C",
+     "A"
+    ],
+    "primOrder": null,
+    "properties": [
+     "b",
+     "a",
+     "c"
+    ],
+    "propertyOrder": [
+     "b",
+     "a"
+    ]
+   },
+   "name": "set_property_order",
+   "spec": {
+    "primOrder": null,
+    "propertyOrder": [
+     "b",
+     "a"
+    ]
+   },
+   "text": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef \"P\" (\n    variants = {\n        string v = \"x\"\n    }\n    prepend variantSets = \"v\"\n)\n{\n    reorder nameChildren = [\"A\", \"B\"]\n    int z = 0\n\n    def \"A\"\n    {\n    }\n\n    def \"B\"\n    {\n    }\n    variantSet \"v\" = {\n        \"x\" (\n            variants = {\n                string n = \"y\"\n            }\n            prepend variantSets = \"n\"\n        ) {\n            reorder properties = [\"a1\", \"a0\"]\n            reorder nameChildren = [\"C1\", \"C0\"]\n            int a0 = 0\n            int a1 = 1\n\n            def \"C0\" (\n                variants = {\n                    string w = \"z\"\n                }\n                prepend variantSets = \"w\"\n            )\n            {\n                reorder nameChildren = [\"G1\", \"G0\"]\n                def \"G0\"\n                {\n                }\n\n                def \"G1\"\n                {\n                }\n                variantSet \"w\" = {\n                    \"z\" {\n                        reorder properties = [\"k\", \"j\"]\n                        reorder nameChildren = [\"K\", \"G0\", \"J\"]\n                        int j = 0\n                        int k = 1\n\n                        def \"J\"\n                        {\n                        }\n\n                        def \"K\"\n                        {\n                        }\n\n                    }\n                }\n            }\n\n            def \"C1\"\n            {\n            }\n            variantSet \"n\" = {\n                \"y\" {\n                    reorder properties = [\"b1\", \"a0\"]\n                    reorder nameChildren = [\"N1\", \"B\", \"N0\"]\n                    int b0 = 0\n                    int b1 = 1\n\n                    def \"N0\"\n                    {\n                    }\n\n                    def \"N1\"\n                    {\n                    }\n\n                }\n            }\n\n        }\n    }\n}\n\ndef \"Q\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n    def \"L\"\n    {\n    }\n}\n\ndef \"S\" (\n    variants = {\n        string look = \"a\"\n    }\n    prepend variantSets = \"look\"\n)\n{\n    def \"X\"\n    {\n    }\n\n    def \"Y\"\n    {\n    }\n\n    def \"Z\"\n    {\n    }\n    variantSet \"look\" = {\n        \"a\" {\n            reorder nameChildren = [\"Z\", \"X\"]\n\n        }\n        \"b\" {\n            reorder properties = [\"q\", \"p\"]\n            reorder nameChildren = [\"Y\", \"Z\", \"X\"]\n            int p = 0\n            int q = 1\n\n        }\n    }\n}\n\ndef \"E\" (\n    variants = {\n        string v = \"x\"\n    }\n    prepend variantSets = \"v\"\n)\n{\n    def \"A\"\n    {\n    }\n    variantSet \"v\" = {\n        \"x\" (\n            variants = {\n                string n = \"y\"\n            }\n            prepend variantSets = \"n\"\n        ) {\n            reorder properties = [\"b\", \"a\"]\n            int a = 1\n            int b = 2\n\n            def \"B\"\n            {\n            }\n\n            def \"C\"\n            {\n            }\n            variantSet \"n\" = {\n                \"y\" {\n                    int c = 3\n\n                    def \"D\"\n                    {\n                    }\n\n                }\n            }\n\n        }\n    }\n}\n\n",
+   "variant": "/E{v=x}"
+  },
+  {
+   "accepted": [
+    true,
+    true,
+    true
+   ],
+   "calls": [
+    [
+     "set_property_order",
+     [
+      "b",
+      "a"
+     ]
+    ],
+    [
+     "set_prim_order",
+     [
+      "C",
+      "A",
+      "B"
+     ]
+    ],
+    [
+     "set_property_order",
+     null
+    ]
+   ],
+   "composed": {
+    "children": [
+     "D",
+     "C",
+     "B",
+     "A"
+    ],
+    "primOrder": [
+     "C",
+     "A",
+     "B"
+    ],
+    "properties": [
+     "a",
+     "b",
+     "c"
+    ],
+    "propertyOrder": []
+   },
+   "name": "set_both_orders",
+   "spec": {
+    "primOrder": [
+     "C",
+     "A",
+     "B"
+    ],
+    "propertyOrder": null
+   },
+   "text": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef \"P\" (\n    variants = {\n        string v = \"x\"\n    }\n    prepend variantSets = \"v\"\n)\n{\n    reorder nameChildren = [\"A\", \"B\"]\n    int z = 0\n\n    def \"A\"\n    {\n    }\n\n    def \"B\"\n    {\n    }\n    variantSet \"v\" = {\n        \"x\" (\n            variants = {\n                string n = \"y\"\n            }\n            prepend variantSets = \"n\"\n        ) {\n            reorder properties = [\"a1\", \"a0\"]\n            reorder nameChildren = [\"C1\", \"C0\"]\n            int a0 = 0\n            int a1 = 1\n\n            def \"C0\" (\n                variants = {\n                    string w = \"z\"\n                }\n                prepend variantSets = \"w\"\n            )\n            {\n                reorder nameChildren = [\"G1\", \"G0\"]\n                def \"G0\"\n                {\n                }\n\n                def \"G1\"\n                {\n                }\n                variantSet \"w\" = {\n                    \"z\" {\n                        reorder properties = [\"k\", \"j\"]\n                        reorder nameChildren = [\"K\", \"G0\", \"J\"]\n                        int j = 0\n                        int k = 1\n\n                        def \"J\"\n                        {\n                        }\n\n                        def \"K\"\n                        {\n                        }\n\n                    }\n                }\n            }\n\n            def \"C1\"\n            {\n            }\n            variantSet \"n\" = {\n                \"y\" {\n                    reorder properties = [\"b1\", \"a0\"]\n                    reorder nameChildren = [\"N1\", \"B\", \"N0\"]\n                    int b0 = 0\n                    int b1 = 1\n\n                    def \"N0\"\n                    {\n                    }\n\n                    def \"N1\"\n                    {\n                    }\n\n                }\n            }\n\n        }\n    }\n}\n\ndef \"Q\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n    def \"L\"\n    {\n    }\n}\n\ndef \"S\" (\n    variants = {\n        string look = \"a\"\n    }\n    prepend variantSets = \"look\"\n)\n{\n    def \"X\"\n    {\n    }\n\n    def \"Y\"\n    {\n    }\n\n    def \"Z\"\n    {\n    }\n    variantSet \"look\" = {\n        \"a\" {\n            reorder nameChildren = [\"Z\", \"X\"]\n\n        }\n        \"b\" {\n            reorder properties = [\"q\", \"p\"]\n            reorder nameChildren = [\"Y\", \"Z\", \"X\"]\n            int p = 0\n            int q = 1\n\n        }\n    }\n}\n\ndef \"E\" (\n    variants = {\n        string v = \"x\"\n    }\n    prepend variantSets = \"v\"\n)\n{\n    def \"A\"\n    {\n    }\n    variantSet \"v\" = {\n        \"x\" (\n            variants = {\n                string n = \"y\"\n            }\n            prepend variantSets = \"n\"\n        ) {\n            reorder nameChildren = [\"C\", \"A\", \"B\"]\n            int a = 1\n            int b = 2\n\n            def \"B\"\n            {\n            }\n\n            def \"C\"\n            {\n            }\n            variantSet \"n\" = {\n                \"y\" {\n                    int c = 3\n\n                    def \"D\"\n                    {\n                    }\n\n                }\n            }\n\n        }\n    }\n}\n\n",
+   "variant": "/E{v=x}"
+  },
+  {
+   "accepted": [
+    true,
+    true
+   ],
+   "calls": [
+    [
+     "set_prim_order",
+     [
+      "D",
+      "C",
+      "B",
+      "A"
+     ]
+    ],
+    [
+     "set_property_order",
+     [
+      "c",
+      "b"
+     ]
+    ]
+   ],
+   "composed": {
+    "children": [
+     "D",
+     "B",
+     "C",
+     "A"
+    ],
+    "primOrder": [
+     "D",
+     "C",
+     "B",
+     "A"
+    ],
+    "properties": [
+     "c",
+     "b",
+     "a"
+    ],
+    "propertyOrder": [
+     "c",
+     "b"
+    ]
+   },
+   "name": "nested_variant",
+   "spec": {
+    "primOrder": [
+     "D",
+     "C",
+     "B",
+     "A"
+    ],
+    "propertyOrder": [
+     "c",
+     "b"
+    ]
+   },
+   "text": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef \"P\" (\n    variants = {\n        string v = \"x\"\n    }\n    prepend variantSets = \"v\"\n)\n{\n    reorder nameChildren = [\"A\", \"B\"]\n    int z = 0\n\n    def \"A\"\n    {\n    }\n\n    def \"B\"\n    {\n    }\n    variantSet \"v\" = {\n        \"x\" (\n            variants = {\n                string n = \"y\"\n            }\n            prepend variantSets = \"n\"\n        ) {\n            reorder properties = [\"a1\", \"a0\"]\n            reorder nameChildren = [\"C1\", \"C0\"]\n            int a0 = 0\n            int a1 = 1\n\n            def \"C0\" (\n                variants = {\n                    string w = \"z\"\n                }\n                prepend variantSets = \"w\"\n            )\n            {\n                reorder nameChildren = [\"G1\", \"G0\"]\n                def \"G0\"\n                {\n                }\n\n                def \"G1\"\n                {\n                }\n                variantSet \"w\" = {\n                    \"z\" {\n                        reorder properties = [\"k\", \"j\"]\n                        reorder nameChildren = [\"K\", \"G0\", \"J\"]\n                        int j = 0\n                        int k = 1\n\n                        def \"J\"\n                        {\n                        }\n\n                        def \"K\"\n                        {\n                        }\n\n                    }\n                }\n            }\n\n            def \"C1\"\n            {\n            }\n            variantSet \"n\" = {\n                \"y\" {\n                    reorder properties = [\"b1\", \"a0\"]\n                    reorder nameChildren = [\"N1\", \"B\", \"N0\"]\n                    int b0 = 0\n                    int b1 = 1\n\n                    def \"N0\"\n                    {\n                    }\n\n                    def \"N1\"\n                    {\n                    }\n\n                }\n            }\n\n        }\n    }\n}\n\ndef \"Q\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n    def \"L\"\n    {\n    }\n}\n\ndef \"S\" (\n    variants = {\n        string look = \"a\"\n    }\n    prepend variantSets = \"look\"\n)\n{\n    def \"X\"\n    {\n    }\n\n    def \"Y\"\n    {\n    }\n\n    def \"Z\"\n    {\n    }\n    variantSet \"look\" = {\n        \"a\" {\n            reorder nameChildren = [\"Z\", \"X\"]\n\n        }\n        \"b\" {\n            reorder properties = [\"q\", \"p\"]\n            reorder nameChildren = [\"Y\", \"Z\", \"X\"]\n            int p = 0\n            int q = 1\n\n        }\n    }\n}\n\ndef \"E\" (\n    variants = {\n        string v = \"x\"\n    }\n    prepend variantSets = \"v\"\n)\n{\n    def \"A\"\n    {\n    }\n    variantSet \"v\" = {\n        \"x\" (\n            variants = {\n                string n = \"y\"\n            }\n            prepend variantSets = \"n\"\n        ) {\n            int a = 1\n            int b = 2\n\n            def \"B\"\n            {\n            }\n\n            def \"C\"\n            {\n            }\n            variantSet \"n\" = {\n                \"y\" {\n                    reorder properties = [\"c\", \"b\"]\n                    reorder nameChildren = [\"D\", \"C\", \"B\", \"A\"]\n                    int c = 3\n\n                    def \"D\"\n                    {\n                    }\n\n                }\n            }\n\n        }\n    }\n}\n\n",
+   "variant": "/E{v=x}{n=y}"
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "calls": [
+    [
+     "sdf_name_children_order",
+     [
+      "C",
+      "B"
+     ]
+    ]
+   ],
+   "composed": {
+    "children": [
+     "D",
+     "C",
+     "B",
+     "A"
+    ],
+    "primOrder": [
+     "C",
+     "B"
+    ],
+    "properties": [
+     "a",
+     "b",
+     "c"
+    ],
+    "propertyOrder": []
+   },
+   "name": "sdf_name_children_order",
+   "spec": {
+    "primOrder": [
+     "C",
+     "B"
+    ],
+    "propertyOrder": null
+   },
+   "text": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef \"P\" (\n    variants = {\n        string v = \"x\"\n    }\n    prepend variantSets = \"v\"\n)\n{\n    reorder nameChildren = [\"A\", \"B\"]\n    int z = 0\n\n    def \"A\"\n    {\n    }\n\n    def \"B\"\n    {\n    }\n    variantSet \"v\" = {\n        \"x\" (\n            variants = {\n                string n = \"y\"\n            }\n            prepend variantSets = \"n\"\n        ) {\n            reorder properties = [\"a1\", \"a0\"]\n            reorder nameChildren = [\"C1\", \"C0\"]\n            int a0 = 0\n            int a1 = 1\n\n            def \"C0\" (\n                variants = {\n                    string w = \"z\"\n                }\n                prepend variantSets = \"w\"\n            )\n            {\n                reorder nameChildren = [\"G1\", \"G0\"]\n                def \"G0\"\n                {\n                }\n\n                def \"G1\"\n                {\n                }\n                variantSet \"w\" = {\n                    \"z\" {\n                        reorder properties = [\"k\", \"j\"]\n                        reorder nameChildren = [\"K\", \"G0\", \"J\"]\n                        int j = 0\n                        int k = 1\n\n                        def \"J\"\n                        {\n                        }\n\n                        def \"K\"\n                        {\n                        }\n\n                    }\n                }\n            }\n\n            def \"C1\"\n            {\n            }\n            variantSet \"n\" = {\n                \"y\" {\n                    reorder properties = [\"b1\", \"a0\"]\n                    reorder nameChildren = [\"N1\", \"B\", \"N0\"]\n                    int b0 = 0\n                    int b1 = 1\n\n                    def \"N0\"\n                    {\n                    }\n\n                    def \"N1\"\n                    {\n                    }\n\n                }\n            }\n\n        }\n    }\n}\n\ndef \"Q\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n    def \"L\"\n    {\n    }\n}\n\ndef \"S\" (\n    variants = {\n        string look = \"a\"\n    }\n    prepend variantSets = \"look\"\n)\n{\n    def \"X\"\n    {\n    }\n\n    def \"Y\"\n    {\n    }\n\n    def \"Z\"\n    {\n    }\n    variantSet \"look\" = {\n        \"a\" {\n            reorder nameChildren = [\"Z\", \"X\"]\n\n        }\n        \"b\" {\n            reorder properties = [\"q\", \"p\"]\n            reorder nameChildren = [\"Y\", \"Z\", \"X\"]\n            int p = 0\n            int q = 1\n\n        }\n    }\n}\n\ndef \"E\" (\n    variants = {\n        string v = \"x\"\n    }\n    prepend variantSets = \"v\"\n)\n{\n    def \"A\"\n    {\n    }\n    variantSet \"v\" = {\n        \"x\" (\n            variants = {\n                string n = \"y\"\n            }\n            prepend variantSets = \"n\"\n        ) {\n            reorder nameChildren = [\"C\", \"B\"]\n            int a = 1\n            int b = 2\n\n            def \"B\"\n            {\n            }\n\n            def \"C\"\n            {\n            }\n            variantSet \"n\" = {\n                \"y\" {\n                    int c = 3\n\n                    def \"D\"\n                    {\n                    }\n\n                }\n            }\n\n        }\n    }\n}\n\n",
+   "variant": "/E{v=x}"
+  }
+ ],
+ "flatten": {
+  "/E": {
+   "children": [
+    "D",
+    "B",
+    "C",
+    "A"
+   ],
+   "primOrder": null,
+   "propertyOrder": null
+  },
+  "/E/A": {
+   "children": [],
+   "primOrder": null,
+   "propertyOrder": null
+  },
+  "/E/B": {
+   "children": [],
+   "primOrder": null,
+   "propertyOrder": null
+  },
+  "/E/C": {
+   "children": [],
+   "primOrder": null,
+   "propertyOrder": null
+  },
+  "/E/D": {
+   "children": [],
+   "primOrder": null,
+   "propertyOrder": null
+  },
+  "/P": {
+   "children": [
+    "N1",
+    "N0",
+    "W",
+    "C1",
+    "C0",
+    "A",
+    "B"
+   ],
+   "primOrder": [
+    "A",
+    "B"
+   ],
+   "propertyOrder": [
+    "a1",
+    "a0"
+   ]
+  },
+  "/P/A": {
+   "children": [],
+   "primOrder": null,
+   "propertyOrder": null
+  },
+  "/P/B": {
+   "children": [],
+   "primOrder": null,
+   "propertyOrder": null
+  },
+  "/P/C0": {
+   "children": [
+    "K",
+    "J",
+    "G1",
+    "G0"
+   ],
+   "primOrder": [
+    "G1",
+    "G0"
+   ],
+   "propertyOrder": [
+    "k",
+    "j"
+   ]
+  },
+  "/P/C0/G0": {
+   "children": [],
+   "primOrder": null,
+   "propertyOrder": null
+  },
+  "/P/C0/G1": {
+   "children": [],
+   "primOrder": null,
+   "propertyOrder": null
+  },
+  "/P/C0/J": {
+   "children": [],
+   "primOrder": null,
+   "propertyOrder": null
+  },
+  "/P/C0/K": {
+   "children": [],
+   "primOrder": null,
+   "propertyOrder": null
+  },
+  "/P/C1": {
+   "children": [],
+   "primOrder": null,
+   "propertyOrder": null
+  },
+  "/P/N0": {
+   "children": [],
+   "primOrder": null,
+   "propertyOrder": null
+  },
+  "/P/N1": {
+   "children": [],
+   "primOrder": null,
+   "propertyOrder": null
+  },
+  "/P/W": {
+   "children": [],
+   "primOrder": null,
+   "propertyOrder": null
+  },
+  "/Q": {
+   "children": [
+    "V",
+    "R0",
+    "R1",
+    "L"
+   ],
+   "primOrder": [
+    "L",
+    "R1",
+    "V",
+    "R0"
+   ],
+   "propertyOrder": [
+    "t",
+    "s"
+   ]
+  },
+  "/Q/L": {
+   "children": [],
+   "primOrder": null,
+   "propertyOrder": null
+  },
+  "/Q/R0": {
+   "children": [],
+   "primOrder": null,
+   "propertyOrder": null
+  },
+  "/Q/R1": {
+   "children": [],
+   "primOrder": null,
+   "propertyOrder": null
+  },
+  "/Q/V": {
+   "children": [],
+   "primOrder": null,
+   "propertyOrder": null
+  },
+  "/S": {
+   "children": [
+    "X",
+    "Y",
+    "Z"
+   ],
+   "primOrder": [
+    "Z",
+    "X"
+   ],
+   "propertyOrder": null
+  },
+  "/S/X": {
+   "children": [],
+   "primOrder": null,
+   "propertyOrder": null
+  },
+  "/S/Y": {
+   "children": [],
+   "primOrder": null,
+   "propertyOrder": null
+  },
+  "/S/Z": {
+   "children": [],
+   "primOrder": null,
+   "propertyOrder": null
+  }
+ },
+ "layer_stack_flatten": {
+  "/E": {
+   "children": [
+    "A"
+   ],
+   "primOrder": null,
+   "propertyOrder": null
+  },
+  "/E/A": {
+   "children": [],
+   "primOrder": null,
+   "propertyOrder": null
+  },
+  "/E{v=x}": {
+   "children": [
+    "B",
+    "C"
+   ],
+   "primOrder": null,
+   "propertyOrder": null
+  },
+  "/E{v=x}B": {
+   "children": [],
+   "primOrder": null,
+   "propertyOrder": null
+  },
+  "/E{v=x}C": {
+   "children": [],
+   "primOrder": null,
+   "propertyOrder": null
+  },
+  "/E{v=x}{n=y}": {
+   "children": [
+    "D"
+   ],
+   "primOrder": null,
+   "propertyOrder": null
+  },
+  "/E{v=x}{n=y}D": {
+   "children": [],
+   "primOrder": null,
+   "propertyOrder": null
+  },
+  "/P": {
+   "children": [
+    "A",
+    "B"
+   ],
+   "primOrder": [
+    "A",
+    "B"
+   ],
+   "propertyOrder": null
+  },
+  "/P/A": {
+   "children": [],
+   "primOrder": null,
+   "propertyOrder": null
+  },
+  "/P/B": {
+   "children": [],
+   "primOrder": null,
+   "propertyOrder": null
+  },
+  "/P{v=x}": {
+   "children": [
+    "W",
+    "C1",
+    "C0"
+   ],
+   "primOrder": [
+    "C1",
+    "C0"
+   ],
+   "propertyOrder": [
+    "a1",
+    "a0"
+   ]
+  },
+  "/P{v=x}C0": {
+   "children": [
+    "G1",
+    "G0"
+   ],
+   "primOrder": [
+    "G1",
+    "G0"
+   ],
+   "propertyOrder": null
+  },
+  "/P{v=x}C0/G0": {
+   "children": [],
+   "primOrder": null,
+   "propertyOrder": null
+  },
+  "/P{v=x}C0/G1": {
+   "children": [],
+   "primOrder": null,
+   "propertyOrder": null
+  },
+  "/P{v=x}C0{w=z}": {
+   "children": [
+    "K",
+    "J"
+   ],
+   "primOrder": [
+    "K",
+    "G0",
+    "J"
+   ],
+   "propertyOrder": [
+    "k",
+    "j"
+   ]
+  },
+  "/P{v=x}C0{w=z}J": {
+   "children": [],
+   "primOrder": null,
+   "propertyOrder": null
+  },
+  "/P{v=x}C0{w=z}K": {
+   "children": [],
+   "primOrder": null,
+   "propertyOrder": null
+  },
+  "/P{v=x}C1": {
+   "children": [],
+   "primOrder": null,
+   "propertyOrder": null
+  },
+  "/P{v=x}W": {
+   "children": [],
+   "primOrder": null,
+   "propertyOrder": null
+  },
+  "/P{v=x}{n=y}": {
+   "children": [
+    "N1",
+    "N0"
+   ],
+   "primOrder": [
+    "N1",
+    "B",
+    "N0"
+   ],
+   "propertyOrder": [
+    "b1",
+    "a0"
+   ]
+  },
+  "/P{v=x}{n=y}N0": {
+   "children": [],
+   "primOrder": null,
+   "propertyOrder": null
+  },
+  "/P{v=x}{n=y}N1": {
+   "children": [],
+   "primOrder": null,
+   "propertyOrder": null
+  },
+  "/Q": {
+   "children": [
+    "L"
+   ],
+   "primOrder": null,
+   "propertyOrder": null
+  },
+  "/Q/L": {
+   "children": [],
+   "primOrder": null,
+   "propertyOrder": null
+  },
+  "/S": {
+   "children": [
+    "X",
+    "Y",
+    "Z"
+   ],
+   "primOrder": null,
+   "propertyOrder": null
+  },
+  "/S/X": {
+   "children": [],
+   "primOrder": null,
+   "propertyOrder": null
+  },
+  "/S/Y": {
+   "children": [],
+   "primOrder": null,
+   "propertyOrder": null
+  },
+  "/S/Z": {
+   "children": [],
+   "primOrder": null,
+   "propertyOrder": null
+  },
+  "/S{look=a}": {
+   "children": [],
+   "primOrder": [
+    "Z",
+    "X"
+   ],
+   "propertyOrder": null
+  },
+  "/S{look=b}": {
+   "children": [],
+   "primOrder": [
+    "Y",
+    "Z",
+    "X"
+   ],
+   "propertyOrder": [
+    "q",
+    "p"
+   ]
+  }
+ },
+ "openusd_version": "26.11",
+ "specs": {
+  "asset.usda": {
+   "/Asset": {
+    "primOrder": null,
+    "propertyOrder": null
+   },
+   "/Asset/R0": {
+    "primOrder": null,
+    "propertyOrder": null
+   },
+   "/Asset/R1": {
+    "primOrder": null,
+    "propertyOrder": null
+   },
+   "/Asset{v=x}": {
+    "primOrder": [
+     "L",
+     "R1",
+     "V",
+     "R0"
+    ],
+    "propertyOrder": [
+     "t",
+     "s"
+    ]
+   },
+   "/Asset{v=x}V": {
+    "primOrder": null,
+    "propertyOrder": null
+   }
+  },
+  "root.usda": {
+   "/E": {
+    "primOrder": null,
+    "propertyOrder": null
+   },
+   "/E/A": {
+    "primOrder": null,
+    "propertyOrder": null
+   },
+   "/E{v=x}": {
+    "primOrder": null,
+    "propertyOrder": null
+   },
+   "/E{v=x}B": {
+    "primOrder": null,
+    "propertyOrder": null
+   },
+   "/E{v=x}C": {
+    "primOrder": null,
+    "propertyOrder": null
+   },
+   "/E{v=x}{n=y}": {
+    "primOrder": null,
+    "propertyOrder": null
+   },
+   "/E{v=x}{n=y}D": {
+    "primOrder": null,
+    "propertyOrder": null
+   },
+   "/P": {
+    "primOrder": [
+     "A",
+     "B"
+    ],
+    "propertyOrder": null
+   },
+   "/P/A": {
+    "primOrder": null,
+    "propertyOrder": null
+   },
+   "/P/B": {
+    "primOrder": null,
+    "propertyOrder": null
+   },
+   "/P{v=x}": {
+    "primOrder": [
+     "C1",
+     "C0"
+    ],
+    "propertyOrder": [
+     "a1",
+     "a0"
+    ]
+   },
+   "/P{v=x}C0": {
+    "primOrder": [
+     "G1",
+     "G0"
+    ],
+    "propertyOrder": null
+   },
+   "/P{v=x}C0/G0": {
+    "primOrder": null,
+    "propertyOrder": null
+   },
+   "/P{v=x}C0/G1": {
+    "primOrder": null,
+    "propertyOrder": null
+   },
+   "/P{v=x}C0{w=z}": {
+    "primOrder": [
+     "K",
+     "G0",
+     "J"
+    ],
+    "propertyOrder": [
+     "k",
+     "j"
+    ]
+   },
+   "/P{v=x}C0{w=z}J": {
+    "primOrder": null,
+    "propertyOrder": null
+   },
+   "/P{v=x}C0{w=z}K": {
+    "primOrder": null,
+    "propertyOrder": null
+   },
+   "/P{v=x}C1": {
+    "primOrder": null,
+    "propertyOrder": null
+   },
+   "/P{v=x}{n=y}": {
+    "primOrder": [
+     "N1",
+     "B",
+     "N0"
+    ],
+    "propertyOrder": [
+     "b1",
+     "a0"
+    ]
+   },
+   "/P{v=x}{n=y}N0": {
+    "primOrder": null,
+    "propertyOrder": null
+   },
+   "/P{v=x}{n=y}N1": {
+    "primOrder": null,
+    "propertyOrder": null
+   },
+   "/Q": {
+    "primOrder": null,
+    "propertyOrder": null
+   },
+   "/Q/L": {
+    "primOrder": null,
+    "propertyOrder": null
+   },
+   "/S": {
+    "primOrder": null,
+    "propertyOrder": null
+   },
+   "/S/X": {
+    "primOrder": null,
+    "propertyOrder": null
+   },
+   "/S/Y": {
+    "primOrder": null,
+    "propertyOrder": null
+   },
+   "/S/Z": {
+    "primOrder": null,
+    "propertyOrder": null
+   },
+   "/S{look=a}": {
+    "primOrder": [
+     "Z",
+     "X"
+    ],
+    "propertyOrder": null
+   },
+   "/S{look=b}": {
+    "primOrder": [
+     "Y",
+     "Z",
+     "X"
+    ],
+    "propertyOrder": [
+     "q",
+     "p"
+    ]
+   }
+  },
+  "weak.usda": {
+   "/P": {
+    "primOrder": null,
+    "propertyOrder": null
+   },
+   "/P{v=x}": {
+    "primOrder": [
+     "W",
+     "C1"
+    ],
+    "propertyOrder": [
+     "w",
+     "a0"
+    ]
+   },
+   "/P{v=x}W": {
+    "primOrder": null,
+    "propertyOrder": null
+   }
+  }
+ },
+ "switched": {
+  "composed": {
+   "/E": {
+    "children": [
+     "D",
+     "B",
+     "C",
+     "A"
+    ],
+    "primOrder": null,
+    "properties": [
+     "a",
+     "b",
+     "c"
+    ],
+    "propertyOrder": []
+   },
+   "/E/A": {
+    "children": [],
+    "primOrder": null,
+    "properties": [],
+    "propertyOrder": []
+   },
+   "/E/B": {
+    "children": [],
+    "primOrder": null,
+    "properties": [],
+    "propertyOrder": []
+   },
+   "/E/C": {
+    "children": [],
+    "primOrder": null,
+    "properties": [],
+    "propertyOrder": []
+   },
+   "/E/D": {
+    "children": [],
+    "primOrder": null,
+    "properties": [],
+    "propertyOrder": []
+   },
+   "/P": {
+    "children": [
+     "N1",
+     "N0",
+     "W",
+     "C1",
+     "C0",
+     "A",
+     "B"
+    ],
+    "primOrder": [
+     "A",
+     "B"
+    ],
+    "properties": [
+     "a1",
+     "a0",
+     "b0",
+     "b1",
+     "w",
+     "z"
+    ],
+    "propertyOrder": [
+     "a1",
+     "a0"
+    ]
+   },
+   "/P/A": {
+    "children": [],
+    "primOrder": null,
+    "properties": [],
+    "propertyOrder": []
+   },
+   "/P/B": {
+    "children": [],
+    "primOrder": null,
+    "properties": [],
+    "propertyOrder": []
+   },
+   "/P/C0": {
+    "children": [
+     "K",
+     "J",
+     "G1",
+     "G0"
+    ],
+    "primOrder": [
+     "G1",
+     "G0"
+    ],
+    "properties": [
+     "k",
+     "j"
+    ],
+    "propertyOrder": [
+     "k",
+     "j"
+    ]
+   },
+   "/P/C0/G0": {
+    "children": [],
+    "primOrder": null,
+    "properties": [],
+    "propertyOrder": []
+   },
+   "/P/C0/G1": {
+    "children": [],
+    "primOrder": null,
+    "properties": [],
+    "propertyOrder": []
+   },
+   "/P/C0/J": {
+    "children": [],
+    "primOrder": null,
+    "properties": [],
+    "propertyOrder": []
+   },
+   "/P/C0/K": {
+    "children": [],
+    "primOrder": null,
+    "properties": [],
+    "propertyOrder": []
+   },
+   "/P/C1": {
+    "children": [],
+    "primOrder": null,
+    "properties": [],
+    "propertyOrder": []
+   },
+   "/P/N0": {
+    "children": [],
+    "primOrder": null,
+    "properties": [],
+    "propertyOrder": []
+   },
+   "/P/N1": {
+    "children": [],
+    "primOrder": null,
+    "properties": [],
+    "propertyOrder": []
+   },
+   "/P/W": {
+    "children": [],
+    "primOrder": null,
+    "properties": [],
+    "propertyOrder": []
+   },
+   "/Q": {
+    "children": [
+     "V",
+     "R0",
+     "R1",
+     "L"
+    ],
+    "primOrder": [
+     "L",
+     "R1",
+     "V",
+     "R0"
+    ],
+    "properties": [
+     "t",
+     "s"
+    ],
+    "propertyOrder": [
+     "t",
+     "s"
+    ]
+   },
+   "/Q/L": {
+    "children": [],
+    "primOrder": null,
+    "properties": [],
+    "propertyOrder": []
+   },
+   "/Q/R0": {
+    "children": [],
+    "primOrder": null,
+    "properties": [],
+    "propertyOrder": []
+   },
+   "/Q/R1": {
+    "children": [],
+    "primOrder": null,
+    "properties": [],
+    "propertyOrder": []
+   },
+   "/Q/V": {
+    "children": [],
+    "primOrder": null,
+    "properties": [],
+    "propertyOrder": []
+   },
+   "/S": {
+    "children": [
+     "X",
+     "Y",
+     "Z"
+    ],
+    "primOrder": [
+     "Y",
+     "Z",
+     "X"
+    ],
+    "properties": [
+     "q",
+     "p"
+    ],
+    "propertyOrder": [
+     "q",
+     "p"
+    ]
+   },
+   "/S/X": {
+    "children": [],
+    "primOrder": null,
+    "properties": [],
+    "propertyOrder": []
+   },
+   "/S/Y": {
+    "children": [],
+    "primOrder": null,
+    "properties": [],
+    "propertyOrder": []
+   },
+   "/S/Z": {
+    "children": [],
+    "primOrder": null,
+    "properties": [],
+    "propertyOrder": []
+   }
+  },
+  "selection": [
+   "/S",
+   "look",
+   "b"
+  ]
+ },
+ "text": {
+  "asset.usda": "#usda 1.0\n\ndef \"Asset\" (\n    variants = {\n        string v = \"x\"\n    }\n    prepend variantSets = \"v\"\n)\n{\n    def \"R0\"\n    {\n    }\n\n    def \"R1\"\n    {\n    }\n    variantSet \"v\" = {\n        \"x\" {\n            reorder properties = [\"t\", \"s\"]\n            reorder nameChildren = [\"L\", \"R1\", \"V\", \"R0\"]\n            int s = 0\n            int t = 1\n\n            def \"V\"\n            {\n            }\n\n        }\n    }\n}\n\n",
+  "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef \"P\" (\n    variants = {\n        string v = \"x\"\n    }\n    prepend variantSets = \"v\"\n)\n{\n    reorder nameChildren = [\"A\", \"B\"]\n    int z = 0\n\n    def \"A\"\n    {\n    }\n\n    def \"B\"\n    {\n    }\n    variantSet \"v\" = {\n        \"x\" (\n            variants = {\n                string n = \"y\"\n            }\n            prepend variantSets = \"n\"\n        ) {\n            reorder properties = [\"a1\", \"a0\"]\n            reorder nameChildren = [\"C1\", \"C0\"]\n            int a0 = 0\n            int a1 = 1\n\n            def \"C0\" (\n                variants = {\n                    string w = \"z\"\n                }\n                prepend variantSets = \"w\"\n            )\n            {\n                reorder nameChildren = [\"G1\", \"G0\"]\n                def \"G0\"\n                {\n                }\n\n                def \"G1\"\n                {\n                }\n                variantSet \"w\" = {\n                    \"z\" {\n                        reorder properties = [\"k\", \"j\"]\n                        reorder nameChildren = [\"K\", \"G0\", \"J\"]\n                        int j = 0\n                        int k = 1\n\n                        def \"J\"\n                        {\n                        }\n\n                        def \"K\"\n                        {\n                        }\n\n                    }\n                }\n            }\n\n            def \"C1\"\n            {\n            }\n            variantSet \"n\" = {\n                \"y\" {\n                    reorder properties = [\"b1\", \"a0\"]\n                    reorder nameChildren = [\"N1\", \"B\", \"N0\"]\n                    int b0 = 0\n                    int b1 = 1\n\n                    def \"N0\"\n                    {\n                    }\n\n                    def \"N1\"\n                    {\n                    }\n\n                }\n            }\n\n        }\n    }\n}\n\ndef \"Q\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n    def \"L\"\n    {\n    }\n}\n\ndef \"S\" (\n    variants = {\n        string look = \"a\"\n    }\n    prepend variantSets = \"look\"\n)\n{\n    def \"X\"\n    {\n    }\n\n    def \"Y\"\n    {\n    }\n\n    def \"Z\"\n    {\n    }\n    variantSet \"look\" = {\n        \"a\" {\n            reorder nameChildren = [\"Z\", \"X\"]\n\n        }\n        \"b\" {\n            reorder properties = [\"q\", \"p\"]\n            reorder nameChildren = [\"Y\", \"Z\", \"X\"]\n            int p = 0\n            int q = 1\n\n        }\n    }\n}\n\ndef \"E\" (\n    variants = {\n        string v = \"x\"\n    }\n    prepend variantSets = \"v\"\n)\n{\n    def \"A\"\n    {\n    }\n    variantSet \"v\" = {\n        \"x\" (\n            variants = {\n                string n = \"y\"\n            }\n            prepend variantSets = \"n\"\n        ) {\n            int a = 1\n            int b = 2\n\n            def \"B\"\n            {\n            }\n\n            def \"C\"\n            {\n            }\n            variantSet \"n\" = {\n                \"y\" {\n                    int c = 3\n\n                    def \"D\"\n                    {\n                    }\n\n                }\n            }\n\n        }\n    }\n}\n\n",
+  "weak.usda": "#usda 1.0\n\nover \"P\"\n{\n    variantSet \"v\" = {\n        \"x\" {\n            reorder properties = [\"w\", \"a0\"]\n            reorder nameChildren = [\"W\", \"C1\"]\n            int w = 0\n\n            def \"W\"\n            {\n            }\n\n        }\n    }\n}\n\n"
+ }
+}

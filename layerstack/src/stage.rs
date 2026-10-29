@@ -72,8 +72,8 @@ use crate::{
     composition_error::{CompositionError, order_errors},
     dependency_map::{ArcDependency, CompositionDeps},
     doc::{
-        FieldValue, InterpolationType, LayerId, LayerStore, Specifier, Value,
-        combine_dictionary_chain,
+        FieldValue, InterpolationType, LayerId, LayerStore, PrimSpec, Specifier, Value,
+        VariantSpec, combine_dictionary_chain,
     },
     interner::TokenId,
     listop::{ListOp, resolve_list_chain},
@@ -3037,6 +3037,45 @@ impl Stage {
 
     /// [`Self::resolve_property_order`] of the prim whose index is `index`.
     fn property_order_of(index: &PrimIndex, store: &dyn LayerStore) -> Option<Vec<TokenId>> {
+        Self::strongest_order(index, store, PrimSpec::property_order, |variant| {
+            variant.property_order.as_deref()
+        })
+    }
+
+    /// Resolves the child ordering (`reorder nameChildren`) of a composed
+    /// prim as its metadata: the strongest authored `primOrder`, a
+    /// variant's prim spec's included, as `UsdObject::GetMetadata` of
+    /// `primOrder` resolves it and `UsdStage::Flatten` copies it.
+    ///
+    /// Composition applies every opinion of the field, weakest first, to
+    /// order the children (`PcpComposeSiteChildNames`); this is only the
+    /// strongest of them.
+    ///
+    /// Spec: AOUSD Core §7.6.2.4.5 (`primOrder`), §7.6.7 (variant specs),
+    /// §12.2 (strongest opinion).
+    #[must_use]
+    pub(crate) fn resolve_prim_order(
+        &self,
+        prim: PathId,
+        store: &dyn LayerStore,
+    ) -> Option<Vec<TokenId>> {
+        Self::strongest_order(
+            self.prims.get(&prim)?,
+            store,
+            PrimSpec::prim_order,
+            |variant| variant.prim_order.as_deref(),
+        )
+    }
+
+    /// The strongest opinion of an order field among the sources of
+    /// `index`: `prim` reads it from a prim spec and `variant` from a
+    /// variant's prim spec, as each source is the one or the other.
+    fn strongest_order(
+        index: &PrimIndex,
+        store: &dyn LayerStore,
+        prim: impl Fn(&PrimSpec) -> Option<&[TokenId]>,
+        variant: impl Fn(&VariantSpec) -> Option<&[TokenId]>,
+    ) -> Option<Vec<TokenId>> {
         index
             .sources
             .iter()
@@ -3048,9 +3087,9 @@ impl Stage {
                 )?;
                 let chain = source.spec_path.variant_chain();
                 if chain.is_empty() {
-                    spec.property_order().map(<[TokenId]>::to_vec)
+                    prim(spec).map(<[TokenId]>::to_vec)
                 } else {
-                    spec.variant_spec(&chain)?.property_order.clone()
+                    variant(spec.variant_spec(&chain)?).map(<[TokenId]>::to_vec)
                 }
             })
     }
@@ -4796,8 +4835,8 @@ mod tests {
         let mut store = crate::InMemoryStore::default();
         let (a, c) = (store.path("/A"), store.path("/C"));
         let mut root = crate::Layer::new(LayerId(1));
-        root.insert_prim(c, crate::PrimSpec::class());
-        root.insert_prim(a, crate::PrimSpec::over().with_inherit(c));
+        root.insert_prim(c, PrimSpec::class());
+        root.insert_prim(a, PrimSpec::over().with_inherit(c));
         store.insert_layer(root);
         let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
         assert_eq!(stage.resolve_specifier(a, &store), Some(Specifier::Class));
@@ -5037,9 +5076,9 @@ mod tests {
         let mut layer = crate::doc::Layer::new(LayerId(1));
         layer.insert_prim(
             prim,
-            crate::doc::PrimSpec {
+            PrimSpec {
                 type_name: Some(mesh),
-                ..crate::doc::PrimSpec::default()
+                ..PrimSpec::default()
             },
         );
         store.insert_layer(layer);

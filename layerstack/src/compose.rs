@@ -684,6 +684,59 @@ mod child_order_tests {
         assert_eq!(stage.children_of(p), Some(&[c, b, a][..]));
     }
 
+    /// A selected variant's prim spec reorders the children composed so far
+    /// at its site, as any prim spec does: the names its own branch and
+    /// weaker sites author, before the stronger prim spec adds its own.
+    ///
+    /// Spec: AOUSD Core §7.6.7 (variant specs), §11.3.1 (ordered prim
+    /// children). OpenUSD: `PcpComposeSiteChildNames` reads `primOrder` at
+    /// the variant site (`pxr/usd/pcp/composeSite.cpp`).
+    #[test]
+    fn variant_reorder_applies_at_its_site() {
+        let mut store = InMemoryStore::default();
+        let [p, a, c, d] = ["/P", "/P/A", "/P/C", "/P/D"].map(|path| store.path(path));
+        let name = |store: &InMemoryStore, path: PathId| store.paths.resolve(path).leaf().unwrap();
+        let (a_tok, c_tok, d_tok) = (name(&store, a), name(&store, c), name(&store, d));
+        let (v, x) = (store.tokens.intern("v"), store.tokens.intern("x"));
+        let site = VariantSelectionSite {
+            host_path: p,
+            set: v,
+            variant: x,
+        };
+        let mut parent = PrimSpec::def();
+        parent.rare_mut().variant_selections.insert(v, x);
+        parent
+            .rare_mut()
+            .variant_set_names
+            .make_mut()
+            .prepend
+            .push(v);
+        parent.rare_mut().variant_sets.insert(
+            v,
+            VariantSetSpec {
+                variants: crate::Variants::from([(
+                    x,
+                    VariantSpec {
+                        authored_children: vec![c_tok, d_tok],
+                        prim_order: Some(vec![d_tok, a_tok, c_tok]),
+                        ..VariantSpec::default()
+                    },
+                )]),
+            },
+        );
+        let mut layer = Layer::new(LayerId(1));
+        layer.insert_prim(p, parent);
+        layer.insert_prim(a, PrimSpec::def());
+        for child in [c, d] {
+            layer.insert_prim(child, PrimSpec::def().with_outer_variant_sites(vec![site]));
+        }
+        store.insert_layer(layer);
+        let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+        // The branch orders its own `D` before `C`; `A`, which the prim
+        // spec authors, is not composed yet there and follows them.
+        assert_eq!(stage.children_of(p), Some(&[d, c, a][..]));
+    }
+
     /// Each spec contributes its own children, listed in `authored_children`
     /// or inferred from its layer's prim specs, then applies its reorder,
     /// weakest spec first: a stronger spec's explicit list never hides a

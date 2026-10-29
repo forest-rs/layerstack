@@ -687,8 +687,16 @@ impl<F: FnMut(LayerId, &str) -> Option<String>> Context<'_, F> {
                     };
                     sets = &spec.variant_sets;
                 }
+                // A variant's prim spec orders its children as any prim
+                // spec does (`_FlattenSpec` of an `SdfVariantSpec` flattens
+                // its `GetPrimSpec`, `pxr/usd/usd/flattenUtils.cpp`).
                 if let Some(spec) = found {
                     append_unique(&mut children, &spec.authored_children);
+                    if let Some(order) = &spec.prim_order {
+                        children = ListOp::default()
+                            .with_reordered(order.clone())
+                            .apply_to(&children);
+                    }
                 }
             }
         }
@@ -851,6 +859,7 @@ fn merge_variant(a: &mut VariantSpec, b: &VariantSpec) -> Result<(), LayerStackF
     a.specializes = list(&a.specializes, &b.specializes).into();
     merge_selections(&mut a.variant_selections, &b.variant_selections);
     fill(&mut a.property_order, &b.property_order);
+    fill(&mut a.prim_order, &b.prim_order);
     merge_variants(&mut a.variant_sets, &b.variant_sets)
 }
 fn merge_prim(a: &mut PrimSpec, b: &PrimSpec) -> Result<(), LayerStackFlattenError> {

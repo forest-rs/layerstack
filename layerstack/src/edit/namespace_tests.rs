@@ -556,7 +556,10 @@ fn active_parent_cannot_move_uncoordinated_inactive_children() {
 }
 
 #[test]
-fn dormant_weak_specs_are_rejected_even_when_they_are_not_populated() {
+fn dormant_weak_specs_move_with_their_host() {
+    // A variant no prim selects composes nothing, and its specs move with
+    // the prim hosting the variant set, as `SdfLayer::Apply` moves a prim
+    // spec with its variants.
     let mut store = base();
     let child = store.path("/A/Child");
     let host = store.path("/A");
@@ -579,10 +582,21 @@ fn dormant_weak_specs_are_rejected_even_when_they_are_not_populated() {
         .sublayers
         .push(SublayerEntry::new(ASSET));
     let stage = Stage::compose(&mut store, ROOT, StageOptions::default());
-    assert!(matches!(
-        prim_move(&stage, &mut store, "/A", "/Renamed"),
-        Err(NamespaceError::UnsupportedComposition(_))
-    ));
+    let edit = prim_move(&stage, &mut store, "/A", "/Renamed").unwrap();
+    let mut live = LiveStage::compose(&mut store, ROOT, StageOptions::default());
+    live.apply(&mut store, edit.transaction()).unwrap();
+    let renamed = store.path("/Renamed");
+    let moved = store.path("/Renamed/Child");
+    let weak = store.layer(ASSET).unwrap();
+    assert!(
+        weak.prim_specs(child).next().is_none(),
+        "nothing stays behind"
+    );
+    let spec = weak
+        .prim_specs(moved)
+        .next()
+        .expect("the dormant spec moved");
+    assert_eq!(spec.outer_variant_sites()[0].host_path, renamed);
 }
 
 #[test]

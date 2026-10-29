@@ -71,9 +71,20 @@ fn prepare_with(
 ) -> Result<NamespaceEdit, NamespaceError> {
     validate_paths(store, source, destination)?;
     validate_stage(primary, store, source, destination)?;
+    // A variant's edit target maps into its branch (`/V{v=x}F` for
+    // `/V/F`), across the variant arc: `UsdNamespaceEditor` refuses edit
+    // targets that map paths across composition arcs
+    // (`_EditProcessor::_GatherLayersToEdit`,
+    // `pxr/usd/usd/namespaceEditor.cpp`).
+    let (from, to) = (
+        map(target, store, source)?,
+        map(target, store, destination)?,
+    );
     if !primary.layer_stack().contains(&target.layer())
-        || spec_target(&map(target, store, source)?) != source
-        || spec_target(&map(target, store, destination)?) != destination
+        || from.has_variant_selections()
+        || to.has_variant_selections()
+        || spec_target(&from) != source
+        || spec_target(&to) != destination
     {
         return Err(NamespaceError::Unmappable);
     }
@@ -109,33 +120,13 @@ fn prepare_with(
     for id in &inspected {
         let layer = store.layer(*id).ok_or(NamespaceError::NoSuchObject)?;
         if retained.is_some() {
-            // Only specs that author arcs or variant sets can fail these
-            // checks.
+            // Only specs that author arcs can fail these checks.
             let slots = retained::links_of(indexes, layer);
-            let branched = !layer.variant_prims.is_empty()
-                || slots.iter().any(|path| {
-                    layer
-                        .prims
-                        .get(path)
-                        .is_some_and(|p| !p.variant_sets().is_empty())
-                });
-            if branched {
-                return Err(NamespaceError::UnsupportedComposition(
-                    "dormant variant composition requires explicit dependency coordination",
-                ));
-            }
             for spec in slots.iter().filter_map(|path| layer.prims.get(path)) {
                 validate_arcs(store, spec)?;
             }
             links.insert(*id, slots);
             continue;
-        }
-        if !layer.variant_prims.is_empty()
-            || layer.prims.values().any(|p| !p.variant_sets().is_empty())
-        {
-            return Err(NamespaceError::UnsupportedComposition(
-                "dormant variant composition requires explicit dependency coordination",
-            ));
         }
         for spec in layer.prims.values() {
             validate_arcs(store, spec)?;
@@ -228,6 +219,7 @@ fn prepare_with(
     // moves, their ancestors, and those that author paths.
     let mut copied: HashMap<LayerId, Vec<PathId>> = HashMap::new();
     let mut edited = HashMap::new();
+    let mut dormant: HashMap<LayerId, Dormant> = HashMap::new();
     for id in &inspected {
         let original = store.layer(*id).ok_or(NamespaceError::NoSuchObject)?;
         let mut layer = match (indexes.first(), links.get(id)) {
@@ -239,12 +231,15 @@ fn prepare_with(
             }
             _ => original.clone(),
         };
+        let mut unused = dormant_variants(store, &stages, indexes, &layer);
         if let Some(moves) = local_moves.get(id) {
             for mapping in moves {
                 validate_authored(&layer, store, mapping)?;
                 move_local(store, &mut layer, mapping)?;
+                unused = unused.after(store, mapping);
             }
         }
+        dormant.insert(*id, unused);
         edited.insert(*id, layer);
     }
     if relocate {
@@ -257,6 +252,7 @@ fn prepare_with(
     }
     for id in &inspected {
         let layer = edited.get_mut(id).unwrap();
+        let unused = &dormant[id];
         let moves = local_moves.get(id).map_or(&[][..], Vec::as_slice);
         // A layer used by multiple stages cannot have two meanings for a path.
         // The normalized union has already checked that its maps agree.
@@ -270,6 +266,7 @@ fn prepare_with(
                     target.layer(),
                     Some(mapping),
                     &source_move,
+                    unused,
                 )?;
             }
             for (path, branches) in &mut layer.variant_prims {
@@ -282,6 +279,7 @@ fn prepare_with(
                         target.layer(),
                         Some(mapping),
                         &source_move,
+                        unused,
                     )?;
                 }
             }
@@ -293,11 +291,29 @@ fn prepare_with(
         // never the dependent stage namespace. Source assets otherwise stay put.
         for edited_id in root_layers {
             for (path, spec) in &mut layer.prims {
-                repair_prim(store, spec, *path, *id, *edited_id, None, &source_move)?;
+                repair_prim(
+                    store,
+                    spec,
+                    *path,
+                    *id,
+                    *edited_id,
+                    None,
+                    &source_move,
+                    unused,
+                )?;
             }
             for (path, branches) in &mut layer.variant_prims {
                 for spec in branches {
-                    repair_prim(store, spec, *path, *id, *edited_id, None, &source_move)?;
+                    repair_prim(
+                        store,
+                        spec,
+                        *path,
+                        *id,
+                        *edited_id,
+                        None,
+                        &source_move,
+                        unused,
+                    )?;
                 }
             }
         }
@@ -397,9 +413,127 @@ fn prepare_with(
     })
 }
 
+/// The variant specs of `layer`, before the edit, that no prim index of
+/// `stages` uses ([`Dormant`]).
+///
+/// In a layer of a stage's root layer stack, a variant spec is used where
+/// the prim at its path has a node at its site in that stack: OpenUSD
+/// fixes paths only in the specs of a prim's local and local variant
+/// nodes (`_GatherPathBearingFieldEditsForStage`), and a variant spec
+/// reached through another arc (`/World/Copy` referencing `/World/A` with
+/// another selection) is that arc's to keep. In any other layer the edit
+/// repairs only reference and payload targets, so only the variant specs
+/// authoring those are looked up, among the prims with a node at their
+/// path. AOUSD Core §10.4 (prim index nodes), §10.5 (variants).
+fn dormant_variants(
+    store: &dyn LayerStore,
+    stages: &[&Stage],
+    indexes: &[&PreparationIndex],
+    layer: &Layer,
+) -> Dormant {
+    let local = stages.iter().any(|s| s.layer_stack().contains(&layer.id));
+    let mut out = Dormant::default();
+    if layer.variant_prims.is_empty() && layer.prims.values().all(|p| p.variant_sets().is_empty()) {
+        return out;
+    }
+    let used = |path: PathId, sites: &[VariantSelectionSite]| {
+        let at_site = |node: crate::prim_index_graph::PrimNode<'_>| {
+            node.site().prim_path() == path
+                && node
+                    .site()
+                    .variant_selection_sites()
+                    .eq(sites.iter().copied())
+        };
+        if local {
+            return stages.iter().any(|stage| {
+                stage.layer_stack().contains(&layer.id)
+                    && stage.explain_prim_graph(path).is_some_and(|graph| {
+                        let stack = graph.node(NodeId::ROOT).map(|n| n.layer_stack_identifier());
+                        graph.nodes().any(|(_, node)| {
+                            at_site(node) && Some(node.layer_stack_identifier()) == stack
+                        })
+                    })
+            });
+        }
+        stages.iter().enumerate().any(|(i, stage)| {
+            let prims: Vec<PathId> = match indexes.get(i) {
+                Some(index) => index.prims_with_nodes_at(path).collect(),
+                None => stage.prim_paths().collect(),
+            };
+            prims.into_iter().any(|prim| {
+                stage.explain_prim_graph(prim).is_some_and(|graph| {
+                    graph.nodes().any(|(_, node)| {
+                        at_site(node)
+                            && LayerStack::gather_identifier(store, node.layer_stack_identifier())
+                                .layers
+                                .contains(&layer.id)
+                    })
+                })
+            })
+        })
+    };
+    // Outside the root layer stack, only arcs are repaired.
+    let repairable = |refs: &ListOp<Reference>, payloads: &ListOp<Reference>| {
+        local || refs.items().next().is_some() || payloads.items().next().is_some()
+    };
+    let mut visit = |path: PathId, sites: &mut Vec<VariantSelectionSite>, sets: &VariantSets| {
+        fn walk(
+            path: PathId,
+            sites: &mut Vec<VariantSelectionSite>,
+            sets: &VariantSets,
+            check: &mut dyn FnMut(PathId, &[VariantSelectionSite], &VariantSpec),
+        ) {
+            for (set, spec) in sets {
+                for (variant, branch) in &spec.variants {
+                    sites.push(VariantSelectionSite {
+                        host_path: path,
+                        set: *set,
+                        variant: *variant,
+                    });
+                    check(path, sites, branch);
+                    walk(path, sites, &branch.variant_sets, check);
+                    sites.pop();
+                }
+            }
+        }
+        walk(path, sites, sets, &mut |path, sites, branch| {
+            if repairable(&branch.references, &branch.payloads) && !used(path, sites) {
+                out.insert(path, sites.to_vec());
+            }
+        });
+    };
+    let mut unused_specs = Vec::new();
+    let specs = layer.prims.iter().map(|(p, s)| (*p, s)).chain(
+        layer
+            .variant_prims
+            .iter()
+            .flat_map(|(p, specs)| specs.iter().map(move |s| (*p, s))),
+    );
+    for (path, spec) in specs {
+        let mut sites = spec.outer_variant_sites().to_vec();
+        if !sites.is_empty() && repairable(&spec.references, &spec.payloads) && !used(path, &sites)
+        {
+            // Everything inside it is unused too.
+            unused_specs.push((path, sites));
+            continue;
+        }
+        visit(path, &mut sites, spec.variant_sets());
+    }
+    for (path, sites) in unused_specs {
+        out.insert(path, sites);
+    }
+    out
+}
+
 /// Rejects a spec whose references or payloads target an unloaded or
-/// unresolved layer, or an asset expression.
+/// unresolved layer, or an asset expression. A spec inside a variant
+/// passes: a selected variant's unresolved arc is a composition error the
+/// snapshot check rejects, and one in a variant no prim selects composes
+/// nothing for the edit to keep.
 fn validate_arcs(store: &dyn LayerStore, spec: &PrimSpec) -> Result<(), NamespaceError> {
+    if !spec.outer_variant_sites().is_empty() {
+        return Ok(());
+    }
     if spec
         .references
         .items()
@@ -538,7 +672,11 @@ fn gather_dependent_moves(
         };
         let composed = store.paths().resolve(prim).clone();
         for (_, node) in graph.nodes() {
-            if node.arc_kind() == ArcKind::Local {
+            // A variant arc names no path: its site follows its host's
+            // (`PcpArcTypeVariant` in
+            // `_ProcessDependentNodePathAtIntroductionChange`,
+            // `pxr/usd/pcp/dependentNamespaceEditUtils.cpp`).
+            if matches!(node.arc_kind(), ArcKind::Local | ArcKind::Variants) {
                 continue;
             }
             let stack = LayerStack::gather_identifier(store, node.layer_stack_identifier());
@@ -552,8 +690,27 @@ fn gather_dependent_moves(
             if source.from.property_path().is_some() && !suffix.is_empty() {
                 continue;
             }
+            // An arc authored in the local variants the prim selects hangs
+            // beneath their nodes rather than the root, and is implied to
+            // the root at the same site, through the identity map of those
+            // variants (`_EvalImpliedClasses`, `pxr/usd/pcp/primIndex.cpp`):
+            // the arc it is implied from is the one to follow.
+            let in_variants = node.parent() != Some(NodeId::ROOT);
+            if node.is_implied()
+                && node
+                    .origin()
+                    .and_then(|id| graph.node(id))
+                    .is_some_and(|origin| {
+                        origin.site() == node.site()
+                            && origin.layer_stack_identifier() == node.layer_stack_identifier()
+                            && origin.parent() != Some(NodeId::ROOT)
+                            && authored_in_local_variants(graph, origin)
+                    })
+            {
+                continue;
+            }
             if node.site().has_variant_selections()
-                || node.parent() != Some(NodeId::ROOT)
+                || !authored_in_local_variants(graph, node)
                 || node.is_implied()
             {
                 return Err(NamespaceError::UnsupportedComposition(
@@ -569,6 +726,11 @@ fn gather_dependent_moves(
             // Moving the referenced root changes its target, not its mount.
             if source.from.property_path().is_none() && raw_from.is_prefix_of(&raw_mount) {
                 continue;
+            }
+            if in_variants {
+                return Err(NamespaceError::UnsupportedComposition(
+                    "dependent namespace beneath an arc authored in a variant requires variant spec moves",
+                ));
             }
             let Some(dest_suffix) = raw_to.strip_prefix(&raw_mount) else {
                 return Err(NamespaceError::UnsupportedComposition(
@@ -606,6 +768,31 @@ fn gather_dependent_moves(
         }
     }
     Ok(())
+}
+
+/// Whether `node`'s arc is authored at the root's site or inside the local
+/// variants it selects: every node above it is a variant node of the root
+/// layer stack.
+fn authored_in_local_variants(
+    graph: &crate::PrimIndexGraph,
+    node: crate::prim_index_graph::PrimNode<'_>,
+) -> bool {
+    let Some(root) = graph.node(NodeId::ROOT) else {
+        return false;
+    };
+    let mut parent = node.parent();
+    while let Some(id) = parent.filter(|id| *id != NodeId::ROOT) {
+        let Some(above) = graph.node(id) else {
+            return false;
+        };
+        if above.arc_kind() != ArcKind::Variants
+            || above.layer_stack_identifier() != root.layer_stack_identifier()
+        {
+            return false;
+        }
+        parent = above.parent();
+    }
+    parent == Some(NodeId::ROOT)
 }
 
 fn normalize_moves(
@@ -700,30 +887,23 @@ fn requires_relocate(
     Ok(false)
 }
 
+/// Rejects a move of namespace holding an authored inactive opinion
+/// outside every variant: the descendants it hides need coordination.
+/// One inside a variant a prim index selects makes its prim inactive,
+/// which the composed checks reject; one in a variant none selects
+/// changes nothing composed and moves with its prim.
 fn validate_authored(
     layer: &Layer,
     store: &dyn LayerStore,
     mapping: &PathMove,
 ) -> Result<(), NamespaceError> {
-    for (path, spec) in layer.prims.iter().chain(
-        layer
-            .variant_prims
-            .iter()
-            .flat_map(|(p, ss)| ss.iter().map(move |s| (p, s))),
-    ) {
-        let relevant = store
-            .paths()
-            .resolve(mapping.from.prim_path())
-            .is_prefix_of(store.paths().resolve(*path));
-        if !relevant {
-            continue;
-        }
-        if !spec.outer_variant_sites().is_empty() || !spec.variant_sets().is_empty() {
-            return Err(NamespaceError::UnsupportedComposition(
-                "namespace moves containing dormant variant branches are not supported",
-            ));
-        }
-        if spec.active == Some(false) {
+    for (path, spec) in &layer.prims {
+        let relevant = spec.outer_variant_sites().is_empty()
+            && store
+                .paths()
+                .resolve(mapping.from.prim_path())
+                .is_prefix_of(store.paths().resolve(*path));
+        if relevant && spec.active == Some(false) {
             return Err(NamespaceError::UnsupportedComposition(
                 "namespace moves containing inactive opinions are not supported",
             ));
@@ -740,16 +920,20 @@ fn move_local(
     let has_source = if let Some(p) = mapping.from.property_path() {
         layer.property(p).is_some()
     } else {
+        // Specs at the moved path inside an ancestor's variant stay with
+        // that variant ([`move_specs`]): the edit relocates their prim.
+        let from = store.paths().resolve(mapping.from.prim_path());
+        let beneath = |p: &PathId| from.is_prefix_of(store.paths().resolve(*p));
         layer
             .prims
-            .keys()
-            .chain(layer.variant_prims.keys())
-            .any(|p| {
-                store
-                    .paths()
-                    .resolve(mapping.from.prim_path())
-                    .is_prefix_of(store.paths().resolve(*p))
-            })
+            .iter()
+            .chain(
+                layer
+                    .variant_prims
+                    .iter()
+                    .flat_map(|(p, specs)| specs.iter().map(move |s| (p, s))),
+            )
+            .any(|(p, s)| beneath(p) && moves_with(store, from, &[], s))
     };
     if !has_source {
         return Ok(());
@@ -764,7 +948,7 @@ fn move_local(
             .unwrap()
     };
     ensure_ancestors(store, layer, parent);
-    if !layer.prims.contains_key(&mapping.from.prim_path()) {
+    if layer.prim_spec_in(mapping.from.prim_path(), &[]).is_none() {
         layer.insert_prim(mapping.from.prim_path(), PrimSpec::over());
     }
     let from = SpecPath::from_prim_path(mapping.from.prim_path());
@@ -787,7 +971,7 @@ fn ensure_ancestors(store: &mut dyn LayerStore, layer: &mut Layer, path: Path) {
     ensure_ancestors(store, layer, parent.clone());
     let name = path.leaf().unwrap();
     let id = store.paths().intern(path);
-    if layer.prims.contains_key(&id) {
+    if layer.prim_spec_in(id, &[]).is_some() {
         return;
     }
     layer.insert_prim(id, PrimSpec::over());
@@ -796,7 +980,10 @@ fn ensure_ancestors(store: &mut dyn LayerStore, layer: &mut Layer, path: Path) {
     // `UsdNamespaceEditor` calls for a reparent's new parent. AOUSD Core
     // §7.6.2.2.1 (`primChildren`).
     let parent = store.paths().intern(parent);
-    if let Some(spec) = layer.prims.get_mut(&parent)
+    if let Some(spec) = layer
+        .prims
+        .get_mut(&parent)
+        .filter(|spec| spec.outer_variant_sites().is_empty())
         && !spec.authored_children.contains(&name)
     {
         spec.authored_children.push(name);

@@ -11,10 +11,9 @@
 //! `SdfCopySpec`. It records whether the call applies, every prim and
 //! variant prim spec of each layer with its children, properties,
 //! `primOrder` and `propertyOrder`, and every composed prim's children and
-//! property names. `variant.usda` holds the variant cases: layerstack
-//! refuses every root-stack namespace edit on a stage composing a variant
-//! set. Here each case makes the layerstack call that documents
-//! itself as that one, applied through a `LiveStage`:
+//! property names. `variant.usda` holds the edits through a variant, which
+//! OpenUSD and layerstack refuse. Here each case makes the layerstack call
+//! that documents itself as that one, applied through a `LiveStage`:
 //!
 //! - `editor`: `NamespaceEdit::prepare` (a move) or `prepare_delete`
 //!   (`UsdNamespaceEditor`), through the root layer or `/V`'s variant;

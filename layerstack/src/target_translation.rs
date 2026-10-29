@@ -26,7 +26,8 @@
 //! 3. a path any of whose paths does not map does not map.
 //!
 //! Only a property token holding a `[` takes this path ([`is_relational`]),
-//! and a store none of whose tokens holds one never reads a token's text.
+//! and a store none of whose tokens holds one, but for the `[]` of array
+//! type names, never reads a token's text.
 //!
 //! Spec: AOUSD Core §8 (paths), §10.2 (arcs map namespace).
 

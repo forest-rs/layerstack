@@ -73,9 +73,9 @@ pub struct TokenInterner {
     /// Whether some interned string is a variable expression, so a variant
     /// selection may be one ([`crate::variable_expression::is_expression`]).
     expressions: AtomicBool,
-    /// Whether some interned string holds a `[`, so a property target's
-    /// token may be a relational attribute's or a mapper's
-    /// ([`crate::target_translation::is_relational`]).
+    /// Whether some interned string holds a bracket that is not `[]`, so a
+    /// property target's token may be a relational attribute's or a
+    /// mapper's ([`crate::target_translation::is_relational`]).
     brackets: AtomicBool,
 }
 
@@ -93,6 +93,13 @@ impl Default for TokenInterner {
         debug_assert_eq!(empty, TokenId::EMPTY, "the empty token is interned first");
         interner
     }
+}
+
+/// Whether `s` holds a `[` that does not open `[]`: one a path could be in.
+/// Every stage interns array type names (`float[]`), which hold no path.
+fn holds_path_bracket(s: &str) -> bool {
+    s.match_indices('[')
+        .any(|(at, _)| s.as_bytes().get(at + 1) != Some(&b']'))
 }
 
 /// The text of `s` before its first NUL, a token's identity
@@ -182,7 +189,7 @@ impl TokenInterner {
         if new && crate::variable_expression::is_expression(s) {
             self.expressions.store(true, Ordering::Release);
         }
-        if new && s.contains('[') {
+        if new && holds_path_bracket(s) {
             self.brackets.store(true, Ordering::Release);
         }
         TokenId(id)
@@ -207,9 +214,9 @@ impl TokenInterner {
         self.expressions.load(Ordering::Acquire)
     }
 
-    /// Returns `true` when some interned string holds a `[`, as the
-    /// property token of a relational attribute or mapper target does
-    /// (`b[/C].d`).
+    /// Returns `true` when some interned string holds a `[` that is not
+    /// the `[]` of an array type name (`float[]`), as the property token of
+    /// a relational attribute or mapper target does (`b[/C].d`).
     pub(crate) fn has_brackets(&self) -> bool {
         self.brackets.load(Ordering::Acquire)
     }
@@ -226,6 +233,17 @@ pub(crate) struct TokenMark {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn array_type_names_hold_no_path_bracket() {
+        let tokens = TokenInterner::default();
+        let _ = tokens.intern("float[]");
+        let _ = tokens.intern("token[]");
+        assert!(!tokens.has_brackets());
+        let _ = tokens.intern("b[/C].d");
+        assert!(tokens.has_brackets());
+        assert!(tokens.snapshot().has_brackets());
+    }
 
     #[test]
     fn a_token_ends_at_its_first_nul() {

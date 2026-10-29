@@ -36,6 +36,7 @@ use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use layerstack::edit::{EditTarget, Transaction};
 use layerstack::stage::flatten::{AssetPaths, FlattenRequirements};
 use layerstack::value_clips::ClipIssueKind;
 use layerstack::{
@@ -550,4 +551,96 @@ fn a_live_stage_reads_expressions_with_edited_variables() {
             Some(Value::Asset("./stone.png".into()))
         );
     }
+}
+
+/// An asset path expression a live edit authors reads evaluated, in the
+/// node's context, as one the layer held when the stage was composed.
+#[test]
+fn a_live_edit_authoring_an_expression_reads_it_evaluated() {
+    let (mut loaded, _) = load();
+    let root = loaded.root_layer;
+    let mut live = LiveStage::compose(&mut loaded.store, root, StageOptions::default());
+    let sub = *loaded
+        .layer_names
+        .iter()
+        .find(|(_, name)| name.as_str() == "sub/sub.usda")
+        .expect("the sublayer")
+        .0;
+    for (layer, property, expected) in [
+        (root, "/Local.plain", "./wood.png"),
+        (sub, "/Sub.plain", "./wood.png"),
+        (root, "/Local.number", "`\"${TEX}\"`"),
+    ] {
+        let property = loaded.store.property_path(property);
+        let mut transaction = Transaction::new();
+        let authored = if expected.starts_with('`') {
+            expected
+        } else {
+            "`\"./${NAME}.png\"`"
+        };
+        transaction.set_default(
+            EditTarget::for_layer(layer).property(property),
+            Value::Asset(authored.into()),
+        );
+        live.apply(&mut loaded.store, &transaction)
+            .expect("applies");
+        assert_eq!(
+            live.stage()
+                .view(&loaded.store)
+                .attribute(property)
+                .and_then(|a| a.get(LsTime::Default))
+                .map(|resolved| resolved.value),
+            Some(Value::Asset(expected.into())),
+            "{property:?}"
+        );
+    }
+}
+
+/// Replacing an expression that fails to evaluate with a path drops its
+/// error, as the stage then reads no expression there.
+#[test]
+fn a_live_edit_replacing_a_failing_expression_drops_its_error() {
+    let (mut loaded, _) = load();
+    let root = loaded.root_layer;
+    let mut live = LiveStage::compose(&mut loaded.store, root, StageOptions::default());
+    let failures = |live: &LiveStage| {
+        live.stage()
+            .composition_errors()
+            .iter()
+            .filter(|error| {
+                matches!(
+                    error,
+                    CompositionError::VariableExpressionError(error)
+                        if error.context == ExpressionContext::AssetValue
+                            && error.expression == "`${NUM}`"
+                            && error.layer == root
+                )
+            })
+            .count()
+    };
+    assert_eq!(
+        failures(&live),
+        1,
+        "`/Local.number` and `.arraySamples` fail"
+    );
+    let property = loaded.store.property_path("/Local.number");
+    let mut transaction = Transaction::new();
+    transaction.set_default(
+        EditTarget::for_layer(root).property(property),
+        Value::Asset("./plain.png".into()),
+    );
+    live.apply(&mut loaded.store, &transaction)
+        .expect("applies");
+    // `.arraySamples` at 1 still fails.
+    assert_eq!(failures(&live), 1);
+    let samples = loaded.store.property_path("/Local.arraySamples");
+    let mut transaction = Transaction::new();
+    transaction.set_time_sample(
+        EditTarget::for_layer(root).property(samples),
+        1.0,
+        Value::Array(vec![Value::Asset("./plain.png".into())]),
+    );
+    live.apply(&mut loaded.store, &transaction)
+        .expect("applies");
+    assert_eq!(failures(&live), 0);
 }

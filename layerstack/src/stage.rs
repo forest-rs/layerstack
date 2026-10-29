@@ -2103,10 +2103,27 @@ impl Stage {
         {
             return None;
         }
+        // A prim reporting an asset path expression that failed recomposes,
+        // so that the error goes when the edit replaces the expression.
+        let failed_assets: HashSet<PathId> = self
+            .errors
+            .iter()
+            .filter_map(|error| match error {
+                CompositionError::VariableExpressionError(error)
+                    if error.context == crate::composition_error::ExpressionContext::AssetValue =>
+                {
+                    error.prim
+                }
+                _ => None,
+            })
+            .collect();
         let mut patches = Vec::new();
         for (edit_index, (edit, prims)) in edits.iter().zip(dependents).enumerate() {
             let authored = edit.property(store)?;
             for &prim in prims {
+                if failed_assets.contains(&prim) {
+                    return None;
+                }
                 let index = self.prims.get(&prim)?;
                 let opinions = index.property_opinions(edit.name)?;
                 let mut matched = false;
@@ -2136,6 +2153,22 @@ impl Stage {
                     matched = true;
                     let mut default = edit.default.then(|| authored.default.clone());
                     let mut samples = edit.samples.then(|| authored.time_samples.clone());
+                    // An asset path expression is evaluated, its variables
+                    // recorded and its failure reported where composition
+                    // reads the opinion ([`crate::asset::values`]).
+                    if default
+                        .iter()
+                        .flatten()
+                        .chain(
+                            samples
+                                .iter()
+                                .filter_map(TimeSamples::get)
+                                .flat_map(|samples| samples.iter().map(|(_, value)| value)),
+                        )
+                        .any(crate::asset::values::holds_asset_expression)
+                    {
+                        return None;
+                    }
                     let shareable = !default
                         .iter()
                         .flatten()

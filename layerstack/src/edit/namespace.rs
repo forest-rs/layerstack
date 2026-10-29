@@ -779,8 +779,9 @@ fn reachable_layers(stage: &Stage, store: &dyn LayerStore, root: LayerId) -> Vec
                 .map(|(layer, _)| layer),
         );
     }
+    let mut seen = crate::HashSet::new();
     while let Some(id) = pending.pop() {
-        if found.contains(&id) {
+        if !seen.insert(id) {
             continue;
         }
         let Some(layer) = store.layer(id) else {

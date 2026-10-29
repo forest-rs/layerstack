@@ -137,6 +137,36 @@ describe("edit kinds", () => {
     });
   });
 
+  it("definePrim gives later edits of the same apply its type's attributes", async () => {
+    using stage = await roundTrip(
+      [
+        { type: "definePrim", path: "/Garden/Ball", typeName: "Sphere" },
+        { type: "setValue", path: "/Garden/Ball.radius", value: { type: "double", value: 2 } },
+        { type: "definePrim", path: "/World/Rock", typeName: "Cube" },
+        { type: "setValue", path: "/World/Rock.size", value: { type: "double", value: 3 } },
+      ],
+      (stage) => {
+        const radius = stage.attribute("/Garden/Ball.radius");
+        assert.equal(radius?.typeName, "double");
+        assert.equal(radius?.custom, false);
+        assert.deepEqual(radius?.get(), double(2));
+        assert.equal(stage.prim("/World/Rock")?.typeName, "Cube");
+        assert.deepEqual(stage.attribute("/World/Rock.size")?.get(), double(3));
+      },
+    );
+    const cases: [Edit, string][] = [
+      [{ type: "setValue", path: "/Pebble.bogus", value: { type: "double", value: 1 } }, "edit.rejected.undeclared_type"],
+      [{ type: "setValue", path: "/Pebble.radius", value: { type: "float", value: 1 } }, "edit.rejected.type_mismatch"],
+    ];
+    for (const [edit, code] of cases) {
+      const define: Edit = { type: "definePrim", path: "/Pebble", typeName: "Sphere" };
+      const error = failure(() => stage.apply([define, edit], stage.root));
+      assert.equal(error.code, code, JSON.stringify(edit));
+      assert.equal(error.edit, 1, "the error names the edit");
+      assert.equal(stage.prim("/Pebble"), null, "nothing applied");
+    }
+  });
+
   it("removePrim and removeProperty remove the target layer's specs", async () => {
     using stage = await roundTrip([{ type: "removePrim", path: "/World/Rock" }], (stage) => {
       assert.equal(stage.prim("/World/Rock"), null);

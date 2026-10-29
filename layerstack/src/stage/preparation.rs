@@ -419,9 +419,12 @@ fn fields_name_paths(fields: &[FieldEntry]) -> bool {
     })
 }
 
+/// Whether `value` holds a path a namespace edit may fix: a path
+/// expression, or the `SdfPath` of a relationship's legacy `default`
+/// ([`Value::PathText`]), which OpenUSD's `_PathReplacePrefix` fixes.
 fn value_names_paths(value: &Value) -> bool {
     match value {
-        Value::PathExpression(_) => true,
+        Value::PathExpression(_) | Value::PathText(_) => true,
         Value::Array(values) => values.iter().any(value_names_paths),
         Value::Dictionary(values) => values.iter().any(|(_, v)| value_names_paths(v)),
         _ => false,

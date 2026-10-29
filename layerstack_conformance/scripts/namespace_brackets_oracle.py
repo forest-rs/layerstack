@@ -126,6 +126,12 @@ def "World"
         pathExpression expr = "/World/A/Kid /World/C.y /World/A.x"
     }
 
+    # A prim whose only path is a relationship's default.
+    def "Lone"
+    {
+        rel only.default = </World/C.b[/World/A/Kid].d>
+    }
+
     # A selected variant and an unselected one.
     def "V" (
         variants = {

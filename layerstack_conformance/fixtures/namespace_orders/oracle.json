@@ -1,0 +1,5152 @@
+{
+ "before": {
+  "scene.usda": {
+   "applied": true,
+   "composed": {
+    "/": {
+     "children": [
+      "Q",
+      "R",
+      "P"
+     ],
+     "properties": []
+    },
+    "/P": {
+     "children": [
+      "C",
+      "E",
+      "A",
+      "B"
+     ],
+     "properties": [
+      "z",
+      "y",
+      "x"
+     ]
+    },
+    "/P/A": {
+     "children": [],
+     "properties": []
+    },
+    "/P/B": {
+     "children": [],
+     "properties": []
+    },
+    "/P/C": {
+     "children": [],
+     "properties": []
+    },
+    "/P/E": {
+     "children": [],
+     "properties": []
+    },
+    "/Q": {
+     "children": [
+      "D"
+     ],
+     "properties": [
+      "w"
+     ]
+    },
+    "/Q/D": {
+     "children": [],
+     "properties": []
+    },
+    "/R": {
+     "children": [
+      "K",
+      "J"
+     ],
+     "properties": []
+    },
+    "/R/J": {
+     "children": [],
+     "properties": []
+    },
+    "/R/K": {
+     "children": [],
+     "properties": []
+    }
+   },
+   "layers": {
+    "asset.usda": {
+     "/": {
+      "children": [
+       "Asset"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset": {
+      "children": [
+       "J",
+       "K"
+      ],
+      "primOrder": [
+       "K",
+       "J"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset/J": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset/K": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    },
+    "scene.usda": {
+     "/": {
+      "children": [
+       "P",
+       "Q",
+       "R"
+      ],
+      "primOrder": [
+       "Q",
+       "R",
+       "P"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P": {
+      "children": [
+       "A",
+       "B",
+       "C",
+       "E"
+      ],
+      "primOrder": [
+       "C",
+       "A",
+       "Gone",
+       "B"
+      ],
+      "properties": [
+       "x",
+       "y",
+       "z"
+      ],
+      "propertyOrder": [
+       "z",
+       "y",
+       "x"
+      ]
+     },
+     "/P/A": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/B": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/C": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/E": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Q": {
+      "children": [
+       "D"
+      ],
+      "primOrder": [
+       "D",
+       "A"
+      ],
+      "properties": [
+       "w"
+      ],
+      "propertyOrder": [
+       "w",
+       "x"
+      ]
+     },
+     "/Q/D": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/R": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    },
+    "sub.usda": {
+     "/": {
+      "children": [
+       "P"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P": {
+      "children": [
+       "A",
+       "B"
+      ],
+      "primOrder": [
+       "B",
+       "A"
+      ],
+      "properties": [
+       "y"
+      ],
+      "propertyOrder": [
+       "x",
+       "y"
+      ]
+     },
+     "/P/A": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/B": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    }
+   }
+  },
+  "variant.usda": {
+   "applied": true,
+   "composed": {
+    "/": {
+     "children": [
+      "V"
+     ],
+     "properties": []
+    },
+    "/V": {
+     "children": [
+      "G",
+      "F"
+     ],
+     "properties": []
+    },
+    "/V/F": {
+     "children": [],
+     "properties": []
+    },
+    "/V/G": {
+     "children": [],
+     "properties": []
+    }
+   },
+   "layers": {
+    "variant.usda": {
+     "/": {
+      "children": [
+       "V"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/V": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/V{v=x}": {
+      "children": [
+       "F",
+       "G"
+      ],
+      "primOrder": [
+       "G",
+       "F"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/V{v=x}F": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/V{v=x}G": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    }
+   }
+  }
+ },
+ "cases": [
+  {
+   "applied": true,
+   "call": "editor",
+   "composed": {
+    "/": {
+     "children": [
+      "Q",
+      "R",
+      "P"
+     ],
+     "properties": []
+    },
+    "/P": {
+     "children": [
+      "A2",
+      "C",
+      "E",
+      "B"
+     ],
+     "properties": [
+      "z",
+      "y",
+      "x"
+     ]
+    },
+    "/P/A2": {
+     "children": [],
+     "properties": []
+    },
+    "/P/B": {
+     "children": [],
+     "properties": []
+    },
+    "/P/C": {
+     "children": [],
+     "properties": []
+    },
+    "/P/E": {
+     "children": [],
+     "properties": []
+    },
+    "/Q": {
+     "children": [
+      "D"
+     ],
+     "properties": [
+      "w"
+     ]
+    },
+    "/Q/D": {
+     "children": [],
+     "properties": []
+    },
+    "/R": {
+     "children": [
+      "K",
+      "J"
+     ],
+     "properties": []
+    },
+    "/R/J": {
+     "children": [],
+     "properties": []
+    },
+    "/R/K": {
+     "children": [],
+     "properties": []
+    }
+   },
+   "destination": "/P/A2",
+   "layers": {
+    "asset.usda": {
+     "/": {
+      "children": [
+       "Asset"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset": {
+      "children": [
+       "J",
+       "K"
+      ],
+      "primOrder": [
+       "K",
+       "J"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset/J": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset/K": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    },
+    "scene.usda": {
+     "/": {
+      "children": [
+       "P",
+       "Q",
+       "R"
+      ],
+      "primOrder": [
+       "Q",
+       "R",
+       "P"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P": {
+      "children": [
+       "A2",
+       "B",
+       "C",
+       "E"
+      ],
+      "primOrder": [
+       "C",
+       "A",
+       "Gone",
+       "B"
+      ],
+      "properties": [
+       "x",
+       "y",
+       "z"
+      ],
+      "propertyOrder": [
+       "z",
+       "y",
+       "x"
+      ]
+     },
+     "/P/A2": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/B": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/C": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/E": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Q": {
+      "children": [
+       "D"
+      ],
+      "primOrder": [
+       "D",
+       "A"
+      ],
+      "properties": [
+       "w"
+      ],
+      "propertyOrder": [
+       "w",
+       "x"
+      ]
+     },
+     "/Q/D": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/R": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    },
+    "sub.usda": {
+     "/": {
+      "children": [
+       "P"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P": {
+      "children": [
+       "A2",
+       "B"
+      ],
+      "primOrder": [
+       "B",
+       "A"
+      ],
+      "properties": [
+       "y"
+      ],
+      "propertyOrder": [
+       "x",
+       "y"
+      ]
+     },
+     "/P/A2": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/B": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    }
+   },
+   "name": "rename_child",
+   "path": "/P/A",
+   "scene": "scene.usda",
+   "target": "root"
+  },
+  {
+   "applied": true,
+   "call": "editor",
+   "composed": {
+    "/": {
+     "children": [
+      "Q",
+      "R",
+      "P"
+     ],
+     "properties": []
+    },
+    "/P": {
+     "children": [
+      "C",
+      "E",
+      "Gone",
+      "B"
+     ],
+     "properties": [
+      "z",
+      "y",
+      "x"
+     ]
+    },
+    "/P/B": {
+     "children": [],
+     "properties": []
+    },
+    "/P/C": {
+     "children": [],
+     "properties": []
+    },
+    "/P/E": {
+     "children": [],
+     "properties": []
+    },
+    "/P/Gone": {
+     "children": [],
+     "properties": []
+    },
+    "/Q": {
+     "children": [
+      "D"
+     ],
+     "properties": [
+      "w"
+     ]
+    },
+    "/Q/D": {
+     "children": [],
+     "properties": []
+    },
+    "/R": {
+     "children": [
+      "K",
+      "J"
+     ],
+     "properties": []
+    },
+    "/R/J": {
+     "children": [],
+     "properties": []
+    },
+    "/R/K": {
+     "children": [],
+     "properties": []
+    }
+   },
+   "destination": "/P/Gone",
+   "layers": {
+    "asset.usda": {
+     "/": {
+      "children": [
+       "Asset"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset": {
+      "children": [
+       "J",
+       "K"
+      ],
+      "primOrder": [
+       "K",
+       "J"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset/J": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset/K": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    },
+    "scene.usda": {
+     "/": {
+      "children": [
+       "P",
+       "Q",
+       "R"
+      ],
+      "primOrder": [
+       "Q",
+       "R",
+       "P"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P": {
+      "children": [
+       "Gone",
+       "B",
+       "C",
+       "E"
+      ],
+      "primOrder": [
+       "C",
+       "A",
+       "Gone",
+       "B"
+      ],
+      "properties": [
+       "x",
+       "y",
+       "z"
+      ],
+      "propertyOrder": [
+       "z",
+       "y",
+       "x"
+      ]
+     },
+     "/P/B": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/C": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/E": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/Gone": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Q": {
+      "children": [
+       "D"
+      ],
+      "primOrder": [
+       "D",
+       "A"
+      ],
+      "properties": [
+       "w"
+      ],
+      "propertyOrder": [
+       "w",
+       "x"
+      ]
+     },
+     "/Q/D": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/R": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    },
+    "sub.usda": {
+     "/": {
+      "children": [
+       "P"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P": {
+      "children": [
+       "Gone",
+       "B"
+      ],
+      "primOrder": [
+       "B",
+       "A"
+      ],
+      "properties": [
+       "y"
+      ],
+      "propertyOrder": [
+       "x",
+       "y"
+      ]
+     },
+     "/P/B": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/Gone": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    }
+   },
+   "name": "rename_onto_ordered_name",
+   "path": "/P/A",
+   "scene": "scene.usda",
+   "target": "root"
+  },
+  {
+   "applied": true,
+   "call": "editor",
+   "composed": {
+    "/": {
+     "children": [
+      "Q",
+      "R",
+      "P"
+     ],
+     "properties": []
+    },
+    "/P": {
+     "children": [
+      "C",
+      "E2",
+      "A",
+      "B"
+     ],
+     "properties": [
+      "z",
+      "y",
+      "x"
+     ]
+    },
+    "/P/A": {
+     "children": [],
+     "properties": []
+    },
+    "/P/B": {
+     "children": [],
+     "properties": []
+    },
+    "/P/C": {
+     "children": [],
+     "properties": []
+    },
+    "/P/E2": {
+     "children": [],
+     "properties": []
+    },
+    "/Q": {
+     "children": [
+      "D"
+     ],
+     "properties": [
+      "w"
+     ]
+    },
+    "/Q/D": {
+     "children": [],
+     "properties": []
+    },
+    "/R": {
+     "children": [
+      "K",
+      "J"
+     ],
+     "properties": []
+    },
+    "/R/J": {
+     "children": [],
+     "properties": []
+    },
+    "/R/K": {
+     "children": [],
+     "properties": []
+    }
+   },
+   "destination": "/P/E2",
+   "layers": {
+    "asset.usda": {
+     "/": {
+      "children": [
+       "Asset"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset": {
+      "children": [
+       "J",
+       "K"
+      ],
+      "primOrder": [
+       "K",
+       "J"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset/J": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset/K": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    },
+    "scene.usda": {
+     "/": {
+      "children": [
+       "P",
+       "Q",
+       "R"
+      ],
+      "primOrder": [
+       "Q",
+       "R",
+       "P"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P": {
+      "children": [
+       "A",
+       "B",
+       "C",
+       "E2"
+      ],
+      "primOrder": [
+       "C",
+       "A",
+       "Gone",
+       "B"
+      ],
+      "properties": [
+       "x",
+       "y",
+       "z"
+      ],
+      "propertyOrder": [
+       "z",
+       "y",
+       "x"
+      ]
+     },
+     "/P/A": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/B": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/C": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/E2": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Q": {
+      "children": [
+       "D"
+      ],
+      "primOrder": [
+       "D",
+       "A"
+      ],
+      "properties": [
+       "w"
+      ],
+      "propertyOrder": [
+       "w",
+       "x"
+      ]
+     },
+     "/Q/D": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/R": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    },
+    "sub.usda": {
+     "/": {
+      "children": [
+       "P"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P": {
+      "children": [
+       "A",
+       "B"
+      ],
+      "primOrder": [
+       "B",
+       "A"
+      ],
+      "properties": [
+       "y"
+      ],
+      "propertyOrder": [
+       "x",
+       "y"
+      ]
+     },
+     "/P/A": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/B": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    }
+   },
+   "name": "rename_unordered_child",
+   "path": "/P/E",
+   "scene": "scene.usda",
+   "target": "root"
+  },
+  {
+   "applied": true,
+   "call": "editor",
+   "composed": {
+    "/": {
+     "children": [
+      "P2",
+      "Q",
+      "R"
+     ],
+     "properties": []
+    },
+    "/P2": {
+     "children": [
+      "C",
+      "E",
+      "A",
+      "B"
+     ],
+     "properties": [
+      "z",
+      "y",
+      "x"
+     ]
+    },
+    "/P2/A": {
+     "children": [],
+     "properties": []
+    },
+    "/P2/B": {
+     "children": [],
+     "properties": []
+    },
+    "/P2/C": {
+     "children": [],
+     "properties": []
+    },
+    "/P2/E": {
+     "children": [],
+     "properties": []
+    },
+    "/Q": {
+     "children": [
+      "D"
+     ],
+     "properties": [
+      "w"
+     ]
+    },
+    "/Q/D": {
+     "children": [],
+     "properties": []
+    },
+    "/R": {
+     "children": [
+      "K",
+      "J"
+     ],
+     "properties": []
+    },
+    "/R/J": {
+     "children": [],
+     "properties": []
+    },
+    "/R/K": {
+     "children": [],
+     "properties": []
+    }
+   },
+   "destination": "/P2",
+   "layers": {
+    "asset.usda": {
+     "/": {
+      "children": [
+       "Asset"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset": {
+      "children": [
+       "J",
+       "K"
+      ],
+      "primOrder": [
+       "K",
+       "J"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset/J": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset/K": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    },
+    "scene.usda": {
+     "/": {
+      "children": [
+       "P2",
+       "Q",
+       "R"
+      ],
+      "primOrder": [
+       "Q",
+       "R",
+       "P"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P2": {
+      "children": [
+       "A",
+       "B",
+       "C",
+       "E"
+      ],
+      "primOrder": [
+       "C",
+       "A",
+       "Gone",
+       "B"
+      ],
+      "properties": [
+       "x",
+       "y",
+       "z"
+      ],
+      "propertyOrder": [
+       "z",
+       "y",
+       "x"
+      ]
+     },
+     "/P2/A": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P2/B": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P2/C": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P2/E": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Q": {
+      "children": [
+       "D"
+      ],
+      "primOrder": [
+       "D",
+       "A"
+      ],
+      "properties": [
+       "w"
+      ],
+      "propertyOrder": [
+       "w",
+       "x"
+      ]
+     },
+     "/Q/D": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/R": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    },
+    "sub.usda": {
+     "/": {
+      "children": [
+       "P2"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P2": {
+      "children": [
+       "A",
+       "B"
+      ],
+      "primOrder": [
+       "B",
+       "A"
+      ],
+      "properties": [
+       "y"
+      ],
+      "propertyOrder": [
+       "x",
+       "y"
+      ]
+     },
+     "/P2/A": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P2/B": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    }
+   },
+   "name": "rename_root_prim",
+   "path": "/P",
+   "scene": "scene.usda",
+   "target": "root"
+  },
+  {
+   "applied": true,
+   "call": "editor",
+   "composed": {
+    "/": {
+     "children": [
+      "Q",
+      "R",
+      "P"
+     ],
+     "properties": []
+    },
+    "/P": {
+     "children": [
+      "C",
+      "E",
+      "B"
+     ],
+     "properties": [
+      "z",
+      "y",
+      "x"
+     ]
+    },
+    "/P/B": {
+     "children": [],
+     "properties": []
+    },
+    "/P/C": {
+     "children": [],
+     "properties": []
+    },
+    "/P/E": {
+     "children": [],
+     "properties": []
+    },
+    "/Q": {
+     "children": [
+      "D",
+      "A"
+     ],
+     "properties": [
+      "w"
+     ]
+    },
+    "/Q/A": {
+     "children": [],
+     "properties": []
+    },
+    "/Q/D": {
+     "children": [],
+     "properties": []
+    },
+    "/R": {
+     "children": [
+      "K",
+      "J"
+     ],
+     "properties": []
+    },
+    "/R/J": {
+     "children": [],
+     "properties": []
+    },
+    "/R/K": {
+     "children": [],
+     "properties": []
+    }
+   },
+   "destination": "/Q/A",
+   "layers": {
+    "asset.usda": {
+     "/": {
+      "children": [
+       "Asset"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset": {
+      "children": [
+       "J",
+       "K"
+      ],
+      "primOrder": [
+       "K",
+       "J"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset/J": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset/K": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    },
+    "scene.usda": {
+     "/": {
+      "children": [
+       "P",
+       "Q",
+       "R"
+      ],
+      "primOrder": [
+       "Q",
+       "R",
+       "P"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P": {
+      "children": [
+       "B",
+       "C",
+       "E"
+      ],
+      "primOrder": [
+       "C",
+       "A",
+       "Gone",
+       "B"
+      ],
+      "properties": [
+       "x",
+       "y",
+       "z"
+      ],
+      "propertyOrder": [
+       "z",
+       "y",
+       "x"
+      ]
+     },
+     "/P/B": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/C": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/E": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Q": {
+      "children": [
+       "D",
+       "A"
+      ],
+      "primOrder": [
+       "D",
+       "A"
+      ],
+      "properties": [
+       "w"
+      ],
+      "propertyOrder": [
+       "w",
+       "x"
+      ]
+     },
+     "/Q/A": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Q/D": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/R": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    },
+    "sub.usda": {
+     "/": {
+      "children": [
+       "P",
+       "Q"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P": {
+      "children": [
+       "B"
+      ],
+      "primOrder": [
+       "B",
+       "A"
+      ],
+      "properties": [
+       "y"
+      ],
+      "propertyOrder": [
+       "x",
+       "y"
+      ]
+     },
+     "/P/B": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Q": {
+      "children": [
+       "A"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Q/A": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    }
+   },
+   "name": "reparent_child",
+   "path": "/P/A",
+   "scene": "scene.usda",
+   "target": "root"
+  },
+  {
+   "applied": true,
+   "call": "editor",
+   "composed": {
+    "/": {
+     "children": [
+      "Q",
+      "R",
+      "P"
+     ],
+     "properties": []
+    },
+    "/P": {
+     "children": [
+      "C",
+      "E",
+      "A"
+     ],
+     "properties": [
+      "z",
+      "y",
+      "x"
+     ]
+    },
+    "/P/A": {
+     "children": [],
+     "properties": []
+    },
+    "/P/C": {
+     "children": [],
+     "properties": []
+    },
+    "/P/E": {
+     "children": [],
+     "properties": []
+    },
+    "/Q": {
+     "children": [
+      "B2",
+      "D"
+     ],
+     "properties": [
+      "w"
+     ]
+    },
+    "/Q/B2": {
+     "children": [],
+     "properties": []
+    },
+    "/Q/D": {
+     "children": [],
+     "properties": []
+    },
+    "/R": {
+     "children": [
+      "K",
+      "J"
+     ],
+     "properties": []
+    },
+    "/R/J": {
+     "children": [],
+     "properties": []
+    },
+    "/R/K": {
+     "children": [],
+     "properties": []
+    }
+   },
+   "destination": "/Q/B2",
+   "layers": {
+    "asset.usda": {
+     "/": {
+      "children": [
+       "Asset"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset": {
+      "children": [
+       "J",
+       "K"
+      ],
+      "primOrder": [
+       "K",
+       "J"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset/J": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset/K": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    },
+    "scene.usda": {
+     "/": {
+      "children": [
+       "P",
+       "Q",
+       "R"
+      ],
+      "primOrder": [
+       "Q",
+       "R",
+       "P"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P": {
+      "children": [
+       "A",
+       "C",
+       "E"
+      ],
+      "primOrder": [
+       "C",
+       "A",
+       "Gone",
+       "B"
+      ],
+      "properties": [
+       "x",
+       "y",
+       "z"
+      ],
+      "propertyOrder": [
+       "z",
+       "y",
+       "x"
+      ]
+     },
+     "/P/A": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/C": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/E": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Q": {
+      "children": [
+       "D",
+       "B2"
+      ],
+      "primOrder": [
+       "D",
+       "A"
+      ],
+      "properties": [
+       "w"
+      ],
+      "propertyOrder": [
+       "w",
+       "x"
+      ]
+     },
+     "/Q/B2": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Q/D": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/R": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    },
+    "sub.usda": {
+     "/": {
+      "children": [
+       "P",
+       "Q"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P": {
+      "children": [
+       "A"
+      ],
+      "primOrder": [
+       "B",
+       "A"
+      ],
+      "properties": [
+       "y"
+      ],
+      "propertyOrder": [
+       "x",
+       "y"
+      ]
+     },
+     "/P/A": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Q": {
+      "children": [
+       "B2"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Q/B2": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    }
+   },
+   "name": "reparent_and_rename_child",
+   "path": "/P/B",
+   "scene": "scene.usda",
+   "target": "root"
+  },
+  {
+   "applied": true,
+   "call": "editor",
+   "composed": {
+    "/": {
+     "children": [
+      "Q",
+      "R",
+      "P"
+     ],
+     "properties": []
+    },
+    "/P": {
+     "children": [
+      "C",
+      "E",
+      "B"
+     ],
+     "properties": [
+      "z",
+      "y",
+      "x"
+     ]
+    },
+    "/P/B": {
+     "children": [],
+     "properties": []
+    },
+    "/P/C": {
+     "children": [],
+     "properties": []
+    },
+    "/P/E": {
+     "children": [],
+     "properties": []
+    },
+    "/Q": {
+     "children": [
+      "D"
+     ],
+     "properties": [
+      "w"
+     ]
+    },
+    "/Q/D": {
+     "children": [],
+     "properties": []
+    },
+    "/R": {
+     "children": [
+      "K",
+      "J"
+     ],
+     "properties": []
+    },
+    "/R/J": {
+     "children": [],
+     "properties": []
+    },
+    "/R/K": {
+     "children": [],
+     "properties": []
+    }
+   },
+   "destination": null,
+   "layers": {
+    "asset.usda": {
+     "/": {
+      "children": [
+       "Asset"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset": {
+      "children": [
+       "J",
+       "K"
+      ],
+      "primOrder": [
+       "K",
+       "J"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset/J": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset/K": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    },
+    "scene.usda": {
+     "/": {
+      "children": [
+       "P",
+       "Q",
+       "R"
+      ],
+      "primOrder": [
+       "Q",
+       "R",
+       "P"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P": {
+      "children": [
+       "B",
+       "C",
+       "E"
+      ],
+      "primOrder": [
+       "C",
+       "A",
+       "Gone",
+       "B"
+      ],
+      "properties": [
+       "x",
+       "y",
+       "z"
+      ],
+      "propertyOrder": [
+       "z",
+       "y",
+       "x"
+      ]
+     },
+     "/P/B": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/C": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/E": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Q": {
+      "children": [
+       "D"
+      ],
+      "primOrder": [
+       "D",
+       "A"
+      ],
+      "properties": [
+       "w"
+      ],
+      "propertyOrder": [
+       "w",
+       "x"
+      ]
+     },
+     "/Q/D": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/R": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    },
+    "sub.usda": {
+     "/": {
+      "children": [
+       "P"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P": {
+      "children": [
+       "B"
+      ],
+      "primOrder": [
+       "B",
+       "A"
+      ],
+      "properties": [
+       "y"
+      ],
+      "propertyOrder": [
+       "x",
+       "y"
+      ]
+     },
+     "/P/B": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    }
+   },
+   "name": "delete_child",
+   "path": "/P/A",
+   "scene": "scene.usda",
+   "target": "root"
+  },
+  {
+   "applied": true,
+   "call": "editor",
+   "composed": {
+    "/": {
+     "children": [
+      "Q",
+      "R",
+      "P"
+     ],
+     "properties": []
+    },
+    "/P": {
+     "children": [
+      "C",
+      "E",
+      "A",
+      "B"
+     ],
+     "properties": [
+      "z",
+      "x",
+      "y2"
+     ]
+    },
+    "/P/A": {
+     "children": [],
+     "properties": []
+    },
+    "/P/B": {
+     "children": [],
+     "properties": []
+    },
+    "/P/C": {
+     "children": [],
+     "properties": []
+    },
+    "/P/E": {
+     "children": [],
+     "properties": []
+    },
+    "/Q": {
+     "children": [
+      "D"
+     ],
+     "properties": [
+      "w"
+     ]
+    },
+    "/Q/D": {
+     "children": [],
+     "properties": []
+    },
+    "/R": {
+     "children": [
+      "K",
+      "J"
+     ],
+     "properties": []
+    },
+    "/R/J": {
+     "children": [],
+     "properties": []
+    },
+    "/R/K": {
+     "children": [],
+     "properties": []
+    }
+   },
+   "destination": "/P.y2",
+   "layers": {
+    "asset.usda": {
+     "/": {
+      "children": [
+       "Asset"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset": {
+      "children": [
+       "J",
+       "K"
+      ],
+      "primOrder": [
+       "K",
+       "J"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset/J": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset/K": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    },
+    "scene.usda": {
+     "/": {
+      "children": [
+       "P",
+       "Q",
+       "R"
+      ],
+      "primOrder": [
+       "Q",
+       "R",
+       "P"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P": {
+      "children": [
+       "A",
+       "B",
+       "C",
+       "E"
+      ],
+      "primOrder": [
+       "C",
+       "A",
+       "Gone",
+       "B"
+      ],
+      "properties": [
+       "x",
+       "y2",
+       "z"
+      ],
+      "propertyOrder": [
+       "z",
+       "y",
+       "x"
+      ]
+     },
+     "/P/A": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/B": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/C": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/E": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Q": {
+      "children": [
+       "D"
+      ],
+      "primOrder": [
+       "D",
+       "A"
+      ],
+      "properties": [
+       "w"
+      ],
+      "propertyOrder": [
+       "w",
+       "x"
+      ]
+     },
+     "/Q/D": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/R": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    },
+    "sub.usda": {
+     "/": {
+      "children": [
+       "P"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P": {
+      "children": [
+       "A",
+       "B"
+      ],
+      "primOrder": [
+       "B",
+       "A"
+      ],
+      "properties": [
+       "y2"
+      ],
+      "propertyOrder": [
+       "x",
+       "y"
+      ]
+     },
+     "/P/A": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/B": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    }
+   },
+   "name": "rename_property",
+   "path": "/P.y",
+   "scene": "scene.usda",
+   "target": "root"
+  },
+  {
+   "applied": true,
+   "call": "editor",
+   "composed": {
+    "/": {
+     "children": [
+      "Q",
+      "R",
+      "P"
+     ],
+     "properties": []
+    },
+    "/P": {
+     "children": [
+      "C",
+      "E",
+      "A",
+      "B"
+     ],
+     "properties": [
+      "z",
+      "y"
+     ]
+    },
+    "/P/A": {
+     "children": [],
+     "properties": []
+    },
+    "/P/B": {
+     "children": [],
+     "properties": []
+    },
+    "/P/C": {
+     "children": [],
+     "properties": []
+    },
+    "/P/E": {
+     "children": [],
+     "properties": []
+    },
+    "/Q": {
+     "children": [
+      "D"
+     ],
+     "properties": [
+      "w",
+      "x"
+     ]
+    },
+    "/Q/D": {
+     "children": [],
+     "properties": []
+    },
+    "/R": {
+     "children": [
+      "K",
+      "J"
+     ],
+     "properties": []
+    },
+    "/R/J": {
+     "children": [],
+     "properties": []
+    },
+    "/R/K": {
+     "children": [],
+     "properties": []
+    }
+   },
+   "destination": "/Q.x",
+   "layers": {
+    "asset.usda": {
+     "/": {
+      "children": [
+       "Asset"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset": {
+      "children": [
+       "J",
+       "K"
+      ],
+      "primOrder": [
+       "K",
+       "J"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset/J": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset/K": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    },
+    "scene.usda": {
+     "/": {
+      "children": [
+       "P",
+       "Q",
+       "R"
+      ],
+      "primOrder": [
+       "Q",
+       "R",
+       "P"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P": {
+      "children": [
+       "A",
+       "B",
+       "C",
+       "E"
+      ],
+      "primOrder": [
+       "C",
+       "A",
+       "Gone",
+       "B"
+      ],
+      "properties": [
+       "y",
+       "z"
+      ],
+      "propertyOrder": [
+       "z",
+       "y",
+       "x"
+      ]
+     },
+     "/P/A": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/B": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/C": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/E": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Q": {
+      "children": [
+       "D"
+      ],
+      "primOrder": [
+       "D",
+       "A"
+      ],
+      "properties": [
+       "w",
+       "x"
+      ],
+      "propertyOrder": [
+       "w",
+       "x"
+      ]
+     },
+     "/Q/D": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/R": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    },
+    "sub.usda": {
+     "/": {
+      "children": [
+       "P"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P": {
+      "children": [
+       "A",
+       "B"
+      ],
+      "primOrder": [
+       "B",
+       "A"
+      ],
+      "properties": [
+       "y"
+      ],
+      "propertyOrder": [
+       "x",
+       "y"
+      ]
+     },
+     "/P/A": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/B": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    }
+   },
+   "name": "reparent_property",
+   "path": "/P.x",
+   "scene": "scene.usda",
+   "target": "root"
+  },
+  {
+   "applied": true,
+   "call": "editor",
+   "composed": {
+    "/": {
+     "children": [
+      "Q",
+      "R",
+      "P"
+     ],
+     "properties": []
+    },
+    "/P": {
+     "children": [
+      "C",
+      "E",
+      "A",
+      "B"
+     ],
+     "properties": [
+      "y",
+      "x"
+     ]
+    },
+    "/P/A": {
+     "children": [],
+     "properties": []
+    },
+    "/P/B": {
+     "children": [],
+     "properties": []
+    },
+    "/P/C": {
+     "children": [],
+     "properties": []
+    },
+    "/P/E": {
+     "children": [],
+     "properties": []
+    },
+    "/Q": {
+     "children": [
+      "D"
+     ],
+     "properties": [
+      "w"
+     ]
+    },
+    "/Q/D": {
+     "children": [],
+     "properties": []
+    },
+    "/R": {
+     "children": [
+      "K",
+      "J"
+     ],
+     "properties": []
+    },
+    "/R/J": {
+     "children": [],
+     "properties": []
+    },
+    "/R/K": {
+     "children": [],
+     "properties": []
+    }
+   },
+   "destination": null,
+   "layers": {
+    "asset.usda": {
+     "/": {
+      "children": [
+       "Asset"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset": {
+      "children": [
+       "J",
+       "K"
+      ],
+      "primOrder": [
+       "K",
+       "J"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset/J": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset/K": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    },
+    "scene.usda": {
+     "/": {
+      "children": [
+       "P",
+       "Q",
+       "R"
+      ],
+      "primOrder": [
+       "Q",
+       "R",
+       "P"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P": {
+      "children": [
+       "A",
+       "B",
+       "C",
+       "E"
+      ],
+      "primOrder": [
+       "C",
+       "A",
+       "Gone",
+       "B"
+      ],
+      "properties": [
+       "x",
+       "y"
+      ],
+      "propertyOrder": [
+       "z",
+       "y",
+       "x"
+      ]
+     },
+     "/P/A": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/B": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/C": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/E": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Q": {
+      "children": [
+       "D"
+      ],
+      "primOrder": [
+       "D",
+       "A"
+      ],
+      "properties": [
+       "w"
+      ],
+      "propertyOrder": [
+       "w",
+       "x"
+      ]
+     },
+     "/Q/D": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/R": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    },
+    "sub.usda": {
+     "/": {
+      "children": [
+       "P"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P": {
+      "children": [
+       "A",
+       "B"
+      ],
+      "primOrder": [
+       "B",
+       "A"
+      ],
+      "properties": [
+       "y"
+      ],
+      "propertyOrder": [
+       "x",
+       "y"
+      ]
+     },
+     "/P/A": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/B": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    }
+   },
+   "name": "delete_property",
+   "path": "/P.z",
+   "scene": "scene.usda",
+   "target": "root"
+  },
+  {
+   "applied": false,
+   "call": "editor",
+   "composed": {
+    "/": {
+     "children": [
+      "V"
+     ],
+     "properties": []
+    },
+    "/V": {
+     "children": [
+      "G",
+      "F"
+     ],
+     "properties": []
+    },
+    "/V/F": {
+     "children": [],
+     "properties": []
+    },
+    "/V/G": {
+     "children": [],
+     "properties": []
+    }
+   },
+   "destination": "/V/F2",
+   "layers": {
+    "variant.usda": {
+     "/": {
+      "children": [
+       "V"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/V": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/V{v=x}": {
+      "children": [
+       "F",
+       "G"
+      ],
+      "primOrder": [
+       "G",
+       "F"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/V{v=x}F": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/V{v=x}G": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    }
+   },
+   "name": "rename_variant_child",
+   "path": "/V/F",
+   "scene": "variant.usda",
+   "target": "variant"
+  },
+  {
+   "applied": false,
+   "call": "editor",
+   "composed": {
+    "/": {
+     "children": [
+      "V"
+     ],
+     "properties": []
+    },
+    "/V": {
+     "children": [
+      "G",
+      "F"
+     ],
+     "properties": []
+    },
+    "/V/F": {
+     "children": [],
+     "properties": []
+    },
+    "/V/G": {
+     "children": [],
+     "properties": []
+    }
+   },
+   "destination": null,
+   "layers": {
+    "variant.usda": {
+     "/": {
+      "children": [
+       "V"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/V": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/V{v=x}": {
+      "children": [
+       "F",
+       "G"
+      ],
+      "primOrder": [
+       "G",
+       "F"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/V{v=x}F": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/V{v=x}G": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    }
+   },
+   "name": "delete_variant_child",
+   "path": "/V/F",
+   "scene": "variant.usda",
+   "target": "variant"
+  },
+  {
+   "applied": true,
+   "call": "layer_apply",
+   "composed": {
+    "/": {
+     "children": [
+      "Q",
+      "R",
+      "P"
+     ],
+     "properties": []
+    },
+    "/P": {
+     "children": [
+      "C",
+      "E",
+      "A",
+      "B"
+     ],
+     "properties": [
+      "z",
+      "y",
+      "x"
+     ]
+    },
+    "/P/A": {
+     "children": [],
+     "properties": []
+    },
+    "/P/B": {
+     "children": [],
+     "properties": []
+    },
+    "/P/C": {
+     "children": [],
+     "properties": []
+    },
+    "/P/E": {
+     "children": [],
+     "properties": []
+    },
+    "/Q": {
+     "children": [
+      "D"
+     ],
+     "properties": [
+      "w"
+     ]
+    },
+    "/Q/D": {
+     "children": [],
+     "properties": []
+    },
+    "/R": {
+     "children": [
+      "J2",
+      "K"
+     ],
+     "properties": []
+    },
+    "/R/J2": {
+     "children": [],
+     "properties": []
+    },
+    "/R/K": {
+     "children": [],
+     "properties": []
+    }
+   },
+   "destination": "/Asset/J2",
+   "layers": {
+    "asset.usda": {
+     "/": {
+      "children": [
+       "Asset"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset": {
+      "children": [
+       "J2",
+       "K"
+      ],
+      "primOrder": [
+       "K",
+       "J"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset/J2": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset/K": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    },
+    "scene.usda": {
+     "/": {
+      "children": [
+       "P",
+       "Q",
+       "R"
+      ],
+      "primOrder": [
+       "Q",
+       "R",
+       "P"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P": {
+      "children": [
+       "A",
+       "B",
+       "C",
+       "E"
+      ],
+      "primOrder": [
+       "C",
+       "A",
+       "Gone",
+       "B"
+      ],
+      "properties": [
+       "x",
+       "y",
+       "z"
+      ],
+      "propertyOrder": [
+       "z",
+       "y",
+       "x"
+      ]
+     },
+     "/P/A": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/B": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/C": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/E": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Q": {
+      "children": [
+       "D"
+      ],
+      "primOrder": [
+       "D",
+       "A"
+      ],
+      "properties": [
+       "w"
+      ],
+      "propertyOrder": [
+       "w",
+       "x"
+      ]
+     },
+     "/Q/D": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/R": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    },
+    "sub.usda": {
+     "/": {
+      "children": [
+       "P"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P": {
+      "children": [
+       "A",
+       "B"
+      ],
+      "primOrder": [
+       "B",
+       "A"
+      ],
+      "properties": [
+       "y"
+      ],
+      "propertyOrder": [
+       "x",
+       "y"
+      ]
+     },
+     "/P/A": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/B": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    }
+   },
+   "name": "rename_asset_child",
+   "path": "/Asset/J",
+   "scene": "scene.usda",
+   "target": "asset.usda"
+  },
+  {
+   "applied": true,
+   "call": "remove_spec",
+   "composed": {
+    "/": {
+     "children": [
+      "Q",
+      "R",
+      "P"
+     ],
+     "properties": []
+    },
+    "/P": {
+     "children": [
+      "C",
+      "E",
+      "A",
+      "B"
+     ],
+     "properties": [
+      "z",
+      "y",
+      "x"
+     ]
+    },
+    "/P/A": {
+     "children": [],
+     "properties": []
+    },
+    "/P/B": {
+     "children": [],
+     "properties": []
+    },
+    "/P/C": {
+     "children": [],
+     "properties": []
+    },
+    "/P/E": {
+     "children": [],
+     "properties": []
+    },
+    "/Q": {
+     "children": [
+      "D"
+     ],
+     "properties": [
+      "w"
+     ]
+    },
+    "/Q/D": {
+     "children": [],
+     "properties": []
+    },
+    "/R": {
+     "children": [
+      "K",
+      "J"
+     ],
+     "properties": []
+    },
+    "/R/J": {
+     "children": [],
+     "properties": []
+    },
+    "/R/K": {
+     "children": [],
+     "properties": []
+    }
+   },
+   "destination": null,
+   "layers": {
+    "asset.usda": {
+     "/": {
+      "children": [
+       "Asset"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset": {
+      "children": [
+       "J",
+       "K"
+      ],
+      "primOrder": [
+       "K",
+       "J"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset/J": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset/K": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    },
+    "scene.usda": {
+     "/": {
+      "children": [
+       "P",
+       "Q",
+       "R"
+      ],
+      "primOrder": [
+       "Q",
+       "R",
+       "P"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P": {
+      "children": [
+       "B",
+       "C",
+       "E"
+      ],
+      "primOrder": [
+       "C",
+       "A",
+       "Gone",
+       "B"
+      ],
+      "properties": [
+       "x",
+       "y",
+       "z"
+      ],
+      "propertyOrder": [
+       "z",
+       "y",
+       "x"
+      ]
+     },
+     "/P/B": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/C": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/E": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Q": {
+      "children": [
+       "D"
+      ],
+      "primOrder": [
+       "D",
+       "A"
+      ],
+      "properties": [
+       "w"
+      ],
+      "propertyOrder": [
+       "w",
+       "x"
+      ]
+     },
+     "/Q/D": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/R": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    },
+    "sub.usda": {
+     "/": {
+      "children": [
+       "P"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P": {
+      "children": [
+       "A",
+       "B"
+      ],
+      "primOrder": [
+       "B",
+       "A"
+      ],
+      "properties": [
+       "y"
+      ],
+      "propertyOrder": [
+       "x",
+       "y"
+      ]
+     },
+     "/P/A": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/B": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    }
+   },
+   "name": "remove_child_spec",
+   "path": "/P/A",
+   "scene": "scene.usda",
+   "target": "scene.usda"
+  },
+  {
+   "applied": true,
+   "call": "remove_spec",
+   "composed": {
+    "/": {
+     "children": [
+      "Q",
+      "R",
+      "P"
+     ],
+     "properties": []
+    },
+    "/P": {
+     "children": [
+      "C",
+      "E",
+      "A",
+      "B"
+     ],
+     "properties": [
+      "y",
+      "x"
+     ]
+    },
+    "/P/A": {
+     "children": [],
+     "properties": []
+    },
+    "/P/B": {
+     "children": [],
+     "properties": []
+    },
+    "/P/C": {
+     "children": [],
+     "properties": []
+    },
+    "/P/E": {
+     "children": [],
+     "properties": []
+    },
+    "/Q": {
+     "children": [
+      "D"
+     ],
+     "properties": [
+      "w"
+     ]
+    },
+    "/Q/D": {
+     "children": [],
+     "properties": []
+    },
+    "/R": {
+     "children": [
+      "K",
+      "J"
+     ],
+     "properties": []
+    },
+    "/R/J": {
+     "children": [],
+     "properties": []
+    },
+    "/R/K": {
+     "children": [],
+     "properties": []
+    }
+   },
+   "destination": null,
+   "layers": {
+    "asset.usda": {
+     "/": {
+      "children": [
+       "Asset"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset": {
+      "children": [
+       "J",
+       "K"
+      ],
+      "primOrder": [
+       "K",
+       "J"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset/J": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset/K": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    },
+    "scene.usda": {
+     "/": {
+      "children": [
+       "P",
+       "Q",
+       "R"
+      ],
+      "primOrder": [
+       "Q",
+       "R",
+       "P"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P": {
+      "children": [
+       "A",
+       "B",
+       "C",
+       "E"
+      ],
+      "primOrder": [
+       "C",
+       "A",
+       "Gone",
+       "B"
+      ],
+      "properties": [
+       "x",
+       "y"
+      ],
+      "propertyOrder": [
+       "z",
+       "y",
+       "x"
+      ]
+     },
+     "/P/A": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/B": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/C": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/E": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Q": {
+      "children": [
+       "D"
+      ],
+      "primOrder": [
+       "D",
+       "A"
+      ],
+      "properties": [
+       "w"
+      ],
+      "propertyOrder": [
+       "w",
+       "x"
+      ]
+     },
+     "/Q/D": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/R": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    },
+    "sub.usda": {
+     "/": {
+      "children": [
+       "P"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P": {
+      "children": [
+       "A",
+       "B"
+      ],
+      "primOrder": [
+       "B",
+       "A"
+      ],
+      "properties": [
+       "y"
+      ],
+      "propertyOrder": [
+       "x",
+       "y"
+      ]
+     },
+     "/P/A": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/B": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    }
+   },
+   "name": "remove_property_spec",
+   "path": "/P.z",
+   "scene": "scene.usda",
+   "target": "scene.usda"
+  },
+  {
+   "applied": true,
+   "call": "copy_spec",
+   "composed": {
+    "/": {
+     "children": [
+      "Q",
+      "R",
+      "P"
+     ],
+     "properties": []
+    },
+    "/P": {
+     "children": [
+      "C",
+      "E",
+      "A",
+      "B"
+     ],
+     "properties": [
+      "z",
+      "y",
+      "x"
+     ]
+    },
+    "/P/A": {
+     "children": [],
+     "properties": []
+    },
+    "/P/B": {
+     "children": [],
+     "properties": []
+    },
+    "/P/C": {
+     "children": [],
+     "properties": []
+    },
+    "/P/E": {
+     "children": [],
+     "properties": []
+    },
+    "/Q": {
+     "children": [
+      "D",
+      "A"
+     ],
+     "properties": [
+      "w"
+     ]
+    },
+    "/Q/A": {
+     "children": [],
+     "properties": []
+    },
+    "/Q/D": {
+     "children": [],
+     "properties": []
+    },
+    "/R": {
+     "children": [
+      "K",
+      "J"
+     ],
+     "properties": []
+    },
+    "/R/J": {
+     "children": [],
+     "properties": []
+    },
+    "/R/K": {
+     "children": [],
+     "properties": []
+    }
+   },
+   "destination": "/Q/A",
+   "layers": {
+    "asset.usda": {
+     "/": {
+      "children": [
+       "Asset"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset": {
+      "children": [
+       "J",
+       "K"
+      ],
+      "primOrder": [
+       "K",
+       "J"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset/J": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset/K": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    },
+    "scene.usda": {
+     "/": {
+      "children": [
+       "P",
+       "Q",
+       "R"
+      ],
+      "primOrder": [
+       "Q",
+       "R",
+       "P"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P": {
+      "children": [
+       "A",
+       "B",
+       "C",
+       "E"
+      ],
+      "primOrder": [
+       "C",
+       "A",
+       "Gone",
+       "B"
+      ],
+      "properties": [
+       "x",
+       "y",
+       "z"
+      ],
+      "propertyOrder": [
+       "z",
+       "y",
+       "x"
+      ]
+     },
+     "/P/A": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/B": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/C": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/E": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Q": {
+      "children": [
+       "D",
+       "A"
+      ],
+      "primOrder": [
+       "D",
+       "A"
+      ],
+      "properties": [
+       "w"
+      ],
+      "propertyOrder": [
+       "w",
+       "x"
+      ]
+     },
+     "/Q/A": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Q/D": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/R": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    },
+    "sub.usda": {
+     "/": {
+      "children": [
+       "P"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P": {
+      "children": [
+       "A",
+       "B"
+      ],
+      "primOrder": [
+       "B",
+       "A"
+      ],
+      "properties": [
+       "y"
+      ],
+      "propertyOrder": [
+       "x",
+       "y"
+      ]
+     },
+     "/P/A": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/B": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    }
+   },
+   "name": "copy_child_spec",
+   "path": "/P/A",
+   "scene": "scene.usda",
+   "target": "scene.usda"
+  },
+  {
+   "applied": true,
+   "call": "copy_spec",
+   "composed": {
+    "/": {
+     "children": [
+      "Q",
+      "R",
+      "P3",
+      "P"
+     ],
+     "properties": []
+    },
+    "/P": {
+     "children": [
+      "C",
+      "E",
+      "A",
+      "B"
+     ],
+     "properties": [
+      "z",
+      "y",
+      "x"
+     ]
+    },
+    "/P/A": {
+     "children": [],
+     "properties": []
+    },
+    "/P/B": {
+     "children": [],
+     "properties": []
+    },
+    "/P/C": {
+     "children": [],
+     "properties": []
+    },
+    "/P/E": {
+     "children": [],
+     "properties": []
+    },
+    "/P3": {
+     "children": [
+      "C",
+      "E",
+      "A",
+      "B"
+     ],
+     "properties": [
+      "z",
+      "y",
+      "x"
+     ]
+    },
+    "/P3/A": {
+     "children": [],
+     "properties": []
+    },
+    "/P3/B": {
+     "children": [],
+     "properties": []
+    },
+    "/P3/C": {
+     "children": [],
+     "properties": []
+    },
+    "/P3/E": {
+     "children": [],
+     "properties": []
+    },
+    "/Q": {
+     "children": [
+      "D"
+     ],
+     "properties": [
+      "w"
+     ]
+    },
+    "/Q/D": {
+     "children": [],
+     "properties": []
+    },
+    "/R": {
+     "children": [
+      "K",
+      "J"
+     ],
+     "properties": []
+    },
+    "/R/J": {
+     "children": [],
+     "properties": []
+    },
+    "/R/K": {
+     "children": [],
+     "properties": []
+    }
+   },
+   "destination": "/P3",
+   "layers": {
+    "asset.usda": {
+     "/": {
+      "children": [
+       "Asset"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset": {
+      "children": [
+       "J",
+       "K"
+      ],
+      "primOrder": [
+       "K",
+       "J"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset/J": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset/K": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    },
+    "scene.usda": {
+     "/": {
+      "children": [
+       "P",
+       "Q",
+       "R",
+       "P3"
+      ],
+      "primOrder": [
+       "Q",
+       "R",
+       "P"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P": {
+      "children": [
+       "A",
+       "B",
+       "C",
+       "E"
+      ],
+      "primOrder": [
+       "C",
+       "A",
+       "Gone",
+       "B"
+      ],
+      "properties": [
+       "x",
+       "y",
+       "z"
+      ],
+      "propertyOrder": [
+       "z",
+       "y",
+       "x"
+      ]
+     },
+     "/P/A": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/B": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/C": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/E": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P3": {
+      "children": [
+       "A",
+       "B",
+       "C",
+       "E"
+      ],
+      "primOrder": [
+       "C",
+       "A",
+       "Gone",
+       "B"
+      ],
+      "properties": [
+       "x",
+       "y",
+       "z"
+      ],
+      "propertyOrder": [
+       "z",
+       "y",
+       "x"
+      ]
+     },
+     "/P3/A": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P3/B": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P3/C": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P3/E": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Q": {
+      "children": [
+       "D"
+      ],
+      "primOrder": [
+       "D",
+       "A"
+      ],
+      "properties": [
+       "w"
+      ],
+      "propertyOrder": [
+       "w",
+       "x"
+      ]
+     },
+     "/Q/D": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/R": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    },
+    "sub.usda": {
+     "/": {
+      "children": [
+       "P"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P": {
+      "children": [
+       "A",
+       "B"
+      ],
+      "primOrder": [
+       "B",
+       "A"
+      ],
+      "properties": [
+       "y"
+      ],
+      "propertyOrder": [
+       "x",
+       "y"
+      ]
+     },
+     "/P/A": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/B": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    }
+   },
+   "name": "copy_ordered_spec",
+   "path": "/P",
+   "scene": "scene.usda",
+   "target": "scene.usda"
+  }
+ ],
+ "openusd_version": "26.11",
+ "set_name": [
+  {
+   "applied": true,
+   "composed": {
+    "/": {
+     "children": [
+      "Q",
+      "R",
+      "P"
+     ],
+     "properties": []
+    },
+    "/P": {
+     "children": [
+      "C",
+      "E",
+      "A2",
+      "B",
+      "A"
+     ],
+     "properties": [
+      "z",
+      "y",
+      "x"
+     ]
+    },
+    "/P/A": {
+     "children": [],
+     "properties": []
+    },
+    "/P/A2": {
+     "children": [],
+     "properties": []
+    },
+    "/P/B": {
+     "children": [],
+     "properties": []
+    },
+    "/P/C": {
+     "children": [],
+     "properties": []
+    },
+    "/P/E": {
+     "children": [],
+     "properties": []
+    },
+    "/Q": {
+     "children": [
+      "D"
+     ],
+     "properties": [
+      "w"
+     ]
+    },
+    "/Q/D": {
+     "children": [],
+     "properties": []
+    },
+    "/R": {
+     "children": [
+      "K",
+      "J"
+     ],
+     "properties": []
+    },
+    "/R/J": {
+     "children": [],
+     "properties": []
+    },
+    "/R/K": {
+     "children": [],
+     "properties": []
+    }
+   },
+   "layers": {
+    "asset.usda": {
+     "/": {
+      "children": [
+       "Asset"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset": {
+      "children": [
+       "J",
+       "K"
+      ],
+      "primOrder": [
+       "K",
+       "J"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset/J": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset/K": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    },
+    "scene.usda": {
+     "/": {
+      "children": [
+       "P",
+       "Q",
+       "R"
+      ],
+      "primOrder": [
+       "Q",
+       "R",
+       "P"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P": {
+      "children": [
+       "A2",
+       "B",
+       "C",
+       "E"
+      ],
+      "primOrder": [
+       "C",
+       "A2",
+       "Gone",
+       "B"
+      ],
+      "properties": [
+       "x",
+       "y",
+       "z"
+      ],
+      "propertyOrder": [
+       "z",
+       "y",
+       "x"
+      ]
+     },
+     "/P/A2": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/B": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/C": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/E": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Q": {
+      "children": [
+       "D"
+      ],
+      "primOrder": [
+       "D",
+       "A"
+      ],
+      "properties": [
+       "w"
+      ],
+      "propertyOrder": [
+       "w",
+       "x"
+      ]
+     },
+     "/Q/D": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/R": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    },
+    "sub.usda": {
+     "/": {
+      "children": [
+       "P"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P": {
+      "children": [
+       "A",
+       "B"
+      ],
+      "primOrder": [
+       "B",
+       "A"
+      ],
+      "properties": [
+       "y"
+      ],
+      "propertyOrder": [
+       "x",
+       "y"
+      ]
+     },
+     "/P/A": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/B": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    }
+   },
+   "name": "prim",
+   "new_name": "A2",
+   "path": "/P/A"
+  },
+  {
+   "applied": true,
+   "composed": {
+    "/": {
+     "children": [
+      "Q",
+      "R",
+      "P"
+     ],
+     "properties": []
+    },
+    "/P": {
+     "children": [
+      "C",
+      "E",
+      "Gone",
+      "B",
+      "A"
+     ],
+     "properties": [
+      "z",
+      "y",
+      "x"
+     ]
+    },
+    "/P/A": {
+     "children": [],
+     "properties": []
+    },
+    "/P/B": {
+     "children": [],
+     "properties": []
+    },
+    "/P/C": {
+     "children": [],
+     "properties": []
+    },
+    "/P/E": {
+     "children": [],
+     "properties": []
+    },
+    "/P/Gone": {
+     "children": [],
+     "properties": []
+    },
+    "/Q": {
+     "children": [
+      "D"
+     ],
+     "properties": [
+      "w"
+     ]
+    },
+    "/Q/D": {
+     "children": [],
+     "properties": []
+    },
+    "/R": {
+     "children": [
+      "K",
+      "J"
+     ],
+     "properties": []
+    },
+    "/R/J": {
+     "children": [],
+     "properties": []
+    },
+    "/R/K": {
+     "children": [],
+     "properties": []
+    }
+   },
+   "layers": {
+    "asset.usda": {
+     "/": {
+      "children": [
+       "Asset"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset": {
+      "children": [
+       "J",
+       "K"
+      ],
+      "primOrder": [
+       "K",
+       "J"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset/J": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset/K": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    },
+    "scene.usda": {
+     "/": {
+      "children": [
+       "P",
+       "Q",
+       "R"
+      ],
+      "primOrder": [
+       "Q",
+       "R",
+       "P"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P": {
+      "children": [
+       "Gone",
+       "B",
+       "C",
+       "E"
+      ],
+      "primOrder": [
+       "C",
+       "Gone",
+       "B"
+      ],
+      "properties": [
+       "x",
+       "y",
+       "z"
+      ],
+      "propertyOrder": [
+       "z",
+       "y",
+       "x"
+      ]
+     },
+     "/P/B": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/C": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/E": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/Gone": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Q": {
+      "children": [
+       "D"
+      ],
+      "primOrder": [
+       "D",
+       "A"
+      ],
+      "properties": [
+       "w"
+      ],
+      "propertyOrder": [
+       "w",
+       "x"
+      ]
+     },
+     "/Q/D": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/R": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    },
+    "sub.usda": {
+     "/": {
+      "children": [
+       "P"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P": {
+      "children": [
+       "A",
+       "B"
+      ],
+      "primOrder": [
+       "B",
+       "A"
+      ],
+      "properties": [
+       "y"
+      ],
+      "propertyOrder": [
+       "x",
+       "y"
+      ]
+     },
+     "/P/A": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/B": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    }
+   },
+   "name": "prim_onto_ordered_name",
+   "new_name": "Gone",
+   "path": "/P/A"
+  },
+  {
+   "applied": true,
+   "composed": {
+    "/": {
+     "children": [
+      "P",
+      "Q",
+      "R",
+      "P2"
+     ],
+     "properties": []
+    },
+    "/P": {
+     "children": [
+      "B",
+      "A"
+     ],
+     "properties": [
+      "y"
+     ]
+    },
+    "/P/A": {
+     "children": [],
+     "properties": []
+    },
+    "/P/B": {
+     "children": [],
+     "properties": []
+    },
+    "/P2": {
+     "children": [
+      "C",
+      "E",
+      "A",
+      "B"
+     ],
+     "properties": [
+      "z",
+      "y",
+      "x"
+     ]
+    },
+    "/P2/A": {
+     "children": [],
+     "properties": []
+    },
+    "/P2/B": {
+     "children": [],
+     "properties": []
+    },
+    "/P2/C": {
+     "children": [],
+     "properties": []
+    },
+    "/P2/E": {
+     "children": [],
+     "properties": []
+    },
+    "/Q": {
+     "children": [
+      "D"
+     ],
+     "properties": [
+      "w"
+     ]
+    },
+    "/Q/D": {
+     "children": [],
+     "properties": []
+    },
+    "/R": {
+     "children": [
+      "K",
+      "J"
+     ],
+     "properties": []
+    },
+    "/R/J": {
+     "children": [],
+     "properties": []
+    },
+    "/R/K": {
+     "children": [],
+     "properties": []
+    }
+   },
+   "layers": {
+    "asset.usda": {
+     "/": {
+      "children": [
+       "Asset"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset": {
+      "children": [
+       "J",
+       "K"
+      ],
+      "primOrder": [
+       "K",
+       "J"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset/J": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset/K": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    },
+    "scene.usda": {
+     "/": {
+      "children": [
+       "P2",
+       "Q",
+       "R"
+      ],
+      "primOrder": [
+       "Q",
+       "R",
+       "P2"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P2": {
+      "children": [
+       "A",
+       "B",
+       "C",
+       "E"
+      ],
+      "primOrder": [
+       "C",
+       "A",
+       "Gone",
+       "B"
+      ],
+      "properties": [
+       "x",
+       "y",
+       "z"
+      ],
+      "propertyOrder": [
+       "z",
+       "y",
+       "x"
+      ]
+     },
+     "/P2/A": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P2/B": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P2/C": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P2/E": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Q": {
+      "children": [
+       "D"
+      ],
+      "primOrder": [
+       "D",
+       "A"
+      ],
+      "properties": [
+       "w"
+      ],
+      "propertyOrder": [
+       "w",
+       "x"
+      ]
+     },
+     "/Q/D": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/R": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    },
+    "sub.usda": {
+     "/": {
+      "children": [
+       "P"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P": {
+      "children": [
+       "A",
+       "B"
+      ],
+      "primOrder": [
+       "B",
+       "A"
+      ],
+      "properties": [
+       "y"
+      ],
+      "propertyOrder": [
+       "x",
+       "y"
+      ]
+     },
+     "/P/A": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/B": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    }
+   },
+   "name": "root_prim",
+   "new_name": "P2",
+   "path": "/P"
+  },
+  {
+   "applied": true,
+   "composed": {
+    "/": {
+     "children": [
+      "Q",
+      "R",
+      "P"
+     ],
+     "properties": []
+    },
+    "/P": {
+     "children": [
+      "C",
+      "E",
+      "A",
+      "B"
+     ],
+     "properties": [
+      "z",
+      "y",
+      "x",
+      "y2"
+     ]
+    },
+    "/P/A": {
+     "children": [],
+     "properties": []
+    },
+    "/P/B": {
+     "children": [],
+     "properties": []
+    },
+    "/P/C": {
+     "children": [],
+     "properties": []
+    },
+    "/P/E": {
+     "children": [],
+     "properties": []
+    },
+    "/Q": {
+     "children": [
+      "D"
+     ],
+     "properties": [
+      "w"
+     ]
+    },
+    "/Q/D": {
+     "children": [],
+     "properties": []
+    },
+    "/R": {
+     "children": [
+      "K",
+      "J"
+     ],
+     "properties": []
+    },
+    "/R/J": {
+     "children": [],
+     "properties": []
+    },
+    "/R/K": {
+     "children": [],
+     "properties": []
+    }
+   },
+   "layers": {
+    "asset.usda": {
+     "/": {
+      "children": [
+       "Asset"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset": {
+      "children": [
+       "J",
+       "K"
+      ],
+      "primOrder": [
+       "K",
+       "J"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset/J": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset/K": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    },
+    "scene.usda": {
+     "/": {
+      "children": [
+       "P",
+       "Q",
+       "R"
+      ],
+      "primOrder": [
+       "Q",
+       "R",
+       "P"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P": {
+      "children": [
+       "A",
+       "B",
+       "C",
+       "E"
+      ],
+      "primOrder": [
+       "C",
+       "A",
+       "Gone",
+       "B"
+      ],
+      "properties": [
+       "x",
+       "y2",
+       "z"
+      ],
+      "propertyOrder": [
+       "z",
+       "y",
+       "x"
+      ]
+     },
+     "/P/A": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/B": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/C": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/E": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Q": {
+      "children": [
+       "D"
+      ],
+      "primOrder": [
+       "D",
+       "A"
+      ],
+      "properties": [
+       "w"
+      ],
+      "propertyOrder": [
+       "w",
+       "x"
+      ]
+     },
+     "/Q/D": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/R": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    },
+    "sub.usda": {
+     "/": {
+      "children": [
+       "P"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P": {
+      "children": [
+       "A",
+       "B"
+      ],
+      "primOrder": [
+       "B",
+       "A"
+      ],
+      "properties": [
+       "y"
+      ],
+      "propertyOrder": [
+       "x",
+       "y"
+      ]
+     },
+     "/P/A": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/B": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    }
+   },
+   "name": "property",
+   "new_name": "y2",
+   "path": "/P.y"
+  }
+ ]
+}

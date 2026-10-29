@@ -1,0 +1,52 @@
+#usda 1.0
+(
+    subLayers = [
+        @sub.usda@
+    ]
+)
+
+reorder rootPrims = ["Q", "R", "P"]
+
+# `/P` orders a child it does not have (`Gone`) and leaves one out (`E`).
+def "P"
+{
+    reorder nameChildren = ["C", "A", "Gone", "B"]
+    reorder properties = ["z", "y", "x"]
+    int x = 0
+    int y = 1
+    int z = 2
+
+    def "A"
+    {
+    }
+
+    def "B"
+    {
+    }
+
+    def "C"
+    {
+    }
+
+    def "E"
+    {
+    }
+}
+
+# `/Q` orders a child named as `/P/A` before it has one.
+def "Q"
+{
+    reorder nameChildren = ["D", "A"]
+    reorder properties = ["w", "x"]
+    int w = 0
+
+    def "D"
+    {
+    }
+}
+
+def "R" (
+    prepend references = @asset.usda@</Asset>
+)
+{
+}

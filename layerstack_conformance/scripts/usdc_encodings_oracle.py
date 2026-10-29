@@ -7,10 +7,11 @@ Usage: usdc_encodings_oracle.py [--check] [OUT_DIR]
 
 Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.11`.
 Writes, under `layerstack_conformance/fixtures/usdc_encodings` by default,
-each case's USDA source (`<case>.usda`), the crate file OpenUSD exports
-for the layer it reads from that file (`<case>.usdc`, when the export
-succeeds) and `oracle.json`, which `tests/conformance/usdc_encodings.rs`
-replays with `read_usda`, `save_usdc` and `read_usdc`.
+each case's USDA source (`<case>.usda`, but for the cases built below),
+the crate file OpenUSD exports for the layer it reads from that file
+(`<case>.usdc`, when the export succeeds) and `oracle.json`, which
+`tests/conformance/usdc_encodings.rs` replays with `read_usda`,
+`save_usdc` and `read_usdc`.
 
 For each case the oracle records three calls: `Sdf.Layer.FindOrOpen` of
 the source, `SdfLayer::Export` to a `.usdc`, and `Sdf.Layer.OpenAsAnonymous`
@@ -53,13 +54,26 @@ the same text as the source layer (`same_text`) and that text.
   absolute root, until the stack overflows. The export runs in a child
   process, and the oracle records that it was killed (`crashed`).
 
+One case has no USDA source, since the text parser cannot make it:
+it is a layer `Sdf.CopySpec` copies from a USDA source, replacing
+fields' values through its value callback (which sets them as they
+are), and the oracle records its export, the read of that file, and
+whether the text parser reads the text that read exports (`open_text`).
+
+- `mapper_connections`: attribute connections to mappers
+  (`</A.b.mapper[/C]>`, `</A.b[/C].d.mapper[/E]>`) beside a relational
+  attribute. `SdfSchemaBase::IsValidAttributeConnectionPath` keeps
+  authoring from making them (`pxr/usd/sdf/schema.cpp`), and the text
+  parser refuses them, but the crate stores and reads them as any path,
+  and `ExportToString` writes them.
+
 `--check` regenerates every file into a temporary directory and fails
 unless each matches the checked-in fixture; for a crate file, unless
 OpenUSD reads the same text from both. The crate's bytes depend on how
 OpenUSD was built (the Linux source build and the macOS wheel of 26.11.1
 write files of the same length with different bytes), so the check
 compares what OpenUSD reads from them; the Rust test compares
-`save_usdc` with the checked-in file.
+`save_usdc` with the checked-in file of each case with a USDA source.
 """
 import argparse
 import difflib
@@ -147,15 +161,34 @@ def "P"
 """,
 }
 
+# Layers the text parser cannot make: each copies `source` with
+# `Sdf.CopySpec`, its value callback replacing the value of each
+# `(path, field)` listed by a function of `pxr`'s `Sdf`.
+BUILT = {
+    "mapper_connections": ("""#usda 1.0
+def "P"
+{
+    float c.connect = </X.y>
+    float d.connect = </X.y>
+    rel r = </X.y>
+}
+""", {
+        ("/P.c", "connectionPaths"): lambda: Sdf.PathListOp.CreateExplicit(
+            [Sdf.Path("/A.b.mapper[/C]")]),
+        ("/P.d", "connectionPaths"): lambda: Sdf.PathListOp.Create(prependedItems=[
+            Sdf.Path("/A.b[/C].d.mapper[/E]"), Sdf.Path("/A.b[/C].d")]),
+    }),
+}
+
 
 def errors(exc):
     """The commentary of each error `exc` lists, without the function,
-    file and line OpenUSD names before it."""
+    file and line OpenUSD names before it; a parse error's commentary
+    ends in a newline, which is dropped."""
     found = []
-    for line in str(exc).splitlines():
-        match = re.match(r"\s*Error in '[^']*' at line \d+ in file \S+ : '(.*)'$", line)
-        if match:
-            found.append(match.group(1))
+    pattern = r"Error in '[^']*' at line \d+ in file \S+ : '(.*?)\n?'(?=\n|$)"
+    for match in re.finditer(pattern, str(exc), re.DOTALL):
+        found.append(match.group(1))
     return found
 
 
@@ -164,7 +197,7 @@ def call(fn):
     try:
         return fn(), []
     except Tf.ErrorException as exc:
-        return None, errors(exc)
+        return None, errors(exc) or [str(exc)]
 
 
 def export_child(source, written):
@@ -228,12 +261,41 @@ def case(out, name, text):
     return record
 
 
+def built(out, name, source, fields):
+    """Records `name`: the layer `Sdf.CopySpec` copies from `source`, the
+    value of each of `fields` replaced."""
+    src = Sdf.Layer.CreateAnonymous(f"{name}_source.usda")
+    src.ImportFromString(source)
+    layer = Sdf.Layer.CreateAnonymous(f"{name}.usda")
+
+    def value(spec_type, field, src_layer, src_path, in_src, dst_layer, dst_path, in_dst):
+        make = fields.get((str(src_path), field))
+        return (True, make()) if make else True
+
+    for prim in src.rootPrims:
+        Sdf.CopySpec(src, prim.path, layer, prim.path, value, lambda *_: True)
+    record = {}
+    with tempfile.TemporaryDirectory() as tmp:
+        written = os.path.join(tmp, f"{name}.usdc")
+        ok, posted = call(lambda: layer.Export(written))
+        record["export_usdc"] = {"accepted": bool(ok) and not posted, "errors": posted}
+        keep(out, name, written, record["export_usdc"])
+        text = reread(record, written, layer.ExportToString())
+    if text is not None:
+        _, posted = call(lambda: Sdf.Layer.CreateAnonymous("reread.usda").ImportFromString(text))
+        record["open_text"] = {"accepted": not posted, "errors": posted}
+    return record
+
+
 def write(out):
     os.makedirs(out, exist_ok=True)
     _, minor, patch = Usd.GetVersion()
     oracle = {
         "openusd_version": f"{minor}.{patch}",
-        "cases": {name: case(out, name, text) for name, text in CASES.items()},
+        "cases": {
+            **{name: case(out, name, text) for name, text in CASES.items()},
+            **{name: built(out, name, *spec) for name, spec in BUILT.items()},
+        },
     }
     with open(os.path.join(out, "oracle.json"), "w") as f:
         json.dump(oracle, f, indent=1, sort_keys=True)

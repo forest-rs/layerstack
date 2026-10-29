@@ -31,12 +31,12 @@
 //!
 //! Spec: AOUSD Core §8 (paths), §10.2 (arcs map namespace).
 
-use alloc::{boxed::Box, string::String, vec::Vec};
+use alloc::{boxed::Box, string::String, vec, vec::Vec};
 
 use crate::{
     TokenInterner,
     interner::TokenId,
-    path::{PathId, PathInterner, PropertyPath},
+    path::{PathId, PathInterner, PropertyPath, TargetPath},
 };
 
 /// How a namespace mapping maps a prim path, for [`map_relational`].
@@ -116,6 +116,138 @@ pub(crate) fn replace_relational_prefix(
     };
     let replaced = replace_prefix(paths, &path, &prim_path(from), &prim_path(to), true);
     property_path(tokens, paths, target, &path, &replaced).unwrap_or(target)
+}
+
+/// Whether the prim or prim's property `prefix` is a prefix of `target`, a
+/// relational attribute or mapper target ([`is_relational`]), as
+/// `SdfPath::HasPrefix` counts it: of the prim part, or of the property
+/// part's leading name (`/A.b` of `/A.b[/C].d` and `/A.b.mapper[/C]`), and
+/// never of a path in a bracket. A token outside the path grammar has only
+/// its prim's path tested.
+pub(crate) fn relational_has_prefix(
+    tokens: &TokenInterner,
+    paths: &PathInterner,
+    target: PropertyPath,
+    prefix: TargetPath,
+) -> bool {
+    let Some(elements) = parse_elements(tokens.resolve(target.property()), tokens, paths) else {
+        return match prefix {
+            TargetPath::Prim(prim) => prim_has_prefix(
+                paths,
+                Prim::Absolute(target.prim_path()),
+                Prim::Absolute(prim),
+            ),
+            TargetPath::Property(property) => property == target,
+        };
+    };
+    let path = Tree {
+        prim: Prim::Absolute(target.prim_path()),
+        elements,
+    };
+    has_prefix(paths, &path, &edited(tokens, prefix))
+}
+
+/// `target`, a relational attribute or mapper target ([`is_relational`]),
+/// with the prim or prim's property `from` replaced by `to`, as
+/// `SdfPath::ReplacePrefix(from, to)` replaces it: in the prim part or the
+/// property part's leading name, and in every bracket (`fixTargetPaths`),
+/// whether or not `from` is a prefix of `target` itself.
+pub(crate) fn replace_relational_target_prefix(
+    tokens: &TokenInterner,
+    paths: &PathInterner,
+    target: PropertyPath,
+    from: TargetPath,
+    to: TargetPath,
+) -> PropertyPath {
+    if let (TargetPath::Prim(from), TargetPath::Prim(to)) = (from, to) {
+        return replace_relational_prefix(tokens, paths, target, from, to);
+    }
+    let Some(elements) = parse_elements(tokens.resolve(target.property()), tokens, paths) else {
+        return match to {
+            TargetPath::Property(to) if TargetPath::Property(target) == from => to,
+            _ => target,
+        };
+    };
+    let path = Tree {
+        prim: Prim::Absolute(target.prim_path()),
+        elements,
+    };
+    let replaced = replace_prefix(
+        paths,
+        &path,
+        &edited(tokens, from),
+        &edited(tokens, to),
+        true,
+    );
+    property_path(tokens, paths, target, &path, &replaced).unwrap_or(target)
+}
+
+/// Whether the prim or prim's property `prefix` is a prefix of the path
+/// `text` (an `SdfPath` value), as `SdfPath::HasPrefix` counts it; false
+/// for a relative path or one outside the path grammar.
+pub(crate) fn text_has_prefix(
+    tokens: &TokenInterner,
+    paths: &PathInterner,
+    text: &str,
+    prefix: TargetPath,
+) -> bool {
+    parse_path(text, tokens, paths).is_some_and(|path| {
+        matches!(path.prim, Prim::Absolute(_)) && has_prefix(paths, &path, &edited(tokens, prefix))
+    })
+}
+
+/// The path `text` (an `SdfPath` value) with the prim or prim's property
+/// `from` replaced by `to`, as `SdfPath::ReplacePrefix(from, to)` replaces
+/// it, brackets and all; `None` when it is unchanged, relative or outside
+/// the path grammar.
+pub(crate) fn replace_text_prefix(
+    tokens: &TokenInterner,
+    paths: &PathInterner,
+    text: &str,
+    from: TargetPath,
+    to: TargetPath,
+) -> Option<String> {
+    let path = parse_path(text, tokens, paths)?;
+    if !matches!(path.prim, Prim::Absolute(_)) {
+        return None;
+    }
+    let replaced = replace_prefix(
+        paths,
+        &path,
+        &edited(tokens, from),
+        &edited(tokens, to),
+        true,
+    );
+    if replaced == path {
+        return None;
+    }
+    let mut out = String::with_capacity(text.len());
+    write_path(&mut out, &replaced, tokens, paths);
+    Some(out)
+}
+
+/// A namespace edit's path, a prim or a prim's property, as a [`Tree`].
+fn edited(tokens: &TokenInterner, path: TargetPath) -> Tree<'_> {
+    match path {
+        TargetPath::Prim(prim) => Tree {
+            prim: Prim::Absolute(prim),
+            elements: Vec::new(),
+        },
+        TargetPath::Property(property) => Tree {
+            prim: Prim::Absolute(property.prim_path()),
+            elements: vec![Element::Name(tokens.resolve(property.property()))],
+        },
+    }
+}
+
+/// Whether `prefix` is a prefix of `path` (`SdfPath::HasPrefix`): of its
+/// absolute prim part, or its prim part and leading property elements.
+fn has_prefix(paths: &PathInterner, path: &Tree<'_>, prefix: &Tree<'_>) -> bool {
+    if prefix.elements.is_empty() {
+        return matches!(path.prim, Prim::Absolute(_))
+            && prim_has_prefix(paths, path.prim, prefix.prim);
+    }
+    path.prim == prefix.prim && path.elements.starts_with(&prefix.elements)
 }
 
 /// The property target `out`, the result of mapping `path`, the parsed
@@ -622,5 +754,45 @@ mod tests {
             mapped("/A/X.b[/A/X].d", &reference, false).as_deref(),
             Some("/A/B/X.b[/A/B/X].d")
         );
+    }
+
+    /// `SdfPath::HasPrefix` of a relational target is of its prim part or
+    /// its leading property name, never of a bracket, and
+    /// `SdfPath::ReplacePrefix` by a property fixes the brackets too.
+    #[test]
+    fn a_property_prefix_is_the_leading_name() {
+        let (tokens, paths) = (TokenInterner::default(), PathInterner::default());
+        let path = |text: &str| paths.intern(Path::parse_absolute(text, &tokens).unwrap());
+        let property = |prim: &str, name: &str| PropertyPath::new(path(prim), tokens.intern(name));
+        let prim = |text: &str| TargetPath::Prim(path(text));
+        let owner = TargetPath::Property(property("/A", "x"));
+        let target = property("/A", "x.mapper[/A.x]");
+        for (prefix, expected) in [
+            (owner, true),
+            (prim("/A"), true),
+            (prim("/"), true),
+            (TargetPath::Property(property("/A", "y")), false),
+            (prim("/C"), false),
+        ] {
+            assert_eq!(
+                relational_has_prefix(&tokens, &paths, target, prefix),
+                expected
+            );
+        }
+        let inside = property("/C", "b[/A].d");
+        assert!(!relational_has_prefix(&tokens, &paths, inside, prim("/A")));
+        let renamed = TargetPath::Property(property("/A", "x2"));
+        let replaced = replace_relational_target_prefix(&tokens, &paths, target, owner, renamed);
+        assert_eq!(replaced.display(&paths, &tokens), "/A.x2.mapper[/A.x2]");
+        assert_eq!(
+            replace_text_prefix(&tokens, &paths, "/C.b[/A/K].d", prim("/A"), prim("/B")).as_deref(),
+            Some("/C.b[/B/K].d")
+        );
+        assert!(!text_has_prefix(
+            &tokens,
+            &paths,
+            "/C.b[/A/K].d",
+            prim("/A")
+        ));
     }
 }

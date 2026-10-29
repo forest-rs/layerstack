@@ -546,14 +546,13 @@ fn relocate_away(
 
 /// Whether the authored path `path` names the deleted `object`, or for a
 /// prim anything beneath it.
+///
+/// As `_PathListOpNamespaceEdit` (`pxr/usd/usd/namespaceEditor.cpp`) drops
+/// a list op's item, by `SdfPath::HasPrefix`: a relational attribute or
+/// mapper (`/A.b[/C].d`) goes with its owning prim or property, and is
+/// kept when the deleted object is named only inside its brackets.
 fn names(store: &dyn LayerStore, object: TargetPath, path: TargetPath) -> bool {
-    match object {
-        TargetPath::Property(_) => path == object,
-        TargetPath::Prim(prim) => store
-            .paths()
-            .resolve(prim)
-            .is_prefix_of(store.paths().resolve(path.prim_path())),
-    }
+    has_prefix(store, path, object)
 }
 
 /// Drops every authored path in `layer` that names the deleted `object`,
@@ -712,6 +711,7 @@ fn repair_owner(
 ) -> Result<(), NamespaceError> {
     for entry in owner.properties.iter_mut() {
         let spec = Arc::make_mut(&mut entry.spec);
+        repair_path_default(store, spec, object, None);
         if let Some(targets) = &mut spec.targets {
             retain(targets, |target| !names(store, object, *target));
         }

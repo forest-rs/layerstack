@@ -135,7 +135,7 @@ fn copy_prim(
     move_specs(store, &mut scratch, &from_spec, &to_spec)
         .map_err(|_| Rejection::UnsupportedCopy)?;
     scratch.prims.remove(&parent);
-    let mapping = PathMove::new(TargetPath::Prim(from), TargetPath::Prim(to));
+    let mapping = PathMove::for_copy(TargetPath::Prim(from), TargetPath::Prim(to));
     let mut copies: Vec<(PathId, PrimSpec)> = scratch
         .prims
         .into_iter()
@@ -230,7 +230,7 @@ fn copy_property(
     // Remap the copy's paths as its prim's: targets of the source prim's
     // namespace follow it to the destination prim, as OpenUSD remaps them.
     let mut carrier = PrimSpec::over().with_property(to.property(), property);
-    let mapping = PathMove::new(
+    let mapping = PathMove::for_copy(
         TargetPath::Prim(from.prim_path()),
         TargetPath::Prim(to.prim_path()),
     );

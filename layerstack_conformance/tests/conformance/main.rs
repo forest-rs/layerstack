@@ -115,6 +115,7 @@ mod namespace_deletes;
 mod namespace_edits;
 mod namespace_orders;
 mod namespace_preparation;
+mod namespace_variants;
 mod nested_arc_depth;
 mod numeric_ingestion_bounds;
 mod observers;

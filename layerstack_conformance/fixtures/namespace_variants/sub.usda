@@ -1,0 +1,54 @@
+#usda 1.0
+
+over "World"
+{
+    over "A" (
+        variants = {
+            string look = "red"
+        }
+    )
+    {
+    }
+
+    over "Host" (
+        prepend variantSets = "v"
+    )
+    {
+        variantSet "v" = {
+            "off" {
+                rel toB = </World/B>
+
+                def "Dormant" (
+                    prepend inherits = </World/B>
+                )
+                {
+                    int c.connect = </World/B.x>
+                    rel toB = </World/B>
+
+                    over "Kid"
+                    {
+                        int k = 0
+                    }
+                }
+
+            }
+            "on" {
+                rel toB = </World/B>
+
+                def "Inner" (
+                    prepend inherits = </World/B>
+                )
+                {
+                    int c.connect = </World/B.x>
+                    rel toB = </World/B>
+
+                    over "Kid"
+                    {
+                        int k = 1
+                    }
+                }
+
+            }
+        }
+    }
+}

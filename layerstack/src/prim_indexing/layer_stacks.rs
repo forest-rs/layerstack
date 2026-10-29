@@ -129,6 +129,11 @@ impl<'s> LayerStacks<'s> {
         }
     }
 
+    /// Whether the stage mutes `layer`.
+    pub(crate) fn is_muted(&self, layer: LayerId) -> bool {
+        self.muted.is_some_and(|muted| muted.contains(&layer))
+    }
+
     pub(crate) fn get(&self, id: StackId) -> &ComputedStack<'s> {
         self.stacks.get(id.0).expect("computed layer stack")
     }

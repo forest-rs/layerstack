@@ -1997,6 +1997,149 @@
     }
    ],
    "errors": []
+  },
+  {
+   "root": "muted.usda",
+   "fallbacks": {},
+   "muted": [
+    "muted_asset.usda",
+    "muted_sub.usda"
+   ],
+   "prims": [
+    {
+     "path": "/Ball",
+     "prim_stack": [
+      [
+       "muted.usda",
+       "/Ball"
+      ]
+     ],
+     "properties": [
+      {
+       "name": "weight",
+       "kind": "attribute",
+       "stack": [
+        [
+         "muted.usda",
+         "/Ball.weight"
+        ]
+       ],
+       "targets": [],
+       "value": 1
+      }
+     ]
+    },
+    {
+     "path": "/Box",
+     "prim_stack": [
+      [
+       "muted.usda",
+       "/Box"
+      ]
+     ],
+     "properties": []
+    },
+    {
+     "path": "/Dot",
+     "prim_stack": [
+      [
+       "muted.usda",
+       "/Dot"
+      ]
+     ],
+     "properties": []
+    },
+    {
+     "path": "/Pole",
+     "prim_stack": [
+      [
+       "muted.usda",
+       "/Pole"
+      ],
+      [
+       "muted_host.usda",
+       "/Pole"
+      ]
+     ],
+     "properties": []
+    },
+    {
+     "path": "/Pin",
+     "prim_stack": [
+      [
+       "muted.usda",
+       "/Pin"
+      ],
+      [
+       "muted.usda",
+       "/Ball"
+      ]
+     ],
+     "properties": [
+      {
+       "name": "weight",
+       "kind": "attribute",
+       "stack": [
+        [
+         "muted.usda",
+         "/Ball.weight"
+        ]
+       ],
+       "targets": [],
+       "value": 1
+      }
+     ]
+    },
+    {
+     "path": "/Cone",
+     "prim_stack": [
+      [
+       "muted.usda",
+       "/Cone"
+      ],
+      [
+       "muted_host.usda",
+       "/Cone"
+      ]
+     ],
+     "properties": [
+      {
+       "name": "weight",
+       "kind": "attribute",
+       "stack": [
+        [
+         "muted_host.usda",
+         "/Cone.weight"
+        ]
+       ],
+       "targets": [],
+       "value": 4
+      }
+     ]
+    }
+   ],
+   "errors": [
+    [
+     "MutedAssetPath",
+     "/Ball"
+    ],
+    [
+     "MutedAssetPath",
+     "/Box"
+    ],
+    [
+     "MutedAssetPath",
+     "/Dot"
+    ],
+    [
+     "MutedAssetPath",
+     "/Pin"
+    ],
+    [
+     "MutedAssetPath",
+     "/Pole"
+    ]
+   ]
   }
  ],
  "rejected": {

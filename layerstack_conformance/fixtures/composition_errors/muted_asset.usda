@@ -1,0 +1,18 @@
+#usda 1.0
+(
+    defaultPrim = "Ball"
+)
+
+def "Ball"
+{
+    int weight = 2
+
+    def "Inner"
+    {
+    }
+}
+
+def "Box"
+{
+    int weight = 3
+}

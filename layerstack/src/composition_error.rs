@@ -65,6 +65,11 @@ pub enum CompositionError {
     /// A reference or payload whose asset path could not be resolved. The
     /// arc contributed nothing.
     UnresolvedAsset(UnresolvedAsset),
+    /// A reference or payload whose target layer the stage mutes
+    /// ([`StageOptions::muted_layers`]). The arc contributed nothing.
+    ///
+    /// [`StageOptions::muted_layers`]: crate::StageOptions::muted_layers
+    MutedAsset(MutedAsset),
     /// A sublayer whose asset path could not be resolved. The sublayer was
     /// ignored.
     UnresolvedSublayer(UnresolvedSublayer),
@@ -130,6 +135,7 @@ impl CompositionError {
             Self::UnresolvedDefaultPrim(error) => Some(error.prim),
             Self::UnresolvedPrimPath(error) => Some(error.prim),
             Self::UnresolvedAsset(error) => Some(error.prim),
+            Self::MutedAsset(error) => Some(error.prim),
             Self::OpinionAtRelocationSource(error) => Some(error.prim),
             Self::ArcToProhibitedChild(error) => Some(error.prim),
             Self::InconsistentPropertyType(error) => Some(error.prim),
@@ -152,6 +158,7 @@ impl CompositionError {
     /// | [`Self::UnresolvedDefaultPrim`] | `composition.unresolved_default_prim` |
     /// | [`Self::UnresolvedPrimPath`] | `composition.unresolved_prim_path` |
     /// | [`Self::UnresolvedAsset`] | `composition.unresolved_asset` |
+    /// | [`Self::MutedAsset`] | `composition.muted_asset` |
     /// | [`Self::UnresolvedSublayer`] | `composition.unresolved_sublayer` |
     /// | [`Self::InvalidAuthoredRelocation`] | `composition.invalid_authored_relocation` |
     /// | [`Self::InvalidConflictingRelocation`] | `composition.invalid_conflicting_relocation` |
@@ -186,19 +193,20 @@ impl CompositionError {
             Self::UnresolvedDefaultPrim(_) => 3,
             Self::UnresolvedPrimPath(_) => 4,
             Self::UnresolvedAsset(_) => 5,
-            Self::UnresolvedSublayer(_) => 6,
-            Self::InvalidAuthoredRelocation(_) => 7,
-            Self::InvalidConflictingRelocation(_) => 8,
-            Self::InvalidSameTargetRelocations(_) => 9,
-            Self::OpinionAtRelocationSource(_) => 10,
-            Self::ArcToProhibitedChild(_) => 11,
-            Self::InconsistentPropertyType(_) => 12,
-            Self::InvalidExternalTargetPath(_) => 13,
-            Self::InvalidInstanceTargetPath(_) => 14,
-            Self::VariableExpressionError(_) => 15,
-            Self::InvalidSublayerAndOffsetCount(_) => 16,
-            Self::MissingLayer(_) => 17,
-            Self::LimitExceeded(_) => 18,
+            Self::MutedAsset(_) => 6,
+            Self::UnresolvedSublayer(_) => 7,
+            Self::InvalidAuthoredRelocation(_) => 8,
+            Self::InvalidConflictingRelocation(_) => 9,
+            Self::InvalidSameTargetRelocations(_) => 10,
+            Self::OpinionAtRelocationSource(_) => 11,
+            Self::ArcToProhibitedChild(_) => 12,
+            Self::InconsistentPropertyType(_) => 13,
+            Self::InvalidExternalTargetPath(_) => 14,
+            Self::InvalidInstanceTargetPath(_) => 15,
+            Self::VariableExpressionError(_) => 16,
+            Self::InvalidSublayerAndOffsetCount(_) => 17,
+            Self::MissingLayer(_) => 18,
+            Self::LimitExceeded(_) => 19,
         }
     }
 }
@@ -215,13 +223,14 @@ impl CompositionError {
 }
 
 /// [`CompositionError::code`] by [`CompositionError::rank`].
-const CODES: [&str; 19] = [
+const CODES: [&str; 20] = [
     "composition.foreign_schema_registry",
     "composition.sublayer_cycle",
     "composition.arc_cycle",
     "composition.unresolved_default_prim",
     "composition.unresolved_prim_path",
     "composition.unresolved_asset",
+    "composition.muted_asset",
     "composition.unresolved_sublayer",
     "composition.invalid_authored_relocation",
     "composition.invalid_conflicting_relocation",
@@ -322,6 +331,16 @@ impl Describe for CompositionError {
                 error.asset_path,
                 names.spec(&error.introducing_spec),
                 names.layer(error.introducing_layer)
+            ),
+            Self::MutedAsset(error) => write!(
+                f,
+                "{}: the {} authored at {} in {} targets {}, which the stage mutes; \
+                 it contributes nothing",
+                names.path(error.prim),
+                arc_name(error.arc),
+                names.spec(&error.introducing_spec),
+                names.layer(error.introducing_layer),
+                names.layer(error.layer)
             ),
             Self::UnresolvedSublayer(error) => write!(
                 f,
@@ -697,6 +716,44 @@ pub struct UnresolvedAsset {
     /// The spec in `introducing_layer` that authors the arc, including any
     /// enclosing variant selections (`/Rock{look=mossy}`). This remains in
     /// its authored namespace when `prim` is a referenced copy.
+    pub introducing_spec: SpecPath,
+}
+
+/// A reference or payload whose target layer the stage mutes
+/// ([`StageOptions::muted_layers`]), found while composing `prim`.
+///
+/// Muting hides a layer on purpose, so the arc is not followed: it adds no
+/// node to the prim index and contributes no opinions, and the rest of the
+/// prim is composed as normal; [`LiveStage::unmute_layer`] recomposes the
+/// prims whose arcs reach it. An internal arc is never muted, and a muted sublayer or
+/// session layer is skipped without an error, as OpenUSD skips it
+/// (`PcpLayerStack::_BuildLayerStack`).
+///
+/// Spec: AOUSD Core §10.3.2.1 (references), §10.3.2.2 (payloads), §10.6
+/// (composition errors). OpenUSD reports it as `PcpErrorMutedAssetPath`
+/// (`_EvalRefOrPayloadArcs` in `pxr/usd/pcp/primIndex.cpp`, "Asset @...@
+/// was muted for reference introduced by ..."), whose `sourceLayer` and
+/// `site` are `introducing_layer` and `introducing_spec` here and whose
+/// `resolvedAssetPath`, the muted layer's identifier, is `layer`.
+///
+/// [`StageOptions::muted_layers`]: crate::StageOptions::muted_layers
+/// [`LiveStage::unmute_layer`]: crate::LiveStage::unmute_layer
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub struct MutedAsset {
+    /// The composed prim whose composition reached the arc.
+    pub prim: PathId,
+    /// The arc: [`ArcKind::References`] or [`ArcKind::Payloads`].
+    pub arc: ArcKind,
+    /// The muted layer the arc's asset path resolves to.
+    pub layer: LayerId,
+    /// The layer whose list edit adds the arc. For an arc reached through
+    /// another arc it is a layer of that arc's target, not of the stage's
+    /// layer stack.
+    pub introducing_layer: LayerId,
+    /// The spec in `introducing_layer` that authors the arc, including any
+    /// enclosing variant selections. This remains in its authored namespace
+    /// when `prim` is a referenced copy.
     pub introducing_spec: SpecPath,
 }
 
@@ -1139,7 +1196,7 @@ mod tests {
             assert!(!case.ends_with("_error"), "{code} names its type");
             assert!(seen.insert(code), "{code} repeats");
         }
-        assert_eq!(CODES[15], "composition.variable_expression");
+        assert_eq!(CODES[16], "composition.variable_expression");
         let error = CompositionError::UnresolvedSublayer(UnresolvedSublayer {
             layer: LayerId(0),
             asset_path: "./sub.usda".into(),

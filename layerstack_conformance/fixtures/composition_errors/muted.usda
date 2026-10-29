@@ -1,0 +1,54 @@
+#usda 1.0
+(
+    subLayers = [@./muted_sub.usda@]
+)
+
+# Composed with `muted_asset.usda` and `muted_sub.usda` muted. A reference
+# to a muted layer reports `MutedAssetPath` and adds no node; `/Ball` keeps
+# only its local opinions.
+def "Ball" (
+    references = @./muted_asset.usda@</Ball>
+)
+{
+    int weight = 1
+}
+
+# A payload to a muted layer.
+def "Box" (
+    payload = @./muted_asset.usda@</Box>
+)
+{
+}
+
+# A reference without a prim path is muted before its `defaultPrim` is
+# looked up.
+def "Dot" (
+    references = @./muted_asset.usda@
+)
+{
+}
+
+# `muted_host.usda /Pole` references the muted layer: the error is reported
+# on `/Pole`, whose composition reaches the arc.
+def "Pole" (
+    references = @./muted_host.usda@</Pole>
+)
+{
+}
+
+# An internal reference is never muted, but `/Ball`'s reference it reaches
+# is.
+def "Pin" (
+    references = </Ball>
+)
+{
+}
+
+# `muted_host.usda` sublayers the muted `muted_sub.usda`: the sublayer is
+# skipped without an error, in the stage's layer stack and in the
+# referenced one alike, and `/Hidden` is not composed.
+def "Cone" (
+    references = @./muted_host.usda@</Cone>
+)
+{
+}

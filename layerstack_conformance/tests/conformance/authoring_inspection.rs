@@ -23,6 +23,11 @@
 //! says masks it. Inspected over every time code at once, each recorded
 //! time's span must give the answer the single time does.
 //!
+//! `Attribute::explain` must name the same source as OpenUSD before the
+//! write, at every recorded time: a blocked sample in effect
+//! (`/Plain.blockedSamples`) names the time samples, with no value and the
+//! block's role, and a default block names none.
+//!
 //! Spec: AOUSD Core §10.4 (strength ordering), §12.3 (value resolution),
 //! §12.3.7 (value clips); OpenUSD `UsdStage::_GetResolveInfo`,
 //! `UsdResolveInfo`, `UsdPrim::MakeResolveTargetStrongerThanEditTarget`.
@@ -32,7 +37,8 @@ use std::sync::Arc;
 use layerstack::{
     ArcKind, AuthoringInspection, AuthoringQuery, AuthoringSourceKind, AuthoringTimes,
     AuthoringVerdict, AuthoringWrite, CurrentSource, InterpolationType, LayerId, OpinionKey,
-    PathId, PropertyPath, SpecPath, Stage, StageOptions, edit::EditTarget,
+    OpinionRole, PathId, PropertyPath, SpecPath, Stage, StageOptions, Time, ValueSource,
+    edit::EditTarget,
 };
 use layerstack_conformance::{
     usda_real::{LoadedStage, load_entry_usda},
@@ -239,10 +245,8 @@ fn shows(verdict: AuthoringVerdict) -> bool {
     )
 }
 
-#[test]
-fn inspection_answers_as_openusd_resolves_before_and_after_each_write() {
-    let oracle: Oracle = serde_json::from_str(ORACLE).expect("oracle.json");
-    assert_eq!(oracle.openusd_version, layerstack_schemas::OPENUSD_VERSION);
+/// The oracle's stage, composed with OpenUSD's schemas.
+fn compose(oracle: &Oracle) -> Fixture {
     let mut loaded = load_entry_usda(
         &workspace_root()
             .join("layerstack_conformance/fixtures/authoring_inspection")
@@ -257,7 +261,70 @@ fn inspection_answers_as_openusd_resolves_before_and_after_each_write() {
             ..StageOptions::default()
         },
     );
-    let mut fixture = Fixture { loaded, stage };
+    Fixture { loaded, stage }
+}
+
+/// The oracle's name for a value source (`UsdResolveInfoSource`).
+fn source_name(source: ValueSource) -> &'static str {
+    match source {
+        ValueSource::None => "none",
+        ValueSource::Default => "default",
+        ValueSource::TimeSamples { .. } => "time_samples",
+        ValueSource::Spline => "spline",
+        ValueSource::ValueClips => "value_clips",
+        ValueSource::Fallback => "fallback",
+    }
+}
+
+/// Before any write, `Attribute::explain` names the source
+/// `GetResolveInfo(time)` reports, and a value is blocked exactly when its
+/// strongest opinion is a block with no source.
+#[test]
+fn explanations_name_the_sources_openusd_resolves() {
+    let oracle: Oracle = serde_json::from_str(ORACLE).expect("oracle.json");
+    let fixture = compose(&oracle);
+    let view = fixture.stage.view(&fixture.loaded.store);
+    let mut mismatches = Vec::new();
+    for case in &oracle.cases {
+        let property: PropertyPath = fixture.loaded.store.property_path(&case.property);
+        for recorded in &case.times {
+            let time = match &recorded.time {
+                serde_json::Value::String(_) => Time::Default,
+                time => Time::at(time.as_f64().unwrap()),
+            };
+            let seen = view
+                .attribute(property)
+                .and_then(|a| a.explain(time))
+                .map_or(("none", false), |explained| {
+                    let blocked = explained.source == ValueSource::None
+                        && explained
+                            .opinions
+                            .first()
+                            .is_some_and(|opinion| opinion.role == OpinionRole::Block);
+                    (source_name(explained.source), blocked)
+                });
+            let expected = (recorded.before.source.as_str(), recorded.before.blocked);
+            if seen != expected {
+                mismatches.push(format!(
+                    "{} at {}: explained {seen:?}, OpenUSD {expected:?}",
+                    case.property, recorded.time
+                ));
+            }
+        }
+    }
+    mismatches.dedup();
+    assert!(
+        mismatches.is_empty(),
+        "explained sources differ from OpenUSD:\n{}",
+        mismatches.join("\n")
+    );
+}
+
+#[test]
+fn inspection_answers_as_openusd_resolves_before_and_after_each_write() {
+    let oracle: Oracle = serde_json::from_str(ORACLE).expect("oracle.json");
+    assert_eq!(oracle.openusd_version, layerstack_schemas::OPENUSD_VERSION);
+    let mut fixture = compose(&oracle);
     for case in &oracle.cases {
         let target = fixture.edit_target(&case.target);
         let property: PropertyPath = fixture.loaded.store.property_path(&case.property);

@@ -26,11 +26,10 @@
 //! against the layer of the opinion that supplied their entry
 //! (`Property::explain_metadata`), as OpenUSD anchors them.
 //!
-//! An explanation names its source as `UsdResolveInfo` does, with two
-//! differences of form: a sampled block in effect is
-//! [`ValueSource::None`] with a [`OpinionRole::Block`] opinion whose samples
-//! say where it is held, where OpenUSD names the time samples and marks the
-//! value blocked; and an explanation lists the opinions a value composed,
+//! An explanation names its source as `UsdResolveInfo` does (a sampled
+//! block in effect names the time samples, its [`OpinionRole::Block`]
+//! opinion's samples saying where it is held), with one difference of
+//! form: an explanation lists the opinions a value composed,
 //! where OpenUSD ends a chain that composed over nothing with a `None` link
 //! and continues a path expression's chain past one that does not splice in
 //! the next weaker one (`%_`), since the type composes.
@@ -369,18 +368,18 @@ impl Composed {
             return format!("clips|{}", self.node(node));
         }
         let source = match explanation.source {
-            ValueSource::None => {
-                // A sampled block in effect: OpenUSD names its samples.
+            ValueSource::None => return "none|".into(),
+            // A sampled block in effect: the samples are the source, and
+            // the block is the opinion that decides.
+            ValueSource::TimeSamples { .. } if explanation.value.is_none() => {
                 return match explanation
                     .opinions
                     .iter()
                     .find(|opinion| matches!(opinion.role, OpinionRole::Block))
+                    .and_then(|block| block.node)
                 {
-                    Some(block) if sampled(block) => match block.node {
-                        Some(node) => format!("samples|{}", self.node(node)),
-                        None => "samples|".into(),
-                    },
-                    _ => "none|".into(),
+                    Some(node) => format!("samples|{}", self.node(node)),
+                    None => "samples|".into(),
                 };
             }
             ValueSource::Default => "default",

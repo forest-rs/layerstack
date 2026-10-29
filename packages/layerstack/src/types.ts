@@ -272,7 +272,11 @@ export interface Opinion {
 export interface Explanation {
   /** The resolved value, exactly what {@link Attribute.get} reads. */
   readonly value: Value | null;
-  /** Where it comes from. */
+  /**
+   * Where it comes from, as OpenUSD's resolve info names it: a blocked
+   * sample held at the time is `timeSamples` with a `null` value and a
+   * `block` opinion.
+   */
   readonly source: ValueSource;
   /** The bracketing sample times, for `timeSamples`. */
   readonly samples: { readonly lower: number; readonly upper: number } | null;

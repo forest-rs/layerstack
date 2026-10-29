@@ -126,15 +126,19 @@ impl<T> ValueExplanation<'_, T> {
 /// OpenUSD: `UsdResolveInfoSource` (`pxr/usd/usd/resolveInfo.h`).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ValueSource {
-    /// No value: nothing authored answers the query, or a block is in
-    /// effect and there is no schema fallback.
+    /// No value: nothing authored answers the query, or a default block
+    /// (or a spline that evaluates to nothing) decides it and there is no
+    /// schema fallback. A blocked sample in effect is
+    /// [`Self::TimeSamples`], with no value.
     None,
     /// Default-time opinions: authored defaults (with any sparse array edits
     /// composed over them), metadata values, dictionaries and list ops.
     ///
     /// Spec: AOUSD Core §12.2, §12.3.1.
     Default,
-    /// Time samples bracketing the query time.
+    /// Time samples bracketing the query time. With no value when the
+    /// sample held there is a block, which the opinion's
+    /// [`OpinionRole::Block`] role names.
     ///
     /// Spec: AOUSD Core §12.3.2.2 (time samples), §12.5 (interpolation).
     TimeSamples {
@@ -948,7 +952,22 @@ impl Stage {
         roles.apply_strongest_wins(reads, value.is_none());
         roles.record_blocks(time);
         let source = if value.is_none() {
-            ValueSource::None
+            // A blocked sample in effect: its samples are still the source,
+            // as `UsdAttribute::GetResolveInfo(time)` names them, with no
+            // value (`_ResolveInfoResolver::ProcessLayerAtTime` in
+            // `pxr/usd/usd/stage.cpp`); the block role says why. A default
+            // block, or a spline that evaluates to nothing, names none.
+            // Spec: AOUSD Core §12.3.6.
+            match roles.stage_bracket(position, time, interp) {
+                Some((lower, upper)) => ValueSource::TimeSamples {
+                    lower,
+                    upper,
+                    interpolation: interp,
+                    lower_seeded_by_fallback: false,
+                    upper_seeded_by_fallback: false,
+                },
+                None => ValueSource::None,
+            }
         } else if let Some((lower, upper)) = roles.record_samples(position, time, interp) {
             ValueSource::TimeSamples {
                 lower,
@@ -1312,11 +1331,10 @@ impl<'s> Roles<'s> {
         }
     }
 
-    /// Records the samples of the opinion at `position` that answer a query
-    /// at stage time `time` as contributing, and returns their stage times;
-    /// `None` when the opinion authors no time samples.
-    fn record_samples(
-        &mut self,
+    /// The stage times of the samples of the opinion at `position` that
+    /// bracket stage time `time`; `None` when it authors no time samples.
+    fn stage_bracket(
+        &self,
         position: usize,
         time: f64,
         interp: InterpolationType,
@@ -1330,7 +1348,19 @@ impl<'s> Roles<'s> {
         let to_stage = |index: usize| samples[index].0 * offset.scale + offset.offset;
         let (lower, upper) =
             sample_bracket(samples, offset.map_time(time), interp).unwrap_or_default();
-        let (lower, upper) = (to_stage(lower), to_stage(upper));
+        Some((to_stage(lower), to_stage(upper)))
+    }
+
+    /// Records the samples of the opinion at `position` that answer a query
+    /// at stage time `time` as contributing, and returns their stage times;
+    /// `None` when the opinion authors no time samples.
+    fn record_samples(
+        &mut self,
+        position: usize,
+        time: f64,
+        interp: InterpolationType,
+    ) -> Option<(f64, f64)> {
+        let (lower, upper) = self.stage_bracket(position, time, interp)?;
         let role = OpinionRole::Contributed(Contribution::Value);
         self.samples[position].push(SampleUse {
             time: lower,
@@ -1515,6 +1545,19 @@ impl<'s> Roles<'s> {
     }
 
     /// Finishes a sparse-array explanation.
+    /// The stage time of the blocked sample held by the strongest block in
+    /// effect, when that block is a sample ([`Self::record_blocks`]).
+    fn held_sampled_block(&self) -> Option<f64> {
+        let position = self
+            .roles
+            .iter()
+            .position(|role| matches!(role, Some(OpinionRole::Block)))?;
+        self.samples[position]
+            .iter()
+            .find(|sample| sample.role == OpinionRole::Block && sample.time.is_finite())
+            .map(|sample| sample.time)
+    }
+
     /// The earliest finite time of a sample a contributing opinion offered.
     fn first_contributed_sample(&self) -> Option<f64> {
         self.roles
@@ -1543,7 +1586,26 @@ impl<'s> Roles<'s> {
         // value while the other composes over the fallback seed.
         let seeded = |fold: &SampleFold| fold.uses_seed(has_fallback);
         let source = match (&value, contributed) {
-            (None, _) => ValueSource::None,
+            // A blocked sample in effect: its samples are still the source,
+            // as `UsdAttribute::GetResolveInfo(time)` names them, with no
+            // value. Spec: AOUSD Core §12.3.6.
+            (None, _) => match (interp, self.held_sampled_block()) {
+                (Some(interpolation), Some(held)) => {
+                    let (lower, upper) = match folds {
+                        [first, .., last] => (first.time, last.time),
+                        [only] if only.time.is_finite() => (only.time, only.time),
+                        _ => (held, held),
+                    };
+                    ValueSource::TimeSamples {
+                        lower,
+                        upper,
+                        interpolation,
+                        lower_seeded_by_fallback: false,
+                        upper_seeded_by_fallback: false,
+                    }
+                }
+                _ => ValueSource::None,
+            },
             (Some(_), false) => ValueSource::Fallback,
             (Some(_), true) => match (interp, folds) {
                 (Some(interpolation), [first, .., last]) => ValueSource::TimeSamples {

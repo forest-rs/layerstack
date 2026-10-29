@@ -30,11 +30,18 @@ or USDC), the flattened stage or a USDZ package, touching nothing.
 ## Building the module
 
 ```sh
-cargo build -p layerstack_wasm --profile wasm --target wasm32-unknown-unknown
+cargo build -p layerstack_wasm --no-default-features --features standalone \
+  --profile wasm --target wasm32-unknown-unknown
 wasm-bindgen --target web --out-dir packages/layerstack/wasm --out-name layerstack \
   target/wasm32-unknown-unknown/wasm/layerstack_wasm.wasm
 wasm-opt -Oz --converge packages/layerstack/wasm/layerstack_bg.wasm -o packages/layerstack/wasm/layerstack_bg.wasm
 ```
+
+The module is built without `std`: the `standalone` feature supplies its
+global allocator (dlmalloc, the one `std` uses on `wasm32-unknown-unknown`)
+and a panic handler that traps, as `std`'s does there once it has formatted a
+message it has nowhere to write. That also leaves out the core crates' `std`
+paths (threads, retained USDC arrays), which the bindings never take.
 
 `packages/layerstack/scripts/build-wasm.sh` runs these steps and checks that
 the `wasm-bindgen` CLI is the version `Cargo.lock` holds, which it must be.

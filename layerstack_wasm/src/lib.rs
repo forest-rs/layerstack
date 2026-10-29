@@ -48,6 +48,13 @@
 //!
 //! The bindings are single-threaded: opening and composition run on the
 //! calling thread (`StageOptions::threads` is 0).
+//!
+//! The package's module is built without `std` and with the `standalone`
+//! feature, which supplies the global allocator (dlmalloc, as `std` does on
+//! `wasm32-unknown-unknown`) and a panic handler that traps: a panic traps
+//! the instance as it does with `std`, without the formatting of a message
+//! nothing on that target reads. A crate that links this one into a module
+//! of its own keeps `std`, which supplies both.
 #![no_std]
 extern crate alloc;
 #[cfg(feature = "std")]
@@ -61,6 +68,21 @@ mod stage;
 mod storage;
 mod value;
 mod wire;
+
+/// The allocator and panic handler of a module built without `std`.
+#[cfg(all(feature = "standalone", not(feature = "std"), target_arch = "wasm32"))]
+mod standalone {
+    /// The allocator `std` uses on `wasm32-unknown-unknown`.
+    #[global_allocator]
+    static ALLOCATOR: dlmalloc::GlobalDlmalloc = dlmalloc::GlobalDlmalloc;
+
+    /// Traps, as `std`'s panic runtime does on this target once it has
+    /// formatted a message it has nowhere to write.
+    #[panic_handler]
+    fn panic(_: &core::panic::PanicInfo<'_>) -> ! {
+        core::arch::wasm32::unreachable()
+    }
+}
 
 pub use array::ArrayHandle;
 pub use edit::EditBatch;

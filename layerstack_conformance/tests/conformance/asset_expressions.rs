@@ -10,7 +10,8 @@
 //! author the same asset defaults, time samples, arrays and dictionary
 //! entries as expressions of every kind. It records what OpenUSD reads
 //! for each (`authoredPath`, `evaluatedPath`, `resolvedPath`), the
-//! warnings each read issues, and `UsdStage::Flatten`'s text.
+//! warnings each read issues, `UsdStage::Flatten`'s text, and
+//! `UsdUtils.FlattenLayerStack`'s.
 //!
 //! Here the stage must read each asset path as `SdfAssetPath::GetAssetPath`
 //! returns it: the evaluated path, or the authored text when the
@@ -18,8 +19,11 @@
 //! anchor each path OpenUSD resolves to the file OpenUSD resolves, and
 //! refuse each expression that evaluated to no path. Each expression
 //! OpenUSD warns about must be a `VariableExpressionError` composition
-//! error of the layer and with the message OpenUSD reports. The cases in
-//! `DIFFERING` are the ones layerstack does not yet do as OpenUSD does.
+//! error of the layer and with the message OpenUSD reports. The stage's
+//! flattened layer must save as OpenUSD's `UsdStage::Flatten` text, and
+//! `flatten_layer_stack`'s as `UsdUtils.FlattenLayerStack`'s, reporting
+//! the expressions OpenUSD warns about. The cases in `DIFFERING` are the
+//! ones layerstack does not yet do as OpenUSD does.
 //!
 //! Spec: AOUSD Core §6.2 (the `asset` type), §9 (asset resolution).
 //! OpenUSD: `_AssetPathToStage` in `pxr/usd/usd/stage.cpp`,
@@ -414,40 +418,68 @@ fn flattening_writes_the_paths_openusd_writes() {
     );
 }
 
-/// `UsdUtils.FlattenLayerStack` evaluates the asset path expressions of
-/// attribute defaults and samples, writing one that evaluates to no path
-/// or fails as `@@`, and keeps those of metadata dictionaries as authored
-/// (the oracle's `flatten_layer_stack`). Layerstack's
-/// [`layerstack::flatten_layer_stack`] does not reduce them yet: it
-/// refuses the layer stack, naming the layer, rather than writing
-/// expressions it has not evaluated.
-#[test]
-fn flattening_the_layer_stack_refuses_asset_expressions() {
-    let oracle = oracle();
-    assert!(
-        oracle["flatten_layer_stack"]
-            .as_str()
-            .unwrap()
-            .contains("custom asset empty = @@"),
-        "OpenUSD writes a failed expression as an empty path"
-    );
-    let (loaded, _) = load();
-    let refused = layerstack::flatten_layer_stack(
+/// The layer [`layerstack::flatten_layer_stack`] writes for the fixture,
+/// anchoring each asset path as `UsdFlattenLayerStackResolveAssetPath`
+/// does with OpenUSD's default resolver: anchored to its layer, unless
+/// anchoring leaves it as it is.
+fn flatten_layer_stack_text(loaded: &LoadedStage) -> (String, Vec<(String, String)>) {
+    let resolver = locations(loaded);
+    let flat = layerstack::flatten_layer_stack(
         &loaded.store,
         loaded.root_layer.into(),
         LayerId(999_999),
-        &mut |_, path| Some(path.to_string()),
-    );
-    assert!(
-        matches!(
-            refused,
-            Err(layerstack::LayerStackFlattenError::Unsupported {
-                feature: "asset expressions",
-                ..
-            })
-        ),
-        "{refused:?}"
-    );
+        &mut |layer, path| {
+            let anchored = resolver.anchor_asset_path(path, layer)?;
+            Some(
+                if anchored == layerstack::asset::normalize_asset_path(path) {
+                    path.to_string()
+                } else {
+                    anchored
+                },
+            )
+        },
+    )
+    .expect("flattens");
+    let store: &InMemoryStore = &loaded.store;
+    let text =
+        layerstack_usda::save_usda(&flat.layer, store.tokens(), store.paths()).expect("saves");
+    let errors = flat
+        .report
+        .expression_errors
+        .iter()
+        .map(|error| (error.expression.clone(), error.error.clone()))
+        .collect();
+    (
+        text.replace(&format!("{}/", fixtures().to_string_lossy()), "<dir>/"),
+        errors,
+    )
+}
+
+/// `UsdUtils.FlattenLayerStack` evaluates the asset path expressions of
+/// attribute defaults and samples and of arcs with the layer stack's own
+/// variables, writing one that evaluates to no path or fails as `@@`
+/// with a warning, and keeps the asset paths of dictionaries as authored.
+#[test]
+fn flattening_the_layer_stack_writes_what_openusd_writes() {
+    let oracle = oracle();
+    let (loaded, _) = load();
+    let (text, errors) = flatten_layer_stack_text(&loaded);
+    assert_eq!(text, oracle["flatten_layer_stack"].as_str().unwrap());
+    let warned: BTreeSet<(String, String)> = oracle["flatten_layer_stack_warnings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|warning| {
+            // `Error evaluating expression EXPRESSION: MESSAGE`
+            let warning = warning.as_str().unwrap();
+            let rest = warning
+                .strip_prefix("Error evaluating expression ")
+                .unwrap();
+            let (expression, message) = rest.split_once("`: ").unwrap();
+            (format!("{expression}`"), message.to_string())
+        })
+        .collect();
+    assert_eq!(errors.into_iter().collect::<BTreeSet<_>>(), warned);
 }
 
 /// A live stage reads an asset path expression with the variables as they

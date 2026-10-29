@@ -36,6 +36,11 @@ pub struct LayerStackFlattenReport {
     /// publishing the output layer, a host can register each known loaded layer
     /// under the output layer and `output_path`, preserving clip lookups.
     pub asset_paths: Vec<LayerStackFlattenAssetPath>,
+    /// Asset paths authored as variable expressions that failed to
+    /// evaluate with the layer stack's expression variables; each is
+    /// written as an empty asset path, as OpenUSD writes it (with a
+    /// warning, `_EvaluateAssetPathExpression` in `usd/flattenUtils.cpp`).
+    pub expression_errors: Vec<crate::VariableExpressionError>,
 }
 
 /// One anchored asset occurrence, retaining its input resolution context.
@@ -44,7 +49,8 @@ pub struct LayerStackFlattenReport {
 pub struct LayerStackFlattenAssetPath {
     /// The layer authoring the original path.
     pub source_layer: LayerId,
-    /// Its original authored spelling.
+    /// Its original authored spelling; for one authored as a variable
+    /// expression, the path it evaluates to.
     pub source_path: String,
     /// The spelling returned by the caller's asset callback.
     pub output_path: String,
@@ -110,7 +116,12 @@ impl core::error::Error for LayerStackFlattenError {}
 /// `resolve_asset` receives the authoring layer and each nonempty asset path and
 /// returns its spelling anchored for the output destination, or `None` to refuse
 /// consolidation. The callback may retain absolute/search paths or deliberately
-/// rebase relative paths. This function performs no I/O. All inputs and the output
+/// rebase relative paths. An asset path authored as a variable expression is
+/// evaluated with the layer stack's own expression variables before the
+/// callback sees it; one that evaluates to no path, or fails (recorded in
+/// [`LayerStackFlattenReport::expression_errors`]), is written empty. Asset
+/// paths inside dictionaries (`customData`, `assetInfo`) are kept as
+/// authored, but for a clip set's `assetPaths` and `manifestAssetPath`. This function performs no I/O. All inputs and the output
 /// share the store's interners; the output ID must be distinct from every input.
 ///
 /// References, payloads, inherits, specializes, variant selections, unselected
@@ -127,7 +138,7 @@ impl core::error::Error for LayerStackFlattenError {}
 /// Refuses missing/cyclic inputs, invalid offsets/samples, property-kind conflicts,
 /// mixed property declarations that would change composed custom/variability,
 /// historical `add`/`reorder` list operations (`variantSetNames` among them),
-/// sparse-array edits, asset expressions, empty authored sample maps, and path
+/// sparse-array edits, empty authored sample maps, and path
 /// expressions referring to a weaker opinion. Clip assets and active/times schedules are anchored and retimed;
 /// clip dictionaries at one spec must share a timeline. Retimed template clips
 /// are refused. Deferred timecode arrays with nonidentity offsets are refused
@@ -156,6 +167,7 @@ pub fn flatten_layer_stack(
     let mut context = Context {
         tokens: store.tokens(),
         store,
+        identifier,
         output: output_id,
         resolve_asset,
         report: LayerStackFlattenReport::default(),
@@ -240,6 +252,13 @@ pub fn flatten_layer_stack(
     })
 }
 
+/// Whether a value's asset paths are anchored or kept as authored.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Assets {
+    Anchor,
+    Keep,
+}
+
 fn unsupported(layer: LayerId, feature: &'static str) -> LayerStackFlattenError {
     LayerStackFlattenError::Unsupported { layer, feature }
 }
@@ -258,6 +277,9 @@ struct Origin {
 struct Context<'a, F> {
     tokens: &'a TokenInterner,
     store: &'a dyn LayerStore,
+    /// The layer stack consolidated, whose expression variables asset path
+    /// expressions are evaluated with.
+    identifier: LayerStackIdentifier,
     output: LayerId,
     resolve_asset: &'a mut F,
     report: LayerStackFlattenReport,
@@ -269,12 +291,45 @@ struct Context<'a, F> {
     deferred_assets: Vec<String>,
 }
 impl<F: FnMut(LayerId, &str) -> Option<String>> Context<'_, F> {
+    /// The output spelling of the asset path `path` authored in `layer`.
+    ///
+    /// An expression is evaluated first with the expression variables of
+    /// the layer stack itself (`PcpExpressionVariables::Compute` of its own
+    /// identifier), and one that evaluates to an empty string or to no
+    /// value, or fails, is written as an empty path; a failure is
+    /// recorded in the report. OpenUSD:
+    /// `UsdFlattenLayerStackResolveAssetPathAdvanced` and
+    /// `_EvaluateAssetPathExpression` (`usd/flattenUtils.cpp`).
     fn asset(&mut self, layer: LayerId, path: &str) -> Result<String, LayerStackFlattenError> {
+        let evaluated;
+        let path = if crate::variable_expression::is_expression(path) {
+            match crate::expression_variables::evaluate(self.store, &[self.identifier], path, None)
+            {
+                Ok(Some(to)) => {
+                    evaluated = to;
+                    evaluated.as_str()
+                }
+                Ok(None) => return Ok(String::new()),
+                Err(error) => {
+                    if let CompositionError::VariableExpressionError(error) =
+                        crate::expression_variables::expression_error(
+                            crate::ExpressionContext::AssetValue,
+                            layer,
+                            None,
+                            path,
+                            error,
+                        )
+                    {
+                        self.report.expression_errors.push(error);
+                    }
+                    return Ok(String::new());
+                }
+            }
+        } else {
+            path
+        };
         if path.is_empty() {
             return Ok(String::new());
-        }
-        if crate::variable_expression::is_expression(path) {
-            return Err(unsupported(layer, "asset expressions"));
         }
         let mapped =
             (self.resolve_asset)(layer, path).ok_or_else(|| LayerStackFlattenError::Asset {
@@ -293,25 +348,43 @@ impl<F: FnMut(LayerId, &str) -> Option<String>> Context<'_, F> {
         });
         Ok(mapped)
     }
+    /// `value` in the output: its asset paths anchored, its time codes
+    /// retimed. See [`Self::value_in`].
     fn value(
         &mut self,
         value: &mut Value,
         layer: LayerId,
         offset: LayerOffset,
     ) -> Result<(), LayerStackFlattenError> {
+        self.value_in(value, layer, offset, Assets::Anchor)
+    }
+    /// `value` in the output, its asset paths anchored or kept as `assets`
+    /// says. The asset paths of a dictionary entry are kept as authored, as
+    /// OpenUSD's `_FixAssetPaths` keeps them (only a value, an array or a
+    /// sample of asset paths, an arc, and a clip set's `assetPaths` and
+    /// `manifestAssetPath` are anchored); its time codes are retimed.
+    fn value_in(
+        &mut self,
+        value: &mut Value,
+        layer: LayerId,
+        offset: LayerOffset,
+        assets: Assets,
+    ) -> Result<(), LayerStackFlattenError> {
         match value {
             Value::Asset(path) => {
-                *path = self.asset(layer, path)?.into();
+                if assets == Assets::Anchor {
+                    *path = self.asset(layer, path)?.into();
+                }
             }
             Value::Array(values) => {
                 for value in values {
-                    self.value(value, layer, offset)?;
+                    self.value_in(value, layer, offset, assets)?;
                 }
             }
             Value::Dictionary(entries) => {
                 for (_, value) in entries {
                     if let FieldValue::Value(value) = value {
-                        self.value(value, layer, offset)?;
+                        self.value_in(value, layer, offset, Assets::Keep)?;
                     }
                 }
             }
@@ -406,6 +479,9 @@ impl<F: FnMut(LayerId, &str) -> Option<String>> Context<'_, F> {
                 let FieldValue::Value(value) = value else {
                     continue;
                 };
+                if matches!(key.as_ref(), "assetPaths" | "manifestAssetPath") {
+                    self.value(value, layer, offset)?;
+                }
                 if key.as_ref() == "templateAssetPath" {
                     if !offset.is_identity() {
                         return Err(unsupported(layer, "retimed template clips"));
@@ -502,7 +578,7 @@ impl<F: FnMut(LayerId, &str) -> Option<String>> Context<'_, F> {
             }
             for (_, value) in &mut reference.custom_data {
                 if let FieldValue::Value(value) = value {
-                    self.value(value, layer, LayerOffset::IDENTITY)?;
+                    self.value_in(value, layer, LayerOffset::IDENTITY, Assets::Keep)?;
                 }
             }
             if !self.origins.iter().any(|origin| {
@@ -563,7 +639,7 @@ impl<F: FnMut(LayerId, &str) -> Option<String>> Context<'_, F> {
                 for knot in &mut spline.knots {
                     for (_, value) in &mut knot.custom_data {
                         if let FieldValue::Value(value) = value {
-                            self.value(value, layer, offset)?;
+                            self.value_in(value, layer, offset, Assets::Keep)?;
                         }
                     }
                 }

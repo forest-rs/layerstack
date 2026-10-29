@@ -149,9 +149,12 @@ The cases:
   `read_relational_targets` reads relational attributes
   (`</A.b[/C].d>`, which `SdfPath::IsPropertyPath` counts as properties)
   as targets and connections, and mappers (`</A.b.mapper[/C]>`,
-  `IsMapperPath`) as targets, their bracketed paths anchored as the path
-  is (`SdfPath::MakeAbsolutePath`) and holding variant selections or
-  further relational attributes.
+  `IsMapperPath`) as targets, holding variant selections or further
+  relational attributes, and `read_relational_relative_targets` anchors
+  them as `SdfPath::MakeAbsolutePath` does: of a relative path only, the
+  bracket nearest the end (`GetTargetPath`) at the path's prim path and
+  its own in turn, while an absolute path and earlier brackets keep
+  theirs as written.
 - `read_string_byte_escapes` and `write_string_nul`: strings whose
   escapes OpenUSD keeps as bytes in a `std::string`: bytes that are not
   UTF-8 (`\\xff`), which it writes back escaped, and NUL, which its
@@ -1821,6 +1824,22 @@ def "P"
     rel x = <../A.b[../C].d>
 }
 ''', ["/P.c", "/P.m", "/P.n", "/P.r", "/P.s", "/P.t", "/P.u", "/P.v", "/P.w", "/P.x"]),
+    "read_relational_relative_targets": ('''#usda 1.0
+def "P"
+{
+    def "Q"
+    {
+        rel a = <C.b[../E].d>
+        rel b = <.b[C].d.mapper[E]>
+        rel c = <C.b[D.e[F].g].h>
+        rel d = </X/Y.b[Z].d>
+        rel e = <../S.b[T].d>
+        rel f = <C.b[/Abs].d.mapper[M]>
+        rel g = <C.b[/Abs.e[F].g].h>
+        float h.connect = <C.b[../E].d>
+    }
+}
+''', ["/P/Q.a", "/P/Q.b", "/P/Q.c", "/P/Q.d", "/P/Q.e", "/P/Q.f", "/P/Q.g", "/P/Q.h"]),
     "strict_relational_target_path": ('''#usda 1.0
 def "P"
 {

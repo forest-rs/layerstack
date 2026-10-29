@@ -105,6 +105,37 @@
    "source": "#usda 1.0\ndef \"A\" (\n    references = [@a.usda@, @a.usda@ (offset = 1)]\n)\n{\n}\n",
    "text": "#usda 1.0\n\ndef \"A\" (\n    references = [\n        @a.usda@,\n        @a.usda@ (offset = 1)\n    ]\n)\n{\n}\n\n"
   },
+  "read_relational_relative_targets": {
+   "reads": true,
+   "source": "#usda 1.0\ndef \"P\"\n{\n    def \"Q\"\n    {\n        rel a = <C.b[../E].d>\n        rel b = <.b[C].d.mapper[E]>\n        rel c = <C.b[D.e[F].g].h>\n        rel d = </X/Y.b[Z].d>\n        rel e = <../S.b[T].d>\n        rel f = <C.b[/Abs].d.mapper[M]>\n        rel g = <C.b[/Abs.e[F].g].h>\n        float h.connect = <C.b[../E].d>\n    }\n}\n",
+   "targets": {
+    "/P/Q.a": [
+     "/P/Q/C.b[/P/Q/E].d"
+    ],
+    "/P/Q.b": [
+     "/P/Q.b[C].d.mapper[/P/Q/E]"
+    ],
+    "/P/Q.c": [
+     "/P/Q/C.b[/P/Q/C/D.e[/P/Q/C/D/F].g].h"
+    ],
+    "/P/Q.d": [
+     "/X/Y.b[Z].d"
+    ],
+    "/P/Q.e": [
+     "/P/S.b[/P/S/T].d"
+    ],
+    "/P/Q.f": [
+     "/P/Q/C.b[/Abs].d.mapper[/P/Q/C/M]"
+    ],
+    "/P/Q.g": [
+     "/P/Q/C.b[/Abs.e[/Abs/F].g].h"
+    ],
+    "/P/Q.h": [
+     "/P/Q/C.b[/P/Q/E].d"
+    ]
+   },
+   "text": "#usda 1.0\n\ndef \"P\"\n{\n    def \"Q\"\n    {\n        rel a = </P/Q/C.b[/P/Q/E].d>\n        rel b = </P/Q.b[C].d.mapper[/P/Q/E]>\n        rel c = </P/Q/C.b[/P/Q/C/D.e[/P/Q/C/D/F].g].h>\n        rel d = </X/Y.b[Z].d>\n        rel e = </P/S.b[/P/S/T].d>\n        rel f = </P/Q/C.b[/Abs].d.mapper[/P/Q/C/M]>\n        rel g = </P/Q/C.b[/Abs.e[/Abs/F].g].h>\n        float h.connect = </P/Q/C.b[/P/Q/E].d>\n    }\n}\n\n"
+  },
   "read_relational_targets": {
    "reads": true,
    "source": "#usda 1.0\ndef \"P\"\n{\n    float c.connect = </A.b[/C].d>\n    rel m = </A.b.mapper[/C]>\n    rel n = </A.b[/C.d[/E].f].g>\n    rel r = </A.b[/C].d>\n    rel s = </A.b[/C/D.e].f:g>\n    rel t = </A.b[/C].d.mapper[/E]>\n    rel u = <.b[C].d>\n    rel v = </A.b[/C{v=x}].d>\n    prepend rel w = [</A.b[/C].d>, </A.b.mapper[/C]>]\n    rel x = <../A.b[../C].d>\n}\n",

@@ -1105,7 +1105,8 @@ impl EmitCtx<'_> {
                     }
                     let absolute = (!has_prim_variant_selection(target))
                         .then(|| self.variant_anchored(target, anchor, sites))
-                        .flatten();
+                        .flatten()
+                        .map(|absolute| anchor_relative_brackets(target, absolute));
                     if absolute.is_none() {
                         self.reject(
                             rel.span,
@@ -1921,8 +1922,7 @@ impl EmitCtx<'_> {
                     self.reject(span, format!("{refusal}: <{target}>"));
                     return None;
                 }
-                let absolute =
-                    anchor_bracketed(&absolute, &mut |inner| absolute_path(inner, anchor).into());
+                let absolute = anchor_relative_brackets(target, absolute);
                 // A relational attribute (`/A.b[/C].d`), and for a
                 // relationship a mapper (`/A.b.mapper[/C]`), is a property
                 // target whose property token is the whole property part
@@ -2432,6 +2432,25 @@ fn is_absolute_prim_path(text: &str) -> bool {
 /// scene description cannot (see [Rejected layers](self#rejected-layers)).
 fn has_variant_selection(path: &str) -> bool {
     path.contains('{')
+}
+
+/// `absolute`, the path `target` made absolute, with its bracketed paths
+/// anchored as `SdfPath::MakeAbsolutePath` anchors them
+/// ([`anchor_bracketed`]) when `target` is relative. OpenUSD's parser makes
+/// only a relative path absolute (`TextParserAction<PathRef>`,
+/// `pxr/usd/sdf/textFileFormatParser.cpp`): an absolute one keeps its
+/// bracketed paths as written (`</A.b[C].d>`).
+fn anchor_relative_brackets<'p>(target: &str, absolute: Cow<'p, str>) -> Cow<'p, str> {
+    if target.starts_with('/') || !absolute.contains('[') {
+        return absolute;
+    }
+    let anchored = anchor_bracketed(&absolute, &mut |inner, at| {
+        absolute_path(inner, at).into_owned()
+    });
+    match anchored {
+        Cow::Borrowed(_) => absolute,
+        Cow::Owned(anchored) => Cow::Owned(anchored),
+    }
 }
 
 fn absolute_path<'p>(path: &'p str, anchor: &str) -> Cow<'p, str> {

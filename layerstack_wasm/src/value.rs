@@ -658,26 +658,52 @@ fn range_error(name: &str, what: impl core::fmt::Display) -> Error {
 }
 
 /// The scalars as integers of `I`, each exactly representable.
-fn ints<I: TryFrom<i64> + TryFrom<u64>>(data: &InputData, name: &str) -> Result<Vec<I>, Error> {
+fn ints<I: TryFrom<i128>>(data: &InputData, name: &str) -> Result<Vec<I>, Error> {
+    let mut out = Vec::new();
+    each_integer(data, name, &mut |integer| match I::try_from(integer) {
+        Ok(integer) => {
+            out.push(integer);
+            true
+        }
+        Err(_) => false,
+    })?;
+    Ok(out)
+}
+
+/// Passes each scalar of `data` as an integer to `push`, in order, failing
+/// at the first that is not an integer or that `push` refuses (returns
+/// `false` for). One walk for every integer type [`ints`] makes.
+fn each_integer(
+    data: &InputData,
+    name: &str,
+    push: &mut dyn FnMut(i128) -> bool,
+) -> Result<(), Error> {
     match data {
-        InputData::Numbers(items) => items
-            .iter()
-            .map(|&number| {
-                exact_integer(number)
-                    .and_then(|integer| I::try_from(integer).ok())
-                    .ok_or_else(|| range_error(name, number))
-            })
-            .collect(),
-        InputData::Int64(items) => items
-            .iter()
-            .map(|&integer| I::try_from(integer).map_err(|_| range_error(name, integer)))
-            .collect(),
-        InputData::UInt64(items) => items
-            .iter()
-            .map(|&integer| I::try_from(integer).map_err(|_| range_error(name, integer)))
-            .collect(),
-        _ => Err(kind_error(data, name)),
+        InputData::Numbers(items) => {
+            for &number in items {
+                match exact_integer(number) {
+                    Some(integer) if push(i128::from(integer)) => {}
+                    _ => return Err(range_error(name, number)),
+                }
+            }
+        }
+        InputData::Int64(items) => {
+            for &integer in items {
+                if !push(i128::from(integer)) {
+                    return Err(range_error(name, integer));
+                }
+            }
+        }
+        InputData::UInt64(items) => {
+            for &integer in items {
+                if !push(i128::from(integer)) {
+                    return Err(range_error(name, integer));
+                }
+            }
+        }
+        _ => return Err(kind_error(data, name)),
     }
+    Ok(())
 }
 
 /// `number` as an integer, when it is one a number holds exactly.

@@ -1010,7 +1010,7 @@ impl Stage {
     // AOUSD Core §13.3.2.3; OpenUSD
     // Usd_PrimTypeInfoCache::ComputeInvalidPrimTypeToFallbackMap.
     // Candidates are direct substitutions, never recursively chased.
-    fn fallback_type_map(&self, store: &dyn LayerStore) -> HashMap<TokenId, TokenId> {
+    pub(crate) fn fallback_type_map(&self, store: &dyn LayerStore) -> HashMap<TokenId, TokenId> {
         let Some(schemas) = self.schemas() else {
             return HashMap::new();
         };
@@ -3471,6 +3471,43 @@ impl Stage {
             }
         }
         Some(out)
+    }
+
+    /// The sites that can hold `prim`'s prim specs, strongest first: each
+    /// layer of a node's layer stack at the node's site, for every node of
+    /// the prim's index graph that contributes specs, and for the node
+    /// whose site is `target` in a layer stack holding `target_layer`, as
+    /// an edit target names it, even when it holds no spec yet. A prim the
+    /// stage does not compose has `target` as its one site.
+    ///
+    /// Reading these sites again after authoring at `target` resolves the
+    /// prim's fields as composing again would, unless the authoring changes
+    /// the graph itself (its arcs, variant selections or layer stacks).
+    ///
+    /// Spec: AOUSD Core §10.4 (strength ordering), §12.2 (the strongest
+    /// opinion). OpenUSD: `Usd_Resolver`, which walks the same nodes and
+    /// layers.
+    pub(crate) fn spec_sites(
+        &self,
+        prim: PathId,
+        target_layer: LayerId,
+        target: &SpecPath,
+    ) -> Vec<(LayerId, SpecPath)> {
+        let Some(index) = self.prims.get(&prim) else {
+            return alloc::vec![(target_layer, target.clone())];
+        };
+        let mut sites = Vec::new();
+        for (id, node) in index.graph.nodes() {
+            let targeted = node.site() == target && node.stack_layers().any(|l| l == target_layer);
+            if !targeted && !index.sources.iter().any(|source| source.key.node == id) {
+                continue;
+            }
+            sites.extend(
+                node.stack_layers()
+                    .map(|layer| (layer, node.site().clone())),
+            );
+        }
+        sites
     }
 
     /// Returns the variant selections that govern the composed prim

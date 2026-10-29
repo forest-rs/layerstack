@@ -30,11 +30,12 @@ use crate::{
         VariantSetSpec, VariantSpec,
     },
     interner::TokenId,
-    listop::ListOp,
+    listop::{ListOp, resolve_list_chain},
     path::{PathId, PathInterner, TargetPath},
     property::{
         PropertyEntry, PropertyKind, PropertySpec, PropertyType, Variability, get_property,
     },
+    schema::{PropertyDefinition, SchemaKind},
     spec_path::{SpecPath, VariantSelectionSite},
     stage::Stage,
 };
@@ -794,6 +795,11 @@ pub(super) struct Journal<'a> {
     /// Creating many children of one prim does not scan its growing list
     /// each time, and creating one does not index the list at all.
     children: HashMap<(LayerId, PathId), Option<hashbrown::HashSet<TokenId>>>,
+    /// The prim paths, by layer, of the prim and variant specs whose
+    /// fields the steps run so far may have changed, the type name and
+    /// `apiSchemas` among them: a later edit plans against the prim
+    /// definition those fields now give ([`planned_definition`]).
+    prim_fields: hashbrown::HashSet<(LayerId, PathId)>,
 }
 
 impl Journal<'_> {
@@ -832,6 +838,23 @@ impl Journal<'_> {
             && (main.is_some() || branches.is_some())
         {
             self.namespace = None;
+        }
+        let prim_fields = match &step {
+            Raw::PrimSlots { layer, path, .. } => Some((*layer, *path)),
+            Raw::PrimField { layer, loc, .. }
+            | Raw::Field {
+                layer,
+                loc,
+                property: None,
+                ..
+            } => Some((*layer, loc.prim_path())),
+            Raw::Variant { layer, host, .. } | Raw::VariantSet { layer, host, .. } => {
+                Some((*layer, host.prim_path()))
+            }
+            _ => None,
+        };
+        if let Some(site) = prim_fields {
+            self.prim_fields.insert(site);
         }
         let layer = step.layer();
         if !self.layers.contains(&layer) {
@@ -973,6 +996,7 @@ pub(crate) fn apply(
         namespace: _,
         touched_set: _,
         children: _,
+        prim_fields: _,
     } = journal;
     let mut local_structure = Some(Vec::new());
     let mut child_lists = Vec::new();
@@ -1720,14 +1744,95 @@ fn check_type(path: &SpecPath, ty: &PropertyType, value: &Value) -> Result<(), R
     }
 }
 
+/// The schema definition of the property `name` of the stage prim `at`
+/// addresses, in the prim definition the transaction's steps so far leave
+/// it: `None` for a spec address, a stage without schemas, or a property
+/// the definition does not hold.
+///
+/// While no step has written the fields of a spec at one of the prim's
+/// sites ([`Stage::spec_sites`]), that is the definition the stage
+/// composed. Otherwise the prim's type name and applied schemas are read
+/// again from those sites as the steps left them: the strongest type name
+/// (an empty one and `__AnyType__` are no opinion), mapped through the
+/// layer's `fallbackPrimTypes` when it names no concrete schema, and the
+/// `apiSchemas` list ops composed. So a prim a transaction defines or
+/// retypes, or applies a schema to, has that schema's properties to plan
+/// its later edits against, and an opinion weaker than another site's
+/// stays masked, as OpenUSD's recomposition after each call gives them.
+///
+/// OpenUSD: `UsdStage::_CreateAttributeSpecForEditing` and
+/// `UsdRelationship::_CreateSpec` read `UsdPrim::GetPrimDefinition`,
+/// which `Usd_PrimTypeInfoCache` builds from `typeName` and `apiSchemas`.
+///
+/// Spec: AOUSD Core §12.2 (strongest opinion), §12.4 (list ops),
+/// §13.3.1 (typeless prims), §13.3.2.3 (the prim definition).
+fn planned_definition(
+    store: &dyn LayerStore,
+    at: &Address,
+    name: TokenId,
+    stage: Option<&Stage>,
+    journal: &Journal<'_>,
+) -> Option<PropertyDefinition> {
+    let (stage, (prim, _)) = stage.zip(at.stage_path())?;
+    if journal.prim_fields.is_empty() {
+        return stage.property_definition(prim, name);
+    }
+    let target = at.resolve(store.paths())?.prim_spec();
+    let sites = stage.spec_sites(prim, at.layer(), &target);
+    if !sites
+        .iter()
+        .any(|(layer, site)| journal.prim_fields.contains(&(*layer, site.prim_path())))
+    {
+        return stage.property_definition(prim, name);
+    }
+    let schemas = stage.schemas()?;
+    let tokens = store.tokens();
+    let any_type = tokens.lookup("__AnyType__");
+    let api_schemas = tokens.lookup("apiSchemas");
+    let specs: Vec<SpecRef<'_>> = sites
+        .iter()
+        .filter_map(|(layer, site)| spec_at(store.layer(*layer)?, &Loc::of(site)))
+        .collect();
+    let type_name = specs.iter().find_map(|spec| match spec {
+        SpecRef::Prim(spec) => spec
+            .type_name
+            .filter(|&ty| ty != TokenId::EMPTY && Some(ty) != any_type),
+        SpecRef::Variant(_) => None,
+    });
+    let type_name = match type_name {
+        Some(ty)
+            if schemas
+                .schema(ty)
+                .is_none_or(|s| s.kind != SchemaKind::ConcreteTyped) =>
+        {
+            stage
+                .fallback_type_map(store)
+                .get(&ty)
+                .copied()
+                .or(Some(ty))
+        }
+        other => other,
+    };
+    let lists =
+        specs.iter().filter_map(
+            |spec| match crate::doc::get_field(spec.fields(), &api_schemas?) {
+                Some(FieldValue::TokenListOp(list)) => Some(&**list),
+                _ => None,
+            },
+        );
+    let applied = resolve_list_chain::<TokenId>(&[], lists);
+    schemas.property_definition(type_name, &applied, name, tokens)
+}
+
 /// Sets the default (`time` is `None`) or the time sample at the layer
 /// time `time` of the attribute `at`, creating its spec when missing.
 ///
 /// A created spec takes its type and variability from the prim's schemas
-/// when they define the attribute, and otherwise from the composed
-/// declaration, as OpenUSD creates it (`UsdPrim::CreateAttribute`, which a
-/// schema's `Create*Attr` calls with the definition's type and
-/// variability).
+/// when they define the attribute ([`planned_definition`], which sees the
+/// type and applied schemas the transaction's earlier edits author), and
+/// otherwise from the composed declaration, as OpenUSD creates it
+/// (`UsdPrim::CreateAttribute`, which a schema's `Create*Attr` calls with
+/// the definition's type and variability).
 ///
 /// Spec: AOUSD Core §13.3.2.3 (the prim definition declares the prim's
 /// schema properties).
@@ -1741,9 +1846,7 @@ fn set_value(
 ) -> Result<(), Rejection> {
     let (path, loc, name) = property_address(store, at)?;
     let id = at.layer();
-    let defined = stage
-        .zip(at.stage_path())
-        .and_then(|(stage, (prim, _))| stage.property_definition(prim, name));
+    let defined = planned_definition(store, at, name, stage, journal);
     if defined
         .as_ref()
         .is_some_and(|d| d.kind != PropertyKind::Attribute)
@@ -1954,9 +2057,7 @@ fn write_targets(
         (Some(false) | None, None) => Ok(()),
         (None, Some(targets)) => {
             let prim = at.stage_path().map(|(prim, _)| prim);
-            let defined = stage
-                .zip(prim)
-                .and_then(|(stage, prim)| stage.property_definition(prim, name));
+            let defined = planned_definition(store, at, name, stage, journal);
             let declared = stage
                 .zip(prim)
                 .and_then(|(stage, prim)| stage.resolve_property_declaration(prim, name));

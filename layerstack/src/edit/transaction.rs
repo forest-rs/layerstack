@@ -62,6 +62,19 @@ use crate::{
 /// ancestors and variant branches (`SdfCreatePrimInLayer`), and an
 /// attribute spec with its declared type.
 ///
+/// Each edit is planned against the layers as the edits before it leave
+/// them, and nothing else: applied through
+/// [`LiveStage::apply`](crate::LiveStage::apply), an edit that creates a
+/// property spec from the prim's schema definition reads that definition
+/// from the prim's type and applied schemas as the earlier edits author
+/// them, at the sites the stage composed for the prim. So creating or
+/// retyping a prim, or applying an API schema to it, and then setting one
+/// of the schema's attributes or targets works in one transaction, as the
+/// same calls do one after another in OpenUSD, which recomposes after
+/// each; an opinion a stronger site masks still gives the prim no new
+/// schema. Edits that change the prim's composition graph itself (arcs,
+/// variant selections, sublayers) take effect for later transactions.
+///
 /// An edit addressed to the pseudo-root (`/`) or to a property path on it
 /// is rejected ([`Rejection::PseudoRoot`]), except for the root prim order
 /// ([`Transaction::set_prim_order`]): the pseudo-root spec holds a layer's
@@ -498,7 +511,9 @@ impl Transaction {
     /// Sets the targets of the relationship, or the connections of the
     /// attribute, at `at` to the list op `targets`, replacing any authored
     /// on that spec. A missing property spec is created: with the prim's
-    /// schema definition of the property when it has one, else with the
+    /// schema definition of the property when it has one (as the
+    /// transaction's earlier edits leave the prim's type and applied
+    /// schemas; see [`Transaction`]), else with the
     /// stage's composed declaration (for a stage address applied through
     /// [`LiveStage::apply`](crate::LiveStage::apply)), whose `custom`
     /// qualifier it keeps, else as a `custom` relationship, as OpenUSD
@@ -998,9 +1013,16 @@ impl Transaction {
     ///
     /// The value must conform to the attribute's declared type: the type
     /// authored on the edited spec, or else, for a stage address applied
-    /// through [`LiveStage::apply`](crate::LiveStage::apply), the composed
-    /// declaration of the stage property. A missing attribute spec is
-    /// created with that type. [`Value::Blocked`] blocks the value.
+    /// through [`LiveStage::apply`](crate::LiveStage::apply), the type the
+    /// prim's schema definition gives the attribute, from its type and
+    /// applied schemas as the transaction's earlier edits leave them, or
+    /// else the composed declaration of the stage property. A missing
+    /// attribute spec is created with that type, and with the definition's
+    /// variability. Nothing declaring a type rejects the edit
+    /// ([`Rejection::UndeclaredType`](super::Rejection::UndeclaredType)),
+    /// and so does a value of another type
+    /// ([`Rejection::TypeMismatch`](super::Rejection::TypeMismatch)).
+    /// [`Value::Blocked`] blocks the value.
     ///
     /// For a stage address, `value` is a stage value: its time codes,
     /// durations and path expressions are mapped into the target layer as

@@ -5,12 +5,13 @@
 
 use crate::{
     doc::{LayerId, LayerOffset, LayerStore},
-    interner::TokenId,
+    interner::{TokenId, TokenInterner},
     path::{PathId, PathInterner, PropertyPath, TargetPath},
     prim_index::ArcKind,
     prim_index_graph::{NodeId, PrimIndexGraph, PrimNode},
     spec_path::SpecPath,
     stage::Stage,
+    target_translation::{PrimMap, is_relational, map_relational},
 };
 
 /// How an [`EditTarget`] maps stage namespace to spec paths in its layer.
@@ -38,6 +39,15 @@ pub(crate) enum NamespaceMap {
 }
 
 impl NamespaceMap {
+    /// Whether every path the map's pair does not cover maps to itself
+    /// (`PcpMapFunction::HasRootIdentity`).
+    fn has_root_identity(&self) -> bool {
+        match self {
+            Self::Identity => true,
+            Self::Prefix { root_identity, .. } => *root_identity,
+        }
+    }
+
     /// The spec path of the stage prim `path`, if the map covers it.
     pub(crate) fn map_prim(&self, path: PathId, paths: &PathInterner) -> Option<SpecPath> {
         match self {
@@ -447,17 +457,34 @@ impl Address {
     /// apply to. A spec address's targets are the layer's own paths,
     /// authored as given.
     ///
+    /// A relational attribute or mapper target maps the paths in its
+    /// brackets too, and does not map unless they all do.
+    ///
     /// OpenUSD: `UsdEditTarget::MapToSpecPath` on each target
-    /// (`UsdRelationship::_GetTargetForAuthoring`), which strips variant
-    /// selections from the result.
+    /// (`UsdRelationship::_GetTargetForAuthoring`), which maps each path
+    /// `SdfPath::GetAllTargetPathsRecursively` finds, strips variant
+    /// selections from it and puts it back with `SdfPath::ReplacePrefix`
+    /// (see [`crate::target_translation`]), then strips them from the
+    /// result.
     pub(crate) fn map_target(
         &self,
         target: TargetPath,
+        tokens: &TokenInterner,
         paths: &PathInterner,
     ) -> Option<TargetPath> {
         let AddressPath::Stage { map, .. } = &self.path else {
             return Some(target);
         };
+        if let TargetPath::Property(property) = target
+            && is_relational(tokens, property.property())
+        {
+            let map_prim = |prim: PathId| map.map_prim(prim, paths).map(|spec| spec.prim_path());
+            let map = PrimMap {
+                map: &map_prim,
+                root_identity: map.has_root_identity(),
+            };
+            return map_relational(tokens, paths, property, &map).map(TargetPath::Property);
+        }
         let prim = map.map_prim(target.prim_path(), paths)?.prim_path();
         Some(match target {
             TargetPath::Prim(_) => TargetPath::Prim(prim),

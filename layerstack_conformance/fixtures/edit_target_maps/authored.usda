@@ -3,8 +3,10 @@
 class "Class"
 {
     custom rel look = [
+        </Class.b[/Class/Child].d>,
         </Class/Child>,
         </Light>,
+        </Light.b[/Class/Child].d.mapper[/Light]>,
         </Light.intensity>,
     ]
 }
@@ -14,6 +16,7 @@ def "Base"
     custom rel look = [
         </Light>,
         </Light.intensity>,
+        </Base.b[/Base/Child].d>,
         </Base/Child>,
     ]
 }
@@ -42,6 +45,7 @@ def "Rock" (
             custom rel look = [
                 </Light>,
                 </Light.intensity>,
+                </Rock.b[/Rock/Pebble].d>,
                 </Rock/Pebble>,
             ]
 

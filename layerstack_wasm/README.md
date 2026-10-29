@@ -37,15 +37,21 @@ node packages/layerstack/scripts/strip-sections.mjs \
   target/wasm32-unknown-unknown/wasm/layerstack_wasm.bindgen-input.wasm target_features
 wasm-bindgen --target web --out-dir packages/layerstack/wasm --out-name layerstack \
   target/wasm32-unknown-unknown/wasm/layerstack_wasm.bindgen-input.wasm
-wasm-opt -Oz --converge --low-memory-unused --reorder-functions-by-name \
-  packages/layerstack/wasm/layerstack_bg.wasm -o packages/layerstack/wasm/layerstack_bg.wasm
+wasm-opt -Oz --converge --low-memory-unused --reorder-functions-by-name -g \
+  packages/layerstack/wasm/layerstack_bg.wasm -o ordered.wasm
+node packages/layerstack/scripts/order-functions.mjs ordered.wasm ordered.wasm
+wasm-opt --optimize-level=2 --shrink-level=2 --generate-stack-ir --optimize-stack-ir \
+  --reorder-functions-by-name ordered.wasm -o packages/layerstack/wasm/layerstack_bg.wasm
 ```
 
-The `wasm` profile keeps the function names, which `wasm-opt` lays the
-functions out by (so similar functions sit together and compress better)
-and then leaves out. It keeps the `target_features` section with them,
-which `strip-sections.mjs` takes out so that wasm-bindgen writes the same
-glue as for a stripped module.
+The `wasm` profile keeps the function names, which the first `wasm-opt` run
+lays the functions out by; `order-functions.mjs` then renames them so that
+the second run lays functions with similar bodies next to each other, where
+gzip and brotli compress them better, and leaves the names out. The
+`target_features` section the names come with is taken out by
+`strip-sections.mjs`, so that wasm-bindgen writes the same glue as for a
+stripped module. (`build-wasm.sh` also passes the target's features to
+`wasm-opt`.)
 
 The module is built without `std`: the `standalone` feature supplies its
 global allocator (dlmalloc, the one `std` uses on `wasm32-unknown-unknown`)

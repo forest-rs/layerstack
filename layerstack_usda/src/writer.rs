@@ -474,11 +474,15 @@ impl Prim {
     fn validate_body(&self, path: &str) -> Result<(), WriteError> {
         let path = String::from(path);
         validate_metadata(&self.metadata, &mut Vec::new(), &path)?;
+        // An arc list with no edits is a field an edit emptied, written
+        // with no statements as OpenUSD writes it.
         for (key, arcs) in [
             ("inherits", &self.inherits),
             ("specializes", &self.specializes),
         ] {
-            let Some(op) = arcs else { continue };
+            let Some(op) = arcs.as_ref().filter(|op| **op != ListOp::default()) else {
+                continue;
+            };
             validate_arc_list(op, &path, key)?;
             for target in op.items() {
                 validate_prim_path(target, &path)?;
@@ -488,7 +492,9 @@ impl Prim {
             ("payload", &self.payloads),
             ("references", &self.references),
         ] {
-            let Some(op) = arcs else { continue };
+            let Some(op) = arcs.as_ref().filter(|op| **op != ListOp::default()) else {
+                continue;
+            };
             validate_arc_list(op, &path, key)?;
             for arc in op.items() {
                 if let Some(asset) = &arc.asset {
@@ -5181,12 +5187,17 @@ class "C"
             },
             "an arc names a prim"
         );
+        // An arc list op with no edits is a field an edit emptied in
+        // place, which OpenUSD writes with no statements
+        // (`UsdNamespaceEditor` deleting the prim an inherit names).
+        let mut emptied = Document::default();
+        let mut prim = Prim::new(Specifier::Def, None, "P");
+        prim.inherits = Some(ListOp::default());
+        emptied.prims.push(prim);
         assert_eq!(
-            bad_arc(|d| d.prims[0].specializes = Some(ListOp::default())),
-            WriteError::InvalidListOp {
-                path: "/P#specializes".into()
-            },
-            "an arc list op says something"
+            emptied.to_usda().unwrap(),
+            "#usda 1.0\n\ndef \"P\" (\n)\n{\n}\n\n",
+            "an emptied arc list op"
         );
         let twice = arc(Some("./r.usda"), Some("/R"), 1.0, 1.0);
         let other = arc(Some("./r.usda"), Some("/R"), 2.0, 1.0);

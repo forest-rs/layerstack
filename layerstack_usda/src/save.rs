@@ -109,7 +109,7 @@ use layerstack::doc::{
     VariantSelections, VariantSetSpec, VariantSpec,
 };
 use layerstack::interner::{TokenId, TokenInterner};
-use layerstack::listop::ListOp as LayerListOp;
+use layerstack::listop::{ListOp as LayerListOp, SparseListOp};
 use layerstack::path::{Path, PathId, PathInterner, TargetPath};
 use layerstack::property::{PropertyEntry, PropertyKind, Variability};
 use layerstack::spec_path::VariantSelectionSite;
@@ -650,8 +650,8 @@ impl Lowering<'_> {
         let arcs = Arcs {
             references: &spec.references,
             payloads: &spec.payloads,
-            inherits: spec.inherits(),
-            specializes: spec.specializes(),
+            inherits: spec.rare().map_or(&NO_PATHS, |rare| &rare.inherits),
+            specializes: spec.rare().map_or(&NO_PATHS, |rare| &rare.specializes),
         };
         self.arcs(layer, arcs, &mut prim, &shown)?;
         if let Some(selections) = spec.variant_selections() {
@@ -713,8 +713,12 @@ impl Lowering<'_> {
         prim: &mut Prim,
         shown: &str,
     ) -> Result<(), SaveError> {
-        let references = |op: &LayerListOp<LayerReference>, key: &str| {
-            if !is_authored(op) {
+        // An arc list an edit emptied in place stays authored, and is
+        // written with no statements (`def "A" (` `)`), as OpenUSD writes
+        // the arc list op field a namespace edit emptied
+        // (`SdfListOp::ModifyOperations`).
+        let references = |op: &SparseListOp<LayerReference>, key: &str| {
+            if !op.is_authored() {
                 return Ok(None);
             }
             let path = format!("{shown}#{key}");
@@ -723,8 +727,8 @@ impl Lowering<'_> {
         };
         prim.payloads = references(arcs.payloads, "payload")?;
         prim.references = references(arcs.references, "references")?;
-        let paths = |op: &LayerListOp<PathId>, key: &str| {
-            if !is_authored(op) {
+        let paths = |op: &SparseListOp<PathId>, key: &str| {
+            if !op.is_authored() {
                 return Ok(None);
             }
             let path = format!("{shown}#{key}");
@@ -1365,11 +1369,14 @@ enum Task<'l> {
 /// The arc list ops of a prim spec or variant.
 #[derive(Clone, Copy)]
 struct Arcs<'a> {
-    references: &'a LayerListOp<LayerReference>,
-    payloads: &'a LayerListOp<LayerReference>,
-    inherits: &'a LayerListOp<PathId>,
-    specializes: &'a LayerListOp<PathId>,
+    references: &'a SparseListOp<LayerReference>,
+    payloads: &'a SparseListOp<LayerReference>,
+    inherits: &'a SparseListOp<PathId>,
+    specializes: &'a SparseListOp<PathId>,
 }
+
+/// The inherits and specializes of a prim spec authoring none.
+static NO_PATHS: SparseListOp<PathId> = SparseListOp::new();
 
 /// The display path of child prim `name` of `parent` (`/`, `/A` or
 /// `/A{v=x}`): a prim inside a variant follows its selection directly.

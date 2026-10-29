@@ -1,6 +1,7 @@
 #usda 1.0
 (
     expressionVariables = {
+        string CLIP = "clip"
         string DIR = "maps"
         bool FLAG = 1
         string NAME = "wood"
@@ -70,6 +71,20 @@ def "Clipped" (
             asset manifestAssetPath = @./clips/manifest.usda@
             string primPath = "/Model"
             double2[] times = [(0, 0), (2, 2)]
+        }
+    }
+)
+{
+    custom asset tex
+}
+
+def "ClippedByExpression" (
+    clips = {
+        dictionary default = {
+            double2[] active = [(0, 0)]
+            asset[] assetPaths = [@`"./clips/${CLIP}.usda"`@]
+            asset manifestAssetPath = @`"./clips/manifest.usda"`@
+            string primPath = "/Model"
         }
     }
 )

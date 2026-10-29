@@ -905,7 +905,7 @@ impl Attribute {
                 return Err(WriteError::InvalidTimeSamples { path: path.into() });
             }
         }
-        validate_targets(self.connections.as_ref(), path, false)?;
+        validate_targets(self.connections.as_ref(), path)?;
         validate_metadata(&self.metadata, &mut Vec::new(), path)
     }
 }
@@ -969,7 +969,7 @@ impl Relationship {
     }
 
     fn validate(&self, path: &str) -> Result<(), WriteError> {
-        validate_targets(self.targets.as_ref(), path, true)?;
+        validate_targets(self.targets.as_ref(), path)?;
         if let Some(default) = &self.default
             && default
                 .chars()
@@ -1674,20 +1674,25 @@ fn is_property_name(name: &str) -> bool {
 /// connections use (§16.2.9; §16.2.16.9 excludes variant selections from
 /// targets). A connection may name a prim as a relationship may, as
 /// OpenUSD reads and writes it (`SdfSchema::IsValidAttributeConnectionPath`).
-/// A relational attribute (`/A.b[/C].d`) is a property for both, and a
-/// mapper (`/A.b.mapper[/C]`) a target where `mappers` allows it, each
-/// absolute, though a bracketed path may be relative as OpenUSD keeps one
-/// that `SdfPath::MakeAbsolutePath` leaves (`</A.b[C].d.mapper[/A/E]>`).
-/// Relative paths and variant selections in the prim part are not produced
-/// by this writer.
-fn validate_target(target: &str, path: &str, mappers: bool) -> Result<(), WriteError> {
+/// A relational attribute (`/A.b[/C].d`) or a mapper (`/A.b.mapper[/C]`)
+/// may be either, each absolute, though a bracketed path may be relative
+/// as OpenUSD keeps one that `SdfPath::MakeAbsolutePath` leaves
+/// (`</A.b[C].d.mapper[/A/E]>`). Relative paths and variant selections in
+/// the prim part are not produced by this writer.
+///
+/// A mapper connection is written although no text parser reads one back:
+/// OpenUSD's parser and its authoring refuse it
+/// (`IsValidAttributeConnectionPath` admits prim and property paths only),
+/// but a crate file holds one as any other path, and OpenUSD's text
+/// writer writes what it reads from there as it is (`Sdf_WriteConnectionList`,
+/// `pxr/usd/sdf/fileIO_Common.h`).
+fn validate_target(target: &str, path: &str) -> Result<(), WriteError> {
     let invalid = || WriteError::InvalidTargetPath {
         path: path.into(),
         target: target.into(),
     };
-    // A relational attribute (`/A.b[/C].d`), and for a relationship a
-    // mapper (`/A.b.mapper[/C]`), as `SdfSchema::IsValidRelationshipTargetPath`
-    // and `IsValidAttributeConnectionPath` admit them
+    // A relational attribute (`/A.b[/C].d`) or a mapper (`/A.b.mapper[/C]`),
+    // as `SdfSchema::IsValidRelationshipTargetPath` admits them
     // (`pxr/usd/sdf/schema.cpp`): absolute, though not every bracketed path.
     if target.contains('[') || target.matches('.').nth(1).is_some() {
         if !crate::lower::is_path_text(target)
@@ -1700,8 +1705,8 @@ fn validate_target(target: &str, path: &str, mappers: bool) -> Result<(), WriteE
             return Err(invalid());
         };
         let allowed = match ends {
-            crate::lower::PropertyTail::RelationalAttribute => true,
-            crate::lower::PropertyTail::Mapper => mappers,
+            crate::lower::PropertyTail::RelationalAttribute
+            | crate::lower::PropertyTail::Mapper => true,
             crate::lower::PropertyTail::Other => false,
         };
         let prim_ok = prim
@@ -1803,11 +1808,7 @@ fn validate_arc_list<T: PartialEq>(
 
 /// Validates a connection or target list op: well formed (see
 /// [`ListOp`]), with every path a valid target.
-fn validate_targets(
-    targets: Option<&ListOp<String>>,
-    path: &str,
-    mappers: bool,
-) -> Result<(), WriteError> {
+fn validate_targets(targets: Option<&ListOp<String>>, path: &str) -> Result<(), WriteError> {
     let Some(op) = targets else {
         return Ok(());
     };
@@ -1818,7 +1819,7 @@ fn validate_targets(
         return Err(WriteError::InvalidListOp { path: path.into() });
     }
     for target in op.items() {
-        validate_target(target, path, mappers)?;
+        validate_target(target, path)?;
     }
     Ok(())
 }

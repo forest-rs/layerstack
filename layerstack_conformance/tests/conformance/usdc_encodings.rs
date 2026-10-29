@@ -12,7 +12,9 @@
 //! export OpenUSD accepts must give OpenUSD's file but for its LZ4 blocks
 //! ([`crate_sections`]), and both files must read back with [`read_usdc`]
 //! as the text OpenUSD reads back; an export OpenUSD refuses must be
-//! refused before any output.
+//! refused before any output. A case without a USDA source, a layer the
+//! text parser cannot make, is OpenUSD's file alone: it must read with
+//! [`read_usdc`] as OpenUSD reads it, and save again.
 //!
 //! Spec: AOUSD Core §16.3 (USDC), §7.4 (metadata); OpenUSD 26.11
 //! `pxr/usd/sdf/crateFile.cpp`.
@@ -157,4 +159,50 @@ fn relative_brackets_are_refused_as_openusd_cannot_save_them() {
         ),
         "{refused:?}"
     );
+}
+
+/// Asserts that OpenUSD's file of `case`, a layer the text parser cannot
+/// make, reads with [`read_usdc`] as the text OpenUSD reads from it, that
+/// the text reads with [`read_usda`] as OpenUSD's parser reads it, and that
+/// the layer read saves as USDC, reading back the same. The save is not
+/// compared with OpenUSD's file: `Sdf.CopySpec` made the layer OpenUSD
+/// saved, which orders a spec's fields as no text parser does, and
+/// [`save_usdc`] orders them as OpenUSD's text parser does.
+fn assert_reads_as_openusd(case: &str) {
+    let text = std::fs::read_to_string(fixtures().join("oracle.json")).unwrap();
+    let oracle: Json = serde_json::from_str(&text).expect("oracle.json");
+    let record = &oracle["cases"][case];
+    assert_eq!(
+        record["export_usdc"]["accepted"],
+        Json::Bool(true),
+        "{case}"
+    );
+    let read = &record["open_usdc"];
+    assert_eq!(read["same_text"], Json::Bool(true), "{case}: {read}");
+    let text = read["text"].as_str().unwrap();
+    let openusd = std::fs::read(fixtures().join(format!("{case}.usdc"))).unwrap();
+    assert_eq!(read_back(&openusd), text, "{case}: OpenUSD's file");
+
+    let tokens = TokenInterner::default();
+    let paths = PathInterner::default();
+    let reparsed = read_usda(text, LayerId(3), &tokens, &paths, &mut NoAssets);
+    let diagnostics: Vec<_> = reparsed.diagnostics().collect();
+    assert_eq!(
+        diagnostics.is_empty(),
+        record["open_text"]["accepted"] == Json::Bool(true),
+        "{case}: the text read as OpenUSD's parser reads it: {diagnostics:?}"
+    );
+
+    let read = read_usdc(&openusd, LayerId(1), &tokens, &paths, &mut NoAssets).expect("reads");
+    let ours = save_usdc(&read.layer, &tokens, &paths).unwrap_or_else(|e| panic!("{case}: {e}"));
+    assert_eq!(read_back(&ours), text, "{case}: our file");
+}
+
+/// Attribute connections to mappers, which OpenUSD's authoring and text
+/// parser refuse but its crate stores and reads as any path, read from
+/// OpenUSD's file, write as the text OpenUSD writes (which neither text
+/// reader then reads) and save as USDC that reads back the same.
+#[test]
+fn mapper_connections_read_and_save_as_openusd() {
+    assert_reads_as_openusd("mapper_connections");
 }

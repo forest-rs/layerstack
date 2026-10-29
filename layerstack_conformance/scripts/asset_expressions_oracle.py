@@ -16,7 +16,11 @@ The scene: `scene.usda` sets `expressionVariables` and sublayers
 `ref/ref.usda</Ref>`, whose layer sets variables too; `/Clipped` reads
 `tex` from the value clip `clips/clip.usda`, whose samples are
 expressions, evaluated with the variables of the node that introduces
-the clips and anchored to the clip layer. Each of those specs
+the clips and anchored to the clip layer. `/ClippedByExpression` names its
+clip and manifest with expressions: the stage reads the `clips` metadata
+evaluated, but the clip set opens the paths as its layer authors them
+(`Usd_ResolveClipInfo` reads the layer's field), which name no layer, so
+`tex` has no value. Each of those specs
 authors the same asset values: defaults, time samples and arrays whose
 paths are expressions (relative, search, absolute, conditional, empty,
 `None`, of another type, naming an unset variable, malformed) beside
@@ -38,8 +42,8 @@ is a warning naming the layer and spec.
 It records:
 
 - `read`: on each prim, each attribute's `Get()` and `Get(t)` at each
-  sample, `GetCustomData()` on the prim and each attribute, and
-  `GetAssetInfo()`; every asset path as its `authoredPath`,
+  sample, `GetCustomData()` on the prim and each attribute,
+  `GetAssetInfo()` and the `clips` metadata; every asset path as its `authoredPath`,
   `evaluatedPath` and `resolvedPath` (the fixture directory spelled
   `<dir>`), and the warnings each read issues (their text after `--`,
   without the stage's address).
@@ -128,6 +132,7 @@ LAYERS = {
     "scene.usda": """#usda 1.0
 (
     expressionVariables = {
+        string CLIP = "clip"
         string DIR = "maps"
         bool FLAG = 1
         string NAME = "wood"
@@ -154,6 +159,20 @@ def "Clipped" (
             asset manifestAssetPath = @./clips/manifest.usda@
             string primPath = "/Model"
             double2[] times = [(0, 0), (2, 2)]
+        }
+    }
+)
+{
+    custom asset tex
+}
+
+def "ClippedByExpression" (
+    clips = {
+        dictionary default = {
+            double2[] active = [(0, 0)]
+            asset[] assetPaths = [@`"./clips/${CLIP}.usda"`@]
+            asset manifestAssetPath = @`"./clips/manifest.usda"`@
+            string primPath = "/Model"
         }
     }
 )
@@ -206,7 +225,7 @@ FILES = [
     "ref/only.png", "clips/wood.png",
 ]
 
-PRIMS = ["/Clipped", "/Local", "/Root", "/Sub"]
+PRIMS = ["/Clipped", "/ClippedByExpression", "/Local", "/Root", "/Sub"]
 
 
 class Warnings:
@@ -281,6 +300,7 @@ def prim_record(prim, directory):
     return {
         "customData": read(directory, prim.GetCustomData),
         "assetInfo": read(directory, prim.GetAssetInfo),
+        "clips": read(directory, lambda: prim.GetMetadata("clips")),
         "attributes": attributes,
     }
 

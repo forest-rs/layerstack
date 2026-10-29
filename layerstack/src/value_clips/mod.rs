@@ -1344,6 +1344,22 @@ fn over(
     }
     result.into_iter().collect()
 }
+/// The value of the field `field` that the spec at `spec` in `layer`
+/// authors, as the layer holds it.
+fn authored_field<'s>(
+    store: &'s dyn LayerStore,
+    layer: LayerId,
+    spec: &SpecPath,
+    field: TokenId,
+) -> Option<&'s Value> {
+    let layer = store.layer(layer)?;
+    crate::prim_indexing::site::spec_at(layer, spec, store.paths())?
+        .fields()
+        .iter()
+        .find(|entry| entry.name == field)?
+        .value
+        .as_value()
+}
 fn definitions(
     owner: PathId,
     index: &PrimIndex,
@@ -1383,9 +1399,22 @@ fn definitions(
                 }
                 continue;
             }
-            let OpinionValue::Field(FieldValue::Value(Value::Dictionary(dictionary))) =
-                opinion.value()
-            else {
+            let OpinionValue::Field(FieldValue::Value(composed)) = opinion.value() else {
+                continue;
+            };
+            // Clip sets open the asset paths their layer authors: OpenUSD
+            // reads the `clips` field from the layer (`Usd_ResolveClipInfo`),
+            // so an expression there is not evaluated and names no layer,
+            // though the stage's metadata reads it evaluated
+            // ([`crate::asset::values`]). The composed value differs from
+            // the authored one only there.
+            let authored = authored_field(
+                store,
+                opinion.layer_id(),
+                &opinion.spec_path(),
+                opinion.field(),
+            );
+            let Value::Dictionary(dictionary) = authored.unwrap_or(composed) else {
                 continue;
             };
             let mut added = Vec::new();

@@ -9,7 +9,9 @@
 //! `/Local`, `/Sub` and `/Root` (which references `ref/ref.usda</Ref>`)
 //! author the same asset defaults, time samples, arrays and dictionary
 //! entries as expressions of every kind, and `/Clipped` reads expression
-//! samples from a value clip. It records what OpenUSD reads
+//! samples from a value clip, and `/ClippedByExpression` names its clip
+//! layers with expressions, which its clip set opens unevaluated. It
+//! records what OpenUSD reads
 //! for each (`authoredPath`, `evaluatedPath`, `resolvedPath`), the
 //! warnings each read issues, `UsdStage::Flatten`'s text, and
 //! `UsdUtils.FlattenLayerStack`'s.
@@ -24,8 +26,8 @@
 //! layer and with the message OpenUSD reports. The stage's
 //! flattened layer must save as OpenUSD's `UsdStage::Flatten` text, and
 //! `flatten_layer_stack`'s as `UsdUtils.FlattenLayerStack`'s, reporting
-//! the expressions OpenUSD warns about. The cases in `DIFFERING` are the
-//! ones layerstack does not yet do as OpenUSD does.
+//! the expressions OpenUSD warns about. The lines in `FLATTEN_DIFFERENCES`
+//! are the ones layerstack does not yet write as OpenUSD does.
 //!
 //! Spec: AOUSD Core §6.2 (the `asset` type), §9 (asset resolution).
 //! OpenUSD: `_AssetPathToStage` in `pxr/usd/usd/stage.cpp`,
@@ -37,7 +39,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use layerstack::edit::{EditTarget, Transaction};
-use layerstack::stage::flatten::{AssetPaths, FlattenRequirements};
+use layerstack::stage::flatten::{AssetPaths, FlattenRequirements, LossPolicy};
 use layerstack::value_clips::ClipIssueKind;
 use layerstack::{
     AssetResolveError, AssetResolver, CompositionError, ExpressionContext, FieldValue,
@@ -56,20 +58,47 @@ use serde_json::{Map, Value as Json, json};
 
 const ORACLE: &str = include_str!("../../fixtures/asset_expressions/oracle.json");
 
-/// The checks where layerstack does not yet do what OpenUSD does. Each
-/// must still differ, so that the list stays current.
+/// The lines of `UsdStage::Flatten`'s text that layerstack's flattened
+/// layer writes differently, OpenUSD's first, in order; every other line
+/// must be the same. The list must stay current: a line that comes to
+/// agree leaves it.
 ///
-/// `flatten`: OpenUSD's flatten writes an evaluated path only where
-/// anchoring changes it (`SdfAnchorAssetPaths` keeps the `SdfAssetPath`
-/// otherwise, and the text format writes its authored path), so an
-/// expression evaluating to an absolute path, or to a search path that
-/// names no file (the clip sample `` `"${UNSET}"` ``), is written as
-/// authored; and
-/// it stops anchoring an array at its first empty element (`return` in
+/// OpenUSD's flatten writes an evaluated path only where anchoring
+/// changes it (`SdfAnchorAssetPaths` keeps the `SdfAssetPath` otherwise,
+/// and the text format writes its authored path), so an expression that
+/// evaluates to an absolute path, or to a search path that names no file
+/// (the clip sample `` `"${UNSET}"` ``), is written as authored; and it
+/// stops anchoring an array at its first empty element (`return` in
 /// `_AnchorOrResolveAssetPaths`), so `[@@, @`"./${NAME}.png"`@]` is
 /// written as authored. Layerstack's composed values hold the evaluated
 /// paths, which it anchors and writes.
-const DIFFERING: &[&str] = &["flatten"];
+const FLATTEN_DIFFERENCES: &[(&str, &str)] = &[
+    (
+        r#"    custom asset absolute = @`"/textures/${NAME}.png"`@"#,
+        "    custom asset absolute = @/textures/wood.png@",
+    ),
+    (
+        r#"    custom asset[] gap = [@@, @`"./${NAME}.png"`@]"#,
+        "    custom asset[] gap = [@@, @<dir>/sub/wood.png@]",
+    ),
+    (
+        r#"    custom asset absolute = @`"/textures/${NAME}.png"`@"#,
+        "    custom asset absolute = @/textures/wood.png@",
+    ),
+    (
+        r#"    custom asset[] gap = [@@, @`"./${NAME}.png"`@]"#,
+        "    custom asset[] gap = [@@, @<dir>/wood.png@]",
+    ),
+    (
+        r#"    custom asset absolute = @`"/textures/${NAME}.png"`@"#,
+        "    custom asset absolute = @/textures/wood.png@",
+    ),
+    (
+        r#"    custom asset[] gap = [@@, @`"./${NAME}.png"`@]"#,
+        "    custom asset[] gap = [@@, @<dir>/ref/wood.png@]",
+    ),
+    (r#"        1: @`"${UNSET}"`@,"#, "        1: @${UNSET}@,"),
+];
 
 fn oracle() -> Json {
     let oracle: Json = serde_json::from_str(ORACLE).expect("oracle.json");
@@ -99,6 +128,7 @@ fn load() -> (LoadedStage, Stage) {
 fn asset_paths(recorded: &Json) -> Json {
     match recorded {
         Json::Null => Json::Null,
+        Json::String(_) | Json::Number(_) => recorded.clone(),
         Json::Array(items) => Json::Array(items.iter().map(asset_paths).collect()),
         Json::Object(map) if map.contains_key("dictionary") => {
             let entries: Map<String, Json> = map["dictionary"]
@@ -125,6 +155,8 @@ fn asset_paths(recorded: &Json) -> Json {
 fn encode(value: &Value) -> Json {
     match value {
         Value::Asset(path) => json!(&**path),
+        Value::String(text) => json!(&**text),
+        Value::Vec2d(pair) => json!(pair),
         Value::Dictionary(entries) => dictionary(entries),
         other => match other.array_ref() {
             Some(items) => Json::Array(items.iter().map(|item| encode(&item)).collect()),
@@ -167,6 +199,16 @@ fn the_stage_reads_the_paths_openusd_evaluates() {
                 "{path} {key}"
             );
         }
+        // The stage reads `clips` evaluated, whatever its clip sets open.
+        assert_eq!(
+            prim.metadata("clips")
+                .map_or(Json::Null, |r| match r.value {
+                    ResolvedValue::Dictionary(entries) => dictionary(&entries),
+                    other => panic!("not a dictionary: {other:?}"),
+                }),
+            asset_paths(&record["clips"]["value"]),
+            "{path} clips"
+        );
         let attributes = record["attributes"].as_object().unwrap();
         for property in prim.properties() {
             let Some(attribute) = property.as_attribute() else {
@@ -180,6 +222,17 @@ fn the_stage_reads_the_paths_openusd_evaluates() {
                     .map_or(Json::Null, |r| encode(&r.value)),
                 asset_paths(&expected["default"]["value"]),
                 "{path}.{name} default"
+            );
+            let times: Vec<f64> = expected["samples"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|sample| sample[0].as_f64().unwrap())
+                .collect();
+            assert_eq!(
+                attribute.sample_times(),
+                times,
+                "{path}.{name} sample times"
             );
             for sample in expected["samples"].as_array().unwrap() {
                 let time = sample[0].as_f64().unwrap();
@@ -199,7 +252,7 @@ fn the_stage_reads_the_paths_openusd_evaluates() {
             checked += 1;
         }
     }
-    assert_eq!(checked, 47, "every attribute is read");
+    assert_eq!(checked, 48, "every attribute is read");
 }
 
 /// Knows where each layer of the fixture is, and anchors a search path
@@ -325,7 +378,11 @@ fn expressions_openusd_warns_about_are_composition_errors() {
     let (loaded, stage) = load();
     let mut warned = BTreeSet::new();
     for record in oracle["read"].as_object().unwrap().values() {
-        let mut reads: Vec<&Json> = vec![&record["customData"], &record["assetInfo"]];
+        let mut reads: Vec<&Json> = vec![
+            &record["customData"],
+            &record["assetInfo"],
+            &record["clips"],
+        ];
         for attribute in record["attributes"].as_object().unwrap().values() {
             reads.push(&attribute["default"]);
             reads.push(&attribute["customData"]);
@@ -392,6 +449,8 @@ fn flatten_text(loaded: &mut LoadedStage, stage: &Stage) -> String {
     let resolver = locations(loaded);
     let requirements = FlattenRequirements {
         asset_paths: AssetPaths::Anchored(&resolver),
+        exact_animation: false,
+        losses: LossPolicy::RefuseRequired,
         ..FlattenRequirements::default()
     };
     let flat = stage
@@ -408,32 +467,26 @@ fn flatten_text(loaded: &mut LoadedStage, stage: &Stage) -> String {
     text.replace(&format!("{}/", fixtures().to_string_lossy()), "<dir>/")
 }
 
+/// The stage's flattened layer saves as OpenUSD's `UsdStage::Flatten`
+/// text, but for [`FLATTEN_DIFFERENCES`].
+///
+/// `/ClippedByExpression`'s clip set names no layer, which OpenUSD
+/// flattens to no samples; layerstack reports such a clip set lost
+/// (`Loss::ValueClips`) and refuses it under exact animation, so this
+/// flattens accepting that loss, and writes no samples either.
 #[test]
 fn flattening_writes_the_paths_openusd_writes() {
     let oracle = oracle();
-    let differs = DIFFERING.contains(&"flatten");
-    // A differing check panics, which aborts where panics cannot unwind
-    // (WASI), so it runs only where its panic can be caught.
-    if differs && cfg!(panic = "abort") {
-        return;
-    }
-    let result = std::panic::catch_unwind(|| {
-        let (mut loaded, stage) = load();
-        assert_eq!(
-            flatten_text(&mut loaded, &stage),
-            oracle["flatten"].as_str().unwrap()
-        );
-    });
-    assert_eq!(
-        result.is_ok(),
-        !differs,
-        "flatten {}",
-        if differs {
-            "agrees, so it leaves `DIFFERING`"
-        } else {
-            "differs from OpenUSD's"
-        }
-    );
+    let (mut loaded, stage) = load();
+    let text = flatten_text(&mut loaded, &stage);
+    let expected = oracle["flatten"].as_str().unwrap();
+    assert_eq!(text.lines().count(), expected.lines().count(), "{text}");
+    let differences: Vec<(&str, &str)> = expected
+        .lines()
+        .zip(text.lines())
+        .filter(|(openusd, layerstack)| openusd != layerstack)
+        .collect();
+    assert_eq!(differences, FLATTEN_DIFFERENCES);
 }
 
 /// The layer [`layerstack::flatten_layer_stack`] writes for the fixture,

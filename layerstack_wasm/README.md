@@ -77,7 +77,7 @@ change listeners and make no undo receipt (see `Stage::document_mut`).
 
 This crate and the TypeScript package are released together, at the same
 version. The records the module exchanges with the package are versioned by
-`ABI`, currently 2; a change to an export's arguments or a record's layout
+`ABI`, currently 3; a change to an export's arguments or a record's layout
 brings a new ABI, and the package refuses a module of another.
 
 ## Minimum supported Rust Version (MSRV)

@@ -1753,20 +1753,22 @@ def "Spare" (
     #[test]
     fn changes_drain_in_order_after_each_call() {
         let mut stage = open();
-        let loaded = stage.take_changes(true);
+        let nothing = || Wire::List(vec![Wire::List(Vec::new()); 3]);
+        let batches = |record: Wire| record.as_list().unwrap()[0].clone();
+        let loaded = batches(stage.take_changes(true));
         assert_eq!(
             loaded.as_list().unwrap()[0].as_list().unwrap()[2],
             Wire::List(vec![Wire::text("/Spare")]),
             "loading the supplied reference resynced its prim"
         );
-        assert_eq!(stage.take_changes(true), Wire::List(Vec::new()));
+        assert_eq!(stage.take_changes(true), nothing());
         let target = root(&stage);
         let mut batch = EditBatch::new();
         batch.define_prim("/Garden".into(), "def".into(), None);
         let three = numbers(&mut batch, "double", &[3.0]);
         batch.set_value("/World.size".into(), None, three);
         stage.apply(target.0, &mut batch).unwrap();
-        let changes = stage.take_changes(true);
+        let changes = batches(stage.take_changes(true));
         let batches = changes.as_list().unwrap();
         assert_eq!(batches.len(), 1);
         let fields = batches[0].as_list().unwrap();
@@ -1780,11 +1782,11 @@ def "Spare" (
                 || fields[2].as_list().unwrap().contains(&Wire::text("/World")),
             "{fields:?}"
         );
-        assert_eq!(stage.take_changes(true), Wire::List(Vec::new()));
+        assert_eq!(stage.take_changes(true), nothing());
         let mut batch = EditBatch::new();
         batch.set_active("/Garden".into(), false);
         stage.apply(target.0, &mut batch).unwrap();
-        assert_eq!(stage.take_changes(false), Wire::List(Vec::new()));
-        assert_eq!(stage.take_changes(true), Wire::List(Vec::new()), "consumed");
+        assert_eq!(stage.take_changes(false), nothing());
+        assert_eq!(stage.take_changes(true), nothing(), "consumed");
     }
 }

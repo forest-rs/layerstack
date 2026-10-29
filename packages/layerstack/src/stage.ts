@@ -46,7 +46,7 @@ export const PACKAGE_VERSION = "0.1.0";
  * The ABI this package speaks: the version of the records it exchanges
  * with the native module (`layerstack_wasm::ABI`).
  */
-export const ABI = 2;
+export const ABI = 3;
 
 /** The native stage the generated glue exports (`layerstack_wasm::Stage`). Borrowed only by same-module extensions. */
 export interface NativeStage extends Disposable {
@@ -58,6 +58,8 @@ export interface NativeStage extends Disposable {
   loadSupplied(): unknown;
   layers(): unknown;
   layerDirty(id: bigint): boolean;
+  setLayerMuted(id: bigint, muted: boolean): boolean;
+  mutedLayers(): unknown;
   status(): unknown;
   prim(path: string): unknown;
   children(path: string): string[];
@@ -466,8 +468,8 @@ export class Stage implements Disposable {
    * The layer with `id`, the same `Layer` every time: for an id that native
    * code returns, such as the source layer of a resolved value on a stage
    * opened with {@link OpenOptions.provenance}. Any layer the stage holds
-   * has one, a layer reached only through an arc included
-   * ({@link Stage.layers}).
+   * has one, a muted layer and a layer reached only through an arc
+   * included ({@link Stage.layers}).
    *
    * Throws `argument.invalid` when `id` is not a `bigint`, and
    * `layer.unknown` when the stage holds no layer with it (an asset it
@@ -485,6 +487,57 @@ export class Stage implements Disposable {
   isDirty(layer: Layer): boolean {
     this.#own("isDirty", layer);
     return this.#call("isDirty", (native) => native.layerDirty(layer.id));
+  }
+
+  /**
+   * Mutes `layer`, as OpenUSD's `UsdStage::MuteLayer` does: the stage
+   * recomposes without its opinions and its sublayers, wherever it reaches
+   * it (a sublayer, the session layer, a reference's or payload's layer),
+   * and change listeners hear it before this returns
+   * ({@link Changes.mutedLayers}). Returns whether its muting changed:
+   * `false` for a layer muted already.
+   *
+   * Muting is the stage's state, not an edit: it makes no receipt, and
+   * undo neither undoes it nor is blocked by it. The layer keeps its
+   * content and its unsaved edits, and composes again when unmuted.
+   * While it is muted, edits that target it fail with `layer.muted` and
+   * {@link Stage.save} without a layer skips it (`save(layer)` writes it).
+   * While any layer is muted, {@link Stage.move} and {@link Stage.delete}
+   * fail with `namespace.unsupported`: they could not repair the paths a
+   * muted layer names. Muting a layer the stage holds but does not use is
+   * not an error, as in OpenUSD; it changes no prim.
+   *
+   * Throws `layer.affinity` for another stage's layer and
+   * `mute.root_layer` for {@link Stage.root}, which cannot be muted.
+   */
+  muteLayer(layer: Layer): boolean {
+    return this.#setMuted("muteLayer", layer, true);
+  }
+
+  /**
+   * Unmutes `layer`, as OpenUSD's `UsdStage::UnmuteLayer` does: the stage
+   * recomposes with it again, and listeners hear it
+   * ({@link Changes.unmutedLayers}). Returns whether its muting changed:
+   * `false` for a layer not muted. Assets its content asks for that the
+   * stage has not read are unavailable afterwards:
+   * `await stage.resolve(source)`.
+   *
+   * Throws `layer.affinity` for another stage's layer.
+   */
+  unmuteLayer(layer: Layer): boolean {
+    return this.#setMuted("unmuteLayer", layer, false);
+  }
+
+  /** The layers the stage mutes, by id, as OpenUSD's `UsdStage::GetMutedLayers` lists them. Never the root. */
+  mutedLayers(): Layer[] {
+    const ids = this.#call("mutedLayers", (native) => native.mutedLayers()) as bigint[];
+    return ids.map((id) => this.#layer(id));
+  }
+
+  /** Whether the stage mutes `layer` (OpenUSD's `UsdStage::IsLayerMuted`). Throws `layer.affinity` for another stage's layer. */
+  isMuted(layer: Layer): boolean {
+    this.#own("isMuted", layer);
+    return this.mutedLayers().includes(layer);
   }
 
   /** The stage's state now: prims, composition errors, unavailable and unresolved assets. */
@@ -654,7 +707,8 @@ export class Stage implements Disposable {
   /**
    * Calls `listener` with each composed change, synchronously and in
    * order, after every call that changes the stage: {@link Stage.apply},
-   * {@link Stage.undo}, {@link Stage.loadSupplied} (and so
+   * {@link Stage.undo}, {@link Stage.muteLayer}, {@link Stage.unmuteLayer},
+   * {@link Stage.loadSupplied} (and so
    * {@link Stage.resolve}, once per round). A listener that throws does not
    * stop the others; its error is reported (`reportError`, else
    * `console.error`) as `listener.failed`. A listener may edit the stage;
@@ -813,9 +867,10 @@ export class Stage implements Disposable {
    * Native edits are heard once the live stage recomposes them: at once for
    * a transaction (`StageDocument::apply`) or a load, and for a queued control
    * (layer muting) or a direct store edit only after `StageDocument::synchronize`,
-   * which the extension calls before returning. Their layers become dirty
-   * ({@link Stage.isDirty}, {@link Stage.save}). They make no
-   * {@link EditReceipt}: undo covers only what {@link Stage.apply},
+   * which the extension calls before returning; muting is heard with the
+   * layers it muted and unmuted ({@link Changes.mutedLayers}). Edited
+   * layers become dirty ({@link Stage.isDirty}, {@link Stage.save}). Native
+   * edits make no {@link EditReceipt}: undo covers only what {@link Stage.apply},
    * {@link Stage.move} and {@link Stage.delete} did. A receipt whose inverse
    * covers a spec a native edit changed since (a value both set, or a prim
    * the receipt defined that native code then gave a child) fails with
@@ -861,6 +916,13 @@ export class Stage implements Disposable {
     return this.#call(operation, f);
   }
 
+  #setMuted(operation: string, layer: Layer, muted: boolean): boolean {
+    this.#own(operation, layer);
+    const changed = this.#call(operation, (native) => native.setLayerMuted(layer.id, muted));
+    this.#notify();
+    return changed;
+  }
+
   /** The layer edits go to: `target`, else the edit layer. */
   #target(operation: string, target: Layer | undefined): Layer {
     const layer = target ?? this.editLayer;
@@ -895,13 +957,18 @@ export class Stage implements Disposable {
     this.#dispatching = true;
     try {
       for (;;) {
-        const record = this.#call("onChange", (native) => native.takeChanges(this.#listeners.length > 0)) as
-          | Row[]
-          | null;
-        const batches =
-          record === null
-            ? [{ created: [], removed: [], resynced: ["/"], changedInfoOnly: [], properties: [] }]
-            : record.map(decodeChanges);
+        const [record, muted, unmuted] = this.#call("onChange", (native) =>
+          native.takeChanges(this.#listeners.length > 0),
+        ) as [Row[] | null, bigint[], bigint[]];
+        const batches = record === null ? [decodeChanges([[], [], ["/"], [], []])] : record.map(decodeChanges);
+        if (muted.length > 0 || unmuted.length > 0) {
+          const last = batches.pop() ?? decodeChanges([[], [], [], [], []]);
+          batches.push({
+            ...last,
+            mutedLayers: muted.map((id) => this.#layer(id)),
+            unmutedLayers: unmuted.map((id) => this.#layer(id)),
+          });
+        }
         if (batches.length === 0 || this.#listeners.length === 0) return;
         for (const changes of batches) {
           for (const listener of [...this.#listeners]) {
@@ -1259,6 +1326,8 @@ function decodeChanges(row: unknown): Changes {
       prim,
       fields: fields.map(([property, field, metadata]) => ({ property, field, metadata })),
     })),
+    mutedLayers: [],
+    unmutedLayers: [],
   };
 }
 

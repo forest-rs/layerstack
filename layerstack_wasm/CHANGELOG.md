@@ -9,6 +9,8 @@ Initial release.
 - Prim, attribute, relationship, metadata and value queries, value
   explanations, and composed numeric arrays viewed in place in the module's
   memory.
+- Layer muting, which is stage state and not an undoable edit, heard in the
+  change records with the layers muted and unmuted.
 - Atomic edits with undo and change records, saves of dirty layers, and
   exports of a layer, the flattened stage or a USDZ package.
 - An `rlib` for crates that link the bindings into a module of their own.

@@ -714,22 +714,9 @@ fn gather_dependent_moves(
                 continue;
             }
             // An arc authored in the local variants the prim selects hangs
-            // beneath their nodes rather than the root, and is implied to
-            // the root at the same site, through the identity map of those
-            // variants (`_EvalImpliedClasses`, `pxr/usd/pcp/primIndex.cpp`):
-            // the arc it is implied from is the one to follow.
-            let in_variants = node.parent() != Some(NodeId::ROOT);
-            if node.is_implied()
-                && node
-                    .origin()
-                    .and_then(|id| graph.node(id))
-                    .is_some_and(|origin| {
-                        origin.site() == node.site()
-                            && origin.layer_stack_identifier() == node.layer_stack_identifier()
-                            && origin.parent() != Some(NodeId::ROOT)
-                            && authored_in_local_variants(graph, origin)
-                    })
-            {
+            // beneath their nodes rather than the root, with a copy implied
+            // to the root.
+            if implied_from_local_variant(graph, node) {
                 continue;
             }
             if node.site().has_variant_selections()
@@ -783,27 +770,13 @@ fn gather_dependent_moves(
             // the arc's, each in its own branches: OpenUSD moves the specs
             // of every node on the way up to the root
             // (`_PrimIndexDependentNodeEditProcessor::_AddSpecMoveEdits`).
-            if in_variants {
-                let from_path = store.paths().resolve(from).clone();
-                let mut parent = node.parent();
-                while let Some(above) = parent.filter(|id| *id != NodeId::ROOT) {
-                    let above = graph.node(above).ok_or(NamespaceError::Unmappable)?;
-                    let within: Vec<VariantSelectionSite> = above
-                        .site()
-                        .variant_selection_sites()
-                        .filter(|site| {
-                            let host = store.paths().resolve(site.host_path);
-                            host.is_prefix_of(&from_path) && host.depth() < from_path.depth()
-                        })
-                        .collect();
-                    let moved = VariantMove {
-                        mapping: mapping.clone(),
-                        within,
-                    };
-                    if !moved.within.is_empty() && !variant_out.contains(&moved) {
-                        variant_out.push(moved);
-                    }
-                    parent = above.parent();
+            for within in branches_above(store, graph, node, from) {
+                let moved = VariantMove {
+                    mapping: mapping.clone(),
+                    within,
+                };
+                if !variant_out.contains(&moved) {
+                    variant_out.push(moved);
                 }
             }
             if !out
@@ -817,10 +790,65 @@ fn gather_dependent_moves(
     Ok(())
 }
 
+/// The branches holding the local specs of the prim at `path` (or an
+/// ancestor of it the edit maps) that `node`'s arc composes over, inside
+/// the variants above it: for each variant node between `node` and the
+/// root, the selections of its site hosted above `path`. Empty for an arc
+/// authored outside every variant.
+pub(super) fn branches_above(
+    store: &dyn LayerStore,
+    graph: &crate::PrimIndexGraph,
+    node: crate::prim_index_graph::PrimNode<'_>,
+    path: PathId,
+) -> Vec<Vec<VariantSelectionSite>> {
+    let path = store.paths().resolve(path);
+    let mut out = Vec::new();
+    let mut parent = node.parent();
+    while let Some(above) = parent
+        .filter(|id| *id != NodeId::ROOT)
+        .and_then(|id| graph.node(id))
+    {
+        let within: Vec<VariantSelectionSite> = above
+            .site()
+            .variant_selection_sites()
+            .filter(|site| {
+                let host = store.paths().resolve(site.host_path);
+                host.is_prefix_of(path) && host.depth() < path.depth()
+            })
+            .collect();
+        if !within.is_empty() && !out.contains(&within) {
+            out.push(within);
+        }
+        parent = above.parent();
+    }
+    out
+}
+
+/// Whether `node` is the copy of an arc authored in the local variants its
+/// prim selects that Pcp implies to the root at the same site, through
+/// those variants' identity map (`_EvalImpliedClasses`,
+/// `pxr/usd/pcp/primIndex.cpp`): the arc it is implied from is the one to
+/// follow.
+pub(super) fn implied_from_local_variant(
+    graph: &crate::PrimIndexGraph,
+    node: crate::prim_index_graph::PrimNode<'_>,
+) -> bool {
+    node.is_implied()
+        && node
+            .origin()
+            .and_then(|id| graph.node(id))
+            .is_some_and(|origin| {
+                origin.site() == node.site()
+                    && origin.layer_stack_identifier() == node.layer_stack_identifier()
+                    && origin.parent() != Some(NodeId::ROOT)
+                    && authored_in_local_variants(graph, origin)
+            })
+}
+
 /// Whether `node`'s arc is authored at the root's site or inside the local
 /// variants it selects: every node above it is a variant node of the root
 /// layer stack.
-fn authored_in_local_variants(
+pub(super) fn authored_in_local_variants(
     graph: &crate::PrimIndexGraph,
     node: crate::prim_index_graph::PrimNode<'_>,
 ) -> bool {

@@ -1287,3 +1287,60 @@ fn reparenting_lists_the_overs_it_creates_in_their_parents() {
     live.apply(&mut store, &applied.inverse).unwrap();
     assert_eq!(store.layers[&WEAK].prims[&root].authored_children, [a_name]);
 }
+
+/// A prim inheriting `/B` keeps its specs when `/B` goes and its inherit
+/// is dropped, but its override of `/B/Kid` goes with `/B/Kid`, and its
+/// opinion of `/B.x` with `/B.x`, as `UsdNamespaceEditor` deletes them
+/// (`PcpGatherDependentNamespaceEdits`).
+#[test]
+fn deletes_take_the_local_specs_that_compose_over_them_through_an_arc() {
+    let setup = || {
+        let mut store = InMemoryStore::default();
+        let b = store.path("/B");
+        let kid = store.path("/B/Kid");
+        let x = store.path("/X");
+        let x_kid = store.path("/X/Kid");
+        let name = store.tokens.intern("x");
+        let mut layer = Layer::new(ROOT);
+        layer.insert_prim(b, PrimSpec::def().with_property(name, attribute(1.0)));
+        layer.insert_prim(kid, PrimSpec::def());
+        let mut inherits = PrimSpec::def().with_property(name, attribute(2.0));
+        inherits.rare_mut().inherits.make_mut().prepend.push(b);
+        layer.insert_prim(x, inherits);
+        layer.insert_prim(x_kid, PrimSpec::over());
+        store.insert_layer(layer);
+        store
+    };
+    let delete = |object: &str| {
+        let mut store = setup();
+        let object = match object.split_once('.') {
+            Some(_) => TargetPath::Property(store.property_path(object)),
+            None => TargetPath::Prim(store.path(object)),
+        };
+        let mut live = LiveStage::compose(&mut store, ROOT, StageOptions::default());
+        let edit = NamespaceEdit::prepare_delete(
+            live.stage(),
+            &mut store,
+            &EditTarget::for_layer(ROOT),
+            object,
+        )
+        .unwrap();
+        live.apply(&mut store, edit.transaction()).unwrap();
+        store
+    };
+    let store = delete("/B/Kid");
+    let x_kid = store.path("/X/Kid");
+    assert!(store.layers[&ROOT].prims().get(&x_kid).is_none());
+    let store = delete("/B");
+    let (x, x_kid) = (store.path("/X"), store.path("/X/Kid"));
+    let spec = &store.layers[&ROOT].prims()[&x];
+    assert!(spec.inherits().is_empty(), "the inherit goes");
+    assert_eq!(spec.properties.len(), 1, "its own opinions stay");
+    assert!(
+        store.layers[&ROOT].prims().get(&x_kid).is_none(),
+        "the override of /B/Kid goes"
+    );
+    let store = delete("/B.x");
+    let x = store.path("/X");
+    assert!(store.layers[&ROOT].prims()[&x].properties.is_empty());
+}

@@ -54,7 +54,6 @@ const SWITCH: [(&str, &str, &str); 4] = [
 /// must still differ, so that the list stays current.
 const DIFFERING: &[&str] = &[
     "delete_targeted",
-    "delete_inherited_child",
     "rename_property_with_dormant_opinion",
     "reparent_targeted_property",
 ];

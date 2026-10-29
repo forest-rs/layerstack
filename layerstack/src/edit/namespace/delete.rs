@@ -108,11 +108,12 @@ fn prepare_with(
     let mut edited = HashMap::new();
     let mut dormant = HashMap::new();
     let indexes: Vec<&PreparationIndex> = index.into_iter().collect();
+    let dependents = dependents(stage, store, index, object);
     for id in &stack {
         let original = store.layer(*id).ok_or(NamespaceError::NoSuchObject)?;
         let mut layer = match index {
             Some(index) => {
-                let slots = working_slots(store, index, original, object);
+                let slots = working_slots(store, index, original, object, &dependents);
                 let copy = retained::working_copy(original, &slots);
                 copied.insert(*id, slots);
                 copy
@@ -123,7 +124,10 @@ fn prepare_with(
             *id,
             coordinated::dormant_variants(store, &[stage], &indexes, &layer),
         );
-        remove_specs(store, &mut layer, object);
+        remove_specs(store, &mut layer, object, &[]);
+        for (dependent, within) in &dependents {
+            remove_specs(store, &mut layer, *dependent, within);
+        }
         edited.insert(*id, layer);
     }
     let still_composed = composes(store, stage, root, &edited, &copied, index, object)?;
@@ -220,16 +224,19 @@ fn working_slots(
     index: &PreparationIndex,
     layer: &Layer,
     object: TargetPath,
+    dependents: &[(TargetPath, Vec<VariantSelectionSite>)],
 ) -> Vec<PathId> {
-    let prim = object.prim_path();
     let mut slots: HashSet<PathId> = layer_links(Some(index), layer).into_owned();
-    slots.extend(retained::slots_beneath(
-        store,
-        index.children(),
-        layer,
-        prim,
-    ));
-    slots.extend(retained::at_or_above(store, prim));
+    for object in core::iter::once(object).chain(dependents.iter().map(|(d, _)| *d)) {
+        let prim = object.prim_path();
+        slots.extend(retained::slots_beneath(
+            store,
+            index.children(),
+            layer,
+            prim,
+        ));
+        slots.extend(retained::at_or_above(store, prim));
+    }
     let mut slots: Vec<PathId> = slots
         .into_iter()
         .filter(|path| layer.prims.contains_key(path) || layer.variant_prims.contains_key(path))
@@ -329,23 +336,36 @@ fn composes(
     Ok(compose(&mut overlay))
 }
 
-/// Removes `object`'s specs from `layer`: for a prim, every spec at or
-/// beneath it outside its ancestors' variant branches (a branch of an
-/// ancestor is an arc, so its specs stay) and its name from its parent's
-/// children; for a property, the property of the prim's own spec.
-fn remove_specs(store: &mut dyn LayerStore, layer: &mut Layer, object: TargetPath) {
+/// Removes `object`'s specs inside the branches `within` (hosted above
+/// it; none for the specs outside every branch) from `layer`: for a prim,
+/// every spec at or beneath it there (a branch of an ancestor is an arc,
+/// so the specs of other branches stay) and its name from its parent's
+/// children; for a property, the property of the prim's spec there.
+fn remove_specs(
+    store: &mut dyn LayerStore,
+    layer: &mut Layer,
+    object: TargetPath,
+    within: &[VariantSelectionSite],
+) {
     let prim = object.prim_path();
     if let TargetPath::Property(property) = object {
-        if let Some(spec) = layer.prims.get_mut(&prim) {
-            spec.remove_property(property.property());
+        let loc = Loc::Prim {
+            path: prim,
+            sites: within.to_vec(),
+        };
+        if let Some(mut spec) = spec_at_mut(layer, &loc) {
+            spec.properties().retain(|p| p.name != property.property());
         }
         return;
     }
     let root = store.paths().resolve(prim).clone();
     let owned = |store: &dyn LayerStore, spec: &PrimSpec| {
-        spec.outer_variant_sites()
-            .iter()
-            .all(|site| root.is_prefix_of(store.paths().resolve(site.host_path)))
+        let sites = spec.outer_variant_sites();
+        sites.len() >= within.len()
+            && sites[..within.len()] == *within
+            && sites[within.len()..]
+                .iter()
+                .all(|site| root.is_prefix_of(store.paths().resolve(site.host_path)))
     };
     // Every path with a spec has one in `prims`; the specs of other
     // branches at it are in `variant_prims` (see `Layer::prims`), so the
@@ -380,6 +400,88 @@ fn remove_specs(store: &mut dyn LayerStore, layer: &mut Layer, object: TargetPat
             spec.children().retain(|child| *child != name);
         }
     }
+}
+
+/// The local specs that compose over the deleted namespace through an
+/// internal arc, which go with it: for each composed prim with a node at
+/// or beneath the deleted prim (for a property, at its prim) reached
+/// through an arc of the root layer stack authored at the prim, at an
+/// ancestor or in the local variants they select, that prim (or its
+/// property), outside every branch and inside each of those variants. A
+/// prim whose own arc reaches the deleted namespace keeps its specs: the
+/// repairs drop the arc, and the prims beneath it that composed over the
+/// deleted prim's children go, through the arc's nodes in their indexes.
+///
+/// OpenUSD: `PcpGatherDependentNamespaceEdits`, which deletes the specs at
+/// every node from such a node up to the root
+/// (`_PrimIndexDependentNodeEditProcessor::_AddSpecMoveEdits` with an
+/// empty new path), and for an arc to the deleted prim itself the specs
+/// over its children (`_ProcessDependentNodePathAtIntroductionChange`).
+/// Nested and implied arcs are not followed. AOUSD Core §8, §10.
+fn dependents(
+    stage: &Stage,
+    store: &dyn LayerStore,
+    index: Option<&PreparationIndex>,
+    object: TargetPath,
+) -> Vec<(TargetPath, Vec<VariantSelectionSite>)> {
+    let deleted = store.paths().resolve(object.prim_path()).clone();
+    let mut prims: Vec<PathId> = match index {
+        Some(index) => index.prims_with_nodes_beneath(object.prim_path()).collect(),
+        None => stage.prim_paths().collect(),
+    };
+    sort::sort_unstable(&mut prims);
+    prims.dedup();
+    let mut out: Vec<(TargetPath, Vec<VariantSelectionSite>)> = Vec::new();
+    for prim in prims {
+        let composed = store.paths().resolve(prim);
+        if deleted.is_prefix_of(composed) {
+            continue;
+        }
+        let Some(graph) = stage.explain_prim_graph(prim) else {
+            continue;
+        };
+        let Some(root) = graph.node(crate::NodeId::ROOT) else {
+            continue;
+        };
+        for (_, node) in graph.nodes() {
+            if matches!(
+                node.arc_kind(),
+                crate::ArcKind::Local | crate::ArcKind::Variants
+            ) || node.layer_stack_identifier() != root.layer_stack_identifier()
+                || node.site().has_variant_selections()
+                || coordinated::implied_from_local_variant(graph, node)
+                || node.is_implied()
+                || !coordinated::authored_in_local_variants(graph, node)
+            {
+                continue;
+            }
+            let site = store.paths().resolve(node.site().prim_path());
+            let dependent = match object {
+                TargetPath::Property(property)
+                    if node.site().prim_path() == property.prim_path() =>
+                {
+                    TargetPath::Property(PropertyPath::new(prim, property.property()))
+                }
+                // An arc authored at the prim itself is dropped instead.
+                TargetPath::Prim(_)
+                    if deleted.is_prefix_of(site)
+                        && usize::from(node.namespace_depth()) < composed.depth() =>
+                {
+                    TargetPath::Prim(prim)
+                }
+                _ => continue,
+            };
+            let mut branches = coordinated::branches_above(store, graph, node, prim);
+            branches.insert(0, Vec::new());
+            for within in branches {
+                let entry = (dependent, within);
+                if !out.contains(&entry) {
+                    out.push(entry);
+                }
+            }
+        }
+    }
+    out
 }
 
 /// Removes the prim `object`, which composes from across an arc after its

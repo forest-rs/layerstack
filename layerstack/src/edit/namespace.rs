@@ -376,7 +376,11 @@ impl NamespaceEdit {
     /// inherits, specializes, internal references and payloads, path
     /// expression terms (`/A /B` without `/A` is `/B`) and `defaultPrim`;
     /// those in a variant no composed prim index selects stay, as
-    /// `UsdNamespaceEditor` leaves them.
+    /// `UsdNamespaceEditor` leaves them. The local specs that compose over
+    /// the deleted namespace through an internal arc authored at an
+    /// ancestor (`/X/Kid` when `/X` inherits `/B` and `/B/Kid` goes), or
+    /// over a deleted property (`/X.x` for `/B.x`), go too, outside every
+    /// variant and inside the selected ones holding the arc.
     ///
     /// `target` must address a layer of the root layer stack without
     /// remapping paths ([`NamespaceError::Unmappable`]). The object must be

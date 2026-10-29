@@ -44,6 +44,10 @@
  *   USDZ member); open with `editLayer: "session"`.
  * - `layer.outside_stack`: the edits target a layer the stage reaches only
  *   through an arc.
+ * - `layer.muted`: the edits target a muted layer ({@link Stage.muteLayer});
+ *   unmute it to edit it.
+ * - `mute.root_layer`: {@link Stage.muteLayer} was given the root layer,
+ *   which cannot be muted.
  * - `namespace.*`: a {@link Stage.move} or {@link Stage.delete} that
  *   cannot be made; nothing changed: `namespace.invalid_paths` (not two
  *   distinct non-root prims or two properties), `namespace.not_found`,
@@ -91,6 +95,8 @@ export type ErrorCode =
   | "value.unsupported"
   | "layer.read_only"
   | "layer.outside_stack"
+  | "layer.muted"
+  | "mute.root_layer"
   | "flatten.failed"
   | "package.failed"
   | `edit.${string}`

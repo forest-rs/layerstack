@@ -315,8 +315,9 @@ export interface VariantSet {
 }
 
 /**
- * What one recomposition changed, as prim paths. A listener registered
- * with {@link Stage.onChange} receives one per recomposition, in order.
+ * What one recomposition changed, as prim paths, and the layers whose
+ * muting changed. A listener registered with {@link Stage.onChange}
+ * receives one per recomposition, in order.
  *
  * Re-read what a path covers: a `resynced` path's whole subtree may have
  * changed; a `changedInfoOnly` prim kept its children, but its fields and
@@ -338,6 +339,18 @@ export interface Changes {
    * field: re-read it.
    */
   readonly properties: readonly PrimPropertyChanges[];
+  /**
+   * Layers muted since the changes heard before
+   * ({@link Stage.muteLayer}, or natively through {@link Stage.withNative}),
+   * as OpenUSD's `UsdNotice::LayerMutingChanged` names them. A muting is
+   * heard once, on the last of the changes it is heard with, with the
+   * prims it recomposed; muting a layer the stage does not use changes no
+   * prim. Always empty in an {@link EditReceipt}'s changes: muting is not
+   * an edit.
+   */
+  readonly mutedLayers: readonly Layer[];
+  /** Layers unmuted since the changes heard before, as `mutedLayers`. */
+  readonly unmutedLayers: readonly Layer[];
 }
 
 /** The property fields that may have changed on one `changedInfoOnly` prim, ordered by property, then field. */

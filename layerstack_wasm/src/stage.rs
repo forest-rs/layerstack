@@ -4,6 +4,7 @@
 //! An open stage: loading, inspection, explanation and authoring.
 
 use alloc::{
+    collections::BTreeSet,
     format,
     string::{String, ToString},
     sync::Arc,
@@ -13,9 +14,10 @@ use alloc::{
 
 use layerstack::{
     ArcKind, ChangeCursor, Changes, CompositionLimits, Contribution, EditError, EditTarget,
-    FlattenError, FlattenRequirements, IgnoreCause, InMemoryStore, Layer, LayerId, NamespaceEdit,
-    NamespaceError, OpinionRole, PathId, PropertyField, ResolvedValue, Specifier, StageOptions,
-    TargetPath, Time, Transaction, ValueSource, Variability, asset_dependencies::DependencyTarget,
+    FlattenError, FlattenRequirements, IgnoreCause, InMemoryStore, Layer, LayerId, LayerMuteError,
+    NamespaceEdit, NamespaceError, OpinionRole, PathId, PropertyField, ResolvedValue, Specifier,
+    StageOptions, TargetPath, Time, Transaction, ValueSource, Variability,
+    asset_dependencies::DependencyTarget,
 };
 use layerstack_io::{
     ApplyError, FORMAT_ARGS_DELIMITER, ImportPolicy, IoError, LoadOptions, LoadReport, OpenOptions,
@@ -68,6 +70,9 @@ pub struct Stage {
     document: StageDocument<HostStorage>,
     /// The observer the wrapper drains after each mutating call.
     cursor: ChangeCursor,
+    /// The muted layers as the wrapper last heard them, to report the
+    /// layers muted and unmuted since with the next changes.
+    heard_muted: BTreeSet<LayerId>,
     /// What a receipt holds to name the stage that made it.
     identity: Arc<()>,
 }
@@ -156,6 +161,7 @@ impl Stage {
         Ok(Self {
             document,
             cursor,
+            heard_muted: BTreeSet::new(),
             identity: Arc::new(()),
         })
     }
@@ -177,7 +183,8 @@ impl Stage {
     /// layers edited in the store directly recompose, and are heard, only
     /// once [`StageDocument::synchronize`] runs: call it before returning to
     /// JavaScript. The TypeScript `Stage.withNative` calls its listeners
-    /// with those changes before it returns.
+    /// with those changes before it returns, layers whose muting changed
+    /// included (`mutedLayers`, `unmutedLayers`).
     ///
     /// Native edits make no [`EditReceipt`]: the [`layerstack::Applied`]
     /// inverse the caller gets back is its own to keep or drop. A receipt
@@ -291,6 +298,57 @@ impl Stage {
         let layer = LayerId(id);
         self.check_layer(layer)?;
         Ok(self.document.is_dirty(layer))
+    }
+
+    /// Mutes layer `id` (`muted` true) or unmutes it, and recomposes:
+    /// whether its muting changed. A muted layer contributes no opinions
+    /// and no sublayers wherever the stage reaches it, and the stage keeps
+    /// it as it is: its content, edits and dirty state stay, and
+    /// unmuting composes it again. Muting is the stage's state, not an
+    /// authored edit, so it makes no receipt.
+    ///
+    /// Any layer of the stage may be muted, one the stage reaches only
+    /// through an arc or does not use included, except the root
+    /// (`mute.root_layer`). Muting an unused layer changes no prim. While
+    /// it is muted, edits that target it fail with `layer.muted`, and
+    /// saving the stage skips it, as a layer the stage does not use.
+    ///
+    /// Spec: AOUSD Core composes the layer stacks (§10.3.1) of the layers
+    /// it is given and has no muting; this follows OpenUSD's
+    /// `UsdStage::MuteLayer` and `UsdStage::UnmuteLayer`.
+    ///
+    /// # Errors
+    ///
+    /// `layer.unknown` when the document has no such layer;
+    /// `mute.root_layer` when `muted` names the root.
+    pub(crate) fn set_layer_muted(&mut self, id: u64, muted: bool) -> Result<bool, Error> {
+        let layer = LayerId(id);
+        self.check_layer(layer)?;
+        let was = self.document.stage().stage().is_layer_muted(layer);
+        let (_, live) = self.document.parts_mut();
+        if muted {
+            live.mute_layer(layer).map_err(mute_error)?;
+        } else {
+            live.unmute_layer(layer);
+        }
+        self.document.synchronize();
+        Ok(self.document.stage().stage().is_layer_muted(layer) != was)
+    }
+
+    /// The ids of the layers the composed stage mutes, ascending
+    /// (`layerstack::Stage::muted_layers`): what was muted and composed,
+    /// not a control queued since and not yet synchronized.
+    #[must_use]
+    pub(crate) fn muted_layers(&self) -> Wire {
+        Wire::List(
+            self.document
+                .stage()
+                .stage()
+                .muted_layers()
+                .iter()
+                .map(|id| Wire::UInt64(id.0))
+                .collect(),
+        )
     }
 
     /// The stage's state now: `[prims, compositionErrors, unresolved]`,
@@ -926,18 +984,24 @@ impl Stage {
             .map_err(|error| error.at_path(path))
     }
 
-    /// The composed changes since the last call, one batch per
-    /// recomposition, oldest first, each
+    /// The composed changes since the last call:
+    /// `[batches, mutedLayers, unmutedLayers]`.
+    ///
+    /// `batches` holds one batch per recomposition, oldest first, each a
     /// `[created, removed, resynced, changedInfoOnly, properties]` record
-    /// (`changes_record`); an empty list when nothing changed, and `null` when
-    /// the history the cursor needs was evicted (more than the history
-    /// budget changed in one call), which the wrapper reports as a
-    /// resync of `/`. With `render` false the batches are consumed
-    /// unrendered and the list is empty.
+    /// (`changes_record`): an empty list when nothing changed, and `null`
+    /// when the history the cursor needs was evicted (more than the
+    /// history budget changed in one call), which the wrapper reports as a
+    /// resync of `/`. `mutedLayers` and `unmutedLayers` are the ids of the
+    /// layers the composed stage mutes now and did not at the last call,
+    /// and the reverse ([`Self::muted_layers`]), ascending: a mute or
+    /// unmute the call sees once it is composed, whoever requested it.
+    /// OpenUSD: `UsdNotice::LayerMutingChanged`. With `render` false the
+    /// batches are consumed unrendered and the lists are empty.
     #[must_use]
     pub(crate) fn take_changes(&mut self, render: bool) -> Wire {
         let store = self.document.store();
-        match self.document.stage().changes_since(&mut self.cursor) {
+        let batches = match self.document.stage().changes_since(&mut self.cursor) {
             Ok(batches) => Wire::List(
                 batches
                     .filter(|_| render)
@@ -945,7 +1009,22 @@ impl Stage {
                     .collect(),
             ),
             Err(_) => Wire::Null,
-        }
+        };
+        let muted = self.document.stage().stage().muted_layers();
+        let ids = |ids: &mut dyn Iterator<Item = &LayerId>| {
+            Wire::List(
+                ids.filter(|_| render)
+                    .map(|id| Wire::UInt64(id.0))
+                    .collect(),
+            )
+        };
+        let record = Wire::List(vec![
+            batches,
+            ids(&mut muted.difference(&self.heard_muted)),
+            ids(&mut self.heard_muted.difference(muted)),
+        ]);
+        self.heard_muted.clone_from(muted);
+        record
     }
 
     fn check_target(&self, target: LayerId) -> Result<(), Error> {
@@ -965,6 +1044,12 @@ impl Stage {
                 "layer.read_only",
                 "the layer cannot be saved, so it is not edited: open the stage with a session \
                  layer (editLayer: \"session\") and edit that",
+            )));
+        }
+        if self.document.stage().stage().is_layer_muted(target) {
+            return Err(named(Error::new(
+                "layer.muted",
+                "the layer is muted, so the stage does not compose it: unmute it to edit it",
             )));
         }
         if !self
@@ -1440,6 +1525,18 @@ impl Stage {
         Ok(self.layer_dirty(id)?)
     }
 
+    /// Mutes or unmutes a layer (`set_layer_muted`, as documented in `stage.rs`).
+    #[wasm_bindgen(js_name = setLayerMuted)]
+    pub fn js_set_layer_muted(&mut self, id: u64, muted: bool) -> Result<bool, JsValue> {
+        Ok(self.set_layer_muted(id, muted)?)
+    }
+
+    /// The record `muted_layers` builds, as documented in `stage.rs`.
+    #[wasm_bindgen(js_name = mutedLayers)]
+    pub fn js_muted_layers(&self) -> JsValue {
+        self.muted_layers().into()
+    }
+
     /// The record `status` builds, as documented in `stage.rs`.
     #[wasm_bindgen(js_name = status)]
     pub fn js_status(&self) -> JsValue {
@@ -1574,6 +1671,18 @@ fn changes_record(changes: &Changes, store: &InMemoryStore) -> Wire {
         paths(&changes.changed_info_only),
         Wire::List(properties),
     ])
+}
+
+/// The error of a mute request the live stage refuses: `mute.root_layer`,
+/// or `mute.conflicting_request` for a layer both muted and unmuted in
+/// one request, which the bindings never make.
+fn mute_error(error: LayerMuteError) -> Error {
+    match error {
+        LayerMuteError::RootLayer => {
+            Error::new("mute.root_layer", "the root layer cannot be muted")
+        }
+        _ => Error::new("mute.conflicting_request", error.to_string()),
+    }
 }
 
 /// `[identifier, assetPath, anchor, usedBy, prims]` for an unavailable
@@ -2410,9 +2519,7 @@ def Mesh "Rock" {
         txn.create_prim(EditTarget::for_layer(root).prim(mesh), Specifier::Def, None);
         stage.document_mut().apply(&txn).unwrap();
         let created = |changes: &Wire| -> Vec<String> {
-            changes
-                .as_list()
-                .unwrap()
+            batches(changes)
                 .iter()
                 .flat_map(|batch| batch.as_list().unwrap()[0].as_list().unwrap().iter())
                 .map(|path| path.as_text().unwrap().to_string())
@@ -2430,12 +2537,13 @@ def Mesh "Rock" {
             .unwrap();
         let (_, live) = stage.document_mut().parts_mut();
         assert!(live.mute_layer(edit).unwrap());
-        assert!(
-            stage.take_changes(true).as_list().unwrap().is_empty(),
-            "nothing recomposed yet"
-        );
+        let unheard = stage.take_changes(true);
+        assert!(batches(&unheard).is_empty(), "nothing recomposed yet");
+        assert!(muting(&unheard).0.is_empty(), "nor muted");
         stage.document_mut().synchronize();
-        assert!(!stage.take_changes(true).as_list().unwrap().is_empty());
+        let heard = stage.take_changes(true);
+        assert!(!batches(&heard).is_empty());
+        assert_eq!(muting(&heard), (vec![edit.0], vec![]));
         assert_eq!(
             sources(&stage, &["points"]),
             [Some([
@@ -2444,6 +2552,196 @@ def Mesh "Rock" {
                 String::from("points"),
             ])],
             "the muted sublayer no longer gives the points"
+        );
+    }
+
+    /// The batches of a `take_changes` record.
+    fn batches(record: &Wire) -> &[Wire] {
+        record.as_list().unwrap()[0].as_list().unwrap()
+    }
+
+    /// The layers a `take_changes` record says were muted and unmuted.
+    fn muting(record: &Wire) -> (Vec<u64>, Vec<u64>) {
+        let ids = |wire: &Wire| -> Vec<u64> {
+            wire.as_list()
+                .unwrap()
+                .iter()
+                .map(|id| match id {
+                    Wire::UInt64(id) => *id,
+                    other => panic!("{other:?}"),
+                })
+                .collect()
+        };
+        let record = record.as_list().unwrap();
+        (ids(&record[1]), ids(&record[2]))
+    }
+
+    fn layer_named(stage: &Stage, identifier: &str) -> LayerId {
+        stage
+            .document()
+            .store()
+            .layer_ids()
+            .into_iter()
+            .find(|&id| stage.document().identifier(id) == Some(identifier))
+            .unwrap()
+    }
+
+    fn has_attribute(stage: &Stage, path: &str) -> bool {
+        stage.attribute(path).unwrap() != Wire::Null
+    }
+
+    #[test]
+    fn muting_a_sublayer_hides_it_until_unmuted_and_is_heard() {
+        let mut stage = resolved();
+        let _ = stage.take_changes(false);
+        let sub = layer_named(&stage, "sub.usda");
+        assert!(has_attribute(&stage, "/Ball.serial"));
+
+        assert!(stage.set_layer_muted(sub.0, true).unwrap());
+        assert!(
+            !has_attribute(&stage, "/Ball.serial"),
+            "the muted sublayer gives no opinions"
+        );
+        assert_eq!(stage.muted_layers(), Wire::List(vec![Wire::UInt64(sub.0)]));
+        let heard = stage.take_changes(true);
+        assert!(!batches(&heard).is_empty(), "the stage recomposed");
+        assert_eq!(muting(&heard), (vec![sub.0], vec![]));
+        assert!(stage.unavailable().as_list().unwrap().is_empty());
+
+        assert!(
+            !stage.set_layer_muted(sub.0, true).unwrap(),
+            "already muted"
+        );
+        let quiet = stage.take_changes(true);
+        assert!(batches(&quiet).is_empty());
+        assert_eq!(muting(&quiet), (vec![], vec![]));
+
+        assert!(stage.set_layer_muted(sub.0, false).unwrap());
+        assert!(
+            has_attribute(&stage, "/Ball.serial"),
+            "unmuted, it composes again"
+        );
+        assert_eq!(stage.muted_layers(), Wire::List(vec![]));
+        assert_eq!(muting(&stage.take_changes(true)), (vec![], vec![sub.0]));
+        assert!(!stage.set_layer_muted(sub.0, false).unwrap(), "not muted");
+    }
+
+    #[test]
+    fn the_root_and_unknown_layers_cannot_be_muted() {
+        let mut stage = resolved();
+        let root = stage.document().root_layer();
+        let error = stage.set_layer_muted(root.0, true).unwrap_err();
+        assert_eq!(error.code, "mute.root_layer");
+        assert!(
+            !stage.set_layer_muted(root.0, false).unwrap(),
+            "unmuting the root, never muted, changes nothing"
+        );
+        assert_eq!(stage.muted_layers(), Wire::List(vec![]));
+        let error = stage.set_layer_muted(u64::MAX, true).unwrap_err();
+        assert_eq!(error.code, "layer.unknown");
+    }
+
+    #[test]
+    fn a_muted_layer_keeps_its_content_but_is_not_edited_through_the_stage() {
+        let mut stage = resolved();
+        let sub = layer_named(&stage, "sub.usda");
+        let root = stage.document().root_layer();
+        set_size(&mut stage, sub, 5.0);
+        let undo = {
+            let mut batch = EditBatch::new();
+            let slot = batch.value_numbers("double".into(), vec![6.0]);
+            batch.set_value("/Ball.size".into(), None, slot);
+            stage.apply(root.0, &mut batch).unwrap()
+        };
+        assert!(stage.set_layer_muted(sub.0, true).unwrap());
+        assert!(stage.layer_dirty(sub.0).unwrap(), "muting keeps the edit");
+        let written = |record: &Wire| -> Vec<String> {
+            record.as_list().unwrap()[0]
+                .as_list()
+                .unwrap()
+                .iter()
+                .map(|row| row.as_list().unwrap()[1].as_text().unwrap().to_string())
+                .collect()
+        };
+        assert_eq!(
+            written(&stage.save(None).unwrap()),
+            ["scene.usda"],
+            "saving the stage skips the layer it does not use"
+        );
+        assert!(stage.layer_dirty(sub.0).unwrap());
+        assert_eq!(
+            written(&stage.save(Some(sub.0)).unwrap()),
+            ["sub.usda"],
+            "saving it by name writes it"
+        );
+        let mut batch = EditBatch::new();
+        let slot = batch.value_numbers("double".into(), vec![1.0]);
+        batch.set_value("/Ball.size".into(), None, slot);
+        let error = stage.apply(sub.0, &mut batch).unwrap_err();
+        assert_eq!(error.code, "layer.muted");
+        assert_eq!(error.identifier.as_deref(), Some("sub.usda"));
+
+        // Muting is not an edit: a receipt made before it still undoes.
+        let mut undo = undo;
+        stage.undo(&mut undo).unwrap();
+        assert_eq!(
+            size(&stage),
+            stage.get("/Base.size", None).unwrap(),
+            "the root's edit undone, the muted sublayer's 5 is not composed"
+        );
+        assert!(stage.set_layer_muted(sub.0, false).unwrap());
+        assert_eq!(
+            size(&stage),
+            Wire::List(vec![
+                Wire::text("double"),
+                Wire::text("s"),
+                Wire::Number(5.0)
+            ]),
+            "unmuted, its edit composes again"
+        );
+    }
+
+    #[test]
+    fn a_referenced_layer_and_the_session_layer_can_be_muted() {
+        let mut stage = resolved();
+        let ball = layer_named(&stage, "parts/ball.usda");
+        assert!(has_attribute(&stage, "/Ball.points"));
+        assert!(stage.set_layer_muted(ball.0, true).unwrap());
+        assert!(
+            !has_attribute(&stage, "/Ball.points"),
+            "the reference to the muted layer contributes nothing"
+        );
+        assert!(
+            stage.unavailable().as_list().unwrap().is_empty(),
+            "nor is it wanted"
+        );
+
+        let mut stage = Stage::open(
+            "scene.usda",
+            ROOT.as_bytes().to_vec(),
+            false,
+            true,
+            BROWSER_LIMITS,
+        )
+        .unwrap();
+        let session = stage.edit_layer().unwrap();
+        set_size(&mut stage, session, 9.0);
+        assert!(stage.set_layer_muted(session.0, true).unwrap());
+        assert_eq!(
+            size(&stage),
+            Wire::List(vec![
+                Wire::text("double"),
+                Wire::text("s"),
+                Wire::Number(2.0)
+            ]),
+            "the muted session layer's opinion is gone"
+        );
+        let mut batch = EditBatch::new();
+        let slot = batch.value_numbers("double".into(), vec![1.0]);
+        batch.set_value("/Ball.size".into(), None, slot);
+        assert_eq!(
+            stage.apply(session.0, &mut batch).unwrap_err().code,
+            "layer.muted"
         );
     }
 }

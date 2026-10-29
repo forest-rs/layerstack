@@ -1799,27 +1799,26 @@ fn planned_definition(
             .filter(|&ty| ty != TokenId::EMPTY && Some(ty) != any_type),
         SpecRef::Variant(_) => None,
     });
+    let concrete = |ty| {
+        schemas
+            .schema(ty)
+            .is_some_and(|schema| schema.kind == SchemaKind::ConcreteTyped)
+    };
     let type_name = match type_name {
-        Some(ty)
-            if schemas
-                .schema(ty)
-                .is_none_or(|s| s.kind != SchemaKind::ConcreteTyped) =>
-        {
-            stage
-                .fallback_type_map(store)
-                .get(&ty)
-                .copied()
-                .or(Some(ty))
-        }
+        Some(ty) if !concrete(ty) => stage
+            .fallback_type_map(store)
+            .get(&ty)
+            .copied()
+            .or(Some(ty)),
         other => other,
     };
-    let lists =
-        specs.iter().filter_map(
-            |spec| match crate::doc::get_field(spec.fields(), &api_schemas?) {
-                Some(FieldValue::TokenListOp(list)) => Some(&**list),
-                _ => None,
-            },
-        );
+    let lists = specs.iter().filter_map(|spec| {
+        let field = crate::doc::get_field(spec.fields(), &api_schemas?);
+        match field {
+            Some(FieldValue::TokenListOp(list)) => Some(&**list),
+            _ => None,
+        }
+    });
     let applied = resolve_list_chain::<TokenId>(&[], lists);
     schemas.property_definition(type_name, &applied, name, tokens)
 }

@@ -48,6 +48,9 @@ FIXTURES = os.path.normpath(os.path.join(HERE, "..", "fixtures", "transaction_sc
 
 SCENE = '''#usda 1.0
 (
+    fallbackPrimTypes = {
+        token[] RoundThing = ["Sphere"]
+    }
     subLayers = [
         @weak.usda@
     ]
@@ -122,6 +125,10 @@ CASES = [
         ("define", "/New", "Sphere"),
         ("set", "/New.radius", {"double": 2.0}),
         ("sample", "/New.radius", 1.0, {"double": 3.0}),
+    ]),
+    ("define_fallback_type_then_set", "scene.usda", [
+        ("define", "/New", "RoundThing"),
+        ("set", "/New.radius", {"double": 2.0}),
     ]),
     ("retype_then_set", "scene.usda", [
         ("set_type", "/Cube", "Sphere"),

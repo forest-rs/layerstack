@@ -83,6 +83,7 @@
     "properties": [
      "c",
      "r",
+     "referenced",
      "toR"
     ],
     "targets": {
@@ -90,6 +91,9 @@
       "/World/R.b[/World/R/Part].d",
       "/World/R/Part.b[/World/R].d",
       "/World/R/Part.x.mapper[/World/R/Part.y]"
+     ],
+     "referenced": [
+      "/World/R/Part"
      ],
      "toR": [
       "/World/R.b[/World/R/Part].d",
@@ -125,6 +129,7 @@
      "before",
      "both",
      "conn",
+     "deleted",
      "dependent",
      "edits",
      "expr",
@@ -151,6 +156,7 @@
       "/World/A.b[/World/A/Kid].d",
       "/World/A.x.mapper[/World/A.x]"
      ],
+     "deleted": [],
      "dependent": [
       "/World/A/Kid",
       "/World/C.y",
@@ -200,9 +206,9 @@
    }
   },
   "layers": {
-   "asset.usda": "#usda 1.0\n(\n    defaultPrim = \"Asset\"\n)\n\ndef \"Asset\"\n{\n    int c.connect = </Asset/Part.b[/Asset].d>\n    rel r = [\n        </Asset.b[/Asset/Part].d>,\n        </Asset/Part.b[/Asset].d>,\n        </Asset/Part.x.mapper[/Asset/Part.y]>,\n    ]\n\n    def \"Part\"\n    {\n        int x = 1\n        int y = 1\n    }\n}\n\n",
-   "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\ndef \"World\"\n{\n    def \"A\"\n    {\n        rel b = </World/C>\n        int x = 1\n\n        def \"Kid\"\n        {\n            rel b = </World/C>\n        }\n    }\n\n    def \"C\"\n    {\n        rel b = </World/A>\n        int y = 1\n    }\n\n    def \"Group\"\n    {\n    }\n\n    def \"User\"\n    {\n        rel across\n        rel across.default = </World/C.b[/World/A/Kid].d>        \n        rel after = [\n            </World/A.b[/World/C].x>,\n            </World/C.b[/World/A].y>,\n        ]\n        rel before = [\n            </World/A.b[/World/C].d>,\n            </World/A/Kid.b[/World/C].d>,\n            </World/A.x.mapper[/World/C.y]>,\n        ]\n        rel both = [\n            </World/A.b[/World/A/Kid].d>,\n            </World/A.x.mapper[/World/A.x]>,\n        ]\n        int conn.connect = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n            </World/A/Kid.b[/World/C].d>,\n        ]\n        rel dependent = [\n            </World/A/Kid>,\n            </World/C.y>,\n            </World/A.x>,\n        ]\n        rel dependent.default = </World/C.b[/World/A/Kid].d>        \n        delete rel edits = </World/C.b[/World/A].d>\n        prepend rel edits = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n        append rel edits = </World/A.x.mapper[/World/C.y]>\n        reorder rel edits = [\n            </World/C.b[/World/A].d>,\n            </World/A.b[/World/C].d>,\n        ]\n        pathExpression expr = \"/World/A/Kid /World/C.y /World/A.x\"\n        rel independent = </World/Group>\n        rel independent.default = </World/C.b[/World/A/Kid].d>        \n        rel inside = [\n            </World/C.b[/World/A].d>,\n            </World/C.b[/World/A/Kid].d>,\n            </World/C.y.mapper[/World/A.x]>,\n            </World/C.b[/World/C.b[/World/A].d].e>,\n        ]\n        delete int listed.connect = </World/A/Kid.b[/World/C].d>\n        prepend int listed.connect = </World/A.b[/World/A/Kid].d>\n        append int listed.connect = </World/C.b[/World/A].d>\n        rel relative = </World/A.b[../C].d>\n    }\n\n    def \"Lone\"\n    {\n        rel only\n        rel only.default = </World/C.b[/World/A/Kid].d>        \n    }\n\n    def \"V\" (\n        variants = {\n            string s = \"on\"\n        }\n        prepend variantSets = \"s\"\n    )\n    {\n        variantSet \"s\" = {\n            \"off\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n            \"on\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n        }\n    }\n\n    def \"R\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n        rel toR = [\n            </World/R.b[/World/R/Part].d>,\n            </World/R/Part.x.mapper[/World/A.x]>,\n        ]\n    }\n}\n\n",
-   "sub.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"User\"\n    {\n        rel across = </World/A/Kid>\n        rel sub = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n    }\n}\n\n"
+   "asset.usda": "#usda 1.0\n(\n    defaultPrim = \"Asset\"\n)\n\ndef \"Asset\"\n{\n    int c.connect = </Asset/Part.b[/Asset].d>\n    rel r = [\n        </Asset.b[/Asset/Part].d>,\n        </Asset/Part.b[/Asset].d>,\n        </Asset/Part.x.mapper[/Asset/Part.y]>,\n    ]\n    rel referenced = </Asset/Part>\n\n    def \"Part\"\n    {\n        int x = 1\n        int y = 1\n    }\n}\n\n",
+   "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\ndef \"World\"\n{\n    def \"A\"\n    {\n        rel b = </World/C>\n        int x = 1\n\n        def \"Kid\"\n        {\n            rel b = </World/C>\n        }\n    }\n\n    def \"C\"\n    {\n        rel b = </World/A>\n        int y = 1\n    }\n\n    def \"Group\"\n    {\n    }\n\n    def \"User\"\n    {\n        rel across\n        rel across.default = </World/C.b[/World/A/Kid].d>        \n        rel after = [\n            </World/A.b[/World/C].x>,\n            </World/C.b[/World/A].y>,\n        ]\n        rel before = [\n            </World/A.b[/World/C].d>,\n            </World/A/Kid.b[/World/C].d>,\n            </World/A.x.mapper[/World/C.y]>,\n        ]\n        rel both = [\n            </World/A.b[/World/A/Kid].d>,\n            </World/A.x.mapper[/World/A.x]>,\n        ]\n        int conn.connect = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n            </World/A/Kid.b[/World/C].d>,\n        ]\n        rel deleted\n        rel deleted.default = </World/C.b[/World/A/Kid].d>        \n        rel dependent = [\n            </World/A/Kid>,\n            </World/C.y>,\n            </World/A.x>,\n        ]\n        rel dependent.default = </World/C.b[/World/A/Kid].d>        \n        delete rel edits = </World/C.b[/World/A].d>\n        prepend rel edits = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n        append rel edits = </World/A.x.mapper[/World/C.y]>\n        reorder rel edits = [\n            </World/C.b[/World/A].d>,\n            </World/A.b[/World/C].d>,\n        ]\n        pathExpression expr = \"/World/A/Kid /World/C.y /World/A.x\"\n        rel independent = </World/Group>\n        rel independent.default = </World/C.b[/World/A/Kid].d>        \n        rel inside = [\n            </World/C.b[/World/A].d>,\n            </World/C.b[/World/A/Kid].d>,\n            </World/C.y.mapper[/World/A.x]>,\n            </World/C.b[/World/C.b[/World/A].d].e>,\n        ]\n        delete int listed.connect = </World/A/Kid.b[/World/C].d>\n        prepend int listed.connect = </World/A.b[/World/A/Kid].d>\n        append int listed.connect = </World/C.b[/World/A].d>\n        rel relative = </World/A.b[../C].d>\n    }\n\n    def \"Lone\"\n    {\n        rel only\n        rel only.default = </World/C.b[/World/A/Kid].d>        \n    }\n\n    def \"V\" (\n        variants = {\n            string s = \"on\"\n        }\n        prepend variantSets = \"s\"\n    )\n    {\n        variantSet \"s\" = {\n            \"off\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n            \"on\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n        }\n    }\n\n    def \"R\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n        rel referenced\n        rel referenced.default = </World/C.b[/World/R/Part].d>        \n        rel toR = [\n            </World/R.b[/World/R/Part].d>,\n            </World/R/Part.x.mapper[/World/A.x]>,\n        ]\n    }\n}\n\n",
+   "sub.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"User\"\n    {\n        rel across = </World/A/Kid>\n        delete rel deleted = </World/A/Kid>\n        rel sub = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n    }\n}\n\n"
   }
  },
  "cases": [
@@ -292,6 +298,7 @@
      "properties": [
       "c",
       "r",
+      "referenced",
       "toR"
      ],
      "targets": {
@@ -299,6 +306,9 @@
        "/World/R.b[/World/R/Part].d",
        "/World/R/Part.b[/World/R].d",
        "/World/R/Part.x.mapper[/World/R/Part.y]"
+      ],
+      "referenced": [
+       "/World/R/Part"
       ],
       "toR": [
        "/World/R.b[/World/R/Part].d",
@@ -334,6 +344,7 @@
       "before",
       "both",
       "conn",
+      "deleted",
       "dependent",
       "edits",
       "expr",
@@ -360,6 +371,7 @@
        "/World/A2.b[/World/A2/Kid].d",
        "/World/A2.x.mapper[/World/A2.x]"
       ],
+      "deleted": [],
       "dependent": [
        "/World/A2/Kid",
        "/World/C.y",
@@ -411,9 +423,9 @@
    "destination": "/World/A2",
    "errors": [],
    "layers": {
-    "asset.usda": "#usda 1.0\n(\n    defaultPrim = \"Asset\"\n)\n\ndef \"Asset\"\n{\n    int c.connect = </Asset/Part.b[/Asset].d>\n    rel r = [\n        </Asset.b[/Asset/Part].d>,\n        </Asset/Part.b[/Asset].d>,\n        </Asset/Part.x.mapper[/Asset/Part.y]>,\n    ]\n\n    def \"Part\"\n    {\n        int x = 1\n        int y = 1\n    }\n}\n\n",
-    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\ndef \"World\"\n{\n    def \"A2\"\n    {\n        rel b = </World/C>\n        int x = 1\n\n        def \"Kid\"\n        {\n            rel b = </World/C>\n        }\n    }\n\n    def \"C\"\n    {\n        rel b = </World/A2>\n        int y = 1\n    }\n\n    def \"Group\"\n    {\n    }\n\n    def \"User\"\n    {\n        rel across\n        rel across.default = </World/C.b[/World/A2/Kid].d>        \n        rel after = [\n            </World/A2.b[/World/C].x>,\n            </World/C.b[/World/A].y>,\n        ]\n        rel before = [\n            </World/A2.b[/World/C].d>,\n            </World/A2/Kid.b[/World/C].d>,\n            </World/A2.x.mapper[/World/C.y]>,\n        ]\n        rel both = [\n            </World/A2.b[/World/A2/Kid].d>,\n            </World/A2.x.mapper[/World/A2.x]>,\n        ]\n        int conn.connect = [\n            </World/A2.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n            </World/A2/Kid.b[/World/C].d>,\n        ]\n        rel dependent = [\n            </World/A2/Kid>,\n            </World/C.y>,\n            </World/A2.x>,\n        ]\n        rel dependent.default = </World/C.b[/World/A2/Kid].d>        \n        delete rel edits = </World/C.b[/World/A].d>\n        prepend rel edits = [\n            </World/A2.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n        append rel edits = </World/A2.x.mapper[/World/C.y]>\n        reorder rel edits = [\n            </World/C.b[/World/A].d>,\n            </World/A2.b[/World/C].d>,\n        ]\n        pathExpression expr = \"/World/A2/Kid /World/C.y /World/A2.x\"\n        rel independent = </World/Group>\n        rel independent.default = </World/C.b[/World/A/Kid].d>        \n        rel inside = [\n            </World/C.b[/World/A].d>,\n            </World/C.b[/World/A/Kid].d>,\n            </World/C.y.mapper[/World/A.x]>,\n            </World/C.b[/World/C.b[/World/A].d].e>,\n        ]\n        delete int listed.connect = </World/A2/Kid.b[/World/C].d>\n        prepend int listed.connect = </World/A2.b[/World/A2/Kid].d>\n        append int listed.connect = </World/C.b[/World/A].d>\n        rel relative = </World/A2.b[../C].d>\n    }\n\n    def \"Lone\"\n    {\n        rel only\n        rel only.default = </World/C.b[/World/A/Kid].d>        \n    }\n\n    def \"V\" (\n        variants = {\n            string s = \"on\"\n        }\n        prepend variantSets = \"s\"\n    )\n    {\n        variantSet \"s\" = {\n            \"off\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n            \"on\" {\n                int c.connect = </World/A2.b[/World/C].d>\n                rel r = [\n                    </World/A2.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A2/Kid>,\n                ]\n\n            }\n        }\n    }\n\n    def \"R\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n        rel toR = [\n            </World/R.b[/World/R/Part].d>,\n            </World/R/Part.x.mapper[/World/A.x]>,\n        ]\n    }\n}\n\n",
-    "sub.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"User\"\n    {\n        rel across = </World/A2/Kid>\n        rel sub = [\n            </World/A2.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n    }\n}\n\n"
+    "asset.usda": "#usda 1.0\n(\n    defaultPrim = \"Asset\"\n)\n\ndef \"Asset\"\n{\n    int c.connect = </Asset/Part.b[/Asset].d>\n    rel r = [\n        </Asset.b[/Asset/Part].d>,\n        </Asset/Part.b[/Asset].d>,\n        </Asset/Part.x.mapper[/Asset/Part.y]>,\n    ]\n    rel referenced = </Asset/Part>\n\n    def \"Part\"\n    {\n        int x = 1\n        int y = 1\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\ndef \"World\"\n{\n    def \"A2\"\n    {\n        rel b = </World/C>\n        int x = 1\n\n        def \"Kid\"\n        {\n            rel b = </World/C>\n        }\n    }\n\n    def \"C\"\n    {\n        rel b = </World/A2>\n        int y = 1\n    }\n\n    def \"Group\"\n    {\n    }\n\n    def \"User\"\n    {\n        rel across\n        rel across.default = </World/C.b[/World/A2/Kid].d>        \n        rel after = [\n            </World/A2.b[/World/C].x>,\n            </World/C.b[/World/A].y>,\n        ]\n        rel before = [\n            </World/A2.b[/World/C].d>,\n            </World/A2/Kid.b[/World/C].d>,\n            </World/A2.x.mapper[/World/C.y]>,\n        ]\n        rel both = [\n            </World/A2.b[/World/A2/Kid].d>,\n            </World/A2.x.mapper[/World/A2.x]>,\n        ]\n        int conn.connect = [\n            </World/A2.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n            </World/A2/Kid.b[/World/C].d>,\n        ]\n        rel deleted\n        rel deleted.default = </World/C.b[/World/A2/Kid].d>        \n        rel dependent = [\n            </World/A2/Kid>,\n            </World/C.y>,\n            </World/A2.x>,\n        ]\n        rel dependent.default = </World/C.b[/World/A2/Kid].d>        \n        delete rel edits = </World/C.b[/World/A].d>\n        prepend rel edits = [\n            </World/A2.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n        append rel edits = </World/A2.x.mapper[/World/C.y]>\n        reorder rel edits = [\n            </World/C.b[/World/A].d>,\n            </World/A2.b[/World/C].d>,\n        ]\n        pathExpression expr = \"/World/A2/Kid /World/C.y /World/A2.x\"\n        rel independent = </World/Group>\n        rel independent.default = </World/C.b[/World/A/Kid].d>        \n        rel inside = [\n            </World/C.b[/World/A].d>,\n            </World/C.b[/World/A/Kid].d>,\n            </World/C.y.mapper[/World/A.x]>,\n            </World/C.b[/World/C.b[/World/A].d].e>,\n        ]\n        delete int listed.connect = </World/A2/Kid.b[/World/C].d>\n        prepend int listed.connect = </World/A2.b[/World/A2/Kid].d>\n        append int listed.connect = </World/C.b[/World/A].d>\n        rel relative = </World/A2.b[../C].d>\n    }\n\n    def \"Lone\"\n    {\n        rel only\n        rel only.default = </World/C.b[/World/A/Kid].d>        \n    }\n\n    def \"V\" (\n        variants = {\n            string s = \"on\"\n        }\n        prepend variantSets = \"s\"\n    )\n    {\n        variantSet \"s\" = {\n            \"off\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n            \"on\" {\n                int c.connect = </World/A2.b[/World/C].d>\n                rel r = [\n                    </World/A2.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A2/Kid>,\n                ]\n\n            }\n        }\n    }\n\n    def \"R\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n        rel referenced\n        rel referenced.default = </World/C.b[/World/R/Part].d>        \n        rel toR = [\n            </World/R.b[/World/R/Part].d>,\n            </World/R/Part.x.mapper[/World/A.x]>,\n        ]\n    }\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"User\"\n    {\n        rel across = </World/A2/Kid>\n        delete rel deleted = </World/A2/Kid>\n        rel sub = [\n            </World/A2.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n    }\n}\n\n"
    },
    "name": "rename_owner",
    "path": "/World/A",
@@ -506,6 +518,7 @@
      "properties": [
       "c",
       "r",
+      "referenced",
       "toR"
      ],
      "targets": {
@@ -513,6 +526,9 @@
        "/World/R.b[/World/R/Part].d",
        "/World/R/Part.b[/World/R].d",
        "/World/R/Part.x.mapper[/World/R/Part.y]"
+      ],
+      "referenced": [
+       "/World/R/Part"
       ],
       "toR": [
        "/World/R.b[/World/R/Part].d",
@@ -548,6 +564,7 @@
       "before",
       "both",
       "conn",
+      "deleted",
       "dependent",
       "edits",
       "expr",
@@ -574,6 +591,7 @@
        "/World/Group/A.b[/World/Group/A/Kid].d",
        "/World/Group/A.x.mapper[/World/Group/A.x]"
       ],
+      "deleted": [],
       "dependent": [
        "/World/Group/A/Kid",
        "/World/C.y",
@@ -625,9 +643,9 @@
    "destination": "/World/Group/A",
    "errors": [],
    "layers": {
-    "asset.usda": "#usda 1.0\n(\n    defaultPrim = \"Asset\"\n)\n\ndef \"Asset\"\n{\n    int c.connect = </Asset/Part.b[/Asset].d>\n    rel r = [\n        </Asset.b[/Asset/Part].d>,\n        </Asset/Part.b[/Asset].d>,\n        </Asset/Part.x.mapper[/Asset/Part.y]>,\n    ]\n\n    def \"Part\"\n    {\n        int x = 1\n        int y = 1\n    }\n}\n\n",
-    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\ndef \"World\"\n{\n    def \"C\"\n    {\n        rel b = </World/Group/A>\n        int y = 1\n    }\n\n    def \"Group\"\n    {\n        def \"A\"\n        {\n            rel b = </World/C>\n            int x = 1\n\n            def \"Kid\"\n            {\n                rel b = </World/C>\n            }\n        }\n    }\n\n    def \"User\"\n    {\n        rel across\n        rel across.default = </World/C.b[/World/Group/A/Kid].d>        \n        rel after = [\n            </World/Group/A.b[/World/C].x>,\n            </World/C.b[/World/A].y>,\n        ]\n        rel before = [\n            </World/Group/A.b[/World/C].d>,\n            </World/Group/A/Kid.b[/World/C].d>,\n            </World/Group/A.x.mapper[/World/C.y]>,\n        ]\n        rel both = [\n            </World/Group/A.b[/World/Group/A/Kid].d>,\n            </World/Group/A.x.mapper[/World/Group/A.x]>,\n        ]\n        int conn.connect = [\n            </World/Group/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n            </World/Group/A/Kid.b[/World/C].d>,\n        ]\n        rel dependent = [\n            </World/Group/A/Kid>,\n            </World/C.y>,\n            </World/Group/A.x>,\n        ]\n        rel dependent.default = </World/C.b[/World/Group/A/Kid].d>        \n        delete rel edits = </World/C.b[/World/A].d>\n        prepend rel edits = [\n            </World/Group/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n        append rel edits = </World/Group/A.x.mapper[/World/C.y]>\n        reorder rel edits = [\n            </World/C.b[/World/A].d>,\n            </World/Group/A.b[/World/C].d>,\n        ]\n        pathExpression expr = \"/World/Group/A/Kid /World/C.y /World/Group/A.x\"\n        rel independent = </World/Group>\n        rel independent.default = </World/C.b[/World/A/Kid].d>        \n        rel inside = [\n            </World/C.b[/World/A].d>,\n            </World/C.b[/World/A/Kid].d>,\n            </World/C.y.mapper[/World/A.x]>,\n            </World/C.b[/World/C.b[/World/A].d].e>,\n        ]\n        delete int listed.connect = </World/Group/A/Kid.b[/World/C].d>\n        prepend int listed.connect = </World/Group/A.b[/World/Group/A/Kid].d>\n        append int listed.connect = </World/C.b[/World/A].d>\n        rel relative = </World/Group/A.b[../C].d>\n    }\n\n    def \"Lone\"\n    {\n        rel only\n        rel only.default = </World/C.b[/World/A/Kid].d>        \n    }\n\n    def \"V\" (\n        variants = {\n            string s = \"on\"\n        }\n        prepend variantSets = \"s\"\n    )\n    {\n        variantSet \"s\" = {\n            \"off\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n            \"on\" {\n                int c.connect = </World/Group/A.b[/World/C].d>\n                rel r = [\n                    </World/Group/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/Group/A/Kid>,\n                ]\n\n            }\n        }\n    }\n\n    def \"R\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n        rel toR = [\n            </World/R.b[/World/R/Part].d>,\n            </World/R/Part.x.mapper[/World/A.x]>,\n        ]\n    }\n}\n\n",
-    "sub.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"User\"\n    {\n        rel across = </World/Group/A/Kid>\n        rel sub = [\n            </World/Group/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n    }\n}\n\n"
+    "asset.usda": "#usda 1.0\n(\n    defaultPrim = \"Asset\"\n)\n\ndef \"Asset\"\n{\n    int c.connect = </Asset/Part.b[/Asset].d>\n    rel r = [\n        </Asset.b[/Asset/Part].d>,\n        </Asset/Part.b[/Asset].d>,\n        </Asset/Part.x.mapper[/Asset/Part.y]>,\n    ]\n    rel referenced = </Asset/Part>\n\n    def \"Part\"\n    {\n        int x = 1\n        int y = 1\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\ndef \"World\"\n{\n    def \"C\"\n    {\n        rel b = </World/Group/A>\n        int y = 1\n    }\n\n    def \"Group\"\n    {\n        def \"A\"\n        {\n            rel b = </World/C>\n            int x = 1\n\n            def \"Kid\"\n            {\n                rel b = </World/C>\n            }\n        }\n    }\n\n    def \"User\"\n    {\n        rel across\n        rel across.default = </World/C.b[/World/Group/A/Kid].d>        \n        rel after = [\n            </World/Group/A.b[/World/C].x>,\n            </World/C.b[/World/A].y>,\n        ]\n        rel before = [\n            </World/Group/A.b[/World/C].d>,\n            </World/Group/A/Kid.b[/World/C].d>,\n            </World/Group/A.x.mapper[/World/C.y]>,\n        ]\n        rel both = [\n            </World/Group/A.b[/World/Group/A/Kid].d>,\n            </World/Group/A.x.mapper[/World/Group/A.x]>,\n        ]\n        int conn.connect = [\n            </World/Group/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n            </World/Group/A/Kid.b[/World/C].d>,\n        ]\n        rel deleted\n        rel deleted.default = </World/C.b[/World/Group/A/Kid].d>        \n        rel dependent = [\n            </World/Group/A/Kid>,\n            </World/C.y>,\n            </World/Group/A.x>,\n        ]\n        rel dependent.default = </World/C.b[/World/Group/A/Kid].d>        \n        delete rel edits = </World/C.b[/World/A].d>\n        prepend rel edits = [\n            </World/Group/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n        append rel edits = </World/Group/A.x.mapper[/World/C.y]>\n        reorder rel edits = [\n            </World/C.b[/World/A].d>,\n            </World/Group/A.b[/World/C].d>,\n        ]\n        pathExpression expr = \"/World/Group/A/Kid /World/C.y /World/Group/A.x\"\n        rel independent = </World/Group>\n        rel independent.default = </World/C.b[/World/A/Kid].d>        \n        rel inside = [\n            </World/C.b[/World/A].d>,\n            </World/C.b[/World/A/Kid].d>,\n            </World/C.y.mapper[/World/A.x]>,\n            </World/C.b[/World/C.b[/World/A].d].e>,\n        ]\n        delete int listed.connect = </World/Group/A/Kid.b[/World/C].d>\n        prepend int listed.connect = </World/Group/A.b[/World/Group/A/Kid].d>\n        append int listed.connect = </World/C.b[/World/A].d>\n        rel relative = </World/Group/A.b[../C].d>\n    }\n\n    def \"Lone\"\n    {\n        rel only\n        rel only.default = </World/C.b[/World/A/Kid].d>        \n    }\n\n    def \"V\" (\n        variants = {\n            string s = \"on\"\n        }\n        prepend variantSets = \"s\"\n    )\n    {\n        variantSet \"s\" = {\n            \"off\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n            \"on\" {\n                int c.connect = </World/Group/A.b[/World/C].d>\n                rel r = [\n                    </World/Group/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/Group/A/Kid>,\n                ]\n\n            }\n        }\n    }\n\n    def \"R\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n        rel referenced\n        rel referenced.default = </World/C.b[/World/R/Part].d>        \n        rel toR = [\n            </World/R.b[/World/R/Part].d>,\n            </World/R/Part.x.mapper[/World/A.x]>,\n        ]\n    }\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"User\"\n    {\n        rel across = </World/Group/A/Kid>\n        delete rel deleted = </World/Group/A/Kid>\n        rel sub = [\n            </World/Group/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n    }\n}\n\n"
    },
    "name": "reparent_owner",
    "path": "/World/A",
@@ -689,6 +707,7 @@
      "properties": [
       "c",
       "r",
+      "referenced",
       "toR"
      ],
      "targets": {
@@ -696,6 +715,9 @@
        "/World/R.b[/World/R/Part].d",
        "/World/R/Part.b[/World/R].d",
        "/World/R/Part.x.mapper[/World/R/Part.y]"
+      ],
+      "referenced": [
+       "/World/R/Part"
       ],
       "toR": [
        "/World/R.b[/World/R/Part].d",
@@ -728,6 +750,7 @@
       "before",
       "both",
       "conn",
+      "deleted",
       "dependent",
       "edits",
       "expr",
@@ -744,6 +767,7 @@
       ],
       "before": [],
       "both": [],
+      "deleted": [],
       "dependent": [
        "/World/C.y"
       ],
@@ -782,9 +806,9 @@
    "destination": null,
    "errors": [],
    "layers": {
-    "asset.usda": "#usda 1.0\n(\n    defaultPrim = \"Asset\"\n)\n\ndef \"Asset\"\n{\n    int c.connect = </Asset/Part.b[/Asset].d>\n    rel r = [\n        </Asset.b[/Asset/Part].d>,\n        </Asset/Part.b[/Asset].d>,\n        </Asset/Part.x.mapper[/Asset/Part.y]>,\n    ]\n\n    def \"Part\"\n    {\n        int x = 1\n        int y = 1\n    }\n}\n\n",
-    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\ndef \"World\"\n{\n    def \"C\"\n    {\n        rel b = None\n        int y = 1\n    }\n\n    def \"Group\"\n    {\n    }\n\n    def \"User\"\n    {\n        rel across\n        rel across.default = <>        \n        rel after = </World/C.b[/World/A].y>\n        rel before = None\n        rel both = None\n        int conn.connect = </World/C.b[/World/A].d>\n        rel dependent = </World/C.y>\n        rel dependent.default = <>        \n        delete rel edits = </World/C.b[/World/A].d>\n        prepend rel edits = </World/C.b[/World/A].d>\n        reorder rel edits = </World/C.b[/World/A].d>\n        pathExpression expr = \"/World/C.y\"\n        rel independent = </World/Group>\n        rel independent.default = </World/C.b[/World/A/Kid].d>        \n        rel inside = [\n            </World/C.b[/World/A].d>,\n            </World/C.b[/World/A/Kid].d>,\n            </World/C.y.mapper[/World/A.x]>,\n            </World/C.b[/World/C.b[/World/A].d].e>,\n        ]\n        append int listed.connect = </World/C.b[/World/A].d>\n        rel relative = None\n    }\n\n    def \"Lone\"\n    {\n        rel only\n        rel only.default = </World/C.b[/World/A/Kid].d>        \n    }\n\n    def \"V\" (\n        variants = {\n            string s = \"on\"\n        }\n        prepend variantSets = \"s\"\n    )\n    {\n        variantSet \"s\" = {\n            \"off\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n            \"on\" {\n                int c.connect = None\n                rel r = </World/C.b[/World/A].d>\n\n            }\n        }\n    }\n\n    def \"R\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n        rel toR = [\n            </World/R.b[/World/R/Part].d>,\n            </World/R/Part.x.mapper[/World/A.x]>,\n        ]\n    }\n}\n\n",
-    "sub.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"User\"\n    {\n        rel across = None\n        rel sub = </World/C.b[/World/A].d>\n    }\n}\n\n"
+    "asset.usda": "#usda 1.0\n(\n    defaultPrim = \"Asset\"\n)\n\ndef \"Asset\"\n{\n    int c.connect = </Asset/Part.b[/Asset].d>\n    rel r = [\n        </Asset.b[/Asset/Part].d>,\n        </Asset/Part.b[/Asset].d>,\n        </Asset/Part.x.mapper[/Asset/Part.y]>,\n    ]\n    rel referenced = </Asset/Part>\n\n    def \"Part\"\n    {\n        int x = 1\n        int y = 1\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\ndef \"World\"\n{\n    def \"C\"\n    {\n        rel b = None\n        int y = 1\n    }\n\n    def \"Group\"\n    {\n    }\n\n    def \"User\"\n    {\n        rel across\n        rel across.default = <>        \n        rel after = </World/C.b[/World/A].y>\n        rel before = None\n        rel both = None\n        int conn.connect = </World/C.b[/World/A].d>\n        rel deleted\n        rel deleted.default = <>        \n        rel dependent = </World/C.y>\n        rel dependent.default = <>        \n        delete rel edits = </World/C.b[/World/A].d>\n        prepend rel edits = </World/C.b[/World/A].d>\n        reorder rel edits = </World/C.b[/World/A].d>\n        pathExpression expr = \"/World/C.y\"\n        rel independent = </World/Group>\n        rel independent.default = </World/C.b[/World/A/Kid].d>        \n        rel inside = [\n            </World/C.b[/World/A].d>,\n            </World/C.b[/World/A/Kid].d>,\n            </World/C.y.mapper[/World/A.x]>,\n            </World/C.b[/World/C.b[/World/A].d].e>,\n        ]\n        append int listed.connect = </World/C.b[/World/A].d>\n        rel relative = None\n    }\n\n    def \"Lone\"\n    {\n        rel only\n        rel only.default = </World/C.b[/World/A/Kid].d>        \n    }\n\n    def \"V\" (\n        variants = {\n            string s = \"on\"\n        }\n        prepend variantSets = \"s\"\n    )\n    {\n        variantSet \"s\" = {\n            \"off\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n            \"on\" {\n                int c.connect = None\n                rel r = </World/C.b[/World/A].d>\n\n            }\n        }\n    }\n\n    def \"R\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n        rel referenced\n        rel referenced.default = </World/C.b[/World/R/Part].d>        \n        rel toR = [\n            </World/R.b[/World/R/Part].d>,\n            </World/R/Part.x.mapper[/World/A.x]>,\n        ]\n    }\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"User\"\n    {\n        rel across = None\n        rel deleted\n        rel sub = </World/C.b[/World/A].d>\n    }\n}\n\n"
    },
    "name": "delete_owner",
    "path": "/World/A",
@@ -876,6 +900,7 @@
      "properties": [
       "c",
       "r",
+      "referenced",
       "toR"
      ],
      "targets": {
@@ -883,6 +908,9 @@
        "/World/R.b[/World/R/Part].d",
        "/World/R/Part.b[/World/R].d",
        "/World/R/Part.x.mapper[/World/R/Part.y]"
+      ],
+      "referenced": [
+       "/World/R/Part"
       ],
       "toR": [
        "/World/R.b[/World/R/Part].d",
@@ -918,6 +946,7 @@
       "before",
       "both",
       "conn",
+      "deleted",
       "dependent",
       "edits",
       "expr",
@@ -944,6 +973,7 @@
        "/World/A.b[/World/A/Kid].d",
        "/World/A.x.mapper[/World/A.x]"
       ],
+      "deleted": [],
       "dependent": [
        "/World/A/Kid2",
        "/World/C.y",
@@ -995,9 +1025,9 @@
    "destination": "/World/A/Kid2",
    "errors": [],
    "layers": {
-    "asset.usda": "#usda 1.0\n(\n    defaultPrim = \"Asset\"\n)\n\ndef \"Asset\"\n{\n    int c.connect = </Asset/Part.b[/Asset].d>\n    rel r = [\n        </Asset.b[/Asset/Part].d>,\n        </Asset/Part.b[/Asset].d>,\n        </Asset/Part.x.mapper[/Asset/Part.y]>,\n    ]\n\n    def \"Part\"\n    {\n        int x = 1\n        int y = 1\n    }\n}\n\n",
-    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\ndef \"World\"\n{\n    def \"A\"\n    {\n        rel b = </World/C>\n        int x = 1\n\n        def \"Kid2\"\n        {\n            rel b = </World/C>\n        }\n    }\n\n    def \"C\"\n    {\n        rel b = </World/A>\n        int y = 1\n    }\n\n    def \"Group\"\n    {\n    }\n\n    def \"User\"\n    {\n        rel across\n        rel across.default = </World/C.b[/World/A/Kid2].d>        \n        rel after = [\n            </World/A.b[/World/C].x>,\n            </World/C.b[/World/A].y>,\n        ]\n        rel before = [\n            </World/A.b[/World/C].d>,\n            </World/A/Kid2.b[/World/C].d>,\n            </World/A.x.mapper[/World/C.y]>,\n        ]\n        rel both = [\n            </World/A.b[/World/A/Kid].d>,\n            </World/A.x.mapper[/World/A.x]>,\n        ]\n        int conn.connect = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n            </World/A/Kid2.b[/World/C].d>,\n        ]\n        rel dependent = [\n            </World/A/Kid2>,\n            </World/C.y>,\n            </World/A.x>,\n        ]\n        rel dependent.default = </World/C.b[/World/A/Kid2].d>        \n        delete rel edits = </World/C.b[/World/A].d>\n        prepend rel edits = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n        append rel edits = </World/A.x.mapper[/World/C.y]>\n        reorder rel edits = [\n            </World/C.b[/World/A].d>,\n            </World/A.b[/World/C].d>,\n        ]\n        pathExpression expr = \"/World/A/Kid2 /World/C.y /World/A.x\"\n        rel independent = </World/Group>\n        rel independent.default = </World/C.b[/World/A/Kid].d>        \n        rel inside = [\n            </World/C.b[/World/A].d>,\n            </World/C.b[/World/A/Kid].d>,\n            </World/C.y.mapper[/World/A.x]>,\n            </World/C.b[/World/C.b[/World/A].d].e>,\n        ]\n        delete int listed.connect = </World/A/Kid2.b[/World/C].d>\n        prepend int listed.connect = </World/A.b[/World/A/Kid].d>\n        append int listed.connect = </World/C.b[/World/A].d>\n        rel relative = </World/A.b[../C].d>\n    }\n\n    def \"Lone\"\n    {\n        rel only\n        rel only.default = </World/C.b[/World/A/Kid].d>        \n    }\n\n    def \"V\" (\n        variants = {\n            string s = \"on\"\n        }\n        prepend variantSets = \"s\"\n    )\n    {\n        variantSet \"s\" = {\n            \"off\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n            \"on\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid2>,\n                ]\n\n            }\n        }\n    }\n\n    def \"R\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n        rel toR = [\n            </World/R.b[/World/R/Part].d>,\n            </World/R/Part.x.mapper[/World/A.x]>,\n        ]\n    }\n}\n\n",
-    "sub.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"User\"\n    {\n        rel across = </World/A/Kid2>\n        rel sub = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n    }\n}\n\n"
+    "asset.usda": "#usda 1.0\n(\n    defaultPrim = \"Asset\"\n)\n\ndef \"Asset\"\n{\n    int c.connect = </Asset/Part.b[/Asset].d>\n    rel r = [\n        </Asset.b[/Asset/Part].d>,\n        </Asset/Part.b[/Asset].d>,\n        </Asset/Part.x.mapper[/Asset/Part.y]>,\n    ]\n    rel referenced = </Asset/Part>\n\n    def \"Part\"\n    {\n        int x = 1\n        int y = 1\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\ndef \"World\"\n{\n    def \"A\"\n    {\n        rel b = </World/C>\n        int x = 1\n\n        def \"Kid2\"\n        {\n            rel b = </World/C>\n        }\n    }\n\n    def \"C\"\n    {\n        rel b = </World/A>\n        int y = 1\n    }\n\n    def \"Group\"\n    {\n    }\n\n    def \"User\"\n    {\n        rel across\n        rel across.default = </World/C.b[/World/A/Kid2].d>        \n        rel after = [\n            </World/A.b[/World/C].x>,\n            </World/C.b[/World/A].y>,\n        ]\n        rel before = [\n            </World/A.b[/World/C].d>,\n            </World/A/Kid2.b[/World/C].d>,\n            </World/A.x.mapper[/World/C.y]>,\n        ]\n        rel both = [\n            </World/A.b[/World/A/Kid].d>,\n            </World/A.x.mapper[/World/A.x]>,\n        ]\n        int conn.connect = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n            </World/A/Kid2.b[/World/C].d>,\n        ]\n        rel deleted\n        rel deleted.default = </World/C.b[/World/A/Kid2].d>        \n        rel dependent = [\n            </World/A/Kid2>,\n            </World/C.y>,\n            </World/A.x>,\n        ]\n        rel dependent.default = </World/C.b[/World/A/Kid2].d>        \n        delete rel edits = </World/C.b[/World/A].d>\n        prepend rel edits = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n        append rel edits = </World/A.x.mapper[/World/C.y]>\n        reorder rel edits = [\n            </World/C.b[/World/A].d>,\n            </World/A.b[/World/C].d>,\n        ]\n        pathExpression expr = \"/World/A/Kid2 /World/C.y /World/A.x\"\n        rel independent = </World/Group>\n        rel independent.default = </World/C.b[/World/A/Kid].d>        \n        rel inside = [\n            </World/C.b[/World/A].d>,\n            </World/C.b[/World/A/Kid].d>,\n            </World/C.y.mapper[/World/A.x]>,\n            </World/C.b[/World/C.b[/World/A].d].e>,\n        ]\n        delete int listed.connect = </World/A/Kid2.b[/World/C].d>\n        prepend int listed.connect = </World/A.b[/World/A/Kid].d>\n        append int listed.connect = </World/C.b[/World/A].d>\n        rel relative = </World/A.b[../C].d>\n    }\n\n    def \"Lone\"\n    {\n        rel only\n        rel only.default = </World/C.b[/World/A/Kid].d>        \n    }\n\n    def \"V\" (\n        variants = {\n            string s = \"on\"\n        }\n        prepend variantSets = \"s\"\n    )\n    {\n        variantSet \"s\" = {\n            \"off\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n            \"on\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid2>,\n                ]\n\n            }\n        }\n    }\n\n    def \"R\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n        rel referenced\n        rel referenced.default = </World/C.b[/World/R/Part].d>        \n        rel toR = [\n            </World/R.b[/World/R/Part].d>,\n            </World/R/Part.x.mapper[/World/A.x]>,\n        ]\n    }\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"User\"\n    {\n        rel across = </World/A/Kid2>\n        delete rel deleted = </World/A/Kid2>\n        rel sub = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n    }\n}\n\n"
    },
    "name": "rename_owner_child",
    "path": "/World/A/Kid",
@@ -1075,6 +1105,7 @@
      "properties": [
       "c",
       "r",
+      "referenced",
       "toR"
      ],
      "targets": {
@@ -1082,6 +1113,9 @@
        "/World/R.b[/World/R/Part].d",
        "/World/R/Part.b[/World/R].d",
        "/World/R/Part.x.mapper[/World/R/Part.y]"
+      ],
+      "referenced": [
+       "/World/R/Part"
       ],
       "toR": [
        "/World/R.b[/World/R/Part].d",
@@ -1116,6 +1150,7 @@
       "before",
       "both",
       "conn",
+      "deleted",
       "dependent",
       "edits",
       "expr",
@@ -1139,6 +1174,7 @@
        "/World/A.b[/World/A/Kid].d",
        "/World/A.x.mapper[/World/A.x]"
       ],
+      "deleted": [],
       "dependent": [
        "/World/C.y",
        "/World/A.x"
@@ -1188,9 +1224,9 @@
    "destination": null,
    "errors": [],
    "layers": {
-    "asset.usda": "#usda 1.0\n(\n    defaultPrim = \"Asset\"\n)\n\ndef \"Asset\"\n{\n    int c.connect = </Asset/Part.b[/Asset].d>\n    rel r = [\n        </Asset.b[/Asset/Part].d>,\n        </Asset/Part.b[/Asset].d>,\n        </Asset/Part.x.mapper[/Asset/Part.y]>,\n    ]\n\n    def \"Part\"\n    {\n        int x = 1\n        int y = 1\n    }\n}\n\n",
-    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\ndef \"World\"\n{\n    def \"A\"\n    {\n        rel b = </World/C>\n        int x = 1\n    }\n\n    def \"C\"\n    {\n        rel b = </World/A>\n        int y = 1\n    }\n\n    def \"Group\"\n    {\n    }\n\n    def \"User\"\n    {\n        rel across\n        rel across.default = <>        \n        rel after = [\n            </World/A.b[/World/C].x>,\n            </World/C.b[/World/A].y>,\n        ]\n        rel before = [\n            </World/A.b[/World/C].d>,\n            </World/A.x.mapper[/World/C.y]>,\n        ]\n        rel both = [\n            </World/A.b[/World/A/Kid].d>,\n            </World/A.x.mapper[/World/A.x]>,\n        ]\n        int conn.connect = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n        rel dependent = [\n            </World/C.y>,\n            </World/A.x>,\n        ]\n        rel dependent.default = <>        \n        delete rel edits = </World/C.b[/World/A].d>\n        prepend rel edits = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n        append rel edits = </World/A.x.mapper[/World/C.y]>\n        reorder rel edits = [\n            </World/C.b[/World/A].d>,\n            </World/A.b[/World/C].d>,\n        ]\n        pathExpression expr = \"/World/C.y /World/A.x\"\n        rel independent = </World/Group>\n        rel independent.default = </World/C.b[/World/A/Kid].d>        \n        rel inside = [\n            </World/C.b[/World/A].d>,\n            </World/C.b[/World/A/Kid].d>,\n            </World/C.y.mapper[/World/A.x]>,\n            </World/C.b[/World/C.b[/World/A].d].e>,\n        ]\n        prepend int listed.connect = </World/A.b[/World/A/Kid].d>\n        append int listed.connect = </World/C.b[/World/A].d>\n        rel relative = </World/A.b[../C].d>\n    }\n\n    def \"Lone\"\n    {\n        rel only\n        rel only.default = </World/C.b[/World/A/Kid].d>        \n    }\n\n    def \"V\" (\n        variants = {\n            string s = \"on\"\n        }\n        prepend variantSets = \"s\"\n    )\n    {\n        variantSet \"s\" = {\n            \"off\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n            \"on\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                ]\n\n            }\n        }\n    }\n\n    def \"R\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n        rel toR = [\n            </World/R.b[/World/R/Part].d>,\n            </World/R/Part.x.mapper[/World/A.x]>,\n        ]\n    }\n}\n\n",
-    "sub.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"User\"\n    {\n        rel across = None\n        rel sub = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n    }\n}\n\n"
+    "asset.usda": "#usda 1.0\n(\n    defaultPrim = \"Asset\"\n)\n\ndef \"Asset\"\n{\n    int c.connect = </Asset/Part.b[/Asset].d>\n    rel r = [\n        </Asset.b[/Asset/Part].d>,\n        </Asset/Part.b[/Asset].d>,\n        </Asset/Part.x.mapper[/Asset/Part.y]>,\n    ]\n    rel referenced = </Asset/Part>\n\n    def \"Part\"\n    {\n        int x = 1\n        int y = 1\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\ndef \"World\"\n{\n    def \"A\"\n    {\n        rel b = </World/C>\n        int x = 1\n    }\n\n    def \"C\"\n    {\n        rel b = </World/A>\n        int y = 1\n    }\n\n    def \"Group\"\n    {\n    }\n\n    def \"User\"\n    {\n        rel across\n        rel across.default = <>        \n        rel after = [\n            </World/A.b[/World/C].x>,\n            </World/C.b[/World/A].y>,\n        ]\n        rel before = [\n            </World/A.b[/World/C].d>,\n            </World/A.x.mapper[/World/C.y]>,\n        ]\n        rel both = [\n            </World/A.b[/World/A/Kid].d>,\n            </World/A.x.mapper[/World/A.x]>,\n        ]\n        int conn.connect = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n        rel deleted\n        rel deleted.default = <>        \n        rel dependent = [\n            </World/C.y>,\n            </World/A.x>,\n        ]\n        rel dependent.default = <>        \n        delete rel edits = </World/C.b[/World/A].d>\n        prepend rel edits = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n        append rel edits = </World/A.x.mapper[/World/C.y]>\n        reorder rel edits = [\n            </World/C.b[/World/A].d>,\n            </World/A.b[/World/C].d>,\n        ]\n        pathExpression expr = \"/World/C.y /World/A.x\"\n        rel independent = </World/Group>\n        rel independent.default = </World/C.b[/World/A/Kid].d>        \n        rel inside = [\n            </World/C.b[/World/A].d>,\n            </World/C.b[/World/A/Kid].d>,\n            </World/C.y.mapper[/World/A.x]>,\n            </World/C.b[/World/C.b[/World/A].d].e>,\n        ]\n        prepend int listed.connect = </World/A.b[/World/A/Kid].d>\n        append int listed.connect = </World/C.b[/World/A].d>\n        rel relative = </World/A.b[../C].d>\n    }\n\n    def \"Lone\"\n    {\n        rel only\n        rel only.default = </World/C.b[/World/A/Kid].d>        \n    }\n\n    def \"V\" (\n        variants = {\n            string s = \"on\"\n        }\n        prepend variantSets = \"s\"\n    )\n    {\n        variantSet \"s\" = {\n            \"off\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n            \"on\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                ]\n\n            }\n        }\n    }\n\n    def \"R\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n        rel referenced\n        rel referenced.default = </World/C.b[/World/R/Part].d>        \n        rel toR = [\n            </World/R.b[/World/R/Part].d>,\n            </World/R/Part.x.mapper[/World/A.x]>,\n        ]\n    }\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"User\"\n    {\n        rel across = None\n        rel deleted\n        rel sub = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n    }\n}\n\n"
    },
    "name": "delete_owner_child",
    "path": "/World/A/Kid",
@@ -1282,6 +1318,7 @@
      "properties": [
       "c",
       "r",
+      "referenced",
       "toR"
      ],
      "targets": {
@@ -1289,6 +1326,9 @@
        "/World/R.b[/World/R/Part].d",
        "/World/R/Part.b[/World/R].d",
        "/World/R/Part.x.mapper[/World/R/Part.y]"
+      ],
+      "referenced": [
+       "/World/R/Part"
       ],
       "toR": [
        "/World/R.b[/World/R/Part].d",
@@ -1324,6 +1364,7 @@
       "before",
       "both",
       "conn",
+      "deleted",
       "dependent",
       "edits",
       "expr",
@@ -1350,6 +1391,7 @@
        "/World/A.b[/World/A/Kid].d",
        "/World/A.x.mapper[/World/A.x]"
       ],
+      "deleted": [],
       "dependent": [
        "/World/A/Kid",
        "/World/C2.y",
@@ -1401,9 +1443,9 @@
    "destination": "/World/C2",
    "errors": [],
    "layers": {
-    "asset.usda": "#usda 1.0\n(\n    defaultPrim = \"Asset\"\n)\n\ndef \"Asset\"\n{\n    int c.connect = </Asset/Part.b[/Asset].d>\n    rel r = [\n        </Asset.b[/Asset/Part].d>,\n        </Asset/Part.b[/Asset].d>,\n        </Asset/Part.x.mapper[/Asset/Part.y]>,\n    ]\n\n    def \"Part\"\n    {\n        int x = 1\n        int y = 1\n    }\n}\n\n",
-    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\ndef \"World\"\n{\n    def \"A\"\n    {\n        rel b = </World/C2>\n        int x = 1\n\n        def \"Kid\"\n        {\n            rel b = </World/C2>\n        }\n    }\n\n    def \"C2\"\n    {\n        rel b = </World/A>\n        int y = 1\n    }\n\n    def \"Group\"\n    {\n    }\n\n    def \"User\"\n    {\n        rel across\n        rel across.default = </World/C2.b[/World/A/Kid].d>        \n        rel after = [\n            </World/A.b[/World/C].x>,\n            </World/C2.b[/World/A].y>,\n        ]\n        rel before = [\n            </World/A.b[/World/C].d>,\n            </World/A/Kid.b[/World/C].d>,\n            </World/A.x.mapper[/World/C.y]>,\n        ]\n        rel both = [\n            </World/A.b[/World/A/Kid].d>,\n            </World/A.x.mapper[/World/A.x]>,\n        ]\n        int conn.connect = [\n            </World/A.b[/World/C].d>,\n            </World/C2.b[/World/A].d>,\n            </World/A/Kid.b[/World/C].d>,\n        ]\n        rel dependent = [\n            </World/A/Kid>,\n            </World/C2.y>,\n            </World/A.x>,\n        ]\n        rel dependent.default = </World/C2.b[/World/A/Kid].d>        \n        delete rel edits = </World/C2.b[/World/A].d>\n        prepend rel edits = [\n            </World/A.b[/World/C].d>,\n            </World/C2.b[/World/A].d>,\n        ]\n        append rel edits = </World/A.x.mapper[/World/C.y]>\n        reorder rel edits = [\n            </World/C2.b[/World/A].d>,\n            </World/A.b[/World/C].d>,\n        ]\n        pathExpression expr = \"/World/A/Kid /World/C2.y /World/A.x\"\n        rel independent = </World/Group>\n        rel independent.default = </World/C2.b[/World/A/Kid].d>        \n        rel inside = [\n            </World/C2.b[/World/A].d>,\n            </World/C2.b[/World/A/Kid].d>,\n            </World/C2.y.mapper[/World/A.x]>,\n            </World/C2.b[/World/C2.b[/World/A].d].e>,\n        ]\n        delete int listed.connect = </World/A/Kid.b[/World/C].d>\n        prepend int listed.connect = </World/A.b[/World/A/Kid].d>\n        append int listed.connect = </World/C2.b[/World/A].d>\n        rel relative = </World/A.b[../C].d>\n    }\n\n    def \"Lone\"\n    {\n        rel only\n        rel only.default = </World/C2.b[/World/A/Kid].d>        \n    }\n\n    def \"V\" (\n        variants = {\n            string s = \"on\"\n        }\n        prepend variantSets = \"s\"\n    )\n    {\n        variantSet \"s\" = {\n            \"off\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n            \"on\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C2.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n        }\n    }\n\n    def \"R\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n        rel toR = [\n            </World/R.b[/World/R/Part].d>,\n            </World/R/Part.x.mapper[/World/A.x]>,\n        ]\n    }\n}\n\n",
-    "sub.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"User\"\n    {\n        rel across = </World/A/Kid>\n        rel sub = [\n            </World/A.b[/World/C].d>,\n            </World/C2.b[/World/A].d>,\n        ]\n    }\n}\n\n"
+    "asset.usda": "#usda 1.0\n(\n    defaultPrim = \"Asset\"\n)\n\ndef \"Asset\"\n{\n    int c.connect = </Asset/Part.b[/Asset].d>\n    rel r = [\n        </Asset.b[/Asset/Part].d>,\n        </Asset/Part.b[/Asset].d>,\n        </Asset/Part.x.mapper[/Asset/Part.y]>,\n    ]\n    rel referenced = </Asset/Part>\n\n    def \"Part\"\n    {\n        int x = 1\n        int y = 1\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\ndef \"World\"\n{\n    def \"A\"\n    {\n        rel b = </World/C2>\n        int x = 1\n\n        def \"Kid\"\n        {\n            rel b = </World/C2>\n        }\n    }\n\n    def \"C2\"\n    {\n        rel b = </World/A>\n        int y = 1\n    }\n\n    def \"Group\"\n    {\n    }\n\n    def \"User\"\n    {\n        rel across\n        rel across.default = </World/C2.b[/World/A/Kid].d>        \n        rel after = [\n            </World/A.b[/World/C].x>,\n            </World/C2.b[/World/A].y>,\n        ]\n        rel before = [\n            </World/A.b[/World/C].d>,\n            </World/A/Kid.b[/World/C].d>,\n            </World/A.x.mapper[/World/C.y]>,\n        ]\n        rel both = [\n            </World/A.b[/World/A/Kid].d>,\n            </World/A.x.mapper[/World/A.x]>,\n        ]\n        int conn.connect = [\n            </World/A.b[/World/C].d>,\n            </World/C2.b[/World/A].d>,\n            </World/A/Kid.b[/World/C].d>,\n        ]\n        rel deleted\n        rel deleted.default = </World/C2.b[/World/A/Kid].d>        \n        rel dependent = [\n            </World/A/Kid>,\n            </World/C2.y>,\n            </World/A.x>,\n        ]\n        rel dependent.default = </World/C2.b[/World/A/Kid].d>        \n        delete rel edits = </World/C2.b[/World/A].d>\n        prepend rel edits = [\n            </World/A.b[/World/C].d>,\n            </World/C2.b[/World/A].d>,\n        ]\n        append rel edits = </World/A.x.mapper[/World/C.y]>\n        reorder rel edits = [\n            </World/C2.b[/World/A].d>,\n            </World/A.b[/World/C].d>,\n        ]\n        pathExpression expr = \"/World/A/Kid /World/C2.y /World/A.x\"\n        rel independent = </World/Group>\n        rel independent.default = </World/C2.b[/World/A/Kid].d>        \n        rel inside = [\n            </World/C2.b[/World/A].d>,\n            </World/C2.b[/World/A/Kid].d>,\n            </World/C2.y.mapper[/World/A.x]>,\n            </World/C2.b[/World/C2.b[/World/A].d].e>,\n        ]\n        delete int listed.connect = </World/A/Kid.b[/World/C].d>\n        prepend int listed.connect = </World/A.b[/World/A/Kid].d>\n        append int listed.connect = </World/C2.b[/World/A].d>\n        rel relative = </World/A.b[../C].d>\n    }\n\n    def \"Lone\"\n    {\n        rel only\n        rel only.default = </World/C2.b[/World/A/Kid].d>        \n    }\n\n    def \"V\" (\n        variants = {\n            string s = \"on\"\n        }\n        prepend variantSets = \"s\"\n    )\n    {\n        variantSet \"s\" = {\n            \"off\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n            \"on\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C2.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n        }\n    }\n\n    def \"R\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n        rel referenced\n        rel referenced.default = </World/C2.b[/World/R/Part].d>        \n        rel toR = [\n            </World/R.b[/World/R/Part].d>,\n            </World/R/Part.x.mapper[/World/A.x]>,\n        ]\n    }\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"User\"\n    {\n        rel across = </World/A/Kid>\n        delete rel deleted = </World/A/Kid>\n        rel sub = [\n            </World/A.b[/World/C].d>,\n            </World/C2.b[/World/A].d>,\n        ]\n    }\n}\n\n"
    },
    "name": "rename_bracketed",
    "path": "/World/C",
@@ -1496,6 +1538,7 @@
      "properties": [
       "c",
       "r",
+      "referenced",
       "toR"
      ],
      "targets": {
@@ -1503,6 +1546,9 @@
        "/World/R.b[/World/R/Part].d",
        "/World/R/Part.b[/World/R].d",
        "/World/R/Part.x.mapper[/World/R/Part.y]"
+      ],
+      "referenced": [
+       "/World/R/Part"
       ],
       "toR": [
        "/World/R.b[/World/R/Part].d",
@@ -1538,6 +1584,7 @@
       "before",
       "both",
       "conn",
+      "deleted",
       "dependent",
       "edits",
       "expr",
@@ -1564,6 +1611,7 @@
        "/World/A.b[/World/A/Kid].d",
        "/World/A.x.mapper[/World/A.x]"
       ],
+      "deleted": [],
       "dependent": [
        "/World/A/Kid",
        "/World/Group/C.y",
@@ -1615,9 +1663,9 @@
    "destination": "/World/Group/C",
    "errors": [],
    "layers": {
-    "asset.usda": "#usda 1.0\n(\n    defaultPrim = \"Asset\"\n)\n\ndef \"Asset\"\n{\n    int c.connect = </Asset/Part.b[/Asset].d>\n    rel r = [\n        </Asset.b[/Asset/Part].d>,\n        </Asset/Part.b[/Asset].d>,\n        </Asset/Part.x.mapper[/Asset/Part.y]>,\n    ]\n\n    def \"Part\"\n    {\n        int x = 1\n        int y = 1\n    }\n}\n\n",
-    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\ndef \"World\"\n{\n    def \"A\"\n    {\n        rel b = </World/Group/C>\n        int x = 1\n\n        def \"Kid\"\n        {\n            rel b = </World/Group/C>\n        }\n    }\n\n    def \"Group\"\n    {\n        def \"C\"\n        {\n            rel b = </World/A>\n            int y = 1\n        }\n    }\n\n    def \"User\"\n    {\n        rel across\n        rel across.default = </World/Group/C.b[/World/A/Kid].d>        \n        rel after = [\n            </World/A.b[/World/C].x>,\n            </World/Group/C.b[/World/A].y>,\n        ]\n        rel before = [\n            </World/A.b[/World/C].d>,\n            </World/A/Kid.b[/World/C].d>,\n            </World/A.x.mapper[/World/C.y]>,\n        ]\n        rel both = [\n            </World/A.b[/World/A/Kid].d>,\n            </World/A.x.mapper[/World/A.x]>,\n        ]\n        int conn.connect = [\n            </World/A.b[/World/C].d>,\n            </World/Group/C.b[/World/A].d>,\n            </World/A/Kid.b[/World/C].d>,\n        ]\n        rel dependent = [\n            </World/A/Kid>,\n            </World/Group/C.y>,\n            </World/A.x>,\n        ]\n        rel dependent.default = </World/Group/C.b[/World/A/Kid].d>        \n        delete rel edits = </World/Group/C.b[/World/A].d>\n        prepend rel edits = [\n            </World/A.b[/World/C].d>,\n            </World/Group/C.b[/World/A].d>,\n        ]\n        append rel edits = </World/A.x.mapper[/World/C.y]>\n        reorder rel edits = [\n            </World/Group/C.b[/World/A].d>,\n            </World/A.b[/World/C].d>,\n        ]\n        pathExpression expr = \"/World/A/Kid /World/Group/C.y /World/A.x\"\n        rel independent = </World/Group>\n        rel independent.default = </World/Group/C.b[/World/A/Kid].d>        \n        rel inside = [\n            </World/Group/C.b[/World/A].d>,\n            </World/Group/C.b[/World/A/Kid].d>,\n            </World/Group/C.y.mapper[/World/A.x]>,\n            </World/Group/C.b[/World/Group/C.b[/World/A].d].e>,\n        ]\n        delete int listed.connect = </World/A/Kid.b[/World/C].d>\n        prepend int listed.connect = </World/A.b[/World/A/Kid].d>\n        append int listed.connect = </World/Group/C.b[/World/A].d>\n        rel relative = </World/A.b[../C].d>\n    }\n\n    def \"Lone\"\n    {\n        rel only\n        rel only.default = </World/Group/C.b[/World/A/Kid].d>        \n    }\n\n    def \"V\" (\n        variants = {\n            string s = \"on\"\n        }\n        prepend variantSets = \"s\"\n    )\n    {\n        variantSet \"s\" = {\n            \"off\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n            \"on\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/Group/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n        }\n    }\n\n    def \"R\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n        rel toR = [\n            </World/R.b[/World/R/Part].d>,\n            </World/R/Part.x.mapper[/World/A.x]>,\n        ]\n    }\n}\n\n",
-    "sub.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"User\"\n    {\n        rel across = </World/A/Kid>\n        rel sub = [\n            </World/A.b[/World/C].d>,\n            </World/Group/C.b[/World/A].d>,\n        ]\n    }\n}\n\n"
+    "asset.usda": "#usda 1.0\n(\n    defaultPrim = \"Asset\"\n)\n\ndef \"Asset\"\n{\n    int c.connect = </Asset/Part.b[/Asset].d>\n    rel r = [\n        </Asset.b[/Asset/Part].d>,\n        </Asset/Part.b[/Asset].d>,\n        </Asset/Part.x.mapper[/Asset/Part.y]>,\n    ]\n    rel referenced = </Asset/Part>\n\n    def \"Part\"\n    {\n        int x = 1\n        int y = 1\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\ndef \"World\"\n{\n    def \"A\"\n    {\n        rel b = </World/Group/C>\n        int x = 1\n\n        def \"Kid\"\n        {\n            rel b = </World/Group/C>\n        }\n    }\n\n    def \"Group\"\n    {\n        def \"C\"\n        {\n            rel b = </World/A>\n            int y = 1\n        }\n    }\n\n    def \"User\"\n    {\n        rel across\n        rel across.default = </World/Group/C.b[/World/A/Kid].d>        \n        rel after = [\n            </World/A.b[/World/C].x>,\n            </World/Group/C.b[/World/A].y>,\n        ]\n        rel before = [\n            </World/A.b[/World/C].d>,\n            </World/A/Kid.b[/World/C].d>,\n            </World/A.x.mapper[/World/C.y]>,\n        ]\n        rel both = [\n            </World/A.b[/World/A/Kid].d>,\n            </World/A.x.mapper[/World/A.x]>,\n        ]\n        int conn.connect = [\n            </World/A.b[/World/C].d>,\n            </World/Group/C.b[/World/A].d>,\n            </World/A/Kid.b[/World/C].d>,\n        ]\n        rel deleted\n        rel deleted.default = </World/Group/C.b[/World/A/Kid].d>        \n        rel dependent = [\n            </World/A/Kid>,\n            </World/Group/C.y>,\n            </World/A.x>,\n        ]\n        rel dependent.default = </World/Group/C.b[/World/A/Kid].d>        \n        delete rel edits = </World/Group/C.b[/World/A].d>\n        prepend rel edits = [\n            </World/A.b[/World/C].d>,\n            </World/Group/C.b[/World/A].d>,\n        ]\n        append rel edits = </World/A.x.mapper[/World/C.y]>\n        reorder rel edits = [\n            </World/Group/C.b[/World/A].d>,\n            </World/A.b[/World/C].d>,\n        ]\n        pathExpression expr = \"/World/A/Kid /World/Group/C.y /World/A.x\"\n        rel independent = </World/Group>\n        rel independent.default = </World/Group/C.b[/World/A/Kid].d>        \n        rel inside = [\n            </World/Group/C.b[/World/A].d>,\n            </World/Group/C.b[/World/A/Kid].d>,\n            </World/Group/C.y.mapper[/World/A.x]>,\n            </World/Group/C.b[/World/Group/C.b[/World/A].d].e>,\n        ]\n        delete int listed.connect = </World/A/Kid.b[/World/C].d>\n        prepend int listed.connect = </World/A.b[/World/A/Kid].d>\n        append int listed.connect = </World/Group/C.b[/World/A].d>\n        rel relative = </World/A.b[../C].d>\n    }\n\n    def \"Lone\"\n    {\n        rel only\n        rel only.default = </World/Group/C.b[/World/A/Kid].d>        \n    }\n\n    def \"V\" (\n        variants = {\n            string s = \"on\"\n        }\n        prepend variantSets = \"s\"\n    )\n    {\n        variantSet \"s\" = {\n            \"off\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n            \"on\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/Group/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n        }\n    }\n\n    def \"R\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n        rel referenced\n        rel referenced.default = </World/Group/C.b[/World/R/Part].d>        \n        rel toR = [\n            </World/R.b[/World/R/Part].d>,\n            </World/R/Part.x.mapper[/World/A.x]>,\n        ]\n    }\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"User\"\n    {\n        rel across = </World/A/Kid>\n        delete rel deleted = </World/A/Kid>\n        rel sub = [\n            </World/A.b[/World/C].d>,\n            </World/Group/C.b[/World/A].d>,\n        ]\n    }\n}\n\n"
    },
    "name": "reparent_bracketed",
    "path": "/World/C",
@@ -1691,6 +1739,7 @@
      "properties": [
       "c",
       "r",
+      "referenced",
       "toR"
      ],
      "targets": {
@@ -1698,6 +1747,9 @@
        "/World/R.b[/World/R/Part].d",
        "/World/R/Part.b[/World/R].d",
        "/World/R/Part.x.mapper[/World/R/Part.y]"
+      ],
+      "referenced": [
+       "/World/R/Part"
       ],
       "toR": [
        "/World/R.b[/World/R/Part].d",
@@ -1731,6 +1783,7 @@
       "before",
       "both",
       "conn",
+      "deleted",
       "dependent",
       "edits",
       "expr",
@@ -1756,6 +1809,7 @@
        "/World/A.b[/World/A/Kid].d",
        "/World/A.x.mapper[/World/A.x]"
       ],
+      "deleted": [],
       "dependent": [
        "/World/A/Kid",
        "/World/A.x"
@@ -1798,9 +1852,9 @@
    "destination": null,
    "errors": [],
    "layers": {
-    "asset.usda": "#usda 1.0\n(\n    defaultPrim = \"Asset\"\n)\n\ndef \"Asset\"\n{\n    int c.connect = </Asset/Part.b[/Asset].d>\n    rel r = [\n        </Asset.b[/Asset/Part].d>,\n        </Asset/Part.b[/Asset].d>,\n        </Asset/Part.x.mapper[/Asset/Part.y]>,\n    ]\n\n    def \"Part\"\n    {\n        int x = 1\n        int y = 1\n    }\n}\n\n",
-    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\ndef \"World\"\n{\n    def \"A\"\n    {\n        rel b = None\n        int x = 1\n\n        def \"Kid\"\n        {\n            rel b = None\n        }\n    }\n\n    def \"Group\"\n    {\n    }\n\n    def \"User\"\n    {\n        rel across\n        rel across.default = <>        \n        rel after = </World/A.b[/World/C].x>\n        rel before = [\n            </World/A.b[/World/C].d>,\n            </World/A/Kid.b[/World/C].d>,\n            </World/A.x.mapper[/World/C.y]>,\n        ]\n        rel both = [\n            </World/A.b[/World/A/Kid].d>,\n            </World/A.x.mapper[/World/A.x]>,\n        ]\n        int conn.connect = [\n            </World/A.b[/World/C].d>,\n            </World/A/Kid.b[/World/C].d>,\n        ]\n        rel dependent = [\n            </World/A/Kid>,\n            </World/A.x>,\n        ]\n        rel dependent.default = <>        \n        prepend rel edits = </World/A.b[/World/C].d>\n        append rel edits = </World/A.x.mapper[/World/C.y]>\n        reorder rel edits = </World/A.b[/World/C].d>\n        pathExpression expr = \"/World/A/Kid /World/A.x\"\n        rel independent = </World/Group>\n        rel independent.default = <>        \n        rel inside = None\n        delete int listed.connect = </World/A/Kid.b[/World/C].d>\n        prepend int listed.connect = </World/A.b[/World/A/Kid].d>\n        rel relative = </World/A.b[../C].d>\n    }\n\n    def \"Lone\"\n    {\n        rel only\n        rel only.default = <>        \n    }\n\n    def \"V\" (\n        variants = {\n            string s = \"on\"\n        }\n        prepend variantSets = \"s\"\n    )\n    {\n        variantSet \"s\" = {\n            \"off\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n            \"on\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n        }\n    }\n\n    def \"R\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n        rel toR = [\n            </World/R.b[/World/R/Part].d>,\n            </World/R/Part.x.mapper[/World/A.x]>,\n        ]\n    }\n}\n\n",
-    "sub.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"User\"\n    {\n        rel across = </World/A/Kid>\n        rel sub = </World/A.b[/World/C].d>\n    }\n}\n\n"
+    "asset.usda": "#usda 1.0\n(\n    defaultPrim = \"Asset\"\n)\n\ndef \"Asset\"\n{\n    int c.connect = </Asset/Part.b[/Asset].d>\n    rel r = [\n        </Asset.b[/Asset/Part].d>,\n        </Asset/Part.b[/Asset].d>,\n        </Asset/Part.x.mapper[/Asset/Part.y]>,\n    ]\n    rel referenced = </Asset/Part>\n\n    def \"Part\"\n    {\n        int x = 1\n        int y = 1\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\ndef \"World\"\n{\n    def \"A\"\n    {\n        rel b = None\n        int x = 1\n\n        def \"Kid\"\n        {\n            rel b = None\n        }\n    }\n\n    def \"Group\"\n    {\n    }\n\n    def \"User\"\n    {\n        rel across\n        rel across.default = <>        \n        rel after = </World/A.b[/World/C].x>\n        rel before = [\n            </World/A.b[/World/C].d>,\n            </World/A/Kid.b[/World/C].d>,\n            </World/A.x.mapper[/World/C.y]>,\n        ]\n        rel both = [\n            </World/A.b[/World/A/Kid].d>,\n            </World/A.x.mapper[/World/A.x]>,\n        ]\n        int conn.connect = [\n            </World/A.b[/World/C].d>,\n            </World/A/Kid.b[/World/C].d>,\n        ]\n        rel deleted\n        rel deleted.default = <>        \n        rel dependent = [\n            </World/A/Kid>,\n            </World/A.x>,\n        ]\n        rel dependent.default = <>        \n        prepend rel edits = </World/A.b[/World/C].d>\n        append rel edits = </World/A.x.mapper[/World/C.y]>\n        reorder rel edits = </World/A.b[/World/C].d>\n        pathExpression expr = \"/World/A/Kid /World/A.x\"\n        rel independent = </World/Group>\n        rel independent.default = <>        \n        rel inside = None\n        delete int listed.connect = </World/A/Kid.b[/World/C].d>\n        prepend int listed.connect = </World/A.b[/World/A/Kid].d>\n        rel relative = </World/A.b[../C].d>\n    }\n\n    def \"Lone\"\n    {\n        rel only\n        rel only.default = <>        \n    }\n\n    def \"V\" (\n        variants = {\n            string s = \"on\"\n        }\n        prepend variantSets = \"s\"\n    )\n    {\n        variantSet \"s\" = {\n            \"off\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n            \"on\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n        }\n    }\n\n    def \"R\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n        rel referenced\n        rel referenced.default = <>        \n        rel toR = [\n            </World/R.b[/World/R/Part].d>,\n            </World/R/Part.x.mapper[/World/A.x]>,\n        ]\n    }\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"User\"\n    {\n        rel across = </World/A/Kid>\n        delete rel deleted = </World/A/Kid>\n        rel sub = </World/A.b[/World/C].d>\n    }\n}\n\n"
    },
    "name": "delete_bracketed",
    "path": "/World/C",
@@ -1892,6 +1946,7 @@
      "properties": [
       "c",
       "r",
+      "referenced",
       "toR"
      ],
      "targets": {
@@ -1899,6 +1954,9 @@
        "/Earth/R.b[/Earth/R/Part].d",
        "/Earth/R/Part.b[/Earth/R].d",
        "/Earth/R/Part.x.mapper[/Earth/R/Part.y]"
+      ],
+      "referenced": [
+       "/Earth/R/Part"
       ],
       "toR": [
        "/Earth/R.b[/Earth/R/Part].d",
@@ -1934,6 +1992,7 @@
       "before",
       "both",
       "conn",
+      "deleted",
       "dependent",
       "edits",
       "expr",
@@ -1960,6 +2019,7 @@
        "/Earth/A.b[/Earth/A/Kid].d",
        "/Earth/A.x.mapper[/Earth/A.x]"
       ],
+      "deleted": [],
       "dependent": [
        "/Earth/A/Kid",
        "/Earth/C.y",
@@ -2011,9 +2071,9 @@
    "destination": "/Earth",
    "errors": [],
    "layers": {
-    "asset.usda": "#usda 1.0\n(\n    defaultPrim = \"Asset\"\n)\n\ndef \"Asset\"\n{\n    int c.connect = </Asset/Part.b[/Asset].d>\n    rel r = [\n        </Asset.b[/Asset/Part].d>,\n        </Asset/Part.b[/Asset].d>,\n        </Asset/Part.x.mapper[/Asset/Part.y]>,\n    ]\n\n    def \"Part\"\n    {\n        int x = 1\n        int y = 1\n    }\n}\n\n",
-    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\ndef \"Earth\"\n{\n    def \"A\"\n    {\n        rel b = </Earth/C>\n        int x = 1\n\n        def \"Kid\"\n        {\n            rel b = </Earth/C>\n        }\n    }\n\n    def \"C\"\n    {\n        rel b = </Earth/A>\n        int y = 1\n    }\n\n    def \"Group\"\n    {\n    }\n\n    def \"User\"\n    {\n        rel across\n        rel across.default = </Earth/C.b[/Earth/A/Kid].d>        \n        rel after = [\n            </Earth/A.b[/Earth/C].x>,\n            </Earth/C.b[/Earth/A].y>,\n        ]\n        rel before = [\n            </Earth/A.b[/Earth/C].d>,\n            </Earth/A/Kid.b[/Earth/C].d>,\n            </Earth/A.x.mapper[/Earth/C.y]>,\n        ]\n        rel both = [\n            </Earth/A.b[/Earth/A/Kid].d>,\n            </Earth/A.x.mapper[/Earth/A.x]>,\n        ]\n        int conn.connect = [\n            </Earth/A.b[/Earth/C].d>,\n            </Earth/C.b[/Earth/A].d>,\n            </Earth/A/Kid.b[/Earth/C].d>,\n        ]\n        rel dependent = [\n            </Earth/A/Kid>,\n            </Earth/C.y>,\n            </Earth/A.x>,\n        ]\n        rel dependent.default = </Earth/C.b[/Earth/A/Kid].d>        \n        delete rel edits = </Earth/C.b[/Earth/A].d>\n        prepend rel edits = [\n            </Earth/A.b[/Earth/C].d>,\n            </Earth/C.b[/Earth/A].d>,\n        ]\n        append rel edits = </Earth/A.x.mapper[/Earth/C.y]>\n        reorder rel edits = [\n            </Earth/C.b[/Earth/A].d>,\n            </Earth/A.b[/Earth/C].d>,\n        ]\n        pathExpression expr = \"/Earth/A/Kid /Earth/C.y /Earth/A.x\"\n        rel independent = </Earth/Group>\n        rel independent.default = </Earth/C.b[/Earth/A/Kid].d>        \n        rel inside = [\n            </Earth/C.b[/Earth/A].d>,\n            </Earth/C.b[/Earth/A/Kid].d>,\n            </Earth/C.y.mapper[/Earth/A.x]>,\n            </Earth/C.b[/Earth/C.b[/Earth/A].d].e>,\n        ]\n        delete int listed.connect = </Earth/A/Kid.b[/Earth/C].d>\n        prepend int listed.connect = </Earth/A.b[/Earth/A/Kid].d>\n        append int listed.connect = </Earth/C.b[/Earth/A].d>\n        rel relative = </Earth/A.b[../C].d>\n    }\n\n    def \"Lone\"\n    {\n        rel only\n        rel only.default = </Earth/C.b[/Earth/A/Kid].d>        \n    }\n\n    def \"V\" (\n        variants = {\n            string s = \"on\"\n        }\n        prepend variantSets = \"s\"\n    )\n    {\n        variantSet \"s\" = {\n            \"off\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n            \"on\" {\n                int c.connect = </Earth/A.b[/Earth/C].d>\n                rel r = [\n                    </Earth/A.b[/Earth/C].d>,\n                    </Earth/C.b[/Earth/A].d>,\n                    </Earth/A/Kid>,\n                ]\n\n            }\n        }\n    }\n\n    def \"R\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n        rel toR = [\n            </Earth/R.b[/Earth/R/Part].d>,\n            </Earth/R/Part.x.mapper[/Earth/A.x]>,\n        ]\n    }\n}\n\n",
-    "sub.usda": "#usda 1.0\n\nover \"Earth\"\n{\n    over \"User\"\n    {\n        rel across = </Earth/A/Kid>\n        rel sub = [\n            </Earth/A.b[/Earth/C].d>,\n            </Earth/C.b[/Earth/A].d>,\n        ]\n    }\n}\n\n"
+    "asset.usda": "#usda 1.0\n(\n    defaultPrim = \"Asset\"\n)\n\ndef \"Asset\"\n{\n    int c.connect = </Asset/Part.b[/Asset].d>\n    rel r = [\n        </Asset.b[/Asset/Part].d>,\n        </Asset/Part.b[/Asset].d>,\n        </Asset/Part.x.mapper[/Asset/Part.y]>,\n    ]\n    rel referenced = </Asset/Part>\n\n    def \"Part\"\n    {\n        int x = 1\n        int y = 1\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\ndef \"Earth\"\n{\n    def \"A\"\n    {\n        rel b = </Earth/C>\n        int x = 1\n\n        def \"Kid\"\n        {\n            rel b = </Earth/C>\n        }\n    }\n\n    def \"C\"\n    {\n        rel b = </Earth/A>\n        int y = 1\n    }\n\n    def \"Group\"\n    {\n    }\n\n    def \"User\"\n    {\n        rel across\n        rel across.default = </Earth/C.b[/Earth/A/Kid].d>        \n        rel after = [\n            </Earth/A.b[/Earth/C].x>,\n            </Earth/C.b[/Earth/A].y>,\n        ]\n        rel before = [\n            </Earth/A.b[/Earth/C].d>,\n            </Earth/A/Kid.b[/Earth/C].d>,\n            </Earth/A.x.mapper[/Earth/C.y]>,\n        ]\n        rel both = [\n            </Earth/A.b[/Earth/A/Kid].d>,\n            </Earth/A.x.mapper[/Earth/A.x]>,\n        ]\n        int conn.connect = [\n            </Earth/A.b[/Earth/C].d>,\n            </Earth/C.b[/Earth/A].d>,\n            </Earth/A/Kid.b[/Earth/C].d>,\n        ]\n        rel deleted\n        rel deleted.default = </Earth/C.b[/Earth/A/Kid].d>        \n        rel dependent = [\n            </Earth/A/Kid>,\n            </Earth/C.y>,\n            </Earth/A.x>,\n        ]\n        rel dependent.default = </Earth/C.b[/Earth/A/Kid].d>        \n        delete rel edits = </Earth/C.b[/Earth/A].d>\n        prepend rel edits = [\n            </Earth/A.b[/Earth/C].d>,\n            </Earth/C.b[/Earth/A].d>,\n        ]\n        append rel edits = </Earth/A.x.mapper[/Earth/C.y]>\n        reorder rel edits = [\n            </Earth/C.b[/Earth/A].d>,\n            </Earth/A.b[/Earth/C].d>,\n        ]\n        pathExpression expr = \"/Earth/A/Kid /Earth/C.y /Earth/A.x\"\n        rel independent = </Earth/Group>\n        rel independent.default = </Earth/C.b[/Earth/A/Kid].d>        \n        rel inside = [\n            </Earth/C.b[/Earth/A].d>,\n            </Earth/C.b[/Earth/A/Kid].d>,\n            </Earth/C.y.mapper[/Earth/A.x]>,\n            </Earth/C.b[/Earth/C.b[/Earth/A].d].e>,\n        ]\n        delete int listed.connect = </Earth/A/Kid.b[/Earth/C].d>\n        prepend int listed.connect = </Earth/A.b[/Earth/A/Kid].d>\n        append int listed.connect = </Earth/C.b[/Earth/A].d>\n        rel relative = </Earth/A.b[../C].d>\n    }\n\n    def \"Lone\"\n    {\n        rel only\n        rel only.default = </Earth/C.b[/Earth/A/Kid].d>        \n    }\n\n    def \"V\" (\n        variants = {\n            string s = \"on\"\n        }\n        prepend variantSets = \"s\"\n    )\n    {\n        variantSet \"s\" = {\n            \"off\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n            \"on\" {\n                int c.connect = </Earth/A.b[/Earth/C].d>\n                rel r = [\n                    </Earth/A.b[/Earth/C].d>,\n                    </Earth/C.b[/Earth/A].d>,\n                    </Earth/A/Kid>,\n                ]\n\n            }\n        }\n    }\n\n    def \"R\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n        rel referenced\n        rel referenced.default = </Earth/C.b[/Earth/R/Part].d>        \n        rel toR = [\n            </Earth/R.b[/Earth/R/Part].d>,\n            </Earth/R/Part.x.mapper[/Earth/A.x]>,\n        ]\n    }\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"Earth\"\n{\n    over \"User\"\n    {\n        rel across = </Earth/A/Kid>\n        delete rel deleted = </Earth/A/Kid>\n        rel sub = [\n            </Earth/A.b[/Earth/C].d>,\n            </Earth/C.b[/Earth/A].d>,\n        ]\n    }\n}\n\n"
    },
    "name": "rename_ancestor",
    "path": "/World",
@@ -2105,6 +2165,7 @@
      "properties": [
       "c",
       "r",
+      "referenced",
       "toR"
      ],
      "targets": {
@@ -2112,6 +2173,9 @@
        "/World/R.b[/World/R/Part].d",
        "/World/R/Part.b[/World/R].d",
        "/World/R/Part.x.mapper[/World/R/Part.y]"
+      ],
+      "referenced": [
+       "/World/R/Part"
       ],
       "toR": [
        "/World/R.b[/World/R/Part].d",
@@ -2147,6 +2211,7 @@
       "before",
       "both",
       "conn",
+      "deleted",
       "dependent",
       "edits",
       "expr",
@@ -2173,6 +2238,7 @@
        "/World/A.b2[/World/A/Kid].d",
        "/World/A.x.mapper[/World/A.x]"
       ],
+      "deleted": [],
       "dependent": [
        "/World/A/Kid",
        "/World/C.y",
@@ -2224,9 +2290,9 @@
    "destination": "/World/A.b2",
    "errors": [],
    "layers": {
-    "asset.usda": "#usda 1.0\n(\n    defaultPrim = \"Asset\"\n)\n\ndef \"Asset\"\n{\n    int c.connect = </Asset/Part.b[/Asset].d>\n    rel r = [\n        </Asset.b[/Asset/Part].d>,\n        </Asset/Part.b[/Asset].d>,\n        </Asset/Part.x.mapper[/Asset/Part.y]>,\n    ]\n\n    def \"Part\"\n    {\n        int x = 1\n        int y = 1\n    }\n}\n\n",
-    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\ndef \"World\"\n{\n    def \"A\"\n    {\n        rel b2 = </World/C>\n        int x = 1\n\n        def \"Kid\"\n        {\n            rel b = </World/C>\n        }\n    }\n\n    def \"C\"\n    {\n        rel b = </World/A>\n        int y = 1\n    }\n\n    def \"Group\"\n    {\n    }\n\n    def \"User\"\n    {\n        rel across\n        rel across.default = </World/C.b[/World/A/Kid].d>        \n        rel after = [\n            </World/A.b2[/World/C].x>,\n            </World/C.b[/World/A].y>,\n        ]\n        rel before = [\n            </World/A.b2[/World/C].d>,\n            </World/A/Kid.b[/World/C].d>,\n            </World/A.x.mapper[/World/C.y]>,\n        ]\n        rel both = [\n            </World/A.b2[/World/A/Kid].d>,\n            </World/A.x.mapper[/World/A.x]>,\n        ]\n        int conn.connect = [\n            </World/A.b2[/World/C].d>,\n            </World/C.b[/World/A].d>,\n            </World/A/Kid.b[/World/C].d>,\n        ]\n        rel dependent = [\n            </World/A/Kid>,\n            </World/C.y>,\n            </World/A.x>,\n        ]\n        rel dependent.default = </World/C.b[/World/A/Kid].d>        \n        delete rel edits = </World/C.b[/World/A].d>\n        prepend rel edits = [\n            </World/A.b2[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n        append rel edits = </World/A.x.mapper[/World/C.y]>\n        reorder rel edits = [\n            </World/C.b[/World/A].d>,\n            </World/A.b2[/World/C].d>,\n        ]\n        pathExpression expr = \"/World/A/Kid /World/C.y /World/A.x\"\n        rel independent = </World/Group>\n        rel independent.default = </World/C.b[/World/A/Kid].d>        \n        rel inside = [\n            </World/C.b[/World/A].d>,\n            </World/C.b[/World/A/Kid].d>,\n            </World/C.y.mapper[/World/A.x]>,\n            </World/C.b[/World/C.b[/World/A].d].e>,\n        ]\n        delete int listed.connect = </World/A/Kid.b[/World/C].d>\n        prepend int listed.connect = </World/A.b2[/World/A/Kid].d>\n        append int listed.connect = </World/C.b[/World/A].d>\n        rel relative = </World/A.b2[../C].d>\n    }\n\n    def \"Lone\"\n    {\n        rel only\n        rel only.default = </World/C.b[/World/A/Kid].d>        \n    }\n\n    def \"V\" (\n        variants = {\n            string s = \"on\"\n        }\n        prepend variantSets = \"s\"\n    )\n    {\n        variantSet \"s\" = {\n            \"off\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n            \"on\" {\n                int c.connect = </World/A.b2[/World/C].d>\n                rel r = [\n                    </World/A.b2[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n        }\n    }\n\n    def \"R\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n        rel toR = [\n            </World/R.b[/World/R/Part].d>,\n            </World/R/Part.x.mapper[/World/A.x]>,\n        ]\n    }\n}\n\n",
-    "sub.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"User\"\n    {\n        rel across = </World/A/Kid>\n        rel sub = [\n            </World/A.b2[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n    }\n}\n\n"
+    "asset.usda": "#usda 1.0\n(\n    defaultPrim = \"Asset\"\n)\n\ndef \"Asset\"\n{\n    int c.connect = </Asset/Part.b[/Asset].d>\n    rel r = [\n        </Asset.b[/Asset/Part].d>,\n        </Asset/Part.b[/Asset].d>,\n        </Asset/Part.x.mapper[/Asset/Part.y]>,\n    ]\n    rel referenced = </Asset/Part>\n\n    def \"Part\"\n    {\n        int x = 1\n        int y = 1\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\ndef \"World\"\n{\n    def \"A\"\n    {\n        rel b2 = </World/C>\n        int x = 1\n\n        def \"Kid\"\n        {\n            rel b = </World/C>\n        }\n    }\n\n    def \"C\"\n    {\n        rel b = </World/A>\n        int y = 1\n    }\n\n    def \"Group\"\n    {\n    }\n\n    def \"User\"\n    {\n        rel across\n        rel across.default = </World/C.b[/World/A/Kid].d>        \n        rel after = [\n            </World/A.b2[/World/C].x>,\n            </World/C.b[/World/A].y>,\n        ]\n        rel before = [\n            </World/A.b2[/World/C].d>,\n            </World/A/Kid.b[/World/C].d>,\n            </World/A.x.mapper[/World/C.y]>,\n        ]\n        rel both = [\n            </World/A.b2[/World/A/Kid].d>,\n            </World/A.x.mapper[/World/A.x]>,\n        ]\n        int conn.connect = [\n            </World/A.b2[/World/C].d>,\n            </World/C.b[/World/A].d>,\n            </World/A/Kid.b[/World/C].d>,\n        ]\n        rel deleted\n        rel deleted.default = </World/C.b[/World/A/Kid].d>        \n        rel dependent = [\n            </World/A/Kid>,\n            </World/C.y>,\n            </World/A.x>,\n        ]\n        rel dependent.default = </World/C.b[/World/A/Kid].d>        \n        delete rel edits = </World/C.b[/World/A].d>\n        prepend rel edits = [\n            </World/A.b2[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n        append rel edits = </World/A.x.mapper[/World/C.y]>\n        reorder rel edits = [\n            </World/C.b[/World/A].d>,\n            </World/A.b2[/World/C].d>,\n        ]\n        pathExpression expr = \"/World/A/Kid /World/C.y /World/A.x\"\n        rel independent = </World/Group>\n        rel independent.default = </World/C.b[/World/A/Kid].d>        \n        rel inside = [\n            </World/C.b[/World/A].d>,\n            </World/C.b[/World/A/Kid].d>,\n            </World/C.y.mapper[/World/A.x]>,\n            </World/C.b[/World/C.b[/World/A].d].e>,\n        ]\n        delete int listed.connect = </World/A/Kid.b[/World/C].d>\n        prepend int listed.connect = </World/A.b2[/World/A/Kid].d>\n        append int listed.connect = </World/C.b[/World/A].d>\n        rel relative = </World/A.b2[../C].d>\n    }\n\n    def \"Lone\"\n    {\n        rel only\n        rel only.default = </World/C.b[/World/A/Kid].d>        \n    }\n\n    def \"V\" (\n        variants = {\n            string s = \"on\"\n        }\n        prepend variantSets = \"s\"\n    )\n    {\n        variantSet \"s\" = {\n            \"off\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n            \"on\" {\n                int c.connect = </World/A.b2[/World/C].d>\n                rel r = [\n                    </World/A.b2[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n        }\n    }\n\n    def \"R\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n        rel referenced\n        rel referenced.default = </World/C.b[/World/R/Part].d>        \n        rel toR = [\n            </World/R.b[/World/R/Part].d>,\n            </World/R/Part.x.mapper[/World/A.x]>,\n        ]\n    }\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"User\"\n    {\n        rel across = </World/A/Kid>\n        delete rel deleted = </World/A/Kid>\n        rel sub = [\n            </World/A.b2[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n    }\n}\n\n"
    },
    "name": "rename_owner_property",
    "path": "/World/A.b",
@@ -2313,6 +2379,7 @@
      "properties": [
       "c",
       "r",
+      "referenced",
       "toR"
      ],
      "targets": {
@@ -2320,6 +2387,9 @@
        "/World/R.b[/World/R/Part].d",
        "/World/R/Part.b[/World/R].d",
        "/World/R/Part.x.mapper[/World/R/Part.y]"
+      ],
+      "referenced": [
+       "/World/R/Part"
       ],
       "toR": [
        "/World/R.b[/World/R/Part].d",
@@ -2353,6 +2423,7 @@
       "before",
       "both",
       "conn",
+      "deleted",
       "dependent",
       "edits",
       "expr",
@@ -2376,6 +2447,7 @@
       "both": [
        "/World/A.x.mapper[/World/A.x]"
       ],
+      "deleted": [],
       "dependent": [
        "/World/A/Kid",
        "/World/C.y",
@@ -2418,9 +2490,9 @@
    "destination": null,
    "errors": [],
    "layers": {
-    "asset.usda": "#usda 1.0\n(\n    defaultPrim = \"Asset\"\n)\n\ndef \"Asset\"\n{\n    int c.connect = </Asset/Part.b[/Asset].d>\n    rel r = [\n        </Asset.b[/Asset/Part].d>,\n        </Asset/Part.b[/Asset].d>,\n        </Asset/Part.x.mapper[/Asset/Part.y]>,\n    ]\n\n    def \"Part\"\n    {\n        int x = 1\n        int y = 1\n    }\n}\n\n",
-    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\ndef \"World\"\n{\n    def \"A\"\n    {\n        int x = 1\n\n        def \"Kid\"\n        {\n            rel b = </World/C>\n        }\n    }\n\n    def \"C\"\n    {\n        rel b = </World/A>\n        int y = 1\n    }\n\n    def \"Group\"\n    {\n    }\n\n    def \"User\"\n    {\n        rel across\n        rel across.default = </World/C.b[/World/A/Kid].d>        \n        rel after = </World/C.b[/World/A].y>\n        rel before = [\n            </World/A/Kid.b[/World/C].d>,\n            </World/A.x.mapper[/World/C.y]>,\n        ]\n        rel both = </World/A.x.mapper[/World/A.x]>\n        int conn.connect = [\n            </World/C.b[/World/A].d>,\n            </World/A/Kid.b[/World/C].d>,\n        ]\n        rel dependent = [\n            </World/A/Kid>,\n            </World/C.y>,\n            </World/A.x>,\n        ]\n        rel dependent.default = </World/C.b[/World/A/Kid].d>        \n        delete rel edits = </World/C.b[/World/A].d>\n        prepend rel edits = </World/C.b[/World/A].d>\n        append rel edits = </World/A.x.mapper[/World/C.y]>\n        reorder rel edits = </World/C.b[/World/A].d>\n        pathExpression expr = \"/World/A/Kid /World/C.y /World/A.x\"\n        rel independent = </World/Group>\n        rel independent.default = </World/C.b[/World/A/Kid].d>        \n        rel inside = [\n            </World/C.b[/World/A].d>,\n            </World/C.b[/World/A/Kid].d>,\n            </World/C.y.mapper[/World/A.x]>,\n            </World/C.b[/World/C.b[/World/A].d].e>,\n        ]\n        delete int listed.connect = </World/A/Kid.b[/World/C].d>\n        append int listed.connect = </World/C.b[/World/A].d>\n        rel relative = None\n    }\n\n    def \"Lone\"\n    {\n        rel only\n        rel only.default = </World/C.b[/World/A/Kid].d>        \n    }\n\n    def \"V\" (\n        variants = {\n            string s = \"on\"\n        }\n        prepend variantSets = \"s\"\n    )\n    {\n        variantSet \"s\" = {\n            \"off\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n            \"on\" {\n                int c.connect = None\n                rel r = [\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n        }\n    }\n\n    def \"R\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n        rel toR = [\n            </World/R.b[/World/R/Part].d>,\n            </World/R/Part.x.mapper[/World/A.x]>,\n        ]\n    }\n}\n\n",
-    "sub.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"User\"\n    {\n        rel across = </World/A/Kid>\n        rel sub = </World/C.b[/World/A].d>\n    }\n}\n\n"
+    "asset.usda": "#usda 1.0\n(\n    defaultPrim = \"Asset\"\n)\n\ndef \"Asset\"\n{\n    int c.connect = </Asset/Part.b[/Asset].d>\n    rel r = [\n        </Asset.b[/Asset/Part].d>,\n        </Asset/Part.b[/Asset].d>,\n        </Asset/Part.x.mapper[/Asset/Part.y]>,\n    ]\n    rel referenced = </Asset/Part>\n\n    def \"Part\"\n    {\n        int x = 1\n        int y = 1\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\ndef \"World\"\n{\n    def \"A\"\n    {\n        int x = 1\n\n        def \"Kid\"\n        {\n            rel b = </World/C>\n        }\n    }\n\n    def \"C\"\n    {\n        rel b = </World/A>\n        int y = 1\n    }\n\n    def \"Group\"\n    {\n    }\n\n    def \"User\"\n    {\n        rel across\n        rel across.default = </World/C.b[/World/A/Kid].d>        \n        rel after = </World/C.b[/World/A].y>\n        rel before = [\n            </World/A/Kid.b[/World/C].d>,\n            </World/A.x.mapper[/World/C.y]>,\n        ]\n        rel both = </World/A.x.mapper[/World/A.x]>\n        int conn.connect = [\n            </World/C.b[/World/A].d>,\n            </World/A/Kid.b[/World/C].d>,\n        ]\n        rel deleted\n        rel deleted.default = </World/C.b[/World/A/Kid].d>        \n        rel dependent = [\n            </World/A/Kid>,\n            </World/C.y>,\n            </World/A.x>,\n        ]\n        rel dependent.default = </World/C.b[/World/A/Kid].d>        \n        delete rel edits = </World/C.b[/World/A].d>\n        prepend rel edits = </World/C.b[/World/A].d>\n        append rel edits = </World/A.x.mapper[/World/C.y]>\n        reorder rel edits = </World/C.b[/World/A].d>\n        pathExpression expr = \"/World/A/Kid /World/C.y /World/A.x\"\n        rel independent = </World/Group>\n        rel independent.default = </World/C.b[/World/A/Kid].d>        \n        rel inside = [\n            </World/C.b[/World/A].d>,\n            </World/C.b[/World/A/Kid].d>,\n            </World/C.y.mapper[/World/A.x]>,\n            </World/C.b[/World/C.b[/World/A].d].e>,\n        ]\n        delete int listed.connect = </World/A/Kid.b[/World/C].d>\n        append int listed.connect = </World/C.b[/World/A].d>\n        rel relative = None\n    }\n\n    def \"Lone\"\n    {\n        rel only\n        rel only.default = </World/C.b[/World/A/Kid].d>        \n    }\n\n    def \"V\" (\n        variants = {\n            string s = \"on\"\n        }\n        prepend variantSets = \"s\"\n    )\n    {\n        variantSet \"s\" = {\n            \"off\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n            \"on\" {\n                int c.connect = None\n                rel r = [\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n        }\n    }\n\n    def \"R\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n        rel referenced\n        rel referenced.default = </World/C.b[/World/R/Part].d>        \n        rel toR = [\n            </World/R.b[/World/R/Part].d>,\n            </World/R/Part.x.mapper[/World/A.x]>,\n        ]\n    }\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"User\"\n    {\n        rel across = </World/A/Kid>\n        delete rel deleted = </World/A/Kid>\n        rel sub = </World/C.b[/World/A].d>\n    }\n}\n\n"
    },
    "name": "delete_owner_property",
    "path": "/World/A.b",
@@ -2512,6 +2584,7 @@
      "properties": [
       "c",
       "r",
+      "referenced",
       "toR"
      ],
      "targets": {
@@ -2519,6 +2592,9 @@
        "/World/R.b[/World/R/Part].d",
        "/World/R/Part.b[/World/R].d",
        "/World/R/Part.x.mapper[/World/R/Part.y]"
+      ],
+      "referenced": [
+       "/World/R/Part"
       ],
       "toR": [
        "/World/R.b[/World/R/Part].d",
@@ -2554,6 +2630,7 @@
       "before",
       "both",
       "conn",
+      "deleted",
       "dependent",
       "edits",
       "expr",
@@ -2580,6 +2657,7 @@
        "/World/A.b[/World/A/Kid].d",
        "/World/A.x2.mapper[/World/A.x2]"
       ],
+      "deleted": [],
       "dependent": [
        "/World/A/Kid",
        "/World/C.y",
@@ -2631,9 +2709,9 @@
    "destination": "/World/A.x2",
    "errors": [],
    "layers": {
-    "asset.usda": "#usda 1.0\n(\n    defaultPrim = \"Asset\"\n)\n\ndef \"Asset\"\n{\n    int c.connect = </Asset/Part.b[/Asset].d>\n    rel r = [\n        </Asset.b[/Asset/Part].d>,\n        </Asset/Part.b[/Asset].d>,\n        </Asset/Part.x.mapper[/Asset/Part.y]>,\n    ]\n\n    def \"Part\"\n    {\n        int x = 1\n        int y = 1\n    }\n}\n\n",
-    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\ndef \"World\"\n{\n    def \"A\"\n    {\n        rel b = </World/C>\n        int x2 = 1\n\n        def \"Kid\"\n        {\n            rel b = </World/C>\n        }\n    }\n\n    def \"C\"\n    {\n        rel b = </World/A>\n        int y = 1\n    }\n\n    def \"Group\"\n    {\n    }\n\n    def \"User\"\n    {\n        rel across\n        rel across.default = </World/C.b[/World/A/Kid].d>        \n        rel after = [\n            </World/A.b[/World/C].x>,\n            </World/C.b[/World/A].y>,\n        ]\n        rel before = [\n            </World/A.b[/World/C].d>,\n            </World/A/Kid.b[/World/C].d>,\n            </World/A.x2.mapper[/World/C.y]>,\n        ]\n        rel both = [\n            </World/A.b[/World/A/Kid].d>,\n            </World/A.x2.mapper[/World/A.x2]>,\n        ]\n        int conn.connect = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n            </World/A/Kid.b[/World/C].d>,\n        ]\n        rel dependent = [\n            </World/A/Kid>,\n            </World/C.y>,\n            </World/A.x2>,\n        ]\n        rel dependent.default = </World/C.b[/World/A/Kid].d>        \n        delete rel edits = </World/C.b[/World/A].d>\n        prepend rel edits = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n        append rel edits = </World/A.x2.mapper[/World/C.y]>\n        reorder rel edits = [\n            </World/C.b[/World/A].d>,\n            </World/A.b[/World/C].d>,\n        ]\n        pathExpression expr = \"/World/A/Kid /World/C.y /World/A.x2\"\n        rel independent = </World/Group>\n        rel independent.default = </World/C.b[/World/A/Kid].d>        \n        rel inside = [\n            </World/C.b[/World/A].d>,\n            </World/C.b[/World/A/Kid].d>,\n            </World/C.y.mapper[/World/A.x]>,\n            </World/C.b[/World/C.b[/World/A].d].e>,\n        ]\n        delete int listed.connect = </World/A/Kid.b[/World/C].d>\n        prepend int listed.connect = </World/A.b[/World/A/Kid].d>\n        append int listed.connect = </World/C.b[/World/A].d>\n        rel relative = </World/A.b[../C].d>\n    }\n\n    def \"Lone\"\n    {\n        rel only\n        rel only.default = </World/C.b[/World/A/Kid].d>        \n    }\n\n    def \"V\" (\n        variants = {\n            string s = \"on\"\n        }\n        prepend variantSets = \"s\"\n    )\n    {\n        variantSet \"s\" = {\n            \"off\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n            \"on\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n        }\n    }\n\n    def \"R\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n        rel toR = [\n            </World/R.b[/World/R/Part].d>,\n            </World/R/Part.x.mapper[/World/A.x]>,\n        ]\n    }\n}\n\n",
-    "sub.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"User\"\n    {\n        rel across = </World/A/Kid>\n        rel sub = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n    }\n}\n\n"
+    "asset.usda": "#usda 1.0\n(\n    defaultPrim = \"Asset\"\n)\n\ndef \"Asset\"\n{\n    int c.connect = </Asset/Part.b[/Asset].d>\n    rel r = [\n        </Asset.b[/Asset/Part].d>,\n        </Asset/Part.b[/Asset].d>,\n        </Asset/Part.x.mapper[/Asset/Part.y]>,\n    ]\n    rel referenced = </Asset/Part>\n\n    def \"Part\"\n    {\n        int x = 1\n        int y = 1\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\ndef \"World\"\n{\n    def \"A\"\n    {\n        rel b = </World/C>\n        int x2 = 1\n\n        def \"Kid\"\n        {\n            rel b = </World/C>\n        }\n    }\n\n    def \"C\"\n    {\n        rel b = </World/A>\n        int y = 1\n    }\n\n    def \"Group\"\n    {\n    }\n\n    def \"User\"\n    {\n        rel across\n        rel across.default = </World/C.b[/World/A/Kid].d>        \n        rel after = [\n            </World/A.b[/World/C].x>,\n            </World/C.b[/World/A].y>,\n        ]\n        rel before = [\n            </World/A.b[/World/C].d>,\n            </World/A/Kid.b[/World/C].d>,\n            </World/A.x2.mapper[/World/C.y]>,\n        ]\n        rel both = [\n            </World/A.b[/World/A/Kid].d>,\n            </World/A.x2.mapper[/World/A.x2]>,\n        ]\n        int conn.connect = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n            </World/A/Kid.b[/World/C].d>,\n        ]\n        rel deleted\n        rel deleted.default = </World/C.b[/World/A/Kid].d>        \n        rel dependent = [\n            </World/A/Kid>,\n            </World/C.y>,\n            </World/A.x2>,\n        ]\n        rel dependent.default = </World/C.b[/World/A/Kid].d>        \n        delete rel edits = </World/C.b[/World/A].d>\n        prepend rel edits = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n        append rel edits = </World/A.x2.mapper[/World/C.y]>\n        reorder rel edits = [\n            </World/C.b[/World/A].d>,\n            </World/A.b[/World/C].d>,\n        ]\n        pathExpression expr = \"/World/A/Kid /World/C.y /World/A.x2\"\n        rel independent = </World/Group>\n        rel independent.default = </World/C.b[/World/A/Kid].d>        \n        rel inside = [\n            </World/C.b[/World/A].d>,\n            </World/C.b[/World/A/Kid].d>,\n            </World/C.y.mapper[/World/A.x]>,\n            </World/C.b[/World/C.b[/World/A].d].e>,\n        ]\n        delete int listed.connect = </World/A/Kid.b[/World/C].d>\n        prepend int listed.connect = </World/A.b[/World/A/Kid].d>\n        append int listed.connect = </World/C.b[/World/A].d>\n        rel relative = </World/A.b[../C].d>\n    }\n\n    def \"Lone\"\n    {\n        rel only\n        rel only.default = </World/C.b[/World/A/Kid].d>        \n    }\n\n    def \"V\" (\n        variants = {\n            string s = \"on\"\n        }\n        prepend variantSets = \"s\"\n    )\n    {\n        variantSet \"s\" = {\n            \"off\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n            \"on\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n        }\n    }\n\n    def \"R\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n        rel referenced\n        rel referenced.default = </World/C.b[/World/R/Part].d>        \n        rel toR = [\n            </World/R.b[/World/R/Part].d>,\n            </World/R/Part.x.mapper[/World/A.x]>,\n        ]\n    }\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"User\"\n    {\n        rel across = </World/A/Kid>\n        delete rel deleted = </World/A/Kid>\n        rel sub = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n    }\n}\n\n"
    },
    "name": "rename_mapper_property",
    "path": "/World/A.x",
@@ -2726,6 +2804,7 @@
      "properties": [
       "c",
       "r",
+      "referenced",
       "toR"
      ],
      "targets": {
@@ -2733,6 +2812,9 @@
        "/World/R.b[/World/R/Part].d",
        "/World/R/Part.b[/World/R].d",
        "/World/R/Part.x.mapper[/World/R/Part.y]"
+      ],
+      "referenced": [
+       "/World/R/Part"
       ],
       "toR": [
        "/World/R.b[/World/R/Part].d",
@@ -2768,6 +2850,7 @@
       "before",
       "both",
       "conn",
+      "deleted",
       "dependent",
       "edits",
       "expr",
@@ -2794,6 +2877,7 @@
        "/World/A.b[/World/A/Kid].d",
        "/World/Group.x.mapper[/World/Group.x]"
       ],
+      "deleted": [],
       "dependent": [
        "/World/A/Kid",
        "/World/C.y",
@@ -2845,9 +2929,9 @@
    "destination": "/World/Group.x",
    "errors": [],
    "layers": {
-    "asset.usda": "#usda 1.0\n(\n    defaultPrim = \"Asset\"\n)\n\ndef \"Asset\"\n{\n    int c.connect = </Asset/Part.b[/Asset].d>\n    rel r = [\n        </Asset.b[/Asset/Part].d>,\n        </Asset/Part.b[/Asset].d>,\n        </Asset/Part.x.mapper[/Asset/Part.y]>,\n    ]\n\n    def \"Part\"\n    {\n        int x = 1\n        int y = 1\n    }\n}\n\n",
-    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\ndef \"World\"\n{\n    def \"A\"\n    {\n        rel b = </World/C>\n\n        def \"Kid\"\n        {\n            rel b = </World/C>\n        }\n    }\n\n    def \"C\"\n    {\n        rel b = </World/A>\n        int y = 1\n    }\n\n    def \"Group\"\n    {\n        int x = 1\n    }\n\n    def \"User\"\n    {\n        rel across\n        rel across.default = </World/C.b[/World/A/Kid].d>        \n        rel after = [\n            </World/A.b[/World/C].x>,\n            </World/C.b[/World/A].y>,\n        ]\n        rel before = [\n            </World/A.b[/World/C].d>,\n            </World/A/Kid.b[/World/C].d>,\n            </World/Group.x.mapper[/World/C.y]>,\n        ]\n        rel both = [\n            </World/A.b[/World/A/Kid].d>,\n            </World/Group.x.mapper[/World/Group.x]>,\n        ]\n        int conn.connect = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n            </World/A/Kid.b[/World/C].d>,\n        ]\n        rel dependent = [\n            </World/A/Kid>,\n            </World/C.y>,\n            </World/Group.x>,\n        ]\n        rel dependent.default = </World/C.b[/World/A/Kid].d>        \n        delete rel edits = </World/C.b[/World/A].d>\n        prepend rel edits = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n        append rel edits = </World/Group.x.mapper[/World/C.y]>\n        reorder rel edits = [\n            </World/C.b[/World/A].d>,\n            </World/A.b[/World/C].d>,\n        ]\n        pathExpression expr = \"/World/A/Kid /World/C.y /World/Group.x\"\n        rel independent = </World/Group>\n        rel independent.default = </World/C.b[/World/A/Kid].d>        \n        rel inside = [\n            </World/C.b[/World/A].d>,\n            </World/C.b[/World/A/Kid].d>,\n            </World/C.y.mapper[/World/A.x]>,\n            </World/C.b[/World/C.b[/World/A].d].e>,\n        ]\n        delete int listed.connect = </World/A/Kid.b[/World/C].d>\n        prepend int listed.connect = </World/A.b[/World/A/Kid].d>\n        append int listed.connect = </World/C.b[/World/A].d>\n        rel relative = </World/A.b[../C].d>\n    }\n\n    def \"Lone\"\n    {\n        rel only\n        rel only.default = </World/C.b[/World/A/Kid].d>        \n    }\n\n    def \"V\" (\n        variants = {\n            string s = \"on\"\n        }\n        prepend variantSets = \"s\"\n    )\n    {\n        variantSet \"s\" = {\n            \"off\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n            \"on\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n        }\n    }\n\n    def \"R\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n        rel toR = [\n            </World/R.b[/World/R/Part].d>,\n            </World/R/Part.x.mapper[/World/A.x]>,\n        ]\n    }\n}\n\n",
-    "sub.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"User\"\n    {\n        rel across = </World/A/Kid>\n        rel sub = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n    }\n}\n\n"
+    "asset.usda": "#usda 1.0\n(\n    defaultPrim = \"Asset\"\n)\n\ndef \"Asset\"\n{\n    int c.connect = </Asset/Part.b[/Asset].d>\n    rel r = [\n        </Asset.b[/Asset/Part].d>,\n        </Asset/Part.b[/Asset].d>,\n        </Asset/Part.x.mapper[/Asset/Part.y]>,\n    ]\n    rel referenced = </Asset/Part>\n\n    def \"Part\"\n    {\n        int x = 1\n        int y = 1\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\ndef \"World\"\n{\n    def \"A\"\n    {\n        rel b = </World/C>\n\n        def \"Kid\"\n        {\n            rel b = </World/C>\n        }\n    }\n\n    def \"C\"\n    {\n        rel b = </World/A>\n        int y = 1\n    }\n\n    def \"Group\"\n    {\n        int x = 1\n    }\n\n    def \"User\"\n    {\n        rel across\n        rel across.default = </World/C.b[/World/A/Kid].d>        \n        rel after = [\n            </World/A.b[/World/C].x>,\n            </World/C.b[/World/A].y>,\n        ]\n        rel before = [\n            </World/A.b[/World/C].d>,\n            </World/A/Kid.b[/World/C].d>,\n            </World/Group.x.mapper[/World/C.y]>,\n        ]\n        rel both = [\n            </World/A.b[/World/A/Kid].d>,\n            </World/Group.x.mapper[/World/Group.x]>,\n        ]\n        int conn.connect = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n            </World/A/Kid.b[/World/C].d>,\n        ]\n        rel deleted\n        rel deleted.default = </World/C.b[/World/A/Kid].d>        \n        rel dependent = [\n            </World/A/Kid>,\n            </World/C.y>,\n            </World/Group.x>,\n        ]\n        rel dependent.default = </World/C.b[/World/A/Kid].d>        \n        delete rel edits = </World/C.b[/World/A].d>\n        prepend rel edits = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n        append rel edits = </World/Group.x.mapper[/World/C.y]>\n        reorder rel edits = [\n            </World/C.b[/World/A].d>,\n            </World/A.b[/World/C].d>,\n        ]\n        pathExpression expr = \"/World/A/Kid /World/C.y /World/Group.x\"\n        rel independent = </World/Group>\n        rel independent.default = </World/C.b[/World/A/Kid].d>        \n        rel inside = [\n            </World/C.b[/World/A].d>,\n            </World/C.b[/World/A/Kid].d>,\n            </World/C.y.mapper[/World/A.x]>,\n            </World/C.b[/World/C.b[/World/A].d].e>,\n        ]\n        delete int listed.connect = </World/A/Kid.b[/World/C].d>\n        prepend int listed.connect = </World/A.b[/World/A/Kid].d>\n        append int listed.connect = </World/C.b[/World/A].d>\n        rel relative = </World/A.b[../C].d>\n    }\n\n    def \"Lone\"\n    {\n        rel only\n        rel only.default = </World/C.b[/World/A/Kid].d>        \n    }\n\n    def \"V\" (\n        variants = {\n            string s = \"on\"\n        }\n        prepend variantSets = \"s\"\n    )\n    {\n        variantSet \"s\" = {\n            \"off\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n            \"on\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n        }\n    }\n\n    def \"R\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n        rel referenced\n        rel referenced.default = </World/C.b[/World/R/Part].d>        \n        rel toR = [\n            </World/R.b[/World/R/Part].d>,\n            </World/R/Part.x.mapper[/World/A.x]>,\n        ]\n    }\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"User\"\n    {\n        rel across = </World/A/Kid>\n        delete rel deleted = </World/A/Kid>\n        rel sub = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n    }\n}\n\n"
    },
    "name": "reparent_mapper_property",
    "path": "/World/A.x",
@@ -2938,6 +3022,7 @@
      "properties": [
       "c",
       "r",
+      "referenced",
       "toR"
      ],
      "targets": {
@@ -2945,6 +3030,9 @@
        "/World/R.b[/World/R/Part].d",
        "/World/R/Part.b[/World/R].d",
        "/World/R/Part.x.mapper[/World/R/Part.y]"
+      ],
+      "referenced": [
+       "/World/R/Part"
       ],
       "toR": [
        "/World/R.b[/World/R/Part].d",
@@ -2980,6 +3068,7 @@
       "before",
       "both",
       "conn",
+      "deleted",
       "dependent",
       "edits",
       "expr",
@@ -3004,6 +3093,7 @@
       "both": [
        "/World/A.b[/World/A/Kid].d"
       ],
+      "deleted": [],
       "dependent": [
        "/World/A/Kid",
        "/World/C.y"
@@ -3053,9 +3143,9 @@
    "destination": null,
    "errors": [],
    "layers": {
-    "asset.usda": "#usda 1.0\n(\n    defaultPrim = \"Asset\"\n)\n\ndef \"Asset\"\n{\n    int c.connect = </Asset/Part.b[/Asset].d>\n    rel r = [\n        </Asset.b[/Asset/Part].d>,\n        </Asset/Part.b[/Asset].d>,\n        </Asset/Part.x.mapper[/Asset/Part.y]>,\n    ]\n\n    def \"Part\"\n    {\n        int x = 1\n        int y = 1\n    }\n}\n\n",
-    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\ndef \"World\"\n{\n    def \"A\"\n    {\n        rel b = </World/C>\n\n        def \"Kid\"\n        {\n            rel b = </World/C>\n        }\n    }\n\n    def \"C\"\n    {\n        rel b = </World/A>\n        int y = 1\n    }\n\n    def \"Group\"\n    {\n    }\n\n    def \"User\"\n    {\n        rel across\n        rel across.default = </World/C.b[/World/A/Kid].d>        \n        rel after = [\n            </World/A.b[/World/C].x>,\n            </World/C.b[/World/A].y>,\n        ]\n        rel before = [\n            </World/A.b[/World/C].d>,\n            </World/A/Kid.b[/World/C].d>,\n        ]\n        rel both = </World/A.b[/World/A/Kid].d>\n        int conn.connect = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n            </World/A/Kid.b[/World/C].d>,\n        ]\n        rel dependent = [\n            </World/A/Kid>,\n            </World/C.y>,\n        ]\n        rel dependent.default = <>        \n        delete rel edits = </World/C.b[/World/A].d>\n        prepend rel edits = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n        reorder rel edits = [\n            </World/C.b[/World/A].d>,\n            </World/A.b[/World/C].d>,\n        ]\n        pathExpression expr = \"/World/A/Kid /World/C.y\"\n        rel independent = </World/Group>\n        rel independent.default = </World/C.b[/World/A/Kid].d>        \n        rel inside = [\n            </World/C.b[/World/A].d>,\n            </World/C.b[/World/A/Kid].d>,\n            </World/C.y.mapper[/World/A.x]>,\n            </World/C.b[/World/C.b[/World/A].d].e>,\n        ]\n        delete int listed.connect = </World/A/Kid.b[/World/C].d>\n        prepend int listed.connect = </World/A.b[/World/A/Kid].d>\n        append int listed.connect = </World/C.b[/World/A].d>\n        rel relative = </World/A.b[../C].d>\n    }\n\n    def \"Lone\"\n    {\n        rel only\n        rel only.default = </World/C.b[/World/A/Kid].d>        \n    }\n\n    def \"V\" (\n        variants = {\n            string s = \"on\"\n        }\n        prepend variantSets = \"s\"\n    )\n    {\n        variantSet \"s\" = {\n            \"off\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n            \"on\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n        }\n    }\n\n    def \"R\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n        rel toR = [\n            </World/R.b[/World/R/Part].d>,\n            </World/R/Part.x.mapper[/World/A.x]>,\n        ]\n    }\n}\n\n",
-    "sub.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"User\"\n    {\n        rel across = </World/A/Kid>\n        rel sub = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n    }\n}\n\n"
+    "asset.usda": "#usda 1.0\n(\n    defaultPrim = \"Asset\"\n)\n\ndef \"Asset\"\n{\n    int c.connect = </Asset/Part.b[/Asset].d>\n    rel r = [\n        </Asset.b[/Asset/Part].d>,\n        </Asset/Part.b[/Asset].d>,\n        </Asset/Part.x.mapper[/Asset/Part.y]>,\n    ]\n    rel referenced = </Asset/Part>\n\n    def \"Part\"\n    {\n        int x = 1\n        int y = 1\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\ndef \"World\"\n{\n    def \"A\"\n    {\n        rel b = </World/C>\n\n        def \"Kid\"\n        {\n            rel b = </World/C>\n        }\n    }\n\n    def \"C\"\n    {\n        rel b = </World/A>\n        int y = 1\n    }\n\n    def \"Group\"\n    {\n    }\n\n    def \"User\"\n    {\n        rel across\n        rel across.default = </World/C.b[/World/A/Kid].d>        \n        rel after = [\n            </World/A.b[/World/C].x>,\n            </World/C.b[/World/A].y>,\n        ]\n        rel before = [\n            </World/A.b[/World/C].d>,\n            </World/A/Kid.b[/World/C].d>,\n        ]\n        rel both = </World/A.b[/World/A/Kid].d>\n        int conn.connect = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n            </World/A/Kid.b[/World/C].d>,\n        ]\n        rel deleted\n        rel deleted.default = </World/C.b[/World/A/Kid].d>        \n        rel dependent = [\n            </World/A/Kid>,\n            </World/C.y>,\n        ]\n        rel dependent.default = <>        \n        delete rel edits = </World/C.b[/World/A].d>\n        prepend rel edits = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n        reorder rel edits = [\n            </World/C.b[/World/A].d>,\n            </World/A.b[/World/C].d>,\n        ]\n        pathExpression expr = \"/World/A/Kid /World/C.y\"\n        rel independent = </World/Group>\n        rel independent.default = </World/C.b[/World/A/Kid].d>        \n        rel inside = [\n            </World/C.b[/World/A].d>,\n            </World/C.b[/World/A/Kid].d>,\n            </World/C.y.mapper[/World/A.x]>,\n            </World/C.b[/World/C.b[/World/A].d].e>,\n        ]\n        delete int listed.connect = </World/A/Kid.b[/World/C].d>\n        prepend int listed.connect = </World/A.b[/World/A/Kid].d>\n        append int listed.connect = </World/C.b[/World/A].d>\n        rel relative = </World/A.b[../C].d>\n    }\n\n    def \"Lone\"\n    {\n        rel only\n        rel only.default = </World/C.b[/World/A/Kid].d>        \n    }\n\n    def \"V\" (\n        variants = {\n            string s = \"on\"\n        }\n        prepend variantSets = \"s\"\n    )\n    {\n        variantSet \"s\" = {\n            \"off\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n            \"on\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n        }\n    }\n\n    def \"R\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n        rel referenced\n        rel referenced.default = </World/C.b[/World/R/Part].d>        \n        rel toR = [\n            </World/R.b[/World/R/Part].d>,\n            </World/R/Part.x.mapper[/World/A.x]>,\n        ]\n    }\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"User\"\n    {\n        rel across = </World/A/Kid>\n        delete rel deleted = </World/A/Kid>\n        rel sub = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n    }\n}\n\n"
    },
    "name": "delete_mapper_property",
    "path": "/World/A.x",
@@ -3147,6 +3237,7 @@
      "properties": [
       "c",
       "r",
+      "referenced",
       "toR"
      ],
      "targets": {
@@ -3154,6 +3245,9 @@
        "/World/R.b[/World/R/Part].d",
        "/World/R/Part.b[/World/R].d",
        "/World/R/Part.x.mapper[/World/R/Part.y]"
+      ],
+      "referenced": [
+       "/World/R/Part"
       ],
       "toR": [
        "/World/R.b[/World/R/Part].d",
@@ -3189,6 +3283,7 @@
       "before",
       "both",
       "conn",
+      "deleted",
       "dependent",
       "edits",
       "expr",
@@ -3215,6 +3310,7 @@
        "/World/A.b[/World/A/Kid].d",
        "/World/A.x.mapper[/World/A.x]"
       ],
+      "deleted": [],
       "dependent": [
        "/World/A/Kid",
        "/World/C.y2",
@@ -3266,9 +3362,9 @@
    "destination": "/World/C.y2",
    "errors": [],
    "layers": {
-    "asset.usda": "#usda 1.0\n(\n    defaultPrim = \"Asset\"\n)\n\ndef \"Asset\"\n{\n    int c.connect = </Asset/Part.b[/Asset].d>\n    rel r = [\n        </Asset.b[/Asset/Part].d>,\n        </Asset/Part.b[/Asset].d>,\n        </Asset/Part.x.mapper[/Asset/Part.y]>,\n    ]\n\n    def \"Part\"\n    {\n        int x = 1\n        int y = 1\n    }\n}\n\n",
-    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\ndef \"World\"\n{\n    def \"A\"\n    {\n        rel b = </World/C>\n        int x = 1\n\n        def \"Kid\"\n        {\n            rel b = </World/C>\n        }\n    }\n\n    def \"C\"\n    {\n        rel b = </World/A>\n        int y2 = 1\n    }\n\n    def \"Group\"\n    {\n    }\n\n    def \"User\"\n    {\n        rel across\n        rel across.default = </World/C.b[/World/A/Kid].d>        \n        rel after = [\n            </World/A.b[/World/C].x>,\n            </World/C.b[/World/A].y>,\n        ]\n        rel before = [\n            </World/A.b[/World/C].d>,\n            </World/A/Kid.b[/World/C].d>,\n            </World/A.x.mapper[/World/C.y]>,\n        ]\n        rel both = [\n            </World/A.b[/World/A/Kid].d>,\n            </World/A.x.mapper[/World/A.x]>,\n        ]\n        int conn.connect = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n            </World/A/Kid.b[/World/C].d>,\n        ]\n        rel dependent = [\n            </World/A/Kid>,\n            </World/C.y2>,\n            </World/A.x>,\n        ]\n        rel dependent.default = </World/C.b[/World/A/Kid].d>        \n        delete rel edits = </World/C.b[/World/A].d>\n        prepend rel edits = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n        append rel edits = </World/A.x.mapper[/World/C.y]>\n        reorder rel edits = [\n            </World/C.b[/World/A].d>,\n            </World/A.b[/World/C].d>,\n        ]\n        pathExpression expr = \"/World/A/Kid /World/C.y2 /World/A.x\"\n        rel independent = </World/Group>\n        rel independent.default = </World/C.b[/World/A/Kid].d>        \n        rel inside = [\n            </World/C.b[/World/A].d>,\n            </World/C.b[/World/A/Kid].d>,\n            </World/C.y2.mapper[/World/A.x]>,\n            </World/C.b[/World/C.b[/World/A].d].e>,\n        ]\n        delete int listed.connect = </World/A/Kid.b[/World/C].d>\n        prepend int listed.connect = </World/A.b[/World/A/Kid].d>\n        append int listed.connect = </World/C.b[/World/A].d>\n        rel relative = </World/A.b[../C].d>\n    }\n\n    def \"Lone\"\n    {\n        rel only\n        rel only.default = </World/C.b[/World/A/Kid].d>        \n    }\n\n    def \"V\" (\n        variants = {\n            string s = \"on\"\n        }\n        prepend variantSets = \"s\"\n    )\n    {\n        variantSet \"s\" = {\n            \"off\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n            \"on\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n        }\n    }\n\n    def \"R\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n        rel toR = [\n            </World/R.b[/World/R/Part].d>,\n            </World/R/Part.x.mapper[/World/A.x]>,\n        ]\n    }\n}\n\n",
-    "sub.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"User\"\n    {\n        rel across = </World/A/Kid>\n        rel sub = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n    }\n}\n\n"
+    "asset.usda": "#usda 1.0\n(\n    defaultPrim = \"Asset\"\n)\n\ndef \"Asset\"\n{\n    int c.connect = </Asset/Part.b[/Asset].d>\n    rel r = [\n        </Asset.b[/Asset/Part].d>,\n        </Asset/Part.b[/Asset].d>,\n        </Asset/Part.x.mapper[/Asset/Part.y]>,\n    ]\n    rel referenced = </Asset/Part>\n\n    def \"Part\"\n    {\n        int x = 1\n        int y = 1\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\ndef \"World\"\n{\n    def \"A\"\n    {\n        rel b = </World/C>\n        int x = 1\n\n        def \"Kid\"\n        {\n            rel b = </World/C>\n        }\n    }\n\n    def \"C\"\n    {\n        rel b = </World/A>\n        int y2 = 1\n    }\n\n    def \"Group\"\n    {\n    }\n\n    def \"User\"\n    {\n        rel across\n        rel across.default = </World/C.b[/World/A/Kid].d>        \n        rel after = [\n            </World/A.b[/World/C].x>,\n            </World/C.b[/World/A].y>,\n        ]\n        rel before = [\n            </World/A.b[/World/C].d>,\n            </World/A/Kid.b[/World/C].d>,\n            </World/A.x.mapper[/World/C.y]>,\n        ]\n        rel both = [\n            </World/A.b[/World/A/Kid].d>,\n            </World/A.x.mapper[/World/A.x]>,\n        ]\n        int conn.connect = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n            </World/A/Kid.b[/World/C].d>,\n        ]\n        rel deleted\n        rel deleted.default = </World/C.b[/World/A/Kid].d>        \n        rel dependent = [\n            </World/A/Kid>,\n            </World/C.y2>,\n            </World/A.x>,\n        ]\n        rel dependent.default = </World/C.b[/World/A/Kid].d>        \n        delete rel edits = </World/C.b[/World/A].d>\n        prepend rel edits = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n        append rel edits = </World/A.x.mapper[/World/C.y]>\n        reorder rel edits = [\n            </World/C.b[/World/A].d>,\n            </World/A.b[/World/C].d>,\n        ]\n        pathExpression expr = \"/World/A/Kid /World/C.y2 /World/A.x\"\n        rel independent = </World/Group>\n        rel independent.default = </World/C.b[/World/A/Kid].d>        \n        rel inside = [\n            </World/C.b[/World/A].d>,\n            </World/C.b[/World/A/Kid].d>,\n            </World/C.y2.mapper[/World/A.x]>,\n            </World/C.b[/World/C.b[/World/A].d].e>,\n        ]\n        delete int listed.connect = </World/A/Kid.b[/World/C].d>\n        prepend int listed.connect = </World/A.b[/World/A/Kid].d>\n        append int listed.connect = </World/C.b[/World/A].d>\n        rel relative = </World/A.b[../C].d>\n    }\n\n    def \"Lone\"\n    {\n        rel only\n        rel only.default = </World/C.b[/World/A/Kid].d>        \n    }\n\n    def \"V\" (\n        variants = {\n            string s = \"on\"\n        }\n        prepend variantSets = \"s\"\n    )\n    {\n        variantSet \"s\" = {\n            \"off\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n            \"on\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n        }\n    }\n\n    def \"R\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n        rel referenced\n        rel referenced.default = </World/C.b[/World/R/Part].d>        \n        rel toR = [\n            </World/R.b[/World/R/Part].d>,\n            </World/R/Part.x.mapper[/World/A.x]>,\n        ]\n    }\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"User\"\n    {\n        rel across = </World/A/Kid>\n        delete rel deleted = </World/A/Kid>\n        rel sub = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n    }\n}\n\n"
    },
    "name": "rename_bracketed_property",
    "path": "/World/C.y",
@@ -3359,6 +3455,7 @@
      "properties": [
       "c",
       "r",
+      "referenced",
       "toR"
      ],
      "targets": {
@@ -3366,6 +3463,9 @@
        "/World/R.b[/World/R/Part].d",
        "/World/R/Part.b[/World/R].d",
        "/World/R/Part.x.mapper[/World/R/Part.y]"
+      ],
+      "referenced": [
+       "/World/R/Part"
       ],
       "toR": [
        "/World/R.b[/World/R/Part].d",
@@ -3401,6 +3501,7 @@
       "before",
       "both",
       "conn",
+      "deleted",
       "dependent",
       "edits",
       "expr",
@@ -3427,6 +3528,7 @@
        "/World/A.b[/World/A/Kid].d",
        "/World/A.x.mapper[/World/A.x]"
       ],
+      "deleted": [],
       "dependent": [
        "/World/A/Kid",
        "/World/A.x"
@@ -3476,9 +3578,9 @@
    "destination": null,
    "errors": [],
    "layers": {
-    "asset.usda": "#usda 1.0\n(\n    defaultPrim = \"Asset\"\n)\n\ndef \"Asset\"\n{\n    int c.connect = </Asset/Part.b[/Asset].d>\n    rel r = [\n        </Asset.b[/Asset/Part].d>,\n        </Asset/Part.b[/Asset].d>,\n        </Asset/Part.x.mapper[/Asset/Part.y]>,\n    ]\n\n    def \"Part\"\n    {\n        int x = 1\n        int y = 1\n    }\n}\n\n",
-    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\ndef \"World\"\n{\n    def \"A\"\n    {\n        rel b = </World/C>\n        int x = 1\n\n        def \"Kid\"\n        {\n            rel b = </World/C>\n        }\n    }\n\n    def \"C\"\n    {\n        rel b = </World/A>\n    }\n\n    def \"Group\"\n    {\n    }\n\n    def \"User\"\n    {\n        rel across\n        rel across.default = </World/C.b[/World/A/Kid].d>        \n        rel after = [\n            </World/A.b[/World/C].x>,\n            </World/C.b[/World/A].y>,\n        ]\n        rel before = [\n            </World/A.b[/World/C].d>,\n            </World/A/Kid.b[/World/C].d>,\n            </World/A.x.mapper[/World/C.y]>,\n        ]\n        rel both = [\n            </World/A.b[/World/A/Kid].d>,\n            </World/A.x.mapper[/World/A.x]>,\n        ]\n        int conn.connect = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n            </World/A/Kid.b[/World/C].d>,\n        ]\n        rel dependent = [\n            </World/A/Kid>,\n            </World/A.x>,\n        ]\n        rel dependent.default = <>        \n        delete rel edits = </World/C.b[/World/A].d>\n        prepend rel edits = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n        append rel edits = </World/A.x.mapper[/World/C.y]>\n        reorder rel edits = [\n            </World/C.b[/World/A].d>,\n            </World/A.b[/World/C].d>,\n        ]\n        pathExpression expr = \"/World/A/Kid /World/A.x\"\n        rel independent = </World/Group>\n        rel independent.default = </World/C.b[/World/A/Kid].d>        \n        rel inside = [\n            </World/C.b[/World/A].d>,\n            </World/C.b[/World/A/Kid].d>,\n            </World/C.b[/World/C.b[/World/A].d].e>,\n        ]\n        delete int listed.connect = </World/A/Kid.b[/World/C].d>\n        prepend int listed.connect = </World/A.b[/World/A/Kid].d>\n        append int listed.connect = </World/C.b[/World/A].d>\n        rel relative = </World/A.b[../C].d>\n    }\n\n    def \"Lone\"\n    {\n        rel only\n        rel only.default = </World/C.b[/World/A/Kid].d>        \n    }\n\n    def \"V\" (\n        variants = {\n            string s = \"on\"\n        }\n        prepend variantSets = \"s\"\n    )\n    {\n        variantSet \"s\" = {\n            \"off\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n            \"on\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n        }\n    }\n\n    def \"R\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n        rel toR = [\n            </World/R.b[/World/R/Part].d>,\n            </World/R/Part.x.mapper[/World/A.x]>,\n        ]\n    }\n}\n\n",
-    "sub.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"User\"\n    {\n        rel across = </World/A/Kid>\n        rel sub = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n    }\n}\n\n"
+    "asset.usda": "#usda 1.0\n(\n    defaultPrim = \"Asset\"\n)\n\ndef \"Asset\"\n{\n    int c.connect = </Asset/Part.b[/Asset].d>\n    rel r = [\n        </Asset.b[/Asset/Part].d>,\n        </Asset/Part.b[/Asset].d>,\n        </Asset/Part.x.mapper[/Asset/Part.y]>,\n    ]\n    rel referenced = </Asset/Part>\n\n    def \"Part\"\n    {\n        int x = 1\n        int y = 1\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\ndef \"World\"\n{\n    def \"A\"\n    {\n        rel b = </World/C>\n        int x = 1\n\n        def \"Kid\"\n        {\n            rel b = </World/C>\n        }\n    }\n\n    def \"C\"\n    {\n        rel b = </World/A>\n    }\n\n    def \"Group\"\n    {\n    }\n\n    def \"User\"\n    {\n        rel across\n        rel across.default = </World/C.b[/World/A/Kid].d>        \n        rel after = [\n            </World/A.b[/World/C].x>,\n            </World/C.b[/World/A].y>,\n        ]\n        rel before = [\n            </World/A.b[/World/C].d>,\n            </World/A/Kid.b[/World/C].d>,\n            </World/A.x.mapper[/World/C.y]>,\n        ]\n        rel both = [\n            </World/A.b[/World/A/Kid].d>,\n            </World/A.x.mapper[/World/A.x]>,\n        ]\n        int conn.connect = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n            </World/A/Kid.b[/World/C].d>,\n        ]\n        rel deleted\n        rel deleted.default = </World/C.b[/World/A/Kid].d>        \n        rel dependent = [\n            </World/A/Kid>,\n            </World/A.x>,\n        ]\n        rel dependent.default = <>        \n        delete rel edits = </World/C.b[/World/A].d>\n        prepend rel edits = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n        append rel edits = </World/A.x.mapper[/World/C.y]>\n        reorder rel edits = [\n            </World/C.b[/World/A].d>,\n            </World/A.b[/World/C].d>,\n        ]\n        pathExpression expr = \"/World/A/Kid /World/A.x\"\n        rel independent = </World/Group>\n        rel independent.default = </World/C.b[/World/A/Kid].d>        \n        rel inside = [\n            </World/C.b[/World/A].d>,\n            </World/C.b[/World/A/Kid].d>,\n            </World/C.b[/World/C.b[/World/A].d].e>,\n        ]\n        delete int listed.connect = </World/A/Kid.b[/World/C].d>\n        prepend int listed.connect = </World/A.b[/World/A/Kid].d>\n        append int listed.connect = </World/C.b[/World/A].d>\n        rel relative = </World/A.b[../C].d>\n    }\n\n    def \"Lone\"\n    {\n        rel only\n        rel only.default = </World/C.b[/World/A/Kid].d>        \n    }\n\n    def \"V\" (\n        variants = {\n            string s = \"on\"\n        }\n        prepend variantSets = \"s\"\n    )\n    {\n        variantSet \"s\" = {\n            \"off\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n            \"on\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n        }\n    }\n\n    def \"R\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n        rel referenced\n        rel referenced.default = </World/C.b[/World/R/Part].d>        \n        rel toR = [\n            </World/R.b[/World/R/Part].d>,\n            </World/R/Part.x.mapper[/World/A.x]>,\n        ]\n    }\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"User\"\n    {\n        rel across = </World/A/Kid>\n        delete rel deleted = </World/A/Kid>\n        rel sub = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n    }\n}\n\n"
    },
    "name": "delete_bracketed_property",
    "path": "/World/C.y",
@@ -3570,6 +3672,7 @@
      "properties": [
       "c",
       "r",
+      "referenced",
       "toR"
      ],
      "targets": {
@@ -3577,6 +3680,9 @@
        "/World/R.b[/World/R/Part].d",
        "/World/R/Part.b[/World/R].d",
        "/World/R/Part.x.mapper[/World/R/Part.y]"
+      ],
+      "referenced": [
+       "/World/R/Part"
       ],
       "toR": [
        "/World/R.b[/World/R/Part].d",
@@ -3612,6 +3718,7 @@
       "before",
       "both",
       "conn",
+      "deleted",
       "dependent",
       "edits",
       "expr",
@@ -3638,6 +3745,7 @@
        "/World/A.b[/World/A/Kid].d",
        "/World/A.x.mapper[/World/A.x]"
       ],
+      "deleted": [],
       "dependent": [
        "/World/A/Kid",
        "/World/C.y",
@@ -3689,9 +3797,9 @@
    "destination": "/World/C.b2",
    "errors": [],
    "layers": {
-    "asset.usda": "#usda 1.0\n(\n    defaultPrim = \"Asset\"\n)\n\ndef \"Asset\"\n{\n    int c.connect = </Asset/Part.b[/Asset].d>\n    rel r = [\n        </Asset.b[/Asset/Part].d>,\n        </Asset/Part.b[/Asset].d>,\n        </Asset/Part.x.mapper[/Asset/Part.y]>,\n    ]\n\n    def \"Part\"\n    {\n        int x = 1\n        int y = 1\n    }\n}\n\n",
-    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\ndef \"World\"\n{\n    def \"A\"\n    {\n        rel b = </World/C>\n        int x = 1\n\n        def \"Kid\"\n        {\n            rel b = </World/C>\n        }\n    }\n\n    def \"C\"\n    {\n        rel b2 = </World/A>\n        int y = 1\n    }\n\n    def \"Group\"\n    {\n    }\n\n    def \"User\"\n    {\n        rel across\n        rel across.default = </World/C.b2[/World/A/Kid].d>        \n        rel after = [\n            </World/A.b[/World/C].x>,\n            </World/C.b2[/World/A].y>,\n        ]\n        rel before = [\n            </World/A.b[/World/C].d>,\n            </World/A/Kid.b[/World/C].d>,\n            </World/A.x.mapper[/World/C.y]>,\n        ]\n        rel both = [\n            </World/A.b[/World/A/Kid].d>,\n            </World/A.x.mapper[/World/A.x]>,\n        ]\n        int conn.connect = [\n            </World/A.b[/World/C].d>,\n            </World/C.b2[/World/A].d>,\n            </World/A/Kid.b[/World/C].d>,\n        ]\n        rel dependent = [\n            </World/A/Kid>,\n            </World/C.y>,\n            </World/A.x>,\n        ]\n        rel dependent.default = </World/C.b2[/World/A/Kid].d>        \n        delete rel edits = </World/C.b2[/World/A].d>\n        prepend rel edits = [\n            </World/A.b[/World/C].d>,\n            </World/C.b2[/World/A].d>,\n        ]\n        append rel edits = </World/A.x.mapper[/World/C.y]>\n        reorder rel edits = [\n            </World/C.b2[/World/A].d>,\n            </World/A.b[/World/C].d>,\n        ]\n        pathExpression expr = \"/World/A/Kid /World/C.y /World/A.x\"\n        rel independent = </World/Group>\n        rel independent.default = </World/C.b2[/World/A/Kid].d>        \n        rel inside = [\n            </World/C.b2[/World/A].d>,\n            </World/C.b2[/World/A/Kid].d>,\n            </World/C.y.mapper[/World/A.x]>,\n            </World/C.b2[/World/C.b2[/World/A].d].e>,\n        ]\n        delete int listed.connect = </World/A/Kid.b[/World/C].d>\n        prepend int listed.connect = </World/A.b[/World/A/Kid].d>\n        append int listed.connect = </World/C.b2[/World/A].d>\n        rel relative = </World/A.b[../C].d>\n    }\n\n    def \"Lone\"\n    {\n        rel only\n        rel only.default = </World/C.b2[/World/A/Kid].d>        \n    }\n\n    def \"V\" (\n        variants = {\n            string s = \"on\"\n        }\n        prepend variantSets = \"s\"\n    )\n    {\n        variantSet \"s\" = {\n            \"off\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n            \"on\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b2[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n        }\n    }\n\n    def \"R\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n        rel toR = [\n            </World/R.b[/World/R/Part].d>,\n            </World/R/Part.x.mapper[/World/A.x]>,\n        ]\n    }\n}\n\n",
-    "sub.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"User\"\n    {\n        rel across = </World/A/Kid>\n        rel sub = [\n            </World/A.b[/World/C].d>,\n            </World/C.b2[/World/A].d>,\n        ]\n    }\n}\n\n"
+    "asset.usda": "#usda 1.0\n(\n    defaultPrim = \"Asset\"\n)\n\ndef \"Asset\"\n{\n    int c.connect = </Asset/Part.b[/Asset].d>\n    rel r = [\n        </Asset.b[/Asset/Part].d>,\n        </Asset/Part.b[/Asset].d>,\n        </Asset/Part.x.mapper[/Asset/Part.y]>,\n    ]\n    rel referenced = </Asset/Part>\n\n    def \"Part\"\n    {\n        int x = 1\n        int y = 1\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\ndef \"World\"\n{\n    def \"A\"\n    {\n        rel b = </World/C>\n        int x = 1\n\n        def \"Kid\"\n        {\n            rel b = </World/C>\n        }\n    }\n\n    def \"C\"\n    {\n        rel b2 = </World/A>\n        int y = 1\n    }\n\n    def \"Group\"\n    {\n    }\n\n    def \"User\"\n    {\n        rel across\n        rel across.default = </World/C.b2[/World/A/Kid].d>        \n        rel after = [\n            </World/A.b[/World/C].x>,\n            </World/C.b2[/World/A].y>,\n        ]\n        rel before = [\n            </World/A.b[/World/C].d>,\n            </World/A/Kid.b[/World/C].d>,\n            </World/A.x.mapper[/World/C.y]>,\n        ]\n        rel both = [\n            </World/A.b[/World/A/Kid].d>,\n            </World/A.x.mapper[/World/A.x]>,\n        ]\n        int conn.connect = [\n            </World/A.b[/World/C].d>,\n            </World/C.b2[/World/A].d>,\n            </World/A/Kid.b[/World/C].d>,\n        ]\n        rel deleted\n        rel deleted.default = </World/C.b2[/World/A/Kid].d>        \n        rel dependent = [\n            </World/A/Kid>,\n            </World/C.y>,\n            </World/A.x>,\n        ]\n        rel dependent.default = </World/C.b2[/World/A/Kid].d>        \n        delete rel edits = </World/C.b2[/World/A].d>\n        prepend rel edits = [\n            </World/A.b[/World/C].d>,\n            </World/C.b2[/World/A].d>,\n        ]\n        append rel edits = </World/A.x.mapper[/World/C.y]>\n        reorder rel edits = [\n            </World/C.b2[/World/A].d>,\n            </World/A.b[/World/C].d>,\n        ]\n        pathExpression expr = \"/World/A/Kid /World/C.y /World/A.x\"\n        rel independent = </World/Group>\n        rel independent.default = </World/C.b2[/World/A/Kid].d>        \n        rel inside = [\n            </World/C.b2[/World/A].d>,\n            </World/C.b2[/World/A/Kid].d>,\n            </World/C.y.mapper[/World/A.x]>,\n            </World/C.b2[/World/C.b2[/World/A].d].e>,\n        ]\n        delete int listed.connect = </World/A/Kid.b[/World/C].d>\n        prepend int listed.connect = </World/A.b[/World/A/Kid].d>\n        append int listed.connect = </World/C.b2[/World/A].d>\n        rel relative = </World/A.b[../C].d>\n    }\n\n    def \"Lone\"\n    {\n        rel only\n        rel only.default = </World/C.b2[/World/A/Kid].d>        \n    }\n\n    def \"V\" (\n        variants = {\n            string s = \"on\"\n        }\n        prepend variantSets = \"s\"\n    )\n    {\n        variantSet \"s\" = {\n            \"off\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n            \"on\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b2[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n        }\n    }\n\n    def \"R\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n        rel referenced\n        rel referenced.default = </World/C.b2[/World/R/Part].d>        \n        rel toR = [\n            </World/R.b[/World/R/Part].d>,\n            </World/R/Part.x.mapper[/World/A.x]>,\n        ]\n    }\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"User\"\n    {\n        rel across = </World/A/Kid>\n        delete rel deleted = </World/A/Kid>\n        rel sub = [\n            </World/A.b[/World/C].d>,\n            </World/C.b2[/World/A].d>,\n        ]\n    }\n}\n\n"
    },
    "name": "rename_bracketed_owner_property",
    "path": "/World/C.b",
@@ -3783,6 +3891,7 @@
      "properties": [
       "c",
       "r",
+      "referenced",
       "toR"
      ],
      "targets": {
@@ -3790,6 +3899,9 @@
        "/World/R2.b[/World/R2/Part].d",
        "/World/R2/Part.b[/World/R2].d",
        "/World/R2/Part.x.mapper[/World/R2/Part.y]"
+      ],
+      "referenced": [
+       "/World/R2/Part"
       ],
       "toR": [
        "/World/R2.b[/World/R2/Part].d",
@@ -3825,6 +3937,7 @@
       "before",
       "both",
       "conn",
+      "deleted",
       "dependent",
       "edits",
       "expr",
@@ -3851,6 +3964,7 @@
        "/World/A.b[/World/A/Kid].d",
        "/World/A.x.mapper[/World/A.x]"
       ],
+      "deleted": [],
       "dependent": [
        "/World/A/Kid",
        "/World/C.y",
@@ -3902,9 +4016,9 @@
    "destination": "/World/R2",
    "errors": [],
    "layers": {
-    "asset.usda": "#usda 1.0\n(\n    defaultPrim = \"Asset\"\n)\n\ndef \"Asset\"\n{\n    int c.connect = </Asset/Part.b[/Asset].d>\n    rel r = [\n        </Asset.b[/Asset/Part].d>,\n        </Asset/Part.b[/Asset].d>,\n        </Asset/Part.x.mapper[/Asset/Part.y]>,\n    ]\n\n    def \"Part\"\n    {\n        int x = 1\n        int y = 1\n    }\n}\n\n",
-    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\ndef \"World\"\n{\n    def \"A\"\n    {\n        rel b = </World/C>\n        int x = 1\n\n        def \"Kid\"\n        {\n            rel b = </World/C>\n        }\n    }\n\n    def \"C\"\n    {\n        rel b = </World/A>\n        int y = 1\n    }\n\n    def \"Group\"\n    {\n    }\n\n    def \"User\"\n    {\n        rel across\n        rel across.default = </World/C.b[/World/A/Kid].d>        \n        rel after = [\n            </World/A.b[/World/C].x>,\n            </World/C.b[/World/A].y>,\n        ]\n        rel before = [\n            </World/A.b[/World/C].d>,\n            </World/A/Kid.b[/World/C].d>,\n            </World/A.x.mapper[/World/C.y]>,\n        ]\n        rel both = [\n            </World/A.b[/World/A/Kid].d>,\n            </World/A.x.mapper[/World/A.x]>,\n        ]\n        int conn.connect = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n            </World/A/Kid.b[/World/C].d>,\n        ]\n        rel dependent = [\n            </World/A/Kid>,\n            </World/C.y>,\n            </World/A.x>,\n        ]\n        rel dependent.default = </World/C.b[/World/A/Kid].d>        \n        delete rel edits = </World/C.b[/World/A].d>\n        prepend rel edits = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n        append rel edits = </World/A.x.mapper[/World/C.y]>\n        reorder rel edits = [\n            </World/C.b[/World/A].d>,\n            </World/A.b[/World/C].d>,\n        ]\n        pathExpression expr = \"/World/A/Kid /World/C.y /World/A.x\"\n        rel independent = </World/Group>\n        rel independent.default = </World/C.b[/World/A/Kid].d>        \n        rel inside = [\n            </World/C.b[/World/A].d>,\n            </World/C.b[/World/A/Kid].d>,\n            </World/C.y.mapper[/World/A.x]>,\n            </World/C.b[/World/C.b[/World/A].d].e>,\n        ]\n        delete int listed.connect = </World/A/Kid.b[/World/C].d>\n        prepend int listed.connect = </World/A.b[/World/A/Kid].d>\n        append int listed.connect = </World/C.b[/World/A].d>\n        rel relative = </World/A.b[../C].d>\n    }\n\n    def \"Lone\"\n    {\n        rel only\n        rel only.default = </World/C.b[/World/A/Kid].d>        \n    }\n\n    def \"V\" (\n        variants = {\n            string s = \"on\"\n        }\n        prepend variantSets = \"s\"\n    )\n    {\n        variantSet \"s\" = {\n            \"off\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n            \"on\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n        }\n    }\n\n    def \"R2\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n        rel toR = [\n            </World/R2.b[/World/R2/Part].d>,\n            </World/R2/Part.x.mapper[/World/A.x]>,\n        ]\n    }\n}\n\n",
-    "sub.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"User\"\n    {\n        rel across = </World/A/Kid>\n        rel sub = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n    }\n}\n\n"
+    "asset.usda": "#usda 1.0\n(\n    defaultPrim = \"Asset\"\n)\n\ndef \"Asset\"\n{\n    int c.connect = </Asset/Part.b[/Asset].d>\n    rel r = [\n        </Asset.b[/Asset/Part].d>,\n        </Asset/Part.b[/Asset].d>,\n        </Asset/Part.x.mapper[/Asset/Part.y]>,\n    ]\n    rel referenced = </Asset/Part>\n\n    def \"Part\"\n    {\n        int x = 1\n        int y = 1\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\ndef \"World\"\n{\n    def \"A\"\n    {\n        rel b = </World/C>\n        int x = 1\n\n        def \"Kid\"\n        {\n            rel b = </World/C>\n        }\n    }\n\n    def \"C\"\n    {\n        rel b = </World/A>\n        int y = 1\n    }\n\n    def \"Group\"\n    {\n    }\n\n    def \"User\"\n    {\n        rel across\n        rel across.default = </World/C.b[/World/A/Kid].d>        \n        rel after = [\n            </World/A.b[/World/C].x>,\n            </World/C.b[/World/A].y>,\n        ]\n        rel before = [\n            </World/A.b[/World/C].d>,\n            </World/A/Kid.b[/World/C].d>,\n            </World/A.x.mapper[/World/C.y]>,\n        ]\n        rel both = [\n            </World/A.b[/World/A/Kid].d>,\n            </World/A.x.mapper[/World/A.x]>,\n        ]\n        int conn.connect = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n            </World/A/Kid.b[/World/C].d>,\n        ]\n        rel deleted\n        rel deleted.default = </World/C.b[/World/A/Kid].d>        \n        rel dependent = [\n            </World/A/Kid>,\n            </World/C.y>,\n            </World/A.x>,\n        ]\n        rel dependent.default = </World/C.b[/World/A/Kid].d>        \n        delete rel edits = </World/C.b[/World/A].d>\n        prepend rel edits = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n        append rel edits = </World/A.x.mapper[/World/C.y]>\n        reorder rel edits = [\n            </World/C.b[/World/A].d>,\n            </World/A.b[/World/C].d>,\n        ]\n        pathExpression expr = \"/World/A/Kid /World/C.y /World/A.x\"\n        rel independent = </World/Group>\n        rel independent.default = </World/C.b[/World/A/Kid].d>        \n        rel inside = [\n            </World/C.b[/World/A].d>,\n            </World/C.b[/World/A/Kid].d>,\n            </World/C.y.mapper[/World/A.x]>,\n            </World/C.b[/World/C.b[/World/A].d].e>,\n        ]\n        delete int listed.connect = </World/A/Kid.b[/World/C].d>\n        prepend int listed.connect = </World/A.b[/World/A/Kid].d>\n        append int listed.connect = </World/C.b[/World/A].d>\n        rel relative = </World/A.b[../C].d>\n    }\n\n    def \"Lone\"\n    {\n        rel only\n        rel only.default = </World/C.b[/World/A/Kid].d>        \n    }\n\n    def \"V\" (\n        variants = {\n            string s = \"on\"\n        }\n        prepend variantSets = \"s\"\n    )\n    {\n        variantSet \"s\" = {\n            \"off\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n            \"on\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n        }\n    }\n\n    def \"R2\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n        rel referenced\n        rel referenced.default = </World/C.b[/World/R2/Part].d>        \n        rel toR = [\n            </World/R2.b[/World/R2/Part].d>,\n            </World/R2/Part.x.mapper[/World/A.x]>,\n        ]\n    }\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"User\"\n    {\n        rel across = </World/A/Kid>\n        delete rel deleted = </World/A/Kid>\n        rel sub = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n    }\n}\n\n"
    },
    "name": "rename_referencing",
    "path": "/World/R",
@@ -3996,6 +4110,7 @@
      "properties": [
       "c",
       "r",
+      "referenced",
       "toR"
      ],
      "targets": {
@@ -4003,6 +4118,9 @@
        "/World/R.b[/World/R/Part2].d",
        "/World/R/Part2.b[/World/R].d",
        "/World/R/Part2.x.mapper[/World/R/Part2.y]"
+      ],
+      "referenced": [
+       "/World/R/Part2"
       ],
       "toR": [
        "/World/R.b[/World/R/Part].d",
@@ -4038,6 +4156,7 @@
       "before",
       "both",
       "conn",
+      "deleted",
       "dependent",
       "edits",
       "expr",
@@ -4064,6 +4183,7 @@
        "/World/A.b[/World/A/Kid].d",
        "/World/A.x.mapper[/World/A.x]"
       ],
+      "deleted": [],
       "dependent": [
        "/World/A/Kid",
        "/World/C.y",
@@ -4115,9 +4235,9 @@
    "destination": "/World/R/Part2",
    "errors": [],
    "layers": {
-    "asset.usda": "#usda 1.0\n(\n    defaultPrim = \"Asset\"\n)\n\ndef \"Asset\"\n{\n    int c.connect = </Asset/Part.b[/Asset].d>\n    rel r = [\n        </Asset.b[/Asset/Part].d>,\n        </Asset/Part.b[/Asset].d>,\n        </Asset/Part.x.mapper[/Asset/Part.y]>,\n    ]\n\n    def \"Part\"\n    {\n        int x = 1\n        int y = 1\n    }\n}\n\n",
-    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n    relocates = {\n        </World/R/Part>: </World/R/Part2>\n    }\n)\n\ndef \"World\"\n{\n    def \"A\"\n    {\n        rel b = </World/C>\n        int x = 1\n\n        def \"Kid\"\n        {\n            rel b = </World/C>\n        }\n    }\n\n    def \"C\"\n    {\n        rel b = </World/A>\n        int y = 1\n    }\n\n    def \"Group\"\n    {\n    }\n\n    def \"User\"\n    {\n        rel across\n        rel across.default = </World/C.b[/World/A/Kid].d>        \n        rel after = [\n            </World/A.b[/World/C].x>,\n            </World/C.b[/World/A].y>,\n        ]\n        rel before = [\n            </World/A.b[/World/C].d>,\n            </World/A/Kid.b[/World/C].d>,\n            </World/A.x.mapper[/World/C.y]>,\n        ]\n        rel both = [\n            </World/A.b[/World/A/Kid].d>,\n            </World/A.x.mapper[/World/A.x]>,\n        ]\n        int conn.connect = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n            </World/A/Kid.b[/World/C].d>,\n        ]\n        rel dependent = [\n            </World/A/Kid>,\n            </World/C.y>,\n            </World/A.x>,\n        ]\n        rel dependent.default = </World/C.b[/World/A/Kid].d>        \n        delete rel edits = </World/C.b[/World/A].d>\n        prepend rel edits = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n        append rel edits = </World/A.x.mapper[/World/C.y]>\n        reorder rel edits = [\n            </World/C.b[/World/A].d>,\n            </World/A.b[/World/C].d>,\n        ]\n        pathExpression expr = \"/World/A/Kid /World/C.y /World/A.x\"\n        rel independent = </World/Group>\n        rel independent.default = </World/C.b[/World/A/Kid].d>        \n        rel inside = [\n            </World/C.b[/World/A].d>,\n            </World/C.b[/World/A/Kid].d>,\n            </World/C.y.mapper[/World/A.x]>,\n            </World/C.b[/World/C.b[/World/A].d].e>,\n        ]\n        delete int listed.connect = </World/A/Kid.b[/World/C].d>\n        prepend int listed.connect = </World/A.b[/World/A/Kid].d>\n        append int listed.connect = </World/C.b[/World/A].d>\n        rel relative = </World/A.b[../C].d>\n    }\n\n    def \"Lone\"\n    {\n        rel only\n        rel only.default = </World/C.b[/World/A/Kid].d>        \n    }\n\n    def \"V\" (\n        variants = {\n            string s = \"on\"\n        }\n        prepend variantSets = \"s\"\n    )\n    {\n        variantSet \"s\" = {\n            \"off\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n            \"on\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n        }\n    }\n\n    def \"R\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n        rel toR = [\n            </World/R.b[/World/R/Part].d>,\n            </World/R/Part2.x.mapper[/World/A.x]>,\n        ]\n    }\n}\n\n",
-    "sub.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"User\"\n    {\n        rel across = </World/A/Kid>\n        rel sub = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n    }\n}\n\n"
+    "asset.usda": "#usda 1.0\n(\n    defaultPrim = \"Asset\"\n)\n\ndef \"Asset\"\n{\n    int c.connect = </Asset/Part.b[/Asset].d>\n    rel r = [\n        </Asset.b[/Asset/Part].d>,\n        </Asset/Part.b[/Asset].d>,\n        </Asset/Part.x.mapper[/Asset/Part.y]>,\n    ]\n    rel referenced = </Asset/Part>\n\n    def \"Part\"\n    {\n        int x = 1\n        int y = 1\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n    relocates = {\n        </World/R/Part>: </World/R/Part2>\n    }\n)\n\ndef \"World\"\n{\n    def \"A\"\n    {\n        rel b = </World/C>\n        int x = 1\n\n        def \"Kid\"\n        {\n            rel b = </World/C>\n        }\n    }\n\n    def \"C\"\n    {\n        rel b = </World/A>\n        int y = 1\n    }\n\n    def \"Group\"\n    {\n    }\n\n    def \"User\"\n    {\n        rel across\n        rel across.default = </World/C.b[/World/A/Kid].d>        \n        rel after = [\n            </World/A.b[/World/C].x>,\n            </World/C.b[/World/A].y>,\n        ]\n        rel before = [\n            </World/A.b[/World/C].d>,\n            </World/A/Kid.b[/World/C].d>,\n            </World/A.x.mapper[/World/C.y]>,\n        ]\n        rel both = [\n            </World/A.b[/World/A/Kid].d>,\n            </World/A.x.mapper[/World/A.x]>,\n        ]\n        int conn.connect = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n            </World/A/Kid.b[/World/C].d>,\n        ]\n        rel deleted\n        rel deleted.default = </World/C.b[/World/A/Kid].d>        \n        rel dependent = [\n            </World/A/Kid>,\n            </World/C.y>,\n            </World/A.x>,\n        ]\n        rel dependent.default = </World/C.b[/World/A/Kid].d>        \n        delete rel edits = </World/C.b[/World/A].d>\n        prepend rel edits = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n        append rel edits = </World/A.x.mapper[/World/C.y]>\n        reorder rel edits = [\n            </World/C.b[/World/A].d>,\n            </World/A.b[/World/C].d>,\n        ]\n        pathExpression expr = \"/World/A/Kid /World/C.y /World/A.x\"\n        rel independent = </World/Group>\n        rel independent.default = </World/C.b[/World/A/Kid].d>        \n        rel inside = [\n            </World/C.b[/World/A].d>,\n            </World/C.b[/World/A/Kid].d>,\n            </World/C.y.mapper[/World/A.x]>,\n            </World/C.b[/World/C.b[/World/A].d].e>,\n        ]\n        delete int listed.connect = </World/A/Kid.b[/World/C].d>\n        prepend int listed.connect = </World/A.b[/World/A/Kid].d>\n        append int listed.connect = </World/C.b[/World/A].d>\n        rel relative = </World/A.b[../C].d>\n    }\n\n    def \"Lone\"\n    {\n        rel only\n        rel only.default = </World/C.b[/World/A/Kid].d>        \n    }\n\n    def \"V\" (\n        variants = {\n            string s = \"on\"\n        }\n        prepend variantSets = \"s\"\n    )\n    {\n        variantSet \"s\" = {\n            \"off\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n            \"on\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n        }\n    }\n\n    def \"R\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n        rel referenced\n        rel referenced.default = </World/C.b[/World/R/Part2].d>        \n        rel toR = [\n            </World/R.b[/World/R/Part].d>,\n            </World/R/Part2.x.mapper[/World/A.x]>,\n        ]\n    }\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"User\"\n    {\n        rel across = </World/A/Kid>\n        delete rel deleted = </World/A/Kid>\n        rel sub = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n    }\n}\n\n"
    },
    "name": "rename_referenced_child",
    "path": "/World/R/Part",
@@ -4207,6 +4327,7 @@
      "properties": [
       "c",
       "r",
+      "referenced",
       "toR"
      ],
      "targets": {
@@ -4214,6 +4335,9 @@
        "/World/R.b[/World/R/Part].d",
        "/World/R/Part.b[/World/R].d",
        "/World/R/Part.x.mapper[/World/R/Part.y]"
+      ],
+      "referenced": [
+       "/World/R/Part"
       ],
       "toR": [
        "/World/R.b[/World/R/Part].d"
@@ -4239,6 +4363,7 @@
       "before",
       "both",
       "conn",
+      "deleted",
       "dependent",
       "edits",
       "expr",
@@ -4265,6 +4390,7 @@
        "/World/A.b[/World/A/Kid].d",
        "/World/A.x.mapper[/World/A.x]"
       ],
+      "deleted": [],
       "dependent": [
        "/World/A/Kid",
        "/World/C.y",
@@ -4316,9 +4442,9 @@
    "destination": null,
    "errors": [],
    "layers": {
-    "asset.usda": "#usda 1.0\n(\n    defaultPrim = \"Asset\"\n)\n\ndef \"Asset\"\n{\n    int c.connect = </Asset/Part.b[/Asset].d>\n    rel r = [\n        </Asset.b[/Asset/Part].d>,\n        </Asset/Part.b[/Asset].d>,\n        </Asset/Part.x.mapper[/Asset/Part.y]>,\n    ]\n\n    def \"Part\"\n    {\n        int x = 1\n        int y = 1\n    }\n}\n\n",
-    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n    relocates = {\n        </World/R/Part>: <>\n    }\n)\n\ndef \"World\"\n{\n    def \"A\"\n    {\n        rel b = </World/C>\n        int x = 1\n\n        def \"Kid\"\n        {\n            rel b = </World/C>\n        }\n    }\n\n    def \"C\"\n    {\n        rel b = </World/A>\n        int y = 1\n    }\n\n    def \"Group\"\n    {\n    }\n\n    def \"User\"\n    {\n        rel across\n        rel across.default = </World/C.b[/World/A/Kid].d>        \n        rel after = [\n            </World/A.b[/World/C].x>,\n            </World/C.b[/World/A].y>,\n        ]\n        rel before = [\n            </World/A.b[/World/C].d>,\n            </World/A/Kid.b[/World/C].d>,\n            </World/A.x.mapper[/World/C.y]>,\n        ]\n        rel both = [\n            </World/A.b[/World/A/Kid].d>,\n            </World/A.x.mapper[/World/A.x]>,\n        ]\n        int conn.connect = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n            </World/A/Kid.b[/World/C].d>,\n        ]\n        rel dependent = [\n            </World/A/Kid>,\n            </World/C.y>,\n            </World/A.x>,\n        ]\n        rel dependent.default = </World/C.b[/World/A/Kid].d>        \n        delete rel edits = </World/C.b[/World/A].d>\n        prepend rel edits = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n        append rel edits = </World/A.x.mapper[/World/C.y]>\n        reorder rel edits = [\n            </World/C.b[/World/A].d>,\n            </World/A.b[/World/C].d>,\n        ]\n        pathExpression expr = \"/World/A/Kid /World/C.y /World/A.x\"\n        rel independent = </World/Group>\n        rel independent.default = </World/C.b[/World/A/Kid].d>        \n        rel inside = [\n            </World/C.b[/World/A].d>,\n            </World/C.b[/World/A/Kid].d>,\n            </World/C.y.mapper[/World/A.x]>,\n            </World/C.b[/World/C.b[/World/A].d].e>,\n        ]\n        delete int listed.connect = </World/A/Kid.b[/World/C].d>\n        prepend int listed.connect = </World/A.b[/World/A/Kid].d>\n        append int listed.connect = </World/C.b[/World/A].d>\n        rel relative = </World/A.b[../C].d>\n    }\n\n    def \"Lone\"\n    {\n        rel only\n        rel only.default = </World/C.b[/World/A/Kid].d>        \n    }\n\n    def \"V\" (\n        variants = {\n            string s = \"on\"\n        }\n        prepend variantSets = \"s\"\n    )\n    {\n        variantSet \"s\" = {\n            \"off\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n            \"on\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n        }\n    }\n\n    def \"R\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n        rel toR = </World/R.b[/World/R/Part].d>\n    }\n}\n\n",
-    "sub.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"User\"\n    {\n        rel across = </World/A/Kid>\n        rel sub = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n    }\n}\n\n"
+    "asset.usda": "#usda 1.0\n(\n    defaultPrim = \"Asset\"\n)\n\ndef \"Asset\"\n{\n    int c.connect = </Asset/Part.b[/Asset].d>\n    rel r = [\n        </Asset.b[/Asset/Part].d>,\n        </Asset/Part.b[/Asset].d>,\n        </Asset/Part.x.mapper[/Asset/Part.y]>,\n    ]\n    rel referenced = </Asset/Part>\n\n    def \"Part\"\n    {\n        int x = 1\n        int y = 1\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n    relocates = {\n        </World/R/Part>: <>\n    }\n)\n\ndef \"World\"\n{\n    def \"A\"\n    {\n        rel b = </World/C>\n        int x = 1\n\n        def \"Kid\"\n        {\n            rel b = </World/C>\n        }\n    }\n\n    def \"C\"\n    {\n        rel b = </World/A>\n        int y = 1\n    }\n\n    def \"Group\"\n    {\n    }\n\n    def \"User\"\n    {\n        rel across\n        rel across.default = </World/C.b[/World/A/Kid].d>        \n        rel after = [\n            </World/A.b[/World/C].x>,\n            </World/C.b[/World/A].y>,\n        ]\n        rel before = [\n            </World/A.b[/World/C].d>,\n            </World/A/Kid.b[/World/C].d>,\n            </World/A.x.mapper[/World/C.y]>,\n        ]\n        rel both = [\n            </World/A.b[/World/A/Kid].d>,\n            </World/A.x.mapper[/World/A.x]>,\n        ]\n        int conn.connect = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n            </World/A/Kid.b[/World/C].d>,\n        ]\n        rel deleted\n        rel deleted.default = </World/C.b[/World/A/Kid].d>        \n        rel dependent = [\n            </World/A/Kid>,\n            </World/C.y>,\n            </World/A.x>,\n        ]\n        rel dependent.default = </World/C.b[/World/A/Kid].d>        \n        delete rel edits = </World/C.b[/World/A].d>\n        prepend rel edits = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n        append rel edits = </World/A.x.mapper[/World/C.y]>\n        reorder rel edits = [\n            </World/C.b[/World/A].d>,\n            </World/A.b[/World/C].d>,\n        ]\n        pathExpression expr = \"/World/A/Kid /World/C.y /World/A.x\"\n        rel independent = </World/Group>\n        rel independent.default = </World/C.b[/World/A/Kid].d>        \n        rel inside = [\n            </World/C.b[/World/A].d>,\n            </World/C.b[/World/A/Kid].d>,\n            </World/C.y.mapper[/World/A.x]>,\n            </World/C.b[/World/C.b[/World/A].d].e>,\n        ]\n        delete int listed.connect = </World/A/Kid.b[/World/C].d>\n        prepend int listed.connect = </World/A.b[/World/A/Kid].d>\n        append int listed.connect = </World/C.b[/World/A].d>\n        rel relative = </World/A.b[../C].d>\n    }\n\n    def \"Lone\"\n    {\n        rel only\n        rel only.default = </World/C.b[/World/A/Kid].d>        \n    }\n\n    def \"V\" (\n        variants = {\n            string s = \"on\"\n        }\n        prepend variantSets = \"s\"\n    )\n    {\n        variantSet \"s\" = {\n            \"off\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n            \"on\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n        }\n    }\n\n    def \"R\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n        rel referenced\n        rel referenced.default = <>        \n        rel toR = </World/R.b[/World/R/Part].d>\n    }\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"User\"\n    {\n        rel across = </World/A/Kid>\n        delete rel deleted = </World/A/Kid>\n        rel sub = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n    }\n}\n\n"
    },
    "name": "delete_referenced_child",
    "path": "/World/R/Part",
@@ -4410,6 +4536,7 @@
      "properties": [
       "c",
       "r",
+      "referenced",
       "toR"
      ],
      "targets": {
@@ -4417,6 +4544,9 @@
        "/World/R.b[/World/R/Part].d",
        "/World/R/Part.b[/World/R].d",
        "/World/R/Part.x.mapper[/World/R/Part.y]"
+      ],
+      "referenced": [
+       "/World/R/Part"
       ],
       "toR": [
        "/World/R.b[/World/R/Part].d",
@@ -4452,6 +4582,7 @@
       "before",
       "both",
       "conn",
+      "deleted",
       "dependent",
       "edits",
       "expr",
@@ -4478,6 +4609,7 @@
        "/World/A.b[/World/A/Kid].d",
        "/World/A.x.mapper[/World/A.x]"
       ],
+      "deleted": [],
       "dependent": [
        "/World/A/Kid",
        "/World/C.y",
@@ -4531,9 +4663,9 @@
     "The property to edit requires authoring relocates since it composes opinions introduced by ancestral composition arcs; authoring relocates is not supported for properties"
    ],
    "layers": {
-    "asset.usda": "#usda 1.0\n(\n    defaultPrim = \"Asset\"\n)\n\ndef \"Asset\"\n{\n    int c.connect = </Asset/Part.b[/Asset].d>\n    rel r = [\n        </Asset.b[/Asset/Part].d>,\n        </Asset/Part.b[/Asset].d>,\n        </Asset/Part.x.mapper[/Asset/Part.y]>,\n    ]\n\n    def \"Part\"\n    {\n        int x = 1\n        int y = 1\n    }\n}\n\n",
-    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\ndef \"World\"\n{\n    def \"A\"\n    {\n        rel b = </World/C>\n        int x = 1\n\n        def \"Kid\"\n        {\n            rel b = </World/C>\n        }\n    }\n\n    def \"C\"\n    {\n        rel b = </World/A>\n        int y = 1\n    }\n\n    def \"Group\"\n    {\n    }\n\n    def \"User\"\n    {\n        rel across\n        rel across.default = </World/C.b[/World/A/Kid].d>        \n        rel after = [\n            </World/A.b[/World/C].x>,\n            </World/C.b[/World/A].y>,\n        ]\n        rel before = [\n            </World/A.b[/World/C].d>,\n            </World/A/Kid.b[/World/C].d>,\n            </World/A.x.mapper[/World/C.y]>,\n        ]\n        rel both = [\n            </World/A.b[/World/A/Kid].d>,\n            </World/A.x.mapper[/World/A.x]>,\n        ]\n        int conn.connect = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n            </World/A/Kid.b[/World/C].d>,\n        ]\n        rel dependent = [\n            </World/A/Kid>,\n            </World/C.y>,\n            </World/A.x>,\n        ]\n        rel dependent.default = </World/C.b[/World/A/Kid].d>        \n        delete rel edits = </World/C.b[/World/A].d>\n        prepend rel edits = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n        append rel edits = </World/A.x.mapper[/World/C.y]>\n        reorder rel edits = [\n            </World/C.b[/World/A].d>,\n            </World/A.b[/World/C].d>,\n        ]\n        pathExpression expr = \"/World/A/Kid /World/C.y /World/A.x\"\n        rel independent = </World/Group>\n        rel independent.default = </World/C.b[/World/A/Kid].d>        \n        rel inside = [\n            </World/C.b[/World/A].d>,\n            </World/C.b[/World/A/Kid].d>,\n            </World/C.y.mapper[/World/A.x]>,\n            </World/C.b[/World/C.b[/World/A].d].e>,\n        ]\n        delete int listed.connect = </World/A/Kid.b[/World/C].d>\n        prepend int listed.connect = </World/A.b[/World/A/Kid].d>\n        append int listed.connect = </World/C.b[/World/A].d>\n        rel relative = </World/A.b[../C].d>\n    }\n\n    def \"Lone\"\n    {\n        rel only\n        rel only.default = </World/C.b[/World/A/Kid].d>        \n    }\n\n    def \"V\" (\n        variants = {\n            string s = \"on\"\n        }\n        prepend variantSets = \"s\"\n    )\n    {\n        variantSet \"s\" = {\n            \"off\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n            \"on\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n        }\n    }\n\n    def \"R\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n        rel toR = [\n            </World/R.b[/World/R/Part].d>,\n            </World/R/Part.x.mapper[/World/A.x]>,\n        ]\n    }\n}\n\n",
-    "sub.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"User\"\n    {\n        rel across = </World/A/Kid>\n        rel sub = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n    }\n}\n\n"
+    "asset.usda": "#usda 1.0\n(\n    defaultPrim = \"Asset\"\n)\n\ndef \"Asset\"\n{\n    int c.connect = </Asset/Part.b[/Asset].d>\n    rel r = [\n        </Asset.b[/Asset/Part].d>,\n        </Asset/Part.b[/Asset].d>,\n        </Asset/Part.x.mapper[/Asset/Part.y]>,\n    ]\n    rel referenced = </Asset/Part>\n\n    def \"Part\"\n    {\n        int x = 1\n        int y = 1\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\ndef \"World\"\n{\n    def \"A\"\n    {\n        rel b = </World/C>\n        int x = 1\n\n        def \"Kid\"\n        {\n            rel b = </World/C>\n        }\n    }\n\n    def \"C\"\n    {\n        rel b = </World/A>\n        int y = 1\n    }\n\n    def \"Group\"\n    {\n    }\n\n    def \"User\"\n    {\n        rel across\n        rel across.default = </World/C.b[/World/A/Kid].d>        \n        rel after = [\n            </World/A.b[/World/C].x>,\n            </World/C.b[/World/A].y>,\n        ]\n        rel before = [\n            </World/A.b[/World/C].d>,\n            </World/A/Kid.b[/World/C].d>,\n            </World/A.x.mapper[/World/C.y]>,\n        ]\n        rel both = [\n            </World/A.b[/World/A/Kid].d>,\n            </World/A.x.mapper[/World/A.x]>,\n        ]\n        int conn.connect = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n            </World/A/Kid.b[/World/C].d>,\n        ]\n        rel deleted\n        rel deleted.default = </World/C.b[/World/A/Kid].d>        \n        rel dependent = [\n            </World/A/Kid>,\n            </World/C.y>,\n            </World/A.x>,\n        ]\n        rel dependent.default = </World/C.b[/World/A/Kid].d>        \n        delete rel edits = </World/C.b[/World/A].d>\n        prepend rel edits = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n        append rel edits = </World/A.x.mapper[/World/C.y]>\n        reorder rel edits = [\n            </World/C.b[/World/A].d>,\n            </World/A.b[/World/C].d>,\n        ]\n        pathExpression expr = \"/World/A/Kid /World/C.y /World/A.x\"\n        rel independent = </World/Group>\n        rel independent.default = </World/C.b[/World/A/Kid].d>        \n        rel inside = [\n            </World/C.b[/World/A].d>,\n            </World/C.b[/World/A/Kid].d>,\n            </World/C.y.mapper[/World/A.x]>,\n            </World/C.b[/World/C.b[/World/A].d].e>,\n        ]\n        delete int listed.connect = </World/A/Kid.b[/World/C].d>\n        prepend int listed.connect = </World/A.b[/World/A/Kid].d>\n        append int listed.connect = </World/C.b[/World/A].d>\n        rel relative = </World/A.b[../C].d>\n    }\n\n    def \"Lone\"\n    {\n        rel only\n        rel only.default = </World/C.b[/World/A/Kid].d>        \n    }\n\n    def \"V\" (\n        variants = {\n            string s = \"on\"\n        }\n        prepend variantSets = \"s\"\n    )\n    {\n        variantSet \"s\" = {\n            \"off\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n            \"on\" {\n                int c.connect = </World/A.b[/World/C].d>\n                rel r = [\n                    </World/A.b[/World/C].d>,\n                    </World/C.b[/World/A].d>,\n                    </World/A/Kid>,\n                ]\n\n            }\n        }\n    }\n\n    def \"R\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n        rel referenced\n        rel referenced.default = </World/C.b[/World/R/Part].d>        \n        rel toR = [\n            </World/R.b[/World/R/Part].d>,\n            </World/R/Part.x.mapper[/World/A.x]>,\n        ]\n    }\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"User\"\n    {\n        rel across = </World/A/Kid>\n        delete rel deleted = </World/A/Kid>\n        rel sub = [\n            </World/A.b[/World/C].d>,\n            </World/C.b[/World/A].d>,\n        ]\n    }\n}\n\n"
    },
    "name": "rename_referenced_property",
    "path": "/World/R/Part.x",

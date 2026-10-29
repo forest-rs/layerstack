@@ -6,6 +6,7 @@
 def "Asset"
 {
     int c.connect = </Asset/Part.b[/Asset].d>
+    rel referenced = </Asset/Part>
     rel r = [</Asset.b[/Asset/Part].d>, </Asset/Part.b[/Asset].d>, </Asset/Part.x.mapper[/Asset/Part.y]>]
 
     def "Part"

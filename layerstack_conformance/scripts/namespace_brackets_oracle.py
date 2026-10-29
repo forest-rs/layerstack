@@ -41,7 +41,11 @@ What the records show, with the 26.11 code that does it:
   owning property's path and not beneath the paths in its brackets. A
   relationship's `default`, an `SdfPath`, is fixed by `ReplacePrefix`
   without a prefix test (`_PathReplacePrefix`), but only when one of the
-  relationship's paths is affected, in any layer.
+  composed relationship's paths is affected: in any layer, across a
+  reference as the arc maps it, or deleted by a list op. A delete empties
+  the default.
+- A list op whose every item a delete drops keeps its field, which
+  `ExportToString` writes with no statement (`rel deleted`).
 - Path expressions cannot hold bracketed paths (`SdfPathExpression`
   refuses `[`).
 
@@ -119,6 +123,8 @@ def "World"
         rel independent.default = </World/C.b[/World/A/Kid].d>
         # A default whose relationship's targets `sub.usda` authors.
         rel across.default = </World/C.b[/World/A/Kid].d>
+        # ... and one whose relationship's only target `sub.usda` deletes.
+        rel deleted.default = </World/C.b[/World/A/Kid].d>
         int conn.connect = [</World/A.b[/World/C].d>, </World/C.b[/World/A].d>, </World/A/Kid.b[/World/C].d>]
         delete int listed.connect = </World/A/Kid.b[/World/C].d>
         prepend int listed.connect = </World/A.b[/World/A/Kid].d>
@@ -160,6 +166,8 @@ def "World"
     )
     {
         rel toR = [</World/R.b[/World/R/Part].d>, </World/R/Part.x.mapper[/World/A.x]>]
+        # A default whose relationship's targets the reference authors.
+        rel referenced.default = </World/C.b[/World/R/Part].d>
     }
 }
 ''',
@@ -170,6 +178,7 @@ over "World"
     over "User"
     {
         rel across = </World/A/Kid>
+        delete rel deleted = </World/A/Kid>
         rel sub = [</World/A.b[/World/C].d>, </World/C.b[/World/A].d>]
     }
 }
@@ -182,6 +191,7 @@ over "World"
 def "Asset"
 {
     int c.connect = </Asset/Part.b[/Asset].d>
+    rel referenced = </Asset/Part>
     rel r = [</Asset.b[/Asset/Part].d>, </Asset/Part.b[/Asset].d>, </Asset/Part.x.mapper[/Asset/Part.y]>]
 
     def "Part"

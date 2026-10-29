@@ -56,6 +56,8 @@ def "World"
         rel independent.default = </World/C.b[/World/A/Kid].d>
         # A default whose relationship's targets `sub.usda` authors.
         rel across.default = </World/C.b[/World/A/Kid].d>
+        # ... and one whose relationship's only target `sub.usda` deletes.
+        rel deleted.default = </World/C.b[/World/A/Kid].d>
         int conn.connect = [</World/A.b[/World/C].d>, </World/C.b[/World/A].d>, </World/A/Kid.b[/World/C].d>]
         delete int listed.connect = </World/A/Kid.b[/World/C].d>
         prepend int listed.connect = </World/A.b[/World/A/Kid].d>
@@ -97,5 +99,7 @@ def "World"
     )
     {
         rel toR = [</World/R.b[/World/R/Part].d>, </World/R/Part.x.mapper[/World/A.x]>]
+        # A default whose relationship's targets the reference authors.
+        rel referenced.default = </World/C.b[/World/R/Part].d>
     }
 }

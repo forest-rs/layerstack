@@ -1,0 +1,5162 @@
+{
+ "cases": [
+  {
+   "accepted": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true
+   ],
+   "calls": [
+    {
+     "call": "set",
+     "key": null,
+     "name": "tc",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "set",
+     "key": 30.0,
+     "name": "tcs",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "set",
+     "key": null,
+     "name": "tca",
+     "value": [
+      {
+       "timecode": 30.0
+      },
+      {
+       "timecode": 40.0
+      }
+     ]
+    },
+    {
+     "call": "set",
+     "key": null,
+     "name": "du",
+     "value": {
+      "duration": 8.0
+     }
+    },
+    {
+     "call": "set",
+     "key": null,
+     "name": "pe",
+     "value": {
+      "pathExpression": "/Root/Child"
+     }
+    },
+    {
+     "call": "set",
+     "key": null,
+     "name": "rpe",
+     "value": {
+      "pathExpression": "Child"
+     }
+    },
+    {
+     "call": "set",
+     "key": 30.0,
+     "name": "pes",
+     "value": {
+      "pathExpression": "/Root/Child"
+     }
+    },
+    {
+     "call": "set",
+     "key": null,
+     "name": "pea",
+     "value": [
+      {
+       "pathExpression": "/Root/Child"
+      },
+      {
+       "pathExpression": "Child"
+      },
+      {
+       "pathExpression": "/Elsewhere + //Any"
+      }
+     ]
+    },
+    {
+     "call": "create",
+     "key": "pathExpression",
+     "name": "npe",
+     "value": {
+      "pathExpression": "Child + /Elsewhere"
+     }
+    },
+    {
+     "call": "create",
+     "key": "timecode",
+     "name": "ntc",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "create",
+     "key": "asset",
+     "name": "nasset",
+     "value": {
+      "asset": "./tex.png"
+     }
+    },
+    {
+     "call": "prim_key",
+     "key": "t",
+     "name": "customData",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "prim_key",
+     "key": "d:deep",
+     "name": "customData",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "prim_key",
+     "key": "e",
+     "name": "customData",
+     "value": {
+      "pathExpression": "/Root/Child"
+     }
+    },
+    {
+     "call": "prim_key",
+     "key": "ts",
+     "name": "customData",
+     "value": [
+      {
+       "timecode": 30.0
+      }
+     ]
+    },
+    {
+     "call": "prim_key",
+     "key": "du",
+     "name": "customData",
+     "value": {
+      "duration": 8.0
+     }
+    },
+    {
+     "call": "prim_field",
+     "key": null,
+     "name": "assetInfo",
+     "value": {
+      "dictionary": {
+       "n": {
+        "dictionary": {
+         "e": {
+          "pathExpression": "/Root/Child"
+         },
+         "ts": [
+          {
+           "timecode": 30.0
+          }
+         ]
+        }
+       },
+       "t": {
+        "timecode": 30.0
+       }
+      }
+     }
+    },
+    {
+     "call": "attr_key",
+     "key": "t",
+     "name": "plain",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "attr_key",
+     "key": "n:t",
+     "name": "plain",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "attr_key",
+     "key": "e",
+     "name": "plain",
+     "value": {
+      "pathExpression": "/Root/Child"
+     }
+    },
+    {
+     "call": "attr_field",
+     "key": "customData",
+     "name": "tc",
+     "value": {
+      "dictionary": {
+       "e": {
+        "pathExpression": "/Root/Child"
+       },
+       "t": {
+        "timecode": 30.0
+       }
+      }
+     }
+    }
+   ],
+   "layer": "scene.usda",
+   "name": "root_layer",
+   "prim": "/Root",
+   "read": {
+    "assetInfo": {
+     "dictionary": {
+      "n": {
+       "dictionary": {
+        "e": {
+         "pathExpression": "/Root/Child"
+        },
+        "ts": [
+         {
+          "timecode": 30.0
+         }
+        ]
+       }
+      },
+      "t": {
+       "timecode": 30.0
+      }
+     }
+    },
+    "attributes": {
+     "du": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "duration": 8.0
+      },
+      "samples": []
+     },
+     "nasset": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "asset": "./tex.png"
+      },
+      "samples": []
+     },
+     "npe": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "pathExpression": "/Root/Child + /Elsewhere"
+      },
+      "samples": []
+     },
+     "ntc": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "timecode": 30.0
+      },
+      "samples": []
+     },
+     "pe": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "pathExpression": "/Root/Child"
+      },
+      "samples": []
+     },
+     "pea": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": [
+       {
+        "pathExpression": "/Root/Child"
+       },
+       {
+        "pathExpression": "/Root/Child"
+       },
+       {
+        "pathExpression": "/Elsewhere + //Any"
+       }
+      ],
+      "samples": []
+     },
+     "pes": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": null,
+      "samples": [
+       [
+        12.0,
+        {
+         "pathExpression": "/Root/Child"
+        }
+       ],
+       [
+        30.0,
+        {
+         "pathExpression": "/Root/Child"
+        }
+       ]
+      ]
+     },
+     "plain": {
+      "customData": {
+       "dictionary": {
+        "e": {
+         "pathExpression": "/Root/Child"
+        },
+        "n": {
+         "dictionary": {
+          "t": {
+           "timecode": 30.0
+          }
+         }
+        },
+        "t": {
+         "timecode": 30.0
+        }
+       }
+      },
+      "default": 1.0,
+      "samples": []
+     },
+     "rpe": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "pathExpression": "/Root/Child"
+      },
+      "samples": []
+     },
+     "tc": {
+      "customData": {
+       "dictionary": {
+        "e": {
+         "pathExpression": "/Root/Child"
+        },
+        "t": {
+         "timecode": 30.0
+        }
+       }
+      },
+      "default": {
+       "timecode": 30.0
+      },
+      "samples": []
+     },
+     "tca": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": [
+       {
+        "timecode": 30.0
+       },
+       {
+        "timecode": 40.0
+       }
+      ],
+      "samples": []
+     },
+     "tcs": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": null,
+      "samples": [
+       [
+        30.0,
+        {
+         "timecode": 30.0
+        }
+       ]
+      ]
+     },
+     "vpe": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "pathExpression": "/Root/Child"
+      },
+      "samples": []
+     },
+     "vtc": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "timecode": 24.0
+      },
+      "samples": []
+     }
+    },
+    "customData": {
+     "dictionary": {
+      "d": {
+       "dictionary": {
+        "deep": {
+         "timecode": 30.0
+        },
+        "deeper": {
+         "dictionary": {
+          "e": {
+           "pathExpression": "/Root/Child"
+          },
+          "ts": [
+           {
+            "timecode": 12.0
+           },
+           {
+            "timecode": 14.0
+           }
+          ]
+         }
+        }
+       }
+      },
+      "du": {
+       "duration": 8.0
+      },
+      "e": {
+       "pathExpression": "/Root/Child"
+      },
+      "out": {
+       "pathExpression": "//Any"
+      },
+      "rel": {
+       "pathExpression": ""
+      },
+      "t": {
+       "timecode": 30.0
+      },
+      "ts": [
+       {
+        "timecode": 30.0
+       }
+      ]
+     }
+    }
+   },
+   "target": "root",
+   "text": "#usda 1.4\n(\n    subLayers = [\n        @sub.usda@ (offset = 4; scale = 0.5)\n    ]\n)\n\ndef \"Root\" (\n    assetInfo = {\n        dictionary n = {\n            pathExpression e = \"/Root/Child\"\n            timecode[] ts = [30]\n        }\n        timecode t = 30\n    }\n    customData = {\n        dictionary d = {\n            timecode deep = 30\n        }\n        duration du = 8\n        pathExpression e = \"/Root/Child\"\n        timecode t = 30\n        timecode[] ts = [30]\n    }\n    references = @ref.usda@</Ref> (offset = 10; scale = 2)\n)\n{\n    custom duration du = 8\n    custom asset nasset = @./tex.png@\n    custom pathExpression npe = \"/Root/Child + /Elsewhere\"\n    custom timecode ntc = 30\n    custom pathExpression pe = \"/Root/Child\"\n    custom pathExpression[] pea = [\"/Root/Child\", \"/Root/Child\", \"/Elsewhere + //Any\"]\n    custom pathExpression pes\n    pathExpression pes.timeSamples = {\n        30: \"/Root/Child\",\n    }\n    custom double plain (\n        customData = {\n            pathExpression e = \"/Root/Child\"\n            dictionary n = {\n                timecode t = 30\n            }\n            timecode t = 30\n        }\n    )\n    custom pathExpression rpe = \"/Root/Child\"\n    custom timecode tc = 30 (\n        customData = {\n            pathExpression e = \"/Root/Child\"\n            timecode t = 30\n        }\n    )\n    custom timecode[] tca = [30, 40]\n    custom timecode tcs\n    timecode tcs.timeSamples = {\n        30: 30,\n    }\n}\n\nclass \"Class\" (\n    customData = {\n        dictionary d = {\n            timecode deep = 5\n            dictionary deeper = {\n                pathExpression e = \"/Class/Child\"\n                timecode[] ts = [1, 2]\n            }\n        }\n        duration du = 4\n        pathExpression e = \"/Class/Child\"\n        pathExpression out = \"/Elsewhere + //Any\"\n        pathExpression rel = \"Child\"\n        timecode t = 5\n        timecode[] ts = [1, 2]\n    }\n)\n{\n    custom duration du = 4\n    custom pathExpression pe = \"/Class/Child\"\n    custom pathExpression[] pea = [\"/Class/Child\", \"/Class/Child\", \"/Elsewhere + //Any\"]\n    custom pathExpression pes\n    pathExpression pes.timeSamples = {\n        1: \"/Class/Child\",\n    }\n    custom double plain = 1 (\n        customData = {\n            pathExpression e = \"/Class/Child\"\n            dictionary n = {\n                timecode t = 5\n            }\n            timecode t = 5\n        }\n    )\n    custom pathExpression rpe = \"/Class/Child\"\n    custom timecode tc = 5\n    custom timecode[] tca = [1, 2]\n    custom timecode tcs\n    timecode tcs.timeSamples = {\n        1: 5,\n        2: 6,\n    }\n\n    def \"Child\"\n    {\n    }\n}\n\ndef \"Inst\" (\n    inherits = </Class>\n)\n{\n}\n\ndef \"Rock\" (\n    variants = {\n        string look = \"a\"\n    }\n    prepend variantSets = \"look\"\n)\n{\n    def \"Child\"\n    {\n    }\n    variantSet \"look\" = {\n        \"a\" (\n            customData = {\n                dictionary d = {\n                    timecode deep = 5\n                    dictionary deeper = {\n                        pathExpression e = \"/Rock/Child\"\n                        timecode[] ts = [1, 2]\n                    }\n                }\n                duration du = 4\n                pathExpression e = \"/Rock/Child\"\n                pathExpression out = \"/Elsewhere + //Any\"\n                pathExpression rel = \"Child\"\n                timecode t = 5\n                timecode[] ts = [1, 2]\n            }\n        ) {\n            custom duration du = 4\n            custom pathExpression pe = \"/Rock/Child\"\n            custom pathExpression[] pea = [\"/Rock/Child\", \"/Rock/Child\", \"/Elsewhere + //Any\"]\n            custom pathExpression pes\n            pathExpression pes.timeSamples = {\n                1: \"/Rock/Child\",\n            }\n            custom double plain = 1 (\n                customData = {\n                    pathExpression e = \"/Rock/Child\"\n                    dictionary n = {\n                        timecode t = 5\n                    }\n                    timecode t = 5\n                }\n            )\n            custom pathExpression rpe = \"/Rock/Child\"\n            custom timecode tc = 5\n            custom timecode[] tca = [1, 2]\n            custom timecode tcs\n            timecode tcs.timeSamples = {\n                1: 5,\n                2: 6,\n            }\n\n        }\n    }\n}\n\n"
+  },
+  {
+   "accepted": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true
+   ],
+   "calls": [
+    {
+     "call": "set",
+     "key": null,
+     "name": "tc",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "set",
+     "key": 30.0,
+     "name": "tcs",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "set",
+     "key": null,
+     "name": "tca",
+     "value": [
+      {
+       "timecode": 30.0
+      },
+      {
+       "timecode": 40.0
+      }
+     ]
+    },
+    {
+     "call": "set",
+     "key": null,
+     "name": "du",
+     "value": {
+      "duration": 8.0
+     }
+    },
+    {
+     "call": "set",
+     "key": null,
+     "name": "pe",
+     "value": {
+      "pathExpression": "/Root/Child"
+     }
+    },
+    {
+     "call": "set",
+     "key": null,
+     "name": "rpe",
+     "value": {
+      "pathExpression": "Child"
+     }
+    },
+    {
+     "call": "set",
+     "key": 30.0,
+     "name": "pes",
+     "value": {
+      "pathExpression": "/Root/Child"
+     }
+    },
+    {
+     "call": "set",
+     "key": null,
+     "name": "pea",
+     "value": [
+      {
+       "pathExpression": "/Root/Child"
+      },
+      {
+       "pathExpression": "Child"
+      },
+      {
+       "pathExpression": "/Elsewhere + //Any"
+      }
+     ]
+    },
+    {
+     "call": "create",
+     "key": "pathExpression",
+     "name": "npe",
+     "value": {
+      "pathExpression": "Child + /Elsewhere"
+     }
+    },
+    {
+     "call": "create",
+     "key": "timecode",
+     "name": "ntc",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "create",
+     "key": "asset",
+     "name": "nasset",
+     "value": {
+      "asset": "./tex.png"
+     }
+    },
+    {
+     "call": "prim_key",
+     "key": "t",
+     "name": "customData",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "prim_key",
+     "key": "d:deep",
+     "name": "customData",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "prim_key",
+     "key": "e",
+     "name": "customData",
+     "value": {
+      "pathExpression": "/Root/Child"
+     }
+    },
+    {
+     "call": "prim_key",
+     "key": "ts",
+     "name": "customData",
+     "value": [
+      {
+       "timecode": 30.0
+      }
+     ]
+    },
+    {
+     "call": "prim_key",
+     "key": "du",
+     "name": "customData",
+     "value": {
+      "duration": 8.0
+     }
+    },
+    {
+     "call": "prim_field",
+     "key": null,
+     "name": "assetInfo",
+     "value": {
+      "dictionary": {
+       "n": {
+        "dictionary": {
+         "e": {
+          "pathExpression": "/Root/Child"
+         },
+         "ts": [
+          {
+           "timecode": 30.0
+          }
+         ]
+        }
+       },
+       "t": {
+        "timecode": 30.0
+       }
+      }
+     }
+    },
+    {
+     "call": "attr_key",
+     "key": "t",
+     "name": "plain",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "attr_key",
+     "key": "n:t",
+     "name": "plain",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "attr_key",
+     "key": "e",
+     "name": "plain",
+     "value": {
+      "pathExpression": "/Root/Child"
+     }
+    },
+    {
+     "call": "attr_field",
+     "key": "customData",
+     "name": "tc",
+     "value": {
+      "dictionary": {
+       "e": {
+        "pathExpression": "/Root/Child"
+       },
+       "t": {
+        "timecode": 30.0
+       }
+      }
+     }
+    }
+   ],
+   "layer": "ref.usda",
+   "name": "reference",
+   "prim": "/Root",
+   "read": {
+    "assetInfo": {
+     "dictionary": {
+      "n": {
+       "dictionary": {
+        "e": {
+         "pathExpression": "/Root/Child"
+        },
+        "ts": [
+         {
+          "timecode": 30.0
+         }
+        ]
+       }
+      },
+      "t": {
+       "timecode": 30.0
+      }
+     }
+    },
+    "attributes": {
+     "du": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "duration": 8.0
+      },
+      "samples": []
+     },
+     "nasset": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "asset": "./tex.png"
+      },
+      "samples": []
+     },
+     "npe": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "pathExpression": "/Root/Child"
+      },
+      "samples": []
+     },
+     "ntc": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "timecode": 30.0
+      },
+      "samples": []
+     },
+     "pe": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "pathExpression": "/Root/Child"
+      },
+      "samples": []
+     },
+     "pea": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": [
+       {
+        "pathExpression": "/Root/Child"
+       },
+       {
+        "pathExpression": "/Root/Child"
+       },
+       {
+        "pathExpression": "//Any"
+       }
+      ],
+      "samples": []
+     },
+     "pes": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": null,
+      "samples": [
+       [
+        12.0,
+        {
+         "pathExpression": "/Root/Child"
+        }
+       ],
+       [
+        30.0,
+        {
+         "pathExpression": "/Root/Child"
+        }
+       ]
+      ]
+     },
+     "plain": {
+      "customData": {
+       "dictionary": {
+        "e": {
+         "pathExpression": "/Root/Child"
+        },
+        "n": {
+         "dictionary": {
+          "t": {
+           "timecode": 30.0
+          }
+         }
+        },
+        "t": {
+         "timecode": 30.0
+        }
+       }
+      },
+      "default": 1.0,
+      "samples": []
+     },
+     "rpe": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "pathExpression": "/Root/Child"
+      },
+      "samples": []
+     },
+     "tc": {
+      "customData": {
+       "dictionary": {
+        "e": {
+         "pathExpression": "/Root/Child"
+        },
+        "t": {
+         "timecode": 30.0
+        }
+       }
+      },
+      "default": {
+       "timecode": 30.0
+      },
+      "samples": []
+     },
+     "tca": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": [
+       {
+        "timecode": 30.0
+       },
+       {
+        "timecode": 40.0
+       }
+      ],
+      "samples": []
+     },
+     "tcs": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": null,
+      "samples": [
+       [
+        12.0,
+        {
+         "timecode": 20.0
+        }
+       ],
+       [
+        14.0,
+        {
+         "timecode": 22.0
+        }
+       ],
+       [
+        30.0,
+        {
+         "timecode": 30.0
+        }
+       ]
+      ]
+     },
+     "vpe": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "pathExpression": "/Root/Child"
+      },
+      "samples": []
+     },
+     "vtc": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "timecode": 24.0
+      },
+      "samples": []
+     }
+    },
+    "customData": {
+     "dictionary": {
+      "d": {
+       "dictionary": {
+        "deep": {
+         "timecode": 30.0
+        },
+        "deeper": {
+         "dictionary": {
+          "e": {
+           "pathExpression": "/Root/Child"
+          },
+          "ts": [
+           {
+            "timecode": 12.0
+           },
+           {
+            "timecode": 14.0
+           }
+          ]
+         }
+        }
+       }
+      },
+      "du": {
+       "duration": 8.0
+      },
+      "e": {
+       "pathExpression": "/Root/Child"
+      },
+      "out": {
+       "pathExpression": "//Any"
+      },
+      "rel": {
+       "pathExpression": ""
+      },
+      "t": {
+       "timecode": 30.0
+      },
+      "ts": [
+       {
+        "timecode": 30.0
+       }
+      ]
+     }
+    }
+   },
+   "target": "reference",
+   "text": "#usda 1.4\n\ndef \"Ref\" (\n    assetInfo = {\n        dictionary n = {\n            pathExpression e = \"/Ref/Child\"\n            timecode[] ts = [10]\n        }\n        timecode t = 10\n    }\n    customData = {\n        dictionary d = {\n            timecode deep = 10\n            dictionary deeper = {\n                pathExpression e = \"/Ref/Child\"\n                timecode[] ts = [1, 2]\n            }\n        }\n        duration du = 4\n        pathExpression e = \"/Ref/Child\"\n        pathExpression out = \"/Elsewhere + //Any\"\n        pathExpression rel = \"Child\"\n        timecode t = 10\n        timecode[] ts = [10]\n    }\n    variants = {\n        string mode = \"x\"\n    }\n    prepend variantSets = \"mode\"\n)\n{\n    custom duration du = 4\n    custom asset nasset = @./tex.png@\n    custom pathExpression npe = \"/Ref/Child\"\n    custom timecode ntc = 10\n    custom pathExpression pe = \"/Ref/Child\"\n    custom pathExpression[] pea = [\"/Ref/Child\", \"/Ref/Child\", \"//Any\"]\n    custom pathExpression pes\n    pathExpression pes.timeSamples = {\n        1: \"/Ref/Child\",\n        10: \"/Ref/Child\",\n    }\n    custom double plain = 1 (\n        customData = {\n            pathExpression e = \"/Ref/Child\"\n            dictionary n = {\n                timecode t = 10\n            }\n            timecode t = 10\n        }\n    )\n    custom pathExpression rpe = \"/Ref/Child\"\n    custom timecode tc = 10 (\n        customData = {\n            pathExpression e = \"/Ref/Child\"\n            timecode t = 10\n        }\n    )\n    custom timecode[] tca = [10, 15]\n    custom timecode tcs\n    timecode tcs.timeSamples = {\n        1: 5,\n        2: 6,\n        10: 10,\n    }\n\n    def \"Child\"\n    {\n    }\n    variantSet \"mode\" = {\n        \"x\" {\n            custom pathExpression vpe = \"/Ref/Child\"\n            custom timecode vtc = 7\n\n        }\n    }\n}\n\n"
+  },
+  {
+   "accepted": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true
+   ],
+   "calls": [
+    {
+     "call": "set",
+     "key": null,
+     "name": "tc",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "set",
+     "key": 30.0,
+     "name": "tcs",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "set",
+     "key": null,
+     "name": "tca",
+     "value": [
+      {
+       "timecode": 30.0
+      },
+      {
+       "timecode": 40.0
+      }
+     ]
+    },
+    {
+     "call": "set",
+     "key": null,
+     "name": "du",
+     "value": {
+      "duration": 8.0
+     }
+    },
+    {
+     "call": "create",
+     "key": "timecode",
+     "name": "ntc",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "create",
+     "key": "asset",
+     "name": "nasset",
+     "value": {
+      "asset": "./tex.png"
+     }
+    },
+    {
+     "call": "prim_key",
+     "key": "t",
+     "name": "customData",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "prim_key",
+     "key": "d:deep",
+     "name": "customData",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "prim_key",
+     "key": "ts",
+     "name": "customData",
+     "value": [
+      {
+       "timecode": 30.0
+      }
+     ]
+    },
+    {
+     "call": "prim_key",
+     "key": "du",
+     "name": "customData",
+     "value": {
+      "duration": 8.0
+     }
+    },
+    {
+     "call": "attr_key",
+     "key": "t",
+     "name": "plain",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "attr_key",
+     "key": "n:t",
+     "name": "plain",
+     "value": {
+      "timecode": 30.0
+     }
+    }
+   ],
+   "layer": "ref.usda",
+   "name": "reference_variant",
+   "prim": "/Root",
+   "read": {
+    "assetInfo": {
+     "dictionary": {}
+    },
+    "attributes": {
+     "du": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "duration": 8.0
+      },
+      "samples": []
+     },
+     "nasset": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "asset": "./tex.png"
+      },
+      "samples": []
+     },
+     "ntc": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "timecode": 30.0
+      },
+      "samples": []
+     },
+     "pe": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "pathExpression": "/Root/Child"
+      },
+      "samples": []
+     },
+     "pea": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": [
+       {
+        "pathExpression": "/Root/Child"
+       },
+       {
+        "pathExpression": "/Root/Child"
+       },
+       {
+        "pathExpression": "//Any"
+       }
+      ],
+      "samples": []
+     },
+     "pes": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": null,
+      "samples": [
+       [
+        12.0,
+        {
+         "pathExpression": "/Root/Child"
+        }
+       ]
+      ]
+     },
+     "plain": {
+      "customData": {
+       "dictionary": {
+        "e": {
+         "pathExpression": "/Root/Child"
+        },
+        "n": {
+         "dictionary": {
+          "t": {
+           "timecode": 20.0
+          }
+         }
+        },
+        "t": {
+         "timecode": 20.0
+        }
+       }
+      },
+      "default": 1.0,
+      "samples": []
+     },
+     "rpe": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "pathExpression": "/Root/Child"
+      },
+      "samples": []
+     },
+     "tc": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "timecode": 20.0
+      },
+      "samples": []
+     },
+     "tca": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": [
+       {
+        "timecode": 12.0
+       },
+       {
+        "timecode": 14.0
+       }
+      ],
+      "samples": []
+     },
+     "tcs": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": null,
+      "samples": [
+       [
+        12.0,
+        {
+         "timecode": 20.0
+        }
+       ],
+       [
+        14.0,
+        {
+         "timecode": 22.0
+        }
+       ]
+      ]
+     },
+     "vpe": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "pathExpression": "/Root/Child"
+      },
+      "samples": []
+     },
+     "vtc": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "timecode": 24.0
+      },
+      "samples": []
+     }
+    },
+    "customData": {
+     "dictionary": {
+      "d": {
+       "dictionary": {
+        "deep": {
+         "timecode": 20.0
+        },
+        "deeper": {
+         "dictionary": {
+          "e": {
+           "pathExpression": "/Root/Child"
+          },
+          "ts": [
+           {
+            "timecode": 12.0
+           },
+           {
+            "timecode": 14.0
+           }
+          ]
+         }
+        }
+       }
+      },
+      "du": {
+       "duration": 8.0
+      },
+      "e": {
+       "pathExpression": "/Root/Child"
+      },
+      "out": {
+       "pathExpression": "//Any"
+      },
+      "rel": {
+       "pathExpression": ""
+      },
+      "t": {
+       "timecode": 20.0
+      },
+      "ts": [
+       {
+        "timecode": 12.0
+       },
+       {
+        "timecode": 14.0
+       }
+      ]
+     }
+    }
+   },
+   "target": "variant",
+   "text": "#usda 1.4\n\ndef \"Ref\" (\n    customData = {\n        dictionary d = {\n            timecode deep = 5\n            dictionary deeper = {\n                pathExpression e = \"/Ref/Child\"\n                timecode[] ts = [1, 2]\n            }\n        }\n        duration du = 4\n        pathExpression e = \"/Ref/Child\"\n        pathExpression out = \"/Elsewhere + //Any\"\n        pathExpression rel = \"Child\"\n        timecode t = 5\n        timecode[] ts = [1, 2]\n    }\n    variants = {\n        string mode = \"x\"\n    }\n    prepend variantSets = \"mode\"\n)\n{\n    custom duration du = 4\n    custom pathExpression pe = \"/Ref/Child\"\n    custom pathExpression[] pea = [\"/Ref/Child\", \"/Ref/Child\", \"/Elsewhere + //Any\"]\n    custom pathExpression pes\n    pathExpression pes.timeSamples = {\n        1: \"/Ref/Child\",\n    }\n    custom double plain = 1 (\n        customData = {\n            pathExpression e = \"/Ref/Child\"\n            dictionary n = {\n                timecode t = 5\n            }\n            timecode t = 5\n        }\n    )\n    custom pathExpression rpe = \"/Ref/Child\"\n    custom timecode tc = 5\n    custom timecode[] tca = [1, 2]\n    custom timecode tcs\n    timecode tcs.timeSamples = {\n        1: 5,\n        2: 6,\n    }\n\n    def \"Child\"\n    {\n    }\n    variantSet \"mode\" = {\n        \"x\" (\n            customData = {\n                dictionary d = {\n                    timecode deep = 10\n                }\n                duration du = 4\n                timecode t = 10\n                timecode[] ts = [10]\n            }\n        ) {\n            custom duration du = 4\n            custom asset nasset = @./tex.png@\n            custom timecode ntc = 10\n            custom double plain (\n                customData = {\n                    dictionary n = {\n                        timecode t = 10\n                    }\n                    timecode t = 10\n                }\n            )\n            custom timecode tc = 10\n            custom timecode[] tca = [10, 15]\n            custom timecode tcs\n            timecode tcs.timeSamples = {\n                10: 10,\n            }\n            custom pathExpression vpe = \"/Ref/Child\"\n            custom timecode vtc = 7\n\n        }\n    }\n}\n\n"
+  },
+  {
+   "accepted": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true
+   ],
+   "calls": [
+    {
+     "call": "set",
+     "key": null,
+     "name": "pe",
+     "value": {
+      "pathExpression": "/Root/Child"
+     }
+    },
+    {
+     "call": "set",
+     "key": null,
+     "name": "rpe",
+     "value": {
+      "pathExpression": "Child"
+     }
+    },
+    {
+     "call": "set",
+     "key": 30.0,
+     "name": "pes",
+     "value": {
+      "pathExpression": "/Root/Child"
+     }
+    },
+    {
+     "call": "set",
+     "key": null,
+     "name": "pea",
+     "value": [
+      {
+       "pathExpression": "/Root/Child"
+      },
+      {
+       "pathExpression": "Child"
+      },
+      {
+       "pathExpression": "/Elsewhere + //Any"
+      }
+     ]
+    },
+    {
+     "call": "create",
+     "key": "pathExpression",
+     "name": "npe",
+     "value": {
+      "pathExpression": "Child + /Elsewhere"
+     }
+    },
+    {
+     "call": "prim_key",
+     "key": "e",
+     "name": "customData",
+     "value": {
+      "pathExpression": "/Root/Child"
+     }
+    },
+    {
+     "call": "prim_field",
+     "key": null,
+     "name": "assetInfo",
+     "value": {
+      "dictionary": {
+       "n": {
+        "dictionary": {
+         "e": {
+          "pathExpression": "/Root/Child"
+         },
+         "ts": [
+          {
+           "timecode": 30.0
+          }
+         ]
+        }
+       },
+       "t": {
+        "timecode": 30.0
+       }
+      }
+     }
+    },
+    {
+     "call": "attr_key",
+     "key": "e",
+     "name": "plain",
+     "value": {
+      "pathExpression": "/Root/Child"
+     }
+    },
+    {
+     "call": "attr_field",
+     "key": "customData",
+     "name": "tc",
+     "value": {
+      "dictionary": {
+       "e": {
+        "pathExpression": "/Root/Child"
+       },
+       "t": {
+        "timecode": 30.0
+       }
+      }
+     }
+    }
+   ],
+   "layer": "ref.usda",
+   "name": "reference_variant_expressions",
+   "prim": "/Root",
+   "read": {
+    "assetInfo": {
+     "dictionary": {
+      "n": {
+       "dictionary": {
+        "e": {
+         "pathExpression": "/Root{mode=x}Child"
+        },
+        "ts": [
+         {
+          "timecode": 30.0
+         }
+        ]
+       }
+      },
+      "t": {
+       "timecode": 30.0
+      }
+     }
+    },
+    "attributes": {
+     "du": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "duration": 8.0
+      },
+      "samples": []
+     },
+     "npe": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "pathExpression": "/Root{mode=x}Child"
+      },
+      "samples": []
+     },
+     "pe": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "pathExpression": "/Root/Child"
+      },
+      "samples": []
+     },
+     "pea": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": [
+       {
+        "pathExpression": "/Root/Child"
+       },
+       {
+        "pathExpression": "/Root/Child"
+       },
+       {
+        "pathExpression": "//Any"
+       }
+      ],
+      "samples": []
+     },
+     "pes": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": null,
+      "samples": [
+       [
+        12.0,
+        {
+         "pathExpression": "/Root/Child"
+        }
+       ],
+       [
+        30.0,
+        {
+         "pathExpression": "/Root/Child"
+        }
+       ]
+      ]
+     },
+     "plain": {
+      "customData": {
+       "dictionary": {
+        "e": {
+         "pathExpression": "/Root/Child"
+        },
+        "n": {
+         "dictionary": {
+          "t": {
+           "timecode": 20.0
+          }
+         }
+        },
+        "t": {
+         "timecode": 20.0
+        }
+       }
+      },
+      "default": 1.0,
+      "samples": []
+     },
+     "rpe": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "pathExpression": "/Root/Child"
+      },
+      "samples": []
+     },
+     "tc": {
+      "customData": {
+       "dictionary": {
+        "e": {
+         "pathExpression": "/Root{mode=x}Child"
+        },
+        "t": {
+         "timecode": 30.0
+        }
+       }
+      },
+      "default": {
+       "timecode": 20.0
+      },
+      "samples": []
+     },
+     "tca": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": [
+       {
+        "timecode": 12.0
+       },
+       {
+        "timecode": 14.0
+       }
+      ],
+      "samples": []
+     },
+     "tcs": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": null,
+      "samples": [
+       [
+        12.0,
+        {
+         "timecode": 20.0
+        }
+       ],
+       [
+        14.0,
+        {
+         "timecode": 22.0
+        }
+       ]
+      ]
+     },
+     "vpe": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "pathExpression": "/Root/Child"
+      },
+      "samples": []
+     },
+     "vtc": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "timecode": 24.0
+      },
+      "samples": []
+     }
+    },
+    "customData": {
+     "dictionary": {
+      "d": {
+       "dictionary": {
+        "deep": {
+         "timecode": 20.0
+        },
+        "deeper": {
+         "dictionary": {
+          "e": {
+           "pathExpression": "/Root/Child"
+          },
+          "ts": [
+           {
+            "timecode": 12.0
+           },
+           {
+            "timecode": 14.0
+           }
+          ]
+         }
+        }
+       }
+      },
+      "du": {
+       "duration": 8.0
+      },
+      "e": {
+       "pathExpression": "/Root/Child"
+      },
+      "out": {
+       "pathExpression": "//Any"
+      },
+      "rel": {
+       "pathExpression": ""
+      },
+      "t": {
+       "timecode": 20.0
+      },
+      "ts": [
+       {
+        "timecode": 12.0
+       },
+       {
+        "timecode": 14.0
+       }
+      ]
+     }
+    }
+   },
+   "target": "variant",
+   "text": "#usda 1.4\n\ndef \"Ref\" (\n    customData = {\n        dictionary d = {\n            timecode deep = 5\n            dictionary deeper = {\n                pathExpression e = \"/Ref/Child\"\n                timecode[] ts = [1, 2]\n            }\n        }\n        duration du = 4\n        pathExpression e = \"/Ref/Child\"\n        pathExpression out = \"/Elsewhere + //Any\"\n        pathExpression rel = \"Child\"\n        timecode t = 5\n        timecode[] ts = [1, 2]\n    }\n    variants = {\n        string mode = \"x\"\n    }\n    prepend variantSets = \"mode\"\n)\n{\n    custom duration du = 4\n    custom pathExpression pe = \"/Ref/Child\"\n    custom pathExpression[] pea = [\"/Ref/Child\", \"/Ref/Child\", \"/Elsewhere + //Any\"]\n    custom pathExpression pes\n    pathExpression pes.timeSamples = {\n        1: \"/Ref/Child\",\n    }\n    custom double plain = 1 (\n        customData = {\n            pathExpression e = \"/Ref/Child\"\n            dictionary n = {\n                timecode t = 5\n            }\n            timecode t = 5\n        }\n    )\n    custom pathExpression rpe = \"/Ref/Child\"\n    custom timecode tc = 5\n    custom timecode[] tca = [1, 2]\n    custom timecode tcs\n    timecode tcs.timeSamples = {\n        1: 5,\n        2: 6,\n    }\n\n    def \"Child\"\n    {\n    }\n    variantSet \"mode\" = {\n        \"x\" (\n            assetInfo = {\n                dictionary n = {\n                    pathExpression e = \"/Ref{mode=x}Child\"\n                    timecode[] ts = [10]\n                }\n                timecode t = 10\n            }\n            customData = {\n                pathExpression e = \"/Ref{mode=x}Child\"\n            }\n        ) {\n            custom pathExpression npe = \"/Ref{mode=x}Child\"\n            custom pathExpression pe = \"/Ref{mode=x}Child\"\n            custom pathExpression[] pea = [\"/Ref{mode=x}Child\", \"/Ref{mode=x}Child\", \"//Any\"]\n            custom pathExpression pes\n            pathExpression pes.timeSamples = {\n                10: \"/Ref{mode=x}Child\",\n            }\n            custom double plain (\n                customData = {\n                    pathExpression e = \"/Ref{mode=x}Child\"\n                }\n            )\n            custom pathExpression rpe = \"/Ref{mode=x}Child\"\n            custom timecode tc (\n                customData = {\n                    pathExpression e = \"/Ref{mode=x}Child\"\n                    timecode t = 10\n                }\n            )\n            custom pathExpression vpe = \"/Ref/Child\"\n            custom timecode vtc = 7\n\n        }\n    }\n}\n\n"
+  },
+  {
+   "accepted": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true
+   ],
+   "calls": [
+    {
+     "call": "set",
+     "key": null,
+     "name": "tc",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "set",
+     "key": 30.0,
+     "name": "tcs",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "set",
+     "key": null,
+     "name": "tca",
+     "value": [
+      {
+       "timecode": 30.0
+      },
+      {
+       "timecode": 40.0
+      }
+     ]
+    },
+    {
+     "call": "set",
+     "key": null,
+     "name": "du",
+     "value": {
+      "duration": 8.0
+     }
+    },
+    {
+     "call": "set",
+     "key": null,
+     "name": "pe",
+     "value": {
+      "pathExpression": "/Inst/Child"
+     }
+    },
+    {
+     "call": "set",
+     "key": null,
+     "name": "rpe",
+     "value": {
+      "pathExpression": "Child"
+     }
+    },
+    {
+     "call": "set",
+     "key": 30.0,
+     "name": "pes",
+     "value": {
+      "pathExpression": "/Inst/Child"
+     }
+    },
+    {
+     "call": "set",
+     "key": null,
+     "name": "pea",
+     "value": [
+      {
+       "pathExpression": "/Inst/Child"
+      },
+      {
+       "pathExpression": "Child"
+      },
+      {
+       "pathExpression": "/Elsewhere + //Any"
+      }
+     ]
+    },
+    {
+     "call": "create",
+     "key": "pathExpression",
+     "name": "npe",
+     "value": {
+      "pathExpression": "Child + /Elsewhere"
+     }
+    },
+    {
+     "call": "create",
+     "key": "timecode",
+     "name": "ntc",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "create",
+     "key": "asset",
+     "name": "nasset",
+     "value": {
+      "asset": "./tex.png"
+     }
+    },
+    {
+     "call": "prim_key",
+     "key": "t",
+     "name": "customData",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "prim_key",
+     "key": "d:deep",
+     "name": "customData",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "prim_key",
+     "key": "e",
+     "name": "customData",
+     "value": {
+      "pathExpression": "/Inst/Child"
+     }
+    },
+    {
+     "call": "prim_key",
+     "key": "ts",
+     "name": "customData",
+     "value": [
+      {
+       "timecode": 30.0
+      }
+     ]
+    },
+    {
+     "call": "prim_key",
+     "key": "du",
+     "name": "customData",
+     "value": {
+      "duration": 8.0
+     }
+    },
+    {
+     "call": "prim_field",
+     "key": null,
+     "name": "assetInfo",
+     "value": {
+      "dictionary": {
+       "n": {
+        "dictionary": {
+         "e": {
+          "pathExpression": "/Inst/Child"
+         },
+         "ts": [
+          {
+           "timecode": 30.0
+          }
+         ]
+        }
+       },
+       "t": {
+        "timecode": 30.0
+       }
+      }
+     }
+    },
+    {
+     "call": "attr_key",
+     "key": "t",
+     "name": "plain",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "attr_key",
+     "key": "n:t",
+     "name": "plain",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "attr_key",
+     "key": "e",
+     "name": "plain",
+     "value": {
+      "pathExpression": "/Inst/Child"
+     }
+    },
+    {
+     "call": "attr_field",
+     "key": "customData",
+     "name": "tc",
+     "value": {
+      "dictionary": {
+       "e": {
+        "pathExpression": "/Inst/Child"
+       },
+       "t": {
+        "timecode": 30.0
+       }
+      }
+     }
+    }
+   ],
+   "layer": "scene.usda",
+   "name": "inherit",
+   "prim": "/Inst",
+   "read": {
+    "assetInfo": {
+     "dictionary": {
+      "n": {
+       "dictionary": {
+        "e": {
+         "pathExpression": "/Inst/Child"
+        },
+        "ts": [
+         {
+          "timecode": 30.0
+         }
+        ]
+       }
+      },
+      "t": {
+       "timecode": 30.0
+      }
+     }
+    },
+    "attributes": {
+     "du": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "duration": 8.0
+      },
+      "samples": []
+     },
+     "nasset": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "asset": "./tex.png"
+      },
+      "samples": []
+     },
+     "npe": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "pathExpression": "/Inst/Child + /Elsewhere"
+      },
+      "samples": []
+     },
+     "ntc": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "timecode": 30.0
+      },
+      "samples": []
+     },
+     "pe": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "pathExpression": "/Inst/Child"
+      },
+      "samples": []
+     },
+     "pea": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": [
+       {
+        "pathExpression": "/Inst/Child"
+       },
+       {
+        "pathExpression": "/Inst/Child"
+       },
+       {
+        "pathExpression": "/Elsewhere + //Any"
+       }
+      ],
+      "samples": []
+     },
+     "pes": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": null,
+      "samples": [
+       [
+        1.0,
+        {
+         "pathExpression": "/Inst/Child"
+        }
+       ],
+       [
+        30.0,
+        {
+         "pathExpression": "/Inst/Child"
+        }
+       ]
+      ]
+     },
+     "plain": {
+      "customData": {
+       "dictionary": {
+        "e": {
+         "pathExpression": "/Inst/Child"
+        },
+        "n": {
+         "dictionary": {
+          "t": {
+           "timecode": 30.0
+          }
+         }
+        },
+        "t": {
+         "timecode": 30.0
+        }
+       }
+      },
+      "default": 1.0,
+      "samples": []
+     },
+     "rpe": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "pathExpression": "/Inst/Child"
+      },
+      "samples": []
+     },
+     "tc": {
+      "customData": {
+       "dictionary": {
+        "e": {
+         "pathExpression": "/Inst/Child"
+        },
+        "t": {
+         "timecode": 30.0
+        }
+       }
+      },
+      "default": {
+       "timecode": 30.0
+      },
+      "samples": []
+     },
+     "tca": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": [
+       {
+        "timecode": 30.0
+       },
+       {
+        "timecode": 40.0
+       }
+      ],
+      "samples": []
+     },
+     "tcs": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": null,
+      "samples": [
+       [
+        1.0,
+        {
+         "timecode": 5.0
+        }
+       ],
+       [
+        2.0,
+        {
+         "timecode": 6.0
+        }
+       ],
+       [
+        30.0,
+        {
+         "timecode": 30.0
+        }
+       ]
+      ]
+     }
+    },
+    "customData": {
+     "dictionary": {
+      "d": {
+       "dictionary": {
+        "deep": {
+         "timecode": 30.0
+        },
+        "deeper": {
+         "dictionary": {
+          "e": {
+           "pathExpression": "/Inst/Child"
+          },
+          "ts": [
+           {
+            "timecode": 1.0
+           },
+           {
+            "timecode": 2.0
+           }
+          ]
+         }
+        }
+       }
+      },
+      "du": {
+       "duration": 8.0
+      },
+      "e": {
+       "pathExpression": "/Inst/Child"
+      },
+      "out": {
+       "pathExpression": "/Elsewhere + //Any"
+      },
+      "rel": {
+       "pathExpression": "Child"
+      },
+      "t": {
+       "timecode": 30.0
+      },
+      "ts": [
+       {
+        "timecode": 30.0
+       }
+      ]
+     }
+    }
+   },
+   "target": "inherit",
+   "text": "#usda 1.4\n(\n    subLayers = [\n        @sub.usda@ (offset = 4; scale = 0.5)\n    ]\n)\n\ndef \"Root\" (\n    references = @ref.usda@</Ref> (offset = 10; scale = 2)\n)\n{\n}\n\nclass \"Class\" (\n    assetInfo = {\n        dictionary n = {\n            pathExpression e = \"/Class/Child\"\n            timecode[] ts = [30]\n        }\n        timecode t = 30\n    }\n    customData = {\n        dictionary d = {\n            timecode deep = 30\n            dictionary deeper = {\n                pathExpression e = \"/Class/Child\"\n                timecode[] ts = [1, 2]\n            }\n        }\n        duration du = 8\n        pathExpression e = \"/Class/Child\"\n        pathExpression out = \"/Elsewhere + //Any\"\n        pathExpression rel = \"Child\"\n        timecode t = 30\n        timecode[] ts = [30]\n    }\n)\n{\n    custom duration du = 8\n    custom asset nasset = @./tex.png@\n    custom pathExpression npe = \"/Class/Child + /Elsewhere\"\n    custom timecode ntc = 30\n    custom pathExpression pe = \"/Class/Child\"\n    custom pathExpression[] pea = [\"/Class/Child\", \"/Class/Child\", \"/Elsewhere + //Any\"]\n    custom pathExpression pes\n    pathExpression pes.timeSamples = {\n        1: \"/Class/Child\",\n        30: \"/Class/Child\",\n    }\n    custom double plain = 1 (\n        customData = {\n            pathExpression e = \"/Class/Child\"\n            dictionary n = {\n                timecode t = 30\n            }\n            timecode t = 30\n        }\n    )\n    custom pathExpression rpe = \"/Class/Child\"\n    custom timecode tc = 30 (\n        customData = {\n            pathExpression e = \"/Class/Child\"\n            timecode t = 30\n        }\n    )\n    custom timecode[] tca = [30, 40]\n    custom timecode tcs\n    timecode tcs.timeSamples = {\n        1: 5,\n        2: 6,\n        30: 30,\n    }\n\n    def \"Child\"\n    {\n    }\n}\n\ndef \"Inst\" (\n    inherits = </Class>\n)\n{\n}\n\ndef \"Rock\" (\n    variants = {\n        string look = \"a\"\n    }\n    prepend variantSets = \"look\"\n)\n{\n    def \"Child\"\n    {\n    }\n    variantSet \"look\" = {\n        \"a\" (\n            customData = {\n                dictionary d = {\n                    timecode deep = 5\n                    dictionary deeper = {\n                        pathExpression e = \"/Rock/Child\"\n                        timecode[] ts = [1, 2]\n                    }\n                }\n                duration du = 4\n                pathExpression e = \"/Rock/Child\"\n                pathExpression out = \"/Elsewhere + //Any\"\n                pathExpression rel = \"Child\"\n                timecode t = 5\n                timecode[] ts = [1, 2]\n            }\n        ) {\n            custom duration du = 4\n            custom pathExpression pe = \"/Rock/Child\"\n            custom pathExpression[] pea = [\"/Rock/Child\", \"/Rock/Child\", \"/Elsewhere + //Any\"]\n            custom pathExpression pes\n            pathExpression pes.timeSamples = {\n                1: \"/Rock/Child\",\n            }\n            custom double plain = 1 (\n                customData = {\n                    pathExpression e = \"/Rock/Child\"\n                    dictionary n = {\n                        timecode t = 5\n                    }\n                    timecode t = 5\n                }\n            )\n            custom pathExpression rpe = \"/Rock/Child\"\n            custom timecode tc = 5\n            custom timecode[] tca = [1, 2]\n            custom timecode tcs\n            timecode tcs.timeSamples = {\n                1: 5,\n                2: 6,\n            }\n\n        }\n    }\n}\n\n"
+  },
+  {
+   "accepted": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true
+   ],
+   "calls": [
+    {
+     "call": "set",
+     "key": null,
+     "name": "tc",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "set",
+     "key": 30.0,
+     "name": "tcs",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "set",
+     "key": null,
+     "name": "tca",
+     "value": [
+      {
+       "timecode": 30.0
+      },
+      {
+       "timecode": 40.0
+      }
+     ]
+    },
+    {
+     "call": "set",
+     "key": null,
+     "name": "du",
+     "value": {
+      "duration": 8.0
+     }
+    },
+    {
+     "call": "create",
+     "key": "timecode",
+     "name": "ntc",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "create",
+     "key": "asset",
+     "name": "nasset",
+     "value": {
+      "asset": "./tex.png"
+     }
+    },
+    {
+     "call": "prim_key",
+     "key": "t",
+     "name": "customData",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "prim_key",
+     "key": "d:deep",
+     "name": "customData",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "prim_key",
+     "key": "ts",
+     "name": "customData",
+     "value": [
+      {
+       "timecode": 30.0
+      }
+     ]
+    },
+    {
+     "call": "prim_key",
+     "key": "du",
+     "name": "customData",
+     "value": {
+      "duration": 8.0
+     }
+    },
+    {
+     "call": "attr_key",
+     "key": "t",
+     "name": "plain",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "attr_key",
+     "key": "n:t",
+     "name": "plain",
+     "value": {
+      "timecode": 30.0
+     }
+    }
+   ],
+   "layer": "scene.usda",
+   "name": "variant",
+   "prim": "/Rock",
+   "read": {
+    "assetInfo": {
+     "dictionary": {}
+    },
+    "attributes": {
+     "du": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "duration": 8.0
+      },
+      "samples": []
+     },
+     "nasset": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "asset": "./tex.png"
+      },
+      "samples": []
+     },
+     "ntc": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "timecode": 30.0
+      },
+      "samples": []
+     },
+     "pe": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "pathExpression": "/Rock/Child"
+      },
+      "samples": []
+     },
+     "pea": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": [
+       {
+        "pathExpression": "/Rock/Child"
+       },
+       {
+        "pathExpression": "/Rock/Child"
+       },
+       {
+        "pathExpression": "/Elsewhere + //Any"
+       }
+      ],
+      "samples": []
+     },
+     "pes": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": null,
+      "samples": [
+       [
+        1.0,
+        {
+         "pathExpression": "/Rock/Child"
+        }
+       ]
+      ]
+     },
+     "plain": {
+      "customData": {
+       "dictionary": {
+        "e": {
+         "pathExpression": "/Rock/Child"
+        },
+        "n": {
+         "dictionary": {
+          "t": {
+           "timecode": 30.0
+          }
+         }
+        },
+        "t": {
+         "timecode": 30.0
+        }
+       }
+      },
+      "default": 1.0,
+      "samples": []
+     },
+     "rpe": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "pathExpression": "/Rock/Child"
+      },
+      "samples": []
+     },
+     "tc": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "timecode": 30.0
+      },
+      "samples": []
+     },
+     "tca": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": [
+       {
+        "timecode": 30.0
+       },
+       {
+        "timecode": 40.0
+       }
+      ],
+      "samples": []
+     },
+     "tcs": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": null,
+      "samples": [
+       [
+        1.0,
+        {
+         "timecode": 5.0
+        }
+       ],
+       [
+        2.0,
+        {
+         "timecode": 6.0
+        }
+       ],
+       [
+        30.0,
+        {
+         "timecode": 30.0
+        }
+       ]
+      ]
+     }
+    },
+    "customData": {
+     "dictionary": {
+      "d": {
+       "dictionary": {
+        "deep": {
+         "timecode": 30.0
+        },
+        "deeper": {
+         "dictionary": {
+          "e": {
+           "pathExpression": "/Rock/Child"
+          },
+          "ts": [
+           {
+            "timecode": 1.0
+           },
+           {
+            "timecode": 2.0
+           }
+          ]
+         }
+        }
+       }
+      },
+      "du": {
+       "duration": 8.0
+      },
+      "e": {
+       "pathExpression": "/Rock/Child"
+      },
+      "out": {
+       "pathExpression": "/Elsewhere + //Any"
+      },
+      "rel": {
+       "pathExpression": "Child"
+      },
+      "t": {
+       "timecode": 30.0
+      },
+      "ts": [
+       {
+        "timecode": 30.0
+       }
+      ]
+     }
+    }
+   },
+   "target": "variant",
+   "text": "#usda 1.4\n(\n    subLayers = [\n        @sub.usda@ (offset = 4; scale = 0.5)\n    ]\n)\n\ndef \"Root\" (\n    references = @ref.usda@</Ref> (offset = 10; scale = 2)\n)\n{\n}\n\nclass \"Class\" (\n    customData = {\n        dictionary d = {\n            timecode deep = 5\n            dictionary deeper = {\n                pathExpression e = \"/Class/Child\"\n                timecode[] ts = [1, 2]\n            }\n        }\n        duration du = 4\n        pathExpression e = \"/Class/Child\"\n        pathExpression out = \"/Elsewhere + //Any\"\n        pathExpression rel = \"Child\"\n        timecode t = 5\n        timecode[] ts = [1, 2]\n    }\n)\n{\n    custom duration du = 4\n    custom pathExpression pe = \"/Class/Child\"\n    custom pathExpression[] pea = [\"/Class/Child\", \"/Class/Child\", \"/Elsewhere + //Any\"]\n    custom pathExpression pes\n    pathExpression pes.timeSamples = {\n        1: \"/Class/Child\",\n    }\n    custom double plain = 1 (\n        customData = {\n            pathExpression e = \"/Class/Child\"\n            dictionary n = {\n                timecode t = 5\n            }\n            timecode t = 5\n        }\n    )\n    custom pathExpression rpe = \"/Class/Child\"\n    custom timecode tc = 5\n    custom timecode[] tca = [1, 2]\n    custom timecode tcs\n    timecode tcs.timeSamples = {\n        1: 5,\n        2: 6,\n    }\n\n    def \"Child\"\n    {\n    }\n}\n\ndef \"Inst\" (\n    inherits = </Class>\n)\n{\n}\n\ndef \"Rock\" (\n    variants = {\n        string look = \"a\"\n    }\n    prepend variantSets = \"look\"\n)\n{\n    def \"Child\"\n    {\n    }\n    variantSet \"look\" = {\n        \"a\" (\n            customData = {\n                dictionary d = {\n                    timecode deep = 30\n                    dictionary deeper = {\n                        pathExpression e = \"/Rock/Child\"\n                        timecode[] ts = [1, 2]\n                    }\n                }\n                duration du = 8\n                pathExpression e = \"/Rock/Child\"\n                pathExpression out = \"/Elsewhere + //Any\"\n                pathExpression rel = \"Child\"\n                timecode t = 30\n                timecode[] ts = [30]\n            }\n        ) {\n            custom duration du = 8\n            custom asset nasset = @./tex.png@\n            custom timecode ntc = 30\n            custom pathExpression pe = \"/Rock/Child\"\n            custom pathExpression[] pea = [\"/Rock/Child\", \"/Rock/Child\", \"/Elsewhere + //Any\"]\n            custom pathExpression pes\n            pathExpression pes.timeSamples = {\n                1: \"/Rock/Child\",\n            }\n            custom double plain = 1 (\n                customData = {\n                    pathExpression e = \"/Rock/Child\"\n                    dictionary n = {\n                        timecode t = 30\n                    }\n                    timecode t = 30\n                }\n            )\n            custom pathExpression rpe = \"/Rock/Child\"\n            custom timecode tc = 30\n            custom timecode[] tca = [30, 40]\n            custom timecode tcs\n            timecode tcs.timeSamples = {\n                1: 5,\n                2: 6,\n                30: 30,\n            }\n\n        }\n    }\n}\n\n"
+  },
+  {
+   "accepted": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true
+   ],
+   "calls": [
+    {
+     "call": "set",
+     "key": null,
+     "name": "pe",
+     "value": {
+      "pathExpression": "/Rock/Child"
+     }
+    },
+    {
+     "call": "set",
+     "key": null,
+     "name": "rpe",
+     "value": {
+      "pathExpression": "Child"
+     }
+    },
+    {
+     "call": "set",
+     "key": 30.0,
+     "name": "pes",
+     "value": {
+      "pathExpression": "/Rock/Child"
+     }
+    },
+    {
+     "call": "set",
+     "key": null,
+     "name": "pea",
+     "value": [
+      {
+       "pathExpression": "/Rock/Child"
+      },
+      {
+       "pathExpression": "Child"
+      },
+      {
+       "pathExpression": "/Elsewhere + //Any"
+      }
+     ]
+    },
+    {
+     "call": "create",
+     "key": "pathExpression",
+     "name": "npe",
+     "value": {
+      "pathExpression": "Child + /Elsewhere"
+     }
+    },
+    {
+     "call": "prim_key",
+     "key": "e",
+     "name": "customData",
+     "value": {
+      "pathExpression": "/Rock/Child"
+     }
+    },
+    {
+     "call": "prim_field",
+     "key": null,
+     "name": "assetInfo",
+     "value": {
+      "dictionary": {
+       "n": {
+        "dictionary": {
+         "e": {
+          "pathExpression": "/Rock/Child"
+         },
+         "ts": [
+          {
+           "timecode": 30.0
+          }
+         ]
+        }
+       },
+       "t": {
+        "timecode": 30.0
+       }
+      }
+     }
+    },
+    {
+     "call": "attr_key",
+     "key": "e",
+     "name": "plain",
+     "value": {
+      "pathExpression": "/Rock/Child"
+     }
+    },
+    {
+     "call": "attr_field",
+     "key": "customData",
+     "name": "tc",
+     "value": {
+      "dictionary": {
+       "e": {
+        "pathExpression": "/Rock/Child"
+       },
+       "t": {
+        "timecode": 30.0
+       }
+      }
+     }
+    }
+   ],
+   "layer": "scene.usda",
+   "name": "variant_expressions",
+   "prim": "/Rock",
+   "read": {
+    "assetInfo": {
+     "dictionary": {
+      "n": {
+       "dictionary": {
+        "e": {
+         "pathExpression": "/Rock{look=a}Child"
+        },
+        "ts": [
+         {
+          "timecode": 30.0
+         }
+        ]
+       }
+      },
+      "t": {
+       "timecode": 30.0
+      }
+     }
+    },
+    "attributes": {
+     "du": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "duration": 4.0
+      },
+      "samples": []
+     },
+     "npe": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "pathExpression": "/Rock{look=a}Child + /Elsewhere"
+      },
+      "samples": []
+     },
+     "pe": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "pathExpression": "/Rock{look=a}Child"
+      },
+      "samples": []
+     },
+     "pea": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": [
+       {
+        "pathExpression": "/Rock{look=a}Child"
+       },
+       {
+        "pathExpression": "/Rock{look=a}Child"
+       },
+       {
+        "pathExpression": "/Elsewhere + //Any"
+       }
+      ],
+      "samples": []
+     },
+     "pes": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": null,
+      "samples": [
+       [
+        1.0,
+        {
+         "pathExpression": "/Rock/Child"
+        }
+       ],
+       [
+        30.0,
+        {
+         "pathExpression": "/Rock{look=a}Child"
+        }
+       ]
+      ]
+     },
+     "plain": {
+      "customData": {
+       "dictionary": {
+        "e": {
+         "pathExpression": "/Rock{look=a}Child"
+        },
+        "n": {
+         "dictionary": {
+          "t": {
+           "timecode": 5.0
+          }
+         }
+        },
+        "t": {
+         "timecode": 5.0
+        }
+       }
+      },
+      "default": 1.0,
+      "samples": []
+     },
+     "rpe": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "pathExpression": "/Rock{look=a}Child"
+      },
+      "samples": []
+     },
+     "tc": {
+      "customData": {
+       "dictionary": {
+        "e": {
+         "pathExpression": "/Rock{look=a}Child"
+        },
+        "t": {
+         "timecode": 30.0
+        }
+       }
+      },
+      "default": {
+       "timecode": 5.0
+      },
+      "samples": []
+     },
+     "tca": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": [
+       {
+        "timecode": 1.0
+       },
+       {
+        "timecode": 2.0
+       }
+      ],
+      "samples": []
+     },
+     "tcs": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": null,
+      "samples": [
+       [
+        1.0,
+        {
+         "timecode": 5.0
+        }
+       ],
+       [
+        2.0,
+        {
+         "timecode": 6.0
+        }
+       ]
+      ]
+     }
+    },
+    "customData": {
+     "dictionary": {
+      "d": {
+       "dictionary": {
+        "deep": {
+         "timecode": 5.0
+        },
+        "deeper": {
+         "dictionary": {
+          "e": {
+           "pathExpression": "/Rock/Child"
+          },
+          "ts": [
+           {
+            "timecode": 1.0
+           },
+           {
+            "timecode": 2.0
+           }
+          ]
+         }
+        }
+       }
+      },
+      "du": {
+       "duration": 4.0
+      },
+      "e": {
+       "pathExpression": "/Rock{look=a}Child"
+      },
+      "out": {
+       "pathExpression": "/Elsewhere + //Any"
+      },
+      "rel": {
+       "pathExpression": "Child"
+      },
+      "t": {
+       "timecode": 5.0
+      },
+      "ts": [
+       {
+        "timecode": 1.0
+       },
+       {
+        "timecode": 2.0
+       }
+      ]
+     }
+    }
+   },
+   "target": "variant",
+   "text": "#usda 1.4\n(\n    subLayers = [\n        @sub.usda@ (offset = 4; scale = 0.5)\n    ]\n)\n\ndef \"Root\" (\n    references = @ref.usda@</Ref> (offset = 10; scale = 2)\n)\n{\n}\n\nclass \"Class\" (\n    customData = {\n        dictionary d = {\n            timecode deep = 5\n            dictionary deeper = {\n                pathExpression e = \"/Class/Child\"\n                timecode[] ts = [1, 2]\n            }\n        }\n        duration du = 4\n        pathExpression e = \"/Class/Child\"\n        pathExpression out = \"/Elsewhere + //Any\"\n        pathExpression rel = \"Child\"\n        timecode t = 5\n        timecode[] ts = [1, 2]\n    }\n)\n{\n    custom duration du = 4\n    custom pathExpression pe = \"/Class/Child\"\n    custom pathExpression[] pea = [\"/Class/Child\", \"/Class/Child\", \"/Elsewhere + //Any\"]\n    custom pathExpression pes\n    pathExpression pes.timeSamples = {\n        1: \"/Class/Child\",\n    }\n    custom double plain = 1 (\n        customData = {\n            pathExpression e = \"/Class/Child\"\n            dictionary n = {\n                timecode t = 5\n            }\n            timecode t = 5\n        }\n    )\n    custom pathExpression rpe = \"/Class/Child\"\n    custom timecode tc = 5\n    custom timecode[] tca = [1, 2]\n    custom timecode tcs\n    timecode tcs.timeSamples = {\n        1: 5,\n        2: 6,\n    }\n\n    def \"Child\"\n    {\n    }\n}\n\ndef \"Inst\" (\n    inherits = </Class>\n)\n{\n}\n\ndef \"Rock\" (\n    variants = {\n        string look = \"a\"\n    }\n    prepend variantSets = \"look\"\n)\n{\n    def \"Child\"\n    {\n    }\n    variantSet \"look\" = {\n        \"a\" (\n            assetInfo = {\n                dictionary n = {\n                    pathExpression e = \"/Rock{look=a}Child\"\n                    timecode[] ts = [30]\n                }\n                timecode t = 30\n            }\n            customData = {\n                dictionary d = {\n                    timecode deep = 5\n                    dictionary deeper = {\n                        pathExpression e = \"/Rock/Child\"\n                        timecode[] ts = [1, 2]\n                    }\n                }\n                duration du = 4\n                pathExpression e = \"/Rock{look=a}Child\"\n                pathExpression out = \"/Elsewhere + //Any\"\n                pathExpression rel = \"Child\"\n                timecode t = 5\n                timecode[] ts = [1, 2]\n            }\n        ) {\n            custom duration du = 4\n            custom pathExpression npe = \"/Rock{look=a}Child + /Elsewhere\"\n            custom pathExpression pe = \"/Rock{look=a}Child\"\n            custom pathExpression[] pea = [\"/Rock{look=a}Child\", \"/Rock{look=a}Child\", \"/Elsewhere + //Any\"]\n            custom pathExpression pes\n            pathExpression pes.timeSamples = {\n                1: \"/Rock/Child\",\n                30: \"/Rock{look=a}Child\",\n            }\n            custom double plain = 1 (\n                customData = {\n                    pathExpression e = \"/Rock{look=a}Child\"\n                    dictionary n = {\n                        timecode t = 5\n                    }\n                    timecode t = 5\n                }\n            )\n            custom pathExpression rpe = \"/Rock{look=a}Child\"\n            custom timecode tc = 5 (\n                customData = {\n                    pathExpression e = \"/Rock{look=a}Child\"\n                    timecode t = 30\n                }\n            )\n            custom timecode[] tca = [1, 2]\n            custom timecode tcs\n            timecode tcs.timeSamples = {\n                1: 5,\n                2: 6,\n            }\n\n        }\n    }\n}\n\n"
+  },
+  {
+   "accepted": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true
+   ],
+   "calls": [
+    {
+     "call": "set",
+     "key": null,
+     "name": "tc",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "set",
+     "key": 30.0,
+     "name": "tcs",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "set",
+     "key": null,
+     "name": "tca",
+     "value": [
+      {
+       "timecode": 30.0
+      },
+      {
+       "timecode": 40.0
+      }
+     ]
+    },
+    {
+     "call": "set",
+     "key": null,
+     "name": "du",
+     "value": {
+      "duration": 8.0
+     }
+    },
+    {
+     "call": "create",
+     "key": "timecode",
+     "name": "ntc",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "create",
+     "key": "asset",
+     "name": "nasset",
+     "value": {
+      "asset": "./tex.png"
+     }
+    },
+    {
+     "call": "prim_key",
+     "key": "t",
+     "name": "customData",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "prim_key",
+     "key": "d:deep",
+     "name": "customData",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "prim_key",
+     "key": "ts",
+     "name": "customData",
+     "value": [
+      {
+       "timecode": 30.0
+      }
+     ]
+    },
+    {
+     "call": "prim_key",
+     "key": "du",
+     "name": "customData",
+     "value": {
+      "duration": 8.0
+     }
+    },
+    {
+     "call": "attr_key",
+     "key": "t",
+     "name": "plain",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "attr_key",
+     "key": "n:t",
+     "name": "plain",
+     "value": {
+      "timecode": 30.0
+     }
+    }
+   ],
+   "layer": "scene.usda",
+   "name": "local_direct_variant",
+   "prim": "/Rock",
+   "read": {
+    "assetInfo": {
+     "dictionary": {}
+    },
+    "attributes": {
+     "du": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "duration": 8.0
+      },
+      "samples": []
+     },
+     "nasset": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "asset": "./tex.png"
+      },
+      "samples": []
+     },
+     "ntc": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "timecode": 30.0
+      },
+      "samples": []
+     },
+     "pe": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "pathExpression": "/Rock/Child"
+      },
+      "samples": []
+     },
+     "pea": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": [
+       {
+        "pathExpression": "/Rock/Child"
+       },
+       {
+        "pathExpression": "/Rock/Child"
+       },
+       {
+        "pathExpression": "/Elsewhere + //Any"
+       }
+      ],
+      "samples": []
+     },
+     "pes": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": null,
+      "samples": [
+       [
+        1.0,
+        {
+         "pathExpression": "/Rock/Child"
+        }
+       ]
+      ]
+     },
+     "plain": {
+      "customData": {
+       "dictionary": {
+        "e": {
+         "pathExpression": "/Rock/Child"
+        },
+        "n": {
+         "dictionary": {
+          "t": {
+           "timecode": 30.0
+          }
+         }
+        },
+        "t": {
+         "timecode": 30.0
+        }
+       }
+      },
+      "default": 1.0,
+      "samples": []
+     },
+     "rpe": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "pathExpression": "/Rock/Child"
+      },
+      "samples": []
+     },
+     "tc": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "timecode": 30.0
+      },
+      "samples": []
+     },
+     "tca": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": [
+       {
+        "timecode": 30.0
+       },
+       {
+        "timecode": 40.0
+       }
+      ],
+      "samples": []
+     },
+     "tcs": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": null,
+      "samples": [
+       [
+        1.0,
+        {
+         "timecode": 5.0
+        }
+       ],
+       [
+        2.0,
+        {
+         "timecode": 6.0
+        }
+       ],
+       [
+        30.0,
+        {
+         "timecode": 30.0
+        }
+       ]
+      ]
+     }
+    },
+    "customData": {
+     "dictionary": {
+      "d": {
+       "dictionary": {
+        "deep": {
+         "timecode": 30.0
+        },
+        "deeper": {
+         "dictionary": {
+          "e": {
+           "pathExpression": "/Rock/Child"
+          },
+          "ts": [
+           {
+            "timecode": 1.0
+           },
+           {
+            "timecode": 2.0
+           }
+          ]
+         }
+        }
+       }
+      },
+      "du": {
+       "duration": 8.0
+      },
+      "e": {
+       "pathExpression": "/Rock/Child"
+      },
+      "out": {
+       "pathExpression": "/Elsewhere + //Any"
+      },
+      "rel": {
+       "pathExpression": "Child"
+      },
+      "t": {
+       "timecode": 30.0
+      },
+      "ts": [
+       {
+        "timecode": 30.0
+       }
+      ]
+     }
+    }
+   },
+   "target": "local_direct_variant",
+   "text": "#usda 1.4\n(\n    subLayers = [\n        @sub.usda@ (offset = 4; scale = 0.5)\n    ]\n)\n\ndef \"Root\" (\n    references = @ref.usda@</Ref> (offset = 10; scale = 2)\n)\n{\n}\n\nclass \"Class\" (\n    customData = {\n        dictionary d = {\n            timecode deep = 5\n            dictionary deeper = {\n                pathExpression e = \"/Class/Child\"\n                timecode[] ts = [1, 2]\n            }\n        }\n        duration du = 4\n        pathExpression e = \"/Class/Child\"\n        pathExpression out = \"/Elsewhere + //Any\"\n        pathExpression rel = \"Child\"\n        timecode t = 5\n        timecode[] ts = [1, 2]\n    }\n)\n{\n    custom duration du = 4\n    custom pathExpression pe = \"/Class/Child\"\n    custom pathExpression[] pea = [\"/Class/Child\", \"/Class/Child\", \"/Elsewhere + //Any\"]\n    custom pathExpression pes\n    pathExpression pes.timeSamples = {\n        1: \"/Class/Child\",\n    }\n    custom double plain = 1 (\n        customData = {\n            pathExpression e = \"/Class/Child\"\n            dictionary n = {\n                timecode t = 5\n            }\n            timecode t = 5\n        }\n    )\n    custom pathExpression rpe = \"/Class/Child\"\n    custom timecode tc = 5\n    custom timecode[] tca = [1, 2]\n    custom timecode tcs\n    timecode tcs.timeSamples = {\n        1: 5,\n        2: 6,\n    }\n\n    def \"Child\"\n    {\n    }\n}\n\ndef \"Inst\" (\n    inherits = </Class>\n)\n{\n}\n\ndef \"Rock\" (\n    variants = {\n        string look = \"a\"\n    }\n    prepend variantSets = \"look\"\n)\n{\n    def \"Child\"\n    {\n    }\n    variantSet \"look\" = {\n        \"a\" (\n            customData = {\n                dictionary d = {\n                    timecode deep = 30\n                    dictionary deeper = {\n                        pathExpression e = \"/Rock/Child\"\n                        timecode[] ts = [1, 2]\n                    }\n                }\n                duration du = 8\n                pathExpression e = \"/Rock/Child\"\n                pathExpression out = \"/Elsewhere + //Any\"\n                pathExpression rel = \"Child\"\n                timecode t = 30\n                timecode[] ts = [30]\n            }\n        ) {\n            custom duration du = 8\n            custom asset nasset = @./tex.png@\n            custom timecode ntc = 30\n            custom pathExpression pe = \"/Rock/Child\"\n            custom pathExpression[] pea = [\"/Rock/Child\", \"/Rock/Child\", \"/Elsewhere + //Any\"]\n            custom pathExpression pes\n            pathExpression pes.timeSamples = {\n                1: \"/Rock/Child\",\n            }\n            custom double plain = 1 (\n                customData = {\n                    pathExpression e = \"/Rock/Child\"\n                    dictionary n = {\n                        timecode t = 30\n                    }\n                    timecode t = 30\n                }\n            )\n            custom pathExpression rpe = \"/Rock/Child\"\n            custom timecode tc = 30\n            custom timecode[] tca = [30, 40]\n            custom timecode tcs\n            timecode tcs.timeSamples = {\n                1: 5,\n                2: 6,\n                30: 30,\n            }\n\n        }\n    }\n}\n\n"
+  },
+  {
+   "accepted": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true
+   ],
+   "calls": [
+    {
+     "call": "set",
+     "key": null,
+     "name": "pe",
+     "value": {
+      "pathExpression": "/Rock/Child"
+     }
+    },
+    {
+     "call": "set",
+     "key": null,
+     "name": "rpe",
+     "value": {
+      "pathExpression": "Child"
+     }
+    },
+    {
+     "call": "set",
+     "key": 30.0,
+     "name": "pes",
+     "value": {
+      "pathExpression": "/Rock/Child"
+     }
+    },
+    {
+     "call": "set",
+     "key": null,
+     "name": "pea",
+     "value": [
+      {
+       "pathExpression": "/Rock/Child"
+      },
+      {
+       "pathExpression": "Child"
+      },
+      {
+       "pathExpression": "/Elsewhere + //Any"
+      }
+     ]
+    },
+    {
+     "call": "create",
+     "key": "pathExpression",
+     "name": "npe",
+     "value": {
+      "pathExpression": "Child + /Elsewhere"
+     }
+    },
+    {
+     "call": "prim_key",
+     "key": "e",
+     "name": "customData",
+     "value": {
+      "pathExpression": "/Rock/Child"
+     }
+    },
+    {
+     "call": "prim_field",
+     "key": null,
+     "name": "assetInfo",
+     "value": {
+      "dictionary": {
+       "n": {
+        "dictionary": {
+         "e": {
+          "pathExpression": "/Rock/Child"
+         },
+         "ts": [
+          {
+           "timecode": 30.0
+          }
+         ]
+        }
+       },
+       "t": {
+        "timecode": 30.0
+       }
+      }
+     }
+    },
+    {
+     "call": "attr_key",
+     "key": "e",
+     "name": "plain",
+     "value": {
+      "pathExpression": "/Rock/Child"
+     }
+    },
+    {
+     "call": "attr_field",
+     "key": "customData",
+     "name": "tc",
+     "value": {
+      "dictionary": {
+       "e": {
+        "pathExpression": "/Rock/Child"
+       },
+       "t": {
+        "timecode": 30.0
+       }
+      }
+     }
+    }
+   ],
+   "layer": "scene.usda",
+   "name": "local_direct_variant_expressions",
+   "prim": "/Rock",
+   "read": {
+    "assetInfo": {
+     "dictionary": {
+      "n": {
+       "dictionary": {
+        "e": {
+         "pathExpression": "/Rock{look=a}Child"
+        },
+        "ts": [
+         {
+          "timecode": 30.0
+         }
+        ]
+       }
+      },
+      "t": {
+       "timecode": 30.0
+      }
+     }
+    },
+    "attributes": {
+     "du": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "duration": 4.0
+      },
+      "samples": []
+     },
+     "npe": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "pathExpression": "/Rock{look=a}Child + /Elsewhere"
+      },
+      "samples": []
+     },
+     "pe": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "pathExpression": "/Rock{look=a}Child"
+      },
+      "samples": []
+     },
+     "pea": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": [
+       {
+        "pathExpression": "/Rock{look=a}Child"
+       },
+       {
+        "pathExpression": "/Rock{look=a}Child"
+       },
+       {
+        "pathExpression": "/Elsewhere + //Any"
+       }
+      ],
+      "samples": []
+     },
+     "pes": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": null,
+      "samples": [
+       [
+        1.0,
+        {
+         "pathExpression": "/Rock/Child"
+        }
+       ],
+       [
+        30.0,
+        {
+         "pathExpression": "/Rock{look=a}Child"
+        }
+       ]
+      ]
+     },
+     "plain": {
+      "customData": {
+       "dictionary": {
+        "e": {
+         "pathExpression": "/Rock{look=a}Child"
+        },
+        "n": {
+         "dictionary": {
+          "t": {
+           "timecode": 5.0
+          }
+         }
+        },
+        "t": {
+         "timecode": 5.0
+        }
+       }
+      },
+      "default": 1.0,
+      "samples": []
+     },
+     "rpe": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "pathExpression": "/Rock{look=a}Child"
+      },
+      "samples": []
+     },
+     "tc": {
+      "customData": {
+       "dictionary": {
+        "e": {
+         "pathExpression": "/Rock{look=a}Child"
+        },
+        "t": {
+         "timecode": 30.0
+        }
+       }
+      },
+      "default": {
+       "timecode": 5.0
+      },
+      "samples": []
+     },
+     "tca": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": [
+       {
+        "timecode": 1.0
+       },
+       {
+        "timecode": 2.0
+       }
+      ],
+      "samples": []
+     },
+     "tcs": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": null,
+      "samples": [
+       [
+        1.0,
+        {
+         "timecode": 5.0
+        }
+       ],
+       [
+        2.0,
+        {
+         "timecode": 6.0
+        }
+       ]
+      ]
+     }
+    },
+    "customData": {
+     "dictionary": {
+      "d": {
+       "dictionary": {
+        "deep": {
+         "timecode": 5.0
+        },
+        "deeper": {
+         "dictionary": {
+          "e": {
+           "pathExpression": "/Rock/Child"
+          },
+          "ts": [
+           {
+            "timecode": 1.0
+           },
+           {
+            "timecode": 2.0
+           }
+          ]
+         }
+        }
+       }
+      },
+      "du": {
+       "duration": 4.0
+      },
+      "e": {
+       "pathExpression": "/Rock{look=a}Child"
+      },
+      "out": {
+       "pathExpression": "/Elsewhere + //Any"
+      },
+      "rel": {
+       "pathExpression": "Child"
+      },
+      "t": {
+       "timecode": 5.0
+      },
+      "ts": [
+       {
+        "timecode": 1.0
+       },
+       {
+        "timecode": 2.0
+       }
+      ]
+     }
+    }
+   },
+   "target": "local_direct_variant",
+   "text": "#usda 1.4\n(\n    subLayers = [\n        @sub.usda@ (offset = 4; scale = 0.5)\n    ]\n)\n\ndef \"Root\" (\n    references = @ref.usda@</Ref> (offset = 10; scale = 2)\n)\n{\n}\n\nclass \"Class\" (\n    customData = {\n        dictionary d = {\n            timecode deep = 5\n            dictionary deeper = {\n                pathExpression e = \"/Class/Child\"\n                timecode[] ts = [1, 2]\n            }\n        }\n        duration du = 4\n        pathExpression e = \"/Class/Child\"\n        pathExpression out = \"/Elsewhere + //Any\"\n        pathExpression rel = \"Child\"\n        timecode t = 5\n        timecode[] ts = [1, 2]\n    }\n)\n{\n    custom duration du = 4\n    custom pathExpression pe = \"/Class/Child\"\n    custom pathExpression[] pea = [\"/Class/Child\", \"/Class/Child\", \"/Elsewhere + //Any\"]\n    custom pathExpression pes\n    pathExpression pes.timeSamples = {\n        1: \"/Class/Child\",\n    }\n    custom double plain = 1 (\n        customData = {\n            pathExpression e = \"/Class/Child\"\n            dictionary n = {\n                timecode t = 5\n            }\n            timecode t = 5\n        }\n    )\n    custom pathExpression rpe = \"/Class/Child\"\n    custom timecode tc = 5\n    custom timecode[] tca = [1, 2]\n    custom timecode tcs\n    timecode tcs.timeSamples = {\n        1: 5,\n        2: 6,\n    }\n\n    def \"Child\"\n    {\n    }\n}\n\ndef \"Inst\" (\n    inherits = </Class>\n)\n{\n}\n\ndef \"Rock\" (\n    variants = {\n        string look = \"a\"\n    }\n    prepend variantSets = \"look\"\n)\n{\n    def \"Child\"\n    {\n    }\n    variantSet \"look\" = {\n        \"a\" (\n            assetInfo = {\n                dictionary n = {\n                    pathExpression e = \"/Rock{look=a}Child\"\n                    timecode[] ts = [30]\n                }\n                timecode t = 30\n            }\n            customData = {\n                dictionary d = {\n                    timecode deep = 5\n                    dictionary deeper = {\n                        pathExpression e = \"/Rock/Child\"\n                        timecode[] ts = [1, 2]\n                    }\n                }\n                duration du = 4\n                pathExpression e = \"/Rock{look=a}Child\"\n                pathExpression out = \"/Elsewhere + //Any\"\n                pathExpression rel = \"Child\"\n                timecode t = 5\n                timecode[] ts = [1, 2]\n            }\n        ) {\n            custom duration du = 4\n            custom pathExpression npe = \"/Rock{look=a}Child + /Elsewhere\"\n            custom pathExpression pe = \"/Rock{look=a}Child\"\n            custom pathExpression[] pea = [\"/Rock{look=a}Child\", \"/Rock{look=a}Child\", \"/Elsewhere + //Any\"]\n            custom pathExpression pes\n            pathExpression pes.timeSamples = {\n                1: \"/Rock/Child\",\n                30: \"/Rock{look=a}Child\",\n            }\n            custom double plain = 1 (\n                customData = {\n                    pathExpression e = \"/Rock{look=a}Child\"\n                    dictionary n = {\n                        timecode t = 5\n                    }\n                    timecode t = 5\n                }\n            )\n            custom pathExpression rpe = \"/Rock{look=a}Child\"\n            custom timecode tc = 5 (\n                customData = {\n                    pathExpression e = \"/Rock{look=a}Child\"\n                    timecode t = 30\n                }\n            )\n            custom timecode[] tca = [1, 2]\n            custom timecode tcs\n            timecode tcs.timeSamples = {\n                1: 5,\n                2: 6,\n            }\n\n        }\n    }\n}\n\n"
+  },
+  {
+   "accepted": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true
+   ],
+   "calls": [
+    {
+     "call": "set",
+     "key": null,
+     "name": "tc",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "set",
+     "key": 30.0,
+     "name": "tcs",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "set",
+     "key": null,
+     "name": "tca",
+     "value": [
+      {
+       "timecode": 30.0
+      },
+      {
+       "timecode": 40.0
+      }
+     ]
+    },
+    {
+     "call": "set",
+     "key": null,
+     "name": "du",
+     "value": {
+      "duration": 8.0
+     }
+    },
+    {
+     "call": "set",
+     "key": null,
+     "name": "pe",
+     "value": {
+      "pathExpression": "/Sub/Child"
+     }
+    },
+    {
+     "call": "set",
+     "key": null,
+     "name": "rpe",
+     "value": {
+      "pathExpression": "Child"
+     }
+    },
+    {
+     "call": "set",
+     "key": 30.0,
+     "name": "pes",
+     "value": {
+      "pathExpression": "/Sub/Child"
+     }
+    },
+    {
+     "call": "set",
+     "key": null,
+     "name": "pea",
+     "value": [
+      {
+       "pathExpression": "/Sub/Child"
+      },
+      {
+       "pathExpression": "Child"
+      },
+      {
+       "pathExpression": "/Elsewhere + //Any"
+      }
+     ]
+    },
+    {
+     "call": "create",
+     "key": "pathExpression",
+     "name": "npe",
+     "value": {
+      "pathExpression": "Child + /Elsewhere"
+     }
+    },
+    {
+     "call": "create",
+     "key": "timecode",
+     "name": "ntc",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "create",
+     "key": "asset",
+     "name": "nasset",
+     "value": {
+      "asset": "./tex.png"
+     }
+    },
+    {
+     "call": "prim_key",
+     "key": "t",
+     "name": "customData",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "prim_key",
+     "key": "d:deep",
+     "name": "customData",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "prim_key",
+     "key": "e",
+     "name": "customData",
+     "value": {
+      "pathExpression": "/Sub/Child"
+     }
+    },
+    {
+     "call": "prim_key",
+     "key": "ts",
+     "name": "customData",
+     "value": [
+      {
+       "timecode": 30.0
+      }
+     ]
+    },
+    {
+     "call": "prim_key",
+     "key": "du",
+     "name": "customData",
+     "value": {
+      "duration": 8.0
+     }
+    },
+    {
+     "call": "prim_field",
+     "key": null,
+     "name": "assetInfo",
+     "value": {
+      "dictionary": {
+       "n": {
+        "dictionary": {
+         "e": {
+          "pathExpression": "/Sub/Child"
+         },
+         "ts": [
+          {
+           "timecode": 30.0
+          }
+         ]
+        }
+       },
+       "t": {
+        "timecode": 30.0
+       }
+      }
+     }
+    },
+    {
+     "call": "attr_key",
+     "key": "t",
+     "name": "plain",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "attr_key",
+     "key": "n:t",
+     "name": "plain",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "attr_key",
+     "key": "e",
+     "name": "plain",
+     "value": {
+      "pathExpression": "/Sub/Child"
+     }
+    },
+    {
+     "call": "attr_field",
+     "key": "customData",
+     "name": "tc",
+     "value": {
+      "dictionary": {
+       "e": {
+        "pathExpression": "/Sub/Child"
+       },
+       "t": {
+        "timecode": 30.0
+       }
+      }
+     }
+    }
+   ],
+   "layer": "sub.usda",
+   "name": "sublayer_offset",
+   "prim": "/Sub",
+   "read": {
+    "assetInfo": {
+     "dictionary": {
+      "n": {
+       "dictionary": {
+        "e": {
+         "pathExpression": "/Sub/Child"
+        },
+        "ts": [
+         {
+          "timecode": 30.0
+         }
+        ]
+       }
+      },
+      "t": {
+       "timecode": 30.0
+      }
+     }
+    },
+    "attributes": {
+     "du": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "duration": 8.0
+      },
+      "samples": []
+     },
+     "nasset": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "asset": "./tex.png"
+      },
+      "samples": []
+     },
+     "npe": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "pathExpression": "/Sub/Child + /Elsewhere"
+      },
+      "samples": []
+     },
+     "ntc": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "timecode": 30.0
+      },
+      "samples": []
+     },
+     "pe": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "pathExpression": "/Sub/Child"
+      },
+      "samples": []
+     },
+     "pea": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": [
+       {
+        "pathExpression": "/Sub/Child"
+       },
+       {
+        "pathExpression": "/Sub/Child"
+       },
+       {
+        "pathExpression": "/Elsewhere + //Any"
+       }
+      ],
+      "samples": []
+     },
+     "pes": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": null,
+      "samples": [
+       [
+        4.5,
+        {
+         "pathExpression": "/Sub/Child"
+        }
+       ],
+       [
+        30.0,
+        {
+         "pathExpression": "/Sub/Child"
+        }
+       ]
+      ]
+     },
+     "plain": {
+      "customData": {
+       "dictionary": {
+        "e": {
+         "pathExpression": "/Sub/Child"
+        },
+        "n": {
+         "dictionary": {
+          "t": {
+           "timecode": 30.0
+          }
+         }
+        },
+        "t": {
+         "timecode": 30.0
+        }
+       }
+      },
+      "default": 1.0,
+      "samples": []
+     },
+     "rpe": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "pathExpression": "/Sub/Child"
+      },
+      "samples": []
+     },
+     "tc": {
+      "customData": {
+       "dictionary": {
+        "e": {
+         "pathExpression": "/Sub/Child"
+        },
+        "t": {
+         "timecode": 30.0
+        }
+       }
+      },
+      "default": {
+       "timecode": 30.0
+      },
+      "samples": []
+     },
+     "tca": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": [
+       {
+        "timecode": 30.0
+       },
+       {
+        "timecode": 40.0
+       }
+      ],
+      "samples": []
+     },
+     "tcs": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": null,
+      "samples": [
+       [
+        4.5,
+        {
+         "timecode": 6.5
+        }
+       ],
+       [
+        5.0,
+        {
+         "timecode": 7.0
+        }
+       ],
+       [
+        30.0,
+        {
+         "timecode": 30.0
+        }
+       ]
+      ]
+     }
+    },
+    "customData": {
+     "dictionary": {
+      "d": {
+       "dictionary": {
+        "deep": {
+         "timecode": 30.0
+        },
+        "deeper": {
+         "dictionary": {
+          "e": {
+           "pathExpression": "/Sub/Child"
+          },
+          "ts": [
+           {
+            "timecode": 4.5
+           },
+           {
+            "timecode": 5.0
+           }
+          ]
+         }
+        }
+       }
+      },
+      "du": {
+       "duration": 8.0
+      },
+      "e": {
+       "pathExpression": "/Sub/Child"
+      },
+      "out": {
+       "pathExpression": "/Elsewhere + //Any"
+      },
+      "rel": {
+       "pathExpression": "Child"
+      },
+      "t": {
+       "timecode": 30.0
+      },
+      "ts": [
+       {
+        "timecode": 30.0
+       }
+      ]
+     }
+    }
+   },
+   "target": "local_layer",
+   "text": "#usda 1.4\n\ndef \"Sub\" (\n    assetInfo = {\n        dictionary n = {\n            pathExpression e = \"/Sub/Child\"\n            timecode[] ts = [52]\n        }\n        timecode t = 52\n    }\n    customData = {\n        dictionary d = {\n            timecode deep = 52\n            dictionary deeper = {\n                pathExpression e = \"/Sub/Child\"\n                timecode[] ts = [1, 2]\n            }\n        }\n        duration du = 16\n        pathExpression e = \"/Sub/Child\"\n        pathExpression out = \"/Elsewhere + //Any\"\n        pathExpression rel = \"Child\"\n        timecode t = 52\n        timecode[] ts = [52]\n    }\n)\n{\n    custom duration du = 16\n    custom asset nasset = @./tex.png@\n    custom pathExpression npe = \"/Sub/Child + /Elsewhere\"\n    custom timecode ntc = 52\n    custom pathExpression pe = \"/Sub/Child\"\n    custom pathExpression[] pea = [\"/Sub/Child\", \"/Sub/Child\", \"/Elsewhere + //Any\"]\n    custom pathExpression pes\n    pathExpression pes.timeSamples = {\n        1: \"/Sub/Child\",\n        52: \"/Sub/Child\",\n    }\n    custom double plain = 1 (\n        customData = {\n            pathExpression e = \"/Sub/Child\"\n            dictionary n = {\n                timecode t = 52\n            }\n            timecode t = 52\n        }\n    )\n    custom pathExpression rpe = \"/Sub/Child\"\n    custom timecode tc = 52 (\n        customData = {\n            pathExpression e = \"/Sub/Child\"\n            timecode t = 52\n        }\n    )\n    custom timecode[] tca = [52, 72]\n    custom timecode tcs\n    timecode tcs.timeSamples = {\n        1: 5,\n        2: 6,\n        52: 52,\n    }\n\n    def \"Child\"\n    {\n    }\n}\n\n"
+  },
+  {
+   "accepted": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true
+   ],
+   "calls": [
+    {
+     "call": "set",
+     "key": null,
+     "name": "tc",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "set",
+     "key": 30.0,
+     "name": "tcs",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "set",
+     "key": null,
+     "name": "tca",
+     "value": [
+      {
+       "timecode": 30.0
+      },
+      {
+       "timecode": 40.0
+      }
+     ]
+    },
+    {
+     "call": "set",
+     "key": null,
+     "name": "du",
+     "value": {
+      "duration": 8.0
+     }
+    },
+    {
+     "call": "set",
+     "key": null,
+     "name": "pe",
+     "value": {
+      "pathExpression": "/Sub/Child"
+     }
+    },
+    {
+     "call": "set",
+     "key": null,
+     "name": "rpe",
+     "value": {
+      "pathExpression": "Child"
+     }
+    },
+    {
+     "call": "set",
+     "key": 30.0,
+     "name": "pes",
+     "value": {
+      "pathExpression": "/Sub/Child"
+     }
+    },
+    {
+     "call": "set",
+     "key": null,
+     "name": "pea",
+     "value": [
+      {
+       "pathExpression": "/Sub/Child"
+      },
+      {
+       "pathExpression": "Child"
+      },
+      {
+       "pathExpression": "/Elsewhere + //Any"
+      }
+     ]
+    },
+    {
+     "call": "create",
+     "key": "pathExpression",
+     "name": "npe",
+     "value": {
+      "pathExpression": "Child + /Elsewhere"
+     }
+    },
+    {
+     "call": "create",
+     "key": "timecode",
+     "name": "ntc",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "create",
+     "key": "asset",
+     "name": "nasset",
+     "value": {
+      "asset": "./tex.png"
+     }
+    },
+    {
+     "call": "prim_key",
+     "key": "t",
+     "name": "customData",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "prim_key",
+     "key": "d:deep",
+     "name": "customData",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "prim_key",
+     "key": "e",
+     "name": "customData",
+     "value": {
+      "pathExpression": "/Sub/Child"
+     }
+    },
+    {
+     "call": "prim_key",
+     "key": "ts",
+     "name": "customData",
+     "value": [
+      {
+       "timecode": 30.0
+      }
+     ]
+    },
+    {
+     "call": "prim_key",
+     "key": "du",
+     "name": "customData",
+     "value": {
+      "duration": 8.0
+     }
+    },
+    {
+     "call": "prim_field",
+     "key": null,
+     "name": "assetInfo",
+     "value": {
+      "dictionary": {
+       "n": {
+        "dictionary": {
+         "e": {
+          "pathExpression": "/Sub/Child"
+         },
+         "ts": [
+          {
+           "timecode": 30.0
+          }
+         ]
+        }
+       },
+       "t": {
+        "timecode": 30.0
+       }
+      }
+     }
+    },
+    {
+     "call": "attr_key",
+     "key": "t",
+     "name": "plain",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "attr_key",
+     "key": "n:t",
+     "name": "plain",
+     "value": {
+      "timecode": 30.0
+     }
+    },
+    {
+     "call": "attr_key",
+     "key": "e",
+     "name": "plain",
+     "value": {
+      "pathExpression": "/Sub/Child"
+     }
+    },
+    {
+     "call": "attr_field",
+     "key": "customData",
+     "name": "tc",
+     "value": {
+      "dictionary": {
+       "e": {
+        "pathExpression": "/Sub/Child"
+       },
+       "t": {
+        "timecode": 30.0
+       }
+      }
+     }
+    }
+   ],
+   "layer": "sub.usda",
+   "name": "sublayer_plain",
+   "prim": "/Sub",
+   "read": {
+    "assetInfo": {
+     "dictionary": {
+      "n": {
+       "dictionary": {
+        "e": {
+         "pathExpression": "/Sub/Child"
+        },
+        "ts": [
+         {
+          "timecode": 19.0
+         }
+        ]
+       }
+      },
+      "t": {
+       "timecode": 19.0
+      }
+     }
+    },
+    "attributes": {
+     "du": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "duration": 4.0
+      },
+      "samples": []
+     },
+     "nasset": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "asset": "./tex.png"
+      },
+      "samples": []
+     },
+     "npe": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "pathExpression": "/Sub/Child + /Elsewhere"
+      },
+      "samples": []
+     },
+     "ntc": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "timecode": 19.0
+      },
+      "samples": []
+     },
+     "pe": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "pathExpression": "/Sub/Child"
+      },
+      "samples": []
+     },
+     "pea": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": [
+       {
+        "pathExpression": "/Sub/Child"
+       },
+       {
+        "pathExpression": "/Sub/Child"
+       },
+       {
+        "pathExpression": "/Elsewhere + //Any"
+       }
+      ],
+      "samples": []
+     },
+     "pes": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": null,
+      "samples": [
+       [
+        4.5,
+        {
+         "pathExpression": "/Sub/Child"
+        }
+       ],
+       [
+        19.0,
+        {
+         "pathExpression": "/Sub/Child"
+        }
+       ]
+      ]
+     },
+     "plain": {
+      "customData": {
+       "dictionary": {
+        "e": {
+         "pathExpression": "/Sub/Child"
+        },
+        "n": {
+         "dictionary": {
+          "t": {
+           "timecode": 19.0
+          }
+         }
+        },
+        "t": {
+         "timecode": 19.0
+        }
+       }
+      },
+      "default": 1.0,
+      "samples": []
+     },
+     "rpe": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": {
+       "pathExpression": "/Sub/Child"
+      },
+      "samples": []
+     },
+     "tc": {
+      "customData": {
+       "dictionary": {
+        "e": {
+         "pathExpression": "/Sub/Child"
+        },
+        "t": {
+         "timecode": 19.0
+        }
+       }
+      },
+      "default": {
+       "timecode": 19.0
+      },
+      "samples": []
+     },
+     "tca": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": [
+       {
+        "timecode": 19.0
+       },
+       {
+        "timecode": 24.0
+       }
+      ],
+      "samples": []
+     },
+     "tcs": {
+      "customData": {
+       "dictionary": {}
+      },
+      "default": null,
+      "samples": [
+       [
+        4.5,
+        {
+         "timecode": 6.5
+        }
+       ],
+       [
+        5.0,
+        {
+         "timecode": 7.0
+        }
+       ],
+       [
+        19.0,
+        {
+         "timecode": 19.0
+        }
+       ]
+      ]
+     }
+    },
+    "customData": {
+     "dictionary": {
+      "d": {
+       "dictionary": {
+        "deep": {
+         "timecode": 19.0
+        },
+        "deeper": {
+         "dictionary": {
+          "e": {
+           "pathExpression": "/Sub/Child"
+          },
+          "ts": [
+           {
+            "timecode": 4.5
+           },
+           {
+            "timecode": 5.0
+           }
+          ]
+         }
+        }
+       }
+      },
+      "du": {
+       "duration": 4.0
+      },
+      "e": {
+       "pathExpression": "/Sub/Child"
+      },
+      "out": {
+       "pathExpression": "/Elsewhere + //Any"
+      },
+      "rel": {
+       "pathExpression": "Child"
+      },
+      "t": {
+       "timecode": 19.0
+      },
+      "ts": [
+       {
+        "timecode": 19.0
+       }
+      ]
+     }
+    }
+   },
+   "target": "layer",
+   "text": "#usda 1.4\n\ndef \"Sub\" (\n    assetInfo = {\n        dictionary n = {\n            pathExpression e = \"/Sub/Child\"\n            timecode[] ts = [30]\n        }\n        timecode t = 30\n    }\n    customData = {\n        dictionary d = {\n            timecode deep = 30\n            dictionary deeper = {\n                pathExpression e = \"/Sub/Child\"\n                timecode[] ts = [1, 2]\n            }\n        }\n        duration du = 8\n        pathExpression e = \"/Sub/Child\"\n        pathExpression out = \"/Elsewhere + //Any\"\n        pathExpression rel = \"Child\"\n        timecode t = 30\n        timecode[] ts = [30]\n    }\n)\n{\n    custom duration du = 8\n    custom asset nasset = @./tex.png@\n    custom pathExpression npe = \"/Sub/Child + /Elsewhere\"\n    custom timecode ntc = 30\n    custom pathExpression pe = \"/Sub/Child\"\n    custom pathExpression[] pea = [\"/Sub/Child\", \"/Sub/Child\", \"/Elsewhere + //Any\"]\n    custom pathExpression pes\n    pathExpression pes.timeSamples = {\n        1: \"/Sub/Child\",\n        30: \"/Sub/Child\",\n    }\n    custom double plain = 1 (\n        customData = {\n            pathExpression e = \"/Sub/Child\"\n            dictionary n = {\n                timecode t = 30\n            }\n            timecode t = 30\n        }\n    )\n    custom pathExpression rpe = \"/Sub/Child\"\n    custom timecode tc = 30 (\n        customData = {\n            pathExpression e = \"/Sub/Child\"\n            timecode t = 30\n        }\n    )\n    custom timecode[] tca = [30, 40]\n    custom timecode tcs\n    timecode tcs.timeSamples = {\n        1: 5,\n        2: 6,\n        30: 30,\n    }\n\n    def \"Child\"\n    {\n    }\n}\n\n"
+  }
+ ],
+ "flatten": "#usda 1.4\n\ndef \"Sub\" (\n    customData = {\n        dictionary d = {\n            timecode deep = 6.5\n            dictionary deeper = {\n                pathExpression e = \"/Sub/Child\"\n                timecode[] ts = [4.5, 5]\n            }\n        }\n        duration du = 2\n        pathExpression e = \"/Sub/Child\"\n        pathExpression out = \"/Elsewhere + //Any\"\n        pathExpression rel = \"Child\"\n        timecode t = 6.5\n        timecode[] ts = [4.5, 5]\n    }\n)\n{\n    custom duration du = 2\n    custom pathExpression pe = \"/Sub/Child\"\n    custom pathExpression[] pea = [\"/Sub/Child\", \"/Sub/Child\", \"/Elsewhere + //Any\"]\n    custom pathExpression pes\n    pathExpression pes.timeSamples = {\n        4.5: \"/Sub/Child\",\n    }\n    custom double plain = 1 (\n        customData = {\n            pathExpression e = \"/Sub/Child\"\n            dictionary n = {\n                timecode t = 6.5\n            }\n            timecode t = 6.5\n        }\n    )\n    custom pathExpression rpe = \"/Sub/Child\"\n    custom timecode tc = 6.5\n    custom timecode[] tca = [4.5, 5]\n    custom timecode tcs\n    timecode tcs.timeSamples = {\n        4.5: 6.5,\n        5: 7,\n    }\n\n    def \"Child\"\n    {\n    }\n}\n\ndef \"Root\" (\n    customData = {\n        dictionary d = {\n            timecode deep = 20\n            dictionary deeper = {\n                pathExpression e = \"/Root/Child\"\n                timecode[] ts = [12, 14]\n            }\n        }\n        duration du = 8\n        pathExpression e = \"/Root/Child\"\n        pathExpression out = \"//Any\"\n        pathExpression rel = \"\"\n        timecode t = 20\n        timecode[] ts = [12, 14]\n    }\n)\n{\n    custom duration du = 8\n    custom pathExpression pe = \"/Root/Child\"\n    custom pathExpression[] pea = [\"/Root/Child\", \"/Root/Child\", \"//Any\"]\n    custom pathExpression pes\n    pathExpression pes.timeSamples = {\n        12: \"/Root/Child\",\n    }\n    custom double plain = 1 (\n        customData = {\n            pathExpression e = \"/Root/Child\"\n            dictionary n = {\n                timecode t = 20\n            }\n            timecode t = 20\n        }\n    )\n    custom pathExpression rpe = \"/Root/Child\"\n    custom timecode tc = 20\n    custom timecode[] tca = [12, 14]\n    custom timecode tcs\n    timecode tcs.timeSamples = {\n        12: 20,\n        14: 22,\n    }\n    custom pathExpression vpe = \"/Root/Child\"\n    custom timecode vtc = 24\n\n    def \"Child\"\n    {\n    }\n}\n\nclass \"Class\" (\n    customData = {\n        dictionary d = {\n            timecode deep = 5\n            dictionary deeper = {\n                pathExpression e = \"/Class/Child\"\n                timecode[] ts = [1, 2]\n            }\n        }\n        duration du = 4\n        pathExpression e = \"/Class/Child\"\n        pathExpression out = \"/Elsewhere + //Any\"\n        pathExpression rel = \"Child\"\n        timecode t = 5\n        timecode[] ts = [1, 2]\n    }\n)\n{\n    custom duration du = 4\n    custom pathExpression pe = \"/Class/Child\"\n    custom pathExpression[] pea = [\"/Class/Child\", \"/Class/Child\", \"/Elsewhere + //Any\"]\n    custom pathExpression pes\n    pathExpression pes.timeSamples = {\n        1: \"/Class/Child\",\n    }\n    custom double plain = 1 (\n        customData = {\n            pathExpression e = \"/Class/Child\"\n            dictionary n = {\n                timecode t = 5\n            }\n            timecode t = 5\n        }\n    )\n    custom pathExpression rpe = \"/Class/Child\"\n    custom timecode tc = 5\n    custom timecode[] tca = [1, 2]\n    custom timecode tcs\n    timecode tcs.timeSamples = {\n        1: 5,\n        2: 6,\n    }\n\n    def \"Child\"\n    {\n    }\n}\n\ndef \"Inst\" (\n    customData = {\n        dictionary d = {\n            timecode deep = 5\n            dictionary deeper = {\n                pathExpression e = \"/Inst/Child\"\n                timecode[] ts = [1, 2]\n            }\n        }\n        duration du = 4\n        pathExpression e = \"/Inst/Child\"\n        pathExpression out = \"/Elsewhere + //Any\"\n        pathExpression rel = \"Child\"\n        timecode t = 5\n        timecode[] ts = [1, 2]\n    }\n)\n{\n    custom duration du = 4\n    custom pathExpression pe = \"/Inst/Child\"\n    custom pathExpression[] pea = [\"/Inst/Child\", \"/Inst/Child\", \"/Elsewhere + //Any\"]\n    custom pathExpression pes\n    pathExpression pes.timeSamples = {\n        1: \"/Inst/Child\",\n    }\n    custom double plain = 1 (\n        customData = {\n            pathExpression e = \"/Inst/Child\"\n            dictionary n = {\n                timecode t = 5\n            }\n            timecode t = 5\n        }\n    )\n    custom pathExpression rpe = \"/Inst/Child\"\n    custom timecode tc = 5\n    custom timecode[] tca = [1, 2]\n    custom timecode tcs\n    timecode tcs.timeSamples = {\n        1: 5,\n        2: 6,\n    }\n\n    def \"Child\"\n    {\n    }\n}\n\ndef \"Rock\" (\n    customData = {\n        dictionary d = {\n            timecode deep = 5\n            dictionary deeper = {\n                pathExpression e = \"/Rock/Child\"\n                timecode[] ts = [1, 2]\n            }\n        }\n        duration du = 4\n        pathExpression e = \"/Rock/Child\"\n        pathExpression out = \"/Elsewhere + //Any\"\n        pathExpression rel = \"Child\"\n        timecode t = 5\n        timecode[] ts = [1, 2]\n    }\n)\n{\n    custom duration du = 4\n    custom pathExpression pe = \"/Rock/Child\"\n    custom pathExpression[] pea = [\"/Rock/Child\", \"/Rock/Child\", \"/Elsewhere + //Any\"]\n    custom pathExpression pes\n    pathExpression pes.timeSamples = {\n        1: \"/Rock/Child\",\n    }\n    custom double plain = 1 (\n        customData = {\n            pathExpression e = \"/Rock/Child\"\n            dictionary n = {\n                timecode t = 5\n            }\n            timecode t = 5\n        }\n    )\n    custom pathExpression rpe = \"/Rock/Child\"\n    custom timecode tc = 5\n    custom timecode[] tca = [1, 2]\n    custom timecode tcs\n    timecode tcs.timeSamples = {\n        1: 5,\n        2: 6,\n    }\n\n    def \"Child\"\n    {\n    }\n}\n\n",
+ "openusd_version": "26.11",
+ "read": {
+  "/Inst": {
+   "assetInfo": {
+    "dictionary": {}
+   },
+   "attributes": {
+    "du": {
+     "customData": {
+      "dictionary": {}
+     },
+     "default": {
+      "duration": 4.0
+     },
+     "samples": []
+    },
+    "pe": {
+     "customData": {
+      "dictionary": {}
+     },
+     "default": {
+      "pathExpression": "/Inst/Child"
+     },
+     "samples": []
+    },
+    "pea": {
+     "customData": {
+      "dictionary": {}
+     },
+     "default": [
+      {
+       "pathExpression": "/Inst/Child"
+      },
+      {
+       "pathExpression": "/Inst/Child"
+      },
+      {
+       "pathExpression": "/Elsewhere + //Any"
+      }
+     ],
+     "samples": []
+    },
+    "pes": {
+     "customData": {
+      "dictionary": {}
+     },
+     "default": null,
+     "samples": [
+      [
+       1.0,
+       {
+        "pathExpression": "/Inst/Child"
+       }
+      ]
+     ]
+    },
+    "plain": {
+     "customData": {
+      "dictionary": {
+       "e": {
+        "pathExpression": "/Inst/Child"
+       },
+       "n": {
+        "dictionary": {
+         "t": {
+          "timecode": 5.0
+         }
+        }
+       },
+       "t": {
+        "timecode": 5.0
+       }
+      }
+     },
+     "default": 1.0,
+     "samples": []
+    },
+    "rpe": {
+     "customData": {
+      "dictionary": {}
+     },
+     "default": {
+      "pathExpression": "/Inst/Child"
+     },
+     "samples": []
+    },
+    "tc": {
+     "customData": {
+      "dictionary": {}
+     },
+     "default": {
+      "timecode": 5.0
+     },
+     "samples": []
+    },
+    "tca": {
+     "customData": {
+      "dictionary": {}
+     },
+     "default": [
+      {
+       "timecode": 1.0
+      },
+      {
+       "timecode": 2.0
+      }
+     ],
+     "samples": []
+    },
+    "tcs": {
+     "customData": {
+      "dictionary": {}
+     },
+     "default": null,
+     "samples": [
+      [
+       1.0,
+       {
+        "timecode": 5.0
+       }
+      ],
+      [
+       2.0,
+       {
+        "timecode": 6.0
+       }
+      ]
+     ]
+    }
+   },
+   "customData": {
+    "dictionary": {
+     "d": {
+      "dictionary": {
+       "deep": {
+        "timecode": 5.0
+       },
+       "deeper": {
+        "dictionary": {
+         "e": {
+          "pathExpression": "/Inst/Child"
+         },
+         "ts": [
+          {
+           "timecode": 1.0
+          },
+          {
+           "timecode": 2.0
+          }
+         ]
+        }
+       }
+      }
+     },
+     "du": {
+      "duration": 4.0
+     },
+     "e": {
+      "pathExpression": "/Inst/Child"
+     },
+     "out": {
+      "pathExpression": "/Elsewhere + //Any"
+     },
+     "rel": {
+      "pathExpression": "Child"
+     },
+     "t": {
+      "timecode": 5.0
+     },
+     "ts": [
+      {
+       "timecode": 1.0
+      },
+      {
+       "timecode": 2.0
+      }
+     ]
+    }
+   }
+  },
+  "/Rock": {
+   "assetInfo": {
+    "dictionary": {}
+   },
+   "attributes": {
+    "du": {
+     "customData": {
+      "dictionary": {}
+     },
+     "default": {
+      "duration": 4.0
+     },
+     "samples": []
+    },
+    "pe": {
+     "customData": {
+      "dictionary": {}
+     },
+     "default": {
+      "pathExpression": "/Rock/Child"
+     },
+     "samples": []
+    },
+    "pea": {
+     "customData": {
+      "dictionary": {}
+     },
+     "default": [
+      {
+       "pathExpression": "/Rock/Child"
+      },
+      {
+       "pathExpression": "/Rock/Child"
+      },
+      {
+       "pathExpression": "/Elsewhere + //Any"
+      }
+     ],
+     "samples": []
+    },
+    "pes": {
+     "customData": {
+      "dictionary": {}
+     },
+     "default": null,
+     "samples": [
+      [
+       1.0,
+       {
+        "pathExpression": "/Rock/Child"
+       }
+      ]
+     ]
+    },
+    "plain": {
+     "customData": {
+      "dictionary": {
+       "e": {
+        "pathExpression": "/Rock/Child"
+       },
+       "n": {
+        "dictionary": {
+         "t": {
+          "timecode": 5.0
+         }
+        }
+       },
+       "t": {
+        "timecode": 5.0
+       }
+      }
+     },
+     "default": 1.0,
+     "samples": []
+    },
+    "rpe": {
+     "customData": {
+      "dictionary": {}
+     },
+     "default": {
+      "pathExpression": "/Rock/Child"
+     },
+     "samples": []
+    },
+    "tc": {
+     "customData": {
+      "dictionary": {}
+     },
+     "default": {
+      "timecode": 5.0
+     },
+     "samples": []
+    },
+    "tca": {
+     "customData": {
+      "dictionary": {}
+     },
+     "default": [
+      {
+       "timecode": 1.0
+      },
+      {
+       "timecode": 2.0
+      }
+     ],
+     "samples": []
+    },
+    "tcs": {
+     "customData": {
+      "dictionary": {}
+     },
+     "default": null,
+     "samples": [
+      [
+       1.0,
+       {
+        "timecode": 5.0
+       }
+      ],
+      [
+       2.0,
+       {
+        "timecode": 6.0
+       }
+      ]
+     ]
+    }
+   },
+   "customData": {
+    "dictionary": {
+     "d": {
+      "dictionary": {
+       "deep": {
+        "timecode": 5.0
+       },
+       "deeper": {
+        "dictionary": {
+         "e": {
+          "pathExpression": "/Rock/Child"
+         },
+         "ts": [
+          {
+           "timecode": 1.0
+          },
+          {
+           "timecode": 2.0
+          }
+         ]
+        }
+       }
+      }
+     },
+     "du": {
+      "duration": 4.0
+     },
+     "e": {
+      "pathExpression": "/Rock/Child"
+     },
+     "out": {
+      "pathExpression": "/Elsewhere + //Any"
+     },
+     "rel": {
+      "pathExpression": "Child"
+     },
+     "t": {
+      "timecode": 5.0
+     },
+     "ts": [
+      {
+       "timecode": 1.0
+      },
+      {
+       "timecode": 2.0
+      }
+     ]
+    }
+   }
+  },
+  "/Root": {
+   "assetInfo": {
+    "dictionary": {}
+   },
+   "attributes": {
+    "du": {
+     "customData": {
+      "dictionary": {}
+     },
+     "default": {
+      "duration": 8.0
+     },
+     "samples": []
+    },
+    "pe": {
+     "customData": {
+      "dictionary": {}
+     },
+     "default": {
+      "pathExpression": "/Root/Child"
+     },
+     "samples": []
+    },
+    "pea": {
+     "customData": {
+      "dictionary": {}
+     },
+     "default": [
+      {
+       "pathExpression": "/Root/Child"
+      },
+      {
+       "pathExpression": "/Root/Child"
+      },
+      {
+       "pathExpression": "//Any"
+      }
+     ],
+     "samples": []
+    },
+    "pes": {
+     "customData": {
+      "dictionary": {}
+     },
+     "default": null,
+     "samples": [
+      [
+       12.0,
+       {
+        "pathExpression": "/Root/Child"
+       }
+      ]
+     ]
+    },
+    "plain": {
+     "customData": {
+      "dictionary": {
+       "e": {
+        "pathExpression": "/Root/Child"
+       },
+       "n": {
+        "dictionary": {
+         "t": {
+          "timecode": 20.0
+         }
+        }
+       },
+       "t": {
+        "timecode": 20.0
+       }
+      }
+     },
+     "default": 1.0,
+     "samples": []
+    },
+    "rpe": {
+     "customData": {
+      "dictionary": {}
+     },
+     "default": {
+      "pathExpression": "/Root/Child"
+     },
+     "samples": []
+    },
+    "tc": {
+     "customData": {
+      "dictionary": {}
+     },
+     "default": {
+      "timecode": 20.0
+     },
+     "samples": []
+    },
+    "tca": {
+     "customData": {
+      "dictionary": {}
+     },
+     "default": [
+      {
+       "timecode": 12.0
+      },
+      {
+       "timecode": 14.0
+      }
+     ],
+     "samples": []
+    },
+    "tcs": {
+     "customData": {
+      "dictionary": {}
+     },
+     "default": null,
+     "samples": [
+      [
+       12.0,
+       {
+        "timecode": 20.0
+       }
+      ],
+      [
+       14.0,
+       {
+        "timecode": 22.0
+       }
+      ]
+     ]
+    },
+    "vpe": {
+     "customData": {
+      "dictionary": {}
+     },
+     "default": {
+      "pathExpression": "/Root/Child"
+     },
+     "samples": []
+    },
+    "vtc": {
+     "customData": {
+      "dictionary": {}
+     },
+     "default": {
+      "timecode": 24.0
+     },
+     "samples": []
+    }
+   },
+   "customData": {
+    "dictionary": {
+     "d": {
+      "dictionary": {
+       "deep": {
+        "timecode": 20.0
+       },
+       "deeper": {
+        "dictionary": {
+         "e": {
+          "pathExpression": "/Root/Child"
+         },
+         "ts": [
+          {
+           "timecode": 12.0
+          },
+          {
+           "timecode": 14.0
+          }
+         ]
+        }
+       }
+      }
+     },
+     "du": {
+      "duration": 8.0
+     },
+     "e": {
+      "pathExpression": "/Root/Child"
+     },
+     "out": {
+      "pathExpression": "//Any"
+     },
+     "rel": {
+      "pathExpression": ""
+     },
+     "t": {
+      "timecode": 20.0
+     },
+     "ts": [
+      {
+       "timecode": 12.0
+      },
+      {
+       "timecode": 14.0
+      }
+     ]
+    }
+   }
+  },
+  "/Sub": {
+   "assetInfo": {
+    "dictionary": {}
+   },
+   "attributes": {
+    "du": {
+     "customData": {
+      "dictionary": {}
+     },
+     "default": {
+      "duration": 2.0
+     },
+     "samples": []
+    },
+    "pe": {
+     "customData": {
+      "dictionary": {}
+     },
+     "default": {
+      "pathExpression": "/Sub/Child"
+     },
+     "samples": []
+    },
+    "pea": {
+     "customData": {
+      "dictionary": {}
+     },
+     "default": [
+      {
+       "pathExpression": "/Sub/Child"
+      },
+      {
+       "pathExpression": "/Sub/Child"
+      },
+      {
+       "pathExpression": "/Elsewhere + //Any"
+      }
+     ],
+     "samples": []
+    },
+    "pes": {
+     "customData": {
+      "dictionary": {}
+     },
+     "default": null,
+     "samples": [
+      [
+       4.5,
+       {
+        "pathExpression": "/Sub/Child"
+       }
+      ]
+     ]
+    },
+    "plain": {
+     "customData": {
+      "dictionary": {
+       "e": {
+        "pathExpression": "/Sub/Child"
+       },
+       "n": {
+        "dictionary": {
+         "t": {
+          "timecode": 6.5
+         }
+        }
+       },
+       "t": {
+        "timecode": 6.5
+       }
+      }
+     },
+     "default": 1.0,
+     "samples": []
+    },
+    "rpe": {
+     "customData": {
+      "dictionary": {}
+     },
+     "default": {
+      "pathExpression": "/Sub/Child"
+     },
+     "samples": []
+    },
+    "tc": {
+     "customData": {
+      "dictionary": {}
+     },
+     "default": {
+      "timecode": 6.5
+     },
+     "samples": []
+    },
+    "tca": {
+     "customData": {
+      "dictionary": {}
+     },
+     "default": [
+      {
+       "timecode": 4.5
+      },
+      {
+       "timecode": 5.0
+      }
+     ],
+     "samples": []
+    },
+    "tcs": {
+     "customData": {
+      "dictionary": {}
+     },
+     "default": null,
+     "samples": [
+      [
+       4.5,
+       {
+        "timecode": 6.5
+       }
+      ],
+      [
+       5.0,
+       {
+        "timecode": 7.0
+       }
+      ]
+     ]
+    }
+   },
+   "customData": {
+    "dictionary": {
+     "d": {
+      "dictionary": {
+       "deep": {
+        "timecode": 6.5
+       },
+       "deeper": {
+        "dictionary": {
+         "e": {
+          "pathExpression": "/Sub/Child"
+         },
+         "ts": [
+          {
+           "timecode": 4.5
+          },
+          {
+           "timecode": 5.0
+          }
+         ]
+        }
+       }
+      }
+     },
+     "du": {
+      "duration": 2.0
+     },
+     "e": {
+      "pathExpression": "/Sub/Child"
+     },
+     "out": {
+      "pathExpression": "/Elsewhere + //Any"
+     },
+     "rel": {
+      "pathExpression": "Child"
+     },
+     "t": {
+      "timecode": 6.5
+     },
+     "ts": [
+      {
+       "timecode": 4.5
+      },
+      {
+       "timecode": 5.0
+      }
+     ]
+    }
+   }
+  }
+ }
+}

@@ -1,0 +1,58 @@
+#usda 1.4
+
+def "Ref" (
+    customData = {
+        dictionary d = {
+            timecode deep = 5
+            dictionary deeper = {
+                pathExpression e = "/Ref/Child"
+                timecode[] ts = [1, 2]
+            }
+        }
+        duration du = 4
+        pathExpression e = "/Ref/Child"
+        pathExpression out = "/Elsewhere + //Any"
+        pathExpression rel = "Child"
+        timecode t = 5
+        timecode[] ts = [1, 2]
+    }
+    variants = {
+        string mode = "x"
+    }
+    prepend variantSets = "mode"
+)
+{
+    custom duration du = 4
+    custom pathExpression pe = "/Ref/Child"
+    custom pathExpression[] pea = ["/Ref/Child", "Child", "/Elsewhere + //Any"]
+    custom pathExpression pes.timeSamples = {
+        1: "/Ref/Child",
+    }
+    custom double plain = 1 (
+        customData = {
+            pathExpression e = "/Ref/Child"
+            dictionary n = {
+                timecode t = 5
+            }
+            timecode t = 5
+        }
+    )
+    custom pathExpression rpe = "Child"
+    custom timecode tc = 5
+    custom timecode[] tca = [1, 2]
+    custom timecode tcs.timeSamples = {
+        1: 5,
+        2: 6,
+    }
+
+    def "Child"
+    {
+    }
+    variantSet "mode" = {
+        "x" {
+            custom pathExpression vpe = "/Ref/Child"
+            custom timecode vtc = 7
+
+        }
+    }
+}

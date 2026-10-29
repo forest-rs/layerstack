@@ -1,0 +1,47 @@
+#usda 1.4
+
+def "Sub" (
+    customData = {
+        dictionary d = {
+            timecode deep = 5
+            dictionary deeper = {
+                pathExpression e = "/Sub/Child"
+                timecode[] ts = [1, 2]
+            }
+        }
+        duration du = 4
+        pathExpression e = "/Sub/Child"
+        pathExpression out = "/Elsewhere + //Any"
+        pathExpression rel = "Child"
+        timecode t = 5
+        timecode[] ts = [1, 2]
+    }
+)
+{
+    custom duration du = 4
+    custom pathExpression pe = "/Sub/Child"
+    custom pathExpression[] pea = ["/Sub/Child", "Child", "/Elsewhere + //Any"]
+    custom pathExpression pes.timeSamples = {
+        1: "/Sub/Child",
+    }
+    custom double plain = 1 (
+        customData = {
+            pathExpression e = "/Sub/Child"
+            dictionary n = {
+                timecode t = 5
+            }
+            timecode t = 5
+        }
+    )
+    custom pathExpression rpe = "Child"
+    custom timecode tc = 5
+    custom timecode[] tca = [1, 2]
+    custom timecode tcs.timeSamples = {
+        1: 5,
+        2: 6,
+    }
+
+    def "Child"
+    {
+    }
+}

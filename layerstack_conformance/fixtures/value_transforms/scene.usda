@@ -1,0 +1,119 @@
+#usda 1.4
+(
+    subLayers = [
+        @sub.usda@ (offset = 4; scale = 0.5)
+    ]
+)
+
+def "Root" (
+    references = @ref.usda@</Ref> (offset = 10; scale = 2)
+)
+{
+}
+
+class "Class" (
+    customData = {
+        dictionary d = {
+            timecode deep = 5
+            dictionary deeper = {
+                pathExpression e = "/Class/Child"
+                timecode[] ts = [1, 2]
+            }
+        }
+        duration du = 4
+        pathExpression e = "/Class/Child"
+        pathExpression out = "/Elsewhere + //Any"
+        pathExpression rel = "Child"
+        timecode t = 5
+        timecode[] ts = [1, 2]
+    }
+)
+{
+    custom duration du = 4
+    custom pathExpression pe = "/Class/Child"
+    custom pathExpression[] pea = ["/Class/Child", "Child", "/Elsewhere + //Any"]
+    custom pathExpression pes.timeSamples = {
+        1: "/Class/Child",
+    }
+    custom double plain = 1 (
+        customData = {
+            pathExpression e = "/Class/Child"
+            dictionary n = {
+                timecode t = 5
+            }
+            timecode t = 5
+        }
+    )
+    custom pathExpression rpe = "Child"
+    custom timecode tc = 5
+    custom timecode[] tca = [1, 2]
+    custom timecode tcs.timeSamples = {
+        1: 5,
+        2: 6,
+    }
+
+    def "Child"
+    {
+    }
+}
+
+def "Inst" (
+    inherits = </Class>
+)
+{
+}
+
+def "Rock" (
+    variants = {
+        string look = "a"
+    }
+    prepend variantSets = "look"
+)
+{
+    def "Child"
+    {
+    }
+    variantSet "look" = {
+        "a" (
+            customData = {
+                dictionary d = {
+                    timecode deep = 5
+                    dictionary deeper = {
+                        pathExpression e = "/Rock/Child"
+                        timecode[] ts = [1, 2]
+                    }
+                }
+                duration du = 4
+                pathExpression e = "/Rock/Child"
+                pathExpression out = "/Elsewhere + //Any"
+                pathExpression rel = "Child"
+                timecode t = 5
+                timecode[] ts = [1, 2]
+            }
+        ) {
+            custom duration du = 4
+            custom pathExpression pe = "/Rock/Child"
+            custom pathExpression[] pea = ["/Rock/Child", "Child", "/Elsewhere + //Any"]
+            custom pathExpression pes.timeSamples = {
+                1: "/Rock/Child",
+            }
+            custom double plain = 1 (
+                customData = {
+                    pathExpression e = "/Rock/Child"
+                    dictionary n = {
+                        timecode t = 5
+                    }
+                    timecode t = 5
+                }
+            )
+            custom pathExpression rpe = "Child"
+            custom timecode tc = 5
+            custom timecode[] tca = [1, 2]
+            custom timecode tcs.timeSamples = {
+                1: 5,
+                2: 6,
+            }
+
+        }
+    }
+}

@@ -21,6 +21,7 @@ def "Local" (
         dictionary n = {
             asset[] l = [@`"${TEX}"`@, @`"./${DIR}/${NAME}.png"`@]
         }
+        asset p = @./plain.png@
     }
 )
 {
@@ -41,6 +42,7 @@ def "Local" (
             dictionary n = {
                 asset[] l = [@`"${TEX}"`@, @`"./${DIR}/${NAME}.png"`@]
             }
+            asset p = @./plain.png@
         }
     )
     custom asset none = @`None`@

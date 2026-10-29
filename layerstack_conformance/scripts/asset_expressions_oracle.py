@@ -44,8 +44,12 @@ It records:
   where `SdfAnchorAssetPaths` writes an evaluated path anchored to its
   layer.
 - `flatten_layer_stack`: `UsdUtils.FlattenLayerStack`'s text for the
-  stage's layer stack (`UsdFlattenLayerStackResolveAssetPathAdvanced`),
-  and the warnings each flatten issues.
+  stage's layer stack, which evaluates the expressions of attribute values
+  and arcs with the layer stack's own variables, writes one that evaluates
+  to no path as `@@`, and keeps the asset paths of dictionaries as
+  authored (`UsdFlattenLayerStackResolveAssetPathAdvanced` and
+  `_FixAssetPaths` in `pxr/usd/usd/flattenUtils.cpp`);
+- the warnings each flatten issues.
 
 `--check` rewrites everything into a temporary directory and fails unless
 it matches the checked-in fixture.
@@ -80,6 +84,7 @@ custom asset named = @`"./${NAME}.png"`@ (
         dictionary n = {
             asset[] l = [@`"${TEX}"`@, @`"./${DIR}/${NAME}.png"`@]
         }
+        asset p = @./plain.png@
     }
 )
 custom asset none = @`None`@
@@ -113,6 +118,7 @@ customData = {
     dictionary n = {
         asset[] l = [@`"${TEX}"`@, @`"./${DIR}/${NAME}.png"`@]
     }
+    asset p = @./plain.png@
 }"""
 
 LAYERS = {

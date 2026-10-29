@@ -6,9 +6,13 @@
 //! A variable expression is a string enclosed in backticks, such as
 //! `` `"./${ASSET}.usd"` `` or `` `if(${HIGH}, "high", "low")` ``, that is
 //! evaluated against a set of [`ExpressionVariables`]. Asset paths of
-//! sublayers, references and payloads, and variant selections, may be
-//! expressions; composition evaluates them with the `expressionVariables`
-//! of the layer stack that authors them.
+//! sublayers, references and payloads, variant selections, and asset path
+//! values (`asset` and `asset[]` attribute values and metadata dictionary
+//! entries) may be expressions; composition evaluates them with the
+//! `expressionVariables` of the layer stack that authors them. A stage
+//! reads an asset path value as the path it evaluates to, or as authored
+//! when it evaluates to an empty string or to no value, or fails; the
+//! layer keeps the authored text.
 //!
 //! The language has:
 //!

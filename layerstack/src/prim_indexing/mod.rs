@@ -844,7 +844,7 @@ fn index_prim(
     let index = if graph_only {
         PrimIndex::default()
     } else {
-        let mut index = prim_index(ctx, path, &graph, like, &mut findings);
+        let mut index = prim_index(ctx, path, &graph, like, &mut findings, &mut outputs.reads);
         if let Some(parent) = parent.as_deref() {
             parent.child_shape.offer(index.graph.shape());
         }
@@ -1851,12 +1851,17 @@ fn is_active(ctx: &Ctx<'_>, graph: &Graph) -> bool {
 /// The index's graph shares its shape with `like`, the graph of the
 /// prim's parent, when they are the same, and otherwise with any graph
 /// of the composition that has it ([`PrimIndexGraph::from_ordered_in`]).
+///
+/// Asset path values authored as variable expressions are evaluated per
+/// node ([`evaluate_asset_values`]); the variables they read go to
+/// `reads`, and those that fail to evaluate to `checks`.
 fn prim_index(
     ctx: &Ctx<'_>,
     prim: PathId,
     graph: &Graph,
     like: Option<&Arc<crate::prim_index_graph::GraphShape>>,
     checks: &mut crate::composition_checks::Findings,
+    reads: &mut VariableReads,
 ) -> PrimIndex {
     let nodes = graph.nodes.iter().map(|node| {
         let to_id =
@@ -1915,6 +1920,10 @@ fn prim_index(
             ctx.store.paths().resolve(at_intro.prim_path()).clone()
         });
         let stack = ctx.stacks.get(node.site.stack);
+        // The layer stacks whose variables the node's asset path
+        // expressions read, found for the first one.
+        let variable_chain: core::cell::OnceCell<Vec<LayerStackIdentifier>> =
+            core::cell::OnceCell::new();
         for (strength, layer_id, spec) in site::specs(ctx.store, stack, &node.site.path) {
             let layer_strength = u16::try_from(strength).unwrap_or(u16::MAX);
             let layer_offset = node_offset.compose(stack.offset_at(strength));
@@ -1937,6 +1946,20 @@ fn prim_index(
                 // Relative expressions anchor at every node, the root's
                 // included.
                 map_path_expressions(ctx.store, &node.map_to_root, lookup_path, &mut value);
+                if crate::asset::values::opinion_holds_asset_expression(&value) {
+                    let stacks = variable_chain.get_or_init(|| node_variable_chain(ctx, graph, at));
+                    evaluate_asset_values(
+                        ctx.store,
+                        stacks,
+                        AssetValueSite {
+                            prim,
+                            layer: layer_id,
+                        },
+                        &mut value,
+                        reads,
+                        checks,
+                    );
+                }
                 if let Some(arc_root) = &arc_root {
                     let map_to_root = &node.map_to_root;
                     let map = |store: &dyn LayerStore, path: PathId| {
@@ -2041,6 +2064,74 @@ pub(crate) fn order_children(
     for (slot, (_, child)) in children.iter_mut().zip(placed) {
         *slot = child;
     }
+}
+
+/// The layer stacks on the arcs from `graph`'s root to its node `at`,
+/// outermost first, up to the node's own: the chain whose expression
+/// variables the node's layer stack composes, as
+/// [`crate::expression_variables::node_chain`] finds it in a prim index.
+fn node_variable_chain(ctx: &Ctx<'_>, graph: &Graph, at: usize) -> Vec<LayerStackIdentifier> {
+    let mut stacks = Vec::new();
+    let mut cursor = graph::node_index(at);
+    while cursor != NONE {
+        let node = graph.node(cursor);
+        stacks.push(ctx.stacks.get(node.site.stack).identifier);
+        cursor = node.parent;
+    }
+    stacks.reverse();
+    let own = ctx
+        .stacks
+        .get(graph.node(graph::node_index(at)).site.stack)
+        .identifier;
+    if let Some(end) = stacks.iter().position(|stack| *stack == own) {
+        stacks.truncate(end + 1);
+    }
+    stacks.dedup();
+    stacks
+}
+
+/// The composed prim and the layer whose opinion authors an asset path
+/// value.
+#[derive(Clone, Copy)]
+struct AssetValueSite {
+    prim: PathId,
+    layer: LayerId,
+}
+
+/// Evaluates the asset paths `value` authors as variable expressions with
+/// the variables of the layer stacks `stacks` (see
+/// [`crate::asset::values`]), recording the variables each reads in
+/// `reads` and each that fails as a [`CompositionError::VariableExpressionError`]
+/// in `checks`. One that evaluates to an empty string or no value, or
+/// fails, keeps its authored text.
+///
+/// Spec: AOUSD Core §9 (asset resolution). OpenUSD: `_AssetPathToStage`
+/// (`pxr/usd/usd/stage.cpp`) and `SdfResolveAssetPaths`
+/// (`pxr/usd/sdf/assetPath.cpp`), with `PcpLayerStack::GetExpressionVariables`
+/// of the node's layer stack.
+fn evaluate_asset_values(
+    store: &dyn LayerStore,
+    stacks: &[LayerStackIdentifier],
+    site: AssetValueSite,
+    value: &mut crate::prim_index::OpinionValue,
+    reads: &mut VariableReads,
+    checks: &mut crate::composition_checks::Findings,
+) {
+    crate::asset::values::evaluate_opinion_asset_expressions(value, &mut |expression| {
+        match crate::expression_variables::evaluate(store, stacks, expression, Some(reads)) {
+            Ok(evaluated) => evaluated.map(Arc::from),
+            Err(error) => {
+                checks.report(crate::expression_variables::expression_error(
+                    crate::composition_error::ExpressionContext::AssetValue,
+                    site.layer,
+                    Some(site.prim),
+                    expression,
+                    error,
+                ));
+                None
+            }
+        }
+    });
 }
 
 /// Anchors the path expressions `value` authors at `site` (a node's site
@@ -2294,6 +2385,7 @@ pub(crate) fn expanded_prim_index(
         &graph,
         None,
         &mut crate::composition_checks::Findings::default(),
+        &mut VariableReads::default(),
     )
 }
 

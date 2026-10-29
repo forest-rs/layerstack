@@ -193,7 +193,7 @@ fn anchoring_reports_missing_context_and_preserves_host_search_policy() {
     for (path, error) in [
         ("", AssetAnchorError::EmptyPath),
         ("./a.exr", AssetAnchorError::MissingSource),
-        ("`${MAP}`", AssetAnchorError::ExpressionRequiresEvaluation),
+        ("`${MAP}`", AssetAnchorError::UnevaluatedExpression),
     ] {
         assert_eq!(
             AssetReference {

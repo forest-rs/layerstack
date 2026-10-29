@@ -1221,3 +1221,20 @@ fn deleting_beneath_an_instance_is_an_instance_proxy_edit() {
         NamespaceError::InstanceProxy
     );
 }
+
+/// A variant's edit target maps a stage path into its branch, across the
+/// variant arc, so a delete through it is refused, as `UsdNamespaceEditor`
+/// refuses edit targets whose map is not the identity.
+#[test]
+fn deletes_reject_a_variant_edit_target() {
+    let mut store = base();
+    let child = store.path("/A/Child");
+    let stage = Stage::compose(&mut store, ROOT, StageOptions::default());
+    let variant = crate::SpecPath::parse("/A{v=x}", &store.tokens, &store.paths).unwrap();
+    let target = EditTarget::for_local_variant(ROOT, &variant);
+    assert_eq!(
+        NamespaceEdit::prepare_delete(&stage, &mut store, &target, TargetPath::Prim(child))
+            .unwrap_err(),
+        NamespaceError::Unmappable
+    );
+}

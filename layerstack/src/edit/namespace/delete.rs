@@ -81,8 +81,15 @@ fn prepare_with(
         }
         ancestor = prim.parent();
     }
+    // A variant's edit target maps into its branch (`/V{v=x}F` for
+    // `/V/F`), across the variant arc: `UsdNamespaceEditor` refuses edit
+    // targets that map paths across composition arcs
+    // (`_EditProcessor::_GatherLayersToEdit`,
+    // `pxr/usd/usd/namespaceEditor.cpp`).
+    let mapped = map(target, store, object)?;
     if !stage.layer_stack().contains(&target.layer())
-        || spec_target(&map(target, store, object)?) != object
+        || mapped.has_variant_selections()
+        || spec_target(&mapped) != object
     {
         return Err(NamespaceError::Unmappable);
     }

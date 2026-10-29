@@ -1,0 +1,13 @@
+#usda 1.0
+
+def "Asset"
+{
+    def "Leaf"
+    {
+        double size = 1
+
+        def "Tip"
+        {
+        }
+    }
+}

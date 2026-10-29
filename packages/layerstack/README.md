@@ -46,6 +46,22 @@ await stage.resolve(source);
   `NativeModule` (the generated glue of a module that links
   `layerstack_wasm`; its type is in `@forest-rs/layerstack/native`) to use
   that module.
+- **Native extensions share the stage.** A module linking `layerstack_wasm`
+  can export domain functions taking `&layerstack_wasm::Stage`. Call one with
+  `stage.withNative("domain.inspect", native => module.inspect(native))`.
+  The callback borrows the actual stage synchronously; it must not retain,
+  free or consume it. Native changes reach `onChange` listeners in the ordinary
+  synchronous order, including when the callback throws after committing an
+  edit; a listener's edits are dispatched after the current change batch.
+  Dispatch can call the module again, so return owned data or a handle rather
+  than a borrowed view into Wasm memory.
+  This is not a transaction or an async lease: committed edits remain, and
+  rejecting a returned promise cannot stop an async continuation already
+  started by the callback. Disposed-stage and native-error diagnostics retain
+  the supplied operation name.
+  Open with `{ provenance: true }` when an extension needs the winning source
+  layer, spec path and field in native resolved values. This evidence is off
+  by default; ordinary `attribute.explain()` queries work either way.
 - **Opening is synchronous and complete.** `open` composes the root layer
   alone. Every dependency it cannot read yet is *unavailable*: it may still
   arrive. One confirmed absent, or whose read failed, is *unresolved*: its
@@ -202,8 +218,8 @@ The package and the `layerstack_wasm` crate are released together, at the
 same version. They meet at an ABI number, the layout of the records the
 module exchanges with this package: `layerstack.version` is `{ package,
 crate, revision, abi }`, and loading a module of another ABI fails with
-`module.abi`. The first release speaks ABI 1; a release that changes a
-record's layout brings a new ABI.
+`module.abi`. This package speaks ABI 2; changing an export's arguments or
+record layout brings a new ABI.
 
 ## Building and testing
 

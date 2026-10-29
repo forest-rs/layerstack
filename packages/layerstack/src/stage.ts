@@ -61,6 +61,7 @@ export interface NativeStage {
   prim(path: string): unknown;
   children(path: string): string[];
   attributeNames(path: string): string[];
+  relationshipNames(path: string): string[];
   variantSets(path: string): unknown;
   attribute(path: string): unknown;
   get(path: string, time?: number | null): unknown;
@@ -934,6 +935,16 @@ export class Prim {
   /** Its attribute `name` (`size`, `inputs:diffuseColor`), or `null`. */
   attribute(name: string): Attribute | null {
     return this.stage.attribute(`${this.path}.${name}`);
+  }
+
+  /** The names of its relationships, schema-defined and authored, in property order. */
+  relationshipNames(): string[] {
+    return this.stage.native("relationshipNames", (native) => native.relationshipNames(this.path));
+  }
+
+  /** Its relationship `name` (`lookAt`, `material:binding`), or `null`. */
+  relationship(name: string): Relationship | null {
+    return this.stage.relationship(`${this.path}.${name}`);
   }
 
   /** Its variant sets, their selections and variant names. Select one with {@link Stage.setVariantSelection}. */

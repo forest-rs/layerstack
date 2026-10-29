@@ -307,6 +307,12 @@ def "World" (
     assert.equal(lookAt?.custom, true);
     assert.deepEqual(lookAt?.targets(), ["/World/Rock", "/World.size"]);
     assert.equal(stage.relationship("/World.missing"), null);
+    assert.deepEqual(world?.relationshipNames(), ["lookAt"]);
+    assert.ok(!world?.relationshipNames().includes("size"), "attributes are not relationships");
+    assert.deepEqual(world?.relationship("lookAt")?.targets(), ["/World/Rock", "/World.size"]);
+    // A schema's relationships are listed before anything authors them.
+    stage.apply([{ type: "definePrim", path: "/World/Rock/Cam", typeName: "Camera" }], stage.root);
+    assert.ok(stage.prim("/World/Rock/Cam")?.relationshipNames().includes("proxyPrim"));
   });
 });
 

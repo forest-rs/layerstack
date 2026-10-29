@@ -447,7 +447,7 @@ fn prepare_with(
 /// repairs only reference and payload targets, so only the variant specs
 /// authoring those are looked up, among the prims with a node at their
 /// path. AOUSD Core §10.4 (prim index nodes), §10.5 (variants).
-fn dormant_variants(
+pub(super) fn dormant_variants(
     store: &dyn LayerStore,
     stages: &[&Stage],
     indexes: &[&PreparationIndex],

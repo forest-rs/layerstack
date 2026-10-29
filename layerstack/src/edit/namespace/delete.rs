@@ -22,6 +22,7 @@ use crate::prim_indexing::Boundaries;
 use crate::sort;
 use crate::{
     HashMap, HashSet, Relocate, SparseListOp, VariantSets,
+    spec_path::VariantSelectionSite,
     stage::preparation::{PreparationIndex, layer_links},
 };
 
@@ -105,6 +106,8 @@ fn prepare_with(
     // its ancestors, and those that author paths.
     let mut copied = HashMap::new();
     let mut edited = HashMap::new();
+    let mut dormant = HashMap::new();
+    let indexes: Vec<&PreparationIndex> = index.into_iter().collect();
     for id in &stack {
         let original = store.layer(*id).ok_or(NamespaceError::NoSuchObject)?;
         let mut layer = match index {
@@ -116,6 +119,10 @@ fn prepare_with(
             }
             None => original.clone(),
         };
+        dormant.insert(
+            *id,
+            coordinated::dormant_variants(store, &[stage], &indexes, &layer),
+        );
         remove_specs(store, &mut layer, object);
         edited.insert(*id, layer);
     }
@@ -132,6 +139,7 @@ fn prepare_with(
                 store,
                 edited.get_mut(id).expect("edited stack layer"),
                 object,
+                &dormant[id],
             )?;
         }
     }
@@ -339,41 +347,30 @@ fn remove_specs(store: &mut dyn LayerStore, layer: &mut Layer, object: TargetPat
             .iter()
             .all(|site| root.is_prefix_of(store.paths().resolve(site.host_path)))
     };
+    // Every path with a spec has one in `prims`; the specs of other
+    // branches at it are in `variant_prims` (see `Layer::prims`), so the
+    // specs kept at a path are placed again.
     let paths: Vec<PathId> = layer
         .prims
         .keys()
-        .chain(layer.variant_prims.keys())
         .copied()
         .filter(|path| root.is_prefix_of(store.paths().resolve(*path)))
         .collect();
     let mut removed_roots = Vec::new();
+    let mut kept = Vec::new();
     for path in paths {
-        if layer
-            .prims
-            .get(&path)
-            .is_some_and(|spec| owned(store, spec))
-            && let Some(spec) = layer.prims.remove(&path)
-            && path == prim
-        {
-            removed_roots.push(spec.outer_variant_sites().to_vec());
-        }
-        if let Some(branches) = layer.variant_prims.get_mut(&path) {
-            let mut kept = Vec::new();
-            for spec in core::mem::take(branches) {
-                if owned(store, &spec) {
-                    if path == prim {
-                        removed_roots.push(spec.outer_variant_sites().to_vec());
-                    }
-                } else {
-                    kept.push(spec);
-                }
-            }
-            if kept.is_empty() {
-                layer.variant_prims.remove(&path);
-            } else {
-                *branches = kept;
+        let main = layer.prims.remove(&path);
+        let branches = layer.variant_prims.remove(&path).unwrap_or_default();
+        for spec in main.into_iter().chain(branches) {
+            if !owned(store, &spec) {
+                kept.push((path, spec));
+            } else if path == prim {
+                removed_roots.push(spec.outer_variant_sites().to_vec());
             }
         }
+    }
+    for (path, spec) in kept {
+        layer.insert_prim(path, spec);
     }
     for sites in removed_roots {
         let loc = Loc::Prim { path: prim, sites };
@@ -457,11 +454,14 @@ fn names(store: &dyn LayerStore, object: TargetPath, path: TargetPath) -> bool {
     }
 }
 
-/// Drops every authored path in `layer` that names the deleted `object`.
+/// Drops every authored path in `layer` that names the deleted `object`,
+/// but those in the variants no composed prim index selects (`dormant`),
+/// which OpenUSD leaves naming it ([`Dormant`]).
 fn repair(
     store: &mut dyn LayerStore,
     layer: &mut Layer,
     object: TargetPath,
+    dormant: &Dormant,
 ) -> Result<(), NamespaceError> {
     let author = layer.id;
     // In path order, so the first spec that cannot be repaired is always
@@ -476,10 +476,10 @@ fn repair(
     paths.dedup();
     for path in paths {
         if let Some(spec) = layer.prims.get_mut(&path) {
-            repair_prim(store, spec, path, author, object)?;
+            repair_prim(store, spec, path, author, object, dormant)?;
         }
         for spec in layer.variant_prims.get_mut(&path).into_iter().flatten() {
-            repair_prim(store, spec, path, author, object)?;
+            repair_prim(store, spec, path, author, object, dormant)?;
         }
     }
     let root = store_root_path(store);
@@ -501,7 +501,12 @@ fn repair_prim(
     path: PathId,
     author: LayerId,
     object: TargetPath,
+    dormant: &Dormant,
 ) -> Result<(), NamespaceError> {
+    let outer = spec.outer_variant_sites().to_vec();
+    if !outer.is_empty() && dormant.contains(path, &outer) {
+        return Ok(());
+    }
     // A spec authoring no inherits or specializes has nothing in them to
     // repair: it lends empty ones rather than allocating its rare fields.
     let (mut no_inherits, mut no_specializes) = (SparseListOp::new(), SparseListOp::new());
@@ -523,21 +528,41 @@ fn repair_prim(
         author,
         object,
     )?;
+    let mut sites = outer;
     match spec.authored_rare_mut() {
-        Some(rare) => repair_variant_sets(store, &mut rare.variant_sets, path, author, object),
+        Some(rare) => repair_variant_sets(
+            store,
+            &mut rare.variant_sets,
+            path,
+            author,
+            object,
+            (&mut sites, dormant),
+        ),
         None => Ok(()),
     }
 }
 
+/// Repairs the variants in `sets`, held by the prim at `path` inside the
+/// branches `sites`, but those `dormant` lists.
 fn repair_variant_sets(
     store: &mut dyn LayerStore,
     sets: &mut VariantSets,
     path: PathId,
     author: LayerId,
     object: TargetPath,
+    (sites, dormant): (&mut Vec<VariantSelectionSite>, &Dormant),
 ) -> Result<(), NamespaceError> {
-    for set in sets.values_mut() {
-        for variant in set.variants.values_mut() {
+    for (set, spec) in sets.iter_mut() {
+        for (name, variant) in spec.variants.iter_mut() {
+            sites.push(VariantSelectionSite {
+                host_path: path,
+                set: *set,
+                variant: *name,
+            });
+            if dormant.contains(path, sites) {
+                sites.pop();
+                continue;
+            }
             repair_owner(
                 store,
                 Owner {
@@ -552,7 +577,15 @@ fn repair_variant_sets(
                 author,
                 object,
             )?;
-            repair_variant_sets(store, &mut variant.variant_sets, path, author, object)?;
+            repair_variant_sets(
+                store,
+                &mut variant.variant_sets,
+                path,
+                author,
+                object,
+                (sites, dormant),
+            )?;
+            sites.pop();
         }
     }
     Ok(())

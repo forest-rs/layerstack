@@ -26,6 +26,22 @@ function publish(native: GeneratedStage, layer: bigint, path: string): void {
   using receipt = native.apply(layer, batch);
 }
 
+// A native transaction the extension makes, with no receipt kept.
+function commit(native: GeneratedStage, layer: bigint, fill: (batch: EditBatch) => void): void {
+  using batch = new EditBatch();
+  fill(batch);
+  using receipt = native.apply(layer, batch);
+}
+
+function setSize(native: GeneratedStage, layer: bigint, size: number): void {
+  commit(native, layer, (batch) => batch.setValue("/Ball.size", null, batch.valueNumbers("double", new Float64Array([size]))));
+}
+
+function size(stage: Stage): unknown {
+  const value = stage.attribute("/Ball.size")?.get();
+  return value?.kind === "scalar" ? value.value : value;
+}
+
 describe("same-module native extensions", () => {
   it("opens with explicit native provenance and validates JavaScript callers", () => {
     const forwarded: boolean[] = [];
@@ -46,6 +62,12 @@ describe("same-module native extensions", () => {
       assert.ok(stage.attribute("/Ball.size")?.explain());
     }
     assert.deepEqual(forwarded, [false, false, true]);
+    for (const provenance of [false, true]) {
+      using stage = module.open({ identifier: "scene.usda", bytes: bytes("scene.usda") }, { provenance });
+      assert.equal(stage.provenance, provenance);
+    }
+    using plain = openScene();
+    assert.equal(plain.provenance, false);
     for (const provenance of [null, 0, 1, "true", {}]) {
       assert.throws(
         () => Reflect.apply(layerstack.open, layerstack, [
@@ -205,5 +227,62 @@ describe("same-module native extensions", () => {
       () => stage.status(),
       (error) => error instanceof LayerstackError && error.code === "module.trapped",
     );
+  });
+});
+
+describe("undo across native transactions", () => {
+  it("undoes a user edit around native content elsewhere, and redoes it", () => {
+    using stage = openScene();
+    const receipt = stage.apply([{ type: "setValue", path: "/Ball.size", value: { type: "double", value: 3 } }]);
+    stage.withNative("extension.publish", (native) => publish(native, stage.root.id, "/Derived"));
+    using redo = receipt.undo();
+    assert.equal(size(stage), 2);
+    using again = redo.undo();
+    assert.equal(size(stage), 3);
+    assert.equal(stage.prim("/Derived")?.typeName, "Xform", "undo leaves native content alone");
+  });
+
+  it("refuses an undo over a spec native code changed, until it is put back", () => {
+    using stage = openScene();
+    const define = stage.apply([{ type: "definePrim", path: "/Thing", typeName: "Xform" }]);
+    stage.withNative("extension.publish", (native) => publish(native, stage.root.id, "/Thing/Derived"));
+    assert.throws(
+      () => define.undo(),
+      (error) => error instanceof LayerstackError && error.code === "edit.stale" && error.operation === "undo",
+    );
+    assert.equal(stage.prim("/Thing/Derived")?.typeName, "Xform", "a refused undo changes nothing");
+    stage.withNative("extension.unpublish", (native) =>
+      commit(native, stage.root.id, (batch) => batch.removePrim("/Thing/Derived")),
+    );
+    using redo = define.undo();
+    assert.equal(stage.prim("/Thing"), null);
+
+    const set = stage.apply([{ type: "setValue", path: "/Ball.size", value: { type: "double", value: 3 } }]);
+    stage.withNative("extension.set", (native) => setSize(native, stage.root.id, 7));
+    assert.throws(() => set.undo(), (error) => error instanceof LayerstackError && error.code === "edit.stale");
+    assert.equal(size(stage), 7);
+    stage.withNative("extension.set", (native) => setSize(native, stage.root.id, 3));
+    using back = set.undo();
+    assert.equal(size(stage), 2);
+  });
+
+  it("keeps undo free of native content in another layer", () => {
+    using stage = layerstack.open({ identifier: "scene.usda", bytes: bytes("scene.usda") }, { editLayer: "session" });
+    const session = stage.editLayer;
+    assert.ok(session !== null && session !== stage.root);
+    const define = stage.apply([{ type: "definePrim", path: "/Thing", typeName: "Xform" }], stage.root);
+    stage.withNative("extension.publish", (native) => publish(native, session.id, "/Thing/Derived"));
+    using redo = define.undo();
+    assert.equal(stage.prim("/Thing")?.defined, false, "only the session's derived opinion is left");
+    using again = redo.undo();
+    assert.equal(stage.prim("/Thing")?.typeName, "Xform");
+    assert.equal(stage.prim("/Thing/Derived")?.typeName, "Xform");
+    assert.equal(stage.isDirty(session), true);
+    assert.deepEqual(
+      stage.save().written.map((layer) => layer.identifier),
+      ["scene.usda"],
+      "saving never writes the derived layer",
+    );
+    assert.equal(stage.isDirty(session), true);
   });
 });

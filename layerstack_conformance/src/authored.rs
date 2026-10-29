@@ -61,7 +61,10 @@ pub fn render_value(value: &Value, names: Names<'_>) -> String {
         Value::Dictionary(entries) => {
             let mut entries: Vec<_> = entries
                 .iter()
-                .map(|(key, v)| format!("{key:?}: {}", render_value(v, names)))
+                .map(|(key, v)| match v {
+                    FieldValue::Value(v) => format!("{key:?}: {}", render_value(v, names)),
+                    list_op => format!("{key:?}: {list_op:?}"),
+                })
                 .collect();
             entries.sort();
             format!("{{{}}}", entries.join(", "))

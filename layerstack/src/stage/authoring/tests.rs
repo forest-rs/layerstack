@@ -53,7 +53,7 @@ fn dense_sparse_and_animation_sources_are_distinct() {
         (Value::Double(2.), SourceComposability::Dense),
         (Value::Blocked, SourceComposability::Dense),
         (
-            Value::Dictionary(vec![("a".into(), Value::Int(1))]),
+            Value::Dictionary(vec![("a".into(), Value::Int(1).into())]),
             SourceComposability::Composable,
         ),
         (
@@ -416,15 +416,19 @@ fn clip_inspection_uses_manifest_metadata_without_decoding_payloads() {
                     Value::Dictionary(vec![
                         (
                             "assetPaths".into(),
-                            Value::Array(vec![Value::Asset("clip.usda".into())]),
+                            Value::Array(vec![Value::Asset("clip.usda".into())]).into(),
                         ),
                         (
                             "manifestAssetPath".into(),
-                            Value::Asset("manifest.usda".into()),
+                            Value::Asset("manifest.usda".into()).into(),
                         ),
-                        ("primPath".into(), Value::string("/C")),
-                        ("active".into(), Value::Array(vec![Value::Vec2d([0., 0.])])),
-                    ]),
+                        ("primPath".into(), Value::string("/C").into()),
+                        (
+                            "active".into(),
+                            Value::Array(vec![Value::Vec2d([0., 0.])]).into(),
+                        ),
+                    ])
+                    .into(),
                 )])),
             ),
     );
@@ -973,7 +977,7 @@ fn clip_stack(residency: Residency) -> (Stage, InMemoryStore, PropertyPath) {
     let clip_path = store.path("/C");
     let x = store.tokens.intern("x");
     let clips = store.tokens.intern("clips");
-    let mut set = vec![
+    let mut set: Vec<(Arc<str>, Value)> = vec![
         (
             "assetPaths".into(),
             Value::Array(vec![Value::Asset("clip.usda".into())]),
@@ -995,7 +999,7 @@ fn clip_stack(residency: Residency) -> (Stage, InMemoryStore, PropertyPath) {
             clips,
             FieldValue::Value(Value::Dictionary(vec![(
                 "default".into(),
-                Value::Dictionary(set),
+                Value::dictionary(set).into(),
             )])),
         ),
     );

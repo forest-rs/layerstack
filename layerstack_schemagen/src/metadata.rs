@@ -575,7 +575,7 @@ fn conversion(ty: &str) -> Result<(String, String), String> {
     match ty {
         "tokenlistop" => return Ok(("::alloc::vec::Vec<&'a str>".into(), "|v, t| crate::value::read_array(v, t, crate::value::read_token)".into())),
         "int64listop" => return Ok(("::alloc::vec::Vec<i64>".into(), "crate::value::read_int64_array".into())),
-        "dictionary" => return Ok(("::alloc::vec::Vec<(::alloc::sync::Arc<str>, ::layerstack::Value)>".into(), "|v, _| match v { ::layerstack::Value::Dictionary(entries) => Some(entries.clone()), _ => None }".into())),
+        "dictionary" => return Ok(("::alloc::vec::Vec<(::alloc::sync::Arc<str>, ::layerstack::FieldValue)>".into(), "|v, _| match v { ::layerstack::Value::Dictionary(entries) => Some(entries.clone()), _ => None }".into())),
         _ => {}
     }
     let tokens = TokenInterner::default();
@@ -672,9 +672,9 @@ fn accessor(value_type: MetadataType) -> Result<Option<Accessor>, String> {
     };
     Ok(Some(match value_type.storage() {
         MetadataType::Dictionary => Accessor {
-            read: "Vec<(Arc<str>, ::layerstack::Value)>".into(),
+            read: "Vec<(Arc<str>, ::layerstack::FieldValue)>".into(),
             read_fn: "|v, _| match v { ::layerstack::Value::Dictionary(entries) => Some(entries.clone()), _ => None }".into(),
-            write: "Vec<(Arc<str>, ::layerstack::Value)>".into(),
+            write: "Vec<(Arc<str>, ::layerstack::FieldValue)>".into(),
             write_call: "::layerstack::FieldValue::Value(::layerstack::Value::Dictionary(value))".into(),
         },
         MetadataType::ListOp(item) => {

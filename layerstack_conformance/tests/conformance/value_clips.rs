@@ -1339,7 +1339,7 @@ fn live_anchor_metadata_retimes_and_new_asset_bindings_become_visible() {
     else {
         panic!("clips dictionary")
     };
-    let Value::Dictionary(fields) = &mut sets
+    let layerstack::FieldValue::Value(Value::Dictionary(fields)) = &mut sets
         .iter_mut()
         .find(|(name, _)| &**name == "default")
         .unwrap()
@@ -1351,7 +1351,7 @@ fn live_anchor_metadata_retimes_and_new_asset_bindings_become_visible() {
         .iter_mut()
         .find(|(name, _)| &**name == "times")
         .unwrap()
-        .1 = Value::Array(vec![Value::Vec2d([0., 10.]), Value::Vec2d([10., 0.])]);
+        .1 = Value::Array(vec![Value::Vec2d([0., 10.]), Value::Vec2d([10., 0.])]).into();
     prim.set_field(clips_token, Value::Dictionary(sets));
     live.notify_prim_edit(property.prim_path());
     live.recompose(&mut store);
@@ -1575,7 +1575,7 @@ fn live_newly_selected_resident_clip_is_watched_on_the_next_edit() {
     else {
         panic!("clips dictionary")
     };
-    let Value::Dictionary(fields) = &mut sets
+    let layerstack::FieldValue::Value(Value::Dictionary(fields)) = &mut sets
         .iter_mut()
         .find(|(name, _)| &**name == "default")
         .unwrap()
@@ -1587,7 +1587,7 @@ fn live_newly_selected_resident_clip_is_watched_on_the_next_edit() {
         .iter_mut()
         .find(|(name, _)| &**name == "assetPaths")
         .unwrap()
-        .1 = Value::Array(vec![Value::Asset("b.usda".into())]);
+        .1 = Value::Array(vec![Value::Asset("b.usda".into())]).into();
     prim.set_field(clips_token, Value::Dictionary(sets));
     live.notify_prim_edit(property.prim_path());
     live.recompose(&mut store);

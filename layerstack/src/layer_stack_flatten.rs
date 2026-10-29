@@ -310,7 +310,9 @@ impl<F: FnMut(LayerId, &str) -> Option<String>> Context<'_, F> {
             }
             Value::Dictionary(entries) => {
                 for (_, value) in entries {
-                    self.value(value, layer, offset)?;
+                    if let FieldValue::Value(value) = value {
+                        self.value(value, layer, offset)?;
+                    }
                 }
             }
             Value::ArrayEdit(_) | Value::TypedArrayEdit(_) => {
@@ -397,10 +399,13 @@ impl<F: FnMut(LayerId, &str) -> Option<String>> Context<'_, F> {
             return Ok(());
         };
         for (_, set) in sets {
-            let Value::Dictionary(entries) = set else {
+            let FieldValue::Value(Value::Dictionary(entries)) = set else {
                 return Err(unsupported(layer, "malformed clip dictionary"));
             };
             for (key, value) in entries {
+                let FieldValue::Value(value) = value else {
+                    continue;
+                };
                 if key.as_ref() == "templateAssetPath" {
                     if !offset.is_identity() {
                         return Err(unsupported(layer, "retimed template clips"));
@@ -496,7 +501,9 @@ impl<F: FnMut(LayerId, &str) -> Option<String>> Context<'_, F> {
                 reference.layer = self.output;
             }
             for (_, value) in &mut reference.custom_data {
-                self.value(value, layer, LayerOffset::IDENTITY)?;
+                if let FieldValue::Value(value) = value {
+                    self.value(value, layer, LayerOffset::IDENTITY)?;
+                }
             }
             if !self.origins.iter().any(|origin| {
                 origin.site == *site && origin.payload == payload && origin.reference == *reference
@@ -555,7 +562,9 @@ impl<F: FnMut(LayerId, &str) -> Option<String>> Context<'_, F> {
                 }
                 for knot in &mut spline.knots {
                     for (_, value) in &mut knot.custom_data {
-                        self.value(value, layer, offset)?;
+                        if let FieldValue::Value(value) = value {
+                            self.value(value, layer, offset)?;
+                        }
                     }
                 }
             }

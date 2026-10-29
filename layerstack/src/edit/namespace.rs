@@ -1377,7 +1377,9 @@ fn repair_value(
         }
         Value::Dictionary(values) => {
             for (_, value) in values {
-                repair_value(store, value, local, anchor, owner_moves)?;
+                if let FieldValue::Value(value) = value {
+                    repair_value(store, value, local, anchor, owner_moves)?;
+                }
             }
         }
         _ => {}

@@ -50,7 +50,7 @@ fn path_list(resolved: Resolved<ResolvedValue>) -> Option<Resolved<Vec<TargetPat
 
 /// A resolved dictionary; `None` for another kind of value.
 #[expect(clippy::type_complexity, reason = "the resolved dictionary's shape")]
-fn dictionary(resolved: Resolved<ResolvedValue>) -> Option<Resolved<Vec<(Arc<str>, Value)>>> {
+fn dictionary(resolved: Resolved<ResolvedValue>) -> Option<Resolved<Vec<(Arc<str>, FieldValue)>>> {
     match resolved.value {
         ResolvedValue::Dictionary(value) => Some(Resolved {
             value,
@@ -2225,8 +2225,8 @@ fn property_names_apply_reorder_properties() {
 
 // ── Dictionary combining ──────────────────────────────────────────────
 
-fn dict_entry(key: &str, val: Value) -> (Arc<str>, Value) {
-    (Arc::from(key), val)
+fn dict_entry(key: &str, val: Value) -> (Arc<str>, FieldValue) {
+    (Arc::from(key), val.into())
 }
 
 #[test]
@@ -2462,7 +2462,7 @@ fn dict(entries: &[(&str, Value)]) -> Value {
 
 /// Composes `/P` over a sublayer stack whose layers author `customData`
 /// strongest first, and resolves it.
-fn resolve_custom_data_stack(opinions: Vec<Value>) -> Option<Vec<(Arc<str>, Value)>> {
+fn resolve_custom_data_stack(opinions: Vec<Value>) -> Option<Vec<(Arc<str>, FieldValue)>> {
     let mut store = InMemoryStore::default();
     let field = store.tokens().intern("customData");
     let p = store.path("/P");
@@ -2677,14 +2677,18 @@ fn dictionary_combines_over_schema_fallback() {
 /// dictionary combining (AOUSD Core §6.6.2.1), used as a parity reference.
 /// Resolution must match it up to key order.
 fn reference_combine(
-    stronger: &[(Arc<str>, Value)],
-    weaker: &[(Arc<str>, Value)],
-) -> Vec<(Arc<str>, Value)> {
+    stronger: &[(Arc<str>, FieldValue)],
+    weaker: &[(Arc<str>, FieldValue)],
+) -> Vec<(Arc<str>, FieldValue)> {
     let mut result = stronger.to_vec();
     for (key, weak_val) in weaker {
         if let Some(pos) = result.iter().position(|(k, _)| k == key) {
-            if let (Value::Dictionary(s), Value::Dictionary(w)) = (&result[pos].1, weak_val) {
-                result[pos].1 = Value::Dictionary(reference_combine(s, w));
+            if let (
+                FieldValue::Value(Value::Dictionary(s)),
+                FieldValue::Value(Value::Dictionary(w)),
+            ) = (&result[pos].1, weak_val)
+            {
+                result[pos].1 = Value::Dictionary(reference_combine(s, w)).into();
             }
         } else {
             result.push((key.clone(), weak_val.clone()));
@@ -2693,13 +2697,14 @@ fn reference_combine(
     result
 }
 
-fn sorted_recursively(entries: &[(Arc<str>, Value)]) -> Vec<(Arc<str>, Value)> {
-    let mut out: Vec<(Arc<str>, Value)> = entries
+fn sorted_recursively(entries: &[(Arc<str>, FieldValue)]) -> Vec<(Arc<str>, FieldValue)> {
+    let mut out: Vec<(Arc<str>, FieldValue)> = entries
         .iter()
         .map(|(key, value)| match value {
-            Value::Dictionary(nested) => {
-                (key.clone(), Value::Dictionary(sorted_recursively(nested)))
-            }
+            FieldValue::Value(Value::Dictionary(nested)) => (
+                key.clone(),
+                Value::Dictionary(sorted_recursively(nested)).into(),
+            ),
             other => (key.clone(), other.clone()),
         })
         .collect();
@@ -2732,7 +2737,7 @@ fn dictionary_resolution_matches_reference_fold_up_to_key_order() {
     ];
 
     for stack in stacks {
-        let entries: Vec<Vec<(Arc<str>, Value)>> = stack
+        let entries: Vec<Vec<(Arc<str>, FieldValue)>> = stack
             .iter()
             .map(|value| match value {
                 Value::Dictionary(entries) => entries.clone(),

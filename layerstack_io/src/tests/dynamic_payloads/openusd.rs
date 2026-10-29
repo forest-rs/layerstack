@@ -740,7 +740,7 @@ fn test_changes() {
 fn arg_dict(payload_id: &str, num: i32) -> Value {
     Value::Dictionary(vec![(
         Arc::from(payload_id),
-        Value::Dictionary(vec![(Arc::from(NUM), Value::Int(num))]),
+        Value::Dictionary(vec![(Arc::from(NUM), Value::Int(num).into())]).into(),
     )])
 }
 

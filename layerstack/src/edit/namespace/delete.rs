@@ -806,7 +806,9 @@ fn repair_value(
         }
         Value::Dictionary(values) => {
             for (_, value) in values {
-                repair_value(store, value, anchor, object)?;
+                if let FieldValue::Value(value) = value {
+                    repair_value(store, value, anchor, object)?;
+                }
             }
         }
         _ => {}

@@ -10,9 +10,9 @@ use alloc::{string::String, vec::Vec};
 
 use layerstack::edit::{EditTarget, Transaction};
 use layerstack::{
-    CannotApply, LayerStore, ListOp, ListPosition, PathId, PrimPathArg, PropertyDeclaration,
-    PropertyDefinition, PropertyKind, PropertyPath, PropertySpec, PropertyType, ResolvedValue,
-    Specifier, Stage, TargetPath, Time, TokenId, TokenInterner, Value,
+    CannotApply, FieldValue, LayerStore, ListOp, ListPosition, PathId, PrimPathArg,
+    PropertyDeclaration, PropertyDefinition, PropertyKind, PropertyPath, PropertySpec,
+    PropertyType, ResolvedValue, Specifier, Stage, TargetPath, Time, TokenId, TokenInterner, Value,
 };
 
 #[cfg(test)]
@@ -170,7 +170,7 @@ pub struct SchemaEdit<'s> {
     samples: Vec<TimeSampleEdit>,
     /// Prim metadata this edit authors, including target-local list operations.
     #[cfg(feature = "usd-geom")]
-    metadata: Vec<(PathId, TokenId, layerstack::FieldValue)>,
+    metadata: Vec<(PathId, TokenId, FieldValue)>,
     /// Property metadata this edit authors (`None` clears it), latest last.
     property_metadata: Vec<PropertyMetadataEdit>,
     /// Local property specs removed during this edit.
@@ -200,7 +200,7 @@ struct TimeSampleEdit {
 struct PropertyMetadataEdit {
     property: PropertyPath,
     key: TokenId,
-    value: Option<layerstack::FieldValue>,
+    value: Option<FieldValue>,
 }
 
 impl fmt::Debug for SchemaEdit<'_> {
@@ -561,11 +561,7 @@ impl<'s> SchemaEdit<'s> {
 
     /// The target site's authored metadata, never a flattened composed list.
     #[cfg(feature = "usd-geom")]
-    pub(crate) fn local_prim_metadata(
-        &mut self,
-        path: PathId,
-        name: &str,
-    ) -> Option<layerstack::FieldValue> {
+    pub(crate) fn local_prim_metadata(&mut self, path: PathId, name: &str) -> Option<FieldValue> {
         let name = self.tokens().intern(name);
         if let Some((_, _, value)) = self
             .metadata
@@ -595,12 +591,7 @@ impl<'s> SchemaEdit<'s> {
     }
 
     #[cfg(feature = "usd-geom")]
-    pub(crate) fn set_prim_metadata(
-        &mut self,
-        path: PathId,
-        name: &str,
-        value: layerstack::FieldValue,
-    ) {
+    pub(crate) fn set_prim_metadata(&mut self, path: PathId, name: &str, value: FieldValue) {
         let name = self.tokens().intern(name);
         self.transaction
             .set_metadata(self.target.prim(path), name, value.clone());
@@ -1113,7 +1104,7 @@ impl<'s> SchemaEdit<'s> {
         path: PathId,
         name: &str,
         key: &str,
-        value: impl Into<layerstack::FieldValue>,
+        value: impl Into<FieldValue>,
     ) {
         let value = value.into();
         let token = self.tokens().intern(name);
@@ -1148,7 +1139,7 @@ impl<'s> SchemaEdit<'s> {
             .find(|edit| edit.property == property && edit.key == key)
         {
             return match &edit.value {
-                Some(layerstack::FieldValue::Value(value)) => Some(value.clone()),
+                Some(FieldValue::Value(value)) => Some(value.clone()),
                 _ => None,
             };
         }
@@ -1205,7 +1196,7 @@ impl<'s> SchemaEdit<'s> {
         path: PathId,
         name: &str,
         key: &str,
-        value: Option<layerstack::FieldValue>,
+        value: Option<FieldValue>,
     ) -> Result<(), MetadataError> {
         let kind = self
             .property_kind(path, name)
@@ -1250,7 +1241,7 @@ impl<'s> SchemaEdit<'s> {
         &mut self,
         path: PathId,
         key: &str,
-        value: Option<layerstack::FieldValue>,
+        value: Option<FieldValue>,
     ) -> Result<(), MetadataError> {
         if !self.exists(path) {
             return Err(MetadataError::NoSuchPrim);
@@ -1276,18 +1267,11 @@ impl<'s> SchemaEdit<'s> {
     /// Records that a whole-field edit sets the field `key` of `target` to
     /// `value` (`None` clears it), so a later by-key edit in this edit
     /// starts from it rather than from the layer.
-    fn replace_dictionary(
-        &mut self,
-        target: TargetPath,
-        key: TokenId,
-        value: Option<&layerstack::FieldValue>,
-    ) {
+    fn replace_dictionary(&mut self, target: TargetPath, key: TokenId, value: Option<&FieldValue>) {
         self.dictionaries
             .retain(|(at, field, _)| (*at, *field) != (target, key));
         let dictionary = match value {
-            Some(layerstack::FieldValue::Value(dictionary @ Value::Dictionary(_))) => {
-                dictionary.clone()
-            }
+            Some(FieldValue::Value(dictionary @ Value::Dictionary(_))) => dictionary.clone(),
             Some(_) => return,
             None => Value::Dictionary(Vec::new()),
         };
@@ -1308,7 +1292,7 @@ impl<'s> SchemaEdit<'s> {
         target: TargetPath,
         key: &str,
         key_path: &str,
-        value: Option<Value>,
+        value: Option<FieldValue>,
     ) -> Result<(), MetadataError> {
         let keys: Vec<&str> = key_path.split(':').collect();
         if keys.iter().any(|part| part.is_empty()) {
@@ -1351,11 +1335,7 @@ impl<'s> SchemaEdit<'s> {
         set_dictionary_entry(&mut dictionary, &keys, value);
         // The field must take a dictionary: `customData`, `assetInfo`, or
         // one a plugin registers.
-        self.check_metadata(
-            key,
-            spec_kind,
-            Some(&layerstack::FieldValue::Value(dictionary.clone())),
-        )?;
+        self.check_metadata(key, spec_kind, Some(&FieldValue::Value(dictionary.clone())))?;
         let empty = matches!(&dictionary, Value::Dictionary(entries) if entries.is_empty());
         let at = match target {
             TargetPath::Prim(path) => self.target.prim(path),
@@ -1367,18 +1347,14 @@ impl<'s> SchemaEdit<'s> {
         if erase && empty {
             self.transaction.clear_metadata(at, field);
         } else {
-            self.transaction.set_metadata(
-                at,
-                field,
-                layerstack::FieldValue::Value(dictionary.clone()),
-            );
+            self.transaction
+                .set_metadata(at, field, FieldValue::Value(dictionary.clone()));
         }
         if let TargetPath::Property(property) = target {
             self.property_metadata.push(PropertyMetadataEdit {
                 property,
                 key: field,
-                value: (!(erase && empty))
-                    .then(|| layerstack::FieldValue::Value(dictionary.clone())),
+                value: (!(erase && empty)).then(|| FieldValue::Value(dictionary.clone())),
             });
         }
         self.dictionaries
@@ -1395,7 +1371,7 @@ impl<'s> SchemaEdit<'s> {
         &self,
         key: &str,
         target: layerstack::MetadataTarget,
-        value: Option<&layerstack::FieldValue>,
+        value: Option<&FieldValue>,
     ) -> Result<(), MetadataError> {
         layerstack::MetadataField::check_edit(
             key,
@@ -1479,7 +1455,7 @@ impl<'s> SchemaEdit<'s> {
                 }
             };
             match layerstack::get_field(fields, &key)? {
-                layerstack::FieldValue::Value(value @ Value::Dictionary(_)) => Some(value.clone()),
+                FieldValue::Value(value @ Value::Dictionary(_)) => Some(value.clone()),
                 _ => None,
             }
         });
@@ -1511,26 +1487,24 @@ impl<'s> SchemaEdit<'s> {
                 // Spec: AOUSD Core §12.2.5: dictionaries combine through
                 // weaker opinions, stopping at a block. Removed specs never
                 // contribute labels to newly created properties.
-                let dictionary = if matches!(
-                    values.peek(),
-                    Some(layerstack::FieldValue::Value(Value::Dictionary(_)))
-                ) {
-                    layerstack::combine_dictionary_chain(
-                        values
-                            .map_while(|field| {
-                                (!matches!(field, layerstack::FieldValue::Value(Value::Blocked)))
-                                    .then_some(field)
-                            })
-                            .filter_map(|field| match field {
-                                layerstack::FieldValue::Value(Value::Dictionary(entries)) => {
-                                    Some(entries.as_slice())
-                                }
-                                _ => None,
-                            }),
-                    )
-                } else {
-                    Vec::new()
-                };
+                let dictionary =
+                    if matches!(values.peek(), Some(FieldValue::Value(Value::Dictionary(_)))) {
+                        layerstack::combine_dictionary_chain(
+                            values
+                                .map_while(|field| {
+                                    (!matches!(field, FieldValue::Value(Value::Blocked)))
+                                        .then_some(field)
+                                })
+                                .filter_map(|field| match field {
+                                    FieldValue::Value(Value::Dictionary(entries)) => {
+                                        Some(entries.as_slice())
+                                    }
+                                    _ => None,
+                                }),
+                        )
+                    } else {
+                        Vec::new()
+                    };
                 let mut dictionary = dictionary;
                 if let Some((_, Value::Dictionary(local))) =
                     self.ui_hints.iter().rev().find(|(at, _)| *at == target)
@@ -1906,7 +1880,7 @@ impl core::error::Error for MetadataError {}
 /// Sets (`Some`) or erases (`None`) the entry at `keys`, creating the
 /// dictionaries on the way to a set and replacing a non-dictionary there;
 /// an erase removes the dictionaries it leaves empty, as `VtDictionary::EraseValueAtPath` does.
-fn set_dictionary_entry(value: &mut Value, keys: &[&str], replacement: Option<Value>) {
+fn set_dictionary_entry(value: &mut Value, keys: &[&str], replacement: Option<FieldValue>) {
     let Some((key, rest)) = keys.split_first() else {
         return;
     };
@@ -1935,13 +1909,28 @@ fn set_dictionary_entry(value: &mut Value, keys: &[&str], replacement: Option<Va
         Some(i) => i,
         None if replacement.is_none() => return,
         None => {
-            entries.push((alloc::sync::Arc::from(*key), Value::Dictionary(Vec::new())));
+            entries.push((
+                alloc::sync::Arc::from(*key),
+                Value::Dictionary(Vec::new()).into(),
+            ));
             entries.len() - 1
         }
     };
     let erase = replacement.is_none();
-    set_dictionary_entry(&mut entries[i].1, rest, replacement);
-    if erase && matches!(&entries[i].1, Value::Dictionary(inner) if inner.is_empty()) {
+    let nested = &mut entries[i].1;
+    if !matches!(nested, FieldValue::Value(_)) {
+        // A list op on the way: a set replaces it, an erase finds nothing.
+        if erase {
+            return;
+        }
+        *nested = Value::Dictionary(Vec::new()).into();
+    }
+    if let FieldValue::Value(nested) = nested {
+        set_dictionary_entry(nested, rest, replacement);
+    }
+    if erase
+        && matches!(&entries[i].1, FieldValue::Value(Value::Dictionary(inner)) if inner.is_empty())
+    {
         entries.remove(i);
     }
 }

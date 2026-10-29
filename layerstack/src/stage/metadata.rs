@@ -68,16 +68,20 @@ impl Stage {
             })
     }
     /// Reads a colon-separated dictionary key path from composed stage metadata.
+    ///
+    /// The entry is almost always a plain value ([`FieldValue::as_value`]),
+    /// but may hold a list op, as OpenUSD's `UsdStage::GetMetadataByDictKey`
+    /// returns whatever the entry holds.
     pub fn metadata_dict_key(
         &self,
         key: TokenId,
         key_path: &str,
         store: &dyn LayerStore,
-    ) -> Option<Value> {
+    ) -> Option<FieldValue> {
         let keys = dictionary_keys(key_path).ok()?;
-        let mut value = self.layer_metadata(key, store)?;
+        let mut value = FieldValue::Value(self.layer_metadata(key, store)?);
         for key in keys {
-            let Value::Dictionary(entries) = value else {
+            let FieldValue::Value(Value::Dictionary(entries)) = value else {
                 return None;
             };
             value = entries.into_iter().find(|(k, _)| k.as_ref() == key)?.1;
@@ -110,10 +114,11 @@ impl Stage {
             .flatten()
             .filter_map(|id| store.layer(id))
             .any(|layer| {
-                let Some(FieldValue::Value(value)) = layer.metadata(key) else {
+                let Some(FieldValue::Value(Value::Dictionary(entries))) = layer.metadata(key)
+                else {
                     return false;
                 };
-                dictionary_get(value, &keys).is_some()
+                dictionary_get(entries, &keys).is_some()
             })
     }
     /// Start time code, defaulting to zero. This is metadata, not a playback cursor.
@@ -224,22 +229,23 @@ impl LiveStage {
     /// Sets or clears one authored dictionary key. The selected layer's other
     /// keys are retained; weaker dictionaries remain available to composition.
     /// Undo guards the whole authored dictionary field, like other metadata edits.
+    ///
+    /// The entry may hold a plain value or a list op, as OpenUSD's
+    /// `UsdStage::SetMetadataByDictKey` sets any value.
     pub fn set_stage_metadata_dict_key(
         &mut self,
         store: &mut dyn LayerStore,
         layer: LayerId,
         key: TokenId,
         key_path: &str,
-        value: Option<Value>,
+        value: Option<FieldValue>,
     ) -> Result<Applied, StageMetadataError> {
         self.stage().check_metadata_layer(layer)?;
         let keys = dictionary_keys(key_path)?;
         let field = store.layer(layer).and_then(|l| l.metadata(key));
         let mut dictionary = match field {
-            Some(FieldValue::Value(Value::Dictionary(entries))) => {
-                Value::Dictionary(entries.clone())
-            }
-            None => Value::Dictionary(Vec::new()),
+            Some(FieldValue::Value(Value::Dictionary(entries))) => entries.clone(),
+            None => Vec::new(),
             _ => return Err(StageMetadataError::NotADictionary(key)),
         };
         if value.is_none() && dictionary_get(&dictionary, &keys).is_none() {
@@ -248,7 +254,7 @@ impl LiveStage {
                 .map_err(StageMetadataError::Edit);
         }
         dictionary_set(&mut dictionary, &keys, value, key)?;
-        self.set_stage_metadata(store, layer, key, FieldValue::Value(dictionary))
+        self.set_stage_metadata(store, layer, key, Value::Dictionary(dictionary).into())
     }
     /// Authors the root layer's default prim, independent of session overrides.
     /// A name is stored as authored; callers can inspect `Stage::default_prim`.
@@ -322,25 +328,27 @@ fn dictionary_keys(path: &str) -> Result<Vec<&str>, StageMetadataError> {
         Ok(keys)
     }
 }
-fn dictionary_get<'a>(value: &'a Value, keys: &[&str]) -> Option<&'a Value> {
-    let mut value = value;
-    for key in keys {
-        let Value::Dictionary(entries) = value else {
-            return None;
-        };
-        value = &entries.iter().find(|(name, _)| name.as_ref() == *key)?.1;
+/// The entry at key path `keys` in `entries`, a dictionary's.
+fn dictionary_get<'a>(
+    entries: &'a [(Arc<str>, FieldValue)],
+    keys: &[&str],
+) -> Option<&'a FieldValue> {
+    let (first, rest) = keys.split_first()?;
+    let value = &entries.iter().find(|(name, _)| name.as_ref() == *first)?.1;
+    if rest.is_empty() {
+        return Some(value);
     }
-    Some(value)
+    let FieldValue::Value(Value::Dictionary(entries)) = value else {
+        return None;
+    };
+    dictionary_get(entries, rest)
 }
 fn dictionary_set(
-    value: &mut Value,
+    entries: &mut Vec<(Arc<str>, FieldValue)>,
     keys: &[&str],
-    replacement: Option<Value>,
+    replacement: Option<FieldValue>,
     field: TokenId,
 ) -> Result<(), StageMetadataError> {
-    let Value::Dictionary(entries) = value else {
-        return Err(StageMetadataError::NotADictionary(field));
-    };
     let position = entries.iter().position(|(key, _)| key.as_ref() == keys[0]);
     if keys.len() == 1 {
         match (position, replacement) {
@@ -357,9 +365,12 @@ fn dictionary_set(
         Some(i) => i,
         None if replacement.is_none() => return Ok(()),
         None => {
-            entries.push((keys[0].into(), Value::Dictionary(Vec::new())));
+            entries.push((keys[0].into(), Value::Dictionary(Vec::new()).into()));
             entries.len() - 1
         }
     };
-    dictionary_set(&mut entries[position].1, &keys[1..], replacement, field)
+    let FieldValue::Value(Value::Dictionary(entries)) = &mut entries[position].1 else {
+        return Err(StageMetadataError::NotADictionary(field));
+    };
+    dictionary_set(entries, &keys[1..], replacement, field)
 }

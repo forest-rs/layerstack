@@ -273,7 +273,7 @@ fn dict(entries: Vec<(&str, Value)>) -> Value {
     Value::Dictionary(
         entries
             .into_iter()
-            .map(|(key, value)| (Arc::from(key), value))
+            .map(|(key, value)| (Arc::from(key), value.into()))
             .collect(),
     )
 }
@@ -333,6 +333,7 @@ fn dictionary_opinions_report_what_each_supplied() {
                 OpinionRole::Contributed(Contribution::Dictionary(DictionaryMerge {
                     supplied: vec![key_path(&["species"]), key_path(&["growth"])],
                     merged: vec![],
+                    composed: vec![],
                     overridden: vec![],
                 }))
             ),
@@ -342,6 +343,7 @@ fn dictionary_opinions_report_what_each_supplied() {
                 OpinionRole::Contributed(Contribution::Dictionary(DictionaryMerge {
                     supplied: vec![key_path(&["growth", "max"]), key_path(&["planted"])],
                     merged: vec![key_path(&["growth"])],
+                    composed: vec![],
                     overridden: vec![key_path(&["species"]), key_path(&["growth", "rate"])],
                 }))
             ),

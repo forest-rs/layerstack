@@ -474,7 +474,7 @@ mod tests {
                     data,
                     Value::Dictionary(vec![(
                         "nested".into(),
-                        Value::Dictionary(vec![("a".into(), Value::Int(1))]),
+                        Value::Dictionary(vec![("a".into(), Value::Int(1).into())]).into(),
                     )]),
                 )
                 .with_property(
@@ -492,9 +492,10 @@ mod tests {
                     Value::Dictionary(vec![(
                         "nested".into(),
                         Value::Dictionary(vec![
-                            ("a".into(), Value::Int(9)),
-                            ("b".into(), Value::Int(2)),
-                        ]),
+                            ("a".into(), Value::Int(9).into()),
+                            ("b".into(), Value::Int(2).into()),
+                        ])
+                        .into(),
                     )]),
                 )
                 .with_property(
@@ -521,9 +522,10 @@ mod tests {
             Some(&FieldValue::Value(Value::Dictionary(vec![(
                 "nested".into(),
                 Value::Dictionary(vec![
-                    ("a".into(), Value::Int(1)),
-                    ("b".into(), Value::Int(2))
+                    ("a".into(), Value::Int(1).into()),
+                    ("b".into(), Value::Int(2).into())
                 ])
+                .into()
             )])))
         );
     }

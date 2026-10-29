@@ -85,7 +85,11 @@ pub(crate) fn layer_expression_variables(
     };
     if let Some(FieldValue::Value(Value::Dictionary(entries))) = layer.metadata(field) {
         for (name, value) in entries {
-            variables.insert(&**name, variable_value(value));
+            let value = match value {
+                FieldValue::Value(value) => variable_value(value),
+                other => VariableValue::Unsupported(String::from(list_op_type_name(other))),
+            };
+            variables.insert(&**name, value);
         }
     }
     variables
@@ -171,6 +175,23 @@ fn list(items: &[ExpressionValue]) -> Option<ExpressionValue> {
 }
 
 /// A short type name for a value expressions do not support.
+/// The `VtValue::GetTypeName` of a list op an expression variable holds
+/// (`SdfListOp<int>`), which OpenUSD names in the error; `int64` and
+/// `uint64` items are spelled as on macOS (`long long`).
+fn list_op_type_name(value: &FieldValue) -> &'static str {
+    match value {
+        FieldValue::TokenListOp(_) => "SdfListOp<TfToken>",
+        FieldValue::PathListOp(_) => "SdfListOp<SdfPath>",
+        FieldValue::StringListOp(_) => "SdfListOp<string>",
+        FieldValue::IntListOp(_) => "SdfListOp<int>",
+        FieldValue::UIntListOp(_) => "SdfListOp<unsigned int>",
+        FieldValue::Int64ListOp(_) => "SdfListOp<long long>",
+        FieldValue::UInt64ListOp(_) => "SdfListOp<unsigned long long>",
+        FieldValue::UnregisteredListOp(_) => "SdfListOp<SdfUnregisteredValue>",
+        FieldValue::Value(value) => value_type_name(value),
+    }
+}
+
 fn value_type_name(value: &Value) -> &'static str {
     match value {
         Value::UChar(_) => "uchar",

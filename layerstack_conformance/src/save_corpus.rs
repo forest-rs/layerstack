@@ -287,7 +287,11 @@ fn sort_fields(
     fn dictionaries(value: &mut Value) {
         if let Value::Dictionary(entries) = value {
             entries.sort_by(|a, b| a.0.cmp(&b.0));
-            entries.iter_mut().for_each(|(_, v)| dictionaries(v));
+            entries.iter_mut().for_each(|(_, v)| {
+                if let FieldValue::Value(v) = v {
+                    dictionaries(v);
+                }
+            });
         }
     }
     fields.sort_by(|a, b| {
@@ -479,10 +483,10 @@ pub fn cases() -> Vec<SaveCase> {
                     panic!("limits dictionary");
                 };
                 let soft = entries.iter_mut().find(|(k, _)| &**k == "soft").unwrap();
-                let Value::Dictionary(soft) = &mut soft.1 else {
+                let FieldValue::Value(Value::Dictionary(soft)) = &mut soft.1 else {
                     panic!("soft limits dictionary");
                 };
-                soft.iter_mut().find(|(k, _)| &**k == "min").unwrap().1 = Value::Float(2.0);
+                soft.iter_mut().find(|(k, _)| &**k == "min").unwrap().1 = Value::Float(2.0).into();
             },
             expected: UI_HINTS_EDITED,
             weaker: None,

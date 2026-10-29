@@ -237,6 +237,13 @@ impl Document {
     /// See [`Self::to_usda`].
     pub fn validate_text(&self) -> Result<(), WriteError> {
         self.validate()?;
+        self.validate_text_specs()
+    }
+
+    /// The checks only text needs of the layer's metadata and its prims
+    /// ([`Self::validate_text`] less [`Self::validate`]).
+    pub(crate) fn validate_text_specs(&self) -> Result<(), WriteError> {
+        text_metadata(&self.metadata, "/")?;
         validate_text_prims(&self.prims)
     }
 
@@ -1084,8 +1091,9 @@ pub struct Metadatum {
     /// metadata syntax requires. A list op ([`Value::TokenListOp`] and its
     /// string and integer siblings) is written as one statement per
     /// operation (`prepend key = [...]`); it is accepted on prims,
-    /// attributes and relationships, not in layer metadata or inside
-    /// dictionaries. The `comment` field takes a string or token and is
+    /// attributes and relationships, not in layer metadata. Inside a
+    /// dictionary only a crate file holds one
+    /// ([`WriteError::DictionaryListOp`]). The `comment` field takes a string or token and is
     /// written as USDA spells it, a bare quoted string.
     pub value: Value,
 }
@@ -1481,11 +1489,24 @@ pub enum WriteError {
     },
     /// A list-op metadata value, connection list or target list is empty,
     /// mixes an explicit list with edits, or appears where USDA has no
-    /// list-op syntax (layer metadata, dictionary entries); or an arc list
+    /// list-op syntax (layer metadata); or an arc list
     /// repeats an item within one operation.
     InvalidListOp {
         /// Path of the owning object, with the metadata key after `#`.
         path: String,
+    },
+    /// A dictionary entry holds a list op, which a crate file stores but
+    /// USDA text cannot: OpenUSD writes the list op's `TfStringify` text
+    /// after an empty type name (` a = SdfIntListOp(Prepended Items: [1])`,
+    /// `Sdf_FileIOUtility::_WriteDictionary`), which its own text parser
+    /// refuses. Only the text writer refuses it.
+    DictionaryListOp {
+        /// Path of the owning object, with the field after `#`
+        /// (`/P#customData`).
+        path: String,
+        /// The entry's key path in the field's dictionary, nested keys
+        /// joined by `/` (`d/x`).
+        key: String,
     },
     /// A value block (`None`) appears outside an attribute default.
     MisplacedBlock {
@@ -1583,6 +1604,10 @@ impl fmt::Display for WriteError {
                 write!(f, "{path}: invalid target path {target:?}")
             }
             Self::InvalidListOp { path } => write!(f, "{path}: invalid list op"),
+            Self::DictionaryListOp { path, key } => write!(
+                f,
+                "{path}: dictionary entry `{key}` holds a list op, which USDA text cannot hold"
+            ),
             Self::MisplacedBlock { path } => {
                 write!(f, "{path}: a value block is only an attribute default")
             }
@@ -1912,7 +1937,7 @@ pub const PERMISSIONS: &[&str] = &["public", "private"];
 /// Rejects binary descriptions USDA cannot preserve in the root prims
 /// `prims` and every spec below them: per-knot curve types and
 /// sparse-edit kinds distinct from their declaration.
-pub(crate) fn validate_text_prims(prims: &[Prim]) -> Result<(), WriteError> {
+fn validate_text_prims(prims: &[Prim]) -> Result<(), WriteError> {
     walk(prims, VariantOrder::Authored, |step, path, _| match step {
         Step::Prim { prim: body, .. } | Step::Variant { variant: body, .. } => {
             validate_text_body(body, path)
@@ -1924,6 +1949,28 @@ pub(crate) fn validate_text_prims(prims: &[Prim]) -> Result<(), WriteError> {
 /// [`validate_text_prims`] for one prim spec or variant's prim spec at
 /// `path`, apart from its child prims and variant sets.
 fn validate_text_body(body: &Prim, path: &str) -> Result<(), WriteError> {
+    text_metadata(&body.metadata, path)?;
+    for arc in body
+        .references
+        .iter()
+        .chain(&body.payloads)
+        .flat_map(ListOp::items)
+    {
+        text_dictionary(&arc.custom_data, &alloc::format!("{path}#references"), "")?;
+    }
+    for property in &body.properties {
+        let (name, metadata) = match property {
+            Property::Attribute(attribute) => (&attribute.name, &attribute.metadata),
+            Property::Relationship(relationship) => (&relationship.name, &relationship.metadata),
+        };
+        let location = alloc::format!("{path}.{name}");
+        text_metadata(metadata, &location)?;
+        if let Property::Attribute(attribute) = property {
+            for (_, entries) in &attribute.spline_custom_data {
+                text_dictionary(entries, &alloc::format!("{location}#spline"), "")?;
+            }
+        }
+    }
     if body
         .variant_set_names
         .as_ref()
@@ -1981,6 +2028,50 @@ fn validate_text_body(body: &Prim, path: &str) -> Result<(), WriteError> {
                     type_name: attribute.type_name.clone(),
                 });
             }
+        }
+    }
+    Ok(())
+}
+
+/// Refuses a dictionary entry holding a list op in `metadata`, the
+/// metadata of the object at `path`: see [`WriteError::DictionaryListOp`].
+fn text_metadata(metadata: &[Metadatum], path: &str) -> Result<(), WriteError> {
+    for entry in metadata {
+        if let Value::Dictionary(entries) = &entry.value {
+            text_dictionary(entries, &alloc::format!("{path}#{}", entry.key), "")?;
+        }
+    }
+    Ok(())
+}
+
+/// Refuses an entry of `entries`, or of a dictionary they hold, that holds
+/// a list op, naming its key path below `prefix` (`d/x`).
+fn text_dictionary(
+    entries: &[(String, Value)],
+    path: &str,
+    prefix: &str,
+) -> Result<(), WriteError> {
+    for (key, value) in entries {
+        let key = if prefix.is_empty() {
+            key.clone()
+        } else {
+            alloc::format!("{prefix}/{key}")
+        };
+        match value {
+            Value::Dictionary(nested) => text_dictionary(nested, path, &key)?,
+            Value::TokenListOp(_)
+            | Value::StringListOp(_)
+            | Value::IntListOp(_)
+            | Value::UIntListOp(_)
+            | Value::Int64ListOp(_)
+            | Value::UInt64ListOp(_)
+            | Value::UnregisteredListOp(_) => {
+                return Err(WriteError::DictionaryListOp {
+                    path: String::from(path),
+                    key,
+                });
+            }
+            _ => {}
         }
     }
     Ok(())
@@ -2108,7 +2199,9 @@ fn validate_value(value: &Value, path: &str) -> Result<(), WriteError> {
                 if let Some(error) = bad_text(key) {
                     return Err(error);
                 }
-                if v.list_op_is_valid().is_some() {
+                // An entry may hold a list op, as a `VtDictionary` entry
+                // may; the text writer refuses it ([`Document::validate_text`]).
+                if v.list_op_is_valid() == Some(false) {
                     return Err(WriteError::InvalidListOp {
                         path: alloc::format!("{path}#{key}"),
                     });
@@ -4370,6 +4463,33 @@ over "P" (
         }
     }
 
+    /// A list op in a dictionary is valid, as a crate file holds one, but
+    /// the text writer refuses it, naming the field and the key path.
+    #[test]
+    fn dictionary_list_ops_are_refused_as_text() {
+        let nested = Value::Dictionary(vec![(
+            "d".to_string(),
+            Value::Dictionary(vec![(
+                "x".to_string(),
+                Value::IntListOp(ListOp::explicit(vec![1])),
+            )]),
+        )]);
+        let mut prim = Prim::def("Xform", "Root");
+        prim.metadata.push(Metadatum::new("customData", nested));
+        let doc = Document {
+            prims: vec![prim],
+            ..Document::new()
+        };
+        assert_eq!(doc.validate(), Ok(()));
+        assert_eq!(
+            doc.to_usda(),
+            Err(WriteError::DictionaryListOp {
+                path: "/Root#customData".into(),
+                key: "d/x".into(),
+            })
+        );
+    }
+
     #[test]
     fn dictionaries_are_metadata_not_attribute_types() {
         let dict = Value::Dictionary(vec![("k".to_string(), Value::Int(1))]);
@@ -4823,9 +4943,13 @@ def Xform "Root"
             "customData",
             Value::Dictionary(vec![("k".into(), op.clone())]),
         ));
-        assert!(
-            matches!(doc.to_usda(), Err(WriteError::InvalidListOp { .. })),
-            "no list ops in dictionaries"
+        assert_eq!(
+            doc.to_usda(),
+            Err(WriteError::DictionaryListOp {
+                path: "/Root#customData".into(),
+                key: "k".into(),
+            }),
+            "no list ops in dictionaries in text"
         );
         let mut doc = shading_doc();
         doc.prims[0].push_property(Attribute::new("x", "token[]", op).custom());

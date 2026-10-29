@@ -542,7 +542,8 @@ fn doc_of(custom_data: Option<&FieldValue>) -> String {
     let Some(FieldValue::Value(Value::Dictionary(entries))) = custom_data else {
         return String::new();
     };
-    let Some((_, Value::String(text))) = entries.iter().find(|(key, _)| &**key == "userDocBrief")
+    let Some((_, FieldValue::Value(Value::String(text)))) =
+        entries.iter().find(|(key, _)| &**key == "userDocBrief")
     else {
         return String::new();
     };
@@ -606,7 +607,7 @@ fn source_api_names(
         };
         let entry = |data: Option<&FieldValue>, key: &str| match data {
             Some(FieldValue::Value(Value::Dictionary(entries))) => {
-                entries.iter().find_map(|(k, v)| match v {
+                entries.iter().find_map(|(k, v)| match v.as_value()? {
                     Value::String(text) if &**k == key => Some(text.to_string()),
                     Value::Token(token) if &**k == key => {
                         Some(store.tokens().resolve(*token).to_string())

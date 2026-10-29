@@ -1287,8 +1287,12 @@ fn nested_nans_are_guarded_by_bits() {
     let colors = |x: f32| Value::Array(vec![Value::Vec3f([0.5, x, 0.5])]);
     let limits = store.tokens.intern("limits");
     let rock = Address::spec(ROCK, spec(&mut store, "/Rock"));
-    let dict =
-        |x: f64| FieldValue::Value(Value::Dictionary(vec![("max".into(), Value::Double(x))]));
+    let dict = |x: f64| {
+        FieldValue::Value(Value::Dictionary(vec![(
+            "max".into(),
+            Value::Double(x).into(),
+        )]))
+    };
     let mut edit = Transaction::new();
     edit.create_property(
         color.clone(),

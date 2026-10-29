@@ -78,7 +78,9 @@ fn hash_expression_paths<H: Hasher>(value: &Value, state: &mut H) {
         }
         Value::Dictionary(fields) => {
             for (_, value) in fields {
-                hash_expression_paths(value, state);
+                if let FieldValue::Value(value) = value {
+                    hash_expression_paths(value, state);
+                }
             }
         }
         // Native numeric arrays cannot contain paths; retain their O(1) bucket cost.

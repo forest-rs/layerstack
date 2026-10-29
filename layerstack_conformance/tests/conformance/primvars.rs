@@ -806,7 +806,7 @@ fn removed_primvar_ui_labels_do_not_leak_into_recreated_properties() {
                 SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
             UiHintsEdit::property(&mut edit, property)
                 .unwrap()
-                .set_value_labels(&mut edit, vec![("Weak".into(), Value::Float(9.))])
+                .set_value_labels(&mut edit, vec![("Weak".into(), Value::Float(9.).into())])
                 .unwrap();
             let transaction = edit.finish();
             live.apply(&mut store, &transaction).unwrap();
@@ -829,7 +829,7 @@ fn removed_primvar_ui_labels_do_not_leak_into_recreated_properties() {
         let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
         UiHintsEdit::property(&mut edit, property)
             .unwrap()
-            .set_value_labels(&mut edit, vec![("Old".into(), Value::Float(7.))])
+            .set_value_labels(&mut edit, vec![("Old".into(), Value::Float(7.).into())])
             .unwrap();
         let transaction = edit.finish();
         live.apply(&mut store, &transaction).unwrap();
@@ -857,7 +857,7 @@ fn removed_primvar_ui_labels_do_not_leak_into_recreated_properties() {
         if weaker {
             ui.apply_value_label(&mut edit, "Weak").unwrap();
         }
-        ui.set_value_labels(&mut edit, vec![("New".into(), Value::Float(10.))])
+        ui.set_value_labels(&mut edit, vec![("New".into(), Value::Float(10.).into())])
             .unwrap();
         ui.apply_value_label(&mut edit, "New").unwrap();
         assert_eq!(

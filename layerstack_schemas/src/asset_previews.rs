@@ -13,7 +13,7 @@ use crate::{
     assets::AssetReference,
     usd_media::{AssetPreviewsApi, AssetPreviewsApiEdit},
 };
-use alloc::{string::String, sync::Arc, vec, vec::Vec};
+use alloc::{string::String, sync::Arc, vec::Vec};
 use layerstack::{
     FieldValue, LayerId, LayerStore, OpinionValue, Path, PathId, PopulationMask, Provenance, Stage,
     StageOptions, Value,
@@ -50,7 +50,11 @@ impl AssetPreviewsApi<'_> {
             return None;
         }
         let key_path = [DEFAULT_THUMBNAILS, DEFAULT_IMAGE].join(":");
-        let Value::Asset(path) = self.metadata().value_by_key(ASSET_INFO, &key_path)? else {
+        let Some(Value::Asset(path)) = self
+            .metadata()
+            .value_by_key(ASSET_INFO, &key_path)?
+            .into_value()
+        else {
             return None;
         };
         let source = self.prim().and_then(|prim| {
@@ -96,10 +100,8 @@ impl AssetPreviewsApiEdit {
         edit: &mut SchemaEdit<'_>,
         default_image: &str,
     ) -> Result<&Self, MetadataError> {
-        let thumbnails = Value::Dictionary(vec![(
-            Arc::from(DEFAULT_IMAGE),
-            Value::Asset(Arc::from(default_image)),
-        )]);
+        let thumbnails =
+            Value::dictionary([(DEFAULT_IMAGE, Value::Asset(Arc::from(default_image)))]);
         self.write_metadata_by_key(edit, ASSET_INFO, DEFAULT_THUMBNAILS, thumbnails)?;
         Ok(self)
     }

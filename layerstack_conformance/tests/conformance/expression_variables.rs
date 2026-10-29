@@ -319,7 +319,7 @@ fn live_stage_recomposes_edited_variables() {
         let dictionary = Value::Dictionary(
             entries
                 .iter()
-                .map(|(name, value)| ((*name).into(), value.clone()))
+                .map(|(name, value)| ((*name).into(), value.clone().into()))
                 .collect(),
         );
         loaded
@@ -498,7 +498,7 @@ fn live_stage_recomposes_referenced_sublayers() {
     };
     for (name, value) in &mut variables {
         if &**name == "COLOR" {
-            *value = Value::String("red".into());
+            *value = Value::String("red".into()).into();
         }
     }
     loaded

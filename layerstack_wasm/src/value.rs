@@ -39,7 +39,7 @@ use alloc::{
 };
 use layerstack::sort;
 
-use layerstack::{StringArray, TokenInterner, TypedArray, Value, ValueType, half};
+use layerstack::{FieldValue, StringArray, TokenInterner, TypedArray, Value, ValueType, half};
 
 use crate::{array::ArrayHandle, error::Error, wire::Wire};
 
@@ -108,7 +108,10 @@ pub(crate) fn encode(
         Value::Dictionary(entries) => {
             let mut out = Vec::with_capacity(entries.len());
             for (key, value) in entries {
-                let value = encode(value, None, tokens)?.unwrap_or(Wire::Null);
+                let value = match value {
+                    FieldValue::Value(value) => encode(value, None, tokens)?.unwrap_or(Wire::Null),
+                    list_op => opaque(list_op_type_name(list_op)),
+                };
                 out.push(Wire::List(vec![Wire::text(&**key), value]));
             }
             Wire::List(vec![
@@ -135,6 +138,23 @@ pub(crate) fn encode(
         // A value this build does not encode reads as opaque.
         _ => opaque(type_name.unwrap_or("unknown")),
     }))
+}
+
+/// The type name of a dictionary entry's list op (`intListOp`), which reads
+/// as opaque: a crate file stores list ops in dictionaries
+/// (`CrateFile::_PackValue`), but the bindings do not represent them.
+fn list_op_type_name(value: &FieldValue) -> &'static str {
+    match value {
+        FieldValue::TokenListOp(_) => "tokenListOp",
+        FieldValue::PathListOp(_) => "pathListOp",
+        FieldValue::StringListOp(_) => "stringListOp",
+        FieldValue::IntListOp(_) => "intListOp",
+        FieldValue::UIntListOp(_) => "uintListOp",
+        FieldValue::Int64ListOp(_) => "int64ListOp",
+        FieldValue::UInt64ListOp(_) => "uint64ListOp",
+        FieldValue::UnregisteredListOp(_) => "unregisteredListOp",
+        _ => "unknown",
+    }
 }
 
 /// The record of a value the wrapper cannot represent, typed `type_name`.
@@ -556,13 +576,13 @@ fn decode_nested(
             format!("dictionaries nest deeper than {DICTIONARY_DEPTH}"),
         ));
     }
-    let mut out: Vec<(Arc<str>, Value)> = Vec::with_capacity(entries.len());
+    let mut out: Vec<(Arc<str>, FieldValue)> = Vec::with_capacity(entries.len());
     for entry in entries {
         let value = decode_nested(slots, entry.slot, tokens, depth + 1).map_err(|error| Error {
             message: format!("dictionary key `{}`: {}", entry.key, error.message),
             ..error
         })?;
-        out.push((Arc::from(entry.key.as_str()), value));
+        out.push((Arc::from(entry.key.as_str()), value.into()));
     }
     sort::sort_by(&mut out, |a, b| a.0.cmp(&b.0));
     if let Some(pair) = out.windows(2).find(|pair| pair[0].0 == pair[1].0) {
@@ -790,6 +810,26 @@ mod tests {
         assert_eq!(handle.byte_length(), 24);
     }
 
+    /// A dictionary entry holding a list op, which a crate file stores,
+    /// reads as an opaque value named for its kind.
+    #[test]
+    fn dictionary_list_op_entries_read_as_opaque() {
+        let tokens = TokenInterner::default();
+        let op = layerstack::ListOp::default().with_prepended(vec![1]);
+        let dictionary = Value::dictionary([("a", FieldValue::from(op))]);
+        assert_eq!(
+            encode(&dictionary, None, &tokens).unwrap().unwrap(),
+            Wire::List(vec![
+                Wire::text("dictionary"),
+                Wire::text("d"),
+                Wire::List(vec![Wire::List(vec![
+                    Wire::text("a"),
+                    Wire::List(vec![Wire::text("intListOp"), Wire::text("x")]),
+                ])]),
+            ])
+        );
+    }
+
     #[test]
     fn scalars_keep_64_bit_integers_exact() {
         let tokens = TokenInterner::default();
@@ -1015,9 +1055,13 @@ mod tests {
             Value::Dictionary(vec![
                 (
                     Arc::from("inner"),
-                    Value::Dictionary(vec![(Arc::from("size"), Value::Vec3d([1.0, 2.0, 3.0]))])
+                    Value::Dictionary(vec![(
+                        Arc::from("size"),
+                        Value::Vec3d([1.0, 2.0, 3.0]).into()
+                    )])
+                    .into()
                 ),
-                (Arc::from("name"), Value::String(Arc::from("moss"))),
+                (Arc::from("name"), Value::String(Arc::from("moss")).into()),
             ]),
             "ordered by key"
         );

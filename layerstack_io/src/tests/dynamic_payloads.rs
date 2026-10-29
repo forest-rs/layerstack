@@ -14,9 +14,9 @@
 use super::*;
 use core::f64::consts::PI;
 use layerstack::{
-    DynamicArgs, DynamicFileFormat, DynamicFormatContext, LayerOffset, MetadataDefinition,
-    MetadataTarget, PrimSpec, PropertySpec, PropertyType, Reference, ReferenceTarget,
-    SchemaRegistry,
+    DynamicArgs, DynamicFileFormat, DynamicFormatContext, FieldValue, LayerOffset,
+    MetadataDefinition, MetadataTarget, PrimSpec, PropertySpec, PropertyType, Reference,
+    ReferenceTarget, SchemaRegistry,
 };
 use std::sync::{
     Mutex,
@@ -106,7 +106,7 @@ impl TestDynamic {
             return Vec::new();
         };
         match dict.into_iter().find(|(key, _)| &**key == payload_id) {
-            Some((_, Value::Dictionary(entries))) => entries,
+            Some((_, FieldValue::Value(Value::Dictionary(entries)))) => plain(entries),
             _ => Vec::new(),
         }
     }
@@ -117,15 +117,23 @@ impl TestDynamic {
             return None;
         };
         let id = data.iter().find_map(|(key, value)| match value {
-            Value::UInt64(id) if &**key == CONTEXT_ID => Some(*id),
+            FieldValue::Value(Value::UInt64(id)) if &**key == CONTEXT_ID => Some(*id),
             _ => None,
         })?;
         self.contexts
             .lock()
             .unwrap()
             .contains(&id)
-            .then(|| data.clone())
+            .then(|| plain(data.clone()))
     }
+}
+
+/// The plain values of a dictionary's `entries`.
+fn plain(entries: Vec<(Arc<str>, FieldValue)>) -> Vec<(Arc<str>, Value)> {
+    entries
+        .into_iter()
+        .filter_map(|(key, value)| Some((key, value.into_value()?)))
+        .collect()
 }
 
 fn is_int(value: &Value) -> bool {
@@ -309,7 +317,7 @@ impl DynamicFileFormat for TestDynamic {
         }
         let mut composed = DynamicArgs {
             args: FormatArgs::new(),
-            dependency: Value::Dictionary(data),
+            dependency: Value::dictionary(data),
         };
         let args = &mut composed.args;
         for name in [DEPTH, NUM] {
@@ -857,7 +865,7 @@ pub(super) fn author<B: Storage>(
         txn.set_metadata(
             Address::spec(layer, SpecPath::from_prim_path(path)),
             token,
-            layerstack::FieldValue::Value(value),
+            FieldValue::Value(value),
         );
     }
     doc.apply(&txn).unwrap().0

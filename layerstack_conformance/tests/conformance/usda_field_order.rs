@@ -126,7 +126,7 @@ fn value(store: &InMemoryStore, json: &Json) -> Value {
             item.as_object()
                 .unwrap()
                 .iter()
-                .map(|(key, entry)| (Arc::from(key.as_str()), value(store, entry)))
+                .map(|(key, entry)| (Arc::from(key.as_str()), value(store, entry).into()))
                 .collect(),
         ),
         other => panic!("no value type {other}"),

@@ -286,6 +286,7 @@ impl Composed {
                 let mut map = BTreeMap::new();
                 for (name, value) in entries {
                     key.push(name.clone());
+                    let value = value.as_value().expect("a plain entry");
                     map.insert(name.to_string(), self.encode_at(value, anchor, key));
                     key.pop();
                 }

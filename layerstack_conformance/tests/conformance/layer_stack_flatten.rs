@@ -30,7 +30,9 @@ fn value(value: &mut Value) {
         Value::Dictionary(entries) => {
             entries.sort_by(|a, b| a.0.cmp(&b.0));
             for (_, entry) in entries {
-                self::value(entry);
+                if let FieldValue::Value(entry) = entry {
+                    self::value(entry);
+                }
             }
         }
         Value::Array(values) => {

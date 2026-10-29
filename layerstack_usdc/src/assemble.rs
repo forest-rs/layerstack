@@ -2200,14 +2200,26 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
                 let vals: Vec<Value> = items.iter().map(|v| self.convert_crate_value(v)).collect();
                 Value::array(vals)
             }
-            // An entry of a value no layer value holds is left out, and
+            // An entry holds a value or a list op, as a `VtDictionary`
+            // entry may; one holding what no entry holds is left out, and
             // reported where the dictionary is a metadata field
             // ([`unheld_entries`]).
             CrateValue::Dictionary(entries) => {
-                let dict: Vec<(Arc<str>, Value)> = entries
+                let dict: Vec<(Arc<str>, FieldValue)> = entries
                     .iter()
                     .filter(|(_, v)| unheld_kind(v).is_none())
-                    .map(|(k, v)| (Arc::from(k.as_str()), self.convert_crate_value(v)))
+                    .map(|(k, v)| {
+                        let entry = match v {
+                            CrateValue::ListOp(listop) if listop.op_type == ValueType::TokenListOp => {
+                                FieldValue::TokenListOp(Box::new(self.convert_token_listop(listop)))
+                            }
+                            CrateValue::ListOp(listop) => {
+                                scalar_entry_list_op(listop).unwrap_or(FieldValue::Value(Value::Null))
+                            }
+                            v => FieldValue::Value(self.convert_crate_value(v)),
+                        };
+                        (Arc::from(k.as_str()), entry)
+                    })
                     .collect();
                 Value::Dictionary(dict)
             }
@@ -2521,7 +2533,10 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
                             knot.custom_data = entries
                                 .iter()
                                 .map(|(key, value)| {
-                                    (Arc::from(key.as_str()), self.convert_crate_value(value))
+                                    (
+                                        Arc::from(key.as_str()),
+                                        FieldValue::Value(self.convert_crate_value(value)),
+                                    )
                                 })
                                 .collect();
                         } else {
@@ -3677,18 +3692,24 @@ fn split_trailing_selections(path: &str) -> Option<(&str, Vec<(&str, &str)>)> {
     (owner == rest && !chain.is_empty()).then_some((owner, chain))
 }
 
-/// Converts a list op whose items are plain scalars, or returns `None` when
-/// an item has an unexpected type.
-///
-/// Spec: AOUSD Core §16.3.10 (list op encoding).
-/// What a dictionary entry holds when no layer value holds it: a list op,
-/// time samples, a spline, a variant selection map, relocates, a
-/// variability or a permission, which OpenUSD's crate stores in a
-/// `VtDictionary` as any value (`CrateFile::_PackValue`,
-/// `pxr/usd/sdf/crateFile.cpp`); `None` for any other value.
+/// What a dictionary entry holds when no [`FieldValue`] holds it, which
+/// OpenUSD's crate stores in a `VtDictionary` as any value
+/// (`CrateFile::_PackValue`, `pxr/usd/sdf/crateFile.cpp`): a path,
+/// reference, payload or unregistered value list op, time samples, a
+/// spline, a variant selection map, relocates, a variability or a
+/// permission; `None` for any other value, a token, string or integer list
+/// op among them.
 fn unheld_kind(value: &CrateValue) -> Option<&'static str> {
     Some(match value {
-        CrateValue::ListOp(_) => "a list op",
+        CrateValue::ListOp(listop) => match listop.op_type {
+            ValueType::TokenListOp => return None,
+            _ if scalar_entry_list_op(listop).is_some() => return None,
+            ValueType::PathListOp => "a path list op",
+            ValueType::ReferenceListOp => "a reference list op",
+            ValueType::PayloadListOp => "a payload list op",
+            ValueType::UnregisteredValueListOp => "an unregistered value list op",
+            _ => "a list op of items of another type",
+        },
         CrateValue::TimeSamples(_) => "time samples",
         CrateValue::Spline(..) => "a spline",
         CrateValue::VariantSelectionMap(_) => "a variant selection map",
@@ -3721,6 +3742,44 @@ fn unheld_entries(value: &CrateValue, prefix: &mut String, found: &mut Vec<(Stri
     }
 }
 
+/// A dictionary entry's string, `int`, `uint`, `int64` or `uint64` list
+/// op, which a [`FieldValue`] holds as a metadata field's; `None` for
+/// another list op, or one of items of another type.
+fn scalar_entry_list_op(listop: &CrateListOp) -> Option<FieldValue> {
+    match listop.op_type {
+        ValueType::StringListOp => convert_scalar_listop(listop, |v| match v {
+            CrateValue::String(s) => Some(Arc::from(s.as_str())),
+            _ => None,
+        })
+        .map(FieldValue::from),
+        ValueType::IntListOp => convert_scalar_listop(listop, |v| match v {
+            CrateValue::Int(v) => Some(*v),
+            _ => None,
+        })
+        .map(FieldValue::from),
+        ValueType::UIntListOp => convert_scalar_listop(listop, |v| match v {
+            CrateValue::UInt(v) => Some(*v),
+            _ => None,
+        })
+        .map(FieldValue::from),
+        ValueType::Int64ListOp => convert_scalar_listop(listop, |v| match v {
+            CrateValue::Int64(v) => Some(*v),
+            _ => None,
+        })
+        .map(FieldValue::from),
+        ValueType::UInt64ListOp => convert_scalar_listop(listop, |v| match v {
+            CrateValue::UInt64(v) => Some(*v),
+            _ => None,
+        })
+        .map(FieldValue::from),
+        _ => None,
+    }
+}
+
+/// Converts a list op whose items are plain scalars, or returns `None` when
+/// an item has an unexpected type.
+///
+/// Spec: AOUSD Core §16.3.10 (list op encoding).
 fn convert_scalar_listop<T>(
     listop: &CrateListOp,
     item: impl Fn(&CrateValue) -> Option<T>,
@@ -4092,7 +4151,7 @@ def "Other" {}
         assert_eq!(field("words"), value(Value::array(words)));
         assert_eq!(
             field("info"),
-            value(Value::Dictionary(alloc::vec![("k".into(), Value::Int(1))]))
+            value(Value::Dictionary(alloc::vec![("k".into(), Value::Int(1).into())]))
         );
     }
 
@@ -4222,7 +4281,7 @@ def "Other" {}
             data.value,
             FieldValue::Value(Value::Dictionary(alloc::vec![(
                 "k".into(),
-                Value::String("v".into())
+                Value::String("v".into()).into()
             )]))
         );
     }

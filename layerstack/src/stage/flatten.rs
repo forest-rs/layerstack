@@ -1547,7 +1547,10 @@ fn asset_paths(value: &Value, out: &mut Vec<Arc<str>>) {
     match value {
         Value::Asset(path) => out.push(path.clone()),
         Value::Array(items) => items.iter().for_each(|item| asset_paths(item, out)),
-        Value::Dictionary(entries) => entries.iter().for_each(|(_, v)| asset_paths(v, out)),
+        Value::Dictionary(entries) => entries
+            .iter()
+            .filter_map(|(_, v)| v.as_value())
+            .for_each(|v| asset_paths(v, out)),
         _ => {}
     }
 }

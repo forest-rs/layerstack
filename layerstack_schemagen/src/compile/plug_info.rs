@@ -175,12 +175,15 @@ fn type_entry(class: &ClassInfo, tokens: &layerstack::TokenInterner) -> Result<J
     // extraPlugInfo goes first, so the generated keys win.
     if let Some(Value::Dictionary(extra)) = dict_get(&class.custom_data, "extraPlugInfo") {
         for (key, value) in extra {
-            let value = to_json(value, tokens).ok_or_else(|| CompileError::PlugInfo {
-                message: format!(
-                    "{}'s extraPlugInfo `{key}` has no JSON representation",
-                    class.name
-                ),
-            })?;
+            let value = value
+                .as_value()
+                .and_then(|value| to_json(value, tokens))
+                .ok_or_else(|| CompileError::PlugInfo {
+                    message: format!(
+                        "{}'s extraPlugInfo `{key}` has no JSON representation",
+                        class.name
+                    ),
+                })?;
             entry.insert(key.to_string(), value);
         }
     }
@@ -258,7 +261,7 @@ fn to_json(value: &Value, tokens: &layerstack::TokenInterner) -> Option<Json> {
         Value::Dictionary(entries) => Json::Object(
             entries
                 .iter()
-                .map(|(key, value)| Some((key.to_string(), to_json(value, tokens)?)))
+                .map(|(key, value)| Some((key.to_string(), to_json(value.as_value()?, tokens)?)))
                 .collect::<Option<_>>()?,
         ),
         _ => return None,

@@ -171,13 +171,14 @@ pub(crate) fn generate(
                         .iter()
                         .map(|n| Value::Token(store.tokens().intern(n)))
                         .collect(),
-                ),
+                )
+                .into(),
             ));
         }
         if let Some(brief) = briefs.get(&(name.to_owned(), None)) {
             data.push((
                 Arc::from("userDocBrief"),
-                Value::String(Arc::from(&**brief)),
+                Value::String(Arc::from(&**brief)).into(),
             ));
         }
         set_custom_data(&mut edit, at, data, &names);
@@ -192,7 +193,7 @@ pub(crate) fn generate(
                 .map(|brief| {
                     (
                         Arc::from("userDocBrief"),
-                        Value::String(Arc::from(&**brief)),
+                        Value::String(Arc::from(&**brief)).into(),
                     )
                 })
                 .into_iter()
@@ -221,7 +222,8 @@ pub(crate) fn generate(
                             .iter()
                             .map(|t| Value::Token(store.tokens().intern(t)))
                             .collect(),
-                    ),
+                    )
+                    .into(),
                 )
             })
             .collect();
@@ -293,7 +295,7 @@ fn root_prims(layer: &Layer, store: &layerstack::InMemoryStore) -> Vec<PathId> {
         .unwrap_or_default()
 }
 
-fn custom_data(field: Option<&FieldValue>) -> Vec<(Arc<str>, Value)> {
+fn custom_data(field: Option<&FieldValue>) -> Vec<(Arc<str>, FieldValue)> {
     match field {
         Some(FieldValue::Value(Value::Dictionary(entries))) => entries.clone(),
         _ => Vec::new(),
@@ -304,7 +306,7 @@ fn custom_data(field: Option<&FieldValue>) -> Vec<(Arc<str>, Value)> {
 fn set_custom_data(
     edit: &mut Transaction,
     at: layerstack::Address,
-    data: Vec<(Arc<str>, Value)>,
+    data: Vec<(Arc<str>, FieldValue)>,
     names: &Names,
 ) {
     if data.is_empty() {
@@ -324,7 +326,7 @@ fn set_custom_data(
 /// originals removed, so the order stays. Returns the new names.
 fn rename_with_prefix(
     class: &ClassInfo,
-    custom_data: &[(Arc<str>, Value)],
+    custom_data: &[(Arc<str>, FieldValue)],
     properties: &[String],
     path: PathId,
     target: &EditTarget,
@@ -464,11 +466,11 @@ fn briefs(
 /// the object's customData, else the first sentence of its
 /// documentation, at most 500 characters.
 fn brief(
-    user: Option<&[(Arc<str>, Value)]>,
-    custom_data: &[(Arc<str>, Value)],
+    user: Option<&[(Arc<str>, FieldValue)]>,
+    custom_data: &[(Arc<str>, FieldValue)],
     documentation: Option<&FieldValue>,
 ) -> Option<String> {
-    let brief_of = |data: &[(Arc<str>, Value)]| match dict_get(data, "userDocBrief") {
+    let brief_of = |data: &[(Arc<str>, FieldValue)]| match dict_get(data, "userDocBrief") {
         Some(Value::String(text)) => Some(text.trim().to_owned()),
         _ => None,
     };
@@ -521,7 +523,11 @@ impl UserDoc {
     }
 
     /// The composed customData of the class, or of its property.
-    fn custom_data(&self, class: &str, property: Option<&str>) -> Option<Vec<(Arc<str>, Value)>> {
+    fn custom_data(
+        &self,
+        class: &str,
+        property: Option<&str>,
+    ) -> Option<Vec<(Arc<str>, FieldValue)>> {
         let store = self.stage.store();
         let class = store
             .paths()

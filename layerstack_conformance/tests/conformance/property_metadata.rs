@@ -84,7 +84,7 @@ fn value(ty: &str, json: &serde_json::Value, tokens: &layerstack::TokenInterner)
                 .map(|(key, item)| {
                     (
                         Arc::from(key.as_str()),
-                        Value::Int(i32::try_from(item.as_i64().unwrap()).unwrap()),
+                        Value::Int(i32::try_from(item.as_i64().unwrap()).unwrap()).into(),
                     )
                 })
                 .collect(),
@@ -112,7 +112,12 @@ fn json(value: &ResolvedValue, tokens: &layerstack::TokenInterner) -> serde_json
                 .collect(),
             Value::Dictionary(entries) => entries
                 .iter()
-                .map(|(key, item)| (key.to_string(), scalar(item, tokens)))
+                .map(|(key, item)| {
+                    (
+                        key.to_string(),
+                        scalar(item.as_value().expect("a plain entry"), tokens),
+                    )
+                })
                 .collect::<serde_json::Map<_, _>>()
                 .into(),
             other => panic!("unexpected {other:?}"),

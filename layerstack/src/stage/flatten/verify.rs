@@ -14,7 +14,7 @@ use core::fmt::Write as _;
 
 use super::{FindingKind, FlattenReport, Loss, ObjectPath, Transformation};
 use crate::{
-    doc::{LayerStore, Value},
+    doc::{FieldValue, LayerStore, Value},
     interner::{TokenId, TokenInterner},
     path::{PathId, PathInterner, PropertyPath, TargetPath},
     prim_index::{FieldKey, OpinionSource},
@@ -698,7 +698,12 @@ impl Verifier<'_> {
                     out.push('{');
                     for (key, item) in entries {
                         let _ = write!(out, "{key:?}: ");
-                        write(out, item, tokens);
+                        match item {
+                            FieldValue::Value(item) => write(out, item, tokens),
+                            other => {
+                                let _ = write!(out, "{other:?}");
+                            }
+                        }
                         out.push_str(", ");
                     }
                     out.push('}');

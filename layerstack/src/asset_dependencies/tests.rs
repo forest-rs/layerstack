@@ -16,10 +16,15 @@ fn custom_data_arcs(layer: LayerId, path: PathId, prefix: &str) -> ListOp<Refere
                         Value::Asset(alloc::format!("{prefix}/{bucket}.png").into()),
                         Value::Asset(alloc::format!("{prefix}/shared.png").into()),
                         Value::string("literal.png"),
-                    ]),
-                )]),
+                    ])
+                    .into(),
+                )])
+                .into(),
             ),
-            ("templateAssetPath".into(), Value::string("literal.#.usd")),
+            (
+                "templateAssetPath".into(),
+                Value::string("literal.#.usd").into(),
+            ),
         ])
     };
     ListOp::explicit(vec![reference("explicit")])
@@ -217,13 +222,17 @@ fn rewriting_covers_sparse_samples_metadata_and_clip_templates_without_mutating_
         Value::Dictionary(vec![(
             "main".into(),
             Value::Dictionary(vec![
-                ("templateAssetPath".into(), Value::string("anim.#.usda")),
+                (
+                    "templateAssetPath".into(),
+                    Value::string("anim.#.usda").into(),
+                ),
                 (
                     "assetPaths".into(),
-                    Value::Array(vec![Value::Asset("clip.usda".into())]),
+                    Value::Array(vec![Value::Asset("clip.usda".into())]).into(),
                 ),
-                ("plain".into(), Value::string("leave.png")),
-            ]),
+                ("plain".into(), Value::string("leave.png").into()),
+            ])
+            .into(),
         )]),
     );
     let mut layer = Layer::new(LayerId(1));
@@ -308,14 +317,15 @@ fn direct_prim_asset_identity_stays_distinct_from_identical_nested_resources() {
     let asset_info = store.tokens.intern("assetInfo");
     let attr = store.tokens.intern("value");
     let dictionary = Value::Dictionary(vec![
-        ("identifier".into(), Value::Asset("same.usda".into())),
-        ("preview".into(), Value::Asset("image.png".into())),
+        ("identifier".into(), Value::Asset("same.usda".into()).into()),
+        ("preview".into(), Value::Asset("image.png".into()).into()),
         (
             "nested".into(),
             Value::Dictionary(vec![(
                 "identifier".into(),
-                Value::Asset("same.usda".into()),
-            )]),
+                Value::Asset("same.usda".into()).into(),
+            )])
+            .into(),
         ),
     ]);
     let mut layer = Layer::new(LayerId(1));
@@ -384,7 +394,7 @@ fn unselected_variant_identities_are_scoped_to_prim_metadata() {
     let hidden = store.tokens.intern("hidden");
     let value = FieldValue::Value(Value::Dictionary(vec![(
         "identifier".into(),
-        Value::Asset("identity.usda".into()),
+        Value::Asset("identity.usda".into()).into(),
     )]));
     let field = FieldEntry {
         name: asset_info,

@@ -25,8 +25,8 @@ use layerstack::sort;
 use alloc::{string::String, vec::Vec};
 
 use layerstack::{
-    LayerStore, ListPosition, PathId, PrimPathArg, PropertyPath, Stage, StageView, TargetPath,
-    Time, TokenId, TokenInterner, Value,
+    FieldValue, LayerStore, ListPosition, PathId, PrimPathArg, PropertyPath, Stage, StageView,
+    TargetPath, Time, TokenId, TokenInterner, Value,
 };
 
 use crate::edit::{CannotEdit, SchemaEdit};
@@ -659,7 +659,7 @@ impl PrimEdit {
     ///
     /// Why the field cannot be authored on that property.
     ///
-    /// [`FieldValue`]: layerstack::FieldValue
+    /// [`FieldValue`]: FieldValue
     #[doc(alias = "SetMetadata")]
     #[doc(alias = "UsdObject::SetMetadata")]
     pub fn write_property_metadata(
@@ -667,7 +667,7 @@ impl PrimEdit {
         edit: &mut SchemaEdit<'_>,
         property: &str,
         field: &str,
-        value: impl Into<layerstack::FieldValue>,
+        value: impl Into<FieldValue>,
     ) -> Result<&Self, crate::MetadataError> {
         edit.author_property_metadata(self.path, property, field, Some(value.into()))?;
         Ok(self)
@@ -728,10 +728,11 @@ impl PrimEdit {
         property: &str,
         field: &str,
         key_path: &str,
-        value: Value,
+        value: impl Into<FieldValue>,
     ) -> Result<&Self, crate::MetadataError> {
         let property = PropertyPath::new(self.path, edit.tokens().intern(property));
-        edit.author_metadata_by_key(TargetPath::Property(property), field, key_path, Some(value))?;
+        let value = Some(value.into());
+        edit.author_metadata_by_key(TargetPath::Property(property), field, key_path, value)?;
         Ok(self)
     }
 
@@ -785,9 +786,10 @@ impl PrimEdit {
         edit: &mut SchemaEdit<'_>,
         field: &str,
         key_path: &str,
-        value: Value,
+        value: impl Into<FieldValue>,
     ) -> Result<&Self, crate::MetadataError> {
-        edit.author_metadata_by_key(TargetPath::Prim(self.path), field, key_path, Some(value))?;
+        let value = Some(value.into());
+        edit.author_metadata_by_key(TargetPath::Prim(self.path), field, key_path, value)?;
         Ok(self)
     }
 
@@ -834,7 +836,7 @@ impl PrimEdit {
         &self,
         edit: &mut SchemaEdit<'_>,
         field: &str,
-        value: impl Into<layerstack::FieldValue>,
+        value: impl Into<FieldValue>,
     ) -> Result<&Self, crate::MetadataError> {
         edit.author_prim_metadata(self.path, field, Some(value.into()))?;
         Ok(self)

@@ -345,7 +345,9 @@ fn arcs(
         // AOUSD Core §9.4: relative asset values retain their authoring layer,
         // including values nested in reference customData (§16.2.17.5).
         for (_, value) in &arc.custom_data {
-            values(value, layer, Some(spec), None, out, false);
+            if let FieldValue::Value(value) = value {
+                values(value, layer, Some(spec), None, out, false);
+            }
         }
     }
 }
@@ -395,6 +397,9 @@ fn extract_prim_field(
         && let FieldValue::Value(Value::Dictionary(entries)) = &field.value
     {
         for (key, value) in entries {
+            let FieldValue::Value(value) = value else {
+                continue;
+            };
             if key.as_ref() == "identifier"
                 && let Value::Asset(asset) = value
             {
@@ -514,6 +519,9 @@ fn values(
         }
         Value::Dictionary(entries) => {
             for (key, v) in entries {
+                let FieldValue::Value(v) = v else {
+                    continue;
+                };
                 if clip && &**key == "templateAssetPath" {
                     if let Value::String(asset) = v {
                         push(
@@ -567,6 +575,9 @@ fn rewrite_value(
         }
         Value::Dictionary(entries) => {
             for (key, value) in entries {
+                let FieldValue::Value(value) = value else {
+                    continue;
+                };
                 if clip && &**key == "templateAssetPath" {
                     if let Value::String(asset) = value
                         && let Some(new) = map.get(&dependency(
@@ -731,7 +742,9 @@ fn rewrite_arcs(
             arc.asset = Some(String::from(&**new));
         }
         for (_, value) in &mut arc.custom_data {
-            rewrite_value(value, layer, Some(spec), None, map, false);
+            if let FieldValue::Value(value) = value {
+                rewrite_value(value, layer, Some(spec), None, map, false);
+            }
         }
     }
 }
@@ -746,6 +759,9 @@ fn rewrite_prim_field(
         && let FieldValue::Value(Value::Dictionary(entries)) = &mut field.value
     {
         for (key, value) in entries {
+            let FieldValue::Value(value) = value else {
+                continue;
+            };
             if key.as_ref() == "identifier"
                 && let Value::Asset(asset) = value
             {

@@ -464,7 +464,7 @@ fn dictionary_value(value: &ast::MetadataValue<'_>, tokens: &TokenInterner) -> V
                         _ => return None,
                     },
                 };
-                Some((Arc::from(&*entry.key), value))
+                Some((Arc::from(&*entry.key), value.into()))
             })
             .collect(),
     )

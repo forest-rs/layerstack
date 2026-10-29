@@ -10,7 +10,7 @@
 //! Spec: AOUSD Core §12.3.3 (spline opinions), §12.5 (interpolation methods),
 //! §16.3.10.33 (binary encoding).
 
-use crate::doc::Value;
+use crate::doc::FieldValue;
 use alloc::{sync::Arc, vec::Vec};
 use core::fmt;
 
@@ -150,7 +150,7 @@ pub enum TangentAlgorithm {
 #[doc(alias = "TsKnot")]
 pub struct Knot {
     /// Authored knot metadata; it does not affect numerical evaluation.
-    pub custom_data: Vec<(Arc<str>, Value)>,
+    pub custom_data: Vec<(Arc<str>, FieldValue)>,
     /// Authored incoming tangent algorithm.
     pub pre_tan_algorithm: TangentAlgorithm,
     /// Authored outgoing tangent algorithm.

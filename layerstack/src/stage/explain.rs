@@ -301,6 +301,10 @@ pub struct DictionaryMerge {
     /// Nested dictionaries of this opinion that combined with stronger
     /// ones; their entries appear in the other lists.
     pub merged: Vec<KeyPath>,
+    /// List ops of this opinion a stronger list op of their kind composed
+    /// over (`SdfListOp::ApplyOperations`, as `VtDictionaryOverRecursive`
+    /// composes the values at a key).
+    pub composed: Vec<KeyPath>,
     /// Entries of this opinion a stronger value won over.
     pub overridden: Vec<KeyPath>,
 }
@@ -1468,8 +1472,8 @@ impl<'s> Roles<'s> {
     /// Spec: AOUSD Core §6.6.2.1, §12.2.5, §12.3.6.
     fn apply_dictionaries(
         &mut self,
-        seed: Option<&[(Arc<str>, Value)]>,
-    ) -> (Vec<(Arc<str>, Value)>, bool) {
+        seed: Option<&[(Arc<str>, FieldValue)]>,
+    ) -> (Vec<(Arc<str>, FieldValue)>, bool) {
         // Which defaults take part, and why the others do not, is the
         // ordered chain's dictionary rule: blocks cut off, other values are
         // incompatible.
@@ -1501,6 +1505,10 @@ impl<'s> Roles<'s> {
                     provenance,
                     key_path,
                 } => (provenance, key_path, |m| &mut m.overridden),
+                DictionaryEvent::Composed {
+                    provenance,
+                    key_path,
+                } => (provenance, key_path, |m| &mut m.composed),
                 // An event this mapping predates has no list in a
                 // `DictionaryMerge` to record it in.
                 _ => continue,
@@ -1515,7 +1523,9 @@ impl<'s> Roles<'s> {
                     Some(OpinionRole::Contributed(Contribution::Dictionary(merge)));
             }
         }
-        (report.value, seeded)
+        let mut value = report.value;
+        crate::doc::finalize_dictionary(&mut value);
+        (value, seeded)
     }
 
     /// Records which defaults take part in a dictionary chain, and why the

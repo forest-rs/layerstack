@@ -34,7 +34,12 @@ fn to_json(value: &Value, store: &InMemoryStore) -> Json {
         Value::Dictionary(entries) => Json::Object(
             entries
                 .iter()
-                .map(|(key, value)| (key.to_string(), to_json(value, store)))
+                .map(|(key, value)| {
+                    (
+                        key.to_string(),
+                        to_json(value.as_value().expect("a plain entry"), store),
+                    )
+                })
                 .collect::<Map<_, _>>(),
         ),
         Value::Int(v) => json!(v),
@@ -161,7 +166,7 @@ fn metadata_by_key_matches_cpp_call_by_call() {
             "{label}"
         );
         assert_eq!(
-            entry.map(|value| to_json(&value, &store)),
+            entry.map(|value| to_json(value.as_value().expect("a plain entry"), &store)),
             call.composed_entry,
             "{label}"
         );
@@ -192,7 +197,7 @@ fn by_key_edits_in_one_edit_build_on_each_other() {
     );
     // A whole-field write earlier in the same edit is where a key starts.
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
-    let whole = Value::Dictionary(vec![(Arc::from("z"), Value::Int(9))]);
+    let whole = Value::Dictionary(vec![(Arc::from("z"), Value::Int(9).into())]);
     handle
         .write_metadata(&mut edit, "customData", whole)
         .unwrap();

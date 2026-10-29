@@ -544,35 +544,35 @@ pub fn stitch_clip_sequence(
     let clips = tokens.intern("clips");
     let start_key = tokens.intern("startTimeCode");
     let end_key = tokens.intern("endTimeCode");
-    let metadata = Value::Dictionary(alloc::vec![
+    let metadata = Value::dictionary([
         (
-            "active".into(),
+            "active",
             Value::array_from_iter(
                 active.into_iter().map(Value::Vec2d),
-                Some(&Value::Vec2d([0.; 2]))
-            )
+                Some(&Value::Vec2d([0.; 2])),
+            ),
         ),
         (
-            "assetPaths".into(),
+            "assetPaths",
             Value::array_from_iter(
                 sources.iter().map(|s| Value::Asset(s.asset_path.into())),
-                Some(&Value::Asset("".into()))
-            )
+                Some(&Value::Asset("".into())),
+            ),
         ),
         (
-            "manifestAssetPath".into(),
-            Value::Asset(options.manifest_asset_path.as_str().into())
+            "manifestAssetPath",
+            Value::Asset(options.manifest_asset_path.as_str().into()),
         ),
         (
-            "primPath".into(),
-            Value::string(paths.display(options.clip_prim_path, tokens))
+            "primPath",
+            Value::string(paths.display(options.clip_prim_path, tokens)),
         ),
         (
-            "times".into(),
+            "times",
             Value::array_from_iter(
                 times.into_iter().map(Value::Vec2d),
-                Some(&Value::Vec2d([0.; 2]))
-            )
+                Some(&Value::Vec2d([0.; 2])),
+            ),
         ),
     ]);
     let mut root = Layer::new(options.root_id);
@@ -595,7 +595,7 @@ pub fn stitch_clip_sequence(
         options.clip_prim_path,
         PrimSpec::over().with_field(
             clips,
-            Value::Dictionary(alloc::vec![(options.clip_set.as_str().into(), metadata)]),
+            Value::dictionary([(options.clip_set.as_str(), metadata)]),
         ),
     );
     ensure_parent_specs(&mut root, options.clip_prim_path, paths);
@@ -684,11 +684,11 @@ mod tests {
         let Value::Dictionary(entries) = value else {
             panic!("dictionary")
         };
-        &entries
+        entries
             .iter()
             .find(|(name, _)| name.as_ref() == key)
+            .and_then(|(_, value)| value.as_value())
             .unwrap()
-            .1
     }
     fn clip_metadata<'a>(
         bundle: &'a ClipBundle,

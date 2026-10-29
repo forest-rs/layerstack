@@ -1,0 +1,115 @@
+#usda 1.0
+(
+    relocates = {
+        </Reloc/C>: </Reloc/D>
+    }
+)
+
+def "Ref" (
+    prepend references = @./asset.usda@</Model>
+)
+{
+}
+
+def "Pay" (
+    prepend payload = @./asset.usda@</Model>
+)
+{
+}
+
+def "Nested" (
+    prepend references = @./outer.usda@</Outer>
+)
+{
+}
+
+def "Reloc" (
+    prepend references = @./asset.usda@</Model>
+)
+{
+    rel local = </Reloc.b[/Reloc/D].d>
+}
+
+def "Local"
+{
+    rel r = </Local.b[/Local/C].d>
+    rel m = </Local.b.mapper[/Local/C]>
+    float c.connect = </Local.b[/Local/C].d>
+    rel outside = [</Local.b[/Ref/C].d>, </Local/C>]
+
+    def "C"
+    {
+    }
+}
+
+def "Internal" (
+    prepend references = </Local>
+)
+{
+}
+
+class "Class"
+{
+    rel r = </Class.b[/Class/C].d>
+    rel m = </Class.b.mapper[/Class/C]>
+    float c.connect = </Class.b[/Class/C].d>
+    rel kept = </Class.b[/Ref/C].d>
+    rel back = [</Class.b[/Inst/C].d>, </Class/C>]
+    rel relativeBracket = <.b[C].d.mapper[E]>
+
+    def "C"
+    {
+    }
+}
+
+def "Inst" (
+    prepend inherits = </Class>
+)
+{
+}
+
+def "Spec" (
+    prepend specializes = </Class>
+)
+{
+}
+
+def "Classy" (
+    prepend references = @./asset.usda@</Classy>
+)
+{
+}
+
+def "A"
+{
+    def "B" (
+        prepend references = @./asset.usda@</A>
+    )
+    {
+    }
+}
+
+def "Strong" (
+    prepend references = @./asset.usda@</Model>
+)
+{
+    delete rel r = </Strong.b[/Strong/C].d>
+    prepend rel m = </Strong.b.mapper[/Strong/E]>
+}
+
+def "Instances"
+{
+    def "I1" (
+        instanceable = true
+        prepend references = @./asset.usda@</Model>
+    )
+    {
+    }
+
+    def "I2" (
+        instanceable = true
+        prepend references = @./asset.usda@</Model>
+    )
+    {
+    }
+}

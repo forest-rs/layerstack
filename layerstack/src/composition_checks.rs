@@ -25,6 +25,7 @@ use crate::{
     path::{Path, PathId, PropertyPath, TargetPath},
     prim_index::{ArcKind, FieldKey, OpinionRef, OpinionValue, PrimIndex, SourceId},
     spec_path::SpecPath,
+    target_translation::{PrimMap, is_relational, map_relational},
 };
 
 /// The composition errors found, deduplicated and kept in the order found,
@@ -168,6 +169,10 @@ pub(crate) struct ArcPathMap<'a> {
     /// Maps a path authored in the arc's target namespace to the stage
     /// namespace; `None` when the arcs cannot map it.
     pub(crate) map: &'a dyn Fn(&dyn LayerStore, PathId) -> Option<PathId>,
+    /// Whether the arcs map every path outside their pairs to itself
+    /// (`PcpMapFunction::HasRootIdentity`), as they map a relative path
+    /// in a relational target's bracket.
+    pub(crate) root_identity: bool,
 }
 
 impl ArcPathMap<'_> {
@@ -182,9 +187,20 @@ impl ArcPathMap<'_> {
             .is_prefix_of(store.paths().resolve(target.prim_path()))
     }
 
+    /// Maps `target`; a relational attribute or mapper target maps the
+    /// paths in its brackets too, and does not map unless they all do
+    /// (`Pcp_TranslatePath`, see [`crate::target_translation`]).
     fn map_target(&self, store: &dyn LayerStore, target: TargetPath) -> Option<TargetPath> {
         match target {
             TargetPath::Prim(path) => self.map(store, path).map(TargetPath::Prim),
+            TargetPath::Property(path) if is_relational(store.tokens(), path.property()) => {
+                let map = |prim: PathId| self.map(store, prim);
+                let map = PrimMap {
+                    map: &map,
+                    root_identity: self.root_identity,
+                };
+                map_relational(store.tokens(), store.paths(), path, &map).map(TargetPath::Property)
+            }
             TargetPath::Property(path) => self
                 .map(store, path.prim_path())
                 .map(|prim| TargetPath::Property(PropertyPath::new(prim, path.property()))),

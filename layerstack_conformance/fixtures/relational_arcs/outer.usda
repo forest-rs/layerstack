@@ -1,0 +1,14 @@
+#usda 1.0
+
+def "Outer"
+{
+    rel r = </Outer.b[/Outer/Inner/C].d>
+    rel m = </Outer/Inner.b.mapper[/Outer/Inner/C]>
+    rel outside = [</Outer.b[/Model/C].d>, </Outer/Inner>]
+
+    def "Inner" (
+        prepend references = @./asset.usda@</Model>
+    )
+    {
+    }
+}

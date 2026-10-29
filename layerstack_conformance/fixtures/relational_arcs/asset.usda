@@ -1,0 +1,73 @@
+#usda 1.0
+
+def "Model" (
+    prepend variantSets = "v"
+    variants = {
+        string v = "a"
+    }
+)
+{
+    float c.connect = </Model.b[/Model/C].d>
+    rel m = </Model.b.mapper[/Model/C]>
+    rel n = </Model.b[/Model/C.d[/Model/E].f].g>
+    rel r = </Model.b[/Model/C].d>
+    rel t = </Model.b[/Model/C].d.mapper[/Model/E]>
+    rel relative = [<.b[C].d>, <C.b[../E].d>, <.b.mapper[C/F]>]
+    rel outside = [</Model.b[/Other].d>, </Model.b[/Model/C].d>]
+    rel outsideOwner = [</Other.b[/Model/C].d>, </Model/E>]
+    rel outsideMapper = [</Model.b.mapper[/Other]>, </Model.b.mapper[/Model/E]>]
+    rel outsideNested = [</Model.b[/Model/C.d[/Other].f].g>, </Model.b[/Model/C.d[/Model/E].f].g>]
+    float outsideConnect.connect = [</Model.b[/Other].d>, </Model/C.x>]
+    rel relativeBracket = [<.b[C].d.mapper[E]>, </Model/E>]
+    rel variantBracket = [</Model.b[/Model/C{w=x}].d>, </Model.b[/Model{v=a}C].d>]
+    delete rel deleted = [</Model.b[/Other].d>, </Model.b[/Model/C].d>]
+    variantSet "v" = {
+        "a" {
+            rel inVariant = </Model.b[/Model/C].d>
+            float variantConnect.connect = </Model/C.b[/Model/E].d>
+        }
+    }
+
+    def "C"
+    {
+        def "F"
+        {
+        }
+    }
+
+    def "E"
+    {
+    }
+}
+
+def "Other"
+{
+}
+
+def "A"
+{
+    rel r = </A.b[/A].d>
+    rel s = </A/X.b[/A/X].d>
+    rel t = </A.b[/A/X].d>
+
+    def "X"
+    {
+    }
+}
+
+def "Classy" (
+    inherits = </_Class>
+)
+{
+}
+
+class "_Class"
+{
+    rel r = </_Class.b[/_Class/C].d>
+    rel kept = </_Class.b[/Elsewhere].d>
+    rel back = [</_Class.b[/Classy/C].d>, </_Class/C>]
+
+    def "C"
+    {
+    }
+}

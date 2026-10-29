@@ -1423,6 +1423,13 @@ struct ProjectionScope<'a> {
     translatable: bool,
 }
 
+/// A prim with a node other than its local one at a site, and the edited
+/// layers that node's layer stack holds ([`ProjectionScope::roots`]).
+struct SiteReader {
+    prim: PathId,
+    layers: Vec<LayerId>,
+}
+
 /// A stage composed over a projected store, only in part where a
 /// [`ProjectionScope`] allows.
 struct Projection {
@@ -1568,14 +1575,47 @@ impl ProjectionScope<'_> {
                 })
             })
         };
+        // For each site, the prims with a non-local node there in a layer
+        // stack holding an edited layer, with those layers: found once per
+        // site, as the slots of one edit share ancestors, and the root
+        // prims of many assets share a site path.
+        let edited: Vec<LayerId> = self.edits.keys().copied().collect();
+        let readers: RefCell<HashMap<PathId, Vec<SiteReader>>> = RefCell::default();
+        let readers_at = |site: PathId| -> Vec<SiteReader> {
+            let mut found = Vec::new();
+            for prim in index.prims_with_nodes_at(site) {
+                let Some(graph) = stage.explain_prim_graph(prim) else {
+                    found.push(SiteReader {
+                        prim,
+                        layers: edited.clone(),
+                    });
+                    continue;
+                };
+                let mut layers = Vec::new();
+                for (_, node) in graph.nodes() {
+                    if node.arc_kind() == ArcKind::Local || node.site().prim_path() != site {
+                        continue;
+                    }
+                    for &layer in &edited {
+                        if node.layer_strength(layer).is_some() && !layers.contains(&layer) {
+                            layers.push(layer);
+                        }
+                    }
+                    if layers.len() == edited.len() {
+                        break;
+                    }
+                }
+                if !layers.is_empty() {
+                    found.push(SiteReader { prim, layers });
+                }
+            }
+            found
+        };
         // The prim at `site` in the stage's layer stack when `local`, and
         // the namespace at `site` beneath the prims with a node at or
         // above it in the layer stack of `layer`.
-        // The prims with a node at each site read in each layer's stack,
-        // found once per site: the slots of one edit share ancestors, and
-        // the root prims of many assets share a site path.
-        let readers: RefCell<HashMap<(PathId, LayerId), Vec<PathId>>> = RefCell::default();
         let depending = |roots: &mut Vec<PathId>, site: PathId, layer: LayerId, local: bool| {
+            debug_assert!(edited.contains(&layer), "the readers are of edited layers");
             if local {
                 roots.push(site);
             }
@@ -1585,14 +1625,9 @@ impl ProjectionScope<'_> {
                 let suffix = path
                     .strip_prefix(store.paths().resolve(above))
                     .expect("ancestor");
-                let prims = readers.entry((above, layer)).or_insert_with(|| {
-                    index
-                        .prims_with_nodes_at(above)
-                        .filter(|prim| reads(*prim, layer, &|at| at == above))
-                        .collect()
-                });
-                for &prim in prims.iter() {
-                    roots.push(store.paths().intern_joined(prim, suffix));
+                let prims = readers.entry(above).or_insert_with(|| readers_at(above));
+                for reader in prims.iter().filter(|r| r.layers.contains(&layer)) {
+                    roots.push(store.paths().intern_joined(reader.prim, suffix));
                 }
             }
         };

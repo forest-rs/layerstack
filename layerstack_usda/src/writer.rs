@@ -1811,7 +1811,10 @@ fn validate_targets(
     let Some(op) = targets else {
         return Ok(());
     };
-    if !op.is_valid() {
+    // A list with no edits is a field an edit emptied, written with no
+    // statements, as OpenUSD writes the target list op a namespace edit
+    // emptied (`SdfListOp::ModifyOperations`).
+    if !op.is_valid() && *op != ListOp::default() {
         return Err(WriteError::InvalidListOp { path: path.into() });
     }
     for target in op.items() {
@@ -3564,10 +3567,12 @@ impl Writer<'_> {
             .targets
             .as_ref()
             .and_then(|op| op.explicit.as_deref());
+        // An emptied edit list has no statement to declare the
+        // relationship, so it is declared on its own (`rel name`).
         let edits = relationship
             .targets
             .as_ref()
-            .filter(|op| op.explicit.is_none());
+            .filter(|op| op.explicit.is_none() && **op != ListOp::default());
         let metadata = relationship.metadata.iter().any(is_written);
         if edits.is_none() || relationship.custom || metadata {
             self.indent(depth);
@@ -5005,12 +5010,9 @@ over "B"
             unreachable!("r is a relationship");
         };
         r.targets = Some(ListOp::default());
-        assert_eq!(
-            doc.to_usda(),
-            Err(WriteError::InvalidListOp {
-                path: "/A.r".into()
-            }),
-            "an empty edit list says nothing"
+        assert!(
+            doc.to_usda().unwrap().contains("\n    rel r\n"),
+            "an emptied edit list declares the relationship alone"
         );
         let mut doc = edits_doc();
         let Property::Attribute(z) = &mut doc.prims[0].properties[3] else {

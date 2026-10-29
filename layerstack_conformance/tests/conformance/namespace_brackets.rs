@@ -41,11 +41,7 @@ const LAYERS: [&str; 3] = ["scene.usda", "sub.usda", "asset.usda"];
 
 /// The cases where layerstack does not yet do what OpenUSD does. Each
 /// must still differ, so that the list stays current.
-///
-/// Each of these deletes the only target of `sub.usda`'s
-/// `delete rel deleted`, which OpenUSD writes as `rel deleted`, and the
-/// USDA writer refuses the emptied list op.
-const DIFFERING: &[&str] = &["delete_owner", "delete_owner_child"];
+const DIFFERING: &[&str] = &[];
 
 fn oracle() -> Json {
     let oracle: Json = serde_json::from_str(ORACLE).expect("oracle.json");

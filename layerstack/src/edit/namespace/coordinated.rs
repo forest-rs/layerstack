@@ -251,7 +251,7 @@ fn prepare_with(
             }
             _ => original.clone(),
         };
-        let mut unused = dormant_variants(store, &stages, indexes, &layer);
+        let mut unused = dormant_variants(store, &stages, indexes, root_layers, &layer);
         if let Some(moves) = local_moves.get(id) {
             for mapping in moves {
                 validate_authored(&layer, store, mapping)?;
@@ -459,12 +459,14 @@ fn prepare_with(
 /// reached through another arc (`/World/Copy` referencing `/World/A` with
 /// another selection) is that arc's to keep. In any other layer the edit
 /// repairs only reference and payload targets, so only the variant specs
-/// authoring those are looked up, among the prims with a node at their
-/// path. AOUSD Core §10.4 (prim index nodes), §10.5 (variants).
+/// authoring those into the `edited` layers are looked up, among the
+/// prims with a node at their path. AOUSD Core §10.4 (prim index nodes),
+/// §10.5 (variants).
 pub(super) fn dormant_variants(
     store: &dyn LayerStore,
     stages: &[&Stage],
     indexes: &[&PreparationIndex],
+    edited: &[LayerId],
     layer: &Layer,
 ) -> Dormant {
     let local = stages.iter().any(|s| s.layer_stack().contains(&layer.id));
@@ -508,9 +510,15 @@ pub(super) fn dormant_variants(
             })
         })
     };
-    // Outside the root layer stack, only arcs are repaired.
+    // Outside the root layer stack, only the arcs into the edited layers
+    // are repaired ([`repair_prim`] with no local move).
     let repairable = |refs: &ListOp<Reference>, payloads: &ListOp<Reference>| {
-        local || refs.items().next().is_some() || payloads.items().next().is_some()
+        local
+            || refs.items().chain(payloads.items()).any(|r| {
+                edited.contains(&r.layer)
+                    || r.stored_target_layer(store)
+                        .is_some_and(|target| edited.contains(&target))
+            })
     };
     let mut visit = |path: PathId, sites: &mut Vec<VariantSelectionSite>, sets: &VariantSets| {
         fn walk(

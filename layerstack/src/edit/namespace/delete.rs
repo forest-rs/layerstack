@@ -122,7 +122,7 @@ fn prepare_with(
         };
         dormant.insert(
             *id,
-            coordinated::dormant_variants(store, &[stage], &indexes, &layer),
+            coordinated::dormant_variants(store, &[stage], &indexes, &stack, &layer),
         );
         remove_specs(store, &mut layer, object, &[]);
         for (dependent, within) in &dependents {

@@ -496,6 +496,79 @@ fn variants_scene() -> InMemoryStore {
     store
 }
 
+/// Groups whose renames compose their subtrees translated, beside ones a
+/// rename cannot prove so: `/World/Group`'s `A` inherits `/World/Class`,
+/// which targets `B` and so changes in place when the group is renamed;
+/// `B` references `A` within the group and `C` the asset; `/World/Plain`'s
+/// `X` inherits a class nothing in the group names; `/World/Copy`
+/// references into the group; `/Ref` references the asset, so its local
+/// `Item` composes through an ancestral arc.
+fn renames_scene() -> InMemoryStore {
+    let mut store = InMemoryStore::default();
+    let owner = store.tokens.intern("owner");
+    let mut asset = Layer::new(ASSET);
+    let asset_root = author(&mut store, &mut asset, "/Asset", PrimSpec::def());
+    author(&mut store, &mut asset, "/Asset/Item", PrimSpec::def());
+    store.insert_layer(asset);
+    let mut root = Layer::new(ROOT);
+    author(&mut store, &mut root, "/World", PrimSpec::def());
+    author(&mut store, &mut root, "/World/Group", PrimSpec::def());
+    let class = store.path("/World/Class");
+    let a = author(
+        &mut store,
+        &mut root,
+        "/World/Group/A",
+        PrimSpec::def().with_inherit(class),
+    );
+    author(
+        &mut store,
+        &mut root,
+        "/World/Group/A/Leaf",
+        PrimSpec::def(),
+    );
+    author(
+        &mut store,
+        &mut root,
+        "/World/Group/B",
+        PrimSpec::def().with_reference(Reference::new(ROOT, a)),
+    );
+    author(
+        &mut store,
+        &mut root,
+        "/World/Group/C",
+        PrimSpec::def().with_reference(Reference::with_asset(ASSET, asset_root, "asset.usda")),
+    );
+    author(
+        &mut store,
+        &mut root,
+        "/World/Class",
+        PrimSpec::class().with_property(owner, expression("/World/Group/B")),
+    );
+    author(&mut store, &mut root, "/World/Plain", PrimSpec::def());
+    let base = author(&mut store, &mut root, "/World/Base", PrimSpec::class());
+    author(
+        &mut store,
+        &mut root,
+        "/World/Plain/X",
+        PrimSpec::def().with_inherit(base),
+    );
+    author(
+        &mut store,
+        &mut root,
+        "/World/Copy",
+        PrimSpec::def().with_reference(Reference::new(ROOT, a)),
+    );
+    author(
+        &mut store,
+        &mut root,
+        "/Ref",
+        PrimSpec::def().with_reference(Reference::with_asset(ASSET, asset_root, "asset.usda")),
+    );
+    author(&mut store, &mut root, "/Ref/Item", PrimSpec::over());
+    store.insert_layer(root);
+    store
+}
+
 /// A scene's live stages: the root layer's, and the dependents'.
 struct Scene {
     store: InMemoryStore,
@@ -734,6 +807,15 @@ fn retained_preparation_matches_composition_across_arcs_and_dependents() {
         let mut scene = Scene::new(arcs_scene(relocated), StageOptions::default(), &[DEPENDENT]);
         scene.exercise(&[ROOT], 4);
     }
+}
+
+/// Renames whose destination subtrees are proven to compose their
+/// sources' translated, and renames refused that proof, find what
+/// composing them finds.
+#[test]
+fn retained_preparation_matches_composition_for_translated_renames() {
+    let mut scene = Scene::new(renames_scene(), StageOptions::default(), &[]);
+    assert!(scene.exercise(&[ROOT], 6) > 0);
 }
 
 #[test]

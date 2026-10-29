@@ -396,6 +396,10 @@ fn prepare_with(
                 edits.insert(*id, edit);
             }
         }
+        // Whether the edit moves namespace whole, deleting nothing and
+        // moving nothing within variant branches.
+        let whole_moves = local_deletes.values().all(Vec::is_empty)
+            && local_variant_moves.values().all(Vec::is_empty);
         validate_projection_retained(
             store,
             &edited,
@@ -403,6 +407,7 @@ fn prepare_with(
             &stages,
             &stage_moves,
             indexes,
+            current && whole_moves,
             current,
         )?;
     } else {
@@ -1383,9 +1388,88 @@ struct ProjectionScope<'a> {
     indexes: &'a [&'a PreparationIndex],
     edits: &'a HashMap<LayerId, retained::LayerEdit>,
     children: Option<ChildIndex>,
+    /// Whether a rename may be proven to translate its subtree
+    /// ([`Self::translated`]): the edit deletes nothing and moves nothing
+    /// within variant branches.
+    translatable: bool,
+}
+
+/// A stage composed over a projected store, only in part where a
+/// [`ProjectionScope`] allows.
+struct Projection {
+    stage: Stage,
+    /// The destination of a rename proven to compose its source's subtree
+    /// translated ([`ProjectionScope::translated`]), which the projection
+    /// leaves uncomposed.
+    translated: Option<PathId>,
+}
+
+impl Projection {
+    /// Whether `path` exists in the projection, composed or proven.
+    fn exists(&self, path: TargetPath) -> bool {
+        match path {
+            TargetPath::Prim(p) => self.stage.has_prim(p) || self.translated == Some(p),
+            TargetPath::Property(p) => self.stage.has_property_path(p),
+        }
+    }
 }
 
 impl ProjectionScope<'_> {
+    /// The rename among `moves`, the moves of `stage`, whose destination
+    /// subtree composes exactly its source's, translated, when the
+    /// composition of no prim beneath the source reads a slot the edit
+    /// changes other than those it moves ([`Self::roots`] checks that):
+    /// the stage's only move, of a prim to a new name beneath the same
+    /// parent, whose composition has no node but its root, in a stage
+    /// whose layer stack authors no relocates.
+    ///
+    /// A prim index reads the specs at its nodes' sites and the arcs they
+    /// author. The prims beneath the source read the specs it moves, which
+    /// the edit moves in every layer of the stack and repairs as it
+    /// translates them, and through their arcs sites in other layer
+    /// stacks, or in this one outside the source, which the edit leaves
+    /// as they are. With no node above the parent's root, no ancestral
+    /// arc maps the prims' names into another namespace, and without
+    /// relocates no path of this stack names another, so each prim
+    /// beneath the destination composes the graph of its source prim,
+    /// translated: the same nodes, arcs and errors, none in a current
+    /// snapshot, and the same instancing keys. The same parent keeps every
+    /// path outside the subtree an ancestor of one of its prims exactly
+    /// when it was before. OpenUSD likewise validates a namespace edit
+    /// without composing the moved namespace again
+    /// (`UsdNamespaceEditor::CanApplyEdits`).
+    ///
+    /// Spec: AOUSD Core §8 (namespace), §10 (composition arcs and their
+    /// sites), §10.3.2.6 (relocates), §11.3.3 (scene graph instancing).
+    fn translated(
+        &self,
+        store: &dyn LayerStore,
+        stage: &Stage,
+        moves: &[PathMove],
+    ) -> Option<PathMove> {
+        let [mapping] = moves else {
+            return None;
+        };
+        let (TargetPath::Prim(from), TargetPath::Prim(to)) = (mapping.from, mapping.to) else {
+            return None;
+        };
+        let parent = store.paths().parent(from)?;
+        if !self.translatable
+            || store.paths().parent(to) != Some(parent)
+            || self.edits.values().any(|edit| !edit.relocated.is_empty())
+            || stage
+                .layer_stack()
+                .iter()
+                .any(|id| store.layer(*id).is_none_or(|l| !l.relocates().is_empty()))
+            || stage
+                .explain_prim_graph(parent)
+                .is_some_and(|graph| graph.nodes().any(|(id, _)| id != NodeId::ROOT))
+        {
+            return None;
+        }
+        Some(mapping.clone())
+    }
+
     /// The prims of `stage`, the `i`th stage, whose composition the edit
     /// can change, with the namespace beneath them; `None` when they
     /// cannot be told apart from the rest of the stage.
@@ -1424,13 +1508,16 @@ impl ProjectionScope<'_> {
     /// instance proxies included, and `_DidChangeLayerStackRelocations`
     /// resyncs the prims `FindSiteDependencies` finds at and beneath the
     /// relocated paths.
+    ///
+    /// A rename proven to translate its subtree ([`Self::translated`])
+    /// leaves the destination subtree out of the roots, and is returned.
     fn roots(
         &self,
         store: &dyn LayerStore,
         stage: &Stage,
         i: usize,
         moves: &[PathMove],
-    ) -> Option<Vec<PathId>> {
+    ) -> Option<(Vec<PathId>, Option<PathId>)> {
         let index = self.indexes.get(i)?;
         if self.edits.values().any(|edit| edit.metadata)
             || !stage.dynamic_layers().is_empty()
@@ -1471,10 +1558,44 @@ impl ProjectionScope<'_> {
                 }
             }
         };
+        // A rename translating its subtree, whose prims read no slot the
+        // edit changes in place: the moved specs alone.
+        let mut translated = self.translated(store, stage, moves);
+        let moved_roots: HashSet<PathId> = translated
+            .iter()
+            .flat_map(|m| [m.from.prim_path(), m.to.prim_path()])
+            .collect();
+        let moved = |path: PathId| retained::is_beneath(store, path, &moved_roots);
+        let mut found = Vec::new();
+        if translated.is_some() {
+            let reads_changed = self.edits.iter().any(|(&id, edit)| {
+                let local = stage.layer_stack().contains(&id);
+                edit.structural.iter().any(|&slot| {
+                    if local && moved(slot) {
+                        return false;
+                    }
+                    found.clear();
+                    depending(&mut found, slot, id, local);
+                    found.iter().any(|prim| moved(*prim))
+                })
+            });
+            if reads_changed {
+                translated = None;
+            }
+        }
         for (&id, edit) in self.edits {
             let local = stage.layer_stack().contains(&id);
             for &slot in &edit.structural {
-                depending(&mut roots, slot, id, local);
+                if translated.is_some() && local && moved(slot) {
+                    // The moved specs: the prims beneath the source read
+                    // them translated; the prims elsewhere with arcs to
+                    // them stay roots.
+                    found.clear();
+                    depending(&mut found, slot, id, local);
+                    roots.extend(found.iter().copied().filter(|prim| !moved(*prim)));
+                } else {
+                    depending(&mut roots, slot, id, local);
+                }
             }
             // A source another layer relocates too may move to that
             // layer's target once this one's changes.
@@ -1498,9 +1619,12 @@ impl ProjectionScope<'_> {
         }
         for mapping in moves {
             roots.push(mapping.from.prim_path());
-            roots.push(mapping.to.prim_path());
+            if translated.is_none() {
+                roots.push(mapping.to.prim_path());
+            }
         }
-        Some(retained::minimal_roots(store, &roots))
+        let translated = translated.map(|mapping| mapping.to.prim_path());
+        Some((retained::minimal_roots(store, &roots), translated))
     }
 
     /// The projection of `stage`, the `i`th stage, composing only the
@@ -1512,9 +1636,9 @@ impl ProjectionScope<'_> {
         stage: &Stage,
         i: usize,
         moves: &[PathMove],
-    ) -> Option<Stage> {
+    ) -> Option<Projection> {
         let index = self.indexes.get(i)?;
-        let mut roots = self.roots(store, stage, i, moves)?;
+        let (mut roots, translated) = self.roots(store, stage, i, moves)?;
         let pseudo_root = store.paths().intern(Path::root());
         let fresh;
         let children = match &self.children {
@@ -1565,7 +1689,10 @@ impl ProjectionScope<'_> {
                 }
             }
             if more.is_empty() {
-                return Some(partial);
+                return Some(Projection {
+                    stage: partial,
+                    translated,
+                });
             }
             roots.extend(more);
             roots = retained::minimal_roots(store, &roots);
@@ -1590,7 +1717,9 @@ fn validate_projection(
 /// the projected layers are composed in place in `store`, or copied whole
 /// when the store does not lend them, and where every snapshot is
 /// `current`, a stage whose prims the edit changes can be told apart
-/// composes only those.
+/// composes only those, leaving out a renamed subtree when `translatable`
+/// ([`ProjectionScope::translated`]).
+#[allow(clippy::too_many_arguments, reason = "the projection's whole context")]
 fn validate_projection_retained(
     store: &mut dyn LayerStore,
     edited: &HashMap<LayerId, Layer>,
@@ -1598,6 +1727,7 @@ fn validate_projection_retained(
     stages: &[&Stage],
     mappings: &[Vec<PathMove>],
     indexes: &[&PreparationIndex],
+    translatable: bool,
     current: bool,
 ) -> Result<(), NamespaceError> {
     let scope = if current {
@@ -1613,6 +1743,7 @@ fn validate_projection_retained(
             indexes,
             edits,
             children,
+            translatable,
         })
     } else {
         None
@@ -1644,35 +1775,33 @@ fn validate_projected_stages(
     scope: Option<&ProjectionScope<'_>>,
 ) -> Result<(), NamespaceError> {
     for (i, (stage, moves)) in stages.iter().zip(mappings).enumerate() {
+        let whole = |store: &mut dyn LayerStore| Projection {
+            stage: Stage::compose(store, stage.root_layer().unwrap(), stage.options().clone()),
+            translated: None,
+        };
         let projected = match scope.and_then(|scope| scope.compose(store, stage, i, moves)) {
             Some(projected) => {
                 // Every test that prepares an edit checks the part against
                 // the whole.
                 #[cfg(test)]
                 {
-                    let whole =
-                        Stage::compose(store, stage.root_layer().unwrap(), stage.options().clone());
                     assert_eq!(
                         projection_findings(&projected, moves),
-                        projection_findings(&whole, moves),
+                        projection_findings(&whole(store), moves),
                         "a partial projection finds what the whole projection finds"
                     );
                 }
                 projected
             }
-            None => Stage::compose(store, stage.root_layer().unwrap(), stage.options().clone()),
+            None => whole(store),
         };
-        if !projected.composition_errors().is_empty() {
+        if !projected.stage.composition_errors().is_empty() {
             return Err(NamespaceError::UnsupportedComposition(
                 "prepared namespace edit would create invalid composition",
             ));
         }
         for mapping in moves {
-            let exists = |p| match p {
-                TargetPath::Prim(p) => projected.has_prim(p),
-                TargetPath::Property(p) => projected.has_property_path(p),
-            };
-            if exists(mapping.from) || !exists(mapping.to) {
+            if projected.exists(mapping.from) || !projected.exists(mapping.to) {
                 return Err(NamespaceError::UnsupportedComposition(
                     "prepared namespace edit did not preserve its composed namespace mapping",
                 ));
@@ -1685,16 +1814,12 @@ fn validate_projected_stages(
 /// What validating a projection reads from it: whether it composes
 /// without errors, and whether each move's source and destination exist.
 #[cfg(test)]
-fn projection_findings(projected: &Stage, moves: &[PathMove]) -> (bool, Vec<(bool, bool)>) {
-    let exists = |p| match p {
-        TargetPath::Prim(p) => projected.has_prim(p),
-        TargetPath::Property(p) => projected.has_property_path(p),
-    };
+fn projection_findings(projected: &Projection, moves: &[PathMove]) -> (bool, Vec<(bool, bool)>) {
     (
-        projected.composition_errors().is_empty(),
+        projected.stage.composition_errors().is_empty(),
         moves
             .iter()
-            .map(|m| (exists(m.from), exists(m.to)))
+            .map(|m| (projected.exists(m.from), projected.exists(m.to)))
             .collect(),
     )
 }

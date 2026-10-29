@@ -1140,7 +1140,10 @@ impl Walk<'_, '_, '_> {
             out.loadable.insert(path);
         }
         let mut deferred = false;
-        if instanceable {
+        // An inactive prim is no instance, whatever its index.
+        // OpenUSD: `Usd_PrimData::_ComposeAndCacheFlags`
+        // (`active && IsInstanceable()`). Spec: AOUSD Core §11.3.3.
+        if instanceable && active {
             out.instances.insert(path);
         }
         // An inactive instance composes no descendants to share. The first

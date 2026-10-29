@@ -663,7 +663,9 @@ Both use the existing mapped transaction and undo path.
 
 This slice requires source ports to exist (including ports created earlier in
 the edit). It does not implement `CanConnect`, source-port auto-creation,
-individual list insertion/deletion helpers, Sdr, or connectability plugins.
+individual list insertion/deletion helpers, Sdr, or connectability behaviors
+that plugins register in C++ code (those a schema's plugin metadata configures
+are found by `Scene::connectable_behavior`).
 Those policies are separate from composed connection inspection.
 
 Run `cargo run -p layerstack_examples --bin shading_values` for a complete

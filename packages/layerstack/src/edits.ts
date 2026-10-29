@@ -10,7 +10,7 @@ import type { ErrorCode } from "./errors.js";
 import type { Edit, ValueInput } from "./types.js";
 
 /** The native batch the generated glue exports (`layerstack_wasm::EditBatch`). Not for app use. */
-export interface NativeEditBatch {
+export interface NativeEditBatch extends Disposable {
   free(): void;
   readonly length: number;
   valueNumbers(type: string, data: ArrayLike<number>): number;

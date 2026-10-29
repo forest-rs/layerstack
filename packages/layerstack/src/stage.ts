@@ -46,13 +46,14 @@ export const PACKAGE_VERSION = "0.1.0";
  * The ABI this package speaks: the version of the records it exchanges
  * with the native module (`layerstack_wasm::ABI`).
  */
-export const ABI = 1;
+export const ABI = 2;
 
-/** The native stage the generated glue exports (`layerstack_wasm::Stage`). Not for app use. */
-export interface NativeStage {
+/** The native stage the generated glue exports (`layerstack_wasm::Stage`). Borrowed only by same-module extensions. */
+export interface NativeStage extends Disposable {
   free(): void;
   unavailable(): unknown;
   supply(identifier: string, bytes: Uint8Array): void;
+  suppliedBytes(): bigint;
   confirmAbsent(identifier: string): void;
   loadSupplied(): unknown;
   layers(): unknown;
@@ -81,7 +82,7 @@ export interface NativeStage {
 }
 
 /** The native receipt the generated glue exports (`layerstack_wasm::EditReceipt`). Not for app use. */
-export interface NativeReceipt {
+export interface NativeReceipt extends Disposable {
   free(): void;
   record(): unknown;
   readonly undoable: boolean;
@@ -102,6 +103,7 @@ export interface NativeModule {
       primIndexNodes: number | undefined,
       nodesPerPrimIndex: number | undefined,
       composedDepth: number | undefined,
+      provenance: boolean,
     ): NativeStage;
   };
   /** The batch of edits `Stage.apply` takes. */
@@ -163,6 +165,10 @@ export class Layerstack {
     if (editLayer !== "root" && editLayer !== "session") {
       throw new LayerstackError("argument.invalid", "open", 'editLayer must be "root" or "session"');
     }
+    if (options.provenance !== undefined && typeof options.provenance !== "boolean") {
+      throw new LayerstackError("argument.invalid", "open", "provenance must be a boolean");
+    }
+    const provenance = options.provenance ?? false;
     const recover = options.importPolicy === "recover";
     const session = editLayer === "session";
     const limits = options.limits;
@@ -170,7 +176,7 @@ export class Layerstack {
     const perIndex = limit(limits?.nodesPerPrimIndex, "nodesPerPrimIndex");
     const depth = limit(limits?.composedDepth, "composedDepth");
     const native = this.call("open", () =>
-      this.#module.Stage.open(root.identifier, root.bytes, recover, session, nodes, perIndex, depth),
+      this.#module.Stage.open(root.identifier, root.bytes, recover, session, nodes, perIndex, depth, provenance),
     );
     this.#bytesIn += root.bytes.byteLength;
     return new Stage(this, native);
@@ -755,6 +761,57 @@ export class Stage implements Disposable {
   /** Disposes the native stage, for `using`. */
   [Symbol.dispose](): void {
     this.free();
+  }
+
+  /**
+   * Borrows this stage for a synchronous extension linked into the same native
+   * module, such as a Rust export taking `&layerstack_wasm::Stage`. `operation`
+   * names that extension in disposed-stage and native-error diagnostics.
+   *
+   * The callback must not retain, free or consume the borrowed native stage.
+   * Return an extension result, never a promise or thenable. A returned
+   * thenable is rejected with `argument.invalid`; this cannot cancel an async
+   * continuation that the callback already started.
+   *
+   * Native changes use the ordinary synchronous {@link onChange} ordering;
+   * extensions called by a listener queue their changes after the current
+   * batch. Change dispatch can call the module again before returning: return
+   * owned data or a handle, not a borrowed view into Wasm memory.
+   *
+   * Changes are drained even after a callback failure. The callback is not a
+   * transaction: edits it committed before failing remain committed. A
+   * callback failure remains the primary error if draining changes also fails.
+   * Native traps poison the module as they do for ordinary stage calls.
+   */
+  withNative<T>(operation: string, f: (native: NativeStage) => T): T {
+    if (typeof operation !== "string" || operation.length === 0 || typeof f !== "function") {
+      throw new LayerstackError("argument.invalid", "withNative", "expected an operation name and a synchronous callback");
+    }
+    let result: T;
+    try {
+      result = this.#call(operation, (native) => {
+        const value = f(native);
+        if (
+          value !== null &&
+          (typeof value === "object" || typeof value === "function") &&
+          "then" in value &&
+          typeof value.then === "function"
+        ) {
+          throw new LayerstackError("argument.invalid", operation, "native extensions must return synchronously, not a promise or thenable");
+        }
+        return value;
+      });
+    } catch (error) {
+      try {
+        this.#notify();
+      } catch {
+        // A callback failure is primary. In particular, a trap can prevent
+        // draining, and its original operation/cause must remain intact.
+      }
+      throw error;
+    }
+    this.#notify();
+    return result;
   }
 
   /** @internal */

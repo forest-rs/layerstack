@@ -136,6 +136,12 @@ export interface StageStatus {
 /** Options of {@link Layerstack.open}. */
 export interface OpenOptions {
   /**
+   * Include the winning source layer, spec path and field in native resolved
+   * values for same-module extensions that check source correspondence.
+   * Defaults to `false`; {@link Attribute.explain} is available either way.
+   */
+  readonly provenance?: boolean;
+  /**
    * `"strict"` (the default) rejects a layer whose content is malformed
    * (`io.rejected`); `"recover"` imports what parses.
    */

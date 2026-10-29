@@ -101,6 +101,26 @@ impl Stage {
         session_layer: bool,
         limits: CompositionLimits,
     ) -> Result<Self, Error> {
+        Self::open_with_provenance(identifier, bytes, recover, session_layer, limits, false)
+    }
+
+    /// Opens a stage as in [`Self::open`], optionally including the winning
+    /// source layer, spec path and field in native resolved values.
+    ///
+    /// Same-module extensions use this evidence to check source correspondence.
+    /// Query explanations remain available when `provenance` is false.
+    ///
+    /// # Errors
+    ///
+    /// The root's read or import failure, as in [`Self::open`].
+    pub fn open_with_provenance(
+        identifier: &str,
+        bytes: Vec<u8>,
+        recover: bool,
+        session_layer: bool,
+        limits: CompositionLimits,
+        provenance: bool,
+    ) -> Result<Self, Error> {
         let mut storage = HostStorage::new();
         storage.supply(identifier, bytes);
         let mut store = InMemoryStore::default();
@@ -112,6 +132,7 @@ impl Stage {
             schemas: Some(Arc::new(schemas)),
             session_layer: session_layer.then_some(SESSION_LAYER),
             limits,
+            with_provenance: provenance,
             ..StageOptions::default()
         };
         let policy = if recover {
@@ -1278,7 +1299,8 @@ impl Stage {
     /// `prim_index_nodes`, `nodes_per_prim_index` and `composed_depth`:
     /// each `undefined` for its
     /// [`BROWSER_LIMITS`] value, infinite for no limit, a number for that
-    /// limit (truncated to an integer).
+    /// limit (truncated to an integer). `provenance` includes winning sources
+    /// in native resolved values ([`Self::open_with_provenance`]).
     #[wasm_bindgen(js_name = open)]
     pub fn js_open(
         identifier: &str,
@@ -1288,6 +1310,7 @@ impl Stage {
         prim_index_nodes: Option<f64>,
         nodes_per_prim_index: Option<f64>,
         composed_depth: Option<f64>,
+        provenance: bool,
     ) -> Result<Self, JsValue> {
         let limit = |given: Option<f64>, default: Option<usize>| match given {
             None => default,
@@ -1304,12 +1327,13 @@ impl Stage {
             nodes_per_prim_index: limit(nodes_per_prim_index, BROWSER_LIMITS.nodes_per_prim_index),
             composed_depth: limit(composed_depth, BROWSER_LIMITS.composed_depth),
         };
-        Ok(Self::open(
+        Ok(Self::open_with_provenance(
             identifier,
             bytes,
             recover,
             session_layer,
             limits,
+            provenance,
         )?)
     }
 
@@ -1730,6 +1754,49 @@ def "Ball" {
             .iter()
             .map(|need| need.as_list().unwrap()[0].as_text().unwrap())
             .collect()
+    }
+
+    #[test]
+    fn native_resolution_provenance_is_explicit_and_explanations_remain_available() {
+        for provenance in [false, true] {
+            let stage = Stage::open_with_provenance(
+                "scene.usda",
+                ROOT.as_bytes().to_vec(),
+                false,
+                false,
+                BROWSER_LIMITS,
+                provenance,
+            )
+            .unwrap();
+            let document = stage.document();
+            assert_eq!(document.stage().options().with_provenance, provenance);
+            let attribute = document.view().attribute("/Ball.size").unwrap();
+            let resolved = attribute
+                .read(Time::Default, |value| Some(value.clone()))
+                .unwrap();
+            assert_eq!(resolved.value, layerstack::Value::Double(2.0));
+            assert_eq!(resolved.provenance.is_some(), provenance);
+            if let Some(source) = resolved.provenance {
+                assert_eq!(source.layer, document.root_layer());
+                assert_eq!(
+                    source
+                        .spec_path
+                        .display(document.store().paths(), document.store().tokens()),
+                    "/Base.size"
+                );
+                assert_eq!(document.store().tokens().resolve(source.field), "size");
+            }
+            assert!(attribute.explain(Time::Default).is_some());
+        }
+        let default = Stage::open(
+            "scene.usda",
+            ROOT.as_bytes().to_vec(),
+            false,
+            false,
+            BROWSER_LIMITS,
+        )
+        .unwrap();
+        assert!(!default.document().stage().options().with_provenance);
     }
 
     #[test]

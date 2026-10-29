@@ -3,9 +3,7 @@
   "relational_targets": {
    "export_usdc": {
     "accepted": true,
-    "bytes": 1127,
-    "errors": [],
-    "fnv1a64": "5c04f4b55a3066e0"
+    "errors": []
    },
    "open_usda": {
     "accepted": true,
@@ -41,9 +39,7 @@
   "unregistered_list_ops": {
    "export_usdc": {
     "accepted": true,
-    "bytes": 1266,
-    "errors": [],
-    "fnv1a64": "c417fb869102b6ce"
+    "errors": []
    },
    "open_usda": {
     "accepted": true,

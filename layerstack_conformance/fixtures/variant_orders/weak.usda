@@ -1,0 +1,17 @@
+#usda 1.0
+
+over "P"
+{
+    variantSet "v" = {
+        "x" {
+            reorder properties = ["w", "a0"]
+            reorder nameChildren = ["W", "C1"]
+            int w = 0
+
+            def "W"
+            {
+            }
+
+        }
+    }
+}

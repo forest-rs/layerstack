@@ -745,11 +745,12 @@ impl Flattener<'_, '_> {
                 };
                 spec.active = spec.active.or(authored.active);
                 spec.instanceable = spec.instanceable.or(authored.instanceable);
-                if spec.prim_order().is_none()
-                    && let Some(order) = authored.prim_order()
-                {
-                    spec.rare_mut().prim_order = Some(order.to_vec());
-                }
+            }
+            // The strongest `primOrder`, a variant's included, as
+            // `UsdStage::Flatten` copies the composed metadata.
+            let order = stage.resolve_prim_order(prim, store);
+            if order.is_some() || spec.prim_order().is_some() {
+                spec.rare_mut().prim_order = order;
             }
             let order = stage.resolve_property_order(prim, store);
             if order.is_some() || spec.property_order().is_some() {

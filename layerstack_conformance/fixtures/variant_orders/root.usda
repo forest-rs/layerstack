@@ -1,0 +1,184 @@
+#usda 1.0
+(
+    subLayers = [
+        @weak.usda@
+    ]
+)
+
+# Orders at every level: the prim, its variant, the variant nested in it,
+# a child of the variant, and a variant of that child. The weak sublayer
+# authors the same variant with an order of its own.
+def "P" (
+    variants = {
+        string v = "x"
+    }
+    prepend variantSets = "v"
+)
+{
+    reorder nameChildren = ["A", "B"]
+    int z = 0
+    def "A"
+    {
+    }
+
+    def "B"
+    {
+    }
+    variantSet "v" = {
+        "x" (
+            variants = {
+                string n = "y"
+            }
+            prepend variantSets = "n"
+        ) {
+            reorder properties = ["a1", "a0"]
+            reorder nameChildren = ["C1", "C0"]
+            int a0 = 0
+            int a1 = 1
+
+            def "C0" (
+                variants = {
+                    string w = "z"
+                }
+                prepend variantSets = "w"
+            )
+            {
+                reorder nameChildren = ["G1", "G0"]
+                def "G0"
+                {
+                }
+
+                def "G1"
+                {
+                }
+                variantSet "w" = {
+                    "z" {
+                        reorder properties = ["k", "j"]
+                        reorder nameChildren = ["K", "G0", "J"]
+                        int j = 0
+                        int k = 1
+
+                        def "J"
+                        {
+                        }
+
+                        def "K"
+                        {
+                        }
+
+                    }
+                }
+            }
+
+            def "C1"
+            {
+            }
+            variantSet "n" = {
+                "y" {
+                    reorder properties = ["b1", "a0"]
+                    reorder nameChildren = ["N1", "B", "N0"]
+                    int b0 = 0
+                    int b1 = 1
+
+                    def "N0"
+                    {
+                    }
+
+                    def "N1"
+                    {
+                    }
+
+                }
+            }
+
+        }
+    }
+}
+
+# The variant comes through a reference: the asset's variant orders the
+# referencing prim's children beneath its own local ones.
+def "Q" (
+    prepend references = @asset.usda@</Asset>
+)
+{
+    def "L"
+    {
+    }
+}
+
+# Two variants ordering the same children differently, for a switch.
+def "S" (
+    variants = {
+        string look = "a"
+    }
+    prepend variantSets = "look"
+)
+{
+    def "X"
+    {
+    }
+
+    def "Y"
+    {
+    }
+
+    def "Z"
+    {
+    }
+    variantSet "look" = {
+        "a" {
+            reorder nameChildren = ["Z", "X"]
+
+        }
+        "b" {
+            reorder properties = ["q", "p"]
+            reorder nameChildren = ["Y", "Z", "X"]
+            int p = 0
+            int q = 1
+
+        }
+    }
+}
+
+# The target of the edits.
+def "E" (
+    variants = {
+        string v = "x"
+    }
+    prepend variantSets = "v"
+)
+{
+    def "A"
+    {
+    }
+    variantSet "v" = {
+        "x" (
+            variants = {
+                string n = "y"
+            }
+            prepend variantSets = "n"
+        ) {
+            int a = 1
+            int b = 2
+
+            def "B"
+            {
+            }
+
+            def "C"
+            {
+            }
+            variantSet "n" = {
+                "y" {
+                    int c = 3
+
+                    def "D"
+                    {
+                    }
+
+                }
+            }
+
+        }
+    }
+}

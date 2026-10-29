@@ -145,10 +145,17 @@ impl<'a> SpecRef<'a> {
         }
     }
 
+    /// The authored `primOrder` (`reorder nameChildren`), of a prim spec
+    /// or of a variant's prim spec: OpenUSD reads the field at every site,
+    /// variant sites included (`PcpComposeSiteChildNames`,
+    /// `pxr/usd/pcp/composeSite.cpp`).
+    ///
+    /// Spec: AOUSD Core §7.6.7 (variant specs), §11.3.1 (ordered prim
+    /// children).
     pub(crate) fn prim_order(self) -> Option<&'a [TokenId]> {
         match self {
             Self::Prim(spec) => spec.prim_order(),
-            Self::Variant(_) => None,
+            Self::Variant(spec) => spec.prim_order.as_deref(),
         }
     }
 

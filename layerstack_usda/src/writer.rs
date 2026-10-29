@@ -1669,24 +1669,23 @@ fn is_property_name(name: &str) -> bool {
 /// targets). A connection may name a prim as a relationship may, as
 /// OpenUSD reads and writes it (`SdfSchema::IsValidAttributeConnectionPath`).
 /// A relational attribute (`/A.b[/C].d`) is a property for both, and a
-/// mapper (`/A.b.mapper[/C]`) a target where `mappers` allows it, each of
-/// absolute paths throughout. Relative paths and variant selections in the
-/// prim part are not produced by this writer.
+/// mapper (`/A.b.mapper[/C]`) a target where `mappers` allows it, each
+/// absolute, though a bracketed path may be relative as OpenUSD keeps one
+/// that `SdfPath::MakeAbsolutePath` leaves (`</A.b[C].d.mapper[/A/E]>`).
+/// Relative paths and variant selections in the prim part are not produced
+/// by this writer.
 fn validate_target(target: &str, path: &str, mappers: bool) -> Result<(), WriteError> {
     let invalid = || WriteError::InvalidTargetPath {
         path: path.into(),
         target: target.into(),
     };
     // A relational attribute (`/A.b[/C].d`), and for a relationship a
-    // mapper (`/A.b.mapper[/C]`), of absolute paths throughout, as
-    // `SdfSchema::IsValidRelationshipTargetPath` and
-    // `IsValidAttributeConnectionPath` admit them (`pxr/usd/sdf/schema.cpp`).
+    // mapper (`/A.b.mapper[/C]`), as `SdfSchema::IsValidRelationshipTargetPath`
+    // and `IsValidAttributeConnectionPath` admit them
+    // (`pxr/usd/sdf/schema.cpp`): absolute, though not every bracketed path.
     if target.contains('[') || target.matches('.').nth(1).is_some() {
         if !crate::lower::is_path_text(target)
             || !target.starts_with('/')
-            || target
-                .match_indices('[')
-                .any(|(at, _)| !target[at + 1..].starts_with('/'))
             || crate::lower::has_prim_variant_selection(target)
         {
             return Err(invalid());

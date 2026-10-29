@@ -2009,42 +2009,63 @@ pub(crate) fn has_prim_variant_selection(text: &str) -> bool {
     false
 }
 
-/// `text` with each path in its top-level `[...]` made absolute by
-/// `anchor` (a relative one) and in turn its own bracketed paths, as
-/// `SdfPath::MakeAbsolutePath` anchors a path's target paths at the
-/// path's anchor; `text` itself when it holds no `[`.
+/// `text`, an absolute path, with its target path made absolute as
+/// `SdfPath::MakeAbsolutePath` makes it (`pxr/usd/sdf/path.cpp`): only the
+/// path in its last top-level `[...]`, the one nearest the end
+/// (`SdfPath::GetTargetPath`), is anchored, at `text`'s prim path, by
+/// `absolute(path, anchor)` when it is relative, and then its own in turn.
+/// A path in an earlier bracket stays as written, relative or not
+/// (`<.b[C].d.mapper[E]>` in `/P` reads as `</P.b[C].d.mapper[/P/E]>`).
+/// `text` itself when it holds no `[`.
 pub(crate) fn anchor_bracketed<'t>(
     text: &'t str,
-    anchor: &mut impl FnMut(&str) -> String,
+    absolute: &mut impl FnMut(&str, &str) -> String,
 ) -> Cow<'t, str> {
-    if !text.contains('[') {
+    let Some((open, close)) = last_top_level_bracket(text) else {
+        return Cow::Borrowed(text);
+    };
+    let inner = &text[open + 1..close];
+    let prim = split_top_level(text, b'.').map_or(text, |(prim, _)| prim);
+    let anchored: Cow<'_, str> = if inner.starts_with('/') {
+        Cow::Borrowed(inner)
+    } else {
+        Cow::Owned(absolute(inner, prim))
+    };
+    let anchored = anchor_bracketed(&anchored, absolute).into_owned();
+    if anchored == inner {
         return Cow::Borrowed(text);
     }
-    let mut out = String::with_capacity(text.len());
+    let mut out = String::with_capacity(text.len() + anchored.len());
+    out.push_str(&text[..=open]);
+    out.push_str(&anchored);
+    out.push_str(&text[close..]);
+    Cow::Owned(out)
+}
+
+/// The byte positions of the `[` and `]` of the last top-level bracket
+/// in `text`, if any.
+fn last_top_level_bracket(text: &str) -> Option<(usize, usize)> {
     let mut depth = 0_usize;
-    let mut start = 0;
+    let mut open = 0;
+    let mut found = None;
     for (at, b) in text.bytes().enumerate() {
         match b {
             b'[' => {
                 if depth == 0 {
-                    out.push_str(&text[start..=at]);
-                    start = at + 1;
+                    open = at;
                 }
                 depth += 1;
             }
             b']' => {
                 depth = depth.saturating_sub(1);
                 if depth == 0 {
-                    let inner = anchor(&text[start..at]);
-                    out.push_str(&anchor_bracketed(&inner, anchor));
-                    start = at;
+                    found = Some((open, at));
                 }
             }
             _ => {}
         }
     }
-    out.push_str(&text[start..]);
-    Cow::Owned(out)
+    found
 }
 
 /// The rules of [`is_path_text`], over `text`'s byte positions.
@@ -3426,11 +3447,22 @@ def Scope \"root\" {
         }
         assert!(!has_prim_variant_selection("/A.b[/C{v=x}].d"));
         assert!(has_prim_variant_selection("/A{v=x}.b[/C].d"));
-        let mut anchor = |inner: &str| format!("/P/{inner}");
+        // `SdfPath::MakeAbsolutePath`: the last bracket's path anchors at
+        // the path's prim path, and its own at its prim path in turn.
+        let mut anchor = |inner: &str, at: &str| format!("{at}/{inner}");
         assert_eq!(
             anchor_bracketed("/A.b[C.d[E].f].g", &mut anchor),
-            "/A.b[/P/C.d[/P/E].f].g"
+            "/A.b[/A/C.d[/A/C/E].f].g"
         );
+        assert_eq!(
+            anchor_bracketed("/A.b[C].d.mapper[E]", &mut anchor),
+            "/A.b[C].d.mapper[/A/E]"
+        );
+        assert_eq!(
+            anchor_bracketed("/A/B.b[/C.d[E].f].g", &mut anchor),
+            "/A/B.b[/C.d[/C/E].f].g"
+        );
+        assert_eq!(anchor_bracketed("/A.b[/C].d", &mut anchor), "/A.b[/C].d");
         assert_eq!(anchor_bracketed("/A.b", &mut anchor), "/A.b");
     }
 

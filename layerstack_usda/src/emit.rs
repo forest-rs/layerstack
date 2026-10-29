@@ -1069,7 +1069,7 @@ impl EmitCtx<'_> {
             spec.spline = Some(Box::new(*spline));
         }
         if let Some(value) = default {
-            spec.default = Some(value);
+            spec.default = Some(absolute_expressions(value, anchor));
         }
     }
 
@@ -2648,6 +2648,49 @@ fn declare_listed_sets(names: &ListOp<TokenId>, sets: &mut VariantSets) {
 
 // ── Tests ───────────────────────────────────────────────────────────────
 
+/// `value`, a default, with each relative path expression it holds, alone
+/// or in an array, made absolute at the prim `anchor` (a prim path's
+/// text). Time samples and metadata keep their expressions as written.
+///
+/// OpenUSD: `_SetDefault` in `pxr/usd/sdf/textParserHelpers.cpp`
+/// (`SdfPathExpression::MakeAbsolute` with the property's prim path),
+/// as `SdfPropertySpec::SetDefaultValue` does.
+fn absolute_expressions(value: Value, anchor: &str) -> Value {
+    let absolute = |text: Arc<str>| match layerstack::PathExpression::parse(&text) {
+        Ok(expression) if !expression.is_absolute() => {
+            let names: Vec<String> = anchor
+                .split('/')
+                .filter(|name| !name.is_empty())
+                .map(String::from)
+                .collect();
+            let absolute = expression.make_absolute(&names).lossless_text();
+            // An anchored form that would not read back (a reference to
+            // the root, `%/:name`) stays as written, for composition to
+            // anchor.
+            match layerstack::PathExpression::parse(&absolute) {
+                Ok(_) => Arc::from(absolute),
+                Err(_) => text,
+            }
+        }
+        _ => text,
+    };
+    match value {
+        Value::PathExpression(text) => Value::PathExpression(absolute(text)),
+        Value::Array(items) if items.iter().any(|v| matches!(v, Value::PathExpression(_))) => {
+            Value::Array(
+                items
+                    .into_iter()
+                    .map(|item| match item {
+                        Value::PathExpression(text) => Value::PathExpression(absolute(text)),
+                        other => other,
+                    })
+                    .collect(),
+            )
+        }
+        other => other,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2819,6 +2862,40 @@ def \"A\" {
             attr_default(&spec.properties, &x_tok),
             Some(&(Value::Int(42)))
         );
+    }
+
+    /// OpenUSD's text parser makes relative path expression defaults
+    /// absolute at their prim (`_SetDefault`), and leaves time samples and
+    /// metadata as written.
+    #[test]
+    fn relative_expression_defaults_are_made_absolute() {
+        let src = "#usda 1.0\ndef \"A\" (\n    customData = {\n        pathExpression m = \"B\"\n    }\n)\n{\n    pathExpression e = \"B ../C /D\"\n    pathExpression[] es = [\"B\", \"/D\"]\n    pathExpression s.timeSamples = {\n        1: \"B\",\n    }\n}\n";
+        let (result, tokens, paths) = emit_source(src);
+        let a_path = Path::parse_absolute("/A", &tokens).unwrap();
+        let spec = result.layer.prim(paths.lookup(&a_path).unwrap()).unwrap();
+        let expression = |text: &str| Value::PathExpression(text.into());
+        assert_eq!(
+            attr_default(&spec.properties, &tokens.intern("e")),
+            Some(&expression("/A/B /C /D"))
+        );
+        assert_eq!(
+            attr_default(&spec.properties, &tokens.intern("es")),
+            Some(&Value::Array(vec![expression("/A/B"), expression("/D")]))
+        );
+        let samples = spec
+            .properties
+            .iter()
+            .find(|entry| entry.name == tokens.intern("s"))
+            .and_then(|entry| entry.spec.time_samples.get())
+            .unwrap();
+        assert_eq!(samples, &[(1.0, expression("B"))][..]);
+        let custom_data = tokens.intern("customData");
+        let Some(FieldValue::Value(Value::Dictionary(entries))) =
+            get_field(&spec.fields, &custom_data)
+        else {
+            panic!("customData");
+        };
+        assert_eq!(entries[0].1, FieldValue::Value(expression("B")));
     }
 
     #[test]

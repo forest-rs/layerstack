@@ -183,16 +183,31 @@ export class Editor implements Disposable {
    * stack is dropped: a new action forks history.
    */
   apply(label: string, edits: readonly Edit[]): EditReceipt {
-    this.#cause = label;
-    const receipt = this.stage.apply(edits);
-    this.undoStack.push({ label, receipt });
-    for (const entry of this.redoStack.splice(0)) entry.receipt.release();
-    return receipt;
+    return this.#record(label, () => this.stage.apply(edits));
   }
 
-  /** Authors `value` as the default of the attribute at `path` in the edit layer. */
-  setValue(path: string, value: ValueInput): EditReceipt {
-    return this.apply(`set ${path}`, [{ type: "setValue", path, value }]);
+  /**
+   * Authors `value` for the attribute at `path` in the edit layer: its
+   * default, or its sample at `time`.
+   */
+  setValue(path: string, value: ValueInput, time: number | null = null): EditReceipt {
+    return time === null
+      ? this.apply(`set ${path}`, [{ type: "setValue", path, value }])
+      : this.apply(`set ${path} at ${time}`, [{ type: "setValue", path, value, time }]);
+  }
+
+  /**
+   * Moves (renames or reparents) the prim or property at `path` to `to`,
+   * as one undoable action: `Stage.move` moves every opinion of the edit
+   * layer's stack and repairs the paths that name it.
+   */
+  move(path: string, to: string): EditReceipt {
+    return this.#record(`move ${path} to ${to}`, () => this.stage.move(path, to));
+  }
+
+  /** Deletes the prim or property at `path` from the edit layer's stack, as one undoable action. */
+  delete(path: string): EditReceipt {
+    return this.#record(`delete ${path}`, () => this.stage.delete(path));
   }
 
   /**
@@ -267,6 +282,15 @@ export class Editor implements Disposable {
 
   [Symbol.dispose](): void {
     this.free();
+  }
+
+  /** Runs an action that returns a receipt, and keeps the receipt for undo. */
+  #record(label: string, action: () => EditReceipt): EditReceipt {
+    this.#cause = label;
+    const receipt = action();
+    this.undoStack.push({ label, receipt });
+    for (const entry of this.redoStack.splice(0)) entry.receipt.release();
+    return receipt;
   }
 
   async #source(identifier: string): Promise<Uint8Array | null> {

@@ -1,0 +1,14 @@
+#usda 1.0
+(
+    defaultPrim = "Beacon"
+    doc = "A beacon the sample instances twice: both instances share one prototype."
+)
+
+def Xform "Beacon"
+{
+    def Sphere "Bulb"
+    {
+        double radius = 0.25
+        color3f color = (1, 0.8, 0.2)
+    }
+}

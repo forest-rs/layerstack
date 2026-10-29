@@ -1,7 +1,7 @@
 #usda 1.0
 (
     defaultPrim = "World"
-    doc = "The demo editor's sample: a root layer, a sublayer, a class the rock inherits, and a robot referenced from its own file with a variant set."
+    doc = "The demo editor's sample: a root layer, a sublayer, a class the rock inherits, a robot referenced from its own file with a variant set, and two instances of a beacon."
     subLayers = [
         @./library.usda@
     ]
@@ -31,6 +31,23 @@ def Xform "World"
             "painted" {
                 color3f color = (0.8, 0.2, 0.1)
             }
+        }
+    }
+
+    def Xform "Beacons"
+    {
+        def "North" (
+            instanceable = true
+            prepend references = @./assets/beacon.usda@
+        )
+        {
+        }
+
+        def "South" (
+            instanceable = true
+            prepend references = @./assets/beacon.usda@
+        )
+        {
         }
     }
 }

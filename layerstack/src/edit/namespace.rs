@@ -25,6 +25,10 @@ use super::{
     spec::{Loc, SpecRef, spec_at, spec_at_mut},
     transaction::Op,
 };
+use crate::target_translation::{
+    is_relational, relational_has_prefix, replace_relational_target_prefix, replace_text_prefix,
+    text_has_prefix,
+};
 use crate::{
     FieldEntry, FieldValue, Layer, LayerId, LayerStack, LayerStore, ListOp, Path, PathId, PrimSpec,
     PropertyEntry, PropertyPath, Reference, ReferenceTarget, SpecPath, Stage, TargetPath, TokenId,
@@ -966,10 +970,36 @@ fn moves_with(
 pub(super) struct PathMove {
     from: TargetPath,
     to: TargetPath,
+    /// Whose path fixing this is.
+    fix: PathFix,
+}
+/// Whose path fixing a [`PathMove`] mirrors; they differ for the paths in
+/// a relational attribute's or mapper's brackets.
+#[derive(Clone, Copy, PartialEq)]
+pub(super) enum PathFix {
+    /// `UsdNamespaceEditor`'s: an authored path is fixed where the moved
+    /// path is its prefix, and the relationship's `default` with it.
+    NamespaceEdit,
+    /// `SdfCopySpec`'s (`SdfShouldCopyValue`, `pxr/usd/sdf/copyUtils.cpp`):
+    /// a target or connection is mapped by `SdfPath::ReplacePrefix` alone,
+    /// and other fields are copied as they are.
+    Copy,
 }
 impl PathMove {
     pub(super) fn new(from: TargetPath, to: TargetPath) -> Self {
-        Self { from, to }
+        Self {
+            from,
+            to,
+            fix: PathFix::NamespaceEdit,
+        }
+    }
+    /// The paths a copy of `from` to `to` remaps ([`PathFix::Copy`]).
+    pub(super) fn for_copy(from: TargetPath, to: TargetPath) -> Self {
+        Self {
+            from,
+            to,
+            fix: PathFix::Copy,
+        }
     }
     fn prim(&self, store: &mut dyn LayerStore, path: PathId) -> PathId {
         if self.from.property_path().is_some() {
@@ -986,7 +1016,26 @@ impl PathMove {
         let result = store.paths().resolve(self.to.prim_path()).join(&suffix);
         store.paths().intern(result)
     }
+    /// `path`, an authored relationship target or connection, after the
+    /// move: as `_PathListOpNamespaceEdit` (`pxr/usd/usd/namespaceEditor.cpp`)
+    /// edits a list op's item, replaced only where the moved path is its
+    /// prefix (`SdfPath::HasPrefix`, which never looks inside brackets), and
+    /// then by `SdfPath::ReplacePrefix`, which fixes the paths in a
+    /// relational attribute's or mapper's brackets too (`fixTargetPaths`).
+    /// AOUSD Core §8 (paths).
     fn target(&self, store: &mut dyn LayerStore, path: TargetPath) -> TargetPath {
+        if let TargetPath::Property(property) = path
+            && self.fix == PathFix::NamespaceEdit
+            && is_relational(store.tokens(), property.property())
+        {
+            let (tokens, paths) = (store.tokens(), store.paths());
+            if !relational_has_prefix(tokens, paths, property, self.from) {
+                return path;
+            }
+            let replaced =
+                replace_relational_target_prefix(tokens, paths, property, self.from, self.to);
+            return TargetPath::Property(replaced);
+        }
         if self.from.property_path().is_some() {
             return if path == self.from { self.to } else { path };
         }
@@ -1048,6 +1097,9 @@ fn repair_properties(
         let entry_moves =
             owner_moves || moved_property.is_some_and(|m| m.from.prim_path() != m.to.prim_path());
         let spec = Arc::make_mut(&mut entry.spec);
+        if let Some(mapping) = local.filter(|m| m.fix == PathFix::NamespaceEdit) {
+            repair_path_default(store, spec, mapping.from, Some(mapping.to));
+        }
         if let (Some(mapping), Some(targets)) = (local, &mut spec.targets) {
             map_list(targets, |p| *p = mapping.target(store, *p));
         }
@@ -1069,6 +1121,64 @@ fn repair_properties(
     }
     Ok(())
 }
+/// Whether `prefix`, an edited prim or property, is a prefix of the
+/// authored path `path` as `SdfPath::HasPrefix` counts it: of its prim's
+/// path, or for a property the property itself or a relational attribute
+/// or mapper it owns (`/A.b` of `/A.b[/C].d`), but never of a path in
+/// brackets. AOUSD Core §8 (paths).
+pub(super) fn has_prefix(store: &dyn LayerStore, path: TargetPath, prefix: TargetPath) -> bool {
+    match (prefix, path) {
+        (TargetPath::Prim(prim), _) => store
+            .paths()
+            .resolve(prim)
+            .is_prefix_of(store.paths().resolve(path.prim_path())),
+        (TargetPath::Property(_), TargetPath::Prim(_)) => false,
+        (TargetPath::Property(_), TargetPath::Property(property)) => {
+            path == prefix
+                || (is_relational(store.tokens(), property.property())
+                    && relational_has_prefix(store.tokens(), store.paths(), property, prefix))
+        }
+    }
+}
+
+/// Fixes the `SdfPath` a relationship's legacy `default` holds
+/// ([`Value::PathText`]) for the edit of `from` (to `to`, or a delete), as
+/// OpenUSD does: once any path the property authors (its targets or that
+/// default) has `from` as its prefix, the property depends on the edit
+/// (`_DependencyCollector`, `pxr/usd/usd/namespaceEditor.cpp`), and then
+/// the default is replaced by `SdfPath::ReplacePrefix(from, to)` whether or
+/// not `from` is its own prefix (`_PathReplacePrefix`), which fixes the
+/// paths in its brackets and, for a delete, empties it. Only this spec's
+/// paths are tested, where OpenUSD tests the composed property's.
+/// AOUSD Core §8 (paths).
+pub(super) fn repair_path_default(
+    store: &dyn LayerStore,
+    spec: &mut crate::PropertySpec,
+    from: TargetPath,
+    to: Option<TargetPath>,
+) {
+    let Some(Value::PathText(text)) = &spec.default else {
+        return;
+    };
+    let (tokens, paths) = (store.tokens(), store.paths());
+    let depends = text_has_prefix(tokens, paths, text, from)
+        || spec
+            .targets
+            .iter()
+            .flat_map(|targets| targets.items())
+            .any(|target| has_prefix(store, *target, from));
+    if !depends {
+        return;
+    }
+    let replaced = match to {
+        Some(to) => replace_text_prefix(tokens, paths, text, from, to).map(Arc::from),
+        None => Some(Arc::from("")),
+    };
+    if let Some(replaced) = replaced {
+        spec.default = Some(Value::PathText(replaced));
+    }
+}
+
 fn path_names(store: &dyn LayerStore, path: PathId) -> Vec<alloc::string::String> {
     store
         .paths()

@@ -67,6 +67,8 @@
  * Composition errors are not thrown; {@link Stage.status} lists them as
  * {@link Issue}s with `composition.*` codes
  * (`layerstack::CompositionError::code`).
+ *
+ * A {@link LayerstackError}'s `code` may also be a {@link HostErrorCode}.
  */
 export type ErrorCode =
   | "module.load"
@@ -103,6 +105,17 @@ export type ErrorCode =
   | `namespace.${string}`
   | `io.${string}`;
 
+/**
+ * The code of an error a native extension raises, through
+ * {@link Stage.withNative}: the code of the `layerstack_wasm::Error` its
+ * Rust returns, passed through as it is. It is any string, so
+ * `error.code === "domain.failed"` type-checks while editors still offer
+ * this package's {@link ErrorCode}s. An extension names its codes in a
+ * family of its own (`domain.*`), outside this package's families, so a
+ * code always says whose error it is.
+ */
+export type HostErrorCode = string & {};
+
 /** What a {@link LayerstackError} is about, beyond its code. */
 export interface ErrorDetails {
   /** The prim or property path the failure is about. */
@@ -116,13 +129,15 @@ export interface ErrorDetails {
 }
 
 /**
- * Every failure this package throws: a stable {@link ErrorCode}, the
- * operation that failed (the method name, such as `open` or `resolve`),
- * and the path, asset identifier or edit it is about.
+ * Every failure this package throws: a stable {@link ErrorCode} (or a
+ * native extension's {@link HostErrorCode}), the operation that failed
+ * (the method name, such as `open` or `resolve`, or the operation named
+ * to {@link Stage.withNative}), and the path, asset identifier or edit it
+ * is about.
  */
 export class LayerstackError extends Error {
-  /** The stable code naming the kind of failure. */
-  readonly code: ErrorCode;
+  /** The stable code naming the kind of failure: one of {@link ErrorCode}, or a native extension's own. */
+  readonly code: ErrorCode | HostErrorCode;
   /** The method that failed. */
   readonly operation: string;
   /** The prim or property path the failure is about, if any. */
@@ -132,7 +147,7 @@ export class LayerstackError extends Error {
   /** The index of the edit the failure is about, in the edits passed to `Stage.apply`, if any. */
   readonly edit: number | undefined;
 
-  constructor(code: ErrorCode, operation: string, message: string, details: ErrorDetails = {}) {
+  constructor(code: ErrorCode | HostErrorCode, operation: string, message: string, details: ErrorDetails = {}) {
     super(`${operation}: ${message}`, details.cause === undefined ? undefined : { cause: details.cause });
     this.name = "LayerstackError";
     this.code = code;

@@ -2052,18 +2052,30 @@ fn map_path_expressions(
     site: PathId,
     value: &mut crate::prim_index::OpinionValue,
 ) {
-    use crate::path_expression::value::{anchor_value_with, has_path_expression};
-    let (default, samples) = match &*value {
-        crate::prim_index::OpinionValue::Field(crate::doc::FieldValue::Value(v)) => (Some(v), None),
+    use crate::path_expression::value::{
+        anchor_value_with, has_path_expression, holds_path_expression, map_metadata_value_with,
+    };
+    let (default, samples, metadata) = match &*value {
+        crate::prim_index::OpinionValue::Field(crate::doc::FieldValue::Value(v)) => {
+            (None, None, core::slice::from_ref(v))
+        }
         crate::prim_index::OpinionValue::Property(spec) => {
-            (spec.default.as_ref(), spec.time_samples.get())
+            (spec.default.as_ref(), spec.time_samples.get(), &[][..])
         }
         crate::prim_index::OpinionValue::Field(_) => return,
     };
     let default_changes = default.is_some_and(has_path_expression);
     let samples_change =
         samples.is_some_and(|samples| samples.iter().any(|(_, v)| has_path_expression(v)));
-    if !default_changes && !samples_change {
+    let metadata_changes = metadata.iter().any(holds_path_expression)
+        || match &*value {
+            crate::prim_index::OpinionValue::Property(spec) => spec
+                .metadata
+                .iter()
+                .any(|entry| entry.value.as_value().is_some_and(holds_path_expression)),
+            crate::prim_index::OpinionValue::Field(_) => false,
+        };
+    if !default_changes && !samples_change && !metadata_changes {
         return;
     }
     let anchor: Vec<alloc::string::String> = store
@@ -2090,12 +2102,26 @@ fn map_path_expressions(
                 .collect(),
         )
     };
+    // Metadata is mapped without anchoring; attribute values anchor
+    // relative expressions at the node's site.
+    let root_identity = map_to_root.has_root_identity();
     match value {
         crate::prim_index::OpinionValue::Field(crate::doc::FieldValue::Value(v)) => {
-            anchor_value_with(v, &anchor, &mut map);
+            map_metadata_value_with(v, root_identity, &mut map);
         }
         crate::prim_index::OpinionValue::Property(spec) => {
             let spec = Arc::make_mut(spec);
+            if metadata_changes {
+                let mut metadata = spec.metadata.to_vec();
+                for entry in &mut metadata {
+                    if let crate::doc::FieldValue::Value(v) = &mut entry.value
+                        && holds_path_expression(v)
+                    {
+                        map_metadata_value_with(v, root_identity, &mut map);
+                    }
+                }
+                spec.metadata = metadata.into();
+            }
             if default_changes && let Some(v) = spec.default.as_mut() {
                 anchor_value_with(v, &anchor, &mut map);
             }

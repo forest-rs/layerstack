@@ -145,6 +145,14 @@ CASES = [
         ("apply", "/Cube", "MaterialBindingAPI"),
         ("add_target", "/Cube.material:binding", "/Looks/Red"),
     ]),
+    ("apply_then_schema_target", "scene.usda", [
+        ("apply", "/Cube", "CollectionAPI:look"),
+        ("add_target", "/Cube.collection:look:includes", "/Ref"),
+    ]),
+    ("define_then_schema_target", "scene.usda", [
+        ("define", "/New", "Xform"),
+        ("add_target", "/New.proxyPrim", "/Cube"),
+    ]),
     ("target_without_api", "scene.usda", [
         ("add_target", "/Cube.material:binding", "/Looks/Red"),
     ]),

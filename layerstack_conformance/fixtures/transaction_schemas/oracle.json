@@ -342,6 +342,94 @@
    "calls": [
     {
      "accepted": true,
+     "applied": [
+      "CollectionAPI:look"
+     ],
+     "call": [
+      "apply",
+      "/Cube",
+      "CollectionAPI:look"
+     ],
+     "texts": {
+      "asset.usda": "#usda 1.0\n\ndef Xform \"Asset\"\n{\n}\n\ndef Xform \"Other\"\n{\n}\n\n",
+      "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\" (\n    prepend apiSchemas = [\"CollectionAPI:look\"]\n)\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
+      "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\n"
+     },
+     "type_name": "Cube"
+    },
+    {
+     "accepted": true,
+     "applied": [
+      "CollectionAPI:look"
+     ],
+     "call": [
+      "add_target",
+      "/Cube.collection:look:includes",
+      "/Ref"
+     ],
+     "relationship": {
+      "custom": false,
+      "targets": [
+       "/Ref"
+      ]
+     },
+     "texts": {
+      "asset.usda": "#usda 1.0\n\ndef Xform \"Asset\"\n{\n}\n\ndef Xform \"Other\"\n{\n}\n\n",
+      "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\" (\n    prepend apiSchemas = [\"CollectionAPI:look\"]\n)\n{\n    prepend rel collection:look:includes = </Ref>\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\n",
+      "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\n"
+     },
+     "type_name": "Cube"
+    }
+   ],
+   "name": "apply_then_schema_target",
+   "target": "scene.usda"
+  },
+  {
+   "calls": [
+    {
+     "accepted": true,
+     "applied": [],
+     "call": [
+      "define",
+      "/New",
+      "Xform"
+     ],
+     "texts": {
+      "asset.usda": "#usda 1.0\n\ndef Xform \"Asset\"\n{\n}\n\ndef Xform \"Other\"\n{\n}\n\n",
+      "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\ndef Xform \"New\"\n{\n}\n\n",
+      "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\n"
+     },
+     "type_name": "Xform"
+    },
+    {
+     "accepted": true,
+     "applied": [],
+     "call": [
+      "add_target",
+      "/New.proxyPrim",
+      "/Cube"
+     ],
+     "relationship": {
+      "custom": false,
+      "targets": [
+       "/Cube"
+      ]
+     },
+     "texts": {
+      "asset.usda": "#usda 1.0\n\ndef Xform \"Asset\"\n{\n}\n\ndef Xform \"Other\"\n{\n}\n\n",
+      "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@\n    ]\n)\n\ndef Cube \"Cube\"\n{\n}\n\ndef \"Ref\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef Cube \"Strong\" (\n    prepend references = @asset.usda@</Other>\n)\n{\n}\n\ndef \"Var\" (\n    variants = {\n        string shape = \"round\"\n    }\n    prepend variantSets = \"shape\"\n)\n{\n    variantSet \"shape\" = {\n        \"round\" {\n\n        }\n    }\n}\n\ndef Xform \"New\"\n{\n    prepend rel proxyPrim = </Cube>\n}\n\n",
+      "weak.usda": "#usda 1.0\n\ndef Cube \"Weak\"\n{\n}\n\n"
+     },
+     "type_name": "Xform"
+    }
+   ],
+   "name": "define_then_schema_target",
+   "target": "scene.usda"
+  },
+  {
+   "calls": [
+    {
+     "accepted": true,
      "applied": [],
      "call": [
       "add_target",

@@ -119,7 +119,9 @@ impl<T> ValueExplanation<'_, T> {
     }
 }
 
-/// Where a resolved value comes from.
+/// Where a resolved value comes from: the slot of the strongest opinion
+/// the query reads, even when composing over weaker opinions resolves no
+/// value (a path expression whose `%_` reaches a block).
 ///
 /// OpenUSD: `UsdResolveInfoSource` (`pxr/usd/usd/resolveInfo.h`).
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -663,10 +665,15 @@ impl Stage {
 
         if let Some(fold) = crate::path_expression::fold_default(opinions.records(), fallback) {
             let seeded = roles.apply_expression_fold(&fold, reads);
-            let source = match (&fold.value, fold.contributors.first()) {
-                (None, _) => ValueSource::None,
-                (Some(_), Some(None)) => ValueSource::Fallback,
-                (Some(_), _) => ValueSource::Default,
+            // The strongest expression's slot is the source, whatever the
+            // fold makes of it: a `%_` that reaches a block resolves no
+            // value, and the source is still the default, as
+            // `UsdAttribute::GetResolveInfo` names it
+            // (`_ResolveInfoResolver::ProcessLayerAtTime` in
+            // `pxr/usd/usd/stage.cpp`). Spec: AOUSD Core §12.3.1.
+            let source = match fold.contributors.first() {
+                Some(None) => ValueSource::Fallback,
+                _ => ValueSource::Default,
             };
             let value = fold.value.map(ResolvedValue::Scalar);
             return roles.finish(value, source, seeded);

@@ -431,7 +431,8 @@ exist, `subset.indices` for a face past the mesh, `coord_sys.no_binding`,
 | `material.not_material` | `setBaseMaterial` of a prim that is not a `Material`. |
 | `material.binding_name` | A collection binding name with a namespace, or a purpose that is not an identifier. |
 | `shading.*` | A refused shading edit: `shading.no_port` (no input or output at the path), `shading.not_shader`, `shading.type_mismatch`, `shading.invalid_name`, `shading.invalid_attribute`. |
-| `schema.cannot_edit` | A schema edit (or `def` define) of a prim beneath an instance or in a prototype, which OpenUSD refuses. `schema.cannot_apply`: an API schema the prim may not have. |
+| `schema.cannot_edit` | A schema edit (or `definePrim`) of a prim beneath an instance or in a prototype, which OpenUSD refuses. `schema.cannot_apply`: an API schema the prim may not have. |
+| `prim.not_class` | `definePrim` with specifier `class` of a defined prim that is not a class, which OpenUSD's `CreateClassPrim` refuses. |
 | `coord_sys.no_binding` | `clearCoordSys` of a binding that does not exist. |
 | `metadata.*` | `metadata.key_path` (an `sdrMetadata` key with an empty part), `metadata.field`. |
 | `skel.*` | A skinning read or computation that cannot be made: `skel.unbound` (nothing skins the prim), `skel.influences` (not as many weights as joint indices, or not whole blocks), `skel.deformation` (influences that do not fit the points or name a joint past the palette), `skel.input`, `skel.array_length`, `skel.target`, `skel.topology`, `skel.primvar`, `skel.method`, `skel.singular`. |

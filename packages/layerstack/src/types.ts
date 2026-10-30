@@ -520,17 +520,25 @@ export type ListPosition = "frontOfPrepend" | "backOfPrepend" | "frontOfAppend" 
 /**
  * `UsdStage::DefinePrim` (`specifier` `"def"`, the default),
  * `OverridePrim` (`"over"`) or `CreateClassPrim` (`"class"`), on the
- * target layer, reading the stage as it was before the edits:
+ * target layer, reading the stage as the defines before it in the same
+ * `apply` leave it. Each is refused with `schema.cannot_edit` beneath an
+ * instance or in a prototype, as OpenUSD refuses it.
  *
  * - `def`: nothing when the prim is defined and `typeName` is absent or
  *   its type already; otherwise authors `def` (and `typeName`) on its
- *   spec, and `def` on each ancestor that is not defined. Refused with
- *   `schema.cannot_edit` beneath an instance or in a prototype, as
- *   OpenUSD refuses it. Later schema-shaped edits of the same `apply`
- *   (such as {@link SetShaderInputEdit} on a shader defined here) see
- *   the prim and its type.
- * - `over`: nothing when the prim exists; otherwise an `over` spec.
- * - `class`: nothing when the prim is a class; otherwise authors `class`.
+ *   spec, and `def` on each ancestor that is not defined. Later
+ *   schema-shaped edits of the same `apply` (such as
+ *   {@link SetShaderInputEdit} on a shader defined here) see the prim and
+ *   its type.
+ * - `over`: nothing when the prim exists, on the stage or earlier in the
+ *   same `apply` (a `def` stays a `def`); otherwise an `over` spec.
+ * - `class`: nothing when the prim is a class or inside one; otherwise
+ *   defines it as `def` does and authors `class`. Refused with
+ *   `prim.not_class` for a defined prim that is not a class, as OpenUSD
+ *   refuses it.
+ *
+ * A `typeName` given with `over` or `class` is then authored on the target
+ * layer's spec, as `UsdPrim::SetTypeName` authors it.
  */
 export interface DefinePrimEdit {
   readonly type: "definePrim";

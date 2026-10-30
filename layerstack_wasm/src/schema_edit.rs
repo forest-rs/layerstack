@@ -30,8 +30,8 @@ use layerstack::{
     InMemoryStore, PathId, PropertyPath, PropertyType, TargetPath, Value, schema::CannotApply,
 };
 use layerstack_schemas::{
-    ApplySchemaError, BindingStrength, CannotEdit, CoordSysError, MaterialBindingError,
-    MaterialPurpose, MetadataError, PrimEdit, SchemaEdit,
+    ApplySchemaError, BindingStrength, CannotEdit, ClassPrimError, CoordSysError,
+    MaterialBindingError, MaterialPurpose, MetadataError, PrimEdit, SchemaEdit,
     shading::{ConnectionModification, ConnectionSource, PortEdit, PortError},
     subset::{SubsetAuthoringError, SubsetError, SubsetFamilyType},
     usd_geom::{GeomSubsetEdit, GeomSubsetElementType, ImageableEdit},
@@ -479,6 +479,7 @@ pub(crate) fn prepare(input: &SchemaInput, inputs: &Inputs<'_>) -> Result<Prepar
 #[derive(Debug)]
 pub(crate) enum Refusal {
     CannotEdit(CannotEdit),
+    ClassPrim(ClassPrimError),
     Apply(ApplySchemaError),
     NoPrim(PathId),
     NotMaterial(PathId),
@@ -497,6 +498,15 @@ impl From<CannotEdit> for Refusal {
     }
 }
 
+impl From<ClassPrimError> for Refusal {
+    fn from(error: ClassPrimError) -> Self {
+        match error {
+            ClassPrimError::CannotEdit(error) => Self::CannotEdit(error),
+            error => Self::ClassPrim(error),
+        }
+    }
+}
+
 impl Refusal {
     /// The error, its prims and properties named with `store`.
     pub(crate) fn into_error(self, store: &InMemoryStore) -> Error {
@@ -505,6 +515,13 @@ impl Refusal {
             Self::CannotEdit(error) => {
                 Error::new("schema.cannot_edit", error.display(store).to_string())
             }
+            Self::ClassPrim(error) => Error::new(
+                match error {
+                    ClassPrimError::NotLocal => "layer.outside_stack",
+                    _ => "prim.not_class",
+                },
+                error.display(store).to_string(),
+            ),
             Self::Apply(ApplySchemaError::CannotEdit(error)) => {
                 Self::CannotEdit(error).into_error(store)
             }

@@ -137,6 +137,34 @@ describe("edit kinds", () => {
     });
   });
 
+  it("definePrim's over and class leave a defined prim's def, as OverridePrim and CreateClassPrim do", async () => {
+    // `OverridePrim` then `SetTypeName`: the `def` spec stays a `def`.
+    using stage = await roundTrip(
+      [{ type: "definePrim", path: "/World/Rock", specifier: "over", typeName: "Cube" }],
+      (stage) => {
+        assert.equal(stage.prim("/World/Rock")?.specifier, "def");
+        assert.equal(stage.prim("/World/Rock")?.typeName, "Cube");
+      },
+    );
+    using classes = await roundTrip(
+      [
+        { type: "definePrim", path: "/Base", specifier: "class" },
+        { type: "definePrim", path: "/Base/Inner", specifier: "over" },
+        { type: "definePrim", path: "/Base/Inner", specifier: "class" },
+      ],
+      (stage) => {
+        assert.equal(stage.prim("/Base")?.specifier, "class");
+        assert.equal(stage.prim("/Base/Inner")?.specifier, "over", "already in a class");
+      },
+    );
+    const refused = failure(() =>
+      stage.apply([{ type: "definePrim", path: "/World/Rock", specifier: "class" }], stage.root),
+    );
+    assert.equal(refused.code, "prim.not_class");
+    assert.equal(refused.edit, 0);
+    assert.equal(stage.prim("/World/Rock")?.specifier, "def", "nothing is authored");
+  });
+
   it("definePrim gives later edits of the same apply its type's attributes", async () => {
     using stage = await roundTrip(
       [

@@ -563,9 +563,10 @@ pub(crate) struct Scope<'a> {
 enum Step {
     /// A generic edit's transaction.
     Generic(Transaction),
-    /// A `def` define (`UsdStage::DefinePrim`), collected through the
-    /// schema edit so later schema edits of the batch see the prim.
-    Define(PathId, Option<String>),
+    /// A define (`UsdStage::DefinePrim`, `OverridePrim` or
+    /// `CreateClassPrim`, and the type name given), collected through the
+    /// schema edit so later edits of the batch see the prim.
+    Define(PathId, Specifier, Option<String>),
     /// A schema-shaped edit.
     Schema(schema_edit::Prepared),
 }
@@ -578,9 +579,10 @@ enum Step {
 ///
 /// Every edit is checked first, reading the stage as composed before the
 /// batch. Then the edits are collected in order through one
-/// [`layerstack_schemas::SchemaEdit`]: a `def` define and the schema-shaped
-/// edits through its handles, which see the prims, types and applied
-/// schemas earlier edits of the batch define and apply; the other edits as
+/// [`layerstack_schemas::SchemaEdit`]: a define (`def`, `over` or `class`)
+/// and the schema-shaped edits through its handles, which see the prims,
+/// types and applied schemas earlier edits of the batch define and apply;
+/// the other edits as
 /// their own transactions, appended ([`layerstack_schemas::SchemaEdit::append`]).
 ///
 /// # Errors
@@ -590,8 +592,8 @@ enum Step {
 /// for (and the reverse), `argument.invalid` for an unknown specifier,
 /// list position or value slot, and the `value.*` errors of
 /// [`value::decode`]; then a schema handle's refusal
-/// ([`schema_edit::Refusal`]): `prim.not_found`, `material.not_found`,
-/// `schema.cannot_edit`, `shading.*`, `subset.*`, `coord_sys.no_binding`,
+/// ([`schema_edit::Refusal`]): `prim.not_found`, `prim.not_class`,
+/// `material.not_found`, `schema.cannot_edit`, `shading.*`, `subset.*`, `coord_sys.no_binding`,
 /// `metadata.*`.
 pub(crate) fn lower(
     batch: &EditBatch,
@@ -627,8 +629,9 @@ pub(crate) fn lower(
                     path,
                     specifier,
                     type_name,
-                } if specifier == "def" => Step::Define(
+                } => Step::Define(
                     prim_path(store, path).map_err(|error| fail(index, error))?,
+                    define_specifier(specifier).map_err(|error| fail(index, error))?,
                     type_name.clone(),
                 ),
                 EditInput::Schema(input) => Step::Schema(
@@ -654,10 +657,9 @@ pub(crate) fn lower(
                     edit.append(txn);
                     Ok(())
                 }
-                Step::Define(path, type_name) => edit
-                    .define_prim(path, type_name.as_deref().unwrap_or(""))
-                    .map(|_| ())
-                    .map_err(schema_edit::Refusal::from),
+                Step::Define(path, specifier, type_name) => {
+                    define(&mut edit, path, specifier, type_name.as_deref())
+                }
                 Step::Schema(prepared) => schema_edit::author(&mut edit, prepared),
             };
             if let Err(refusal) = result {
@@ -726,25 +728,8 @@ fn lower_one(
     };
     let value = |slot: u32| value::decode_slot(&batch.values, slot, store.tokens());
     match edit {
-        EditInput::DefinePrim {
-            path,
-            specifier,
-            type_name,
-        } => {
-            let path_id = prim(path)?;
-            let specifier = match specifier.as_str() {
-                "def" => Specifier::Def,
-                "over" => Specifier::Over,
-                "class" => Specifier::Class,
-                other => {
-                    return Err(Error::new(
-                        "argument.invalid",
-                        format!("`{other}` is not a specifier: def, over or class"),
-                    ));
-                }
-            };
-            define_prim(scope, txn, path, path_id, specifier, type_name.as_deref());
-        }
+        // Collected through the schema edit ([`lower`]).
+        EditInput::DefinePrim { .. } => {}
         EditInput::RemovePrim { path } => {
             txn.remove_spec(at.prim(prim(path)?));
         }
@@ -1024,73 +1009,63 @@ fn check_time(time: f64) -> Result<f64, Error> {
     }
 }
 
-/// Lowers a define as OpenUSD's stage calls do, reading the composed
-/// stage as it was before the batch:
+/// The specifier a `definePrim` edit names: `def`, `over` or `class`.
+fn define_specifier(specifier: &str) -> Result<Specifier, Error> {
+    match specifier {
+        "def" => Ok(Specifier::Def),
+        "over" => Ok(Specifier::Over),
+        "class" => Ok(Specifier::Class),
+        other => Err(Error::new(
+            "argument.invalid",
+            format!("`{other}` is not a specifier: def, over or class"),
+        )),
+    }
+}
+
+/// Collects a `definePrim` edit through the schema edit, as OpenUSD's
+/// stage calls author:
 ///
-/// - `def` (`UsdStage::DefinePrim`): nothing when the prim is defined
-///   and `type_name` is absent or its type already; otherwise authors
-///   `def` (and the type name, when given) on its spec, and `def` on each
-///   ancestor that does not exist or is not defined.
-/// - `over` (`UsdStage::OverridePrim`): nothing when the prim exists;
-///   otherwise authors an `over` spec (ancestors as `over`s).
-/// - `class` (`UsdStage::CreateClassPrim`): nothing when the prim exists
-///   as a class; otherwise authors `class` on its spec.
+/// - `def` ([`SchemaEdit::define_prim`], `UsdStage::DefinePrim`).
+/// - `over` ([`SchemaEdit::override_prim`], `UsdStage::OverridePrim`):
+///   nothing when the prim exists, so a `def` stays a `def`; otherwise an
+///   `over` spec.
+/// - `class` ([`SchemaEdit::create_class_prim`],
+///   `UsdStage::CreateClassPrim`): nothing when the prim is a class or in
+///   one; refused for a defined prim that is not a class.
 ///
-/// A type name given with `over` or `class` is authored too.
+/// A type name given with `over` or `class` is then authored on the
+/// target's spec, as `UsdPrim::SetTypeName` authors it.
 ///
-/// What exists and is defined is read from the composed stage, in stage
-/// namespace; the specs are authored through the edit target, so an
-/// undefined ancestor the target does not map rejects the edit, as
-/// OpenUSD's `_DefinePrim` fails to create its spec through the stage's
-/// edit target.
+/// [`SchemaEdit::define_prim`]: layerstack_schemas::SchemaEdit::define_prim
+/// [`SchemaEdit::override_prim`]: layerstack_schemas::SchemaEdit::override_prim
+/// [`SchemaEdit::create_class_prim`]: layerstack_schemas::SchemaEdit::create_class_prim
 ///
 /// Spec: AOUSD Core §7.6 (specifier), §12.2.1 (specifier resolution).
-fn define_prim(
-    scope: &Scope<'_>,
-    txn: &mut Transaction,
-    path: &str,
-    path_id: PathId,
+fn define(
+    edit: &mut layerstack_schemas::SchemaEdit<'_>,
+    path: PathId,
     specifier: Specifier,
     type_name: Option<&str>,
-) {
-    let at = scope.target;
-    let composed = scope.view.prim(path);
-    let type_matches =
-        |prim: &layerstack::Prim<'_>| type_name.is_none_or(|name| prim.type_name() == Some(name));
-    let done = match specifier {
-        Specifier::Def => composed.is_some_and(|prim| prim.is_defined() && type_matches(&prim)),
-        Specifier::Over => composed.is_some() && type_name.is_none(),
+) -> Result<(), schema_edit::Refusal> {
+    match specifier {
+        Specifier::Def => {
+            edit.define_prim(path, type_name.unwrap_or(""))?;
+            return Ok(());
+        }
+        Specifier::Over => {
+            edit.override_prim(path)?;
+        }
         Specifier::Class => {
-            composed.is_some_and(|prim| prim.specifier() == Specifier::Class && type_matches(&prim))
+            edit.create_class_prim(path)?;
         }
-    };
-    if done {
-        return;
-    }
-    if specifier == Specifier::Def {
-        let mut ancestor = String::new();
-        let names: Vec<&str> = path.split('/').filter(|name| !name.is_empty()).collect();
-        for name in &names[..names.len().saturating_sub(1)] {
-            ancestor.push('/');
-            ancestor.push_str(name);
-            let defined = scope
-                .view
-                .prim(ancestor.as_str())
-                .is_some_and(|prim| prim.is_defined());
-            if !defined {
-                txn.set_specifier(at.prim(scope.store.path(&ancestor)), Specifier::Def);
-            }
-        }
-    }
-    let prim_at = at.prim(path_id);
-    if specifier == Specifier::Over && composed.is_none() {
-        txn.create_prim(prim_at.clone(), Specifier::Over, None);
-    } else {
-        txn.set_specifier(prim_at.clone(), specifier);
     }
     if let Some(name) = type_name {
-        txn.set_type_name(prim_at, scope.store.tokens().intern(name));
+        let name = edit.tokens().intern(name);
+        let mut txn = Transaction::new();
+        txn.set_type_name(edit.target().prim(path), name);
+        edit.append(txn);
     }
+    Ok(())
 }
 
 /// The reference or payload an add or remove names: an external arc to
@@ -1488,6 +1463,14 @@ def "Spare" (
                 None,
                 false,
                 &[("/World/Rock", "def:Sphere")],
+            ),
+            // `OverridePrim` then `SetTypeName`: the `def` stays.
+            case(
+                "/World/Rock",
+                "over",
+                Some("Cube"),
+                true,
+                &[("/World/Rock", "def:Cube")],
             ),
             case("/Base", "class", None, true, &[("/Base", "class:")]),
             case("/Loose", "class", None, true, &[("/Loose", "class:")]),

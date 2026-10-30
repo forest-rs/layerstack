@@ -11,7 +11,7 @@
 //!
 //! Spec: AOUSD Core §16.3.
 
-use alloc::collections::{BTreeMap, BTreeSet};
+use alloc::collections::BTreeSet;
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::hash::BuildHasher;
@@ -1835,7 +1835,8 @@ fn ts_spline_data(spline: &layerstack::spline::SplineData) -> Vec<u8> {
 /// them in `Sdf_CrateData::Save` order: prim paths (the pseudo-root first)
 /// in `SdfPath` order, then property paths grouped by name.
 fn prepare(specs: &[Spec]) -> Result<Vec<(CratePath, &Spec)>, UsdcWriteError> {
-    let mut forms: BTreeMap<CratePath, SpecForm> = BTreeMap::new();
+    // Looked up only, so hashed.
+    let mut forms: HashMap<CratePath, SpecForm> = HashMap::new();
     let mut prepared = Vec::with_capacity(specs.len());
     for spec in specs {
         let path = CratePath::parse(&spec.path)?;

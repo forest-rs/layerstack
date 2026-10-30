@@ -280,6 +280,7 @@ pub fn stage(data: &[u8]) {
                 },
                 loading,
                 store: Some(InMemoryStore::default()),
+                ..OpenOptions::default()
             },
         ) else {
             continue;

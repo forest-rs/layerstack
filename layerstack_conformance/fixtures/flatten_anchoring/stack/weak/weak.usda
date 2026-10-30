@@ -1,0 +1,15 @@
+#usda 1.0
+(
+    customLayerData = {
+        asset weakTex = @./w.png@
+    }
+    upAxis = "Z"
+)
+
+over "World"
+{
+    asset weakMissing = @tex/none.png@
+    asset weakOwn = @./w.png@
+    asset weakSearch = @tex/w.png@
+    asset weakUp = @../s.png@
+}

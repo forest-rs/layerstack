@@ -21,7 +21,10 @@ asset paths on `/World`. Two session layers stand in other directories:
 `sess/session.usda` authors `customLayerData` whose keys partly override
 the root's, an expression variable the root's expressions then read,
 `upAxis`, `endTimeCode` and an asset path on `/World`; and
-`rate/rate.usda` authors `timeCodesPerSecond`.
+`rate/rate.usda` authors `timeCodesPerSecond`. A third,
+`stack/session.usda`, has a sublayer, `stack/weak/weak.usda`, which joins
+the session layer stack: its asset paths anchor to it, and its layer
+metadata is ignored.
 
 OpenUSD's flatten anchors every asset path to the layer that authors it
 (`SdfAnchorAssetPaths` through `SdfComputeAssetPathRelativeToLayer`),
@@ -37,8 +40,9 @@ evaluating an expression with the root layer stack's variables first
 what it resolves.
 
 It records, for the stage opened on `root.usda` alone (`root`), with
-`sess/session.usda` as its session layer (`session`), and with
-`rate/rate.usda` (`rate`):
+`sess/session.usda` as its session layer (`session`), with
+`rate/rate.usda` (`rate`) and with `stack/session.usda`
+(`session_sublayers`):
 
 - `flatten`: `UsdStage::Flatten`'s `ExportToString`, without its `doc`;
 - `metadata`: for each stage metadata field, `HasAuthoredMetadata` and
@@ -162,18 +166,52 @@ over "World"
     timeCodesPerSecond = 24
 )
 """,
+    "stack/session.usda": """#usda 1.0
+(
+    subLayers = [
+        @./weak/weak.usda@
+    ]
+)
+
+over "World"
+{
+    asset stackSession = @./s.png@
+}
+""",
+    "stack/weak/weak.usda": """#usda 1.0
+(
+    customLayerData = {
+        asset weakTex = @./w.png@
+    }
+    upAxis = "Z"
+)
+
+over "World"
+{
+    asset weakMissing = @tex/none.png@
+    asset weakOwn = @./w.png@
+    asset weakSearch = @tex/w.png@
+    asset weakUp = @../s.png@
+}
+""",
 }
 # Files the paths name, so that OpenUSD finds them; the others are missing.
 FILES = [
     "root.png", "deep.png", "textures/beside.png", "sub/near.png",
     "assets/cd.png", "assets/tex.png", "assets/maps/m.png",
     "sess/sess.png", "sess/deep.png", "sess/stex/s.png",
+    "stack/s.png", "stack/weak/w.png", "stack/weak/tex/w.png",
 ]
 FIELDS = [
     "customLayerData", "defaultPrim", "upAxis", "startTimeCode", "endTimeCode",
     "framesPerSecond", "timeCodesPerSecond",
 ]
-SESSIONS = {"root": None, "session": "sess/session.usda", "rate": "rate/rate.usda"}
+SESSIONS = {
+    "root": None,
+    "session": "sess/session.usda",
+    "rate": "rate/rate.usda",
+    "session_sublayers": "stack/session.usda",
+}
 
 
 def encode(value, directory):

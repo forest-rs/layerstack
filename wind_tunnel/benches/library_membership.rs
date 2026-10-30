@@ -79,6 +79,7 @@ fn open_with(
                 ..LoadOptions::default()
             },
             store: Some(store),
+            ..OpenOptions::default()
         },
     )
     .expect("the library opens")

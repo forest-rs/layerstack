@@ -6,34 +6,29 @@
 //! layer that authors each, replayed from `flatten_anchoring_oracle.py`
 //! (see the script for the scene and what it records).
 //!
-//! The root case flattens through the document's own resolver
-//! ([`StageDocument::flatten`], [`StageDocument::layer_locations`]). A
-//! session layer the host reads itself has no location in the document, so
-//! the session cases flatten through a resolver that knows each layer's
-//! file, anchoring as the document's does
-//! ([`layerstack::asset::create_identifier`]).
+//! Every case opens its session layer from the fixture
+//! ([`OpenOptions::session_layer`]), as `UsdStage::Open(rootLayer,
+//! sessionLayer)` does, and flattens through the document's own resolver
+//! ([`StageDocument::flatten`], [`StageDocument::layer_locations`]).
 //!
 //! OpenUSD: `UsdStage::Flatten`, `SdfAnchorAssetPaths` and
 //! `ArDefaultResolver::_CreateIdentifier`; `UsdStage::GetMetadata`.
 
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use layerstack::stage::flatten::{AssetPaths, FlattenRequirements};
-use layerstack::{
-    AssetResolveError, AssetResolver, InMemoryStore, LayerId, LayerStore, NoAssets, PathInterner,
-    ResolvedAsset, Stage, StageOptions, TokenInterner, Value,
-};
+use layerstack::{InMemoryStore, LayerStore, Stage, Value};
 use layerstack_io::{Filesystem, OpenOptions, StageDocument};
 use serde_json::{Map, Value as Json, json};
 
 const ORACLE: &str = include_str!("../../fixtures/flatten_anchoring/oracle.json");
 
 /// The session layer of each case, by its file in the fixture.
-const CASES: [(&str, Option<&str>); 3] = [
+const CASES: [(&str, Option<&str>); 4] = [
     ("root", None),
     ("session", Some("sess/session.usda")),
     ("rate", Some("rate/rate.usda")),
+    ("session_sublayers", Some("stack/session.usda")),
 ];
 
 /// The stage metadata fields the oracle reads.
@@ -46,9 +41,6 @@ const FIELDS: [&str; 7] = [
     "framesPerSecond",
     "timeCodesPerSecond",
 ];
-
-/// The id a host-owned session layer takes.
-const SESSION: LayerId = LayerId(1);
 
 fn oracle() -> Json {
     let oracle: Json = serde_json::from_str(ORACLE).expect("oracle.json");
@@ -83,78 +75,17 @@ fn slashed(path: &Path) -> String {
     path.to_string_lossy().replace('\\', "/")
 }
 
-/// The fixture's stage, opened from `root.usda` with `session`, read by
-/// the host, as its session layer.
+/// The fixture's stage, opened from `root.usda` with `session` read from
+/// the fixture as its session layer.
 fn open(session: Option<&str>) -> StageDocument<Filesystem> {
     let directory = directory();
     let storage = Filesystem::new(&directory, []).unwrap();
     let root = directory.join("root.usda");
-    let mut store = InMemoryStore::default();
-    if let Some(session) = session {
-        let text = std::fs::read_to_string(directory.join(session)).unwrap();
-        let read = layerstack_usda::read_usda(
-            &text,
-            SESSION,
-            store.tokens(),
-            store.paths(),
-            &mut NoAssets,
-        );
-        assert!(read.parse_diagnostics.is_empty(), "{session}");
-        store.insert_layer(read.emitted.layer);
-    }
     let options = OpenOptions {
-        stage: StageOptions {
-            session_layer: session.map(|_| SESSION),
-            ..StageOptions::default()
-        },
-        store: Some(store),
+        session_layer: session.map(|session| slashed(&directory.join(session))),
         ..OpenOptions::default()
     };
     StageDocument::open(storage, root.to_str().unwrap(), options).unwrap()
-}
-
-/// Knows the file of each layer of `document`, and of its session layer
-/// `session`, and anchors as the document's resolver does.
-struct Located {
-    layers: HashMap<LayerId, String>,
-}
-
-impl Located {
-    fn new(document: &StageDocument<Filesystem>, session: Option<&str>) -> Self {
-        let mut layers: HashMap<LayerId, String> = document
-            .store()
-            .layer_ids()
-            .into_iter()
-            .filter_map(|id| Some((id, document.identifier(id)?.to_owned())))
-            .collect();
-        if let Some(session) = session {
-            layers.insert(SESSION, slashed(&directory().join(session)));
-        }
-        Self { layers }
-    }
-}
-
-impl AssetResolver for Located {
-    fn resolve(
-        &mut self,
-        _: &str,
-        _: Option<LayerId>,
-        _: &TokenInterner,
-        _: &PathInterner,
-    ) -> Result<ResolvedAsset, AssetResolveError> {
-        Err(AssetResolveError::Unavailable)
-    }
-
-    fn resolved_path(&self, id: LayerId) -> Option<&str> {
-        self.layers.get(&id).map(String::as_str)
-    }
-
-    fn anchor_asset_path(&self, asset_path: &str, anchor: LayerId) -> Option<String> {
-        let location = self.resolved_path(anchor)?;
-        layerstack::asset::create_identifier(asset_path, location, |identifier| {
-            Path::new(identifier).is_file()
-        })
-    }
 }
 
 /// `layer` saved as USDA, with the fixture directory spelled `<dir>`.
@@ -163,22 +94,12 @@ fn text(layer: &layerstack::Layer, store: &InMemoryStore) -> String {
     text.replace(&format!("{}/", slashed(&directory())), "<dir>/")
 }
 
-/// The case's stage flattened under `requirements`: through the
-/// document's resolver when it has no session layer.
+/// The case's stage flattened under `requirements`, through the
+/// document's resolver.
 fn flatten(case: Option<&str>, requirements: &FlattenRequirements) -> String {
     let mut document = open(case);
-    if case.is_none() {
-        let flat = document.flatten(requirements).expect("flattens");
-        return text(&flat.layer, document.store());
-    }
-    let located = Located::new(&document, case);
-    let root = document.root_layer();
-    let (store, live) = document.parts_mut();
-    let flat = live
-        .stage()
-        .flatten(store, &located, root, LayerId(999_999), requirements)
-        .expect("flattens");
-    text(&flat.layer, store)
+    let flat = document.flatten(requirements).expect("flattens");
+    text(&flat.layer, document.store())
 }
 
 /// Each case flattens to OpenUSD's text, every asset path anchored as
@@ -300,7 +221,7 @@ fn stage_metadata_asset_paths_anchor_to_the_layer_authoring_them() {
     let oracle = oracle();
     for (name, session) in CASES {
         let document = open(session);
-        let located = Located::new(&document, session);
+        let located = document.layer_locations();
         let stage: &Stage = document.stage().stage();
         let store = document.store();
         let flatten = oracle[name]["flatten"].as_str().unwrap();
@@ -321,14 +242,6 @@ fn stage_metadata_asset_paths_anchor_to_the_layer_authoring_them() {
                 identifiers(&expected["value"], field, flatten),
                 "{name} {field}"
             );
-            if session.is_none() {
-                // The document's own resolver anchors the same.
-                assert_eq!(
-                    stage.layer_metadata_anchored(key, store, &document.layer_locations()),
-                    Some(anchored),
-                    "{name} {field}"
-                );
-            }
         }
         let default_prim = document
             .view()

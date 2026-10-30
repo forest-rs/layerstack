@@ -427,6 +427,7 @@ pub(super) fn open<B: Storage>(storage: B, root: &str, attributes: bool) -> Stag
                 ..Default::default()
             },
             store: Some(store),
+            ..OpenOptions::default()
         },
     )
     .unwrap()

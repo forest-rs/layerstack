@@ -483,6 +483,7 @@ fn a_derived_id_steps_past_a_host_layer_holding_it() {
                 stage: options,
                 loading,
                 store: Some(store),
+                ..OpenOptions::default()
             },
         )
         .unwrap();

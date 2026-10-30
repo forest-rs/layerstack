@@ -15,6 +15,9 @@ opinion-resolution kernel from USD scene composition and file formats.
 | [`layerstack_mesh_export`](layerstack_mesh_export/) | Meshes, Preview Surface materials, and static point instancers exported to USD |
 | [`layerstack_wasm`](layerstack_wasm/) | WebAssembly bindings: the native side of the TypeScript package |
 | [`@forest-rs/layerstack`](packages/layerstack/) | TypeScript package: open, resolve, inspect, explain, edit and save stages in the browser or Node |
+| [`layerstack_stagehand`](layerstack_stagehand/) | Render-ready buffers from a stage: triangulated meshes, face-varying primvars, normals, subset draw ranges and tessellated implicit shapes, with reports |
+| [`layerstack_stagehand_wasm`](layerstack_stagehand_wasm/) | WebAssembly module of the stagehand TypeScript package |
+| [`@forest-rs/layerstack_stagehand`](packages/layerstack_stagehand/) | TypeScript package: mesh and shape buffers from a stage read through `@forest-rs/layerstack` |
 | [`layerstack_schemagen`](layerstack_schemagen/) | Generates the OpenUSD schema tables and views, and compiles a custom `schema.usda` library into `generatedSchema.usda`, `plugInfo.json` and Rust views (`cargo install layerstack_schemagen`) |
 
 ## Getting started
@@ -26,8 +29,10 @@ For filesystem or custom-transport loading and saving, start with
 [layerstack_io](layerstack_io/README.md). Format crates also work directly on
 caller-owned bytes. Applications own rendering and execution policy.
 
-All library crates require Rust **1.89** or later and use `alloc`. See each
-crate's documentation for features and supported operations.
+All library crates require Rust **1.89** or later and use `alloc`, except
+`layerstack_stagehand` (and its WebAssembly module), which requires **1.92** for
+its triangulation dependency and is not published yet. See each crate's
+documentation for features and supported operations.
 
 ## Status and conformance
 
@@ -87,7 +92,8 @@ or later:
 
 ```sh
 cargo package --workspace --exclude layerstack_conformance \
-  --exclude layerstack_examples --exclude wind_tunnel --locked --all-features
+  --exclude layerstack_examples --exclude wind_tunnel \
+  --exclude layerstack_stagehand --exclude layerstack_stagehand_wasm --locked --all-features
 python3 .github/check_packages.py "${CARGO_TARGET_DIR:-target}/package"
 ```
 

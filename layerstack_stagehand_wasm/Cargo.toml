@@ -1,0 +1,41 @@
+[package]
+name = "layerstack_stagehand_wasm"
+description = "The WebAssembly module of @forest-rs/layerstack_stagehand: render-ready mesh buffers from typed arrays."
+version.workspace = true
+edition.workspace = true
+# As `layerstack_stagehand`: `exedra_triangulate` needs Rust 1.92.
+rust-version = "1.92"
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
+keywords = ["usd", "wasm", "mesh", "triangulation"]
+categories = ["wasm", "graphics"]
+publish = false
+
+[lib]
+# `cdylib` is the module `@forest-rs/layerstack_stagehand` loads; `rlib`
+# lets the workspace's checks build it for any target.
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["std"]
+std = ["wasm-bindgen/std"]
+# The module the package loads, built without `std`: this crate supplies
+# the global allocator and a panic handler that traps, as
+# `layerstack_wasm`'s `standalone` does. Only on `wasm32` and without
+# `std`, which brings its own.
+standalone = ["dep:dlmalloc"]
+
+[dependencies]
+# Without the `stage` feature: the module takes typed arrays, not a
+# stage, so it links neither `layerstack` nor its schemas.
+layerstack_stagehand = { default-features = false, path = "../layerstack_stagehand" }
+# The JavaScript ABI, at the version `layerstack_wasm` uses, so one
+# `wasm-bindgen` CLI builds both modules.
+wasm-bindgen = { default-features = false, version = "0.2.129" }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+dlmalloc = { features = ["global"], optional = true, version = "0.2.14" }
+
+[lints]
+workspace = true

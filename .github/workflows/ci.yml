@@ -24,21 +24,24 @@ env:
     -p layerstack_io
     -p layerstack_mesh_export
   # List of packages that don't support `no_std`.
-  # `layerstack_wasm` is a WebAssembly module; its no_std build is checked
-  # by the gate, and a `cdylib` is not a crate type `x86_64-unknown-none`
-  # supports.
+  # `layerstack_wasm` and `layerstack_stagehand_wasm` are WebAssembly
+  # modules; their no_std builds are checked by the gate, and a `cdylib` is
+  # not a crate type `x86_64-unknown-none` supports.
   RUST_NO_STD_PKGS: >-
     --exclude layerstack_conformance
     --exclude layerstack_examples
     --exclude layerstack_schemagen
+    --exclude layerstack_stagehand_wasm
     --exclude layerstack_wasm
     --exclude wind_tunnel
   # List of packages that don't support wasip1
-  # `layerstack_wasm`'s exports import wasm-bindgen's JavaScript glue, which
-  # a WASI runtime does not provide; the `typescript` job runs the module.
+  # `layerstack_wasm`'s and `layerstack_stagehand_wasm`'s exports import
+  # wasm-bindgen's JavaScript glue, which a WASI runtime does not provide;
+  # the `typescript` job runs the modules.
   RUST_NO_WASIP1_PKGS: >-
     --exclude layerstack_examples
     --exclude layerstack_schemagen
+    --exclude layerstack_stagehand_wasm
     --exclude layerstack_wasm
     --exclude wind_tunnel
   # List of packages that don't support wasm32
@@ -423,6 +426,7 @@ jobs:
           cache: npm
           cache-dependency-path: |
             packages/layerstack/package-lock.json
+            packages/layerstack_stagehand/package-lock.json
             packages/demo/package-lock.json
 
       - name: install the package's dev dependencies
@@ -444,7 +448,29 @@ jobs:
       - name: run the Node tests
         run: npm test
 
-      # The demo links the package built above.
+      # `@forest-rs/layerstack_stagehand` over its own module, with its own
+      # size budget (packages/layerstack_stagehand/size-budget.json); its
+      # tests read stages through the package built above.
+      - name: install the stagehand package's dev dependencies
+        working-directory: packages/layerstack_stagehand
+        run: npm ci
+
+      - name: build the stagehand module
+        working-directory: packages/layerstack_stagehand
+        run: npm run build:wasm
+
+      - name: check the stagehand size budget
+        working-directory: packages/layerstack_stagehand
+        run: npm run size
+
+      - name: build, type-check and test the stagehand package
+        working-directory: packages/layerstack_stagehand
+        run: |
+          npm run build
+          npm run check
+          npm test
+
+      # The demo links the packages built above.
       - name: install the demo's dev dependencies
         working-directory: packages/demo
         run: npm ci

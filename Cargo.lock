@@ -426,6 +426,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "layerstack_stagehand_wasm"
+version = "0.1.0"
+dependencies = [
+ "dlmalloc",
+ "layerstack_stagehand",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "layerstack_usda"
 version = "0.1.0"
 dependencies = [

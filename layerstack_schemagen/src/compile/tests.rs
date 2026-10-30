@@ -559,6 +559,43 @@ fn rust_modules_carry_extra_plug_info() {
     );
 }
 
+/// Apply lists a class gives only in `extraPlugInfo` reach the module's
+/// declarations, as OpenUSD's registry reads them from `plugInfo.json`,
+/// where usdGenSchema copies them.
+#[test]
+fn rust_modules_read_apply_lists_from_extra_plug_info() {
+    let compiled = compile_text(&format!(
+        "{CODELESS}class \"OnlyTypedAPI\" (\n    inherits = </APISchemaBase>\n    customData = {{\n        \
+         token apiSchemaType = \"singleApply\"\n        dictionary extraPlugInfo = {{\n            \
+         token[] apiSchemaCanOnlyApplyTo = [\"Typed\"]\n        }}\n    }}\n) {{}}\n\
+         class \"SlotAPI\" (\n    inherits = </APISchemaBase>\n    customData = {{\n        \
+         token apiSchemaType = \"multipleApply\"\n        token propertyNamespacePrefix = \"slot\"\n        \
+         dictionary extraPlugInfo = {{\n            \
+         token[] apiSchemaAllowedInstanceNames = [\"left\", \"right\"]\n            \
+         dictionary apiSchemaInstances = {{\n                dictionary left = {{\n                    \
+         token[] apiSchemaCanOnlyApplyTo = [\"Typed\"]\n                }}\n            }}\n        \
+         }}\n    }}\n) {{\n    int value = 1\n}}\n"
+    ))
+    .unwrap();
+    // The declarations, one space between tokens.
+    let module = compiled.rust_module().unwrap();
+    let module = module.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(
+        module.contains(
+            "can_only_apply_to: &[\"Typed\"], allowed_instance_names: &[], \
+             instance_can_only_apply_to: &[],"
+        ),
+        "{module}"
+    );
+    assert!(
+        module.contains(
+            "can_only_apply_to: &[], allowed_instance_names: &[\"left\", \"right\"], \
+             instance_can_only_apply_to: &[(\"left\", &[\"Typed\"]), ],"
+        ),
+        "{module}"
+    );
+}
+
 /// The kinds an existing `plugInfo.json` declares become the module's
 /// `KINDS`; one OpenUSD's `KindRegistry` refuses fails the module, naming
 /// every refusal.

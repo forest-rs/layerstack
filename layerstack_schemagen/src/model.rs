@@ -166,10 +166,45 @@ struct TypeInfo {
     identifier: Option<String>,
     kind: String,
     bases: Vec<String>,
-    can_only_apply_to: Vec<String>,
-    allowed_instance_names: Vec<String>,
-    instance_can_only_apply_to: Vec<(String, Vec<String>)>,
+    apply: ApplyInfo,
     plug_info: Vec<(String, Value)>,
+}
+
+/// Where an applied schema can be applied, as OpenUSD's schema registry
+/// reads it from the schema's `plugInfo.json` type entry
+/// (`Usd_GetAPISchemaPluginApplyToInfoForType`, `schemaRegistry.cpp`).
+/// usdGenSchema writes the entry from the class's `customData` over its
+/// `extraPlugInfo` (`usdGenSchema.py` `GeneratePlugInfo`), so the entry,
+/// not the class, is where both reach the registry.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct ApplyInfo {
+    /// `apiSchemaCanOnlyApplyTo`.
+    pub(crate) can_only_apply_to: Vec<String>,
+    /// `apiSchemaAllowedInstanceNames`.
+    pub(crate) allowed_instance_names: Vec<String>,
+    /// The `apiSchemaCanOnlyApplyTo` of each `apiSchemaInstances` entry.
+    pub(crate) instance_can_only_apply_to: Vec<(String, Vec<String>)>,
+}
+
+impl ApplyInfo {
+    /// The lists of a `plugInfo.json` type entry; empty where it has none.
+    pub(crate) fn of_entry(entry: &Json) -> Self {
+        Self {
+            can_only_apply_to: strings(&entry["apiSchemaCanOnlyApplyTo"]),
+            allowed_instance_names: strings(&entry["apiSchemaAllowedInstanceNames"]),
+            instance_can_only_apply_to: entry["apiSchemaInstances"]
+                .as_object()
+                .map(|instances| {
+                    instances
+                        .iter()
+                        .map(|(instance, info)| {
+                            (instance.clone(), strings(&info["apiSchemaCanOnlyApplyTo"]))
+                        })
+                        .collect()
+                })
+                .unwrap_or_default(),
+        }
+    }
 }
 
 /// Reads the model from `pxr`, the `pxr` package directory of a usd-core
@@ -224,24 +259,7 @@ pub(crate) fn read(pxr: &Path, source: &Path) -> Result<Model, String> {
                             identifier: entry["schemaIdentifier"].as_str().map(String::from),
                             kind: entry["schemaKind"].as_str().unwrap_or_default().into(),
                             bases: strings(&entry["bases"]),
-                            can_only_apply_to: strings(&entry["apiSchemaCanOnlyApplyTo"]),
-                            allowed_instance_names: strings(
-                                &entry["apiSchemaAllowedInstanceNames"],
-                            ),
-                            instance_can_only_apply_to: entry["apiSchemaInstances"]
-                                .as_object()
-                                .map(|instances| {
-                                    instances
-                                        .iter()
-                                        .map(|(instance, info)| {
-                                            (
-                                                instance.clone(),
-                                                strings(&info["apiSchemaCanOnlyApplyTo"]),
-                                            )
-                                        })
-                                        .collect()
-                                })
-                                .unwrap_or_default(),
+                            apply: ApplyInfo::of_entry(entry),
                             plug_info: other_plug_info(entry),
                         },
                     );
@@ -305,9 +323,10 @@ pub(crate) fn read(pxr: &Path, source: &Path) -> Result<Model, String> {
                 None
             };
             let tokens = &mut store.tokens();
-            let can_only_apply_to = intern_all(tokens, &info.can_only_apply_to);
-            let allowed_instance_names = intern_all(tokens, &info.allowed_instance_names);
+            let can_only_apply_to = intern_all(tokens, &info.apply.can_only_apply_to);
+            let allowed_instance_names = intern_all(tokens, &info.apply.allowed_instance_names);
             let instance_can_only_apply_to = info
+                .apply
                 .instance_can_only_apply_to
                 .iter()
                 .map(|(instance, types)| (tokens.intern(instance), intern_all(tokens, types)))

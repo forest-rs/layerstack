@@ -196,13 +196,11 @@ pub(crate) fn module_text(
     };
     // The keys of each type entry the registry carries, as OpenUSD reads
     // them from the installed plugin.
-    let type_plug_info = |name: &str| {
+    let type_entry = |name: &str| {
         plugin_infos()
             .filter_map(|info| info["Types"].as_object())
             .flat_map(|types| types.values())
             .find(|entry| entry["schemaIdentifier"].as_str() == Some(name))
-            .map(model::other_plug_info)
-            .unwrap_or_default()
     };
     let tokens = &store.tokens();
     let names = |names: &[String]| names.iter().map(|n| tokens.intern(n)).collect::<Vec<_>>();
@@ -220,20 +218,34 @@ pub(crate) fn module_text(
             ));
             continue;
         };
+        // Where it can be applied, as OpenUSD's registry reads it from the
+        // type's `plugInfo.json` entry, which holds the class's own lists
+        // over those its `extraPlugInfo` gives; the class's lists without
+        // one.
+        let entry = type_entry(&class.name);
+        let apply = entry.map_or_else(
+            || model::ApplyInfo {
+                can_only_apply_to: class.can_only_apply_to.clone(),
+                allowed_instance_names: class.allowed_instance_names.clone(),
+                instance_can_only_apply_to: class.instance_can_only_apply_to.clone(),
+            },
+            model::ApplyInfo::of_entry,
+        );
+        let plug_info = entry.map(model::other_plug_info).unwrap_or_default();
         declared.push(SchemaDeclaration {
             parent: class
                 .base
                 .as_deref()
                 .filter(|_| kind.is_typed())
                 .map(|parent| tokens.intern(parent)),
-            can_only_apply_to: names(&class.can_only_apply_to),
-            allowed_instance_names: names(&class.allowed_instance_names),
-            instance_can_only_apply_to: class
+            can_only_apply_to: names(&apply.can_only_apply_to),
+            allowed_instance_names: names(&apply.allowed_instance_names),
+            instance_can_only_apply_to: apply
                 .instance_can_only_apply_to
                 .iter()
                 .map(|(instance, types)| (tokens.intern(instance), names(types)))
                 .collect(),
-            plug_info: model::plug_info_entries(&type_plug_info(&class.name), tokens),
+            plug_info: model::plug_info_entries(&plug_info, tokens),
             ..SchemaDeclaration::new(tokens.intern(&class.name), kind)
         });
     }

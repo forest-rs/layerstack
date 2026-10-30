@@ -160,7 +160,9 @@ await stage.resolve(source);
   `setValue`, `clearValue`, `blockValue`, `setTargets`, `addReference`,
   `addPayload`, `removeReference`, `removePayload`, `setVariantSelection`,
   `setActive`, `setInstanceable`, `setKind`, `setMetadata`, `clearMetadata`,
-  and the schema-shaped `bindMaterial`, `unbindMaterial`, `setShaderInput`,
+  the target layer's `setLayerMetadata` and `clearLayerMetadata`
+  (`documentation`, `metersPerUnit`, `startTimeCode`, ...), and the
+  schema-shaped `bindMaterial`, `unbindMaterial`, `setShaderInput`,
   `connectToSource`, `disconnectSource`, `setBaseMaterial`,
   `createGeomSubset`, `createMaterialSubset`, `setSubsetFamilyType`,
   `bindCoordSys`, `blockCoordSys`, `clearCoordSys`, `setSdrMetadata`)

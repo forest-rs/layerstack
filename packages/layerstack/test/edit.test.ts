@@ -344,6 +344,29 @@ describe("edit kinds", () => {
       assert.equal(stage.prim("/Spare")?.metadata("documentation"), null);
     });
   });
+
+  it("setLayerMetadata and clearLayerMetadata author the target layer's metadata", async () => {
+    using stage = await openScene();
+    const heard: Changes[] = [];
+    stage.onChange((changes) => heard.push(changes));
+    const text = () => new TextDecoder().decode(stage.exportLayer(stage.root, "usda"));
+    const receipt = stage.apply(
+      [
+        { type: "setLayerMetadata", key: "documentation", value: { type: "string", value: "moss on every rock" } },
+        { type: "setLayerMetadata", key: "metersPerUnit", value: { type: "double", value: 0.01 } },
+      ],
+      stage.root,
+    );
+    assert.match(text(), /\(\n    defaultPrim = "World"\n    doc = "moss on every rock"\n/);
+    assert.match(text(), /metersPerUnit = 0\.01/);
+    // Stage metadata composes nothing: `/` changes info-only.
+    assert.deepEqual([heard[0]?.resynced, heard[0]?.changedInfoOnly], [[], ["/"]]);
+    receipt.undo().release();
+    assert.doesNotMatch(text(), /moss on every rock|metersPerUnit/);
+    stage.apply([{ type: "setLayerMetadata", key: "documentation", value: { type: "string", value: "kept" } }], stage.root).release();
+    stage.apply([{ type: "clearLayerMetadata", key: "documentation" }], stage.root).release();
+    assert.doesNotMatch(text(), /kept/);
+  });
 });
 
 describe("values", () => {

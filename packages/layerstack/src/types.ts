@@ -774,6 +774,26 @@ export interface ClearMetadataEdit {
 }
 
 /**
+ * Sets the metadata field `key` of the edit target's layer (`SdfLayer`'s
+ * pseudo-root spec, which `UsdStage::SetMetadata` writes): `documentation`,
+ * `customLayerData`, `startTimeCode`, `metersPerUnit`, `upAxis` and the
+ * like. Sublayers and relocates have edits of their own and are refused
+ * here. A field that composes nothing, set on a layer of the stage's own
+ * layer stack, changes `/` info-only ({@link Changes}).
+ */
+export interface SetLayerMetadataEdit {
+  readonly type: "setLayerMetadata";
+  readonly key: string;
+  readonly value: ValueInput;
+}
+
+/** Clears the metadata field `key` of the edit target's layer, as {@link SetLayerMetadataEdit} sets it. */
+export interface ClearLayerMetadataEdit {
+  readonly type: "clearLayerMetadata";
+  readonly key: string;
+}
+
+/**
  * One edit: plain data, so edits can be logged, sent and replayed. A list
  * of them is applied atomically through one edit target by
  * {@link Stage.apply}. Paths are stage paths; times are stage time codes:
@@ -796,6 +816,8 @@ export type Edit =
   | SetKindEdit
   | SetMetadataEdit
   | ClearMetadataEdit
+  | SetLayerMetadataEdit
+  | ClearLayerMetadataEdit
   | BindMaterialEdit
   | UnbindMaterialEdit
   | SetShaderInputEdit

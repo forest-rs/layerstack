@@ -240,7 +240,8 @@ impl<B: Storage> StageDocument<B> {
         .map_err(|e| IoError::new(IoErrorKind::Rejected, e.to_string()))?;
         let mut store = self.store.snapshot();
         let mut catalog = self.catalog.clone();
-        let mut queue = BTreeSet::from([root]);
+        let mut queue = BTreeSet::new();
+        queue.insert(root);
         let mut visited = BTreeSet::new();
         let mut resources = BTreeMap::new();
         let mut assets = BTreeMap::<String, AssetBytes>::new();
@@ -451,7 +452,10 @@ impl<B: Storage> StageDocument<B> {
                     |s| String::from(&*s.identifier),
                 )
             });
-            let mut names = BTreeMap::from([(root, String::from(root_member))]);
+            // One insert, not `BTreeMap::from`, which sorts and bulk-builds
+            // through code compiled for this map alone.
+            let mut names = BTreeMap::new();
+            names.insert(root, String::from(root_member));
             let mut index = 0;
             for &id in layers.iter().filter(|id| **id != root) {
                 let member = loop {

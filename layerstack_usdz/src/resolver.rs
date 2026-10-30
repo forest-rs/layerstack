@@ -91,15 +91,19 @@ impl<'a, P: PackageAccess> UsdzResolver<'a, P> {
         let distinct_member = outer
             .existing_package_layer_id(root, &root_member)
             .is_some_and(|id| id != root);
+        // Inserts, not `BTreeMap::from`, which sorts and bulk-builds
+        // through code compiled for these maps alone.
+        let mut by_member = BTreeMap::new();
+        if !distinct_member {
+            by_member.insert(root_member.clone(), root);
+        }
+        let mut member_paths = BTreeMap::new();
+        member_paths.insert(root, root_member);
         Self {
             archive,
             root,
-            by_member: if distinct_member {
-                BTreeMap::new()
-            } else {
-                BTreeMap::from([(root_member.clone(), root)])
-            },
-            member_paths: BTreeMap::from([(root, root_member)]),
+            by_member,
+            member_paths,
             descendants: Vec::new(),
             failure: None,
             diagnostics: Vec::new(),

@@ -349,7 +349,8 @@ impl<'a, B: Storage> Discovery<'a, B> {
             self.work.sets_reused += 1;
             return Ok(resolved.found(pattern, resolved_pattern, tiles));
         }
-        let mut tiles = BTreeSet::from([first_tile]);
+        let mut tiles = BTreeSet::new();
+        tiles.insert(first_tile);
         let later = UdimTile::all().skip_while(|tile| *tile <= first_tile);
         match &found {
             Found::Member {

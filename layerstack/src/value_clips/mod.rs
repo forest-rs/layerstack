@@ -193,12 +193,12 @@ impl RawLayer {
                 .iter()
                 .filter(|(_, spec)| spec.outer_variant_sites().is_empty())
                 .map(|(&path, spec)| {
-                    let attributes = spec
-                        .properties
-                        .iter()
-                        .filter(|p| p.spec.kind == crate::PropertyKind::Attribute)
-                        .map(|p| (p.name, p.spec.clone()))
-                        .collect();
+                    let attributes = sort::collect_map(
+                        spec.properties
+                            .iter()
+                            .filter(|p| p.spec.kind == crate::PropertyKind::Attribute)
+                            .map(|p| (p.name, p.spec.clone())),
+                    );
                     (path, attributes)
                 })
                 .collect(),

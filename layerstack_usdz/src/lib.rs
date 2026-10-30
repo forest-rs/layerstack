@@ -402,7 +402,8 @@ fn read_package<P: access::PackageAccess>(
 
     // 7. Installing two layers with one ID would silently drop one, so an
     //    outer resolver that handed out an ID twice fails the read.
-    let mut ids = BTreeSet::from([layer_id]);
+    let mut ids = BTreeSet::new();
+    ids.insert(layer_id);
     if let Some(layer) = resolved_layers.iter().find(|layer| !ids.insert(layer.id())) {
         return Err(UsdzError::DuplicateLayerId { id: layer.id() }.into());
     }

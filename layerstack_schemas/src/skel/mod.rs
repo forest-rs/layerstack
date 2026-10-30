@@ -59,9 +59,10 @@ pub use inputs::{
 };
 mod skinning;
 pub use skinning::{
-    BindingProperty, InfluenceInterpolation, JointInfluences, PrototypeLocation, SkelBinding,
-    SkelBindings, SkinningMethod, SkinningQuery, skin_points, skin_points_in_place,
-    skin_points_in_place_with_method, skin_points_with_method,
+    BindingProperty, InfluenceInterpolation, InterleavedInfluences, JointInfluences,
+    PrototypeLocation, SkelBinding, SkelBindings, SkinningInfluences, SkinningMethod,
+    SkinningQuery, skin_points, skin_points_in_place, skin_points_in_place_with_method,
+    skin_points_with_method,
 };
 
 use alloc::{

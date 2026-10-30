@@ -189,6 +189,7 @@ mod skel_dual_quaternion;
 mod skel_extents;
 mod skel_influences;
 mod skel_inputs;
+mod skel_interleaved;
 mod skel_normals;
 mod skel_pose;
 mod skel_prepared;

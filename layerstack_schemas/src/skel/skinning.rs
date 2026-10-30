@@ -33,7 +33,7 @@ pub fn skin_points_with_method(
     method: SkinningMethod,
     geom_bind: &gf::Matrix4,
     joint_transforms: &[gf::Matrix4],
-    influences: JointInfluences<'_>,
+    influences: impl SkinningInfluences,
     points: &[[f32; 3]],
 ) -> Result<Vec<[f32; 3]>, SkelError> {
     if method == SkinningMethod::ClassicLinear {
@@ -50,17 +50,19 @@ pub fn skin_points_in_place_with_method(
     method: SkinningMethod,
     geom_bind: &gf::Matrix4,
     joint_transforms: &[gf::Matrix4],
-    influences: JointInfluences<'_>,
+    influences: impl SkinningInfluences,
     points: &mut [[f32; 3]],
 ) -> Result<(), SkelError> {
-    if method == SkinningMethod::ClassicLinear {
-        return skin_points_in_place(geom_bind, joint_transforms, influences, points);
-    }
-    influences.validate(points.len(), joint_transforms.len())?;
-    super::dual_quaternion::Palette::points(joint_transforms)
-        .view(None)
-        .points(geom_bind, influences, points);
-    Ok(())
+    influences.with_separate(|influences| {
+        if method == SkinningMethod::ClassicLinear {
+            return skin_points_in_place(geom_bind, joint_transforms, influences, points);
+        }
+        influences.validate(points.len(), joint_transforms.len())?;
+        super::dual_quaternion::Palette::points(joint_transforms)
+            .view(None)
+            .points(geom_bind, influences, points);
+        Ok(())
+    })
 }
 
 /// How joint influence blocks apply to geometry points.
@@ -84,6 +86,71 @@ pub struct JointInfluences<'a> {
     /// Whether each point has its own block.
     pub interpolation: InfluenceInterpolation,
 }
+/// Borrowed influence blocks interleaved as `[index, weight]` pairs, the
+/// form GPU skinning consumes ([`JointInfluenceArrays::interleaved`]). Every
+/// skinning function takes them as it takes [`JointInfluences`]; each index
+/// is the pair's first value truncated to an integer.
+///
+/// OpenUSD: the `TfSpan<const GfVec2f> influences` overloads of
+/// `UsdSkelSkinPoints`, `UsdSkelSkinPointsLBS`, `UsdSkelSkinNormals`,
+/// `UsdSkelSkinNormalsLBS`, `UsdSkelSkinFaceVaryingNormals`,
+/// `UsdSkelSkinTransform` and `UsdSkelSkinTransformLBS`, which read each
+/// index as `static_cast<int>(influence[0])` (`_InterleavedInfluencesFn`,
+/// `pxr/usd/usdSkel/utils.cpp`).
+///
+/// [`JointInfluenceArrays::interleaved`]: super::JointInfluenceArrays::interleaved
+#[derive(Clone, Copy, Debug)]
+pub struct InterleavedInfluences<'a> {
+    /// `[joint index, weight]` per influence.
+    pub influences: &'a [[f32; 2]],
+    /// Positive number of influences in each block.
+    pub element_size: usize,
+    /// Whether each point has its own block.
+    pub interpolation: InfluenceInterpolation,
+}
+
+impl InterleavedInfluences<'_> {
+    /// The influences as separate index and weight arrays, each index
+    /// truncated toward zero as C++ `static_cast<int>` does.
+    #[must_use]
+    pub fn split(&self) -> super::JointInfluenceArrays {
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "OpenUSD truncates the interleaved index to an int"
+        )]
+        let indices = self.influences.iter().map(|pair| pair[0] as i32).collect();
+        let weights = self.influences.iter().map(|pair| pair[1]).collect();
+        super::JointInfluenceArrays { indices, weights }
+    }
+}
+
+/// Joint influences a skinning function reads: separate index and weight
+/// arrays ([`JointInfluences`]) or interleaved `[index, weight]` pairs
+/// ([`InterleavedInfluences`]).
+pub trait SkinningInfluences: Copy {
+    /// Calls `f` with the influences as separate arrays, splitting
+    /// interleaved ones into scratch arrays first.
+    fn with_separate<R>(self, f: impl FnOnce(JointInfluences<'_>) -> R) -> R;
+}
+
+impl SkinningInfluences for JointInfluences<'_> {
+    fn with_separate<R>(self, f: impl FnOnce(JointInfluences<'_>) -> R) -> R {
+        f(self)
+    }
+}
+
+impl SkinningInfluences for InterleavedInfluences<'_> {
+    fn with_separate<R>(self, f: impl FnOnce(JointInfluences<'_>) -> R) -> R {
+        let arrays = self.split();
+        f(JointInfluences {
+            indices: &arrays.indices,
+            weights: &arrays.weights,
+            element_size: self.element_size,
+            interpolation: self.interpolation,
+        })
+    }
+}
+
 impl JointInfluences<'_> {
     /// Validates block lengths, positive element size, all joint indices and
     /// finite weights against the intended point and transform counts.
@@ -130,9 +197,10 @@ impl JointInfluences<'_> {
 pub fn skin_points(
     geom_bind: &[[f64; 4]; 4],
     joint_transforms: &[[[f64; 4]; 4]],
-    influences: JointInfluences<'_>,
+    influences: impl SkinningInfluences,
     points: &[[f32; 3]],
 ) -> Result<Vec<[f32; 3]>, SkelError> {
+    influences.with_separate(|influences| {
     influences.validate(points.len(), joint_transforms.len())?;
     #[cfg(feature = "simd")]
     {
@@ -159,6 +227,7 @@ pub fn skin_points(
             points,
         ))
     }
+    })
 }
 pub(super) fn is_affine(matrix: &gf::Matrix4) -> bool {
     matrix[0][3] == 0. && matrix[1][3] == 0. && matrix[2][3] == 0. && matrix[3][3] == 1.
@@ -199,9 +268,10 @@ fn skin_points_validated<const PROJECT_BIND: bool>(
 pub fn skin_points_in_place(
     geom_bind: &[[f64; 4]; 4],
     joint_transforms: &[[[f64; 4]; 4]],
-    influences: JointInfluences<'_>,
+    influences: impl SkinningInfluences,
     points: &mut [[f32; 3]],
 ) -> Result<(), SkelError> {
+    influences.with_separate(|influences| {
     influences.validate(points.len(), joint_transforms.len())?;
     #[cfg(feature = "simd")]
     {
@@ -218,6 +288,7 @@ pub fn skin_points_in_place(
         skin_points_in_place_validated::<true>(geom_bind, joint_transforms, influences, points);
     }
     Ok(())
+    })
 }
 fn skin_points_in_place_validated<const PROJECT_BIND: bool>(
     bind: &gf::Matrix4,

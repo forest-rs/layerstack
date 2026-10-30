@@ -185,7 +185,9 @@ fn main() {
     load(GROVE, root, &mut store, &mut files);
 
     // 2. Compose and flatten, requiring exact instancing and animation (the
-    // defaults, spelled out) and refusing any loss.
+    // defaults, spelled out) and refusing any loss. `files` anchors asset
+    // paths to their layers; the grove's arcs are its only asset paths, and
+    // flattening applies them.
     let stage = Stage::compose(&mut store, root, StageOptions::default());
     let flat_id = LayerId(100);
     let requirements = FlattenRequirements {
@@ -193,7 +195,7 @@ fn main() {
         exact_animation: true,
         ..FlattenRequirements::default()
     };
-    let flattened = match stage.flatten(&mut store, root, flat_id, &requirements) {
+    let flattened = match stage.flatten(&mut store, &files, root, flat_id, &requirements) {
         Ok(flattened) => flattened,
         Err(e) => panic!("the grove flattens: {e}"),
     };

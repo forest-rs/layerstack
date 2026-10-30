@@ -42,7 +42,7 @@ use std::process::Command;
 use std::sync::Arc;
 
 use layerstack::stage::flatten::{
-    AssetPaths, ExternalDependency, FindingKind, FlattenError, FlattenReport, FlattenRequirements,
+    ExternalDependency, FindingKind, FlattenError, FlattenReport, FlattenRequirements,
     FlattenVerification, Loss, LossPolicy, Preserved, Requirement, SkipReason, Transformation,
 };
 use layerstack::{
@@ -192,10 +192,7 @@ fn flatten(case: &Case) -> Result<Flattened, String> {
 
 /// Flattens `case` under `requirements`, anchoring its asset paths to the
 /// files its layers are read from.
-fn flatten_with(
-    case: &Case,
-    requirements: FlattenRequirements<'_>,
-) -> Result<Flattened, FlattenError> {
+fn flatten_with(case: &Case, requirements: FlattenRequirements) -> Result<Flattened, FlattenError> {
     let mut loaded = load_entry_usda(&case.entry);
     let options = StageOptions {
         schemas: Some(Arc::new(schemas(&mut loaded.store))),
@@ -220,11 +217,13 @@ fn flatten_with(
             .map(|(&id, name)| (id, directory.join(name).to_string_lossy().into_owned()))
             .collect(),
     };
-    let requirements = FlattenRequirements {
-        asset_paths: AssetPaths::Anchored(&locations),
-        ..requirements
-    };
-    let flat = stage.flatten(&mut loaded.store, loaded.root_layer, id, &requirements)?;
+    let flat = stage.flatten(
+        &mut loaded.store,
+        &locations,
+        loaded.root_layer,
+        id,
+        &requirements,
+    )?;
     Ok(Flattened {
         store: loaded.store,
         stage,

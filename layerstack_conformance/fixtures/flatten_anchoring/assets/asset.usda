@@ -1,0 +1,18 @@
+#usda 1.0
+
+def Xform "Asset" (
+    customData = {
+        asset cd = @./cd.png@
+        asset cdSearch = @maps/m.png@
+    }
+)
+{
+    asset[] arr = [@./tex.png@, @maps/m.png@, @maps/none.png@]
+    asset inAsset = @maps/m.png@
+    asset rootOnly = @textures/beside.png@
+    asset sampled.timeSamples = {
+        1: @maps/m.png@,
+        2: @./tex.png@,
+    }
+    asset tex = @./tex.png@
+}

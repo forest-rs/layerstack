@@ -39,7 +39,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use layerstack::edit::{EditTarget, Transaction};
-use layerstack::stage::flatten::{AssetPaths, FlattenRequirements, LossPolicy};
+use layerstack::stage::flatten::{FlattenRequirements, LossPolicy};
 use layerstack::value_clips::ClipIssueKind;
 use layerstack::{
     AssetResolveError, AssetResolver, CompositionError, ExpressionContext, FieldValue,
@@ -446,7 +446,6 @@ fn expressions_openusd_warns_about_are_composition_errors() {
 fn flatten_text(loaded: &mut LoadedStage, stage: &Stage) -> String {
     let resolver = locations(loaded);
     let requirements = FlattenRequirements {
-        asset_paths: AssetPaths::Anchored(&resolver),
         exact_animation: false,
         losses: LossPolicy::RefuseRequired,
         ..FlattenRequirements::default()
@@ -454,6 +453,7 @@ fn flatten_text(loaded: &mut LoadedStage, stage: &Stage) -> String {
     let flat = stage
         .flatten(
             &mut loaded.store,
+            &resolver,
             loaded.root_layer,
             LayerId(999_999),
             &requirements,

@@ -53,10 +53,18 @@ fn referenced_scene(store: &mut InMemoryStore, offset: LayerOffset) -> TokenId {
 
 fn flatten(
     store: &mut InMemoryStore,
-    requirements: &FlattenRequirements<'_>,
+    requirements: &FlattenRequirements,
+) -> Result<Flattened, FlattenError> {
+    flatten_with(store, &crate::NoAssets, requirements)
+}
+
+fn flatten_with(
+    store: &mut InMemoryStore,
+    assets: &dyn AssetResolver,
+    requirements: &FlattenRequirements,
 ) -> Result<Flattened, FlattenError> {
     let stage = Stage::compose(store, LayerId(1), StageOptions::default());
-    stage.flatten(store, LayerId(1), LayerId(9), requirements)
+    stage.flatten(store, assets, LayerId(1), LayerId(9), requirements)
 }
 
 #[test]
@@ -143,6 +151,7 @@ fn missing_root_layer_is_an_error() {
     assert_eq!(
         stage.flatten(
             &mut store,
+            &crate::NoAssets,
             LayerId(7),
             LayerId(9),
             &FlattenRequirements::default()
@@ -155,7 +164,17 @@ fn missing_root_layer_is_an_error() {
 /// asset's `/Asset` spec.
 fn flatten_edited(
     offset: LayerOffset,
-    requirements: &FlattenRequirements<'_>,
+    requirements: &FlattenRequirements,
+    edit: impl FnOnce(&mut InMemoryStore, &mut PrimSpec),
+) -> Result<Flattened, FlattenError> {
+    flatten_edited_with(offset, &crate::NoAssets, requirements, edit)
+}
+
+/// As [`flatten_edited`], anchoring asset paths through `assets`.
+fn flatten_edited_with(
+    offset: LayerOffset,
+    assets: &dyn AssetResolver,
+    requirements: &FlattenRequirements,
     edit: impl FnOnce(&mut InMemoryStore, &mut PrimSpec),
 ) -> Result<Flattened, FlattenError> {
     let mut store = InMemoryStore::default();
@@ -168,7 +187,7 @@ fn flatten_edited(
         .get_mut(&LayerId(2))
         .unwrap()
         .insert_prim(asset, spec);
-    flatten(&mut store, requirements)
+    flatten_with(&mut store, assets, requirements)
 }
 
 /// The unmet requirements of a refused flatten, as (requirement, path,
@@ -484,7 +503,7 @@ fn sparse_array_edit_samples_are_baked() {
 }
 
 #[test]
-fn asset_paths_are_external_and_anchoring_is_required_when_declared() {
+fn asset_paths_are_anchored_by_default_and_kept_as_authored_on_request() {
     let texture = |store: &mut InMemoryStore, spec: &mut PrimSpec| {
         let name = store.tokens.intern("texture");
         spec.set_property(
@@ -493,12 +512,11 @@ fn asset_paths_are_external_and_anchoring_is_required_when_declared() {
                 .with_default(Value::Asset("./bark.png".into())),
         );
     };
-    let flat = flatten_edited(
-        LayerOffset::IDENTITY,
-        &FlattenRequirements::default(),
-        texture,
-    )
-    .expect("flattens");
+    let as_authored = FlattenRequirements {
+        asset_paths: AssetPaths::AsAuthored,
+        ..FlattenRequirements::default()
+    };
+    let flat = flatten_edited(LayerOffset::IDENTITY, &as_authored, texture).expect("flattens");
     let external: Vec<String> = flat.report.external().map(ToString::to_string).collect();
     assert_eq!(
         external,
@@ -523,12 +541,16 @@ fn asset_paths_are_external_and_anchoring_is_required_when_declared() {
             (self.known && id == LayerId(2)).then_some("/assets/trees/asset.usda")
         }
     }
-    let anchored = FlattenRequirements {
-        asset_paths: AssetPaths::Anchored(&Located { known: false }),
-        ..FlattenRequirements::default()
-    };
+    // Anchoring is the default, and a layer the resolver cannot locate
+    // leaves a path relative to it unanchored.
+    let anchored = FlattenRequirements::default();
     assert_eq!(
-        unmet(flatten_edited(LayerOffset::IDENTITY, &anchored, texture)),
+        unmet(flatten_edited_with(
+            LayerOffset::IDENTITY,
+            &Located { known: false },
+            &anchored,
+            texture
+        )),
         [(
             Requirement::AnchoredAssetPaths,
             "/World/Tree.texture".into(),
@@ -538,11 +560,8 @@ fn asset_paths_are_external_and_anchoring_is_required_when_declared() {
     );
 
     let located = Located { known: true };
-    let anchored = FlattenRequirements {
-        asset_paths: AssetPaths::Anchored(&located),
-        ..FlattenRequirements::default()
-    };
-    let flat = flatten_edited(LayerOffset::IDENTITY, &anchored, texture).expect("anchors");
+    let flat =
+        flatten_edited_with(LayerOffset::IDENTITY, &located, &anchored, texture).expect("anchors");
     let findings: Vec<String> = flat
         .report
         .findings
@@ -571,6 +590,7 @@ fn the_flattened_layer_verifies_against_the_stage() {
     let flat = stage
         .flatten(
             &mut store,
+            &crate::NoAssets,
             LayerId(1),
             LayerId(9),
             &FlattenRequirements::default(),
@@ -759,6 +779,7 @@ fn flattened_metadata_holds_only_what_the_root_or_session_authors() {
         stage
             .flatten(
                 store,
+                &crate::NoAssets,
                 LayerId(1),
                 LayerId(9),
                 &FlattenRequirements::default(),
@@ -894,12 +915,14 @@ fn stage_metadata_asset_paths_anchor_to_the_layer_authoring_them() {
         ])),
         "as authored"
     );
-    let anchoring = FlattenRequirements {
-        asset_paths: AssetPaths::Anchored(&RootAndSession),
-        ..FlattenRequirements::default()
-    };
     let flat = stage
-        .flatten(&mut store, LayerId(1), LayerId(9), &anchoring)
+        .flatten(
+            &mut store,
+            &RootAndSession,
+            LayerId(1),
+            LayerId(9),
+            &FlattenRequirements::default(),
+        )
         .expect("flattens");
     assert_eq!(
         flat.layer.metadata(data),

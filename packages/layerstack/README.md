@@ -258,8 +258,9 @@ await stage.resolve(source);
   left dirty and listed in `skipped`; `save(layer)` writes it. Exports copy and change nothing:
   `exportLayer(layer, "usda" | "usdc")` returns one layer's bytes (the
   session layer too), `exportFlattened(format)` the composed stage as one
-  layer with no arcs (`lossless`, and `lost` for anything a layer cannot
-  hold), and `exportPackage()` a USDZ of the root and everything it
+  layer with no arcs and its asset paths anchored to the layers authoring
+  them, as OpenUSD flattens (`lossless`, and `lost` for anything a layer
+  cannot hold), and `exportPackage()` a USDZ of the root and everything it
   depends on, unsaved edits included (`bytes` is `null`, with `unresolved`
   saying why, while a dependency is not supplied; the session layer is
   `omitted`).
@@ -406,7 +407,8 @@ exist, `subset.indices` for a face past the mesh, `coord_sys.no_binding`,
 | `receipt.affinity` | A receipt of another stage was passed in. |
 | `receipt.released` | The receipt was undone or released already. |
 | `array.released` | The array handle was released. |
-| `flatten.failed`, `package.failed` | The stage has no root layer to flatten or package. |
+| `flatten.failed` | No layer id is free for the flattened layer. |
+| `package.failed` | The stage has no root layer to package. |
 | `array.no_memory` | The module does not expose its memory, so a handle cannot be read. |
 | `listener.failed` | Reported, not thrown: a change listener threw; `cause` is its error. |
 | `path.invalid` | A path is not an absolute prim path, or not a property path where one is asked for. |

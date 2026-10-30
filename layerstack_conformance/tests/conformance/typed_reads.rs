@@ -480,6 +480,7 @@ fn empty_sample_maps_preserve_default_sources_when_flattened() {
     let flat = stage
         .flatten(
             &mut loaded.store,
+            &layerstack::NoAssets,
             loaded.root_layer,
             LayerId(1000),
             &FlattenRequirements::default(),

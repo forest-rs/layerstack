@@ -11,7 +11,6 @@ use alloc::{string::String, vec::Vec};
 use core::fmt;
 
 use crate::{
-    asset::AssetResolver,
     doc::{LayerId, LayerOffset},
     property::Variability,
 };
@@ -21,13 +20,13 @@ use crate::{
 /// [`Stage::flatten`](crate::Stage::flatten) refuses, listing every unmet
 /// requirement ([`FlattenError::Refused`]), rather than return a layer that
 /// breaks one. The default preserves instancing and animation exactly,
-/// writes asset paths as authored and refuses any loss.
+/// anchors asset paths as OpenUSD's flatten does and refuses any loss.
 ///
 /// Build it as a struct literal that names the fields it sets and takes
 /// the rest from `..FlattenRequirements::default()`: a field a later release adds then
 /// keeps its default.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct FlattenRequirements<'a> {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FlattenRequirements {
     /// Whether instances keep sharing their prototypes.
     pub instancing: Instancing,
     /// Whether every time sample, spline and layer offset must reach the
@@ -35,12 +34,12 @@ pub struct FlattenRequirements<'a> {
     /// layer cannot hold yet is left out and reported as lost.
     pub exact_animation: bool,
     /// How asset paths are written.
-    pub asset_paths: AssetPaths<'a>,
+    pub asset_paths: AssetPaths,
     /// Which losses refuse the flatten.
     pub losses: LossPolicy,
 }
 
-impl FlattenRequirements<'_> {
+impl FlattenRequirements {
     /// These requirements relaxed just enough to accept `unmet`, the
     /// unmet requirements of a refused flatten: exact animation or
     /// anchoring is given up when `unmet` names it, and, since every unmet
@@ -63,12 +62,12 @@ impl FlattenRequirements<'_> {
     }
 }
 
-impl Default for FlattenRequirements<'_> {
+impl Default for FlattenRequirements {
     fn default() -> Self {
         Self {
             instancing: Instancing::Preserve,
             exact_animation: true,
-            asset_paths: AssetPaths::AsAuthored,
+            asset_paths: AssetPaths::Anchored,
             losses: LossPolicy::RefuseAny,
         }
     }
@@ -93,38 +92,23 @@ pub enum Instancing {
 ///
 /// Spec: AOUSD Core §9.4 (a relative asset path is anchored to the layer
 /// that authors it).
-#[derive(Clone, Copy, Default)]
-pub enum AssetPaths<'a> {
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum AssetPaths {
+    /// Anchored to the layer that authors each, through the resolver the
+    /// flatten is given, which knows where each layer is
+    /// ([`AssetResolver::anchor_asset_path`]), as OpenUSD's flatten
+    /// anchors them (`SdfAnchorAssetPaths` through `ArResolver`), in
+    /// values, arrays, dictionaries and metadata alike. An asset path the
+    /// resolver cannot anchor, such as one relative to a layer with no
+    /// location, is an unmet requirement ([`Loss::UnanchoredAssetPath`]).
+    ///
+    /// [`AssetResolver::anchor_asset_path`]: crate::AssetResolver::anchor_asset_path
+    #[default]
+    Anchored,
     /// As authored. A relative path keeps meaning what it meant only while
     /// the flattened layer sits beside the layer that authored it; every
     /// asset path is reported as an external dependency.
-    #[default]
     AsAuthored,
-    /// Anchored to the layer that authors each, through the resolver that
-    /// knows where each layer is ([`AssetResolver::anchor_asset_path`]), as
-    /// OpenUSD's flatten anchors them (`SdfAnchorAssetPaths`), in values,
-    /// arrays, dictionaries and metadata alike. An asset path that cannot
-    /// be anchored is an unmet requirement ([`Loss::UnanchoredAssetPath`]).
-    Anchored(&'a dyn AssetResolver),
-}
-
-impl fmt::Debug for AssetPaths<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::AsAuthored => f.write_str("AsAuthored"),
-            Self::Anchored(_) => f.write_str("Anchored(..)"),
-        }
-    }
-}
-
-impl PartialEq for AssetPaths<'_> {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::AsAuthored, Self::AsAuthored) => true,
-            (Self::Anchored(a), Self::Anchored(b)) => core::ptr::addr_eq(*a, *b),
-            _ => false,
-        }
-    }
 }
 
 /// Which losses refuse a flatten.
@@ -376,7 +360,7 @@ impl fmt::Display for Finding {
 pub struct FindingSource {
     /// The layer that authors it, as the store the stage was composed from
     /// identifies it. The resolver that loaded the layer names it
-    /// ([`AssetResolver::resolved_path`]).
+    /// ([`AssetResolver::resolved_path`](crate::AssetResolver::resolved_path)).
     pub layer: LayerId,
     /// The spec in that layer that authors it (`/Asset{v=a}.height`).
     pub spec: String,

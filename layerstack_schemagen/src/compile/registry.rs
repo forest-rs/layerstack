@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use std::path::{Path as FsPath, PathBuf};
 use std::sync::Arc;
 
-use layerstack::stage::flatten::FlattenRequirements;
+use layerstack::stage::flatten::{AssetPaths, FlattenRequirements};
 use layerstack::{
     EditTarget, FieldValue, Layer, LayerId, ListOp, Path, PathId, PrimSpec, PropertyPath,
     Transaction, Value,
@@ -260,12 +260,17 @@ impl Names {
 /// Flattens the schema stage into a new layer of its store, as
 /// `UsdStage::Flatten` does. The stage composes with no schema registry,
 /// so no prim definition decides a property, which usdGenSchema avoids by
-/// mangling type names.
+/// mangling type names. Asset paths stay as authored: the schema stage
+/// knows no layer locations.
 fn flatten(stage: &mut SchemaStage, root: LayerId) -> Result<LayerId, CompileError> {
     let (store, composed) = stage.parts_mut();
     let id = LayerId(store.layer_ids().last().map_or(0, |id| id.0) + 1);
+    let requirements = FlattenRequirements {
+        asset_paths: AssetPaths::AsAuthored,
+        ..FlattenRequirements::default()
+    };
     let flattened = composed
-        .flatten(store, root, id, &FlattenRequirements::default())
+        .flatten(store, &layerstack::NoAssets, root, id, &requirements)
         .map_err(|e| CompileError::Write {
             message: format!("flattening the schema stage: {e:?}"),
         })?;

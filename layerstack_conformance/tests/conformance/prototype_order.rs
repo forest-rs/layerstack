@@ -239,6 +239,7 @@ fn check(scene: &Path) {
     let flat = stage
         .flatten(
             &mut loaded.store,
+            &layerstack::NoAssets,
             loaded.root_layer,
             id,
             &FlattenRequirements::default(),

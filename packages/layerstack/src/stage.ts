@@ -1671,9 +1671,14 @@ export class Stage implements Disposable {
   /**
    * The composed stage as one layer with no composition arcs, in `format`
    * (`usda` by default), as OpenUSD's `UsdStage::Flatten` writes it:
-   * instances keep sharing prototypes, asset paths are written as authored.
-   * Opening the bytes on their own composes the same stage. Content a
-   * layer cannot hold is left out and listed in `lost`, never silently.
+   * instances keep sharing prototypes, and each asset path is anchored to
+   * the layer that authors it: `./albedo.png` in `set/rock.usda` is written
+   * `set/albedo.png`, the identifier it names, and a search path such as
+   * `textures/moss.png` is anchored only when its asset was supplied beside
+   * that layer. Opening the bytes on their own composes the same stage.
+   * Content a layer cannot hold, such as a path relative to the anonymous
+   * session layer, is written as authored and listed in `lost`, never
+   * silently.
    */
   exportFlattened(format: LayerFormat = "usda"): FlattenResult {
     const [bytes, lossless, lost] = this.#call("exportFlattened", (native) => native.exportFlattened(format)) as [

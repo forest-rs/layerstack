@@ -95,6 +95,7 @@ fn relational_targets_map_through_every_arc_as_openusd_maps_them() {
     let flat = stage
         .flatten(
             &mut loaded.store,
+            &layerstack::NoAssets,
             loaded.root_layer,
             id,
             &FlattenRequirements::default(),

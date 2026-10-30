@@ -562,7 +562,7 @@ pub trait AssetResolver {
     /// authored. OpenUSD's default resolver anchors a search path too when
     /// the anchored asset exists (`ArDefaultResolver::_CreateIdentifier`); a
     /// resolver that can look overrides this to do the same with
-    /// [`create_identifier`].
+    /// [`create_identifier`], as `layerstack_io`'s document resolver does.
     ///
     /// Spec: AOUSD Core §9.4 (relative asset paths).
     fn anchor_asset_path(&self, asset_path: &str, anchor: LayerId) -> Option<String> {

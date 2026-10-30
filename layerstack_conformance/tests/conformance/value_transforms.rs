@@ -319,6 +319,7 @@ fn flattening_writes_the_values_openusd_writes() {
     let flat = stage
         .flatten(
             &mut loaded.store,
+            &layerstack::NoAssets,
             loaded.root_layer,
             LayerId(999_999),
             &FlattenRequirements::default(),

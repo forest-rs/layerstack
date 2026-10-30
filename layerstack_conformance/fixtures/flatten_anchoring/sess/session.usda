@@ -1,0 +1,22 @@
+#usda 1.0
+(
+    customLayerData = {
+        dictionary inner = {
+            asset deepSession = @./deep.png@
+        }
+        asset rootTex = @./sess.png@
+        asset sessExpr = @`"./${NAME}.png"`@
+        asset sessSearch = @stex/s.png@
+        asset sessTex = @./sess.png@
+    }
+    endTimeCode = 10
+    expressionVariables = {
+        string NAME = "sess"
+    }
+    upAxis = "Z"
+)
+
+over "World"
+{
+    asset sessAttr = @./sess.png@
+}

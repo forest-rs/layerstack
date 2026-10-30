@@ -20,8 +20,8 @@ use layerstack::{
     ValueSource, Variability, asset_dependencies::DependencyTarget,
 };
 use layerstack_io::{
-    ApplyError, ImportPolicy, IoError, LoadOptions, LoadReport, OpenOptions, PackageInclusion,
-    PackagePreparationLimits, SaveReport, StageDocument, UnavailableAsset,
+    ApplyError, FlattenFailure, ImportPolicy, IoError, LoadOptions, LoadReport, OpenOptions,
+    PackageInclusion, PackagePreparationLimits, SaveReport, StageDocument, UnavailableAsset,
 };
 use wasm_bindgen::prelude::*;
 
@@ -1643,31 +1643,28 @@ impl Stage {
     /// The composed stage flattened into one layer
     /// ([`layerstack::Stage::flatten`], OpenUSD's `UsdStage::Flatten`), as
     /// `format`: `[bytes, lossless, lost]`. Instances keep sharing their
-    /// prototypes and asset paths are written as authored. A flatten that
-    /// would lose something (animation a layer cannot hold) still exports,
-    /// accepting exactly those losses, with `lossless` false and each loss
-    /// in `lost` as `[path, message]`.
+    /// prototypes, and asset paths are anchored to the layer that authors
+    /// each ([`StageDocument::flatten`]), as OpenUSD's flatten anchors
+    /// them: a search path is anchored when the host supplied the asset
+    /// beside its layer. A flatten that would lose something (animation a
+    /// layer cannot hold, a path relative to a layer with no identifier)
+    /// still exports, accepting exactly those losses, with `lossless`
+    /// false and each loss in `lost` as `[path, message]`.
     ///
     /// Spec: AOUSD Core §11 (stage population), §12 (value resolution).
     ///
     /// # Errors
     ///
     /// `argument.invalid` for a format other than `usda` or `usdc`;
-    /// `flatten.failed` when the stage has no root; the writer's
-    /// `io.unsupported`.
+    /// `flatten.failed` when the document has no free layer id; the
+    /// writer's `io.unsupported`.
     pub(crate) fn export_flattened(&mut self, format: &str) -> Result<Wire, Error> {
         let target = export_target(format)?;
-        let id = self.unused_layer_id();
-        let (store, live) = self.document.parts_mut();
-        let stage = live.stage();
-        let root = stage
-            .root_layer()
-            .ok_or_else(|| Error::new("flatten.failed", "the stage has no root layer"))?;
         let requirements = FlattenRequirements::default();
-        let flattened = match stage.flatten(store, root, id, &requirements) {
-            Err(FlattenError::Refused(refusal)) => {
+        let flattened = match self.document.flatten(&requirements) {
+            Err(FlattenFailure::Flatten(FlattenError::Refused(refusal))) => {
                 let relaxed = requirements.accepting(&refusal.unmet);
-                stage.flatten(store, root, id, &relaxed)
+                self.document.flatten(&relaxed)
             }
             other => other,
         }
@@ -1763,16 +1760,6 @@ impl Stage {
             Wire::List(unresolved),
             Wire::List(omitted),
         ]))
-    }
-
-    /// The smallest layer id above the session layer's that no layer of
-    /// the store has, for a layer the bindings build and never store.
-    fn unused_layer_id(&self) -> LayerId {
-        let store = self.document.store();
-        (SESSION_LAYER.0 + 1..)
-            .map(LayerId)
-            .find(|id| !store.contains_layer(*id))
-            .unwrap_or(SESSION_LAYER)
     }
 
     fn check_layer(&self, layer: LayerId) -> Result<(), Error> {

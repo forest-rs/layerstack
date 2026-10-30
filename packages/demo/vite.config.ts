@@ -11,6 +11,8 @@ export default defineConfig({
   build: {
     // The page awaits the module at the top level.
     target: "es2022",
+    // three.js loads in a chunk of its own, after the editor, at 560 kB.
+    chunkSizeWarningLimit: 600,
   },
   // The package loads its module with `new URL(..., import.meta.url)`;
   // pre-bundling it would move it away from its module file.

@@ -1,7 +1,7 @@
 #usda 1.0
 (
     defaultPrim = "World"
-    doc = "The demo editor's sample: a root layer, a sublayer, a class the rock inherits, a robot referenced from its own file with a variant set, and two instances of a beacon."
+    doc = "The demo editor's sample: a root layer, a sublayer, a class the rock inherits, a robot referenced from its own file with a variant set, two instances of a beacon, a ground mesh and a point instancer of stones."
     subLayers = [
         @./library.usda@
     ]
@@ -13,6 +13,8 @@ def Xform "World"
         inherits = </Shape>
     )
     {
+        double3 xformOp:translate = (-4, 2, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
     }
 
     def Xform "Robot" (
@@ -23,6 +25,8 @@ def Xform "World"
         prepend variantSets = "finish"
     )
     {
+        double3 xformOp:translate = (3, 0, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
         variantSet "finish" = {
             "chrome" (
                 prepend references = @./assets/chrome.usda@
@@ -31,6 +35,7 @@ def Xform "World"
             }
             "painted" {
                 color3f color = (0.8, 0.2, 0.1)
+                color3f[] primvars:displayColor = [(0.8, 0.2, 0.1)]
             }
         }
     }
@@ -42,6 +47,8 @@ def Xform "World"
             prepend references = @./assets/beacon.usda@
         )
         {
+            double3 xformOp:translate = (-2, 0, -5)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
         }
 
         def "South" (
@@ -49,6 +56,35 @@ def Xform "World"
             prepend references = @./assets/beacon.usda@
         )
         {
+            double3 xformOp:translate = (2, 0, -5)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+    }
+
+    def Mesh "Ground"
+    {
+        int[] faceVertexCounts = [4, 4]
+        int[] faceVertexIndices = [0, 1, 4, 3, 1, 2, 5, 4]
+        point3f[] points = [(-8, 0, 6), (0, 0, 6), (8, 0, 6), (-8, 0, -8), (0, 0, -8), (8, 0, -8)]
+        color3f[] primvars:displayColor = [(0.36, 0.42, 0.3), (0.42, 0.38, 0.3)] (
+            interpolation = "uniform"
+        )
+        uniform token subdivisionScheme = "none"
+    }
+
+    def PointInstancer "Stones"
+    {
+        rel prototypes = </World/Stones/Stone>
+        int[] protoIndices = [0, 0, 0, 0, 0]
+        point3f[] positions = [(-1, 0.25, 3), (0, 0.25, 3.5), (1, 0.25, 3), (2, 0.25, 3.5), (3, 0.25, 3)]
+        quath[] orientations = [(1, 0, 0, 0), (0.92, 0, 0.38, 0), (1, 0, 0, 0), (0.92, 0, -0.38, 0), (1, 0, 0, 0)]
+        int64[] ids = [1, 2, 3, 4, 5]
+        int64[] invisibleIds = []
+
+        def Cube "Stone"
+        {
+            double size = 0.5
+            color3f[] primvars:displayColor = [(0.55, 0.53, 0.5)]
         }
     }
 }

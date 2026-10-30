@@ -11,12 +11,14 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { LayerstackError, loadLayerstack } from "@forest-rs/layerstack";
-import type { EditTarget, Explanation, Stage, Value } from "@forest-rs/layerstack";
+import type { EditTarget, Explanation, Stage, TransformCacheStats, Value } from "@forest-rs/layerstack";
 import type { LayerFile } from "../src/editor.ts";
 import { Session, sample, steps } from "../src/script.ts";
 import type { Host } from "../src/script.ts";
 import { materialSummary } from "../src/materials.ts";
 import { formatValue, releaseValue } from "../src/values.ts";
+import { buildViewport, primColor, viewportSummary } from "../src/viewport.ts";
+import type { ViewportSummary } from "../src/viewport.ts";
 
 const scene = fileURLToPath(new URL("../public/scene/", import.meta.url));
 const downloads = await mkdtemp(join(tmpdir(), "layerstack-demo-"));
@@ -104,7 +106,14 @@ const checks: ((session: Session) => void)[] = [
     assert.deepEqual(loaded.sort(), ["assets/beacon.usda", "assets/robot.usda", "library.usda"], "the beacon is read once for both instances");
     assert.ok(!current.loopLog.some((entry) => entry.identifier === sample.variantAsset), "the chrome finish is not fetched yet");
     assert.deepEqual(current.stage.children("/"), ["/Shape", "/World"]);
-    assert.deepEqual(current.stage.children("/World"), ["/World/Lamp", "/World/Rock", "/World/Robot", "/World/Beacons"]);
+    assert.deepEqual(current.stage.children("/World"), [
+      "/World/Lamp",
+      "/World/Rock",
+      "/World/Robot",
+      "/World/Beacons",
+      "/World/Ground",
+      "/World/Stones",
+    ]);
     assert.equal(current.stage.prim("/Shape")?.abstract, true);
     assert.equal(current.stage.editLayer?.identifier, sample.root);
     assert.equal(current.changeLog.length, 1, "one recomposition for the one round");
@@ -167,6 +176,8 @@ const checks: ((session: Session) => void)[] = [
       "assets/robot.usda /Robot.color references ignored (shadowed)",
     ]);
     assert.equal(current.stage.status().complete, true);
+    // The viewport's color: the body inherits the chrome finish's displayColor.
+    assert.deepEqual(primColor(current.stage, `${sample.robot}/Body`), { color: [0.9, 0.9, 0.95].map(Math.fround), colorSource: "displayColor" });
   },
   // 5. Both undone, the override redone.
   ({ current }) => {
@@ -388,6 +399,30 @@ const checks: ((session: Session) => void)[] = [
     );
     assert.deepEqual(current.undoStack, [], "muting is not an edit");
   },
+  // 14. One edit moves an instance, hides a gprim and hides one instance of an instancer.
+  ({ current, prim }) => {
+    assert.equal(prim, sample.instance);
+    assert.equal(current.undoStack.at(-1)?.label, "move the north beacon, hide the rock and stone 3");
+    const stage = current.stage;
+    assert.deepEqual(stage.visibilities([sample.rock, sample.proxy]), ["invisible", "inherited"]);
+    // Row-vector matrices: the translation is the last row.
+    assert.deepEqual([...stage.worldTransforms([sample.proxy]).subarray(12, 15)], [sample.beaconMoved[0], 2, sample.beaconMoved[2]]);
+    const stones = stage.pointInstances(sample.stones);
+    assert.deepEqual([...stones.ids], [1n, 2n, 4n, 5n]);
+    assert.deepEqual([...stage.instanceMask(sample.stones)], [1, 1, 0, 1, 1]);
+    // The viewport of the step before read every transform; the edit moved one prim.
+    const before = transformsBefore;
+    assert.ok(before !== null);
+    // Every prim the viewport draws, the instance proxies below the beacon included.
+    stage.worldTransforms(buildViewport(stage).items.filter((item) => item.prototype === null).map((item) => item.path));
+    const after = stage.transformCache();
+    assert.ok(after.changeBatches > before.changeBatches, "the cache heard the edit");
+    // The beacon's local transform, and the rock's: its first `visibility`
+    // opinion is a new property spec, which the change record reports as a
+    // resync of the rock.
+    assert.deepEqual(current.changeLog.at(-1)?.changes.resynced, [sample.rock]);
+    assert.equal(after.localComputed - before.localComputed, 2, "only the beacon's and the rock's local transforms are recomputed");
+  },
 ];
 
 /**
@@ -422,12 +457,78 @@ async function unmuteWithTheToggle(session: Session): Promise<void> {
   assert.equal(code(() => current.stage.muteLayer(current.stage.root)), "mute.root_layer");
 }
 
+/**
+ * What the viewport draws after each step, from the stage's reads alone:
+ * the prims drawn, the triangles, the instances and the framed world
+ * bounds. Pixels are never compared.
+ */
+const beacons = ["/World/Beacons/North/Bulb", "/World/Beacons/North/Post", "/World/Beacons/South/Bulb", "/World/Beacons/South/Post"];
+const opened: ViewportSummary = {
+  drawn: [...beacons, "/World/Ground", `${sample.robot}/Body`, `${sample.robot}/Head`, sample.rock, `${sample.stones} ×5`],
+  hidden: [],
+  // Two quads, four spheres of 576 triangles (the rock, the head, two
+  // bulbs), three cubes of 12 (the body, two posts) and five stones.
+  triangles: 4 + 4 * 576 + 3 * 12 + 5 * 12,
+  instances: 5,
+  // The ground's corners in x and z; the lamp's sphere light at the origin
+  // to the rock's top (radius 2 at y = 2) in y.
+  bounds: [-8, -0.5, -8, 8, 4, 6],
+};
+/** The rock's radius is 3: it reaches y = -1 and 5. */
+const overridden: ViewportSummary = { ...opened, bounds: [-8, -1, -8, 8, 5, 6] };
+const withPebble = (pebble: "sphere" | "cube", robot: string = sample.robot): ViewportSummary => ({
+  ...overridden,
+  drawn: [...overridden.drawn.filter((path) => !path.startsWith(sample.robot)), sample.pebble, `${robot}/Body`, `${robot}/Head`].sort(),
+  triangles: opened.triangles + (pebble === "sphere" ? 576 : 12),
+});
+const viewports: ViewportSummary[] = [
+  opened,
+  opened,
+  overridden,
+  overridden,
+  overridden,
+  withPebble("sphere"),
+  withPebble("cube"),
+  withPebble("cube"),
+  withPebble("cube", sample.rover),
+  withPebble("cube", sample.rover),
+  withPebble("cube", sample.rover),
+  withPebble("cube", sample.rover),
+  // Muted: the rover's body and head are gone.
+  {
+    ...withPebble("cube", sample.rover),
+    drawn: withPebble("cube", sample.rover).drawn.filter((path) => !path.startsWith(sample.rover)),
+    triangles: opened.triangles + 12 - 576 - 12,
+  },
+  // The rock and stone 3 hidden, the north beacon moved to x = -5, z = -1;
+  // the bulbs' tops (y = 2.25) are the highest now.
+  {
+    drawn: [...beacons, "/World/Ground", sample.pebble, `${sample.stones} ×4`],
+    hidden: [sample.rock],
+    triangles: 4 + 2 * 576 + 3 * 12 + 4 * 12,
+    instances: 4,
+    bounds: [-8, -0.5, -8, 8, 2.25, 6],
+  },
+];
+
+/** The transform cache's counters after the last viewport was built. */
+let transformsBefore: TransformCacheStats | null = null;
+
+function checkViewport(index: number, session: Session): void {
+  const summary = viewportSummary(buildViewport(session.current.stage, session.time ?? undefined));
+  transformsBefore = session.current.stage.transformCache();
+  if (process.env.PRINT_VIEWPORTS !== undefined) console.log(JSON.stringify(summary));
+  assert.deepEqual(summary, viewports[index], `the viewport after step ${index + 1}`);
+}
+
 assert.equal(checks.length, steps.length);
+assert.equal(viewports.length, steps.length);
 try {
   for (const [index, step] of steps.entries()) {
     const before = host.layerstack.transfer();
     await step.run(session, host);
     checks[index]?.(session);
+    checkViewport(index, session);
     const after = host.layerstack.transfer();
     assert.ok(after.bytesIn >= before.bytesIn && after.bytesOut >= before.bytesOut, "the counters only grow");
     console.log(

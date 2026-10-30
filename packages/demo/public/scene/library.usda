@@ -7,6 +7,7 @@ class "Shape"
 {
     double radius = 2
     color3f color = (0.4, 0.4, 0.4)
+    color3f[] primvars:displayColor = [(0.45, 0.42, 0.38)]
 }
 
 over "World"

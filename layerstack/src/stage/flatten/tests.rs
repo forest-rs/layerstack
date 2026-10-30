@@ -733,3 +733,53 @@ fn properties_are_flattened_in_name_order_with_their_order_kept() {
         "and applies again"
     );
 }
+
+/// The flattened layer holds the stage metadata the root or session layer
+/// authors and nothing else: no `timeCodesPerSecond` unless one authors
+/// it, as OpenUSD copies the pseudo-root's authored metadata.
+///
+/// Spec: AOUSD Core §12.2.7 (layer metadata comes from the root layer).
+#[test]
+fn flattened_metadata_holds_only_what_the_root_or_session_authors() {
+    let mut store = InMemoryStore::default();
+    referenced_scene(&mut store, LayerOffset::IDENTITY);
+    let (end, rate) = (
+        store.tokens.intern("endTimeCode"),
+        store.tokens.intern("timeCodesPerSecond"),
+    );
+    let mut session = Layer::new(LayerId(3));
+    session.set_metadata(end, Value::Double(10.0));
+    store.insert_layer(session);
+    let flatten = |store: &mut InMemoryStore| {
+        let options = StageOptions {
+            session_layer: Some(LayerId(3)),
+            ..StageOptions::default()
+        };
+        let stage = Stage::compose(store, LayerId(1), options);
+        stage
+            .flatten(
+                store,
+                LayerId(1),
+                LayerId(9),
+                &FlattenRequirements::default(),
+            )
+            .expect("flattens")
+            .layer
+    };
+    let flat = flatten(&mut store);
+    assert_eq!(
+        flat.metadata(end),
+        Some(&FieldValue::Value(Value::Double(10.0)))
+    );
+    assert_eq!(flat.metadata(rate), None);
+
+    store
+        .layers
+        .get_mut(&LayerId(3))
+        .unwrap()
+        .set_metadata(rate, Value::Double(48.0));
+    assert_eq!(
+        flatten(&mut store).metadata(rate),
+        Some(&FieldValue::Value(Value::Double(48.0)))
+    );
+}

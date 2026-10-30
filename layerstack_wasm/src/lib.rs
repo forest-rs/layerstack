@@ -123,7 +123,7 @@ pub use edit::EditBatch;
 pub use error::Error;
 pub use receipt::EditReceipt;
 pub use skel::{skin_normals, skin_points, skin_transform};
-pub use stage::{BROWSER_LIMITS, SessionLayer, Stage};
+pub use stage::{BROWSER_LIMITS, SessionLayer, Stage, TypedSchema};
 pub use storage::HostStorage;
 
 use alloc::vec;

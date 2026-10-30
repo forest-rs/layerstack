@@ -124,6 +124,7 @@ export interface NativeStage extends Disposable {
   get(path: string, time?: number | null): unknown;
   timeSamples(path: string): Float64Array;
   valueSourcesMightVary(paths: string[]): Uint8Array;
+  isA(path: string, schema: string): boolean;
   explain(path: string, time?: number | null): unknown;
   metadata(path: string, key: string): unknown;
   relationship(path: string): unknown;
@@ -241,6 +242,7 @@ export interface NativeModule {
       provenance: boolean,
       sessionIdentifier: string | undefined,
       sessionBytes: Uint8Array | undefined,
+      schemas: string[],
     ): NativeStage;
   };
   /** The batch of edits `Stage.apply` takes. */
@@ -349,6 +351,13 @@ export class Layerstack {
       throw new LayerstackError("argument.invalid", "open", "provenance must be a boolean");
     }
     const provenance = options.provenance ?? false;
+    const schemas = options.schemas ?? [];
+    if (
+      !Array.isArray(schemas) ||
+      !schemas.every((schema) => typeof schema?.name === "string" && typeof schema?.base === "string")
+    ) {
+      throw new LayerstackError("argument.invalid", "open", "schemas: expected [{ name: string, base: string }]");
+    }
     const recover = options.importPolicy === "recover";
     const session = editLayer === "session";
     const limits = options.limits;
@@ -367,6 +376,7 @@ export class Layerstack {
         provenance,
         sessionLayer?.identifier,
         sessionLayer?.bytes,
+        schemas.flatMap((schema) => [schema.name, schema.base]),
       ),
     );
     this.#bytesIn += root.bytes.byteLength + (sessionLayer?.bytes.byteLength ?? 0);
@@ -2156,6 +2166,16 @@ export class Prim {
   /** The paths of its children ({@link Stage.children}). */
   children(): string[] {
     return this.stage.children(this.path);
+  }
+
+  /**
+   * Whether it is of the typed schema `schema` (`Mesh`, `Gprim`) or of
+   * one derived from it, OpenUSD's or registered at open
+   * ({@link OpenOptions.schemas}), as `UsdPrim::IsA` answers: a reader
+   * that draws meshes asks this rather than comparing {@link typeName}.
+   */
+  isA(schema: string): boolean {
+    return this.stage.native("isA", (native) => native.isA(this.path, schema));
   }
 
   /** The names of its attributes, schema-defined and authored, in property order. */

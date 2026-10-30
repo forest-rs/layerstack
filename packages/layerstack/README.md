@@ -73,6 +73,11 @@ await stage.resolve(source);
   resolved values. It is off by default, costs no measurable time or memory,
   and changes none of this package's reads; `attribute.explain()` works
   either way.
+  Open with `{ schemas: [{ name: "RockMesh", base: "Mesh" }] }` to register
+  typed schemas derived from registered ones, as codeless schemas declare
+  them: a `RockMesh` prim is a `Mesh` to every `IsA` read, with `Mesh`'s
+  properties. `prim.isA("Mesh")` (`UsdPrim::IsA`) is how a reader asks
+  what a prim is, rather than comparing `prim.typeName`.
 - **Opening is synchronous and complete.** `open` composes the root layer
   alone. Every dependency it cannot read yet is *unavailable*: it may still
   arrive. One confirmed absent, or whose read failed, is *unresolved*: its
@@ -289,6 +294,8 @@ JS-owned typed array.
 |---|---|
 | `stage.worldTransforms(paths, { time? })`, `parentToWorldTransforms(...)`, `prim.worldTransform({ time? })` | One `Float64Array`, 16 numbers per prim, row by row (row-vector `GfMatrix4d`: translation in the last row; read as column-major, the matrix WebGL takes) |
 | `stage.localTransform(path, { time? })`, `prim.localTransform(...)` | `LocalTransform`: `matrix`, `resetsXformStack`, `problems` |
+| `stage.worldTransformsMightVary(paths, { time? })` | `boolean[]`: whether each world transform might differ at another time (an op of its chain, up to a reset, has samples, a spline or clips): what a renderer skips when the time changes |
+| `stage.valueSourcesMightBeTimeVarying(paths)`, `attribute.valueSourceMightBeTimeVarying()` | `boolean[]` (one `boolean`): whether each attribute's value source might vary with time, the default time included (`UsdAttributeQuery::ValueSourceMightBeTimeVarying`) |
 | `stage.xformable(path)`, `prim.xformable()` | `Xformable \| null`: `resetsXformStack`, `ops`, `transformMightBeTimeVarying`, `transformTimeSamples` |
 | `stage.visibilities(paths, { time?, purpose? })`, `prim.visibility(...)` | `inherited` or `invisible` (`ComputeVisibility`), or with a purpose `visible` among them (`ComputeEffectiveVisibility`); `null` for a prim that is not `Imageable` |
 | `stage.purposeInfos(paths)`, `prim.purposeInfo()` | `PurposeInfo \| null`: `purpose`, `inheritable`, `authoredOn` |

@@ -413,3 +413,57 @@ class "Branch" {
     assert.equal(error.code, "argument.invalid");
   });
 });
+
+describe("typed schemas registered at open", () => {
+  const bytes = new TextEncoder().encode(`#usda 1.0
+def RockMesh "Rock" {
+}
+def Boulder "Boulder" {
+}
+def Mesh "Plain" {
+}
+`);
+
+  it("are their base to isA, with its properties", () => {
+    using stage = layerstack.open(
+      { identifier: "rocks.usda", bytes },
+      {
+        schemas: [
+          { name: "RockMesh", base: "Mesh" },
+          { name: "Boulder", base: "RockMesh" },
+        ],
+      },
+    );
+    for (const path of ["/Rock", "/Boulder", "/Plain"]) {
+      const prim = stage.prim(path)!;
+      assert.equal(prim.isA("Mesh"), true, path);
+      assert.equal(prim.isA("Gprim"), true, path);
+      assert.equal(prim.isA("Sphere"), false, path);
+    }
+    assert.equal(stage.prim("/Rock")!.typeName, "RockMesh");
+    assert.equal(stage.prim("/Boulder")!.isA("RockMesh"), true);
+    assert.equal(stage.prim("/Rock")!.isA("Boulder"), false);
+    assert.ok(stage.prim("/Rock")!.attributeNames().includes("faceVertexCounts"), "Mesh's properties");
+    using plain = layerstack.open({ identifier: "rocks.usda", bytes });
+    assert.equal(plain.prim("/Rock")!.isA("Mesh"), false, "unregistered, the type is unknown");
+  });
+
+  it("refuse a name that is taken or not an identifier, and a base that is not a typed schema", async () => {
+    for (const schemas of [
+      [{ name: "Mesh", base: "Gprim" }],
+      [{ name: "1Rock", base: "Mesh" }],
+      [{ name: "Rock", base: "CollectionAPI" }],
+      [{ name: "Rock", base: "Missing" }],
+      [
+        { name: "Rock", base: "Mesh" },
+        { name: "Rock", base: "Sphere" },
+      ],
+      [{ name: "Rock" }],
+    ]) {
+      const error = await failure(() =>
+        layerstack.open({ identifier: "rocks.usda", bytes }, { schemas: schemas as { name: string; base: string }[] }),
+      );
+      assert.equal(error.code, "argument.invalid", JSON.stringify(schemas));
+    }
+  });
+});

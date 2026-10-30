@@ -118,6 +118,76 @@ pub struct Stage {
     geom: crate::geom::GeomState,
 }
 
+/// A concrete typed schema a stage registers when it opens, besides
+/// OpenUSD's: `name` is `base`, a registered typed schema (OpenUSD's, or
+/// one declared before it), and has `base`'s properties and none of its
+/// own, as a codeless schema whose `generatedSchema.usda` declares
+/// `class "Name" (inherits = </Base>)` and nothing else. A prim of type
+/// `name` is `base` to every `IsA` read (`UsdPrim::IsA`), so it draws,
+/// bounds and binds as `base` does.
+///
+/// Spec: AOUSD Core §13.3.1 (typed schemas and their inheritance).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TypedSchema {
+    /// The schema's name, an identifier no registered schema has.
+    pub name: String,
+    /// The typed schema it derives from.
+    pub base: String,
+}
+
+/// OpenUSD's schemas (`layerstack_schemas::openusd`), and `schemas`.
+///
+/// # Errors
+///
+/// `argument.invalid` for a name that is not an identifier or is
+/// registered already, or a base that is not a registered typed schema.
+fn registry(
+    schemas: &[TypedSchema],
+    tokens: &layerstack::TokenInterner,
+) -> Result<layerstack::SchemaRegistry, Error> {
+    let openusd = layerstack_schemas::openusd(tokens);
+    if schemas.is_empty() {
+        return Ok(openusd);
+    }
+    let mut builder = layerstack::SchemaRegistry::builder();
+    layerstack_schemas::register(&mut builder, layerstack_schemas::Domain::ALL, tokens)
+        .expect("generated OpenUSD metadata declarations agree");
+    let mut declared: Vec<&str> = Vec::new();
+    for schema in schemas {
+        let invalid = |why: String| Error::new("argument.invalid", format!("schemas: {why}"));
+        let identifier = schema
+            .name
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+            && schema
+                .name
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_');
+        if !identifier {
+            return Err(invalid(format!("`{}` is not an identifier", schema.name)));
+        }
+        let name = tokens.intern(&schema.name);
+        if openusd.schema(name).is_some() || declared.contains(&schema.name.as_str()) {
+            return Err(invalid(format!("`{}` is registered already", schema.name)));
+        }
+        let base = tokens.intern(&schema.base);
+        let typed = declared.contains(&schema.base.as_str())
+            || openusd
+                .schema(base)
+                .is_some_and(|definition| definition.kind.is_typed());
+        if !typed {
+            return Err(invalid(format!(
+                "`{}` is not a registered typed schema",
+                schema.base
+            )));
+        }
+        builder.register(layerstack::SchemaDefinition::typed(name).with_parent(base));
+        declared.push(&schema.name);
+    }
+    Ok(builder.build(tokens))
+}
+
 impl Stage {
     /// Opens the root layer `identifier` from `bytes`, with every OpenUSD
     /// schema registered (`layerstack_schemas::openusd`), and loads what
@@ -152,12 +222,13 @@ impl Stage {
         } else {
             SessionLayer::None
         };
-        Self::open_with_provenance(identifier, bytes, recover, session, limits, false)
+        Self::open_with_provenance(identifier, bytes, recover, session, limits, false, &[])
     }
 
     /// Opens a stage as in [`Self::open`], with the session layer
     /// `session_layer`, optionally including the winning source layer,
-    /// spec path and field in native resolved values.
+    /// spec path and field in native resolved values, and with the typed
+    /// schemas `schemas` registered besides OpenUSD's.
     ///
     /// Same-module extensions use this evidence to check source correspondence.
     /// Query explanations remain available when `provenance` is false.
@@ -165,7 +236,8 @@ impl Stage {
     /// # Errors
     ///
     /// The root's or the session layer's read or import failure, as in
-    /// [`Self::open`]; `io.rejected` for a session layer that is the root.
+    /// [`Self::open`]; `io.rejected` for a session layer that is the root;
+    /// `argument.invalid` for a schema [`TypedSchema`] refuses.
     pub fn open_with_provenance(
         identifier: &str,
         bytes: Vec<u8>,
@@ -173,11 +245,12 @@ impl Stage {
         session_layer: SessionLayer,
         limits: CompositionLimits,
         provenance: bool,
+        schemas: &[TypedSchema],
     ) -> Result<Self, Error> {
         let mut storage = HostStorage::new();
         storage.supply(identifier, bytes);
         let mut store = InMemoryStore::default();
-        let schemas = layerstack_schemas::openusd(store.tokens());
+        let schemas = registry(schemas, store.tokens())?;
         let (anonymous, supplied) = match session_layer {
             SessionLayer::None => (None, None),
             SessionLayer::Anonymous => {
@@ -1876,6 +1949,21 @@ impl Stage {
         Ok(())
     }
 
+    /// Whether the prim at `path` is of the typed schema `schema` or one
+    /// derived from it.
+    ///
+    /// Spec: AOUSD Core §13.3.1. OpenUSD: `UsdPrim::IsA`.
+    ///
+    /// # Errors
+    ///
+    /// `path.invalid`, or `prim.not_found` when no prim is at `path`.
+    pub(crate) fn is_a(&self, path: &str, schema: &str) -> Result<bool, Error> {
+        let prim = self.existing_prim(path)?.path();
+        let scene =
+            layerstack_schemas::Scene::new(self.document.stage().stage(), self.document.store());
+        Ok(scene.is_a(prim, schema))
+    }
+
     pub(crate) fn existing_prim(&self, path: &str) -> Result<layerstack::Prim<'_>, Error> {
         check_prim_path(path)?;
         self.document.view().prim(path).ok_or_else(|| {
@@ -1896,6 +1984,8 @@ impl Stage {
     /// in native resolved values ([`Self::open_with_provenance`]). A
     /// `session_identifier` with `session_bytes` opens that session layer
     /// ([`SessionLayer::Supplied`]) in place of an anonymous one.
+    /// `schemas` holds a [`TypedSchema`]'s name and base for each schema
+    /// to register, one after the other.
     #[wasm_bindgen(js_name = open)]
     pub fn js_open(
         identifier: &str,
@@ -1908,6 +1998,7 @@ impl Stage {
         provenance: bool,
         session_identifier: Option<String>,
         session_bytes: Option<Vec<u8>>,
+        schemas: Vec<String>,
     ) -> Result<Self, JsValue> {
         let limit = |given: Option<f64>, default: Option<usize>| match given {
             None => default,
@@ -1929,8 +2020,17 @@ impl Stage {
             _ if session_layer => SessionLayer::Anonymous,
             _ => SessionLayer::None,
         };
+        let schemas: Vec<TypedSchema> = schemas
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|[name, base]| TypedSchema {
+                name: name.clone(),
+                base: base.clone(),
+            })
+            .collect();
         Ok(Self::open_with_provenance(
-            identifier, bytes, recover, session, limits, provenance,
+            identifier, bytes, recover, session, limits, provenance, &schemas,
         )?)
     }
 
@@ -2217,6 +2317,13 @@ impl Stage {
     #[wasm_bindgen(js_name = get)]
     pub fn js_get(&self, path: &str, time: Option<f64>) -> Result<JsValue, JsValue> {
         Ok(self.get(path, time)?.into())
+    }
+
+    /// Whether the prim is of a typed schema (`is_a`), as documented in
+    /// `stage.rs`.
+    #[wasm_bindgen(js_name = isA)]
+    pub fn js_is_a(&self, path: &str, schema: &str) -> Result<bool, JsValue> {
+        Ok(self.is_a(path, schema)?)
     }
 
     /// The record `time_samples` builds, as documented in `stage.rs`.
@@ -2930,6 +3037,66 @@ def "Ball" {
             .collect()
     }
 
+    /// A typed schema registered at open is its base to `IsA`, with the
+    /// base's properties; a name not an identifier or registered already,
+    /// and a base that is not a typed schema, are refused.
+    #[test]
+    fn typed_schemas_registered_at_open_are_their_base() {
+        let open = |schemas: &[(&str, &str)]| {
+            let schemas: Vec<TypedSchema> = schemas
+                .iter()
+                .map(|(name, base)| TypedSchema {
+                    name: (*name).into(),
+                    base: (*base).into(),
+                })
+                .collect();
+            Stage::open_with_provenance(
+                "scene.usda",
+                b"#usda 1.0\ndef RockMesh \"Rock\" {\n}\ndef Boulder \"Boulder\" {\n}\n".to_vec(),
+                false,
+                SessionLayer::None,
+                BROWSER_LIMITS,
+                false,
+                &schemas,
+            )
+        };
+        let stage = open(&[("RockMesh", "Mesh"), ("Boulder", "RockMesh")]).unwrap();
+        for path in ["/Rock", "/Boulder"] {
+            assert!(stage.is_a(path, "Mesh").unwrap(), "{path}");
+            assert!(stage.is_a(path, "Gprim").unwrap(), "{path}");
+            assert!(!stage.is_a(path, "Sphere").unwrap(), "{path}");
+        }
+        assert!(stage.is_a("/Boulder", "RockMesh").unwrap());
+        assert!(!stage.is_a("/Rock", "Boulder").unwrap());
+        // The base's properties, with their fallbacks.
+        let scheme = stage
+            .document()
+            .view()
+            .attribute("/Rock.subdivisionScheme")
+            .expect("Mesh defines it");
+        assert!(
+            scheme
+                .read(Time::Default, |value| Some(value.clone()))
+                .is_some()
+        );
+        assert_eq!(
+            stage.is_a("/Gone", "Mesh").unwrap_err().code,
+            "prim.not_found"
+        );
+        let plain = open(&[]).unwrap();
+        assert!(!plain.is_a("/Rock", "Mesh").unwrap());
+        for refused in [
+            &[("Mesh", "Gprim")][..],
+            &[("1Rock", "Mesh")],
+            &[("Rock", "CollectionAPI")],
+            &[("Rock", "Missing")],
+            &[("Rock", "Mesh"), ("Rock", "Sphere")],
+        ] {
+            let error = open(refused).map(|_| ()).unwrap_err();
+            assert_eq!(error.code, "argument.invalid", "{refused:?}");
+        }
+    }
+
     #[test]
     fn native_resolution_provenance_is_explicit_and_explanations_remain_available() {
         for provenance in [false, true] {
@@ -2940,6 +3107,7 @@ def "Ball" {
                 SessionLayer::None,
                 BROWSER_LIMITS,
                 provenance,
+                &[],
             )
             .unwrap();
             let document = stage.document();
@@ -3646,6 +3814,7 @@ def Mesh "Rock" {
             SessionLayer::None,
             BROWSER_LIMITS,
             provenance,
+            &[],
         )
         .unwrap();
         let storage = stage.document_mut().storage_mut();

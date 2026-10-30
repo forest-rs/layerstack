@@ -384,7 +384,8 @@ export interface VariantSet {
  *
  * Re-read what a path covers: a `resynced` path's whole subtree may have
  * changed; a `changedInfoOnly` prim kept its children, but its fields and
- * properties may have changed.
+ * properties may have changed; a `resyncedProperties` property may have
+ * been added or removed, and nothing else of its prim changed for it.
  */
 export interface Changes {
   /** Prims that exist now and did not before. */
@@ -402,6 +403,16 @@ export interface Changes {
    * field: re-read it.
    */
   readonly properties: readonly PrimPropertyChanges[];
+  /**
+   * Properties (`/Rock.visibility`) a property spec was added to or
+   * removed from, on prims not in `resynced`: everything about such a
+   * property may have changed, its existence included, and its prim's
+   * other properties did not. Its prim is in `changedInfoOnly` only when
+   * something else of it changed too. A listener caching a prim's
+   * properties, or its property names, must read these too. As OpenUSD's
+   * `UsdNotice::ObjectsChanged::GetResyncedPaths` lists property paths.
+   */
+  readonly resyncedProperties: readonly string[];
   /**
    * Layers muted since the changes heard before
    * ({@link Stage.muteLayer}, or natively through {@link Stage.withNative}),

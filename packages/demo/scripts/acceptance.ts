@@ -148,7 +148,9 @@ const checks: ((session: Session) => void)[] = [
       "library.usda /Shape.radius inherits ignored (shadowed)",
     ]);
     assert.deepEqual(current.undoStack.map((entry) => entry.label), [`set ${sample.radius}`]);
-    assert.deepEqual(current.changeLog.at(-1)?.changes.resynced, [sample.rock]);
+    // The override is a new property spec: the change resyncs the property, not the rock.
+    assert.deepEqual(current.changeLog.at(-1)?.changes.resynced, []);
+    assert.deepEqual(current.changeLog.at(-1)?.changes.resyncedProperties, [sample.radius]);
     assert.equal(current.stage.isDirty(current.stage.root), true);
   },
   // 4. The variant wants an unfetched asset: the loop runs step by step.
@@ -417,11 +419,14 @@ const checks: ((session: Session) => void)[] = [
     stage.worldTransforms(buildViewport(stage).items.filter((item) => item.prototype === null).map((item) => item.path));
     const after = stage.transformCache();
     assert.ok(after.changeBatches > before.changeBatches, "the cache heard the edit");
-    // The beacon's local transform, and the rock's: its first `visibility`
+    // The beacon's local transform alone: the rock's first `visibility`
     // opinion is a new property spec, which the change record reports as a
-    // resync of the rock.
-    assert.deepEqual(current.changeLog.at(-1)?.changes.resynced, [sample.rock]);
-    assert.equal(after.localComputed - before.localComputed, 2, "only the beacon's and the rock's local transforms are recomputed");
+    // resync of that property, not of the rock, and `visibility` is no
+    // transform property.
+    const changes = current.changeLog.at(-1)?.changes;
+    assert.deepEqual(changes?.resynced, []);
+    assert.deepEqual(changes?.resyncedProperties, [`${sample.rock}.visibility`]);
+    assert.equal(after.localComputed - before.localComputed, 1, "only the beacon's local transform is recomputed");
   },
 ];
 

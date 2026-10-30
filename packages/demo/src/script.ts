@@ -237,7 +237,7 @@ export const steps: readonly Step[] = [
   },
   {
     title: "Move a beacon, hide the rock and a stone",
-    look: "The viewport: one edit moves the north beacon (its xformOp:translate), makes the rock invisible and hides stone 3 (the instancer's invisibleIds). The transform cache recomputes two local transforms, the beacon's and the rock's (whose first visibility opinion resyncs it), and reuses the rest; the framed bounds shrink without the rock. Undo brings them back.",
+    look: "The viewport: one edit moves the north beacon (its xformOp:translate), makes the rock invisible and hides stone 3 (the instancer's invisibleIds). The transform cache recomputes one local transform, the beacon's, and reuses the rest: the rock's first visibility opinion resyncs only that property, which no transform reads; the framed bounds shrink without the rock. Undo brings them back.",
     async run(session) {
       session.current.apply("move the north beacon, hide the rock and stone 3", [
         { type: "setValue", path: `${sample.instance}.xformOp:translate`, value: { type: "double3", value: [...sample.beaconMoved] } },

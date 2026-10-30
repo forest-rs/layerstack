@@ -1930,9 +1930,9 @@ export class Stage implements Disposable {
         const [record, muted, unmuted] = this.#call("onChange", (native) =>
           native.takeChanges(this.#listeners.length > 0),
         ) as [Row[] | null, MutingRow[], MutingRow[]];
-        const batches = record === null ? [decodeChanges([[], [], ["/"], [], []])] : record.map(decodeChanges);
+        const batches = record === null ? [decodeChanges([[], [], ["/"], [], [], []])] : record.map(decodeChanges);
         if (muted.length > 0 || unmuted.length > 0) {
-          const last = batches.pop() ?? decodeChanges([[], [], [], [], []]);
+          const last = batches.pop() ?? decodeChanges([[], [], [], [], [], []]);
           const [mutedLayers, mutedIdentifiers] = this.#muting(muted);
           const [unmutedLayers, unmutedIdentifiers] = this.#muting(unmuted);
           batches.push({ ...last, mutedLayers, unmutedLayers, mutedIdentifiers, unmutedIdentifiers });
@@ -2486,12 +2486,13 @@ function readMetadata(stage: Stage, path: string, key: string): Value | null {
 }
 
 function decodeChanges(row: unknown): Changes {
-  const [created, removed, resynced, changedInfoOnly, properties] = row as [
+  const [created, removed, resynced, changedInfoOnly, properties, resyncedProperties] = row as [
     string[],
     string[],
     string[],
     string[],
     [string, [string, PropertyChange["field"], string | null][]][],
+    string[],
   ];
   return {
     created,
@@ -2502,6 +2503,7 @@ function decodeChanges(row: unknown): Changes {
       prim,
       fields: fields.map(([property, field, metadata]) => ({ property, field, metadata })),
     })),
+    resyncedProperties,
     mutedLayers: [],
     unmutedLayers: [],
     mutedIdentifiers: [],

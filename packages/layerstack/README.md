@@ -240,7 +240,9 @@ await stage.resolve(source);
   fails with `namespace.unmappable`. A receipt names its `target` and the
   `layers` it wrote.
 - **Changes are heard synchronously.** `stage.onChange(listener)` hears
-  `{ created, removed, resynced, changedInfoOnly }` (prim paths) for every
+  `{ created, removed, resynced, changedInfoOnly }` (prim paths) and
+  `resyncedProperties` (property paths a spec was added to or removed from,
+  as OpenUSD resyncs them) for every
   recomposition, in order, before the call that caused it (`apply`, `undo`,
   `muteLayer`, `loadSupplied`, each round of `resolve`) returns, with the
   `mutedLayers` and `unmutedLayers` whose muting changed, and their

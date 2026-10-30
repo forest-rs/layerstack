@@ -598,6 +598,10 @@ pub(crate) struct Outcome {
     /// changed: a prim composing from one of them changed more than its
     /// spec stack, whatever inert sites it composes from too.
     pub(crate) other_sites: Vec<(LayerId, PathId)>,
+    /// The layers of the stage's own layer stack whose metadata the
+    /// transaction changed only in fields that compose nothing
+    /// ([`composes_nothing`]): the pseudo-root changed, info-only.
+    pub(crate) layer_info: Vec<LayerId>,
 }
 
 /// An edit of a prim metadata field or an attribute default, the inputs
@@ -807,6 +811,10 @@ pub(super) struct Journal<'a> {
     layers: Vec<LayerId>,
     /// The layers whose edits may change namespace or arcs.
     structural_layers: Vec<LayerId>,
+    /// The layers whose edits include a layer metadata field that
+    /// composes nothing ([`composes_nothing`]): structural unless the
+    /// layer is one of the stage's own layer stack.
+    layer_info: Vec<LayerId>,
     touched: Vec<(LayerId, PathId)>,
     /// `touched` as a set: a bulk edit touches as many prims as it has
     /// steps.
@@ -889,6 +897,13 @@ impl Journal<'_> {
                     self.touched.push((layer, prim));
                 }
             }
+            None if matches!(&step, Raw::LayerMetadata { key, .. }
+                if composes_nothing(store.tokens().resolve(*key))) =>
+            {
+                if !self.layer_info.contains(&layer) {
+                    self.layer_info.push(layer);
+                }
+            }
             None if !self.structural_layers.contains(&layer) => {
                 self.structural_layers.push(layer);
             }
@@ -958,6 +973,18 @@ pub(crate) fn apply(
             return Err(error);
         }
     }
+    // A field of a layer the stage does not compose as its own may reach
+    // it through an arc whose target it names (`defaultPrim` aside, a
+    // layer's metadata composes into no prim, but no stage records which
+    // layers it reads metadata of): such an edit stays structural.
+    let mut layer_info = Vec::new();
+    for layer in core::mem::take(&mut journal.layer_info) {
+        if stage.is_some_and(|stage| stage.layer_stack().contains(&layer)) {
+            layer_info.push(layer);
+        } else if !journal.structural_layers.contains(&layer) {
+            journal.structural_layers.push(layer);
+        }
+    }
     let mut inert_sites = Vec::new();
     for id in &journal.layers {
         let paths = journal
@@ -1023,6 +1050,7 @@ pub(crate) fn apply(
         layers,
         structural_layers,
         touched,
+        layer_info: _,
         namespace: _,
         touched_set: _,
         children: _,
@@ -1121,6 +1149,7 @@ pub(crate) fn apply(
         argument_inputs,
         inert_sites,
         other_sites,
+        layer_info,
         inverse: Transaction {
             preconditions: Vec::new(),
             ops: steps.into_iter().map(|g| Op::Raw(Box::new(g))).collect(),
@@ -1129,6 +1158,31 @@ pub(crate) fn apply(
         touched,
         structural: !structural_layers.is_empty(),
     })
+}
+
+/// Whether the layer metadata field `key` composes nothing: the stage
+/// reads it from its root and session layers when asked (stage metadata,
+/// such as `startTimeCode` and `metersPerUnit`), and no prim index, child
+/// list or arc reads it. A change of one in the stage's own layer stack
+/// changes the pseudo-root, info-only, as OpenUSD reports it
+/// (`UsdStage::_HandleLayersDidChange` records an info change of the
+/// pseudo-root's entry; `PcpChanges::DidChange` finds no layer stack,
+/// offset or significant change in it). Layer stack fields (`subLayers`,
+/// `layerRelocates`, `expressionVariables`), `defaultPrim`, the time code
+/// rates that scale layer offsets, and `fallbackPrimTypes`, which types
+/// prims, compose.
+fn composes_nothing(key: &str) -> bool {
+    matches!(
+        key,
+        "documentation"
+            | "comment"
+            | "customLayerData"
+            | "startTimeCode"
+            | "endTimeCode"
+            | "upAxis"
+            | "metersPerUnit"
+            | "kilogramsPerUnit"
+    )
 }
 
 /// Whether a prim metadata field `key` resyncs its prim: `apiSchemas`

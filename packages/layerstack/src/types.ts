@@ -433,7 +433,9 @@ export interface VariantSet {
  * An inert spec (an `over` with no opinions of its own) added or removed
  * for a prim that exists before and after changes that prim, and each
  * prim composing from it through an arc, info-only, as OpenUSD reports
- * it; a property spec in it is in `resyncedProperties`.
+ * it; a property spec in it is in `resyncedProperties`. A change to stage
+ * metadata that composes nothing (`documentation`, `startTimeCode`,
+ * `metersPerUnit` and the like) reports `/` info-only.
  */
 export interface Changes {
   /** Prims that exist now and did not before. */

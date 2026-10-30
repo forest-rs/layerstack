@@ -101,6 +101,14 @@
  *   does not exist.
  * - `metadata.key_path`, `metadata.field`: an `sdrMetadata` key with an
  *   empty part, or a field the spec cannot hold.
+ * - `skel.*`: a skinning read or computation that cannot be made:
+ *   `skel.unbound` (no skeleton with joint influences binds the prim),
+ *   `skel.influences` (not as many weights as joint indices, or not whole
+ *   blocks), `skel.deformation` (influences that do not fit the points or
+ *   name a joint past the palette), `skel.input` (a required input is
+ *   missing or of another type), `skel.array_length`, `skel.target`,
+ *   `skel.topology`, `skel.primvar`, `skel.method` (an unknown skinning
+ *   method), `skel.singular` (a transform without an inverse).
  *
  * Composition errors are not thrown; {@link Stage.status} lists them as
  * {@link Issue}s with `composition.*` codes
@@ -152,6 +160,7 @@ export type ErrorCode =
   | `schema.${string}`
   | `coord_sys.${string}`
   | `metadata.${string}`
+  | `skel.${string}`
   | `io.${string}`;
 
 /**

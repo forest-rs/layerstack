@@ -78,6 +78,13 @@ use crate::wire::Wire;
 ///   does not exist (`layerstack_schemas::CoordSysError`).
 /// - `metadata.key_path`, `metadata.field`: an `sdrMetadata` edit
 ///   `layerstack_schemas::MetadataError` refuses.
+/// - `skel.*`: a skinning read or computation that cannot be made:
+///   `skel.unbound` (no skeleton with joint influences binds the prim),
+///   and the cases of `layerstack_schemas::skel::SkelError`:
+///   `skel.influences`, `skel.deformation`, `skel.input`,
+///   `skel.array_length`, `skel.target`, `skel.topology`, `skel.primvar`,
+///   `skel.method`, `skel.singular` (and `value.decode` for a retained
+///   array that fails to decode).
 /// - `flatten.failed`, `package.failed`: the stage has no root layer to
 ///   flatten or package.
 /// - `receipt.affinity`: a receipt of another stage was passed in.

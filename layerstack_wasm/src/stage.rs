@@ -86,6 +86,8 @@ pub struct Stage {
     heard_muted: BTreeSet<LayerId>,
     /// What a receipt holds to name the stage that made it.
     identity: Arc<()>,
+    /// The retained skinning evaluator and the changes it has heard.
+    skel: crate::skel::SkelState,
 }
 
 impl Stage {
@@ -169,11 +171,13 @@ impl Stage {
             },
         )?;
         let cursor = document.parts_mut().1.change_cursor();
+        let skel = crate::skel::SkelState::new(document.parts_mut().1);
         Ok(Self {
             document,
             cursor,
             heard_muted: BTreeSet::new(),
             identity: Arc::new(()),
+            skel,
         })
     }
 
@@ -181,6 +185,13 @@ impl Stage {
     #[must_use]
     pub fn document(&self) -> &StageDocument<HostStorage> {
         &self.document
+    }
+
+    /// The document, and the skinning state, which reads it.
+    pub(crate) fn document_and_skel(
+        &mut self,
+    ) -> (&StageDocument<HostStorage>, &mut crate::skel::SkelState) {
+        (&self.document, &mut self.skel)
     }
 
     /// The document, mutably, for a crate that links these bindings and
@@ -2227,6 +2238,53 @@ impl Stage {
     #[wasm_bindgen(js_name = coordSysBindings)]
     pub fn js_coord_sys_bindings(&self, path: &str, inherited: bool) -> Result<JsValue, JsValue> {
         Ok(self.coord_sys_bindings(path, inherited)?.into())
+    }
+
+    /// The record `skinning` builds, as documented in `skel.rs`.
+    #[wasm_bindgen(js_name = skinning)]
+    pub fn js_skinning(&self, path: &str) -> Result<JsValue, JsValue> {
+        Ok(self.skinning(path)?.into())
+    }
+
+    /// The record `skinning_influences` builds, as documented in `skel.rs`.
+    #[wasm_bindgen(js_name = skinningInfluences)]
+    pub fn js_skinning_influences(
+        &self,
+        path: &str,
+        time: Option<f64>,
+        interleaved: bool,
+    ) -> Result<JsValue, JsValue> {
+        Ok(self.skinning_influences(path, time, interleaved)?.into())
+    }
+
+    /// The record `skinning_transforms` builds, as documented in `skel.rs`.
+    #[wasm_bindgen(js_name = skinningTransforms)]
+    pub fn js_skinning_transforms(
+        &mut self,
+        path: &str,
+        time: Option<f64>,
+    ) -> Result<JsValue, JsValue> {
+        Ok(self.skinning_transforms(path, time)?.into())
+    }
+
+    /// The record `deformed_points` builds, as documented in `skel.rs`.
+    #[wasm_bindgen(js_name = deformedPoints)]
+    pub fn js_deformed_points(
+        &mut self,
+        path: &str,
+        time: Option<f64>,
+    ) -> Result<JsValue, JsValue> {
+        Ok(self.deformed_points(path, time)?.into())
+    }
+
+    /// The record `deformed_normals` builds, as documented in `skel.rs`.
+    #[wasm_bindgen(js_name = deformedNormals)]
+    pub fn js_deformed_normals(
+        &mut self,
+        path: &str,
+        time: Option<f64>,
+    ) -> Result<JsValue, JsValue> {
+        Ok(self.deformed_normals(path, time)?.into())
     }
 
     /// The record `supplied_bytes` builds, as documented in `stage.rs`.

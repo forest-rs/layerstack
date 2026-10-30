@@ -95,6 +95,7 @@ mod error;
 mod receipt;
 mod schema_edit;
 mod schemas;
+mod skel;
 mod stage;
 mod storage;
 mod target;
@@ -120,6 +121,7 @@ pub use array::ArrayHandle;
 pub use edit::EditBatch;
 pub use error::Error;
 pub use receipt::EditReceipt;
+pub use skel::{skin_normals, skin_points, skin_transform};
 pub use stage::{BROWSER_LIMITS, Stage};
 pub use storage::HostStorage;
 

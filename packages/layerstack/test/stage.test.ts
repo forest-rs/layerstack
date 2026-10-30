@@ -37,7 +37,7 @@ describe("loading the module", () => {
   });
 
   it("imports no Node built-in, so a browser bundle resolves nothing extra", () => {
-    for (const file of ["index.js", "stage.js", "arrays.js", "edits.js", "errors.js"]) {
+    for (const file of ["index.js", "stage.js", "arrays.js", "edits.js", "errors.js", "schemas.js", "skinning.js"]) {
       const source = readFileSync(new URL(`../dist/${file}`, import.meta.url), "utf8");
       assert.doesNotMatch(source, /\bimport\s*\(|from\s+["']node:/, file);
     }
@@ -48,6 +48,9 @@ describe("loading the module", () => {
       Stage: { open: () => assert.fail("never opened") },
       EditBatch: class {} as unknown as NativeModule["EditBatch"],
       nativeVersion: () => ["9.9.9", "other", ABI + 1],
+      skinPoints: () => assert.fail("never skinned"),
+      skinNormals: () => assert.fail("never skinned"),
+      skinTransform: () => assert.fail("never skinned"),
     };
     const error = await failure(() => loadLayerstack(foreign));
     assert.equal(error.code, "module.abi");

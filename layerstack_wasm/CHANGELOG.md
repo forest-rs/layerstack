@@ -22,6 +22,10 @@ Initial release.
   material subsets and set a family's type, bind, block and clear
   coordinate systems, and set `sdrMetadata`, in the same atomic batch as
   the generic edits.
+- Skinning: a geometry's skinning binding, its joint influences (separate
+  or interleaved) and joint palette as typed arrays, its deformed points
+  and normals from a retained cache that hears the stage's edits, and
+  `skinPoints`, `skinNormals` and `skinTransform` over the caller's arrays.
 - Atomic edits with undo and change records, saves of dirty layers, and
   exports of a layer, the flattened stage or a USDZ package.
 - An `rlib` for crates that link the bindings into a module of their own.

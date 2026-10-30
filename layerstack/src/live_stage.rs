@@ -106,6 +106,54 @@ fn include_resyncs(store: &dyn LayerStore, changes: &mut Changes, paths: &[PathI
     changes
         .changed_info_only
         .retain(|path| !is_beneath_set(store, *path, &resynced));
+    changes
+        .resynced_properties
+        .retain(|path| !is_beneath_set(store, path.prim_path(), &resynced));
+}
+
+/// Adds `properties` to the property resyncs of `changes`, all but those
+/// beneath a resynced prim. A property resync covers the fields of that
+/// property in its prim's inventory, and a prim whose inventory it
+/// empties is no longer info-only: its property resyncs are all that
+/// changed it. `changes.property_changes` must be complete for its prims
+/// (the stage's precise property path), as a prim without one may have
+/// changed in other ways.
+///
+/// OpenUSD: `UsdStage::_HandleLayersDidChange` resyncs a property spec
+/// added or removed at the property path, not at its prim, and
+/// `UsdStage::_ProcessPendingChanges` drops info changes beneath resynced
+/// paths.
+fn include_property_resyncs(
+    store: &dyn LayerStore,
+    changes: &mut Changes,
+    properties: &[crate::PropertyPath],
+) {
+    if properties.is_empty() {
+        return;
+    }
+    let resynced: HashSet<PathId> = changes.resynced.iter().copied().collect();
+    let added: Vec<crate::PropertyPath> = properties
+        .iter()
+        .copied()
+        .filter(|path| !is_beneath_set(store, path.prim_path(), &resynced))
+        .collect();
+    if added.is_empty() {
+        return;
+    }
+    let covered: HashSet<crate::PropertyPath> = added.iter().copied().collect();
+    changes.property_changes.retain_mut(|inventory| {
+        let prim = inventory.prim;
+        inventory
+            .fields
+            .retain(|field| !covered.contains(&crate::PropertyPath::new(prim, field.name)));
+        !inventory.fields.is_empty()
+    });
+    let inventoried: HashSet<PathId> = changes.property_changes.iter().map(|p| p.prim).collect();
+    let owners: HashSet<PathId> = added.iter().map(|path| path.prim_path()).collect();
+    changes
+        .changed_info_only
+        .retain(|prim| !owners.contains(prim) || inventoried.contains(prim));
+    changes.resynced_properties.extend(added);
 }
 
 /// Every layer a stage rooted at `root` reads or would read: the root's
@@ -629,6 +677,23 @@ impl LiveStage {
         for &(layer, path) in &outcome.resync_sites {
             declaration_resyncs.extend(self.source_share(layer).prims(path).copied());
         }
+        // The composed properties whose spec stacks the transaction changed.
+        // They resync alone only when every other edit is a known property
+        // field edit; otherwise their prims resync.
+        let precise_properties = sources_current
+            && !pending_recomposition
+            && outcome.properties.is_some()
+            && argument_dependents.is_empty();
+        let mut property_resyncs = Vec::new();
+        for &(layer, path, name) in &outcome.property_specs {
+            for &prim in self.source_share(layer).prims(path) {
+                if precise_properties {
+                    property_resyncs.push(crate::PropertyPath::new(prim, name));
+                } else {
+                    declaration_resyncs.push(prim);
+                }
+            }
+        }
         if outcome.structural
             && local_current
             && outcome.layers.iter().all(|layer| *layer == self.root)
@@ -764,6 +829,7 @@ impl LiveStage {
             .filter(|(prim, _)| changes.changed_info_only.contains(prim))
             .map(|(prim, fields)| crate::PrimPropertyChanges { prim, fields })
             .collect();
+        include_property_resyncs(store, &mut changes, &property_resyncs);
         self.publish_preparation(store);
         self.notices.publish(&mut changes, &self.stage, store);
         store.paths().sort_paths(&mut recomposed, store.tokens());

@@ -161,9 +161,16 @@ pub struct Applied {
 /// A changed opinion may be masked by a stronger one, so info-only notices do
 /// not assert that the resolved value differs. A conservative full rebuild
 /// reports the pseudo-root as resynced, rather than every survivor as changed.
-/// Structural invalidation has prim granularity: a property declaration or
-/// applied-schema change conservatively resyncs its owning prim. Info-only
-/// reports can include complete property-field inventories in `property_changes`.
+/// A property spec added or removed by a transaction whose other edits are
+/// all property field edits resyncs just that property
+/// (`resynced_properties`): its prim is neither resynced nor, unless its
+/// other properties changed too, info-only. A consumer caching anything a
+/// property contributes, its prim's property names included, must read
+/// `resynced_properties` as well as the prim lists. Other edits that add or
+/// remove property specs, such as one creating a prim spec too or a
+/// namespace edit, and applied-schema changes, resync the owning prim.
+/// Info-only reports can include complete property-field inventories in
+/// `property_changes`.
 /// External opinion notifications lack edit details and conservatively resync
 /// their affected prims, including other prims updated in the same batch.
 /// Every list is in namespace order ([`crate::PathInterner::cmp_paths`]) and
@@ -204,6 +211,19 @@ pub struct Changes {
     pub removed: Vec<PathId>,
     /// Minimal roots whose composed structure may have changed.
     pub resynced: Vec<PathId>,
+    /// Properties whose composed spec stacks may have changed, on prims
+    /// that are not themselves resynced: a property spec was added,
+    /// removed or renamed. Everything about such a property may have
+    /// changed, its existence and declaration included; its prim's other
+    /// properties and its prim's own fields did not. Never beneath a path
+    /// in [`Self::resynced`]. In namespace order: by prim, then by
+    /// property name.
+    ///
+    /// OpenUSD: `UsdNotice::ObjectsChanged::GetResyncedPaths` lists such a
+    /// property's path, not its prim's (`UsdStage::_HandleLayersDidChange`
+    /// resyncs the property paths of `SdfChangeList` entries that add or
+    /// remove property specs).
+    pub resynced_properties: Vec<crate::PropertyPath>,
     /// Surviving prims with opinion or child-list changes, without subtree resync.
     pub changed_info_only: Vec<PathId>,
     /// Complete property-field inventories for a subset of info-only prims.
@@ -280,6 +300,7 @@ impl Changes {
         bytes(&self.created, allocated)
             + bytes(&self.removed, allocated)
             + bytes(&self.resynced, allocated)
+            + bytes(&self.resynced_properties, allocated)
             + bytes(&self.changed_info_only, allocated)
             + bytes(&self.property_changes, allocated)
             + self
@@ -311,6 +332,16 @@ impl Changes {
         ] {
             paths.sort_paths(list, tokens);
         }
+        sort::sort_by(&mut self.resynced_properties, |a, b| {
+            paths
+                .cmp_paths(a.prim_path(), b.prim_path(), tokens)
+                .then_with(|| {
+                    tokens
+                        .resolve(a.property())
+                        .cmp(tokens.resolve(b.property()))
+                })
+        });
+        self.resynced_properties.dedup();
         sort::sort_by(&mut self.property_changes, |a, b| {
             paths.cmp_paths(a.prim, b.prim, tokens)
         });

@@ -150,6 +150,7 @@ impl Journal {
         if changes.created.is_empty()
             && changes.removed.is_empty()
             && changes.resynced.is_empty()
+            && changes.resynced_properties.is_empty()
             && changes.changed_info_only.is_empty()
         {
             return;
@@ -203,6 +204,7 @@ impl crate::change_history::Record for (u64, Changes) {
         self.1.created.len()
             + self.1.removed.len()
             + self.1.resynced.len()
+            + self.1.resynced_properties.len()
             + self.1.changed_info_only.len()
             + self
                 .1

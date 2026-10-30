@@ -150,6 +150,7 @@ mod primvars;
 mod property_discovery;
 mod property_fidelity;
 mod property_metadata;
+mod property_resync;
 mod prototype_order;
 mod proxy_edits;
 mod pseudo_root_edits;

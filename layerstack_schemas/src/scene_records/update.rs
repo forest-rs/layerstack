@@ -568,33 +568,53 @@ fn route(
             };
             for property in properties {
                 let name = scene.store().tokens().resolve(property.name);
-                if ancestor && (name == "xformOpOrder" || name.starts_with("xformOp:")) {
-                    dirty.transform = true;
-                }
-                if ancestor
-                    && (name == "purpose" || name.ends_with("Visibility") || name == "visibility")
-                {
-                    dirty.appearance = true;
-                }
-                if ancestor && name.starts_with("primvars:") {
-                    dirty.primvars = true;
-                }
-                if prim == path && geometry_property(name) {
-                    dirty.geometry = true;
-                    dirty.primvars = true;
-                }
-                if kind == SceneKind::PointInstancer
-                    && ((prim == path
-                        && !name.starts_with("material:")
-                        && !name.starts_with("xformOp"))
-                        || (prototype && (name == "xformOpOrder" || name.starts_with("xformOp:"))))
-                {
-                    dirty.point_instances = true;
-                }
+                route_property(&mut dirty, path, kind, prim, name, ancestor, prototype);
             }
+        }
+        // A property added or removed routes as an edit of its fields does.
+        for property in &report.resynced_properties {
+            let prim = property.prim_path();
+            let ancestor = paths.resolve(prim).is_prefix_of(paths.resolve(path));
+            let prototype = old
+                .and_then(|r| r.point_instances.as_ref())
+                .is_some_and(|p| p.prototypes.contains(&prim));
+            let name = scene.store().tokens().resolve(property.property());
+            route_property(&mut dirty, path, kind, prim, name, ancestor, prototype);
         }
     }
     dirty
+}
+/// Marks what an edit of the property `name` of `prim` makes dirty in the
+/// record of `path`: `ancestor` when `prim` is `path` or above it,
+/// `prototype` when `prim` is a prototype of its point instancer.
+fn route_property(
+    dirty: &mut Dirty,
+    path: PathId,
+    kind: SceneKind,
+    prim: PathId,
+    name: &str,
+    ancestor: bool,
+    prototype: bool,
+) {
+    if ancestor && (name == "xformOpOrder" || name.starts_with("xformOp:")) {
+        dirty.transform = true;
+    }
+    if ancestor && (name == "purpose" || name.ends_with("Visibility") || name == "visibility") {
+        dirty.appearance = true;
+    }
+    if ancestor && name.starts_with("primvars:") {
+        dirty.primvars = true;
+    }
+    if prim == path && geometry_property(name) {
+        dirty.geometry = true;
+        dirty.primvars = true;
+    }
+    if kind == SceneKind::PointInstancer
+        && ((prim == path && !name.starts_with("material:") && !name.starts_with("xformOp"))
+            || (prototype && (name == "xformOpOrder" || name.starts_with("xformOp:"))))
+    {
+        dirty.point_instances = true;
+    }
 }
 fn geometry_property(name: &str) -> bool {
     matches!(

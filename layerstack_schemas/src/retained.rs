@@ -74,6 +74,10 @@ pub enum QueryCause {
         /// Authored field affected.
         field: PropertyField,
     },
+    /// A property spec was added or removed: everything about this composed
+    /// property may have changed, its existence included
+    /// ([`layerstack::Changes::resynced_properties`]).
+    PropertyResync(PropertyPath),
     /// The report identified a prim but not individual fields.
     Prim(PathId),
     /// A structural resync covers this root and its descendants.
@@ -401,6 +405,11 @@ impl RetainedQueries {
                     held.mark(QueryCause::Prim(prim));
                 }
             }
+            for &path in &changes.resynced_properties {
+                if property_resync_overlap(scene, held, path, &self.bounds) {
+                    held.mark(QueryCause::PropertyResync(path));
+                }
+            }
         }
     }
     /// Validates one query and borrows its current answer. A clean poll does not
@@ -676,6 +685,24 @@ fn property_overlap(
             .shading_dependencies()
             .iter()
             .any(|d| d.prim == prim && name.is_none_or(|n| n == d.property)),
+    }
+}
+/// Whether a property added or removed at `path` may change `held`. A
+/// shading answer reads properties it found, so one it may now find or no
+/// longer find is any property of a prim it read from.
+fn property_resync_overlap(
+    scene: &Scene<'_>,
+    held: &Held,
+    path: PropertyPath,
+    bounds: &BoundsCache,
+) -> bool {
+    let prim = path.prim_path();
+    match &held.recipe {
+        Recipe::Shading => {
+            held.shading_dependencies().iter().any(|d| d.prim == prim)
+                || matches!(held.query, Query::ShadingValue(p) if p.prim_path() == prim)
+        }
+        _ => property_overlap(scene, held, prim, Some(path.property()), bounds),
     }
 }
 fn evaluate(

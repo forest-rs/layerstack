@@ -504,6 +504,14 @@ impl BoundsCache {
                 self.invalidate_bounds(scene, path);
             }
         }
+        for property in &changes.resynced_properties {
+            let path = property.prim_path();
+            self.invalidate_extent_dependents(scene, path);
+            if bounds_property(scene.store().tokens().resolve(property.property())) {
+                self.invalidate_prototypes(scene, path);
+                self.invalidate_bounds(scene, path);
+            }
+        }
     }
 
     fn invalidate_extent_dependents(&mut self, scene: &Scene<'_>, path: PathId) {

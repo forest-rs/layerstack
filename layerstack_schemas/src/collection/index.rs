@@ -327,7 +327,8 @@ impl MembershipIndex {
     ///   again), and so is every collection that read one of its
     ///   collections (included it, referenced it from an expression, or
     ///   failed to);
-    /// - a field of `collection:<name>:<base>` in a property inventory, for
+    /// - a field of `collection:<name>:<base>` in a property inventory, or
+    ///   that property in `resynced_properties`, for
     ///   `<base>` one of `includes`, `excludes`, `expansionRule`,
     ///   `includeRoot`, `membershipExpression` and `mode`: that collection
     ///   is compiled again, and so is every collection that read it;
@@ -397,6 +398,16 @@ impl MembershipIndex {
                         name: name.into(),
                     });
                 }
+            }
+        }
+        // A collection property added or removed recompiles its collection
+        // as a field edit of it does.
+        for property in &changes.resynced_properties {
+            if let Some(name) = field_owner(tokens.resolve(property.property())) {
+                edited.push(CollectionIdentity {
+                    owner: property.prim_path(),
+                    name: name.into(),
+                });
             }
         }
         edited.dedup();

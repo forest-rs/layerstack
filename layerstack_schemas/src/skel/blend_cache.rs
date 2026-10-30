@@ -571,7 +571,9 @@ impl BlendShapeCache {
             let shape_changed = changes
                 .changed_info_only
                 .iter()
-                .any(|p| b.query.targets().contains(p));
+                .copied()
+                .chain(changes.resynced_properties.iter().map(|p| p.prim_path()))
+                .any(|p| b.query.targets().contains(&p));
             if b.definitions.changed(scene, changes) || shape_changed {
                 self.stats.invalidations += 1;
                 return false;

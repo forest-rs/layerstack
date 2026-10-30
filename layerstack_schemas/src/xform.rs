@@ -1043,7 +1043,8 @@ impl XformCache {
     /// count and filters the remaining cache by namespace instead. Child lists
     /// are borrowed lazily, so wide scenes allocate no wide traversal frontier.
     /// Info-only changes invalidate the local transform when transform fields
-    /// changed or the report lacks a complete property inventory;
+    /// changed or the report lacks a complete property inventory, and
+    /// property resyncs when they resync a transform property;
     /// descendant worlds validate lazily. No namespace index is constructed.
     ///
     /// Spec: AOUSD Core §11 (population), §12 (composed changes).
@@ -1088,6 +1089,13 @@ impl XformCache {
                     .any(|field| is_transform_property(scene.store().tokens().resolve(field.name)))
             }) {
                 self.invalidate_transform(path);
+            }
+        }
+        // A transform property added or removed changes the local transform;
+        // any other property resync, such as `visibility`, does not.
+        for property in &changes.resynced_properties {
+            if is_transform_property(scene.store().tokens().resolve(property.property())) {
+                self.invalidate_transform(property.prim_path());
             }
         }
     }
@@ -1546,6 +1554,59 @@ mod cache_tests {
         cache.invalidate(&Scene::new(live.stage(), &store), pseudo);
         assert!(cache.is_empty());
         assert!(cache.namespace.as_ref().is_none_or(BTreeMap::is_empty));
+    }
+
+    /// A property resync invalidates the local transform only for transform
+    /// properties: `visibility` added keeps it, `xformOp:rotateZ` does not.
+    #[test]
+    fn property_resyncs_invalidate_transform_properties_only() {
+        use alloc::{sync::Arc, vec};
+        use layerstack::{PropertySpec, PropertyType};
+        let mut store = InMemoryStore::default();
+        let rock = store.path("/Rock");
+        let xform = store.tokens().intern("Xform");
+        let mut layer = Layer::new(LayerId(1));
+        layer.insert_prim(rock, PrimSpec::def().with_type_name(xform));
+        store.insert_layer(layer);
+        let options = StageOptions {
+            schemas: Some(Arc::new(crate::openusd(store.tokens()))),
+            ..StageOptions::default()
+        };
+        let mut live = LiveStage::compose(&mut store, LayerId(1), options);
+        let mut cache = XformCache::new(Time::Default);
+        cache.local_to_world(&Scene::new(live.stage(), &store), rock);
+        assert_eq!(cache.stats().local_computed, 1);
+        let visibility = store.property_path("/Rock.visibility");
+        let invisible = Value::Token(store.tokens().intern("invisible"));
+        let mut txn = Transaction::new();
+        txn.set_default(
+            EditTarget::for_layer(LayerId(1)).property(visibility),
+            invisible,
+        );
+        let applied = live.apply(&mut store, &txn).unwrap();
+        assert_eq!(applied.changes.resynced_properties, [visibility]);
+        cache.apply_changes(&Scene::new(live.stage(), &store), &applied.changes);
+        cache.local_to_world(&Scene::new(live.stage(), &store), rock);
+        assert_eq!(cache.stats().local_computed, 1);
+        let rotate = store.property_path("/Rock.xformOp:rotateZ");
+        let order = store.property_path("/Rock.xformOpOrder");
+        let mut txn = Transaction::new();
+        txn.create_property(
+            EditTarget::for_layer(LayerId(1)).property(rotate),
+            PropertySpec::typed_attribute(PropertyType::parse("double").unwrap())
+                .with_default(Value::Double(90.0)),
+        );
+        txn.create_property(
+            EditTarget::for_layer(LayerId(1)).property(order),
+            PropertySpec::typed_attribute(PropertyType::parse("token[]").unwrap())
+                .with_default(Value::array(vec![Value::Token(rotate.property())])),
+        );
+        let applied = live.apply(&mut store, &txn).unwrap();
+        assert_eq!(applied.changes.resynced_properties, [rotate, order]);
+        cache.apply_changes(&Scene::new(live.stage(), &store), &applied.changes);
+        let world = cache.local_to_world(&Scene::new(live.stage(), &store), rock);
+        assert_eq!(cache.stats().local_computed, 2);
+        assert_ne!(world, Some(gf::IDENTITY));
     }
 
     #[test]

@@ -880,6 +880,39 @@ impl LiveStage {
             .filter(|(prim, _)| changes.changed_info_only.contains(prim))
             .map(|(prim, fields)| crate::PrimPropertyChanges { prim, fields })
             .collect();
+        // A property field edited where the transaction otherwise changed
+        // only inert specs (a relationship's targets a namespace edit
+        // repaired, say) changes its prim info-only with that field, as
+        // OpenUSD reports the property info-only with its field, unless
+        // the prim is resynced, or info-only already for a changed spec
+        // stack, which no inventory covers.
+        if !precise_properties && !inert_sites.is_empty() {
+            let resynced: HashSet<PathId> = changes.resynced.iter().copied().collect();
+            let listed: HashSet<PathId> = changes.changed_info_only.iter().copied().collect();
+            let mut fields: HashMap<PathId, Vec<crate::PropertyChange>> = HashMap::new();
+            for &(layer, path, change) in &outcome.property_fields {
+                if !inert_sites.contains(&(layer, path)) {
+                    continue;
+                }
+                for prim in self.source_prims(store, layer, path) {
+                    if !listed.contains(&prim)
+                        && self.stage.has_prim(prim)
+                        && !is_beneath_set(store, prim, &resynced)
+                    {
+                        fields.entry(prim).or_default().push(change);
+                    }
+                }
+            }
+            if !fields.is_empty() {
+                for (prim, fields) in fields {
+                    changes.changed_info_only.push(prim);
+                    changes
+                        .property_changes
+                        .push(crate::PrimPropertyChanges { prim, fields });
+                }
+                changes.sort(store.paths(), store.tokens());
+            }
+        }
         include_property_resyncs(store, &mut changes, &property_resyncs, precise_properties);
         self.publish_preparation(store);
         self.notices.publish(&mut changes, &self.stage, store);

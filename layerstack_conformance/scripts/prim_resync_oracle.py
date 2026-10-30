@@ -311,6 +311,14 @@ def override_reorders_children():
     Sdf.CreatePrimInLayer(weak, "/Thing")
 
 
+def rename_target():
+    # `/World/Lamp.aim` targets `/World/Robot`: the editor repairs it.
+    editor = Usd.NamespaceEditor(stage)
+    assert editor.RenamePrim(stage.GetPrimAtPath("/World/Robot"), "Rover")
+    assert editor.ApplyEdits()
+    assert root.GetRelationshipAtPath("/World/Lamp.aim").targetPathList.explicitItems == ["/World/Rover"]
+
+
 def mute_sublayer():
     stage.MuteLayer(weak.identifier)
 
@@ -367,6 +375,7 @@ STEPS = [
     ("remove_prim_sublayer", "that sublayer removed", remove_prim_sublayer),
     ("mute_sublayer", "`UsdStage::MuteLayer` of the weaker layer", mute_sublayer),
     ("unmute_sublayer", "`UsdStage::UnmuteLayer` of it", unmute_sublayer),
+    ("rename_target", "`UsdNamespaceEditor::RenamePrim` of `/World/Robot`, which `/World/Lamp.aim` targets, to `Rover`", rename_target),
     ("override_reorders_children", "an `over` for `/Thing` in the weaker layer, which changes the composed order of the root prims", override_reorders_children),
 ]
 

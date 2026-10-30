@@ -612,9 +612,10 @@ const updates: UpdateSummary[] = [
   // The asset's height: the robot's two draws read, nothing rebuilt.
   update({ itemsRead: 2, itemsUntouched: 8 }),
   // Renamed: the robot's draws gone, the rover's added, drawing the same
-  // buffers; the old and new paths alone are resynced, and the lamp, whose
-  // `aim` the rename repairs: read again, unchanged.
-  update({ added: 2, removed: 2, itemsRead: 2, itemsUntouched: 8, localTransforms: 4, lightsRead: 1 }),
+  // buffers; the old and new paths alone are resynced. The lamp's `aim`,
+  // which the rename repairs, changes info-only, and no light reads it:
+  // the lamp is not read again.
+  update({ added: 2, removed: 2, itemsRead: 2, itemsUntouched: 8, localTransforms: 3 }),
   // Time 30, then the default time again: the top alone is animated (its
   // `xformOp:rotateY` samples), so it alone is read and moved; no other
   // draw, light or camera is.

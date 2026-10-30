@@ -20,7 +20,18 @@ pub enum AffineError {
 }
 impl core::fmt::Display for AffineError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "affine factorization: {self:?}")
+        f.write_str(match self {
+            Self::NonFinite => {
+                "cannot factor the matrix: it has a NaN or infinite element, or factoring overflowed"
+            }
+            Self::NonAffine => {
+                "cannot factor the matrix: its last column is not [0, 0, 0, 1], so it is a \
+                 perspective transform, not an affine one"
+            }
+            Self::InvalidEpsilon => {
+                "cannot factor the matrix: the epsilon must be positive and finite"
+            }
+        })
     }
 }
 impl core::error::Error for AffineError {}
@@ -220,7 +231,30 @@ pub enum TrsError {
 }
 impl core::fmt::Display for TrsError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "affine TRS conversion: {self:?}")
+        match self {
+            Self::InvalidTolerance => f.write_str(
+                "cannot convert the factors to translate, rotate and scale: the tolerance must \
+                 be finite and not negative",
+            ),
+            Self::Singular => f.write_str(
+                "cannot convert the factors to translate, rotate and scale: the transform is \
+                 singular, so it has no unique rotation",
+            ),
+            Self::NonFinite => f.write_str(
+                "cannot convert the factors to translate, rotate and scale: the factors or the \
+                 matrix rebuilt from them have a NaN or infinite element",
+            ),
+            Self::InvalidRotation => f.write_str(
+                "cannot convert the factors to translate, rotate and scale: they make no proper \
+                 orthonormal rotation",
+            ),
+            Self::Residual { relative_error } => write!(
+                f,
+                "cannot convert the factors to translate, rotate and scale: rebuilt from them, \
+                 the matrix is off by a relative error of {relative_error}, more than the \
+                 tolerance (a shear, or a tiny scale Gf floors)"
+            ),
+        }
     }
 }
 impl core::error::Error for TrsError {}

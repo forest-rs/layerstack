@@ -121,7 +121,17 @@ pub enum ValidatorRegistrationError {
 }
 impl core::fmt::Display for ValidatorRegistrationError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "invalid validator registration: {self:?}")
+        match self {
+            Self::InvalidId(id) => write!(
+                f,
+                "invalid validator registration: the ID `{id}` is not a namespace and a name \
+                 without whitespace"
+            ),
+            Self::DuplicateId(id) => write!(
+                f,
+                "invalid validator registration: another custom validator has the ID `{id}`"
+            ),
+        }
     }
 }
 impl core::error::Error for ValidatorRegistrationError {}

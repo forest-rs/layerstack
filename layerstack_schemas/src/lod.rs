@@ -49,7 +49,37 @@ pub enum LodError {
 }
 impl core::fmt::Display for LodError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "invalid LOD input: {self:?}")
+        match self {
+            Self::InvalidAttribute(name) => write!(
+                f,
+                "invalid LOD input: `{name}` is missing, of another type, malformed or not finite"
+            ),
+            Self::UnsortedThresholds(name) => write!(
+                f,
+                "invalid LOD input: the thresholds of `{name}` are not in the order its metric needs"
+            ),
+            Self::InvalidMetric => f.write_str(
+                "invalid LOD input: a metric, the viewpoint or the previous metric is negative or not finite",
+            ),
+            Self::InvalidHysteresis => {
+                f.write_str("invalid LOD input: the hysteresis must be finite and not negative")
+            }
+            Self::InvalidTransform => {
+                f.write_str("invalid LOD input: a transform is not finite, or not affine")
+            }
+            Self::InvalidFrustum => f.write_str(
+                "invalid LOD input: the frustum parameters make no finite view of any size",
+            ),
+            Self::UnsupportedProjection => {
+                f.write_str("invalid LOD input: the projection method is not one it evaluates")
+            }
+            Self::GeometryFeatureRequired => f.write_str(
+                "invalid LOD input: resolving a bounding-volume relationship needs the `usd-geom` feature",
+            ),
+            Self::InvalidProjection => f.write_str(
+                "invalid LOD input: the projection reached a zero W, or a result that is not finite",
+            ),
+        }
     }
 }
 impl core::error::Error for LodError {}

@@ -92,7 +92,20 @@ pub enum AssetAnchorError {
 }
 impl core::fmt::Display for AssetAnchorError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "asset anchoring: {self:?}")
+        f.write_str(match self {
+            Self::EmptyPath => "cannot anchor the asset path: it is empty, so it names no asset",
+            Self::UnevaluatedExpression => {
+                "cannot anchor the asset path: it is a variable expression that evaluated to \
+                 nothing (a `VariableExpressionError` composition error says why)"
+            }
+            Self::MissingSource => {
+                "cannot anchor the asset path: it is relative, and no authored layer is known \
+                 to anchor it to"
+            }
+            Self::CannotAnchor => {
+                "cannot anchor the asset path: the resolver made no identifier for it"
+            }
+        })
     }
 }
 impl core::error::Error for AssetAnchorError {}

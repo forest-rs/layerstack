@@ -186,6 +186,7 @@ fn prepare_with(
     let mut local_deletes: HashMap<LayerId, Vec<(TargetPath, Vec<VariantSelectionSite>)>> =
         HashMap::new();
     let mut stage_moves = Vec::new();
+    let mut chain = Vec::new();
     for (i, stage) in stages.iter().enumerate() {
         let shares_local_namespace = stage
             .layer_stack()
@@ -211,6 +212,7 @@ fn prepare_with(
             &mut mappings,
             &mut variant_moves,
             &mut deletes,
+            &mut chain,
         )?;
         normalize_moves(store, &mut mappings)?;
         for mapping in &mappings {
@@ -265,6 +267,40 @@ fn prepare_with(
         }
         stage_moves.push(mappings);
     }
+    // The specs of other layer stacks that move or go with nested arcs,
+    // by layer. A layer of a stage's own stack edits its namespace through
+    // that stage's moves alone.
+    let mut remote_moves: HashMap<LayerId, Vec<VariantMove>> = HashMap::new();
+    let mut remote_deletes: HashMap<LayerId, Vec<(TargetPath, Vec<VariantSelectionSite>)>> =
+        HashMap::new();
+    for edit in &chain {
+        for id in &edit.layers {
+            if stages.iter().any(|stage| stage.layer_stack().contains(id)) {
+                return Err(NamespaceError::UnsupportedComposition(
+                    "dependent namespace through an arc nested in a stage's layer stack requires an unambiguous mapping",
+                ));
+            }
+            match edit.to {
+                Some(to) => {
+                    let moved = VariantMove {
+                        mapping: PathMove::new(edit.from, to),
+                        within: edit.within.clone(),
+                    };
+                    let moves = remote_moves.entry(*id).or_default();
+                    if !moves.contains(&moved) {
+                        moves.push(moved);
+                    }
+                }
+                None => {
+                    let gone = (edit.from, edit.within.clone());
+                    let deletes = remote_deletes.entry(*id).or_default();
+                    if !deletes.contains(&gone) {
+                        deletes.push(gone);
+                    }
+                }
+            }
+        }
+    }
     // With retained evidence, each layer is edited as a working copy of
     // the slots the edit can change: those at and beneath the paths it
     // moves, their ancestors, and those that author paths.
@@ -282,12 +318,37 @@ fn prepare_with(
                 copied.insert(*id, slots);
                 copy
             }
-            // A layer outside the layer stacks authoring no arc the edit
-            // repairs is left as it is, uncopied.
-            (Some(_), None, Some(slots)) if slots.is_empty() => continue,
-            (Some(_), None, Some(slots)) => {
-                let copy = retained::working_copy(original, slots);
-                copied.insert(*id, slots.clone());
+            (Some(index), None, Some(slots)) => {
+                // With the slots the nested arcs' dependent edits change.
+                let moves: Vec<PathMove> = remote_moves
+                    .get(id)
+                    .into_iter()
+                    .flatten()
+                    .map(|m| m.mapping.clone())
+                    .collect();
+                let gone = remote_deletes.get(id).map_or(&[][..], Vec::as_slice);
+                let mut slots = slots.clone();
+                if !moves.is_empty() || !gone.is_empty() {
+                    let none = HashSet::new();
+                    slots.extend(working_slots(
+                        store,
+                        index,
+                        original,
+                        &none,
+                        Some(&moves),
+                        gone,
+                    ));
+                    sort::sort_unstable(&mut slots);
+                    slots.dedup();
+                }
+                // A layer outside the layer stacks authoring no arc the
+                // edit repairs, and holding no spec it moves, is left as it
+                // is, uncopied.
+                if slots.is_empty() {
+                    continue;
+                }
+                let copy = retained::working_copy(original, &slots);
+                copied.insert(*id, slots);
                 copy
             }
             _ => original.clone(),
@@ -324,6 +385,21 @@ fn prepare_with(
             }
         }
         for (gone, within) in local_deletes.get(id).into_iter().flatten() {
+            delete::remove_specs(store, &mut layer, *gone, within);
+        }
+        // `UsdNamespaceEditor` moves each spec with `SdfLayer::Apply`,
+        // creating the destination's parent for a reparent
+        // (`_ApplyLayerSpecMove`, `pxr/usd/usd/namespaceEditor.cpp`), in
+        // other layer stacks as in the stage's.
+        for moved in remote_moves.get(id).into_iter().flatten() {
+            if moved.within.is_empty() {
+                move_local(store, &mut layer, &moved.mapping)?;
+            } else {
+                move_in_variant(store, &mut layer, moved)?;
+            }
+            unused = unused.after(store, &moved.mapping, &moved.within);
+        }
+        for (gone, within) in remote_deletes.get(id).into_iter().flatten() {
             delete::remove_specs(store, &mut layer, *gone, within);
         }
         dormant.insert(*id, unused);
@@ -437,7 +513,8 @@ fn prepare_with(
         // Whether the edit moves namespace whole, deleting nothing and
         // moving nothing within variant branches.
         let whole_moves = local_deletes.values().all(Vec::is_empty)
-            && local_variant_moves.values().all(Vec::is_empty);
+            && local_variant_moves.values().all(Vec::is_empty)
+            && chain.is_empty();
         validate_projection_retained(
             store,
             &edited,
@@ -800,6 +877,7 @@ fn gather_dependent_moves(
     out: &mut Vec<PathMove>,
     variant_out: &mut Vec<VariantMove>,
     deleted_out: &mut Vec<(TargetPath, Vec<VariantSelectionSite>)>,
+    chain_out: &mut Vec<ChainEdit>,
 ) -> Result<(), NamespaceError> {
     let raw_from = store.paths().resolve(source.from.prim_path()).clone();
     let raw_to = store.paths().resolve(source.to.prim_path()).clone();
@@ -858,21 +936,28 @@ fn gather_dependent_moves(
             if implied_from_local_variant(graph, node) {
                 continue;
             }
-            if node.site().has_variant_selections()
-                || !authored_in_local_variants(graph, node)
-                || node.is_implied()
-            {
+            if node.site().has_variant_selections() || node.is_implied() {
                 return Err(NamespaceError::UnsupportedComposition(
                     "dependent namespace through nested or variant arcs requires an unambiguous mapping",
                 ));
             }
-            let mount_depth = usize::from(node.namespace_depth());
-            if mount_depth > composed.depth() || composed.depth() - mount_depth > site.depth() {
+            // The levels of the prim beneath the site the arc was
+            // introduced at, counted at its parent node, whose site
+            // descends with the prim ([`PrimNode::namespace_depth`]).
+            let below = graph
+                .node(node.parent().unwrap_or(NodeId::ROOT))
+                .map(|parent| store.paths().resolve(parent.site().prim_path()).depth())
+                .and_then(|depth| depth.checked_sub(usize::from(node.namespace_depth())))
+                .ok_or(NamespaceError::Unmappable)?;
+            if below > composed.depth() || below > site.depth() {
                 return Err(NamespaceError::Unmappable);
             }
-            let raw_mount = Path::root()
-                .join(&site.segments()[..site.depth() - (composed.depth() - mount_depth)]);
-            // Moving the referenced root changes its target, not its mount.
+            let raw_mount = Path::root().join(&site.segments()[..site.depth() - below]);
+            // Moving the referenced root changes its target, not its
+            // mount: the arc is repaired where it is authored, in this
+            // layer stack or, for an arc nested in another's target, in
+            // that one (`_ProcessDependentNodePathAtIntroductionChange`,
+            // `pxr/usd/pcp/dependentNamespaceEditUtils.cpp`).
             if source.from.property_path().is_none() && raw_from.is_prefix_of(&raw_mount) {
                 continue;
             }
@@ -882,11 +967,31 @@ fn gather_dependent_moves(
             let from = store
                 .paths()
                 .intern(Path::root().join(&composed.segments()[..composed.depth() - suffix.len()]));
+            // An arc authored in another layer stack beneath the root's
+            // (an asset's arc back into the stage) composes over the moved
+            // namespace through the specs of every node above it, which
+            // move with it.
+            let chain = if authored_in_local_variants(graph, node) {
+                Vec::new()
+            } else {
+                let dest = raw_to.strip_prefix(&raw_mount);
+                chain_edits(
+                    store,
+                    graph,
+                    node,
+                    source_layers,
+                    suffix.len(),
+                    below,
+                    dest,
+                    source,
+                )?
+            };
             // A destination outside the arc's source domain no longer
             // composes here, which deletes the local specs over it
             // (`_MapNewPathToIntroducingNode`,
             // `pxr/usd/pcp/dependentNamespaceEditUtils.cpp`).
             let Some(dest_suffix) = raw_to.strip_prefix(&raw_mount) else {
+                push_unique(chain_out, chain);
                 let gone = match source.from.property_path() {
                     Some(p) => TargetPath::Property(PropertyPath::new(from, p.property())),
                     None => TargetPath::Prim(from),
@@ -903,7 +1008,7 @@ fn gather_dependent_moves(
             };
             let to = store.paths().intern(
                 Path::root()
-                    .join(&composed.segments()[..mount_depth])
+                    .join(&composed.segments()[..composed.depth() - below])
                     .join(dest_suffix),
             );
             let mapping = if let (Some(a), Some(b)) =
@@ -917,10 +1022,11 @@ fn gather_dependent_moves(
                 PathMove::new(TargetPath::Prim(from), TargetPath::Prim(to))
             };
             if mapping.from == mapping.to
-                || unedited_property_opinion(stage, store, prim, source_layers, source)
+                || unedited_property_opinion(stage, store, prim, source_layers, source, &chain)
             {
                 continue;
             }
+            push_unique(chain_out, chain);
             // The local specs to move are at the sites of the nodes above
             // the arc's, each in its own branches: OpenUSD moves the specs
             // of every node on the way up to the root
@@ -959,6 +1065,7 @@ fn unedited_property_opinion(
     prim: PathId,
     source_layers: &[LayerId],
     source: &PathMove,
+    chain: &[ChainEdit],
 ) -> bool {
     let Some(property) = source.from.property_path() else {
         return false;
@@ -971,7 +1078,17 @@ fn unedited_property_opinion(
         .any(|(layer, site)| {
             let own = site.prim_path() == prim && stage.layer_stack().contains(layer);
             let edited = source_layers.contains(layer) && *site == moved;
+            // The specs of the nodes between a nested arc and the root,
+            // which move with it.
+            let carried = chain.iter().any(|edit| {
+                edit.layers.contains(layer)
+                    && edit.from.prim_path() == site.prim_path()
+                    && site
+                        .variant_selection_sites()
+                        .eq(edit.within.iter().copied())
+            });
             !own && !edited
+                && !carried
                 && store
                     .layer(*layer)
                     .and_then(|l| spec_at(l, &Loc::of(site)))
@@ -991,12 +1108,21 @@ pub(super) fn branches_above(
     path: PathId,
 ) -> Vec<Vec<VariantSelectionSite>> {
     let path = store.paths().resolve(path);
+    let stack = graph
+        .node(NodeId::ROOT)
+        .map(|root| root.layer_stack_identifier());
     let mut out = Vec::new();
     let mut parent = node.parent();
     while let Some(above) = parent
         .filter(|id| *id != NodeId::ROOT)
         .and_then(|id| graph.node(id))
     {
+        // The nodes of other layer stacks hold no local specs
+        // ([`chain_edits`] edits theirs).
+        if Some(above.layer_stack_identifier()) != stack {
+            parent = above.parent();
+            continue;
+        }
         let within: Vec<VariantSelectionSite> = above
             .site()
             .variant_selection_sites()
@@ -1011,6 +1137,122 @@ pub(super) fn branches_above(
         parent = above.parent();
     }
     out
+}
+
+/// A dependent edit of the specs a layer stack other than a stage's holds
+/// over the edited namespace: those at the site of a node between an arc
+/// nested in another arc's target (an asset's arc back into the stage)
+/// and the root of a composed prim's graph.
+#[derive(Clone, PartialEq)]
+pub(super) struct ChainEdit {
+    /// The layers of the node's layer stack, each of which edits its specs.
+    pub(super) layers: Vec<LayerId>,
+    /// The branches the specs are authored in, all hosted above `from`.
+    pub(super) within: Vec<VariantSelectionSite>,
+    /// The specs' prim, or property, inside `within`.
+    pub(super) from: TargetPath,
+    /// Where they move, inside the same branches; `None` removes them.
+    pub(super) to: Option<TargetPath>,
+}
+
+/// Appends each of `edits` that `out` does not already hold.
+pub(super) fn push_unique(out: &mut Vec<ChainEdit>, edits: Vec<ChainEdit>) {
+    for edit in edits {
+        if !out.contains(&edit) {
+            out.push(edit);
+        }
+    }
+}
+
+/// The [`ChainEdit`]s of the nodes above `node` outside the root's layer
+/// stack, for an edit of the namespace `suffix` levels above `node`'s site
+/// in one of `source_layers` (`source`'s property, when it moves one).
+/// `node`'s arc was introduced `below` levels above its site, and `dest`
+/// is the destination beneath that introduction, `None` where it leaves
+/// it.
+///
+/// Each node's site is the composed prim's in its layer stack, so the
+/// namespace edited at `node` is its site `suffix` levels up, and the
+/// destination lies beneath its site `below` levels up. A destination
+/// outside the arc's domain removes the specs instead. OpenUSD visits the
+/// same nodes from the dependent one up to the root, moving or deleting
+/// the specs of each (`_PrimIndexDependentNodeEditProcessor::
+/// _ProcessNextNodeTask` and `_AddSpecMoveEdits`,
+/// `pxr/usd/pcp/dependentNamespaceEditUtils.cpp`), its spec path mapped
+/// through each introduction (`_MapNewPathToIntroducingNode`). The root's
+/// layer stack has its own moves ([`gather_dependent_moves`]). A node above
+/// in a layer stack holding an edited layer would edit that namespace
+/// twice, which is refused. AOUSD Core §10 (composition arcs).
+#[allow(clippy::too_many_arguments, reason = "the walk's whole context")]
+fn chain_edits(
+    store: &mut dyn LayerStore,
+    graph: &crate::PrimIndexGraph,
+    node: crate::prim_index_graph::PrimNode<'_>,
+    source_layers: &[LayerId],
+    suffix: usize,
+    below: usize,
+    dest: Option<&[TokenId]>,
+    source: &PathMove,
+) -> Result<Vec<ChainEdit>, NamespaceError> {
+    let Some(root) = graph.node(NodeId::ROOT) else {
+        return Ok(Vec::new());
+    };
+    let dest = dest.map(<[TokenId]>::to_vec);
+    let mut out = Vec::new();
+    let mut parent = node.parent();
+    while let Some(above) = parent
+        .filter(|id| *id != NodeId::ROOT)
+        .and_then(|id| graph.node(id))
+    {
+        parent = above.parent();
+        if above.layer_stack_identifier() == root.layer_stack_identifier() {
+            continue;
+        }
+        let layers = LayerStack::gather_identifier(store, above.layer_stack_identifier()).layers;
+        if layers.iter().any(|id| source_layers.contains(id)) {
+            return Err(NamespaceError::UnsupportedComposition(
+                "dependent namespace through an arc nested in the edited layer stack requires an unambiguous mapping",
+            ));
+        }
+        let site = store.paths().resolve(above.site().prim_path()).clone();
+        if suffix > site.depth() || below > site.depth() {
+            return Err(NamespaceError::Unmappable);
+        }
+        let mount = site.depth() - below;
+        let within: Vec<VariantSelectionSite> = above.site().variant_selection_sites().collect();
+        if within
+            .iter()
+            .any(|at| store.paths().resolve(at.host_path).depth() > mount)
+        {
+            return Err(NamespaceError::Unmappable);
+        }
+        let from = store
+            .paths()
+            .intern(Path::root().join(&site.segments()[..site.depth() - suffix]));
+        let to = dest.as_deref().map(|dest| {
+            store
+                .paths()
+                .intern(Path::root().join(&site.segments()[..mount]).join(dest))
+        });
+        let (from, to) = match (source.from.property_path(), source.to.property_path()) {
+            (Some(a), b) => (
+                TargetPath::Property(PropertyPath::new(from, a.property())),
+                to.zip(b)
+                    .map(|(to, b)| TargetPath::Property(PropertyPath::new(to, b.property()))),
+            ),
+            (None, _) => (TargetPath::Prim(from), to.map(TargetPath::Prim)),
+        };
+        if to == Some(from) {
+            continue;
+        }
+        out.push(ChainEdit {
+            layers,
+            within,
+            from,
+            to,
+        });
+    }
+    Ok(out)
 }
 
 /// Whether `node` is the copy of an arc authored in the local variants its

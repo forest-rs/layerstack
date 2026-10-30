@@ -41,16 +41,7 @@ const LAYERS: [&str; 2] = ["scene.usda", "asset.usda"];
 
 /// The cases where layerstack does not yet do what OpenUSD does. Each
 /// must still differ, so that the list stays current.
-const DIFFERING: &[&str] = &[
-    "rename_lamp",
-    "reparent_lamp",
-    "delete_lamp",
-    "rename_bulb",
-    "reparent_bulb",
-    "delete_bulb",
-    "rename_property",
-    "delete_property",
-];
+const DIFFERING: &[&str] = &["delete_lamp", "delete_bulb", "delete_property"];
 
 fn oracle() -> Json {
     let oracle: Json = serde_json::from_str(ORACLE).expect("oracle.json");

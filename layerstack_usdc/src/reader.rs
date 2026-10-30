@@ -16,6 +16,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 use hashbrown::HashMap;
+use layerstack::sort;
 
 use crate::{
     DecodeBudget, UsdcError, header, section,
@@ -348,7 +349,9 @@ fn spec_path(sections: &CrateSections, at: usize) -> &str {
 /// The indexes of the specs of `sections`, sorted by their paths' text.
 fn sorted_by_path(sections: &CrateSections) -> Vec<usize> {
     let mut order: Vec<usize> = (0..sections.specs.len()).collect();
-    order.sort_unstable_by(|&a, &b| spec_path(sections, a).cmp(spec_path(sections, b)));
+    sort::sort_unstable_by(&mut order, |&a, &b| {
+        spec_path(sections, a).cmp(spec_path(sections, b))
+    });
     order
 }
 

@@ -24,6 +24,7 @@ use alloc::{string::String, sync::Arc, vec::Vec};
 use layerstack::{
     LayerId, LayerMuteError, LayerStore,
     asset::{FormatArgs, PackagePath},
+    sort,
 };
 
 use crate::{
@@ -187,7 +188,7 @@ impl<B: Storage> StageDocument<B> {
             .iter()
             .filter_map(|&id| self.identifier(id))
             .collect();
-        identifiers.sort_unstable();
+        sort::sort_unstable(&mut identifiers);
         identifiers
     }
 }

@@ -11,6 +11,8 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
+use layerstack::sort;
+
 use super::{Prim, VariantSet};
 
 /// The order [`walk()`] visits a variant set's variants in.
@@ -144,7 +146,7 @@ pub(crate) fn walk<'a, E>(
                     let mut variants: Vec<&Prim> = variant_set.variants.iter().collect();
                     if order == VariantOrder::ByName {
                         // Names are unique: the order is total.
-                        variants.sort_unstable_by(|a, b| a.name.cmp(&b.name));
+                        sort::sort_unstable_by(&mut variants, |a, b| a.name.cmp(&b.name));
                     }
                     stack.push(Frame::Set {
                         set: variant_set,

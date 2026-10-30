@@ -37,9 +37,13 @@ use crate::{Catalog, IoError, StageDocument, Storage};
 /// (`textures/bark.png`) is anchored there too when [`Storage::exists`]
 /// finds the asset beside the layer, and kept otherwise, including when
 /// the storage cannot say ([`IoErrorKind::Unsupported`], or an asset it
-/// cannot supply yet, [`IoErrorKind::Unavailable`]). A search path
-/// authored inside a package is kept unless the storage reports the
-/// member itself.
+/// cannot supply yet, [`IoErrorKind::Unavailable`]). Inside a package, as
+/// `SdfComputeAssetPathRelativeToLayer` anchors: a path relative to its
+/// layer is anchored to the packaged layer (the package read as a layer
+/// stands for its root layer); a search path is the member beside the
+/// packaged layer, or else beside the package's root layer, which the
+/// document's copy of the package answers, and otherwise is anchored to
+/// the package file as a search path any other layer authors is.
 ///
 /// [`AssetResolver::resolve`] reads nothing and fails with
 /// [`AssetResolveError::Unavailable`]: the document loads layers itself
@@ -80,10 +84,46 @@ impl<B: Storage> AssetResolver for LayerLocations<'_, B> {
 
     fn anchor_asset_path(&self, asset_path: &str, anchor: LayerId) -> Option<String> {
         let location = self.resolved_path(anchor).unwrap_or("");
-        create_identifier(asset_path, location, |identifier| {
-            self.storage.exists(identifier).is_ok_and(|exists| exists)
-        })
+        let exists = |identifier: &str| self.storage.exists(identifier).is_ok_and(|exists| exists);
+        let Some(package) = self.catalog.sources.get(&anchor).and_then(|s| s.package) else {
+            return create_identifier(asset_path, location, exists);
+        };
+        let Some(archive) = self.catalog.package_bytes.get(&package) else {
+            return create_identifier(asset_path, location, exists);
+        };
+        let outer = self.catalog.package_identifier(package);
+        // `SdfComputeAssetPathRelativeToLayer` anchors a path inside the
+        // package to the packaged layer, the package read as a layer
+        // standing for its root layer.
+        let packaged = match self.catalog.package_roots.get(&anchor) {
+            Some(root) => alloc::format!("{outer}[{root}]"),
+            None => String::from(location),
+        };
+        if !is_search_path(asset_path) {
+            return create_identifier(asset_path, &packaged, exists);
+        }
+        // A search path is the member beside the packaged layer, or else
+        // beside the package's root layer, as layer reads select it; then
+        // anchored to the package file as any other layer's
+        // (`ArSplitPackageRelativePathOuter`), or kept.
+        match self
+            .catalog
+            .package_member(archive, asset_path, anchor, package)
+        {
+            Ok(Some(member)) => Some(alloc::format!("{outer}[{member}]")),
+            _ => create_identifier(asset_path, outer, exists),
+        }
     }
+}
+
+/// Whether `asset_path` is a search path: relative, but not to its layer
+/// (`./`, `../`), nor an expression or a URI. OpenUSD looks for one
+/// inside the package that authors it
+/// (`SdfComputeAssetPathRelativeToLayer`).
+fn is_search_path(asset_path: &str) -> bool {
+    !asset_path.is_empty()
+        && !asset_path.starts_with(['.', '/', '\\', '`'])
+        && !asset_path.contains(':')
 }
 
 impl<B: Storage> StageDocument<B> {

@@ -24,7 +24,12 @@ the root's, an expression variable the root's expressions then read,
 `rate/rate.usda` authors `timeCodesPerSecond`. A third,
 `stack/session.usda`, has a sublayer, `stack/weak/weak.usda`, which joins
 the session layer stack: its asset paths anchor to it, and its layer
-metadata is ignored.
+metadata is ignored. A fourth, `pkg/session.usda`, defines
+`/World/Packaged`, referencing a member of the package `pkg/pkg.usdz` and
+the package itself, whose layers author search paths found beside the
+member, beside the package's root layer, beside the package file and
+nowhere: OpenUSD looks inside the package first
+(`SdfComputeAssetPathRelativeToLayer` in `pxr/usd/sdf/layerUtils.cpp`).
 
 OpenUSD's flatten anchors every asset path to the layer that authors it
 (`SdfAnchorAssetPaths` through `SdfComputeAssetPathRelativeToLayer`),
@@ -41,8 +46,8 @@ what it resolves.
 
 It records, for the stage opened on `root.usda` alone (`root`), with
 `sess/session.usda` as its session layer (`session`), with
-`rate/rate.usda` (`rate`) and with `stack/session.usda`
-(`session_sublayers`):
+`rate/rate.usda` (`rate`), with `stack/session.usda`
+(`session_sublayers`) and with `pkg/session.usda` (`package`):
 
 - `flatten`: `UsdStage::Flatten`'s `ExportToString`, without its `doc`;
 - `metadata`: for each stage metadata field, `HasAuthoredMetadata` and
@@ -58,7 +63,9 @@ import argparse
 import filecmp
 import json
 import os
+import struct
 import tempfile
+import zipfile
 
 from pxr import Sdf, Usd
 
@@ -194,6 +201,50 @@ over "World"
     asset weakUp = @../s.png@
 }
 """,
+    "pkg/session.usda": """#usda 1.0
+
+over "World"
+{
+    def "Packaged" (
+        references = [
+            @./pkg.usdz[sub/inner.usda]@</Inner>,
+            @./pkg.usdz@</Root>
+        ]
+    )
+    {
+    }
+}
+""",
+}
+# Packages, each its members in package order, the root layer first.
+PACKAGES = {
+    "pkg/pkg.usdz": [
+        ("root.usda", """#usda 1.0
+
+def Xform "Root"
+{
+    asset rootBesidePackage = @near.png@
+    asset rootOwn = @./own.png@
+    asset rootSearch = @tex/a.png@
+}
+"""),
+        ("sub/inner.usda", """#usda 1.0
+
+def Xform "Inner"
+{
+    asset atPackageRoot = @tex/a.png@
+    asset besideMember = @near.png@
+    asset besidePackage = @outside.png@
+    asset inBoth = @both.png@
+    asset nowhere = @nowhere.png@
+    asset own = @./own.png@
+    asset up = @../tex/a.png@
+}
+"""),
+        ("sub/near.png", ""),
+        ("tex/a.png", ""),
+        ("both.png", ""),
+    ],
 }
 # Files the paths name, so that OpenUSD finds them; the others are missing.
 FILES = [
@@ -201,6 +252,7 @@ FILES = [
     "assets/cd.png", "assets/tex.png", "assets/maps/m.png",
     "sess/sess.png", "sess/deep.png", "sess/stex/s.png",
     "stack/s.png", "stack/weak/w.png", "stack/weak/tex/w.png",
+    "pkg/outside.png", "pkg/both.png", "pkg/near.png",
 ]
 FIELDS = [
     "customLayerData", "defaultPrim", "upAxis", "startTimeCode", "endTimeCode",
@@ -211,6 +263,7 @@ SESSIONS = {
     "session": "sess/session.usda",
     "rate": "rate/rate.usda",
     "session_sublayers": "stack/session.usda",
+    "package": "pkg/session.usda",
 }
 
 
@@ -268,6 +321,18 @@ def record(directory, session):
     }
 
 
+def package(members, path):
+    """Packages the members as `usdzip` lays them out: stored, with every
+    member's data 64-byte aligned by a `0x1986` extra field."""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_STORED) as z:
+        for name, text in members:
+            info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
+            pad = (-(z.fp.tell() + 30 + len(name.encode()) + 4)) % 64
+            info.extra = struct.pack("<HH", 0x1986, pad) + bytes(pad)
+            z.writestr(info, text.encode())
+
+
 def write(out):
     out = os.path.realpath(out)
     for name, text in LAYERS.items():
@@ -279,6 +344,8 @@ def write(out):
         path = os.path.join(out, name)
         os.makedirs(os.path.dirname(path), exist_ok=True)
         open(path, "w").close()
+    for name, members in PACKAGES.items():
+        package(members, os.path.join(out, name))
     for layer in list(Sdf.Layer.GetLoadedLayers()):
         if not layer.anonymous:
             layer.Reload(force=True)
@@ -301,7 +368,7 @@ def main():
         return
     with tempfile.TemporaryDirectory() as tmp:
         write(tmp)
-        for name in list(LAYERS) + FILES + ["oracle.json"]:
+        for name in list(LAYERS) + FILES + list(PACKAGES) + ["oracle.json"]:
             if not filecmp.cmp(os.path.join(tmp, name), os.path.join(FIXTURES, name),
                                shallow=False):
                 raise SystemExit(f"{name} differs from {FIXTURES}")

@@ -46,7 +46,8 @@
  *   number of components, a number that is not an exact integer of the
  *   type, a value kind that cannot be authored).
  * - `layer.read_only`: the edits target a layer that cannot be saved (a
- *   USDZ member); open with `editLayer: "session"`.
+ *   USDZ member); open with `editLayer: "session"`. A move or delete
+ *   that would change such a layer fails with it too, naming the layer.
  * - `layer.outside_stack`: the edits target a layer the stage reaches only
  *   through an arc: edit it through an {@link Opinion.editTarget} or a
  *   {@link CompositionArc.editTarget}.

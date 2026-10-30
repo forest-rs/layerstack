@@ -955,7 +955,11 @@ export class Stage implements Disposable {
    * `namespace.collision` (the destination is occupied),
    * `namespace.missing_parent`, `namespace.not_found`,
    * `namespace.instance_proxy` (inside an instance),
-   * `namespace.unmappable`, ...
+   * `namespace.unmappable`, ... A move that would change a layer that
+   * cannot be saved ({@link Layer.readOnly}), such as a package member
+   * whose arc back into the stage it would repair, throws
+   * `layer.read_only` naming that layer, nothing changed, where OpenUSD
+   * edits the member in memory and its save fails.
    */
   move(path: string, to: string, target?: Layer | EditTarget): EditReceipt {
     if (typeof path !== "string" || typeof to !== "string") {

@@ -20,8 +20,8 @@ use layerstack::{
     ValueSource, Variability, asset_dependencies::DependencyTarget,
 };
 use layerstack_io::{
-    ApplyError, FORMAT_ARGS_DELIMITER, ImportPolicy, IoError, LoadOptions, LoadReport, OpenOptions,
-    PackageInclusion, PackagePreparationLimits, SaveReport, StageDocument, UnavailableAsset,
+    ApplyError, ImportPolicy, IoError, LoadOptions, LoadReport, OpenOptions, PackageInclusion,
+    PackagePreparationLimits, SaveReport, StageDocument, UnavailableAsset,
 };
 use wasm_bindgen::prelude::*;
 
@@ -261,7 +261,7 @@ impl Stage {
                     Wire::UInt64(id.0),
                     Wire::text_or_null(identifier),
                     Wire::text(identifier.map_or("", format_of)),
-                    Wire::Bool(self.read_only(id, identifier)),
+                    Wire::Bool(self.read_only(id)),
                     Wire::Bool(self.document.is_dirty(id)),
                 ])
             })
@@ -289,15 +289,15 @@ impl Stage {
             return Some(session);
         }
         let root = stage.root_layer()?;
-        (!self.read_only(root, self.document.identifier(root))).then_some(root)
+        (!self.read_only(root)).then_some(root)
     }
 
     /// Whether saving layer `id` would fail as read-only
     /// ([`layerstack_io::IoErrorKind::ReadOnly`]): a package's layers, and
-    /// a layer built from format arguments.
-    fn read_only(&self, id: LayerId, identifier: Option<&str>) -> bool {
-        self.document.package_stats(id).is_some()
-            || identifier.is_some_and(|text| text.contains(FORMAT_ARGS_DELIMITER))
+    /// a layer built from format arguments, as the document marks them in
+    /// its store ([`LayerStore::layer_read_only`]).
+    fn read_only(&self, id: LayerId) -> bool {
+        self.document.store().layer_read_only(id).is_some()
     }
 
     /// Whether layer `id` changed since it was read or last saved.
@@ -1093,9 +1093,10 @@ impl Stage {
         }
     }
 
-    /// Applies a prepared namespace edit, after checking that every layer
-    /// it edits can be saved; its receipt lists the paths the edit leaves
-    /// naming the old location ([`NamespaceEdit::unrepaired_paths`]).
+    /// Applies a prepared namespace edit, which changes no read-only
+    /// layer ([`NamespaceError::ReadOnlyLayer`]); its receipt lists the
+    /// paths the edit leaves naming the old location
+    /// ([`NamespaceEdit::unrepaired_paths`]).
     fn commit_namespace(
         &mut self,
         record: Wire,
@@ -1103,19 +1104,6 @@ impl Stage {
         edit: &NamespaceEdit,
         path: &str,
     ) -> Result<EditReceipt, Error> {
-        for &layer in edit.layers_to_edit() {
-            let identifier = self.document.identifier(layer);
-            if self.read_only(layer, identifier) {
-                return Err(Error {
-                    identifier: identifier.map(ToString::to_string),
-                    ..Error::new(
-                        "layer.read_only",
-                        "the namespace edit would edit a layer that cannot be saved",
-                    )
-                    .at_path(path)
-                });
-            }
-        }
         let mut receipt = self
             .commit(record, target, edit.transaction(), |_| None)
             .map_err(|error| error.at_path(path))?;
@@ -1211,7 +1199,7 @@ impl Stage {
                 "the stage has no layer with this id",
             ));
         }
-        if self.read_only(layer, identifier) {
+        if self.read_only(layer) {
             let message = if self.document.stage().stage().has_local_layer(layer) {
                 "the layer cannot be saved, so it is not edited: open the stage with a session \
                  layer (editLayer: \"session\") and edit that"
@@ -2207,14 +2195,25 @@ fn namespace_code(error: &NamespaceError) -> &'static str {
         NamespaceError::InstanceProxy => "namespace.instance_proxy",
         NamespaceError::Unmappable => "namespace.unmappable",
         NamespaceError::SplitOpinions { .. } => "namespace.split_opinions",
+        NamespaceError::ReadOnlyLayer { .. } => "layer.read_only",
         _ => "namespace.unsupported",
     }
 }
 
 /// `error` as the bindings throw it, its layer and spec written with
-/// `store`.
+/// `store`, and the identifier of the read-only layer a namespace edit
+/// would change.
 fn namespace_error(error: &NamespaceError, store: &dyn LayerStore, path: &str) -> Error {
-    Error::new(namespace_code(error), error.display(store).to_string()).at_path(path)
+    let identifier = match error {
+        NamespaceError::ReadOnlyLayer { layer, .. } => {
+            store.layer_identifier(*layer).map(ToString::to_string)
+        }
+        _ => None,
+    };
+    Error {
+        identifier,
+        ..Error::new(namespace_code(error), error.display(store).to_string()).at_path(path)
+    }
 }
 
 /// `path` is an absolute prim path: `/`, or `/` and names separated by

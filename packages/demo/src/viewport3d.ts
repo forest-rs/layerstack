@@ -48,6 +48,13 @@
 //   not loaded).
 // - `PortalLight`: not drawn; it only guides a dome's light.
 //
+// Materials: each draw's bound `UsdPreviewSurface` record (stagehand's
+// `MaterialItem`) becomes a three.js material as `surfaces.ts` maps it, a
+// range's subset material for that range of the geometry's groups; a draw
+// without a material is drawn in its `displayColor` (or gray), as before.
+// A material the diffs change restyles the draws binding it, and nothing
+// else.
+//
 // A pixel then holds luminance in nits, which the `UsdLux` documentation
 // makes 1 for a 1-nit light seen directly at exposure 0: the renderer's
 // `toneMappingExposure` is the stage camera's
@@ -82,7 +89,9 @@ import {
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { RectAreaLightUniformsLib } from "three/addons/lights/RectAreaLightUniformsLib.js";
 import { conformCamera, lightSizeFactor } from "@forest-rs/layerstack_stagehand";
-import type { CameraItem, LightItem } from "@forest-rs/layerstack_stagehand";
+import type { CameraItem, LightItem, MaterialItem } from "@forest-rs/layerstack_stagehand";
+import { TextureStore, surfaceMaterial } from "./surfaces.ts";
+import type { AssetExists, AssetReader } from "./surfaces.ts";
 import type { ViewItem, ViewportScene, ViewportUpdate } from "./viewport.ts";
 
 /** A three.js view of a {@link ViewportScene}, updated in place from each {@link ViewportUpdate}. */
@@ -113,8 +122,23 @@ export class Viewport {
   #selected: string | null = null;
   /** The bounds the camera was last framed on, to frame again only when they change. */
   #framed = "";
+  /** The textures the materials read. */
+  readonly #textures: TextureStore;
+  /** The scene last applied, to restyle textured draws when their images arrive. */
+  #applied: ViewportScene | null = null;
 
-  constructor(canvas: HTMLCanvasElement, free: HTMLInputElement | null = null) {
+  /**
+   * `read` and `exists` reach the stage's assets (textures and UDIM tiles)
+   * as the asset loop's host does; without them textures draw as their
+   * fallbacks.
+   */
+  constructor(
+    canvas: HTMLCanvasElement,
+    free: HTMLInputElement | null = null,
+    read: AssetReader = async () => null,
+    exists: AssetExists = async () => false,
+  ) {
+    this.#textures = new TextureStore(read, exists, () => this.#restyleTextured());
     this.#canvas = canvas;
     this.#free = free;
     this.#renderer = new WebGLRenderer({ canvas, antialias: true });
@@ -147,6 +171,7 @@ export class Viewport {
    * does not name are left as they are.
    */
   update(scene: ViewportScene, update: ViewportUpdate, selected: string | null): void {
+    this.#applied = scene;
     const items = new Map(scene.items.map((view) => [view.item.id, view]));
     // The first update this view sees (three.js loads after the first
     // render) starts from nothing, as a new stage's does.
@@ -181,6 +206,7 @@ export class Viewport {
       geometry.setAttribute("position", new BufferAttribute(mesh.positions, 3));
       geometry.setAttribute("normal", new BufferAttribute(mesh.normals, 3));
       if (mesh.colors !== null) geometry.setAttribute("color", new BufferAttribute(mesh.colors, 3));
+      if (mesh.st !== null) geometry.setAttribute("uv", new BufferAttribute(mesh.st, 2));
       geometry.computeBoundingSphere();
     }
     const added = reset ? new Set(items.keys()) : update.added;
@@ -203,7 +229,7 @@ export class Viewport {
       const object = this.#objects.get(id);
       if (view === undefined || object === undefined || added.has(id)) continue;
       for (const material of [object.material].flat()) material.dispose();
-      object.material = materials(view, selected);
+      object.material = materials(view, selected, scene.materials, this.#textures);
     }
     this.#selected = selected;
     // Lights: those the update names made again, the rest left as they are.
@@ -234,10 +260,9 @@ export class Viewport {
       this.#geometries.set(view.item.buffer, geometry);
     }
     const placements = view.item.matrices.length / 16;
+    const styled = materials(view, selected, this.#applied?.materials ?? new Map(), this.#textures);
     const object =
-      view.item.source.kind === "gprim"
-        ? new Mesh(geometry, materials(view, selected))
-        : new InstancedMesh(geometry, materials(view, selected), Math.max(1, placements));
+      view.item.source.kind === "gprim" ? new Mesh(geometry, styled) : new InstancedMesh(geometry, styled, Math.max(1, placements));
     object.matrixAutoUpdate = false;
     this.#objects.set(view.item.id, object);
     this.#scene.add(object);
@@ -280,6 +305,21 @@ export class Viewport {
       if ("dispose" in object && typeof object.dispose === "function") object.dispose();
     }
     this.#lights.delete(path);
+  }
+
+  /** Makes again the materials of the draws binding a material with textures: an image arrived. */
+  #restyleTextured(): void {
+    const scene = this.#applied;
+    if (scene === null) return;
+    for (const view of scene.items) {
+      const bound = [view.item.material, ...view.item.subsetMaterials];
+      if (!bound.some((path) => path !== null && (scene.materials.get(path)?.textures.length ?? 0) > 0)) continue;
+      const object = this.#objects.get(view.item.id);
+      if (object === undefined) continue;
+      for (const material of [object.material].flat()) material.dispose();
+      object.material = materials(view, this.#selected, scene.materials, this.#textures);
+    }
+    this.#draw();
   }
 
   /** The stage camera the view looks through, or `null` for the free camera. */
@@ -341,13 +381,35 @@ export class Viewport {
   }
 }
 
-/** The item's materials: one per range when it has subsets, its own color otherwise, highlighted when selected. */
-function materials(view: ViewItem, selected: string | null): MeshStandardMaterial | MeshStandardMaterial[] {
+/**
+ * The item's materials, highlighted when selected: one per range when it
+ * has subsets (a range's subset material, else the item's), each its bound
+ * `UsdPreviewSurface` record's (`surfaces.ts`), else its color.
+ */
+function materials(
+  view: ViewItem,
+  selected: string | null,
+  records: ReadonlyMap<string, MaterialItem>,
+  textures: TextureStore,
+): MeshStandardMaterial | MeshStandardMaterial[] {
   const { item } = view;
   const paths = [item.prim, ...item.instances];
   const highlighted =
     selected !== null && paths.some((path) => selected === path || selected.startsWith(`${path}/`) || path.startsWith(`${selected}/`));
   const colors = view.buffers.mesh.colors;
+  const doubleSided = view.kind === "mesh" || view.kind === "Plane";
+  const record = (path: string | null) => {
+    const found = path === null ? undefined : records.get(path);
+    return found?.surface == null ? null : found;
+  };
+  const surface = (found: MaterialItem) => {
+    const material = surfaceMaterial(found, textures, { vertexColors: colors !== null, doubleSided, highlighted });
+    // A constant `displayColor` the buffer does not carry (a shape's) is the prim's color.
+    if (found.diffuseColor.kind === "primvar" && !material.vertexColors && found.diffuseColor.name === "displayColor" && view.colorSource === "displayColor") {
+      material.color.setRGB(...(view.color as [number, number, number]));
+    }
+    return material;
+  };
   // Per-vertex displayColor multiplies a white base; a subset's material
   // color replaces it for its range.
   const material = (color: readonly [number, number, number] | null) => {
@@ -362,7 +424,15 @@ function materials(view: ViewItem, selected: string | null): MeshStandardMateria
       emissiveIntensity: highlighted ? 0.6 : 0,
     });
   };
-  return view.buffers.mesh.ranges.length > 1 ? view.rangeColors.map(material) : material(null);
+  const ranges = view.buffers.mesh.ranges;
+  if (ranges.length > 1) {
+    return ranges.map((range, index) => {
+      const found = record(range.subset === null ? item.material : (item.subsetMaterials[range.subset] ?? item.material));
+      return found === null ? material(view.rangeColors[index] ?? null) : surface(found);
+    });
+  }
+  const found = record(item.material);
+  return found === null ? material(null) : surface(found);
 }
 
 /** A geometry over the item's stagehand buffer: indexed, with normals, colors and a group per range. */
@@ -373,6 +443,7 @@ function makeGeometry(view: ViewItem): BufferGeometry {
   geometry.setAttribute("position", new BufferAttribute(mesh.positions, 3));
   geometry.setAttribute("normal", new BufferAttribute(mesh.normals, 3));
   if (mesh.colors !== null) geometry.setAttribute("color", new BufferAttribute(mesh.colors, 3));
+  if (mesh.st !== null) geometry.setAttribute("uv", new BufferAttribute(mesh.st, 2));
   // A group per range when there are subsets, each drawn with its range's material.
   if (mesh.ranges.length > 1) mesh.ranges.forEach((range, index) => geometry.addGroup(range.first, range.count, index));
   geometry.computeBoundingSphere();

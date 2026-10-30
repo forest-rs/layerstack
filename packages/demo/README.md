@@ -7,13 +7,16 @@ in `public/scene/`: a root layer;
 a sublayer with a class the rock inherits and a lamp whose `aim` names the
 robot and whose `flicker` is sampled, then blocked at time 24; a robot
 referenced from its own file, which binds it a material with a preview
-surface shader, with a variant set whose `chrome` variant
+surface shader reading its finish's `displayColor`, with a variant set whose `chrome` variant
 references an asset fetched only when it is selected; two instances of
 a beacon, which share one prototype; a ground mesh; a point instancer
 of five stones; a top spun by time samples on its `xformOp:rotateY`; a
 camera; and lights: the lamp (a sphere light, in the sublayer), a sun
 (distant), a sky (dome), a spot (a disk light with `ShapingAPI`) and a
-panel (rect).
+panel (rect); a sign bound to a checker texture (`textures/checker.png`,
+turned and scaled by a `UsdTransform2d`, its coordinates' primvar and its
+tint material interface inputs) and a strip bound to a UDIM set
+(`textures/tile.<UDIM>.png`: tiles 1001 and 1002).
 
 The viewport (`src/viewport.ts`, drawn by three.js in `src/viewport3d.ts`)
 takes everything from layerstack, with no USD loader, through a
@@ -26,9 +29,15 @@ transforms, over buffers stagehand built from typed arrays read through
 layerstack (a mesh's topology, points, primvars and `materialBind`
 subsets, or a shape's size attributes): indexed buffers with normals,
 per-vertex `displayColor` where it varies, concave faces ear-clipped (the
-path), and a three.js group per subset range (the ground), colored by the
-`displayColor` primvar (inherited from an ancestor or a class too) or else
-the bound material's surface `diffuseColor`; `stage.worldBounds(["/"])`
+path), and a three.js group per subset range (the ground). A draw binding a
+material is drawn with it: the draw list's `UsdPreviewSurface` record
+becomes a `MeshStandardMaterial` or `MeshPhysicalMaterial`
+(`src/surfaces.ts` documents the mapping), its textures loaded through
+`TextureLoader` from the bytes the asset loop's host fetches, a UDIM set's
+tiles (found through `textures/listing.json`, as a static host cannot list
+a directory) laid into one atlas. Other draws are colored by the
+`displayColor` primvar (inherited from an ancestor or a class too);
+`stage.worldBounds(["/"])`
 frames the free camera. The view looks through the stage's camera
 (`/World/Camera`: its view and projection matrices as `GfFrustum` computes
 them, fitted to the canvas by `CameraUtilConformWindow`'s `fit` policy,
@@ -69,7 +78,7 @@ header. The layers panel shows which layers are muted from the changes the
 stage reports (`Changes.mutedIdentifiers` and `unmutedIdentifiers`), not by
 asking the stage again.
 
-The script runs fifteen steps, one button each:
+The script runs sixteen steps, one button each:
 
 1. Open the sample: the stage wants its sublayer, the robot's reference and
    the beacon's (once, for both instances), and `resolve` fetches them.
@@ -128,6 +137,10 @@ The script runs fifteen steps, one button each:
 15. Brighten the lamp: its `inputs:intensity` in the edit layer, over the
     sublayer's. The draw list reads that light alone (no draw, no camera,
     no other light), and the viewport replaces its three.js light alone.
+16. Warm the sign's checker: the checker material's `tint`, an interface
+    input its texture's `scale` reads. The draw list reads that material
+    alone (no draw, light or camera), and the viewport makes the sign's
+    three.js material again, reusing the loaded image.
 
 `scripts/acceptance.ts` runs the same steps headless in Node, reading the
 sample from disk, and checks the values and explanations after each one,

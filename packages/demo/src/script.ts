@@ -57,6 +57,15 @@ export const sample = {
   top: "/World/Top",
   /** The camera the viewport looks through, until "Free camera" is checked. */
   camera: "/World/Camera",
+  /** A sign drawn with a checker texture, its material, and the material's tint: an interface input that scales the texture. */
+  sign: "/World/Sign",
+  checker: "/World/Looks/Checker",
+  tint: "/World/Looks/Checker.inputs:tint",
+  /** The tint the script sets. */
+  warmer: [1, 0.85, 0.6, 1],
+  /** A strip drawn with UDIM tiles (`tile.<UDIM>.png`: 1001 and 1002), and its material. */
+  strip: "/World/Strip",
+  tiles: "/World/Looks/Tiles",
 } as const;
 
 /** What the script needs of its host: the instance, the fetch, and a way to hand saved layers to the user. */
@@ -260,6 +269,14 @@ export const steps: readonly Step[] = [
     async run(session) {
       session.current.setValue(sample.lampIntensity, { type: "float", value: sample.brighter });
       session.select(sample.lamp, sample.lampIntensity);
+    },
+  },
+  {
+    title: "Warm the sign's checker",
+    look: "The viewport: the sign's checker texture warms. Its material's tint, a material interface input, connects to the texture's scale, which three.js applies as the map's color. The stats line: the edit reads that material alone, and no draw, light or camera; the sign's three.js material alone is made again, and the checker image is not loaded again.",
+    async run(session) {
+      session.current.setValue(sample.tint, { type: "float4", value: [...sample.warmer] });
+      session.select(sample.checker, sample.tint);
     },
   },
 ];

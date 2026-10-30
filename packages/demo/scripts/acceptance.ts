@@ -6,12 +6,12 @@
 // values and explanations after each step. Run after building
 // `@forest-rs/layerstack` (`npm run build:wasm && npm run build` there).
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { LayerstackError, loadLayerstack } from "@forest-rs/layerstack";
-import { loadStagehand } from "@forest-rs/layerstack_stagehand";
+import { loadStagehand, udimTiles } from "@forest-rs/layerstack_stagehand";
 import type { EditTarget, Explanation, Stage, TransformCacheStats, Value } from "@forest-rs/layerstack";
 import type { LayerFile } from "../src/editor.ts";
 import { Session, sample, steps } from "../src/script.ts";
@@ -126,6 +126,9 @@ const checks: ((session: Session) => void)[] = [
       "/World/Spot",
       "/World/Panel",
       "/World/Stones",
+      sample.sign,
+      sample.strip,
+      "/World/Looks",
     ]);
     assert.equal(current.stage.prim("/Shape")?.abstract, true);
     assert.equal(current.stage.editLayer?.identifier, sample.root);
@@ -137,7 +140,8 @@ const checks: ((session: Session) => void)[] = [
       binding: `direct from ${sample.robot}.material:binding`,
       shader: `${sample.robot}/Looks/Paint/Surface`,
       inputs: [
-        { name: "diffuseColor", type: "color3f", value: "(0.5, 0.5, 0.5)" },
+        // The paint reads the finish's displayColor primvar.
+        { name: "diffuseColor", type: "color3f", value: `← ${sample.robot}/Looks/Paint/Finish.outputs:result` },
         { name: "roughness", type: "float", value: "0.6" },
       ],
     });
@@ -402,6 +406,7 @@ const checks: ((session: Session) => void)[] = [
       `${sample.rover}/Head`,
       `${sample.rover}/Looks`,
       `${sample.rover}/Looks/Paint`,
+      `${sample.rover}/Looks/Paint/Finish`,
       `${sample.rover}/Looks/Paint/Surface`,
     ]);
     const color = read(current.stage, sample.roverColor);
@@ -454,6 +459,12 @@ const checks: ((session: Session) => void)[] = [
       "library.usda /World/Lamp.inputs:intensity local ignored (shadowed)",
     ]);
   },
+  // 16. The checker's tint, a material interface input the texture's scale reads.
+  ({ current, prim, attribute }) => {
+    assert.equal(prim, sample.checker);
+    assert.equal(attribute, sample.tint);
+    assert.deepEqual(read(current.stage, sample.tint).opinions, ["scene.usda /World/Looks/Checker.inputs:tint local contributed"]);
+  },
 ];
 
 /**
@@ -502,19 +513,52 @@ const meshes = [
   "/World/Ground: 4 triangles, 8 vertices, 0 concave (0 clipped), ranges 2+2",
   // The path's L is concave: ear-clipped, not fanned.
   "/World/Path: 4 triangles, 6 vertices, 1 concave (1 clipped), ranges 4",
+  // The sign and the strip: a quad each, with `st`.
+  `${sample.sign}: 2 triangles, 4 vertices, 0 concave (0 clipped), ranges 2`,
+  `${sample.strip}: 2 triangles, 4 vertices, 0 concave (0 clipped), ranges 2`,
 ];
+/**
+ * The materials the draws bind, as `UsdPreviewSurface` records: the
+ * checker (a texture whose coordinates a `UsdTransform2d` turns 15° and
+ * scales by 2, read through the material's `coordinates` input, its scale
+ * the material's `tint`), the UDIM strip, and the robot's paint, whose
+ * diffuse color is the `displayColor` primvar its finishes author.
+ */
+const surface = "emissiveColor (0, 0, 0); metallic 0";
+const flat = "opacity 1; normal (0, 0, 1); occlusion 1";
+const checker = (scale: string) =>
+  `${sample.checker}: ${sample.checker}/Surface; diffuseColor texture 0.rgb; ${surface}; roughness 0.45; ${flat}; ` +
+  `texture 0 ./textures/checker.png sRGB repeat/repeat scale (${scale}) st st rotated 15 scaled (2, 2); alpha opaque`;
+const tiles =
+  `${sample.tiles}: ${sample.tiles}/Surface; diffuseColor texture 0.rgb; ${surface}; roughness 0.8; ${flat}; ` +
+  "texture 0 ./textures/tile.<UDIM>.png (udim) sRGB useMetadata/useMetadata scale (1, 1, 1, 1) st st; alpha opaque";
+const paint = (robot: string) =>
+  `${robot}/Looks/Paint: ${robot}/Looks/Paint/Surface; diffuseColor primvar displayColor; ${surface}; roughness 0.6; ${flat}; alpha opaque`;
+const materials = (robot: string | null = sample.robot, scale = "1, 1, 1, 1") =>
+  [checker(scale), ...(robot === null ? [] : [paint(robot)]), tiles].sort();
 /**
  * The sample's lights, by kind: the lamp (a sphere light in the
  * sublayer), the sun, the sky, the spot and the panel.
  */
 const lights = ["/World/Lamp sphere", "/World/Panel rect", "/World/Sky dome", "/World/Spot disk", "/World/Sun distant"];
 const opened: ViewportSummary = {
-  drawn: [...beacons, "/World/Ground", "/World/Path", `${sample.robot}/Body`, `${sample.robot}/Head`, sample.rock, `${sample.stones} ×5`, sample.top],
+  drawn: [
+    ...beacons,
+    "/World/Ground",
+    "/World/Path",
+    `${sample.robot}/Body`,
+    `${sample.robot}/Head`,
+    sample.rock,
+    sample.sign,
+    `${sample.stones} ×5`,
+    sample.strip,
+    sample.top,
+  ],
   hidden: [],
-  // Two meshes of four triangles, four spheres of 528 (24 segments by 12
-  // rings: the rock, the head, two bulbs), four cubes of 12 (the body,
-  // two posts, the top) and five stones.
-  triangles: 2 * 4 + 4 * SPHERE + 4 * 12 + 5 * 12,
+  // Two meshes of four triangles and two quads, four spheres of 528 (24
+  // segments by 12 rings: the rock, the head, two bulbs), four cubes of 12
+  // (the body, two posts, the top) and five stones.
+  triangles: 2 * 4 + 2 * 2 + 4 * SPHERE + 4 * 12 + 5 * 12,
   instances: 5,
   // The ground's corners in x and z; the ground to the spot light's disk
   // (y = 5) in y.
@@ -522,6 +566,7 @@ const opened: ViewportSummary = {
   meshes,
   lights,
   camera: sample.camera,
+  materials: materials(),
 };
 /** The rock's radius is 3: it reaches y = -1. */
 const overridden: ViewportSummary = { ...opened, bounds: [-8, -1, -8, 8, 5, 6] };
@@ -529,6 +574,7 @@ const withPebble = (pebble: "sphere" | "cube", robot: string = sample.robot): Vi
   ...overridden,
   drawn: [...overridden.drawn.filter((path) => !path.startsWith(sample.robot)), sample.pebble, `${robot}/Body`, `${robot}/Head`].sort(),
   triangles: opened.triangles + (pebble === "sphere" ? SPHERE : 12),
+  materials: materials(robot),
 });
 const viewports: ViewportSummary[] = [
   opened,
@@ -543,27 +589,31 @@ const viewports: ViewportSummary[] = [
   withPebble("cube", sample.rover),
   withPebble("cube", sample.rover),
   withPebble("cube", sample.rover),
-  // Muted: the rover's body and head are gone.
+  // Muted: the rover's body and head are gone, and with them its paint.
   {
     ...withPebble("cube", sample.rover),
     drawn: withPebble("cube", sample.rover).drawn.filter((path) => !path.startsWith(sample.rover)),
     triangles: opened.triangles + 12 - SPHERE - 12,
+    materials: materials(null),
   },
   // The rock and stone 3 hidden, the north beacon moved to x = -5, z = -1;
   // the pebble (a cube of 0.8 at the origin) is the lowest now.
   {
-    drawn: [...beacons, "/World/Ground", "/World/Path", sample.pebble, `${sample.stones} ×4`, sample.top],
+    drawn: [...beacons, "/World/Ground", "/World/Path", sample.pebble, sample.sign, `${sample.stones} ×4`, sample.strip, sample.top],
     hidden: [sample.rock],
-    triangles: 2 * 4 + 2 * SPHERE + 4 * 12 + 4 * 12,
+    triangles: 2 * 4 + 2 * 2 + 2 * SPHERE + 4 * 12 + 4 * 12,
     instances: 4,
     bounds: [-8, -0.4, -8, 8, 5, 6],
     meshes,
     lights,
     camera: sample.camera,
+    materials: materials(null),
   },
 ];
 // The lamp brightened: the same draws.
 viewports.push(viewports.at(-1)!);
+// The checker warmed: its texture's scale is the new tint.
+viewports.push({ ...viewports.at(-1)!, materials: materials(null, "1, 0.85, 0.6, 1") });
 
 /**
  * What the viewport's draw list did after each step, from the editor's
@@ -587,53 +637,62 @@ const update = (counts: Partial<UpdateSummary>): UpdateSummary => ({
   lightsRead: 0,
   lights: 0,
   camerasRead: 0,
+  materialsRead: 0,
+  materials: 0,
   ...counts,
 });
 const updates: UpdateSummary[] = [
-  // Read whole: nine draws (the beacons' post and bulb one each for both
-  // instances, the stones one for five), two meshes planned and six
-  // shapes tessellated (the body and the posts share a cube); five lights
-  // and the camera read.
-  update({ added: 9, triangulations: 2, tessellations: 6, itemsRead: 9, localTransforms: 22, lightsRead: 5, lights: 5, camerasRead: 1 }),
+  // Read whole: eleven draws (the beacons' post and bulb one each for both
+  // instances, the stones one for five), four meshes planned and six
+  // shapes tessellated (the body and the posts share a cube); five lights,
+  // the camera and the three bound materials read.
+  update({ added: 11, triangulations: 4, tessellations: 6, itemsRead: 11, localTransforms: 24, lightsRead: 5, lights: 5, camerasRead: 1, materialsRead: 3, materials: 3 }),
   // Selecting changes nothing.
   update({}),
   // The rock's radius: one draw read, its sphere tessellated at radius 3.
-  update({ tessellations: 1, itemsRead: 1, itemsUntouched: 8 }),
+  update({ tessellations: 1, itemsRead: 1, itemsUntouched: 10 }),
   // The variant and its asset: the robot's draws read in each record
-  // (untouched counts the last one's), recolored, nothing rebuilt.
-  update({ itemsRead: 4, itemsUntouched: 7, localTransforms: 3 }),
+  // (untouched counts the last one's), recolored, nothing rebuilt; the
+  // robot is resynced in each, its paint with it: read twice, the same
+  // record (its diffuse color is the displayColor primvar either way).
+  update({ itemsRead: 4, itemsUntouched: 9, localTransforms: 3, materialsRead: 2 }),
   // Undo, undo, redo: the shapes of both radii are still held.
-  update({ itemsRead: 4, itemsUntouched: 8, localTransforms: 3 }),
+  update({ itemsRead: 4, itemsUntouched: 10, localTransforms: 3, materialsRead: 1 }),
   // A new prim: its draw added, and nothing else read. The prim alone is
   // resynced, as OpenUSD reports it, not `/World` with it.
-  update({ added: 1, tessellations: 1, itemsRead: 1, itemsUntouched: 9, localTransforms: 1 }),
+  update({ added: 1, tessellations: 1, itemsRead: 1, itemsUntouched: 11, localTransforms: 1 }),
   // Retyped: the pebble alone, a cube now.
-  update({ tessellations: 1, itemsRead: 1, itemsUntouched: 9, localTransforms: 1 }),
-  // The asset's height: the robot's two draws read, nothing rebuilt.
-  update({ itemsRead: 2, itemsUntouched: 8 }),
+  update({ tessellations: 1, itemsRead: 1, itemsUntouched: 11, localTransforms: 1 }),
+  // The asset's height: the robot's two draws read, nothing rebuilt; no
+  // material reads the height.
+  update({ itemsRead: 2, itemsUntouched: 10 }),
   // Renamed: the robot's draws gone, the rover's added, drawing the same
   // buffers; the old and new paths alone are resynced. The lamp's `aim`,
   // which the rename repairs, changes info-only, and no light reads it:
-  // the lamp is not read again.
-  update({ added: 2, removed: 2, itemsRead: 2, itemsUntouched: 8, localTransforms: 3 }),
+  // the lamp is not read again. The robot's paint is gone and the rover's
+  // read.
+  update({ added: 2, removed: 2, itemsRead: 2, itemsUntouched: 10, localTransforms: 3, materialsRead: 1, materials: 2 }),
   // Time 30, then the default time again: the top alone is animated (its
   // `xformOp:rotateY` samples), so it alone is read and moved; no other
-  // draw, light or camera is.
-  update({ moved: 1, itemsRead: 1, itemsUntouched: 9, itemsTimeInvariant: 9, localTransforms: 1 }),
-  update({ moved: 1, itemsRead: 1, itemsUntouched: 9, itemsTimeInvariant: 9, localTransforms: 1 }),
+  // draw, light, camera or material is.
+  update({ moved: 1, itemsRead: 1, itemsUntouched: 11, itemsTimeInvariant: 11, localTransforms: 1 }),
+  update({ moved: 1, itemsRead: 1, itemsUntouched: 11, itemsTimeInvariant: 11, localTransforms: 1 }),
   // Reopened: a new stage, read whole.
-  update({ added: 10, triangulations: 2, tessellations: 7, itemsRead: 10, localTransforms: 23, lightsRead: 5, lights: 5, camerasRead: 1 }),
-  // Muted: the rover's draws gone, nothing read.
-  update({ removed: 2, itemsUntouched: 8 }),
+  update({ added: 12, triangulations: 4, tessellations: 7, itemsRead: 12, localTransforms: 25, lightsRead: 5, lights: 5, camerasRead: 1, materialsRead: 3, materials: 3 }),
+  // Muted: the rover's draws gone, nothing read; its paint dropped.
+  update({ removed: 2, itemsUntouched: 10, materials: 1 }),
   // One edit moves the north beacon (its post and bulb groups' matrices),
   // hides the rock (no matrices, shown or hidden) and stone 3 (the
   // stones' matrices): matrices and visibility only, nothing triangulated,
   // tessellated or refilled.
-  update({ moved: 4, shown: 1, itemsRead: 4, itemsUntouched: 4 }),
+  update({ moved: 4, shown: 1, itemsRead: 4, itemsUntouched: 6 }),
   // The lamp's intensity: that light alone read and changed; no draw or
   // camera read. Its new opinion is a new property spec in the edit layer,
   // which resyncs that property alone.
-  update({ itemsUntouched: 8, localTransforms: 1, lightsRead: 1, lights: 1 }),
+  update({ itemsUntouched: 10, localTransforms: 1, lightsRead: 1, lights: 1 }),
+  // The checker's tint: that material alone read and changed; no draw,
+  // light or camera read.
+  update({ itemsUntouched: 10, materialsRead: 1, materials: 1 }),
 ];
 
 /** The transform cache's counters after the last viewport was built. */
@@ -675,6 +734,25 @@ try {
   assert.equal(camera.linearExposureScale, 1);
   assert.deepEqual([...camera.cameraToWorld.subarray(12, 15)], [10, 7, 14]);
   console.log("ok the lamp's light and the camera the viewport draws with");
+  // The strip's UDIM set: the tiles the scene's storage has, as the page
+  // finds them from the directory's listing and OpenUSD tile by tile.
+  const strip = model.list!.material(sample.tiles)!.textures[0]!;
+  const tiles = await udimTiles(strip.file, (identifier) =>
+    access(join(scene, identifier)).then(
+      () => true,
+      () => false,
+    ),
+  );
+  assert.deepEqual(
+    tiles.map((tile) => [tile.tile, tile.identifier]),
+    [
+      [1001, "./textures/tile.1001.png"],
+      [1002, "./textures/tile.1002.png"],
+    ],
+  );
+  const listing = JSON.parse(await readFile(join(scene, "textures/listing.json"), "utf8")) as string[];
+  assert.deepEqual(listing.filter((name) => name.startsWith("tile.")), ["tile.1001.png", "tile.1002.png"], "the page's listing names the same tiles");
+  console.log("ok the strip's UDIM tiles");
   await unmuteWithTheToggle(session);
   console.log("ok the layers panel's toggle unmutes the robot asset in one change");
   const { bytesIn, bytesOut, memoryBytes } = host.layerstack.transfer();

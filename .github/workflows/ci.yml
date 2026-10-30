@@ -11,6 +11,9 @@ env:
   RUST_MIN_VER: "1.89"
   # List of packages that will be checked with the minimum supported Rust version.
   # This should be limited to packages that are intended for publishing.
+  # `layerstack_stagehand` is left out: it sets its own MSRV, 1.92, which
+  # `exedra_triangulate` needs, and is not published while that is a Git
+  # dependency.
   RUST_MIN_VER_PKGS: >-
     -p opinionated
     -p layerstack

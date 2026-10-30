@@ -9,6 +9,7 @@ members = [
     "layerstack_mesh_export",
     "layerstack_schemagen",
     "layerstack_schemas",
+    "layerstack_stagehand",
     "layerstack_usda",
     "layerstack_usdc",
     "layerstack_usdz",

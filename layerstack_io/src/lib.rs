@@ -1072,8 +1072,9 @@ pub struct StageDocument<B> {
 }
 /// The assets the stage asked for that storage could not supply yet
 /// ([`IoErrorKind::Unavailable`]), by anchor layer and authored asset path,
-/// with the identifier storage gave each.
-type Unavailable = BTreeMap<(LayerId, String), String>;
+/// with the identifier storage gave each. Kept as the [`ReadFailure`] it
+/// is, so this map and [`Catalog::failures`] compile to one map's code.
+type Unavailable = BTreeMap<(LayerId, String), ReadFailure>;
 impl<B: core::fmt::Debug> core::fmt::Debug for StageDocument<B> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("StageDocument")
@@ -1375,7 +1376,11 @@ impl<B: Storage> StageDocument<B> {
                     // asking for it and a later call reads it again.
                     Err(error) if error.kind == IoErrorKind::Unavailable => {
                         let identifier = error.identifier.unwrap_or_else(|| asset.clone());
-                        self.unavailable.insert((anchor, asset), identifier);
+                        let failure = ReadFailure {
+                            identifier: Some(identifier),
+                            kind: IoErrorKind::Unavailable,
+                        };
+                        self.unavailable.insert((anchor, asset), failure);
                     }
                     Err(error) => {
                         self.unavailable.remove(&(anchor, asset.clone()));
@@ -1560,7 +1565,11 @@ impl<B: Storage> StageDocument<B> {
         let mut assets: Vec<UnavailableAsset> = Vec::new();
         for request in self.stage.stage().asset_requests() {
             let key = (request.anchor, request.asset_path.clone());
-            let Some(identifier) = self.unavailable.get(&key) else {
+            let Some(identifier) = self
+                .unavailable
+                .get(&key)
+                .and_then(|failure| failure.identifier.as_ref())
+            else {
                 continue;
             };
             if let Some(last) = assets.last_mut().filter(|last| {

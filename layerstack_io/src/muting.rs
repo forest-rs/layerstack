@@ -159,8 +159,8 @@ impl<B: Storage> StageDocument<B> {
         let bound: Vec<((LayerId, String), LayerId)> = self
             .unavailable
             .iter()
-            .filter_map(|(key, identifier)| {
-                let id = *self.catalog.ids.get(identifier.as_str())?;
+            .filter_map(|(key, failure)| {
+                let id = *self.catalog.ids.get(failure.identifier.as_deref()?)?;
                 (muted.contains(&id) && self.store.layer(id).is_none()).then(|| (key.clone(), id))
             })
             .collect();

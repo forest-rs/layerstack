@@ -242,6 +242,10 @@ pub struct Changes {
     /// an arc: they are listed here, as OpenUSD lists them. So is a prim
     /// whose new `over` holds only property specs, which are resynced in
     /// [`Self::resynced_properties`], or metadata that composes nothing.
+    /// A spec rewritten with only its properties changed, as a namespace
+    /// edit rewrites one whose relationship targets it repairs, is listed
+    /// here with the fields it changed in [`Self::property_changes`], and
+    /// the properties it adds, removes or renames are resynced.
     /// A change to stage metadata that composes nothing (`documentation`,
     /// `startTimeCode`, `metersPerUnit` and the like) lists the
     /// pseudo-root.

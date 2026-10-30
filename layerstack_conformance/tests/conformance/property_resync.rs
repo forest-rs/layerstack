@@ -25,8 +25,8 @@
 //!   resyncs only property entries that add or remove specs, and a rename's
 //!   `SdfChangeList` entry has `didRename` alone), so a client caching the
 //!   old property is not told it is gone. A [`NamespaceEdit`] rewrites the
-//!   prim's spec, which resyncs the prim here: conservative, and it covers
-//!   both property paths.
+//!   prim's spec, its properties alone, which resyncs both property paths
+//!   here.
 //! - layerstack names no prototype prims; it composes an instance's
 //!   descendants per instance. An edit OpenUSD reports at
 //!   `/__Prototype_1/Ball.radius`, the prototype of the one instance
@@ -329,7 +329,7 @@ fn edit(name: &str, loaded: &mut LoadedStage, live: &LiveStage) -> Transaction {
 fn corrected(name: &str, mut report: Report) -> Report {
     if name == "rename_property" {
         report.info.remove("/Rock.gloss");
-        report.resynced = vec!["/Rock".into()];
+        report.resynced = vec!["/Rock.gloss".into(), "/Rock.roughness".into()];
     }
     report
 }

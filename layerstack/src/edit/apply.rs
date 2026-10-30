@@ -594,6 +594,9 @@ pub(crate) struct Outcome {
     /// ([`inert_prims`]), in every layer it changed: a prim composed
     /// before and after such an edit changed its spec stack alone.
     pub(crate) inert_sites: Vec<(LayerId, PathId)>,
+    /// `(layer, source prim path, change)` of every property field the
+    /// transaction changed, property spec additions and removals aside.
+    pub(crate) property_fields: Vec<(LayerId, PathId, super::PropertyChange)>,
     /// `(layer, source prim path)` of every other prim site a step
     /// changed: a prim composing from one of them changed more than its
     /// spec stack, whatever inert sites it composes from too.
@@ -722,42 +725,147 @@ impl PropertyValueEdit {
     }
 }
 
-fn property_edits(steps: &[Guarded]) -> Option<Vec<(LayerId, PathId, super::PropertyChange)>> {
+/// The property field `raw` changes, as `(layer, source prim path,
+/// change)`: `Some(None)` for a property spec added or removed, which
+/// [`Outcome::property_specs`] reports, and `None` for a step that is not
+/// about a property.
+#[expect(
+    clippy::option_option,
+    reason = "a property spec step is about a property, but changes no field"
+)]
+fn property_field(raw: &Raw) -> Option<Option<(LayerId, PathId, super::PropertyChange)>> {
     use super::{PropertyChange, PropertyField};
+    let (layer, loc, name, field) = match raw {
+        Raw::Default {
+            layer, loc, name, ..
+        } => (*layer, loc, *name, PropertyField::Default),
+        Raw::Sample {
+            layer, loc, name, ..
+        } => (*layer, loc, *name, PropertyField::TimeSamples),
+        Raw::Animation {
+            layer, loc, name, ..
+        } => (*layer, loc, *name, PropertyField::Animation),
+        Raw::Targets {
+            layer, loc, name, ..
+        } => (*layer, loc, *name, PropertyField::Targets),
+        Raw::Field {
+            layer,
+            loc,
+            property: Some(name),
+            key,
+            ..
+        } => (*layer, loc, *name, PropertyField::Metadata(*key)),
+        Raw::Property { .. } => return Some(None),
+        _ => return None,
+    };
+    Some(Some((
+        layer,
+        loc.prim_path(),
+        PropertyChange { name, field },
+    )))
+}
+
+/// The property changes of `guarded` when it is a [`Raw::PrimSlots`] step
+/// that rewrites a prim spec, keeping it, and changes nothing of it but
+/// its properties (and the child names it lists), as a namespace edit
+/// rewrites a spec whose relationship targets it repairs: the names of
+/// the properties added, removed or redeclared, whose spec stacks change,
+/// and the fields changed of the others.
+///
+/// OpenUSD records each as an entry of the property's own path
+/// (`didAddProperty`, `didRemoveProperty`, or an info change of the
+/// field), not of the prim's.
+fn slot_property_changes(guarded: &Guarded) -> Option<(Vec<TokenId>, Vec<super::PropertyChange>)> {
+    use super::{PropertyChange, PropertyField};
+    let (
+        Raw::PrimSlots {
+            main: Some(after),
+            branches,
+            ..
+        },
+        Raw::PrimSlots {
+            main: Some(before),
+            branches: before_branches,
+            ..
+        },
+    ) = (&guarded.written, &guarded.step)
+    else {
+        return None;
+    };
+    if !branches.same(before_branches) || after.properties == before.properties {
+        return None;
+    }
+    let bare = |spec: &PrimSpec| {
+        let mut spec = spec.clone();
+        spec.authored_children.clear();
+        spec.properties.clear();
+        spec
+    };
+    if !bare(after).same(&bare(before)) {
+        return None;
+    }
+    let find = |spec: &PrimSpec, name| {
+        spec.properties
+            .iter()
+            .find(|entry| entry.name == name)
+            .map(|entry| entry.spec.clone())
+    };
+    let mut specs = Vec::new();
+    let mut fields = Vec::new();
+    let names = after
+        .properties
+        .iter()
+        .chain(&before.properties)
+        .map(|entry| entry.name);
+    for name in names {
+        if specs.contains(&name) || fields.iter().any(|f: &PropertyChange| f.name == name) {
+            continue;
+        }
+        let (Some(a), Some(b)) = (find(after, name), find(before, name)) else {
+            specs.push(name);
+            continue;
+        };
+        if a == b {
+            continue;
+        }
+        if (a.kind, a.custom, a.variability, &a.type_name)
+            != (b.kind, b.custom, b.variability, &b.type_name)
+        {
+            specs.push(name);
+            continue;
+        }
+        let mut field = |changed: bool, field| {
+            if changed {
+                fields.push(PropertyChange { name, field });
+            }
+        };
+        field(a.default != b.default, PropertyField::Default);
+        field(a.time_samples != b.time_samples, PropertyField::TimeSamples);
+        field(a.spline != b.spline, PropertyField::Animation);
+        field(a.targets != b.targets, PropertyField::Targets);
+        let keys = a.metadata.iter().chain(b.metadata.iter()).map(|f| f.name);
+        let mut seen = Vec::new();
+        for key in keys {
+            if seen.contains(&key) {
+                continue;
+            }
+            seen.push(key);
+            let value = |spec: &PropertySpec| {
+                spec.metadata
+                    .iter()
+                    .find(|f| f.name == key)
+                    .map(|f| f.value.clone())
+            };
+            field(value(&a) != value(&b), PropertyField::Metadata(key));
+        }
+    }
+    Some((specs, fields))
+}
+
+fn property_edits(steps: &[Guarded]) -> Option<Vec<(LayerId, PathId, super::PropertyChange)>> {
     steps
         .iter()
-        .map(|step| {
-            let (layer, loc, name, field) = match &step.written {
-                Raw::Default {
-                    layer, loc, name, ..
-                } => (*layer, loc, *name, PropertyField::Default),
-                Raw::Sample {
-                    layer, loc, name, ..
-                } => (*layer, loc, *name, PropertyField::TimeSamples),
-                Raw::Animation {
-                    layer, loc, name, ..
-                } => (*layer, loc, *name, PropertyField::Animation),
-                Raw::Targets {
-                    layer, loc, name, ..
-                } => (*layer, loc, *name, PropertyField::Targets),
-                Raw::Field {
-                    layer,
-                    loc,
-                    property: Some(name),
-                    key,
-                    ..
-                } => (*layer, loc, *name, PropertyField::Metadata(*key)),
-                // A property spec added or removed is reported as a
-                // property resync (`Outcome::property_specs`), not a field.
-                Raw::Property { .. } => return Some(None),
-                _ => return None,
-            };
-            Some(Some((
-                layer,
-                loc.prim_path(),
-                PropertyChange { name, field },
-            )))
-        })
+        .map(|step| property_field(&step.written))
         .collect::<Option<Vec<_>>>()
         .map(|edits| edits.into_iter().flatten().collect())
 }
@@ -1027,7 +1135,7 @@ pub(crate) fn apply(
                     supports(&g.written) && supports(&g.step)
                 });
         inert_sites.extend(
-            inert_prims(store, &journal.steps, *id, root)
+            inert_prims(store, &journal.steps, *id, root, true)
                 .0
                 .into_iter()
                 .map(|path| (*id, path)),
@@ -1136,6 +1244,20 @@ pub(crate) fn apply(
     sort::sort_unstable(&mut property_specs);
     property_specs.dedup();
     let argument_inputs = steps.iter().filter_map(argument_input).collect();
+    let mut property_fields: Vec<_> = steps
+        .iter()
+        .filter_map(|g| property_field(&g.written).flatten())
+        .collect();
+    for guarded in &steps {
+        if let Raw::PrimSlots { layer, path, .. } = &guarded.written
+            && let Some((specs, fields)) = slot_property_changes(guarded)
+        {
+            property_specs.extend(specs.into_iter().map(|name| (*layer, *path, name)));
+            property_fields.extend(fields.into_iter().map(|field| (*layer, *path, field)));
+        }
+    }
+    sort::sort_unstable(&mut property_specs);
+    property_specs.dedup();
     let values = value_edits(&steps, store);
     let properties = property_edits(&steps);
     steps.reverse();
@@ -1149,6 +1271,7 @@ pub(crate) fn apply(
         argument_inputs,
         inert_sites,
         other_sites,
+        property_fields,
         layer_info,
         inverse: Transaction {
             preconditions: Vec::new(),
@@ -1254,6 +1377,7 @@ fn inert_prims(
     steps: &[Guarded],
     layer: LayerId,
     root: Option<PathId>,
+    opinions: bool,
 ) -> (Vec<PathId>, HashMap<PathId, Vec<usize>>) {
     let inert = |spec: &PrimSpec| {
         let mut spec = spec.clone();
@@ -1272,10 +1396,13 @@ fn inert_prims(
         } if *at == path => {
             branches.as_ref().is_none_or(|b| b.is_empty()) && main.as_ref().is_none_or(inert)
         }
+        Raw::Child { .. } => true,
+        Raw::PrimSlots { .. } => false,
         // A property spec added or removed changes that property's spec
-        // stack, which is reported on its own (`Outcome::property_specs`).
-        Raw::Child { .. } | Raw::Property { .. } => true,
-        _ => false,
+        // stack, which is reported on its own (`Outcome::property_specs`),
+        // and a property field edit that property's fields
+        // (`Outcome::property_fields`).
+        _ => opinions && property_field(step).is_some(),
     };
     // Metadata that composes nothing beyond its own value, authored on a
     // spec the steps create: the prim's spec stack changes, which reports
@@ -1286,7 +1413,7 @@ fn inert_prims(
             property: None,
             key,
             ..
-        } => created && !resyncs_prim(store.tokens().resolve(*key)),
+        } => opinions && created && !resyncs_prim(store.tokens().resolve(*key)),
         _ => false,
     };
     let steps: Vec<&Guarded> = steps
@@ -1307,7 +1434,8 @@ fn inert_prims(
         {
             by_path.entry(path).or_default().push(at);
         }
-        if matches!(g.written, Raw::PrimSlots { .. } | Raw::Child { .. })
+        if (matches!(g.written, Raw::PrimSlots { .. } | Raw::Child { .. })
+            || (opinions && property_field(&g.written).is_some()))
             && let Some(path) = written.filter(|path| Some(*path) != root)
         {
             candidates.push(path);
@@ -1332,6 +1460,7 @@ fn inert_prims(
             || changes.iter().map(|&at| steps[at]).all(|g| {
                 (supports(&g.written, path) && supports(&g.step, path))
                     || (plain_field(&g.written, created) && plain_field(&g.step, created))
+                    || (opinions && slot_property_changes(g).is_some())
             })
     });
     (candidates, by_path)
@@ -1358,7 +1487,7 @@ fn support_only_prims(
     stage: &Stage,
     root: Option<PathId>,
 ) -> Vec<PathId> {
-    let (mut candidates, by_path) = inert_prims(store, steps, layer, root);
+    let (mut candidates, by_path) = inert_prims(store, steps, layer, root, false);
     // `by_path` indexes the steps of `layer`.
     let steps: Vec<&Guarded> = steps
         .iter()

@@ -530,15 +530,42 @@ impl LiveStage {
         // prims in the same order, changed only the spec stacks of the
         // prims an inert spec came to or left: OpenUSD's `DidChangeSpecs`
         // (`pxr/usd/pcp/changes.cpp`), which `UsdStage` reports info-only.
-        // When every root requested is such a prim, the prims depending on
-        // them changed only their spec stacks too (`DidChangeSpecs` of each
-        // dependency); otherwise a dependent may depend on another change.
+        // The prims depending on such prims alone changed only their spec
+        // stacks too (`DidChangeSpecs` of each dependency); those depending
+        // on another root requested, found by marking those roots again,
+        // may have changed in any way.
         let mut inert = core::mem::take(&mut self.inert_prims);
-        if requested.iter().all(|root| inert.contains(root)) {
-            inert.extend(dependent_roots.iter().copied());
-        } else {
-            requested.append(&mut dependent_roots);
+        let opaque: Vec<PathId> = requested
+            .iter()
+            .copied()
+            .filter(|root| !inert.contains(root))
+            .collect();
+        let mut tainted = HashSet::new();
+        if !opaque.is_empty() && !dependent_roots.is_empty() {
+            for &root in &opaque {
+                self.tracker.mark(root, OPINION_EDIT);
+                for prim in self.stage.traverse_all(root) {
+                    self.tracker.mark(prim, OPINION_EDIT);
+                }
+            }
+            tainted.extend(
+                self.tracker
+                    .drain(OPINION_EDIT)
+                    .affected()
+                    .scratch(&mut self.traversal_scratch)
+                    .run(),
+            );
         }
+        for prim in &tainted {
+            inert.remove(prim);
+        }
+        requested.extend(tainted.iter().copied());
+        inert.extend(
+            dependent_roots
+                .iter()
+                .copied()
+                .filter(|prim| !tainted.contains(prim)),
+        );
         // Beneath such a root, the roots requested for other changes are
         // resynced on their own, as OpenUSD resyncs `/Sky/Cloud` and
         // changes `/Sky` info-only when `DefinePrim` of `/Sky/Cloud`

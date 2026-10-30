@@ -33,6 +33,7 @@
         "/World": [
           "Rock",
           "Lamp",
+          "Robot",
           "Pebble"
         ],
         "/Robot": [],
@@ -91,6 +92,7 @@
         "/World": [
           "Rock",
           "Lamp",
+          "Robot",
           "Pebble",
           "Moss"
         ],
@@ -136,6 +138,7 @@
         "/World": [
           "Rock",
           "Lamp",
+          "Robot",
           "Pebble",
           "Moss",
           "Ghost"
@@ -196,6 +199,7 @@
         "/World": [
           "Rock",
           "Lamp",
+          "Robot",
           "Pebble",
           "Moss",
           "Ghost"
@@ -247,6 +251,7 @@
         "/World": [
           "Rock",
           "Lamp",
+          "Robot",
           "Pebble",
           "Moss",
           "Ghost"
@@ -295,6 +300,7 @@
         "/World": [
           "Rock",
           "Lamp",
+          "Robot",
           "Moss",
           "Ghost"
         ],
@@ -342,6 +348,7 @@
         "/World": [
           "Rock",
           "Lamp",
+          "Robot",
           "Ghost"
         ],
         "/Robot": [],
@@ -387,6 +394,7 @@
         "/World": [
           "Rock",
           "Lamp",
+          "Robot",
           "Ghost"
         ],
         "/Robot": [],
@@ -437,6 +445,7 @@
         ],
         "/World": [
           "Lamp",
+          "Robot",
           "Ghost",
           "Rock"
         ],
@@ -489,6 +498,7 @@
         "/World": [
           "Rock",
           "Lamp",
+          "Robot",
           "Ghost"
         ],
         "/Robot": [],
@@ -536,6 +546,7 @@
         "/World": [
           "Rock",
           "Lamp",
+          "Robot",
           "Spirit"
         ],
         "/Robot": [],
@@ -583,7 +594,8 @@
         ],
         "/World": [
           "Rock",
-          "Lamp"
+          "Lamp",
+          "Robot"
         ],
         "/Robot": [],
         "/Thing": [
@@ -631,7 +643,8 @@
         ],
         "/World": [
           "Rock",
-          "Lamp"
+          "Lamp",
+          "Robot"
         ],
         "/Robot": [],
         "/Thing": [
@@ -680,7 +693,8 @@
         "/World": [
           "Rock",
           "Shrub",
-          "Lamp"
+          "Lamp",
+          "Robot"
         ],
         "/Robot": [],
         "/Thing": [
@@ -732,7 +746,8 @@
         "/World": [
           "Rock",
           "Shrub",
-          "Lamp"
+          "Lamp",
+          "Robot"
         ],
         "/Robot": [],
         "/Thing": [
@@ -780,7 +795,8 @@
         "/World": [
           "Rock",
           "Shrub",
-          "Lamp"
+          "Lamp",
+          "Robot"
         ],
         "/Robot": [],
         "/Thing": [
@@ -816,7 +832,8 @@
         "/World": [
           "Rock",
           "Shrub",
-          "Lamp"
+          "Lamp",
+          "Robot"
         ],
         "/Robot": [],
         "/Thing": [
@@ -870,7 +887,8 @@
         "/World": [
           "Rock",
           "Shrub",
-          "Lamp"
+          "Lamp",
+          "Robot"
         ],
         "/Robot": [],
         "/Thing": [
@@ -920,7 +938,8 @@
         "/World": [
           "Rock",
           "Shrub",
-          "Lamp"
+          "Lamp",
+          "Robot"
         ],
         "/Robot": [],
         "/Thing": [
@@ -966,7 +985,8 @@
         "/World": [
           "Rock",
           "Shrub",
-          "Lamp"
+          "Lamp",
+          "Robot"
         ],
         "/Robot": [],
         "/Thing": [
@@ -1012,7 +1032,8 @@
         "/World": [
           "Rock",
           "Shrub",
-          "Lamp"
+          "Lamp",
+          "Robot"
         ],
         "/Robot": [],
         "/Thing": [
@@ -1060,7 +1081,8 @@
         "/World": [
           "Rock",
           "Shrub",
-          "Lamp"
+          "Lamp",
+          "Robot"
         ],
         "/Robot": [],
         "/Thing": [
@@ -1106,7 +1128,8 @@
         "/World": [
           "Rock",
           "Shrub",
-          "Lamp"
+          "Lamp",
+          "Robot"
         ],
         "/Robot": [],
         "/Thing": [
@@ -1154,7 +1177,8 @@
         "/World": [
           "Rock",
           "Shrub",
-          "Lamp"
+          "Lamp",
+          "Robot"
         ],
         "/Robot": [],
         "/Thing": [
@@ -1202,7 +1226,8 @@
         "/World": [
           "Rock",
           "Shrub",
-          "Lamp"
+          "Lamp",
+          "Robot"
         ],
         "/Robot": [],
         "/Thing": [
@@ -1253,7 +1278,8 @@
         "/World": [
           "Rock",
           "Shrub",
-          "Lamp"
+          "Lamp",
+          "Robot"
         ],
         "/Robot": [],
         "/Thing": [
@@ -1301,7 +1327,8 @@
         "/World": [
           "Rock",
           "Shrub",
-          "Lamp"
+          "Lamp",
+          "Robot"
         ],
         "/Robot": [],
         "/Thing": [
@@ -1351,7 +1378,8 @@
         "/World": [
           "Rock",
           "Shrub",
-          "Lamp"
+          "Lamp",
+          "Robot"
         ],
         "/Robot": [],
         "/Thing": [
@@ -1397,7 +1425,8 @@
         "/World": [
           "Rock",
           "Shrub",
-          "Lamp"
+          "Lamp",
+          "Robot"
         ],
         "/Robot": [],
         "/Thing": [
@@ -1443,7 +1472,8 @@
         "/World": [
           "Rock",
           "Shrub",
-          "Lamp"
+          "Lamp",
+          "Robot"
         ],
         "/Robot": [],
         "/Thing": [
@@ -1491,7 +1521,8 @@
         "/World": [
           "Rock",
           "Shrub",
-          "Lamp"
+          "Lamp",
+          "Robot"
         ],
         "/Robot": [],
         "/Thing": [
@@ -1539,7 +1570,8 @@
         "/World": [
           "Rock",
           "Shrub",
-          "Lamp"
+          "Lamp",
+          "Robot"
         ],
         "/Robot": [],
         "/Thing": [
@@ -1585,7 +1617,8 @@
         "/World": [
           "Rock",
           "Shrub",
-          "Lamp"
+          "Lamp",
+          "Robot"
         ],
         "/Robot": [],
         "/Thing": [
@@ -1633,7 +1666,8 @@
         "/World": [
           "Rock",
           "Shrub",
-          "Lamp"
+          "Lamp",
+          "Robot"
         ],
         "/Robot": [],
         "/Thing": [
@@ -1679,7 +1713,8 @@
         "/World": [
           "Rock",
           "Shrub",
-          "Lamp"
+          "Lamp",
+          "Robot"
         ],
         "/Robot": [],
         "/Thing": [
@@ -1725,7 +1760,8 @@
         "/World": [
           "Rock",
           "Shrub",
-          "Lamp"
+          "Lamp",
+          "Robot"
         ],
         "/Robot": [],
         "/Thing": [
@@ -1775,7 +1811,8 @@
         "/World": [
           "Rock",
           "Shrub",
-          "Lamp"
+          "Lamp",
+          "Robot"
         ],
         "/Robot": [],
         "/Thing": [
@@ -1825,7 +1862,8 @@
         "/World": [
           "Rock",
           "Shrub",
-          "Lamp"
+          "Lamp",
+          "Robot"
         ],
         "/Robot": [],
         "/Thing": [
@@ -1875,7 +1913,8 @@
         "/World": [
           "Rock",
           "Shrub",
-          "Lamp"
+          "Lamp",
+          "Robot"
         ],
         "/Robot": [],
         "/Thing": [
@@ -1921,7 +1960,8 @@
         "/World": [
           "Rock",
           "Shrub",
-          "Lamp"
+          "Lamp",
+          "Robot"
         ],
         "/Robot": [],
         "/Thing": [
@@ -1971,7 +2011,8 @@
         "/World": [
           "Rock",
           "Shrub",
-          "Lamp"
+          "Lamp",
+          "Robot"
         ],
         "/Robot": [],
         "/Thing": [
@@ -2023,7 +2064,8 @@
         "/World": [
           "Rock",
           "Shrub",
-          "Lamp"
+          "Lamp",
+          "Robot"
         ],
         "/Robot": [],
         "/Thing": [
@@ -2075,7 +2117,8 @@
         "/World": [
           "Rock",
           "Shrub",
-          "Lamp"
+          "Lamp",
+          "Robot"
         ],
         "/Robot": [],
         "/Thing": [
@@ -2133,7 +2176,8 @@
         "/World": [
           "Rock",
           "Shrub",
-          "Lamp"
+          "Lamp",
+          "Robot"
         ],
         "/Robot": [],
         "/Thing": [
@@ -2188,7 +2232,8 @@
         "/World": [
           "Rock",
           "Shrub",
-          "Lamp"
+          "Lamp",
+          "Robot"
         ],
         "/Robot": [],
         "/Thing": [
@@ -2252,7 +2297,8 @@
         ],
         "/World": [
           "Rock",
-          "Lamp"
+          "Lamp",
+          "Robot"
         ],
         "/Robot": [],
         "/Thing": [
@@ -2320,7 +2366,64 @@
         "/World": [
           "Rock",
           "Shrub",
-          "Lamp"
+          "Lamp",
+          "Robot"
+        ],
+        "/Robot": [],
+        "/Thing": [
+          "Ball"
+        ],
+        "/Switch": [],
+        "/Rover": [],
+        "prototype": [
+          "Ball"
+        ]
+      }
+    },
+    {
+      "name": "rename_target",
+      "call": "`UsdNamespaceEditor::RenamePrim` of `/World/Robot`, which `/World/Lamp.aim` targets, to `Rover`",
+      "notices": [
+        {
+          "resynced": [
+            "/World/Robot",
+            "/World/Rover"
+          ],
+          "info": [
+            "/Echo.aim",
+            "/World/Lamp.aim"
+          ],
+          "fields": {
+            "/World/Robot": [],
+            "/World/Rover": [],
+            "/Echo.aim": [
+              "targetPaths"
+            ],
+            "/World/Lamp.aim": [
+              "targetPaths"
+            ]
+          }
+        }
+      ],
+      "children": {
+        "/": [
+          "World",
+          "Moon",
+          "Sky",
+          "Robot",
+          "Drone",
+          "Thing",
+          "Switch",
+          "Rover",
+          "Echo",
+          "_Base",
+          "Spirit"
+        ],
+        "/World": [
+          "Rock",
+          "Shrub",
+          "Lamp",
+          "Rover"
         ],
         "/Robot": [],
         "/Thing": [
@@ -2364,7 +2467,8 @@
         "/World": [
           "Rock",
           "Shrub",
-          "Lamp"
+          "Lamp",
+          "Rover"
         ],
         "/Robot": [],
         "/Thing": [

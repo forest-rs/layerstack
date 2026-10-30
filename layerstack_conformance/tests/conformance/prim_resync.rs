@@ -58,8 +58,8 @@ use std::collections::BTreeMap;
 
 use layerstack::{
     Changes, EditTarget, FieldValue, Layer, LayerId, ListPosition, LiveStage, NamespaceEdit,
-    PathId, PropertySpec, PropertyType, Reference, Specifier, StageOptions, SublayerEntry,
-    TargetPath, Transaction, Value,
+    PathId, PropertyField, PropertySpec, PropertyType, Reference, Specifier, StageOptions,
+    SublayerEntry, TargetPath, Transaction, Value,
 };
 use layerstack_conformance::{
     usda_real::{LoadedStage, load_entry_usda},
@@ -147,11 +147,29 @@ fn actual(changes: &Changes, loaded: &LoadedStage) -> Report {
         )
     }));
     resynced.sort();
-    let info = changes
-        .changed_info_only
-        .iter()
-        .map(|&path| (prim(path), Vec::new()))
-        .collect();
+    // A prim with a complete property inventory is reported at the
+    // properties it names, with their fields, as OpenUSD reports them.
+    let mut info = BTreeMap::new();
+    for &path in &changes.changed_info_only {
+        match changes.properties_for(path) {
+            Some(fields) if !fields.is_empty() => {
+                for change in fields {
+                    let field = match change.field {
+                        PropertyField::Targets => "targetPaths".to_string(),
+                        PropertyField::Default => "default".to_string(),
+                        PropertyField::Metadata(key) => tokens.resolve(key).to_string(),
+                        other => format!("{other:?}"),
+                    };
+                    info.entry(format!("{}.{}", prim(path), tokens.resolve(change.name)))
+                        .or_insert_with(Vec::new)
+                        .push(field);
+                }
+            }
+            _ => {
+                info.insert(prim(path), Vec::new());
+            }
+        }
+    }
     Report { resynced, info }
 }
 
@@ -267,11 +285,11 @@ fn edit(name: &str, loaded: &mut LoadedStage, live: &LiveStage, added: &Extra) -
         "clear_reorder" => {
             txn.clear_prim_order(prim(scene, world));
         }
-        "rename_prim" | "reparent_prim" => {
-            let (from, to) = if name == "rename_prim" {
-                (ghost, spirit)
-            } else {
-                (spirit, moved)
+        "rename_prim" | "reparent_prim" | "rename_target" => {
+            let (from, to) = match name {
+                "rename_prim" => (ghost, spirit),
+                "reparent_prim" => (spirit, moved),
+                _ => (path("/World/Robot"), path("/World/Rover")),
             };
             return NamespaceEdit::prepare(
                 live.stage(),
@@ -483,10 +501,13 @@ fn prim_spec_edits_resync_only_the_prim() {
         };
         let found = actual(&changes, &loaded);
         let mut want = corrected(name, expected(record));
-        // Fields are compared for info-only paths only, which a prim spec
-        // edit never reports in the oracle.
-        for fields in want.info.values_mut() {
-            fields.clear();
+        // Fields are compared for info-only properties: a prim spec edit
+        // reports none for its prim, and an info-only prim here has no
+        // inventory.
+        for (path, fields) in want.info.iter_mut() {
+            if !path.contains('.') {
+                fields.clear();
+            }
         }
         if found != want {
             failures.push(format!("{name}:\n  want {want:?}\n  got  {found:?}"));

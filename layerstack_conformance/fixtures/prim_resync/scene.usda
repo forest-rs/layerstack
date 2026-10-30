@@ -17,6 +17,11 @@ def Xform "World"
 
     def Xform "Lamp"
     {
+        rel aim = </World/Robot>
+    }
+
+    def Xform "Robot"
+    {
     }
 }
 

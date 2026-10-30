@@ -3,7 +3,8 @@
 
 //! Normal skinning uses inverse transposes, with explicit corner-to-point maps.
 use super::{
-    InfluenceInterpolation, JointInfluences, SkelError, SkinningMethod, skin_points_with_method,
+    InfluenceInterpolation, JointInfluences, SkelError, SkinningInfluences, SkinningMethod,
+    skin_points_with_method,
 };
 use crate::gf;
 use alloc::vec::Vec;
@@ -116,7 +117,7 @@ pub(super) fn validate_corners(
 pub fn skin_normals(
     bind: &Matrix,
     joints: &[Matrix],
-    influences: JointInfluences<'_>,
+    influences: impl SkinningInfluences,
     normals: &[[f32; 3]],
 ) -> Result<Vec<[f32; 3]>, SkelError> {
     let mut result = normals.to_vec();
@@ -129,19 +130,21 @@ pub fn skin_normals_in_place_with_method(
     method: SkinningMethod,
     bind: &Matrix,
     joints: &[Matrix],
-    influences: JointInfluences<'_>,
+    influences: impl SkinningInfluences,
     normals: &mut [[f32; 3]],
 ) -> Result<(), SkelError> {
-    influences.validate(normals.len(), joints.len())?;
-    let (bind, joints) = normal_matrices(bind, joints)?;
-    if method == SkinningMethod::ClassicLinear {
-        deform(&bind, &joints, influences, None, normals);
-    } else {
-        super::dual_quaternion::Palette::normals(joints)
-            .view(None)
-            .normals(&bind, influences, None, normals);
-    }
-    Ok(())
+    influences.with_separate(|influences| {
+        influences.validate(normals.len(), joints.len())?;
+        let (bind, joints) = normal_matrices(bind, joints)?;
+        if method == SkinningMethod::ClassicLinear {
+            deform(&bind, &joints, influences, None, normals);
+        } else {
+            super::dual_quaternion::Palette::normals(joints)
+                .view(None)
+                .normals(&bind, influences, None, normals);
+        }
+        Ok(())
+    })
 }
 /// Skins face-varying normals with an explicit method and one point per corner. `point_count`
 /// is the geometry point count, not the number of normals; influences address
@@ -150,29 +153,31 @@ pub fn skin_face_varying_normals_with_method(
     method: SkinningMethod,
     bind: &Matrix,
     joints: &[Matrix],
-    influences: JointInfluences<'_>,
+    influences: impl SkinningInfluences,
     point_count: usize,
     face_vertex_indices: &[i32],
     normals: &[[f32; 3]],
 ) -> Result<Vec<[f32; 3]>, SkelError> {
-    influences.validate(point_count, joints.len())?;
-    validate_corners(point_count, face_vertex_indices, normals.len())?;
-    let (bind, joints) = normal_matrices(bind, joints)?;
-    let mut result = normals.to_vec();
-    if method == SkinningMethod::ClassicLinear {
-        deform(
-            &bind,
-            &joints,
-            influences,
-            Some(face_vertex_indices),
-            &mut result,
-        );
-    } else {
-        super::dual_quaternion::Palette::normals(joints)
-            .view(None)
-            .normals(&bind, influences, Some(face_vertex_indices), &mut result);
-    }
-    Ok(result)
+    influences.with_separate(|influences| {
+        influences.validate(point_count, joints.len())?;
+        validate_corners(point_count, face_vertex_indices, normals.len())?;
+        let (bind, joints) = normal_matrices(bind, joints)?;
+        let mut result = normals.to_vec();
+        if method == SkinningMethod::ClassicLinear {
+            deform(
+                &bind,
+                &joints,
+                influences,
+                Some(face_vertex_indices),
+                &mut result,
+            );
+        } else {
+            super::dual_quaternion::Palette::normals(joints)
+                .view(None)
+                .normals(&bind, influences, Some(face_vertex_indices), &mut result);
+        }
+        Ok(result)
+    })
 }
 /// Computes a constant binding's skeleton-space transform with an explicit method.
 /// Matches `UsdSkelSkinTransform`: a unit single-joint binding uses matrix
@@ -186,38 +191,40 @@ pub fn rigid_skinning_transform_with_method(
     method: SkinningMethod,
     bind: &Matrix,
     joints: &[Matrix],
-    influences: JointInfluences<'_>,
+    influences: impl SkinningInfluences,
 ) -> Result<Matrix, SkelError> {
-    if influences.interpolation != InfluenceInterpolation::Constant {
-        return Err(SkelError::InvalidDeformation {
-            element: None,
-            reason: "rigid transform needs constant influences",
+    influences.with_separate(|influences| {
+        if influences.interpolation != InfluenceInterpolation::Constant {
+            return Err(SkelError::InvalidDeformation {
+                element: None,
+                reason: "rigid transform needs constant influences",
+            });
+        }
+        influences.validate(0, joints.len())?;
+        if influences.element_size == 1 && (influences.weights[0] - 1.).abs() <= 1e-6 {
+            return Ok(gf::mul(
+                bind,
+                &joints[usize::try_from(influences.indices[0]).expect("validated influence")],
+            ));
+        }
+        let pivot: [f32; 3] = core::array::from_fn(|i| bind[3][i] as f32);
+        let frame: [[_; 3]; 4] = core::array::from_fn(|i| {
+            if i == 3 {
+                pivot
+            } else {
+                core::array::from_fn(|j| pivot[j] + bind[i][j] as f32)
+            }
         });
-    }
-    influences.validate(0, joints.len())?;
-    if influences.element_size == 1 && (influences.weights[0] - 1.).abs() <= 1e-6 {
-        return Ok(gf::mul(
-            bind,
-            &joints[usize::try_from(influences.indices[0]).expect("validated influence")],
-        ));
-    }
-    let pivot: [f32; 3] = core::array::from_fn(|i| bind[3][i] as f32);
-    let frame: [[_; 3]; 4] = core::array::from_fn(|i| {
-        if i == 3 {
-            pivot
-        } else {
-            core::array::from_fn(|j| pivot[j] + bind[i][j] as f32)
+        let frame = skin_points_with_method(method, &gf::IDENTITY, joints, influences, &frame)?;
+        let mut result = gf::IDENTITY;
+        for i in 0..3 {
+            for j in 0..3 {
+                result[i][j] = f64::from(frame[i][j] - frame[3][j]);
+            }
         }
-    });
-    let frame = skin_points_with_method(method, &gf::IDENTITY, joints, influences, &frame)?;
-    let mut result = gf::IDENTITY;
-    for i in 0..3 {
-        for j in 0..3 {
-            result[i][j] = f64::from(frame[i][j] - frame[3][j]);
-        }
-    }
-    result[3][..3].copy_from_slice(&frame[3].map(f64::from));
-    Ok(result)
+        result[3][..3].copy_from_slice(&frame[3].map(f64::from));
+        Ok(result)
+    })
 }
 
 /// Skins normals with an explicit method. Both methods derive inverse-transpose
@@ -227,7 +234,7 @@ pub fn skin_normals_with_method(
     method: SkinningMethod,
     bind: &Matrix,
     joints: &[Matrix],
-    influences: JointInfluences<'_>,
+    influences: impl SkinningInfluences,
     normals: &[[f32; 3]],
 ) -> Result<Vec<[f32; 3]>, SkelError> {
     let mut result = normals.to_vec();
@@ -239,7 +246,7 @@ pub fn skin_normals_with_method(
 pub fn skin_normals_in_place(
     bind: &Matrix,
     joints: &[Matrix],
-    influences: JointInfluences<'_>,
+    influences: impl SkinningInfluences,
     normals: &mut [[f32; 3]],
 ) -> Result<(), SkelError> {
     skin_normals_in_place_with_method(
@@ -255,7 +262,7 @@ pub fn skin_normals_in_place(
 pub fn skin_face_varying_normals(
     bind: &Matrix,
     joints: &[Matrix],
-    influences: JointInfluences<'_>,
+    influences: impl SkinningInfluences,
     point_count: usize,
     indices: &[i32],
     normals: &[[f32; 3]],
@@ -275,7 +282,7 @@ pub fn skin_face_varying_normals(
 pub fn rigid_skinning_transform(
     bind: &Matrix,
     joints: &[Matrix],
-    influences: JointInfluences<'_>,
+    influences: impl SkinningInfluences,
 ) -> Result<Matrix, SkelError> {
     rigid_skinning_transform_with_method(SkinningMethod::ClassicLinear, bind, joints, influences)
 }

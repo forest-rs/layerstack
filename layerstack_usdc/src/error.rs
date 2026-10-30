@@ -121,7 +121,8 @@ impl fmt::Display for UsdcError {
             ),
             Self::SectionOutOfBounds { name, offset, size } => write!(
                 f,
-                "section {name:?} out of bounds (offset={offset}, size={size})"
+                "the section `{}` lies outside the file (offset {offset}, size {size})",
+                name.escape_debug()
             ),
             Self::DecompressionFailed { context } => {
                 write!(f, "LZ4 decompression failed: {context}")

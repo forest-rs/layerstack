@@ -255,6 +255,47 @@ pub enum SpecForm {
     VariantSet = 11,
 }
 
+impl SpecForm {
+    /// The form in words, as a diagnostic names it (`relationship
+    /// target`), after OpenUSD's `SdfSpecType`.
+    #[must_use]
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            Self::Unknown => "unknown",
+            Self::Attribute => "attribute",
+            Self::Connection => "connection",
+            Self::Expression => "expression",
+            Self::Mapper => "mapper",
+            Self::MapperArg => "mapper argument",
+            Self::Prim => "prim",
+            Self::PseudoRoot => "pseudo-root",
+            Self::Relationship => "relationship",
+            Self::RelationshipTarget => "relationship target",
+            Self::Variant => "variant",
+            Self::VariantSet => "variant set",
+        }
+    }
+
+    /// [`Self::name`] with its article (`an attribute`).
+    #[must_use]
+    pub(crate) fn article_name(self) -> &'static str {
+        match self {
+            Self::Unknown => "an unknown",
+            Self::Attribute => "an attribute",
+            Self::Connection => "a connection",
+            Self::Expression => "an expression",
+            Self::Mapper => "a mapper",
+            Self::MapperArg => "a mapper argument",
+            Self::Prim => "a prim",
+            Self::PseudoRoot => "a pseudo-root",
+            Self::Relationship => "a relationship",
+            Self::RelationshipTarget => "a relationship target",
+            Self::Variant => "a variant",
+            Self::VariantSet => "a variant set",
+        }
+    }
+}
+
 impl TryFrom<u32> for SpecForm {
     type Error = UsdcError;
 

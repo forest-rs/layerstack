@@ -157,21 +157,37 @@ impl fmt::Display for UsdcWriteError {
                 f,
                 "{path}#{field}: invalid array edit descriptor or literal"
             ),
-            Self::InvalidPath { path, reason } => write!(f, "invalid path {path:?}: {reason}"),
+            Self::InvalidPath { path, reason } => {
+                write!(f, "`{}` is not a valid path: {reason}", path.escape_debug())
+            }
             Self::SpecPathMismatch { path, form } => {
-                write!(f, "{path}: a {form:?} spec cannot have this path")
+                write!(
+                    f,
+                    "{path}: {} spec cannot have this path",
+                    form.article_name()
+                )
             }
             Self::UnsupportedSpecForm { path, form } => {
-                write!(f, "{path}: {form:?} specs are not written")
+                write!(f, "{path}: {} specs are not written", form.name())
             }
             Self::DuplicateSpec { path } => write!(f, "{path}: duplicate spec"),
             Self::MissingPseudoRoot => write!(f, "no pseudo-root spec at /"),
             Self::MissingParent { path } => write!(f, "{path}: parent has no spec"),
-            Self::DuplicateField { path, field } => write!(f, "{path}: duplicate field {field:?}"),
+            Self::DuplicateField { path, field } => {
+                write!(
+                    f,
+                    "{path}: the field `{}` is repeated",
+                    field.escape_debug()
+                )
+            }
             Self::InvalidFieldName { path } => write!(f, "{path}: empty field name"),
             Self::NulInText { path, field } => write!(f, "{path}: {field} contains NUL"),
             Self::DuplicateDictionaryKey { path, field, key } => {
-                write!(f, "{path}: {field} repeats dictionary key {key:?}")
+                write!(
+                    f,
+                    "{path}: {field} repeats the dictionary key `{}`",
+                    key.escape_debug()
+                )
             }
             Self::InvalidListOp {
                 path,
@@ -184,13 +200,13 @@ impl fmt::Display for UsdcWriteError {
             Self::Document(e) => write!(f, "{e}"),
             Self::Save(e) => write!(f, "{e}"),
             Self::UnencodedField { path, key } => {
-                write!(f, "{path}: the crate writer does not encode {key:?}")
+                write!(f, "{path}: the crate writer does not encode `{key}`")
             }
             Self::MetadataType {
                 path,
                 key,
                 expected,
-            } => write!(f, "{path}: {key} needs a {expected:?} value"),
+            } => write!(f, "{path}: `{key}` needs {} value", expected.article_name()),
             Self::TooLarge => write!(f, "layer exceeds the crate format's limits"),
         }
     }

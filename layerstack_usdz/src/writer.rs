@@ -99,13 +99,15 @@ impl fmt::Display for UsdzWriteError {
         match self {
             Self::Empty => write!(f, "a USDZ package needs at least a root layer"),
             Self::RootNotLayer { path } => {
-                write!(f, "first package file {path:?} is not a USD layer")
+                write!(f, "the first package file, `{path}`, is not a USD layer")
             }
-            Self::InvalidPath { path } => write!(f, "invalid package path {path:?}"),
+            Self::InvalidPath { path } => {
+                write!(f, "`{}` is not a valid package path", path.escape_debug())
+            }
             Self::UnsupportedMemberType { path } => {
-                write!(f, "{path:?} is not a USD, image or audio file")
+                write!(f, "`{path}` is not a USD, image or audio file")
             }
-            Self::DuplicatePath { path } => write!(f, "duplicate package path {path:?}"),
+            Self::DuplicatePath { path } => write!(f, "the package has `{path}` twice"),
             Self::TooLarge => write!(f, "package exceeds 32-bit ZIP limits"),
         }
     }
@@ -290,6 +292,7 @@ fn put_u32(out: &mut Vec<u8>, v: u32) {
 mod tests {
     use super::*;
     use crate::zip::ZipArchive;
+    use alloc::string::ToString;
 
     const LAYER: &[u8] =
         b"#usda 1.0\n(\n    defaultPrim = \"Root\"\n)\n\ndef Xform \"Root\"\n{\n}\n";
@@ -366,6 +369,20 @@ mod tests {
                 path: "a.usda".into()
             }),
             "duplicate"
+        );
+        assert_eq!(
+            UsdzWriteError::DuplicatePath {
+                path: "a.usda".into()
+            }
+            .to_string(),
+            "the package has `a.usda` twice"
+        );
+        assert_eq!(
+            UsdzWriteError::InvalidPath {
+                path: "a\tb.usda".into()
+            }
+            .to_string(),
+            "`a\\tb.usda` is not a valid package path"
         );
     }
 

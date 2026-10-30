@@ -304,21 +304,34 @@ impl fmt::Display for ExportError {
             Self::InvalidMesh { path, problem } => write!(f, "{path}: {problem}"),
             Self::InvalidInstancer { path, problem } => write!(f, "{path}: {problem}"),
             Self::UnknownPrototype { path, prototype } => {
-                write!(f, "{path}: places undefined shared prototype {prototype:?}")
+                write!(
+                    f,
+                    "{path}: places the shared prototype `{prototype}`, which is not defined"
+                )
             }
             Self::PrototypeCycle { prototype } => {
-                write!(f, "shared prototype {prototype:?} places itself")
+                write!(f, "the shared prototype `{prototype}` places itself")
             }
             Self::InvalidStage => write!(f, "metersPerUnit must be finite and positive"),
             Self::InvalidMaterial { path, problem } => write!(f, "{path}: {problem}"),
             Self::UnknownMaterial { path, material } => {
-                write!(f, "{path}: binds undefined material {material:?}")
+                write!(
+                    f,
+                    "{path}: binds the material `{material}`, which is not defined"
+                )
             }
             Self::UnpackagedAsset { asset } => {
-                write!(f, "asset path {asset:?} names no file in the package")
+                write!(f, "the asset path @{asset}@ names no file in the package")
             }
             Self::ProfileMember { path, profile } => {
-                write!(f, "{path:?} is not allowed in a {profile:?} USDZ package")
+                let profile = match profile {
+                    UsdzProfile::Generic => "generic",
+                    UsdzProfile::Arkit => "ARKit",
+                };
+                write!(
+                    f,
+                    "`{path}` is not allowed in a package of the {profile} USDZ profile"
+                )
             }
             Self::Usda(e) => write!(f, "USDA: {e}"),
             Self::Usdc(e) => write!(f, "USDC: {e}"),
@@ -369,17 +382,17 @@ impl fmt::Display for MeshProblem {
                 faces,
             } => write!(
                 f,
-                "subset {subset:?} names face {face}, but the mesh has {faces}"
+                "the subset `{subset}` names face {face}, but the mesh has {faces}"
             ),
             Self::OverlappingSubsets { subset, face } => {
-                write!(f, "face {face} appears again in subset {subset:?}")
+                write!(f, "face {face} appears again in the subset `{subset}`")
             }
             Self::IncompletePartition { face } => {
                 write!(f, "face {face} is in no subset of the partition")
             }
             Self::MissingTexCoords { material, uv_set } => write!(
                 f,
-                "material {material:?} reads UV set {uv_set:?}, which the mesh does not author"
+                "the material `{material}` reads the UV set `{uv_set}`, which the mesh does not author"
             ),
         }
     }
@@ -414,13 +427,14 @@ impl fmt::Display for InstancerProblem {
             ),
             Self::InvalidName { instance, name } => write!(
                 f,
-                "instance {instance} is named {name:?}, which is not a prim name it can use"
+                "instance {instance} is named `{}`, which is not a prim name it can use",
+                name.escape_debug()
             ),
             Self::DuplicateName {
                 name,
                 first,
                 second,
-            } => write!(f, "instances {first} and {second} are both named {name:?}"),
+            } => write!(f, "instances {first} and {second} are both named `{name}`"),
             Self::PrimvarInterpolation {
                 name,
                 interpolation,

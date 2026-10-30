@@ -821,6 +821,31 @@ pub enum FieldType {
     Permission,
 }
 
+impl FieldType {
+    /// The type in words with its article, as a diagnostic names it (`an
+    /// int64 list op`).
+    pub(crate) fn article_name(self) -> &'static str {
+        match self {
+            Self::Token => "a token",
+            Self::String => "a string",
+            Self::Double => "a double",
+            Self::Int => "an int",
+            Self::Int64 => "an int64",
+            Self::Float => "a float",
+            Self::Bool => "a bool",
+            Self::Dictionary | Self::UnregisteredDictionary => "a dictionary",
+            Self::Asset => "an asset path",
+            Self::AssetArray => "an asset path array",
+            Self::TokenArray => "a token array",
+            Self::StringArray => "a string array",
+            Self::TokenListOp => "a token list op",
+            Self::StringListOp => "a string list op",
+            Self::Int64ListOp => "an int64 list op",
+            Self::Permission => "a permission (`public` or `private`)",
+        }
+    }
+}
+
 /// The crate field name and registered type of the USDA metadata `key` on
 /// an `owner`, or `None` when the key is not registered for it.
 ///

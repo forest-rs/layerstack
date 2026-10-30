@@ -423,7 +423,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
             Some(tok.text(self.source))
         } else {
             let span = self.current_span();
-            self.error(span, format!("expected {kind:?}"));
+            self.error(span, format!("expected {}", spelling(kind)));
             None
         }
     }
@@ -589,7 +589,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
         if self.diagnostics.len() == start.diagnostics {
             let span = self.current_span();
             let text = self.current_text();
-            self.error(span, format!("unexpected {text:?}"));
+            self.error(span, format!("unexpected `{}`", text.escape_debug()));
         }
         self.bump();
     }
@@ -1392,7 +1392,10 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
             } else {
                 let span = self.current_span();
                 let text = self.current_text();
-                self.error(span, format!("unexpected token in prim body: {text:?}"));
+                self.error(
+                    span,
+                    format!("unexpected `{}` in a prim body", text.escape_debug()),
+                );
                 self.bump();
             }
             self.skip_unparsed(progress);
@@ -1680,7 +1683,8 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
             self.error(
             span,
                 format!(
-                    "unexpected {text:?} after a property; expected '=', '.', '(' or the end of the line"
+                    "unexpected `{}` after a property; expected `=`, `.`, `(` or the end of the line",
+                    text.escape_debug()
                 ),
             );
         }
@@ -2876,7 +2880,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
                 self.bump();
             } else {
                 let span = self.current_span();
-                self.error(span, "expected Equals");
+                self.error(span, "expected `=`");
             }
             self.parse_symmetry_function();
             return;
@@ -2953,6 +2957,42 @@ fn string_is_terminated(text: &str) -> bool {
         }
     }
     false
+}
+
+/// How a diagnostic names a token `kind` it expected: its text in
+/// backticks for punctuation, else what it is.
+fn spelling(kind: TokenKind) -> &'static str {
+    match kind {
+        TokenKind::Whitespace => "whitespace",
+        TokenKind::Newline => "a line break",
+        TokenKind::PythonComment | TokenKind::CppComment | TokenKind::BlockComment => "a comment",
+        TokenKind::Number => "a number",
+        TokenKind::SingleQuoteString
+        | TokenKind::DoubleQuoteString
+        | TokenKind::MultilineSingleQuoteString
+        | TokenKind::MultilineDoubleQuoteString => "a string",
+        TokenKind::AssetPath => "an asset path",
+        TokenKind::Ident => "a name",
+        TokenKind::LeftParen => "`(`",
+        TokenKind::RightParen => "`)`",
+        TokenKind::LeftBracket => "`[`",
+        TokenKind::RightBracket => "`]`",
+        TokenKind::LeftBrace => "`{`",
+        TokenKind::RightBrace => "`}`",
+        TokenKind::LeftAngle => "`<`",
+        TokenKind::RightAngle => "`>`",
+        TokenKind::Ampersand => "`&`",
+        TokenKind::Asterisk => "`*`",
+        TokenKind::Colon => "`:`",
+        TokenKind::Comma => "`,`",
+        TokenKind::Dot => "`.`",
+        TokenKind::Equals => "`=`",
+        TokenKind::Minus => "`-`",
+        TokenKind::Plus => "`+`",
+        TokenKind::Pound => "`#`",
+        TokenKind::Semicolon => "`;`",
+        TokenKind::Error => "a token",
+    }
 }
 
 fn is_trivia(kind: TokenKind) -> bool {
@@ -3153,6 +3193,31 @@ def Xform "Root" (
         ] {
             assert!(!substitutions(body).is_empty(), "{body}");
         }
+    }
+
+    #[test]
+    fn diagnostics_name_tokens_as_usda_spells_them() {
+        let messages = |src: &str| -> Vec<String> {
+            parse(src)
+                .diagnostics
+                .into_iter()
+                .map(|diagnostic| diagnostic.message)
+                .collect()
+        };
+        let unclosed = messages("#usda 1.0\ndef \"A\" (\n    kind = \"x\"\n\ndef \"B\" {}\n");
+        assert!(unclosed.iter().any(|m| m == "expected `)`"), "{unclosed:?}");
+        assert_eq!(
+            messages("#usda 1.0\ndef \"A\" {\n    @x@\n}\n"),
+            ["unexpected `@x@` in a prim body"]
+        );
+        assert_eq!(
+            messages("#usda 1.0\ndef \"A\" {\n    double a ]\n}\n"),
+            ["unexpected `]` after a property; expected `=`, `.`, `(` or the end of the line"]
+        );
+        assert_eq!(
+            messages("#usda 1.0\ndef \"A\" (\n    variants = { string v = \"a\\tb\" }\n) {}\n"),
+            ["`a\\tb` is not a valid variant selection"]
+        );
     }
 
     #[test]

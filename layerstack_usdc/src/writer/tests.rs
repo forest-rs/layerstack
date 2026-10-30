@@ -1240,9 +1240,14 @@ fn rejects_invalid_input() {
     );
     let mut specs = layer_with(&[("x", Value::Int(1))]);
     specs[2].fields.push(Field::new("default", Value::Int(2)));
+    let duplicate = err(specs);
     assert!(
-        matches!(err(specs), UsdcWriteError::DuplicateField { .. }),
+        matches!(duplicate, UsdcWriteError::DuplicateField { .. }),
         "duplicate field"
+    );
+    assert_eq!(
+        duplicate.to_string(),
+        "/Root.x: the field `default` is repeated"
     );
 }
 

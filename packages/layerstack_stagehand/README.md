@@ -82,8 +82,11 @@ faces' world-space area) and a `GeometryLight` (its target as data).
 Lights and cameras inside a native instance are listed once per instance,
 by their instance proxies' paths; a light inside a point instancer's
 prototype once per unmasked instance, with `instance` (the instancer and
-the instance's position) and the key `${path}@${instancer}[${index}]`
-(`lightKey`); `list.light(key)` finds it. A diff
+the instance's authored `ids` entry, `id`, or its position, `index`, when
+the instancer authors no `ids`) and the key `${path}@${instancer}#${id}`
+or `${path}@${instancer}[${index}]` (`lightKey`); `list.light(key)` finds
+it. Keyed by id, reordering or compacting an instancer's arrays changes
+its lights' matrices instead of removing and adding them. A diff
 lists `camerasAdded`, `camerasRemoved`, `camerasChanged` and the same for
 lights (by key), and `work.camerasRead` and `work.lightsRead`: an edit reads only
 the lights and cameras it reaches, and `setTime` only those whose inputs

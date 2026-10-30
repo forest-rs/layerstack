@@ -354,7 +354,7 @@ describe("lights and cameras inside instances", () => {
   it("match OpenUSD's answers", () => {
     const { oracle, stage, list } = open();
     try {
-      assert.equal(oracle.rows.length, 33);
+      assert.equal(oracle.rows.length, 39);
       for (const time of [undefined, 0, 10]) {
         if (list.time !== time) list.setTime(time);
         const rows = oracle.rows.filter((row: { time: number | null }) => (row.time ?? undefined) === time);
@@ -368,11 +368,13 @@ describe("lights and cameras inside instances", () => {
             row.world.flat().forEach((value: number, i: number) => close(camera.cameraToWorld[i]!, value));
             continue;
           }
-          const key = lightKey(row.path, row.instance);
+          const at: { instancer: string; index: number; id: number | null } | null = row.instance;
+          const instance = at === null ? null : at.id === null ? { instancer: at.instancer, index: at.index } : { instancer: at.instancer, id: BigInt(at.id) };
+          const key = lightKey(row.path, instance);
           lights.push(key);
           const light = list.light(key);
           assert.ok(light !== null, `${where} is not listed`);
-          assert.deepEqual(light.instance, row.instance, where);
+          assert.deepEqual(light.instance, instance, where);
           const kinds: Record<string, string> = { Mesh: "mesh", GeometryLight: "geometry", DiskLight: "disk", SphereLight: "sphere" };
           assert.equal(light.kind, kinds[row.type], where);
           row.world.flat().forEach((value: number, i: number) => close(light.matrix[i]!, value));
@@ -418,6 +420,43 @@ describe("lights and cameras inside instances", () => {
       diff = edit([{ type: "setValue", path: "/LampRig/Bulb.inputs:intensity", value: { type: "float", value: 3 } }]);
       assert.deepEqual(diff.lightsChanged, ["/World/Lamps/Dark/Bulb", "/World/Lamps/North/Bulb", "/World/Lamps/South/Bulb"]);
       assert.deepEqual([diff.work.lightsRead, diff.work.camerasRead], [3, 0]);
+    } finally {
+      list.dispose();
+      stage.free();
+    }
+  });
+
+  // As `layerstack_stagehand`'s `placed_lights_follow_their_ids`: an
+  // instancer authoring `ids` keys its lights by id, so reordering and
+  // compacting its arrays moves them rather than removing and adding.
+  it("follow a point instancer's ids", () => {
+    const { stage, list, edit } = open();
+    try {
+      const firefly = (id: bigint) => lightKey("/World/Swarm/Protos/Firefly", { instancer: "/World/Swarm", id });
+      const keys = list.lights().map((light) => light.key);
+      assert.deepEqual(
+        keys.filter((key) => key.startsWith("/World/Swarm/")),
+        [firefly(7n), firefly(11n)].sort(),
+        "id 3 is masked",
+      );
+      assert.equal(firefly(7n), "/World/Swarm/Protos/Firefly@/World/Swarm#7");
+      assert.ok(keys.includes("/World/Field/Protos/Torch/Flame@/World/Field[0]"), "no ids: keyed by position");
+      const arrays = (ids: bigint[], positions: number[]): Edit[] => [
+        { type: "setValue", path: "/World/Swarm.protoIndices", value: { type: "int[]", value: new Int32Array(ids.length) } },
+        { type: "setValue", path: "/World/Swarm.ids", value: { type: "int64[]", value: ids } },
+        { type: "setValue", path: "/World/Swarm.positions", value: { type: "point3f[]", value: new Float32Array(positions) } },
+      ];
+      // Reversed, the masked instance last: the same instances, unmoved.
+      let diff = edit(arrays([11n, 3n, 7n], [2, 2, 0, 1, 2, 0, 0, 2, 0]));
+      assert.deepEqual([diff.lightsAdded, diff.lightsRemoved, diff.lightsChanged], [[], [], []]);
+      // Compacted and moved: two matrix changes.
+      diff = edit(arrays([7n, 11n], [0, 2, 1, 2, 2, 1]));
+      assert.deepEqual([diff.lightsAdded, diff.lightsRemoved], [[], []]);
+      assert.deepEqual(diff.lightsChanged, [firefly(7n), firefly(11n)].sort());
+      assert.deepEqual([...list.light(firefly(11n))!.position], [2, 2, 6]);
+      // An id gone: its light removed.
+      diff = edit(arrays([11n], [2, 2, 1]));
+      assert.deepEqual([diff.lightsAdded, diff.lightsRemoved, diff.lightsChanged], [[], [firefly(7n)], []]);
     } finally {
       list.dispose();
       stage.free();

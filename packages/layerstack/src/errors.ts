@@ -113,6 +113,10 @@
  *   (the prim declares no such primvar), `primvar.indices` (an indexed
  *   primvar without readable indices), `primvar.index` (an index past the
  *   values).
+ * - `bounds.*`: a bound that cannot be computed: `bounds.extent` (a
+ *   boundable without a valid extent nor geometry to compute one from),
+ *   `bounds.extent_provider`, `bounds.instancer` (invalid instance data),
+ *   `bounds.instancer_cycle`, `bounds.singular`.
  *
  * Composition errors are not thrown; {@link Stage.status} lists them as
  * {@link Issue}s with `composition.*` codes
@@ -166,6 +170,7 @@ export type ErrorCode =
   | `metadata.${string}`
   | `skel.${string}`
   | `primvar.${string}`
+  | `bounds.${string}`
   | `io.${string}`;
 
 /**

@@ -1300,6 +1300,26 @@ export interface TransformCacheStats {
   readonly resets: number;
 }
 
+/**
+ * What a stage's bounds caches have done and hold
+ * ({@link Stage.boundsCache}). Counters are cumulative since the stage
+ * opened.
+ */
+export interface BoundsCacheStats {
+  /** Prim bounds computed. */
+  readonly computed: number;
+  /** Prim bounds reused. */
+  readonly hits: number;
+  /** Prim bounds edits evicted. */
+  readonly invalidated: number;
+  /** Prim bounds held now. */
+  readonly prims: number;
+  /** Caches held: one per set of {@link BoundsOptions}, at most four. */
+  readonly caches: number;
+  /** Times the stage's change history expired before a read, so the caches started over. */
+  readonly resets: number;
+}
+
 /** Why an op of `xformOpOrder` did not contribute as written; OpenUSD evaluates it as the identity (a huge scale for `singular`). */
 export interface XformProblem {
   /** The `xformOpOrder` entry. */
@@ -1341,4 +1361,40 @@ export interface PurposeInfo {
   readonly inheritable: boolean;
   /** The prim whose authored `purpose` it is; `null` for a fallback. */
   readonly authoredOn: string | null;
+}
+
+/**
+ * The options of a bounds query: the cache it reads
+ * (`UsdGeomBBoxCache(time, includedPurposes, useExtentsHint, ignoreVisibility)`).
+ * The stage keeps a cache for each combination it is asked for, at most
+ * four, each hearing the stage's edits.
+ */
+export interface BoundsOptions {
+  /** The time code; the default time without one. */
+  readonly time?: number;
+  /** The purposes whose geometry counts; `["default"]` without them. */
+  readonly purposes?: readonly string[];
+  /** Whether models' authored `extentsHint` stands for their subtrees. */
+  readonly useExtentsHint?: boolean;
+  /** Whether invisible prims count too. A queried prim always counts. */
+  readonly ignoreVisibility?: boolean;
+}
+
+/**
+ * Oriented bounding boxes, one per queried prim, in order: each is a range
+ * transformed by a matrix, as OpenUSD's `GfBBox3d`.
+ *
+ * An empty box (no geometry of the included purposes) has a range whose
+ * minimum is above its maximum (`Number.MAX_VALUE` and `-Number.MAX_VALUE`),
+ * as `GfRange3d()` is.
+ */
+export interface BoundingBoxes {
+  /** The number of boxes. */
+  readonly count: number;
+  /** Each box's range before its matrix: 6 numbers, `[minX, minY, minZ, maxX, maxY, maxZ]`. */
+  readonly ranges: Float64Array;
+  /** Each box's matrix: 16 numbers, row by row (`GfBBox3d::GetMatrix`). */
+  readonly matrices: Float64Array;
+  /** Each box's axis-aligned range after its matrix, 6 numbers as in `ranges` (`GfBBox3d::ComputeAlignedRange`): what to frame a camera on. */
+  readonly alignedRanges: Float64Array;
 }

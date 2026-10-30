@@ -23,12 +23,16 @@ import { SkinningQuery } from "./skinning.js";
 import {
   Primvar,
   Xformable,
+  decodeBounds,
   decodeLocalTransform,
   decodePurpose,
 } from "./geometry.js";
 import type {
   ArcKind,
   ArrayData,
+  BoundingBoxes,
+  BoundsCacheStats,
+  BoundsOptions,
   LocalTransform,
   PurposeInfo,
   TransformCacheStats,
@@ -149,6 +153,7 @@ export interface NativeStage extends Disposable {
   deformedNormals(path: string, time?: number | null): unknown;
   skinningCache(): unknown;
   transformCache(): unknown;
+  boundsCache(): unknown;
   localTransform(path: string, time?: number | null): unknown;
   worldTransforms(paths: string[], time: number | null | undefined, parent: boolean): Float64Array;
   xformable(path: string): unknown;
@@ -158,6 +163,21 @@ export interface NativeStage extends Disposable {
   primvar(path: string, name: string, inherited: boolean): unknown;
   primvarValue(path: string, name: string, time: number | null | undefined, flattened: boolean): unknown;
   primvarIndices(path: string, name: string, time?: number | null): unknown;
+  bounds(
+    paths: string[],
+    time: number | null | undefined,
+    purposes: string[],
+    hints: boolean,
+    ignoreVisibility: boolean,
+    space: string,
+  ): unknown;
+  extentsHint(
+    path: string,
+    time: number | null | undefined,
+    purposes: string[],
+    hints: boolean,
+    ignoreVisibility: boolean,
+  ): Float64Array;
 }
 
 /**
@@ -1114,6 +1134,21 @@ export class Stage implements Disposable {
     };
   }
 
+  /** What the stage's bounds caches have done and hold: the caches behind {@link Stage.worldBounds} and its siblings, which hear the stage's edits as {@link Stage.transformCache} does. */
+  boundsCache(): BoundsCacheStats {
+    const [computed, hits, invalidated, prims, caches, resets] = this.#call("boundsCache", (native) =>
+      native.boundsCache(),
+    ) as number[];
+    return {
+      computed: computed as number,
+      hits: hits as number,
+      invalidated: invalidated as number,
+      prims: prims as number,
+      caches: caches as number,
+      resets: resets as number,
+    };
+  }
+
   /**
    * The local-to-world transform of each prim of `paths` at `time`, in
    * order: 16 numbers per prim in one `Float64Array`, prim `i` at
@@ -1221,6 +1256,77 @@ export class Stage implements Disposable {
   primvar(path: string, name: string, options: { readonly inherited?: boolean } = {}): Primvar | null {
     const row = this.#call("primvar", (native) => native.primvar(path, name, options.inherited ?? false)) as Row | null;
     return row === null ? null : new Primvar(this, row);
+  }
+
+  /**
+   * The bound of each prim of `paths` in world space at `time`, for the
+   * included purposes: its geometry's and its descendants', each oriented
+   * box as a range and a matrix ({@link BoundingBoxes})
+   * (`UsdGeomBBoxCache::ComputeWorldBound`). `alignedRanges` frames a
+   * camera.
+   *
+   * The stage keeps a bounds cache for each set of options that hears its
+   * edits, as the transform cache does: a model's authored `extentsHint`
+   * stands for its subtree with `useExtentsHint`, a boundable's authored
+   * `extent` for its own geometry, and geometry without one is bounded from
+   * its points or shape.
+   *
+   * Throws `prim.not_found` naming the first path no prim is at, a
+   * `bounds.*` code for geometry whose bound cannot be computed
+   * (`bounds.extent`, `bounds.instancer`).
+   */
+  worldBounds(paths: readonly string[], options: BoundsOptions = {}): BoundingBoxes {
+    return this.#bounds("worldBounds", paths, options, "world");
+  }
+
+  /** The bound of each prim of `paths` in its parent's space: {@link Stage.worldBounds} with only the prim's own local transform applied (`UsdGeomBBoxCache::ComputeLocalBound`). */
+  localBounds(paths: readonly string[], options: BoundsOptions = {}): BoundingBoxes {
+    return this.#bounds("localBounds", paths, options, "local");
+  }
+
+  /**
+   * The bound of each prim of `paths` in its own space: its extent and its
+   * descendants' bounds in it, without its own transform
+   * (`UsdGeomBBoxCache::ComputeUntransformedBound`). A boundable's is its
+   * extent; the aligned range is the extent of the subtree.
+   */
+  untransformedBounds(paths: readonly string[], options: BoundsOptions = {}): BoundingBoxes {
+    return this.#bounds("untransformedBounds", paths, options, "untransformed");
+  }
+
+  /**
+   * The `extentsHint` OpenUSD computes for the model at `path`: one extent
+   * per purpose in default, render, proxy, guide order, 6 numbers each
+   * (`[minX, minY, minZ, maxX, maxY, maxZ]`), trailing empty ones dropped
+   * but one kept (`UsdGeomModelAPI::ComputeExtentsHint`). A boundable
+   * repeats its computed extent for every purpose.
+   *
+   * Throws as {@link Stage.worldBounds}.
+   */
+  extentsHint(path: string, options: BoundsOptions = {}): Float64Array {
+    return this.#call("extentsHint", (native) =>
+      native.extentsHint(
+        path,
+        options.time,
+        [...(options.purposes ?? [])],
+        options.useExtentsHint ?? false,
+        options.ignoreVisibility ?? false,
+      ),
+    );
+  }
+
+  #bounds(operation: string, paths: readonly string[], options: BoundsOptions, space: string): BoundingBoxes {
+    const row = this.#call(operation, (native) =>
+      native.bounds(
+        [...paths],
+        options.time,
+        [...(options.purposes ?? [])],
+        options.useExtentsHint ?? false,
+        options.ignoreVisibility ?? false,
+        space,
+      ),
+    ) as Row;
+    return decodeBounds(row);
   }
 
   /** The composed prim at `path`, or `null`. Throws `path.invalid` for a path that is not an absolute prim path. */

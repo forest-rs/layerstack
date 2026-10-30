@@ -28,8 +28,9 @@ Initial release.
   `skinPoints`, `skinNormals` and `skinTransform` over the caller's arrays.
 - Geometry for renderers: local, world and parent-to-world transforms
   (batched, from a retained transform cache that hears the stage's edits),
-  transform ops, computed visibility and purpose, and primvars with
-  inheritance, their indices and flattened values.
+  transform ops, computed visibility and purpose, primvars with inheritance,
+  their indices and flattened values, world, local and untransformed bounds
+  and extents hints from retained bounds caches.
 - Atomic edits with undo and change records, saves of dirty layers, and
   exports of a layer, the flattened stage or a USDZ package.
 - An `rlib` for crates that link the bindings into a module of their own.

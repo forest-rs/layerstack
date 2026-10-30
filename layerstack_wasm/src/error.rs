@@ -88,6 +88,9 @@ use crate::wire::Wire;
 /// - `primvar.*`: `primvar.not_found` (the prim declares no such
 ///   primvar), and the cases of `layerstack_schemas::primvar::PrimvarError`
 ///   a read meets: `primvar.indices`, `primvar.index`, `primvar.invalid`.
+/// - `bounds.*`: the cases of `layerstack_schemas::bounds::BoundsError`:
+///   `bounds.extent`, `bounds.extent_provider`, `bounds.instancer`,
+///   `bounds.instancer_cycle`, `bounds.singular`.
 /// - `flatten.failed`, `package.failed`: the stage has no root layer to
 ///   flatten or package.
 /// - `receipt.affinity`: a receipt of another stage was passed in.

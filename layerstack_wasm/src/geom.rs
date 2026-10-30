@@ -2,14 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 //! The geometry a renderer reads from TypeScript: transforms, visibility
-//! and purpose, and primvars.
+//! and purpose, primvars and bounds.
 //!
 //! A stage keeps one [`GeomState`] with its own change cursor: before each
-//! transform read it hears the stage's changes since the last one and
-//! passes them to its retained [`XformCache`] (`apply_changes`), which
-//! invalidates only what the changes touch, or clears it when the change
-//! history expired. A frame's reads then reuse every transform an edit
-//! did not touch, and recompute time-varying ones at the new time.
+//! transform or bounds read it hears the stage's changes since the last
+//! one and passes them to its retained [`XformCache`] and
+//! [`BoundsCache`]s (`apply_changes`), which invalidate only what the
+//! changes touch, or clears them when the change history expired. A
+//! frame's reads then reuse every transform and bound an edit did not
+//! touch, and recompute time-varying ones at the new time.
 //!
 //! Batched results leave as JS-owned typed arrays (`Float64Array`),
 //! copied once out of the module; matrices
@@ -19,7 +20,8 @@
 //!
 //! Spec: AOUSD Core §6.3 (row-vector matrices), §12.3 (value resolution
 //! at a time). OpenUSD: `UsdGeomXformCache`, `UsdGeomXformable`,
-//! `UsdGeomImageable`, `UsdGeomPrimvarsAPI`, `UsdGeomPrimvar`.
+//! `UsdGeomImageable`, `UsdGeomPrimvarsAPI`, `UsdGeomPrimvar`,
+//! `UsdGeomBBoxCache`, `UsdGeomModelAPI::ComputeExtentsHint`.
 
 use alloc::{
     format,
@@ -31,6 +33,7 @@ use alloc::{
 use layerstack::{ChangeCursor, InMemoryStore, LiveStage, PathId, StageView, Time, TypedArray};
 use layerstack_schemas::{
     PrimView, Scene, Visibility, XformCache, XformCacheStats, XformProblemKind,
+    bounds::{BoundingBox, BoundsCache, BoundsError, BoundsOptions, BoundsStats, Range3d},
     primvar::{Primvar, PrimvarError},
     usd_geom::{Imageable, ImageablePurpose, Xformable},
 };
@@ -44,17 +47,50 @@ use crate::{
     wire::Wire,
 };
 
-/// The geometry state a stage keeps: the retained transform cache, and
-/// the cursor of the changes it has heard.
+/// At most this many bounds caches, one per set of options, are kept: a
+/// renderer uses one or two. Asking for another drops the least recently
+/// used.
+const BOUNDS_CACHES: usize = 4;
+
+/// The options a bounds cache is made with: the included purposes (as
+/// given, sorted and without repeats), whether model `extentsHint`s are
+/// used, and whether visibility is ignored.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct BoundsKey {
+    purposes: Vec<String>,
+    hints: bool,
+    ignore_visibility: bool,
+}
+
+impl BoundsKey {
+    fn options(&self) -> BoundsOptions {
+        BoundsOptions {
+            included_purposes: self
+                .purposes
+                .iter()
+                .map(|purpose| ImageablePurpose::from_token(purpose))
+                .collect(),
+            use_extents_hint: self.hints,
+            ignore_visibility: self.ignore_visibility,
+        }
+    }
+}
+
+/// The geometry state a stage keeps: the retained transform and bounds
+/// caches, and the cursor of the changes they have heard.
 #[derive(Debug)]
 pub(crate) struct GeomState {
     cursor: ChangeCursor,
     transforms: XformCache,
+    /// Bounds caches, least recently used first.
+    bounds: Vec<(BoundsKey, BoundsCache)>,
     /// The transform counters of caches cleared since the stage opened.
     transform_carry: XformCacheStats,
+    /// The bounds counters of caches cleared or dropped since.
+    bounds_carry: BoundsStats,
     /// Change batches heard.
     batches: u64,
-    /// Times the change history expired and the cache was cleared.
+    /// Times the change history expired and the caches were cleared.
     resets: u64,
 }
 
@@ -64,13 +100,15 @@ impl GeomState {
         Self {
             cursor: live.change_cursor(),
             transforms: XformCache::new(Time::Default),
+            bounds: Vec::new(),
             transform_carry: XformCacheStats::default(),
+            bounds_carry: BoundsStats::default(),
             batches: 0,
             resets: 0,
         }
     }
 
-    /// Hears every change the stage made since the last call: the cache
+    /// Hears every change the stage made since the last call: each cache
     /// invalidates what the changes touch, or, when the history expired,
     /// starts over.
     fn hear(&mut self, live: &LiveStage, store: &InMemoryStore) {
@@ -80,12 +118,19 @@ impl GeomState {
                 for changes in batches {
                     self.batches += 1;
                     self.transforms.apply_changes(&scene, changes);
+                    for (_, cache) in &mut self.bounds {
+                        cache.apply_changes(&scene, changes);
+                    }
                 }
             }
             // Evidence expired: start over.
             Err(_) => {
                 add_transform_stats(&mut self.transform_carry, self.transforms.stats());
                 self.transforms.clear();
+                for (_, cache) in &mut self.bounds {
+                    add_bounds_stats(&mut self.bounds_carry, cache.stats());
+                    cache.clear();
+                }
                 self.resets += 1;
             }
         }
@@ -102,6 +147,35 @@ impl GeomState {
         self.transforms.set_time(time);
         &mut self.transforms
     }
+
+    /// The bounds cache of `key`, current with the stage, at `time`.
+    fn bounds_at(
+        &mut self,
+        live: &LiveStage,
+        store: &InMemoryStore,
+        key: BoundsKey,
+        time: Time,
+    ) -> &mut BoundsCache {
+        self.hear(live, store);
+        let at = match self.bounds.iter().position(|(held, _)| *held == key) {
+            Some(at) => at,
+            None => {
+                if self.bounds.len() == BOUNDS_CACHES {
+                    let (_, dropped) = self.bounds.remove(0);
+                    add_bounds_stats(&mut self.bounds_carry, dropped.stats());
+                }
+                let options = key.options();
+                self.bounds.push((key, BoundsCache::new(time, options)));
+                self.bounds.len() - 1
+            }
+        };
+        // Most recently used last.
+        let entry = self.bounds.remove(at);
+        self.bounds.push(entry);
+        let cache = &mut self.bounds.last_mut().expect("just pushed").1;
+        cache.set_time(time);
+        cache
+    }
 }
 
 fn add_transform_stats(total: &mut XformCacheStats, stats: XformCacheStats) {
@@ -110,9 +184,21 @@ fn add_transform_stats(total: &mut XformCacheStats, stats: XformCacheStats) {
     total.hits += stats.hits;
 }
 
+fn add_bounds_stats(total: &mut BoundsStats, stats: BoundsStats) {
+    total.computed += stats.computed;
+    total.hits += stats.hits;
+    total.invalidated += stats.invalidated;
+}
+
 /// A matrix's 16 numbers, row by row.
 fn push_matrix(out: &mut Vec<f64>, matrix: &[[f64; 4]; 4]) {
     out.extend_from_slice(matrix.as_flattened());
+}
+
+/// A range's `[minX, minY, minZ, maxX, maxY, maxZ]`.
+fn push_range(out: &mut Vec<f64>, range: &Range3d) {
+    out.extend_from_slice(&range.min);
+    out.extend_from_slice(&range.max);
 }
 
 fn problem_name(kind: XformProblemKind) -> &'static str {
@@ -131,6 +217,20 @@ fn visibility_name(visibility: Visibility) -> &'static str {
     visibility.as_str()
 }
 
+/// The code of a bounds failure.
+fn bounds_code(error: &BoundsError) -> &'static str {
+    match error {
+        BoundsError::MissingPrim(_) => "prim.not_found",
+        BoundsError::ExtentUnavailable(_) => "bounds.extent",
+        BoundsError::ExtentProvider { .. } => "bounds.extent_provider",
+        BoundsError::InvalidPointInstancer { .. } => "bounds.instancer",
+        BoundsError::PointInstancerCycle(_) => "bounds.instancer_cycle",
+        BoundsError::SingularTransform(_) => "bounds.singular",
+        // A failure this build does not name.
+        _ => "bounds.invalid",
+    }
+}
+
 /// The code of a primvar failure.
 fn primvar_code(error: &PrimvarError) -> &'static str {
     match error {
@@ -140,6 +240,22 @@ fn primvar_code(error: &PrimvarError) -> &'static str {
         PrimvarError::MissingPrim(_) => "prim.not_found",
         // A failure this build does not name.
         _ => "primvar.invalid",
+    }
+}
+
+/// The purposes of a bounds query: `default` alone when none are given.
+fn bounds_key(purposes: &[String], hints: bool, ignore_visibility: bool) -> BoundsKey {
+    let mut purposes: Vec<String> = if purposes.is_empty() {
+        vec![String::from("default")]
+    } else {
+        purposes.to_vec()
+    };
+    purposes.sort_unstable();
+    purposes.dedup();
+    BoundsKey {
+        purposes,
+        hints,
+        ignore_visibility,
     }
 }
 
@@ -196,6 +312,32 @@ impl Stage {
             size(stats.hits),
             size(state.transforms.len()),
             count(state.batches),
+            count(state.resets),
+        ])
+    }
+
+    /// What the stage's bounds caches have done and hold: `[computed,
+    /// hits, invalidated, prims, caches, resets]`: prim bounds computed,
+    /// reused, and evicted by edits (cumulative since the stage opened),
+    /// the prim bounds held, the caches held (one per set of options, at
+    /// most four), and the times the change history expired.
+    pub(crate) fn bounds_cache(&self) -> Wire {
+        let state = self.geom_state();
+        let mut stats = state.bounds_carry;
+        let mut prims = 0;
+        for (_, cache) in &state.bounds {
+            add_bounds_stats(&mut stats, cache.stats());
+            prims += cache.len();
+        }
+        let size = |value: usize| Wire::Number(value as f64);
+        #[expect(clippy::cast_precision_loss, reason = "counters stay far below 2^53")]
+        let count = |value: u64| Wire::Number(value as f64);
+        Wire::List(vec![
+            size(stats.computed),
+            size(stats.hits),
+            size(stats.invalidated),
+            size(prims),
+            size(state.bounds.len()),
             count(state.resets),
         ])
     }
@@ -531,6 +673,108 @@ impl Stage {
             .and_then(|indices| ArrayHandle::new(Some("int[]"), &TypedArray::Int(indices)))
             .map_or(Wire::Null, Wire::Array))
     }
+
+    /// The bound of each prim of `paths` at `time` in `space` (`world`,
+    /// `local` or `untransformed`), for the included `purposes` (`default`
+    /// alone when empty), using models' `extentsHint` with `hints`, and
+    /// with `ignore_visibility` counting invisible prims: `[ranges,
+    /// matrices, aligned]`, each box's range before its matrix (6 numbers,
+    /// minimum then maximum corner), its matrix (16, row by row) and the
+    /// axis-aligned range of the transformed box (6). An empty box's range
+    /// has its minimum above its maximum (`f64::MAX` and `-f64::MAX`). The
+    /// stage keeps a bounds cache for each set of options that hears its
+    /// edits.
+    ///
+    /// OpenUSD: `UsdGeomBBoxCache::ComputeWorldBound`, `ComputeLocalBound`,
+    /// `ComputeUntransformedBound`, `GfBBox3d::ComputeAlignedRange`.
+    ///
+    /// # Errors
+    ///
+    /// `path.invalid`, `prim.not_found`; `argument.invalid` for another
+    /// space; a `bounds.*` code for geometry whose bound cannot be computed
+    /// (`bounds.extent` for a boundable without a valid extent nor geometry
+    /// to compute one from, `bounds.instancer` for invalid instance data).
+    pub(crate) fn bounds(
+        &mut self,
+        paths: &[String],
+        time: Option<f64>,
+        purposes: &[String],
+        hints: bool,
+        ignore_visibility: bool,
+        space: &str,
+    ) -> Result<Wire, Error> {
+        let prims = self.prim_ids(paths)?;
+        if !matches!(space, "world" | "local" | "untransformed") {
+            return Err(Error::new(
+                "argument.invalid",
+                format!("`{space}` is not a bounds space: world, local or untransformed"),
+            ));
+        }
+        let (document, geom) = self.document_and_geom();
+        let store = document.store();
+        let live = document.stage();
+        let key = bounds_key(purposes, hints, ignore_visibility);
+        let cache = geom.bounds_at(live, store, key, time_of(time));
+        let scene = Scene::new(live.stage(), store);
+        let mut ranges = Vec::with_capacity(6 * prims.len());
+        let mut matrices = Vec::with_capacity(16 * prims.len());
+        let mut aligned = Vec::with_capacity(6 * prims.len());
+        for (prim, path) in prims.into_iter().zip(paths) {
+            let bound: Result<BoundingBox, BoundsError> = match space {
+                "world" => cache.world_bound(&scene, prim),
+                "local" => cache.local_bound(&scene, prim),
+                _ => cache.untransformed_bound(&scene, prim),
+            };
+            let bound = bound.map_err(|error| {
+                Error::new(bounds_code(&error), error.display(store).to_string()).at_path(path)
+            })?;
+            push_range(&mut ranges, &bound.range);
+            push_matrix(&mut matrices, &bound.matrix);
+            push_range(&mut aligned, &bound.aligned_range());
+        }
+        Ok(Wire::List(vec![
+            Wire::Floats(ranges),
+            Wire::Floats(matrices),
+            Wire::Floats(aligned),
+        ]))
+    }
+
+    /// The `extentsHint` OpenUSD computes for the prim at `path` at
+    /// `time` with a bounds cache of these options (as in
+    /// [`Self::bounds`]): one extent per purpose, in default, render,
+    /// proxy, guide order, 6 numbers each, trailing empty ones dropped but
+    /// one kept.
+    ///
+    /// OpenUSD: `UsdGeomModelAPI::ComputeExtentsHint`.
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::bounds`].
+    pub(crate) fn extents_hint(
+        &mut self,
+        path: &str,
+        time: Option<f64>,
+        purposes: &[String],
+        hints: bool,
+        ignore_visibility: bool,
+    ) -> Result<Vec<f64>, Error> {
+        let prim = self.existing_prim(path)?.path();
+        let (document, geom) = self.document_and_geom();
+        let store = document.store();
+        let live = document.stage();
+        let key = bounds_key(purposes, hints, ignore_visibility);
+        let cache = geom.bounds_at(live, store, key, time_of(time));
+        let scene = Scene::new(live.stage(), store);
+        let hint = cache.compute_extents_hint(&scene, prim).map_err(|error| {
+            Error::new(bounds_code(&error), error.display(store).to_string()).at_path(path)
+        })?;
+        Ok(hint
+            .as_flattened()
+            .as_flattened()
+            .iter()
+            .map(|&value| f64::from(value))
+            .collect())
+    }
 }
 
 #[cfg(test)]
@@ -710,6 +954,74 @@ def "Loose" {
                 .unwrap_err()
                 .code,
             "primvar.not_found"
+        );
+    }
+
+    #[test]
+    fn bounds_are_batched_and_hear_edits() {
+        let mut stage = open(SCENE);
+        // A queried root counts even when invisible, as in OpenUSD; its
+        // invisible descendants do not, so the lamp's parent is empty.
+        let paths = vec![
+            String::from("/Robot"),
+            String::from("/Lamp"),
+            String::from("/Loose"),
+        ];
+        let bounds = stage
+            .bounds(&paths, Some(0.0), &[], false, false, "world")
+            .unwrap();
+        let max = f64::MAX;
+        assert_eq!(
+            show(&bounds),
+            format!(
+                "[[-1, -1, -1, 1, 1, 1, -2, -2, -2, 2, 2, 2, {max}, {max}, {max}, -{max}, -{max}, \
+                 -{max}], [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 2, 3, 1, 1, 0, 0, 0, 0, 1, 0, \
+                 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1], [0, \
+                 1, 2, 2, 3, 4, -2, -2, -2, 2, 2, 2, {max}, {max}, {max}, -{max}, -{max}, -{max}]]"
+            )
+        );
+        let guides = stage
+            .bounds(
+                &paths[..1],
+                Some(0.0),
+                &[String::from("default"), String::from("guide")],
+                false,
+                false,
+                "untransformed",
+            )
+            .unwrap();
+        assert!(
+            show(&guides).starts_with("[[-5, -5, -5, 5, 5, 5]"),
+            "{}",
+            show(&guides)
+        );
+        let hint = stage
+            .extents_hint("/Robot", Some(0.0), &[], false, false)
+            .unwrap();
+        assert_eq!(&hint[..6], &[-1.0, -1.0, -1.0, 1.0, 1.0, 1.0]);
+
+        let mut batch = EditBatch::new();
+        let grown = batch.value_numbers("float3[]".into(), vec![-2.0, -2.0, -2.0, 2.0, 2.0, 2.0]);
+        batch.set_value("/Robot/Arm/Hand.extent".into(), None, grown);
+        stage
+            .apply(stage.document().root_layer().0, &mut batch)
+            .unwrap();
+        let bounds = stage
+            .bounds(&paths[..1], Some(0.0), &[], false, false, "untransformed")
+            .unwrap();
+        assert!(
+            show(&bounds).starts_with("[[-2, -2, -2, 2, 2, 2]"),
+            "{}",
+            show(&bounds)
+        );
+        let stats = show(&stage.bounds_cache());
+        assert!(stats.ends_with(", 2, 0]"), "two caches, no reset: {stats}");
+        assert_eq!(
+            stage
+                .bounds(&paths, None, &[], false, false, "sideways")
+                .unwrap_err()
+                .code,
+            "argument.invalid"
         );
     }
 }

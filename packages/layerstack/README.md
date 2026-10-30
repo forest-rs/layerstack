@@ -265,11 +265,11 @@ await stage.resolve(source);
   in (sources) and out (array copies, saved and exported bytes), the views
   built and the bytes they exposed without a copy, and the module's memory.
 
-## Transforms, visibility and primvars
+## Transforms, visibility, primvars and bounds
 
-What a renderer reads to place and show geometry, as OpenUSD's
-`UsdGeomXformCache`, `UsdGeomImageable` and `UsdGeomPrimvarsAPI` compute it
-(through `layerstack_schemas`). Batched reads
+What a renderer reads to place, show and frame geometry, as OpenUSD's
+`UsdGeomXformCache`, `UsdGeomImageable`, `UsdGeomPrimvarsAPI` and
+`UsdGeomBBoxCache` compute it (through `layerstack_schemas`). Batched reads
 take many paths and return one JS-owned typed array.
 
 | Read | Returns |
@@ -280,7 +280,9 @@ take many paths and return one JS-owned typed array.
 | `stage.visibilities(paths, { time?, purpose? })`, `prim.visibility(...)` | `inherited` or `invisible` (`ComputeVisibility`), or with a purpose `visible` among them (`ComputeEffectiveVisibility`); `null` for a prim that is not `Imageable` |
 | `stage.purposeInfos(paths)`, `prim.purposeInfo()` | `PurposeInfo \| null`: `purpose`, `inheritable`, `authoredOn` |
 | `stage.primvars(path, { inherited? })`, `stage.primvar(path, name, { inherited? })`, `prim.primvars(...)`, `prim.primvar(...)` | `Primvar`: `prim`, `name`, `typeName`, `interpolation`, `elementSize`, `indexed`, `idTarget`, `mightBeTimeVarying`; `get(time?)`, `flattened(time?)` (through its indices), `indices(time?)` |
-| `stage.transformCache()` | `TransformCacheStats`: what the retained transform cache computed, reused, heard and holds |
+| `stage.worldBounds(paths, options)`, `localBounds`, `untransformedBounds` | `BoundingBoxes`: `ranges` (6 per prim), `matrices` (16), `alignedRanges` (6), with `options` `{ time?, purposes?, useExtentsHint?, ignoreVisibility? }` |
+| `stage.extentsHint(path, options)` | `Float64Array`: the `extentsHint` OpenUSD computes, 6 numbers per purpose |
+| `stage.transformCache()`, `stage.boundsCache()` | `TransformCacheStats`, `BoundsCacheStats`: what the retained caches computed, reused, invalidated and hold |
 
 **A renderer drawing a frame.** At load it lists the prims to draw, and
 for each its `primvars({ inherited: true })` (a `displayColor` from an
@@ -288,11 +290,13 @@ ancestor included) and bound material. Each frame it makes one
 `stage.worldTransforms(paths, { time })` call and uploads the
 `Float64Array` slices as model matrices, one `stage.visibilities(paths,
 { time })` and `purposeInfos(paths)` to skip what is hidden or of another
-purpose. The stage keeps one native transform cache, which hears the
-stage's edits before each read and invalidates only what they touch: a
-frame after an edit recomputes the edited prim's transform and its
-descendants' world transforms, and nothing else. `stage.transformCache()`
-reports what each frame computed and reused.
+purpose, and frames the camera on `stage.worldBounds([root]).alignedRanges`.
+The stage keeps one native transform cache and a bounds cache
+per set of bounds options (at most four), which hear the stage's edits
+before each read and invalidate only what they touch: a frame after an
+edit recomputes the edited prim's transform and its descendants' world
+transforms, and nothing else. `stage.transformCache()` and
+`stage.boundsCache()` report what each frame computed and reused.
 
 ## Materials, subsets, coordinate systems and skinning
 
@@ -425,6 +429,7 @@ exist, `subset.indices` for a face past the mesh, `coord_sys.no_binding`,
 | `metadata.*` | `metadata.key_path` (an `sdrMetadata` key with an empty part), `metadata.field`. |
 | `skel.*` | A skinning read or computation that cannot be made: `skel.unbound` (nothing skins the prim), `skel.influences` (not as many weights as joint indices, or not whole blocks), `skel.deformation` (influences that do not fit the points or name a joint past the palette), `skel.input`, `skel.array_length`, `skel.target`, `skel.topology`, `skel.primvar`, `skel.method`, `skel.singular`. |
 | `primvar.*` | `primvar.not_found` (the prim declares no such primvar), `primvar.indices` (an indexed primvar without readable indices), `primvar.index` (an index past the values). |
+| `bounds.*` | A bound that cannot be computed: `bounds.extent` (a boundable without a valid extent nor geometry to compute one from), `bounds.extent_provider`, `bounds.instancer`, `bounds.instancer_cycle`, `bounds.singular`. |
 | `io.*` | A read or import failed: `io.rejected` (does not parse), `io.not_found`, `io.unavailable`, ... |
 | `composition.*` | In `status().compositionErrors`: `composition.unresolved_asset`, `composition.arc_cycle`, ... |
 

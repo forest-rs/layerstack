@@ -190,8 +190,14 @@ fn mesh_checks_use_exact_requested_times_and_subtree_scope() {
             )]),
     );
     layer.insert_prim(m, good);
+    // Faces without points: their indices name points that are not there.
+    let mut pointless = mesh(&mut store);
+    pointless.remove_property(store.tokens().intern("points"));
+    layer.insert_prim(outside, pointless);
+    // No topology at all reads as empty arrays, which OpenUSD's
+    // `ValidateTopology` accepts.
     layer.insert_prim(
-        outside,
+        store.path("/Empty"),
         PrimSpec::def().with_type_name(store.tokens().intern("Mesh")),
     );
     store.insert_layer(layer);
@@ -217,14 +223,17 @@ fn mesh_checks_use_exact_requested_times_and_subtree_scope() {
         ))
     ));
     assert_eq!(report.work.mesh_time_evaluations, 1);
-    assert_eq!(
-        context
-            .validate(&scene, ValidationScope::Stage, &[Time::Default])
-            .unwrap()
-            .problems
-            .len(),
-        1
-    );
+    let stage_report = context
+        .validate(&scene, ValidationScope::Stage, &[Time::Default])
+        .unwrap();
+    assert_eq!(stage_report.problems.len(), 1);
+    assert_eq!(stage_report.problems[0].site.prim, Some(outside));
+    assert!(matches!(
+        stage_report.problems[0].kind,
+        ValidationProblemKind::MeshTopology(crate::subset::MeshTopologyError::InvalidVertexIndex(
+            0
+        ))
+    ));
 }
 #[cfg(feature = "usd-geom")]
 #[test]

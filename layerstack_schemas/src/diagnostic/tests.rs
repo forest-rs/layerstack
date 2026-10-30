@@ -39,11 +39,6 @@ fn errors_name_paths_and_tokens_with_the_store() {
     }
     for (error, text) in [
         (
-            MeshTopologyError::MissingAttribute,
-            "invalid mesh topology: `points`, `faceVertexCounts` or `faceVertexIndices` is \
-             absent or has another value type",
-        ),
-        (
             MeshTopologyError::InvalidFaceCounts,
             "invalid mesh topology: a `faceVertexCounts` entry is negative or the counts \
              overflow their total",

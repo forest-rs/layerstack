@@ -15,10 +15,13 @@ Two parts:
   default time and at times 1 and 2, the values of `faceVertexCounts`,
   `faceVertexIndices`, `holeIndices`, `orientation` and
   `subdivisionScheme` (`Get`, fallbacks included), the number of `points`,
-  and `ValidateTopology` on them.
+  and `ValidateTopology` on them. Some meshes leave `points`,
+  `faceVertexCounts` or `faceVertexIndices` unauthored, or all three:
+  `Get` then leaves the array empty, and `ValidateTopology` sees it so.
 
 `tests/conformance/mesh_topology.rs` replays both through
-`validate_mesh_topology` and `Mesh::topology` and compares everything.
+`validate_mesh_topology`, `Mesh::topology` and `Mesh::validate_topology`
+and compares everything.
 """
 import argparse
 import json

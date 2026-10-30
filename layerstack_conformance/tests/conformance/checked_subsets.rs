@@ -226,6 +226,9 @@ fn mesh_validation_distinguishes_every_failed_array_from_missing_topology() {
     }
 }
 
+/// A mesh with no topology is a subset family problem, but its topology
+/// itself is valid: OpenUSD's `Get` leaves each unauthored array empty,
+/// which `UsdGeomMesh::ValidateTopology` accepts.
 #[test]
 fn checked_validation_retains_ordinary_missing_topology_as_a_problem() {
     let (store, live) = support::scene("#usda 1.0\ndef Mesh \"M\" {}");
@@ -246,8 +249,8 @@ fn checked_validation_retains_ordinary_missing_topology_as_a_problem() {
         Mesh::get(&scene, path)
             .unwrap()
             .validate_topology(Time::Default),
-        Err(MeshTopologyError::MissingAttribute),
-        "ordinary missing mesh storage remains distinguishable"
+        Ok(()),
+        "unauthored mesh topology reads as empty, as OpenUSD reads it"
     );
 }
 
@@ -334,8 +337,9 @@ fn topology_reads_skip_incompatible_defaults_but_keep_numeric_source_selection()
         }
         assert_eq!(
             mesh.validate_topology(Time::held(1.)),
-            Err(MeshTopologyError::MissingAttribute),
-            "numeric source selection does not retry a weaker default"
+            Err(MeshTopologyError::SizeMismatch),
+            "numeric source selection does not retry a weaker default: the \
+             incompatible counts read as empty, as OpenUSD's typed `Get` leaves them"
         );
         assert_eq!(
             geometry.unassigned_subset_indices(&Element::Face, "faces", Time::held(1.)),

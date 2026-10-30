@@ -59,3 +59,30 @@ def Mesh "Animated"
         2: [(0, 0, 0), (1, 0, 0), (0, 1, 0), (1, 1, 0)],
     }
 }
+
+def Mesh "Empty"
+{
+}
+
+def Mesh "PointsOnly"
+{
+    point3f[] points = [(0, 0, 0), (1, 0, 0), (0, 1, 0)]
+}
+
+def Mesh "NoPoints"
+{
+    int[] faceVertexCounts = [3]
+    int[] faceVertexIndices = [0, 1, 2]
+}
+
+def Mesh "NoCounts"
+{
+    int[] faceVertexIndices = [0, 1, 2]
+    point3f[] points = [(0, 0, 0), (1, 0, 0), (0, 1, 0)]
+}
+
+def Mesh "NoIndices"
+{
+    int[] faceVertexCounts = [3]
+    point3f[] points = [(0, 0, 0), (1, 0, 0), (0, 1, 0)]
+}

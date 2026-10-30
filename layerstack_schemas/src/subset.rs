@@ -1024,8 +1024,6 @@ impl<'a> Imageable<'a> {
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum MeshTopologyError {
-    /// Required points, face counts or face indices are absent or incompatible.
-    MissingAttribute,
     /// Face counts contain a negative value or overflow their total.
     InvalidFaceCounts,
     /// The face-count sum differs from the number of face indices.
@@ -1053,10 +1051,6 @@ impl Describe for MeshTopologyError {
     fn describe(&self, f: &mut core::fmt::Formatter<'_>, names: Names<'_>) -> core::fmt::Result {
         f.write_str("invalid mesh topology: ")?;
         match self {
-            Self::MissingAttribute => f.write_str(
-                "`points`, `faceVertexCounts` or `faceVertexIndices` is absent or has another \
-                 value type",
-            ),
             Self::InvalidFaceCounts => f.write_str(
                 "a `faceVertexCounts` entry is negative or the counts overflow their total",
             ),
@@ -1110,40 +1104,46 @@ pub fn validate_mesh_topology(
     Ok(())
 }
 impl Mesh<'_> {
-    /// Validates this mesh's topology at `time`, including point-index bounds.
-    /// Returns an error for missing required arrays or inconsistent topology.
-    /// Deferred decode failures retain their original error and attribute path;
-    /// they are distinct from `MissingAttribute`.
+    /// Validates this mesh's topology at `time`, including point-index
+    /// bounds, as OpenUSD validates the arrays `Get` reads: an absent
+    /// `points`, `faceVertexCounts` or `faceVertexIndices`, or one with
+    /// another value type, reads as empty, so a mesh with none of them is
+    /// valid, and one with faces but no points names points that are not
+    /// there ([`MeshTopologyError::InvalidVertexIndex`]). An array that
+    /// fails to decode is [`MeshTopologyError::Decode`], with its original
+    /// error and attribute path. A negative face count is refused
+    /// ([`validate_mesh_topology`]).
+    ///
+    /// This is [`Mesh::topology`]'s `validation`, without reading
+    /// `holeIndices`.
+    ///
+    /// OpenUSD: `UsdGeomMesh::ValidateTopology` on the values of
+    /// `GetPointsAttr`, `GetFaceVertexCountsAttr` and
+    /// `GetFaceVertexIndicesAttr` (`pxr/usd/usdGeom/mesh.cpp`).
     #[doc(alias = "UsdGeomMesh::ValidateTopology")]
     #[doc(alias = "ValidateTopology")]
     pub fn validate_topology(&self, time: Time) -> Result<(), MeshTopologyError> {
-        let decode_error = |name: &str, error| MeshTopologyError::Decode {
-            property: self
-                .property_path(name)
-                .expect("failed attribute is interned"),
-            error,
-        };
-        let points = self
-            .try_read_value("points", time, crate::value::read_float3_array_shared)
-            .map_err(|error| decode_error("points", error))?
-            .ok_or(MeshTopologyError::MissingAttribute)?;
-        let counts = self
-            .try_read_value(
-                "faceVertexCounts",
-                time,
-                crate::value::read_int_array_shared,
-            )
-            .map_err(|error| decode_error("faceVertexCounts", error))?
-            .ok_or(MeshTopologyError::MissingAttribute)?;
-        let indices = self
-            .try_read_value(
-                "faceVertexIndices",
-                time,
-                crate::value::read_int_array_shared,
-            )
-            .map_err(|error| decode_error("faceVertexIndices", error))?
-            .ok_or(MeshTopologyError::MissingAttribute)?;
-        validate_mesh_topology(&indices, &counts, points.len())
+        // The first attribute that fails to decode.
+        let mut problem = None;
+        let points = self.kept(
+            &mut problem,
+            "points",
+            self.try_read_value("points", time, crate::value::read_float3_array_shared),
+        );
+        let counts = self.kept(
+            &mut problem,
+            "faceVertexCounts",
+            self.try_face_vertex_counts(time),
+        );
+        let indices = self.kept(
+            &mut problem,
+            "faceVertexIndices",
+            self.try_face_vertex_indices(time),
+        );
+        match problem {
+            Some(problem) => Err(problem),
+            None => validate_mesh_topology(&indices, &counts, points.len()),
+        }
     }
 }
 
@@ -1154,9 +1154,9 @@ impl Mesh<'_> {
 /// attribute reads as an empty array, as OpenUSD's `Get` leaves it, so a
 /// mesh without faces is valid and draws nothing; an attribute that fails
 /// to decode also reads as empty, and `validation` is then
-/// [`MeshTopologyError::Decode`]. (The `MeshTopology` validation rule,
-/// [`Mesh::validate_topology`], is stricter: it also requires `points`,
-/// `faceVertexCounts` and `faceVertexIndices` to be authored.)
+/// [`MeshTopologyError::Decode`]. Its `validation` is
+/// [`Mesh::validate_topology`]'s, which the `MeshTopology` validation rule
+/// reports.
 /// `orientation` and `subdivision_scheme` are their schema fallbacks
 /// (`rightHanded`, `catmullClark`) when unauthored.
 ///

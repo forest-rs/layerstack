@@ -771,13 +771,12 @@ impl Stage {
 
 /// The code of a topology problem in a `meshTopology` record:
 /// `faceCounts` (a negative count, or counts that overflow),
-/// `sizeMismatch`, `vertexIndex`, `missing` or `decode`.
+/// `sizeMismatch`, `vertexIndex` or `decode`.
 fn topology_problem_code(error: &MeshTopologyError) -> &'static str {
     match error {
         MeshTopologyError::InvalidFaceCounts => "faceCounts",
         MeshTopologyError::SizeMismatch => "sizeMismatch",
         MeshTopologyError::InvalidVertexIndex(_) => "vertexIndex",
-        MeshTopologyError::MissingAttribute => "missing",
         _ => "decode",
     }
 }

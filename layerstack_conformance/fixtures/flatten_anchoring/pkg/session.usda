@@ -1,0 +1,13 @@
+#usda 1.0
+
+over "World"
+{
+    def "Packaged" (
+        references = [
+            @./pkg.usdz[sub/inner.usda]@</Inner>,
+            @./pkg.usdz@</Root>
+        ]
+    )
+    {
+    }
+}

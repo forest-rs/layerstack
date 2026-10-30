@@ -164,56 +164,58 @@ fn prepare_with(
     let mut unrepaired_paths = Vec::new();
     let mut remote = Vec::new();
     for id in reached.iter().filter(|id| !stack.contains(id)) {
-        remote.push(*id);
         let original = store.layer(*id).ok_or(NamespaceError::NoSuchObject)?;
         let gone = remote_deletes.get(id).map_or(&[][..], Vec::as_slice);
-        let mut layer = match index {
-            Some(index) => {
-                let arcs = retained::arcs_of(&indexes, original);
-                let mut slots: Vec<PathId> = arcs
-                    .naming(&stack)
-                    .chain(
-                        arcs.unresolved()
-                            .iter()
-                            .copied()
-                            .filter(|path| retained::arcs_into(store, original, *path, &stack)),
-                    )
-                    .collect();
-                for (object, _) in gone {
-                    let prim = object.prim_path();
-                    slots.extend(retained::slots_beneath(
-                        store,
-                        index.children(),
-                        original,
-                        prim,
-                    ));
-                    slots.extend(retained::at_or_above(store, prim).filter(|path| {
-                        original.prims.contains_key(path)
-                            || original.variant_prims.contains_key(path)
-                    }));
+        let mut layer =
+            match index {
+                Some(index) => {
+                    // A property's delete drops no arc, so only its specs.
+                    let mut slots: Vec<PathId> = Vec::new();
+                    if let TargetPath::Prim(_) = object {
+                        let arcs = retained::arcs_of(&indexes, original);
+                        slots.extend(
+                            arcs.naming(&stack)
+                                .chain(arcs.unresolved().iter().copied().filter(|path| {
+                                    retained::arcs_into(store, original, *path, &stack)
+                                })),
+                        );
+                    }
+                    for (object, _) in gone {
+                        let prim = object.prim_path();
+                        slots.extend(retained::slots_beneath(
+                            store,
+                            index.children(),
+                            original,
+                            prim,
+                        ));
+                        slots.extend(retained::at_or_above(store, prim).filter(|path| {
+                            original.prims.contains_key(path)
+                                || original.variant_prims.contains_key(path)
+                        }));
+                    }
+                    sort::sort_unstable(&mut slots);
+                    slots.dedup();
+                    if slots.is_empty() {
+                        continue;
+                    }
+                    let copy = retained::working_copy(original, &slots);
+                    copied.insert(*id, slots);
+                    copy
                 }
-                sort::sort_unstable(&mut slots);
-                slots.dedup();
-                if slots.is_empty() {
+                // A layer authoring no arc into the root layer stack and
+                // holding no spec the delete removes is left as it is.
+                None if gone.is_empty()
+                    && (object.property_path().is_some()
+                        || !original
+                            .prims
+                            .keys()
+                            .chain(original.variant_prims.keys())
+                            .any(|path| retained::arcs_into(store, original, *path, &stack))) =>
+                {
                     continue;
                 }
-                let copy = retained::working_copy(original, &slots);
-                copied.insert(*id, slots);
-                copy
-            }
-            // A layer authoring no arc into the root layer stack and
-            // holding no spec the delete removes is left as it is.
-            None if gone.is_empty()
-                && !original
-                    .prims
-                    .keys()
-                    .chain(original.variant_prims.keys())
-                    .any(|path| retained::arcs_into(store, original, *path, &stack)) =>
-            {
-                continue;
-            }
-            None => original.clone(),
-        };
+                None => original.clone(),
+            };
         let unused = coordinated::dormant_variants(store, &[stage], &indexes, &stack, &layer);
         for (gone, within) in gone {
             remove_specs(store, &mut layer, *gone, within);
@@ -223,6 +225,7 @@ fn prepare_with(
         }
         unrepaired::collect(&*store, &layer, &unused, &by, &mut unrepaired_paths);
         edited.insert(*id, layer);
+        remote.push(*id);
     }
     let still_composed = composes(store, stage, root, &edited, &copied, index, object)?;
     if still_composed {
@@ -262,11 +265,14 @@ fn prepare_with(
     let mut layers = Vec::new();
     let mut specs = Vec::new();
     let mut relocates = Vec::new();
-    // Every layer the delete read is expected at its generation, as a
-    // move expects every layer it inspects.
+    // The root layer stack's layers are expected at their generations,
+    // and each other layer the delete edits.
     for id in stack.iter().chain(&remote).copied() {
         let original = store.layer(id).ok_or(NamespaceError::NoSuchObject)?;
-        transaction.expect_generation(id, original.generation());
+        let local = stack.contains(&id);
+        if local {
+            transaction.expect_generation(id, original.generation());
+        }
         let Some(layer) = edited.get(&id) else {
             continue;
         };
@@ -308,6 +314,9 @@ fn prepare_with(
             );
         }
         if transaction.len() != previous {
+            if !local {
+                transaction.expect_generation(id, original.generation());
+            }
             layers.push(id);
         }
     }
@@ -557,9 +566,9 @@ fn dependents(
     let stack = stage.layer_stack();
     let mut out: Vec<(TargetPath, Vec<VariantSelectionSite>)> = Vec::new();
     let mut chain = Vec::new();
+    let mut holds_stack: HashMap<crate::LayerStackIdentifier, bool> = HashMap::new();
     for prim in prims {
-        let composed = store.paths().resolve(prim).clone();
-        if deleted.is_prefix_of(&composed) {
+        if deleted.is_prefix_of(store.paths().resolve(prim)) {
             continue;
         }
         let Some(graph) = stage.explain_prim_graph(prim) else {
@@ -578,19 +587,7 @@ fn dependents(
             {
                 continue;
             }
-            let nested = !coordinated::authored_in_local_variants(graph, node);
-            let into_stack = if nested {
-                LayerStack::gather_identifier(store, node.layer_stack_identifier())
-                    .layers
-                    .iter()
-                    .any(|id| stack.contains(id))
-            } else {
-                node.layer_stack_identifier() == root.layer_stack_identifier()
-            };
-            if !into_stack {
-                continue;
-            }
-            let site = store.paths().resolve(node.site().prim_path()).clone();
+            let site = store.paths().resolve(node.site().prim_path());
             // The levels of the prim beneath the site the arc was
             // introduced at ([`crate::PrimNode::namespace_depth`]).
             let below = graph
@@ -605,11 +602,29 @@ fn dependents(
                     TargetPath::Property(PropertyPath::new(prim, property.property()))
                 }
                 // An arc authored at the prim itself is dropped instead.
-                TargetPath::Prim(_) if deleted.is_prefix_of(&site) && below > 0 => {
+                TargetPath::Prim(_) if deleted.is_prefix_of(site) && below > 0 => {
                     TargetPath::Prim(prim)
                 }
                 _ => continue,
             };
+            let nested = !coordinated::authored_in_local_variants(graph, node);
+            let into_stack = if nested {
+                // The prims beneath the deleted one share a few layer
+                // stacks among many nodes.
+                *holds_stack
+                    .entry(node.layer_stack_identifier())
+                    .or_insert_with(|| {
+                        LayerStack::gather_identifier(store, node.layer_stack_identifier())
+                            .layers
+                            .iter()
+                            .any(|id| stack.contains(id))
+                    })
+            } else {
+                node.layer_stack_identifier() == root.layer_stack_identifier()
+            };
+            if !into_stack {
+                continue;
+            }
             if nested {
                 let gone = PathMove::new(object, object);
                 coordinated::push_unique(

@@ -743,21 +743,39 @@ pub fn anchor_asset_path(asset_path: &str, layer_location: &str) -> Option<Strin
         let location = PackagePath::parse(layer_location, 32).ok()?;
         let (first, rest) = location.members().split_first()?;
         let member = PackagePath::anchor_member(&asset_path, &PackagePath::join(first, rest))?;
-        return Some(alloc::format!("{}[{member}]", location.outer()));
+        return Some(alloc::format!(
+            "{}[{member}]",
+            host_relative(&location.outer().replace('\\', "/"))
+        ));
     }
     if layer_location.is_empty() {
         return None;
     }
     let location = layer_location.replace('\\', "/");
     // A location relative to wherever its host resolves from anchors to a
-    // path relative to the same place: `set/bark.png` from `set/oak.usda`,
-    // and `./bark.png` kept from `oak.usda`, never the absolute `/bark.png`.
+    // path relative to the same place, marked so (`./set/bark.png` from
+    // `set/oak.usda`, `./bark.png` from `oak.usda`): never the absolute
+    // `/bark.png`, nor the search path `set/bark.png`, which names another
+    // asset once written in a layer.
     let joined = match location.rfind('/') {
-        Some(end) => alloc::format!("{}/{asset_path}", &location[..end]),
+        Some(end) => alloc::format!("{}/{asset_path}", host_relative(&location[..end])),
         None if !is_relative(&location) => alloc::format!("/{asset_path}"),
         None => asset_path,
     };
     Some(normalize_asset_path(&joined))
+}
+
+/// `location`, a location relative to wherever its host resolves from
+/// (`set/oak.usda`), as a path relative to the layer that writes it
+/// (`./set/oak.usda`), so that what is joined to it is not read as a
+/// search path (AOUSD Core §9.5); any other location, absolute, a URI or
+/// already relative to its layer, as it is.
+fn host_relative(location: &str) -> alloc::borrow::Cow<'_, str> {
+    if is_relative(location) && !is_file_relative(location) {
+        alloc::borrow::Cow::Owned(alloc::format!("./{location}"))
+    } else {
+        alloc::borrow::Cow::Borrowed(location)
+    }
 }
 
 #[cfg(test)]
@@ -828,8 +846,17 @@ mod tests {
         for (path, location, anchored) in [
             ("./bark.png", "oak.usda", "./bark.png"),
             ("../bark.png", "oak.usda", "../bark.png"),
-            ("./bark.png", "trees/oak.usda", "trees/bark.png"),
+            ("./bark.png", "trees/oak.usda", "./trees/bark.png"),
+            ("../bark.png", "trees/oak.usda", "./bark.png"),
             ("../../bark.png", "trees/oak.usda", "../bark.png"),
+            ("./bark.png", "./trees/oak.usda", "./trees/bark.png"),
+            ("./bark.png", "../trees/oak.usda", "../trees/bark.png"),
+            (
+                "./bark.png",
+                "set/oak.usdz[a/b.usda]",
+                "./set/oak.usdz[a/bark.png]",
+            ),
+            ("./bark.png", "oak.usdz[b.usda]", "./oak.usdz[bark.png]"),
         ] {
             assert_eq!(
                 anchor_asset_path(path, location).as_deref(),

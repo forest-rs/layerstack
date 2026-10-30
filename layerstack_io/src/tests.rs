@@ -536,9 +536,15 @@ fn reference_custom_data_resources_are_localized_and_missing_assets_prevent_expo
     struct AnchoredMemory(Memory);
     impl Storage for AnchoredMemory {
         fn identify(&self, asset: &str, anchor: Option<&str>) -> Result<String, IoError> {
-            Ok(anchor
+            // An anchor relative to the storage's root anchors to a path
+            // marked relative to it (`./source/preview.png`); the storage
+            // keys its sources without the mark.
+            let anchored = anchor
                 .and_then(|anchor| layerstack::asset::anchor_asset_path(asset, anchor))
-                .unwrap_or_else(|| asset.into()))
+                .unwrap_or_else(|| asset.into());
+            Ok(anchored
+                .strip_prefix("./")
+                .map_or_else(|| anchored.clone(), String::from))
         }
         fn read(&self, identifier: &str) -> Result<Vec<u8>, IoError> {
             self.0.read(identifier)

@@ -262,7 +262,9 @@ await stage.resolve(source);
   session layer too), `exportFlattened(format)` the composed stage as one
   layer with no arcs and its asset paths anchored to the layers authoring
   them, as OpenUSD flattens (`lossless`, and `lost` for anything a layer
-  cannot hold), and `exportPackage()` a USDZ of the root and everything it
+  cannot hold; `./x.png` in `set/a.usda` is written `./set/x.png`,
+  relative to the host's root, where the flattened layer belongs), and
+  `exportPackage()` a USDZ of the root and everything it
   depends on, unsaved edits included (`bytes` is `null`, with `unresolved`
   saying why, while a dependency is not supplied; the session layer is
   `omitted`).

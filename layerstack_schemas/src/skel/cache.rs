@@ -158,19 +158,23 @@ impl Dependencies {
             || changes.changed_info_only.iter().any(|&path| {
                 self.roots.contains(&path)
                     && changes.properties_for(path).is_none_or(|fields| {
-                        fields.iter().any(|changed| {
-                            self.fields.iter().any(|f| match f {
-                                Field::Named(p, name) => {
-                                    *p == path
-                                        && scene.store().tokens().resolve(changed.name) == *name
-                                }
-                                Field::Forwarded(p) => {
-                                    p.prim_path() == path && p.property() == changed.name
-                                }
-                            })
-                        })
+                        fields
+                            .iter()
+                            .any(|changed| self.reads(scene, path, changed.name))
                     })
             })
+            // A property added or removed changes what reading it gives.
+            || changes.resynced_properties.iter().any(|property| {
+                self.roots.contains(&property.prim_path())
+                    && self.reads(scene, property.prim_path(), property.property())
+            })
+    }
+    /// Whether these dependencies read the property `name` of `path`.
+    fn reads(&self, scene: &Scene<'_>, path: PathId, name: layerstack::TokenId) -> bool {
+        self.fields.iter().any(|f| match f {
+            Field::Named(p, field) => *p == path && scene.store().tokens().resolve(name) == *field,
+            Field::Forwarded(p) => p.prim_path() == path && p.property() == name,
+        })
     }
 }
 struct Rig {
@@ -1195,7 +1199,9 @@ impl SkelCache {
                 changes
                     .changed_info_only
                     .iter()
-                    .any(|p| s.targets().contains(p))
+                    .copied()
+                    .chain(changes.resynced_properties.iter().map(|p| p.prim_path()))
+                    .any(|p| s.targets().contains(&p))
             });
             if removed.contains(&skel) || b.definitions.changed(scene, changes) || shape_changed {
                 remove_bindings.push(path);

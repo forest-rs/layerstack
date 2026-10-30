@@ -560,7 +560,8 @@ pub(crate) struct Guarded {
 /// What applying a transaction did, for stages to recompose.
 #[derive(Debug)]
 pub(crate) struct Outcome {
-    /// Complete source property changes, or None if any operation is broader.
+    /// Complete source property field changes, those of
+    /// [`Self::property_specs`] aside, or None if any operation is broader.
     pub(crate) properties: Option<Vec<(LayerId, PathId, super::PropertyChange)>>,
     /// Exact existing-attribute value slots, or None for other edit kinds.
     pub(crate) values: Option<Vec<PropertyValueEdit>>,
@@ -579,8 +580,12 @@ pub(crate) struct Outcome {
     /// ([`lists_children_only`]), sorted: their prim indexes and namespace
     /// stay as they were, and only their child lists are composed again.
     pub(crate) child_lists: Vec<PathId>,
-    /// Source prims whose property declarations or schema identity changed.
+    /// Source prims whose schema identity changed (`apiSchemas`).
     pub(crate) resync_sites: Vec<(LayerId, PathId)>,
+    /// `(layer, source prim path, property name)` of every property spec
+    /// added or removed, sorted: each changes that property's spec stack,
+    /// not its prim's.
+    pub(crate) property_specs: Vec<(LayerId, PathId, TokenId)>,
     /// The edits of inputs dynamic file format arguments may compose from.
     pub(crate) argument_inputs: Vec<ArgumentInput>,
 }
@@ -728,11 +733,19 @@ fn property_edits(steps: &[Guarded]) -> Option<Vec<(LayerId, PathId, super::Prop
                     key,
                     ..
                 } => (*layer, loc, *name, PropertyField::Metadata(*key)),
+                // A property spec added or removed is reported as a
+                // property resync (`Outcome::property_specs`), not a field.
+                Raw::Property { .. } => return Some(None),
                 _ => return None,
             };
-            Some((layer, loc.prim_path(), PropertyChange { name, field }))
+            Some(Some((
+                layer,
+                loc.prim_path(),
+                PropertyChange { name, field },
+            )))
         })
-        .collect()
+        .collect::<Option<Vec<_>>>()
+        .map(|edits| edits.into_iter().flatten().collect())
 }
 
 fn value_edits(steps: &[Guarded], store: &dyn LayerStore) -> Option<Vec<PropertyValueEdit>> {
@@ -1001,13 +1014,22 @@ pub(crate) fn apply(
     let mut local_structure = Some(Vec::new());
     let mut child_lists = Vec::new();
     let mut resync_sites = Vec::new();
+    let mut property_specs = Vec::new();
     let root = store.paths().lookup(&crate::Path::root());
     for guarded in &steps {
-        // OpenUSD: UsdStage::_ComputePendingChanges groups property additions
-        // and removals, and apiSchemas changes, into resync notices. Our
-        // reports have prim granularity, so invalidate the owning prim.
+        // OpenUSD: `UsdStage::_HandleLayersDidChange` resyncs the property
+        // path of a property spec added or removed (`didAddProperty`,
+        // `didAddPropertyWithOnlyRequiredFields`, `didRemoveProperty` in
+        // `SdfChangeList`), which `PcpChanges::DidChange` records as a
+        // change of that property's spec stack. An `apiSchemas` change
+        // resyncs the prim.
+        if let Raw::Property {
+            layer, loc, name, ..
+        } = &guarded.written
+        {
+            property_specs.push((*layer, loc.prim_path(), *name));
+        }
         let declaration = match &guarded.written {
-            Raw::Property { layer, loc, .. } => Some((*layer, loc.prim_path())),
             Raw::Field {
                 layer,
                 loc,
@@ -1055,6 +1077,8 @@ pub(crate) fn apply(
     }
     sort::sort_unstable(&mut resync_sites);
     resync_sites.dedup();
+    sort::sort_unstable(&mut property_specs);
+    property_specs.dedup();
     let argument_inputs = steps.iter().filter_map(argument_input).collect();
     let values = value_edits(&steps, store);
     let properties = property_edits(&steps);
@@ -1065,6 +1089,7 @@ pub(crate) fn apply(
         local_structure,
         child_lists,
         resync_sites,
+        property_specs,
         argument_inputs,
         inverse: Transaction {
             preconditions: Vec::new(),

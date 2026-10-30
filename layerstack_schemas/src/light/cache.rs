@@ -320,6 +320,14 @@ impl LightCache {
             .any(|f| {
                 let name = scene.store().tokens().resolve(f.name);
                 f.field == PropertyField::Targets || name == "lightList:cacheBehavior"
+            })
+            // A `lightList` relationship or its cache behavior added or removed.
+            || changes.resynced_properties.iter().any(|p| {
+                scene
+                    .store()
+                    .tokens()
+                    .resolve(p.property())
+                    .starts_with("lightList")
             });
         self.lists.retain(|(_, mode), _| {
             !structural && !unknown && (*mode == LightListMode::IgnoreCache || !cache_changed)
@@ -371,7 +379,28 @@ impl LightCache {
                         || h.inputs.dependencies.iter().any(|d| d.prim == *path)
                 }
             });
-            if (structural || info) && !h.dirty {
+            // A property added or removed: as a field edit of it, and, as
+            // the light may now read it or no longer can, any property of a
+            // prim it reads or a relationship of it targets.
+            let resynced = changes.resynced_properties.iter().any(|property| {
+                let path = property.prim_path();
+                let name = scene.store().tokens().resolve(property.property());
+                (path == light && (name.starts_with("inputs:") || name == "light:shaderId"))
+                    || h.inputs.dependencies.iter().any(|d| d.prim == path)
+                    || h.inputs
+                        .relationships
+                        .iter()
+                        .flat_map(|(_, targets)| targets)
+                        .any(|target| match target {
+                            TargetPath::Prim(p) => *p == path,
+                            TargetPath::Property(p) => p.prim_path() == path,
+                        })
+                    || (h.inputs.ancestors.contains(&path)
+                        && (name.starts_with("xformOp:")
+                            || name == "xformOpOrder"
+                            || name == "visibility"))
+            });
+            if (structural || info || resynced) && !h.dirty {
                 h.dirty = true;
                 self.stats.invalidated += 1;
             }

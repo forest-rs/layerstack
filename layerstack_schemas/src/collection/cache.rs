@@ -301,17 +301,22 @@ impl MembershipCache {
     /// Routes complete edit reports and drops entries whose owning prim vanished;
     /// other work happens lazily on the next capture.
     /// Unknown prim metadata can change expression references or predicates,
-    /// so it conservatively invalidates every compiled query. Rule maps do not
+    /// so it conservatively invalidates every compiled query, as does a
+    /// property added or removed. Rule maps do not
     /// depend on unrelated geometry values, nor do collection predicates read
     /// attribute values. Host changes outside edit reports require `clear`.
     pub fn apply_changes(&mut self, scene: &Scene<'_>, changes: &Changes) {
         let structural = !changes.created.is_empty()
             || !changes.removed.is_empty()
             || !changes.resynced.is_empty();
-        let unknown = changes
-            .changed_info_only
-            .iter()
-            .any(|p| changes.properties_for(*p).is_none());
+        // A property added or removed can change a collection's own
+        // declaration, or the properties a rule expands to or a predicate
+        // matches.
+        let unknown = !changes.resynced_properties.is_empty()
+            || changes
+                .changed_info_only
+                .iter()
+                .any(|p| changes.properties_for(*p).is_none());
         let tokens = scene.store().tokens();
         self.held.retain(|key, held| {
             self.stats.routed += 1;

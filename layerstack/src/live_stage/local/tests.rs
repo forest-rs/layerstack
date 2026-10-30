@@ -235,28 +235,101 @@ fn authored_child_order_survives_delete_and_exact_undo() {
     assert!(live.local_index(&store).unwrap().current(&store));
 }
 
+/// A property spec added or removed resyncs the property, not its prim
+/// (OpenUSD: `UsdStage::_HandleLayersDidChange` resyncs the property path).
 #[test]
-fn property_declaration_changes_resync_the_owner_in_both_directions() {
+fn property_declaration_changes_resync_the_property_in_both_directions() {
     let (mut store, mut live) = scene();
     let owner = store.path("/World/B");
+    let property = store.property_path("/World/B.newValue");
     let mut create = Transaction::new();
     create.create_property(
         address(&mut store, "/World/B.newValue"),
         PropertySpec::typed_attribute(PropertyType::parse("double").unwrap()),
     );
     let created = live.apply(&mut store, &create).unwrap();
-    assert_eq!(created.changes.resynced, [owner]);
+    assert!(created.changes.resynced.is_empty());
+    assert_eq!(created.changes.resynced_properties, [property]);
     assert!(created.changes.changed_info_only.is_empty());
     assert!(created.changes.created.is_empty());
+    assert!(
+        live.view(&store)
+            .prim(owner)
+            .unwrap()
+            .attribute(property.property())
+            .is_some()
+    );
     let removed = live.apply(&mut store, &created.inverse).unwrap();
-    assert_eq!(removed.changes.resynced, [owner]);
+    assert!(removed.changes.resynced.is_empty());
+    assert_eq!(removed.changes.resynced_properties, [property]);
     assert!(removed.changes.changed_info_only.is_empty());
+    assert!(
+        live.view(&store)
+            .prim(owner)
+            .unwrap()
+            .attribute(property.property())
+            .is_none()
+    );
     live.apply(&mut store, &removed.inverse).unwrap();
     let mut remove = Transaction::new();
     remove.remove_spec(address(&mut store, "/World/B.newValue"));
     let removed = live.apply(&mut store, &remove).unwrap();
-    assert_eq!(removed.changes.resynced, [owner]);
+    assert!(removed.changes.resynced.is_empty());
+    assert_eq!(removed.changes.resynced_properties, [property]);
     assert!(removed.changes.changed_info_only.is_empty());
+    matches_clean(&mut store, &live);
+}
+
+/// With a field edit of another property, the prim is info-only with that
+/// field alone; the new property's own default is covered by its resync.
+#[test]
+fn property_resyncs_leave_other_field_edits_info_only() {
+    let (mut store, mut live) = scene();
+    let owner = store.path("/World/B");
+    let property = store.property_path("/World/B.newValue");
+    let value = store.tokens.intern("value");
+    let mut txn = Transaction::new();
+    txn.create_property(
+        address(&mut store, "/World/B.newValue"),
+        PropertySpec::typed_attribute(PropertyType::parse("double").unwrap()),
+    );
+    txn.set_default(address(&mut store, "/World/B.newValue"), Value::Double(2.0));
+    txn.set_default(address(&mut store, "/World/B.value"), Value::Double(3.0));
+    let applied = live.apply(&mut store, &txn).unwrap();
+    assert!(applied.changes.resynced.is_empty());
+    assert_eq!(applied.changes.resynced_properties, [property]);
+    assert_eq!(applied.changes.changed_info_only, [owner]);
+    let fields = applied.changes.properties_for(owner).unwrap();
+    assert_eq!(fields.len(), 1);
+    assert_eq!(fields[0].name, value);
+    assert_eq!(fields[0].field, crate::PropertyField::Default);
+    matches_clean(&mut store, &live);
+}
+
+/// A property created with its prim's spec, or beneath a prim another edit
+/// of the transaction resyncs, is covered by the prim's resync.
+#[test]
+fn prim_resyncs_cover_property_resyncs() {
+    let (mut store, mut live) = scene();
+    let mut txn = Transaction::new();
+    txn.create_prim(address(&mut store, "/World/B/Z"), Specifier::Def, None);
+    txn.create_property(
+        address(&mut store, "/World/B/Z.newValue"),
+        PropertySpec::typed_attribute(PropertyType::parse("double").unwrap()),
+    );
+    let applied = live.apply(&mut store, &txn).unwrap();
+    assert_eq!(applied.changes.resynced, [store.path("/World/B/Z")]);
+    assert!(applied.changes.resynced_properties.is_empty());
+    let schema = store.tokens.intern("CollectionAPI:selection");
+    let mut txn = Transaction::new();
+    txn.add_applied_schema(address(&mut store, "/World/B"), schema);
+    txn.create_property(
+        address(&mut store, "/World/B.other"),
+        PropertySpec::typed_attribute(PropertyType::parse("double").unwrap()),
+    );
+    let applied = live.apply(&mut store, &txn).unwrap();
+    assert_eq!(applied.changes.resynced, [store.path("/World/B")]);
+    assert!(applied.changes.resynced_properties.is_empty());
     matches_clean(&mut store, &live);
 }
 

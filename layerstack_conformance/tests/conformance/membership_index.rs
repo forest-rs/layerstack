@@ -395,10 +395,11 @@ const STEPS: &[Step] = &[
             tx.set_targets(at, ListOp::explicit(vec![TargetPath::Prim(pebble)]));
             tx
         },
-        // A new property spec resyncs `/Parts`: its collections compile
-        // again, `heavy` unchanged.
+        // A new property spec resyncs `/Parts.collection:smooth:excludes`,
+        // not `/Parts`: `smooth` and `nested`, which includes it, compile
+        // again, and `heavy`, also on `/Parts`, does not.
         expect: (&[], &[], &["nested", "smooth"]),
-        recompiled: Some(&["heavy", "nested", "smooth"]),
+        recompiled: Some(&["nested", "smooth"]),
     },
     Step {
         name: "an include deleted in the stronger layer",

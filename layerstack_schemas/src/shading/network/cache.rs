@@ -167,6 +167,10 @@ impl MaterialNetworkCache {
             held.dirty |= held.network.dependencies.iter().any(|dep| {
                 changes.changed_info_only.contains(&dep.prim)
                     || changes
+                        .resynced_properties
+                        .iter()
+                        .any(|p| p.prim_path() == dep.prim)
+                    || changes
                         .created
                         .iter()
                         .chain(&changes.removed)

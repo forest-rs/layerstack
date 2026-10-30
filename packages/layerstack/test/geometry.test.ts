@@ -140,6 +140,43 @@ def "Loose" {
     assert.equal(stage.prim("/Loose")!.visibility(), null);
     assert.equal(failure(() => stage.worldTransforms(["/Robot", "/Gone"])).code, "prim.not_found");
   });
+
+  it("say which transforms and attributes might vary with time", () => {
+    const stage = layerstack.open({
+      identifier: "robot.usda",
+      bytes: new TextEncoder().encode(`#usda 1.0
+def Xform "Robot" {
+    double3 xformOp:translate.timeSamples = { 1: (1, 2, 3) }
+    uniform token[] xformOpOrder = ["xformOp:translate"]
+    def Xform "Arm" {
+        def Xform "Hand" {
+            uniform token[] xformOpOrder = ["!resetXformStack!"]
+            double size = 2
+        }
+    }
+}
+def Xform "Base" {
+    float radius.timeSamples = { 0: 1, 10: 2 }
+}
+`),
+    });
+    // A single sample makes the robot and its arm vary (a numeric time
+    // reads it, the default time does not); the hand resets the stack.
+    assert.deepEqual(stage.worldTransformsMightVary(["/Robot", "/Robot/Arm", "/Robot/Arm/Hand", "/Base", "/"]), [
+      true,
+      true,
+      false,
+      false,
+      false,
+    ]);
+    assert.deepEqual(
+      stage.valueSourcesMightBeTimeVarying(["/Base.radius", "/Robot/Arm/Hand.size", "/Robot.xformOp:translate", "/Base.none"]),
+      [true, false, true, false],
+    );
+    assert.equal(stage.attribute("/Base.radius")?.valueSourceMightBeTimeVarying(), true);
+    assert.equal(failure(() => stage.worldTransformsMightVary(["/Gone"])).code, "prim.not_found");
+    assert.equal(failure(() => stage.valueSourcesMightBeTimeVarying(["/Base"])).code, "path.invalid");
+  });
 });
 
 describe("the retained caches", () => {

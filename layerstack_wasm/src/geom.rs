@@ -439,6 +439,33 @@ impl Stage {
         Ok(out)
     }
 
+    /// Whether each prim's local-to-world transform might differ at
+    /// another time, the default time included, through the stage's
+    /// transform cache at `time`: one per path, `1` or `0`.
+    ///
+    /// OpenUSD has no world-space query; see
+    /// `XformCache::local_to_world_might_vary`.
+    ///
+    /// # Errors
+    ///
+    /// `prim.not_found` naming the first path no prim is at.
+    pub(crate) fn world_transforms_might_vary(
+        &mut self,
+        paths: &[String],
+        time: Option<f64>,
+    ) -> Result<Vec<u8>, Error> {
+        let prims = self.prim_ids(paths)?;
+        let (document, geom) = self.document_and_geom();
+        let store = document.store();
+        let live = document.stage();
+        let cache = geom.transforms_at(live, store, time_of(time));
+        let scene = Scene::new(live.stage(), store);
+        Ok(prims
+            .into_iter()
+            .map(|prim| u8::from(cache.local_to_world_might_vary(&scene, prim) == Some(true)))
+            .collect())
+    }
+
     /// The prim at `path`'s transform ops, or `null` when it is not
     /// `Xformable`: `[resetsXformStack, ops, mightBeTimeVarying,
     /// timeSamples]`, whether its `xformOpOrder` resets the transform

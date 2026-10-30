@@ -819,6 +819,30 @@ impl Stage {
             .unwrap_or_default())
     }
 
+    /// Whether each attribute's value source might vary with time, the
+    /// default time included: time samples (even one), a spline or value
+    /// clips supply it, directly or under sparse edits. One per path, `1`
+    /// or `0`; `0` for a path no attribute is at.
+    ///
+    /// Spec: AOUSD Core §12.3.2, §12.3.4 (value clips). OpenUSD:
+    /// `UsdAttributeQuery::ValueSourceMightBeTimeVarying`.
+    ///
+    /// # Errors
+    ///
+    /// `path.invalid` for a path that is not a property path.
+    pub(crate) fn value_sources_might_vary(&self, paths: &[String]) -> Result<Vec<u8>, Error> {
+        let view = self.document.view();
+        paths
+            .iter()
+            .map(|path| {
+                check_property_path(path)?;
+                Ok(u8::from(view.attribute(path.as_str()).is_some_and(
+                    layerstack::Attribute::value_source_might_be_time_varying,
+                )))
+            })
+            .collect()
+    }
+
     /// Why the attribute has its value at `time`:
     /// `[value, source, lower, upper, opinions]`, or `null` when the
     /// attribute does not exist. `value` is a value record or `null`;
@@ -2201,6 +2225,13 @@ impl Stage {
         Ok(self.time_samples(path)?)
     }
 
+    /// The flags `value_sources_might_vary` reads, as documented in
+    /// `stage.rs`.
+    #[wasm_bindgen(js_name = valueSourcesMightVary)]
+    pub fn js_value_sources_might_vary(&self, paths: Vec<String>) -> Result<Vec<u8>, JsValue> {
+        Ok(self.value_sources_might_vary(&paths)?)
+    }
+
     /// The record `explain` builds, as documented in `stage.rs`.
     #[wasm_bindgen(js_name = explain)]
     pub fn js_explain(&self, path: &str, time: Option<f64>) -> Result<JsValue, JsValue> {
@@ -2430,6 +2461,17 @@ impl Stage {
         parent: bool,
     ) -> Result<Vec<f64>, JsValue> {
         Ok(self.world_transforms(&paths, time, parent)?)
+    }
+
+    /// The flags `world_transforms_might_vary` reads, as documented in
+    /// `geom.rs`.
+    #[wasm_bindgen(js_name = worldTransformsMightVary)]
+    pub fn js_world_transforms_might_vary(
+        &mut self,
+        paths: Vec<String>,
+        time: Option<f64>,
+    ) -> Result<Vec<u8>, JsValue> {
+        Ok(self.world_transforms_might_vary(&paths, time)?)
     }
 
     /// The record `xformable` builds, as documented in `geom.rs`.

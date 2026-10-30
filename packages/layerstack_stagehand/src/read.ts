@@ -143,8 +143,8 @@ function axis(stage: Stage, path: string): Axis {
 
 /**
  * The implicit shape at `path` at `time` (`Cube`, `Sphere`, `Cylinder`,
- * `Cone`, `Capsule`, `Plane`) with its size attributes, schema fallbacks
- * included; `null` for any other prim.
+ * `Cone`, `Capsule`, `Plane`, `Cylinder_1`, `Capsule_1`) with its size
+ * attributes, schema fallbacks included; `null` for any other prim.
  */
 export function readShape(stage: Stage, path: string, options: { readonly time?: number } = {}): Shape | null {
   const { time } = options;
@@ -162,6 +162,22 @@ export function readShape(stage: Stage, path: string, options: { readonly time?:
       return { kind: "Capsule", radius: at("radius", 0.5), height: at("height", 1), axis: axis(stage, path) };
     case "Plane":
       return { kind: "Plane", width: at("width", 2), length: at("length", 2), axis: axis(stage, path) };
+    case "Cylinder_1":
+      return {
+        kind: "Cylinder_1",
+        radiusTop: at("radiusTop", 1),
+        radiusBottom: at("radiusBottom", 1),
+        height: at("height", 2),
+        axis: axis(stage, path),
+      };
+    case "Capsule_1":
+      return {
+        kind: "Capsule_1",
+        radiusTop: at("radiusTop", 0.5),
+        radiusBottom: at("radiusBottom", 0.5),
+        height: at("height", 1),
+        axis: axis(stage, path),
+      };
     default:
       return null;
   }

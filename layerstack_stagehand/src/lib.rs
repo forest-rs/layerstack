@@ -47,7 +47,8 @@
 //! # Implicit shapes
 //!
 //! [`tessellate`] turns a `Cube`, `Sphere`, `Cylinder`, `Cone`, `Capsule`
-//! or `Plane` ([`Shape`]) into buffers at an explicit [`Tessellation`].
+//! or `Plane`, or a `Cylinder_1` or `Capsule_1` with a radius per end
+//! ([`Shape`]), into buffers at an explicit [`Tessellation`].
 //!
 //! # From a stage
 //!

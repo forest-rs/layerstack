@@ -160,7 +160,23 @@ export type Shape =
   | { readonly kind: "Cylinder"; readonly radius: number; readonly height: number; readonly axis: Axis }
   | { readonly kind: "Cone"; readonly radius: number; readonly height: number; readonly axis: Axis }
   | { readonly kind: "Capsule"; readonly radius: number; readonly height: number; readonly axis: Axis }
-  | { readonly kind: "Plane"; readonly width: number; readonly length: number; readonly axis: Axis };
+  | { readonly kind: "Plane"; readonly width: number; readonly length: number; readonly axis: Axis }
+  /** `Cylinder_1`: a radius per end, `radiusTop` at `+axis`. */
+  | {
+      readonly kind: "Cylinder_1";
+      readonly radiusTop: number;
+      readonly radiusBottom: number;
+      readonly height: number;
+      readonly axis: Axis;
+    }
+  /** `Capsule_1`: a capping sphere radius per end, meeting the slanted side tangentially. */
+  | {
+      readonly kind: "Capsule_1";
+      readonly radiusTop: number;
+      readonly radiusBottom: number;
+      readonly height: number;
+      readonly axis: Axis;
+    };
 
 /** How finely curved shapes are cut. */
 export interface Tessellation {

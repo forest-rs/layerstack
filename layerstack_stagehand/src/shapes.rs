@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 //! The `UsdGeom` implicit shapes as triangles: cube, sphere, cylinder,
-//! cone, capsule and plane, at an explicit [`Tessellation`].
+//! cone, capsule and plane, and the `_1` revisions of the cylinder and
+//! capsule with a radius per end, at an explicit [`Tessellation`].
 //!
 //! Each shape is centered on the origin and sized as its schema says
 //! (OpenUSD `pxr/usd/usdGeom/schema.usda`): a `Cube` of edge `size`; a
@@ -10,12 +11,18 @@
 //! `height` along `axis` (the cone's apex at `+height / 2`); a `Capsule`
 //! whose cylinder of `height` is capped by hemispheres of `radius`
 //! (`height + 2 * radius` long); a `Plane` of `width` and `length` facing
-//! `+axis`. Triangles wind counter-clockwise seen from outside; normals
+//! `+axis`. A `Cylinder_1` runs from `radiusBottom` at `-height / 2` to
+//! `radiusTop` at `+height / 2`; a `Capsule_1` caps such a slanted side with
+//! spheres that meet it tangentially, centered inward of the ends by
+//! `slope * radius` with radius `radius * sqrt(1 + slope²)`, `slope` being
+//! `(radiusBottom - radiusTop) / height` (OpenUSD 26.11
+//! `usdGeom/capsule_1.cpp`, `_ComputeExtentMax`, which bounds the same
+//! spheres). Triangles wind counter-clockwise seen from outside; normals
 //! are smooth on curved surfaces and flat on caps and cube faces.
 
 use alloc::vec;
 use alloc::vec::Vec;
-use core::f32::consts::{FRAC_PI_2, PI, TAU};
+use core::f32::consts::{PI, TAU};
 
 use crate::plan::{DrawRange, MeshBuffers, small};
 
@@ -96,6 +103,32 @@ pub enum Shape {
         /// The spine.
         axis: Axis,
     },
+    /// `Cylinder_1`: `radiusTop` and `radiusBottom` (fallbacks 1), `height`
+    /// (fallback 2), `axis`: a cylinder whose ends may differ in radius, a
+    /// cone's frustum.
+    Cylinder1 {
+        /// The radius of the end at `+axis`.
+        radius_top: f32,
+        /// The radius of the end at `-axis`.
+        radius_bottom: f32,
+        /// The length along `axis`.
+        height: f32,
+        /// The spine.
+        axis: Axis,
+    },
+    /// `Capsule_1`: `radiusTop` and `radiusBottom` (fallbacks 0.5) of its
+    /// capping spheres, `height` (fallback 1), `axis`. With equal radii it
+    /// is a [`Shape::Capsule`].
+    Capsule1 {
+        /// The radius at the top end (`+axis`).
+        radius_top: f32,
+        /// The radius at the bottom end (`-axis`).
+        radius_bottom: f32,
+        /// The length of the side between the caps' rims, along `axis`.
+        height: f32,
+        /// The spine.
+        axis: Axis,
+    },
     /// `Plane`: `width` and `length` (fallbacks 2), facing `+axis`. Width
     /// runs along `x` (along `z` for axis `X`), length along `y` (along
     /// `z` for axis `Y`).
@@ -136,9 +169,13 @@ impl Default for Tessellation {
 /// | cube | 24 | 12 |
 /// | plane | 4 | 2 |
 /// | sphere | `(rings + 1) * (segments + 1)` | `2 * segments * (rings - 1)` |
-/// | cylinder | `4 * (segments + 1) + 2` | `4 * segments` |
+/// | cylinder, `Cylinder_1` | `4 * (segments + 1) + 2` | `4 * segments` |
 /// | cone | `3 * (segments + 1) + 1` | `2 * segments` |
-/// | capsule | `(2 * (rings / 2) + 2) * (segments + 1)` | `2 * segments * (2 * (rings / 2))` |
+/// | capsule, `Capsule_1` | `(2 * (rings / 2) + 2) * (segments + 1)` | `2 * segments * (2 * (rings / 2))` |
+///
+/// A `Cylinder_1` with a zero radius draws neither that end's cap nor the
+/// side's degenerate triangles there: `segments` fewer of each, as a
+/// cone.
 #[must_use]
 pub fn tessellate(shape: &Shape, tessellation: &Tessellation) -> MeshBuffers {
     let segments = tessellation.segments.max(3);
@@ -152,26 +189,39 @@ pub fn tessellate(shape: &Shape, tessellation: &Tessellation) -> MeshBuffers {
             axis,
         } => out.plane(width / 2.0, length / 2.0, axis),
         Shape::Sphere { radius } => {
-            let rows: Vec<(f32, f32)> = (0..=rings)
-                .map(|i| (PI * i as f32 / rings as f32, 0.0))
+            let rows: Vec<Row> = (0..=rings)
+                .map(|i| Row {
+                    polar: PI * i as f32 / rings as f32,
+                    center: 0.0,
+                    radius,
+                })
                 .collect();
-            out.lathe(&rows, radius, segments, Axis::Z);
+            out.lathe(&rows, segments, Axis::Z);
         }
         Shape::Capsule {
             radius,
             height,
             axis,
+        } => out.capsule(radius, radius, height, rings, segments, axis),
+        Shape::Capsule1 {
+            radius_top,
+            radius_bottom,
+            height,
+            axis,
+        } => out.capsule(radius_top, radius_bottom, height, rings, segments, axis),
+        Shape::Cylinder1 {
+            radius_top,
+            radius_bottom,
+            height,
+            axis,
         } => {
-            let half = (rings / 2).max(1);
-            let mut rows = Vec::new();
-            rows.extend((0..=half).map(|i| (FRAC_PI_2 * i as f32 / half as f32, height / 2.0)));
-            rows.extend((0..=half).map(|i| {
-                (
-                    FRAC_PI_2 + FRAC_PI_2 * i as f32 / half as f32,
-                    -height / 2.0,
-                )
-            }));
-            out.lathe(&rows, radius, segments, axis);
+            out.side(radius_bottom, radius_top, height, segments, axis);
+            if radius_top != 0.0 {
+                out.cap(radius_top, height / 2.0, segments, axis, 1.0);
+            }
+            if radius_bottom != 0.0 {
+                out.cap(radius_bottom, -height / 2.0, segments, axis, -1.0);
+            }
         }
         Shape::Cylinder {
             radius,
@@ -205,6 +255,14 @@ pub fn tessellate(shape: &Shape, tessellation: &Tessellation) -> MeshBuffers {
             count,
         }],
     }
+}
+
+/// One circle of latitude of a lathed surface: its polar angle from `+Z`
+/// on a sphere of `radius` centered at `center` on the axis.
+struct Row {
+    polar: f32,
+    center: f32,
+    radius: f32,
 }
 
 #[derive(Default)]
@@ -283,19 +341,60 @@ impl Builder {
         }
     }
 
-    /// A surface of revolution about `+Z` through rows of
-    /// `(polar angle from +Z, z offset)` on a sphere of `radius`; rows at a
-    /// pole get one triangle per segment.
-    fn lathe(&mut self, rows: &[(f32, f32)], radius: f32, segments: u32, axis: Axis) {
+    /// A capsule of `height` along `+Z` whose capping spheres meet a
+    /// side running from `bottom` to `top` tangentially: rows from the top
+    /// pole down to the top rim, then from the bottom rim to the bottom
+    /// pole, `rings / 2` bands per cap; the side is the band between the
+    /// rims.
+    fn capsule(
+        &mut self,
+        top: f32,
+        bottom: f32,
+        height: f32,
+        rings: u32,
+        segments: u32,
+        axis: Axis,
+    ) {
+        let half = (rings / 2).max(1);
+        let slope = if height > 0.0 {
+            (bottom - top) / height
+        } else {
+            0.0
+        };
+        let secant = libm::sqrtf(1.0 + slope * slope);
+        // The rims sit at the polar angle where a sphere's normal leans as
+        // the side's does: `atan2(1, slope)`, a right angle when straight.
+        let rim = libm::atan2f(1.0, slope);
+        let mut rows = Vec::new();
+        rows.extend((0..=half).map(|i| Row {
+            polar: rim * i as f32 / half as f32,
+            center: height / 2.0 - slope * top,
+            radius: top * secant,
+        }));
+        rows.extend((0..=half).map(|i| Row {
+            polar: rim + (PI - rim) * i as f32 / half as f32,
+            center: -height / 2.0 - slope * bottom,
+            radius: bottom * secant,
+        }));
+        self.lathe(&rows, segments, axis);
+    }
+
+    /// A surface of revolution about `+Z` through rows, each a circle of
+    /// latitude of a sphere; rows at a pole get one triangle per segment.
+    fn lathe(&mut self, rows: &[Row], segments: u32, axis: Axis) {
         let base = small(self.positions.len());
-        for &(theta, offset) in rows {
-            let (sin_t, cos_t) = (libm::sinf(theta), libm::cosf(theta));
+        for row in rows {
+            let (sin_t, cos_t) = (libm::sinf(row.polar), libm::cosf(row.polar));
             for j in 0..=segments {
                 let phi = TAU * j as f32 / segments as f32;
                 let n = [sin_t * libm::cosf(phi), sin_t * libm::sinf(phi), cos_t];
                 self.vertex(
                     axis,
-                    [radius * n[0], radius * n[1], radius * n[2] + offset],
+                    [
+                        row.radius * n[0],
+                        row.radius * n[1],
+                        row.radius * n[2] + row.center,
+                    ],
                     n,
                 );
             }
@@ -307,8 +406,8 @@ impl Builder {
                 let a = base + small(i) * width + j;
                 let b = a + width;
                 let (c, d) = (b + 1, a + 1);
-                let north = rows[i].0 == 0.0;
-                let south = i + 1 == last && (rows[last].0 - PI).abs() < 1e-6;
+                let north = rows[i].polar == 0.0;
+                let south = i + 1 == last && (rows[last].polar - PI).abs() < 1e-6;
                 if !south {
                     self.triangle(a, b, c);
                 }
@@ -319,8 +418,9 @@ impl Builder {
         }
     }
 
-    /// The side of a cylinder (`top == bottom`) or cone (`top == 0`) of
-    /// `height` along `+Z`, smooth around.
+    /// The side of a cylinder (`top == bottom`), cone (`top == 0`) or
+    /// frustum of `height` along `+Z`, smooth around; a zero radius draws
+    /// no triangle at that end.
     fn side(&mut self, bottom: f32, top: f32, height: f32, segments: u32, axis: Axis) {
         let base = small(self.positions.len());
         // The side's normal leans by the slope (bottom - top) / height.
@@ -343,7 +443,9 @@ impl Builder {
         for j in 0..segments {
             let (a, b) = (base + j, base + j + 1);
             let (c, d) = (b + width, a + width);
-            self.triangle(a, b, c);
+            if bottom != 0.0 {
+                self.triangle(a, b, c);
+            }
             if top != 0.0 {
                 self.triangle(a, c, d);
             }

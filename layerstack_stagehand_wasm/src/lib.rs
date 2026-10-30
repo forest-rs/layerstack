@@ -397,10 +397,12 @@ impl StagehandMesh {
 }
 
 /// The triangles of an implicit shape: `kind` (`Cube`, `Sphere`,
-/// `Cylinder`, `Cone`, `Capsule`, `Plane`) with its sizes (`size` for a
-/// cube, `radius` for a sphere, `radius` and `height` for a cylinder, cone
-/// or capsule, `width` and `length` for a plane, as `a` and `b`), its
-/// `axis` token, and the segments around and rings from pole to pole.
+/// `Cylinder`, `Cone`, `Capsule`, `Plane`, `Cylinder_1`, `Capsule_1`) with
+/// its sizes (`size` for a cube, `radius` for a sphere, `radius` and
+/// `height` for a cylinder, cone or capsule, `width` and `length` for a
+/// plane, `radiusTop`, `height` and `radiusBottom` for the `_1` kinds, as
+/// `a`, `b` and `c`), its `axis` token, and the segments around and rings
+/// from pole to pole.
 ///
 /// # Errors
 ///
@@ -410,6 +412,7 @@ pub fn tessellate_shape(
     kind: &str,
     a: f32,
     b: f32,
+    c: f32,
     axis: &str,
     segments: u32,
     rings: u32,
@@ -436,6 +439,18 @@ pub fn tessellate_shape(
         "Plane" => Shape::Plane {
             width: a,
             length: b,
+            axis,
+        },
+        "Cylinder_1" => Shape::Cylinder1 {
+            radius_top: a,
+            height: b,
+            radius_bottom: c,
+            axis,
+        },
+        "Capsule_1" => Shape::Capsule1 {
+            radius_top: a,
+            height: b,
+            radius_bottom: c,
             axis,
         },
         _ => return Err(error("tessellate", "unknown shape")),

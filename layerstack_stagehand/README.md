@@ -12,7 +12,8 @@ browser.
   `materialBind` face subset; a retained plan that refills positions and
   normals for new points without triangulating again.
 - **Implicit shapes**: `Cube`, `Sphere`, `Cylinder`, `Cone`, `Capsule` and
-  `Plane` tessellated at explicit segment counts.
+  `Plane`, and the `Cylinder_1` and `Capsule_1` revisions with a radius per
+  end, tessellated at explicit segment counts.
 - **Reports**: counts of faces, triangles and vertices, the faces skipped
   and why, concave faces and fallbacks, dropped primvars and subset
   overlaps.

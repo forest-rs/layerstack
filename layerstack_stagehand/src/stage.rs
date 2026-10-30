@@ -10,7 +10,8 @@ use layerstack::{PathId, PrimPathArg, Time, Value};
 use layerstack_schemas::primvar::Primvar as StagePrimvar;
 use layerstack_schemas::subset::MeshTopology as StageTopology;
 use layerstack_schemas::usd_geom::{
-    Capsule, Cone, Cube, Cylinder, GeomSubsetElementType, Imageable, Mesh, Plane, Sphere,
+    Capsule, Capsule1, Cone, Cube, Cylinder, Cylinder1, GeomSubsetElementType, Imageable, Mesh,
+    Plane, Sphere,
 };
 use layerstack_schemas::value::{read_float2_array_shared, read_float3_array_shared};
 use layerstack_schemas::{PrimView, Scene};
@@ -250,9 +251,9 @@ fn primvar<T>(
 }
 
 /// The implicit shape at `path` at `time` (`Cube`, `Sphere`, `Cylinder`,
-/// `Cone`, `Capsule`, `Plane`), with its size attributes, schema
-/// fallbacks included; `None` for any other prim. The `_1` revisions
-/// (`Cylinder_1`, `Capsule_1`, with a radius per end) are not read yet.
+/// `Cone`, `Capsule`, `Plane`, and the `_1` revisions `Cylinder_1` and
+/// `Capsule_1` with `radiusTop` and `radiusBottom`), with its size
+/// attributes, schema fallbacks included; `None` for any other prim.
 #[must_use]
 pub fn read_shape(scene: &Scene<'_>, path: impl PrimPathArg, time: Time) -> Option<Shape> {
     let path = scene.prim_path(path)?;
@@ -285,6 +286,22 @@ pub fn read_shape(scene: &Scene<'_>, path: impl PrimPathArg, time: Time) -> Opti
     if let Some(capsule) = Capsule::get(scene, path) {
         return Some(Shape::Capsule {
             radius: f(capsule.radius_at(time), 0.5),
+            height: f(capsule.height_at(time), 1.0),
+            axis: axis(capsule.axis().as_ref().map(|a| a.as_str())),
+        });
+    }
+    if let Some(cylinder) = Cylinder1::get(scene, path) {
+        return Some(Shape::Cylinder1 {
+            radius_top: f(cylinder.radius_top_at(time), 1.0),
+            radius_bottom: f(cylinder.radius_bottom_at(time), 1.0),
+            height: f(cylinder.height_at(time), 2.0),
+            axis: axis(cylinder.axis().as_ref().map(|a| a.as_str())),
+        });
+    }
+    if let Some(capsule) = Capsule1::get(scene, path) {
+        return Some(Shape::Capsule1 {
+            radius_top: f(capsule.radius_top_at(time), 0.5),
+            radius_bottom: f(capsule.radius_bottom_at(time), 0.5),
             height: f(capsule.height_at(time), 1.0),
             axis: axis(capsule.axis().as_ref().map(|a| a.as_str())),
         });
@@ -349,6 +366,13 @@ def Capsule "Lamp" {
     uniform token axis = "Y"
 }
 def Plane "Floor" {
+}
+def Cylinder_1 "Post" {
+    double radiusTop = 0.25
+    uniform token axis = "Y"
+}
+def Capsule_1 "Beacon" {
+    double radiusBottom = 0.75
 }
 "#;
 
@@ -427,6 +451,24 @@ def Plane "Floor" {
             Some(Shape::Plane {
                 width: 2.0,
                 length: 2.0,
+                axis: Axis::Z
+            })
+        );
+        assert_eq!(
+            read_shape(&scene, "/Post", Time::Default),
+            Some(Shape::Cylinder1 {
+                radius_top: 0.25,
+                radius_bottom: 1.0,
+                height: 2.0,
+                axis: Axis::Y
+            })
+        );
+        assert_eq!(
+            read_shape(&scene, "/Beacon", Time::Default),
+            Some(Shape::Capsule1 {
+                radius_top: 0.5,
+                radius_bottom: 0.75,
+                height: 1.0,
                 axis: Axis::Z
             })
         );

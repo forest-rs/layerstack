@@ -519,6 +519,8 @@ class Gather {
   shading = new Changed();
   /** Materials read in this diff, so none is read twice. */
   materialsRead = new Set<string>();
+  /** The materials the native instancing prototype groups this diff adds bind, by gprim: a new mesh buffer is planned once with the sets all of its groups read. */
+  groups = new Map<string, string[]>();
   work = {
     primsTraversed: 0,
     itemsRead: 0,
@@ -689,7 +691,11 @@ export class DrawList implements Disposable {
    * ({@link Stage.worldTransformsMightVary}), or a point instancer's
    * placement attributes. The rest are left untouched and counted in
    * {@link DrawWork.itemsTimeInvariant}. What might vary is found as the
-   * item is read, so {@link applyChanges} keeps it up to date.
+   * item is read, so {@link applyChanges} keeps it up to date. Cameras,
+   * lights and materials whose inputs might vary are read again too; when
+   * a material's `UsdPrimvarReader_float2` `varname` names other sets at
+   * `time`, the meshes drawing them are planned again, listed in
+   * {@link DrawDiff.rebuilt}.
    */
   setTime(time: number | undefined): DrawDiff {
     const before = this.#stage.transformCache().localComputed;
@@ -713,6 +719,8 @@ export class DrawList implements Disposable {
       if (held.varies) this.#readLight({ path, instance, kind }, placements, gather);
     }
     for (const [path, held] of [...this.#materials]) if (held.varies) this.#readMaterial(path, gather);
+    // A `varname` read at the new time may name other sets.
+    this.#applyToUvSets(gather);
     return this.#finish(gather, read, before);
   }
 
@@ -803,6 +811,11 @@ export class DrawList implements Disposable {
     const gone = [...this.#entries]
       .filter(([, entry]) => !seen.has(sourceKey(entry.item.source)) && found.scopes.some((scope) => covers(scope, entry.item.source)))
       .map(([id]) => id);
+    for (const source of found.sources) {
+      if (source.kind !== "prototype" || source.material === null || this.#keys.has(sourceKey(source))) continue;
+      const materials = gather.groups.get(source.prim) ?? [];
+      if (!materials.includes(source.material)) gather.groups.set(source.prim, [...materials, source.material]);
+    }
     const read = new Set<number>();
     const added = new Set<string>();
     for (const source of found.sources) {
@@ -878,6 +891,7 @@ export class DrawList implements Disposable {
       }
     }
     const at = this.#time === undefined ? {} : { time: this.#time };
+    const planned = new Set<number>();
     for (const [key, set] of wanted) {
       const names = [...set].sort();
       const retained = this.#buffers.get(key)!;
@@ -895,6 +909,11 @@ export class DrawList implements Disposable {
         subsets: (input.subsets ?? []).map((subset) => subset.path ?? ""),
         revision: retained.buffers.revision + 1,
       };
+      planned.add(key);
+    }
+    // The sets drawn now might vary where the old ones did not.
+    for (const entry of this.#entries.values()) {
+      if (planned.has(entry.item.buffer)) entry.varies = { ...entry.varies, geometry: this.#geometryMightVary(entry.item.prim, entry.item.buffer) };
     }
   }
 
@@ -907,6 +926,7 @@ export class DrawList implements Disposable {
   #uvSetsFor(item: DrawItem, gather: Gather): string[] {
     const prim = this.#stage.prim(item.prim);
     const materials = [item.source.kind === "prototype" ? item.source.material : this.#material(item.prim)];
+    if (item.source.kind === "prototype") materials.push(...(gather.groups.get(item.source.prim) ?? []));
     for (const subset of prim?.geomSubsets({ elementType: "face", familyName: "materialBind" }) ?? []) {
       materials.push(this.#material(subset.path));
       subset.indices?.release();
@@ -919,6 +939,17 @@ export class DrawList implements Disposable {
       for (const name of held === undefined ? [] : uvSetsRead(held.item)) names.add(name);
     }
     return [...names].sort();
+  }
+
+  /** Whether the geometry `prim` draws into the buffer `key` might differ at another time: its attributes, its face subsets', or a texture coordinate set the buffer draws. */
+  #geometryMightVary(prim: string, key: number): boolean {
+    const retained = this.#buffers.get(key);
+    const uvSets = retained?.uvSets ?? [];
+    return (
+      this.#inputsMightVary([prim], GEOMETRY_INPUTS) ||
+      this.#inputsMightVary(retained?.buffers.subsets ?? [], SUBSET_INPUTS) ||
+      this.#inputsMightVary([prim], uvSets.flatMap((name) => [`primvars:${name}`, `primvars:${name}:indices`]))
+    );
   }
 
   /** Reads the material at `path` again ({@link readMaterial}) and records whether it changed. */
@@ -1476,11 +1507,7 @@ export class DrawList implements Disposable {
         this.#buffers.get(key)!.users++;
         item = { ...item, buffer: key };
       }
-      const uvSets = this.#buffers.get(key)?.uvSets ?? [];
-      varies.geometry =
-        this.#inputsMightVary([item.prim], GEOMETRY_INPUTS) ||
-        this.#inputsMightVary(this.#buffers.get(key)?.buffers.subsets ?? [], SUBSET_INPUTS) ||
-        this.#inputsMightVary([item.prim], uvSets.flatMap((name) => [`primvars:${name}`, `primvars:${name}:indices`]));
+      varies.geometry = this.#geometryMightVary(item.prim, key);
     }
     if (what.material || what.geometry || isNew) {
       const material = source.kind === "prototype" ? source.material : this.#material(item.prim);

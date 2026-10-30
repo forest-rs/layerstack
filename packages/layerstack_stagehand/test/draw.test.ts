@@ -428,4 +428,135 @@ def Scope "Looks" {
       stage.free();
     }
   });
+
+  /** A material reading the primvar `coordinates` names through a texture. */
+  const reading = (name: string, coordinates: string) => `
+    def Material "${name}" {
+        token outputs:surface.connect = </Looks/${name}/Surface.outputs:surface>
+        ${coordinates}
+        def Shader "Surface" {
+            uniform token info:id = "UsdPreviewSurface"
+            color3f inputs:diffuseColor.connect = </Looks/${name}/Texture.outputs:rgb>
+            token outputs:surface
+        }
+        def Shader "Texture" {
+            uniform token info:id = "UsdUVTexture"
+            asset inputs:file = @tile.png@
+            float2 inputs:st.connect = </Looks/${name}/Reader.outputs:result>
+            float3 outputs:rgb
+        }
+        def Shader "Reader" {
+            uniform token info:id = "UsdPrimvarReader_float2"
+            string inputs:varname.connect = </Looks/${name}.inputs:coordinates>
+            float2 outputs:result
+        }
+    }`;
+
+  // As `a_prototypes_groups_plan_their_mesh_once_with_every_set`: two
+  // instances of one card bound to materials reading different sets, two
+  // groups drawing one buffer, planned once with both.
+  it("plan a prototype's mesh once for every group's sets", () => {
+    const text = `#usda 1.0
+def Xform "World" {
+    def Xform "North" (
+        instanceable = true
+        prepend references = </Card>
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    ) {
+        rel material:binding = </Looks/Near>
+    }
+    def Xform "South" (
+        instanceable = true
+        prepend references = </Card>
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    ) {
+        rel material:binding = </Looks/Far>
+    }
+}
+class Xform "Card" {
+    def Mesh "Face" {
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points = [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0)]
+        texCoord2f[] primvars:st1 = [(0, 0), (2, 0), (2, 2), (0, 2)] (
+            interpolation = "vertex"
+        )
+        texCoord2f[] primvars:st2 = [(0, 0), (3, 0), (3, 3), (0, 3)] (
+            interpolation = "vertex"
+        )
+    }
+}
+def Scope "Looks" {${reading("Near", 'token inputs:coordinates = "st1"')}${reading("Far", 'token inputs:coordinates = "st2"')}
+}
+`;
+    const stage = layerstack.open({ identifier: "scene.usda", bytes: new TextEncoder().encode(text) });
+    const list = stagehand.drawList(stage);
+    try {
+      const first = list.refresh();
+      assert.equal(first.added.length, 2, "one group per material");
+      assert.equal(first.work.triangulations, 1, "planned once");
+      assert.deepEqual(first.rebuilt, []);
+      const [a, b] = list.items();
+      assert.equal(a!.buffer, b!.buffer);
+      assert.deepEqual(
+        list.buffers(a!.buffer)!.mesh.uvSets.map((set) => set.name),
+        ["st1", "st2"],
+      );
+    } finally {
+      list.dispose();
+      stage.free();
+    }
+  });
+
+  // As `set_time_follows_a_varname_that_varies`: `setTime` plans the mesh
+  // again with the set a varying `varname` names, and that set's samples
+  // then refill it.
+  it("follow a varname that varies over time", () => {
+    const text = `#usda 1.0
+def Mesh "Plate" (
+    prepend apiSchemas = ["MaterialBindingAPI"]
+) {
+    int[] faceVertexCounts = [4]
+    int[] faceVertexIndices = [0, 1, 2, 3]
+    point3f[] points = [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0)]
+    texCoord2f[] primvars:st1 (
+        interpolation = "vertex"
+    )
+    texCoord2f[] primvars:st1.timeSamples = {
+        0: [(0, 0), (2, 0), (2, 2), (0, 2)],
+        20: [(0, 0), (4, 0), (4, 4), (0, 4)],
+    }
+    rel material:binding = </Looks/Shifting>
+}
+def Scope "Looks" {${reading("Shifting", 'token inputs:coordinates.timeSamples = {0: "st", 10: "st1"}')}
+}
+`;
+    const stage = layerstack.open({ identifier: "scene.usda", bytes: new TextEncoder().encode(text) });
+    const list = stagehand.drawList(stage, { time: 0 });
+    try {
+      list.refresh();
+      const key = list.items()[0]!.buffer;
+      assert.deepEqual(list.buffers(key)!.mesh.uvSets, []);
+      let diff = list.setTime(10);
+      assert.deepEqual(diff.materialsChanged, ["/Looks/Shifting"]);
+      assert.deepEqual(diff.rebuilt, [key]);
+      assert.equal(diff.work.triangulations, 1);
+      let [set] = list.buffers(key)!.mesh.uvSets;
+      assert.equal(set!.name, "st1");
+      assert.deepEqual([...set!.values.subarray(4, 6)], [3, 3], "st1 between samples");
+      // `st1` is drawn now, and its samples make the mesh read again.
+      diff = list.setTime(20);
+      assert.deepEqual(diff.refilled, [key]);
+      assert.equal(diff.work.triangulations, 0);
+      [set] = list.buffers(key)!.mesh.uvSets;
+      assert.deepEqual([...set!.values.subarray(4, 6)], [4, 4]);
+      // And back: planned again without it.
+      diff = list.setTime(0);
+      assert.deepEqual(diff.rebuilt, [key]);
+      assert.deepEqual(list.buffers(key)!.mesh.uvSets, []);
+    } finally {
+      list.dispose();
+      stage.free();
+    }
+  });
 });

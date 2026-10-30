@@ -74,6 +74,20 @@ pub enum DanglingKind {
     Masked,
 }
 
+impl core::fmt::Display for DanglingKind {
+    /// Why the path dangles, in words: `no prim`, `no property`,
+    /// `inactive`, `unloaded` or `masked out`.
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(match self {
+            Self::NoPrim => "no prim",
+            Self::NoProperty => "no property",
+            Self::Inactive => "inactive",
+            Self::Unloaded => "unloaded",
+            Self::Masked => "masked out",
+        })
+    }
+}
+
 /// Dangling targets counted by [`DanglingKind`].
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[non_exhaustive]
@@ -137,7 +151,7 @@ pub struct DanglingTarget {
 impl DanglingTarget {
     /// The example in words, its paths written as text with `store`, the
     /// store the stage was composed from: `/Placements/Spot.shade ->
-    /// /Plants/Fern/Petal (NoPrim)`.
+    /// /Plants/Fern/Petal (no prim)`.
     #[must_use]
     pub fn display<'a>(&'a self, store: &'a dyn LayerStore) -> impl core::fmt::Display + 'a {
         crate::diagnostic::with_store(self, store)
@@ -152,7 +166,7 @@ impl crate::diagnostic::Describe for DanglingTarget {
     ) -> core::fmt::Result {
         write!(
             f,
-            "{} -> {} ({:?})",
+            "{} -> {} ({})",
             names.property(self.source),
             names.target(self.target),
             self.kind

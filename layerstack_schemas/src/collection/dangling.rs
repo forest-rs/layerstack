@@ -60,8 +60,8 @@ pub struct DanglingCollectionTarget {
 
 impl DanglingCollectionTarget {
     /// The example as text, within its collection: `includes /Gone
-    /// (NoPrim)`, or `includes /Lights/Fill.collection:glare
-    /// (NoCollection)`.
+    /// (no prim)`, or `includes /Lights/Fill.collection:glare
+    /// (no collection)`.
     ///
     /// Its path is written as text with `store`, the store the stage was
     /// composed from, as every diagnostic's `display` writes its ids.
@@ -77,9 +77,9 @@ impl DanglingCollectionTarget {
             };
             let target = self.target.display(store.paths(), store.tokens());
             match self.problem {
-                CollectionTargetProblem::Dangling(kind) => write!(f, "{list} {target} ({kind:?})"),
+                CollectionTargetProblem::Dangling(kind) => write!(f, "{list} {target} ({kind})"),
                 CollectionTargetProblem::NoCollection => {
-                    write!(f, "{list} {target} (NoCollection)")
+                    write!(f, "{list} {target} (no collection)")
                 }
             }
         })

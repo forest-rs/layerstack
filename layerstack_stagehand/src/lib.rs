@@ -93,7 +93,9 @@
 //!
 //! [`DrawList::apply_changes`] takes the change records an edit produced
 //! (`layerstack::Changes`) and reads only what they reach;
-//! [`DrawList::set_time`] reads every item at a new time. Each returns a
+//! [`DrawList::set_time`] reads at a new time only the items whose
+//! inputs might vary with time (time samples, splines or value clips on
+//! their geometry, visibility or transform chain). Each returns a
 //! [`DrawDiff`]: the items added, removed, moved, shown or hidden or
 //! rebound to new materials, and the buffers added, refilled (by a kept
 //! plan, no triangulation), rebuilt or freed, with [`DrawWork`] counting

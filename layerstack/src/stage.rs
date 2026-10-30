@@ -120,6 +120,17 @@ pub(crate) struct PrimTypeInfo {
     definition: Arc<PrimDefinition>,
 }
 
+/// A dictionary schema fallback composed as a one-opinion dictionary
+/// chain; `None` for any other fallback, which reads as it is.
+fn composed_fallback(fallback: &Value) -> Option<Value> {
+    match fallback {
+        Value::Dictionary(entries) => Some(Value::Dictionary(combine_dictionary_chain([
+            entries.as_slice()
+        ]))),
+        _ => None,
+    }
+}
+
 /// A resolved value (optionally with provenance).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Resolved<T> {
@@ -4225,6 +4236,37 @@ impl Stage {
         with_source: bool,
         below: Option<LayerId>,
     ) -> Result<Option<Resolved<T>>, crate::ArrayReadError> {
+        let kept = core::cell::Cell::new(None);
+        let accept = |value: &Value, keep: bool| match read(value) {
+            Some(value) => {
+                if keep {
+                    kept.set(Some(value));
+                }
+                true
+            }
+            None => false,
+        };
+        let provenance = self.try_read_default_by(prim, field, &accept, with_source, below)?;
+        Ok(provenance.map(|provenance| Resolved {
+            value: kept.take().expect("an accepted value is kept"),
+            provenance,
+        }))
+    }
+
+    /// [`Stage::try_read_default`] with its conversion type-erased, so that
+    /// one copy of the selection serves every value type (each copy was
+    /// about 2.7 KB of WebAssembly). `accept(value, keep)` converts `value`
+    /// and says whether it converted; with `keep` the caller keeps the
+    /// result as the answer. Returns the answer's provenance, `None` when
+    /// nothing was accepted.
+    fn try_read_default_by(
+        &self,
+        prim: PathId,
+        field: TokenId,
+        accept: &dyn Fn(&Value, bool) -> bool,
+        with_source: bool,
+        below: Option<LayerId>,
+    ) -> Result<Option<Option<Provenance>>, crate::ArrayReadError> {
         let fallback = self.schema_fallback(prim, field);
         if let Some((index, opinions)) = self.opinions(prim, field, Lookup::Property) {
             let opinions = opinions.from(self.below_start(opinions, below));
@@ -4257,17 +4299,16 @@ impl Stage {
                             mapped.records(),
                             index.property_type_for(&field),
                             fallback,
-                            |value| read(value).is_some(),
+                            |value| accept(value, false),
                         );
                     if let SparseResolveResult::Resolved(value) = resolved
-                        && let Some(value) = read(&value)
+                        && accept(&value, true)
                     {
-                        return Ok(Some(Resolved {
-                            value,
-                            provenance: source
+                        return Ok(Some(
+                            source
                                 .and_then(|i| mapped.get(i))
                                 .and_then(|op| self.provenance_for_if(field, op, with_source)),
-                        }));
+                        ));
                     }
                     return Ok(None);
                 }
@@ -4288,24 +4329,18 @@ impl Stage {
                         ResolvedValue::Dictionary(entries) => Value::Dictionary(entries),
                         _ => return Ok(None),
                     };
-                    if let Some(value) = read(&value) {
-                        return Ok(Some(Resolved {
-                            value,
-                            provenance: resolved.provenance,
-                        }));
+                    if accept(&value, true) {
+                        return Ok(Some(resolved.provenance));
                     }
                     continue;
                 }
                 let mapped = stage_time::retime_value(value, opinion.layer_offset());
-                if let Some(value) = read(mapped.as_ref().unwrap_or(value)) {
-                    return Ok(Some(Resolved {
-                        value,
-                        provenance: self.provenance_for_if(field, opinion, with_source),
-                    }));
+                if accept(mapped.as_ref().unwrap_or(value), true) {
+                    return Ok(Some(self.provenance_for_if(field, opinion, with_source)));
                 }
             }
         }
-        Ok(self.read_fallback(fallback, &read))
+        Ok(self.accept_fallback(fallback, accept).then_some(None))
     }
 
     fn read_fallback<T>(
@@ -4314,16 +4349,25 @@ impl Stage {
         read: &impl Fn(&Value) -> Option<T>,
     ) -> Option<Resolved<T>> {
         let fallback = fallback?;
-        let dictionary = match fallback {
-            Value::Dictionary(entries) => Some(Value::Dictionary(combine_dictionary_chain([
-                entries.as_slice(),
-            ]))),
-            _ => None,
-        };
+        let dictionary = composed_fallback(fallback);
         Some(Resolved {
             value: read(dictionary.as_ref().unwrap_or(fallback))?,
             provenance: None,
         })
+    }
+
+    /// [`Stage::read_fallback`] through the type-erased conversion of
+    /// [`Stage::try_read_default_by`]: whether `accept` kept the fallback.
+    fn accept_fallback(
+        &self,
+        fallback: Option<&Value>,
+        accept: &dyn Fn(&Value, bool) -> bool,
+    ) -> bool {
+        let Some(fallback) = fallback else {
+            return false;
+        };
+        let dictionary = composed_fallback(fallback);
+        accept(dictionary.as_ref().unwrap_or(fallback), true)
     }
 
     /// Resolves a scalar property on a prim with schema fallback.

@@ -545,7 +545,16 @@ const materials = (robot: string | null = sample.robot, scale = "1, 1, 1, 1") =>
  * The sample's lights, by kind: the lamp (a sphere light in the
  * sublayer), the sun, the sky, the spot and the panel.
  */
-const lights = ["/World/Lamp sphere", "/World/Panel rect", "/World/Sky dome", "/World/Spot disk", "/World/Sun distant"];
+// The beacon's glow once per instance, by its instance proxies' paths.
+const lights = [
+  "/World/Beacons/North/Glow sphere",
+  "/World/Beacons/South/Glow sphere",
+  "/World/Lamp sphere",
+  "/World/Panel rect",
+  "/World/Sky dome",
+  "/World/Spot disk",
+  "/World/Sun distant",
+];
 const opened: ViewportSummary = {
   drawn: [
     ...beacons,
@@ -651,9 +660,10 @@ const update = (counts: Partial<UpdateSummary>): UpdateSummary => ({
 const updates: UpdateSummary[] = [
   // Read whole: eleven draws (the beacons' post and bulb one each for both
   // instances, the stones one for five), four meshes planned and six
-  // shapes tessellated (the body and the posts share a cube); five lights,
-  // the camera and the three bound materials read.
-  update({ added: 11, triangulations: 4, tessellations: 6, itemsRead: 11, localTransforms: 24, lightsRead: 5, lights: 5, camerasRead: 1, materialsRead: 3, materials: 3 }),
+  // shapes tessellated (the body and the posts share a cube); seven lights
+  // (the beacon's glow once per instance), the camera and the three bound
+  // materials read.
+  update({ added: 11, triangulations: 4, tessellations: 6, itemsRead: 11, localTransforms: 26, lightsRead: 7, lights: 7, camerasRead: 1, materialsRead: 3, materials: 3 }),
   // Selecting changes nothing.
   update({}),
   // The rock's radius: one draw read, its sphere tessellated at radius 3.
@@ -685,14 +695,15 @@ const updates: UpdateSummary[] = [
   update({ moved: 1, itemsRead: 1, itemsUntouched: 11, itemsTimeInvariant: 11, localTransforms: 1 }),
   update({ moved: 1, itemsRead: 1, itemsUntouched: 11, itemsTimeInvariant: 11, localTransforms: 1 }),
   // Reopened: a new stage, read whole.
-  update({ added: 12, triangulations: 4, tessellations: 7, itemsRead: 12, localTransforms: 25, lightsRead: 5, lights: 5, camerasRead: 1, materialsRead: 3, materials: 3 }),
+  update({ added: 12, triangulations: 4, tessellations: 7, itemsRead: 12, localTransforms: 27, lightsRead: 7, lights: 7, camerasRead: 1, materialsRead: 3, materials: 3 }),
   // Muted: the rover's draws gone, nothing read; its paint dropped.
   update({ removed: 2, itemsUntouched: 10, materials: 1 }),
   // One edit moves the north beacon (its post and bulb groups' matrices),
   // hides the rock (no matrices, shown or hidden) and stone 3 (the
   // stones' matrices): matrices and visibility only, nothing triangulated,
-  // tessellated or refilled.
-  update({ moved: 4, shown: 1, itemsRead: 4, itemsUntouched: 6 }),
+  // tessellated or refilled. The north beacon's glow alone moves with it:
+  // the south's is not read.
+  update({ moved: 4, shown: 1, itemsRead: 4, itemsUntouched: 6, lightsRead: 1, lights: 1 }),
   // The lamp's intensity: that light alone read and changed; no draw or
   // camera read. Its new opinion is a new property spec in the edit layer,
   // which resyncs that property alone.
@@ -744,6 +755,12 @@ try {
   assert.equal(camera.linearExposureScale, 1);
   assert.deepEqual([...camera.cameraToWorld.subarray(12, 15)], [10, 7, 14]);
   console.log("ok the lamp's light and the camera the viewport draws with");
+  // The beacon's glow, a light inside the instances: one per instance, the
+  // north one moved with its beacon.
+  const glow = (beacon: string) => model.list!.light(`/World/Beacons/${beacon}/Glow`)!.position;
+  assert.deepEqual(glow("North"), [sample.beaconMoved[0], sample.beaconMoved[1] + 2, sample.beaconMoved[2]]);
+  assert.deepEqual(glow("South"), [2, 2, -5]);
+  console.log("ok the beacons' glows, one per instance");
   // The strip's UDIM set: the tiles the scene's storage has, as the page
   // finds them from the directory's listing and OpenUSD tile by tile.
   const strip = model.list!.material(sample.tiles)!.textures[0]!;

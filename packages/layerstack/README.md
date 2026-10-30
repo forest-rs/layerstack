@@ -314,6 +314,7 @@ await stage.resolve(source);
 | `schema.cannot_edit` | A schema edit (or `def` define) of a prim beneath an instance or in a prototype, which OpenUSD refuses. `schema.cannot_apply`: an API schema the prim may not have. |
 | `coord_sys.no_binding` | `clearCoordSys` of a binding that does not exist. |
 | `metadata.*` | `metadata.key_path` (an `sdrMetadata` key with an empty part), `metadata.field`. |
+| `skel.*` | A skinning read or computation that cannot be made: `skel.unbound` (nothing skins the prim), `skel.influences` (not as many weights as joint indices, or not whole blocks), `skel.deformation` (influences that do not fit the points or name a joint past the palette), `skel.input`, `skel.array_length`, `skel.target`, `skel.topology`, `skel.primvar`, `skel.method`, `skel.singular`. |
 | `io.*` | A read or import failed: `io.rejected` (does not parse), `io.not_found`, `io.unavailable`, ... |
 | `composition.*` | In `status().compositionErrors`: `composition.unresolved_asset`, `composition.arc_cycle`, ... |
 

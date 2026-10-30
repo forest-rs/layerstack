@@ -19,6 +19,7 @@ import {
   readPort,
   readPorts,
 } from "./schemas.js";
+import { SkinningQuery } from "./skinning.js";
 import type {
   ArcKind,
   ArrayData,
@@ -45,6 +46,7 @@ import type {
   ResolveOptions,
   ResolveResult,
   SaveResult,
+  SkinInput,
   Scalar,
   SkippedLayer,
   StageStatus,
@@ -129,6 +131,11 @@ export interface NativeStage extends Disposable {
   subsetFamilyType(path: string, family: string): string;
   validateSubsetFamily(path: string, element: string, family: string, time?: number | null): unknown;
   coordSysBindings(path: string, inherited: boolean): unknown;
+  skinning(path: string): unknown;
+  skinningInfluences(path: string, time: number | null | undefined, interleaved: boolean): unknown;
+  skinningTransforms(path: string, time?: number | null): unknown;
+  deformedPoints(path: string, time?: number | null): unknown;
+  deformedNormals(path: string, time?: number | null): unknown;
 }
 
 /**
@@ -174,6 +181,38 @@ export interface NativeModule {
   /** The batch of edits `Stage.apply` takes. */
   readonly EditBatch: new () => NativeEditBatch;
   nativeVersion(): unknown;
+  /** The skinning functions over the caller's arrays ({@link Layerstack.skinPoints}). */
+  skinPoints(
+    method: string,
+    geomBind: Float64Array,
+    joints: Float64Array,
+    indices: Int32Array | undefined,
+    weights: Float32Array | undefined,
+    interleaved: Float32Array | undefined,
+    elementSize: number,
+    constant: boolean,
+    points: Float32Array,
+  ): Float32Array;
+  skinNormals(
+    method: string,
+    geomBind: Float64Array,
+    joints: Float64Array,
+    indices: Int32Array | undefined,
+    weights: Float32Array | undefined,
+    interleaved: Float32Array | undefined,
+    elementSize: number,
+    constant: boolean,
+    normals: Float32Array,
+  ): Float32Array;
+  skinTransform(
+    method: string,
+    geomBind: Float64Array,
+    joints: Float64Array,
+    indices: Int32Array | undefined,
+    weights: Float32Array | undefined,
+    interleaved: Float32Array | undefined,
+    elementSize: number,
+  ): Float64Array;
   /** The module's memory, for {@link Layerstack.transfer}; optional. */
   readonly memory?: WebAssembly.Memory;
 }
@@ -245,6 +284,56 @@ export class Layerstack {
     );
     this.#bytesIn += root.bytes.byteLength;
     return new Stage(this, native, provenance);
+  }
+
+  /**
+   * Skins `points` (3 floats each, in geometry space) with the caller's
+   * own arrays, as OpenUSD's `UsdSkelSkinPoints` does with separate or
+   * interleaved influences: the bind transform, then each influence's
+   * joint transform, weighted. Returns the points in skeleton space, a new
+   * `Float32Array`; weights are used as given, not normalized.
+   *
+   * Throws `skel.deformation` when the influences do not fit (not one
+   * block per point, not as many weights as indices, a joint index past the
+   * palette, a weight that is not finite), `argument.invalid` for arrays
+   * of the wrong shape.
+   */
+  skinPoints(input: SkinInput & { readonly points: Float32Array }): Float32Array {
+    const [method, bind, joints, indices, weights, pairs, size, constant] = skinArguments(input, "skinPoints");
+    const points = input.points;
+    if (!(points instanceof Float32Array)) {
+      throw new LayerstackError("argument.invalid", "skinPoints", "`points` must be a Float32Array");
+    }
+    this.#bytesIn += bind.byteLength + joints.byteLength + points.byteLength;
+    const out = this.call("skinPoints", () =>
+      this.#module.skinPoints(method, bind, joints, indices, weights, pairs, size, constant, points),
+    );
+    this.#bytesOut += out.byteLength;
+    return out;
+  }
+
+  /** Skins vertex or varying `normals` as {@link Layerstack.skinPoints} skins points, normalized (`UsdSkelSkinNormals`). Throws as that does, and `skel.singular` for a transform whose linear part has no inverse. */
+  skinNormals(input: SkinInput & { readonly normals: Float32Array }): Float32Array {
+    const [method, bind, joints, indices, weights, pairs, size, constant] = skinArguments(input, "skinNormals");
+    const normals = input.normals;
+    if (!(normals instanceof Float32Array)) {
+      throw new LayerstackError("argument.invalid", "skinNormals", "`normals` must be a Float32Array");
+    }
+    this.#bytesIn += bind.byteLength + joints.byteLength + normals.byteLength;
+    const out = this.call("skinNormals", () =>
+      this.#module.skinNormals(method, bind, joints, indices, weights, pairs, size, constant, normals),
+    );
+    this.#bytesOut += out.byteLength;
+    return out;
+  }
+
+  /** The one transform constant influences move a rigid prim by, 16 numbers row by row, in skeleton space (`UsdSkelSkinTransform`). Throws as {@link Layerstack.skinPoints}, and `skel.deformation` for influences that are not one block. */
+  skinTransform(input: SkinInput): Float64Array {
+    const [method, bind, joints, indices, weights, pairs, size] = skinArguments(input, "skinTransform");
+    this.#bytesIn += bind.byteLength + joints.byteLength;
+    return this.call("skinTransform", () =>
+      this.#module.skinTransform(method, bind, joints, indices, weights, pairs, size),
+    );
   }
 
   /** @internal A new native batch of edits. */
@@ -923,6 +1012,20 @@ export class Stage implements Disposable {
       unresolved,
       complete: unavailable.length === 0 && unresolved.length === 0,
     };
+  }
+
+  /**
+   * The skinning binding of the geometry at `path`
+   * ({@link SkinningQuery}), or `null` when no skeleton with joint
+   * influences binds it (`UsdSkelSkinningQuery`).
+   *
+   * Throws `prim.not_found`, a `skel.*` code for a binding that is partial
+   * or malformed (`skel.input`: joint indices without weights),
+   * `skel.method` for an unknown skinning method.
+   */
+  skinning(path: string): SkinningQuery | null {
+    const row = this.#call("skinning", (native) => native.skinning(path)) as Row | null;
+    return row === null ? null : new SkinningQuery(this, path, row);
   }
 
   /** The composed prim at `path`, or `null`. Throws `path.invalid` for a path that is not an absolute prim path. */
@@ -1709,6 +1812,11 @@ export class Prim {
     return decodeCoordSys(rows);
   }
 
+  /** Its skinning binding ({@link Stage.skinning}), or `null` when nothing skins it. */
+  skinning(): SkinningQuery | null {
+    return this.stage.skinning(this.path);
+  }
+
   /** Its shading inputs (`inputs:*`), schema-defined and authored, in property order: a shader's parameters, a material's or node graph's interface. */
   inputs(): ShaderPort[] {
     return readPorts(this.stage, this.path, "input");
@@ -2050,4 +2158,60 @@ function decodeValue(layerstack: Layerstack, record: unknown): Value | null {
     default:
       return { kind: "opaque", type };
   }
+}
+
+type SkinArguments = [
+  method: string,
+  geomBind: Float64Array,
+  joints: Float64Array,
+  indices: Int32Array | undefined,
+  weights: Float32Array | undefined,
+  interleaved: Float32Array | undefined,
+  elementSize: number,
+  constant: boolean,
+];
+
+/** The arguments of the native skinning functions, shapes checked. */
+function skinArguments(input: SkinInput, operation: string): SkinArguments {
+  const fail = (message: string): never => {
+    throw new LayerstackError("argument.invalid", operation, message);
+  };
+  if (typeof input !== "object" || input === null) fail("expected { geomBindTransform, jointTransforms, influences, ... }");
+  const method = input.method ?? "classicLinear";
+  const numbers = (value: unknown, field: string): Float64Array => {
+    if (value instanceof Float64Array) return value;
+    if (Array.isArray(value) && value.every((item) => typeof item === "number")) return Float64Array.from(value);
+    return fail(`\`${field}\` must be a Float64Array or an array of numbers`);
+  };
+  const influences = input.influences;
+  if (typeof influences !== "object" || influences === null) fail("`influences` must be { indices, weights } or { interleaved }");
+  const size = influences.elementSize;
+  if (!Number.isInteger(size) || size < 1) fail("`influences.elementSize` must be a positive integer");
+  const constant = influences.constant ?? false;
+  if ("interleaved" in influences) {
+    if (!(influences.interleaved instanceof Float32Array)) fail("`influences.interleaved` must be a Float32Array");
+    return [
+      method,
+      numbers(input.geomBindTransform, "geomBindTransform"),
+      numbers(input.jointTransforms, "jointTransforms"),
+      undefined,
+      undefined,
+      influences.interleaved,
+      size,
+      constant,
+    ];
+  }
+  if (!(influences.indices instanceof Int32Array) || !(influences.weights instanceof Float32Array)) {
+    fail("`influences.indices` must be an Int32Array and `influences.weights` a Float32Array");
+  }
+  return [
+    method,
+    numbers(input.geomBindTransform, "geomBindTransform"),
+    numbers(input.jointTransforms, "jointTransforms"),
+    influences.indices,
+    influences.weights,
+    undefined,
+    size,
+    constant,
+  ];
 }

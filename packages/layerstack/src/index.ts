@@ -25,7 +25,14 @@
  * @module
  */
 
-import init, { EditBatch as GlueEditBatch, Stage as GlueStage, nativeVersion } from "../wasm/layerstack.js";
+import init, {
+  EditBatch as GlueEditBatch,
+  Stage as GlueStage,
+  nativeVersion,
+  skinNormals,
+  skinPoints,
+  skinTransform,
+} from "../wasm/layerstack.js";
 import { LayerstackError } from "./errors.js";
 import { Layerstack } from "./stage.js";
 import type { NativeModule } from "./stage.js";
@@ -33,6 +40,7 @@ import type { NativeModule } from "./stage.js";
 export { ArrayCopy, ArrayHandle } from "./arrays.js";
 export { LayerstackError } from "./errors.js";
 export { Material, Shader, ShaderPort } from "./schemas.js";
+export { SkinningQuery } from "./skinning.js";
 export type { ErrorCode, ErrorDetails, HostErrorCode } from "./errors.js";
 export {
   ABI,
@@ -91,7 +99,15 @@ async function instantiate(source: URL | string | BufferSource | WebAssembly.Mod
       cause: error,
     });
   }
-  return new Layerstack({ Stage: GlueStage, EditBatch: GlueEditBatch, nativeVersion, memory });
+  return new Layerstack({
+    Stage: GlueStage,
+    EditBatch: GlueEditBatch,
+    nativeVersion,
+    skinPoints,
+    skinNormals,
+    skinTransform,
+    memory,
+  });
 }
 
 /**

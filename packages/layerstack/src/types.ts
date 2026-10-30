@@ -1205,3 +1205,42 @@ export interface ValueSources {
   /** Recoverable problems on a branch: a target that names no shading attribute, a cycle, a connection into a shader's input. */
   readonly issues: readonly { readonly kind: "invalidTarget" | "cycle" | "nonContainerInput" | "other"; readonly at: string | null }[];
 }
+
+/** A skinning method (`primvars:skel:skinningMethod`): linear blend or dual quaternion. */
+export type SkinningMethod = "classicLinear" | "dualQuaternion";
+
+/**
+ * Joint influences to skin with: separate `indices` and `weights`, or
+ * `interleaved` `[index, weight]` pairs (the form GPU skinning takes,
+ * {@link SkinningQuery.interleavedInfluences}); `elementSize` influences
+ * per point, or for the whole prim with `constant`. Indices address the
+ * joint transforms given with them; weights are used as given.
+ */
+export type JointInfluencesInput =
+  | {
+      readonly indices: Int32Array;
+      readonly weights: Float32Array;
+      readonly elementSize: number;
+      readonly constant?: boolean;
+    }
+  | { readonly interleaved: Float32Array; readonly elementSize: number; readonly constant?: boolean };
+
+/** What {@link Layerstack.skinPoints} and its siblings skin with. Matrices are 16 numbers, row by row, as USD stores them. */
+export interface SkinInput {
+  /** `classicLinear` by default. */
+  readonly method?: SkinningMethod;
+  /** The geometry's bind transform (identity when unauthored). */
+  readonly geomBindTransform: Float64Array | readonly number[];
+  /** The joint palette, 16 numbers per joint in the influences' order ({@link SkinningQuery.skinningTransforms}). */
+  readonly jointTransforms: Float64Array | readonly number[];
+  readonly influences: JointInfluencesInput;
+}
+
+/** A skinning binding's joint palette at one time: what a GPU skins with, beside the influences. */
+export interface SkinningTransforms {
+  /** Inverse bind times animated skeleton-space transform per joint, in the binding's joint order: a `matrix4d[]` array. Release it when done. */
+  readonly transforms: ArrayData;
+  /** The geometry's bind transform, 16 numbers row by row. */
+  readonly geomBindTransform: Float64Array;
+  readonly method: SkinningMethod;
+}

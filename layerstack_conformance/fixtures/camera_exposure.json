@@ -1,0 +1,165 @@
+{
+  "rows": [
+    {
+      "exposure": 0.0,
+      "exposure_time": 1.0,
+      "f_stop": 1.0,
+      "iso": 100.0,
+      "linear_exposure_scale": 1.0,
+      "path": "/Defaults",
+      "responsivity": 1.0,
+      "time": null
+    },
+    {
+      "exposure": 0.0,
+      "exposure_time": 1.0,
+      "f_stop": 1.0,
+      "iso": 100.0,
+      "linear_exposure_scale": 1.0,
+      "path": "/Defaults",
+      "responsivity": 1.0,
+      "time": 0
+    },
+    {
+      "exposure": 0.0,
+      "exposure_time": 1.0,
+      "f_stop": 1.0,
+      "iso": 100.0,
+      "linear_exposure_scale": 1.0,
+      "path": "/Defaults",
+      "responsivity": 1.0,
+      "time": 5
+    },
+    {
+      "exposure": 0.0,
+      "exposure_time": 1.0,
+      "f_stop": 1.0,
+      "iso": 100.0,
+      "linear_exposure_scale": 1.0,
+      "path": "/Defaults",
+      "responsivity": 1.0,
+      "time": 10
+    },
+    {
+      "exposure": 1.5,
+      "exposure_time": 0.019999999552965164,
+      "f_stop": 2.799999952316284,
+      "iso": 400.0,
+      "linear_exposure_scale": 0.036076877266168594,
+      "path": "/Metered",
+      "responsivity": 1.25,
+      "time": null
+    },
+    {
+      "exposure": 1.5,
+      "exposure_time": 0.019999999552965164,
+      "f_stop": 2.799999952316284,
+      "iso": 400.0,
+      "linear_exposure_scale": 0.036076877266168594,
+      "path": "/Metered",
+      "responsivity": 1.25,
+      "time": 0
+    },
+    {
+      "exposure": 1.5,
+      "exposure_time": 0.019999999552965164,
+      "f_stop": 2.799999952316284,
+      "iso": 400.0,
+      "linear_exposure_scale": 0.036076877266168594,
+      "path": "/Metered",
+      "responsivity": 1.25,
+      "time": 5
+    },
+    {
+      "exposure": 1.5,
+      "exposure_time": 0.019999999552965164,
+      "f_stop": 2.799999952316284,
+      "iso": 400.0,
+      "linear_exposure_scale": 0.036076877266168594,
+      "path": "/Metered",
+      "responsivity": 1.25,
+      "time": 10
+    },
+    {
+      "exposure": 0.0,
+      "exposure_time": 1.0,
+      "f_stop": 1.0,
+      "iso": 100.0,
+      "linear_exposure_scale": 1.0,
+      "path": "/Animated",
+      "responsivity": 1.0,
+      "time": null
+    },
+    {
+      "exposure": -1.0,
+      "exposure_time": 1.0,
+      "f_stop": 1.399999976158142,
+      "iso": 100.0,
+      "linear_exposure_scale": 0.2551020383834839,
+      "path": "/Animated",
+      "responsivity": 1.0,
+      "time": 0
+    },
+    {
+      "exposure": 1.0,
+      "exposure_time": 1.0,
+      "f_stop": 4.699999809265137,
+      "iso": 100.0,
+      "linear_exposure_scale": 0.09053871780633926,
+      "path": "/Animated",
+      "responsivity": 1.0,
+      "time": 5
+    },
+    {
+      "exposure": 3.0,
+      "exposure_time": 1.0,
+      "f_stop": 8.0,
+      "iso": 100.0,
+      "linear_exposure_scale": 0.125,
+      "path": "/Animated",
+      "responsivity": 1.0,
+      "time": 10
+    },
+    {
+      "exposure": null,
+      "exposure_time": 1.0,
+      "f_stop": null,
+      "iso": 100.0,
+      "linear_exposure_scale": 1.0,
+      "path": "/Blocked",
+      "responsivity": 1.0,
+      "time": null
+    },
+    {
+      "exposure": 0.0,
+      "exposure_time": 1.0,
+      "f_stop": 1.0,
+      "iso": 100.0,
+      "linear_exposure_scale": 1.0,
+      "path": "/Blocked",
+      "responsivity": 1.0,
+      "time": 0
+    },
+    {
+      "exposure": 0.0,
+      "exposure_time": 1.0,
+      "f_stop": 1.0,
+      "iso": 100.0,
+      "linear_exposure_scale": 1.0,
+      "path": "/Blocked",
+      "responsivity": 1.0,
+      "time": 5
+    },
+    {
+      "exposure": 0.0,
+      "exposure_time": 1.0,
+      "f_stop": 1.0,
+      "iso": 100.0,
+      "linear_exposure_scale": 1.0,
+      "path": "/Blocked",
+      "responsivity": 1.0,
+      "time": 10
+    }
+  ],
+  "version": "26.11"
+}

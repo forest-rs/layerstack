@@ -240,8 +240,15 @@ impl<B: Storage> StageDocument<B> {
         .map_err(|e| IoError::new(IoErrorKind::Rejected, e.to_string()))?;
         let mut store = self.store.snapshot();
         let mut catalog = self.catalog.clone();
-        let mut queue = BTreeSet::new();
-        queue.insert(root);
+        // The layers to visit, sorted with the smallest id last, so `pop`
+        // visits them in id order: a vector rather than a set, whose
+        // removals would compile the tree's rebalancing for this one walk.
+        let mut queue = alloc::vec![root];
+        let push = |queue: &mut Vec<LayerId>, id: LayerId| {
+            if let Err(at) = queue.binary_search_by(|p| id.cmp(p)) {
+                queue.insert(at, id);
+            }
+        };
         let mut visited = BTreeSet::new();
         let mut resources = BTreeMap::new();
         let mut assets = BTreeMap::<String, AssetBytes>::new();
@@ -249,7 +256,7 @@ impl<B: Storage> StageDocument<B> {
         let mut discovery = UdimDiscovery::default();
         let mut admitted = Admitted::default();
         let mut report = DependencyReport::default();
-        while let Some(id) = queue.pop_first() {
+        while let Some(id) = queue.pop() {
             if !visited.insert(id) {
                 continue;
             }
@@ -415,7 +422,7 @@ impl<B: Storage> StageDocument<B> {
                 };
                 let targets = match &resource {
                     Resource::Layer(id) => {
-                        queue.insert(*id);
+                        push(&mut queue, *id);
                         alloc::vec![DependencyTarget::Layer(*id)]
                     }
                     Resource::Asset(bytes) => {

@@ -1352,11 +1352,15 @@ impl Stage {
     /// format to the identifier it was read from; the bytes become that
     /// identifier's source and are handed to the host to persist.
     ///
-    /// The record is `[written, failures, anonymous]`: each layer written as
-    /// `[layer, identifier, bytes]`, each that could not be as
+    /// The record is `[written, failures, anonymous, skipped]`: each layer
+    /// written as `[layer, identifier, bytes]`, each that could not be as
     /// `[layer, code, message]` (`io.read_only` for a package member, which
-    /// stays dirty), and the ids of the dirty anonymous layers, which have
-    /// nowhere to go (export them with `exportLayer`).
+    /// stays dirty), the ids of the dirty anonymous layers, which have
+    /// nowhere to go (export them with `exportLayer`), and, for a save of
+    /// the whole stage, each dirty layer with an identifier it left
+    /// unwritten as `[layer, reason]`: `"muted"`, or `"unused"` for a layer
+    /// the stage holds but no longer composes (an asset whose reference was
+    /// removed after an edit through it). Save it with `save(layer)`.
     ///
     /// Spec: AOUSD Core §7.1 (layers are saved as authored).
     ///
@@ -1364,14 +1368,54 @@ impl Stage {
     ///
     /// `layer.unknown` when `layer` names no layer of the stage.
     pub(crate) fn save(&mut self, layer: Option<u64>) -> Result<Wire, Error> {
-        let report = match layer {
+        let (report, skipped) = match layer {
             Some(id) => {
                 self.check_layer(LayerId(id))?;
-                self.document.save_layers(&[LayerId(id)])
+                (self.document.save_layers(&[LayerId(id)]), Vec::new())
             }
-            None => self.document.save(),
+            None => {
+                let report = self.document.save();
+                let skipped = self.skipped_by(&report);
+                (report, skipped)
+            }
         };
-        Ok(self.save_record(&report))
+        let mut record = self.save_record(&report);
+        if let Wire::List(fields) = &mut record {
+            fields.push(Wire::List(skipped));
+        }
+        Ok(record)
+    }
+
+    /// The dirty layers with an identifier a save of the stage left
+    /// unwritten, as `[layer, reason]` rows: OpenUSD's `UsdStage::Save`
+    /// saves the layers the stage uses, so a muted layer and one no longer
+    /// composed stay dirty.
+    fn skipped_by(&self, report: &SaveReport) -> Vec<Wire> {
+        let stage = self.document.stage().stage();
+        let reported = |id: LayerId| {
+            report.saved.contains(&id)
+                || report.anonymous.contains(&id)
+                || report.failures.iter().any(|failure| failure.layer == id)
+        };
+        self.document
+            .store()
+            .layer_ids()
+            .into_iter()
+            .filter(|&id| {
+                self.document.is_dirty(id)
+                    && self.document.identifier(id).is_some()
+                    && stage.session_layer() != Some(id)
+                    && !reported(id)
+            })
+            .map(|id| {
+                let reason = if stage.is_layer_muted(id) {
+                    "muted"
+                } else {
+                    "unused"
+                };
+                Wire::List(vec![Wire::UInt64(id.0), Wire::text(reason)])
+            })
+            .collect()
     }
 
     fn save_record(&mut self, report: &SaveReport) -> Wire {
@@ -2535,11 +2579,12 @@ def "World" (
         let root = stage.document().stage().stage().root_layer().unwrap();
         set_size(&mut stage, root, 7.0);
         let record = stage.save(None).unwrap();
-        let [written, failures, anonymous] = record.as_list().unwrap() else {
+        let [written, failures, anonymous, skipped] = record.as_list().unwrap() else {
             panic!("{record:?}");
         };
         assert!(failures.as_list().unwrap().is_empty());
         assert!(anonymous.as_list().unwrap().is_empty());
+        assert!(skipped.as_list().unwrap().is_empty());
         let written = written.as_list().unwrap();
         assert_eq!(written.len(), 1, "only the edited root was dirty");
         let row = written[0].as_list().unwrap();
@@ -2563,6 +2608,85 @@ def "World" (
             reopened.export_flattened("usda").unwrap(),
             stage.export_flattened("usda").unwrap(),
             "the same composed stage"
+        );
+    }
+
+    /// A dirty layer the stage no longer composes, or mutes, is left
+    /// unwritten by a save of the stage, and listed; `save(layer)` writes it.
+    #[test]
+    fn save_lists_the_dirty_layers_it_skips() {
+        let mut stage = resolved();
+        let ball = stage
+            .document()
+            .store()
+            .layer_ids()
+            .into_iter()
+            .find(|id| stage.document().identifier(*id) == Some("parts/ball.usda"))
+            .unwrap();
+        let sub = stage
+            .document()
+            .store()
+            .layer_ids()
+            .into_iter()
+            .find(|id| stage.document().identifier(*id) == Some("sub.usda"))
+            .unwrap();
+        let root = stage.document().stage().stage().root_layer().unwrap();
+        let through = {
+            let input = TargetInput {
+                kind: "arc".into(),
+                layer: ball.0,
+                prim: Some("/Ball".into()),
+                site: Some("/Ball".into()),
+                arc: Some("references".into()),
+                maps_outside: false,
+                offset: 0.0,
+                scale: 1.0,
+            };
+            stage.resolve_target(&input).map(|_| input).unwrap()
+        };
+        let mut batch = EditBatch::new();
+        let slot = batch.value_numbers("double".into(), vec![9.0]);
+        batch.create_attribute(
+            "/Ball.mass".into(),
+            "double".into(),
+            false,
+            true,
+            Some(slot),
+        );
+        stage.apply_target(&through, &mut batch).unwrap();
+        set_size(&mut stage, sub, 3.0);
+        stage.set_layer_muted(sub.0, true).unwrap();
+        let mut batch = EditBatch::new();
+        batch.remove_arc(
+            false,
+            "/Ball".into(),
+            Some("./parts/ball.usda".into()),
+            Some("/Ball".into()),
+        );
+        stage.apply(root.0, &mut batch).unwrap();
+        let record = stage.save(None).unwrap();
+        let fields = record.as_list().unwrap();
+        let written: Vec<&Wire> = fields[0]
+            .as_list()
+            .unwrap()
+            .iter()
+            .map(|row| &row.as_list().unwrap()[0])
+            .collect();
+        assert_eq!(written, [&Wire::UInt64(root.0)]);
+        let mut skipped = fields[3].as_list().unwrap().to_vec();
+        skipped.sort_by_key(|row| format!("{row:?}"));
+        let mut expected = vec![
+            Wire::List(vec![Wire::UInt64(ball.0), Wire::text("unused")]),
+            Wire::List(vec![Wire::UInt64(sub.0), Wire::text("muted")]),
+        ];
+        expected.sort_by_key(|row| format!("{row:?}"));
+        assert_eq!(skipped, expected);
+        assert!(stage.layer_dirty(ball.0).unwrap(), "left dirty");
+        let record = stage.save(Some(ball.0)).unwrap();
+        assert_eq!(
+            record.as_list().unwrap()[0].as_list().unwrap().len(),
+            1,
+            "written when named"
         );
     }
 

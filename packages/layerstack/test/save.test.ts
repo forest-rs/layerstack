@@ -37,6 +37,32 @@ async function failure(f: () => unknown): Promise<LayerstackError> {
 }
 
 describe("saving", () => {
+  it("writes an asset edited through its reference, and lists dirty layers it skips", async () => {
+    using stage = await resolvedScene();
+    const radius = stage.attribute("/Ball.radius")?.explain()?.opinions[0];
+    assert.equal(radius?.layer.identifier, "parts/ball.usda");
+    assert.ok(radius?.editTarget);
+    stage.apply([{ type: "setValue", path: "/Ball.radius", value: { type: "double", value: 0.75 } }], radius.editTarget).release();
+    const saved = stage.save();
+    assert.deepEqual(saved.written.map((layer) => layer.identifier), ["parts/ball.usda"]);
+    assert.match(decoder.decode(saved.written[0]?.bytes), /double radius = 0.75/);
+
+    stage.apply([{ type: "setValue", path: "/Ball.radius", value: { type: "double", value: 1 } }], radius.editTarget).release();
+    const sub = stage.layers().find((layer) => layer.identifier === "sub.usda");
+    assert.ok(sub);
+    stage.apply([{ type: "setValue", path: "/Ball.size", value: { type: "double", value: 6 } }], sub).release();
+    stage.muteLayer(sub);
+    stage.apply([{ type: "removeReference", path: "/Ball", asset: "./parts/ball.usda", primPath: "/Ball" }]).release();
+    const skipping = stage.save();
+    assert.deepEqual(skipping.written.map((layer) => layer.identifier), ["scene.usda"]);
+    assert.deepEqual(
+      skipping.skipped.map(({ layer, reason }) => `${layer.identifier} ${reason}`).sort(),
+      ["parts/ball.usda unused", "sub.usda muted"],
+    );
+    assert.equal(stage.isDirty(radius.layer), true, "left dirty");
+    assert.deepEqual(stage.save(radius.layer).written.map((layer) => layer.identifier), ["parts/ball.usda"]);
+  });
+
   it("hands the host each dirty layer, and reopening the saved bytes gives the same stage", async () => {
     using stage = await resolvedScene();
     stage
@@ -55,6 +81,7 @@ describe("saving", () => {
     );
     assert.deepEqual(saved.failures, []);
     assert.deepEqual(saved.anonymous, []);
+    assert.deepEqual(saved.skipped, []);
     const [root] = saved.written;
     assert.ok(root);
     assert.equal(root.layer, stage.root);

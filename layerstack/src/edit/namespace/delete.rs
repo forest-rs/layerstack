@@ -10,7 +10,10 @@
 //! a property cannot be. Every authored path naming the object (and for a
 //! prim, anything beneath it) is then dropped: relationship targets,
 //! attribute connections, inherits, specializes, internal references and
-//! payloads, path expression terms and the layers' `defaultPrim`.
+//! payloads, path expression terms and the layers' `defaultPrim`. In the
+//! other layers the stage reaches, the references and payloads into the
+//! root layer stack naming it are dropped, and the specs that composed
+//! over it through them removed.
 //!
 //! Spec: AOUSD Core §8 (namespace), §10.3.2.6 (relocates), §12.4 (list
 //! ops). OpenUSD: `UsdNamespaceEditor::DeletePrimAtPath` and
@@ -21,7 +24,7 @@ use super::*;
 use crate::prim_indexing::Boundaries;
 use crate::sort;
 use crate::{
-    HashMap, HashSet, Relocate, SparseListOp, VariantSets,
+    HashMap, HashSet, LayerStack, Relocate, SparseListOp, VariantSets,
     spec_path::VariantSelectionSite,
     stage::preparation::{PreparationIndex, layer_links},
 };
@@ -108,7 +111,24 @@ fn prepare_with(
     let mut edited = HashMap::new();
     let mut dormant = HashMap::new();
     let indexes: Vec<&PreparationIndex> = index.into_iter().collect();
-    let dependents = dependents(stage, store, index, object);
+    let (dependents, chain) = dependents(stage, store, index, object)?;
+    // The specs of other layer stacks that go with nested arcs, by layer.
+    let mut remote_deletes: HashMap<LayerId, Vec<(TargetPath, Vec<VariantSelectionSite>)>> =
+        HashMap::new();
+    for edit in &chain {
+        for id in &edit.layers {
+            if stack.contains(id) {
+                return Err(NamespaceError::UnsupportedComposition(
+                    "dependent namespace through an arc nested in a stage's layer stack requires an unambiguous mapping",
+                ));
+            }
+            let gone = (edit.from, edit.within.clone());
+            let deletes = remote_deletes.entry(*id).or_default();
+            if !deletes.contains(&gone) {
+                deletes.push(gone);
+            }
+        }
+    }
     for id in &stack {
         let original = store.layer(*id).ok_or(NamespaceError::NoSuchObject)?;
         let mut layer = match index {
@@ -127,6 +147,81 @@ fn prepare_with(
         for (dependent, within) in &dependents {
             remove_specs(store, &mut layer, *dependent, within);
         }
+        edited.insert(*id, layer);
+    }
+    // The other layers the stage reaches: their arcs into the root layer
+    // stack naming the object are dropped, and their specs over it through
+    // those arcs removed, but in the specs no prim index uses, which the
+    // report lists.
+    let reached = match index {
+        Some(index) => retained::reachable_layers(store, &indexes, index, root),
+        None => reachable_layers(stage, store, root),
+    };
+    let by = unrepaired::Edited::DeleteFrom {
+        object,
+        root_layers: &stack,
+    };
+    let mut unrepaired_paths = Vec::new();
+    let mut remote = Vec::new();
+    for id in reached.iter().filter(|id| !stack.contains(id)) {
+        remote.push(*id);
+        let original = store.layer(*id).ok_or(NamespaceError::NoSuchObject)?;
+        let gone = remote_deletes.get(id).map_or(&[][..], Vec::as_slice);
+        let mut layer = match index {
+            Some(index) => {
+                let arcs = retained::arcs_of(&indexes, original);
+                let mut slots: Vec<PathId> = arcs
+                    .naming(&stack)
+                    .chain(
+                        arcs.unresolved()
+                            .iter()
+                            .copied()
+                            .filter(|path| retained::arcs_into(store, original, *path, &stack)),
+                    )
+                    .collect();
+                for (object, _) in gone {
+                    let prim = object.prim_path();
+                    slots.extend(retained::slots_beneath(
+                        store,
+                        index.children(),
+                        original,
+                        prim,
+                    ));
+                    slots.extend(retained::at_or_above(store, prim).filter(|path| {
+                        original.prims.contains_key(path)
+                            || original.variant_prims.contains_key(path)
+                    }));
+                }
+                sort::sort_unstable(&mut slots);
+                slots.dedup();
+                if slots.is_empty() {
+                    continue;
+                }
+                let copy = retained::working_copy(original, &slots);
+                copied.insert(*id, slots);
+                copy
+            }
+            // A layer authoring no arc into the root layer stack and
+            // holding no spec the delete removes is left as it is.
+            None if gone.is_empty()
+                && !original
+                    .prims
+                    .keys()
+                    .chain(original.variant_prims.keys())
+                    .any(|path| retained::arcs_into(store, original, *path, &stack)) =>
+            {
+                continue;
+            }
+            None => original.clone(),
+        };
+        let unused = coordinated::dormant_variants(store, &[stage], &indexes, &stack, &layer);
+        for (gone, within) in gone {
+            remove_specs(store, &mut layer, *gone, within);
+        }
+        if let TargetPath::Prim(_) = object {
+            repair_arcs_into(store, &mut layer, object, &stack, &unused);
+        }
+        unrepaired::collect(&*store, &layer, &unused, &by, &mut unrepaired_paths);
         edited.insert(*id, layer);
     }
     let still_composed = composes(store, stage, root, &edited, &copied, index, object)?;
@@ -152,7 +247,6 @@ fn prepare_with(
         ));
     }
     // The paths the repairs passed over, in the specs no prim index uses.
-    let mut unrepaired_paths = Vec::new();
     for id in &repaired {
         unrepaired::collect(
             &*store,
@@ -162,41 +256,20 @@ fn prepare_with(
             &mut unrepaired_paths,
         );
     }
-    // The arcs into the root layer stack from the other layers the stage
-    // reaches, which the delete leaves as they are.
-    let reached = match index {
-        Some(index) => retained::reachable_layers(store, &indexes, index, root),
-        None => reachable_layers(stage, store, root),
-    };
-    let by = unrepaired::Edited::DeleteFrom {
-        object,
-        root_layers: &stack,
-    };
-    for id in reached.iter().filter(|id| !stack.contains(id)) {
-        let layer = store.layer(*id).ok_or(NamespaceError::NoSuchObject)?;
-        let mut slots: Vec<PathId> = match index {
-            Some(_) => retained::arcs_of(&indexes, layer).naming(&stack).collect(),
-            None => layer
-                .prims
-                .keys()
-                .chain(layer.variant_prims.keys())
-                .copied()
-                .collect(),
-        };
-        sort::sort_unstable(&mut slots);
-        slots.dedup();
-        unrepaired::collect_all(&*store, layer, &slots, &by, &mut unrepaired_paths);
-    }
     unrepaired::sort(&*store, &mut unrepaired_paths);
 
     let mut transaction = Transaction::new();
     let mut layers = Vec::new();
     let mut specs = Vec::new();
     let mut relocates = Vec::new();
-    for id in stack {
+    // Every layer the delete read is expected at its generation, as a
+    // move expects every layer it inspects.
+    for id in stack.iter().chain(&remote).copied() {
         let original = store.layer(id).ok_or(NamespaceError::NoSuchObject)?;
-        let layer = &edited[&id];
         transaction.expect_generation(id, original.generation());
+        let Some(layer) = edited.get(&id) else {
+            continue;
+        };
         let previous = transaction.len();
         match copied.get(&id) {
             Some(slots) => {
@@ -449,18 +522,31 @@ pub(super) fn remove_specs(
 /// repairs drop the arc, and the prims beneath it that composed over the
 /// deleted prim's children go, through the arc's nodes in their indexes.
 ///
+/// An arc nested in another layer stack's arc target (an asset's arc back
+/// into the stage) composes over the deleted namespace through the specs
+/// of every node above it too, which go as well: the second list, by
+/// layer stack ([`coordinated::ChainEdit`]).
+///
 /// OpenUSD: `PcpGatherDependentNamespaceEdits`, which deletes the specs at
 /// every node from such a node up to the root
 /// (`_PrimIndexDependentNodeEditProcessor::_AddSpecMoveEdits` with an
 /// empty new path), and for an arc to the deleted prim itself the specs
 /// over its children (`_ProcessDependentNodePathAtIntroductionChange`).
-/// Nested and implied arcs are not followed. AOUSD Core §8, §10.
+/// Implied arcs, and nested arcs to variant sites, are not followed.
+/// AOUSD Core §8, §10.
+#[allow(clippy::type_complexity, reason = "the two lists of dependent specs")]
 fn dependents(
     stage: &Stage,
-    store: &dyn LayerStore,
+    store: &mut dyn LayerStore,
     index: Option<&PreparationIndex>,
     object: TargetPath,
-) -> Vec<(TargetPath, Vec<VariantSelectionSite>)> {
+) -> Result<
+    (
+        Vec<(TargetPath, Vec<VariantSelectionSite>)>,
+        Vec<coordinated::ChainEdit>,
+    ),
+    NamespaceError,
+> {
     let deleted = store.paths().resolve(object.prim_path()).clone();
     let mut prims: Vec<PathId> = match index {
         Some(index) => index.prims_with_nodes_beneath(object.prim_path()).collect(),
@@ -468,10 +554,12 @@ fn dependents(
     };
     sort::sort_unstable(&mut prims);
     prims.dedup();
+    let stack = stage.layer_stack();
     let mut out: Vec<(TargetPath, Vec<VariantSelectionSite>)> = Vec::new();
+    let mut chain = Vec::new();
     for prim in prims {
-        let composed = store.paths().resolve(prim);
-        if deleted.is_prefix_of(composed) {
+        let composed = store.paths().resolve(prim).clone();
+        if deleted.is_prefix_of(&composed) {
             continue;
         }
         let Some(graph) = stage.explain_prim_graph(prim) else {
@@ -484,15 +572,32 @@ fn dependents(
             if matches!(
                 node.arc_kind(),
                 crate::ArcKind::Local | crate::ArcKind::Variants
-            ) || node.layer_stack_identifier() != root.layer_stack_identifier()
-                || node.site().has_variant_selections()
+            ) || node.site().has_variant_selections()
                 || coordinated::implied_from_local_variant(graph, node)
                 || node.is_implied()
-                || !coordinated::authored_in_local_variants(graph, node)
             {
                 continue;
             }
-            let site = store.paths().resolve(node.site().prim_path());
+            let nested = !coordinated::authored_in_local_variants(graph, node);
+            let into_stack = if nested {
+                LayerStack::gather_identifier(store, node.layer_stack_identifier())
+                    .layers
+                    .iter()
+                    .any(|id| stack.contains(id))
+            } else {
+                node.layer_stack_identifier() == root.layer_stack_identifier()
+            };
+            if !into_stack {
+                continue;
+            }
+            let site = store.paths().resolve(node.site().prim_path()).clone();
+            // The levels of the prim beneath the site the arc was
+            // introduced at ([`crate::PrimNode::namespace_depth`]).
+            let below = graph
+                .node(node.parent().unwrap_or(crate::NodeId::ROOT))
+                .map(|parent| store.paths().resolve(parent.site().prim_path()).depth())
+                .and_then(|depth| depth.checked_sub(usize::from(node.namespace_depth())))
+                .unwrap_or_default();
             let dependent = match object {
                 TargetPath::Property(property)
                     if node.site().prim_path() == property.prim_path() =>
@@ -500,14 +605,18 @@ fn dependents(
                     TargetPath::Property(PropertyPath::new(prim, property.property()))
                 }
                 // An arc authored at the prim itself is dropped instead.
-                TargetPath::Prim(_)
-                    if deleted.is_prefix_of(site)
-                        && usize::from(node.namespace_depth()) < composed.depth() =>
-                {
+                TargetPath::Prim(_) if deleted.is_prefix_of(&site) && below > 0 => {
                     TargetPath::Prim(prim)
                 }
                 _ => continue,
             };
+            if nested {
+                let gone = PathMove::new(object, object);
+                coordinated::push_unique(
+                    &mut chain,
+                    coordinated::chain_edits(store, graph, node, stack, 0, below, None, &gone)?,
+                );
+            }
             let mut branches = coordinated::branches_above(store, graph, node, prim);
             branches.insert(0, Vec::new());
             for within in branches {
@@ -518,7 +627,77 @@ fn dependents(
             }
         }
     }
-    out
+    Ok((out, chain))
+}
+
+/// Drops the references and payloads of `layer`, a layer outside the root
+/// layer stack `stack`, that target the deleted `object`, or a prim
+/// beneath it, in one of its layers: but those of the specs `dormant`
+/// lists, which no prim index uses.
+///
+/// OpenUSD drops them where `PcpGatherDependentNamespaceEdits` finds a
+/// prim index depending on the deleted site through them, and leaves the
+/// rest (`_ProcessListOpCompositionFieldEditsAtSite`,
+/// `pxr/usd/pcp/dependentNamespaceEditUtils.cpp`). An arc to a prim of
+/// the layer's own namespace is not the object's. AOUSD Core §10.3.2.2
+/// (references), §10.3.2.3 (payloads), §12.4 (list ops).
+fn repair_arcs_into(
+    store: &dyn LayerStore,
+    layer: &mut Layer,
+    object: TargetPath,
+    stack: &[LayerId],
+    dormant: &Dormant,
+) {
+    let keep = |r: &Reference| {
+        !(matches!(r.target, ReferenceTarget::Prim(p) if names(store, object, TargetPath::Prim(p)))
+            && r.stored_target_layer(store)
+                .is_some_and(|target| stack.contains(&target)))
+    };
+    fn arcs(references: &mut SparseListOp<Reference>, keep: &dyn Fn(&Reference) -> bool) {
+        if let Some(list) = references.get_mut() {
+            retain(list, keep);
+        }
+    }
+    fn branches(
+        sets: &mut VariantSets,
+        host: PathId,
+        sites: &mut Vec<VariantSelectionSite>,
+        dormant: &Dormant,
+        keep: &dyn Fn(&Reference) -> bool,
+    ) {
+        for (set, spec) in sets.iter_mut() {
+            for (name, variant) in spec.variants.iter_mut() {
+                sites.push(VariantSelectionSite {
+                    host_path: host,
+                    set: *set,
+                    variant: *name,
+                });
+                if !dormant.contains(host, sites) {
+                    arcs(&mut variant.references, keep);
+                    arcs(&mut variant.payloads, keep);
+                    branches(&mut variant.variant_sets, host, sites, dormant, keep);
+                }
+                sites.pop();
+            }
+        }
+    }
+    let specs = layer.prims.iter_mut().chain(
+        layer
+            .variant_prims
+            .iter_mut()
+            .flat_map(|(path, specs)| specs.iter_mut().map(move |spec| (&*path, spec))),
+    );
+    for (path, spec) in specs {
+        let mut sites = spec.outer_variant_sites().to_vec();
+        if dormant.contains(*path, &sites) {
+            continue;
+        }
+        arcs(&mut spec.references, &keep);
+        arcs(&mut spec.payloads, &keep);
+        if let Some(rare) = spec.authored_rare_mut() {
+            branches(&mut rare.variant_sets, *path, &mut sites, dormant, &keep);
+        }
+    }
 }
 
 /// Removes the prim `object`, which composes from across an arc after its

@@ -7,8 +7,8 @@
 //!
 //! The report is read from the specs the edit already holds, after its
 //! repairs, so it costs one visit of the dormant specs and composes
-//! nothing; a delete, which edits only the root layer stack, also reads
-//! the arcs into it that the other layers the stage reaches author.
+//! nothing. In the other layers the stage reaches, the edit repairs only
+//! the arcs into the root layer stack, so only those are read there.
 //! AOUSD Core §8 (namespace), §10.5 (variant selection).
 
 use super::{Dormant, PathMove, has_prefix, path_names};
@@ -149,7 +149,8 @@ pub(super) enum Edited<'a> {
     /// A delete of the root-stack object.
     Delete(TargetPath),
     /// A delete of the root-stack object, seen from a layer outside the
-    /// root layer stack, whose arcs into `root_layers` it does not repair.
+    /// root layer stack, whose arcs into `root_layers` it drops but in the
+    /// specs no prim index uses.
     DeleteFrom {
         object: TargetPath,
         root_layers: &'a [LayerId],
@@ -242,31 +243,6 @@ pub(super) fn collect(
             visit.prim(*path, &mut sites, spec);
         } else {
             visit.branches(*path, &mut sites, spec.variant_sets(), Some(dormant));
-        }
-    }
-}
-
-/// Appends to `out` the paths that every spec of `layer` at the prim
-/// paths `slots` authors naming what `edited` changed: for a layer the
-/// edit does not repair at all.
-pub(super) fn collect_all(
-    store: &dyn LayerStore,
-    layer: &Layer,
-    slots: &[PathId],
-    edited: &Edited<'_>,
-    out: &mut Vec<UnrepairedPath>,
-) {
-    let mut visit = Visit {
-        store,
-        layer: layer.id,
-        edited,
-        out,
-    };
-    for path in slots {
-        let main = layer.prims.get(path).into_iter();
-        for spec in main.chain(layer.variant_prims.get(path).into_iter().flatten()) {
-            let mut sites = spec.outer_variant_sites().to_vec();
-            visit.prim(*path, &mut sites, spec);
         }
     }
 }

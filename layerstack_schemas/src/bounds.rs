@@ -11,6 +11,7 @@
 mod reduction;
 use reduction::{MIN_CHILDREN, Reduction};
 
+use crate::diagnostic::{Describe, Names, with_store};
 use crate::{
     Time, gf,
     imageable::{PurposeInfo, PurposeInputs, Visibility, local_visibility},
@@ -20,7 +21,7 @@ use crate::{
 };
 use alloc::{boxed::Box, vec, vec::Vec};
 use hashbrown::{HashMap, HashSet};
-use layerstack::PathId;
+use layerstack::{LayerStore, PathId};
 
 /// An axis-aligned double-precision range. A reversed axis denotes emptiness.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -157,28 +158,50 @@ pub enum BoundsError {
     /// Component-space conversion requires an invertible world transform.
     SingularTransform(PathId),
 }
-impl core::fmt::Display for BoundsError {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+impl BoundsError {
+    /// The error in words, its prims and properties written as paths with
+    /// `store`, the store the stage was composed from. `Display` writes
+    /// the same with ids.
+    #[must_use]
+    pub fn display<'a>(&'a self, store: &'a dyn LayerStore) -> impl core::fmt::Display + 'a {
+        with_store(self, store)
+    }
+}
+impl Describe for BoundsError {
+    fn describe(&self, f: &mut core::fmt::Formatter<'_>, names: Names<'_>) -> core::fmt::Result {
+        f.write_str("cannot compute bounds: ")?;
         match self {
-            Self::MissingPrim(prim) => write!(f, "bounds prim {prim:?} does not exist"),
+            Self::MissingPrim(prim) => write!(f, "no composed prim is at {}", names.path(*prim)),
             Self::ExtentUnavailable(prim) => write!(
                 f,
-                "boundable {prim:?} has no valid extent or supported extent provider"
+                "the boundable {} has no valid `extent` and no registered extent provider",
+                names.path(*prim)
             ),
             Self::ExtentProvider { prim, source } => {
-                write!(f, "bounds extent for {prim:?}: {source}")
+                write!(f, "the extent of {} is unavailable: ", names.path(*prim))?;
+                source.describe(f, names)
             }
             Self::InvalidPointInstancer { prim, source } => {
-                write!(f, "invalid point instancer {prim:?}: {source:?}")
+                write!(f, "{}: ", names.path(*prim))?;
+                source.describe(f, names)
             }
             Self::PointInstancerCycle(prim) => write!(
                 f,
-                "point instancer {prim:?} revisits an active instancer or exceeds nesting limit"
+                "the point instancer {} reaches an instancer it is inside, or nests more than 64 \
+                 instancers",
+                names.path(*prim)
             ),
-            Self::SingularTransform(prim) => {
-                write!(f, "bounds frame {prim:?} has a singular world transform")
-            }
+            Self::SingularTransform(prim) => write!(
+                f,
+                "the world transform of {} is singular, so it has no component space",
+                names.path(*prim)
+            ),
         }
+    }
+}
+impl core::fmt::Display for BoundsError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        self.describe(f, Names(None))
     }
 }
 impl core::error::Error for BoundsError {

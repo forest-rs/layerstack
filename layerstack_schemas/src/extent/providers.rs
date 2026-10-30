@@ -3,11 +3,12 @@
 
 //! Explicit host extent evaluation. Geometry and external revisions remain host-owned.
 
+use crate::diagnostic::{Describe, Names, with_store};
 use crate::{PrimView, Scene, Time, bounds::Range3d};
 use alloc::{sync::Arc, vec::Vec};
 use hashbrown::HashMap;
 use layerstack::{
-    ArrayReadError, PathId, PropertyPath, SchemaRegistry, TokenId, TokenInterner, Value,
+    ArrayReadError, LayerStore, PathId, PropertyPath, SchemaRegistry, TokenId, TokenInterner, Value,
 };
 
 /// A provider cannot produce a complete local extent.
@@ -29,16 +30,34 @@ pub enum ExtentError {
         message: Arc<str>,
     },
 }
+impl ExtentError {
+    /// The error in words, its prim or property written as a path with
+    /// `store`, the store the stage was composed from. `Display` writes
+    /// the same with ids.
+    #[must_use]
+    pub fn display<'a>(&'a self, store: &'a dyn LayerStore) -> impl core::fmt::Display + 'a {
+        with_store(self, store)
+    }
+}
+impl Describe for ExtentError {
+    fn describe(&self, f: &mut core::fmt::Formatter<'_>, names: Names<'_>) -> core::fmt::Result {
+        match self {
+            Self::Decode { property, error } => write!(
+                f,
+                "cannot decode the extent input {}: {error}",
+                names.property(*property)
+            ),
+            Self::Failed { prim, message } => write!(
+                f,
+                "the extent provider failed for {}: {message}",
+                names.path(*prim)
+            ),
+        }
+    }
+}
 impl core::fmt::Display for ExtentError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            Self::Decode { property, error } => {
-                write!(f, "extent input {property:?} failed: {error}")
-            }
-            Self::Failed { prim, message } => {
-                write!(f, "extent evaluation for {prim:?} failed: {message}")
-            }
-        }
+        self.describe(f, Names(None))
     }
 }
 impl core::error::Error for ExtentError {
@@ -59,17 +78,36 @@ pub enum ExtentRegistrationError {
     /// A provider is already registered for this schema.
     AlreadyRegistered(TokenId),
 }
-impl core::fmt::Display for ExtentRegistrationError {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+impl ExtentRegistrationError {
+    /// The error in words, the schema written as its name with `store`,
+    /// whose tokens the schema name was interned in. `Display` writes the
+    /// same with the token's id.
+    #[must_use]
+    pub fn display<'a>(&'a self, store: &'a dyn LayerStore) -> impl core::fmt::Display + 'a {
+        with_store(self, store)
+    }
+}
+impl Describe for ExtentRegistrationError {
+    fn describe(&self, f: &mut core::fmt::Formatter<'_>, names: Names<'_>) -> core::fmt::Result {
         match self {
             Self::NotBoundable(schema) => write!(
                 f,
-                "extent provider schema {schema:?} is not registered as Boundable"
+                "cannot register an extent provider: `{}` is not a registered schema derived \
+                 from `Boundable`",
+                names.token(*schema)
             ),
-            Self::AlreadyRegistered(schema) => {
-                write!(f, "extent provider already registered for {schema:?}")
-            }
+            Self::AlreadyRegistered(schema) => write!(
+                f,
+                "cannot register an extent provider: `{}` already has one; registration \
+                 leaves it in place",
+                names.token(*schema)
+            ),
         }
+    }
+}
+impl core::fmt::Display for ExtentRegistrationError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        self.describe(f, Names(None))
     }
 }
 impl core::error::Error for ExtentRegistrationError {}

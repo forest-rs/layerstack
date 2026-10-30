@@ -4,13 +4,14 @@
 //! Subset discovery and topology validation; material evaluation stays in shading.
 //! OpenUSD: `UsdGeomSubset::ValidateFamily`, `GetGeomSubsets`, `GetUnassignedIndices`
 //! and `UsdGeomMesh::ValidateTopology`. Composition follows AOUSD Core §12.
+use crate::diagnostic::{Describe, Names, with_store};
 use crate::{
     PrimView, Time,
     usd_geom::{GeomSubset as Subset, GeomSubsetElementType as SubsetElementType, Imageable, Mesh},
 };
 use alloc::{collections::BTreeSet, format, string::String, vec::Vec};
 use layerstack::sort;
-use layerstack::{ArrayReadError, PathId, PropertyPath, TokenInterner, Value};
+use layerstack::{ArrayReadError, LayerStore, PathId, PropertyPath, TokenInterner, Value};
 
 /// The ownership contract authored for a geometry subset family.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -55,9 +56,40 @@ pub enum SubsetAuthoringError {
     /// refuses it with a coding error.
     UnrestrictedMaterialBindFamily,
 }
+impl SubsetAuthoringError {
+    /// The error in words, its paths written as text with `store`, the
+    /// store the stage was composed from. `Display` writes the same with
+    /// ids.
+    #[must_use]
+    pub fn display<'a>(&'a self, store: &'a dyn LayerStore) -> impl core::fmt::Display + 'a {
+        with_store(self, store)
+    }
+}
+impl Describe for SubsetAuthoringError {
+    fn describe(&self, f: &mut core::fmt::Formatter<'_>, names: Names<'_>) -> core::fmt::Result {
+        f.write_str("cannot author geometry subset: ")?;
+        match self {
+            Self::CannotEdit(error) => error.describe(f, names),
+            Self::InvalidName => f.write_str("the name is not a single prim identifier"),
+            Self::Geometry(error) => error.describe(f, names),
+            Self::Indices(problem) => write!(f, "the indices do not fit the geometry: {problem:?}"),
+            Self::IncompatibleFamilyDeclaration => f.write_str(
+                "the family attribute is declared as something other than a scalar `token`",
+            ),
+            Self::NameTaken(path) => write!(
+                f,
+                "{} already exists and is not a `GeomSubset`; choose another name",
+                names.path(*path)
+            ),
+            Self::UnrestrictedMaterialBindFamily => f.write_str(
+                "a `materialBind` family cannot be `unrestricted`: bound subsets must not overlap",
+            ),
+        }
+    }
+}
 impl core::fmt::Display for SubsetAuthoringError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "cannot author geometry subset: {self:?}")
+        self.describe(f, Names(None))
     }
 }
 impl core::error::Error for SubsetAuthoringError {
@@ -313,9 +345,37 @@ pub enum SubsetError {
         error: ArrayReadError,
     },
 }
+impl SubsetError {
+    /// The error in words, an undecodable attribute written as its path
+    /// with `store`, the store the stage was composed from. `Display`
+    /// writes the same with ids.
+    #[must_use]
+    pub fn display<'a>(&'a self, store: &'a dyn LayerStore) -> impl core::fmt::Display + 'a {
+        with_store(self, store)
+    }
+}
+impl Describe for SubsetError {
+    fn describe(&self, f: &mut core::fmt::Formatter<'_>, names: Names<'_>) -> core::fmt::Result {
+        f.write_str("invalid subset geometry: ")?;
+        match self {
+            Self::InvalidGeometry => {
+                f.write_str("the element type does not apply to the owning geometry")
+            }
+            Self::MissingTopology => {
+                f.write_str("the geometry's topology is absent or has another value type")
+            }
+            Self::InvalidTopology => {
+                f.write_str("the geometry's topology has invalid counts, indices or curve tokens")
+            }
+            Self::Decode { property, error } => {
+                write!(f, "cannot decode {}: {error}", names.property(*property))
+            }
+        }
+    }
+}
 impl core::fmt::Display for SubsetError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "invalid subset geometry: {self:?}")
+        self.describe(f, Names(None))
     }
 }
 impl core::error::Error for SubsetError {
@@ -895,9 +955,41 @@ pub enum MeshTopologyError {
         error: ArrayReadError,
     },
 }
+impl MeshTopologyError {
+    /// The error in words, an undecodable attribute written as its path
+    /// with `store`, the store the stage was composed from. `Display`
+    /// writes the same with ids.
+    #[must_use]
+    pub fn display<'a>(&'a self, store: &'a dyn LayerStore) -> impl core::fmt::Display + 'a {
+        with_store(self, store)
+    }
+}
+impl Describe for MeshTopologyError {
+    fn describe(&self, f: &mut core::fmt::Formatter<'_>, names: Names<'_>) -> core::fmt::Result {
+        f.write_str("invalid mesh topology: ")?;
+        match self {
+            Self::MissingAttribute => f.write_str(
+                "`points`, `faceVertexCounts` or `faceVertexIndices` is absent or has another \
+                 value type",
+            ),
+            Self::InvalidFaceCounts => f.write_str(
+                "a `faceVertexCounts` entry is negative or the counts overflow their total",
+            ),
+            Self::SizeMismatch => f.write_str(
+                "the `faceVertexCounts` sum differs from the number of `faceVertexIndices`",
+            ),
+            Self::InvalidVertexIndex(index) => {
+                write!(f, "the face vertex index {index} names no point")
+            }
+            Self::Decode { property, error } => {
+                write!(f, "cannot decode {}: {error}", names.property(*property))
+            }
+        }
+    }
+}
 impl core::fmt::Display for MeshTopologyError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "invalid mesh topology: {self:?}")
+        self.describe(f, Names(None))
     }
 }
 impl core::error::Error for MeshTopologyError {

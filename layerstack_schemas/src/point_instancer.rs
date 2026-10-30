@@ -6,6 +6,7 @@
 //! OpenUSD: `UsdGeomPointInstancer::ComputeInstanceTransformsAtTime`,
 //! `ComputeMaskAtTime`, and `usdGeom/samplingUtils.cpp`. Attribute sources,
 //! time offsets and interpolation follow AOUSD Core §12.3–12.5.
+use crate::diagnostic::{Describe, Names, with_store};
 use crate::{
     Time,
     bounds::{BoundsCache, BoundsError, BoundsOptions, Extent, Range3d},
@@ -18,7 +19,8 @@ use core::num::NonZeroUsize;
 use hashbrown::HashSet;
 use layerstack::sort;
 use layerstack::{
-    FieldValue, ListOp, MetadataTarget, OpinionValue, PathId, TargetPath, TokenInterner, Value,
+    FieldValue, LayerStore, ListOp, MetadataTarget, OpinionValue, PathId, TargetPath,
+    TokenInterner, Value,
 };
 
 /// An ID edit encountered incompatible or unreadable authored data.
@@ -672,9 +674,54 @@ pub enum PointInstancerError {
     /// Motion anchoring requires array samples; scalar splines are unsupported.
     UnsupportedMotionSource(&'static str),
 }
+impl PointInstancerError {
+    /// The error in words, an undecodable attribute written as its path
+    /// with `store`, the store the stage was composed from. `Display`
+    /// writes the same with ids.
+    #[must_use]
+    pub fn display<'a>(&'a self, store: &'a dyn LayerStore) -> impl core::fmt::Display + 'a {
+        with_store(self, store)
+    }
+}
+impl Describe for PointInstancerError {
+    fn describe(&self, f: &mut core::fmt::Formatter<'_>, names: Names<'_>) -> core::fmt::Result {
+        f.write_str("invalid point instancer: ")?;
+        match self {
+            Self::MissingAttribute(name) => {
+                write!(
+                    f,
+                    "`{name}` is absent or cannot be read with its declared type"
+                )
+            }
+            Self::Decode { property, error } => {
+                write!(f, "cannot decode {}: {error}", names.property(*property))
+            }
+            Self::LengthMismatch(name) => {
+                write!(f, "the length of `{name}` differs from the instance count")
+            }
+            Self::InvalidPrototypes => {
+                f.write_str("`prototypes` is empty, or targets a property where a prim is needed")
+            }
+            Self::InvalidPrototypeIndex { instance, index } => write!(
+                f,
+                "instance {instance} has the prototype index {index}, which is negative or past \
+                 the `prototypes` targets"
+            ),
+            Self::InvalidTime => f.write_str(
+                "the times are not finite or of different kinds, or the stage's time-code rate \
+                 is not finite and positive",
+            ),
+            Self::UnsupportedMotionSource(name) => write!(
+                f,
+                "`{name}` has no array samples to anchor motion to; scalar splines are \
+                 unsupported"
+            ),
+        }
+    }
+}
 impl core::fmt::Display for PointInstancerError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "invalid point instancer: {self:?}")
+        self.describe(f, Names(None))
     }
 }
 impl core::error::Error for PointInstancerError {

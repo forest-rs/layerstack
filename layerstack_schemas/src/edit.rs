@@ -3,6 +3,7 @@
 
 //! Authoring schema properties and applied schemas as a [`Transaction`].
 
+use crate::diagnostic::{Describe, Names, with_store};
 use core::fmt;
 use layerstack::sort;
 
@@ -57,12 +58,35 @@ pub enum CannotEdit {
     InPrototype,
 }
 
+impl CannotEdit {
+    /// The refusal in words, the instance written as its path with
+    /// `store`, the store the stage was composed from. `Display` writes
+    /// the same with the instance's id.
+    #[must_use]
+    pub fn display<'a>(&'a self, store: &'a dyn LayerStore) -> impl fmt::Display + 'a {
+        with_store(self, store)
+    }
+}
+
+impl Describe for CannotEdit {
+    fn describe(&self, f: &mut fmt::Formatter<'_>, names: Names<'_>) -> fmt::Result {
+        match self {
+            Self::BeneathInstance { instance } => write!(
+                f,
+                "the path is beneath the instance {}, whose descendants are instance proxies; \
+                 edit the instance itself or its prototype's source",
+                names.path(*instance)
+            ),
+            Self::InPrototype => f.write_str(
+                "the path is in an instancing prototype; edit the prototype's source instead",
+            ),
+        }
+    }
+}
+
 impl fmt::Display for CannotEdit {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            Self::BeneathInstance { .. } => "the path is beneath an instance",
-            Self::InPrototype => "the path is in an instancing prototype",
-        })
+        self.describe(f, Names(None))
     }
 }
 
@@ -81,12 +105,28 @@ pub enum ApplySchemaError {
     CannotApply(CannotApply),
 }
 
+impl ApplySchemaError {
+    /// The error in words, an instance written as its path with `store`,
+    /// the store the stage was composed from ([`CannotEdit::display`]).
+    /// `Display` writes the same with ids.
+    #[must_use]
+    pub fn display<'a>(&'a self, store: &'a dyn LayerStore) -> impl fmt::Display + 'a {
+        with_store(self, store)
+    }
+}
+
+impl Describe for ApplySchemaError {
+    fn describe(&self, f: &mut fmt::Formatter<'_>, names: Names<'_>) -> fmt::Result {
+        match self {
+            Self::CannotEdit(error) => error.describe(f, names),
+            Self::CannotApply(error) => write!(f, "{error}"),
+        }
+    }
+}
+
 impl fmt::Display for ApplySchemaError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::CannotEdit(error) => error.fmt(f),
-            Self::CannotApply(error) => error.fmt(f),
-        }
+        self.describe(f, Names(None))
     }
 }
 

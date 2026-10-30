@@ -442,7 +442,6 @@ pub mod color;
 mod common_xform;
 #[cfg(feature = "usd-shade")]
 mod coord_sys;
-#[cfg(feature = "usd")]
 mod diagnostic;
 mod edit;
 mod metadata;

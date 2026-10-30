@@ -1,0 +1,1060 @@
+{
+  "openusd_version": "0.26.11",
+  "records": [
+    {
+      "name": "set_visibility",
+      "call": "`UsdAttribute::Set` creates `/Rock.visibility`, which no layer has, with a default",
+      "notices": [
+        {
+          "resynced": [
+            "/Rock.visibility"
+          ],
+          "info": [],
+          "fields": {
+            "/Rock.visibility": [
+              "typeName"
+            ]
+          }
+        },
+        {
+          "resynced": [],
+          "info": [
+            "/Rock.visibility"
+          ],
+          "fields": {
+            "/Rock.visibility": [
+              "default"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "/Rock": [
+          "proxyPrim",
+          "purpose",
+          "size",
+          "visibility",
+          "xformOp:translate",
+          "xformOpOrder"
+        ],
+        "/Lamp": [
+          "proxyPrim",
+          "purpose",
+          "visibility",
+          "xformOpOrder"
+        ],
+        "/Robot": [
+          "proxyPrim",
+          "purpose",
+          "visibility",
+          "xformOpOrder"
+        ]
+      }
+    },
+    {
+      "name": "change_visibility",
+      "call": "`UsdAttribute::Set` on the spec it created",
+      "notices": [
+        {
+          "resynced": [],
+          "info": [
+            "/Rock.visibility"
+          ],
+          "fields": {
+            "/Rock.visibility": [
+              "default"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "/Rock": [
+          "proxyPrim",
+          "purpose",
+          "size",
+          "visibility",
+          "xformOp:translate",
+          "xformOpOrder"
+        ],
+        "/Lamp": [
+          "proxyPrim",
+          "purpose",
+          "visibility",
+          "xformOpOrder"
+        ],
+        "/Robot": [
+          "proxyPrim",
+          "purpose",
+          "visibility",
+          "xformOpOrder"
+        ]
+      }
+    },
+    {
+      "name": "remove_visibility",
+      "call": "`UsdPrim::RemoveProperty` removes the only spec",
+      "notices": [
+        {
+          "resynced": [
+            "/Rock.visibility"
+          ],
+          "info": [],
+          "fields": {
+            "/Rock.visibility": []
+          }
+        }
+      ],
+      "properties": {
+        "/Rock": [
+          "proxyPrim",
+          "purpose",
+          "size",
+          "visibility",
+          "xformOp:translate",
+          "xformOpOrder"
+        ],
+        "/Lamp": [
+          "proxyPrim",
+          "purpose",
+          "visibility",
+          "xformOpOrder"
+        ],
+        "/Robot": [
+          "proxyPrim",
+          "purpose",
+          "visibility",
+          "xformOpOrder"
+        ]
+      }
+    },
+    {
+      "name": "create_required_only",
+      "call": "`UsdPrim::CreateAttribute` authors only the required fields",
+      "notices": [
+        {
+          "resynced": [
+            "/Rock.roughness"
+          ],
+          "info": [],
+          "fields": {
+            "/Rock.roughness": [
+              "custom",
+              "typeName"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "/Rock": [
+          "proxyPrim",
+          "purpose",
+          "roughness",
+          "size",
+          "visibility",
+          "xformOp:translate",
+          "xformOpOrder"
+        ],
+        "/Lamp": [
+          "proxyPrim",
+          "purpose",
+          "visibility",
+          "xformOpOrder"
+        ],
+        "/Robot": [
+          "proxyPrim",
+          "purpose",
+          "visibility",
+          "xformOpOrder"
+        ]
+      }
+    },
+    {
+      "name": "set_required_default",
+      "call": "`UsdAttribute::Set` adds a default to it",
+      "notices": [
+        {
+          "resynced": [],
+          "info": [
+            "/Rock.roughness"
+          ],
+          "fields": {
+            "/Rock.roughness": [
+              "default"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "/Rock": [
+          "proxyPrim",
+          "purpose",
+          "roughness",
+          "size",
+          "visibility",
+          "xformOp:translate",
+          "xformOpOrder"
+        ],
+        "/Lamp": [
+          "proxyPrim",
+          "purpose",
+          "visibility",
+          "xformOpOrder"
+        ],
+        "/Robot": [
+          "proxyPrim",
+          "purpose",
+          "visibility",
+          "xformOpOrder"
+        ]
+      }
+    },
+    {
+      "name": "create_relationship",
+      "call": "`UsdPrim::CreateRelationship`",
+      "notices": [
+        {
+          "resynced": [
+            "/Rock.proxyPrim"
+          ],
+          "info": [],
+          "fields": {
+            "/Rock.proxyPrim": [
+              "variability"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "/Rock": [
+          "proxyPrim",
+          "purpose",
+          "roughness",
+          "size",
+          "visibility",
+          "xformOp:translate",
+          "xformOpOrder"
+        ],
+        "/Lamp": [
+          "proxyPrim",
+          "purpose",
+          "visibility",
+          "xformOpOrder"
+        ],
+        "/Robot": [
+          "proxyPrim",
+          "purpose",
+          "visibility",
+          "xformOpOrder"
+        ]
+      }
+    },
+    {
+      "name": "add_relationship_target",
+      "call": "`UsdRelationship::AddTarget`",
+      "notices": [
+        {
+          "resynced": [],
+          "info": [
+            "/Rock.proxyPrim"
+          ],
+          "fields": {
+            "/Rock.proxyPrim": [
+              "targetPaths"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "/Rock": [
+          "proxyPrim",
+          "purpose",
+          "roughness",
+          "size",
+          "visibility",
+          "xformOp:translate",
+          "xformOpOrder"
+        ],
+        "/Lamp": [
+          "proxyPrim",
+          "purpose",
+          "visibility",
+          "xformOpOrder"
+        ],
+        "/Robot": [
+          "proxyPrim",
+          "purpose",
+          "visibility",
+          "xformOpOrder"
+        ]
+      }
+    },
+    {
+      "name": "remove_relationship",
+      "call": "`UsdPrim::RemoveProperty` on the relationship",
+      "notices": [
+        {
+          "resynced": [
+            "/Rock.proxyPrim"
+          ],
+          "info": [],
+          "fields": {
+            "/Rock.proxyPrim": []
+          }
+        }
+      ],
+      "properties": {
+        "/Rock": [
+          "proxyPrim",
+          "purpose",
+          "roughness",
+          "size",
+          "visibility",
+          "xformOp:translate",
+          "xformOpOrder"
+        ],
+        "/Lamp": [
+          "proxyPrim",
+          "purpose",
+          "visibility",
+          "xformOpOrder"
+        ],
+        "/Robot": [
+          "proxyPrim",
+          "purpose",
+          "visibility",
+          "xformOpOrder"
+        ]
+      }
+    },
+    {
+      "name": "set_stronger",
+      "call": "`UsdAttribute::Set` adds a root spec over the weaker layer's `size`",
+      "notices": [
+        {
+          "resynced": [
+            "/Rock.size"
+          ],
+          "info": [],
+          "fields": {
+            "/Rock.size": [
+              "typeName"
+            ]
+          }
+        },
+        {
+          "resynced": [],
+          "info": [
+            "/Rock.size"
+          ],
+          "fields": {
+            "/Rock.size": [
+              "default"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "/Rock": [
+          "proxyPrim",
+          "purpose",
+          "roughness",
+          "size",
+          "visibility",
+          "xformOp:translate",
+          "xformOpOrder"
+        ],
+        "/Lamp": [
+          "proxyPrim",
+          "purpose",
+          "visibility",
+          "xformOpOrder"
+        ],
+        "/Robot": [
+          "proxyPrim",
+          "purpose",
+          "visibility",
+          "xformOpOrder"
+        ]
+      }
+    },
+    {
+      "name": "remove_stronger",
+      "call": "`UsdPrim::RemoveProperty` removes the root spec; the weaker one stays",
+      "notices": [
+        {
+          "resynced": [
+            "/Rock.size"
+          ],
+          "info": [],
+          "fields": {
+            "/Rock.size": []
+          }
+        }
+      ],
+      "properties": {
+        "/Rock": [
+          "proxyPrim",
+          "purpose",
+          "roughness",
+          "size",
+          "visibility",
+          "xformOp:translate",
+          "xformOpOrder"
+        ],
+        "/Lamp": [
+          "proxyPrim",
+          "purpose",
+          "visibility",
+          "xformOpOrder"
+        ],
+        "/Robot": [
+          "proxyPrim",
+          "purpose",
+          "visibility",
+          "xformOpOrder"
+        ]
+      }
+    },
+    {
+      "name": "remove_last",
+      "call": "`UsdPrim::RemoveProperty` through the weaker layer removes the last spec",
+      "notices": [
+        {
+          "resynced": [
+            "/Rock.size"
+          ],
+          "info": [],
+          "fields": {
+            "/Rock.size": []
+          }
+        }
+      ],
+      "properties": {
+        "/Rock": [
+          "proxyPrim",
+          "purpose",
+          "roughness",
+          "visibility",
+          "xformOp:translate",
+          "xformOpOrder"
+        ],
+        "/Lamp": [
+          "proxyPrim",
+          "purpose",
+          "visibility",
+          "xformOpOrder"
+        ],
+        "/Robot": [
+          "proxyPrim",
+          "purpose",
+          "visibility",
+          "xformOpOrder"
+        ]
+      }
+    },
+    {
+      "name": "create_in_sublayer",
+      "call": "`CreateAttribute` and `Set` through the weaker layer",
+      "notices": [
+        {
+          "resynced": [
+            "/Rock.weight"
+          ],
+          "info": [],
+          "fields": {
+            "/Rock.weight": [
+              "custom",
+              "typeName"
+            ]
+          }
+        },
+        {
+          "resynced": [],
+          "info": [
+            "/Rock.weight"
+          ],
+          "fields": {
+            "/Rock.weight": [
+              "default"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "/Rock": [
+          "proxyPrim",
+          "purpose",
+          "roughness",
+          "visibility",
+          "weight",
+          "xformOp:translate",
+          "xformOpOrder"
+        ],
+        "/Lamp": [
+          "proxyPrim",
+          "purpose",
+          "visibility",
+          "xformOpOrder"
+        ],
+        "/Robot": [
+          "proxyPrim",
+          "purpose",
+          "visibility",
+          "xformOpOrder"
+        ]
+      }
+    },
+    {
+      "name": "create_with_new_over",
+      "call": "`CreateAttribute` and `Set` through the weaker layer, which has no `/Lamp` spec",
+      "notices": [
+        {
+          "resynced": [
+            "/Lamp.weight"
+          ],
+          "info": [
+            "/Lamp"
+          ],
+          "fields": {
+            "/Lamp.weight": [
+              "custom",
+              "typeName"
+            ],
+            "/Lamp": []
+          }
+        },
+        {
+          "resynced": [],
+          "info": [
+            "/Lamp.weight"
+          ],
+          "fields": {
+            "/Lamp.weight": [
+              "default"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "/Rock": [
+          "proxyPrim",
+          "purpose",
+          "roughness",
+          "visibility",
+          "weight",
+          "xformOp:translate",
+          "xformOpOrder"
+        ],
+        "/Lamp": [
+          "proxyPrim",
+          "purpose",
+          "visibility",
+          "weight",
+          "xformOpOrder"
+        ],
+        "/Robot": [
+          "proxyPrim",
+          "purpose",
+          "visibility",
+          "xformOpOrder"
+        ]
+      }
+    },
+    {
+      "name": "create_in_reference",
+      "call": "`SdfAttributeSpec` with a default in the referenced layer",
+      "notices": [
+        {
+          "resynced": [
+            "/Lamp.intensity",
+            "/Robot.intensity"
+          ],
+          "info": [],
+          "fields": {
+            "/Lamp.intensity": [
+              "typeName"
+            ],
+            "/Robot.intensity": [
+              "typeName"
+            ]
+          }
+        },
+        {
+          "resynced": [],
+          "info": [
+            "/Lamp.intensity",
+            "/Robot.intensity"
+          ],
+          "fields": {
+            "/Lamp.intensity": [
+              "default"
+            ],
+            "/Robot.intensity": [
+              "default"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "/Rock": [
+          "proxyPrim",
+          "purpose",
+          "roughness",
+          "visibility",
+          "weight",
+          "xformOp:translate",
+          "xformOpOrder"
+        ],
+        "/Lamp": [
+          "intensity",
+          "proxyPrim",
+          "purpose",
+          "visibility",
+          "weight",
+          "xformOpOrder"
+        ],
+        "/Robot": [
+          "intensity",
+          "proxyPrim",
+          "purpose",
+          "visibility",
+          "xformOpOrder"
+        ]
+      }
+    },
+    {
+      "name": "change_in_reference",
+      "call": "a new default on that spec",
+      "notices": [
+        {
+          "resynced": [],
+          "info": [
+            "/Lamp.intensity",
+            "/Robot.intensity"
+          ],
+          "fields": {
+            "/Lamp.intensity": [
+              "default"
+            ],
+            "/Robot.intensity": [
+              "default"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "/Rock": [
+          "proxyPrim",
+          "purpose",
+          "roughness",
+          "visibility",
+          "weight",
+          "xformOp:translate",
+          "xformOpOrder"
+        ],
+        "/Lamp": [
+          "intensity",
+          "proxyPrim",
+          "purpose",
+          "visibility",
+          "weight",
+          "xformOpOrder"
+        ],
+        "/Robot": [
+          "intensity",
+          "proxyPrim",
+          "purpose",
+          "visibility",
+          "xformOpOrder"
+        ]
+      }
+    },
+    {
+      "name": "create_in_prototype_source",
+      "call": "`SdfAttributeSpec` under the prim instances share",
+      "notices": [
+        {
+          "resynced": [
+            "/Lamp/Ball.radius",
+            "/__Prototype_1/Ball.radius"
+          ],
+          "info": [],
+          "fields": {
+            "/Lamp/Ball.radius": [
+              "typeName"
+            ],
+            "/__Prototype_1/Ball.radius": [
+              "typeName"
+            ]
+          }
+        },
+        {
+          "resynced": [],
+          "info": [
+            "/Lamp/Ball.radius",
+            "/__Prototype_1/Ball.radius"
+          ],
+          "fields": {
+            "/Lamp/Ball.radius": [
+              "default"
+            ],
+            "/__Prototype_1/Ball.radius": [
+              "default"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "/Rock": [
+          "proxyPrim",
+          "purpose",
+          "roughness",
+          "visibility",
+          "weight",
+          "xformOp:translate",
+          "xformOpOrder"
+        ],
+        "/Lamp": [
+          "intensity",
+          "proxyPrim",
+          "purpose",
+          "visibility",
+          "weight",
+          "xformOpOrder"
+        ],
+        "/Robot": [
+          "intensity",
+          "proxyPrim",
+          "purpose",
+          "visibility",
+          "xformOpOrder"
+        ]
+      }
+    },
+    {
+      "name": "remove_in_reference",
+      "call": "`SdfPrimSpec::RemoveProperty` in the referenced layer",
+      "notices": [
+        {
+          "resynced": [
+            "/Lamp.intensity",
+            "/Robot.intensity"
+          ],
+          "info": [],
+          "fields": {
+            "/Lamp.intensity": [],
+            "/Robot.intensity": []
+          }
+        }
+      ],
+      "properties": {
+        "/Rock": [
+          "proxyPrim",
+          "purpose",
+          "roughness",
+          "visibility",
+          "weight",
+          "xformOp:translate",
+          "xformOpOrder"
+        ],
+        "/Lamp": [
+          "proxyPrim",
+          "purpose",
+          "visibility",
+          "weight",
+          "xformOpOrder"
+        ],
+        "/Robot": [
+          "proxyPrim",
+          "purpose",
+          "visibility",
+          "xformOpOrder"
+        ]
+      }
+    },
+    {
+      "name": "add_rotate_op",
+      "call": "`UsdGeomXformable::AddRotateZOp` and `Set`",
+      "notices": [
+        {
+          "resynced": [
+            "/Rock.xformOp:rotateZ"
+          ],
+          "info": [],
+          "fields": {
+            "/Rock.xformOp:rotateZ": [
+              "typeName"
+            ]
+          }
+        },
+        {
+          "resynced": [],
+          "info": [
+            "/Rock.xformOpOrder"
+          ],
+          "fields": {
+            "/Rock.xformOpOrder": [
+              "default"
+            ]
+          }
+        },
+        {
+          "resynced": [],
+          "info": [
+            "/Rock.xformOp:rotateZ"
+          ],
+          "fields": {
+            "/Rock.xformOp:rotateZ": [
+              "default"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "/Rock": [
+          "proxyPrim",
+          "purpose",
+          "roughness",
+          "visibility",
+          "weight",
+          "xformOp:rotateZ",
+          "xformOp:translate",
+          "xformOpOrder"
+        ],
+        "/Lamp": [
+          "proxyPrim",
+          "purpose",
+          "visibility",
+          "weight",
+          "xformOpOrder"
+        ],
+        "/Robot": [
+          "proxyPrim",
+          "purpose",
+          "visibility",
+          "xformOpOrder"
+        ]
+      }
+    },
+    {
+      "name": "change_translate",
+      "call": "`UsdAttribute::Set` on the existing translate",
+      "notices": [
+        {
+          "resynced": [],
+          "info": [
+            "/Rock.xformOp:translate"
+          ],
+          "fields": {
+            "/Rock.xformOp:translate": [
+              "default"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "/Rock": [
+          "proxyPrim",
+          "purpose",
+          "roughness",
+          "visibility",
+          "weight",
+          "xformOp:rotateZ",
+          "xformOp:translate",
+          "xformOpOrder"
+        ],
+        "/Lamp": [
+          "proxyPrim",
+          "purpose",
+          "visibility",
+          "weight",
+          "xformOpOrder"
+        ],
+        "/Robot": [
+          "proxyPrim",
+          "purpose",
+          "visibility",
+          "xformOpOrder"
+        ]
+      }
+    },
+    {
+      "name": "rename_property",
+      "call": "`UsdNamespaceEditor::RenameProperty`",
+      "notices": [
+        {
+          "resynced": [],
+          "info": [
+            "/Rock.gloss"
+          ],
+          "fields": {
+            "/Rock.gloss": []
+          }
+        }
+      ],
+      "properties": {
+        "/Rock": [
+          "gloss",
+          "proxyPrim",
+          "purpose",
+          "visibility",
+          "weight",
+          "xformOp:rotateZ",
+          "xformOp:translate",
+          "xformOpOrder"
+        ],
+        "/Lamp": [
+          "proxyPrim",
+          "purpose",
+          "visibility",
+          "weight",
+          "xformOpOrder"
+        ],
+        "/Robot": [
+          "proxyPrim",
+          "purpose",
+          "visibility",
+          "xformOpOrder"
+        ]
+      }
+    },
+    {
+      "name": "create_prim_and_property",
+      "call": "one `SdfChangeBlock` creates `/Pebble` and its property",
+      "notices": [
+        {
+          "resynced": [
+            "/Pebble"
+          ],
+          "info": [],
+          "fields": {
+            "/Pebble": [
+              "specifier"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "/Rock": [
+          "gloss",
+          "proxyPrim",
+          "purpose",
+          "visibility",
+          "weight",
+          "xformOp:rotateZ",
+          "xformOp:translate",
+          "xformOpOrder"
+        ],
+        "/Lamp": [
+          "proxyPrim",
+          "purpose",
+          "visibility",
+          "weight",
+          "xformOpOrder"
+        ],
+        "/Robot": [
+          "proxyPrim",
+          "purpose",
+          "visibility",
+          "xformOpOrder"
+        ],
+        "/Pebble": [
+          "size"
+        ]
+      }
+    },
+    {
+      "name": "create_with_default_in_block",
+      "call": "one `SdfChangeBlock` creates `/Rock.lift` and sets its default",
+      "notices": [
+        {
+          "resynced": [
+            "/Rock.lift"
+          ],
+          "info": [],
+          "fields": {
+            "/Rock.lift": [
+              "default",
+              "typeName"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "/Rock": [
+          "gloss",
+          "lift",
+          "proxyPrim",
+          "purpose",
+          "visibility",
+          "weight",
+          "xformOp:rotateZ",
+          "xformOp:translate",
+          "xformOpOrder"
+        ],
+        "/Lamp": [
+          "proxyPrim",
+          "purpose",
+          "visibility",
+          "weight",
+          "xformOpOrder"
+        ],
+        "/Robot": [
+          "proxyPrim",
+          "purpose",
+          "visibility",
+          "xformOpOrder"
+        ],
+        "/Pebble": [
+          "size"
+        ]
+      }
+    },
+    {
+      "name": "set_metadata",
+      "call": "`UsdObject::SetMetadata` on a property",
+      "notices": [
+        {
+          "resynced": [],
+          "info": [
+            "/Rock.gloss"
+          ],
+          "fields": {
+            "/Rock.gloss": [
+              "documentation"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "/Rock": [
+          "gloss",
+          "lift",
+          "proxyPrim",
+          "purpose",
+          "visibility",
+          "weight",
+          "xformOp:rotateZ",
+          "xformOp:translate",
+          "xformOpOrder"
+        ],
+        "/Lamp": [
+          "proxyPrim",
+          "purpose",
+          "visibility",
+          "weight",
+          "xformOpOrder"
+        ],
+        "/Robot": [
+          "proxyPrim",
+          "purpose",
+          "visibility",
+          "xformOpOrder"
+        ],
+        "/Pebble": [
+          "size"
+        ]
+      }
+    }
+  ]
+}

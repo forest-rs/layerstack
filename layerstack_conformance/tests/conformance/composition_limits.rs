@@ -421,12 +421,15 @@ fn an_endless_tree_stops_at_the_node_limit_on_any_number_of_threads() {
             .any(|(limit, value, _)| *limit == CompositionLimit::ComposedDepth && *value == 40)
     );
 
-    let expected = outcome(&serial, &store);
+    // WASI has no threads to compare against.
     #[cfg(not(target_os = "wasi"))]
-    for threads in [2, 8] {
-        let threaded = Stage::compose(&mut store, LayerId(1), options(limits, threads));
-        assert_eq!(outcome(&threaded, &store), expected, "{threads} threads");
-        assert_eq!(threaded.composition_work().prim_index_nodes, nodes);
+    {
+        let expected = outcome(&serial, &store);
+        for threads in [2, 8] {
+            let threaded = Stage::compose(&mut store, LayerId(1), options(limits, threads));
+            assert_eq!(outcome(&threaded, &store), expected, "{threads} threads");
+            assert_eq!(threaded.composition_work().prim_index_nodes, nodes);
+        }
     }
 }
 

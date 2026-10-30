@@ -27,6 +27,7 @@ def Xform "World"
             "chrome" (
                 prepend references = @./assets/chrome.usda@
             ) {
+                rel mirrors = </World/Robot>
             }
             "painted" {
                 color3f color = (0.8, 0.2, 0.1)

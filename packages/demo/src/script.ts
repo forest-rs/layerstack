@@ -190,7 +190,7 @@ export const steps: readonly Step[] = [
   },
   {
     title: "Rename the robot to Rover",
-    look: "The explanation: the painted color now comes from /World/Rover{finish=painted}; the variant set moved with the prim. The lamp's aim, in library.usda, targets /World/Rover: one rename edited two layers. The edit target of the robot's reference is stale now: no arc of /World/Robot maps it, and a rename through it is refused.",
+    look: "The explanation: the painted color now comes from /World/Rover{finish=painted}; the variant set moved with the prim. The lamp's aim, in library.usda, targets /World/Rover: one rename edited two layers. The edit target of the robot's reference is stale now: no arc of /World/Robot maps it, and a rename through it is refused. The undo list: the rename leaves one path naming /World/Robot, the chrome finish's mirrors, which no prim selects, as OpenUSD leaves it; selecting chrome would target a robot that is gone.",
     async run(session) {
       session.current.move(sample.robot, sample.rover);
       session.select(sample.rover, sample.roverColor);

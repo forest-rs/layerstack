@@ -616,7 +616,15 @@ function renderUndo(editor: Editor): void {
           "ol",
           { class: "stack" },
           ...[...stack].reverse().map((entry) =>
-            h("li", {}, entry.label, h("span", { class: "detail" }, ` in ${entry.receipt.layers.map(layerName).join(", ") || layerName(entry.receipt.target.layer)}`)),
+            h(
+              "li",
+              {},
+              entry.label,
+              h("span", { class: "detail" }, ` in ${entry.receipt.layers.map(layerName).join(", ") || layerName(entry.receipt.target.layer)}`),
+              ...entry.receipt.unrepaired.map((left) =>
+                h("span", { class: "detail unrepaired" }, `; leaves ${left.path} in ${left.spec} (${left.field}, ${layerName(left.layer)})`),
+              ),
+            ),
           ),
         );
   fill(panel("undo-body"), 

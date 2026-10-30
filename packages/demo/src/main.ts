@@ -10,6 +10,8 @@ import type { Editor, LayerFile } from "./editor.ts";
 import { Session, steps } from "./script.ts";
 import type { Host } from "./script.ts";
 import { materialSummary } from "./materials.ts";
+import { buildViewport, viewportSummary } from "./viewport.ts";
+import type { Viewport } from "./viewport3d.ts";
 import { formatNumber, formatValue, parseValue, releaseValue } from "./values.ts";
 import "./style.css";
 
@@ -143,6 +145,7 @@ function render(): void {
   for (const issue of stage.status().compositionErrors) {
     if (issue.prim !== null) issues.set(issue.prim, [...(issues.get(issue.prim) ?? []), issue]);
   }
+  renderViewport(stage);
   renderTree(stage, waiting, issues);
   renderInspector(editor);
   renderExplanation(stage, waiting, issues);
@@ -152,6 +155,50 @@ function render(): void {
   renderChanges(editor);
   // Last, so the counters include what rendering the panels read.
   renderCounters(editor);
+}
+
+/**
+ * The three.js view: `undefined` while three.js loads (in its own chunk, so
+ * the editor works before it arrives), `null` where WebGL is unavailable.
+ */
+let viewport: Viewport | null | undefined;
+import("./viewport3d.ts").then(
+  ({ Viewport }) => {
+    try {
+      viewport = new Viewport(panel("viewport-canvas") as HTMLCanvasElement);
+    } catch (error) {
+      console.error(error);
+      viewport = null;
+    }
+    render();
+  },
+  (error: unknown) => {
+    console.error(error);
+    viewport = null;
+    render();
+  },
+);
+
+/** Draws the stage from its reads at the inspector's time: world transforms, visibility, purpose, triangles, colors, instances and bounds. */
+function renderViewport(stage: Stage): void {
+  const body = panel("viewport-body");
+  let scene: ReturnType<typeof buildViewport>;
+  try {
+    scene = buildViewport(stage, session.time ?? undefined);
+  } catch (error) {
+    // A read the viewport cannot make (an invalid instancer, say) must not take the panels down.
+    fill(body, `The viewport could not read the stage: ${error instanceof Error ? error.message : String(error)}`);
+    return;
+  }
+  const summary = viewportSummary(scene);
+  viewport?.update(scene, session.prim);
+  const bounds = summary.bounds === null ? "empty" : `[${summary.bounds.slice(0, 3).map(formatNumber).join(", ")}] to [${summary.bounds.slice(3).map(formatNumber).join(", ")}]`;
+  fill(
+    body,
+    `${summary.drawn.length} drawn (${summary.instances} instances), ${summary.triangles} triangles, framed on ${bounds}`,
+    summary.hidden.length > 0 ? `; hidden: ${summary.hidden.join(", ")}` : "",
+    viewport === null ? " (WebGL is unavailable: the summary is all there is)" : "",
+  );
 }
 
 function renderCounters(editor: Editor | null): void {

@@ -1,14 +1,34 @@
 # Layerstack scene editor (demo)
 
 A private demo of [`@forest-rs/layerstack`](../layerstack): a scene editor
-in plain DOM, with no 3D and no UI framework, so what it shows is
-composition. It opens the layered sample in `public/scene/`: a root layer;
+in plain DOM with no UI framework, so what it shows is composition, and a
+3D viewport drawn only from the stage's reads. It opens the layered sample
+in `public/scene/`: a root layer;
 a sublayer with a class the rock inherits and a lamp whose `aim` names the
 robot and whose `flicker` is sampled, then blocked at time 24; a robot
 referenced from its own file, which binds it a material with a preview
 surface shader, with a variant set whose `chrome` variant
-references an asset fetched only when it is selected; and two instances of
-a beacon, which share one prototype.
+references an asset fetched only when it is selected; two instances of
+a beacon, which share one prototype; a ground mesh; and a point instancer
+of five stones.
+
+The viewport (`src/viewport.ts`, drawn by three.js in `src/viewport3d.ts`)
+takes everything from layerstack, with no USD loader: the drawable prims
+(meshes, spheres, cubes and point instancers) from the composed tree, one
+batched `stage.visibilities` and `stage.purposeInfos` read to leave out
+what is invisible or of a purpose not drawn (default and proxy are, as in
+usdview), one batched `stage.worldTransforms` read for every placement, a
+mesh's `points` and face indices (fanned into triangles) or a sphere's
+radius and a cube's size, the `displayColor` primvar (inherited from an
+ancestor or a class too) or else the bound material's surface
+`diffuseColor`, `stage.pointInstances` for the stones, each matrix times the
+instancer's world transform, and `stage.worldBounds(["/"])` to frame the
+camera. It is read again after every action, so the edits, undos, the
+variant switch, the rename and the muted asset show in it; selecting a prim
+highlights it. Drag to orbit, scroll to zoom. Under it, the same read
+summarized: the prims drawn, the instances, the triangles and the framed
+bounds, which `scripts/acceptance.ts` checks after every step without
+rendering a pixel.
 
 Panels: the prim tree (instances, instance proxies and composition errors
 badged), the
@@ -26,7 +46,7 @@ header. The layers panel shows which layers are muted from the changes the
 stage reports (`Changes.mutedIdentifiers` and `unmutedIdentifiers`), not by
 asking the stage again.
 
-The script runs thirteen steps, one button each:
+The script runs fourteen steps, one button each:
 
 1. Open the sample: the stage wants its sublayer, the robot's reference and
    the beacon's (once, for both instances), and `resolve` fetches them.
@@ -72,6 +92,13 @@ The script runs thirteen steps, one button each:
     The stage still holds the layer. Its Unmute in the layers panel
     brings every opinion back in one change and fetches nothing. Muting
     is not an edit: the undo stack is empty.
+14. Move a beacon, hide the rock and a stone, in one edit: the north
+    beacon's `xformOp:translate`, the rock's `visibility` and the stones'
+    `invisibleIds`. The viewport moves the beacon, leaves out the rock and
+    stone 3, and frames the smaller bounds. The transform cache recomputes
+    two local transforms, the beacon's and the rock's (whose first
+    `visibility` opinion is a new spec, which resyncs it), and the world
+    transforms below them, and reuses the rest.
 
 `scripts/acceptance.ts` runs the same steps headless in Node, reading the
 sample from disk, and checks the values and explanations after each one,

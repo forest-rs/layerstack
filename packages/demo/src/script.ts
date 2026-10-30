@@ -45,6 +45,11 @@ export const sample = {
   instance: "/World/Beacons/North",
   proxy: "/World/Beacons/North/Bulb",
   proxyRadius: "/World/Beacons/North/Bulb.radius",
+  /** Five stones a point instancer places, and the id the script hides. */
+  stones: "/World/Stones",
+  hiddenStone: 3n,
+  /** Where the script moves the north beacon. */
+  beaconMoved: [-5, 0, -1],
 } as const;
 
 /** What the script needs of its host: the instance, the fetch, and a way to hand saved layers to the user. */
@@ -228,6 +233,18 @@ export const steps: readonly Step[] = [
       const editor = session.current;
       session.select(sample.rover, sample.roverColor);
       await editor.setMuted(editor.layerNamed(sample.robotAsset), true);
+    },
+  },
+  {
+    title: "Move a beacon, hide the rock and a stone",
+    look: "The viewport: one edit moves the north beacon (its xformOp:translate), makes the rock invisible and hides stone 3 (the instancer's invisibleIds). The transform cache recomputes two local transforms, the beacon's and the rock's (whose first visibility opinion resyncs it), and reuses the rest; the framed bounds shrink without the rock. Undo brings them back.",
+    async run(session) {
+      session.current.apply("move the north beacon, hide the rock and stone 3", [
+        { type: "setValue", path: `${sample.instance}.xformOp:translate`, value: { type: "double3", value: [...sample.beaconMoved] } },
+        { type: "setValue", path: `${sample.rock}.visibility`, value: { type: "token", value: "invisible" } },
+        { type: "setValue", path: `${sample.stones}.invisibleIds`, value: { type: "int64[]", value: [sample.hiddenStone] } },
+      ]);
+      session.select(sample.instance);
     },
   },
 ];

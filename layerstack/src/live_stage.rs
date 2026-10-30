@@ -96,6 +96,119 @@ fn minimal_roots(store: &dyn LayerStore, paths: &[PathId]) -> Vec<PathId> {
     roots
 }
 
+/// What `new` composes differently from `old` when only the layers of the
+/// stage's own layer stack changed, as changes: the prims that came or
+/// went, or whose kept children's order or prototype changed, are
+/// resynced, as minimal roots. A prim whose spec stack only gained or
+/// lost specs with no opinions of the prim's own (an `over` holding
+/// properties, say) changes info-only, and the properties those specs
+/// hold are resynced; one whose spec stack changed otherwise is resynced.
+/// A prim whose spec stack is the same composes the same specs, so the
+/// same opinions (the offsets of the layers kept are kept), arcs and
+/// children. The pseudo-root's own specs compose nothing: it changes
+/// info-only.
+///
+/// OpenUSD: `PcpChanges::DidChange` handles a sublayer added or removed
+/// (`_DidAddOrRemoveSublayer`) as the addition or removal of its specs,
+/// which `UsdStage` reports as for authored specs (an inert prim spec's
+/// prim info-only, its property specs resynced), and the pseudo-root's
+/// `subLayers` change info-only.
+fn layer_stack_changes(store: &dyn LayerStore, old: &Stage, new: &Stage) -> Changes {
+    let root = store.paths().intern(crate::Path::root());
+    let kept = |prim: PathId| {
+        let before = old.all_children_of(prim).unwrap_or_default();
+        let after = new.all_children_of(prim).unwrap_or_default();
+        controls::kept_order(before, after) == controls::kept_order(after, before)
+    };
+    // The specs one stack has and the other not, when the specs both have
+    // keep their order; None otherwise.
+    let spec_of = |(layer, spec): &(LayerId, crate::SpecPath)| {
+        if spec.has_variant_selections() {
+            return None;
+        }
+        store.layer(*layer)?.prim_spec_in(spec.prim_path(), &[])
+    };
+    let restacked = |before: &[(LayerId, crate::SpecPath)],
+                     after: &[(LayerId, crate::SpecPath)]| {
+        let only = |a: &[(LayerId, crate::SpecPath)], b: &[(LayerId, crate::SpecPath)]| {
+            a.iter()
+                .filter(|entry| !b.contains(entry))
+                .cloned()
+                .collect::<Vec<_>>()
+        };
+        let (gone, came) = (only(before, after), only(after, before));
+        let kept_before: Vec<_> = before.iter().filter(|e| !gone.contains(e)).collect();
+        let kept_after: Vec<_> = after.iter().filter(|e| !came.contains(e)).collect();
+        if kept_before != kept_after {
+            return None;
+        }
+        let mut properties = Vec::new();
+        for entry in gone.iter().chain(&came) {
+            let spec = spec_of(entry)?;
+            let mut bare = spec.clone();
+            bare.authored_children.clear();
+            bare.properties.clear();
+            if bare.specifier == Some(crate::Specifier::Over) {
+                bare.specifier = None;
+            }
+            if bare != crate::PrimSpec::default() {
+                return None;
+            }
+            properties.extend(spec.properties.iter().map(|entry| entry.name));
+        }
+        Some(properties)
+    };
+    let mut changes = Changes::default();
+    let mut resynced = Vec::new();
+    for prim in new
+        .prim_paths()
+        .chain(old.prim_paths().filter(|prim| !new.has_prim(*prim)))
+    {
+        if !(old.has_prim(prim)
+            && new.has_prim(prim)
+            && kept(prim)
+            && old.instance_prototype(prim) == new.instance_prototype(prim))
+        {
+            resynced.push(prim);
+            continue;
+        }
+        if prim == root {
+            continue;
+        }
+        let (before, after) = (old.prim_stack(prim), new.prim_stack(prim));
+        if before == after {
+            continue;
+        }
+        match restacked(
+            before.as_deref().unwrap_or_default(),
+            after.as_deref().unwrap_or_default(),
+        ) {
+            Some(properties) => {
+                changes.changed_info_only.push(prim);
+                changes.resynced_properties.extend(
+                    properties
+                        .into_iter()
+                        .map(|name| crate::PropertyPath::new(prim, name)),
+                );
+            }
+            None => resynced.push(prim),
+        }
+    }
+    changes.resynced = minimal_roots(store, &resynced);
+    if !changes.resynced.contains(&root) {
+        changes.changed_info_only.push(root);
+    }
+    let within: HashSet<PathId> = changes.resynced.iter().copied().collect();
+    changes
+        .changed_info_only
+        .retain(|prim| !is_beneath_set(store, *prim, &within));
+    changes
+        .resynced_properties
+        .retain(|path| !is_beneath_set(store, path.prim_path(), &within));
+    changes.sort(store.paths(), store.tokens());
+    changes
+}
+
 fn include_resyncs(store: &dyn LayerStore, changes: &mut Changes, paths: &[PathId]) {
     if paths.is_empty() {
         return;
@@ -310,6 +423,11 @@ pub struct LiveStage {
     /// the sites they compose from; empty outside [`Self::apply`], and when
     /// unnotified or pending edits may have changed more.
     inert_prims: HashSet<PathId>,
+    /// Whether the full rebuild [`Self::apply`] makes follows a change of
+    /// the stage's own layer stack alone, with nothing else pending: its
+    /// report compares the stages before and after
+    /// ([`layer_stack_changes`]).
+    layer_stack_diff: bool,
     layer_discovery: discovery::LayerDiscovery,
     /// The child specs of layers that do not list them, kept across
     /// compositions so an edit re-indexes only the specs it adds.
@@ -363,6 +481,7 @@ impl LiveStage {
             structural_sources: Vec::new(),
             support_sources: Vec::new(),
             inert_prims: HashSet::new(),
+            layer_stack_diff: false,
             layer_discovery: discovery::LayerDiscovery::default(),
             child_index_mark: child_index.work(),
             child_index,
@@ -850,6 +969,8 @@ impl LiveStage {
                 }
             }
         }
+        self.layer_stack_diff =
+            outcome.layer_stack_only && sources_current && !pending_recomposition;
         let mut recomposed = match refreshed {
             Some(paths) => {
                 changes.changed_info_only = paths.clone();
@@ -858,6 +979,7 @@ impl LiveStage {
             None => self.recompose_report(store, Some(&mut changes)),
         };
         self.inert_prims.clear();
+        self.layer_stack_diff = false;
         include_resyncs(store, &mut changes, &declaration_resyncs);
         // Stage metadata the transaction changed in the stage's own layer
         // stack, which the stage reads when asked.
@@ -2098,6 +2220,7 @@ impl LiveStage {
         store: &mut dyn LayerStore,
         changes: Option<&mut Changes>,
     ) -> Vec<PathId> {
+        let diff = core::mem::take(&mut self.layer_stack_diff);
         self.needs_full_rebuild = false;
         self.controls_pending = false;
         self.structural_roots.clear();
@@ -2121,7 +2244,7 @@ impl LiveStage {
                 .prim_paths()
                 .filter(|p| !old_prims.contains(p))
                 .count();
-        self.stage = stage;
+        let old_stage = core::mem::replace(&mut self.stage, stage);
         self.tracker =
             InvalidationTracker::from_graph_with_cycle_handling(deps.graph, CycleHandling::Ignore);
         self.layer_to_prims = deps.layer_to_prims;
@@ -2143,8 +2266,16 @@ impl LiveStage {
                 .copied()
                 .filter(|path| !self.stage.has_prim(*path))
                 .collect();
-            changes.resynced = alloc::vec![store.paths().intern(crate::Path::root())];
+            let root = store.paths().intern(crate::Path::root());
+            changes.resynced = alloc::vec![root];
+            if diff {
+                let found = layer_stack_changes(store, &old_stage, &self.stage);
+                changes.resynced = found.resynced;
+                changes.changed_info_only = found.changed_info_only;
+                changes.resynced_properties = found.resynced_properties;
+            }
         }
+        drop(old_stage);
 
         // A before/after difference, not an edit log: removed paths are those
         // the old stage had and the new one lacks.
@@ -5275,8 +5406,9 @@ mod tests {
     /// does. A root prim created or removed resyncs that prim alone, with
     /// the pseudo-root's child list composed once and the pseudo-root not
     /// reported, even when the first one brings the pseudo-root's spec into
-    /// being and its undo takes it away. A reorder, a `defaultPrim` edit
-    /// and a sublayer resync the stage.
+    /// being and its undo takes it away. A reorder and a `defaultPrim` edit
+    /// resync the stage; a sublayer, which the stage is composed again for,
+    /// resyncs the root prim it defines and changes `/` info-only.
     ///
     /// Spec: AOUSD Core §11.3.1 (child order), §10.3.1 (layer stacks),
     /// §7.6.1.2.3 (`defaultPrim`). OpenUSD resyncs the child a spec is added
@@ -5368,8 +5500,8 @@ mod tests {
             &mut store,
             &txn,
             (7, 7, true),
+            &["/Pebble"],
             &["/"],
-            &[],
         ));
 
         let expected: [(Work, &[&str], &[&str]); 6] = [
@@ -5379,7 +5511,7 @@ mod tests {
             ((3, 2, false), &["/Rock"], &[]),
             ((6, 6, true), &["/"], &[]),
             ((6, 6, true), &["/"], &[]),
-            ((6, 7, true), &["/"], &[]),
+            ((6, 7, true), &["/Pebble"], &["/"]),
         ];
         for (inverse, (work, resynced, info)) in undo.iter().rev().zip(expected.iter().rev()) {
             apply_root_edit(&mut live, &mut store, inverse, *work, resynced, info);

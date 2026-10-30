@@ -707,7 +707,7 @@ impl LiveStage {
 }
 
 /// The paths of `list` that `other` lists too, in `list`'s order.
-fn kept_order(list: &[PathId], other: &[PathId]) -> Vec<PathId> {
+pub(super) fn kept_order(list: &[PathId], other: &[PathId]) -> Vec<PathId> {
     let other: HashSet<PathId> = other.iter().copied().collect();
     list.iter().copied().filter(|p| other.contains(p)).collect()
 }

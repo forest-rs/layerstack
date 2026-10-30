@@ -245,7 +245,9 @@ pub struct Changes {
     /// A spec rewritten with only its properties changed, as a namespace
     /// edit rewrites one whose relationship targets it repairs, is listed
     /// here with the fields it changed in [`Self::property_changes`], and
-    /// the properties it adds, removes or renames are resynced.
+    /// the properties it adds, removes or renames are resynced. A sublayer
+    /// inserted or removed lists the pseudo-root, and the prims whose spec
+    /// stacks gained or lost only inert specs (`over`s, properties aside).
     /// A change to stage metadata that composes nothing (`documentation`,
     /// `startTimeCode`, `metersPerUnit` and the like) lists the
     /// pseudo-root.

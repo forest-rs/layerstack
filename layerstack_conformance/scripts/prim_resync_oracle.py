@@ -74,6 +74,10 @@ asset = Sdf.Layer.FindOrOpen(str(FIXTURES / "asset.usda"))
 empty = Sdf.Layer.CreateAnonymous("empty.usda")
 comet = Sdf.Layer.CreateAnonymous("comet.usda")
 Sdf.CreatePrimInLayer(comet, "/Comet").specifier = Sdf.SpecifierDef
+# And one with an opinion of an attribute of `/World/Rock`.
+heavy = Sdf.Layer.CreateAnonymous("heavy.usda")
+Sdf.AttributeSpec(Sdf.CreatePrimInLayer(heavy, "/World/Rock"), "mass",
+                  Sdf.ValueTypeNames.Double).default = 2.0
 
 notices = []
 
@@ -319,6 +323,14 @@ def rename_target():
     assert root.GetRelationshipAtPath("/World/Lamp.aim").targetPathList.explicitItems == ["/World/Rover"]
 
 
+def insert_opinion_sublayer():
+    root.subLayerPaths.append(heavy.identifier)
+
+
+def remove_opinion_sublayer():
+    root.subLayerPaths.remove(heavy.identifier)
+
+
 def mute_sublayer():
     stage.MuteLayer(weak.identifier)
 
@@ -373,6 +385,8 @@ STEPS = [
     ("remove_empty_sublayer", "that sublayer removed", remove_empty_sublayer),
     ("insert_prim_sublayer", "a sublayer defining `/Comet` appended", insert_prim_sublayer),
     ("remove_prim_sublayer", "that sublayer removed", remove_prim_sublayer),
+    ("insert_opinion_sublayer", "a sublayer with an `over` of `/World/Rock` holding an attribute appended", insert_opinion_sublayer),
+    ("remove_opinion_sublayer", "that sublayer removed", remove_opinion_sublayer),
     ("mute_sublayer", "`UsdStage::MuteLayer` of the weaker layer", mute_sublayer),
     ("unmute_sublayer", "`UsdStage::UnmuteLayer` of it", unmute_sublayer),
     ("rename_target", "`UsdNamespaceEditor::RenamePrim` of `/World/Robot`, which `/World/Lamp.aim` targets, to `Rover`", rename_target),

@@ -1647,7 +1647,9 @@ impl Stage {
     /// prototypes, and asset paths are anchored to the layer that authors
     /// each ([`StageDocument::flatten`]), as OpenUSD's flatten anchors
     /// them: a search path is anchored when the host supplied the asset
-    /// beside its layer. A flatten that would lose something (animation a
+    /// beside its layer, and an identifier relative to the host's root is
+    /// written relative to the flattened layer (`./set/albedo.png`), which
+    /// resolves as the stage did when it sits at that root. A flatten that would lose something (animation a
     /// layer cannot hold, a path relative to a layer with no identifier)
     /// still exports, accepting exactly those losses, with `lossless`
     /// false and each loss in `lost` as `[path, message]`.
@@ -3307,6 +3309,63 @@ def "World" (
         assert_eq!(
             stage.export_flattened("text").unwrap_err().code,
             "argument.invalid"
+        );
+    }
+
+    /// A layer the host names relative to its root (`set/rock.usda`)
+    /// anchors a path relative to it to one relative to the same root,
+    /// written relative to the flattened layer (`./set/albedo.png`): the
+    /// search path `set/albedo.png` would name another asset. From a
+    /// flattened layer at the host's root, each names what it named.
+    #[test]
+    fn a_flattened_layer_marks_host_relative_identifiers_relative() {
+        let text = "#usda 1.0\ndef \"Rock\"\n{\n    asset albedo = @./albedo.png@\n    \
+                    asset lichen = @textures/lichen.png@\n    asset moss = @textures/moss.png@\n    \
+                    asset up = @../up.png@\n    asset shared = @/shared/stone.png@\n    \
+                    asset remote = @https://example.com/rock.png@\n}\n";
+        let mut stage = Stage::open(
+            "set/rock.usda",
+            text.as_bytes().to_vec(),
+            false,
+            false,
+            BROWSER_LIMITS,
+        )
+        .unwrap();
+        stage
+            .document_mut()
+            .storage_mut()
+            .supply("set/textures/lichen.png", Vec::new());
+        let record = stage.export_flattened("usda").unwrap();
+        let [flat, lossless, _] = record.as_list().unwrap() else {
+            panic!("{record:?}");
+        };
+        assert_eq!(*lossless, Wire::Bool(true));
+        let flat = String::from_utf8(bytes(flat).to_vec()).unwrap();
+        let storage = stage.document().storage();
+        for (line, identifier) in [
+            ("asset albedo = @./set/albedo.png@", "set/albedo.png"),
+            (
+                "asset lichen = @./set/textures/lichen.png@",
+                "set/textures/lichen.png",
+            ),
+            ("asset up = @./up.png@", "up.png"),
+            ("asset shared = @/shared/stone.png@", "/shared/stone.png"),
+            (
+                "asset remote = @https://example.com/rock.png@",
+                "https://example.com/rock.png",
+            ),
+        ] {
+            assert!(flat.contains(line), "{line} in {flat}");
+            let written = &line[line.find('@').unwrap() + 1..line.len() - 1];
+            assert_eq!(
+                layerstack_io::Storage::identify(storage, written, Some("flat.usda")).unwrap(),
+                identifier,
+                "{line}"
+            );
+        }
+        assert!(
+            flat.contains("asset moss = @textures/moss.png@"),
+            "a search path nothing supplied beside its layer is kept: {flat}"
         );
     }
 

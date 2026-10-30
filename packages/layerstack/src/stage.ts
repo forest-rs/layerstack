@@ -1673,9 +1673,14 @@ export class Stage implements Disposable {
    * (`usda` by default), as OpenUSD's `UsdStage::Flatten` writes it:
    * instances keep sharing prototypes, and each asset path is anchored to
    * the layer that authors it: `./albedo.png` in `set/rock.usda` is written
-   * `set/albedo.png`, the identifier it names, and a search path such as
-   * `textures/moss.png` is anchored only when its asset was supplied beside
-   * that layer. Opening the bytes on their own composes the same stage.
+   * `./set/albedo.png`, the identifier it names marked relative to the
+   * flattened layer (`set/albedo.png` would be a search path, which names
+   * another asset), and a search path such as `textures/moss.png` is
+   * anchored only when its asset was supplied beside that layer; absolute
+   * paths and URLs are kept. Identifiers name assets from the host's root,
+   * so the flattened layer resolves them as the stage did when it sits
+   * there (as `flat.usda`, not `out/flat.usda`). Opening the bytes on
+   * their own composes the same stage.
    * Content a layer cannot hold, such as a path relative to the anonymous
    * session layer, is written as authored and listed in `lost`, never
    * silently.

@@ -15,7 +15,7 @@ use alloc::string::String;
 
 use layerstack::{
     AssetResolveError, AssetResolver, LayerId, PathInterner, ResolvedAsset, TokenInterner,
-    asset::{FormatArgs, create_identifier},
+    asset::{FormatArgs, create_identifier, normalize_asset_path},
     stage::flatten::{FlattenError, FlattenRequirements, Flattened},
 };
 
@@ -44,6 +44,12 @@ use crate::{Catalog, IoError, StageDocument, Storage};
 /// packaged layer, or else beside the package's root layer, which the
 /// document's copy of the package answers, and otherwise is anchored to
 /// the package file as a search path any other layer authors is.
+///
+/// An identifier relative to wherever its host resolves from
+/// (`set/oak.usda`, as the browser bindings name layers) anchors a path
+/// relative to the same place, marked so (`./set/bark.png`): it resolves
+/// as the original did only from a layer at the host's root, such as a
+/// flattened layer the host writes there.
 ///
 /// [`AssetResolver::resolve`] reads nothing and fails with
 /// [`AssetResolveError::Unavailable`]: the document loads layers itself
@@ -84,7 +90,7 @@ impl<B: Storage> AssetResolver for LayerLocations<'_, B> {
 
     fn anchor_asset_path(&self, asset_path: &str, anchor: LayerId) -> Option<String> {
         let location = self.resolved_path(anchor).unwrap_or("");
-        let exists = |identifier: &str| self.storage.exists(identifier).is_ok_and(|exists| exists);
+        let exists = |identifier: &str| self.exists(identifier);
         let Some(package) = self.catalog.sources.get(&anchor).and_then(|s| s.package) else {
             return create_identifier(asset_path, location, exists);
         };
@@ -105,14 +111,38 @@ impl<B: Storage> AssetResolver for LayerLocations<'_, B> {
         // A search path is the member beside the packaged layer, or else
         // beside the package's root layer, as layer reads select it; then
         // anchored to the package file as any other layer's
-        // (`ArSplitPackageRelativePathOuter`), or kept.
+        // (`ArSplitPackageRelativePathOuter`), or kept. A package named
+        // relative to the host's root is marked so (`./set/rock.usdz[..]`),
+        // as `create_identifier` marks such paths.
+        // The package file is written as `create_identifier` writes any
+        // other anchored path: with `/` separators, also on Windows.
         match self
             .catalog
             .package_member(archive, asset_path, anchor, package)
         {
-            Ok(Some(member)) => Some(alloc::format!("{outer}[{member}]")),
+            Ok(Some(member)) => {
+                let file = normalize_asset_path(&outer.replace('\\', "/"));
+                let marked = if is_search_path(&file) { "./" } else { "" };
+                Some(alloc::format!("{marked}{file}[{member}]"))
+            }
             _ => create_identifier(asset_path, outer, exists),
         }
+    }
+}
+
+impl<B: Storage> LayerLocations<'_, B> {
+    /// Whether storage reports the asset `identifier` names; a path
+    /// relative to the host's root (`./set/bark.png`, as an identifier
+    /// with no directory anchors it) is identified first, as the root is.
+    fn exists(&self, identifier: &str) -> bool {
+        let exists = |identifier: &str| self.storage.exists(identifier).is_ok_and(|exists| exists);
+        if identifier.starts_with("./") || identifier.starts_with("../") {
+            return self
+                .storage
+                .identify(identifier, None)
+                .is_ok_and(|identified| exists(&identified));
+        }
+        exists(identifier)
     }
 }
 

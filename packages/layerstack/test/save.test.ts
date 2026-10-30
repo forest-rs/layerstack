@@ -165,13 +165,31 @@ describe("exporting", () => {
   });
 
   it("anchors the flattened stage's asset paths to the layers authoring them", () => {
-    const text = '#usda 1.0\ndef "Rock"\n{\n    asset albedo = @./albedo.png@\n    asset moss = @textures/moss.png@\n}\n';
+    const text = [
+      "#usda 1.0",
+      'def "Rock"',
+      "{",
+      "    asset albedo = @./albedo.png@",
+      "    asset lichen = @textures/lichen.png@",
+      "    asset moss = @textures/moss.png@",
+      "    asset up = @../up.png@",
+      "    asset shared = @/shared/stone.png@",
+      "    asset remote = @https://example.com/rock.png@",
+      "}",
+      "",
+    ].join("\n");
     using stage = layerstack.open({ identifier: "set/rock.usda", bytes: new TextEncoder().encode(text) });
+    stage.supply("set/textures/lichen.png", new Uint8Array());
     const flat = stage.exportFlattened();
     assert.ok(flat.lossless, JSON.stringify(flat.lost));
     const written = decoder.decode(flat.bytes);
-    assert.match(written, /asset albedo = @set\/albedo\.png@/);
+    // Relative to the host's root, marked so: `set/albedo.png` would be a search path.
+    assert.match(written, /asset albedo = @\.\/set\/albedo\.png@/);
+    assert.match(written, /asset lichen = @\.\/set\/textures\/lichen\.png@/, "a search path supplied beside its layer");
     assert.match(written, /asset moss = @textures\/moss\.png@/, "a search path nothing supplied beside its layer is kept");
+    assert.match(written, /asset up = @\.\/up\.png@/);
+    assert.match(written, /asset shared = @\/shared\/stone\.png@/);
+    assert.match(written, /asset remote = @https:\/\/example\.com\/rock\.png@/);
   });
 
   it("packages a layered stage as a USDZ that reopens complete", async () => {

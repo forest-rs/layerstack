@@ -194,7 +194,10 @@ await stage.resolve(source);
   keeps the receipts it wants; `release()` (or `using`) the rest.
 - **Edits go to an explicit layer.** `stage.editLayer` is the default
   target: the root, or for a stage opened with `{ editLayer: "session" }`
-  an anonymous session layer in front of it. A USDZ package is read-only:
+  an anonymous session layer in front of it, or with `{ sessionLayer:
+  { identifier, bytes } }` that session layer, read as OpenUSD's
+  `UsdStage::Open(rootLayer, sessionLayer)` reads one: its sublayers are
+  wanted like any dependency and `save(layer)` writes it back. A USDZ package is read-only:
   open it with `editLayer: "session"` to edit it, and the package stays as
   read. Edits to a read-only layer fail with `layer.read_only`. A layer of
   the stage's own stack is edited at the offset the stack reads it at

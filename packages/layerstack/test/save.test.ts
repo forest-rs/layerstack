@@ -139,6 +139,67 @@ describe("saving", () => {
   });
 });
 
+describe("a session layer from bytes", () => {
+  const encoder = new TextEncoder();
+  const root = '#usda 1.0\ndef "Rock"\n{\n    double size = 1\n}\n';
+  const session = '#usda 1.0\n(\n    subLayers = [\n        @./weak.usda@\n    ]\n)\n\nover "Rock"\n{\n    asset look = @./look.png@\n}\n';
+  const weak = '#usda 1.0\n\nover "Rock"\n{\n    asset moss = @./moss.png@\n    double size = 2\n}\n';
+  const open = () =>
+    layerstack.open(
+      { identifier: "set/rock.usda", bytes: encoder.encode(root) },
+      { sessionLayer: { identifier: "edits/session.usda", bytes: encoder.encode(session) } },
+    );
+
+  it("takes the edits, wants its sublayers and anchors their asset paths", () => {
+    using stage = open();
+    const layer = stage.editLayer;
+    assert.ok(layer);
+    assert.equal(layer.identifier, "edits/session.usda");
+    assert.deepEqual(
+      stage.unavailable().map((asset) => asset.identifier),
+      ["edits/weak.usda"],
+      "its sublayer is a dependency",
+    );
+    stage.supply("edits/weak.usda", encoder.encode(weak));
+    stage.loadSupplied();
+    assert.deepEqual(stage.attribute("/Rock.size")?.get(), { kind: "scalar", type: "double", value: 2 }, "the session stack is stronger");
+    const flat = stage.exportFlattened();
+    assert.ok(flat.lossless, JSON.stringify(flat.lost));
+    const written = decoder.decode(flat.bytes);
+    assert.match(written, /asset look = @\.\/edits\/look\.png@/);
+    assert.match(written, /asset moss = @\.\/edits\/moss\.png@/);
+  });
+
+  it("is saved alone, to its identifier", () => {
+    using stage = open();
+    const layer = stage.editLayer;
+    assert.ok(layer);
+    stage.apply([{ type: "setValue", path: "/Rock.size", value: { type: "double", value: 3 } }], layer).release();
+    assert.deepEqual(stage.save().written, [], "a save of the stage leaves the session layer alone");
+    const saved = stage.save(layer);
+    assert.deepEqual(saved.anonymous, []);
+    assert.deepEqual(saved.written.map((each) => each.identifier), ["edits/session.usda"]);
+    assert.match(decoder.decode(saved.written[0]?.bytes), /double size = 3/);
+  });
+
+  it("is the edit layer, so editLayer cannot be the root", async () => {
+    const error = await failure(() =>
+      layerstack.open(
+        { identifier: "set/rock.usda", bytes: encoder.encode(root) },
+        { editLayer: "root", sessionLayer: { identifier: "edits/session.usda", bytes: encoder.encode(session) } },
+      ),
+    );
+    assert.equal(error.code, "argument.invalid");
+    const same = await failure(() =>
+      layerstack.open(
+        { identifier: "set/rock.usda", bytes: encoder.encode(root) },
+        { sessionLayer: { identifier: "set/rock.usda", bytes: encoder.encode(session) } },
+      ),
+    );
+    assert.equal(same.code, "io.rejected", "the root is not its own session layer");
+  });
+});
+
 describe("exporting", () => {
   it("exports a layer in each format, which reopens", async () => {
     using stage = await resolvedScene();

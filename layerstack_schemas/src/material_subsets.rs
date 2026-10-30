@@ -238,8 +238,15 @@ impl MaterialBindingApiEdit {
         indices: &[i32],
     ) -> Result<GeomSubsetEdit, SubsetAuthoringError> {
         edit.group(|edit| {
-            let subset =
-                GeomSubsetEdit::create(edit, self.path(), name, element, indices, MATERIAL_BIND)?;
+            let subset = GeomSubsetEdit::create(
+                edit,
+                self.path(),
+                name,
+                element,
+                indices,
+                MATERIAL_BIND,
+                None,
+            )?;
             let current = edit.default_value(self.path(), FAMILY_TYPE);
             let current = current
                 .as_ref()

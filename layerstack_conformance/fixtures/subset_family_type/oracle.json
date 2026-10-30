@@ -1,0 +1,1113 @@
+{
+  "calls": [
+    {
+      "call": "create a: type, no family",
+      "family_types": {
+        "": "unrestricted",
+        "looks": "unrestricted",
+        "parts": "unrestricted"
+      },
+      "specs": {
+        "/M.faceVertexCounts": {
+          "custom": false,
+          "default": [
+            3,
+            3
+          ],
+          "type": "int[]",
+          "uniform": false
+        },
+        "/M.faceVertexIndices": {
+          "custom": false,
+          "default": [
+            0,
+            1,
+            2,
+            1,
+            3,
+            2
+          ],
+          "type": "int[]",
+          "uniform": false
+        },
+        "/M.points": {
+          "custom": false,
+          "default": [
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              1.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              1.0,
+              0.0
+            ],
+            [
+              1.0,
+              1.0,
+              0.0
+            ]
+          ],
+          "type": "point3f[]",
+          "uniform": false
+        },
+        "/M/a.elementType": {
+          "custom": false,
+          "default": "face",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/a.familyName": {
+          "custom": false,
+          "default": "",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/a.indices": {
+          "custom": false,
+          "default": [
+            0
+          ],
+          "type": "int[]",
+          "uniform": false
+        }
+      },
+      "subset": "/M/a"
+    },
+    {
+      "call": "create b: family parts, no type",
+      "family_types": {
+        "": "unrestricted",
+        "looks": "unrestricted",
+        "parts": "unrestricted"
+      },
+      "specs": {
+        "/M.faceVertexCounts": {
+          "custom": false,
+          "default": [
+            3,
+            3
+          ],
+          "type": "int[]",
+          "uniform": false
+        },
+        "/M.faceVertexIndices": {
+          "custom": false,
+          "default": [
+            0,
+            1,
+            2,
+            1,
+            3,
+            2
+          ],
+          "type": "int[]",
+          "uniform": false
+        },
+        "/M.points": {
+          "custom": false,
+          "default": [
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              1.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              1.0,
+              0.0
+            ],
+            [
+              1.0,
+              1.0,
+              0.0
+            ]
+          ],
+          "type": "point3f[]",
+          "uniform": false
+        },
+        "/M/a.elementType": {
+          "custom": false,
+          "default": "face",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/a.familyName": {
+          "custom": false,
+          "default": "",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/a.indices": {
+          "custom": false,
+          "default": [
+            0
+          ],
+          "type": "int[]",
+          "uniform": false
+        },
+        "/M/b.elementType": {
+          "custom": false,
+          "default": "face",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/b.familyName": {
+          "custom": false,
+          "default": "parts",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/b.indices": {
+          "custom": false,
+          "default": [
+            0
+          ],
+          "type": "int[]",
+          "uniform": false
+        }
+      },
+      "subset": "/M/b"
+    },
+    {
+      "call": "create c: parts partition",
+      "family_types": {
+        "": "unrestricted",
+        "looks": "unrestricted",
+        "parts": "partition"
+      },
+      "specs": {
+        "/M.faceVertexCounts": {
+          "custom": false,
+          "default": [
+            3,
+            3
+          ],
+          "type": "int[]",
+          "uniform": false
+        },
+        "/M.faceVertexIndices": {
+          "custom": false,
+          "default": [
+            0,
+            1,
+            2,
+            1,
+            3,
+            2
+          ],
+          "type": "int[]",
+          "uniform": false
+        },
+        "/M.points": {
+          "custom": false,
+          "default": [
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              1.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              1.0,
+              0.0
+            ],
+            [
+              1.0,
+              1.0,
+              0.0
+            ]
+          ],
+          "type": "point3f[]",
+          "uniform": false
+        },
+        "/M.subsetFamily:parts:familyType": {
+          "custom": false,
+          "default": "partition",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/a.elementType": {
+          "custom": false,
+          "default": "face",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/a.familyName": {
+          "custom": false,
+          "default": "",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/a.indices": {
+          "custom": false,
+          "default": [
+            0
+          ],
+          "type": "int[]",
+          "uniform": false
+        },
+        "/M/b.elementType": {
+          "custom": false,
+          "default": "face",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/b.familyName": {
+          "custom": false,
+          "default": "parts",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/b.indices": {
+          "custom": false,
+          "default": [
+            0
+          ],
+          "type": "int[]",
+          "uniform": false
+        },
+        "/M/c.elementType": {
+          "custom": false,
+          "default": "face",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/c.familyName": {
+          "custom": false,
+          "default": "parts",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/c.indices": {
+          "custom": false,
+          "default": [
+            0
+          ],
+          "type": "int[]",
+          "uniform": false
+        }
+      },
+      "subset": "/M/c"
+    },
+    {
+      "call": "create d: parts nonOverlapping",
+      "family_types": {
+        "": "unrestricted",
+        "looks": "unrestricted",
+        "parts": "nonOverlapping"
+      },
+      "specs": {
+        "/M.faceVertexCounts": {
+          "custom": false,
+          "default": [
+            3,
+            3
+          ],
+          "type": "int[]",
+          "uniform": false
+        },
+        "/M.faceVertexIndices": {
+          "custom": false,
+          "default": [
+            0,
+            1,
+            2,
+            1,
+            3,
+            2
+          ],
+          "type": "int[]",
+          "uniform": false
+        },
+        "/M.points": {
+          "custom": false,
+          "default": [
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              1.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              1.0,
+              0.0
+            ],
+            [
+              1.0,
+              1.0,
+              0.0
+            ]
+          ],
+          "type": "point3f[]",
+          "uniform": false
+        },
+        "/M.subsetFamily:parts:familyType": {
+          "custom": false,
+          "default": "nonOverlapping",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/a.elementType": {
+          "custom": false,
+          "default": "face",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/a.familyName": {
+          "custom": false,
+          "default": "",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/a.indices": {
+          "custom": false,
+          "default": [
+            0
+          ],
+          "type": "int[]",
+          "uniform": false
+        },
+        "/M/b.elementType": {
+          "custom": false,
+          "default": "face",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/b.familyName": {
+          "custom": false,
+          "default": "parts",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/b.indices": {
+          "custom": false,
+          "default": [
+            0
+          ],
+          "type": "int[]",
+          "uniform": false
+        },
+        "/M/c.elementType": {
+          "custom": false,
+          "default": "face",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/c.familyName": {
+          "custom": false,
+          "default": "parts",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/c.indices": {
+          "custom": false,
+          "default": [
+            0
+          ],
+          "type": "int[]",
+          "uniform": false
+        },
+        "/M/d.elementType": {
+          "custom": false,
+          "default": "face",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/d.familyName": {
+          "custom": false,
+          "default": "parts",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/d.indices": {
+          "custom": false,
+          "default": [
+            1
+          ],
+          "type": "int[]",
+          "uniform": false
+        }
+      },
+      "subset": "/M/d"
+    },
+    {
+      "call": "create c again: parts unrestricted",
+      "family_types": {
+        "": "unrestricted",
+        "looks": "unrestricted",
+        "parts": "unrestricted"
+      },
+      "specs": {
+        "/M.faceVertexCounts": {
+          "custom": false,
+          "default": [
+            3,
+            3
+          ],
+          "type": "int[]",
+          "uniform": false
+        },
+        "/M.faceVertexIndices": {
+          "custom": false,
+          "default": [
+            0,
+            1,
+            2,
+            1,
+            3,
+            2
+          ],
+          "type": "int[]",
+          "uniform": false
+        },
+        "/M.points": {
+          "custom": false,
+          "default": [
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              1.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              1.0,
+              0.0
+            ],
+            [
+              1.0,
+              1.0,
+              0.0
+            ]
+          ],
+          "type": "point3f[]",
+          "uniform": false
+        },
+        "/M.subsetFamily:parts:familyType": {
+          "custom": false,
+          "default": "unrestricted",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/a.elementType": {
+          "custom": false,
+          "default": "face",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/a.familyName": {
+          "custom": false,
+          "default": "",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/a.indices": {
+          "custom": false,
+          "default": [
+            0
+          ],
+          "type": "int[]",
+          "uniform": false
+        },
+        "/M/b.elementType": {
+          "custom": false,
+          "default": "face",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/b.familyName": {
+          "custom": false,
+          "default": "parts",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/b.indices": {
+          "custom": false,
+          "default": [
+            0
+          ],
+          "type": "int[]",
+          "uniform": false
+        },
+        "/M/c.elementType": {
+          "custom": false,
+          "default": "face",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/c.familyName": {
+          "custom": false,
+          "default": "parts",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/c.indices": {
+          "custom": false,
+          "default": [
+            1
+          ],
+          "type": "int[]",
+          "uniform": false
+        },
+        "/M/d.elementType": {
+          "custom": false,
+          "default": "face",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/d.familyName": {
+          "custom": false,
+          "default": "parts",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/d.indices": {
+          "custom": false,
+          "default": [
+            1
+          ],
+          "type": "int[]",
+          "uniform": false
+        }
+      },
+      "subset": "/M/c"
+    },
+    {
+      "call": "create d again: parts, no type",
+      "family_types": {
+        "": "unrestricted",
+        "looks": "unrestricted",
+        "parts": "unrestricted"
+      },
+      "specs": {
+        "/M.faceVertexCounts": {
+          "custom": false,
+          "default": [
+            3,
+            3
+          ],
+          "type": "int[]",
+          "uniform": false
+        },
+        "/M.faceVertexIndices": {
+          "custom": false,
+          "default": [
+            0,
+            1,
+            2,
+            1,
+            3,
+            2
+          ],
+          "type": "int[]",
+          "uniform": false
+        },
+        "/M.points": {
+          "custom": false,
+          "default": [
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              1.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              1.0,
+              0.0
+            ],
+            [
+              1.0,
+              1.0,
+              0.0
+            ]
+          ],
+          "type": "point3f[]",
+          "uniform": false
+        },
+        "/M.subsetFamily:parts:familyType": {
+          "custom": false,
+          "default": "unrestricted",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/a.elementType": {
+          "custom": false,
+          "default": "face",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/a.familyName": {
+          "custom": false,
+          "default": "",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/a.indices": {
+          "custom": false,
+          "default": [
+            0
+          ],
+          "type": "int[]",
+          "uniform": false
+        },
+        "/M/b.elementType": {
+          "custom": false,
+          "default": "face",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/b.familyName": {
+          "custom": false,
+          "default": "parts",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/b.indices": {
+          "custom": false,
+          "default": [
+            0
+          ],
+          "type": "int[]",
+          "uniform": false
+        },
+        "/M/c.elementType": {
+          "custom": false,
+          "default": "face",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/c.familyName": {
+          "custom": false,
+          "default": "parts",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/c.indices": {
+          "custom": false,
+          "default": [
+            1
+          ],
+          "type": "int[]",
+          "uniform": false
+        },
+        "/M/d.elementType": {
+          "custom": false,
+          "default": "face",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/d.familyName": {
+          "custom": false,
+          "default": "parts",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/d.indices": {
+          "custom": false,
+          "default": [
+            0
+          ],
+          "type": "int[]",
+          "uniform": false
+        }
+      },
+      "subset": "/M/d"
+    },
+    {
+      "call": "unique c: looks nonOverlapping",
+      "family_types": {
+        "": "unrestricted",
+        "looks": "nonOverlapping",
+        "parts": "unrestricted"
+      },
+      "specs": {
+        "/M.faceVertexCounts": {
+          "custom": false,
+          "default": [
+            3,
+            3
+          ],
+          "type": "int[]",
+          "uniform": false
+        },
+        "/M.faceVertexIndices": {
+          "custom": false,
+          "default": [
+            0,
+            1,
+            2,
+            1,
+            3,
+            2
+          ],
+          "type": "int[]",
+          "uniform": false
+        },
+        "/M.points": {
+          "custom": false,
+          "default": [
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              1.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              1.0,
+              0.0
+            ],
+            [
+              1.0,
+              1.0,
+              0.0
+            ]
+          ],
+          "type": "point3f[]",
+          "uniform": false
+        },
+        "/M.subsetFamily:looks:familyType": {
+          "custom": false,
+          "default": "nonOverlapping",
+          "type": "token",
+          "uniform": true
+        },
+        "/M.subsetFamily:parts:familyType": {
+          "custom": false,
+          "default": "unrestricted",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/a.elementType": {
+          "custom": false,
+          "default": "face",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/a.familyName": {
+          "custom": false,
+          "default": "",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/a.indices": {
+          "custom": false,
+          "default": [
+            0
+          ],
+          "type": "int[]",
+          "uniform": false
+        },
+        "/M/b.elementType": {
+          "custom": false,
+          "default": "face",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/b.familyName": {
+          "custom": false,
+          "default": "parts",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/b.indices": {
+          "custom": false,
+          "default": [
+            0
+          ],
+          "type": "int[]",
+          "uniform": false
+        },
+        "/M/c.elementType": {
+          "custom": false,
+          "default": "face",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/c.familyName": {
+          "custom": false,
+          "default": "parts",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/c.indices": {
+          "custom": false,
+          "default": [
+            1
+          ],
+          "type": "int[]",
+          "uniform": false
+        },
+        "/M/c_1.elementType": {
+          "custom": false,
+          "default": "face",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/c_1.familyName": {
+          "custom": false,
+          "default": "looks",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/c_1.indices": {
+          "custom": false,
+          "default": [
+            0
+          ],
+          "type": "int[]",
+          "uniform": false
+        },
+        "/M/d.elementType": {
+          "custom": false,
+          "default": "face",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/d.familyName": {
+          "custom": false,
+          "default": "parts",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/d.indices": {
+          "custom": false,
+          "default": [
+            0
+          ],
+          "type": "int[]",
+          "uniform": false
+        }
+      },
+      "subset": "/M/c_1"
+    },
+    {
+      "call": "unique c: no family, unrestricted",
+      "family_types": {
+        "": "unrestricted",
+        "looks": "nonOverlapping",
+        "parts": "unrestricted"
+      },
+      "specs": {
+        "/M.faceVertexCounts": {
+          "custom": false,
+          "default": [
+            3,
+            3
+          ],
+          "type": "int[]",
+          "uniform": false
+        },
+        "/M.faceVertexIndices": {
+          "custom": false,
+          "default": [
+            0,
+            1,
+            2,
+            1,
+            3,
+            2
+          ],
+          "type": "int[]",
+          "uniform": false
+        },
+        "/M.points": {
+          "custom": false,
+          "default": [
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              1.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              1.0,
+              0.0
+            ],
+            [
+              1.0,
+              1.0,
+              0.0
+            ]
+          ],
+          "type": "point3f[]",
+          "uniform": false
+        },
+        "/M.subsetFamily:looks:familyType": {
+          "custom": false,
+          "default": "nonOverlapping",
+          "type": "token",
+          "uniform": true
+        },
+        "/M.subsetFamily:parts:familyType": {
+          "custom": false,
+          "default": "unrestricted",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/a.elementType": {
+          "custom": false,
+          "default": "face",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/a.familyName": {
+          "custom": false,
+          "default": "",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/a.indices": {
+          "custom": false,
+          "default": [
+            0
+          ],
+          "type": "int[]",
+          "uniform": false
+        },
+        "/M/b.elementType": {
+          "custom": false,
+          "default": "face",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/b.familyName": {
+          "custom": false,
+          "default": "parts",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/b.indices": {
+          "custom": false,
+          "default": [
+            0
+          ],
+          "type": "int[]",
+          "uniform": false
+        },
+        "/M/c.elementType": {
+          "custom": false,
+          "default": "face",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/c.familyName": {
+          "custom": false,
+          "default": "parts",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/c.indices": {
+          "custom": false,
+          "default": [
+            1
+          ],
+          "type": "int[]",
+          "uniform": false
+        },
+        "/M/c_1.elementType": {
+          "custom": false,
+          "default": "face",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/c_1.familyName": {
+          "custom": false,
+          "default": "looks",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/c_1.indices": {
+          "custom": false,
+          "default": [
+            0
+          ],
+          "type": "int[]",
+          "uniform": false
+        },
+        "/M/c_2.elementType": {
+          "custom": false,
+          "default": "face",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/c_2.familyName": {
+          "custom": false,
+          "default": "",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/c_2.indices": {
+          "custom": false,
+          "default": [
+            1
+          ],
+          "type": "int[]",
+          "uniform": false
+        },
+        "/M/d.elementType": {
+          "custom": false,
+          "default": "face",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/d.familyName": {
+          "custom": false,
+          "default": "parts",
+          "type": "token",
+          "uniform": true
+        },
+        "/M/d.indices": {
+          "custom": false,
+          "default": [
+            0
+          ],
+          "type": "int[]",
+          "uniform": false
+        }
+      },
+      "subset": "/M/c_2"
+    }
+  ],
+  "openusd_version": "26.11"
+}

@@ -123,6 +123,15 @@ impl crate::usd_geom::GeomSubsetEdit {
     /// are preserved; this does not validate overlap or partition coverage.
     /// Apply the transaction, then use `Imageable::try_validate_subset_family`
     /// to inspect the complete family's contract and animated samples.
+    ///
+    /// With a nonempty `family` and a `family_type`, the parent's
+    /// `subsetFamily:<family>:familyType` is authored too, as
+    /// [`crate::usd_geom::ImageableEdit::set_subset_family_type`] authors it;
+    /// `None` (or no family) leaves the family's type as it is, as C++ does
+    /// for an empty `familyType` token. C++ takes any token; the
+    /// [`SubsetFamilyType`] enum names the three the schema allows, so an
+    /// unknown family type cannot be authored here.
+    ///
     /// Rejection collects no edits. AOUSD Core §7.3, §12.3–12.5;
     /// OpenUSD `UsdGeomSubset::CreateUniqueGeomSubset`.
     ///
@@ -132,7 +141,9 @@ impl crate::usd_geom::GeomSubsetEdit {
     /// [`SubsetAuthoringError::CannotEdit`] for a subset beneath an instance
     /// (geometry that is an instance or an instance proxy) or in a prototype
     /// ([`SchemaEdit::can_edit`](crate::SchemaEdit::can_edit)), then why the
-    /// geometry or indices do not fit.
+    /// geometry or indices do not fit, then why the family type cannot be
+    /// authored ([`SubsetAuthoringError::InvalidName`] for a family that is
+    /// not an identifier, [`SubsetAuthoringError::IncompatibleFamilyDeclaration`]).
     #[doc(alias = "CreateUniqueGeomSubset")]
     pub fn create_unique(
         edit: &mut crate::SchemaEdit<'_>,
@@ -141,6 +152,7 @@ impl crate::usd_geom::GeomSubsetEdit {
         element: SubsetElementType,
         indices: &[i32],
         family: &str,
+        family_type: Option<SubsetFamilyType>,
     ) -> Result<Self, SubsetAuthoringError> {
         edit.group(|edit| {
             let path = edit
@@ -156,6 +168,7 @@ impl crate::usd_geom::GeomSubsetEdit {
                 .set_element_type(edit, element)
                 .set_family_name(edit, family)
                 .set_indices(edit, indices);
+            author_created_family_type(edit, parent, family, family_type)?;
             Ok(subset)
         })
     }
@@ -169,6 +182,8 @@ impl crate::usd_geom::GeomSubsetEdit {
     /// Indices are checked as [`Self::create_unique`] checks them, where
     /// C++ authors any indices. A prim of another type at that name is
     /// refused with [`SubsetAuthoringError::NameTaken`]; C++ would retype it.
+    /// `family_type` is authored on the parent as [`Self::create_unique`]
+    /// authors it.
     /// Rejection collects no edits. AOUSD Core §7.3, §12.3–12.5;
     /// OpenUSD `UsdGeomSubset::CreateGeomSubset`.
     ///
@@ -184,6 +199,7 @@ impl crate::usd_geom::GeomSubsetEdit {
         element: SubsetElementType,
         indices: &[i32],
         family: &str,
+        family_type: Option<SubsetFamilyType>,
     ) -> Result<Self, SubsetAuthoringError> {
         edit.group(|edit| {
             let path = child_path(edit, parent, name)?;
@@ -204,6 +220,7 @@ impl crate::usd_geom::GeomSubsetEdit {
                 .set_element_type(edit, element)
                 .set_family_name(edit, family)
                 .set_indices(edit, indices);
+            author_created_family_type(edit, parent, family, family_type)?;
             Ok(subset)
         })
     }
@@ -296,35 +313,64 @@ impl crate::usd_geom::ImageableEdit {
         family: &str,
         family_type: SubsetFamilyType,
     ) -> Result<(), SubsetAuthoringError> {
-        edit.group(|edit| {
-            let parsed = layerstack::Path::parse_absolute(&format!("/{family}"), edit.tokens())
-                .map_err(|_| SubsetAuthoringError::InvalidName)?;
-            if parsed.depth() != 1 {
-                return Err(SubsetAuthoringError::InvalidName);
-            }
-            let name = format!("subsetFamily:{family}:familyType");
-            let declared = edit.property_kind(self.path(), &name).is_some();
-            match edit.attribute_type(self.path(), &name) {
-                Some(ty) if ty.is_array() || !matches!(ty.default_scalar(), Value::Token(_)) => {
-                    return Err(SubsetAuthoringError::IncompatibleFamilyDeclaration);
-                }
-                Some(_) => {}
-                None if declared => {
-                    return Err(SubsetAuthoringError::IncompatibleFamilyDeclaration);
-                }
-                None => {
-                    edit.create_uniform_attribute(
-                        self.path(),
-                        &name,
-                        layerstack::PropertyType::parse("token").expect("a registered value type"),
-                    );
-                }
-            }
-            let value = crate::value::write_token(family_type.token(), edit.tokens());
-            edit.set_value(self.path(), &name, None, value);
-            Ok(())
-        })
+        edit.group(|edit| author_family_type(edit, self.path(), family, family_type))
     }
+}
+
+/// The family type a new subset's family gets: authored only for a
+/// nonempty `family` and a type.
+///
+/// OpenUSD: `UsdGeomSubset::CreateGeomSubset` calls `SetFamilyType` when
+/// neither `familyName` nor `familyType` is empty.
+fn author_created_family_type(
+    edit: &mut crate::SchemaEdit<'_>,
+    parent: PathId,
+    family: &str,
+    family_type: Option<SubsetFamilyType>,
+) -> Result<(), SubsetAuthoringError> {
+    match family_type {
+        Some(family_type) if !family.is_empty() => {
+            author_family_type(edit, parent, family, family_type)
+        }
+        _ => Ok(()),
+    }
+}
+
+/// Authors `subsetFamily:<family>:familyType` on `parent`.
+///
+/// OpenUSD: `UsdGeomSubset::SetFamilyType`.
+fn author_family_type(
+    edit: &mut crate::SchemaEdit<'_>,
+    parent: PathId,
+    family: &str,
+    family_type: SubsetFamilyType,
+) -> Result<(), SubsetAuthoringError> {
+    let parsed = layerstack::Path::parse_absolute(&format!("/{family}"), edit.tokens())
+        .map_err(|_| SubsetAuthoringError::InvalidName)?;
+    if parsed.depth() != 1 {
+        return Err(SubsetAuthoringError::InvalidName);
+    }
+    let name = format!("subsetFamily:{family}:familyType");
+    let declared = edit.property_kind(parent, &name).is_some();
+    match edit.attribute_type(parent, &name) {
+        Some(ty) if ty.is_array() || !matches!(ty.default_scalar(), Value::Token(_)) => {
+            return Err(SubsetAuthoringError::IncompatibleFamilyDeclaration);
+        }
+        Some(_) => {}
+        None if declared => {
+            return Err(SubsetAuthoringError::IncompatibleFamilyDeclaration);
+        }
+        None => {
+            edit.create_uniform_attribute(
+                parent,
+                &name,
+                layerstack::PropertyType::parse("token").expect("a registered value type"),
+            );
+        }
+    }
+    let value = crate::value::write_token(family_type.token(), edit.tokens());
+    edit.set_value(parent, &name, None, value);
+    Ok(())
 }
 
 /// Invalid or unreadable geometry needed for a subset query.

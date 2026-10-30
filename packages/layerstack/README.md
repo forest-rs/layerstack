@@ -151,11 +151,18 @@ await stage.resolve(source);
   (`definePrim`, `removePrim`, `removeProperty`, `createAttribute`,
   `setValue`, `clearValue`, `blockValue`, `setTargets`, `addReference`,
   `addPayload`, `removeReference`, `removePayload`, `setVariantSelection`,
-  `setActive`, `setInstanceable`, `setKind`, `setMetadata`, `clearMetadata`)
+  `setActive`, `setInstanceable`, `setKind`, `setMetadata`, `clearMetadata`,
+  and the schema-shaped `bindMaterial`, `unbindMaterial`, `setShaderInput`,
+  `connectToSource`, `disconnectSource`, `setBaseMaterial`,
+  `createGeomSubset`, `createMaterialSubset`, `setSubsetFamilyType`,
+  `bindCoordSys`, `blockCoordSys`, `clearCoordSys`, `setSdrMetadata`)
   through one edit target atomically: all of them or none. Each is named after the
   OpenUSD call whose semantics it has (`UsdStage::DefinePrim`,
-  `UsdAttribute::Set`, ...). A failure names the edit (`error.edit`, its
-  index) and changes nothing.
+  `UsdAttribute::Set`, `UsdShadeMaterialBindingAPI::Bind`, ...). A failure
+  names the edit (`error.edit`, its index) and changes nothing. A schema-shaped
+  edit sees the prims, types and API schemas earlier edits of the same
+  `apply` define and apply, so a material, its shaders, their connections
+  and its bindings can be one undoable step.
 - **Values to author say their type.** A `ValueInput` is `{ type, value }`
   in the layout values are read in (`{ type: "color3f", value: [1, 0, 0] }`,
   `{ type: "point3f[]", value: new Float32Array(...) }`, a `bigint` for an
@@ -299,7 +306,14 @@ await stage.resolve(source);
 | `edit.stale` | An undo whose slots changed since; nothing changed and the receipt is still undoable. |
 | `edit.rejected.*` | The edits were rejected and nothing changed: `edit.rejected.type_mismatch`, `edit.rejected.reserved_field`, ... |
 | `namespace.*` | A `move` or `delete` cannot be made and nothing changed: `namespace.collision` (the destination is occupied), `namespace.missing_parent`, `namespace.not_found`, `namespace.cycle`, `namespace.instance_proxy`, `namespace.invalid_paths`, `namespace.unmappable`, `namespace.split_opinions`, `namespace.unsupported`. |
-| `subset.geometry` | A subset read asked of a prim that is not geometry of the subsets' element type (`materialSubsets()` of a prim that is not a mesh). |
+| `subset.*` | `subset.geometry`: a subset read or created on a prim that is not geometry of the subsets' element type (`materialSubsets()` of a prim that is not a mesh); `subset.indices` (an index outside the geometry), `subset.invalid_name`, `subset.name_taken`, `subset.family_declaration`, `subset.unrestricted_material_bind`. |
+| `material.not_found` | `bindMaterial` names a material where no prim is, on the stage or defined earlier in the same edits, as OpenUSD's `Bind` refuses it; any existing prim binds. |
+| `material.not_material` | `setBaseMaterial` of a prim that is not a `Material`. |
+| `material.binding_name` | A collection binding name with a namespace, or a purpose that is not an identifier. |
+| `shading.*` | A refused shading edit: `shading.no_port` (no input or output at the path), `shading.not_shader`, `shading.type_mismatch`, `shading.invalid_name`, `shading.invalid_attribute`. |
+| `schema.cannot_edit` | A schema edit (or `def` define) of a prim beneath an instance or in a prototype, which OpenUSD refuses. `schema.cannot_apply`: an API schema the prim may not have. |
+| `coord_sys.no_binding` | `clearCoordSys` of a binding that does not exist. |
+| `metadata.*` | `metadata.key_path` (an `sdrMetadata` key with an empty part), `metadata.field`. |
 | `io.*` | A read or import failed: `io.rejected` (does not parse), `io.not_found`, `io.unavailable`, ... |
 | `composition.*` | In `status().compositionErrors`: `composition.unresolved_asset`, `composition.arc_cycle`, ... |
 

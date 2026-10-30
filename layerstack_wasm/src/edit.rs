@@ -32,6 +32,7 @@ use wasm_bindgen::prelude::*;
 use crate::{
     array::ArrayHandle,
     error::Error,
+    schema_edit::{self, SchemaInput},
     value::{self, DictionaryEntry, InputData, ValueInput},
 };
 
@@ -111,6 +112,9 @@ pub(crate) enum EditInput {
     },
     /// `UsdObject::ClearMetadata` on a prim or property.
     ClearMetadata { path: String, key: String },
+    /// A schema-shaped edit, lowered through `layerstack_schemas`' edit
+    /// handles ([`crate::schema_edit`]).
+    Schema(SchemaInput),
 }
 
 impl EditInput {
@@ -133,6 +137,7 @@ impl EditInput {
             | Self::SetKind { path, .. }
             | Self::SetMetadata { path, .. }
             | Self::ClearMetadata { path, .. } => path,
+            Self::Schema(input) => input.path(),
         }
     }
 }
@@ -382,6 +387,145 @@ impl EditBatch {
     pub fn clear_metadata(&mut self, path: String, key: String) {
         self.edits.push(EditInput::ClearMetadata { path, key });
     }
+
+    /// Pushes a `bindMaterial` edit: a direct binding, or a collection
+    /// binding of `collection` named `binding_name`.
+    #[wasm_bindgen(js_name = bindMaterial)]
+    pub fn bind_material(
+        &mut self,
+        path: String,
+        material: String,
+        purpose: String,
+        strength: Option<String>,
+        collection: Option<String>,
+        binding_name: Option<String>,
+    ) {
+        self.schema(SchemaInput::BindMaterial {
+            path,
+            material,
+            purpose,
+            strength,
+            collection,
+            binding_name,
+        });
+    }
+
+    /// Pushes an `unbindMaterial` edit.
+    #[wasm_bindgen(js_name = unbindMaterial)]
+    pub fn unbind_material(&mut self, path: String, purpose: String, binding_name: Option<String>) {
+        self.schema(SchemaInput::UnbindMaterial {
+            path,
+            purpose,
+            binding_name,
+        });
+    }
+
+    /// Pushes a `setShaderInput` edit of the value in slot `value`.
+    #[wasm_bindgen(js_name = setShaderInput)]
+    pub fn set_shader_input(&mut self, path: String, time: Option<f64>, value: u32) {
+        self.schema(SchemaInput::SetShaderInput { path, time, value });
+    }
+
+    /// Pushes a `connectToSource` edit.
+    #[wasm_bindgen(js_name = connectToSource)]
+    pub fn connect_to_source(
+        &mut self,
+        path: String,
+        source: String,
+        type_name: Option<String>,
+        position: String,
+    ) {
+        self.schema(SchemaInput::ConnectToSource {
+            path,
+            source,
+            type_name,
+            position,
+        });
+    }
+
+    /// Pushes a `disconnectSource` edit.
+    #[wasm_bindgen(js_name = disconnectSource)]
+    pub fn disconnect_source(&mut self, path: String, source: Option<String>) {
+        self.schema(SchemaInput::DisconnectSource { path, source });
+    }
+
+    /// Pushes a `setBaseMaterial` edit.
+    #[wasm_bindgen(js_name = setBaseMaterial)]
+    pub fn set_base_material(&mut self, path: String, base: Option<String>) {
+        self.schema(SchemaInput::SetBaseMaterial { path, base });
+    }
+
+    /// Pushes a `createGeomSubset` edit, or a `createMaterialSubset` one
+    /// with `material_bind`.
+    #[wasm_bindgen(js_name = createGeomSubset)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "one positional argument per field of the edit"
+    )]
+    pub fn create_geom_subset(
+        &mut self,
+        path: String,
+        name: String,
+        element: String,
+        indices: Vec<i32>,
+        family: String,
+        family_type: Option<String>,
+        material_bind: bool,
+    ) {
+        self.schema(SchemaInput::CreateGeomSubset {
+            path,
+            name,
+            element,
+            indices,
+            family,
+            family_type,
+            material_bind,
+        });
+    }
+
+    /// Pushes a `setSubsetFamilyType` edit.
+    #[wasm_bindgen(js_name = setSubsetFamilyType)]
+    pub fn set_subset_family_type(&mut self, path: String, family: String, family_type: String) {
+        self.schema(SchemaInput::SetSubsetFamilyType {
+            path,
+            family,
+            family_type,
+        });
+    }
+
+    /// Pushes a `bindCoordSys` edit.
+    #[wasm_bindgen(js_name = bindCoordSys)]
+    pub fn bind_coord_sys(&mut self, path: String, name: String, target: String) {
+        self.schema(SchemaInput::BindCoordSys { path, name, target });
+    }
+
+    /// Pushes a `blockCoordSys` edit.
+    #[wasm_bindgen(js_name = blockCoordSys)]
+    pub fn block_coord_sys(&mut self, path: String, name: String) {
+        self.schema(SchemaInput::BlockCoordSys { path, name });
+    }
+
+    /// Pushes a `clearCoordSys` edit.
+    #[wasm_bindgen(js_name = clearCoordSys)]
+    pub fn clear_coord_sys(&mut self, path: String, name: String, remove_spec: bool) {
+        self.schema(SchemaInput::ClearCoordSys {
+            path,
+            name,
+            remove_spec,
+        });
+    }
+
+    /// Pushes a `setSdrMetadata` edit; `None` clears the key.
+    #[wasm_bindgen(js_name = setSdrMetadata)]
+    pub fn set_sdr_metadata(&mut self, path: String, key: String, value: Option<String>) {
+        self.schema(SchemaInput::SetSdrMetadata { path, key, value });
+    }
+}
+
+impl EditBatch {
+    fn schema(&mut self, input: SchemaInput) {
+        self.edits.push(EditInput::Schema(input));
+    }
 }
 
 /// A batch lowered to one transaction, with the edit each of its
@@ -400,8 +544,9 @@ impl Lowered {
     }
 }
 
-/// What lowering reads: the store, the composed stage before the batch,
-/// and the edit target with the layer stack its layer is in.
+/// What lowering a generic edit reads: the store, the composed stage
+/// before the batch, and the edit target with the layer stack its layer
+/// is in.
 pub(crate) struct Scope<'a> {
     pub(crate) store: &'a InMemoryStore,
     pub(crate) view: StageView<'a>,
@@ -414,11 +559,29 @@ pub(crate) struct Scope<'a> {
     pub(crate) stack: &'a [LayerId],
 }
 
+/// One edit, checked against the store and ready to collect.
+enum Step {
+    /// A generic edit's transaction.
+    Generic(Transaction),
+    /// A `def` define (`UsdStage::DefinePrim`), collected through the
+    /// schema edit so later schema edits of the batch see the prim.
+    Define(PathId, Option<String>),
+    /// A schema-shaped edit.
+    Schema(schema_edit::Prepared),
+}
+
 /// Lowers `batch` to one transaction whose edits are addressed through
-/// the scope's [`EditTarget`]: paths are stage paths and time codes stage
-/// times, mapped to the target layer's specs and times when the
-/// transaction applies, so an edit the target does not map is rejected
-/// then (`edit.rejected.unmappable`).
+/// `target`: paths are stage paths and time codes stage times, mapped to
+/// the target layer's specs and times when the transaction applies, so an
+/// edit the target does not map is rejected then
+/// (`edit.rejected.unmappable`).
+///
+/// Every edit is checked first, reading the stage as composed before the
+/// batch. Then the edits are collected in order through one
+/// [`layerstack_schemas::SchemaEdit`]: a `def` define and the schema-shaped
+/// edits through its handles, which see the prims, types and applied
+/// schemas earlier edits of the batch define and apply; the other edits as
+/// their own transactions, appended ([`layerstack_schemas::SchemaEdit::append`]).
 ///
 /// # Errors
 ///
@@ -426,23 +589,111 @@ pub(crate) struct Scope<'a> {
 /// for a malformed path or a prim path where a property path is asked
 /// for (and the reverse), `argument.invalid` for an unknown specifier,
 /// list position or value slot, and the `value.*` errors of
-/// [`value::decode`].
-pub(crate) fn lower(batch: &EditBatch, scope: &Scope<'_>) -> Result<Lowered, Error> {
-    let mut lowered = Lowered {
-        transaction: Transaction::new(),
-        origins: Vec::new(),
+/// [`value::decode`]; then a schema handle's refusal
+/// ([`schema_edit::Refusal`]): `prim.not_found`, `material.not_found`,
+/// `schema.cannot_edit`, `shading.*`, `subset.*`, `coord_sys.no_binding`,
+/// `metadata.*`.
+pub(crate) fn lower(
+    batch: &EditBatch,
+    stage: &layerstack::Stage,
+    store: &mut InMemoryStore,
+    target: &EditTarget,
+    stack: &[LayerId],
+) -> Result<Lowered, Error> {
+    let fail = |index: usize, error: Error| {
+        let edit = &batch.edits[index];
+        error
+            .at_edit(u32::try_from(index).unwrap_or(u32::MAX))
+            .at_path(edit.path())
     };
-    // Property specs this batch creates, so a later edit does not stamp
-    // them again.
-    let mut ensured = Vec::new();
-    for (index, edit) in batch.edits.iter().enumerate() {
-        let index = u32::try_from(index).unwrap_or(u32::MAX);
-        lower_one(edit, batch, scope, &mut lowered.transaction, &mut ensured)
-            .map_err(|error| error.at_edit(index).at_path(edit.path()))?;
-        let ops = lowered.transaction.len();
-        lowered.origins.resize(ops, index);
+    let mut steps = Vec::with_capacity(batch.edits.len());
+    {
+        let scope = Scope {
+            store: &*store,
+            view: stage.view(&*store),
+            target,
+            stack,
+        };
+        let inputs = schema_edit::Inputs {
+            store: &*store,
+            values: &batch.values,
+        };
+        // Property specs this batch creates, so a later edit does not stamp
+        // them again.
+        let mut ensured = Vec::new();
+        for (index, edit) in batch.edits.iter().enumerate() {
+            let step = match edit {
+                EditInput::DefinePrim {
+                    path,
+                    specifier,
+                    type_name,
+                } if specifier == "def" => Step::Define(
+                    prim_path(store, path).map_err(|error| fail(index, error))?,
+                    type_name.clone(),
+                ),
+                EditInput::Schema(input) => Step::Schema(
+                    schema_edit::prepare(input, &inputs).map_err(|error| fail(index, error))?,
+                ),
+                _ => {
+                    let mut txn = Transaction::new();
+                    lower_one(edit, batch, &scope, &mut txn, &mut ensured)
+                        .map_err(|error| fail(index, error))?;
+                    Step::Generic(txn)
+                }
+            };
+            steps.push(step);
+        }
     }
-    Ok(lowered)
+    let mut origins = Vec::new();
+    let collected = {
+        let mut edit = layerstack_schemas::SchemaEdit::new(stage, store, target.clone());
+        let mut refused = None;
+        for (index, step) in steps.into_iter().enumerate() {
+            let result = match step {
+                Step::Generic(txn) => {
+                    edit.append(txn);
+                    Ok(())
+                }
+                Step::Define(path, type_name) => edit
+                    .define_prim(path, type_name.as_deref().unwrap_or(""))
+                    .map(|_| ())
+                    .map_err(schema_edit::Refusal::from),
+                Step::Schema(prepared) => schema_edit::author(&mut edit, prepared),
+            };
+            if let Err(refusal) = result {
+                refused = Some((index, refusal));
+                break;
+            }
+            origins.resize(
+                edit.transaction().len(),
+                u32::try_from(index).unwrap_or(u32::MAX),
+            );
+        }
+        match refused {
+            None => Ok(edit.finish()),
+            Some(refused) => Err(refused),
+        }
+    };
+    match collected {
+        Ok(transaction) => Ok(Lowered {
+            transaction,
+            origins,
+        }),
+        Err((index, refusal)) => Err(fail(index, refusal.into_error(store))),
+    }
+}
+
+/// The prim path `path` names, interned.
+fn prim_path(store: &InMemoryStore, path: &str) -> Result<PathId, Error> {
+    if path.contains('.') {
+        return Err(Error::new(
+            "path.invalid",
+            "not a prim path, such as /World/Rock",
+        ));
+    }
+    store
+        .try_path(path)
+        .map_err(|error| Error::new("path.invalid", format!("not a prim path: {error}")))
 }
 
 fn lower_one(
@@ -686,6 +937,8 @@ fn lower_one(
             let key = store.tokens().intern(key);
             txn.clear_metadata(at, key);
         }
+        // Prepared and collected by `lower` itself.
+        EditInput::Schema(_) => {}
     }
     Ok(())
 }

@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { LayerstackError, Material, Shader, loadLayerstack } from "../dist/index.js";
-import type { Layerstack, Stage } from "../dist/index.js";
+import type { Edit, Layerstack, Stage } from "../dist/index.js";
 
 const layerstack: Layerstack = await loadLayerstack();
 const text = new TextEncoder();
@@ -72,9 +72,11 @@ def Scope "Looks" {
 }
 `;
 
-export function openShaded(source = shaded): Stage {
-  return layerstack.open({ identifier: "scene.usda", bytes: text.encode(source) });
+export function openShaded(source = shaded, editLayer: "root" | "session" = "root"): Stage {
+  return layerstack.open({ identifier: "scene.usda", bytes: text.encode(source) }, { editLayer });
 }
+
+const decoder = new TextDecoder();
 
 /** Runs `f` and returns the `LayerstackError` it throws. */
 function failure(f: () => unknown): LayerstackError {
@@ -193,5 +195,147 @@ describe("a renderer resolving materials", () => {
       { name: "paint", relationship: "/World.coordSys:paint:binding", target: "/World/Projector" },
     ]);
     assert.deepEqual(rock.coordSysBindings({ inherited: false }), []);
+  });
+});
+
+describe("an editor authoring materials", () => {
+  /** A new clay material with a surface shader, bound to the lamp and to a new subset of the rock, in one undoable apply. */
+  const newMaterial: Edit[] = [
+    { type: "definePrim", path: "/Looks/Clay", typeName: "Material" },
+    { type: "definePrim", path: "/Looks/Clay/Surface", typeName: "Shader" },
+    { type: "setShaderInput", path: "/Looks/Clay/Surface.inputs:roughness", value: { type: "float", value: 0.25 } },
+    {
+      type: "connectToSource",
+      path: "/Looks/Clay.outputs:surface",
+      source: "/Looks/Clay/Surface.outputs:surface",
+      typeName: "token",
+    },
+    { type: "setSdrMetadata", path: "/Looks/Clay/Surface", key: "role", value: "surface" },
+    { type: "setBaseMaterial", path: "/Looks/Clay", base: "/Looks/Stone" },
+    { type: "bindMaterial", path: "/World/Lamp", material: "/Looks/Clay", strength: "strongerThanDescendants" },
+    { type: "createMaterialSubset", path: "/World/Rock", name: "Bottom", indices: [0] },
+    { type: "bindMaterial", path: "/World/Rock/Bottom", material: "/Looks/Clay" },
+    { type: "bindCoordSys", path: "/World/Rock", name: "decal", target: "/World/Projector" },
+  ];
+
+  it("builds, binds and undoes a material through the session layer", () => {
+    using stage = openShaded(shaded, "session");
+    const session = stage.editLayer!;
+    const before = decoder.decode(stage.exportLayer(session, "usda"));
+    const heard: string[][] = [];
+    stage.onChange((changes) => heard.push([...changes.resynced]));
+    const receipt = stage.apply(newMaterial);
+    assert.equal(receipt.target.layer, session);
+    assert.ok(heard.length > 0, "listeners hear the edits");
+
+    assert.equal(stage.prim("/World/Lamp")!.boundMaterial()?.material, "/Looks/Clay");
+    assert.equal(stage.prim("/World/Lamp")!.boundMaterial()?.strength, "strongerThanDescendants");
+    const subsets = stage.prim("/World/Rock")!.materialSubsets();
+    assert.deepEqual(
+      subsets.subsets.map(({ path, binding }) => [path, binding?.material]),
+      [
+        ["/World/Rock/Top", "/Looks/Moss"],
+        ["/World/Rock/Bottom", "/Looks/Clay"],
+      ],
+    );
+    assert.deepEqual(subsets.problems, [], "the bottom face completes the partition");
+    const clay = stage.material("/Looks/Clay")!;
+    assert.equal(clay.baseMaterial, "/Looks/Stone");
+    assert.equal(clay.surface().shader, "/Looks/Clay/Surface");
+    const surface = stage.shader("/Looks/Clay/Surface")!;
+    assert.equal(surface.sdrMetadata.get("role"), "surface");
+    assert.deepEqual(surface.input("roughness")?.get(), { kind: "scalar", type: "float", value: 0.25 });
+    assert.deepEqual(
+      stage.prim("/World/Rock")!.coordSysBindings({ inherited: false }).map(({ name }) => name),
+      ["decal"],
+    );
+
+    const redo = receipt.undo();
+    assert.equal(decoder.decode(stage.exportLayer(session, "usda")), before);
+    assert.equal(stage.material("/Looks/Clay"), null);
+    redo.undo();
+    assert.equal(stage.prim("/World/Lamp")!.boundMaterial()?.material, "/Looks/Clay");
+  });
+
+  it("connects, disconnects and unbinds", () => {
+    using stage = openShaded();
+    stage.apply([
+      { type: "disconnectSource", path: "/Looks/Stone/Surface.inputs:diffuseColor" },
+      { type: "unbindMaterial", path: "/World/Rock/Top" },
+      { type: "setSubsetFamilyType", path: "/World/Rock", familyName: "materialBind", familyType: "nonOverlapping" },
+      { type: "blockCoordSys", path: "/World/Rock", name: "paint" },
+      // Any existing prim binds, whatever its type, as in OpenUSD.
+      { type: "bindMaterial", path: "/World/Lamp", material: "/World/Projector" },
+    ]);
+    const lamp = stage.prim("/World/Lamp")!.boundMaterial();
+    assert.equal(lamp?.material, null, "a prim that is not a material resolves none");
+    assert.equal(lamp?.target, "/World/Projector");
+    assert.deepEqual(stage.port("/Looks/Stone/Surface.inputs:diffuseColor")?.connections, []);
+    assert.equal(stage.prim("/World/Rock/Top")!.boundMaterial()?.material, "/Looks/Stone");
+    assert.equal(stage.prim("/World/Rock")!.subsetFamilyType("materialBind"), "nonOverlapping");
+    assert.deepEqual(stage.relationship("/World/Rock.coordSys:paint:binding")?.targets(), []);
+    stage.apply([
+      {
+        type: "connectToSource",
+        path: "/Looks/Stone/Surface.inputs:diffuseColor",
+        source: "/Looks/Stone/Texture.outputs:rgb",
+        position: "append",
+      },
+      { type: "setSdrMetadata", path: "/Looks/Stone/Surface.inputs:roughness", key: "page", value: null },
+      {
+        type: "createGeomSubset",
+        path: "/World/Rock",
+        name: "Corners",
+        elementType: "point",
+        indices: new Int32Array([0, 5]),
+        familyName: "pins",
+        familyType: "nonOverlapping",
+      },
+    ]);
+    assert.deepEqual(stage.port("/Looks/Stone/Surface.inputs:diffuseColor")?.connections, [
+      "/Looks/Stone/Texture.outputs:rgb",
+    ]);
+    assert.equal(stage.port("/Looks/Stone/Surface.inputs:roughness")?.sdrMetadata.size, 0);
+    const [corners] = stage.prim("/World/Rock")!.geomSubsets({ familyName: "pins" });
+    assert.deepEqual([...(corners?.indices?.copy() as Int32Array)], [0, 5]);
+    assert.equal(stage.prim("/World/Rock")!.subsetFamilyType("pins"), "nonOverlapping");
+  });
+
+  it("refuses invalid edits with their codes, naming the edit, and changes nothing", () => {
+    using stage = openShaded();
+    const before = decoder.decode(stage.exportLayer(stage.root, "usda"));
+    const refused = (edit: Edit): LayerstackError => {
+      const error = failure(() => stage.apply([{ type: "setActive", path: "/World/Projector", active: false }, edit]));
+      assert.equal(error.edit, 1, error.message);
+      return error;
+    };
+    const missing = refused({ type: "bindMaterial", path: "/World/Rock", material: "/Looks/Missing" });
+    assert.equal(missing.code, "material.not_found");
+    assert.equal(missing.path, "/World/Rock");
+    assert.match(missing.message, /no prim is at the material path \/Looks\/Missing/);
+    const unconnected = refused({
+      type: "connectToSource",
+      path: "/Looks/Stone/Surface.inputs:metallic",
+      source: "/Looks/Stone/Texture.outputs:rgb",
+    });
+    assert.equal(unconnected.code, "shading.no_port");
+    assert.equal(refused({ type: "disconnectSource", path: "/Looks/Stone/Surface.inputs:metallic" }).code, "shading.no_port");
+    assert.equal(
+      refused({ type: "setShaderInput", path: "/Looks/Stone/Surface.inputs:roughness", value: { type: "double", value: 1 } }).code,
+      "shading.type_mismatch",
+    );
+    assert.equal(refused({ type: "setBaseMaterial", path: "/World/Rock", base: "/Looks/Stone" }).code, "material.not_material");
+    assert.equal(refused({ type: "createMaterialSubset", path: "/World/Rock", name: "Far", indices: [7] }).code, "subset.indices");
+    assert.equal(refused({ type: "clearCoordSys", path: "/World/Rock", name: "decal" }).code, "coord_sys.no_binding");
+    assert.equal(refused({ type: "setSdrMetadata", path: "/Looks/Stone", key: "role", value: "x" }).code, "shading.not_shader");
+    assert.equal(
+      refused({ type: "bindMaterial", path: "/World/Rock", material: "/Looks/Stone", strength: "strongest" as "weakerThanDescendants" }).code,
+      "argument.invalid",
+    );
+    assert.equal(
+      refused({ type: "createGeomSubset", path: "/World/Rock", name: "Big", elementType: "face", indices: [2 ** 40] }).code,
+      "argument.invalid",
+    );
+    assert.equal(decoder.decode(stage.exportLayer(stage.root, "usda")), before);
   });
 });

@@ -76,9 +76,31 @@
  *   undoable), `edit.rejected.*` (such as `edit.rejected.type_mismatch`
  *   or `edit.rejected.spec_exists`), the codes of
  *   `layerstack::EditError::code`.
- * - `subset.geometry`: a subset read asked of a prim that is not geometry
- *   of the subsets' element type ({@link Prim.materialSubsets} of a prim
- *   that is not a mesh).
+ * - `subset.*`: `subset.geometry`, a subset read or
+ *   {@link CreateGeomSubsetEdit} on a prim that is not geometry of the
+ *   subsets' element type ({@link Prim.materialSubsets} of a prim that is
+ *   not a mesh); and refused subset edits: `subset.indices` (an index out
+ *   of the geometry's range), `subset.invalid_name`, `subset.name_taken`
+ *   (a prim of another type has the name), `subset.family_declaration`,
+ *   `subset.unrestricted_material_bind`.
+ * - `material.not_found`: {@link BindMaterialEdit} names a material
+ *   where no prim is, on the stage or defined earlier in the same edits,
+ *   as OpenUSD's `Bind` refuses it (any existing prim binds).
+ * - `material.not_material`: {@link SetBaseMaterialEdit} of a prim that
+ *   is not a `Material`.
+ * - `material.binding_name`: a collection binding name with a namespace,
+ *   or a purpose that is not an identifier.
+ * - `shading.*`: a refused shading edit: `shading.no_port` (no input or
+ *   output at the path), `shading.not_shader`, `shading.type_mismatch`
+ *   (an input exists with another type), `shading.invalid_name`,
+ *   `shading.invalid_attribute`.
+ * - `schema.cannot_edit`: a schema edit of a prim beneath an instance or
+ *   in a prototype, which OpenUSD refuses; `schema.cannot_apply`: an API
+ *   schema the prim may not have.
+ * - `coord_sys.no_binding`: {@link ClearCoordSysEdit} of a binding that
+ *   does not exist.
+ * - `metadata.key_path`, `metadata.field`: an `sdrMetadata` key with an
+ *   empty part, or a field the spec cannot hold.
  *
  * Composition errors are not thrown; {@link Stage.status} lists them as
  * {@link Issue}s with `composition.*` codes
@@ -125,6 +147,11 @@ export type ErrorCode =
   | `edit.${string}`
   | `namespace.${string}`
   | `subset.${string}`
+  | `material.${string}`
+  | `shading.${string}`
+  | `schema.${string}`
+  | `coord_sys.${string}`
+  | `metadata.${string}`
   | `io.${string}`;
 
 /**

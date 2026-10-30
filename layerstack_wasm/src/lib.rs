@@ -93,6 +93,7 @@ mod array;
 mod edit;
 mod error;
 mod receipt;
+mod schema_edit;
 mod schemas;
 mod stage;
 mod storage;

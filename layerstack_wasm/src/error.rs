@@ -52,10 +52,32 @@ use crate::wire::Wire;
 ///   `namespace.missing_parent`, `namespace.cycle`,
 ///   `namespace.instance_proxy`, `namespace.unmappable`,
 ///   `namespace.split_opinions`, `namespace.unsupported`.
-/// - `subset.geometry`: a subset read asked of a prim that is not geometry
-///   of the subsets' element type (the material subsets of a prim that is
-///   not a mesh), from `layerstack_schemas::subset::SubsetError` and
-///   `layerstack_schemas::MaterialSubsetError`.
+/// - `subset.*`: `subset.geometry`, a subset read or created on a prim
+///   that is not geometry of the subsets' element type (the material
+///   subsets of a prim that is not a mesh), from
+///   `layerstack_schemas::subset::SubsetError` and
+///   `layerstack_schemas::MaterialSubsetError`; and the refusals of
+///   `layerstack_schemas::subset::SubsetAuthoringError`:
+///   `subset.indices`, `subset.invalid_name`, `subset.name_taken`,
+///   `subset.family_declaration`, `subset.unrestricted_material_bind`.
+/// - `material.not_found`: a binding names a material where no prim is,
+///   on the stage or defined earlier in the batch
+///   (`layerstack_schemas::MaterialBindingError::MissingMaterial`), as
+///   OpenUSD's `Bind` refuses it; `material.not_material`: a base material
+///   set on a prim that is not a `Material`;
+///   `material.binding_name`: a binding relationship name that is not a
+///   property name (`layerstack_schemas::MaterialBindingError`).
+/// - `shading.*`: `shading.no_port`, `shading.not_shader`, and the
+///   refusals of `layerstack_schemas::shading::PortError`:
+///   `shading.type_mismatch`, `shading.invalid_name`,
+///   `shading.invalid_attribute`.
+/// - `schema.cannot_edit`: a schema edit of a prim beneath an instance or
+///   in a prototype (`layerstack_schemas::CannotEdit`);
+///   `schema.cannot_apply`: an API schema the prim may not have.
+/// - `coord_sys.no_binding`: clearing a coordinate-system binding that
+///   does not exist (`layerstack_schemas::CoordSysError`).
+/// - `metadata.key_path`, `metadata.field`: an `sdrMetadata` edit
+///   `layerstack_schemas::MetadataError` refuses.
 /// - `flatten.failed`, `package.failed`: the stage has no root layer to
 ///   flatten or package.
 /// - `receipt.affinity`: a receipt of another stage was passed in.

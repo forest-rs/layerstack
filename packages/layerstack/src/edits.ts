@@ -45,6 +45,33 @@ export interface NativeEditBatch extends Disposable {
   setKind(path: string, kind: string): void;
   setMetadata(path: string, key: string, value: number): void;
   clearMetadata(path: string, key: string): void;
+  bindMaterial(
+    path: string,
+    material: string,
+    purpose: string,
+    strength: string | null,
+    collection: string | null,
+    bindingName: string | null,
+  ): void;
+  unbindMaterial(path: string, purpose: string, bindingName: string | null): void;
+  setShaderInput(path: string, time: number | null, value: number): void;
+  connectToSource(path: string, source: string, typeName: string | null, position: string): void;
+  disconnectSource(path: string, source: string | null): void;
+  setBaseMaterial(path: string, base: string | null): void;
+  createGeomSubset(
+    path: string,
+    name: string,
+    element: string,
+    indices: Int32Array,
+    family: string,
+    familyType: string | null,
+    materialBind: boolean,
+  ): void;
+  setSubsetFamilyType(path: string, family: string, familyType: string): void;
+  bindCoordSys(path: string, name: string, target: string): void;
+  blockCoordSys(path: string, name: string): void;
+  clearCoordSys(path: string, name: string, removeSpec: boolean): void;
+  setSdrMetadata(path: string, key: string, value: string | null): void;
 }
 
 const I64_MIN = -(2n ** 63n);
@@ -171,6 +198,87 @@ function lowerEdit(batch: NativeEditBatch, edit: Edit, host: ArrayHost): void {
     case "clearMetadata":
       batch.clearMetadata(path, text(edit.key, "key"));
       return;
+    case "bindMaterial":
+      batch.bindMaterial(
+        path,
+        text(edit.material, "material"),
+        optionalText(edit.purpose, "purpose") ?? "",
+        edit.strength === undefined
+          ? null
+          : oneOf(edit.strength, "strength", ["weakerThanDescendants", "strongerThanDescendants"]),
+        optionalText(edit.collection, "collection"),
+        optionalText(edit.bindingName, "bindingName"),
+      );
+      return;
+    case "unbindMaterial":
+      batch.unbindMaterial(
+        path,
+        optionalText(edit.purpose, "purpose") ?? "",
+        optionalText(edit.bindingName, "bindingName"),
+      );
+      return;
+    case "setShaderInput":
+      batch.setShaderInput(path, time(edit.time), encodeValue(batch, edit.value, host));
+      return;
+    case "connectToSource":
+      batch.connectToSource(
+        path,
+        text(edit.source, "source"),
+        optionalText(edit.typeName, "typeName"),
+        oneOf(edit.position ?? "replace", "position", ["replace", "prepend", "append"]),
+      );
+      return;
+    case "disconnectSource":
+      batch.disconnectSource(path, optionalText(edit.source, "source"));
+      return;
+    case "setBaseMaterial":
+      if (edit.base === undefined) fail("`base` must be a material path, or null to clear it");
+      batch.setBaseMaterial(path, optionalText(edit.base, "base"));
+      return;
+    case "createGeomSubset":
+      batch.createGeomSubset(
+        path,
+        text(edit.name, "name"),
+        text(edit.elementType, "elementType"),
+        indices(edit.indices),
+        optionalText(edit.familyName, "familyName") ?? "",
+        edit.familyType === undefined
+          ? null
+          : oneOf(edit.familyType, "familyType", ["unrestricted", "nonOverlapping", "partition"]),
+        false,
+      );
+      return;
+    case "createMaterialSubset":
+      batch.createGeomSubset(
+        path,
+        text(edit.name, "name"),
+        text(edit.elementType ?? "face", "elementType"),
+        indices(edit.indices),
+        "materialBind",
+        null,
+        true,
+      );
+      return;
+    case "setSubsetFamilyType":
+      batch.setSubsetFamilyType(
+        path,
+        text(edit.familyName, "familyName"),
+        oneOf(edit.familyType, "familyType", ["unrestricted", "nonOverlapping", "partition"]),
+      );
+      return;
+    case "bindCoordSys":
+      batch.bindCoordSys(path, text(edit.name, "name"), text(edit.target, "target"));
+      return;
+    case "blockCoordSys":
+      batch.blockCoordSys(path, text(edit.name, "name"));
+      return;
+    case "clearCoordSys":
+      batch.clearCoordSys(path, text(edit.name, "name"), flag(edit.removeSpec ?? false, "removeSpec"));
+      return;
+    case "setSdrMetadata":
+      if (edit.value !== null && typeof edit.value !== "string") fail("`value` must be a string, or null to clear the key");
+      batch.setSdrMetadata(path, text(edit.key, "key"), edit.value);
+      return;
     default:
       fail(`unknown edit type \`${String((edit as { type?: unknown }).type)}\``);
   }
@@ -288,6 +396,15 @@ function optionalText(value: unknown, field: string): string | null {
 function flag(value: unknown, field: string): boolean {
   if (typeof value !== "boolean") fail(`\`${field}\` must be a boolean`);
   return value;
+}
+
+/** Subset indices as the module takes them: 32-bit integers. */
+function indices(value: unknown): Int32Array {
+  if (value instanceof Int32Array) return value;
+  if (!Array.isArray(value) || !value.every((index) => Number.isInteger(index) && index >= -(2 ** 31) && index < 2 ** 31)) {
+    fail("`indices` must be an Int32Array or an array of 32-bit integers");
+  }
+  return Int32Array.from(value as number[]);
 }
 
 function time(value: unknown): number | null {

@@ -30,7 +30,9 @@ use crate::wire::Wire;
 /// - `argument.invalid`: an argument the wrapper checks is malformed
 ///   (an unknown specifier or list position, a value slot never filled).
 /// - `layer.read_only`: an edit targets a layer that cannot be saved, such
-///   as a package member; open with a session layer to edit it.
+///   as a package member; open with a session layer to edit it. A move or
+///   delete that would change such a layer fails with it too
+///   (`NamespaceError::ReadOnlyLayer`), naming the layer.
 /// - `layer.outside_stack`: an edit targets a layer outside the stage's
 ///   layer stack, such as a referenced asset's.
 /// - `layer.muted`: an edit targets a muted layer, which the stage does

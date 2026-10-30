@@ -6,7 +6,7 @@ import { describe, it } from "node:test";
 
 import { LayerstackError, loadLayerstack } from "../dist/index.js";
 import type { Changes, Layerstack, Stage } from "../dist/index.js";
-import { mockSource } from "./fixtures.ts";
+import { mockSource, usdz } from "./fixtures.ts";
 
 const layerstack: Layerstack = await loadLayerstack();
 const text = new TextEncoder();
@@ -280,6 +280,61 @@ def "Asset" {
     assert.deepEqual(deleted.unrepaired, []);
     deleted.undo();
     assert.match(exported(), /@\.\/scene\.usda@<\/World\/Lamp>/, "undo restores the asset");
+  });
+
+  it("move and delete refuse an asset's arc back into the stage from a package member", async () => {
+    using stage = layerstack.open({
+      identifier: "scene.usda",
+      bytes: text.encode(`#usda 1.0
+def "World" {
+    def "Lamp" {
+    }
+    def "Shelf" (
+        prepend references = @./props.usdz@</Asset>
+    ) {
+    }
+}
+`),
+    });
+    await stage.resolve(
+      mockSource({
+        "props.usdz": usdz([
+          [
+            "asset.usda",
+            `#usda 1.0
+def "Asset" {
+    def "Front" (
+        prepend references = @scene.usda@</World/Lamp>
+    ) {
+    }
+}
+`,
+          ],
+        ]),
+      }),
+    );
+    const member = layer(stage, "props.usdz");
+    assert.equal(member.readOnly, true);
+    const exported = () => new TextDecoder().decode(stage.exportLayer(member, "usda"));
+    const before = exported();
+    assert.match(before, /@scene\.usda@<\/World\/Lamp>/);
+
+    const moved = failure(() => stage.move("/World/Lamp", "/World/Lamp2"));
+    assert.equal(moved.code, "layer.read_only");
+    assert.equal(moved.identifier, "props.usdz");
+    assert.equal(
+      moved.message,
+      "move: cannot move /World/Lamp to /World/Lamp2: the edit would change @props.usdz@, " +
+        "which cannot be saved (a package member)",
+    );
+    const deleted = failure(() => stage.delete("/World/Lamp"));
+    assert.equal(deleted.code, "layer.read_only");
+    assert.match(deleted.message, /^delete: cannot delete \/World\/Lamp: /);
+
+    assert.equal(exported(), before, "the member is as it was");
+    assert.ok(stage.prim("/World/Lamp"), "so is the stage");
+    assert.equal(stage.isDirty(member), false);
+    assert.equal(stage.isDirty(stage.root), false);
   });
 
   it("move targets the edit layer's stack and refuses another stage's layer", async () => {

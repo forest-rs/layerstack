@@ -1,0 +1,556 @@
+{
+  "base_names": {
+    "": "",
+    "CoordSys:a": "CoordSys:a",
+    "coordSys": "coordSys",
+    "coordSys:": "",
+    "coordSys:worldSpace:binding": "worldSpace:binding",
+    "coordSys:x": "x",
+    "coordSysX:y": "coordSysX:y",
+    "coordSystem": "coordSystem",
+    "other:coordSys:a": "other:coordSys:a"
+  },
+  "calls": [
+    {
+      "accepted": true,
+      "call": "bind modelSpace",
+      "reads": {
+        "/World/Model": {
+          "has_local": true,
+          "instance": {
+            "fresh": null,
+            "missing": null,
+            "modelSpace": {
+              "name": "modelSpace:binding",
+              "relationship": "/World/Model.coordSys:modelSpace:binding",
+              "target": "/World/Space"
+            },
+            "paint": null
+          },
+          "local": [
+            {
+              "name": "modelSpace:binding",
+              "relationship": "/World/Model.coordSys:modelSpace:binding",
+              "target": "/World/Space"
+            }
+          ]
+        },
+        "/World/Plain": {
+          "has_local": false,
+          "instance": {
+            "fresh": null,
+            "missing": null,
+            "modelSpace": null,
+            "paint": null
+          },
+          "local": []
+        }
+      },
+      "specs": {
+        "/World/Model.coordSys:modelSpace:binding": {
+          "custom": false,
+          "explicit": true,
+          "explicit_targets": [
+            "/World/Space"
+          ],
+          "prepended": []
+        }
+      }
+    },
+    {
+      "accepted": true,
+      "call": "bind paint unapplied",
+      "reads": {
+        "/World/Model": {
+          "has_local": true,
+          "instance": {
+            "fresh": null,
+            "missing": null,
+            "modelSpace": {
+              "name": "modelSpace:binding",
+              "relationship": "/World/Model.coordSys:modelSpace:binding",
+              "target": "/World/Space"
+            },
+            "paint": null
+          },
+          "local": [
+            {
+              "name": "modelSpace:binding",
+              "relationship": "/World/Model.coordSys:modelSpace:binding",
+              "target": "/World/Space"
+            }
+          ]
+        },
+        "/World/Plain": {
+          "has_local": false,
+          "instance": {
+            "fresh": null,
+            "missing": null,
+            "modelSpace": null,
+            "paint": {
+              "name": "paint:binding",
+              "relationship": "/World/Plain.coordSys:paint:binding",
+              "target": "/World/Space"
+            }
+          },
+          "local": []
+        }
+      },
+      "specs": {
+        "/World/Model.coordSys:modelSpace:binding": {
+          "custom": false,
+          "explicit": true,
+          "explicit_targets": [
+            "/World/Space"
+          ],
+          "prepended": []
+        },
+        "/World/Plain.coordSys:paint:binding": {
+          "custom": false,
+          "explicit": true,
+          "explicit_targets": [
+            "/World/Space"
+          ],
+          "prepended": []
+        }
+      }
+    },
+    {
+      "accepted": true,
+      "call": "bind modelSpace again",
+      "reads": {
+        "/World/Model": {
+          "has_local": true,
+          "instance": {
+            "fresh": null,
+            "missing": null,
+            "modelSpace": {
+              "name": "modelSpace:binding",
+              "relationship": "/World/Model.coordSys:modelSpace:binding",
+              "target": "/World/Other"
+            },
+            "paint": null
+          },
+          "local": [
+            {
+              "name": "modelSpace:binding",
+              "relationship": "/World/Model.coordSys:modelSpace:binding",
+              "target": "/World/Other"
+            }
+          ]
+        },
+        "/World/Plain": {
+          "has_local": false,
+          "instance": {
+            "fresh": null,
+            "missing": null,
+            "modelSpace": null,
+            "paint": {
+              "name": "paint:binding",
+              "relationship": "/World/Plain.coordSys:paint:binding",
+              "target": "/World/Space"
+            }
+          },
+          "local": []
+        }
+      },
+      "specs": {
+        "/World/Model.coordSys:modelSpace:binding": {
+          "custom": false,
+          "explicit": true,
+          "explicit_targets": [
+            "/World/Other"
+          ],
+          "prepended": []
+        },
+        "/World/Plain.coordSys:paint:binding": {
+          "custom": false,
+          "explicit": true,
+          "explicit_targets": [
+            "/World/Space"
+          ],
+          "prepended": []
+        }
+      }
+    },
+    {
+      "accepted": true,
+      "call": "block modelSpace",
+      "reads": {
+        "/World/Model": {
+          "has_local": true,
+          "instance": {
+            "fresh": null,
+            "missing": null,
+            "modelSpace": null,
+            "paint": null
+          },
+          "local": []
+        },
+        "/World/Plain": {
+          "has_local": false,
+          "instance": {
+            "fresh": null,
+            "missing": null,
+            "modelSpace": null,
+            "paint": {
+              "name": "paint:binding",
+              "relationship": "/World/Plain.coordSys:paint:binding",
+              "target": "/World/Space"
+            }
+          },
+          "local": []
+        }
+      },
+      "specs": {
+        "/World/Model.coordSys:modelSpace:binding": {
+          "custom": false,
+          "explicit": true,
+          "explicit_targets": [],
+          "prepended": []
+        },
+        "/World/Plain.coordSys:paint:binding": {
+          "custom": false,
+          "explicit": true,
+          "explicit_targets": [
+            "/World/Space"
+          ],
+          "prepended": []
+        }
+      }
+    },
+    {
+      "accepted": true,
+      "call": "clear modelSpace",
+      "reads": {
+        "/World/Model": {
+          "has_local": true,
+          "instance": {
+            "fresh": null,
+            "missing": null,
+            "modelSpace": null,
+            "paint": null
+          },
+          "local": []
+        },
+        "/World/Plain": {
+          "has_local": false,
+          "instance": {
+            "fresh": null,
+            "missing": null,
+            "modelSpace": null,
+            "paint": {
+              "name": "paint:binding",
+              "relationship": "/World/Plain.coordSys:paint:binding",
+              "target": "/World/Space"
+            }
+          },
+          "local": []
+        }
+      },
+      "specs": {
+        "/World/Model.coordSys:modelSpace:binding": {
+          "custom": false,
+          "explicit": false,
+          "explicit_targets": [],
+          "prepended": []
+        },
+        "/World/Plain.coordSys:paint:binding": {
+          "custom": false,
+          "explicit": true,
+          "explicit_targets": [
+            "/World/Space"
+          ],
+          "prepended": []
+        }
+      }
+    },
+    {
+      "accepted": true,
+      "call": "bind modelSpace after clear",
+      "reads": {
+        "/World/Model": {
+          "has_local": true,
+          "instance": {
+            "fresh": null,
+            "missing": null,
+            "modelSpace": {
+              "name": "modelSpace:binding",
+              "relationship": "/World/Model.coordSys:modelSpace:binding",
+              "target": "/World/Space"
+            },
+            "paint": null
+          },
+          "local": [
+            {
+              "name": "modelSpace:binding",
+              "relationship": "/World/Model.coordSys:modelSpace:binding",
+              "target": "/World/Space"
+            }
+          ]
+        },
+        "/World/Plain": {
+          "has_local": false,
+          "instance": {
+            "fresh": null,
+            "missing": null,
+            "modelSpace": null,
+            "paint": {
+              "name": "paint:binding",
+              "relationship": "/World/Plain.coordSys:paint:binding",
+              "target": "/World/Space"
+            }
+          },
+          "local": []
+        }
+      },
+      "specs": {
+        "/World/Model.coordSys:modelSpace:binding": {
+          "custom": false,
+          "explicit": true,
+          "explicit_targets": [
+            "/World/Space"
+          ],
+          "prepended": []
+        },
+        "/World/Plain.coordSys:paint:binding": {
+          "custom": false,
+          "explicit": true,
+          "explicit_targets": [
+            "/World/Space"
+          ],
+          "prepended": []
+        }
+      }
+    },
+    {
+      "accepted": true,
+      "call": "clear paint removing spec",
+      "reads": {
+        "/World/Model": {
+          "has_local": true,
+          "instance": {
+            "fresh": null,
+            "missing": null,
+            "modelSpace": {
+              "name": "modelSpace:binding",
+              "relationship": "/World/Model.coordSys:modelSpace:binding",
+              "target": "/World/Space"
+            },
+            "paint": null
+          },
+          "local": [
+            {
+              "name": "modelSpace:binding",
+              "relationship": "/World/Model.coordSys:modelSpace:binding",
+              "target": "/World/Space"
+            }
+          ]
+        },
+        "/World/Plain": {
+          "has_local": false,
+          "instance": {
+            "fresh": null,
+            "missing": null,
+            "modelSpace": null,
+            "paint": null
+          },
+          "local": []
+        }
+      },
+      "specs": {
+        "/World/Model.coordSys:modelSpace:binding": {
+          "custom": false,
+          "explicit": true,
+          "explicit_targets": [
+            "/World/Space"
+          ],
+          "prepended": []
+        }
+      }
+    },
+    {
+      "accepted": false,
+      "call": "clear missing",
+      "reads": {
+        "/World/Model": {
+          "has_local": true,
+          "instance": {
+            "fresh": null,
+            "missing": null,
+            "modelSpace": {
+              "name": "modelSpace:binding",
+              "relationship": "/World/Model.coordSys:modelSpace:binding",
+              "target": "/World/Space"
+            },
+            "paint": null
+          },
+          "local": [
+            {
+              "name": "modelSpace:binding",
+              "relationship": "/World/Model.coordSys:modelSpace:binding",
+              "target": "/World/Space"
+            }
+          ]
+        },
+        "/World/Plain": {
+          "has_local": false,
+          "instance": {
+            "fresh": null,
+            "missing": null,
+            "modelSpace": null,
+            "paint": null
+          },
+          "local": []
+        }
+      },
+      "specs": {
+        "/World/Model.coordSys:modelSpace:binding": {
+          "custom": false,
+          "explicit": true,
+          "explicit_targets": [
+            "/World/Space"
+          ],
+          "prepended": []
+        }
+      }
+    },
+    {
+      "accepted": true,
+      "call": "block fresh unapplied",
+      "reads": {
+        "/World/Model": {
+          "has_local": true,
+          "instance": {
+            "fresh": null,
+            "missing": null,
+            "modelSpace": {
+              "name": "modelSpace:binding",
+              "relationship": "/World/Model.coordSys:modelSpace:binding",
+              "target": "/World/Space"
+            },
+            "paint": null
+          },
+          "local": [
+            {
+              "name": "modelSpace:binding",
+              "relationship": "/World/Model.coordSys:modelSpace:binding",
+              "target": "/World/Space"
+            }
+          ]
+        },
+        "/World/Plain": {
+          "has_local": false,
+          "instance": {
+            "fresh": null,
+            "missing": null,
+            "modelSpace": null,
+            "paint": null
+          },
+          "local": []
+        }
+      },
+      "specs": {
+        "/World/Model.coordSys:modelSpace:binding": {
+          "custom": false,
+          "explicit": true,
+          "explicit_targets": [
+            "/World/Space"
+          ],
+          "prepended": []
+        },
+        "/World/Plain.coordSys:fresh:binding": {
+          "custom": false,
+          "explicit": true,
+          "explicit_targets": [],
+          "prepended": []
+        }
+      }
+    },
+    {
+      "accepted": true,
+      "call": "clear fresh removing spec",
+      "reads": {
+        "/World/Model": {
+          "has_local": true,
+          "instance": {
+            "fresh": null,
+            "missing": null,
+            "modelSpace": {
+              "name": "modelSpace:binding",
+              "relationship": "/World/Model.coordSys:modelSpace:binding",
+              "target": "/World/Space"
+            },
+            "paint": null
+          },
+          "local": [
+            {
+              "name": "modelSpace:binding",
+              "relationship": "/World/Model.coordSys:modelSpace:binding",
+              "target": "/World/Space"
+            }
+          ]
+        },
+        "/World/Plain": {
+          "has_local": false,
+          "instance": {
+            "fresh": null,
+            "missing": null,
+            "modelSpace": null,
+            "paint": null
+          },
+          "local": []
+        }
+      },
+      "specs": {
+        "/World/Model.coordSys:modelSpace:binding": {
+          "custom": false,
+          "explicit": true,
+          "explicit_targets": [
+            "/World/Space"
+          ],
+          "prepended": []
+        }
+      }
+    },
+    {
+      "accepted": true,
+      "call": "clear modelSpace removing spec",
+      "reads": {
+        "/World/Model": {
+          "has_local": true,
+          "instance": {
+            "fresh": null,
+            "missing": null,
+            "modelSpace": null,
+            "paint": null
+          },
+          "local": []
+        },
+        "/World/Plain": {
+          "has_local": false,
+          "instance": {
+            "fresh": null,
+            "missing": null,
+            "modelSpace": null,
+            "paint": null
+          },
+          "local": []
+        }
+      },
+      "specs": {}
+    }
+  ],
+  "can_contain": {
+    "": false,
+    "CoordSys:a": false,
+    "coordSys": true,
+    "coordSys:": true,
+    "coordSys:worldSpace:binding": true,
+    "coordSys:x": true,
+    "coordSysX:y": true,
+    "coordSystem": true,
+    "other:coordSys:a": false
+  },
+  "openusd_version": "26.11"
+}

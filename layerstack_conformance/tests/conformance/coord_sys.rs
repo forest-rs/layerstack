@@ -46,7 +46,7 @@ struct Oracle {
 fn record(store: &layerstack::InMemoryStore, binding: &CoordSysBinding) -> Binding {
     Binding {
         // C++ names a binding by its relationship's base name.
-        name: format!("{}:binding", binding.name),
+        name: binding.base_name(),
         relationship: binding
             .relationship
             .display(store.paths(), store.tokens())

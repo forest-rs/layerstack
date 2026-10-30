@@ -58,6 +58,7 @@ mod composition_pcp;
 mod composition_strict;
 mod connectable_plug;
 mod coord_sys;
+mod coord_sys_authoring;
 mod copy_spec;
 mod custom_nodes;
 mod dangling_targets;

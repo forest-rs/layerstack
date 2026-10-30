@@ -278,7 +278,7 @@ fn main() -> Result<(), Failure> {
             &revisions,
             &mut publisher,
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| e.display(&store).to_string())?;
     assert_eq!(
         initial.steps.len(),
         2,
@@ -293,7 +293,7 @@ fn main() -> Result<(), Failure> {
             &revisions,
             &mut publisher,
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| e.display(&store).to_string())?;
     assert!(
         unchanged
             .steps
@@ -318,7 +318,7 @@ fn main() -> Result<(), Failure> {
             &revisions,
             &mut publisher,
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| e.display(&store).to_string())?;
     assert!(
         rebuilt.steps.iter().all(|s| s.evaluated),
         "heightmap change rebuilds terrain and changed scatter inputs"

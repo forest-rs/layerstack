@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::procedural::{ProceduralInputError, ProceduralInputs};
-use alloc::{sync::Arc, vec};
+use alloc::{string::ToString, sync::Arc, vec};
 use core::{
     convert::Infallible,
     sync::atomic::{AtomicI32, AtomicUsize, Ordering},
@@ -501,6 +501,11 @@ fn failed_downstream_reports_completed_publications_and_preserves_previous_outpu
     assert_eq!(failure.completed.steps.len(), 1);
     assert_eq!(*failure.completed.steps[0].output(), 10);
     assert!(matches!(*failure.error, BuildError::Preparation { .. }));
+    assert_eq!(
+        failure.display(&f.store).to_string(),
+        "procedural build: the publisher could not prepare the output of the producer \
+         /Scatter: host rejected output (1 earlier publication of this request stays applied)"
+    );
     assert_eq!(publisher.acknowledged, [f.recipes[0]]);
     let path = f.store.property_path("/ScatterOutput.value");
     assert_eq!(authored(&f, path), Value::Int(3));
@@ -535,6 +540,11 @@ fn registration_conflicts_and_preflight_failures_do_not_publish() {
         *failure.error,
         BuildError::Graph(GraphError::MissingResource { .. })
     ));
+    assert_eq!(
+        failure.display(&f.store).to_string(),
+        "invalid procedural build: the producer /Terrain declares the resource `heightmap`, \
+         but the request supplies no revision for it; supply one"
+    );
     assert!(failure.completed.steps.is_empty());
     assert_eq!(f.store.layer(ROOT).unwrap().generation(), before);
     let extra = f.store.path("/Extra");
@@ -609,6 +619,11 @@ fn cycle_preflight_and_foreign_domains_are_explicit() {
     };
     assert_eq!(cycle.first(), cycle.last());
     assert_eq!(cycle.len(), 3);
+    assert_eq!(
+        GraphError::Cycle(cycle).display(&f.store).to_string(),
+        "invalid procedural build: the producers' inputs form a cycle: /Terrain -> /Scatter -> \
+         /Terrain; remove one of these inputs"
+    );
     let mut other = fixture();
     let failure = f
         .graph
@@ -695,4 +710,171 @@ fn long_dependency_plans_use_a_heap_stack_and_shared_dependencies_run_once() {
             .unwrap();
     }
     assert_eq!(graph.plan(top).unwrap().len(), 4099);
+}
+
+#[test]
+fn errors_name_recipes_inputs_and_outputs_with_the_store() {
+    let f = fixture();
+    let [terrain, scatter, _] = f.recipes;
+    let [terrain_output, scatter_output, _] = f.outputs;
+    let graph = [
+        (
+            GraphError::DifferentStore,
+            "invalid procedural build: the stage or store is not the one the graph was created \
+             with; use that store and a stage composed from it",
+        ),
+        (
+            GraphError::AlreadyRegistered(terrain),
+            "invalid procedural build: the producer /Terrain is already registered; `remove` it \
+             before registering it again",
+        ),
+        (
+            GraphError::NoOutputs(terrain),
+            "invalid procedural build: the producer /Terrain declares no output prims; declare \
+             at least one",
+        ),
+        (
+            GraphError::OutputClaimed {
+                output: terrain_output,
+                owner: terrain,
+            },
+            "invalid procedural build: the output /TerrainOutput is already claimed by the \
+             producer /Terrain; an output has one producer",
+        ),
+        (
+            GraphError::MissingProducer {
+                consumer: None,
+                output: scatter_output,
+            },
+            "invalid procedural build: no registered producer outputs the requested \
+             /ScatterOutput; register its producer first",
+        ),
+        (
+            GraphError::MissingProducer {
+                consumer: Some(scatter),
+                output: terrain_output,
+            },
+            "invalid procedural build: the producer /Scatter takes the input /TerrainOutput, \
+             which no registered producer outputs; register its producer first",
+        ),
+        (
+            GraphError::Cycle(vec![terrain, scatter, terrain]),
+            "invalid procedural build: the producers' inputs form a cycle: /Terrain -> /Scatter \
+             -> /Terrain; remove one of these inputs",
+        ),
+        (
+            GraphError::MissingResource {
+                recipe: terrain,
+                key: "heightmap".into(),
+            },
+            "invalid procedural build: the producer /Terrain declares the resource \
+             `heightmap`, but the request supplies no revision for it; supply one",
+        ),
+    ];
+    for (error, text) in graph {
+        assert_eq!(error.display(&f.store).to_string(), text);
+        assert!(!error.to_string().contains('/'), "{error}");
+    }
+
+    let changed = || EvidenceError::Changed {
+        prim: terrain,
+        property: "primvars:seed".into(),
+    };
+    let stale = [
+        (
+            BuildEvidenceError::Resource {
+                key: "heightmap".into(),
+                expected: 1,
+                actual: Some(2),
+            },
+            "the resource `heightmap` is at revision 2, but the result was evaluated at \
+             revision 1; build again",
+        ),
+        (
+            BuildEvidenceError::Resource {
+                key: "heightmap".into(),
+                expected: 1,
+                actual: None,
+            },
+            "the resource `heightmap` has no supplied revision, but the result was evaluated at \
+             revision 1; supply it and build again",
+        ),
+        (
+            BuildEvidenceError::Input(changed()),
+            "the consumed input /Terrain.primvars:seed changed since the evaluation; evaluate \
+             the recipe again",
+        ),
+        (
+            BuildEvidenceError::Prerequisite {
+                recipe: terrain,
+                error: EvidenceError::Invalidated,
+            },
+            "its prerequisite producer /Terrain no longer justifies it: the procedural binding \
+             was invalidated after the evaluation; evaluate the recipe again",
+        ),
+        (
+            BuildEvidenceError::Publication(EvidenceApplyError::Edit(
+                layerstack::EditError::StaleGeneration {
+                    layer: ROOT,
+                    expected: 2,
+                    found: 3,
+                },
+            )),
+            "layer 1 changed since the edit was prepared (generation 3, expected 2)",
+        ),
+    ];
+    for (error, reason) in stale {
+        assert_eq!(
+            error.display(&f.store).to_string(),
+            alloc::format!("cannot publish the procedural build result: {reason}")
+        );
+        let build: BuildError<Infallible, &str> = BuildError::Publication {
+            recipe: scatter,
+            error,
+        };
+        assert_eq!(
+            build.display(&f.store).to_string(),
+            alloc::format!("procedural build: cannot publish the producer /Scatter: {reason}")
+        );
+    }
+
+    let build: [(BuildError<&str, &str>, &str); 4] = [
+        (
+            BuildError::Graph(GraphError::NoOutputs(terrain)),
+            "invalid procedural build: the producer /Terrain declares no output prims; declare \
+             at least one",
+        ),
+        (
+            BuildError::Evaluation {
+                recipe: terrain,
+                error: ProceduralError::Input(ProceduralInputError::WrongKind {
+                    prim: terrain,
+                    property: "primvars:seed".into(),
+                    expected: layerstack::PropertyKind::Attribute,
+                    actual: layerstack::PropertyKind::Relationship,
+                }),
+            },
+            "procedural build: cannot evaluate the producer /Terrain: the procedural input \
+             /Terrain.primvars:seed is a relationship, but the evaluator reads it as an attribute",
+        ),
+        (
+            BuildError::Evaluation {
+                recipe: terrain,
+                error: ProceduralError::Evaluation("the seed is negative"),
+            },
+            "procedural build: cannot evaluate the producer /Terrain: the evaluator failed: the \
+             seed is negative",
+        ),
+        (
+            BuildError::Preparation {
+                recipe: scatter,
+                error: "host rejected output",
+            },
+            "procedural build: the publisher could not prepare the output of the producer \
+             /Scatter: host rejected output",
+        ),
+    ];
+    for (error, text) in build {
+        assert_eq!(error.display(&f.store).to_string(), text);
+    }
 }

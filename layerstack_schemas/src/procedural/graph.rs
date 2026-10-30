@@ -22,7 +22,10 @@ use super::{
     Evaluated, EvaluationEvidence, EvidenceApplyError, EvidenceError, Procedural, ProceduralError,
     ProceduralEvaluator,
 };
-use crate::Scene;
+use crate::{
+    Scene,
+    diagnostic::{Describe, Names, with_store},
+};
 use alloc::{
     boxed::Box,
     collections::{BTreeMap, BTreeSet},
@@ -96,9 +99,80 @@ pub enum GraphError {
         key: String,
     },
 }
+impl GraphError {
+    /// The error in words, its recipe and output paths written as text
+    /// with `store`, the store the registry was created with: the rule the
+    /// registration or request breaks, and how to recover. `Display` writes
+    /// the same with ids.
+    #[must_use]
+    pub fn display<'a>(&'a self, store: &'a dyn LayerStore) -> impl fmt::Display + 'a {
+        with_store(self, store)
+    }
+}
+impl Describe for GraphError {
+    fn describe(&self, f: &mut fmt::Formatter<'_>, names: Names<'_>) -> fmt::Result {
+        f.write_str("invalid procedural build: ")?;
+        match self {
+            Self::DifferentStore => f.write_str(
+                "the stage or store is not the one the graph was created with; use that store \
+                 and a stage composed from it",
+            ),
+            Self::AlreadyRegistered(recipe) => write!(
+                f,
+                "the producer {} is already registered; `remove` it before registering it again",
+                names.path(*recipe)
+            ),
+            Self::NoOutputs(recipe) => write!(
+                f,
+                "the producer {} declares no output prims; declare at least one",
+                names.path(*recipe)
+            ),
+            Self::OutputClaimed { output, owner } => write!(
+                f,
+                "the output {} is already claimed by the producer {}; an output has one producer",
+                names.path(*output),
+                names.path(*owner)
+            ),
+            Self::MissingProducer {
+                consumer: None,
+                output,
+            } => write!(
+                f,
+                "no registered producer outputs the requested {}; register its producer first",
+                names.path(*output)
+            ),
+            Self::MissingProducer {
+                consumer: Some(consumer),
+                output,
+            } => write!(
+                f,
+                "the producer {} takes the input {}, which no registered producer outputs; \
+                 register its producer first",
+                names.path(*consumer),
+                names.path(*output)
+            ),
+            Self::Cycle(recipes) => {
+                f.write_str("the producers' inputs form a cycle: ")?;
+                for (index, recipe) in recipes.iter().enumerate() {
+                    if index > 0 {
+                        f.write_str(" -> ")?;
+                    }
+                    f.write_str(&names.path(*recipe))?;
+                }
+                f.write_str("; remove one of these inputs")
+            }
+            Self::MissingResource { recipe, key } => write!(
+                f,
+                "the producer {} declares the resource `{key}`, but the request supplies no \
+                 revision for it; supply one",
+                names.path(*recipe)
+            ),
+        }
+    }
+}
 impl fmt::Display for GraphError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "invalid procedural build: {self:?}")
+        self.describe(f, Names(None))
     }
 }
 impl core::error::Error for GraphError {}
@@ -157,21 +231,49 @@ pub enum BuildError<E, P> {
         error: BuildEvidenceError,
     },
 }
-impl<E: fmt::Display, P: fmt::Display> fmt::Display for BuildError<E, P> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl<E: fmt::Display, P: fmt::Display> BuildError<E, P> {
+    /// The error in words, its recipe, input and output paths written as
+    /// text with `store`, the store the registry was created with: which
+    /// producer failed, at which step, and why. The evaluator's and
+    /// publisher's own errors are written with their `Display`. `Display`
+    /// writes the same with ids.
+    #[must_use]
+    pub fn display<'a>(&'a self, store: &'a dyn LayerStore) -> impl fmt::Display + 'a {
+        with_store(self, store)
+    }
+}
+impl<E: fmt::Display, P: fmt::Display> Describe for BuildError<E, P> {
+    fn describe(&self, f: &mut fmt::Formatter<'_>, names: Names<'_>) -> fmt::Result {
         match self {
-            Self::Graph(error) => error.fmt(f),
+            Self::Graph(error) => error.describe(f, names),
             Self::Evaluation { recipe, error } => {
-                write!(f, "producer {recipe:?} evaluation failed: {error}")
+                write!(
+                    f,
+                    "procedural build: cannot evaluate the producer {}: ",
+                    names.path(*recipe)
+                )?;
+                error.reason(f, names)
             }
             Self::Preparation { recipe, error } => write!(
                 f,
-                "producer {recipe:?} publication preparation failed: {error}"
+                "procedural build: the publisher could not prepare the output of the producer \
+                 {}: {error}",
+                names.path(*recipe)
             ),
             Self::Publication { recipe, error } => {
-                write!(f, "producer {recipe:?} guarded publication failed: {error}")
+                write!(
+                    f,
+                    "procedural build: cannot publish the producer {}: ",
+                    names.path(*recipe)
+                )?;
+                error.reason(f, names)
             }
         }
+    }
+}
+impl<E: fmt::Display, P: fmt::Display> fmt::Display for BuildError<E, P> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.describe(f, Names(None))
     }
 }
 impl<E: core::error::Error, P: core::error::Error> core::error::Error for BuildError<E, P> {}
@@ -201,9 +303,60 @@ pub enum BuildEvidenceError {
     /// Transaction/evidence application failed after resource verification.
     Publication(EvidenceApplyError),
 }
+impl BuildEvidenceError {
+    /// The error in words, its paths written as text with `store`, the
+    /// store the registry was created with: which resource, input or
+    /// prerequisite no longer justifies the result, and how to recover.
+    /// `Display` writes the same with ids.
+    #[must_use]
+    pub fn display<'a>(&'a self, store: &'a dyn LayerStore) -> impl fmt::Display + 'a {
+        with_store(self, store)
+    }
+
+    /// Why the result is rejected, without the operation: shared with
+    /// [`BuildError::Publication`].
+    fn reason(&self, f: &mut fmt::Formatter<'_>, names: Names<'_>) -> fmt::Result {
+        match self {
+            Self::Resource {
+                key,
+                expected,
+                actual: Some(actual),
+            } => write!(
+                f,
+                "the resource `{key}` is at revision {actual}, but the result was evaluated at \
+                 revision {expected}; build again"
+            ),
+            Self::Resource {
+                key,
+                expected,
+                actual: None,
+            } => write!(
+                f,
+                "the resource `{key}` has no supplied revision, but the result was evaluated at \
+                 revision {expected}; supply it and build again"
+            ),
+            Self::Input(error) => error.reason(f, names),
+            Self::Prerequisite { recipe, error } => {
+                write!(
+                    f,
+                    "its prerequisite producer {} no longer justifies it: ",
+                    names.path(*recipe)
+                )?;
+                error.reason(f, names)
+            }
+            Self::Publication(error) => error.reason(f, names),
+        }
+    }
+}
+impl Describe for BuildEvidenceError {
+    fn describe(&self, f: &mut fmt::Formatter<'_>, names: Names<'_>) -> fmt::Result {
+        f.write_str("cannot publish the procedural build result: ")?;
+        self.reason(f, names)
+    }
+}
 impl fmt::Display for BuildEvidenceError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "stale procedural build result: {self:?}")
+        self.describe(f, Names(None))
     }
 }
 impl core::error::Error for BuildEvidenceError {}
@@ -355,14 +508,31 @@ pub struct BuildFailure<T, E, P> {
     /// Already applied prerequisite publications. They are not rolled back.
     pub completed: BuildResult<T>,
 }
+impl<T, E: fmt::Display, P: fmt::Display> BuildFailure<T, E, P> {
+    /// The failure in words, through [`BuildError::display`], and how many
+    /// earlier publications of the request stay applied. `Display` writes
+    /// the same with ids.
+    #[must_use]
+    pub fn display<'a>(&'a self, store: &'a dyn LayerStore) -> impl fmt::Display + 'a {
+        with_store(self, store)
+    }
+}
+impl<T, E: fmt::Display, P: fmt::Display> Describe for BuildFailure<T, E, P> {
+    fn describe(&self, f: &mut fmt::Formatter<'_>, names: Names<'_>) -> fmt::Result {
+        self.error.describe(f, names)?;
+        match self.completed.steps.len() {
+            0 => Ok(()),
+            1 => f.write_str(" (1 earlier publication of this request stays applied)"),
+            n => write!(
+                f,
+                " ({n} earlier publications of this request stay applied)"
+            ),
+        }
+    }
+}
 impl<T, E: fmt::Display, P: fmt::Display> fmt::Display for BuildFailure<T, E, P> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}; {} prerequisite publications completed",
-            self.error,
-            self.completed.steps.len()
-        )
+        self.describe(f, Names(None))
     }
 }
 impl<T: fmt::Debug, E: core::error::Error + 'static, P: core::error::Error + 'static>

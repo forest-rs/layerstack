@@ -31,7 +31,19 @@ pub use evidence::{Evaluated, EvaluationEvidence, EvidenceApplyError, EvidenceEr
 /// Explicit producer dependencies, resource revisions and guarded publication.
 pub mod graph;
 
-use crate::{Scene, usd_proc::GenerativeProcedural};
+use crate::{
+    Scene,
+    diagnostic::{Describe, Names, with_store},
+    usd_proc::GenerativeProcedural,
+};
+
+/// A property kind as an article and noun.
+fn kind_words(kind: PropertyKind) -> &'static str {
+    match kind {
+        PropertyKind::Attribute => "an attribute",
+        PropertyKind::Relationship => "a relationship",
+    }
+}
 
 /// Application-supplied evaluator for one procedural system.
 ///
@@ -79,22 +91,45 @@ pub enum ProceduralInputError {
         error: ArrayReadError,
     },
 }
-impl fmt::Display for ProceduralInputError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl ProceduralInputError {
+    /// The error in words, its prim path written as text with `store`, the
+    /// store the stage was composed from. `Display` writes the same with
+    /// the prim's id.
+    #[must_use]
+    pub fn display<'a>(&'a self, store: &'a dyn LayerStore) -> impl fmt::Display + 'a {
+        with_store(self, store)
+    }
+}
+impl Describe for ProceduralInputError {
+    fn describe(&self, f: &mut fmt::Formatter<'_>, names: Names<'_>) -> fmt::Result {
         match self {
             Self::WrongKind {
+                prim,
                 property,
                 expected,
                 actual,
-                ..
             } => write!(
                 f,
-                "procedural input {property} is {actual:?}, expected {expected:?}"
+                "the procedural input {}.{property} is {}, but the evaluator reads it as {}",
+                names.path(*prim),
+                kind_words(*actual),
+                kind_words(*expected)
             ),
             Self::Array {
-                property, error, ..
-            } => write!(f, "cannot read procedural array {property}: {error}"),
+                prim,
+                property,
+                error,
+            } => write!(
+                f,
+                "cannot read the procedural array input {}.{property}: {error}",
+                names.path(*prim)
+            ),
         }
+    }
+}
+impl fmt::Display for ProceduralInputError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.describe(f, Names(None))
     }
 }
 impl core::error::Error for ProceduralInputError {}
@@ -119,19 +154,58 @@ pub enum ProceduralError<E> {
     /// Application evaluator failed; its previous result is not returned.
     Evaluation(E),
 }
+impl<E: fmt::Display> ProceduralError<E> {
+    /// The error in words, its paths written as text with `store`, the
+    /// store the stage was composed from: what kept the recipe from being
+    /// evaluated, and how to recover where the caller can. `Display`
+    /// writes the same with ids.
+    #[must_use]
+    pub fn display<'a>(&'a self, store: &'a dyn LayerStore) -> impl fmt::Display + 'a {
+        with_store(self, store)
+    }
+
+    /// Why evaluation failed, without the operation: shared with the
+    /// procedural build errors that wrap this one.
+    pub(crate) fn reason(&self, f: &mut fmt::Formatter<'_>, names: Names<'_>) -> fmt::Result {
+        match self {
+            Self::DifferentStore => f.write_str(
+                "the stage or store is not the one the procedural binding was created with; \
+                 evaluate with that store and a stage composed from it",
+            ),
+            Self::NotProcedural(path) => write!(
+                f,
+                "{} is absent or is not a `GenerativeProcedural`",
+                names.path(*path)
+            ),
+            Self::System {
+                expected,
+                actual: Some(actual),
+            } => write!(
+                f,
+                "the recipe's `proceduralSystem` is `{actual}`, but the evaluator runs \
+                 `{expected}`"
+            ),
+            Self::System {
+                expected,
+                actual: None,
+            } => write!(
+                f,
+                "the recipe has no `proceduralSystem` token, but the evaluator runs `{expected}`"
+            ),
+            Self::Input(error) => error.describe(f, names),
+            Self::Evaluation(error) => write!(f, "the evaluator failed: {error}"),
+        }
+    }
+}
+impl<E: fmt::Display> Describe for ProceduralError<E> {
+    fn describe(&self, f: &mut fmt::Formatter<'_>, names: Names<'_>) -> fmt::Result {
+        f.write_str("procedural evaluation: ")?;
+        self.reason(f, names)
+    }
+}
 impl<E: fmt::Display> fmt::Display for ProceduralError<E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::DifferentStore => {
-                f.write_str("procedural binding belongs to different store interners")
-            }
-            Self::NotProcedural(path) => write!(f, "no procedural recipe at {path:?}"),
-            Self::System { expected, actual } => {
-                write!(f, "procedural system {actual:?}, expected {expected}")
-            }
-            Self::Input(error) => error.fmt(f),
-            Self::Evaluation(error) => write!(f, "procedural evaluation failed: {error}"),
-        }
+        self.describe(f, Names(None))
     }
 }
 impl<E: core::error::Error + 'static> core::error::Error for ProceduralError<E> {}

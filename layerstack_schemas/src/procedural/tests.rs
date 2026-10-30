@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 use super::*;
-use alloc::{sync::Arc, vec};
+use alloc::{string::ToString, sync::Arc, vec};
 use layerstack::{
     EditTarget, InMemoryStore, Layer, LayerId, ListOp, LiveStage, PrimSpec, PropertySpec,
     PropertyType, StageOptions, Transaction,
@@ -151,10 +151,19 @@ fn unchanged_queries_skip_resolution_and_detached_work_tracks_source_and_epoch()
         PropertySpec::typed_attribute(PropertyType::parse("int").unwrap())
             .with_default(Value::Int(1)),
     );
+    let stale = result
+        .evidence()
+        .apply(&mut live, &mut store, &transaction)
+        .unwrap_err();
     assert!(matches!(
-        result.evidence().apply(&mut live, &mut store, &transaction),
-        Err(EvidenceApplyError::Evidence(EvidenceError::Changed { .. }))
+        stale,
+        EvidenceApplyError::Evidence(EvidenceError::Changed { .. })
     ));
+    assert_eq!(
+        stale.display(&store).to_string(),
+        "cannot publish the procedural result: the consumed input /Inputs.a changed since the \
+         evaluation; evaluate the recipe again"
+    );
     assert!(store.layer(ROOT).unwrap().property(published).is_none());
     let fresh = binding
         .snapshot(&Scene::new(live.stage(), &store), Time::Default)
@@ -439,5 +448,129 @@ fn api_schema_system_fallback_dispatches_without_an_authored_token() {
             .evaluate(&Scene::new(live.stage(), &store), Time::Default)
             .unwrap(),
         17
+    );
+}
+
+#[test]
+fn errors_name_paths_and_layers_with_the_store() {
+    let mut store = InMemoryStore::default();
+    store.set_layer_identifier(ROOT, "./root.usda");
+    let recipe = store.path("/World/Rock");
+    let terrain = store.path("/World/Terrain");
+    let wrong_kind = ProceduralInputError::WrongKind {
+        prim: terrain,
+        property: "primvars:height".into(),
+        expected: PropertyKind::Attribute,
+        actual: PropertyKind::Relationship,
+    };
+    let array = ProceduralInputError::Array {
+        prim: terrain,
+        property: "primvars:points".into(),
+        error: ArrayReadError::BudgetExceeded { limit: 8 },
+    };
+    assert_eq!(
+        wrong_kind.display(&store).to_string(),
+        "the procedural input /World/Terrain.primvars:height is a relationship, but the \
+         evaluator reads it as an attribute"
+    );
+    assert_eq!(
+        array.display(&store).to_string(),
+        "cannot read the procedural array input /World/Terrain.primvars:points: array decode \
+         budget exceeded (8 units)"
+    );
+
+    let evaluation: [(ProceduralError<&str>, &str); 6] = [
+        (
+            ProceduralError::DifferentStore,
+            "procedural evaluation: the stage or store is not the one the procedural binding \
+             was created with; evaluate with that store and a stage composed from it",
+        ),
+        (
+            ProceduralError::NotProcedural(recipe),
+            "procedural evaluation: /World/Rock is absent or is not a `GenerativeProcedural`",
+        ),
+        (
+            ProceduralError::System {
+                expected: "test:pick".into(),
+                actual: Some("test:other".into()),
+            },
+            "procedural evaluation: the recipe's `proceduralSystem` is `test:other`, but the \
+             evaluator runs `test:pick`",
+        ),
+        (
+            ProceduralError::System {
+                expected: "test:pick".into(),
+                actual: None,
+            },
+            "procedural evaluation: the recipe has no `proceduralSystem` token, but the \
+             evaluator runs `test:pick`",
+        ),
+        (
+            ProceduralError::Input(wrong_kind.clone()),
+            "procedural evaluation: the procedural input /World/Terrain.primvars:height is a \
+             relationship, but the evaluator reads it as an attribute",
+        ),
+        (
+            ProceduralError::Evaluation("the height is negative"),
+            "procedural evaluation: the evaluator failed: the height is negative",
+        ),
+    ];
+    for (error, text) in evaluation {
+        assert_eq!(error.display(&store).to_string(), text);
+        assert!(!error.to_string().contains('/'), "{error}");
+    }
+
+    let evidence = [
+        (
+            EvidenceError::DifferentStore,
+            "cannot publish the procedural result: the scene is not composed from the store the \
+             result was evaluated with; check it against that store and a stage composed from it",
+        ),
+        (
+            EvidenceError::Invalidated,
+            "cannot publish the procedural result: the procedural binding was invalidated after \
+             the evaluation; evaluate the recipe again",
+        ),
+        (
+            EvidenceError::NotProcedural(recipe),
+            "cannot publish the procedural result: the recipe /World/Rock is absent or no longer \
+             a `GenerativeProcedural`",
+        ),
+        (
+            EvidenceError::Changed {
+                prim: terrain,
+                property: "primvars:height".into(),
+            },
+            "cannot publish the procedural result: the consumed input \
+             /World/Terrain.primvars:height changed since the evaluation; evaluate the recipe \
+             again",
+        ),
+        (
+            EvidenceError::Input(array.clone()),
+            "cannot publish the procedural result: cannot read the procedural array input \
+             /World/Terrain.primvars:points: array decode budget exceeded (8 units)",
+        ),
+    ];
+    for (error, text) in evidence {
+        assert_eq!(error.display(&store).to_string(), text);
+        let apply = EvidenceApplyError::Evidence(error);
+        assert_eq!(apply.display(&store).to_string(), text);
+    }
+    let edit = EvidenceApplyError::Edit(layerstack::EditError::StaleGeneration {
+        layer: ROOT,
+        expected: 2,
+        found: 3,
+    });
+    assert_eq!(
+        edit.display(&store).to_string(),
+        "cannot publish the procedural result: @./root.usda@ changed since the edit was \
+         prepared (generation 3, expected 2)"
+    );
+    assert_eq!(
+        EvidenceError::NotProcedural(recipe).to_string(),
+        alloc::format!(
+            "cannot publish the procedural result: the recipe {recipe:?} is absent or no longer \
+             a `GenerativeProcedural`"
+        )
     );
 }

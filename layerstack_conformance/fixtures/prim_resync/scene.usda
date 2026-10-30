@@ -37,3 +37,40 @@ def Xform "Drone" (
 )
 {
 }
+
+def Xform "Thing" (
+    prepend references = @asset.usda@</Asset>
+)
+{
+}
+
+def Xform "Switch" (
+    variants = {
+        string look = "day"
+    }
+    prepend variantSets = "look"
+)
+{
+    variantSet "look" = {
+        "day" {
+            def Xform "Sun"
+            {
+            }
+        }
+        "night" {
+            def Xform "Star"
+            {
+            }
+        }
+    }
+}
+
+def Xform "Rover"
+{
+}
+
+def Xform "Echo" (
+    inherits = </World/Lamp>
+)
+{
+}

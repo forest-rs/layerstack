@@ -589,6 +589,15 @@ pub(crate) struct Outcome {
     pub(crate) property_specs: Vec<(LayerId, PathId, TokenId)>,
     /// The edits of inputs dynamic file format arguments may compose from.
     pub(crate) argument_inputs: Vec<ArgumentInput>,
+    /// `(layer, source prim path)` of every spec the transaction only
+    /// created, removed or listed children of as an inert `over`
+    /// ([`inert_prims`]), in every layer it changed: a prim composed
+    /// before and after such an edit changed its spec stack alone.
+    pub(crate) inert_sites: Vec<(LayerId, PathId)>,
+    /// `(layer, source prim path)` of every other prim site a step
+    /// changed: a prim composing from one of them changed more than its
+    /// spec stack, whatever inert sites it composes from too.
+    pub(crate) other_sites: Vec<(LayerId, PathId)>,
 }
 
 /// An edit of a prim metadata field or an attribute default, the inputs
@@ -949,6 +958,7 @@ pub(crate) fn apply(
             return Err(error);
         }
     }
+    let mut inert_sites = Vec::new();
     for id in &journal.layers {
         let paths = journal
             .steps
@@ -989,6 +999,12 @@ pub(crate) fn apply(
                     };
                     supports(&g.written) && supports(&g.step)
                 });
+        inert_sites.extend(
+            inert_prims(store, &journal.steps, *id, root)
+                .0
+                .into_iter()
+                .map(|path| (*id, path)),
+        );
         let mut ignored: Vec<PathId> = root
             .filter(|_| root_only_supports_children)
             .into_iter()
@@ -1078,6 +1094,17 @@ pub(crate) fn apply(
     }
     sort::sort_unstable(&mut resync_sites);
     resync_sites.dedup();
+    sort::sort_unstable(&mut inert_sites);
+    let mut other_sites: Vec<(LayerId, PathId)> = steps
+        .iter()
+        .flat_map(|g| {
+            [&g.written, &g.step].map(|raw| raw.change_path(store).map(|path| (raw.layer(), path)))
+        })
+        .flatten()
+        .filter(|site| inert_sites.binary_search(site).is_err())
+        .collect();
+    sort::sort_unstable(&mut other_sites);
+    other_sites.dedup();
     sort::sort_unstable(&mut property_specs);
     property_specs.dedup();
     let argument_inputs = steps.iter().filter_map(argument_input).collect();
@@ -1092,6 +1119,8 @@ pub(crate) fn apply(
         resync_sites,
         property_specs,
         argument_inputs,
+        inert_sites,
+        other_sites,
         inverse: Transaction {
             preconditions: Vec::new(),
             ops: steps.into_iter().map(|g| Op::Raw(Box::new(g))).collect(),
@@ -1154,30 +1183,24 @@ fn lists_children_only(guarded: &Guarded, root: Option<PathId>) -> Option<PathId
     unlisted(main).same(&unlisted(before)).then_some(*path)
 }
 
-/// The prims of `layer`, a layer of `stage`'s own layer stack, whose specs
-/// the journal's steps only created, removed or listed as the parent of a
-/// child, keeping them inert (`over`, no opinions, no branches) and listing
-/// only children that compose already, at prims that compose from other
-/// specs too. Authoring at a deep prim
-/// creates such an `over` for every ancestor without a spec.
+/// The prims of `layer` whose specs the journal's steps only created,
+/// removed or listed as the parent of a child, keeping them inert (`over`,
+/// no opinions, no branches), or whose steps only change the child names
+/// they list ([`lists_children_only`]), sorted, with the steps that
+/// changed each path. Authoring at a deep prim creates such an `over` for
+/// every ancestor without a spec. The pseudo-root is left out.
 ///
-/// An inert spec changes its prim's own spec stack, not the namespace
-/// beneath it: its children compose already, and a stronger spec listing
-/// names a weaker one lists already adds nothing to the composed child
-/// order. So does a spec whose steps only change the child names it lists
-/// ([`lists_children_only`]). The pseudo-root is handled by its caller.
-///
-/// Spec: AOUSD Core §10 (namespace composition: a prim exists where any
-/// site holds a spec). OpenUSD records such a spec as `didAddInertPrim` or
-/// `didRemoveInertPrim` in `SdfChangeList`, which `PcpChanges` treats as a
-/// spec stack change of the prim alone, not a resync of its namespace.
-fn support_only_prims(
+/// OpenUSD records such a spec as `didAddInertPrim` or
+/// `didRemoveInertPrim` in `SdfChangeList` (`SdfSpec::IsInert`, children
+/// aside), which `PcpChanges::DidChange` (`pxr/usd/pcp/changes.cpp`) treats
+/// as a change of the prim's spec stack (`DidChangeSpecs`), not a resync of
+/// its namespace, unless no prim composes there before or after.
+fn inert_prims(
     store: &dyn LayerStore,
     steps: &[Guarded],
     layer: LayerId,
-    stage: &Stage,
     root: Option<PathId>,
-) -> Vec<PathId> {
+) -> (Vec<PathId>, HashMap<PathId, Vec<usize>>) {
     let inert = |spec: &PrimSpec| {
         let mut spec = spec.clone();
         spec.authored_children.clear();
@@ -1195,7 +1218,21 @@ fn support_only_prims(
         } if *at == path => {
             branches.as_ref().is_none_or(|b| b.is_empty()) && main.as_ref().is_none_or(inert)
         }
-        Raw::Child { .. } => true,
+        // A property spec added or removed changes that property's spec
+        // stack, which is reported on its own (`Outcome::property_specs`).
+        Raw::Child { .. } | Raw::Property { .. } => true,
+        _ => false,
+    };
+    // Metadata that composes nothing beyond its own value, authored on a
+    // spec the steps create: the prim's spec stack changes, which reports
+    // the prim info-only, all of its fields with it. OpenUSD creates the
+    // spec inert and records the field as an info change of its entry.
+    let plain_field = |step: &Raw, created: bool| match step {
+        Raw::Field {
+            property: None,
+            key,
+            ..
+        } => created && !resyncs_prim(store.tokens().resolve(*key)),
         _ => false,
     };
     let steps: Vec<&Guarded> = steps
@@ -1225,23 +1262,65 @@ fn support_only_prims(
     sort::sort_unstable(&mut candidates);
     candidates.dedup();
     candidates.retain(|&path| {
-        // A spec whose child names alone change keeps its prim's index too.
-        if by_path[&path]
+        let changes = &by_path[&path];
+        let created = changes.iter().any(|&at| {
+            matches!(
+                (&steps[at].written, &steps[at].step),
+                (
+                    Raw::PrimSlots { path: written, main: Some(_), .. },
+                    Raw::PrimSlots { main: None, .. },
+                ) if *written == path
+            )
+        });
+        changes
             .iter()
             .all(|&at| lists_children_only(steps[at], root) == Some(path))
-        {
-            return true;
-        }
-        by_path[&path]
+            || changes.iter().map(|&at| steps[at]).all(|g| {
+                (supports(&g.written, path) && supports(&g.step, path))
+                    || (plain_field(&g.written, created) && plain_field(&g.step, created))
+            })
+    });
+    (candidates, by_path)
+}
+
+/// The [`inert_prims`] of `layer`, a layer of `stage`'s own layer stack,
+/// that compose from other specs too, and whose specs list only children
+/// that compose already.
+///
+/// An inert spec changes its prim's own spec stack, not the namespace
+/// beneath it: its children compose already, and a stronger spec listing
+/// names a weaker one lists already adds nothing to the composed child
+/// order. So does a spec whose steps only change the child names it lists
+/// ([`lists_children_only`]). The pseudo-root is handled by its caller.
+/// One listing a new child is recomposed with its namespace, which finds
+/// the prims that compose the child through an arc to it.
+///
+/// Spec: AOUSD Core §10 (namespace composition: a prim exists where any
+/// site holds a spec).
+fn support_only_prims(
+    store: &dyn LayerStore,
+    steps: &[Guarded],
+    layer: LayerId,
+    stage: &Stage,
+    root: Option<PathId>,
+) -> Vec<PathId> {
+    let (mut candidates, by_path) = inert_prims(store, steps, layer, root);
+    // `by_path` indexes the steps of `layer`.
+    let steps: Vec<&Guarded> = steps
+        .iter()
+        .filter(|g| g.written.layer() == layer)
+        .collect();
+    candidates.retain(|&path| {
+        // A spec whose child names alone change keeps its prim's index too.
+        let lists_only = by_path[&path]
             .iter()
-            .map(|&at| steps[at])
-            .all(|g| supports(&g.written, path) && supports(&g.step, path))
-            && stage.prim_stack(path).is_some_and(|stack| {
+            .all(|&at| lists_children_only(steps[at], root) == Some(path));
+        lists_only
+            || stage.prim_stack(path).is_some_and(|stack| {
                 stack
                     .iter()
                     .any(|(id, spec)| *id != layer || spec.prim_path() != path)
-            })
-            && store
+            }) && store
                 .layer(layer)
                 .and_then(|l| l.prim_spec_in(path, &[]))
                 .is_none_or(|spec| {

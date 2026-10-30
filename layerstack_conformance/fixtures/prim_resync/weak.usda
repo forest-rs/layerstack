@@ -9,3 +9,7 @@ over "World"
         double size = 1
     }
 }
+
+def Xform "Moon"
+{
+}

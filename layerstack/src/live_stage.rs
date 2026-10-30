@@ -113,11 +113,12 @@ fn include_resyncs(store: &dyn LayerStore, changes: &mut Changes, paths: &[PathI
 
 /// Adds `properties` to the property resyncs of `changes`, all but those
 /// beneath a resynced prim. A property resync covers the fields of that
-/// property in its prim's inventory, and a prim whose inventory it
-/// empties is no longer info-only: its property resyncs are all that
-/// changed it. `changes.property_changes` must be complete for its prims
-/// (the stage's precise property path), as a prim without one may have
-/// changed in other ways.
+/// property in its prim's inventory. When `precise`,
+/// `changes.property_changes` is complete for its prims (the stage's
+/// precise property path), and a prim whose inventory it empties is no
+/// longer info-only: its property resyncs are all that changed it.
+/// Otherwise an info-only prim stays: it may have changed in other ways,
+/// as a prim spec created with the property changes its spec stack.
 ///
 /// OpenUSD: `UsdStage::_HandleLayersDidChange` resyncs a property spec
 /// added or removed at the property path, not at its prim, and
@@ -127,6 +128,7 @@ fn include_property_resyncs(
     store: &dyn LayerStore,
     changes: &mut Changes,
     properties: &[crate::PropertyPath],
+    precise: bool,
 ) {
     if properties.is_empty() {
         return;
@@ -148,11 +150,14 @@ fn include_property_resyncs(
             .retain(|field| !covered.contains(&crate::PropertyPath::new(prim, field.name)));
         !inventory.fields.is_empty()
     });
-    let inventoried: HashSet<PathId> = changes.property_changes.iter().map(|p| p.prim).collect();
-    let owners: HashSet<PathId> = added.iter().map(|path| path.prim_path()).collect();
-    changes
-        .changed_info_only
-        .retain(|prim| !owners.contains(prim) || inventoried.contains(prim));
+    if precise {
+        let inventoried: HashSet<PathId> =
+            changes.property_changes.iter().map(|p| p.prim).collect();
+        let owners: HashSet<PathId> = added.iter().map(|path| path.prim_path()).collect();
+        changes
+            .changed_info_only
+            .retain(|prim| !owners.contains(prim) || inventoried.contains(prim));
+    }
     changes.resynced_properties.extend(added);
 }
 
@@ -300,6 +305,11 @@ pub struct LiveStage {
     /// ([`crate::Layer::changed_supports_since`]): their prim indexes need
     /// refreshing, not the namespace beneath them.
     support_sources: Vec<(LayerId, PathId)>,
+    /// The composed prims the transaction being applied changed only by
+    /// inert specs (the transaction's inert sites), mapped through
+    /// the sites they compose from; empty outside [`Self::apply`], and when
+    /// unnotified or pending edits may have changed more.
+    inert_prims: HashSet<PathId>,
     layer_discovery: discovery::LayerDiscovery,
     /// The child specs of layers that do not list them, kept across
     /// compositions so an edit re-indexes only the specs it adds.
@@ -352,6 +362,7 @@ impl LiveStage {
             structural_roots: Vec::new(),
             structural_sources: Vec::new(),
             support_sources: Vec::new(),
+            inert_prims: HashSet::new(),
             layer_discovery: discovery::LayerDiscovery::default(),
             child_index_mark: child_index.work(),
             child_index,
@@ -685,7 +696,25 @@ impl LiveStage {
             && outcome.properties.is_some()
             && argument_dependents.is_empty();
         let mut property_resyncs = Vec::new();
+        // A property spec on a prim spec the transaction changed only as
+        // an inert one (created with it, say) resyncs the property, as
+        // OpenUSD does (`create_with_new_over` of `property_resync_oracle.py`):
+        // the prim is resynced, which covers it, or changes its spec stack
+        // alone. Its prims are those the spec's site composes into, which
+        // a new spec's site is not yet among.
+        let inert_sites: HashSet<(LayerId, PathId)> =
+            if sources_current && !pending_recomposition && argument_dependents.is_empty() {
+                outcome.inert_sites.iter().copied().collect()
+            } else {
+                HashSet::new()
+            };
         for &(layer, path, name) in &outcome.property_specs {
+            if !precise_properties && inert_sites.contains(&(layer, path)) {
+                for prim in self.source_prims(store, layer, path) {
+                    property_resyncs.push(crate::PropertyPath::new(prim, name));
+                }
+                continue;
+            }
             for &prim in self.source_share(layer).prims(path) {
                 if precise_properties {
                     property_resyncs.push(crate::PropertyPath::new(prim, name));
@@ -810,6 +839,17 @@ impl LiveStage {
             }
         }
         let mut changes = Changes::default();
+        if refreshed.is_none() && sources_current && !pending_recomposition {
+            for &(layer, path) in &outcome.inert_sites {
+                let prims = self.source_prims(store, layer, path);
+                self.inert_prims.extend(prims);
+            }
+            for &(layer, path) in &outcome.other_sites {
+                for prim in self.source_prims(store, layer, path) {
+                    self.inert_prims.remove(&prim);
+                }
+            }
+        }
         let mut recomposed = match refreshed {
             Some(paths) => {
                 changes.changed_info_only = paths.clone();
@@ -817,6 +857,7 @@ impl LiveStage {
             }
             None => self.recompose_report(store, Some(&mut changes)),
         };
+        self.inert_prims.clear();
         include_resyncs(store, &mut changes, &declaration_resyncs);
         // External notifications identify affected prims but do not describe
         // their edits. They may have changed declarations or schema identity;
@@ -829,7 +870,7 @@ impl LiveStage {
             .filter(|(prim, _)| changes.changed_info_only.contains(prim))
             .map(|(prim, fields)| crate::PrimPropertyChanges { prim, fields })
             .collect();
-        include_property_resyncs(store, &mut changes, &property_resyncs);
+        include_property_resyncs(store, &mut changes, &property_resyncs, precise_properties);
         self.publish_preparation(store);
         self.notices.publish(&mut changes, &self.stage, store);
         store.paths().sort_paths(&mut recomposed, store.tokens());

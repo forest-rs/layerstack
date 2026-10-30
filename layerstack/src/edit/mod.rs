@@ -232,7 +232,16 @@ pub struct Changes {
     /// `primChildren` records no field change, `SdfLayer::_PrimPushChild`).
     /// A consumer caching a prim's children updates them from the
     /// resyncs (and [`Self::created`], [`Self::removed`]) of its children.
-    /// Reordering children (`primOrder`) resyncs the parent.
+    /// Reordering children (`primOrder`) resyncs the parent; a spec added
+    /// to or removed from a weaker layer can move a child too, as child
+    /// names compose weakest layer first, and resyncs that child.
+    ///
+    /// An inert spec (an `over` with no opinions of its own) added or
+    /// removed for a prim that composes before and after changes only its
+    /// prim's spec stack, and that of each prim composing from it through
+    /// an arc: they are listed here, as OpenUSD lists them. So is a prim
+    /// whose new `over` holds only property specs, which are resynced in
+    /// [`Self::resynced_properties`], or metadata that composes nothing.
     pub changed_info_only: Vec<PathId>,
     /// Complete property-field inventories for a subset of info-only prims.
     /// A prim absent here must be treated conservatively: any field may have

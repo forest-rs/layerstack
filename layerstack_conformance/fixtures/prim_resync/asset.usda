@@ -1,10 +1,12 @@
 #usda 1.0
+(
+    subLayers = [
+        @asset_base.usda@
+    ]
+)
 # Copyright 2026 the LayerStack Authors
 # SPDX-License-Identifier: Apache-2.0 OR MIT
 
-def Xform "Asset"
+over "Asset"
 {
-    def Sphere "Ball"
-    {
-    }
 }

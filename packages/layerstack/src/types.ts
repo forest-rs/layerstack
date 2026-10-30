@@ -1244,3 +1244,38 @@ export interface SkinningTransforms {
   readonly geomBindTransform: Float64Array;
   readonly method: SkinningMethod;
 }
+
+/**
+ * What a stage's skinning cache has done since the stage opened, and what
+ * it holds now ({@link Stage.skinningCache}). Counters are cumulative.
+ */
+export interface SkinningCacheStats {
+  /** Deformed point or normal arrays reused without recomputing. */
+  readonly hits: number;
+  /** Deformed arrays recomputed, failed ones included. */
+  readonly misses: number;
+  /** Skeleton definition snapshots built. */
+  readonly skeletonBuilds: number;
+  /** Geometry binding snapshots built. */
+  readonly bindingBuilds: number;
+  /** Joint poses evaluated (one per skeleton and time, when needed). */
+  readonly poseEvaluations: number;
+  /** Joint influence arrays resolved and flattened. */
+  readonly influenceResolutions: number;
+  /** Points skinned. */
+  readonly pointVertices: number;
+  /** Normals skinned. */
+  readonly normalVectors: number;
+  /** Retained entries the stage's edits invalidated. */
+  readonly invalidations: number;
+  /** Times the stage's change history expired before a skinning read, so the cache started over. */
+  readonly resets: number;
+  /** Skeletons retained. */
+  readonly skeletons: number;
+  /** Geometry bindings retained. */
+  readonly bindings: number;
+  /** Bytes of retained arrays (matrices, influences, outputs) in use. */
+  readonly usedBytes: number;
+  /** Bytes of retained array capacity. */
+  readonly capacityBytes: number;
+}

@@ -47,6 +47,7 @@ import type {
   ResolveResult,
   SaveResult,
   SkinInput,
+  SkinningCacheStats,
   Scalar,
   SkippedLayer,
   StageStatus,
@@ -136,6 +137,7 @@ export interface NativeStage extends Disposable {
   skinningTransforms(path: string, time?: number | null): unknown;
   deformedPoints(path: string, time?: number | null): unknown;
   deformedNormals(path: string, time?: number | null): unknown;
+  skinningCache(): unknown;
 }
 
 /**
@@ -1026,6 +1028,49 @@ export class Stage implements Disposable {
   skinning(path: string): SkinningQuery | null {
     const row = this.#call("skinning", (native) => native.skinning(path)) as Row | null;
     return row === null ? null : new SkinningQuery(this, path, row);
+  }
+
+  /**
+   * What the stage's skinning cache has done and holds: the evaluator
+   * behind {@link SkinningQuery.deformedPoints},
+   * {@link SkinningQuery.deformedNormals} and
+   * {@link SkinningQuery.skinningTransforms}, which hears the stage's edits
+   * before each read and invalidates only what they touch. Compare two
+   * reads to see what a frame cost.
+   */
+  skinningCache(): SkinningCacheStats {
+    const [
+      hits,
+      misses,
+      skeletonBuilds,
+      bindingBuilds,
+      poseEvaluations,
+      influenceResolutions,
+      pointVertices,
+      normalVectors,
+      invalidations,
+      resets,
+      skeletons,
+      bindings,
+      usedBytes,
+      capacityBytes,
+    ] = this.#call("skinningCache", (native) => native.skinningCache()) as number[];
+    return {
+      hits: hits as number,
+      misses: misses as number,
+      skeletonBuilds: skeletonBuilds as number,
+      bindingBuilds: bindingBuilds as number,
+      poseEvaluations: poseEvaluations as number,
+      influenceResolutions: influenceResolutions as number,
+      pointVertices: pointVertices as number,
+      normalVectors: normalVectors as number,
+      invalidations: invalidations as number,
+      resets: resets as number,
+      skeletons: skeletons as number,
+      bindings: bindings as number,
+      usedBytes: usedBytes as number,
+      capacityBytes: capacityBytes as number,
+    };
   }
 
   /** The composed prim at `path`, or `null`. Throws `path.invalid` for a path that is not an absolute prim path. */

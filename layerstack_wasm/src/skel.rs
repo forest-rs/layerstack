@@ -43,6 +43,8 @@ type Matrix = [[f64; 4]; 4];
 pub(crate) struct SkelState {
     cache: SkelCache,
     cursor: ChangeCursor,
+    /// Times the change history expired and the cache was cleared.
+    resets: u64,
 }
 
 impl SkelState {
@@ -51,6 +53,7 @@ impl SkelState {
         Self {
             cache: SkelCache::new(Time::Default),
             cursor: live.change_cursor(),
+            resets: 0,
         }
     }
 
@@ -65,7 +68,10 @@ impl SkelState {
                 }
             }
             // Evidence expired: start over.
-            Err(_) => self.cache.clear(),
+            Err(_) => {
+                self.cache.clear();
+                self.resets += 1;
+            }
         }
         self.cache.set_time(time);
         &mut self.cache
@@ -138,6 +144,40 @@ fn matrix_record(matrix: &Matrix) -> Wire {
 }
 
 impl Stage {
+    /// What the stage's skinning cache has done and holds:
+    /// `[hits, misses, skeletonBuilds, bindingBuilds, poseEvaluations,
+    /// influenceResolutions, pointVertices, normalVectors, invalidations,
+    /// resets, skeletons, bindings, usedBytes, capacityBytes]`: deformed
+    /// arrays reused and recomputed, rig and binding snapshots built, poses
+    /// evaluated, influence arrays flattened, points and normals skinned,
+    /// entries edits invalidated, times the change history expired and the
+    /// cache started over (cumulative since the stage opened), then the
+    /// rigs and bindings it retains and the bytes of their arrays.
+    pub(crate) fn skinning_cache(&self) -> Wire {
+        let state = self.skel_state();
+        let stats = state.cache.stats();
+        let memory = state.cache.memory();
+        #[expect(clippy::cast_precision_loss, reason = "counters stay far below 2^53")]
+        let count = |value: u64| Wire::Number(value as f64);
+        let size = |value: usize| Wire::Number(value as f64);
+        Wire::List(vec![
+            count(stats.hits),
+            count(stats.misses),
+            count(stats.skeleton_builds),
+            count(stats.binding_builds),
+            count(stats.pose_evaluations),
+            count(stats.influence_resolutions),
+            count(stats.point_vertices),
+            count(stats.normal_vectors),
+            count(stats.invalidations),
+            count(state.resets),
+            size(memory.skeletons),
+            size(memory.bindings),
+            size(memory.used_bytes),
+            size(memory.capacity_bytes),
+        ])
+    }
+
     /// The geometry prim at `path`, which must exist, and the scene.
     fn skinning_query(&self, path: &str) -> Result<Option<SkinningQuery<'_>>, Error> {
         let prim = self.existing_prim(path)?.path();
@@ -812,6 +852,15 @@ def Mesh "Loose" {
         assert_eq!(
             show(&stage.deformed_points("/Robot/Arm", Some(5.0)).unwrap()),
             "Vec3f([[0.0, 0.0, 0.0], [2.0, 1.0, 0.0], [3.0, 1.0, 0.0]])"
+        );
+        let stats = show(&stage.skinning_cache());
+        assert!(
+            stats.starts_with("[0, "),
+            "no point array was reused: {stats}"
+        );
+        assert!(
+            stats.contains(", 0, 1, 1, "),
+            "no reset; one rig, one binding: {stats}"
         );
     }
 

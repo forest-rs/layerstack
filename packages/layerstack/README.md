@@ -282,6 +282,7 @@ stage objects and authored as `Edit`s, as OpenUSD's `UsdShade`,
 | `prim.coordSysBindings({ inherited? })` | `CoordSysBinding[]`: `name`, `relationship`, `target` |
 | `stage.skinning(path)`, `prim.skinning()` | `SkinningQuery \| null`: `skeleton`, `joints`, `jointMapping`, `elementSize`, `interpolation`, `rigid`, `method`, `animation`, `blendShapes`; `influences(time?)`, `interleavedInfluences(time?)`, `skinningTransforms(time?)`, `deformedPoints(time?)`, `deformedNormals(time?)` |
 | `layerstack.skinPoints`, `skinNormals`, `skinTransform` | The skinning functions over your own typed arrays, with separate or interleaved influences |
+| `stage.skinningCache()` | `SkinningCacheStats`: what the stage's skinning cache reused, recomputed, invalidated and holds |
 
 Edits: `bindMaterial`, `unbindMaterial`, `setShaderInput`,
 `connectToSource`, `disconnectSource`, `setBaseMaterial`,
@@ -322,7 +323,8 @@ Nothing is a per-element JavaScript object. The stage keeps one native
 skinning cache, which hears the stage's edits before each read and
 invalidates only what they touch, so a frame recomputes only what changes
 with time, and an edit of the animation (or its undo) shows in the next
-frame. Joint indices without as many weights fail with `skel.influences`;
+frame; `stage.skinningCache()` reports what each frame reused and
+recomputed. Joint indices without as many weights fail with `skel.influences`;
 influences that do not fit the points with `skel.deformation`.
 
 **An editor authoring materials.** A new material is one `apply`:

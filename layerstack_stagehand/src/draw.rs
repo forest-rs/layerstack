@@ -17,6 +17,7 @@ use layerstack_schemas::{
 
 use crate::camera::{CAMERA_INPUTS, CameraItem};
 use crate::light::{LIGHT_INPUTS, LightItem, LightKind, read_light};
+use crate::material::{MaterialItem, read_material};
 use crate::plan::{MeshBuffers, MeshOptions, MeshPlan};
 use crate::report::MeshReport;
 use crate::shapes::{Shape, Tessellation, tessellate};
@@ -80,6 +81,11 @@ pub struct DrawOptions {
     pub mesh: MeshOptions,
     /// How implicit shapes are cut.
     pub tessellation: Tessellation,
+    /// The render contexts whose material outputs are read, in order
+    /// (`["mtlx"]` reads `outputs:mtlx:surface` first); the universal
+    /// `outputs:surface` is read after them, or alone when empty
+    /// (`UsdShadeMaterial::ComputeSurfaceSource`).
+    pub render_contexts: &'static [&'static str],
 }
 
 impl Default for DrawOptions {
@@ -89,6 +95,7 @@ impl Default for DrawOptions {
             purposes: Purposes::default(),
             mesh: MeshOptions::default(),
             tessellation: Tessellation::default(),
+            render_contexts: &[],
         }
     }
 }
@@ -239,6 +246,8 @@ pub struct DrawWork {
     pub cameras_read: u32,
     /// Lights read again.
     pub lights_read: u32,
+    /// Materials read: their networks captured and their records built.
+    pub materials_read: u32,
 }
 
 /// What changed in a [`DrawList`] since the diff before, for a renderer to
@@ -283,6 +292,13 @@ pub struct DrawDiff {
     pub lights_removed: Vec<PathId>,
     /// Lights read again and found different.
     pub lights_changed: Vec<PathId>,
+    /// Materials newly bound by an item.
+    pub materials_added: Vec<PathId>,
+    /// Materials no item binds any more, or no longer materials.
+    pub materials_removed: Vec<PathId>,
+    /// Materials read again and found different: an input, a connection,
+    /// a texture's file or sampling changed.
+    pub materials_changed: Vec<PathId>,
     /// The work done.
     pub work: DrawWork,
 }
@@ -307,6 +323,9 @@ impl DrawDiff {
             && self.lights_added.is_empty()
             && self.lights_removed.is_empty()
             && self.lights_changed.is_empty()
+            && self.materials_added.is_empty()
+            && self.materials_removed.is_empty()
+            && self.materials_changed.is_empty()
     }
 }
 
@@ -425,6 +444,52 @@ fn inputs_might_vary(scene: &Scene<'_>, path: PathId, names: &[&str]) -> bool {
         names.iter().any(|name| {
             prim.attribute(*name)
                 .is_some_and(layerstack::Attribute::value_source_might_be_time_varying)
+        })
+    })
+}
+
+/// Whether a property name is a shading port or a shader's identity:
+/// what a material or a connected light input reads of a shading prim.
+fn shading_property(name: &str) -> bool {
+    name.starts_with("inputs:") || name.starts_with("outputs:") || name.starts_with("info:")
+}
+
+/// Whether `changes` reach the shading properties of the prim at `prim`:
+/// a resync over it (one of `roots`), a shading property of it changed or
+/// resynced, or an unlisted change of it or above it.
+fn shading_touched(scene: &Scene<'_>, changes: &Changes, roots: &[PathId], prim: PathId) -> bool {
+    let tokens = scene.store().tokens();
+    roots.iter().any(|&root| under(scene, prim, root))
+        || changes.changed_info_only.iter().any(|&changed| {
+            match changes
+                .property_changes
+                .iter()
+                .find(|properties| properties.prim == changed)
+            {
+                None => under(scene, prim, changed),
+                Some(properties) => {
+                    changed == prim
+                        && properties
+                            .fields
+                            .iter()
+                            .any(|field| shading_property(tokens.resolve(field.name)))
+                }
+            }
+        })
+        || changes.resynced_properties.iter().any(|property| {
+            property.prim_path() == prim && shading_property(tokens.resolve(property.property()))
+        })
+}
+
+/// Whether any shading input or output of the prim might hold another
+/// value at another time.
+fn shading_might_vary(scene: &Scene<'_>, path: PathId) -> bool {
+    scene.stage().prim(path, scene.store()).is_some_and(|prim| {
+        prim.property_names().into_iter().any(|name| {
+            shading_property(name)
+                && prim
+                    .attribute(name)
+                    .is_some_and(layerstack::Attribute::value_source_might_be_time_varying)
         })
     })
 }
@@ -586,7 +651,18 @@ struct Entry {
 /// the items, by path, and diffed by [`DrawDiff::cameras_changed`] and
 /// [`DrawDiff::lights_changed`]: a change of an input it reads, of its
 /// transform or visibility or one above it, or a resync over it, reads it
-/// again; other properties of its prim (a lamp's `aim`) do not.
+/// again; other properties of its prim (a lamp's `aim`) do not. A light
+/// input connected elsewhere is read again when a shading property of a
+/// prim its connections reach changes.
+///
+/// Materials ([`MaterialItem`]) are held for the materials the items bind,
+/// by path, and diffed by [`DrawDiff::materials_added`],
+/// [`DrawDiff::materials_removed`] and [`DrawDiff::materials_changed`]: a
+/// material is read when an item comes to bind it, and again when a
+/// shading property (`inputs:*`, `outputs:*`, `info:*`) of it or of a
+/// shader or node graph its network reads changes, or a resync covers one;
+/// [`DrawWork::materials_read`] counts the reads. A time change reads only
+/// those an input of which might vary.
 ///
 /// Not read: collection-based material bindings changed through the
 /// collection alone, and primvars a prototype's instances inherit from
@@ -602,16 +678,19 @@ pub struct DrawList {
     shape_buffers: HashMap<ShapeKey, BufferKey>,
     cameras: BTreeMap<PathId, Held<CameraItem>>,
     lights: BTreeMap<PathId, Held<LightItem>>,
+    materials: BTreeMap<PathId, Held<MaterialItem>>,
     next_item: u32,
     next_buffer: u32,
 }
 
-/// A camera or a light, and whether what it reads might differ at another
-/// time, as last read.
+/// A camera, a light or a material, whether what it reads might differ at
+/// another time, and the other prims it reads (a light's connection
+/// sources, a material's shaders and node graphs), as last read.
 #[derive(Clone, Debug)]
 struct Held<T> {
     item: T,
     varies: bool,
+    sources: Vec<PathId>,
 }
 
 /// The diff being gathered, as sets.
@@ -629,6 +708,7 @@ struct Gather {
     freed: BTreeSet<BufferKey>,
     cameras: Changed,
     lights: Changed,
+    shading: Changed,
     work: DrawWork,
 }
 
@@ -677,6 +757,7 @@ impl Gather {
             count(list.entries.keys().filter(|id| !read.contains(*id)).count());
         let [cameras_added, cameras_removed, cameras_changed] = self.cameras.finish();
         let [lights_added, lights_removed, lights_changed] = self.lights.finish();
+        let [materials_added, materials_removed, materials_changed] = self.shading.finish();
         DrawDiff {
             added: self.added.into_iter().collect(),
             removed: self.removed.into_iter().collect(),
@@ -694,6 +775,9 @@ impl Gather {
             lights_added,
             lights_removed,
             lights_changed,
+            materials_added,
+            materials_removed,
+            materials_changed,
             work: self.work,
         }
     }
@@ -762,6 +846,7 @@ impl DrawList {
             shape_buffers: HashMap::new(),
             cameras: BTreeMap::new(),
             lights: BTreeMap::new(),
+            materials: BTreeMap::new(),
             next_item: 0,
             next_buffer: 0,
         }
@@ -829,6 +914,17 @@ impl DrawList {
     #[must_use]
     pub fn light(&self, path: PathId) -> Option<&LightItem> {
         self.lights.get(&path).map(|held| &held.item)
+    }
+
+    /// The materials the items bind, by path id.
+    pub fn materials(&self) -> impl Iterator<Item = &MaterialItem> {
+        self.materials.values().map(|held| &held.item)
+    }
+
+    /// The material at `path`, while an item binds it.
+    #[must_use]
+    pub fn material(&self, path: PathId) -> Option<&MaterialItem> {
+        self.materials.get(&path).map(|held| &held.item)
     }
 
     /// Reads the whole stage, as a resync of the pseudo-root: the first
@@ -938,6 +1034,14 @@ impl DrawList {
         // items a discovery covers but did not find are gone. Added first,
         // so a buffer a gone item shares with a new one (a renamed prim's
         // shape) is kept rather than freed and made again.
+        let roots: Vec<PathId> = found
+            .scopes
+            .iter()
+            .filter_map(|scope| match scope {
+                Scope::Resync(root) => Some(*root),
+                _ => None,
+            })
+            .collect();
         let seen: HashSet<ItemSource> = found.sources.iter().copied().collect();
         let gone: Vec<ItemId> = self
             .entries
@@ -984,6 +1088,7 @@ impl DrawList {
             }
         }
         read.retain(|id| self.entries.contains_key(id));
+        self.apply_to_materials(scene, changes, &roots, &mut gather);
         gather.finish(local_before, self, &read)
     }
 
@@ -1048,6 +1153,15 @@ impl DrawList {
             .collect();
         for (path, kind) in lights {
             self.read_light(scene, path, kind, &mut gather);
+        }
+        let materials: Vec<PathId> = self
+            .materials
+            .iter()
+            .filter(|(_, held)| held.varies)
+            .map(|(path, _)| *path)
+            .collect();
+        for path in materials {
+            self.read_material(scene, path, &mut gather);
         }
         read.retain(|id| self.entries.contains_key(id));
         gather.finish(local_before, self, &read)
@@ -1153,12 +1267,104 @@ impl DrawList {
         }
         let mut read = lights;
         for (path, held) in &self.lights {
-            if reaches(*path, LIGHT_INPUTS) {
+            if reaches(*path, LIGHT_INPUTS)
+                || held
+                    .sources
+                    .iter()
+                    .any(|&source| shading_touched(scene, changes, &roots, source))
+            {
                 read.entry(*path).or_insert(held.item.kind);
             }
         }
         for (path, kind) in read {
             self.read_light(scene, path, kind, gather);
+        }
+    }
+
+    /// Brings the materials up to `scene` after `changes`, once the items
+    /// are: a material no item binds any more is dropped, a newly bound one
+    /// read, and a held one read again when a change reaches it: a
+    /// shading property (`inputs:*`, `outputs:*`, `info:*`) of it or of a
+    /// shader or node graph it reads, an unlisted change of one of them, or
+    /// a resync over one.
+    fn apply_to_materials(
+        &mut self,
+        scene: &Scene<'_>,
+        changes: &Changes,
+        roots: &[PathId],
+        gather: &mut Gather,
+    ) {
+        let bound: BTreeSet<PathId> = self
+            .entries
+            .values()
+            .flat_map(|entry| {
+                entry
+                    .item
+                    .material
+                    .iter()
+                    .chain(entry.item.subset_materials.iter().flatten())
+                    .copied()
+            })
+            .collect();
+        let gone: Vec<PathId> = self
+            .materials
+            .keys()
+            .filter(|path| !bound.contains(path))
+            .copied()
+            .collect();
+        for path in gone {
+            self.materials.remove(&path);
+            gather.shading.removed.insert(path);
+        }
+        let read: Vec<PathId> = bound
+            .into_iter()
+            .filter(|path| {
+                self.materials.get(path).is_none_or(|held| {
+                    core::iter::once(path)
+                        .chain(&held.sources)
+                        .any(|&prim| shading_touched(scene, changes, roots, prim))
+                })
+            })
+            .collect();
+        for path in read {
+            self.read_material(scene, path, gather);
+        }
+    }
+
+    /// Reads the material at `path` again and records whether it changed;
+    /// drops it when it is no longer a material.
+    fn read_material(&mut self, scene: &Scene<'_>, path: PathId, gather: &mut Gather) {
+        gather.work.materials_read += 1;
+        let Some(read) =
+            read_material(scene, path, self.options.time, self.options.render_contexts)
+        else {
+            if self.materials.remove(&path).is_some() {
+                gather.shading.removed.insert(path);
+            }
+            return;
+        };
+        let mut sources: Vec<PathId> = Vec::new();
+        let mut varies = false;
+        for dependency in &read.dependencies {
+            if dependency.prim != path && !sources.contains(&dependency.prim) {
+                sources.push(dependency.prim);
+            }
+            varies = varies
+                || inputs_might_vary(scene, dependency.prim, &[dependency.property.as_str()]);
+        }
+        let held = Held {
+            item: read.item,
+            varies,
+            sources,
+        };
+        match self.materials.insert(path, held) {
+            None => {
+                gather.shading.added.insert(path);
+            }
+            Some(old) if old.item != self.materials[&path].item => {
+                gather.shading.changed.insert(path);
+            }
+            Some(_) => {}
         }
     }
 
@@ -1177,7 +1383,12 @@ impl DrawList {
         };
         let varies =
             self.world_might_vary(scene, path) || inputs_might_vary(scene, path, CAMERA_INPUTS);
-        match self.cameras.insert(path, Held { item, varies }) {
+        let held = Held {
+            item,
+            varies,
+            sources: Vec::new(),
+        };
+        match self.cameras.insert(path, held) {
             None => {
                 gather.cameras.added.insert(path);
             }
@@ -1207,11 +1418,22 @@ impl DrawList {
         let matrix = self.xforms.local_to_world(scene, path).unwrap_or(IDENTITY);
         let hidden = Imageable::get(scene, path)
             .is_some_and(|imageable| imageable.compute_visibility(time) == Visibility::Invisible);
-        let item = read_light(scene, path, kind, time, matrix, hidden);
+        let (item, sources) = read_light(scene, path, kind, time, matrix, hidden);
+        // A connected input's source might vary as well as its own value.
         let varies = self.world_might_vary(scene, path)
             || visibility_might_vary(scene, path)
-            || inputs_might_vary(scene, path, LIGHT_INPUTS);
-        match self.lights.insert(path, Held { item, varies }) {
+            || inputs_might_vary(scene, path, LIGHT_INPUTS)
+            || sources
+                .iter()
+                .any(|&source| shading_might_vary(scene, source));
+        match self.lights.insert(
+            path,
+            Held {
+                item,
+                varies,
+                sources,
+            },
+        ) {
             None => {
                 gather.lights.added.insert(path);
             }

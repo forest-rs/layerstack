@@ -114,12 +114,30 @@
 //! removed and changed; a change reaches a camera or a light through an
 //! input it reads, or its transform or visibility or one above it; a time
 //! change reads
-//! only those whose inputs or transform might vary. Lights and cameras
-//! inside native instances or point instancer prototypes are not listed
-//! yet.
+//! only those whose inputs or transform might vary. A light input connected
+//! to a node graph or another prim's input reads what the connection leads
+//! to. Lights and cameras inside native instances or point instancer
+//! prototypes are not listed yet.
 //!
-//! Not yet: materials beyond their bindings, curves, points and light
-//! linking evaluation.
+//! # Materials
+//!
+//! The draw list holds a [`MaterialItem`] for each material its items bind:
+//! the `UsdPreviewSurface` the material's surface output resolves to
+//! (through [`DrawOptions::render_contexts`], then the universal context),
+//! with each input a constant, a primvar or a [`MaterialTexture`] lookup,
+//! connections followed through node graphs and material interface inputs,
+//! fallbacks from the shader definitions, texture files anchored to the
+//! layers authoring them ([`TextureFile`], with UDIM tiles listed by
+//! [`TextureFile::udim_tiles`]), the [`AlphaMode`] the opacity inputs come to,
+//! and a [`MaterialNote`] for whatever could not be represented. A diff
+//! lists the materials added, removed and changed; a material is read
+//! again only when a shading property of it, or of a shader or node graph
+//! it reads, changes, or when an item comes to bind it, and a time change
+//! reads only those whose inputs might vary.
+//!
+//! Not yet: shaders other than `UsdPreviewSurface` and its texture,
+//! primvar and transform nodes, curves, points and light linking
+//! evaluation.
 
 #![no_std]
 extern crate alloc;
@@ -131,6 +149,8 @@ mod draw;
 mod input;
 #[cfg(feature = "stage")]
 mod light;
+#[cfg(feature = "stage")]
+mod material;
 mod plan;
 mod report;
 mod shapes;
@@ -154,6 +174,12 @@ pub use input::{
 #[cfg(feature = "stage")]
 pub use light::{
     LightEmission, LightGeometry, LightItem, LightKind, LightLink, LightShadow, LightShaping,
+};
+#[cfg(feature = "stage")]
+pub use material::{
+    AlphaMode, MaterialItem, MaterialNote, MaterialNoteKind, MaterialTexture, MaterialValue,
+    TextureChannel, TextureColorSpace, TextureCoordinates, TextureFile, TextureTransform,
+    TextureWrap, UdimTileFile,
 };
 pub use plan::{DrawRange, MeshBuffers, MeshOptions, MeshPlan, PlanMismatch, SmoothNormals};
 pub use report::{

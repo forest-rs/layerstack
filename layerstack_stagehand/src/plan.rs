@@ -547,7 +547,13 @@ fn empty_ranges(subsets: usize) -> Vec<DrawRange> {
 
 /// The checks of `layerstack_schemas::subset::validate_mesh_topology`
 /// (OpenUSD's `UsdGeomMesh::ValidateTopology`, which, unlike these, lets
-/// negative counts through when they sum right).
+/// negative counts through when they sum right), then the limits of
+/// 32-bit indices.
+///
+/// Not a call to it: without the `stage` feature (the WebAssembly module)
+/// this crate links neither `layerstack` nor its schemas. A test with
+/// `stage` runs both over the same topologies, so they cannot drift
+/// apart unnoticed.
 fn validate_topology(topology: &MeshTopology<'_>, points: usize) -> Result<(), TopologyProblem> {
     let sum = topology
         .face_vertex_counts
@@ -795,4 +801,55 @@ fn newell(face: &[i32], points: &[[f32; 3]]) -> [f32; 3] {
 
 fn sub3(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
     [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
+}
+
+#[cfg(all(test, feature = "stage"))]
+mod drift {
+    use layerstack_schemas::subset::{MeshTopologyError, validate_mesh_topology};
+
+    use super::validate_topology;
+    use crate::input::MeshTopology;
+    use crate::report::TopologyProblem;
+
+    /// Each topology the schemas' validation and this crate's judge alike:
+    /// the same verdict, the same reason.
+    #[test]
+    fn the_plans_validation_agrees_with_the_schemas() {
+        let cases: [(&[i32], &[i32], usize); 8] = [
+            (&[3], &[0, 1, 2], 3),
+            (&[4, 3], &[0, 1, 2, 3, 1, 4, 2], 5),
+            (&[], &[], 0),
+            (&[3], &[0, 1], 3),
+            (&[2, 2], &[0, 1, 2], 3),
+            (&[-1, 4], &[0, 1, 2], 3),
+            (&[3], &[0, 1, 3], 3),
+            (&[3], &[0, -1, 2], 3),
+        ];
+        for (counts, indices, points) in cases {
+            let topology = MeshTopology {
+                face_vertex_counts: counts,
+                face_vertex_indices: indices,
+                ..MeshTopology::default()
+            };
+            let ours = validate_topology(&topology, points);
+            let theirs = validate_mesh_topology(indices, counts, points);
+            let same = match (&ours, &theirs) {
+                (Ok(()), Ok(())) => true,
+                (Err(TopologyProblem::FaceCounts), Err(MeshTopologyError::InvalidFaceCounts))
+                | (
+                    Err(TopologyProblem::SizeMismatch { .. }),
+                    Err(MeshTopologyError::SizeMismatch),
+                ) => true,
+                (
+                    Err(TopologyProblem::VertexIndex { index, .. }),
+                    Err(MeshTopologyError::InvalidVertexIndex(theirs)),
+                ) => index == theirs,
+                _ => false,
+            };
+            assert!(
+                same,
+                "{counts:?} {indices:?} {points}: {ours:?} and {theirs:?}"
+            );
+        }
+    }
 }

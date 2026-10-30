@@ -1,0 +1,117 @@
+#usda 1.0
+
+def Scope "Looks"
+{
+    def Material "Base"
+    {
+    }
+
+    def Material "Derived" (
+        specializes = </Looks/Base>
+    )
+    {
+    }
+
+    def Scope "NotMaterial"
+    {
+    }
+
+    def Material "ToScope" (
+        specializes = </Looks/NotMaterial>
+    )
+    {
+    }
+
+    def Material "ScopeThenBase" (
+        specializes = [</Looks/NotMaterial>, </Looks/Base>]
+    )
+    {
+    }
+
+    def Material "Chain" (
+        specializes = </Looks/Derived>
+    )
+    {
+    }
+
+    def Material "Missing" (
+        specializes = </Looks/Nowhere>
+    )
+    {
+    }
+
+    def Material "Inherited" (
+        inherits = </Looks/Derived>
+    )
+    {
+    }
+
+    def Material "Varied" (
+        variants = {
+            string look = "special"
+        }
+        prepend variantSets = "look"
+    )
+    {
+        variantSet "look" = {
+            "special" (
+                specializes = </Looks/Base>
+            ) {
+            }
+        }
+    }
+
+    def Material "External" (
+        references = @./lib.usda@
+    )
+    {
+    }
+
+    def Material "Internal" (
+        references = </Looks/Derived>
+    )
+    {
+    }
+
+    def Material "SelfReference" (
+        references = @./scene.usda@</Looks/Derived>
+    )
+    {
+    }
+
+    def Material "Plain"
+    {
+    }
+
+    def Shader "Shader" (
+        specializes = </Looks/Base>
+    )
+    {
+    }
+}
+
+def Scope "Lib"
+{
+    def Material "Base"
+    {
+    }
+
+    def Material "Rock" (
+        specializes = </Lib/Base>
+    )
+    {
+    }
+}
+
+def Scope "Placed" (
+    references = </Lib>
+)
+{
+}
+
+def "Instanced" (
+    instanceable = true
+    references = </Lib>
+)
+{
+}

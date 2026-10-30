@@ -8,8 +8,10 @@
 // triangles, an implicit shape's tessellation), their world matrices,
 // visibility and purpose, their colors (the `displayColor` primvar, per
 // vertex where it varies, else the bound material's `diffuseColor`), their
-// face subsets' draw ranges, the world bounds to frame, and the stage's
-// cameras and lights with renderer-ready values. After each
+// face subsets' draw ranges, the world bounds to frame, the stage's
+// cameras and lights with renderer-ready values, and the bound materials as
+// `UsdPreviewSurface` records (constants, primvars and texture lookups,
+// which `viewport3d.ts` turns into three.js materials). After each
 // action the model hands the list the editor's change records, and the
 // list answers with diffs: what to add, remove, move, show or hide, refill
 // or rebuild. Nothing here draws: `viewport3d.ts` applies the diffs to
@@ -24,6 +26,8 @@ import type {
   DrawList,
   DrawWork,
   LightItem,
+  MaterialItem,
+  MaterialValue,
   Stagehand,
 } from "@forest-rs/layerstack_stagehand";
 import type { Editor } from "./editor.ts";
@@ -60,6 +64,8 @@ export interface ViewportScene {
   readonly lights: readonly LightItem[];
   /** The camera the viewport looks through: the stage's first, by path; `null` when it has none. */
   readonly camera: CameraItem | null;
+  /** The materials the draws bind, by path. */
+  readonly materials: ReadonlyMap<string, MaterialItem>;
 }
 
 /**
@@ -91,6 +97,10 @@ export interface ViewportUpdate {
   readonly lightsChanged: ReadonlySet<string>;
   /** Camera paths whose camera to set again: added, removed or changed. */
   readonly cameras: ReadonlySet<string>;
+  /** Material paths: added, removed, read again and found different. */
+  readonly materialsAdded: ReadonlySet<string>;
+  readonly materialsRemoved: ReadonlySet<string>;
+  readonly materialsChanged: ReadonlySet<string>;
   /** The work done, summed. */
   readonly work: DrawWork;
 }
@@ -110,6 +120,8 @@ export interface ViewportSummary {
   readonly lights: readonly string[];
   /** The camera looked through. */
   readonly camera: string | null;
+  /** Each material, `path: input source, ...` for its non-default inputs, its textures and alpha, sorted. */
+  readonly materials: readonly string[];
 }
 
 /** The counts of an update, as the acceptance script checks them and the page shows them. */
@@ -135,6 +147,10 @@ export interface UpdateSummary {
   readonly lights: number;
   /** Cameras read, summed. */
   readonly camerasRead: number;
+  /** Materials read, summed. */
+  readonly materialsRead: number;
+  /** Materials added, removed or changed. */
+  readonly materials: number;
 }
 
 const EMPTY_WORK: DrawWork = {
@@ -150,6 +166,7 @@ const EMPTY_WORK: DrawWork = {
   tessellations: 0,
   camerasRead: 0,
   lightsRead: 0,
+  materialsRead: 0,
 };
 
 /** The `diffuseColor` of the surface shader of the material at `material`, if it has one. */
@@ -211,6 +228,7 @@ function addWork(into: DrawWork, work: DrawWork): DrawWork {
     tessellations: into.tessellations + work.tessellations,
     camerasRead: into.camerasRead + work.camerasRead,
     lightsRead: into.lightsRead + work.lightsRead,
+    materialsRead: into.materialsRead + work.materialsRead,
   };
 }
 
@@ -297,6 +315,9 @@ export class ViewportModel {
       lightsRemoved: paths((d) => d.lightsRemoved),
       lightsChanged: paths((d) => d.lightsChanged),
       cameras: paths((d) => [...d.camerasAdded, ...d.camerasRemoved, ...d.camerasChanged]),
+      materialsAdded: paths((d) => d.materialsAdded),
+      materialsRemoved: paths((d) => d.materialsRemoved),
+      materialsChanged: paths((d) => d.materialsChanged),
       work: diffs.reduce((work, diff) => addWork(work, diff.work), EMPTY_WORK),
     };
     // Colors: read again for new items, and for items whose materials,
@@ -308,6 +329,13 @@ export class ViewportModel {
       if (update.refilled.has(item.buffer) || update.rebuilt.has(item.buffer)) recolor.add(item.id);
       if (touched.some((path) => under(item.prim, path) || item.instances.some((instance) => under(instance, path)))) {
         recolor.add(item.id);
+      }
+    }
+    // A changed material restyles every draw binding it, itself or by a subset.
+    const restyled = new Set([...update.materialsChanged, ...update.materialsAdded]);
+    for (const item of list.items()) {
+      if ([item.material, ...item.subsetMaterials].some((material) => material !== null && restyled.has(material)) && !update.added.has(item.id)) {
+        update.recolored.add(item.id);
       }
     }
     for (const id of update.removed) this.#colors.delete(id);
@@ -326,7 +354,7 @@ export class ViewportModel {
   scene(time: number | undefined): ViewportScene {
     const list = this.#list;
     const stage = this.#stage;
-    if (list === null || stage === null) return { items: [], hidden: [], bounds: null, lights: [], camera: null };
+    if (list === null || stage === null) return { items: [], hidden: [], bounds: null, lights: [], camera: null, materials: new Map() };
     const items: ViewItem[] = [];
     const hidden = new Set<string>();
     for (const item of list.items()) {
@@ -351,6 +379,7 @@ export class ViewportModel {
       bounds: empty ? null : Array.from(bounds),
       lights: list.lights(),
       camera: cameras[0] ?? null,
+      materials: new Map(list.materials().map((material) => [material.path, material])),
     };
   }
 
@@ -380,6 +409,8 @@ export function updateSummary(update: ViewportUpdate): UpdateSummary {
     lightsRead: update.work.lightsRead,
     lights: update.lightsAdded.size + update.lightsRemoved.size + update.lightsChanged.size,
     camerasRead: update.work.camerasRead,
+    materialsRead: update.work.materialsRead,
+    materials: update.materialsAdded.size + update.materialsRemoved.size + update.materialsChanged.size,
   };
 }
 
@@ -417,5 +448,40 @@ export function viewportSummary(scene: ViewportScene): ViewportSummary {
     meshes: meshes.sort(),
     lights: scene.lights.map((light) => `${light.path} ${light.kind}${light.hidden ? " hidden" : ""}`).sort(),
     camera: scene.camera?.path ?? null,
+    materials: [...scene.materials.values()].map(materialLine).sort(),
   };
+}
+
+/** A number to 3 decimals, as the summaries write them. */
+const round = (value: number) => Math.round(value * 1000) / 1000;
+
+/** One input's source, as {@link materialLine} writes it: a value, `primvar name`, or `texture n.channel`. */
+function sourceText(value: MaterialValue<number | readonly number[]>): string {
+  switch (value.kind) {
+    case "constant":
+      return typeof value.value === "number" ? String(round(value.value)) : `(${value.value.map(round).join(", ")})`;
+    case "primvar":
+      return `primvar ${value.name}`;
+    case "texture":
+      return `texture ${value.texture}.${value.channel}`;
+  }
+}
+
+/** A material record in one line: its surface's inputs, its textures and alpha, and its notes. */
+export function materialLine(material: MaterialItem): string {
+  const inputs = (["diffuseColor", "emissiveColor", "metallic", "roughness", "opacity", "normal", "occlusion"] as const).map(
+    (name) => `${name} ${sourceText(material[name])}`,
+  );
+  const textures = material.textures.map((texture, index) => {
+    const coordinates = texture.coordinates;
+    const transform = coordinates.transform === null ? "" : ` rotated ${round(coordinates.transform.rotation)} scaled (${coordinates.transform.scale.map(round).join(", ")})`;
+    return (
+      `texture ${index} ${texture.file.identifier ?? texture.file.assetPath}${texture.file.udim ? " (udim)" : ""} ` +
+      `${texture.colorSpace} ${texture.wrapS}/${texture.wrapT} scale (${texture.scale.map(round).join(", ")}) ` +
+      `st ${coordinates.primvar ?? "constant"}${transform}`
+    );
+  });
+  const alpha = material.alpha.kind === "mask" ? `mask ${round(material.alpha.threshold)}` : material.alpha.kind;
+  const notes = material.notes.map((note) => `${note.kind}${note.input === null ? "" : ` ${note.input}`}`);
+  return [`${material.path}: ${material.surface ?? "no surface"}`, ...inputs, ...textures, `alpha ${alpha}`, ...notes].join("; ");
 }

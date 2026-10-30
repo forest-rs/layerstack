@@ -20,6 +20,8 @@ UsdSkelBakeSkinningParms = "UsdSkelBakeSkinningParms"
 lod = "lod"
 # MaterialX NodeDef identifiers use the ND prefix.
 nd = "nd"
+# three.js names its PBR metal factor and map `metalness`.
+metalness = "metalness"
 
 [files]
 # Include .github, .cargo, etc.

@@ -165,6 +165,28 @@ function render(): void {
   renderCounters(editor);
 }
 
+/** Each texture directory's `listing.json`, fetched once: a static host cannot list a directory. */
+const listings = new Map<string, Promise<readonly string[]>>();
+
+/**
+ * Whether the scene's storage has the texture `identifier`, for a UDIM
+ * set's tiles (`udimTiles`): its directory's listing names it. OpenUSD
+ * asks its resolver tile by tile; this host answers from the listing
+ * rather than fetching a hundred names that are mostly missing.
+ */
+async function textureExists(identifier: string): Promise<boolean> {
+  const slash = identifier.lastIndexOf("/");
+  const directory = identifier.slice(0, slash + 1);
+  let listing = listings.get(directory);
+  if (listing === undefined) {
+    listing = host.fetch(`${directory}listing.json`).then((bytes) =>
+      bytes === null ? [] : (JSON.parse(new TextDecoder().decode(bytes)) as string[]),
+    );
+    listings.set(directory, listing);
+  }
+  return (await listing).includes(identifier.slice(slash + 1));
+}
+
 /**
  * The three.js view: `undefined` while three.js loads (in its own chunk, so
  * the editor works before it arrives), `null` where WebGL is unavailable.
@@ -173,7 +195,12 @@ let viewport: Viewport | null | undefined;
 import("./viewport3d.ts").then(
   ({ Viewport }) => {
     try {
-      viewport = new Viewport(panel("viewport-canvas") as HTMLCanvasElement, panel("free-camera") as HTMLInputElement);
+      viewport = new Viewport(
+        panel("viewport-canvas") as HTMLCanvasElement,
+        panel("free-camera") as HTMLInputElement,
+        (identifier) => host.fetch(identifier),
+        textureExists,
+      );
     } catch (error) {
       console.error(error);
       viewport = null;
@@ -219,11 +246,12 @@ function renderViewport(editor: Editor): void {
         `${work.refilled} refilled, ${work.rebuilt} rebuilt, ${work.triangulations} triangulated, ${work.tessellations} tessellated; ` +
         `${work.itemsRead} draws read, ${work.itemsUntouched} untouched` +
         (last.timeChanged ? ` (${work.itemsTimeInvariant} not animated)` : "") +
-        `, ${work.localTransforms} local transforms; ${work.lightsRead} lights read, ${work.lights} changed; ${work.camerasRead} cameras read`;
+        `, ${work.localTransforms} local transforms; ${work.lightsRead} lights read, ${work.lights} changed; ${work.camerasRead} cameras read; ` +
+        `${work.materialsRead} materials read, ${work.materials} changed`;
   fill(
     body,
     `${scene.items.length} draws: ${summary.drawn.length} drawn (${summary.instances} instances), ${summary.triangles} triangles, framed on ${bounds}; ` +
-      `${summary.lights.length} lights, ${summary.camera === null ? "no stage camera" : `stage camera ${summary.camera}`}`,
+      `${summary.lights.length} lights, ${summary.materials.length} materials, ${summary.camera === null ? "no stage camera" : `stage camera ${summary.camera}`}`,
     summary.hidden.length > 0 ? `; hidden: ${summary.hidden.join(", ")}` : "",
     viewport === null ? " (WebGL is unavailable: the summary is all there is)" : "",
     h("div", { class: "viewport-diff" }, changed),

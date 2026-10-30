@@ -1,7 +1,7 @@
 #usda 1.0
 (
     defaultPrim = "World"
-    doc = "The demo editor's sample: a root layer, a sublayer, a class the rock inherits, a robot referenced from its own file with a variant set, two instances of a beacon, a ground mesh with a face subset, a concave path, a point instancer of stones, a spinning top animated by time samples, a camera and lights."
+    doc = "The demo editor's sample: a root layer, a sublayer, a class the rock inherits, a robot referenced from its own file with a variant set, two instances of a beacon, a ground mesh with a face subset, a concave path, a point instancer of stones, a spinning top animated by time samples, a camera and lights, a sign with a checker texture and a strip with UDIM tiles."
     subLayers = [
         @./library.usda@
     ]
@@ -169,6 +169,113 @@ def Xform "World"
         {
             double size = 0.5
             color3f[] primvars:displayColor = [(0.55, 0.53, 0.5)]
+        }
+    }
+
+    def Mesh "Sign" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points = [(-1, 0, 0), (1, 0, 0), (1, 1.5, 0), (-1, 1.5, 0)]
+        texCoord2f[] primvars:st = [(0, 0), (1, 0), (1, 1), (0, 1)] (
+            interpolation = "vertex"
+        )
+        uniform token subdivisionScheme = "none"
+        rel material:binding = </World/Looks/Checker>
+        double3 xformOp:translate = (-0.5, 0, 1.2)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+    }
+
+    def Mesh "Strip" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points = [(-1, 0.02, 0.5), (1, 0.02, 0.5), (1, 0.02, -0.5), (-1, 0.02, -0.5)]
+        texCoord2f[] primvars:st = [(0, 0), (2, 0), (2, 1), (0, 1)] (
+            interpolation = "vertex"
+        )
+        uniform token subdivisionScheme = "none"
+        rel material:binding = </World/Looks/Tiles>
+        double3 xformOp:translate = (5, 0, -2)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+    }
+
+    def Scope "Looks"
+    {
+        def Material "Checker"
+        {
+            string inputs:coordinates = "st"
+            float4 inputs:tint = (1, 1, 1, 1)
+            token outputs:surface.connect = </World/Looks/Checker/Surface.outputs:surface>
+
+            def Shader "Surface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor.connect = </World/Looks/Checker/Texture.outputs:rgb>
+                float inputs:roughness = 0.45
+                token outputs:surface
+            }
+
+            def Shader "Reader"
+            {
+                uniform token info:id = "UsdPrimvarReader_float2"
+                string inputs:varname.connect = </World/Looks/Checker.inputs:coordinates>
+                float2 outputs:result
+            }
+
+            def Shader "Place"
+            {
+                uniform token info:id = "UsdTransform2d"
+                float2 inputs:in.connect = </World/Looks/Checker/Reader.outputs:result>
+                float inputs:rotation = 15
+                float2 inputs:scale = (2, 2)
+                float2 outputs:result
+            }
+
+            def Shader "Texture"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @./textures/checker.png@
+                float2 inputs:st.connect = </World/Looks/Checker/Place.outputs:result>
+                token inputs:wrapS = "repeat"
+                token inputs:wrapT = "repeat"
+                token inputs:sourceColorSpace = "sRGB"
+                float4 inputs:scale.connect = </World/Looks/Checker.inputs:tint>
+                float3 outputs:rgb
+            }
+        }
+
+        def Material "Tiles"
+        {
+            token outputs:surface.connect = </World/Looks/Tiles/Surface.outputs:surface>
+
+            def Shader "Surface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor.connect = </World/Looks/Tiles/Texture.outputs:rgb>
+                float inputs:roughness = 0.8
+                token outputs:surface
+            }
+
+            def Shader "Reader"
+            {
+                uniform token info:id = "UsdPrimvarReader_float2"
+                string inputs:varname = "st"
+                float2 outputs:result
+            }
+
+            def Shader "Texture"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @./textures/tile.<UDIM>.png@
+                float2 inputs:st.connect = </World/Looks/Tiles/Reader.outputs:result>
+                token inputs:sourceColorSpace = "sRGB"
+                float3 outputs:rgb
+            }
         }
     }
 }

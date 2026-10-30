@@ -47,6 +47,8 @@
 //   luminance L gives an upward surface π L of irradiance (its texture is
 //   not loaded).
 // - `PortalLight`: not drawn; it only guides a dome's light.
+// - Mesh lights and `GeometryLight`s: not drawn as three.js lights, which
+//   have no mesh shape.
 //
 // Materials: each draw's bound `UsdPreviewSurface` record (stagehand's
 // `MaterialItem`) becomes a three.js material as `surfaces.ts` maps it, a
@@ -108,7 +110,7 @@ export class Viewport {
   readonly #free: HTMLInputElement | null;
   /** The stage camera last listed, and its exposure scale. */
   #usdCamera: CameraItem | null = null;
-  /** The three.js objects of each `UsdLux` light, by path: the light and, for a directional or spot light, its target. */
+  /** The three.js objects of each `UsdLux` light, by key (its path, or path and instance): the light and, for a directional or spot light, its target. */
   readonly #lights = new Map<string, Object3D[]>();
   /** The sky and sun lighting a stage without lights. */
   readonly #fallback = new Group();
@@ -233,7 +235,7 @@ export class Viewport {
     }
     this.#selected = selected;
     // Lights: those the update names made again, the rest left as they are.
-    const lights = new Map(scene.lights.map((light) => [light.path, light]));
+    const lights = new Map(scene.lights.map((light) => [light.key, light]));
     if (reset) for (const path of [...this.#lights.keys()]) this.#dropLight(path);
     for (const path of update.lightsRemoved) this.#dropLight(path);
     const relit = reset ? [...lights.keys()] : [...update.lightsAdded, ...update.lightsChanged];
@@ -296,7 +298,7 @@ export class Viewport {
   #addLight(light: LightItem): void {
     const objects = threeLights(light);
     for (const object of objects) this.#scene.add(object);
-    this.#lights.set(light.path, objects);
+    this.#lights.set(light.key, objects);
   }
 
   #dropLight(path: string): void {
@@ -500,7 +502,11 @@ function threeLights(light: LightItem): Object3D[] {
     }
     case "dome":
       return [new HemisphereLight(color, color, Math.PI * peak)];
+    // A portal only guides a dome's light; three.js has no light of a
+    // mesh's shape, so a mesh or geometry light is not drawn as one.
     case "portal":
+    case "mesh":
+    case "geometry":
       return [];
   }
 }

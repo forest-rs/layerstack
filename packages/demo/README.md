@@ -129,7 +129,9 @@ The script runs seventeen steps, one button each:
     beacon's `xformOp:translate`, the rock's `visibility` and the stones'
     `invisibleIds`. The viewport moves the beacon, leaves out the rock and
     stone 3, and frames the smaller bounds: its update moves four draws and
-    hides one, and triangulates, tessellates and refills nothing. The transform cache recomputes
+    hides one, and triangulates, tessellates and refills nothing; of the
+    lights it reads the north beacon's glow alone, a light inside the
+    instance, listed once per instance. The transform cache recomputes
     one local transform, the beacon's, and the world transforms below it,
     and reuses the rest: the rock's first `visibility` opinion is a new
     property spec, which resyncs only `/World/Rock.visibility`, as

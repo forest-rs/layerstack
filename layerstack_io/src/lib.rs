@@ -101,6 +101,8 @@ mod apply;
 pub use apply::ApplyError;
 pub mod format;
 mod layer_ids;
+mod locations;
+pub use locations::{FlattenFailure, LayerLocations};
 mod muting;
 pub use format::{
     FORMAT_ARGS_DELIMITER, FileFormat, FileFormats, FormatArgs, FormatRegistrationError,

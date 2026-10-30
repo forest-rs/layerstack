@@ -167,7 +167,7 @@ impl Stage {
     ///
     /// ```
     /// use layerstack::{
-    ///     InMemoryStore, Layer, LayerId, PrimSpec, Stage, StageOptions,
+    ///     InMemoryStore, Layer, LayerId, NoAssets, PrimSpec, Stage, StageOptions,
     ///     stage::flatten::FlattenRequirements,
     /// };
     ///
@@ -179,7 +179,7 @@ impl Stage {
     /// let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
     ///
     /// let flat = stage
-    ///     .flatten(&mut store, LayerId(1), LayerId(2), &FlattenRequirements::default())
+    ///     .flatten(&mut store, &NoAssets, LayerId(1), LayerId(2), &FlattenRequirements::default())
     ///     .unwrap();
     /// // Compose the flattened layer on its own (or a USDA or USDC copy of it,
     /// // read back into the same store).

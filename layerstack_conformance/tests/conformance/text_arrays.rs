@@ -171,6 +171,7 @@ fn text_arrays_compose_resolve_and_flatten_natively() {
     let flat = stage
         .flatten(
             &mut store,
+            &layerstack::NoAssets,
             LayerId(1),
             LayerId(9),
             &FlattenRequirements::default(),

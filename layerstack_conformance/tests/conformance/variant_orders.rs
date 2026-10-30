@@ -368,6 +368,7 @@ fn stage_flatten(loaded: &mut LoadedStage, stage: &Stage) -> Layer {
     stage
         .flatten(
             &mut loaded.store,
+            &layerstack::NoAssets,
             loaded.root_layer,
             id,
             &FlattenRequirements::default(),

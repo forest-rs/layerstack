@@ -76,6 +76,7 @@ mod export_interop;
 mod expression_variables;
 mod extents_hint;
 mod flatten;
+mod flatten_anchoring;
 mod frustum;
 mod fuzz_regressions;
 mod generated_assets;

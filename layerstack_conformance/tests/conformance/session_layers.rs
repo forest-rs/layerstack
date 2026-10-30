@@ -402,6 +402,7 @@ fn flatten_preserves_session_metadata_and_effective_time_domain() {
     let flat = stage
         .flatten(
             &mut store,
+            &layerstack::NoAssets,
             LayerId(1),
             LayerId(20),
             &layerstack::stage::flatten::FlattenRequirements::default(),

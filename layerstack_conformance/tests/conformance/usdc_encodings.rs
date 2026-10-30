@@ -500,6 +500,7 @@ fn dictionary_list_ops_compose_as_openusd() {
     let flat = stage
         .flatten(
             &mut store,
+            &NoAssets,
             LayerId(1),
             LayerId(10),
             &FlattenRequirements::default(),

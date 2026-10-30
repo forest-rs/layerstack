@@ -397,18 +397,23 @@ fn flattened_time_values_read_as_composed() {
     let flat_id = LayerId(1000);
     // A clip's spline cannot be baked; it is reported and left out.
     let requirements = FlattenRequirements::default();
-    let flat = match stage.stage().flatten(store, root, flat_id, &requirements) {
-        Err(FlattenError::Refused(refusal)) => stage
+    let flat =
+        match stage
             .stage()
-            .flatten(
-                store,
-                root,
-                flat_id,
-                &requirements.accepting(&refusal.unmet),
-            )
-            .unwrap(),
-        flat => flat.unwrap(),
-    };
+            .flatten(store, &layerstack::NoAssets, root, flat_id, &requirements)
+        {
+            Err(FlattenError::Refused(refusal)) => stage
+                .stage()
+                .flatten(
+                    store,
+                    &layerstack::NoAssets,
+                    root,
+                    flat_id,
+                    &requirements.accepting(&refusal.unmet),
+                )
+                .unwrap(),
+            flat => flat.unwrap(),
+        };
     store.insert_layer(flat.layer);
     let flattened = Stage::compose(store, flat_id, StageOptions::default());
     let referenced: Vec<&str> = ATTRIBUTES

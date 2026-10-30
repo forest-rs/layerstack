@@ -63,10 +63,12 @@
 //!   `Flattened_Prototype_N`, written first, holding the prototype's
 //!   descendants, and each instance an internal reference to it in place
 //!   of its descendants, as OpenUSD writes them.
-//! - Asset paths are anchored to the layer that authors each, as OpenUSD's
-//!   flatten anchors them, when the requirements ask for it
-//!   ([`AssetPaths::Anchored`]); either way every asset path the layer
-//!   names is reported as an external dependency.
+//! - Asset paths are anchored to the layer that authors each through the
+//!   resolver the flatten is given, as OpenUSD's flatten anchors them
+//!   through its resolver ([`AssetPaths::Anchored`], the default), unless
+//!   the requirements keep them as authored ([`AssetPaths::AsAuthored`]);
+//!   either way every asset path the layer names is reported as an
+//!   external dependency.
 //! - The layer metadata composes the session root over the persistent root: `defaultPrim`, `upAxis`,
 //!   `metersPerUnit`, `timeCodesPerSecond`, `startTimeCode`,
 //!   `endTimeCode`, `documentation`, `reorder rootPrims` and the rest
@@ -159,13 +161,18 @@ impl Stage {
     ///
     /// `root` is the root layer the stage was composed from, whose layer
     /// metadata, beneath any session opinions, the flattened layer takes; `id` is the flattened layer's
-    /// own id, which the internal references of instances name. See the
-    /// [module docs](crate::stage::flatten) for what is written and
-    /// reported.
+    /// own id, which the internal references of instances name. `assets`
+    /// knows where each layer is, and anchors each asset path to the layer
+    /// that authors it ([`AssetResolver::anchor_asset_path`]) unless the
+    /// requirements keep them as authored ([`AssetPaths::AsAuthored`]); it
+    /// resolves nothing. A store whose layers have no location passes
+    /// [`NoAssets`](crate::NoAssets), which anchors no path relative to its
+    /// layer. See the [module docs](crate::stage::flatten) for what is
+    /// written and reported.
     ///
     /// ```
     /// use layerstack::{
-    ///     InMemoryStore, Layer, LayerId, PrimSpec, Reference, Stage, StageOptions,
+    ///     InMemoryStore, Layer, LayerId, NoAssets, PrimSpec, Reference, Stage, StageOptions,
     ///     stage::flatten::{FlattenRequirements, FindingKind, Transformation},
     /// };
     ///
@@ -178,7 +185,7 @@ impl Stage {
     ///
     /// let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
     /// let flat = stage
-    ///     .flatten(&mut store, LayerId(1), LayerId(2), &FlattenRequirements::default())
+    ///     .flatten(&mut store, &NoAssets, LayerId(1), LayerId(2), &FlattenRequirements::default())
     ///     .expect("nothing is lost");
     /// assert!(flat.layer.prim(tree).unwrap().references.explicit.is_none());
     /// assert!(flat.report.is_lossless());
@@ -197,9 +204,10 @@ impl Stage {
     pub fn flatten(
         &self,
         store: &mut dyn LayerStore,
+        assets: &dyn AssetResolver,
         root: LayerId,
         id: LayerId,
-        requirements: &FlattenRequirements<'_>,
+        requirements: &FlattenRequirements,
     ) -> Result<Flattened, FlattenError> {
         let root_layer = store
             .layer(root)
@@ -227,6 +235,7 @@ impl Stage {
         let mut flattener = Flattener {
             stage: self,
             store,
+            assets,
             requirements,
             out,
             prototypes: HashMap::new(),
@@ -306,10 +315,12 @@ impl Stage {
     }
 }
 
-struct Flattener<'a, 'r> {
+struct Flattener<'a> {
     stage: &'a Stage,
     store: &'a mut dyn LayerStore,
-    requirements: &'a FlattenRequirements<'r>,
+    /// Where each layer is, for anchoring asset paths.
+    assets: &'a dyn AssetResolver,
+    requirements: &'a FlattenRequirements,
     out: Layer,
     /// The prototype path of each instance key.
     prototypes: HashMap<InstanceKey, PathId>,
@@ -328,7 +339,7 @@ struct PrototypeGroup {
     instances: Vec<PathId>,
 }
 
-impl Flattener<'_, '_> {
+impl Flattener<'_> {
     /// The flattened layer, or the refusal when a requirement is unmet.
     fn finish(self) -> Result<Flattened, FlattenError> {
         let requirements = self.requirements;
@@ -342,7 +353,7 @@ impl Flattener<'_, '_> {
                 let declared = loss.requirement().filter(|requirement| match requirement {
                     Requirement::ExactAnimation => requirements.exact_animation,
                     Requirement::AnchoredAssetPaths => {
-                        matches!(requirements.asset_paths, AssetPaths::Anchored(_))
+                        requirements.asset_paths == AssetPaths::Anchored
                     }
                     Requirement::NoLoss => true,
                 });
@@ -443,9 +454,10 @@ impl Flattener<'_, '_> {
     /// layer that authors them). OpenUSD: `SdfAnchorAssetPaths`, which its
     /// flatten applies to every value and metadatum.
     fn anchor_value(&mut self, value: &Value, layer: LayerId) -> Option<Value> {
-        let AssetPaths::Anchored(resolver) = self.requirements.asset_paths else {
+        if self.requirements.asset_paths != AssetPaths::Anchored {
             return None;
-        };
+        }
+        let resolver = self.assets;
         let (anchored, unanchored) = (&mut self.anchored, &mut self.unanchored);
         map_leaves(value, &mut |leaf| {
             anchor_leaf(leaf, layer, resolver, anchored, unanchored)
@@ -457,9 +469,10 @@ impl Flattener<'_, '_> {
     /// their sources (`opinions.with_records` reads them).
     fn anchor_opinions<'o>(&mut self, opinions: Opinions<'o>) -> Cow<'o, [Opinion]> {
         let records = opinions.records();
-        let AssetPaths::Anchored(resolver) = self.requirements.asset_paths else {
+        if self.requirements.asset_paths != AssetPaths::Anchored {
             return Cow::Borrowed(records);
-        };
+        }
+        let resolver = self.assets;
         let (anchored, unanchored) = (&mut self.anchored, &mut self.unanchored);
         let mut out: Option<Vec<Opinion>> = None;
         for (i, opinion) in opinions.iter().enumerate() {

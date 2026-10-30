@@ -164,6 +164,16 @@ describe("exporting", () => {
     }
   });
 
+  it("anchors the flattened stage's asset paths to the layers authoring them", () => {
+    const text = '#usda 1.0\ndef "Rock"\n{\n    asset albedo = @./albedo.png@\n    asset moss = @textures/moss.png@\n}\n';
+    using stage = layerstack.open({ identifier: "set/rock.usda", bytes: new TextEncoder().encode(text) });
+    const flat = stage.exportFlattened();
+    assert.ok(flat.lossless, JSON.stringify(flat.lost));
+    const written = decoder.decode(flat.bytes);
+    assert.match(written, /asset albedo = @set\/albedo\.png@/);
+    assert.match(written, /asset moss = @textures\/moss\.png@/, "a search path nothing supplied beside its layer is kept");
+  });
+
   it("packages a layered stage as a USDZ that reopens complete", async () => {
     using stage = await resolvedScene();
     stage.apply([{ type: "setValue", path: "/Ball.radius", value: { type: "double", value: 3 } }], stage.root).release();

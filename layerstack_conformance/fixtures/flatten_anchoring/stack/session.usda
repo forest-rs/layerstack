@@ -1,0 +1,11 @@
+#usda 1.0
+(
+    subLayers = [
+        @./weak/weak.usda@
+    ]
+)
+
+over "World"
+{
+    asset stackSession = @./s.png@
+}

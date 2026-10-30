@@ -577,6 +577,25 @@ pub struct OpenOptions {
     /// layer, or the store the stage options' schema registry was built
     /// on; a new store when `None`.
     pub store: Option<InMemoryStore>,
+    /// The asset path of a session layer to read from storage, as the
+    /// root is read (identified with no anchor, [`Storage::identify`]),
+    /// with the layers it reaches, its sublayers among them, which form
+    /// the session layer stack; it becomes the stage's session layer
+    /// (`stage.session_layer`). Its layers have identifiers, so the asset
+    /// paths they author anchor to them ([`StageDocument::layer_locations`])
+    /// and [`StageDocument::save_session_layers`] writes them back.
+    ///
+    /// `None`, the default, reads none: the stage's session layer is then
+    /// the host-owned layer `stage.session_layer` names, if any. Setting
+    /// both is rejected ([`IoErrorKind::Rejected`]), as is a session layer
+    /// that is the root layer.
+    ///
+    /// OpenUSD: `UsdStage::Open(rootLayer, sessionLayer)` and
+    /// `UsdStage::CreateNew(identifier, sessionLayer)` with a session layer
+    /// opened from a file. Spec: AOUSD Core §10.3.1 (the session layer is
+    /// the strongest layer of the root layer stack).
+    #[doc(alias = "sessionLayer")]
+    pub session_layer: Option<String>,
 }
 impl From<StageOptions> for OpenOptions {
     fn from(stage: StageOptions) -> Self {
@@ -924,6 +943,18 @@ impl Catalog {
     }
 }
 
+/// Rejects a session layer to read from storage when the stage options
+/// already name a host-owned one.
+fn check_session(options: &StageOptions, session: Option<&str>) -> Result<(), IoError> {
+    if session.is_some() && options.session_layer.is_some() {
+        return Err(IoError::new(
+            IoErrorKind::Rejected,
+            "a session layer to read (`OpenOptions::session_layer`) and a host-owned one \
+             (`StageOptions::session_layer`) were both given",
+        ));
+    }
+    Ok(())
+}
 /// Rejects a schema registry built on another token interner than
 /// `store`'s, before anything is read or composed with it.
 fn check_schemas(store: &InMemoryStore, options: &StageOptions) -> Result<(), IoError> {
@@ -978,7 +1009,9 @@ impl<B: Storage> StageDocument<B> {
     ///
     /// `options` are those [`Self::open`] takes: a [`StageOptions`] alone,
     /// or an [`OpenOptions`] with a host-owned store (schemas, a session
-    /// layer) and the load options later loads use. The assets the new
+    /// layer), a session layer to read from storage
+    /// ([`OpenOptions::session_layer`]) and the load options later loads
+    /// use. The assets the new
     /// stage asks for, such as the session layer's sublayers by asset
     /// path, are loaded before it returns ([`Self::load_requested_assets`]),
     /// and the [`Self::load_report`] holds that evidence.
@@ -990,7 +1023,7 @@ impl<B: Storage> StageDocument<B> {
     #[doc(alias = "UsdStage::CreateNew")]
     #[doc(alias = "CreateNew")]
     pub fn create(
-        storage: B,
+        mut storage: B,
         target: &str,
         options: impl Into<OpenOptions>,
     ) -> Result<Self, IoError> {
@@ -998,10 +1031,12 @@ impl<B: Storage> StageDocument<B> {
             stage: mut options,
             loading,
             store,
+            session_layer,
         } = options.into();
         let mut store = store.unwrap_or_default();
         join_dynamic_formats(&mut options, &loading)?;
         check_schemas(&store, &options)?;
+        check_session(&options, session_layer.as_deref())?;
         let identifier = storage.identify(target, None).map_err(|e| e.at(target))?;
         let format = identifier_format(&identifier, &FileFormats::default())?;
         if format == Format::Usdz {
@@ -1029,6 +1064,29 @@ impl<B: Storage> StageDocument<B> {
         store.set_layer_identifier(root, Arc::clone(&catalog.sources[&root].identifier));
         store.set_layer_read_only(root, catalog.sources[&root].read_only());
         store.insert_layer(Layer::new(root));
+        let mut report = LoadReport::default();
+        if let Some(session) = &session_layer {
+            let mut reader = Reader::new(
+                &mut storage,
+                &mut catalog,
+                loading.import_policy,
+                loading.usdc,
+                loading.package,
+                options.schemas.clone(),
+            );
+            reader.variant_arcs = loading.variant_arcs;
+            reader.formats = loading.formats.clone();
+            let session = reader.load_session(session, root, &store)?;
+            reader.resolve_expressions(
+                &mut store,
+                layerstack::LayerStackIdentifier {
+                    root,
+                    session: Some(session),
+                },
+            )?;
+            report = reader.commit(&mut store);
+            options.session_layer = Some(session);
+        }
         let stage = LiveStage::compose(&mut store, root, options);
         let mut document = Self {
             store,
@@ -1040,12 +1098,14 @@ impl<B: Storage> StageDocument<B> {
             package_limits: loading.package,
             variant_arcs: loading.variant_arcs,
             formats: loading.formats,
-            load_report: LoadReport::default(),
+            load_report: report,
             unavailable: Unavailable::new(),
         };
-        // A host-owned session layer's sublayers by asset path load with
-        // the new stage, as `UsdStage::CreateNew` opens them.
-        document.load_report = document.load_requested_assets()?;
+        // The session layer's sublayers by asset path a host-owned one
+        // authors load with the new stage, as `UsdStage::CreateNew` opens
+        // them.
+        let requested = document.load_requested_assets()?;
+        document.load_report.merge(requested);
         Ok(document)
     }
     /// Opens the stage whose root layer is `asset`, reading it and the
@@ -1056,7 +1116,9 @@ impl<B: Storage> StageDocument<B> {
     /// (import policy, USDC arrays, package limits, variant arcs, file
     /// formats), which later loads and reloads use too, and the store to
     /// open into. A host-owned store holds a session layer or the store a
-    /// schema registry was built on; its identifiers stay reserved. Import
+    /// schema registry was built on; its identifiers stay reserved. A
+    /// session layer read from storage ([`OpenOptions::session_layer`]) is
+    /// read after the root, with the layers it reaches. Import
     /// is staged: failed reads never publish partially imported layers to
     /// a live stage, and retained payloads are checked on demand.
     ///
@@ -1088,9 +1150,11 @@ impl<B: Storage> StageDocument<B> {
             stage: mut options,
             loading,
             store,
+            session_layer,
         } = options.into();
         let mut store = store.unwrap_or_default();
         check_schemas(&store, &options)?;
+        check_session(&options, session_layer.as_deref())?;
         join_dynamic_formats(&mut options, &loading)?;
         let import_policy = loading.import_policy;
         let mut catalog = Catalog {
@@ -1108,26 +1172,19 @@ impl<B: Storage> StageDocument<B> {
         reader.variant_arcs = loading.variant_arcs;
         reader.formats = loading.formats.clone();
         reader.threads = options.thread_budget();
-        #[cfg(feature = "std")]
-        let threaded = reader.load_on_threads(asset, store.tokens(), store.paths());
-        #[cfg(not(feature = "std"))]
-        let threaded: Option<Result<ResolvedAsset, IoError>> = None;
-        let resolved = match threaded {
-            Some(resolved) => resolved?,
-            None => reader.load(asset, None, store.tokens(), store.paths())?,
-        };
-        if let Some(layer) = resolved.layer {
-            reader.pending.push(layer);
+        let root = reader.load_root(asset, &store)?;
+        if let Some(session) = &session_layer {
+            options.session_layer = Some(reader.load_session(session, root, &store)?);
         }
         reader.resolve_expressions(
             &mut store,
             layerstack::LayerStackIdentifier {
-                root: resolved.layer_id,
+                root,
                 session: options.session_layer,
             },
         )?;
         let report = reader.commit(&mut store);
-        let stage = LiveStage::compose(&mut store, resolved.layer_id, options);
+        let stage = LiveStage::compose(&mut store, root, options);
         let mut document = Self {
             store,
             stage,
@@ -1788,6 +1845,40 @@ impl<'a, B: Storage> Reader<'a, B> {
             threads: Threads::new(1),
             muted: BTreeSet::new(),
         }
+    }
+    /// Reads the root layer `asset` and every layer it reaches, on the
+    /// reader's threads when it has more than one, and returns its id.
+    fn load_root(&mut self, asset: &str, store: &InMemoryStore) -> Result<LayerId, IoError> {
+        #[cfg(feature = "std")]
+        let threaded = self.load_on_threads(asset, store.tokens(), store.paths());
+        #[cfg(not(feature = "std"))]
+        let threaded: Option<Result<ResolvedAsset, IoError>> = None;
+        let resolved = match threaded {
+            Some(resolved) => resolved?,
+            None => self.load(asset, None, store.tokens(), store.paths())?,
+        };
+        if let Some(layer) = resolved.layer {
+            self.pending.push(layer);
+        }
+        Ok(resolved.layer_id)
+    }
+    /// Reads the session layer `asset` ([`OpenOptions::session_layer`])
+    /// and every layer it reaches, as the root is read, and returns its
+    /// id; rejected when it is the root layer `root`.
+    fn load_session(
+        &mut self,
+        asset: &str,
+        root: LayerId,
+        store: &InMemoryStore,
+    ) -> Result<LayerId, IoError> {
+        let session = self.load_root(asset, store)?;
+        if session == root {
+            return Err(
+                IoError::new(IoErrorKind::Rejected, "the session layer is the root layer")
+                    .at(asset),
+            );
+        }
+        Ok(session)
     }
     /// Whether `id` is a layer the stage mutes that this document has not
     /// read: OpenUSD checks `Pcp_MutedLayers::IsLayerMuted` before it

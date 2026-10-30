@@ -1662,6 +1662,68 @@ fn save_tracks_successful_generations_and_excludes_sessions() {
     );
     assert!(doc.save().saved.is_empty());
 }
+/// A session layer read from storage (`UsdStage::Open(rootLayer,
+/// sessionLayer)`) brings its sublayers, the session layer stack, which is
+/// stronger than the root's; it is saved only with the session layers.
+#[test]
+fn a_session_layer_read_from_storage_brings_its_stack_and_saves_back() {
+    let files = [
+        (
+            "root.usda",
+            "#usda 1.0\ndef \"Root\" {\n int value = 1\n}\n",
+        ),
+        (
+            "session.usda",
+            "#usda 1.0\n(\n subLayers = [@weak.usda@]\n)\n",
+        ),
+        (
+            "weak.usda",
+            "#usda 1.0\nover \"Root\" {\n int value = 7\n}\n",
+        ),
+    ];
+    let options = || OpenOptions {
+        session_layer: Some("session.usda".into()),
+        ..OpenOptions::default()
+    };
+    let mut doc = StageDocument::open(Memory::with(&files), "root.usda", options()).unwrap();
+    let session = doc.stage.stage().session_layer().unwrap();
+    assert_eq!(doc.identifier(session), Some("session.usda"));
+    let weak = doc.catalog.ids["weak.usda"];
+    assert_eq!(value(&doc), Value::Int(7), "the session stack is stronger");
+    set_value(&mut doc, session, 9);
+    assert_eq!(value(&doc), Value::Int(9));
+    assert!(
+        doc.save().saved.is_empty(),
+        "saving skips the session layers"
+    );
+    assert_eq!(doc.save_session_layers().saved, vec![session]);
+    let saved = String::from_utf8(doc.storage().files["session.usda"].clone()).unwrap();
+    assert!(saved.contains("int value = 9"), "{saved}");
+    assert!(!doc.is_dirty(weak));
+
+    // A new stage reads one too.
+    let created = StageDocument::create(Memory::with(&files), "new.usda", options()).unwrap();
+    let session = created.stage.stage().session_layer().unwrap();
+    assert_eq!(created.identifier(session), Some("session.usda"));
+    assert!(created.store.layer(weak).is_some(), "its sublayer is read");
+
+    // One session layer, never the root.
+    let both = OpenOptions {
+        stage: StageOptions {
+            session_layer: Some(LayerId(1)),
+            ..StageOptions::default()
+        },
+        ..options()
+    };
+    let error = StageDocument::open(Memory::with(&files), "root.usda", both).unwrap_err();
+    assert_eq!(error.kind, IoErrorKind::Rejected);
+    let root = OpenOptions {
+        session_layer: Some("root.usda".into()),
+        ..OpenOptions::default()
+    };
+    let error = StageDocument::open(Memory::with(&files), "root.usda", root).unwrap_err();
+    assert_eq!(error.kind, IoErrorKind::Rejected);
+}
 #[test]
 fn staged_reload_protects_edits_and_preserves_layer_identities() {
     let backend = Memory::with(&[

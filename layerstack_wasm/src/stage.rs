@@ -171,6 +171,7 @@ impl Stage {
                     ..LoadOptions::default()
                 },
                 store: Some(store),
+                ..OpenOptions::default()
             },
         )?;
         let cursor = document.parts_mut().1.change_cursor();

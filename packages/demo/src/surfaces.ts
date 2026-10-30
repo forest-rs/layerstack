@@ -56,7 +56,11 @@
 //   rotation apply rotation before scale and clockwise, so they are not
 //   used.
 // - Coordinates: stagehand's buffers carry `primvars:st` as the `uv`
-//   attribute; a texture reading another primvar is drawn with `st`.
+//   attribute, and the other sets the materials read (`st1`, `uv`), sorted
+//   by name, as `uv1` to `uv3`; a texture reading one samples that
+//   channel (`Texture.channel`). The channel is counted among the sets
+//   the material itself reads, which are the mesh's when one material
+//   draws it.
 //   USD's `st` puts (0, 0) at the image's bottom left, as three.js's
 //   default `flipY` does.
 // - UDIM sets: the tiles the host lists (`udimTiles`) are laid into one
@@ -186,7 +190,7 @@ const WRAPS: Record<TextureWrap, Wrapping> = {
 };
 
 /** A use of `texture`: its image (or fallback color) with this use's sampling, color space and coordinate transform. */
-function use(store: TextureStore, texture: MaterialTexture, color: boolean): Texture {
+function use(store: TextureStore, record: MaterialItem, texture: MaterialTexture, color: boolean): Texture {
   const image = store.image(texture);
   if (image === null || image === undefined) {
     // While loading, and when it cannot be read: the fallback.
@@ -196,6 +200,7 @@ function use(store: TextureStore, texture: MaterialTexture, color: boolean): Tex
     return fallback;
   }
   const out = image.texture.clone();
+  out.channel = channelOf(record, texture);
   const srgb = texture.colorSpace === "sRGB" || (texture.colorSpace === "auto" && color);
   out.colorSpace = srgb ? SRGBColorSpace : NoColorSpace;
   out.wrapS = WRAPS[texture.wrapS];
@@ -212,6 +217,14 @@ function use(store: TextureStore, texture: MaterialTexture, color: boolean): Tex
   out.matrix.set(ax * c * sx, -ax * s * sy, ax * tx, ay * s * sx, ay * c * sy, ay * ty, 0, 0, 1);
   out.needsUpdate = true;
   return out;
+}
+
+/** The three.js uv channel of a texture's coordinates: 0 for `st`, else 1 + the set's place among those the material reads besides `st`, sorted. */
+function channelOf(record: MaterialItem, texture: MaterialTexture): number {
+  const name = texture.coordinates.primvar;
+  if (name === null || name === "st") return 0;
+  const sets = [...new Set(record.textures.flatMap((t) => (t.coordinates.primvar === null || t.coordinates.primvar === "st" ? [] : [t.coordinates.primvar])))].sort();
+  return Math.min(3, 1 + sets.indexOf(name));
 }
 
 /** The constant of a value, else `fallback`. */
@@ -252,7 +265,7 @@ export function surfaceMaterial(
     constant(record.ior, 1.5) !== 1.5;
   const material = physical ? new MeshPhysicalMaterial() : new MeshStandardMaterial();
   const map = (value: MaterialValue<unknown>, color: boolean) =>
-    value.kind === "texture" ? use(store, record.textures[value.texture]!, color) : null;
+    value.kind === "texture" ? use(store, record, record.textures[value.texture]!, color) : null;
   // Diffuse: a constant, a texture's rgb (tinted by its scale), or displayColor.
   const diffuse = record.diffuseColor;
   if (diffuse.kind === "texture") {
@@ -292,7 +305,7 @@ export function surfaceMaterial(
   if (record.normal.kind === "texture") {
     const texture = record.textures[record.normal.texture]!;
     const decodes = texture.scale.slice(0, 3).every((v) => v === 2) && texture.bias.slice(0, 3).every((v) => v === -1);
-    if (decodes) material.normalMap = use(store, texture, false);
+    if (decodes) material.normalMap = use(store, record, texture, false);
   }
   material.displacementMap = channel(record.displacement, "r");
   // Opacity.

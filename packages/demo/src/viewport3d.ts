@@ -91,7 +91,7 @@ import {
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { RectAreaLightUniformsLib } from "three/addons/lights/RectAreaLightUniformsLib.js";
 import { conformCamera, lightSizeFactor } from "@forest-rs/layerstack_stagehand";
-import type { CameraItem, LightItem, MaterialItem } from "@forest-rs/layerstack_stagehand";
+import type { CameraItem, LightItem, MaterialItem, StagehandMesh } from "@forest-rs/layerstack_stagehand";
 import { TextureStore, surfaceMaterial } from "./surfaces.ts";
 import type { AssetExists, AssetReader } from "./surfaces.ts";
 import type { ViewItem, ViewportScene, ViewportUpdate } from "./viewport.ts";
@@ -209,6 +209,7 @@ export class Viewport {
       geometry.setAttribute("normal", new BufferAttribute(mesh.normals, 3));
       if (mesh.colors !== null) geometry.setAttribute("color", new BufferAttribute(mesh.colors, 3));
       if (mesh.st !== null) geometry.setAttribute("uv", new BufferAttribute(mesh.st, 2));
+      setUvSets(geometry, mesh);
       geometry.computeBoundingSphere();
     }
     const added = reset ? new Set(items.keys()) : update.added;
@@ -437,6 +438,15 @@ function materials(
   return found === null ? material(null) : surface(found);
 }
 
+/**
+ * The texture coordinate sets besides `st` stagehand drew for the mesh's
+ * materials, in its order, as three.js's `uv1` to `uv3` (`st` is `uv`);
+ * `surfaces.ts` points a texture reading one at the same channel.
+ */
+function setUvSets(geometry: BufferGeometry, mesh: StagehandMesh): void {
+  mesh.uvSets.slice(0, 3).forEach((set, index) => geometry.setAttribute(`uv${index + 1}`, new BufferAttribute(set.values, 2)));
+}
+
 /** A geometry over the item's stagehand buffer: indexed, with normals, colors and a group per range. */
 function makeGeometry(view: ViewItem): BufferGeometry {
   const mesh = view.buffers.mesh;
@@ -446,6 +456,7 @@ function makeGeometry(view: ViewItem): BufferGeometry {
   geometry.setAttribute("normal", new BufferAttribute(mesh.normals, 3));
   if (mesh.colors !== null) geometry.setAttribute("color", new BufferAttribute(mesh.colors, 3));
   if (mesh.st !== null) geometry.setAttribute("uv", new BufferAttribute(mesh.st, 2));
+  setUvSets(geometry, mesh);
   // A group per range when there are subsets, each drawn with its range's material.
   if (mesh.ranges.length > 1) mesh.ranges.forEach((range, index) => geometry.addGroup(range.first, range.count, index));
   geometry.computeBoundingSphere();

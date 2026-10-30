@@ -17,8 +17,10 @@
 use std::path::{Path, PathBuf};
 
 use layerstack::stage::flatten::{AssetPaths, FlattenRequirements};
-use layerstack::{InMemoryStore, LayerStore, Stage, Value};
+use layerstack::{InMemoryStore, LayerId, LayerStore, Stage, Time, Value};
 use layerstack_io::{Filesystem, OpenOptions, StageDocument};
+use layerstack_schemas::Scene;
+use layerstack_schemas::assets::AssetReference;
 use serde_json::{Map, Value as Json, json};
 
 const ORACLE: &str = include_str!("../../fixtures/flatten_anchoring/oracle.json");
@@ -254,5 +256,47 @@ fn stage_metadata_asset_paths_anchor_to_the_layer_authoring_them() {
             oracle[name]["default_prim"].as_str(),
             "{name}"
         );
+    }
+}
+
+/// A `../` path that climbs out of the package authoring it is anchored
+/// to a member that climbs out (`pkg.usdz[../outside.png]`, the flatten
+/// text above), and resolves to nothing, as OpenUSD resolves it, though a
+/// file of that name is beside the package; a `../` path that stays in
+/// the package resolves to its member.
+#[test]
+fn a_path_climbing_out_of_a_package_resolves_to_nothing() {
+    let oracle = oracle();
+    for (name, session) in [
+        ("package", Some("pkg/session.usda")),
+        ("nested", Some("nested/session.usda")),
+    ] {
+        let climbing = oracle[name]["climbing"].as_object().unwrap();
+        let mut document = open(session);
+        let reads: Vec<(String, String, LayerId, bool)> = {
+            let store = document.store();
+            let scene = Scene::new(document.stage().stage(), store);
+            climbing
+                .iter()
+                .map(|(property, expected)| {
+                    let path = store.property_path(property);
+                    let value = AssetReference::read(&scene, path, Time::Default)
+                        .unwrap()
+                        .unwrap();
+                    assert_eq!(value.asset_path, expected["authored"], "{name} {property}");
+                    let layer = value.source.expect("authored").layer;
+                    let found = expected["resolved"] != "";
+                    (property.clone(), value.asset_path, layer, found)
+                })
+                .collect()
+        };
+        assert!(reads.iter().any(|(.., found)| !found), "{name}");
+        for (property, authored, layer, found) in reads {
+            assert_eq!(
+                document.read_asset_bytes(&authored, Some(layer)).is_ok(),
+                found,
+                "{name} {property}"
+            );
+        }
     }
 }

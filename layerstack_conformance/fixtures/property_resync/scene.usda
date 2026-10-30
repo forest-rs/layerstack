@@ -1,0 +1,31 @@
+#usda 1.0
+(
+    subLayers = [
+        @weak.usda@
+    ]
+)
+# Copyright 2026 the LayerStack Authors
+# SPDX-License-Identifier: Apache-2.0 OR MIT
+
+def Xform "Rock"
+{
+    double3 xformOp:translate = (1, 2, 3)
+    uniform token[] xformOpOrder = ["xformOp:translate"]
+}
+
+def Xform "Lamp" (
+    prepend references = @asset.usda@</Asset>
+)
+{
+}
+
+def Xform "Robot" (
+    instanceable = true
+    prepend references = @asset.usda@</Asset>
+)
+{
+}
+
+def Scope "Looks"
+{
+}

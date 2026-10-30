@@ -825,6 +825,21 @@ def Xform "World" {
         let diff = fixture.list.apply_changes(&scene, &applied.changes);
         assert_eq!(diff.lights_changed, [bulb]);
         assert_eq!(diff.work.lights_read, 1);
+        // A property the light does not read: nothing read.
+        let aim = fixture.store.tokens().intern("aim");
+        let mut relationship = Transaction::new();
+        relationship.create_property(
+            EditTarget::for_layer(LayerId(1)).property(PropertyPath::new(bulb, aim)),
+            layerstack::PropertySpec::relationship(),
+        );
+        let applied = fixture
+            .live
+            .apply(&mut fixture.store, &relationship)
+            .unwrap();
+        let scene = Scene::new(fixture.live.stage(), &fixture.store);
+        let diff = fixture.list.apply_changes(&scene, &applied.changes);
+        assert_eq!(diff.work.lights_read, 0);
+        assert!(diff.is_empty());
     }
 
     #[test]

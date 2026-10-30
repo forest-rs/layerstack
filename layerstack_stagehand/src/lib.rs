@@ -111,8 +111,9 @@
 //! intensity * 2^exposure`, divided by the light's world-space size when it
 //! normalizes, its shape, `ShapingAPI` and `ShadowAPI` controls, and its
 //! link collections as data). A diff lists the cameras and lights added,
-//! removed and changed; a change reaches a camera or a light through its
-//! own prim, or a transform or visibility above it; a time change reads
+//! removed and changed; a change reaches a camera or a light through an
+//! input it reads, or its transform or visibility or one above it; a time
+//! change reads
 //! only those whose inputs or transform might vary. Lights and cameras
 //! inside native instances or point instancer prototypes are not listed
 //! yet.

@@ -6,8 +6,9 @@ browser.
 
 - **Meshes** (`UsdGeomMesh`): faces triangulated as Hydra fans them, with
   concave faces ear-clipped instead (or everything fanned, for parity);
-  vertices split for face-varying and indexed normals, `st` and
-  `displayColor`; authored or smooth computed normals (Hydra's, or turned
+  vertices split for face-varying and indexed normals, `st`,
+  `displayColor` and the other texture coordinate sets the materials read
+  (`st1`, `uv`), each a channel of its own; authored or smooth computed normals (Hydra's, or turned
   to the face at a concave face's reflex corners on request); one draw range per
   `materialBind` face subset; a retained plan that refills positions and
   normals for new points without triangulating again.
@@ -30,7 +31,10 @@ browser.
   the built-in `UsdLux` lights with renderer-ready values (world placement
   and direction, emission with exposure, blackbody color and `normalize`,
   shape, shaping, shadow and link collections; inputs read through their
-  connections), with diffs and time-variability like draw items.
+  connections), mesh lights and geometry lights, with diffs and
+  time-variability like draw items. Lights and cameras inside native
+  instances are listed once per instance; lights inside a point
+  instancer's prototypes once per unmasked instance.
 
 - **Materials** (with `stage`): each material the items bind as a
   renderer-ready `UsdPreviewSurface` record: every input a constant, a

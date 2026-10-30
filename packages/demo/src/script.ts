@@ -66,7 +66,10 @@ export const sample = {
   /** A strip drawn with UDIM tiles (`tile.<UDIM>.png`: 1001 and 1002), and its material. */
   strip: "/World/Strip",
   tiles: "/World/Looks/Tiles",
-  /** The stage's `documentation`, which the last step sets. */
+  /** The checker's coordinates input, and the sign's second texture coordinate set it is pointed at. */
+  coordinates: "/World/Looks/Checker.inputs:coordinates",
+  card: "card",
+  /** The stage's `documentation`, which a step sets. */
   documentation: "A rock, a robot, two beacons and their lights",
 } as const;
 
@@ -288,6 +291,14 @@ export const steps: readonly Step[] = [
       session.current.apply("document the stage", [
         { type: "setLayerMetadata", key: "documentation", value: { type: "string", value: sample.documentation } },
       ]);
+    },
+  },
+  {
+    title: "Read the checker through the sign's card set",
+    look: "The viewport: the sign's checks turn square. The checker's coordinates input now names primvars:card, the sign's second texture coordinate set, instead of st. The stats line: the draw list reads that material again and plans the sign's mesh again with the card set as a buffer channel of its own (rebuilt), which three.js samples as uv1; no other draw, light or camera is read.",
+    async run(session) {
+      session.current.setValue(sample.coordinates, { type: "string", value: sample.card });
+      session.select(sample.checker, sample.coordinates);
     },
   },
 ];

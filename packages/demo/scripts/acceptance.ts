@@ -470,6 +470,12 @@ const checks: ((session: Session) => void)[] = [
     const changes = current.changeLog.at(-1)?.changes;
     assert.deepEqual([changes?.resynced, changes?.resyncedProperties, changes?.changedInfoOnly], [[], [], ["/"]]);
   },
+  // 18. The checker's coordinates name the sign's card set.
+  ({ current, prim, attribute }) => {
+    assert.equal(prim, sample.checker);
+    assert.equal(attribute, sample.coordinates);
+    assert.equal(read(current.stage, sample.coordinates).value, JSON.stringify(sample.card));
+  },
 ];
 
 /**
@@ -531,16 +537,16 @@ const meshes = [
  */
 const surface = "emissiveColor (0, 0, 0); metallic 0";
 const flat = "opacity 1; normal (0, 0, 1); occlusion 1";
-const checker = (scale: string) =>
+const checker = (scale: string, coordinates = "st") =>
   `${sample.checker}: ${sample.checker}/Surface; diffuseColor texture 0.rgb; ${surface}; roughness 0.45; ${flat}; ` +
-  `texture 0 ./textures/checker.png sRGB repeat/repeat scale (${scale}) st st rotated 15 scaled (2, 2); alpha opaque`;
+  `texture 0 ./textures/checker.png sRGB repeat/repeat scale (${scale}) st ${coordinates} rotated 15 scaled (2, 2); alpha opaque`;
 const tiles =
   `${sample.tiles}: ${sample.tiles}/Surface; diffuseColor texture 0.rgb; ${surface}; roughness 0.8; ${flat}; ` +
   "texture 0 ./textures/tile.<UDIM>.png (udim) sRGB useMetadata/useMetadata scale (1, 1, 1, 1) st st; alpha opaque";
 const paint = (robot: string) =>
   `${robot}/Looks/Paint: ${robot}/Looks/Paint/Surface; diffuseColor primvar displayColor; ${surface}; roughness 0.6; ${flat}; alpha opaque`;
-const materials = (robot: string | null = sample.robot, scale = "1, 1, 1, 1") =>
-  [checker(scale), ...(robot === null ? [] : [paint(robot)]), tiles].sort();
+const materials = (robot: string | null = sample.robot, scale = "1, 1, 1, 1", coordinates = "st") =>
+  [checker(scale, coordinates), ...(robot === null ? [] : [paint(robot)]), tiles].sort();
 /**
  * The sample's lights, by kind: the lamp (a sphere light in the
  * sublayer), the sun, the sky, the spot and the panel.
@@ -630,6 +636,9 @@ viewports.push(viewports.at(-1)!);
 viewports.push({ ...viewports.at(-1)!, materials: materials(null, "1, 0.85, 0.6, 1") });
 // The stage documented: the same draws.
 viewports.push(viewports.at(-1)!);
+// The checker read through the card set: the same draws, its texture
+// reading `card`.
+viewports.push({ ...viewports.at(-1)!, materials: materials(null, "1, 0.85, 0.6, 1", sample.card) });
 
 /**
  * What the viewport's draw list did after each step, from the editor's
@@ -714,6 +723,10 @@ const updates: UpdateSummary[] = [
   // The stage's documentation: `/` info-only, which no draw, light,
   // camera or material reads: nothing read.
   update({ itemsUntouched: 10 }),
+  // The checker's coordinates: that material read again, and the sign's
+  // mesh, which now draws the card set as a channel of its own, planned
+  // again (rebuilt); no draw, light or camera read.
+  update({ rebuilt: 1, triangulations: 1, itemsUntouched: 10, materialsRead: 1, materials: 1 }),
 ];
 
 /** The transform cache's counters after the last viewport was built. */
@@ -761,6 +774,14 @@ try {
   assert.deepEqual(glow("North"), [sample.beaconMoved[0], sample.beaconMoved[1] + 2, sample.beaconMoved[2]]);
   assert.deepEqual(glow("South"), [2, 2, -5]);
   console.log("ok the beacons' glows, one per instance");
+  // The sign's buffer draws the card set the checker reads, besides `st`.
+  const sign = model.list!.items().find((item) => item.prim === sample.sign)!;
+  const signMesh = model.list!.buffers(sign.buffer)!.mesh;
+  assert.deepEqual(
+    signMesh.uvSets.map((set) => [set.name, [...set.values.subarray(0, 4)]]),
+    [[sample.card, [0, 0, Math.fround(1.3333334), 0]]],
+  );
+  console.log("ok the sign's card set, drawn for the checker");
   // The strip's UDIM set: the tiles the scene's storage has, as the page
   // finds them from the directory's listing and OpenUSD tile by tile.
   const strip = model.list!.material(sample.tiles)!.textures[0]!;

@@ -5,3 +5,4 @@
 
 pub(crate) mod layer_json;
 pub(crate) mod schema_scene;
+pub(crate) mod scratch;

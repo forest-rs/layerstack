@@ -14,8 +14,9 @@
 //! it leaves out.
 #![cfg(not(target_arch = "wasm32"))]
 
+use crate::support::scratch::fresh_scratch_dir;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Command, Stdio};
 
 use layerstack::{
@@ -68,11 +69,6 @@ impl AssetResolver for NoAssets {
     fn resolved_path(&self, _: LayerId) -> Option<&str> {
         None
     }
-}
-
-/// A per-test directory under Cargo's integration-test scratch space.
-fn scratch_dir() -> PathBuf {
-    Path::new(env!("CARGO_TARGET_TMPDIR")).join("prim_relocates")
 }
 
 /// Where layerstack's import of `source` fails (`line:column`), or
@@ -157,9 +153,7 @@ fn prim_relocates_are_refused_as_openusd_refuses_them() {
         eprintln!("skipped prim relocates oracle: set LAYERSTACK_USD_PYTHON");
         return;
     }
-    let dir = scratch_dir();
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = fresh_scratch_dir("prim_relocates");
     let usdc = dir.join("prim_relocates.usdc");
     std::fs::write(&usdc, bytes).unwrap();
     let stdin: Vec<&str> = REFUSED.iter().copied().chain([ACCEPTED]).collect();

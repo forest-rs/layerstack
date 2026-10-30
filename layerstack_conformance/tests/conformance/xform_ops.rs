@@ -22,6 +22,7 @@
 //! time, undoing each; a rejected call authors nothing. Everything must
 //! agree.
 
+use crate::support::scratch::scratch_dir;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
@@ -396,7 +397,7 @@ fn the_op_api_authors_the_fixture_scene() {
     )
     .expect("saves");
     if text != SCENE {
-        let out = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("xform_ops.usda");
+        let out = scratch_dir("xform_ops.usda");
         std::fs::write(&out, &text).expect("writes");
         panic!(
             "the op API no longer authors fixtures/xform_ops/scene.usda; the new scene is {}: copy \

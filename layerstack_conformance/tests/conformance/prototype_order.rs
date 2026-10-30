@@ -19,8 +19,9 @@
 //! Spec: AOUSD Core §11.3.3 (instances share a prototype).
 #![cfg(not(target_arch = "wasm32"))]
 
+use crate::support::scratch::{fresh_scratch_dir, scratch_dir};
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
 use layerstack::stage::flatten::FlattenRequirements;
@@ -147,7 +148,7 @@ fn many_scene() -> String {
     root.push_str(
         "def \"n\" (\n    instanceable = true\n    references = @library.usda@</Nest>\n)\n{\n}\n",
     );
-    std::fs::write(scratch_dir().join("library.usda"), library).unwrap();
+    std::fs::write(scratch_dir("prototype_order").join("library.usda"), library).unwrap();
     root
 }
 
@@ -168,11 +169,6 @@ def visit(path):
 layer.Traverse(Sdf.Path.absoluteRootPath, visit)
 print(json.dumps(out, sort_keys=True))
 "#;
-
-/// A per-test directory under Cargo's integration-test scratch space.
-fn scratch_dir() -> PathBuf {
-    Path::new(env!("CARGO_TARGET_TMPDIR")).join("prototype_order")
-}
 
 /// usd-core's answer, or `None` without usd-core.
 fn oracle(scene: &Path) -> Option<BTreeMap<String, String>> {
@@ -208,9 +204,7 @@ fn oracle(scene: &Path) -> Option<BTreeMap<String, String>> {
 /// prototype usd-core's deterministic assignment gives it.
 #[test]
 fn flattened_prototypes_follow_deterministic_assignment() {
-    let dir = scratch_dir();
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = fresh_scratch_dir("prototype_order");
     for (name, text) in [
         ("scene.usda", SCENE.to_owned()),
         ("many.usda", many_scene()),

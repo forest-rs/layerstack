@@ -11,6 +11,7 @@
 //! `uniform`/`custom`, `upAxis`, `metersPerUnit`) are checked on the parsed
 //! AST, which records what the file authored.
 
+use crate::support::scratch::scratch_dir;
 use layerstack::doc::{FieldValue, LayerId, Value};
 use layerstack::interner::TokenInterner;
 use layerstack::path::PathInterner;
@@ -736,29 +737,9 @@ fn authored_assets(layer: &layerstack::Layer) -> Vec<String> {
     out
 }
 
-/// A per-test directory under Cargo's integration-test scratch space.
-///
-/// Under WASI only the crate directory and its parent are preopened (see
-/// `.cargo/config.toml`), so the path is made relative to them there.
-fn scratch_dir(name: &str) -> std::path::PathBuf {
-    let tmp = std::path::Path::new(env!("CARGO_TARGET_TMPDIR"));
-    let base = if cfg!(target_os = "wasi") {
-        let workspace = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .expect("crate is inside the workspace");
-        std::path::Path::new("..").join(
-            tmp.strip_prefix(workspace)
-                .expect("target directory is inside the workspace"),
-        )
-    } else {
-        tmp.to_path_buf()
-    };
-    base.join(format!("mesh-export-{name}"))
-}
-
 #[test]
 fn moved_usdz_resolves_every_internal_asset() {
-    let base = scratch_dir("moved-usdz");
+    let base = scratch_dir("mesh-export-moved-usdz");
     // Start clean if an earlier run was interrupted.
     let _ = std::fs::remove_dir_all(&base);
     let sources = base.join("sources");

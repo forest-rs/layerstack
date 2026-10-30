@@ -36,6 +36,7 @@
 //!
 //! Without such a Python that check reports that it skipped and passes.
 
+use crate::support::scratch::fresh_scratch_dir;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
@@ -709,26 +710,6 @@ fn save(layer: &Layer, store: &InMemoryStore) -> (Result<String, String>, Result
     )
 }
 
-/// A per-test directory under Cargo's integration-test scratch space.
-///
-/// Under WASI only the crate directory and its parent are preopened (see
-/// `.cargo/config.toml`), so the path is made relative to them there.
-fn scratch_dir(name: &str) -> PathBuf {
-    let tmp = Path::new(env!("CARGO_TARGET_TMPDIR"));
-    let base = if cfg!(target_os = "wasi") {
-        let workspace = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .expect("crate is inside the workspace");
-        Path::new("..").join(
-            tmp.strip_prefix(workspace)
-                .expect("target directory is inside the workspace"),
-        )
-    } else {
-        tmp.to_path_buf()
-    };
-    base.join(format!("flatten-{name}"))
-}
-
 fn oracle_script() -> &'static str {
     concat!(env!("CARGO_MANIFEST_DIR"), "/scripts/flatten_oracle.py")
 }
@@ -755,9 +736,7 @@ fn flatten_matches_openusd() {
         return;
     };
     eprintln!("OpenUSD {version} via {python}");
-    let dir = scratch_dir("oracle");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = fresh_scratch_dir("flatten-oracle");
     let absolute = |path: &Path| std::fs::canonicalize(path).unwrap();
 
     let mut failures = Vec::new();

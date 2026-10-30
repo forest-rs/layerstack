@@ -15,8 +15,8 @@
 //! Spec: AOUSD Core §12.3.4 (value clips), §12.3.2.1 (layer offsets).
 #![cfg(not(target_arch = "wasm32"))]
 
+use crate::support::scratch::fresh_scratch_dir;
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use layerstack::{StageOptions, Time};
@@ -154,11 +154,6 @@ impl Storage for Files {
     }
 }
 
-/// A per-test directory under Cargo's integration-test scratch space.
-fn scratch_dir() -> PathBuf {
-    Path::new(env!("CARGO_TARGET_TMPDIR")).join("clip_offsets")
-}
-
 /// usd-core's reads of the scene, or `None` without usd-core.
 fn oracle() -> Option<Json> {
     let explicit = std::env::var("LAYERSTACK_USD_PYTHON").ok();
@@ -175,9 +170,7 @@ fn oracle() -> Option<Json> {
         eprintln!("skipped clip offset oracle: set LAYERSTACK_USD_PYTHON");
         return None;
     }
-    let dir = scratch_dir();
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = fresh_scratch_dir("clip_offsets");
     for (name, text) in layers() {
         std::fs::write(dir.join(name), text).unwrap();
     }

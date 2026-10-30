@@ -22,6 +22,7 @@
 #[path = "../generated/schema_views.rs"]
 mod table;
 
+use crate::support::scratch::scratch_dir;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -250,7 +251,7 @@ fn setters_author_the_fixture_scene() {
     let text = layerstack_usda::save_usda(layer, store.tokens(), store.paths())
         .expect("the authored layer saves");
     if text != SCENE {
-        let out = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("schema_views.usda");
+        let out = scratch_dir("schema_views.usda");
         std::fs::write(&out, &text).expect("writes the new scene");
         panic!(
             "the setters no longer author fixtures/schema_views/scene.usda; the new scene is \
@@ -468,7 +469,7 @@ fn targets_map_through_the_edit_target() {
         ("mapped_asset.usda", &asset, MAPPED_ASSET),
     ] {
         if text != fixture {
-            let out = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join(name);
+            let out = scratch_dir(name);
             std::fs::write(&out, text).expect("writes the new layer");
             panic!(
                 "the edit no longer authors fixtures/schema_views/{name}; the new layer is {}: \
@@ -771,7 +772,7 @@ fn local_variant_targets_keep_paths_outside_the_branch() {
     )
     .expect("saves");
     if text != LOCAL_VARIANT {
-        let out = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("local_variant.usda");
+        let out = scratch_dir("local_variant.usda");
         std::fs::write(&out, &text).expect("writes the new layer");
         panic!(
             "the edit no longer authors fixtures/schema_views/local_variant.usda; the new layer \

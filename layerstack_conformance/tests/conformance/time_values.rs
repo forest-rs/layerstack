@@ -17,8 +17,9 @@
 //! Spec: AOUSD Core §12.3.2.1 (layer offsets), §12.3.4 (value clips).
 #![cfg(not(target_arch = "wasm32"))]
 
+use crate::support::scratch::fresh_scratch_dir;
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 use std::sync::Arc;
 
@@ -241,11 +242,6 @@ impl Storage for Files {
     }
 }
 
-/// A per-test directory under Cargo's integration-test scratch space.
-fn scratch_dir() -> PathBuf {
-    Path::new(env!("CARGO_TARGET_TMPDIR")).join("time_values")
-}
-
 /// usd-core's Python, or `None` (after noting the skip) when it is not
 /// available and `LAYERSTACK_USD_PYTHON` does not ask for it.
 fn python() -> Option<String> {
@@ -349,9 +345,7 @@ fn mismatches(got: &Json, want: &Json, paths: &[&str]) -> Vec<String> {
 /// usd-core's reads of the scene, or `None` without usd-core.
 fn oracle() -> Option<Json> {
     let python = python()?;
-    let dir = scratch_dir();
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = fresh_scratch_dir("time_values");
     for (name, text) in LAYERS {
         std::fs::write(dir.join(name), text).unwrap();
     }

@@ -24,6 +24,7 @@
 //! the number of placed meshes. Everywhere else, and without the variable,
 //! that test reports that it skipped and passes.
 
+use crate::support::scratch::fresh_scratch_dir;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -33,29 +34,6 @@ use layerstack_mesh_export::{
     StageSettings, Transform, UpAxis, UsdzProfile, Xform,
 };
 use serde::Deserialize;
-
-/// A per-test directory under Cargo's integration-test scratch space.
-///
-/// Under WASI only the crate directory and its parent are preopened (see
-/// `.cargo/config.toml`), so the path is made relative to them there.
-fn scratch_dir(name: &str) -> PathBuf {
-    let tmp = Path::new(env!("CARGO_TARGET_TMPDIR"));
-    let base = if cfg!(target_os = "wasi") {
-        let workspace = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .expect("crate is inside the workspace");
-        Path::new("..").join(
-            tmp.strip_prefix(workspace)
-                .expect("target directory is inside the workspace"),
-        )
-    } else {
-        tmp.to_path_buf()
-    };
-    let dir = base.join(format!("instanced-references-{name}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    dir
-}
 
 /// Meshes in each prototype, by prototype index: the pine's trunk and
 /// crown, the boulder, the shrub's leaves.
@@ -257,7 +235,7 @@ fn references_draw_what_the_instancers_draw() {
         return;
     };
     let fixture = Fixture::new();
-    let dir = scratch_dir("oracle");
+    let dir = fresh_scratch_dir("instanced-references-oracle");
     let [generic, arkit] = write(&fixture, &dir);
     let script = Path::new(env!("CARGO_MANIFEST_DIR")).join("scripts/instancing_oracle.py");
     let out = Command::new(&python)
@@ -366,7 +344,7 @@ fn usdchecker_accepts_the_arkit_package() {
         return;
     };
     eprintln!("usdchecker: {version}");
-    let dir = scratch_dir("checker");
+    let dir = fresh_scratch_dir("instanced-references-checker");
     let [generic, arkit] = write(&Fixture::new(), &dir);
     let help = Command::new("usdchecker").arg("--help").output().unwrap();
     // OpenUSD 26.05 removed `--arkit`; from then on the USDZ validators
@@ -411,7 +389,7 @@ fn scenekit_draws_every_instance() {
         return;
     }
     let fixture = Fixture::new();
-    let dir = scratch_dir("scenekit");
+    let dir = fresh_scratch_dir("instanced-references-scenekit");
     let [_, arkit] = write(&fixture, &dir);
     let png = dir.join("scene_arkit.png");
     let script = Path::new(env!("CARGO_MANIFEST_DIR")).join("scripts/scenekit_check.swift");
@@ -590,7 +568,7 @@ fn chains_of_shared_prototypes_place_their_geometry() {
         return;
     };
     let chain = Chain::new();
-    let dir = scratch_dir("chains");
+    let dir = fresh_scratch_dir("instanced-references-chains");
     let files = write_forms(&chain.scene(), &dir);
     let report = oracle(&python, &files);
     eprintln!("OpenUSD {} via {python}", report.version);
@@ -708,7 +686,7 @@ fn unindexed_overrides_block_inherited_indices() {
         eprintln!("skipped: no Python with OpenUSD's pxr (set LAYERSTACK_USD_PYTHON)");
         return;
     };
-    let dir = scratch_dir("indices");
+    let dir = fresh_scratch_dir("instanced-references-indices");
     let files = write_forms(&tinted_scene(), &dir);
     let report = oracle(&python, &files);
     eprintln!("OpenUSD {} via {python}", report.version);

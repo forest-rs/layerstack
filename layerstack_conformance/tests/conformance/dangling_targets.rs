@@ -27,6 +27,7 @@
 //! Spec: AOUSD Core §11.3 (population), §12.4 (target lists), §15
 //! (collections).
 
+use crate::support::scratch::scratch_dir;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
@@ -300,26 +301,6 @@ fn fixture_covers_every_kind() {
     assert!(report.targets.total().masked > 0);
 }
 
-/// A per-test directory under Cargo's integration-test scratch space.
-///
-/// Under WASI only the crate directory and its parent are preopened (see
-/// `.cargo/config.toml`), so the path is made relative to them there.
-fn scratch_dir(name: &str) -> std::path::PathBuf {
-    let tmp = std::path::Path::new(env!("CARGO_TARGET_TMPDIR"));
-    let base = if cfg!(target_os = "wasi") {
-        let workspace = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .expect("crate is inside the workspace");
-        std::path::Path::new("..").join(
-            tmp.strip_prefix(workspace)
-                .expect("target directory is inside the workspace"),
-        )
-    } else {
-        tmp.to_path_buf()
-    };
-    base.join(format!("dangling-targets-{name}"))
-}
-
 /// The generated parts library's dangling knob injects exactly the paths it
 /// counts, and leaves the rest of the library as the seed made it.
 #[test]
@@ -347,7 +328,7 @@ fn library_dangling_knob() {
         clean.counts.include_targets + rule_maps
     );
 
-    let dir = scratch_dir("library");
+    let dir = scratch_dir("dangling-targets-library");
     let _ = std::fs::remove_dir_all(&dir);
     let written = library.write(&dir, LibraryFormat::Usda).expect("writes");
     let mut loaded = load_entry_usda(&written.root);

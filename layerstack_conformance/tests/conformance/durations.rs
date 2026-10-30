@@ -14,7 +14,8 @@
 //! clips.
 #![cfg(not(target_arch = "wasm32"))]
 
-use std::path::{Path, PathBuf};
+use crate::support::scratch::fresh_scratch_dir;
+use std::path::Path;
 use std::process::Command;
 
 use layerstack::{
@@ -69,11 +70,6 @@ impl AssetResolver for NoAssets {
     }
 }
 
-/// A per-test directory under Cargo's integration-test scratch space.
-fn scratch_dir() -> PathBuf {
-    Path::new(env!("CARGO_TARGET_TMPDIR")).join("durations")
-}
-
 /// Runs `script` with OpenUSD's Python, `args` after it; its stdout.
 fn openusd(python: &str, script: &str, args: &[&Path]) -> String {
     let output = Command::new(python)
@@ -107,9 +103,7 @@ fn durations_round_trip_with_openusd() {
         eprintln!("skipped duration oracle: set LAYERSTACK_USD_PYTHON");
         return;
     }
-    let dir = scratch_dir();
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = fresh_scratch_dir("durations");
     let source = dir.join("source.usda");
     let theirs = dir.join("openusd.usdc");
     std::fs::write(&source, SOURCE.replace("#usda 1.4", "#usda 1.0")).unwrap();

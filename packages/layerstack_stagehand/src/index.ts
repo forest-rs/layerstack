@@ -28,8 +28,8 @@
  * ```
  *
  * A {@link DrawList} ({@link Stagehand.drawList}) keeps a whole stage's
- * instanced draws and buffers, cameras and lights, and applies the stage's
- * change records as diffs.
+ * instanced draws and buffers, cameras, lights and materials, and applies
+ * the stage's change records as diffs.
  *
  * @module
  */
@@ -50,6 +50,23 @@ export type { DrawBuffers, DrawDiff, DrawItem, DrawOptions, DrawWork, ItemSource
 export { SHAPE_SCHEMAS, readMesh, readPoints, readShape, shapeSchema } from "./read.js";
 export { LIGHT_SCHEMAS, lightKind, lightSizeFactor, readLight } from "./light.js";
 export { conformCamera } from "./camera.js";
+export { anchorAssetPath, isUdim, readMaterial, udimTiles } from "./material.js";
+export type {
+  AlphaMode,
+  MaterialItem,
+  MaterialNote,
+  MaterialNoteKind,
+  MaterialReading,
+  MaterialTexture,
+  MaterialValue,
+  TextureChannel,
+  TextureColorSpace,
+  TextureCoordinates,
+  TextureFile,
+  TextureTransform,
+  TextureWrap,
+  UdimTileFile,
+} from "./material.js";
 export type {
   CameraItem,
   LightEmission,

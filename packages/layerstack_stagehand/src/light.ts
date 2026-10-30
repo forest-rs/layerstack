@@ -203,8 +203,12 @@ type Vec3 = readonly [number, number, number];
 
 /**
  * Reads the light at `path` of `kind` at `time`, given its world matrix
- * and visibility, as `layerstack_stagehand` reads it: inputs as their own
- * values with the schema fallbacks.
+ * and visibility, as `layerstack_stagehand` reads it: inputs with the
+ * schema fallbacks, a connected input through its connections
+ * (`GetValueProducingAttributes`): one attribute with a value is read (the
+ * input's own when every connection fails, as OpenUSD falls back to it); a
+ * shader output or several sources read nothing, so the input takes its
+ * fallback. The prims the connections inspected are added to `sources`.
  */
 export function readLight(
   stage: Stage,
@@ -213,9 +217,37 @@ export function readLight(
   time: number | undefined,
   matrix: Float64Array,
   hidden: boolean,
+  sources: string[] = [],
 ): LightItem {
+  const source = (name: string): string | null => {
+    const own = `${path}.${name}`;
+    if (!name.startsWith("inputs:")) return own;
+    const port = stage.port(own);
+    if (port === null || (port.connections.length === 0 && port.invalidConnections.length === 0)) return own;
+    const found = port.valueSources();
+    const seen = new Set(sources);
+    for (const producer of found.sources) {
+      for (const step of [...producer.chain, producer.attribute]) {
+        const prim = step.slice(0, step.lastIndexOf("."));
+        if (prim !== path && !seen.has(prim)) {
+          seen.add(prim);
+          sources.push(prim);
+        }
+      }
+    }
+    for (const target of [...port.connections, ...port.invalidConnections]) {
+      const prim = target.slice(0, target.lastIndexOf("."));
+      if (prim !== path && !seen.has(prim)) {
+        seen.add(prim);
+        sources.push(prim);
+      }
+    }
+    const [one, ...more] = found.sources;
+    return one !== undefined && more.length === 0 && one.kind === "authoredValue" ? one.attribute : null;
+  };
   const get = (name: string): Value | null => {
-    const value = stage.attribute(`${path}.${name}`)?.get(time) ?? null;
+    const at = source(name);
+    const value = at === null ? null : (stage.attribute(at)?.get(time) ?? null);
     if (value?.kind === "array") {
       value.array.release();
       return null;

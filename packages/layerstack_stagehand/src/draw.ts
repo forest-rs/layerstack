@@ -9,6 +9,8 @@ import type { Changes, Prim, Stage } from "@forest-rs/layerstack";
 import type { Stagehand, StagehandMesh } from "./index.js";
 import { CAMERA_INPUTS, LIGHT_INPUTS, lightKind, readLight } from "./light.js";
 import type { CameraItem, LightItem, LightKind } from "./light.js";
+import { readMaterial } from "./material.js";
+import type { MaterialItem } from "./material.js";
 import { readMesh, readShape, shapeSchema } from "./read.js";
 import type { MeshInput, MeshOptions, PrimvarInput, Shape, Tessellation } from "./types.js";
 
@@ -25,6 +27,12 @@ export interface DrawOptions {
   readonly mesh?: MeshOptions;
   /** How implicit shapes are cut. */
   readonly tessellation?: Tessellation;
+  /**
+   * The render contexts whose material outputs are read, in order
+   * (`["mtlx"]` reads `outputs:mtlx:surface` first); the universal
+   * `outputs:surface` after them, or alone when empty.
+   */
+  readonly renderContexts?: readonly string[];
 }
 
 /** What an item draws, and why its instances are grouped. */
@@ -113,6 +121,8 @@ export interface DrawWork {
   readonly camerasRead: number;
   /** Lights read again. */
   readonly lightsRead: number;
+  /** Materials read: their networks walked and their records built. */
+  readonly materialsRead: number;
 }
 
 /**
@@ -147,6 +157,12 @@ export interface DrawDiff {
   readonly lightsRemoved: readonly string[];
   /** Lights read again and found different. */
   readonly lightsChanged: readonly string[];
+  /** Materials newly bound by an item. */
+  readonly materialsAdded: readonly string[];
+  /** Materials no item binds any more, or no longer materials. */
+  readonly materialsRemoved: readonly string[];
+  /** Materials read again and found different: an input, a connection, a texture's file or sampling. */
+  readonly materialsChanged: readonly string[];
   readonly work: DrawWork;
 }
 
@@ -366,10 +382,35 @@ interface Found {
   prims: number;
 }
 
-/** A camera or a light, and whether what it reads might differ at another time, as last read. */
+/**
+ * A camera, a light or a material, whether what it reads might differ at
+ * another time, and the other prims it reads (a light's connection
+ * sources, a material's shaders and node graphs), as last read.
+ */
 interface Held<T> {
   item: T;
   varies: boolean;
+  sources: readonly string[];
+}
+
+/** Whether a property name is a shading port or a shader's identity: what a material or a connected light input reads of a shading prim. */
+function shadingProperty(name: string): boolean {
+  return name.startsWith("inputs:") || name.startsWith("outputs:") || name.startsWith("info:");
+}
+
+/** Whether `changes` reach the shading properties of the prim at `prim`, as `layerstack_stagehand` decides it. */
+function shadingTouched(changes: Pick<Changes, "changedInfoOnly" | "properties" | "resyncedProperties">, roots: readonly string[], prim: string): boolean {
+  return (
+    roots.some((root) => under(prim, root)) ||
+    changes.changedInfoOnly.some((changed) => {
+      const inventory = changes.properties.find((properties) => properties.prim === changed);
+      return inventory === undefined ? under(prim, changed) : changed === prim && inventory.fields.some((field) => shadingProperty(field.property));
+    }) ||
+    changes.resyncedProperties.some((property) => {
+      const dot = property.lastIndexOf(".");
+      return property.slice(0, dot) === prim && shadingProperty(property.slice(dot + 1));
+    })
+  );
 }
 
 /** Cameras or lights added, removed and changed in the diff being gathered. */
@@ -420,6 +461,7 @@ class Gather {
   freed = new Set<number>();
   cameras = new Changed();
   lights = new Changed();
+  shading = new Changed();
   work = {
     primsTraversed: 0,
     itemsRead: 0,
@@ -433,6 +475,7 @@ class Gather {
     tessellations: 0,
     camerasRead: 0,
     lightsRead: 0,
+    materialsRead: 0,
   };
 }
 
@@ -457,6 +500,10 @@ const sorted = (set: Set<number>) => [...set].sort((a, b) => a - b);
  *   {@link dispose} frees them all.
  * - Cameras ({@link CameraItem}) and lights ({@link LightItem}) are held
  *   by path beside the items, and diffed as added, removed and changed.
+ * - Materials ({@link MaterialItem}) are held for the materials the items
+ *   bind, by path, and diffed the same way: one is read when an item comes
+ *   to bind it, and again only when a shading property (`inputs:*`,
+ *   `outputs:*`, `info:*`) of it or of a prim its network reads changes.
  * - Diffs ({@link DrawDiff}): {@link refresh} reads the whole stage;
  *   {@link applyChanges} reads what a change record reaches (resynced
  *   paths rediscover their subtree; changed properties are classified by
@@ -486,6 +533,8 @@ export class DrawList implements Disposable {
   readonly #shapeBuffers = new Map<string, number>();
   readonly #cameras = new Map<string, Held<CameraItem>>();
   readonly #lights = new Map<string, Held<LightItem>>();
+  readonly #materials = new Map<string, Held<MaterialItem>>();
+  readonly #contexts: readonly string[];
   /** Each prim type's {@link Kind}: `IsA` depends on the type alone. */
   readonly #kinds = new Map<string, Kind>();
   #nextItem = 0;
@@ -499,6 +548,7 @@ export class DrawList implements Disposable {
     this.#purposes = new Set(options.purposes ?? ["default", "proxy"]);
     this.#meshOptions = options.mesh ?? {};
     this.#tessellation = options.tessellation ?? {};
+    this.#contexts = [...(options.renderContexts ?? [])];
   }
 
   /** The time it reads; `undefined` for the default time. */
@@ -539,6 +589,16 @@ export class DrawList implements Disposable {
   /** The light at `path`, while it is listed. */
   light(path: string): LightItem | null {
     return this.#lights.get(path)?.item ?? null;
+  }
+
+  /** The materials the items bind ({@link MaterialItem}), by path. */
+  materials(): MaterialItem[] {
+    return [...this.#materials.values()].map((held) => held.item);
+  }
+
+  /** The material at `path`, while an item binds it. */
+  material(path: string): MaterialItem | null {
+    return this.#materials.get(path)?.item ?? null;
   }
 
   /** Reads the whole stage: the first call adds every item; a later one reports what differs, reusing what did not change. */
@@ -586,6 +646,7 @@ export class DrawList implements Disposable {
     }
     for (const [path, held] of [...this.#cameras]) if (held.varies) this.#readCamera(path, gather);
     for (const [path, held] of [...this.#lights]) if (held.varies) this.#readLight(path, held.item.kind, gather);
+    for (const [path, held] of [...this.#materials]) if (held.varies) this.#readMaterial(path, gather);
     return this.#finish(gather, read, before);
   }
 
@@ -599,6 +660,7 @@ export class DrawList implements Disposable {
     this.#shapeBuffers.clear();
     this.#cameras.clear();
     this.#lights.clear();
+    this.#materials.clear();
   }
 
   [Symbol.dispose](): void {
@@ -698,7 +760,48 @@ export class DrawList implements Disposable {
       read.add(id);
       if (!this.#read(id, entry.item.source, what, false, gather)) this.#remove(id, gather);
     }
+    this.#applyToMaterials(changes, found.scopes.flatMap((scope) => (scope.kind === "resync" ? [scope.root] : [])), gather);
     return this.#finish(gather, read, before);
+  }
+
+  /**
+   * Brings the materials up to the stage once the items are, as
+   * `layerstack_stagehand` does: one no item binds any more is dropped, a
+   * newly bound one read, and a held one read again when a shading
+   * property of it, or of a prim its network reads, changes.
+   */
+  #applyToMaterials(changes: Pick<Changes, "changedInfoOnly" | "properties" | "resyncedProperties">, roots: readonly string[], gather: Gather): void {
+    const bound = new Set<string>();
+    for (const entry of this.#entries.values()) {
+      if (entry.item.material !== null) bound.add(entry.item.material);
+      for (const material of entry.item.subsetMaterials) if (material !== null) bound.add(material);
+    }
+    for (const path of [...this.#materials.keys()]) {
+      if (!bound.has(path)) {
+        this.#materials.delete(path);
+        gather.shading.removed.add(path);
+      }
+    }
+    for (const path of [...bound].sort()) {
+      const held = this.#materials.get(path);
+      if (held === undefined || [path, ...held.sources].some((prim) => shadingTouched(changes, roots, prim))) this.#readMaterial(path, gather);
+    }
+  }
+
+  /** Reads the material at `path` again ({@link readMaterial}) and records whether it changed. */
+  #readMaterial(path: string, gather: Gather): void {
+    gather.work.materialsRead++;
+    const reading = readMaterial(this.#stage, path, this.#time, this.#contexts);
+    if (reading === null) {
+      if (this.#materials.delete(path)) gather.shading.removed.add(path);
+      return;
+    }
+    const attributes = reading.attributes;
+    const varies = attributes.length > 0 && this.#stage.valueSourcesMightBeTimeVarying(attributes).includes(true);
+    const old = this.#materials.get(path);
+    this.#materials.set(path, { item: reading.item, varies, sources: reading.sources });
+    if (old === undefined) gather.shading.added.add(path);
+    else if (!sameRecord(old.item, reading.item)) gather.shading.changed.add(path);
   }
 
   #finish(gather: Gather, read: Set<number>, localBefore: number): DrawDiff {
@@ -715,6 +818,7 @@ export class DrawList implements Disposable {
     for (const key of gather.rebuilt) gather.refilled.delete(key);
     const [camerasAdded, camerasRemoved, camerasChanged] = gather.cameras.finish();
     const [lightsAdded, lightsRemoved, lightsChanged] = gather.lights.finish();
+    const [materialsAdded, materialsRemoved, materialsChanged] = gather.shading.finish();
     const live = [...read].filter((id) => this.#entries.has(id));
     gather.work.itemsRead = live.length;
     gather.work.itemsUntouched = this.#entries.size - live.length;
@@ -736,6 +840,9 @@ export class DrawList implements Disposable {
       lightsAdded,
       lightsRemoved,
       lightsChanged,
+      materialsAdded,
+      materialsRemoved,
+      materialsChanged,
       work: { ...gather.work },
     };
   }
@@ -865,7 +972,10 @@ export class DrawList implements Disposable {
         gather.lights.removed.add(path);
       }
     }
-    for (const [path, held] of this.#lights) if (reaches(path, LIGHT_INPUTS) && !lights.has(path)) lights.set(path, held.item.kind);
+    for (const [path, held] of this.#lights) {
+      const touched = reaches(path, LIGHT_INPUTS) || held.sources.some((source) => shadingTouched(changes, roots, source));
+      if (touched && !lights.has(path)) lights.set(path, held.item.kind);
+    }
     for (const [path, kind] of [...lights].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) this.#readLight(path, kind, gather);
   }
 
@@ -886,7 +996,7 @@ export class DrawList implements Disposable {
     }
     const varies = this.#worldMightVary([path]) || this.#inputsMightVary([path], CAMERA_INPUTS);
     const old = this.#cameras.get(path);
-    this.#cameras.set(path, { item, varies });
+    this.#cameras.set(path, { item, varies, sources: [] });
     if (old === undefined) gather.cameras.added.add(path);
     else if (!sameRecord(old.item, item)) gather.cameras.changed.add(path);
   }
@@ -900,10 +1010,16 @@ export class DrawList implements Disposable {
     }
     const at = this.#time === undefined ? {} : { time: this.#time };
     const hidden = this.#stage.visibilities([path], at)[0] === "invisible";
-    const item = readLight(this.#stage, path, kind, this.#time, this.#world([path]), hidden);
-    const varies = this.#worldMightVary([path]) || this.#visibilityMightVary([path]) || this.#inputsMightVary([path], LIGHT_INPUTS);
+    const sources: string[] = [];
+    const item = readLight(this.#stage, path, kind, this.#time, this.#world([path]), hidden, sources);
+    // A connected input's source might vary as well as its own value.
+    const varies =
+      this.#worldMightVary([path]) ||
+      this.#visibilityMightVary([path]) ||
+      this.#inputsMightVary([path], LIGHT_INPUTS) ||
+      this.#shadingMightVary(sources);
     const old = this.#lights.get(path);
-    this.#lights.set(path, { item, varies });
+    this.#lights.set(path, { item, varies, sources });
     if (old === undefined) gather.lights.added.add(path);
     else if (!sameRecord(old.item, item)) gather.lights.changed.add(path);
   }
@@ -988,6 +1104,14 @@ export class DrawList implements Disposable {
   /** Whether any of the attributes `names` of any of `prims` might hold another value at another time. */
   #inputsMightVary(prims: readonly string[], names: readonly string[]): boolean {
     const paths = prims.flatMap((prim) => names.map((name) => `${prim}.${name}`));
+    return paths.length > 0 && this.#stage.valueSourcesMightBeTimeVarying(paths).includes(true);
+  }
+
+  /** Whether any shading input or output of `prims` might hold another value at another time. */
+  #shadingMightVary(prims: readonly string[]): boolean {
+    const paths = prims.flatMap((prim) =>
+      (this.#stage.prim(prim)?.attributeNames() ?? []).filter(shadingProperty).map((name) => `${prim}.${name}`),
+    );
     return paths.length > 0 && this.#stage.valueSourcesMightBeTimeVarying(paths).includes(true);
   }
 

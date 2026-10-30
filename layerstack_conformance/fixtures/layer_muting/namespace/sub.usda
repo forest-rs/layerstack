@@ -1,0 +1,24 @@
+#usda 1.0
+
+over "World"
+{
+    over "Lamp"
+    {
+        float intensity = 2
+        rel target = </World/Lamp/Bulb>
+    }
+
+    over "Switch"
+    {
+        rel other = </World/Lamp>
+    }
+
+    def "OnlySub"
+    {
+    }
+
+    over "Light"
+    {
+        float glow = 3
+    }
+}

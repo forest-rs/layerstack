@@ -1,0 +1,13 @@
+#usda 1.0
+
+def "Asset"
+{
+    def "Front" (
+        prepend references = @scene.usda@</World/Lamp>
+    )
+    {
+        over "Bulb"
+        {
+        }
+    }
+}

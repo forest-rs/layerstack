@@ -1,0 +1,939 @@
+{
+ "calls": [
+  {
+   "call": [
+    "is_muted",
+    "lamp.usda"
+   ],
+   "heard": null,
+   "muted": [],
+   "muted_assets": [],
+   "open": [
+    "a.usda",
+    "b.usda",
+    "parts/ball.usda",
+    "scene.usda"
+   ],
+   "properties": {
+    "/Ball": [
+     "a",
+     "b",
+     "points"
+    ],
+    "/Lamp": [],
+    "/Robot": null
+   },
+   "raised": false,
+   "result": false
+  },
+  {
+   "call": [
+    "mute",
+    "lamp.usda"
+   ],
+   "heard": [
+    [
+     "lamp.usda"
+    ],
+    []
+   ],
+   "muted": [
+    "lamp.usda"
+   ],
+   "muted_assets": [],
+   "open": [
+    "a.usda",
+    "b.usda",
+    "parts/ball.usda",
+    "scene.usda"
+   ],
+   "properties": {
+    "/Ball": [
+     "a",
+     "b",
+     "points"
+    ],
+    "/Lamp": [],
+    "/Robot": null
+   },
+   "raised": false,
+   "result": null
+  },
+  {
+   "call": [
+    "is_muted",
+    "./lamp.usda"
+   ],
+   "heard": null,
+   "muted": [
+    "lamp.usda"
+   ],
+   "muted_assets": [],
+   "open": [
+    "a.usda",
+    "b.usda",
+    "parts/ball.usda",
+    "scene.usda"
+   ],
+   "properties": {
+    "/Ball": [
+     "a",
+     "b",
+     "points"
+    ],
+    "/Lamp": [],
+    "/Robot": null
+   },
+   "raised": false,
+   "result": true
+  },
+  {
+   "call": [
+    "is_muted",
+    "parts/../lamp.usda"
+   ],
+   "heard": null,
+   "muted": [
+    "lamp.usda"
+   ],
+   "muted_assets": [],
+   "open": [
+    "a.usda",
+    "b.usda",
+    "parts/ball.usda",
+    "scene.usda"
+   ],
+   "properties": {
+    "/Ball": [
+     "a",
+     "b",
+     "points"
+    ],
+    "/Lamp": [],
+    "/Robot": null
+   },
+   "raised": false,
+   "result": true
+  },
+  {
+   "call": [
+    "reference",
+    "/Lamp",
+    "./lamp.usda",
+    "/Lamp"
+   ],
+   "heard": null,
+   "muted": [
+    "lamp.usda"
+   ],
+   "muted_assets": [
+    [
+     "/Lamp",
+     "lamp.usda",
+     "scene.usda"
+    ]
+   ],
+   "open": [
+    "a.usda",
+    "b.usda",
+    "parts/ball.usda",
+    "scene.usda"
+   ],
+   "properties": {
+    "/Ball": [
+     "a",
+     "b",
+     "points"
+    ],
+    "/Lamp": [],
+    "/Robot": null
+   },
+   "raised": false,
+   "result": null
+  },
+  {
+   "call": [
+    "unmute",
+    "./lamp.usda"
+   ],
+   "heard": [
+    [],
+    [
+     "lamp.usda"
+    ]
+   ],
+   "muted": [],
+   "muted_assets": [],
+   "open": [
+    "a.usda",
+    "b.usda",
+    "lamp.usda",
+    "parts/ball.usda",
+    "scene.usda"
+   ],
+   "properties": {
+    "/Ball": [
+     "a",
+     "b",
+     "points"
+    ],
+    "/Lamp": [
+     "glow"
+    ],
+    "/Robot": null
+   },
+   "raised": false,
+   "result": null
+  },
+  {
+   "call": [
+    "mute",
+    "parts/ball.usda"
+   ],
+   "heard": [
+    [
+     "parts/ball.usda"
+    ],
+    []
+   ],
+   "muted": [
+    "parts/ball.usda"
+   ],
+   "muted_assets": [
+    [
+     "/Ball",
+     "parts/ball.usda",
+     "scene.usda"
+    ]
+   ],
+   "open": [
+    "a.usda",
+    "b.usda",
+    "lamp.usda",
+    "scene.usda"
+   ],
+   "properties": {
+    "/Ball": [
+     "a",
+     "b"
+    ],
+    "/Lamp": [
+     "glow"
+    ],
+    "/Robot": null
+   },
+   "raised": false,
+   "result": null
+  },
+  {
+   "call": [
+    "reference",
+    "/Robot",
+    "parts/robot.usda",
+    "/Robot"
+   ],
+   "heard": null,
+   "muted": [
+    "parts/ball.usda"
+   ],
+   "muted_assets": [
+    [
+     "/Ball",
+     "parts/ball.usda",
+     "scene.usda"
+    ],
+    [
+     "/Robot",
+     "parts/ball.usda",
+     "parts/robot.usda"
+    ]
+   ],
+   "open": [
+    "a.usda",
+    "b.usda",
+    "lamp.usda",
+    "parts/robot.usda",
+    "scene.usda"
+   ],
+   "properties": {
+    "/Ball": [
+     "a",
+     "b"
+    ],
+    "/Lamp": [
+     "glow"
+    ],
+    "/Robot": []
+   },
+   "raised": false,
+   "result": null
+  },
+  {
+   "call": [
+    "is_muted",
+    "parts/./ball.usda"
+   ],
+   "heard": null,
+   "muted": [
+    "parts/ball.usda"
+   ],
+   "muted_assets": [
+    [
+     "/Ball",
+     "parts/ball.usda",
+     "scene.usda"
+    ],
+    [
+     "/Robot",
+     "parts/ball.usda",
+     "parts/robot.usda"
+    ]
+   ],
+   "open": [
+    "a.usda",
+    "b.usda",
+    "lamp.usda",
+    "parts/robot.usda",
+    "scene.usda"
+   ],
+   "properties": {
+    "/Ball": [
+     "a",
+     "b"
+    ],
+    "/Lamp": [
+     "glow"
+    ],
+    "/Robot": []
+   },
+   "raised": false,
+   "result": true
+  },
+  {
+   "call": [
+    "mute_and_unmute",
+    [
+     "a.usda"
+    ],
+    [
+     "a.usda"
+    ]
+   ],
+   "heard": [
+    [
+     "a.usda"
+    ],
+    []
+   ],
+   "muted": [
+    "a.usda",
+    "parts/ball.usda"
+   ],
+   "muted_assets": [
+    [
+     "/Ball",
+     "parts/ball.usda",
+     "scene.usda"
+    ],
+    [
+     "/Robot",
+     "parts/ball.usda",
+     "parts/robot.usda"
+    ]
+   ],
+   "open": [
+    "b.usda",
+    "lamp.usda",
+    "parts/robot.usda",
+    "scene.usda"
+   ],
+   "properties": {
+    "/Ball": [
+     "b"
+    ],
+    "/Lamp": [
+     "glow"
+    ],
+    "/Robot": []
+   },
+   "raised": false,
+   "result": null
+  },
+  {
+   "call": [
+    "mute_and_unmute",
+    [
+     "b.usda"
+    ],
+    [
+     "./b.usda"
+    ]
+   ],
+   "heard": [
+    [
+     "b.usda"
+    ],
+    [
+     "b.usda"
+    ]
+   ],
+   "muted": [
+    "a.usda",
+    "parts/ball.usda"
+   ],
+   "muted_assets": [
+    [
+     "/Ball",
+     "parts/ball.usda",
+     "scene.usda"
+    ],
+    [
+     "/Robot",
+     "parts/ball.usda",
+     "parts/robot.usda"
+    ]
+   ],
+   "open": [
+    "b.usda",
+    "lamp.usda",
+    "parts/robot.usda",
+    "scene.usda"
+   ],
+   "properties": {
+    "/Ball": [
+     "b"
+    ],
+    "/Lamp": [
+     "glow"
+    ],
+    "/Robot": []
+   },
+   "raised": false,
+   "result": null
+  },
+  {
+   "call": [
+    "mute_and_unmute",
+    [
+     "b.usda",
+     "./b.usda"
+    ],
+    []
+   ],
+   "heard": [
+    [
+     "b.usda"
+    ],
+    []
+   ],
+   "muted": [
+    "a.usda",
+    "b.usda",
+    "parts/ball.usda"
+   ],
+   "muted_assets": [
+    [
+     "/Ball",
+     "parts/ball.usda",
+     "scene.usda"
+    ],
+    [
+     "/Robot",
+     "parts/ball.usda",
+     "parts/robot.usda"
+    ]
+   ],
+   "open": [
+    "lamp.usda",
+    "parts/robot.usda",
+    "scene.usda"
+   ],
+   "properties": {
+    "/Ball": [],
+    "/Lamp": [
+     "glow"
+    ],
+    "/Robot": []
+   },
+   "raised": false,
+   "result": null
+  },
+  {
+   "call": [
+    "mute_and_unmute",
+    [
+     "a.usda"
+    ],
+    [
+     "b.usda",
+     "b.usda"
+    ]
+   ],
+   "heard": [
+    [],
+    [
+     "b.usda"
+    ]
+   ],
+   "muted": [
+    "a.usda",
+    "parts/ball.usda"
+   ],
+   "muted_assets": [
+    [
+     "/Ball",
+     "parts/ball.usda",
+     "scene.usda"
+    ],
+    [
+     "/Robot",
+     "parts/ball.usda",
+     "parts/robot.usda"
+    ]
+   ],
+   "open": [
+    "b.usda",
+    "lamp.usda",
+    "parts/robot.usda",
+    "scene.usda"
+   ],
+   "properties": {
+    "/Ball": [
+     "b"
+    ],
+    "/Lamp": [
+     "glow"
+    ],
+    "/Robot": []
+   },
+   "raised": false,
+   "result": null
+  },
+  {
+   "call": [
+    "mute_and_unmute",
+    [],
+    [
+     "a.usda",
+     "parts/ball.usda"
+    ]
+   ],
+   "heard": [
+    [],
+    [
+     "a.usda",
+     "parts/ball.usda"
+    ]
+   ],
+   "muted": [],
+   "muted_assets": [],
+   "open": [
+    "a.usda",
+    "b.usda",
+    "lamp.usda",
+    "parts/ball.usda",
+    "parts/robot.usda",
+    "scene.usda"
+   ],
+   "properties": {
+    "/Ball": [
+     "a",
+     "b",
+     "points"
+    ],
+    "/Lamp": [
+     "glow"
+    ],
+    "/Robot": [
+     "points"
+    ]
+   },
+   "raised": false,
+   "result": null
+  },
+  {
+   "call": [
+    "mute",
+    "scene.usda"
+   ],
+   "heard": null,
+   "muted": [],
+   "muted_assets": [],
+   "open": [
+    "a.usda",
+    "b.usda",
+    "lamp.usda",
+    "parts/ball.usda",
+    "parts/robot.usda",
+    "scene.usda"
+   ],
+   "properties": {
+    "/Ball": [
+     "a",
+     "b",
+     "points"
+    ],
+    "/Lamp": [
+     "glow"
+    ],
+    "/Robot": [
+     "points"
+    ]
+   },
+   "raised": true,
+   "result": null
+  },
+  {
+   "call": [
+    "mute_and_unmute",
+    [
+     "./scene.usda",
+     "b.usda"
+    ],
+    []
+   ],
+   "heard": [
+    [
+     "b.usda"
+    ],
+    []
+   ],
+   "muted": [
+    "b.usda"
+   ],
+   "muted_assets": [],
+   "open": [
+    "a.usda",
+    "lamp.usda",
+    "parts/ball.usda",
+    "parts/robot.usda",
+    "scene.usda"
+   ],
+   "properties": {
+    "/Ball": [
+     "a",
+     "points"
+    ],
+    "/Lamp": [
+     "glow"
+    ],
+    "/Robot": [
+     "points"
+    ]
+   },
+   "raised": true,
+   "result": null
+  },
+  {
+   "call": [
+    "unmute",
+    "scene.usda"
+   ],
+   "heard": null,
+   "muted": [
+    "b.usda"
+   ],
+   "muted_assets": [],
+   "open": [
+    "a.usda",
+    "lamp.usda",
+    "parts/ball.usda",
+    "parts/robot.usda",
+    "scene.usda"
+   ],
+   "properties": {
+    "/Ball": [
+     "a",
+     "points"
+    ],
+    "/Lamp": [
+     "glow"
+    ],
+    "/Robot": [
+     "points"
+    ]
+   },
+   "raised": false,
+   "result": null
+  },
+  {
+   "call": [
+    "mute",
+    ""
+   ],
+   "heard": null,
+   "muted": [
+    "b.usda"
+   ],
+   "muted_assets": [],
+   "open": [
+    "a.usda",
+    "lamp.usda",
+    "parts/ball.usda",
+    "parts/robot.usda",
+    "scene.usda"
+   ],
+   "properties": {
+    "/Ball": [
+     "a",
+     "points"
+    ],
+    "/Lamp": [
+     "glow"
+    ],
+    "/Robot": [
+     "points"
+    ]
+   },
+   "raised": false,
+   "result": null
+  },
+  {
+   "call": [
+    "unmute",
+    "never.usda"
+   ],
+   "heard": null,
+   "muted": [
+    "b.usda"
+   ],
+   "muted_assets": [],
+   "open": [
+    "a.usda",
+    "lamp.usda",
+    "parts/ball.usda",
+    "parts/robot.usda",
+    "scene.usda"
+   ],
+   "properties": {
+    "/Ball": [
+     "a",
+     "points"
+    ],
+    "/Lamp": [
+     "glow"
+    ],
+    "/Robot": [
+     "points"
+    ]
+   },
+   "raised": false,
+   "result": null
+  },
+  {
+   "call": [
+    "is_muted",
+    "never.usda"
+   ],
+   "heard": null,
+   "muted": [
+    "b.usda"
+   ],
+   "muted_assets": [],
+   "open": [
+    "a.usda",
+    "lamp.usda",
+    "parts/ball.usda",
+    "parts/robot.usda",
+    "scene.usda"
+   ],
+   "properties": {
+    "/Ball": [
+     "a",
+     "points"
+    ],
+    "/Lamp": [
+     "glow"
+    ],
+    "/Robot": [
+     "points"
+    ]
+   },
+   "raised": false,
+   "result": false
+  }
+ ],
+ "namespace": [
+  {
+   "applied": true,
+   "can_apply": true,
+   "destination": "/World/Light2",
+   "layers": {
+    "asset.usda": "#usda 1.0\n\ndef \"Asset\"\n{\n    def \"Front\" (\n        prepend references = @scene.usda@</World/Light2>\n    )\n    {\n        over \"Bulb\"\n        {\n        }\n    }\n}\n\n",
+    "other.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"Unrelated\"\n    {\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@,\n        @other.usda@\n    ]\n)\n\ndef \"World\"\n{\n    def \"Light2\"\n    {\n        float intensity = 1\n\n        def \"Bulb\"\n        {\n        }\n    }\n\n    def \"Shelf\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n    }\n\n    def \"Switch\"\n    {\n        rel lamp = </World/Light2>\n    }\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"Lamp\"\n    {\n        float intensity = 2\n        rel target = </World/Lamp/Bulb>\n    }\n\n    over \"Switch\"\n    {\n        rel other = </World/Lamp>\n    }\n\n    def \"OnlySub\"\n    {\n    }\n\n    over \"Light\"\n    {\n        float glow = 3\n    }\n}\n\n"
+   },
+   "muted": [
+    "sub.usda"
+   ],
+   "muted_assets": [],
+   "name": "muted sublayer, move",
+   "path": "/World/Lamp",
+   "why_not": null
+  },
+  {
+   "applied": true,
+   "can_apply": true,
+   "destination": "/World/Light",
+   "layers": {
+    "asset.usda": "#usda 1.0\n\ndef \"Asset\"\n{\n    def \"Front\" (\n        prepend references = @scene.usda@</World/Light>\n    )\n    {\n        over \"Bulb\"\n        {\n        }\n    }\n}\n\n",
+    "other.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"Unrelated\"\n    {\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@,\n        @other.usda@\n    ]\n)\n\ndef \"World\"\n{\n    def \"Light\"\n    {\n        float intensity = 1\n\n        def \"Bulb\"\n        {\n        }\n    }\n\n    def \"Shelf\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n    }\n\n    def \"Switch\"\n    {\n        rel lamp = </World/Light>\n    }\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"Lamp\"\n    {\n        float intensity = 2\n        rel target = </World/Lamp/Bulb>\n    }\n\n    over \"Switch\"\n    {\n        rel other = </World/Lamp>\n    }\n\n    def \"OnlySub\"\n    {\n    }\n\n    over \"Light\"\n    {\n        float glow = 3\n    }\n}\n\n"
+   },
+   "muted": [
+    "sub.usda"
+   ],
+   "muted_assets": [],
+   "name": "muted sublayer, move onto its over",
+   "path": "/World/Lamp",
+   "why_not": null
+  },
+  {
+   "applied": true,
+   "can_apply": true,
+   "destination": null,
+   "layers": {
+    "asset.usda": "#usda 1.0\n\ndef \"Asset\"\n{\n    def \"Front\" (\n    )\n    {\n    }\n}\n\n",
+    "other.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"Unrelated\"\n    {\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@,\n        @other.usda@\n    ]\n)\n\ndef \"World\"\n{\n    def \"Shelf\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n    }\n\n    def \"Switch\"\n    {\n        rel lamp = None\n    }\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"Lamp\"\n    {\n        float intensity = 2\n        rel target = </World/Lamp/Bulb>\n    }\n\n    over \"Switch\"\n    {\n        rel other = </World/Lamp>\n    }\n\n    def \"OnlySub\"\n    {\n    }\n\n    over \"Light\"\n    {\n        float glow = 3\n    }\n}\n\n"
+   },
+   "muted": [
+    "sub.usda"
+   ],
+   "muted_assets": [],
+   "name": "muted sublayer, delete",
+   "path": "/World/Lamp",
+   "why_not": null
+  },
+  {
+   "applied": false,
+   "can_apply": false,
+   "destination": "/World/Moved",
+   "layers": {
+    "asset.usda": "#usda 1.0\n\ndef \"Asset\"\n{\n    def \"Front\" (\n        prepend references = @scene.usda@</World/Lamp>\n    )\n    {\n        over \"Bulb\"\n        {\n        }\n    }\n}\n\n",
+    "other.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"Unrelated\"\n    {\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@,\n        @other.usda@\n    ]\n)\n\ndef \"World\"\n{\n    def \"Lamp\"\n    {\n        float intensity = 1\n\n        def \"Bulb\"\n        {\n        }\n    }\n\n    def \"Shelf\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n    }\n\n    def \"Switch\"\n    {\n        rel lamp = </World/Lamp>\n    }\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"Lamp\"\n    {\n        float intensity = 2\n        rel target = </World/Lamp/Bulb>\n    }\n\n    over \"Switch\"\n    {\n        rel other = </World/Lamp>\n    }\n\n    def \"OnlySub\"\n    {\n    }\n\n    over \"Light\"\n    {\n        float glow = 3\n    }\n}\n\n"
+   },
+   "muted": [
+    "sub.usda"
+   ],
+   "muted_assets": [],
+   "name": "muted sublayer, its own prim",
+   "path": "/World/OnlySub",
+   "why_not": "The prim to edit is not a valid prim"
+  },
+  {
+   "applied": true,
+   "can_apply": true,
+   "destination": "/World/Light2",
+   "layers": {
+    "asset.usda": "#usda 1.0\n\ndef \"Asset\"\n{\n    def \"Front\" (\n        prepend references = @scene.usda@</World/Lamp>\n    )\n    {\n        over \"Bulb\"\n        {\n        }\n    }\n}\n\n",
+    "other.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"Unrelated\"\n    {\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@,\n        @other.usda@\n    ]\n)\n\ndef \"World\"\n{\n    def \"Light2\"\n    {\n        float intensity = 1\n\n        def \"Bulb\"\n        {\n        }\n    }\n\n    def \"Shelf\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n    }\n\n    def \"Switch\"\n    {\n        rel lamp = </World/Light2>\n    }\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"Light2\"\n    {\n        float intensity = 2\n        rel target = </World/Light2/Bulb>\n    }\n\n    over \"Switch\"\n    {\n        rel other = </World/Light2>\n    }\n\n    def \"OnlySub\"\n    {\n    }\n\n    over \"Light\"\n    {\n        float glow = 3\n    }\n}\n\n"
+   },
+   "muted": [
+    "asset.usda"
+   ],
+   "muted_assets": [
+    [
+     "/World/Shelf",
+     "asset.usda",
+     "scene.usda"
+    ]
+   ],
+   "name": "muted asset, move",
+   "path": "/World/Lamp",
+   "why_not": null
+  },
+  {
+   "applied": true,
+   "can_apply": true,
+   "destination": null,
+   "layers": {
+    "asset.usda": "#usda 1.0\n\ndef \"Asset\"\n{\n    def \"Front\" (\n        prepend references = @scene.usda@</World/Lamp>\n    )\n    {\n        over \"Bulb\"\n        {\n        }\n    }\n}\n\n",
+    "other.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"Unrelated\"\n    {\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@,\n        @other.usda@\n    ]\n)\n\ndef \"World\"\n{\n    def \"Shelf\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n    }\n\n    def \"Switch\"\n    {\n        rel lamp = None\n    }\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"Switch\"\n    {\n        rel other = None\n    }\n\n    def \"OnlySub\"\n    {\n    }\n\n    over \"Light\"\n    {\n        float glow = 3\n    }\n}\n\n"
+   },
+   "muted": [
+    "asset.usda"
+   ],
+   "muted_assets": [
+    [
+     "/World/Shelf",
+     "asset.usda",
+     "scene.usda"
+    ]
+   ],
+   "name": "muted asset, delete",
+   "path": "/World/Lamp",
+   "why_not": null
+  },
+  {
+   "applied": true,
+   "can_apply": true,
+   "destination": "/World/Rack",
+   "layers": {
+    "asset.usda": "#usda 1.0\n\ndef \"Asset\"\n{\n    def \"Front\" (\n        prepend references = @scene.usda@</World/Lamp>\n    )\n    {\n        over \"Bulb\"\n        {\n        }\n    }\n}\n\n",
+    "other.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"Unrelated\"\n    {\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@,\n        @other.usda@\n    ]\n)\n\ndef \"World\"\n{\n    def \"Lamp\"\n    {\n        float intensity = 1\n\n        def \"Bulb\"\n        {\n        }\n    }\n\n    def \"Rack\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n    }\n\n    def \"Switch\"\n    {\n        rel lamp = </World/Lamp>\n    }\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"Lamp\"\n    {\n        float intensity = 2\n        rel target = </World/Lamp/Bulb>\n    }\n\n    over \"Switch\"\n    {\n        rel other = </World/Lamp>\n    }\n\n    def \"OnlySub\"\n    {\n    }\n\n    over \"Light\"\n    {\n        float glow = 3\n    }\n}\n\n"
+   },
+   "muted": [
+    "asset.usda"
+   ],
+   "muted_assets": [
+    [
+     "/World/Rack",
+     "asset.usda",
+     "scene.usda"
+    ]
+   ],
+   "name": "muted asset, move its referencing prim",
+   "path": "/World/Shelf",
+   "why_not": null
+  },
+  {
+   "applied": true,
+   "can_apply": true,
+   "destination": "/World/Light2",
+   "layers": {
+    "asset.usda": "#usda 1.0\n\ndef \"Asset\"\n{\n    def \"Front\" (\n        prepend references = @scene.usda@</World/Light2>\n    )\n    {\n        over \"Bulb\"\n        {\n        }\n    }\n}\n\n",
+    "other.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"Unrelated\"\n    {\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@,\n        @other.usda@\n    ]\n)\n\ndef \"World\"\n{\n    def \"Light2\"\n    {\n        float intensity = 1\n\n        def \"Bulb\"\n        {\n        }\n    }\n\n    def \"Shelf\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n    }\n\n    def \"Switch\"\n    {\n        rel lamp = </World/Light2>\n    }\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"Light2\"\n    {\n        float intensity = 2\n        rel target = </World/Light2/Bulb>\n    }\n\n    over \"Switch\"\n    {\n        rel other = </World/Light2>\n    }\n\n    def \"OnlySub\"\n    {\n    }\n\n    over \"Light\"\n    {\n        float glow = 3\n    }\n}\n\n"
+   },
+   "muted": [
+    "other.usda"
+   ],
+   "muted_assets": [],
+   "name": "unrelated muted layer, move",
+   "path": "/World/Lamp",
+   "why_not": null
+  },
+  {
+   "applied": true,
+   "can_apply": true,
+   "destination": null,
+   "layers": {
+    "asset.usda": "#usda 1.0\n\ndef \"Asset\"\n{\n    def \"Front\" (\n    )\n    {\n    }\n}\n\n",
+    "other.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"Unrelated\"\n    {\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@,\n        @other.usda@\n    ]\n)\n\ndef \"World\"\n{\n    def \"Shelf\" (\n        prepend references = @asset.usda@</Asset>\n    )\n    {\n    }\n\n    def \"Switch\"\n    {\n        rel lamp = None\n    }\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"World\"\n{\n    over \"Switch\"\n    {\n        rel other = None\n    }\n\n    def \"OnlySub\"\n    {\n    }\n\n    over \"Light\"\n    {\n        float glow = 3\n    }\n}\n\n"
+   },
+   "muted": [
+    "other.usda"
+   ],
+   "muted_assets": [],
+   "name": "unrelated muted layer, delete",
+   "path": "/World/Lamp",
+   "why_not": null
+  }
+ ],
+ "openusd_version": "26.11"
+}

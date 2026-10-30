@@ -89,6 +89,7 @@ mod intrinsic_bounds;
 mod labels;
 mod layer_dangling_targets;
 mod layer_field_edits;
+mod layer_muting;
 mod layer_offsets;
 mod layer_save;
 mod layer_stack_flatten;

@@ -709,6 +709,44 @@ pub fn create_identifier(
     anchor_asset_path(asset_path, layer_location)
 }
 
+/// The member `asset_path`, relative to its layer, names when it climbs
+/// out of the innermost package around `authoring` (that layer's member
+/// path, `inner.usdz[dir/b.usda]`): the climbing path joined to the
+/// layer's directory and normalized, its leading `..` kept
+/// (`inner.usdz[../a.png]` for `../../a.png`). OpenUSD writes this as the
+/// anchored path and never resolves it: anchoring stays inside the
+/// innermost package, so such a path names neither the package around it
+/// nor anything outside it. `None` unless `asset_path` climbs out.
+///
+/// OpenUSD: `SdfComputeAssetPathRelativeToLayer`
+/// (`pxr/usd/sdf/layerUtils.cpp`), which splits the innermost packaged
+/// path (`ArSplitPackageRelativePathInner`), joins the normalized asset
+/// path to its directory (`_AnchorRelativePath`, `TfStringCatPaths`) and
+/// joins the result back (`ArJoinPackageRelativePath`), with no check
+/// that it stays in the package. Spec: AOUSD Core §9.4, §9.7.
+fn member_outside(asset_path: &str, authoring: &str) -> Option<String> {
+    PackagePath::parse(asset_path, 32).ok()?;
+    let authoring = PackagePath::parse(authoring, 32).ok()?;
+    let directory = authoring.leaf().rsplit_once('/').map_or("", |(d, _)| d);
+    let joined = if directory.is_empty() {
+        String::from(asset_path)
+    } else {
+        alloc::format!("{directory}/{asset_path}")
+    };
+    let member = normalize_asset_path(&joined);
+    if !member.starts_with("../") {
+        return None;
+    }
+    Some(match authoring.members().split_last() {
+        Some((_, enclosing)) => {
+            let mut members = enclosing.to_vec();
+            members.push(member);
+            PackagePath::join(authoring.outer(), &members)
+        }
+        None => member,
+    })
+}
+
 /// Splits a Windows drive root off `path`: `C:/a` is `("C:", "/a")`.
 fn drive_root(path: &str) -> Option<(&str, &str)> {
     let bytes = path.as_bytes();
@@ -722,8 +760,16 @@ fn drive_root(path: &str) -> Option<(&str, &str)> {
 /// joined to the layer's directory and normalized
 /// ([`normalize_asset_path`]); any other path is normalized and kept, a
 /// search path staying a search path. `None` for an expression
-/// (`` `...` ``), an unknown location, or a path escaping its containing package. Nested
-/// package levels are anchored independently.
+/// (`` `...` ``) or an unknown location.
+///
+/// Inside a package (`pkg.usdz[set/rock.usda]`), a path relative to the
+/// layer is anchored to the innermost packaged layer, as OpenUSD's
+/// `SdfComputeAssetPathRelativeToLayer` anchors it, each package level
+/// normalized on its own. A path that climbs out of that package
+/// (`../../albedo.png`) is anchored, as OpenUSD writes it, to a member
+/// that climbs out (`pkg.usdz[../albedo.png]`), which no package holds,
+/// so it resolves to nothing, as in OpenUSD; it never names the package
+/// around it or a file beside the package.
 ///
 /// The location and the path may use `\` separators and a drive root
 /// (`C:\assets\oak.usda`); the anchored path uses `/`, as OpenUSD's
@@ -742,7 +788,9 @@ pub fn anchor_asset_path(asset_path: &str, layer_location: &str) -> Option<Strin
     if layer_location.contains('[') {
         let location = PackagePath::parse(layer_location, 32).ok()?;
         let (first, rest) = location.members().split_first()?;
-        let member = PackagePath::anchor_member(&asset_path, &PackagePath::join(first, rest))?;
+        let authoring = PackagePath::join(first, rest);
+        let member = PackagePath::anchor_member(&asset_path, &authoring)
+            .or_else(|| member_outside(&asset_path, &authoring))?;
         return Some(alloc::format!(
             "{}[{member}]",
             host_relative(&location.outer().replace('\\', "/"))
@@ -872,10 +920,40 @@ mod tests {
             anchor_asset_path("../a.png", "/p/a.usdz[inner.usdz[dir/b.usda]]").as_deref(),
             Some("/p/a.usdz[inner.usdz[a.png]]")
         );
-        assert_eq!(
-            anchor_asset_path("../../a.png", "/p/a.usdz[inner.usdz[dir/b.usda]]"),
-            None
-        );
+        // A path climbing out of its package names a member that climbs
+        // out, as OpenUSD anchors it, which nothing resolves; never the
+        // package around it, nor a file beside it.
+        for (path, location, anchored) in [
+            ("../a.png", "/p/a.usdz[b.usda]", "/p/a.usdz[../a.png]"),
+            ("./../a.png", "/p/a.usdz[b.usda]", "/p/a.usdz[../a.png]"),
+            (
+                "../../a.png",
+                "/p/a.usdz[dir/b.usda]",
+                "/p/a.usdz[../a.png]",
+            ),
+            (
+                "../../a.png",
+                "/p/a.usdz[inner.usdz[dir/b.usda]]",
+                "/p/a.usdz[inner.usdz[../a.png]]",
+            ),
+            (
+                "../a.png",
+                "/p/a.usdz[inner.usdz[b.usda]]",
+                "/p/a.usdz[inner.usdz[../a.png]]",
+            ),
+            (
+                "../set/../../a.usdz[t.png]",
+                "set/a.usdz[b.usda]",
+                "./set/a.usdz[../../a.usdz[t.png]]",
+            ),
+        ] {
+            assert_eq!(
+                anchor_asset_path(path, location).as_deref(),
+                Some(anchored),
+                "{path} in {location}"
+            );
+        }
+        assert_eq!(anchor_asset_path("../a[b", "/p/a.usdz[b.usda]"), None);
     }
 
     #[test]

@@ -28,17 +28,23 @@ metadata is ignored. A fourth, `pkg/session.usda`, defines
 `/World/Packaged`, referencing a member of the package `pkg/pkg.usdz` and
 the package itself, whose layers author search paths found beside the
 member, beside the package's root layer, beside the package file and
-nowhere: OpenUSD looks inside the package first
-(`SdfComputeAssetPathRelativeToLayer` in `pxr/usd/sdf/layerUtils.cpp`).
+nowhere, and a `../` path climbing out of the package to a file beside
+it: OpenUSD looks inside the package first
+(`SdfComputeAssetPathRelativeToLayer` in `pxr/usd/sdf/layerUtils.cpp`),
+and anchors the climbing path to a member that climbs out
+(`pkg.usdz[../outside.png]`), which never resolves.
 A fifth, `nested/session.usda`, defines `/World/Nested`, referencing a
 member of `inner.usdz`, a package inside `nested/outer.usdz`, and the
 outer package, whose root layer references the inner package: the inner
 layers author search paths found beside the member, beside the inner
 package's root layer, only in the outer package, beside the outer package
-file and nowhere; the outer root layer names a member of the inner
-package. A path anchors within the innermost package
-(`outer.usdz[inner.usdz[tex/a.png]]`), never in the package around it,
-and then beside the outermost package file.
+file and nowhere, and `../` paths climbing out of the inner package to a
+member of the outer one; the outer root layer names a member of the inner
+package and climbs out to a file beside the outer package. A path anchors
+within the innermost package (`outer.usdz[inner.usdz[tex/a.png]]`), never
+in the package around it, and then beside the outermost package file; a
+climbing path stays a member of the innermost package
+(`outer.usdz[inner.usdz[../tex/o.png]]`).
 
 OpenUSD's flatten anchors every asset path to the layer that authors it
 (`SdfAnchorAssetPaths` through `SdfComputeAssetPathRelativeToLayer`),
@@ -63,7 +69,10 @@ It records, for the stage opened on `root.usda` alone (`root`), with
 - `metadata`: for each stage metadata field, `HasAuthoredMetadata` and
   `GetMetadata`, every asset path as its `authoredPath` and
   `resolvedPath`;
-- `default_prim`: `GetDefaultPrim`'s path.
+- `default_prim`: `GetDefaultPrim`'s path;
+- `climbing`, for `package` and `nested`: each attribute whose asset path
+  starts with `../`, its `authoredPath` and `resolvedPath`: a path that
+  climbs out of its package resolves to nothing.
 
 The fixture directory is spelled `<dir>`. `--check` rewrites everything
 into a temporary directory and fails unless it matches the checked-in
@@ -251,6 +260,7 @@ def Xform "Root"
     asset innerRootOuterMember = @tex/o.png@
     asset innerRootOwn = @./own.png@
     asset innerRootSearch = @tex/a.png@
+    asset innerRootUp = @../tex/o.png@
 }
 """),
     ("sub/inner.usda", """#usda 1.0
@@ -264,6 +274,7 @@ def Xform "Inner"
     asset outerMember = @tex/o.png@
     asset own = @./own.png@
     asset up = @../tex/a.png@
+    asset upOut = @../../tex/o.png@
 }
 """),
     ("sub/near.png", ""),
@@ -280,6 +291,7 @@ def Xform "Root"
     asset rootBesidePackage = @near.png@
     asset rootOwn = @./own.png@
     asset rootSearch = @tex/a.png@
+    asset rootUp = @../outside.png@
 }
 """),
         ("sub/inner.usda", """#usda 1.0
@@ -293,6 +305,7 @@ def Xform "Inner"
     asset nowhere = @nowhere.png@
     asset own = @./own.png@
     asset up = @../tex/a.png@
+    asset upOut = @../../outside.png@
 }
 """),
         ("sub/near.png", ""),
@@ -310,6 +323,7 @@ def Xform "Outer" (
     asset outerInner = @inner.usdz[tex/a.png]@
     asset outerOwn = @./own.png@
     asset outerSearch = @tex/o.png@
+    asset outerUp = @../near.png@
 }
 """),
         ("tex/o.png", ""),
@@ -386,11 +400,20 @@ def record(directory, session):
             "value": encode(stage.GetMetadata(field), directory),
         }
     flattened = stage.Flatten().ExportToString()
-    return {
+    result = {
         "flatten": strip_doc(flattened).replace(directory + "/", "<dir>/"),
         "metadata": metadata,
         "default_prim": str(stage.GetDefaultPrim().GetPath()),
     }
+    climbing = {}
+    for prim in stage.Traverse():
+        for attribute in prim.GetAttributes():
+            value = attribute.Get()
+            if isinstance(value, Sdf.AssetPath) and value.authoredPath.startswith("../"):
+                climbing[str(attribute.GetPath())] = encode(value, directory)
+    if any(path.startswith(("/World/Packaged.", "/World/Nested.")) for path in climbing):
+        result["climbing"] = climbing
+    return result
 
 
 def package_bytes(members):

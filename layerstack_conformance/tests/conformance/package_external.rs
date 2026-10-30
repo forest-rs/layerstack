@@ -107,16 +107,19 @@ fn named(identifier: &str) -> &str {
 /// path naming no member is anchored beside the package file when a file
 /// is there and kept otherwise, to resolve from the host's root.
 ///
-/// `../set/albedo.png` names no file in either: OpenUSD anchors it to the
-/// member `pkg.usdz[../set/albedo.png]`, which never resolves, and
-/// layerstack anchors it to nothing.
+/// `../set/albedo.png` names no file in either: it is anchored to the
+/// member `pkg.usdz[../set/albedo.png]`, which never resolves, though
+/// `set/albedo.png` is beside the package.
+///
+/// What OpenUSD resolves to nothing, layerstack does not read either,
+/// from the packaged layer or by the anchored identifier.
 #[test]
 fn paths_in_a_package_anchor_as_openusd_anchors_them() {
     let oracle = oracle();
     let anchored = oracle["anchored"].as_object().unwrap();
     assert_eq!(anchored.len(), 2, "both packages are recorded");
     for (package, attributes) in anchored {
-        let document =
+        let mut document =
             StageDocument::open(HostRoot::fixture(), package, StageOptions::default()).unwrap();
         let layer = document.stage().stage().root_layer().unwrap();
         for (name, expected) in attributes.as_object().unwrap() {
@@ -124,14 +127,19 @@ fn paths_in_a_package_anchor_as_openusd_anchors_them() {
             let openusd = expected["anchored"].as_str().unwrap();
             let anchored = document
                 .layer_locations()
-                .anchor_asset_path(authored, layer);
-            if authored.starts_with("../") {
-                assert_eq!(expected["resolved"], "", "{package} {name}");
-                assert_eq!(anchored, None, "{package} {name}");
-                continue;
-            }
-            let anchored = anchored.unwrap_or_else(|| panic!("{package} {name} anchors"));
+                .anchor_asset_path(authored, layer)
+                .unwrap_or_else(|| panic!("{package} {name} anchors"));
             assert_eq!(named(&anchored), named(openusd), "{package} {name}");
+            if expected["resolved"] == "" {
+                assert!(
+                    document.read_asset_bytes(authored, Some(layer)).is_err(),
+                    "{package} {name} resolves to nothing"
+                );
+                assert!(
+                    document.read_asset_bytes(&anchored, None).is_err(),
+                    "{package} {name}: {anchored} resolves to nothing"
+                );
+            }
         }
     }
 }

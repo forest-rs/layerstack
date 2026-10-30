@@ -54,6 +54,16 @@ pub const BROWSER_LIMITS: CompositionLimits = CompositionLimits {
 /// the ids derived from identifiers, as host-made layers' ids are.
 const SESSION_LAYER: LayerId = LayerId(1);
 
+/// An edit target resolved against the stage as it is composed now: the
+/// core target, and the layer stack its layer is in.
+#[derive(Clone, Debug)]
+pub(crate) struct Resolved {
+    pub(crate) target: EditTarget,
+    /// The layers of the target layer's stack, strongest first: the
+    /// stage's for a local target, the arc node's for one through an arc.
+    pub(crate) stack: Vec<LayerId>,
+}
+
 /// One open stage over a [`HostStorage`]: the native object behind the
 /// TypeScript `Stage`.
 ///
@@ -790,6 +800,12 @@ impl Stage {
     /// edits ask for that the host has supplied; those it has not stay
     /// unavailable (`unavailable`). `batch` is left empty.
     ///
+    /// The edits name stage paths and stage times: `target` is edited
+    /// through its local edit target, at the offset the stage's layer
+    /// stack reads it at, so a sample set at stage time 15 in a sublayer
+    /// authored with `(offset = 10)` is written at its time 5 (OpenUSD's
+    /// `UsdStage::GetEditTargetForLocalLayer`).
+    ///
     /// Either every edit applies or none does. The receipt holds the
     /// inverse, and its record is `[target, changes, loaded, failures,
     /// unavailable]`: the target layer's id, the composed changes of the
@@ -813,20 +829,37 @@ impl Stage {
     ///   ([`EditError::code`]), naming the edit for a rejected one; nothing
     ///   changed.
     pub fn apply(&mut self, target: u64, batch: &mut EditBatch) -> Result<EditReceipt, Error> {
-        let target = LayerId(target);
-        self.check_target(target)?;
+        let target = self.local_target(LayerId(target))?;
+        self.apply_through(&target, batch)
+    }
+
+    /// Applies `batch` through `target`, as [`Self::apply`] applies it to
+    /// a layer: the edits name stage paths and times, which the target
+    /// maps to its layer's specs and times.
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::apply`], `layer.outside_stack` aside: `layer.read_only`,
+    /// `layer.muted`, the lowering errors and `edit.*`, among them
+    /// `edit.rejected.unmappable` for a path the target does not map.
+    pub(crate) fn apply_through(
+        &mut self,
+        target: &Resolved,
+        batch: &mut EditBatch,
+    ) -> Result<EditReceipt, Error> {
+        let layer = target.target.layer();
+        self.check_writable(layer)?;
         let batch = core::mem::take(batch);
         let lowered = {
-            let stage = self.document.stage().stage();
             let scope = Scope {
                 store: self.document.store(),
                 view: self.document.view(),
-                target,
-                stack: stage.layer_stack(),
+                target: &target.target,
+                stack: &target.stack,
             };
             edit::lower(&batch, &scope)?
         };
-        self.commit(target, &lowered.transaction, |op| {
+        self.commit(layer, &lowered.transaction, |op| {
             let index = lowered.edit_of(op)?;
             let path = batch.edits.get(index as usize).map(edit::EditInput::path)?;
             Some((index, path))
@@ -1030,30 +1063,7 @@ impl Stage {
     }
 
     fn check_target(&self, target: LayerId) -> Result<(), Error> {
-        let identifier = self.document.identifier(target);
-        let named = |error: Error| Error {
-            identifier: identifier.map(ToString::to_string),
-            ..error
-        };
-        if self.document.store().layer(target).is_none() {
-            return Err(Error::new(
-                "layer.unknown",
-                "the stage has no layer with this id",
-            ));
-        }
-        if self.read_only(target, identifier) {
-            return Err(named(Error::new(
-                "layer.read_only",
-                "the layer cannot be saved, so it is not edited: open the stage with a session \
-                 layer (editLayer: \"session\") and edit that",
-            )));
-        }
-        if self.document.stage().stage().is_layer_muted(target) {
-            return Err(named(Error::new(
-                "layer.muted",
-                "the layer is muted, so the stage does not compose it: unmute it to edit it",
-            )));
-        }
+        self.check_writable(target)?;
         if !self
             .document
             .stage()
@@ -1061,13 +1071,64 @@ impl Stage {
             .layer_stack()
             .contains(&target)
         {
+            return Err(Error {
+                identifier: self.document.identifier(target).map(ToString::to_string),
+                ..Error::new(
+                    "layer.outside_stack",
+                    "the layer is not in the stage's layer stack: the stage reaches it only \
+                     through an arc",
+                )
+            });
+        }
+        Ok(())
+    }
+
+    /// Checks that edits can be written to `layer`: the document has it,
+    /// it can be saved and it is not muted.
+    fn check_writable(&self, layer: LayerId) -> Result<(), Error> {
+        let identifier = self.document.identifier(layer);
+        let named = |error: Error| Error {
+            identifier: identifier.map(ToString::to_string),
+            ..error
+        };
+        if self.document.store().layer(layer).is_none() {
+            return Err(Error::new(
+                "layer.unknown",
+                "the stage has no layer with this id",
+            ));
+        }
+        if self.read_only(layer, identifier) {
             return Err(named(Error::new(
-                "layer.outside_stack",
-                "the layer is not in the stage's layer stack: the stage reaches it only \
-                 through an arc",
+                "layer.read_only",
+                "the layer cannot be saved, so it is not edited: open the stage with a session \
+                 layer (editLayer: \"session\") and edit that",
+            )));
+        }
+        if self.document.stage().stage().is_layer_muted(layer) {
+            return Err(named(Error::new(
+                "layer.muted",
+                "the layer is muted, so the stage does not compose it: unmute it to edit it",
             )));
         }
         Ok(())
+    }
+
+    /// The edit target of `layer`, a layer of the stage's layer stack, at
+    /// the offset the stack reads it at ([`EditTarget::for_local_layer`],
+    /// OpenUSD's `UsdStage::GetEditTargetForLocalLayer`): a sample set at
+    /// stage time 15 in a sublayer authored with `(offset = 10)` is written
+    /// at its time 5.
+    ///
+    /// Spec: AOUSD Core §10.3.1.1 (sublayer offsets).
+    fn local_target(&self, layer: LayerId) -> Result<Resolved, Error> {
+        self.check_target(layer)?;
+        let stage = self.document.stage().stage();
+        let target = EditTarget::for_local_layer(stage, self.document.store(), layer)
+            .unwrap_or_else(|| EditTarget::for_layer(layer));
+        Ok(Resolved {
+            target,
+            stack: stage.layer_stack().to_vec(),
+        })
     }
 
     /// Applies `txn` to `target`, as the receipt of what it did.

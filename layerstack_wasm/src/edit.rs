@@ -22,9 +22,10 @@ use alloc::{
 };
 
 use layerstack::{
-    EditTarget, FieldValue, InMemoryStore, LayerId, LayerOffset, ListOp, ListPosition, PathId,
-    PropertyKind, PropertyPath, PropertySpec, PropertyType, Reference, ReferenceSource,
-    ReferenceTarget, Specifier, StageView, Transaction, Value, Variability,
+    EditTarget, FieldValue, InMemoryStore, Layer, LayerId, LayerOffset, ListOp, ListPosition,
+    PathId, PathInterner, PropertyKind, PropertyPath, PropertySpec, PropertyType, Reference,
+    ReferenceSource, ReferenceTarget, SpecPath, Specifier, StageView, Transaction, Value,
+    Variability,
 };
 use wasm_bindgen::prelude::*;
 
@@ -400,18 +401,24 @@ impl Lowered {
 }
 
 /// What lowering reads: the store, the composed stage before the batch,
-/// and the target layer with the layer stack it is in.
+/// and the edit target with the layer stack its layer is in.
 pub(crate) struct Scope<'a> {
     pub(crate) store: &'a InMemoryStore,
     pub(crate) view: StageView<'a>,
-    pub(crate) target: LayerId,
-    /// The stage's layer stack, strongest first.
+    /// Where the edits are written, and how their stage paths and times
+    /// map there: a layer of the stage's layer stack, or a layer reached
+    /// through an arc of a composed prim.
+    pub(crate) target: &'a EditTarget,
+    /// The layer stack the target's layer is in, strongest first: the
+    /// stage's for a local target, the arc node's for one through an arc.
     pub(crate) stack: &'a [LayerId],
 }
 
 /// Lowers `batch` to one transaction whose edits are addressed through
-/// [`EditTarget::for_layer`] of the target layer, so stage paths are
-/// the layer's own and time codes are stage times.
+/// the scope's [`EditTarget`]: paths are stage paths and time codes stage
+/// times, mapped to the target layer's specs and times when the
+/// transaction applies, so an edit the target does not map is rejected
+/// then (`edit.rejected.unmappable`).
 ///
 /// # Errors
 ///
@@ -446,7 +453,7 @@ fn lower_one(
     ensured: &mut Vec<String>,
 ) -> Result<(), Error> {
     let store = scope.store;
-    let at = EditTarget::for_layer(scope.target);
+    let at = scope.target;
     let prim = |path: &str| -> Result<PathId, Error> {
         if path.contains('.') {
             return Err(Error::new(
@@ -617,7 +624,15 @@ fn lower_one(
                 prim_path.as_deref(),
                 LayerOffset::IDENTITY,
             )?;
-            let arc = authored_arc(scope, path_id, *payload, &built).unwrap_or(built);
+            // An internal arc names a stage path, which the transaction maps;
+            // the authored item, in the layer's namespace, stands in for it
+            // only where the target maps the prim to itself.
+            let internal = asset.as_deref().is_none_or(str::is_empty);
+            let arc = if internal && !scope.target.maps_to_itself(path_id, store.paths()) {
+                built
+            } else {
+                authored_arc(scope, path_id, *payload, &built).unwrap_or(built)
+            };
             if *payload {
                 txn.remove_payload(at.prim(path_id), arc);
             } else {
@@ -678,10 +693,12 @@ fn lower_one(
 /// Makes sure the target layer has a spec for the property at `path`, as
 /// OpenUSD's `UsdStage::_CreatePropertySpecForEditing` does before it
 /// authors one of the property's fields: a spec the layer (or an earlier
-/// edit of the batch) has stays; otherwise one is stamped from the prim's
-/// schema definition of the property (not `custom`), else from the stage's
-/// composed declaration of it. Returns whether the spec exists or was
-/// stamped; `false` when nothing defines or declares the property.
+/// edit of the batch) has at the path the target maps `path` to stays
+/// (`/Robot.height` through a reference to `/Robot`); otherwise one is
+/// stamped from the prim's schema definition of the property (not
+/// `custom`), else from the stage's composed declaration of it, read in
+/// stage namespace. Returns whether the spec exists or was stamped;
+/// `false` when nothing defines or declares the property.
 ///
 /// Spec: AOUSD Core §12.2.2–§12.2.4 (property declarations), §13.3.2.3
 /// (the prim definition).
@@ -692,10 +709,15 @@ fn ensure_property_spec(
     path: &str,
     property: PropertyPath,
 ) -> bool {
-    let authored = scope
-        .store
-        .layer(scope.target)
-        .is_some_and(|layer| layer.property(property).is_some());
+    let target = scope.target;
+    let authored = target
+        .map_property_to_spec_path(property, scope.store.paths())
+        .is_some_and(|spec| {
+            scope
+                .store
+                .layer(target.layer())
+                .is_some_and(|layer| layer.property_at(&spec).is_some())
+        });
     if authored || ensured.iter().any(|done| done == path) {
         return true;
     }
@@ -732,7 +754,7 @@ fn ensure_property_spec(
     if custom {
         spec = spec.custom();
     }
-    txn.create_property(EditTarget::for_layer(scope.target).property(property), spec);
+    txn.create_property(target.property(property), spec);
     ensured.push(path.to_string());
     true
 }
@@ -763,6 +785,12 @@ fn check_time(time: f64) -> Result<f64, Error> {
 ///
 /// A type name given with `over` or `class` is authored too.
 ///
+/// What exists and is defined is read from the composed stage, in stage
+/// namespace; the specs are authored through the edit target, so an
+/// undefined ancestor the target does not map rejects the edit, as
+/// OpenUSD's `_DefinePrim` fails to create its spec through the stage's
+/// edit target.
+///
 /// Spec: AOUSD Core §7.6 (specifier), §12.2.1 (specifier resolution).
 fn define_prim(
     scope: &Scope<'_>,
@@ -772,7 +800,7 @@ fn define_prim(
     specifier: Specifier,
     type_name: Option<&str>,
 ) {
-    let at = EditTarget::for_layer(scope.target);
+    let at = scope.target;
     let composed = scope.view.prim(path);
     let type_matches =
         |prim: &layerstack::Prim<'_>| type_name.is_none_or(|name| prim.type_name() == Some(name));
@@ -814,7 +842,10 @@ fn define_prim(
 
 /// The reference or payload an add or remove names: an external arc to
 /// `asset` resolved against the target layer, or an internal arc
-/// without one; to `prim_path`, or to the default prim without one.
+/// without one; to `prim_path`, or to the default prim without one. An
+/// internal arc's path is a stage path, which the transaction maps through
+/// the target (a root prim path is kept as given, as OpenUSD's
+/// `_TranslatePath` keeps it); an external arc's names a prim in its asset.
 fn arc(
     scope: &Scope<'_>,
     asset: Option<&str>,
@@ -831,10 +862,10 @@ fn arc(
         None => ReferenceTarget::DefaultPrim,
     };
     let mut arc = match asset.filter(|asset| !asset.is_empty()) {
-        Some(asset) => Reference::deferred(scope.target, asset, target, offset),
+        Some(asset) => Reference::deferred(scope.target.layer(), asset, target, offset),
         None => Reference::from_source(
             ReferenceSource::Layer {
-                layer: scope.target,
+                layer: scope.target.layer(),
                 asset: None,
             },
             target,
@@ -844,10 +875,16 @@ fn arc(
     Ok(arc)
 }
 
-/// The arc a layer of the stack authors on `path` that names what `wanted`
-/// names (its asset path as authored and its target), as it is authored:
-/// a removal must name the authored item, which records how the arc was
-/// resolved, not only what was written.
+/// The arc a layer of the target's layer stack authors on `path` that
+/// names what `wanted` names (its asset path as authored and its target),
+/// as it is authored: a removal must name the authored item, which records
+/// how the arc was resolved, not only what was written.
+///
+/// The target layer is searched first, then the other layers of its
+/// stack, at the spec path the target maps `path` to (`/Robot` through a
+/// reference to it, `/World/Robot{finish=painted}` inside a variant); a
+/// target that maps paths outside its prim to themselves searches the
+/// stage path last.
 fn authored_arc(
     scope: &Scope<'_>,
     path: PathId,
@@ -864,36 +901,59 @@ fn authored_arc(
         }
     };
     let wanted_asset = asset(wanted);
-    let order = core::iter::once(scope.target).chain(
-        scope
-            .stack
-            .iter()
-            .copied()
-            .filter(|layer| *layer != scope.target),
+    let paths = scope.store.paths();
+    let layer = scope.target.layer();
+    let order: Vec<LayerId> = core::iter::once(layer)
+        .chain(scope.stack.iter().copied().filter(|id| *id != layer))
+        .collect();
+    let mapped = scope.target.map_to_spec_path(path, paths);
+    let stage_path = SpecPath::from_prim_path(path);
+    let sites = mapped.iter().chain(
+        (scope.target.has_root_identity() && mapped.as_ref() != Some(&stage_path))
+            .then_some(&stage_path),
     );
-    for layer in order {
-        let Some(spec) = scope.store.layer(layer).and_then(|layer| layer.prim(path)) else {
-            continue;
-        };
-        let list = if payload {
-            &*spec.payloads
-        } else {
-            &*spec.references
-        };
-        let found = list
-            .explicit
-            .iter()
-            .flatten()
-            .chain(&list.prepend)
-            .chain(&list.append)
-            .chain(&list.add)
-            .chain(&list.delete)
-            .find(|arc| arc.target == wanted.target && asset(arc) == wanted_asset);
-        if let Some(found) = found {
-            return Some(found.clone());
+    for site in sites {
+        for id in &order {
+            let Some(list) = scope
+                .store
+                .layer(*id)
+                .and_then(|layer| authored_arcs(layer, site, paths, payload))
+            else {
+                continue;
+            };
+            let found = list
+                .explicit
+                .iter()
+                .flatten()
+                .chain(&list.prepend)
+                .chain(&list.append)
+                .chain(&list.add)
+                .chain(&list.delete)
+                .find(|arc| arc.target == wanted.target && asset(arc) == wanted_asset);
+            if let Some(found) = found {
+                return Some(found.clone());
+            }
         }
     }
     None
+}
+
+/// The references (or payloads) the prim or variant spec at `site` in
+/// `layer` authors.
+fn authored_arcs<'l>(
+    layer: &'l Layer,
+    site: &SpecPath,
+    paths: &PathInterner,
+    payload: bool,
+) -> Option<&'l ListOp<Reference>> {
+    let (references, payloads) = match layer.prim_at(site) {
+        Some(prim) => (&prim.references, &prim.payloads),
+        None => {
+            let variant = layer.variant_spec_at(site, paths)?;
+            (&variant.references, &variant.payloads)
+        }
+    };
+    Some(if payload { payloads } else { references })
 }
 
 #[cfg(test)]
@@ -1788,5 +1848,391 @@ def "Spare" (
         stage.apply(target.0, &mut batch).unwrap();
         assert_eq!(stage.take_changes(false), nothing());
         assert_eq!(stage.take_changes(true), nothing(), "consumed");
+    }
+}
+
+/// Edits through arcs: a robot referenced with `(offset = 10; scale = 2)`,
+/// a second plain reference to it, and a sublayer authored with
+/// `(offset = 10)`, lowered through node and local variant targets.
+#[cfg(test)]
+mod through_arcs {
+    use alloc::{string::String, vec, vec::Vec};
+
+    use layerstack::{ArcKind, EditTarget, LayerId, SpecPath};
+
+    use super::EditBatch;
+    use crate::{
+        stage::{BROWSER_LIMITS, Resolved, Stage},
+        wire::Wire,
+    };
+
+    const SCENE: &str = r#"#usda 1.0
+(
+    subLayers = [
+        @./shot.usda@ (offset = 10)
+    ]
+)
+def Xform "World" {
+    def Xform "Robot" (
+        prepend references = @./robot.usda@ (offset = 10; scale = 2)
+        variants = {
+            string finish = "painted"
+        }
+        prepend variantSets = "finish"
+    ) {
+        variantSet "finish" = {
+            "painted" (
+                prepend references = @./paint.usda@
+            ) {
+                color3f color = (0.8, 0.2, 0.1)
+            }
+        }
+    }
+    def Xform "Spare" (
+        prepend references = @./robot.usda@
+    ) {
+    }
+    def "Lamp" {
+    }
+}
+"#;
+    const ROBOT: &str = r#"#usda 1.0
+(
+    defaultPrim = "Robot"
+)
+def Xform "Robot" {
+    double height = 1.2
+    double spin.timeSamples = {
+        0: 0,
+    }
+    rel aim = </Robot/Head>
+    def Sphere "Head" {
+    }
+    def "Part" (
+        prepend references = </Robot/Head>
+    ) {
+    }
+    def "Badge" (
+        prepend references = @./paint.usda@
+    ) {
+    }
+}
+"#;
+    const SHOT: &str = "#usda 1.0\nover \"World\" {\n    over \"Lamp\" {\n        double glow.timeSamples = {\n            0: 1,\n        }\n    }\n}\n";
+    const PAINT: &str = "#usda 1.0\n(\n    defaultPrim = \"Paint\"\n)\ndef \"Paint\" {\n    double gloss = 0.5\n}\n";
+
+    fn open() -> Stage {
+        let mut stage = Stage::open(
+            "scene.usda",
+            SCENE.as_bytes().to_vec(),
+            false,
+            false,
+            BROWSER_LIMITS,
+        )
+        .unwrap();
+        let storage = stage.document_mut().storage_mut();
+        storage.supply("robot.usda", ROBOT.as_bytes().to_vec());
+        storage.supply("shot.usda", SHOT.as_bytes().to_vec());
+        storage.supply("paint.usda", PAINT.as_bytes().to_vec());
+        stage.load_supplied().unwrap();
+        stage
+    }
+
+    fn layer(stage: &Stage, identifier: &str) -> LayerId {
+        let document = stage.document();
+        document
+            .store()
+            .layer_ids()
+            .into_iter()
+            .find(|id| document.identifier(*id) == Some(identifier))
+            .unwrap_or_else(|| panic!("no layer {identifier}"))
+    }
+
+    fn text(stage: &Stage, id: LayerId) -> String {
+        let store = stage.document().store();
+        layerstack_usda::save_usda(store.layer(id).unwrap(), store.tokens(), store.paths()).unwrap()
+    }
+
+    /// The target of the `kind` node of `prim`'s graph that reads
+    /// `robot.usda`, in that layer.
+    fn through(stage: &Stage, prim: &str, kind: ArcKind) -> Resolved {
+        let robot = layer(stage, "robot.usda");
+        let document = stage.document();
+        let store = document.store();
+        let path = store.path(prim);
+        let composed = document.view().prim(prim).expect("a composed prim");
+        let graph = composed.composition_graph();
+        let (node, layers) = graph
+            .nodes()
+            .find(|(_, node)| node.arc_kind() == kind && node.layer_stack() == robot)
+            .map(|(id, node)| (id, node.layers().collect::<Vec<_>>()))
+            .expect("a node of that arc");
+        let target =
+            EditTarget::for_node_layer(document.stage().stage(), store, path, node, layers[0])
+                .expect("an editable node");
+        Resolved {
+            target,
+            stack: layers,
+        }
+    }
+
+    fn number(stage: &Stage, path: &str, time: Option<f64>) -> Wire {
+        stage.get(path, time).unwrap().as_list().unwrap()[2].clone()
+    }
+
+    #[test]
+    fn values_samples_and_specs_land_in_the_referenced_layer() {
+        let mut stage = open();
+        let robot = layer(&stage, "robot.usda");
+        let before = text(&stage, robot);
+        let target = through(&stage, "/World/Robot", ArcKind::References);
+        let mut batch = EditBatch::new();
+        let height = batch.value_numbers("double".into(), vec![1.5]);
+        let spin = batch.value_numbers("double".into(), vec![70.0]);
+        batch.set_value("/World/Robot.height".into(), None, height);
+        batch.set_value("/World/Robot.spin".into(), Some(14.0), spin);
+        batch.create_attribute(
+            "/World/Robot.width".into(),
+            "double".into(),
+            false,
+            true,
+            None,
+        );
+        let hidden = batch.value_numbers("bool".into(), vec![1.0]);
+        batch.set_metadata("/World/Robot/Head.radius".into(), "hidden".into(), hidden);
+        batch.define_prim("/World/Robot/Arm".into(), "def".into(), Some("Cube".into()));
+        let mut receipt = stage.apply_through(&target, &mut batch).unwrap();
+        assert_eq!(receipt.target(), robot);
+        let after = text(&stage, robot);
+        assert!(after.contains("double height = 1.5"), "{after}");
+        assert!(
+            after.contains("2: 70"),
+            "stage time 14 is layer time (14 - 10) / 2: {after}"
+        );
+        assert!(after.contains("custom double width"), "{after}");
+        assert!(
+            after.contains("double radius (\n            hidden = true"),
+            "the schema's radius stamped in the asset: {after}"
+        );
+        assert!(after.contains("def Cube \"Arm\""), "{after}");
+        assert_eq!(
+            number(&stage, "/World/Spare.height", None),
+            Wire::Number(1.5),
+            "every prim referencing the asset changes"
+        );
+        assert!(stage.prim("/World/Spare/Arm").unwrap() != Wire::Null);
+        assert_eq!(
+            text(&stage, layer(&stage, "scene.usda")),
+            text(&open(), layer(&open(), "scene.usda")),
+            "the scene is untouched"
+        );
+        let mut redo = stage.undo(&mut receipt).unwrap();
+        assert_eq!(text(&stage, robot), before, "undo restores the asset");
+        stage.undo(&mut redo).unwrap();
+        assert_eq!(text(&stage, robot), after, "redo writes it again");
+    }
+
+    #[test]
+    fn targets_and_internal_arcs_map_into_the_referenced_namespace() {
+        let mut stage = open();
+        assert_eq!(
+            number(&stage, "/World/Spare/Badge.gloss", None),
+            Wire::Number(0.5)
+        );
+        let robot = layer(&stage, "robot.usda");
+        let target = through(&stage, "/World/Robot", ArcKind::References);
+        let mut batch = EditBatch::new();
+        batch.set_targets(
+            "/World/Robot.aim".into(),
+            vec!["/World/Robot/Head".into(), "/World/Robot.height".into()],
+        );
+        batch.add_arc(
+            false,
+            "/World/Robot/Arm".into(),
+            None,
+            Some("/World/Robot/Head".into()),
+            "backOfPrepend".into(),
+            0.0,
+            1.0,
+        );
+        // A root prim path is authored as given (OpenUSD's `_TranslatePath`).
+        batch.add_arc(
+            false,
+            "/World/Robot/Arm".into(),
+            None,
+            Some("/Library".into()),
+            "backOfAppend".into(),
+            0.0,
+            1.0,
+        );
+        batch.remove_arc(
+            false,
+            "/World/Robot/Part".into(),
+            None,
+            Some("/World/Robot/Head".into()),
+        );
+        // An external arc is removed as the asset authors it.
+        batch.remove_arc(
+            false,
+            "/World/Robot/Badge".into(),
+            Some("./paint.usda".into()),
+            None,
+        );
+        stage.apply_through(&target, &mut batch).unwrap();
+        let after = text(&stage, robot);
+        assert!(
+            after.contains("def \"Badge\" (\n        delete references = @./paint.usda@\n    )"),
+            "{after}"
+        );
+        assert_eq!(
+            stage.get("/World/Spare/Badge.gloss", None).unwrap(),
+            Wire::Null,
+            "the paint no longer reaches the badge"
+        );
+        assert!(
+            after.contains("rel aim = [\n        </Robot/Head>,\n        </Robot.height>,\n    ]"),
+            "{after}"
+        );
+        assert!(
+            after.contains("prepend references = </Robot/Head>"),
+            "{after}"
+        );
+        assert!(after.contains("append references = </Library>"), "{after}");
+        assert!(
+            after.contains("delete references = </Robot/Head>"),
+            "{after}"
+        );
+        assert_eq!(
+            stage.relationship("/World/Spare.aim").unwrap(),
+            Wire::List(vec![
+                Wire::Bool(false),
+                Wire::List(vec![
+                    Wire::text("/World/Spare/Head"),
+                    Wire::text("/World/Spare.height")
+                ]),
+            ]),
+            "read back through the other reference"
+        );
+    }
+
+    #[test]
+    fn paths_the_reference_does_not_map_are_rejected_with_their_edit() {
+        let mut stage = open();
+        let robot = layer(&stage, "robot.usda");
+        let before = text(&stage, robot);
+        let target = through(&stage, "/World/Robot", ArcKind::References);
+        let mut batch = EditBatch::new();
+        let one = batch.value_numbers("double".into(), vec![1.0]);
+        batch.set_value("/World/Robot.height".into(), None, one);
+        batch.set_value("/World/Lamp.glow".into(), None, one);
+        let error = stage.apply_through(&target, &mut batch).unwrap_err();
+        assert_eq!(
+            (error.code, error.edit, error.path.as_deref()),
+            (
+                "edit.rejected.unmappable",
+                Some(1),
+                Some("/World/Lamp.glow")
+            )
+        );
+        let mut batch = EditBatch::new();
+        batch.set_targets("/World/Robot.aim".into(), vec!["/World/Lamp".into()]);
+        let error = stage.apply_through(&target, &mut batch).unwrap_err();
+        assert_eq!(
+            (error.code, error.edit),
+            ("edit.rejected.unmappable_target", Some(0))
+        );
+        // OpenUSD's `_DefinePrim` cannot create the spec of an undefined
+        // ancestor its edit target does not map.
+        let mut batch = EditBatch::new();
+        batch.define_prim("/World/Ghost/Shade".into(), "def".into(), None);
+        let error = stage.apply_through(&target, &mut batch).unwrap_err();
+        assert_eq!(
+            (error.code, error.edit),
+            ("edit.rejected.unmappable", Some(0))
+        );
+        assert_eq!(text(&stage, robot), before, "nothing applied");
+        let mut defined = EditBatch::new();
+        defined.define_prim("/World/Robot/Deep/Leaf".into(), "def".into(), None);
+        assert_eq!(
+            stage.apply_through(&target, &mut defined).map(|_| ()),
+            Ok(()),
+            "an undefined ancestor inside the reference is defined in the asset"
+        );
+        assert!(text(&stage, robot).contains("def \"Deep\""));
+        assert!(!text(&stage, layer(&stage, "scene.usda")).contains("Deep"));
+    }
+
+    #[test]
+    fn a_muted_layer_is_not_written_through_an_arc() {
+        let mut stage = open();
+        let robot = layer(&stage, "robot.usda");
+        let target = through(&stage, "/World/Robot", ArcKind::References);
+        stage.set_layer_muted(robot.0, true).unwrap();
+        let mut batch = EditBatch::new();
+        let one = batch.value_numbers("double".into(), vec![1.0]);
+        batch.set_value("/World/Robot.height".into(), None, one);
+        assert_eq!(
+            stage.apply_through(&target, &mut batch).unwrap_err().code,
+            "layer.muted"
+        );
+    }
+
+    #[test]
+    fn a_local_variant_target_writes_inside_the_branch() {
+        let mut stage = open();
+        let scene = layer(&stage, "scene.usda");
+        let variant = {
+            let store = stage.document().store();
+            SpecPath::parse(
+                "/World/Robot{finish=painted}",
+                store.tokens(),
+                store.paths(),
+            )
+            .unwrap()
+        };
+        let target = Resolved {
+            target: EditTarget::for_local_variant(scene, &variant),
+            stack: stage.document().stage().stage().layer_stack().to_vec(),
+        };
+        let mut batch = EditBatch::new();
+        let gloss = batch.value_numbers("double".into(), vec![0.9]);
+        batch.set_value("/World/Robot.gloss".into(), None, gloss);
+        batch.remove_arc(
+            false,
+            "/World/Robot".into(),
+            Some("./paint.usda".into()),
+            None,
+        );
+        stage.apply_through(&target, &mut batch).unwrap();
+        let after = text(&stage, scene);
+        assert!(
+            after.contains("\"painted\" (\n                delete references = @./paint.usda@\n"),
+            "the removal names the arc authored in the branch: {after}"
+        );
+        assert!(after.contains("double gloss = 0.9"), "{after}");
+        assert_eq!(
+            number(&stage, "/World/Robot.gloss", None),
+            Wire::Number(0.9)
+        );
+    }
+
+    #[test]
+    fn a_local_sublayer_is_written_at_its_offset() {
+        let mut stage = open();
+        let shot = layer(&stage, "shot.usda");
+        let mut batch = EditBatch::new();
+        let two = batch.value_numbers("double".into(), vec![2.0]);
+        batch.set_value("/World/Lamp.glow".into(), Some(15.0), two);
+        stage.apply(shot.0, &mut batch).unwrap();
+        let after = text(&stage, shot);
+        assert!(
+            after.contains("5: 2"),
+            "stage time 15 is the sublayer's time 15 - 10: {after}"
+        );
+        assert_eq!(
+            stage.time_samples("/World/Lamp.glow").unwrap(),
+            [10.0, 15.0],
+            "read back at the stage time it was set at"
+        );
     }
 }

@@ -450,7 +450,6 @@ impl LiveStage {
         // Structural authoring changes the child lists of the boundary
         // parents, whose full lists the partial composition composed. Their
         // indexes are replaced only when it composed them again.
-        let mut lists_changed = Vec::new();
         let mut retained = Vec::new();
         for &root in &roots {
             if let Some(parent) = store.paths().parent(root)
@@ -462,12 +461,23 @@ impl LiveStage {
                 } else {
                     retained.push(parent);
                 }
-                // A child that came or went changed the parent's child list.
-                if self.stage.has_prim(root) != partial.has_prim(root) {
-                    lists_changed.push(parent);
-                }
             }
         }
+        // A refreshed prim changed when its spec stack did: an inert spec
+        // came or went (`didAddInertPrim`, which `PcpChanges::DidChange`
+        // records as a spec stack change of the prim alone, and OpenUSD
+        // reports info-only). One whose specs changed only the child names
+        // they list did not, and the pseudo-root, whose spec layerstack
+        // makes for its first listed child (OpenUSD's always exists), never
+        // does.
+        let pseudo_root = store.paths().lookup(&crate::Path::root());
+        let restacked: HashSet<PathId> = refreshed
+            .iter()
+            .copied()
+            .filter(|&prim| {
+                Some(prim) != pseudo_root && self.stage.prim_stack(prim) != partial.prim_stack(prim)
+            })
+            .collect();
         affected.extend(refreshed.iter().copied());
         store.paths().sort_paths(&mut affected, store.tokens());
         self.work.replaced_prim_indexes = affected.len();
@@ -505,8 +515,11 @@ impl LiveStage {
             };
             changes.created = filtered(&|p| new.contains(&p) && !old.contains(&p));
             changes.removed = filtered(&|p| old.contains(&p) && !new.contains(&p));
-            let listed: HashSet<PathId> = lists_changed.into_iter().chain(refreshed).collect();
-            changes.changed_info_only = filtered(&|p| listed.contains(&p));
+            // A boundary parent whose child list gained or lost a prim is
+            // not reported: OpenUSD resyncs the child's path alone (see
+            // `LiveStage::refresh_local_structure`). A refreshed prim whose
+            // spec stack changed is.
+            changes.changed_info_only = filtered(&|p| restacked.contains(&p));
             // A root no prim was or is at is not among `affected`.
             changes.resynced = filtered(&|p| within.contains(&p));
             if changes.resynced.len() < roots.len() {

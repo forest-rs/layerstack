@@ -35,9 +35,6 @@
 //!   `/Lamp` spec creates the `over` too. OpenUSD reports the inert spec as
 //!   an info-only change of `/Lamp`; here a prim spec created resyncs the
 //!   prim, which covers the property.
-//! - A prim spec created is reported with an info-only change of the
-//!   pseudo-root, whose spec lists the new child; OpenUSD reports only
-//!   the resync.
 
 use std::collections::BTreeMap;
 
@@ -338,10 +335,6 @@ fn corrected(name: &str, mut report: Report) -> Report {
         "create_with_new_over" => {
             report.info.remove("/Lamp");
             report.resynced = vec!["/Lamp".into()];
-            report.info.insert("/".into(), Vec::new());
-        }
-        "create_prim_and_property" => {
-            report.info.insert("/".into(), Vec::new());
         }
         _ => {}
     }

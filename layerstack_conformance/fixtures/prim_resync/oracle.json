@@ -1,0 +1,693 @@
+{
+  "openusd_version": "0.26.11",
+  "records": [
+    {
+      "name": "define_child",
+      "call": "`UsdStage::DefinePrim` of a child of `/World`",
+      "notices": [
+        {
+          "resynced": [
+            "/World/Pebble"
+          ],
+          "info": [],
+          "fields": {
+            "/World/Pebble": [
+              "specifier",
+              "typeName"
+            ]
+          }
+        }
+      ],
+      "children": {
+        "/": [
+          "World",
+          "Sky",
+          "Robot",
+          "Drone"
+        ],
+        "/World": [
+          "Rock",
+          "Lamp",
+          "Pebble"
+        ],
+        "/Robot": [],
+        "prototype": [
+          "Ball"
+        ]
+      }
+    },
+    {
+      "name": "define_with_ancestors",
+      "call": "`UsdStage::DefinePrim` of `/World/Moss/Patch`, creating `/World/Moss` too",
+      "notices": [
+        {
+          "resynced": [
+            "/World/Moss"
+          ],
+          "info": [],
+          "fields": {
+            "/World/Moss": [
+              "specifier"
+            ]
+          }
+        },
+        {
+          "resynced": [
+            "/World/Moss/Patch"
+          ],
+          "info": [],
+          "fields": {
+            "/World/Moss/Patch": [
+              "specifier",
+              "typeName"
+            ]
+          }
+        }
+      ],
+      "children": {
+        "/": [
+          "World",
+          "Sky",
+          "Robot",
+          "Drone"
+        ],
+        "/World": [
+          "Rock",
+          "Lamp",
+          "Pebble",
+          "Moss"
+        ],
+        "/Robot": [],
+        "prototype": [
+          "Ball"
+        ]
+      }
+    },
+    {
+      "name": "override_prim",
+      "call": "`UsdStage::OverridePrim` of a new child",
+      "notices": [
+        {
+          "resynced": [
+            "/World/Ghost"
+          ],
+          "info": [],
+          "fields": {
+            "/World/Ghost": []
+          }
+        }
+      ],
+      "children": {
+        "/": [
+          "World",
+          "Sky",
+          "Robot",
+          "Drone"
+        ],
+        "/World": [
+          "Rock",
+          "Lamp",
+          "Pebble",
+          "Moss",
+          "Ghost"
+        ],
+        "/Robot": [],
+        "prototype": [
+          "Ball"
+        ]
+      }
+    },
+    {
+      "name": "create_class",
+      "call": "`UsdStage::CreateClassPrim` at the root",
+      "notices": [
+        {
+          "resynced": [
+            "/_Base"
+          ],
+          "info": [],
+          "fields": {
+            "/_Base": [
+              "specifier"
+            ]
+          }
+        },
+        {
+          "resynced": [
+            "/_Base"
+          ],
+          "info": [],
+          "fields": {
+            "/_Base": [
+              "specifier"
+            ]
+          }
+        }
+      ],
+      "children": {
+        "/": [
+          "World",
+          "Sky",
+          "Robot",
+          "Drone",
+          "_Base"
+        ],
+        "/World": [
+          "Rock",
+          "Lamp",
+          "Pebble",
+          "Moss",
+          "Ghost"
+        ],
+        "/Robot": [],
+        "prototype": [
+          "Ball"
+        ]
+      }
+    },
+    {
+      "name": "define_root",
+      "call": "`UsdStage::DefinePrim` of a root prim",
+      "notices": [
+        {
+          "resynced": [
+            "/Ground"
+          ],
+          "info": [],
+          "fields": {
+            "/Ground": [
+              "specifier",
+              "typeName"
+            ]
+          }
+        }
+      ],
+      "children": {
+        "/": [
+          "World",
+          "Sky",
+          "Robot",
+          "Drone",
+          "_Base",
+          "Ground"
+        ],
+        "/World": [
+          "Rock",
+          "Lamp",
+          "Pebble",
+          "Moss",
+          "Ghost"
+        ],
+        "/Robot": [],
+        "prototype": [
+          "Ball"
+        ]
+      }
+    },
+    {
+      "name": "remove_prim",
+      "call": "`UsdStage::RemovePrim` of a leaf",
+      "notices": [
+        {
+          "resynced": [
+            "/World/Pebble"
+          ],
+          "info": [],
+          "fields": {
+            "/World/Pebble": []
+          }
+        }
+      ],
+      "children": {
+        "/": [
+          "World",
+          "Sky",
+          "Robot",
+          "Drone",
+          "_Base",
+          "Ground"
+        ],
+        "/World": [
+          "Rock",
+          "Lamp",
+          "Moss",
+          "Ghost"
+        ],
+        "/Robot": [],
+        "prototype": [
+          "Ball"
+        ]
+      }
+    },
+    {
+      "name": "remove_with_children",
+      "call": "`UsdStage::RemovePrim` of a prim with a child",
+      "notices": [
+        {
+          "resynced": [
+            "/World/Moss"
+          ],
+          "info": [],
+          "fields": {
+            "/World/Moss": []
+          }
+        }
+      ],
+      "children": {
+        "/": [
+          "World",
+          "Sky",
+          "Robot",
+          "Drone",
+          "_Base",
+          "Ground"
+        ],
+        "/World": [
+          "Rock",
+          "Lamp",
+          "Ghost"
+        ],
+        "/Robot": [],
+        "prototype": [
+          "Ball"
+        ]
+      }
+    },
+    {
+      "name": "remove_root",
+      "call": "`UsdStage::RemovePrim` of a root prim",
+      "notices": [
+        {
+          "resynced": [
+            "/Ground"
+          ],
+          "info": [],
+          "fields": {
+            "/Ground": []
+          }
+        }
+      ],
+      "children": {
+        "/": [
+          "World",
+          "Sky",
+          "Robot",
+          "Drone",
+          "_Base"
+        ],
+        "/World": [
+          "Rock",
+          "Lamp",
+          "Ghost"
+        ],
+        "/Robot": [],
+        "prototype": [
+          "Ball"
+        ]
+      }
+    },
+    {
+      "name": "reorder_children",
+      "call": "`UsdPrim::SetChildrenReorder` authors `primOrder`",
+      "notices": [
+        {
+          "resynced": [
+            "/World"
+          ],
+          "info": [],
+          "fields": {
+            "/World": [
+              "primOrder"
+            ]
+          }
+        }
+      ],
+      "children": {
+        "/": [
+          "World",
+          "Sky",
+          "Robot",
+          "Drone",
+          "_Base"
+        ],
+        "/World": [
+          "Lamp",
+          "Ghost",
+          "Rock"
+        ],
+        "/Robot": [],
+        "prototype": [
+          "Ball"
+        ]
+      }
+    },
+    {
+      "name": "clear_reorder",
+      "call": "`UsdPrim::ClearChildrenReorder`",
+      "notices": [
+        {
+          "resynced": [
+            "/World"
+          ],
+          "info": [],
+          "fields": {
+            "/World": [
+              "primOrder"
+            ]
+          }
+        }
+      ],
+      "children": {
+        "/": [
+          "World",
+          "Sky",
+          "Robot",
+          "Drone",
+          "_Base"
+        ],
+        "/World": [
+          "Rock",
+          "Lamp",
+          "Ghost"
+        ],
+        "/Robot": [],
+        "prototype": [
+          "Ball"
+        ]
+      }
+    },
+    {
+      "name": "rename_prim",
+      "call": "`UsdNamespaceEditor::RenamePrim` of a child of `/World`",
+      "notices": [
+        {
+          "resynced": [
+            "/World/Ghost",
+            "/World/Spirit"
+          ],
+          "info": [],
+          "fields": {
+            "/World/Ghost": [],
+            "/World/Spirit": []
+          }
+        }
+      ],
+      "children": {
+        "/": [
+          "World",
+          "Sky",
+          "Robot",
+          "Drone",
+          "_Base"
+        ],
+        "/World": [
+          "Rock",
+          "Lamp",
+          "Spirit"
+        ],
+        "/Robot": [],
+        "prototype": [
+          "Ball"
+        ]
+      }
+    },
+    {
+      "name": "reparent_prim",
+      "call": "`UsdNamespaceEditor::ReparentPrim` of it to the pseudo-root",
+      "notices": [
+        {
+          "resynced": [
+            "/Spirit",
+            "/World/Spirit"
+          ],
+          "info": [],
+          "fields": {
+            "/Spirit": [],
+            "/World/Spirit": []
+          }
+        }
+      ],
+      "children": {
+        "/": [
+          "World",
+          "Sky",
+          "Robot",
+          "Drone",
+          "_Base",
+          "Spirit"
+        ],
+        "/World": [
+          "Rock",
+          "Lamp"
+        ],
+        "/Robot": [],
+        "prototype": [
+          "Ball"
+        ]
+      }
+    },
+    {
+      "name": "create_property",
+      "call": "`UsdPrim::CreateAttribute`",
+      "notices": [
+        {
+          "resynced": [
+            "/World/Rock.roughness"
+          ],
+          "info": [],
+          "fields": {
+            "/World/Rock.roughness": [
+              "custom",
+              "typeName"
+            ]
+          }
+        }
+      ],
+      "children": {
+        "/": [
+          "World",
+          "Sky",
+          "Robot",
+          "Drone",
+          "_Base",
+          "Spirit"
+        ],
+        "/World": [
+          "Rock",
+          "Lamp"
+        ],
+        "/Robot": [],
+        "prototype": [
+          "Ball"
+        ]
+      }
+    },
+    {
+      "name": "define_in_sublayer",
+      "call": "`UsdStage::DefinePrim` through the weaker layer",
+      "notices": [
+        {
+          "resynced": [
+            "/World/Shrub"
+          ],
+          "info": [],
+          "fields": {
+            "/World/Shrub": [
+              "specifier",
+              "typeName"
+            ]
+          }
+        }
+      ],
+      "children": {
+        "/": [
+          "World",
+          "Sky",
+          "Robot",
+          "Drone",
+          "_Base",
+          "Spirit"
+        ],
+        "/World": [
+          "Rock",
+          "Shrub",
+          "Lamp"
+        ],
+        "/Robot": [],
+        "prototype": [
+          "Ball"
+        ]
+      }
+    },
+    {
+      "name": "define_in_sublayer_with_new_over",
+      "call": "`UsdStage::DefinePrim` of `/Sky/Cloud` through the weaker layer, which has no `/Sky` spec: an `over` is added for it",
+      "notices": [
+        {
+          "resynced": [
+            "/Sky/Cloud"
+          ],
+          "info": [
+            "/Sky"
+          ],
+          "fields": {
+            "/Sky/Cloud": [
+              "specifier",
+              "typeName"
+            ],
+            "/Sky": []
+          }
+        }
+      ],
+      "children": {
+        "/": [
+          "World",
+          "Sky",
+          "Robot",
+          "Drone",
+          "_Base",
+          "Spirit"
+        ],
+        "/World": [
+          "Rock",
+          "Shrub",
+          "Lamp"
+        ],
+        "/Robot": [],
+        "prototype": [
+          "Ball"
+        ]
+      }
+    },
+    {
+      "name": "override_in_sublayer",
+      "call": "`SdfCreatePrimInLayer` adds an `over` for `/World/Lamp` to the weaker layer, which has no spec for it",
+      "notices": [
+        {
+          "resynced": [],
+          "info": [
+            "/World/Lamp"
+          ],
+          "fields": {
+            "/World/Lamp": []
+          }
+        }
+      ],
+      "children": {
+        "/": [
+          "World",
+          "Sky",
+          "Robot",
+          "Drone",
+          "_Base",
+          "Spirit"
+        ],
+        "/World": [
+          "Rock",
+          "Shrub",
+          "Lamp"
+        ],
+        "/Robot": [],
+        "prototype": [
+          "Ball"
+        ]
+      }
+    },
+    {
+      "name": "define_under_instance",
+      "call": "a `def` prim spec beneath the instance root `/Robot` (`UsdStage::DefinePrim` refuses an instance proxy path)",
+      "notices": [],
+      "children": {
+        "/": [
+          "World",
+          "Sky",
+          "Robot",
+          "Drone",
+          "_Base",
+          "Spirit"
+        ],
+        "/World": [
+          "Rock",
+          "Shrub",
+          "Lamp"
+        ],
+        "/Robot": [],
+        "prototype": [
+          "Ball"
+        ]
+      }
+    },
+    {
+      "name": "define_in_prototype_source",
+      "call": "a `def` prim spec added in the asset the instances reference",
+      "notices": [
+        {
+          "resynced": [
+            "/__Prototype_1/Antenna"
+          ],
+          "info": [],
+          "fields": {
+            "/__Prototype_1/Antenna": [
+              "specifier",
+              "typeName"
+            ]
+          }
+        }
+      ],
+      "children": {
+        "/": [
+          "World",
+          "Sky",
+          "Robot",
+          "Drone",
+          "_Base",
+          "Spirit"
+        ],
+        "/World": [
+          "Rock",
+          "Shrub",
+          "Lamp"
+        ],
+        "/Robot": [],
+        "prototype": [
+          "Ball",
+          "Antenna"
+        ]
+      }
+    },
+    {
+      "name": "remove_from_prototype_source",
+      "call": "that spec removed",
+      "notices": [
+        {
+          "resynced": [
+            "/__Prototype_1/Antenna"
+          ],
+          "info": [],
+          "fields": {
+            "/__Prototype_1/Antenna": []
+          }
+        }
+      ],
+      "children": {
+        "/": [
+          "World",
+          "Sky",
+          "Robot",
+          "Drone",
+          "_Base",
+          "Spirit"
+        ],
+        "/World": [
+          "Rock",
+          "Shrub",
+          "Lamp"
+        ],
+        "/Robot": [],
+        "prototype": [
+          "Ball"
+        ]
+      }
+    }
+  ]
+}

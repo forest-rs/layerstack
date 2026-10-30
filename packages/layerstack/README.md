@@ -250,7 +250,9 @@ await stage.resolve(source);
   `muteLayer`, `loadSupplied`, each round of `resolve`) returns, with the
   `mutedLayers` and `unmutedLayers` whose muting changed, and their
   `mutedIdentifiers` and `unmutedIdentifiers` (as OpenUSD's
-  `UsdNotice::LayerMutingChanged`), natively muted ones included. A listener that throws
+  `UsdNotice::LayerMutingChanged`), natively muted ones included. A prim
+  created or removed is resynced alone: its parent is not reported, as
+  OpenUSD does not report it. A listener that throws
   is reported as `listener.failed` and the others still run.
 - **Saving hands you the bytes.** The module writes nothing anywhere.
   `stage.save()` (or `save(layer)`) writes each dirty layer the stage uses

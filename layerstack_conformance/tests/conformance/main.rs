@@ -148,6 +148,7 @@ mod point_motion;
 mod prim_field_edits;
 mod prim_index_graph;
 mod prim_relocates;
+mod prim_resync;
 mod primvars;
 mod property_discovery;
 mod property_fidelity;

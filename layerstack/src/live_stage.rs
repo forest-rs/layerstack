@@ -859,6 +859,16 @@ impl LiveStage {
         };
         self.inert_prims.clear();
         include_resyncs(store, &mut changes, &declaration_resyncs);
+        // Stage metadata the transaction changed in the stage's own layer
+        // stack, which the stage reads when asked.
+        if !outcome.layer_info.is_empty() {
+            let pseudo_root = store.paths().intern(crate::Path::root());
+            if !changes.resynced.contains(&pseudo_root)
+                && !changes.changed_info_only.contains(&pseudo_root)
+            {
+                changes.changed_info_only.insert(0, pseudo_root);
+            }
+        }
         // External notifications identify affected prims but do not describe
         // their edits. They may have changed declarations or schema identity;
         // only transaction-known value edits can promise info-only changes.
@@ -6218,6 +6228,51 @@ mod tests {
         let applied = live.apply(&mut store, &edit).expect("applies");
         assert!(applied.changes.resynced.is_empty());
         assert_eq!(applied.changes.changed_info_only, [world]);
+    }
+
+    /// A root layer field that composes nothing, `documentation`, changes
+    /// the pseudo-root info-only and recomposes nothing; another stage
+    /// reading the layer sees the edit too. `timeCodesPerSecond`, which
+    /// scales layer offsets, still recomposes the stage.
+    ///
+    /// OpenUSD: `UsdStage::_HandleLayersDidChange` reports an info change
+    /// of the pseudo-root's entry info-only; `PcpChanges::DidChange` finds
+    /// a layer offsets change in the time code rates.
+    #[test]
+    fn a_layer_field_composing_nothing_changes_the_pseudo_root_info_only() {
+        use crate::edit::Transaction;
+
+        let mut store = InMemoryStore::default();
+        let world = p(&mut store, "/World");
+        let root = p(&mut store, "/");
+        let documentation = store.tokens.intern("documentation");
+        let rate = store.tokens.intern("timeCodesPerSecond");
+        let mut layer = Layer::new(LayerId(1));
+        layer.insert_prim(world, PrimSpec::def());
+        store.insert_layer(layer);
+        let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+        let mut reader = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+        let mut edit = Transaction::new();
+        edit.set_layer_metadata(
+            LayerId(1),
+            documentation,
+            FieldValue::Value(Value::string("a scene")),
+        );
+        let applied = live.apply(&mut store, &edit).expect("applies");
+        assert!(applied.changes.resynced.is_empty(), "{:?}", applied.changes);
+        assert_eq!(applied.changes.changed_info_only, [root]);
+        assert!(applied.recomposed.is_empty());
+        assert!(!live.recomposition_work().full_rebuild);
+        let undone = live.apply(&mut store, &applied.inverse).expect("undo");
+        assert_eq!(undone.changes.changed_info_only, [root]);
+        assert_eq!(reader.notify_changed_layers(&store), [LayerId(1)]);
+        reader.recompose(&mut store);
+        assert!(reader.stage().has_prim(world));
+
+        let mut edit = Transaction::new();
+        edit.set_layer_metadata(LayerId(1), rate, FieldValue::Value(Value::Double(48.0)));
+        let applied = live.apply(&mut store, &edit).expect("applies");
+        assert_eq!(applied.changes.resynced, [root]);
     }
 
     /// An edit that applies a multiple-apply instance recomposes the prim,

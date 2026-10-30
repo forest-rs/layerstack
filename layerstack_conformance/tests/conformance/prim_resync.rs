@@ -24,7 +24,8 @@
 //! layer or a referenced asset, changes that prim info-only, and each
 //! prim composing from it (`/Echo` inherits `/World/Lamp`); one holding an
 //! attribute spec resyncs the attribute too, and one holding metadata
-//! composing nothing is info-only. `kind` resyncs its prim.
+//! composing nothing is info-only. `kind` resyncs its prim, and a field
+//! of the root layer composing nothing changes `/` info-only.
 //!
 //! Differences, deliberate:
 //!
@@ -47,8 +48,6 @@
 //! - OpenUSD reports `/Echo` info-only with every change of the root
 //!   layer's own fields, which compose nothing into it; layerstack does
 //!   not.
-//! - A field of the root layer, `documentation` among them, resyncs `/`
-//!   here; OpenUSD changes `/` info-only.
 //! - A sublayer inserted or removed, or a layer of the root layer stack
 //!   muted or unmuted, recomposes the stage whole here, and resyncs `/`.
 //!   OpenUSD resyncs the prims and properties whose specs came or went,
@@ -427,8 +426,7 @@ fn corrected(name: &str, mut report: Report) -> Report {
             report.info.remove("/Thing");
             report.resynced = vec!["/Thing".into()];
         }
-        "set_layer_documentation"
-        | "insert_empty_sublayer"
+        "insert_empty_sublayer"
         | "remove_empty_sublayer"
         | "insert_prim_sublayer"
         | "remove_prim_sublayer"

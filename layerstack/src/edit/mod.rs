@@ -242,6 +242,9 @@ pub struct Changes {
     /// an arc: they are listed here, as OpenUSD lists them. So is a prim
     /// whose new `over` holds only property specs, which are resynced in
     /// [`Self::resynced_properties`], or metadata that composes nothing.
+    /// A change to stage metadata that composes nothing (`documentation`,
+    /// `startTimeCode`, `metersPerUnit` and the like) lists the
+    /// pseudo-root.
     pub changed_info_only: Vec<PathId>,
     /// Complete property-field inventories for a subset of info-only prims.
     /// A prim absent here must be treated conservatively: any field may have

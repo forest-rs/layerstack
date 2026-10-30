@@ -155,7 +155,7 @@ fn main() {
             }
             Ok::<_, SkelError>(())
         })
-        .unwrap();
+        .unwrap_or_else(|error| panic!("{}", error.display(&store)));
     assert_eq!(
         renderer.palette_uploads, 3,
         "one shared palette upload per distinct time"

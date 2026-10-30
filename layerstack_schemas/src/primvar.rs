@@ -40,6 +40,7 @@
 //! // interpreting an unreadable array as a missing primvar.
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
+use crate::diagnostic::{Describe, Names, with_store};
 use crate::{PrimEdit, PrimView, Scene, SchemaEdit, Time};
 use alloc::{
     format,
@@ -92,9 +93,67 @@ pub enum PrimvarError {
     /// Reserved legacy error; ID-target reads are now supported.
     IdTargetUnsupported,
 }
+impl PrimvarError {
+    /// The error in words, its prim or attribute written as a path with
+    /// `store`, the store the stage was composed from. `Display` writes the same with ids.
+    #[must_use]
+    pub fn display<'a>(
+        &'a self,
+        store: &'a dyn layerstack::LayerStore,
+    ) -> impl core::fmt::Display + 'a {
+        with_store(self, store)
+    }
+
+    /// Why, without the operation: shared with the errors that wrap this one.
+    pub(crate) fn reason(
+        &self,
+        f: &mut core::fmt::Formatter<'_>,
+        names: Names<'_>,
+    ) -> core::fmt::Result {
+        match self {
+            Self::MissingPrim(path) => write!(f, "no prim is at {}", names.path(*path)),
+            Self::InvalidName(name) => write!(
+                f,
+                "`{name}` is empty, malformed or ends in the reserved `:indices` suffix"
+            ),
+            Self::TypeMismatch(name) => {
+                write!(
+                    f,
+                    "`{name}` already exists with an incompatible kind or type"
+                )
+            }
+            Self::InvalidInterpolation(name) => write!(
+                f,
+                "`{name}` is not a geometry interpolation (`constant`, `uniform`, `vertex`, \
+                 `varying` or `faceVarying`)"
+            ),
+            Self::InvalidElementSize(size) => {
+                write!(f, "the element size {size} is not positive")
+            }
+            Self::MissingIndices => f.write_str(
+                "the indexed primvar has no readable `int[]` indices at the requested time",
+            ),
+            Self::InvalidIndex { position, index } => write!(
+                f,
+                "the index {index} at position {position} does not address a complete element \
+                 of the values"
+            ),
+            Self::Decode { property, error } => {
+                write!(f, "cannot decode {}: {error}", names.property(*property))
+            }
+            Self::IdTargetUnsupported => f.write_str("id-target primvars cannot be read"),
+        }
+    }
+}
+impl Describe for PrimvarError {
+    fn describe(&self, f: &mut core::fmt::Formatter<'_>, names: Names<'_>) -> core::fmt::Result {
+        f.write_str("invalid primvar: ")?;
+        self.reason(f, names)
+    }
+}
 impl core::fmt::Display for PrimvarError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "invalid primvar: {self:?}")
+        self.describe(f, Names(None))
     }
 }
 impl core::error::Error for PrimvarError {}

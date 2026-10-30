@@ -4,6 +4,7 @@
 //! Point motion for meshes, curves and points; simulation and rendering belong to callers.
 //! OpenUSD: `UsdGeomPointBased::ComputePointsAtTime(s)` and `samplingUtils.cpp`.
 //! Source selection and interpolation follow AOUSD Core §12.3–12.5.
+use crate::diagnostic::{Describe, Names, with_store};
 use crate::{
     Time,
     motion_sampling::{aligned, anchor, rate},
@@ -31,9 +32,50 @@ pub enum PointMotionError {
     /// An array motion source cannot be anchored as discrete samples.
     UnsupportedSource(&'static str),
 }
+impl PointMotionError {
+    /// The error in words, an undecodable attribute written as its path with
+    /// `store`, the store the stage was composed from. `Display` writes the same with ids.
+    #[must_use]
+    pub fn display<'a>(
+        &'a self,
+        store: &'a dyn layerstack::LayerStore,
+    ) -> impl core::fmt::Display + 'a {
+        with_store(self, store)
+    }
+
+    /// Why, without the operation: shared with the errors that wrap this one.
+    pub(crate) fn reason(
+        &self,
+        f: &mut core::fmt::Formatter<'_>,
+        names: Names<'_>,
+    ) -> core::fmt::Result {
+        match self {
+            Self::MissingPoints => f.write_str("`points` cannot be read"),
+            Self::Decode { property, error } => {
+                write!(f, "cannot decode {}: {error}", names.property(*property))
+            }
+            Self::InvalidTime => f.write_str(
+                "the times are not finite or of different kinds, or the stage's time-code rate \
+                 is not finite and positive",
+            ),
+            Self::LengthMismatch => {
+                f.write_str("a nonempty motion array differs in length from `points`")
+            }
+            Self::UnsupportedSource(name) => {
+                write!(f, "`{name}` cannot be anchored as discrete samples")
+            }
+        }
+    }
+}
+impl Describe for PointMotionError {
+    fn describe(&self, f: &mut core::fmt::Formatter<'_>, names: Names<'_>) -> core::fmt::Result {
+        f.write_str("invalid point motion: ")?;
+        self.reason(f, names)
+    }
+}
 impl core::fmt::Display for PointMotionError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "invalid point motion: {self:?}")
+        self.describe(f, Names(None))
     }
 }
 impl core::error::Error for PointMotionError {

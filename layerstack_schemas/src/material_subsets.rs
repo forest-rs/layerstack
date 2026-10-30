@@ -3,6 +3,7 @@
 
 //! Material face subsets combine `UsdGeom` family validation and `UsdShade` binding.
 //! Draw ranges, triangulation and renderer grouping belong to the consumer.
+use crate::diagnostic::{Describe, Names, with_store};
 use crate::{
     BindingCache, BindingOptions, BoundMaterial, MaterialPurpose, PrimEdit, PrimView, Scene,
     SchemaEdit, Time,
@@ -69,9 +70,44 @@ pub enum MaterialSubsetError {
         error: ArrayReadError,
     },
 }
+impl MaterialSubsetError {
+    /// The error in words, its prim or attribute written as a path with
+    /// `store`, the store the stage was composed from. `Display` writes the same with ids.
+    #[must_use]
+    pub fn display<'a>(
+        &'a self,
+        store: &'a dyn layerstack::LayerStore,
+    ) -> impl core::fmt::Display + 'a {
+        with_store(self, store)
+    }
+
+    /// Why, without the operation: shared with the errors that wrap this one.
+    pub(crate) fn reason(
+        &self,
+        f: &mut core::fmt::Formatter<'_>,
+        names: Names<'_>,
+    ) -> core::fmt::Result {
+        match self {
+            Self::InvalidGeometry(path) => write!(
+                f,
+                "{} is not a mesh or tetrahedral mesh that supports face subsets",
+                names.path(*path)
+            ),
+            Self::Decode { property, error } => {
+                write!(f, "cannot decode {}: {error}", names.property(*property))
+            }
+        }
+    }
+}
+impl Describe for MaterialSubsetError {
+    fn describe(&self, f: &mut core::fmt::Formatter<'_>, names: Names<'_>) -> core::fmt::Result {
+        f.write_str("cannot read material subsets: ")?;
+        self.reason(f, names)
+    }
+}
 impl core::fmt::Display for MaterialSubsetError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "invalid material subsets: {self:?}")
+        self.describe(f, Names(None))
     }
 }
 impl core::error::Error for MaterialSubsetError {}

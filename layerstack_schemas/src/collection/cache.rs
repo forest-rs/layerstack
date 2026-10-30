@@ -4,6 +4,7 @@
 //! Caller-owned compiled collections and ordered membership decisions.
 use super::{Membership, MembershipProblem, MembershipQuery, SCHEMA_BASE_NAMES};
 use crate::Scene;
+use crate::diagnostic::{Describe, Names, with_store};
 use alloc::{collections::BTreeMap, string::String, vec, vec::Vec};
 use layerstack::sort;
 use layerstack::{Changes, PathId, PropertyPath, TargetPath};
@@ -94,9 +95,32 @@ pub enum MembershipCacheError {
     /// An empty, malformed or reserved collection instance name.
     InvalidName(String),
 }
+impl MembershipCacheError {
+    /// The error in words, the owning prim written as its path with `store`,
+    /// the store the stage was composed from. `Display` writes the same with ids.
+    #[must_use]
+    pub fn display<'a>(
+        &'a self,
+        store: &'a dyn layerstack::LayerStore,
+    ) -> impl core::fmt::Display + 'a {
+        with_store(self, store)
+    }
+}
+impl Describe for MembershipCacheError {
+    fn describe(&self, f: &mut core::fmt::Formatter<'_>, names: Names<'_>) -> core::fmt::Result {
+        f.write_str("cannot capture the collection: ")?;
+        match self {
+            Self::MissingPrim(path) => write!(f, "no prim is at {}", names.path(*path)),
+            Self::InvalidName(name) => write!(
+                f,
+                "`{name}` is empty, malformed or a reserved collection name"
+            ),
+        }
+    }
+}
 impl core::fmt::Display for MembershipCacheError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "collection capture: {self:?}")
+        self.describe(f, Names(None))
     }
 }
 impl core::error::Error for MembershipCacheError {}

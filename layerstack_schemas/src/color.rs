@@ -9,6 +9,7 @@
 //! AOUSD Core §12.2.5, §12.3, §13.3.2; OpenUSD `usd/colorSpaceAPI.cpp`.
 
 mod math;
+use crate::diagnostic::{Describe, Names, with_store};
 use crate::{
     Scene,
     usd::{ColorSpaceApi, ColorSpaceDefinitionApi},
@@ -91,9 +92,59 @@ pub enum ColorError {
     /// An input or output color is nonfinite (including undefined power results).
     InvalidColor,
 }
+impl ColorError {
+    /// The error in words, its prims and attributes written as paths with
+    /// `store`, the store the stage was composed from. `Display` writes the same with ids.
+    #[must_use]
+    pub fn display<'a>(
+        &'a self,
+        store: &'a dyn layerstack::LayerStore,
+    ) -> impl core::fmt::Display + 'a {
+        with_store(self, store)
+    }
+}
+impl Describe for ColorError {
+    fn describe(&self, f: &mut core::fmt::Formatter<'_>, names: Names<'_>) -> core::fmt::Result {
+        f.write_str("invalid color-space input: ")?;
+        match self {
+            Self::MissingPrim(path) => write!(f, "no prim is at {}", names.path(*path)),
+            Self::MissingAttribute(property) => write!(
+                f,
+                "{} does not exist or is not an attribute",
+                names.property(*property)
+            ),
+            Self::UnknownColorSpace { name, prim } => write!(
+                f,
+                "`{name}`, looked up from {}, is neither a built-in color space nor one defined \
+                 in scope",
+                names.path(*prim)
+            ),
+            Self::InvalidAttribute {
+                prim,
+                instance,
+                attribute,
+            } => write!(
+                f,
+                "the `{attribute}` of the color space definition `{instance}` on {} is \
+                 missing, of another type or not finite",
+                names.path(*prim)
+            ),
+            Self::InvalidChromaticities => f.write_str(
+                "the chromaticities do not define a finite, invertible RGB-to-XYZ matrix",
+            ),
+            Self::InvalidTransferFunction => f.write_str(
+                "the gamma and linear bias do not define a finite, continuous transfer function",
+            ),
+            Self::InvalidMatrix => {
+                f.write_str("a matrix is not invertible or has entries that are not finite")
+            }
+            Self::InvalidColor => f.write_str("an input or output color is not finite"),
+        }
+    }
+}
 impl core::fmt::Display for ColorError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "invalid color-space input: {self:?}")
+        self.describe(f, Names(None))
     }
 }
 impl core::error::Error for ColorError {}

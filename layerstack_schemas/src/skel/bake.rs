@@ -17,6 +17,7 @@ use super::{
     BlendShapeQuery, SkelError, SkelProblem, SkeletonQuery, SkinningBindingInputs, SkinningMethod,
     SkinningQuery, normals,
 };
+use crate::diagnostic::{Describe, Names as Words, with_store};
 use crate::{ExtentsHintError, edit::CannotEdit};
 use crate::{
     PrimView, Scene, SchemaEdit, Time, XformCache,
@@ -273,14 +274,46 @@ pub enum SkinningBakeError {
     Edit(EditError),
 }
 
+impl SkinningBakeError {
+    /// The error in words, its prims and layer written with `store`, the
+    /// store the stage was composed from; a rejected edit through
+    /// [`layerstack::EditError::display`]. `Display` writes the same with ids.
+    #[must_use]
+    pub fn display<'a>(&'a self, store: &'a dyn LayerStore) -> impl core::fmt::Display + 'a {
+        with_store(self, store)
+    }
+}
+impl Describe for SkinningBakeError {
+    fn describe(&self, f: &mut core::fmt::Formatter<'_>, names: Words<'_>) -> core::fmt::Result {
+        f.write_str("cannot bake skinning: ")?;
+        match self {
+            Self::NotSkelRoot(path) => write!(
+                f,
+                "the binding root {} is not a `SkelRoot` on the stage",
+                names.path(*path)
+            ),
+            Self::Instanced(path) => write!(
+                f,
+                "{} is a native instance or an instance proxy, which is not baked",
+                names.path(*path)
+            ),
+            Self::MissingLayer(layer) => {
+                write!(
+                    f,
+                    "the binding's {} is not in the store",
+                    names.layer(*layer)
+                )
+            }
+            Self::Edit(error) => {
+                f.write_str("the baked values did not apply: ")?;
+                names.edit(f, error)
+            }
+        }
+    }
+}
 impl core::fmt::Display for SkinningBakeError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            Self::NotSkelRoot(_) => f.write_str("a bake binding's root is not a SkelRoot"),
-            Self::Instanced(_) => f.write_str("instanced skinning is not baked"),
-            Self::MissingLayer(layer) => write!(f, "layer {layer:?} is not in the store"),
-            Self::Edit(error) => write!(f, "baked values did not apply: {error}"),
-        }
+        self.describe(f, Words(None))
     }
 }
 

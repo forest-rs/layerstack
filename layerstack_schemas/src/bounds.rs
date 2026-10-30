@@ -182,8 +182,8 @@ impl Describe for BoundsError {
                 source.describe(f, names)
             }
             Self::InvalidPointInstancer { prim, source } => {
-                write!(f, "{}: ", names.path(*prim))?;
-                source.describe(f, names)
+                write!(f, "the point instancer {} is invalid: ", names.path(*prim))?;
+                source.reason(f, names)
             }
             Self::PointInstancerCycle(prim) => write!(
                 f,

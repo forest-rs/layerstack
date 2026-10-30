@@ -8,6 +8,7 @@ import { ArrayHandle } from "./arrays.js";
 import type { NativeArrayHandle } from "./arrays.js";
 import type { Layerstack, Stage } from "./stage.js";
 import type {
+  ConnectionSourceInfo,
   CoordSysBinding,
   GeomSubset,
   MaterialBinding,
@@ -105,6 +106,21 @@ export function readPorts(stage: Stage, path: string, kind: "input" | "output"):
 export function readPort(stage: Stage, path: string): ShaderPort | null {
   const row = stage.native("port", (native) => native.port(path)) as Row | null;
   return row === null ? null : new ShaderPort(stage, row);
+}
+
+/** The connection source the path text `path` names, checked against the stage. */
+export function readConnectionSourceInfo(stage: Stage, path: string): ConnectionSourceInfo {
+  const [prim, name, kind, typeName, source] = stage.native("connectionSourceInfo", (native) =>
+    native.connectionSourceInfo(path),
+  ) as Row;
+  return Object.freeze({
+    prim: prim as string | null,
+    name: name as string,
+    kind: kind as ConnectionSourceInfo["kind"],
+    typeName: typeName as string | null,
+    source: source as string | null,
+    valid: source !== null,
+  });
 }
 
 /** A `Material`, as read when it was returned: {@link Stage.material}. */

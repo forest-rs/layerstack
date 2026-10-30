@@ -2261,6 +2261,13 @@ impl Stage {
         Ok(self.port(path)?.into())
     }
 
+    /// The record `connection_source_info` builds, as documented in
+    /// `schemas.rs`.
+    #[wasm_bindgen(js_name = connectionSourceInfo)]
+    pub fn js_connection_source_info(&self, path: &str) -> JsValue {
+        self.connection_source_info(path).into()
+    }
+
     /// The record `value_sources` builds, as documented in `schemas.rs`.
     #[wasm_bindgen(js_name = valueSources)]
     pub fn js_value_sources(&self, path: &str) -> Result<JsValue, JsValue> {

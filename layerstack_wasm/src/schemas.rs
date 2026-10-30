@@ -23,7 +23,7 @@ use layerstack::{InMemoryStore, PathId, PropertyPath, TargetPath, Time, TypedArr
 use layerstack_schemas::{
     BindingCache, BindingKind, BindingOptions, BindingStrength, BoundMaterial, CoordSysCache,
     MaterialPurpose, PrimView, Scene,
-    shading::{MaterialTerminal, PortKind, ValueSourceKind},
+    shading::{ConnectionSourceInfo, MaterialTerminal, PortKind, ValueSourceKind},
     subset::{SubsetError, SubsetProblem, SubsetProblemKind, SubsetValidation},
     usd_geom::{GeomSubsetElementType, Imageable},
     usd_shade::{Material, Shader},
@@ -481,6 +481,45 @@ impl Stage {
         )
     }
 
+    /// The connection source the path text `path` names, checked against
+    /// the stage: `[prim, name, kind, typeName, source]`, the source prim
+    /// (`null` when the stage has none there), the attribute's base name
+    /// (empty when `path` is not a property path), its `input` or `output`
+    /// kind (`null` for a name in neither namespace), the attribute's type
+    /// name (`null` when no attribute is there), and the source's property
+    /// path to connect to (`null` unless the info is valid). Text that is
+    /// not a property path, a relational attribute path included, reads as
+    /// an empty info rather than failing.
+    ///
+    /// OpenUSD: `UsdShadeConnectionSourceInfo(stage, sourcePath)` and
+    /// `IsValid`; see [`ConnectionSourceInfo`] for each case and the one
+    /// difference.
+    pub(crate) fn connection_source_info(&self, path: &str) -> Wire {
+        let scene = self.scene();
+        let store = self.document().store();
+        let info = ConnectionSourceInfo::new(&scene, path);
+        Wire::List(vec![
+            info.prim()
+                .map_or(Wire::Null, |prim| path_text(store, prim)),
+            Wire::text(info.name()),
+            info.kind().map_or(Wire::Null, |kind| {
+                Wire::text(match kind {
+                    PortKind::Input => "input",
+                    PortKind::Output => "output",
+                })
+            }),
+            info.type_name()
+                .map_or(Wire::Null, |ty| Wire::text(ty.type_name())),
+            info.source().map_or(Wire::Null, |source| {
+                Wire::Text(alloc::format!(
+                    "{}.{}",
+                    store.paths().display(source.prim(), store.tokens()),
+                    source.name()
+                ))
+            }),
+        ])
+    }
+
     /// Where the port at `path` gets its value, following connections
     /// through node graphs: `[sources, issues]`, each source
     /// `[attribute, kind, chain]` in depth-first order (`shaderOutput` for
@@ -932,6 +971,38 @@ def Scope "Looks" {
                 .code,
             "argument.invalid"
         );
+    }
+
+    #[test]
+    fn an_editor_checks_a_connection_source_path_against_the_stage() {
+        let stage = open(SHADED);
+        let info = |path: &str| show(&stage.connection_source_info(path));
+        assert_eq!(
+            info("/Looks/Stone/Texture.outputs:rgb"),
+            "[/Looks/Stone/Texture, rgb, output, float3, /Looks/Stone/Texture.outputs:rgb]"
+        );
+        // A port that is not there yet is still a source to connect to.
+        assert_eq!(
+            info("/Looks/Stone/Texture.outputs:alpha"),
+            "[/Looks/Stone/Texture, alpha, output, null, /Looks/Stone/Texture.outputs:alpha]"
+        );
+        assert_eq!(
+            info("/Looks/Gone.outputs:rgb"),
+            "[null, rgb, output, null, null]"
+        );
+        assert_eq!(
+            info("/Looks/Stone/Texture.info:id"),
+            "[/Looks/Stone/Texture, info:id, null, token, null]"
+        );
+        // Neither a prim path nor a relational attribute path names a
+        // source.
+        for path in [
+            "/Looks/Stone/Texture",
+            "/Looks/Stone/Texture.outputs:rgb[/X].inputs:y",
+            "not a path",
+        ] {
+            assert_eq!(info(path), "[null, , null, null, null]", "{path}");
+        }
     }
 
     #[test]

@@ -1220,6 +1220,40 @@ export interface TerminalSource {
   readonly sources: readonly { readonly output: string; readonly chain: readonly string[] }[];
 }
 
+/**
+ * A connection source named by a path and checked against the stage:
+ * {@link Stage.connectionSourceInfo}, OpenUSD's
+ * `UsdShadeConnectionSourceInfo(stage, sourcePath)`.
+ *
+ * The path is read as `SdfPath` parses it. Text that is not a property
+ * path (a prim path, a target path such as
+ * `/Mat/Shader.outputs:out[/X]`, text that does not parse) gives an empty
+ * info. Trailing variant selections are stripped from the prim path
+ * (`/Mat/Shader{v=a}.outputs:out` names `/Mat/Shader`). Any prim on the
+ * stage is a source prim, an `over`, an inactive prim and an instance
+ * proxy included; a missing prim, one beneath an inactive prim, a relative
+ * path and a variant selection within the path name none.
+ *
+ * One difference from OpenUSD: a relational attribute path
+ * (`/Mat/Shader.outputs:out[/X].inputs:y`) gives an empty info, where
+ * OpenUSD reads it as `inputs:y` of `/Mat/Shader`, a different attribute
+ * from the one the path names.
+ */
+export interface ConnectionSourceInfo {
+  /** The source prim's path; `null` when the stage has no prim there. */
+  readonly prim: string | null;
+  /** The attribute's name without its `inputs:` or `outputs:` namespace (`rgb`); the whole property name in neither namespace; empty when the path is not a property path. */
+  readonly name: string;
+  /** Whether the attribute is an input or an output; `null` for a name in neither namespace. */
+  readonly kind: "input" | "output" | null;
+  /** The attribute's declared type name (`color3f`), authored or from the prim's schemas; `null` when no attribute is at the path. */
+  readonly typeName: string | null;
+  /** The source's property path to connect to (`/Looks/Stone/Texture.outputs:rgb`), variant selections stripped; `null` unless `valid`. */
+  readonly source: string | null;
+  /** Whether it names a source to connect to: a kind, a name and a source prim (`IsValid`). The attribute need not exist yet. */
+  readonly valid: boolean;
+}
+
 /** An attribute that produces a shading input's value, and the connections that lead to it. */
 export interface ValueProducer {
   /** The input or output attribute. */

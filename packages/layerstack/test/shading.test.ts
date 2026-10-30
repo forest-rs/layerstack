@@ -5,6 +5,7 @@
 // material (subsets included), its shader network's inputs and their
 // sources, and the coordinate systems a shader may name.
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 
 import { LayerstackError, Material, Shader, loadLayerstack } from "../dist/index.js";
@@ -380,5 +381,78 @@ def Xform "Robot" {
     assert.equal(stage.prim("/World/Robot/Body")!.boundMaterial()?.material, "/World/Robot/Paint");
     receipt.undo();
     assert.equal(stage.prim("/World/Robot/Body")!.boundMaterial(), null);
+  });
+});
+
+describe("an editor checking a connection source path", () => {
+  // `connection_source_info_oracle.py`: OpenUSD 26.11's
+  // `UsdShadeConnectionSourceInfo(stage, sourcePath)` for each path text.
+  const fixtures = new URL("../../../layerstack_conformance/fixtures/connection_source_info/", import.meta.url);
+  const oracle = JSON.parse(readFileSync(new URL("oracle.json", fixtures), "utf8")) as {
+    sources: { path: string; valid: boolean; name: string; type: string; type_name: string; source: string }[];
+  };
+  // OpenUSD reads this relational attribute path as `inputs:y` of
+  // `/Mat/Source`, an attribute the path does not name; layerstack reads no
+  // property path there.
+  const relational = "/Mat/Source.outputs:out[/X].inputs:y";
+
+  it("reads each path as OpenUSD does", () => {
+    using stage = layerstack.open({ identifier: "scene.usda", bytes: readFileSync(new URL("scene.usda", fixtures)) });
+    assert.ok(oracle.sources.length >= 30);
+    for (const expected of oracle.sources) {
+      const info = stage.connectionSourceInfo(expected.path);
+      if (expected.path === relational) {
+        assert.ok(expected.valid);
+        assert.deepEqual(info, { prim: null, name: "", kind: null, typeName: null, source: null, valid: false });
+        continue;
+      }
+      assert.deepEqual(
+        {
+          valid: info.valid,
+          name: info.name,
+          type: info.kind === "input" ? "Input" : info.kind === "output" ? "Output" : "Invalid",
+          type_name: info.typeName ?? "",
+          source: info.prim ?? "",
+        },
+        {
+          valid: expected.valid,
+          name: expected.name,
+          type: expected.type,
+          type_name: expected.type_name,
+          source: expected.source,
+        },
+        expected.path,
+      );
+      assert.equal(
+        info.source,
+        expected.valid ? `${expected.source}.${expected.type === "Input" ? "inputs" : "outputs"}:${expected.name}` : null,
+        expected.path,
+      );
+    }
+  });
+
+  it("connects to the source a valid info names", () => {
+    using stage = openShaded();
+    const info = stage.connectionSourceInfo("/Looks/Stone/Texture.outputs:rgb");
+    assert.deepEqual(info, {
+      prim: "/Looks/Stone/Texture",
+      name: "rgb",
+      kind: "output",
+      typeName: "float3",
+      source: "/Looks/Stone/Texture.outputs:rgb",
+      valid: true,
+    });
+    assert.ok(Object.isFrozen(info));
+    assert.equal(stage.connectionSourceInfo("/Looks/Gone.outputs:rgb").valid, false);
+    stage.apply([
+      {
+        type: "connectToSource",
+        path: "/Looks/Stone/Surface.inputs:roughness",
+        source: info.source!,
+      },
+    ]);
+    assert.deepEqual(stage.port("/Looks/Stone/Surface.inputs:roughness")?.connections, [
+      "/Looks/Stone/Texture.outputs:rgb",
+    ]);
   });
 });

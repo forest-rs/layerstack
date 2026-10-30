@@ -10,7 +10,7 @@ import { describe, it } from "node:test";
 
 import { loadLayerstack } from "@forest-rs/layerstack";
 import type { Changes, Edit, Stage } from "@forest-rs/layerstack";
-import { conformCamera, loadStagehand } from "../dist/index.js";
+import { conformCamera, lightKey, loadStagehand } from "../dist/index.js";
 import type { DrawDiff, DrawList, LightGeometry } from "../dist/index.js";
 
 const layerstack = await loadLayerstack();
@@ -324,6 +324,94 @@ describe("a draw list's cameras and lights", () => {
         assert.deepEqual([...conformed.projectionMatrix], [...native.projectionMatrix], where);
       }
     } finally {
+      stage.free();
+    }
+  });
+});
+
+describe("lights and cameras inside instances", () => {
+  const open = () => {
+    const base = new URL("stagehand_instanced_lights/", fixtures);
+    const oracle = JSON.parse(readFileSync(new URL("oracle.json", base), "utf8"));
+    const stage = layerstack.open({ identifier: "scene.usda", bytes: readFileSync(new URL("scene.usda", base)) });
+    const heard: Changes[] = [];
+    stage.onChange((changes) => heard.push(changes));
+    const list = stagehand.drawList(stage);
+    list.refresh();
+    const edit = (edits: Edit[]): DrawDiff => {
+      stage.apply(edits, stage.root);
+      const diffs = heard.splice(0).map((changes) => list.applyChanges(changes));
+      assert.equal(diffs.length, 1);
+      return diffs[0]!;
+    };
+    return { oracle, stage, list, edit };
+  };
+
+  // `stagehand_instanced_lights/oracle.json`: the lights and cameras inside
+  // native instances (by their instance proxies) and a point instancer's
+  // prototype (per unmasked instance), a mesh light and a geometry light, at
+  // three times, against what usd-core answers.
+  it("match OpenUSD's answers", () => {
+    const { oracle, stage, list } = open();
+    try {
+      assert.equal(oracle.rows.length, 33);
+      for (const time of [undefined, 0, 10]) {
+        if (list.time !== time) list.setTime(time);
+        const rows = oracle.rows.filter((row: { time: number | null }) => (row.time ?? undefined) === time);
+        const lights: string[] = [];
+        const cameras: string[] = [];
+        for (const row of rows) {
+          const where = `${row.path} ${time}`;
+          if (row.camera) {
+            cameras.push(row.path);
+            const camera = list.camera(row.path)!.camera!;
+            row.world.flat().forEach((value: number, i: number) => close(camera.cameraToWorld[i]!, value));
+            continue;
+          }
+          const key = lightKey(row.path, row.instance);
+          lights.push(key);
+          const light = list.light(key);
+          assert.ok(light !== null, `${where} is not listed`);
+          assert.deepEqual(light.instance, row.instance, where);
+          const kinds: Record<string, string> = { Mesh: "mesh", GeometryLight: "geometry", DiskLight: "disk", SphereLight: "sphere" };
+          assert.equal(light.kind, kinds[row.type], where);
+          row.world.flat().forEach((value: number, i: number) => close(light.matrix[i]!, value));
+          assert.equal(light.hidden, row.visibility === "invisible", where);
+        }
+        assert.deepEqual(list.lights().map((light) => light.key).sort(), lights.sort(), `${time}: every light, and no other`);
+        assert.deepEqual(list.cameras().map((camera) => camera.path).sort(), cameras.sort(), `${time}`);
+      }
+      const panel = list.light("/World/Panel")!;
+      assert.deepEqual(panel.geometry, { kind: "mesh", area: 6 });
+      assert.deepEqual([...panel.emission.radiance], [1, 1, 1]);
+      assert.deepEqual(list.light("/World/Glow")!.geometry, { kind: "geometry", geometry: "/World/Panel" });
+    } finally {
+      list.dispose();
+      stage.free();
+    }
+  });
+
+  it("follow their instances", () => {
+    const { stage, list, edit } = open();
+    try {
+      let diff = edit([{ type: "setValue", path: "/World/Lamps/North.xformOp:translate", value: { type: "double3", value: [6, 0, 0] } }]);
+      assert.deepEqual(diff.lightsChanged, ["/World/Lamps/North/Bulb"]);
+      assert.deepEqual(diff.camerasChanged, ["/World/Lamps/North/Eye"]);
+      assert.deepEqual([diff.work.lightsRead, diff.work.camerasRead], [1, 1]);
+      assert.deepEqual([...list.light("/World/Lamps/North/Bulb")!.position], [6, 1, -2]);
+      diff = edit([
+        {
+          type: "setValue",
+          path: "/World/Field.positions",
+          value: { type: "point3f[]", value: new Float32Array([0, 0, 1, 1, 0, 1, 2, 0, 1, 3, 0, 1]) },
+        },
+      ]);
+      const flame = (index: number) => lightKey("/World/Field/Protos/Torch/Flame", { instancer: "/World/Field", index });
+      assert.deepEqual(diff.lightsChanged, [flame(0), flame(2)]);
+      assert.equal(diff.work.lightsRead, 2);
+      assert.deepEqual([...list.light(flame(2))!.position], [2, 3, 1]);
+    } finally {
+      list.dispose();
       stage.free();
     }
   });

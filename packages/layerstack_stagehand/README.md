@@ -75,9 +75,16 @@ viewport with `conformCamera(camera, policy, aspect)`, as
 `list.lights()` (`LightItem`: world `matrix`, `position` and `direction`,
 `emission` with `radiance = color * blackbody * intensity * 2^exposure /
 sizeFactor` in nits as `UsdLux` defines it, `geometry`, `shaping`,
-`shadow` and the `lightLink` and `shadowLink` collections as data). A diff
+`shadow` and the `lightLink` and `shadowLink` collections as data), a
+`Mesh` with `MeshLightAPI` applied (`kind: "mesh"`, normalized by its
+faces' world-space area) and a `GeometryLight` (its target as data).
+Lights and cameras inside a native instance are listed once per instance,
+by their instance proxies' paths; a light inside a point instancer's
+prototype once per unmasked instance, with `instance` (the instancer and
+the instance's position) and the key `${path}@${instancer}[${index}]`
+(`lightKey`); `list.light(key)` finds it. A diff
 lists `camerasAdded`, `camerasRemoved`, `camerasChanged` and the same for
-lights, and `work.camerasRead` and `work.lightsRead`: an edit reads only
+lights (by key), and `work.camerasRead` and `work.lightsRead`: an edit reads only
 the lights and cameras it reaches, and `setTime` only those whose inputs
 or transform might vary. A light input connected to a node graph or
 another prim's input reads what the connection leads to.
@@ -111,8 +118,8 @@ copies the buffers out. A native engine calls the Rust crate
 Subdivision surfaces are drawn as their control cage (`report.refined` is
 false; `report.subdivisionScheme` says what was not applied). Shaders other
 than `UsdPreviewSurface` and its texture, primvar and transform nodes,
-curves, points and light linking evaluation are not covered yet, nor lights
-and cameras inside instances.
+curves, points and light linking evaluation are not covered yet, nor
+cameras inside a point instancer's prototypes.
 
 Errors are `StagehandError`s with a stable `code` (`argument.invalid`,
 `plan.mismatch`, `mesh.disposed`, `module.load`, `module.abi`) and a

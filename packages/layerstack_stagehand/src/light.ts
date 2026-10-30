@@ -10,9 +10,14 @@
 // `inputs:intensity`, `inputs:exposure`, `inputs:color`,
 // `inputs:colorTemperature`, `inputs:normalize`); see {@link LightEmission}.
 import type { Camera, Prim, Stage, Value } from "@forest-rs/layerstack";
+import { readMesh } from "./read.js";
 
-/** The built-in `UsdLux` light a {@link LightItem} is, by its typed schema. */
-export type LightKind = "distant" | "sphere" | "rect" | "disk" | "cylinder" | "dome" | "portal";
+/**
+ * The `UsdLux` light a {@link LightItem} is: a built-in light by its typed
+ * schema; `mesh`, a `Mesh` with `MeshLightAPI` (or `LightAPI`) applied,
+ * whose faces emit; `geometry`, a `GeometryLight`, its target as data.
+ */
+export type LightKind = "distant" | "sphere" | "rect" | "disk" | "cylinder" | "dome" | "portal" | "mesh" | "geometry";
 
 /** The typed schemas of each {@link LightKind}, in the order they are asked (`IsA`). */
 export const LIGHT_SCHEMAS: readonly (readonly [string, LightKind])[] = [
@@ -24,10 +29,16 @@ export const LIGHT_SCHEMAS: readonly (readonly [string, LightKind])[] = [
   ["DomeLight", "dome"],
   ["DomeLight_1", "dome"],
   ["PortalLight", "portal"],
+  ["GeometryLight", "geometry"],
 ];
 
-/** The kind of `prim`, by `IsA`; `null` for anything else (mesh, volume, geometry and plugin lights are not listed yet). */
+/**
+ * The kind of `prim`: a built-in light by `IsA`, a `Mesh` with
+ * `MeshLightAPI` or `LightAPI` applied; `null` for anything else (volume
+ * lights, `LightAPI` on other gprims and plugin lights are not listed yet).
+ */
 export function lightKind(prim: Prim): LightKind | null {
+  if (prim.typeName === "Mesh" || prim.isA("Mesh")) return prim.hasAPI("MeshLightAPI") || prim.hasAPI("LightAPI") ? "mesh" : null;
   for (const [schema, kind] of LIGHT_SCHEMAS) {
     if (prim.typeName === schema || prim.isA(schema)) return kind;
   }
@@ -64,8 +75,9 @@ export interface LightEmission {
    * area over the singular values of the transform) or a cylinder's side
    * (its world length times Ramanujan's perimeter of its world
    * cross-section), a distant light's `π sin²θ` (`π (2 - sin²θ)` past a
-   * hemisphere) for `θ` half its angle (1 at angle 0), 1 for a dome or a
-   * portal. As `layerstack_stagehand::LightEmission::size_factor`.
+   * hemisphere) for `θ` half its angle (1 at angle 0), a mesh light's
+   * faces' world-space area, 1 for a dome, a portal or a geometry light.
+   * As `layerstack_stagehand::LightEmission::size_factor`.
    */
   readonly sizeFactor: number;
   /** `color * temperatureColor * intensity * 2^exposure / sizeFactor`. */
@@ -83,7 +95,11 @@ export type LightGeometry =
   | { readonly kind: "cylinder"; readonly radius: number; readonly length: number; readonly treatAsLine: boolean }
   /** `poleAxis` is `DomeLight_1`'s, `null` for a `DomeLight`. */
   | { readonly kind: "dome"; readonly texture: string | null; readonly format: string; readonly poleAxis: string | null }
-  | { readonly kind: "portal"; readonly width: number; readonly height: number };
+  | { readonly kind: "portal"; readonly width: number; readonly height: number }
+  /** The mesh's own faces, drawn as the item of the same prim; `area` is their world-space area. */
+  | { readonly kind: "mesh"; readonly area: number }
+  /** The prim a `GeometryLight`'s `geometry` targets. */
+  | { readonly kind: "geometry"; readonly geometry: string | null };
 
 /** `ShapingAPI`'s controls, as authored. */
 export interface LightShaping {
@@ -116,13 +132,39 @@ export interface LightLink {
   readonly excludes: readonly string[];
 }
 
+/** Which instance of a point instancer places a light: the instancer and the instance's position in its arrays. */
+export interface LightInstance {
+  readonly instancer: string;
+  readonly index: number;
+}
+
+/**
+ * A light's key in a {@link DrawList}: its path (an instance proxy's
+ * inside a native instance, once per instance), and for one a point
+ * instancer places `${path}@${instancer}[${index}]`, once per unmasked
+ * instance.
+ */
+export function lightKey(path: string, instance: LightInstance | null): string {
+  return instance === null ? path : `${path}@${instance.instancer}[${instance.index}]`;
+}
+
 /** One light, read at the list's time. */
 export interface LightItem {
+  /** Its key in the draw list ({@link lightKey}). */
+  readonly key: string;
+  /** The light prim, or its instance proxy inside a native instance. */
   readonly path: string;
+  /** The point instancer's instance placing it, for a light inside a point instancer's prototype. */
+  readonly instance: LightInstance | null;
   readonly kind: LightKind;
-  /** Its local-to-world matrix, 16 numbers row by row (`ComputeLocalToWorldTransform`). */
+  /**
+   * Its local-to-world matrix, 16 numbers row by row
+   * (`ComputeLocalToWorldTransform`; for a light a point instancer places,
+   * its transform relative to the prototype, the instance's, then the
+   * instancer's).
+   */
   readonly matrix: Float64Array;
-  /** Whether it is invisible; it stays listed. */
+  /** Whether it (or the instancer placing it) is invisible; it stays listed. */
   readonly hidden: boolean;
   /** Its world position. */
   readonly position: readonly [number, number, number];
@@ -176,6 +218,11 @@ export const LIGHT_INPUTS = [
   "inputs:shadow:distance",
   "inputs:shadow:falloff",
   "inputs:shadow:falloffGamma",
+  // A normalized mesh light's area.
+  "points",
+  "faceVertexCounts",
+  "faceVertexIndices",
+  "holeIndices",
 ];
 
 /** The attributes a camera is read from, besides its transform. */
@@ -218,6 +265,7 @@ export function readLight(
   matrix: Float64Array,
   hidden: boolean,
   sources: string[] = [],
+  instance: LightInstance | null = null,
 ): LightItem {
   const source = (name: string): string | null => {
     const own = `${path}.${name}`;
@@ -308,6 +356,12 @@ export function readLight(
     case "portal":
       geometry = { kind, width: float("inputs:width", 1), height: float("inputs:height", 1) };
       break;
+    case "mesh":
+      geometry = { kind, area: meshArea(stage, path, time, matrix) };
+      break;
+    case "geometry":
+      geometry = { kind, geometry: stage.relationship(`${path}.geometry`)?.targets()[0] ?? null };
+      break;
   }
   Object.freeze(geometry);
   const colorTemperature = boolean("inputs:enableColorTemperature", false) ? float("inputs:colorTemperature", 6500) : null;
@@ -361,7 +415,9 @@ export function readLight(
       excludes: stage.relationship(`${path}.collection:${name}:excludes`)?.targets() ?? [],
     });
   return Object.freeze({
+    key: lightKey(path, instance),
     path,
+    instance,
     kind,
     matrix,
     hidden,
@@ -374,6 +430,36 @@ export function readLight(
     lightLink: link("lightLink"),
     shadowLink: link("shadowLink"),
   });
+}
+
+/** The world-space area of the mesh at `path`: its faces (holes left out) fanned from their first vertex, through `matrix`. */
+function meshArea(stage: Stage, path: string, time: number | undefined, matrix: ArrayLike<number>): number {
+  const mesh = readMesh(stage, path, time === undefined ? {} : { time });
+  if (mesh === null) return 0;
+  const { points, faceVertexCounts: counts, faceVertexIndices: indices } = mesh;
+  const holes = new Set(mesh.holeIndices ?? []);
+  const world = (index: number): Vec3 | null => {
+    if (index < 0 || 3 * index + 2 >= points.length) return null;
+    const [x, y, z] = [points[3 * index]!, points[3 * index + 1]!, points[3 * index + 2]!];
+    return [0, 1, 2].map((j) => x * matrix[j]! + y * matrix[4 + j]! + z * matrix[8 + j]! + matrix[12 + j]!) as unknown as Vec3;
+  };
+  let area = 0;
+  let first = 0;
+  for (let face = 0; face < counts.length; face++) {
+    const count = counts[face]!;
+    if (count < 0 || first + count > indices.length) return 0;
+    const corners = indices.subarray(first, first + count);
+    first += count;
+    if (holes.has(face) || count === 0) continue;
+    const origin = world(corners[0]!);
+    if (origin === null) continue;
+    for (let k = 1; k + 1 < count; k++) {
+      const b = world(corners[k]!);
+      const c = world(corners[k + 1]!);
+      if (b !== null && c !== null) area += length(cross(sub(b, origin), sub(c, origin))) / 2;
+    }
+  }
+  return area;
 }
 
 const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -423,8 +509,12 @@ export function lightSizeFactor(geometry: LightGeometry, matrix: ArrayLike<numbe
       factor = theta === 0 ? 1 : theta <= Math.PI / 2 ? sin2 * Math.PI : (2 - sin2) * Math.PI;
       break;
     }
+    case "mesh":
+      factor = geometry.area;
+      break;
     case "dome":
     case "portal":
+    case "geometry":
       factor = 1;
       break;
   }

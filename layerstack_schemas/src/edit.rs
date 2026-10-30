@@ -296,6 +296,22 @@ impl<'s> SchemaEdit<'s> {
         self.transaction
     }
 
+    /// Appends `transaction`, edits collected without this edit's handles
+    /// (generic [`Transaction`] calls through the same target), after the
+    /// edits collected so far, so a host that lowers a mixed list of edits
+    /// keeps them in their order in one transaction with one inverse
+    /// ([`Transaction::append`]).
+    ///
+    /// The handles do not read what `transaction` authors: they see the
+    /// stage as it was before this edit, plus what this edit's own calls
+    /// collect ([`Self::define_prim`], `define`, `apply`, `create_*`). A
+    /// host defining a prim that a later handle needs defines it through
+    /// [`Self::define_prim`].
+    pub fn append(&mut self, transaction: Transaction) -> &mut Self {
+        self.transaction.append(transaction);
+        self
+    }
+
     /// Applies a registered API schema by name, including codeless schemas,
     /// and returns the handle authoring the prim.
     ///

@@ -260,3 +260,37 @@ fn handles_and_applied_schemas_refuse_instance_proxies() {
     Xform::define(&mut edit, missing).expect("a new prim through the reference");
     assert!(!edit.transaction().is_empty());
 }
+
+#[test]
+fn appended_generic_edits_keep_their_place_in_one_transaction() {
+    let (mut store, mut live) = stage(|_, _| {});
+    let rock = store.path("/Rock");
+    let lamp = store.path("/Lamp");
+    let mut generic = layerstack::Transaction::new();
+    generic.create_prim(
+        EditTarget::for_layer(ROOT).prim(lamp),
+        Specifier::Over,
+        None,
+    );
+    let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(ROOT));
+    edit.define_prim(rock, "Xform").expect("definable");
+    let defined = edit.transaction().len();
+    edit.append(generic);
+    assert_eq!(edit.transaction().len(), defined + 1, "after the define");
+    // The handles still see what this edit defined, not what it appended.
+    assert!(edit.is_a(rock, "Xform"));
+    assert!(
+        edit.prim_path("/Lamp")
+            .is_some_and(|lamp| !edit.is_a(lamp, "Xform"))
+    );
+    let transaction = edit.finish();
+    live.apply(&mut store, &transaction).expect("applies");
+    assert_eq!(
+        spec(&mut store, "/Rock"),
+        Some((Some(Specifier::Def), Some("Xform".into())))
+    );
+    assert_eq!(
+        spec(&mut store, "/Lamp"),
+        Some((Some(Specifier::Over), None))
+    );
+}

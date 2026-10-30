@@ -154,8 +154,10 @@ fn read_with_registry(
 #[derive(Default)]
 pub(crate) struct PreparedValues {
     values: BTreeMap<PreparedKey, layerstack::Value>,
-    /// Why elements of the arrays at these keys did not convert.
-    errors: BTreeMap<PreparedKey, Vec<alloc::string::String>>,
+    /// Why elements of the arrays at these keys did not convert, sorted by
+    /// key. Rare, so a sorted vector rather than a second map, whose
+    /// removals would compile the tree's rebalancing again.
+    errors: Vec<(PreparedKey, Vec<alloc::string::String>)>,
     /// The arrays read (tuples are not), and their elements.
     arrays: usize,
     elements: usize,
@@ -189,7 +191,10 @@ impl PreparedValues {
             self.elements += elements;
         }
         if !prepared.errors.is_empty() {
-            self.errors.insert(key, prepared.errors);
+            match self.errors.binary_search_by_key(&key, |(at, _)| *at) {
+                Ok(index) => self.errors[index].1 = prepared.errors,
+                Err(index) => self.errors.insert(index, (key, prepared.errors)),
+            }
         }
         self.values.insert(key, prepared.value);
     }
@@ -200,7 +205,11 @@ impl PreparedValues {
         key: PreparedKey,
     ) -> Option<(layerstack::Value, Vec<alloc::string::String>)> {
         let value = self.values.remove(&key)?;
-        Some((value, self.errors.remove(&key).unwrap_or_default()))
+        let errors = match self.errors.binary_search_by_key(&key, |(at, _)| *at) {
+            Ok(index) => self.errors.remove(index).1,
+            Err(_) => Vec::new(),
+        };
+        Some((value, errors))
     }
 
     /// Numeric arrays read.

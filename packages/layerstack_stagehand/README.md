@@ -79,7 +79,23 @@ sizeFactor` in nits as `UsdLux` defines it, `geometry`, `shaping`,
 lists `camerasAdded`, `camerasRemoved`, `camerasChanged` and the same for
 lights, and `work.camerasRead` and `work.lightsRead`: an edit reads only
 the lights and cameras it reaches, and `setTime` only those whose inputs
-or transform might vary.
+or transform might vary. A light input connected to a node graph or
+another prim's input reads what the connection leads to.
+
+It also holds every material its items bind, by path: `list.materials()`
+(`MaterialItem`: the `UsdPreviewSurface` the surface output resolves to
+through `renderContexts`, then the universal context; each input a
+`constant`, a `primvar` or a `texture` lookup, with the spec's fallbacks;
+`textures` with their `file` anchored to the layer authoring it (`udim`
+sets list their tiles with `udimTiles(file, exists)`), `wrapS`/`wrapT`,
+`fallback`, `scale`, `bias`, `colorSpace` and `coordinates` (the
+`UsdPrimvarReader_float2` primvar and a `UsdTransform2d`); the `alpha` mode
+the opacity inputs come to, and `notes` for what could not be
+represented). A diff lists `materialsAdded`, `materialsRemoved` and
+`materialsChanged`, and `work.materialsRead`: a material is read again
+only when a shading property of it or of a prim its network reads
+changes, or an item comes to bind it, and `setTime` reads only those with
+an input that might vary.
 
 ## Two modules, typed arrays between them
 
@@ -93,9 +109,10 @@ copies the buffers out. A native engine calls the Rust crate
 (`layerstack_stagehand`) with a `Stage` directly.
 
 Subdivision surfaces are drawn as their control cage (`report.refined` is
-false; `report.subdivisionScheme` says what was not applied). Materials
-(beyond their bindings), curves, points and light linking evaluation are
-not covered yet, nor lights and cameras inside instances.
+false; `report.subdivisionScheme` says what was not applied). Shaders other
+than `UsdPreviewSurface` and its texture, primvar and transform nodes,
+curves, points and light linking evaluation are not covered yet, nor lights
+and cameras inside instances.
 
 Errors are `StagehandError`s with a stable `code` (`argument.invalid`,
 `plan.mismatch`, `mesh.disposed`, `module.load`, `module.abi`) and a

@@ -751,6 +751,10 @@ struct Gather {
     shading: Changed<PathId>,
     /// Materials read in this diff, so none is read twice.
     materials_read: BTreeSet<PathId>,
+    /// The materials the native instancing prototype groups this diff
+    /// adds bind, by gprim: a new mesh buffer is planned once with the
+    /// sets all of its groups read.
+    groups: HashMap<PathId, Vec<PathId>>,
     work: DrawWork,
 }
 
@@ -1113,6 +1117,19 @@ impl DrawList {
             })
             .map(|(id, _)| *id)
             .collect();
+        for source in &found.sources {
+            if let ItemSource::Prototype {
+                prim,
+                material: Some(material),
+            } = *source
+                && !self.keys.contains_key(source)
+            {
+                let materials = gather.groups.entry(prim).or_default();
+                if !materials.contains(&material) {
+                    materials.push(material);
+                }
+            }
+        }
         let mut read: HashSet<ItemId> = HashSet::new();
         let mut added: HashSet<ItemSource> = HashSet::new();
         for source in found.sources {
@@ -1477,9 +1494,10 @@ impl DrawList {
     }
 
     /// The texture coordinate sets besides `st` the materials bound to a
-    /// new mesh item read: its own, or its prototype group's, and its
-    /// `materialBind` subsets'. A material not held yet is read now, once
-    /// for the diff, so the mesh is planned once with them.
+    /// new mesh item read: its own, or every prototype group's of its gprim
+    /// the diff adds, and its `materialBind` subsets'. A material not held
+    /// yet is read now, once for the diff, so the mesh is planned once with
+    /// them.
     fn uv_sets_for(
         &mut self,
         scene: &Scene<'_>,
@@ -1490,6 +1508,10 @@ impl DrawList {
             ItemSource::Prototype { material, .. } => material,
             _ => bound_material(scene, item.prim),
         }];
+        if let ItemSource::Prototype { prim, .. } = item.source {
+            let groups = gather.groups.get(&prim).into_iter().flatten();
+            materials.extend(groups.map(|&material| Some(material)));
+        }
         if let Some(imageable) = Imageable::get(scene, item.prim) {
             for subset in
                 imageable.geom_subsets(Some(&GeomSubsetElementType::Face), Some("materialBind"))
@@ -2059,18 +2081,7 @@ impl DrawList {
                 }
                 item.buffer = key;
             }
-            varies.geometry = inputs_might_vary(scene, item.prim, GEOMETRY_INPUTS)
-                || self.buffers.get(&key).is_some_and(|buffer| {
-                    buffer
-                        .subsets
-                        .iter()
-                        .any(|&subset| inputs_might_vary(scene, subset, SUBSET_INPUTS))
-                        || buffer.uv_sets.iter().any(|name| {
-                            let primvar = alloc::format!("primvars:{name}");
-                            let indices = alloc::format!("primvars:{name}:indices");
-                            inputs_might_vary(scene, item.prim, &[&primvar, &indices])
-                        })
-                });
+            varies.geometry = geometry_might_vary(scene, item.prim, self.buffers.get(&key));
         }
 
         // Materials.
@@ -2360,6 +2371,24 @@ fn multiply(a: &[[f64; 4]; 4], b: &[[f64; 4]; 4]) -> [[f64; 4]; 4] {
         }
     }
     out
+}
+
+/// Whether the geometry `prim` draws into `buffer` might differ at another
+/// time: its geometry's attributes, its face subsets', or a texture
+/// coordinate set the buffer draws.
+fn geometry_might_vary(scene: &Scene<'_>, prim: PathId, buffer: Option<&DrawBuffers>) -> bool {
+    inputs_might_vary(scene, prim, GEOMETRY_INPUTS)
+        || buffer.is_some_and(|buffer| {
+            buffer
+                .subsets
+                .iter()
+                .any(|&subset| inputs_might_vary(scene, subset, SUBSET_INPUTS))
+                || buffer.uv_sets.iter().any(|name| {
+                    let primvar = alloc::format!("primvars:{name}");
+                    let indices = alloc::format!("primvars:{name}:indices");
+                    inputs_might_vary(scene, prim, &[&primvar, &indices])
+                })
+        })
 }
 
 /// The texture coordinate sets besides `st` a material's textures read
@@ -3013,6 +3042,121 @@ def Scope "Looks" {
         let buffers = &list.buffers(key).unwrap().buffers;
         assert!(buffers.uv_sets.is_empty());
         assert_eq!(buffers.positions.len(), 4);
+    }
+
+    /// `text` composed with the OpenUSD schemas.
+    fn compose(text: &str) -> (InMemoryStore, LiveStage) {
+        let mut store = InMemoryStore::default();
+        let read = layerstack_usda::read_usda(
+            text,
+            LayerId(1),
+            store.tokens(),
+            store.paths(),
+            &mut NoAssets,
+        );
+        assert!(
+            !read.has_errors(),
+            "{:?}",
+            read.diagnostics().collect::<Vec<_>>()
+        );
+        store.insert_layer(read.emitted.layer);
+        let schemas = Arc::new(layerstack_schemas::openusd(store.tokens()));
+        let live = LiveStage::compose(
+            &mut store,
+            LayerId(1),
+            StageOptions {
+                schemas: Some(schemas),
+                ..StageOptions::default()
+            },
+        );
+        (store, live)
+    }
+
+    /// A material reading the primvar `varname` through a texture.
+    fn reading(name: &str, varname: &str) -> alloc::string::String {
+        alloc::format!(
+            r#"
+    def Material "{name}" {{
+        token outputs:surface.connect = </Looks/{name}/Surface.outputs:surface>
+        {varname}
+        def Shader "Surface" {{
+            uniform token info:id = "UsdPreviewSurface"
+            color3f inputs:diffuseColor.connect = </Looks/{name}/Texture.outputs:rgb>
+            token outputs:surface
+        }}
+        def Shader "Texture" {{
+            uniform token info:id = "UsdUVTexture"
+            asset inputs:file = @tile.png@
+            float2 inputs:st.connect = </Looks/{name}/Reader.outputs:result>
+            float3 outputs:rgb
+        }}
+        def Shader "Reader" {{
+            uniform token info:id = "UsdPrimvarReader_float2"
+            string inputs:varname.connect = </Looks/{name}.inputs:coordinates>
+            float2 outputs:result
+        }}
+    }}"#
+        )
+    }
+
+    /// Two instances of one card, bound to materials reading different
+    /// sets: two prototype groups drawing one buffer, planned once with
+    /// both sets on the diff that adds them.
+    #[test]
+    fn a_prototypes_groups_plan_their_mesh_once_with_every_set() {
+        let text = alloc::format!(
+            r#"#usda 1.0
+def Xform "World" {{
+    def Xform "North" (
+        instanceable = true
+        prepend references = </Card>
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    ) {{
+        rel material:binding = </Looks/Near>
+    }}
+    def Xform "South" (
+        instanceable = true
+        prepend references = </Card>
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    ) {{
+        rel material:binding = </Looks/Far>
+    }}
+}}
+class Xform "Card" {{
+    def Mesh "Face" {{
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points = [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0)]
+        texCoord2f[] primvars:st1 = [(0, 0), (2, 0), (2, 2), (0, 2)] (
+            interpolation = "vertex"
+        )
+        texCoord2f[] primvars:st2 = [(0, 0), (3, 0), (3, 3), (0, 3)] (
+            interpolation = "vertex"
+        )
+    }}
+}}
+def Scope "Looks" {{{}{}
+}}
+"#,
+            reading("Near", r#"token inputs:coordinates = "st1""#),
+            reading("Far", r#"token inputs:coordinates = "st2""#),
+        );
+        let (store, live) = compose(&text);
+        let mut list = DrawList::new(DrawOptions::default());
+        let diff = list.refresh(&Scene::new(live.stage(), &store));
+        assert_eq!(diff.added.len(), 2, "one group per material");
+        assert_eq!(diff.work.triangulations, 1, "planned once");
+        assert!(diff.rebuilt.is_empty());
+        let mut items = list.items();
+        let (first, second) = (items.next().unwrap(), items.next().unwrap());
+        assert_eq!(first.buffer, second.buffer);
+        let buffers = &list.buffers(first.buffer).unwrap().buffers;
+        let names: Vec<&str> = buffers
+            .uv_sets
+            .iter()
+            .map(|set| set.name.as_str())
+            .collect();
+        assert_eq!(names, ["st1", "st2"]);
     }
 
     #[test]

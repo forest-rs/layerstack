@@ -166,33 +166,46 @@ impl fmt::Display for LocalizationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::MissingLayer { source } => {
-                write!(f, "localization source layer {source:?} is missing")
+                write!(
+                    f,
+                    "cannot localize layer {}: the store has no such layer",
+                    source.0
+                )
             }
-            Self::InvalidMember { member } => write!(f, "invalid localization member {member:?}"),
+            Self::InvalidMember { member } => {
+                write!(
+                    f,
+                    "`{}` is not a valid package member path",
+                    member.escape_debug()
+                )
+            }
             Self::MemberCollision { member } => write!(
                 f,
-                "localization member {member:?} has conflicting resources"
+                "two different resources would be localized as the package member `{member}`"
             ),
-            Self::LayerCollision { source } => {
-                write!(f, "layer {source:?} has multiple localization destinations")
-            }
+            Self::LayerCollision { source } => write!(
+                f,
+                "layer {} would be localized as more than one package member",
+                source.0
+            ),
             Self::Resolution { dependency, reason } => write!(
                 f,
-                "cannot localize {:?} from layer {:?}: {reason}",
-                dependency.identifier, dependency.layer
+                "cannot localize @{}@ from layer {}: {reason}",
+                dependency.identifier, dependency.layer.0
             ),
             Self::MissingReplacement { member } => write!(
                 f,
-                "replacement {member:?} names no supplied localization resource"
+                "the replacement `{member}` names no localization resource supplied"
             ),
-            Self::UnmatchedTile { pattern, member } => {
+            Self::UnmatchedTile { pattern, member } => write!(
+                f,
+                "the package member `{member}` is not a tile of the UDIM pattern `{pattern}`"
+            ),
+            Self::UnsupportedLayerFormat { member } => {
                 write!(
                     f,
-                    "localization member {member:?} is no tile of {pattern:?}"
+                    "no layer serializer writes the package member `{member}`"
                 )
-            }
-            Self::UnsupportedLayerFormat { member } => {
-                write!(f, "no layer serializer for {member:?}")
             }
             Self::Usda(error) => error.fmt(f),
             Self::Usdc(error) => error.fmt(f),

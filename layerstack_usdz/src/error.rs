@@ -78,7 +78,7 @@ impl fmt::Display for UsdzError {
                 write!(f, "USDZ constraint violated: {reason}")
             }
             Self::MissingMember { member } => {
-                write!(f, "selected package member {member:?} is absent")
+                write!(f, "the package has no member `{member}`, the one selected")
             }
             Self::NoRootLayer => write!(f, "no root USD layer found in package"),
             Self::CrcMismatch {
@@ -87,16 +87,22 @@ impl fmt::Display for UsdzError {
                 actual,
             } => write!(
                 f,
-                "CRC-32 mismatch for {entry:?}: expected {expected:#010x}, got {actual:#010x}"
+                "the CRC-32 of the package member `{entry}` is {actual:#010x}, not {expected:#010x}"
             ),
-            Self::LayerRead { member, cause, .. } => write!(f, "layer {member:?}: {cause}"),
+            Self::LayerRead { member, cause, .. } => {
+                write!(f, "the package member `{member}`: {cause}")
+            }
             Self::UnexpectedEof => write!(f, "unexpected end of data"),
             Self::LayerIdUnavailable { member } => write!(
                 f,
-                "the outer resolver allocates no layer ID for package member {member:?}"
+                "the outer resolver allocates no layer ID for the package member `{member}`"
             ),
             Self::DuplicateLayerId { id } => {
-                write!(f, "two layers read from the package share {id:?}")
+                write!(
+                    f,
+                    "two layers read from the package share the id of layer {}",
+                    id.0
+                )
             }
         }
     }

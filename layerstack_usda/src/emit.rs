@@ -1042,8 +1042,10 @@ impl EmitCtx<'_> {
                 self.reject(
                     attr.span,
                     format!(
-                        "attribute '{}' already has variability '{:?}', cannot change to '{:?}'",
-                        attr.name, spec.variability, variability
+                        "the attribute `{}` is already {}, so it cannot become {}",
+                        attr.name,
+                        variability_name(spec.variability),
+                        variability_name(variability)
                     ),
                 );
                 return;
@@ -2688,6 +2690,15 @@ fn absolute_expressions(value: Value, anchor: &str) -> Value {
             )
         }
         other => other,
+    }
+}
+
+/// A variability as USDA spells it: `uniform`, or `varying`, the default,
+/// which it leaves unwritten.
+fn variability_name(variability: Variability) -> &'static str {
+    match variability {
+        Variability::Uniform => "uniform",
+        Variability::Varying => "varying",
     }
 }
 

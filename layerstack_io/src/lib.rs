@@ -2690,9 +2690,10 @@ fn read_custom(
     let mut layer = format.read(&source)?;
     if layer.id() != id {
         return Err(source.rejected(alloc::format!(
-            "the {} format built layer {:?}, not {id:?}",
+            "the {} format built layer {}, not layer {}",
             format.name(),
-            layer.id()
+            layer.id().0,
+            id.0
         )));
     }
     for entry in layer.sublayers_mut() {

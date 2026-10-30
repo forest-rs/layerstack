@@ -818,7 +818,7 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
                 self.report(
                     path_str,
                     None,
-                    alloc::format!("unsupported: {:?} spec fields are not read", spec.form),
+                    alloc::format!("unsupported: {} spec fields are not read", spec.form.name()),
                 )?;
             }
         }
@@ -2437,7 +2437,10 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
                     self.report(
                         spec_path,
                         Some(field),
-                        alloc::format!("unsupported: {:?} metadata is not read", listop.op_type),
+                        alloc::format!(
+                            "unsupported: {} metadata is not read",
+                            list_op_name(listop.op_type)
+                        ),
                     )?;
                 }
                 converted
@@ -3907,6 +3910,24 @@ fn crate_value_is_array(value: &CrateValue) -> bool {
             .iter()
             .any(|(_, sample)| crate_value_is_array(sample)),
         _ => false,
+    }
+}
+
+/// A list op's crate type in words, as a diagnostic names it (`payload
+/// list op`), after OpenUSD's `SdfListOp` instantiations.
+fn list_op_name(value_type: ValueType) -> &'static str {
+    match value_type {
+        ValueType::TokenListOp => "token list op",
+        ValueType::StringListOp => "string list op",
+        ValueType::PathListOp => "path list op",
+        ValueType::ReferenceListOp => "reference list op",
+        ValueType::IntListOp => "int list op",
+        ValueType::Int64ListOp => "int64 list op",
+        ValueType::UIntListOp => "uint list op",
+        ValueType::UInt64ListOp => "uint64 list op",
+        ValueType::UnregisteredValueListOp => "unregistered value list op",
+        ValueType::PayloadListOp => "payload list op",
+        _ => "list op",
     }
 }
 

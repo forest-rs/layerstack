@@ -1585,23 +1585,35 @@ pub enum WriteError {
 impl fmt::Display for WriteError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::InvalidName { path, name } => write!(f, "{path}: invalid identifier {name:?}"),
+            Self::InvalidName { path, name } => write!(
+                f,
+                "{path}: `{}` is not a valid identifier",
+                name.escape_debug()
+            ),
             Self::Duplicate { path } => write!(f, "{path}: duplicate name"),
             Self::UnknownType { path, type_name } => {
-                write!(f, "{path}: {type_name:?} is not a USD attribute value type")
+                write!(f, "{path}: `{type_name}` is not a USD attribute value type")
             }
             Self::TypeMismatch { path, type_name } => {
                 write!(
                     f,
-                    "{path}: value does not match declared type {type_name:?}"
+                    "{path}: the value is not a `{type_name}`, the declared type"
                 )
             }
             Self::InvalidAssetPath { path, asset } => {
-                write!(f, "{path}: asset path {asset:?} cannot be quoted")
+                write!(
+                    f,
+                    "{path}: the asset path `{}` has no USDA quoting",
+                    asset.escape_debug()
+                )
             }
             Self::NulInString { path } => write!(f, "{path}: string contains NUL"),
             Self::InvalidTargetPath { path, target } => {
-                write!(f, "{path}: invalid target path {target:?}")
+                write!(
+                    f,
+                    "{path}: `{}` is not a valid target path",
+                    target.escape_debug()
+                )
             }
             Self::InvalidListOp { path } => write!(f, "{path}: invalid list op"),
             Self::DictionaryListOp { path, key } => write!(
@@ -1614,7 +1626,7 @@ impl fmt::Display for WriteError {
             Self::ReservedMetadata { path, key } => {
                 write!(
                     f,
-                    "{path}: {key:?} needs USDA syntax this writer does not produce"
+                    "{path}: `{key}` needs USDA syntax this writer does not produce"
                 )
             }
             Self::CommentNotText { path } => write!(f, "{path}: comment is not text"),
@@ -1627,7 +1639,8 @@ impl fmt::Display for WriteError {
             Self::InvalidArcPath { path, target } => {
                 write!(
                     f,
-                    "{path}: arc path {target:?} is not an absolute prim path"
+                    "{path}: the arc path `{}` is not an absolute prim path",
+                    target.escape_debug()
                 )
             }
             Self::StaleAutoEaseTangent { path } => write!(

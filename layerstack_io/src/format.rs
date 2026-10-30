@@ -136,7 +136,7 @@ impl FormatSource<'_> {
     /// [`FormatSource::rejected`] when `path` is not an absolute path.
     pub fn path(&self, path: &str) -> Result<PathId, IoError> {
         let parsed = Path::parse_absolute(path, self.tokens)
-            .map_err(|error| self.rejected(alloc::format!("`{path}`: {error:?}")))?;
+            .map_err(|error| self.rejected(alloc::format!("`{path}`: {error}")))?;
         Ok(self.paths.intern(parsed))
     }
 

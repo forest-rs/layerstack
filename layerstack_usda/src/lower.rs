@@ -1176,7 +1176,10 @@ impl<'a> LowerCtx<'a> {
         if !is_variant_selection(&branch_name) {
             self.error(
                 value.span(),
-                alloc::format!("{branch_name:?} is not a valid variant selection"),
+                alloc::format!(
+                    "`{}` is not a valid variant selection",
+                    branch_name.escape_debug()
+                ),
             );
         }
 
@@ -1629,7 +1632,10 @@ impl<'a> LowerCtx<'a> {
             full
         };
         if !path.is_empty() && !is_path_text(path) {
-            self.error(node.span(), alloc::format!("{path:?} is not a valid path"));
+            self.error(
+                node.span(),
+                alloc::format!("`{}` is not a valid path", path.escape_debug()),
+            );
         }
         path
     }
@@ -1690,7 +1696,7 @@ impl<'a> LowerCtx<'a> {
         if !is_variant_identifier(&name) {
             self.error(
                 node.span(),
-                alloc::format!("{name:?} is not a valid variant name"),
+                alloc::format!("`{}` is not a valid variant name", name.escape_debug()),
             );
         }
         name

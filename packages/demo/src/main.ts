@@ -217,7 +217,9 @@ function renderViewport(editor: Editor): void {
       : `last update (${last.records} change${last.records === 1 ? "" : "s"}${last.timeChanged ? ", new time" : ""}): ` +
         `+${work.added} −${work.removed} draws, ${work.moved} moved, ${work.shown} shown or hidden, ` +
         `${work.refilled} refilled, ${work.rebuilt} rebuilt, ${work.triangulations} triangulated, ${work.tessellations} tessellated; ` +
-        `${work.itemsRead} draws read, ${work.itemsUntouched} untouched, ${work.localTransforms} local transforms`;
+        `${work.itemsRead} draws read, ${work.itemsUntouched} untouched` +
+        (last.timeChanged ? ` (${work.itemsTimeInvariant} not animated)` : "") +
+        `, ${work.localTransforms} local transforms`;
   fill(
     body,
     `${scene.items.length} draws: ${summary.drawn.length} drawn (${summary.instances} instances), ${summary.triangles} triangles, framed on ${bounds}`,

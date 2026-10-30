@@ -102,6 +102,8 @@ export interface UpdateSummary {
   readonly itemsRead: number;
   /** Draws the last change record applied did not read. */
   readonly itemsUntouched: number;
+  /** Draws a time change did not read because nothing they read is animated, summed. */
+  readonly itemsTimeInvariant: number;
   readonly localTransforms: number;
 }
 
@@ -109,6 +111,7 @@ const EMPTY_WORK: DrawWork = {
   primsTraversed: 0,
   itemsRead: 0,
   itemsUntouched: 0,
+  itemsTimeInvariant: 0,
   matricesComputed: 0,
   localTransforms: 0,
   buffersReused: 0,
@@ -167,6 +170,7 @@ function addWork(into: DrawWork, work: DrawWork): DrawWork {
     primsTraversed: into.primsTraversed + work.primsTraversed,
     itemsRead: into.itemsRead + work.itemsRead,
     itemsUntouched: work.itemsUntouched,
+    itemsTimeInvariant: into.itemsTimeInvariant + work.itemsTimeInvariant,
     matricesComputed: into.matricesComputed + work.matricesComputed,
     localTransforms: into.localTransforms + work.localTransforms,
     buffersReused: into.buffersReused + work.buffersReused,
@@ -325,6 +329,7 @@ export function updateSummary(update: ViewportUpdate): UpdateSummary {
     tessellations: update.work.tessellations,
     itemsRead: update.work.itemsRead,
     itemsUntouched: update.work.itemsUntouched,
+    itemsTimeInvariant: update.work.itemsTimeInvariant,
     localTransforms: update.work.localTransforms,
   };
 }

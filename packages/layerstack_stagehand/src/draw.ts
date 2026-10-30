@@ -93,6 +93,8 @@ export interface DrawWork {
   readonly itemsRead: number;
   /** Items no change reached: nothing of them was read. */
   readonly itemsUntouched: number;
+  /** Items {@link DrawList.setTime} did not read because nothing they read might differ at another time; counted in {@link itemsUntouched} too. */
+  readonly itemsTimeInvariant: number;
   /** Instance world matrices computed. */
   readonly matricesComputed: number;
   /** Local transforms the stage's transform cache computed (the rest it reused). */
@@ -156,7 +158,8 @@ function merge(into: Dirty, from: Dirty): void {
   into.material ||= from.material;
 }
 
-const GEOMETRY = new Set([
+/** The attributes a mesh's or a shape's buffer is read from: points, normals, topology, the drawn primvars and their indices, a shape's size. */
+const GEOMETRY_INPUTS = [
   "points",
   "normals",
   "faceVertexCounts",
@@ -172,11 +175,32 @@ const GEOMETRY = new Set([
   "width",
   "length",
   "axis",
-  // A `GeomSubset`'s, read by its mesh.
-  "indices",
-  "elementType",
-  "familyName",
-]);
+  "primvars:normals",
+  "primvars:normals:indices",
+  "primvars:st",
+  "primvars:st:indices",
+  "primvars:displayColor",
+  "primvars:displayColor:indices",
+];
+
+/** A `GeomSubset`'s attributes, read by its mesh. */
+const SUBSET_INPUTS = ["indices", "elementType", "familyName"];
+
+/** The attributes a `PointInstancer` places its instances from. */
+const INSTANCER_INPUTS = [
+  "protoIndices",
+  "ids",
+  "positions",
+  "orientations",
+  "orientationsf",
+  "scales",
+  "velocities",
+  "accelerations",
+  "angularVelocities",
+  "invisibleIds",
+];
+
+const GEOMETRY = new Set([...GEOMETRY_INPUTS, ...SUBSET_INPUTS]);
 
 /** What a property's change may change of the items under its prim, as `layerstack_stagehand` classifies it. */
 function propertyDirt(name: string): Dirty {
@@ -184,12 +208,18 @@ function propertyDirt(name: string): Dirty {
   if (name === "xformOpOrder" || name.startsWith("xformOp:")) dirty.transform = true;
   else if (name === "visibility" || name === "purpose" || name.endsWith("Visibility")) dirty.visibility = true;
   else if (name.startsWith("material:binding")) dirty.material = true;
-  else if (
-    GEOMETRY.has(name) ||
-    ["primvars:normals", "primvars:st", "primvars:displayColor"].some((p) => name === p || name === `${p}:indices`)
-  )
-    dirty.geometry = true;
+  else if (GEOMETRY.has(name)) dirty.geometry = true;
   return dirty;
+}
+
+/** What of an item might differ at another time, as last read: what {@link DrawList.setTime} reads again. */
+interface Varies {
+  /** Its matrices: a drawn instance's world transform, or an instancer's placement. */
+  matrices: boolean;
+  /** Whether it, or any instance, is shown. */
+  visibility: boolean;
+  /** Its buffer's inputs. */
+  geometry: boolean;
 }
 
 /** Whether `path` is `root` or beneath it. */
@@ -305,6 +335,8 @@ interface Entry {
   item: DrawItem;
   /** Every path whose change reaches the item. */
   depends: string[];
+  /** What of it might differ at another time. */
+  varies: Varies;
 }
 
 interface Retained {
@@ -330,6 +362,7 @@ class Gather {
     primsTraversed: 0,
     itemsRead: 0,
     itemsUntouched: 0,
+    itemsTimeInvariant: 0,
     matricesComputed: 0,
     localTransforms: 0,
     buffersReused: 0,
@@ -362,8 +395,8 @@ const sorted = (set: Set<number>) => [...set].sort((a, b) => a - b);
  *   {@link applyChanges} reads what a change record reaches (resynced
  *   paths rediscover their subtree; changed properties are classified by
  *   name into transform, visibility, material and geometry work under
- *   their prim); {@link setTime} reads every item at a new time and
- *   rebuilds only what changed.
+ *   their prim); {@link setTime} reads at a new time only the items
+ *   whose inputs might vary with time, and rebuilds only what changed.
  *
  * ```ts
  * const list = stagehand.drawList(stage, { time });
@@ -432,15 +465,34 @@ export class DrawList implements Disposable {
     return this.#apply(changes);
   }
 
-  /** Reads every item at `time` (`undefined` for the default time); an animated mesh is refilled, never triangulated again unless its topology changed. */
+  /**
+   * Reads at `time` (`undefined` for the default time) the items whose
+   * inputs might differ at another time, and only what of them might; an
+   * animated mesh is refilled, never triangulated again unless its topology
+   * changed. An item's inputs might vary when time samples (even one), a
+   * spline or value clips supply them
+   * ({@link Stage.valueSourcesMightBeTimeVarying}): its geometry's
+   * attributes (and its face subsets'), the `visibility` of it or an
+   * ancestor, its world transform's chain
+   * ({@link Stage.worldTransformsMightVary}), or a point instancer's
+   * placement attributes. The rest are left untouched and counted in
+   * {@link DrawWork.itemsTimeInvariant}. What might vary is found as the
+   * item is read, so {@link applyChanges} keeps it up to date.
+   */
   setTime(time: number | undefined): DrawDiff {
     const before = this.#stage.transformCache().localComputed;
     this.#time = time;
     const gather = new Gather();
     const read = new Set<number>();
     for (const [id, entry] of [...this.#entries]) {
+      const { matrices, visibility, geometry } = entry.varies;
+      const what: Dirty = { instances: matrices, transform: matrices, visibility, geometry, material: false };
+      if (!any(what)) {
+        gather.work.itemsTimeInvariant++;
+        continue;
+      }
       read.add(id);
-      if (!this.#read(id, entry.item.source, all(), false, gather)) this.#remove(id, gather);
+      if (!this.#read(id, entry.item.source, what, false, gather)) this.#remove(id, gather);
     }
     return this.#finish(gather, read, before);
   }
@@ -695,6 +747,28 @@ export class DrawList implements Disposable {
     return this.#stage.worldTransforms(paths, this.#time === undefined ? {} : { time: this.#time });
   }
 
+  /** Whether any of `paths`' world transforms might differ at another time. */
+  #worldMightVary(paths: readonly string[]): boolean {
+    if (paths.length === 0) return false;
+    const at = this.#time === undefined ? {} : { time: this.#time };
+    return this.#stage.worldTransformsMightVary(paths, at).includes(true);
+  }
+
+  /** Whether any of the attributes `names` of any of `prims` might hold another value at another time. */
+  #inputsMightVary(prims: readonly string[], names: readonly string[]): boolean {
+    const paths = prims.flatMap((prim) => names.map((name) => `${prim}.${name}`));
+    return paths.length > 0 && this.#stage.valueSourcesMightBeTimeVarying(paths).includes(true);
+  }
+
+  /** Whether any of `paths`' computed visibility might differ at another time: its `visibility`, or an ancestor's, might. */
+  #visibilityMightVary(paths: readonly string[]): boolean {
+    const chain = new Set<string>();
+    for (const path of paths) {
+      for (let at: string | null = path; at !== null && at !== "/"; at = parent(at)) chain.add(at);
+    }
+    return this.#inputsMightVary([...chain], ["visibility"]);
+  }
+
   /** Reads item `id` of `source` again for what `what` says may have changed; `false` when it draws nothing any more. */
   #read(id: number, source: ItemSource, what: Dirty, isNew: boolean, gather: Gather): boolean {
     const stage = this.#stage;
@@ -712,17 +786,21 @@ export class DrawList implements Disposable {
       subsetMaterials: [],
     };
     let depends = previous?.depends ?? [];
+    const varies: Varies = { ...(previous?.varies ?? { matrices: false, visibility: false, geometry: false }) };
     if (what.instances || what.transform || what.visibility || isNew) {
       let matrices: Float64Array = new Float64Array();
       let instances: string[] = [];
       let ids: BigInt64Array | null = null;
+      varies.matrices = false;
       if (source.kind === "gprim") {
         if (stage.prim(source.path) === null) return false;
         depends = [source.path];
+        varies.visibility = this.#visibilityMightVary([source.path]);
         if (this.#shown([source.path])[0]) {
           gather.work.matricesComputed++;
           matrices = this.#world([source.path]);
           instances = [source.path];
+          varies.matrices = this.#worldMightVary([source.path]);
         }
       } else if (source.kind === "prototype") {
         const first = this.#instanceRoot(source.prim);
@@ -736,6 +814,8 @@ export class DrawList implements Disposable {
         instances = members.filter((_, i) => shown[i]);
         gather.work.matricesComputed += instances.length;
         matrices = this.#world(instances);
+        varies.visibility = this.#visibilityMightVary(members);
+        varies.matrices = this.#worldMightVary(instances);
         depends = [...everyProxy, ...roots];
       } else {
         const targets = stage.relationship(`${source.instancer}.prototypes`)?.targets() ?? [];
@@ -743,7 +823,14 @@ export class DrawList implements Disposable {
         if (prototype === undefined || !under(source.prim, prototype) || stage.prim(source.prim) === null) return false;
         depends = [source.instancer, prototype, source.prim];
         ids = new BigInt64Array();
+        varies.visibility = this.#visibilityMightVary([source.instancer]);
         if (this.#shown([source.instancer])[0]) {
+          // The prim's world chain covers its transform relative to the
+          // prototype and the instancer's.
+          varies.matrices =
+            this.#inputsMightVary([source.instancer], INSTANCER_INPUTS) ||
+            this.#worldMightVary([source.instancer]) ||
+            (source.prim !== prototype && this.#worldMightVary([source.prim]));
           const placed = stage.pointInstances(source.instancer, this.#time === undefined ? {} : { time: this.#time });
           const world = this.#world([source.instancer]);
           // A gprim inside the prototype: its transform relative to the
@@ -795,6 +882,9 @@ export class DrawList implements Disposable {
         this.#buffers.get(key)!.users++;
         item = { ...item, buffer: key };
       }
+      varies.geometry =
+        this.#inputsMightVary([item.prim], GEOMETRY_INPUTS) ||
+        this.#inputsMightVary(this.#buffers.get(key)?.buffers.subsets ?? [], SUBSET_INPUTS);
     }
     if (what.material || what.geometry || isNew) {
       const material = source.kind === "prototype" ? source.material : this.#material(item.prim);
@@ -808,7 +898,7 @@ export class DrawList implements Disposable {
       if (!depends.includes(subset)) depends = [...depends, subset];
     }
     if (previous === undefined) this.#keys.set(sourceKey(source), id);
-    this.#entries.set(id, { item, depends });
+    this.#entries.set(id, { item, depends, varies });
     return true;
   }
 

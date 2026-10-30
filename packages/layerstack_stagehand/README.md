@@ -46,7 +46,7 @@ const list = stagehand.drawList(stage, { time, purposes: ["default", "proxy"] })
 try {
   upload(list.refresh()); // every item and buffer added
   stage.onChange((changes) => upload(list.applyChanges(changes)));
-  upload(list.setTime(next)); // animated meshes refilled, nothing triangulated again
+  upload(list.setTime(next)); // animated items read, meshes refilled, nothing triangulated again
 } finally {
   list.dispose(); // frees every buffer's plan
 }
@@ -56,9 +56,12 @@ Each `DrawDiff` lists the items `added`, `removed`, moved (`matrices`),
 shown or hidden (`visibility`), rebound to `materials` or another buffer
 (`rebound`), and the buffers added, `refilled` (same indices, new
 positions, normals, `st` or colors), `rebuilt` or `freed`; its `work`
-counts the items read and left untouched, the matrices computed, the
-local transforms the stage recomputed, and the buffers reused, refilled,
-triangulated and tessellated. Matrices are 16 numbers per instance, row by
+counts the items read and left untouched (and, for `setTime`, the items
+left untouched because nothing they read is animated), the matrices
+computed, the local transforms the stage recomputed, and the buffers
+reused, refilled, triangulated and tessellated. `setTime` reads only the
+items with time samples, splines or value clips on their geometry,
+visibility or transform chain. Matrices are 16 numbers per instance, row by
 row, as OpenUSD's.
 
 ## Two modules, typed arrays between them

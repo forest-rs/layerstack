@@ -316,56 +316,11 @@ fn quote(text: &str, out: &mut String) {
 
 /// `value` in shortest round-trip form, as `TfStringify(double)` writes it
 /// (double-conversion's `ToShortest`, decimal for decimal exponents from
-/// -6 to 14, `inf`, `-inf` and `nan`).
+/// -6 to 14, the even candidate on a tie, `inf`, `-inf` and `nan`;
+/// [`crate::float_text`]).
 fn shortest_double(value: f64) -> String {
-    if value.is_nan() {
-        return "nan".into();
-    }
-    if value.is_infinite() {
-        return if value > 0.0 { "inf" } else { "-inf" }.into();
-    }
-    if value == 0.0 {
-        return if value.is_sign_negative() { "-0" } else { "0" }.into();
-    }
-    // The shortest digits and decimal exponent.
-    let scientific = format!("{:e}", value.abs());
-    let (mantissa, exponent) = scientific.split_once('e').unwrap_or((&scientific, "0"));
-    let exponent: i32 = exponent.parse().unwrap_or(0);
-    let digits: String = mantissa.chars().filter(char::is_ascii_digit).collect();
     let mut out = String::new();
-    if value < 0.0 {
-        out.push('-');
-    }
-    if (-6..15).contains(&exponent) {
-        let point = exponent + 1;
-        let len = i32::try_from(digits.len()).unwrap_or(i32::MAX);
-        if point <= 0 {
-            out.push_str("0.");
-            for _ in 0..-point {
-                out.push('0');
-            }
-            out.push_str(&digits);
-        } else if point >= len {
-            out.push_str(&digits);
-            for _ in 0..point - len {
-                out.push('0');
-            }
-        } else {
-            let (whole, fraction) = digits.split_at(point.unsigned_abs() as usize);
-            out.push_str(whole);
-            out.push('.');
-            out.push_str(fraction);
-        }
-    } else {
-        let (first, rest) = digits.split_at(1);
-        out.push_str(first);
-        if !rest.is_empty() {
-            out.push('.');
-            out.push_str(rest);
-        }
-        out.push('e');
-        out.push_str(&exponent.to_string());
-    }
+    crate::float_text::push_double(&mut out, value);
     out
 }
 

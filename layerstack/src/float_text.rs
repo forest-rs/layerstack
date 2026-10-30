@@ -1,8 +1,10 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-//! Floating-point numbers spelled as OpenUSD 26.08's text writer spells
-//! them.
+//! Floating-point numbers spelled as OpenUSD spells them in text: the one
+//! implementation behind `layerstack_usda`'s writer, `layerstack_schemas`'
+//! sdr metadata strings and path-expression predicate arguments. Public
+//! only with the `unstable-internals` feature.
 //!
 //! OpenUSD writes a value with `TfStringify` or its stream operator
 //! (`Sdf_FileIOUtility::StringFromVtValue`, `pxr/usd/sdf/fileIO_Common.cpp`),
@@ -45,7 +47,7 @@ use core::fmt::{self, Write as _};
 
 /// Appends `v` as OpenUSD writes a `double`.
 #[inline]
-pub(crate) fn push_double(out: &mut String, v: f64) {
+pub fn push_double(out: &mut String, v: f64) {
     // Most doubles: of a positional magnitude, and `k * 2^q` for an odd `k`
     // with `q` below -25, so no tie is possible ([`may_tie`]). The range
     // holds no subnormal, so `q` is at most the exponent less 1075 plus
@@ -61,7 +63,7 @@ pub(crate) fn push_double(out: &mut String, v: f64) {
 /// Appends `v` as OpenUSD writes a `float`: the fewest digits that read
 /// back as the same `float`.
 #[inline]
-pub(crate) fn push_float(out: &mut String, v: f32) {
+pub fn push_float(out: &mut String, v: f32) {
     // Most floats: of a positional magnitude, and `k * 2^q` for an odd `k`
     // with `q` below -14, so no tie is possible ([`may_tie`]). The range
     // holds no subnormal, so `q` is at most the exponent less 150 plus the
@@ -193,8 +195,8 @@ fn odd_significand(v: f64) -> Option<(u64, i32)> {
 
 /// Appends the half `bits` as OpenUSD writes a `half`: `%g`, six
 /// significant digits, rounded half to even from the half's exact value.
-pub(crate) fn push_half(out: &mut String, bits: u16) {
-    let v = f64::from(layerstack::half::to_f32(bits));
+pub fn push_half(out: &mut String, bits: u16) {
+    let v = f64::from(crate::half::to_f32(bits));
     if !v.is_finite() {
         push_non_finite(out, v);
     } else if let Some(integer) = small_integer(v, 1e6) {
@@ -212,7 +214,7 @@ pub(crate) fn push_half(out: &mut String, bits: u16) {
 
 /// Appends `v` as OpenUSD writes a `timecode` (six significant digits,
 /// `%g`) when that reads back as `v`, and as a `double` otherwise.
-pub(crate) fn push_time_code(out: &mut String, v: f64) {
+pub fn push_time_code(out: &mut String, v: f64) {
     if !v.is_finite() {
         push_non_finite(out, v);
     } else if let Some(integer) = small_integer(v, 1e6) {
@@ -541,7 +543,7 @@ mod tests {
 
     fn half(v: f32) -> String {
         let mut out = String::new();
-        push_half(&mut out, layerstack::half::from_f32(v));
+        push_half(&mut out, crate::half::from_f32(v));
         out
     }
 
@@ -648,14 +650,14 @@ mod tests {
     #[test]
     fn every_half_reads_back_as_itself() {
         for bits in 0..=u16::MAX {
-            let value = layerstack::half::to_f32(bits);
+            let value = crate::half::to_f32(bits);
             if value.is_nan() {
                 continue;
             }
             let mut text = String::new();
             push_half(&mut text, bits);
             let read: f64 = text.parse().unwrap();
-            assert_eq!(layerstack::half::from_f64(read), bits, "{text}");
+            assert_eq!(crate::half::from_f64(read), bits, "{text}");
         }
     }
 

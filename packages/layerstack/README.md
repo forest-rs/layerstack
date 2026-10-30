@@ -77,7 +77,8 @@ await stage.resolve(source);
   typed schemas derived from registered ones, as codeless schemas declare
   them: a `RockMesh` prim is a `Mesh` to every `IsA` read, with `Mesh`'s
   properties. `prim.isA("Mesh")` (`UsdPrim::IsA`) is how a reader asks
-  what a prim is, rather than comparing `prim.typeName`.
+  what a prim is, rather than comparing `prim.typeName`;
+  `prim.hasAPI("ShapingAPI")` (`UsdPrim::HasAPI`) which API schemas it has.
 - **Opening is synchronous and complete.** `open` composes the root layer
   alone. Every dependency it cannot read yet is *unavailable*: it may still
   arrive. One confirmed absent, or whose read failed, is *unresolved*: its
@@ -297,6 +298,7 @@ JS-owned typed array.
 | `stage.worldTransformsMightVary(paths, { time? })` | `boolean[]`: whether each world transform might differ at another time (an op of its chain, up to a reset, has samples, a spline or clips): what a renderer skips when the time changes |
 | `stage.valueSourcesMightBeTimeVarying(paths)`, `attribute.valueSourceMightBeTimeVarying()` | `boolean[]` (one `boolean`): whether each attribute's value source might vary with time, the default time included (`UsdAttributeQuery::ValueSourceMightBeTimeVarying`) |
 | `stage.xformable(path)`, `prim.xformable()` | `Xformable \| null`: `resetsXformStack`, `ops`, `transformMightBeTimeVarying`, `transformTimeSamples` |
+| `stage.camera(path, { time?, conform? })` | `Camera \| null`: a `UsdGeomCamera` as a renderer reads it: `view` and `projectionMatrix` as `GfFrustum` computes them, `cameraToWorld`, `window`, `clippingRange`, lens (`aperture`, `apertureOffset`, `focalLength`, `fStop`, `focusDistance`), `clippingPlanes`, `shutter`, `exposure` and `linearExposureScale`; with `conform: { policy, aspect }` fitted to a viewport as `CameraUtilConformWindow` fits it |
 | `stage.visibilities(paths, { time?, purpose? })`, `prim.visibility(...)` | `inherited` or `invisible` (`ComputeVisibility`), or with a purpose `visible` among them (`ComputeEffectiveVisibility`); `null` for a prim that is not `Imageable` |
 | `stage.purposeInfos(paths)`, `prim.purposeInfo()` | `PurposeInfo \| null`: `purpose`, `inheritable`, `authoredOn` |
 | `stage.primvars(path, { inherited? })`, `stage.primvar(path, name, { inherited? })`, `prim.primvars(...)`, `prim.primvar(...)` | `Primvar`: `prim`, `name`, `typeName`, `interpolation`, `elementSize`, `indexed`, `idTarget`, `mightBeTimeVarying`; `get(time?)`, `flattened(time?)` (through its indices), `indices(time?)` |
@@ -339,6 +341,7 @@ stage objects and authored as `Edit`s, as OpenUSD's `UsdShade`,
 | `prim.geomSubsets({ elementType?, familyName?, time? })`, `subsetFamilyType(family)`, `validateSubsetFamily(family, elementType, { time? })` | `GeomSubset[]`, the family type, `SubsetProblem[]` |
 | `prim.coordSysBindings({ inherited? })` | `CoordSysBinding[]`: `name`, `relationship`, `target` |
 | `stage.skinning(path)`, `prim.skinning()` | `SkinningQuery \| null`: `skeleton`, `joints`, `jointMapping`, `elementSize`, `interpolation`, `rigid`, `method`, `animation`, `blendShapes`; `influences(time?)`, `interleavedInfluences(time?)`, `skinningTransforms(time?)`, `deformedPoints(time?)`, `deformedNormals(time?)` |
+| `layerstack.blackbodyTemperatureRgb(kelvin)` | `Float32Array`: the color a light's `colorTemperature` multiplies its color by (`UsdLuxBlackbodyTemperatureAsRgb`) |
 | `layerstack.skinPoints`, `skinNormals`, `skinTransform` | The skinning functions over your own typed arrays, with separate or interleaved influences |
 | `stage.skinningCache()` | `SkinningCacheStats`: what the stage's skinning cache reused, recomputed, invalidated and holds |
 

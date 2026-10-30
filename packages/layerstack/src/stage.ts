@@ -36,6 +36,8 @@ import type {
   BoundsCacheStats,
   BoundsOptions,
   InstanceOptions,
+  Camera,
+  CameraOptions,
   LocalTransform,
   PointInstances,
   Prototype,
@@ -125,6 +127,7 @@ export interface NativeStage extends Disposable {
   timeSamples(path: string): Float64Array;
   valueSourcesMightVary(paths: string[]): Uint8Array;
   isA(path: string, schema: string): boolean;
+  hasAPI(path: string, schema: string, instance?: string | null): boolean;
   explain(path: string, time?: number | null): unknown;
   metadata(path: string, key: string): unknown;
   relationship(path: string): unknown;
@@ -167,6 +170,7 @@ export interface NativeStage extends Disposable {
   transformCache(): unknown;
   boundsCache(): unknown;
   localTransform(path: string, time?: number | null): unknown;
+  camera(path: string, time?: number | null, policy?: string | null, aspect?: number | null): unknown;
   worldTransforms(paths: string[], time: number | null | undefined, parent: boolean): Float64Array;
   worldTransformsMightVary(paths: string[], time: number | null | undefined): Uint8Array;
   xformable(path: string): unknown;
@@ -280,6 +284,7 @@ export interface NativeModule {
     interleaved: Float32Array | undefined,
     elementSize: number,
   ): Float64Array;
+  blackbodyTemperatureRgb(kelvin: number): Float32Array;
   /** The module's memory, for {@link Layerstack.transfer}; optional. */
   readonly memory?: WebAssembly.Memory;
 }
@@ -431,6 +436,19 @@ export class Layerstack {
     return this.call("skinTransform", () =>
       this.#module.skinTransform(method, bind, joints, indices, weights, pairs, size),
     );
+  }
+
+  /**
+   * The linear Rec. 709 color of a blackbody at `kelvin` (clamped to
+   * 1000–10000 K), normalized to unit luminance, three numbers, as
+   * OpenUSD's `UsdLuxBlackbodyTemperatureAsRgb`: what a light's
+   * `inputs:colorTemperature` multiplies its color by when
+   * `inputs:enableColorTemperature` is on.
+   *
+   * Throws `argument.invalid` for a temperature that is not finite.
+   */
+  blackbodyTemperatureRgb(kelvin: number): Float32Array {
+    return this.call("blackbodyTemperatureRgb", () => this.#module.blackbodyTemperatureRgb(kelvin));
   }
 
   /** @internal A new native batch of edits. */
@@ -1287,6 +1305,25 @@ export class Stage implements Disposable {
     return decodeLocalTransform(
       this.#call("localTransform", (native) => native.localTransform(path, options.time)) as Row,
     );
+  }
+
+  /**
+   * The camera at `path` at `time`, as a renderer reads it, or `null` when
+   * the prim is not a `Camera` (`UsdGeomCamera::GetCamera`,
+   * `GfCamera::GetFrustum`): view and projection matrices as `GfFrustum`
+   * computes them, window, clipping range, lens and exposure. With
+   * `conform`, its aperture is first fitted to the aspect ratio
+   * `conform.aspect` (width over height) by `conform.policy`, as
+   * `CameraUtilConformWindow` fits a `GfCamera`.
+   *
+   * Throws `prim.not_found`, `camera.invalid` when its parameters or
+   * transform make no camera, `argument.invalid` for an unknown policy.
+   */
+  camera(path: string, options: CameraOptions = {}): Camera | null {
+    const row = this.#call("camera", (native) =>
+      native.camera(path, options.time, options.conform?.policy, options.conform?.aspect),
+    ) as Row | null;
+    return row === null ? null : decodeCamera(row);
   }
 
   /** The transform ops of the prim at `path` ({@link Xformable}), or `null` when it is not `Xformable`. Throws `prim.not_found`. */
@@ -2178,6 +2215,16 @@ export class Prim {
     return this.stage.native("isA", (native) => native.isA(this.path, schema));
   }
 
+  /**
+   * Whether it has the API schema `schema` (`ShapingAPI`) applied, or the
+   * instance `instance` of a multiple-apply one (`CollectionAPI`,
+   * `lightLink`), its type's built-in schemas included, as `UsdPrim::HasAPI`
+   * answers.
+   */
+  hasAPI(schema: string, instance?: string): boolean {
+    return this.stage.native("hasAPI", (native) => native.hasAPI(this.path, schema, instance));
+  }
+
   /** The names of its attributes, schema-defined and authored, in property order. */
   attributeNames(): string[] {
     return this.stage.native("attributeNames", (native) => native.attributeNames(this.path));
@@ -2768,4 +2815,31 @@ function skinArguments(input: SkinInput, operation: string): SkinArguments {
     size,
     constant,
   ];
+}
+
+function decodeCamera(row: Row): Camera {
+  const [view, projection, exposure] = [row[2], row[3], row[13]] as Float64Array[];
+  return Object.freeze({
+    projection: row[0] as Camera["projection"],
+    cameraToWorld: row[1] as Float64Array,
+    view: view!,
+    projectionMatrix: projection!,
+    window: row[4] as Float64Array,
+    clippingRange: row[5] as Float64Array,
+    aperture: row[6] as Float64Array,
+    apertureOffset: row[7] as Float64Array,
+    focalLength: row[8] as number,
+    fStop: row[9] as number,
+    focusDistance: row[10] as number,
+    clippingPlanes: row[11] as Float64Array,
+    shutter: row[12] as Float64Array,
+    exposure: Object.freeze({
+      exposure: exposure![0]!,
+      fStop: exposure![1]!,
+      iso: exposure![2]!,
+      responsivity: exposure![3]!,
+      time: exposure![4]!,
+    }),
+    linearExposureScale: row[14] as number,
+  });
 }

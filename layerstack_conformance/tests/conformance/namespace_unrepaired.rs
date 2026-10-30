@@ -22,6 +22,16 @@
 //! recorded paths, at the specs where the edit leaves them. The cases in
 //! `DIFFERING` are the ones layerstack does not yet do as OpenUSD does.
 //!
+//! One divergence is deliberate and has no case here: when the asset
+//! authoring the arc back into the stage is a package member
+//! (`props.usdz[asset.usda]`), `UsdNamespaceEditor`
+//! (`pxr/usd/usd/namespaceEditor.cpp`) repairs it in memory with
+//! `CanApplyEdits` approving, and saving the package then fails in
+//! `SdfLayer::_CheckFormatWritability` (`pxr/usd/sdf/layer.cpp`).
+//! layerstack refuses such a move or delete before any layer changes
+//! (`NamespaceError::ReadOnlyLayer`), as `layerstack`'s and
+//! `layerstack_io`'s unit tests check.
+//!
 //! Spec: AOUSD Core §8 (namespace), §10.5 (variants).
 
 use layerstack::{

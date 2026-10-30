@@ -872,7 +872,10 @@ fn nested_packages_resolve_defaults_explicit_layers_relative_dependencies_and_re
     }
 }
 use alloc::{format, vec};
-use layerstack::{EditTarget, PrimSpec, PropertySpec, Transaction, Value};
+use layerstack::{
+    EditTarget, NamespaceEdit, NamespaceError, PrimSpec, PropertySpec, TargetPath, Transaction,
+    Value,
+};
 
 /// The sources a storage read, in order; storages read through `&self`.
 #[derive(Debug, Default)]
@@ -1734,6 +1737,93 @@ fn binary_export_reopens_and_package_reload_keeps_member_ids() {
     };
     let binary = StageDocument::open(backend, "base.usdc", StageOptions::default()).unwrap();
     assert_eq!(value(&binary), Value::Int(11));
+}
+
+/// `scene.usda`'s `/World/Shelf` references an asset whose `/Asset/Front`
+/// references `/World/Lamp` back in the scene.
+fn asset_arc_back_into_scene(asset: &str) -> Memory {
+    let scene = alloc::format!(
+        "#usda 1.0\ndef \"World\" {{\n def \"Lamp\" {{\n }}\n def \"Shelf\" (\n  \
+         prepend references = @{asset}@</Asset>\n ) {{\n }}\n}}\n"
+    );
+    let source = b"#usda 1.0\ndef \"Asset\" {\n def \"Front\" (\n  \
+        prepend references = @scene.usda@</World/Lamp>\n ) {\n }\n}\n";
+    let mut backend = Memory::default();
+    backend
+        .files
+        .insert("scene.usda".into(), scene.into_bytes());
+    let bytes = if asset.ends_with(".usdz") {
+        layerstack_usdz::write_usdz(&[layerstack_usdz::PackageFile::new("asset.usda", source)])
+            .unwrap()
+    } else {
+        source.to_vec()
+    };
+    backend.files.insert(asset.into(), bytes);
+    backend
+}
+
+/// The document marks a package's layers read-only in its store, and a
+/// namespace edit that would repair a package member's arc back into the
+/// stage is refused naming the member, with every layer as it was; the
+/// same arc in a plain asset is repaired and saved.
+#[test]
+fn namespace_edits_refuse_package_members_and_repair_plain_assets() {
+    let open = |asset: &str| {
+        StageDocument::open(
+            asset_arc_back_into_scene(asset),
+            "scene.usda",
+            StageOptions::default(),
+        )
+        .unwrap()
+    };
+    let mut doc = open("props.usdz");
+    // The package's root member, named by the package.
+    let member = doc.catalog.ids["props.usdz"];
+    let root = doc.catalog.ids["scene.usda"];
+    assert_eq!(
+        doc.store().layer_read_only(member),
+        Some(ReadOnlyReason::PackageMember)
+    );
+    assert_eq!(doc.store().layer_read_only(root), None);
+    let before = doc.store.layers().cloned().collect::<Vec<_>>();
+    let (store, live) = doc.parts_mut();
+    let lamp = TargetPath::Prim(store.path("/World/Lamp"));
+    let renamed = TargetPath::Prim(store.path("/World/Lamp2"));
+    let target = EditTarget::for_layer(root);
+    let refused = |destination| NamespaceError::ReadOnlyLayer {
+        source: lamp,
+        destination,
+        layer: member,
+        reason: ReadOnlyReason::PackageMember,
+    };
+    let error = NamespaceEdit::prepare(live.stage(), store, &target, lamp, renamed).unwrap_err();
+    assert_eq!(error, refused(Some(renamed)));
+    assert_eq!(
+        error.display(store).to_string(),
+        "cannot move /World/Lamp to /World/Lamp2: the edit would change @props.usdz@, \
+         which cannot be saved (a package member)"
+    );
+    let error = NamespaceEdit::prepare_delete(live.stage(), store, &target, lamp).unwrap_err();
+    assert_eq!(error, refused(None));
+    assert_eq!(doc.store.layers().cloned().collect::<Vec<_>>(), before);
+    assert!(!doc.is_dirty(member) && !doc.is_dirty(root));
+
+    let mut doc = open("asset.usda");
+    let (root, asset) = (doc.catalog.ids["scene.usda"], doc.catalog.ids["asset.usda"]);
+    assert_eq!(doc.store().layer_read_only(asset), None);
+    let (store, live) = doc.parts_mut();
+    let lamp = TargetPath::Prim(store.path("/World/Lamp"));
+    let renamed = TargetPath::Prim(store.path("/World/Lamp2"));
+    let target = EditTarget::for_layer(root);
+    let edit = NamespaceEdit::prepare(live.stage(), store, &target, lamp, renamed).unwrap();
+    let mut edited = [root, asset];
+    edited.sort();
+    assert_eq!(edit.layers_to_edit(), edited);
+    live.apply(store, edit.transaction()).unwrap();
+    let saved = doc.save();
+    assert!(saved.failures.is_empty(), "{:?}", saved.failures);
+    let text = String::from_utf8(doc.storage.files["asset.usda"].clone()).unwrap();
+    assert!(text.contains("@scene.usda@</World/Lamp2>"), "{text}");
 }
 
 #[test]

@@ -466,12 +466,15 @@ mod tests {
     use super::*;
     #[test]
     fn range_sources_keep_old_handles_and_views_after_atomic_replacement() {
+        // The process ID keeps test processes running at once, such as
+        // checkouts of the repository tested side by side, apart; WASI has
+        // none and runs in its own directory.
         #[cfg(target_os = "wasi")]
-        let base = std::env::current_dir().unwrap();
+        let (base, process) = (std::env::current_dir().unwrap(), 0);
         #[cfg(not(target_os = "wasi"))]
-        let base = std::env::temp_dir();
+        let (base, process) = (std::env::temp_dir(), std::process::id());
         let root = base.join(alloc::format!(
-            "layerstack-ranges-{}",
+            "layerstack-ranges-{process}-{}",
             NEXT_CANDIDATE.fetch_add(1, Ordering::Relaxed)
         ));
         fs::create_dir_all(&root).unwrap();

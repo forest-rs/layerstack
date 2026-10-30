@@ -52,6 +52,10 @@ use crate::wire::Wire;
 ///   `namespace.missing_parent`, `namespace.cycle`,
 ///   `namespace.instance_proxy`, `namespace.unmappable`,
 ///   `namespace.split_opinions`, `namespace.unsupported`.
+/// - `subset.geometry`: a subset read asked of a prim that is not geometry
+///   of the subsets' element type (the material subsets of a prim that is
+///   not a mesh), from `layerstack_schemas::subset::SubsetError` and
+///   `layerstack_schemas::MaterialSubsetError`.
 /// - `flatten.failed`, `package.failed`: the stage has no root layer to
 ///   flatten or package.
 /// - `receipt.affinity`: a receipt of another stage was passed in.

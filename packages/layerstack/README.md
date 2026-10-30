@@ -299,6 +299,7 @@ await stage.resolve(source);
 | `edit.stale` | An undo whose slots changed since; nothing changed and the receipt is still undoable. |
 | `edit.rejected.*` | The edits were rejected and nothing changed: `edit.rejected.type_mismatch`, `edit.rejected.reserved_field`, ... |
 | `namespace.*` | A `move` or `delete` cannot be made and nothing changed: `namespace.collision` (the destination is occupied), `namespace.missing_parent`, `namespace.not_found`, `namespace.cycle`, `namespace.instance_proxy`, `namespace.invalid_paths`, `namespace.unmappable`, `namespace.split_opinions`, `namespace.unsupported`. |
+| `subset.geometry` | A subset read asked of a prim that is not geometry of the subsets' element type (`materialSubsets()` of a prim that is not a mesh). |
 | `io.*` | A read or import failed: `io.rejected` (does not parse), `io.not_found`, `io.unavailable`, ... |
 | `composition.*` | In `status().compositionErrors`: `composition.unresolved_asset`, `composition.arc_cycle`, ... |
 
@@ -311,7 +312,7 @@ The package and the `layerstack_wasm` crate are released together, at the
 same version. They meet at an ABI number, the layout of the records the
 module exchanges with this package: `layerstack.version` is `{ package,
 crate, revision, abi }`, and loading a module of another ABI fails with
-`module.abi`. This package speaks ABI 6; changing an export's arguments or
+`module.abi`. This package speaks ABI 7; changing an export's arguments or
 record layout brings a new ABI.
 
 ## Building and testing

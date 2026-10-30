@@ -123,6 +123,7 @@ export interface NativeStage extends Disposable {
   attribute(path: string): unknown;
   get(path: string, time?: number | null): unknown;
   timeSamples(path: string): Float64Array;
+  valueSourcesMightVary(paths: string[]): Uint8Array;
   explain(path: string, time?: number | null): unknown;
   metadata(path: string, key: string): unknown;
   relationship(path: string): unknown;
@@ -166,6 +167,7 @@ export interface NativeStage extends Disposable {
   boundsCache(): unknown;
   localTransform(path: string, time?: number | null): unknown;
   worldTransforms(paths: string[], time: number | null | undefined, parent: boolean): Float64Array;
+  worldTransformsMightVary(paths: string[], time: number | null | undefined): Uint8Array;
   xformable(path: string): unknown;
   visibilities(paths: string[], time?: number | null, purpose?: string | null): unknown;
   purposes(paths: string[]): unknown;
@@ -1220,6 +1222,40 @@ export class Stage implements Disposable {
    */
   worldTransforms(paths: readonly string[], options: { readonly time?: number } = {}): Float64Array {
     return this.#call("worldTransforms", (native) => native.worldTransforms([...paths], options.time, false));
+  }
+
+  /**
+   * Whether each prim's local-to-world transform ({@link Stage.worldTransforms})
+   * might differ at another time, the default time included: an op of its
+   * local transform, or of an ancestor's up to the nearest
+   * `!resetXformStack!`, has time samples (even one), a spline or value
+   * clips. `false` means every time reads the same matrix: a renderer can
+   * skip the prim when the time changes. Read through the stage's
+   * transform cache at `time`, as {@link Stage.worldTransforms} reads.
+   *
+   * Throws `prim.not_found` naming the first path no prim is at.
+   */
+  worldTransformsMightVary(paths: readonly string[], options: { readonly time?: number } = {}): boolean[] {
+    const flags = this.#call("worldTransformsMightVary", (native) =>
+      native.worldTransformsMightVary([...paths], options.time),
+    );
+    return Array.from(flags, (flag) => flag === 1);
+  }
+
+  /**
+   * Whether each attribute's value source might vary with time, the
+   * default time included: time samples (even one), a spline or value
+   * clips supply it, directly or under sparse edits
+   * (`UsdAttributeQuery::ValueSourceMightBeTimeVarying`). `false` for a
+   * path no attribute is at; `false` means every time reads the same
+   * value. One read for many attributes: {@link Attribute.valueSourceMightBeTimeVarying}
+   * asks for one.
+   *
+   * Throws `path.invalid` for a path that is not a property path.
+   */
+  valueSourcesMightBeTimeVarying(paths: readonly string[]): boolean[] {
+    const flags = this.#call("valueSourcesMightBeTimeVarying", (native) => native.valueSourcesMightVary([...paths]));
+    return Array.from(flags, (flag) => flag === 1);
   }
 
   /** The local-to-world transform of each prim's parent of `paths` at `time`, as {@link Stage.worldTransforms} lays them out (`UsdGeomXformCache::GetParentToWorldTransform`). */
@@ -2455,6 +2491,11 @@ export class Attribute {
   /** Its composed time sample times, ascending. */
   timeSamples(): number[] {
     return Array.from(this.stage.native("timeSamples", (native) => native.timeSamples(this.path)));
+  }
+
+  /** Whether its value source might vary with time, the default time included (`UsdAttributeQuery::ValueSourceMightBeTimeVarying`); see {@link Stage.valueSourcesMightBeTimeVarying}. */
+  valueSourceMightBeTimeVarying(): boolean {
+    return this.stage.valueSourcesMightBeTimeVarying([this.path])[0] === true;
   }
 
   /** Its composed metadata field `key` (`hidden`, `documentation`), or `null` when nothing authors it. */

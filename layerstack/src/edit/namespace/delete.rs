@@ -323,7 +323,7 @@ fn prepare_with(
     sort::sort_unstable_by(&mut specs, |a, b| {
         a.0.cmp(&b.0).then(a.1.prim_path().cmp(&b.1.prim_path()))
     });
-    Ok(NamespaceEdit {
+    NamespaceEdit {
         transaction,
         source: object,
         destination: None,
@@ -332,7 +332,8 @@ fn prepare_with(
         namespace_moves: Vec::new(),
         relocates,
         unrepaired: unrepaired_paths,
-    })
+    }
+    .writable(store)
 }
 
 /// The slots of `layer` the delete of `object` can change or must

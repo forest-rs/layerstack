@@ -251,6 +251,9 @@ impl LayerStore for ControlledStore<'_> {
     fn layer_identifier(&self, id: LayerId) -> Option<&str> {
         self.inner.layer_identifier(id)
     }
+    fn layer_read_only(&self, id: LayerId) -> Option<crate::ReadOnlyReason> {
+        self.inner.layer_read_only(id)
+    }
     fn asset_layer(&self, anchor: LayerId, asset: &str) -> Option<LayerId> {
         self.inner.asset_layer(anchor, asset)
     }

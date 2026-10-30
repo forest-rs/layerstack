@@ -15,7 +15,13 @@ use crate::{
     InMemoryStore, LiveStage, PrimSpec, PropertySpec, PropertyType, Reference, Relocate,
     StageOptions, SublayerEntry, VariantSetSpec, VariantSpec,
 };
-use alloc::{format, string::String, sync::Arc, vec, vec::Vec};
+use alloc::{
+    format,
+    string::{String, ToString},
+    sync::Arc,
+    vec,
+    vec::Vec,
+};
 
 const ROOT: LayerId = LayerId(1);
 const WEAK: LayerId = LayerId(2);
@@ -1017,6 +1023,92 @@ fn retained_preparation_matches_composition_through_nested_arcs() {
     let mut scene = Scene::new(nested_arcs_scene(), StageOptions::default(), &[]);
     assert!(scene.primary.stage().composition_errors().is_empty());
     assert!(scene.exercise(&[ROOT], 4) > 0);
+}
+
+/// An asset that cannot be saved (a package member) authors an arc back
+/// into the stage: every edit that would repair it, or move or remove its
+/// specs over the edited namespace, is refused naming the asset, both ways
+/// and changing no layer, and edits that leave it alone go ahead. Without
+/// the mark the same edits change the asset.
+#[test]
+fn edits_reaching_a_read_only_asset_are_refused() {
+    let mut store = nested_arcs_scene();
+    let lamp = TargetPath::Prim(store.path("/World/Lamp"));
+    let renamed = TargetPath::Prim(store.path("/World/Lamp2"));
+    let bulb = TargetPath::Prim(store.path("/World/Lamp/Bulb"));
+    let moved_bulb = TargetPath::Prim(store.path("/World/Group/Bulb"));
+    let group = TargetPath::Prim(store.path("/World/Group"));
+    let group2 = TargetPath::Prim(store.path("/World/Group2"));
+    let size = store.tokens.intern("size");
+    let size2 = store.tokens.intern("size2");
+    let lamp_size = TargetPath::Property(PropertyPath::new(lamp.prim_path(), size));
+    let lamp_size2 = TargetPath::Property(PropertyPath::new(lamp.prim_path(), size2));
+    // The same scene, ids and all, with a writable asset.
+    let writable = store.snapshot();
+    store.set_layer_identifier(ASSET, "props.usdz[asset.usda]");
+    store.set_layer_identifier(ROOT, "scene.usda");
+    store.set_layer_read_only(ASSET, Some(ReadOnlyReason::PackageMember));
+    let mut scene = Scene::new(store, StageOptions::default(), &[]);
+    let refused = |source, destination| NamespaceError::ReadOnlyLayer {
+        source,
+        destination,
+        layer: ASSET,
+        reason: ReadOnlyReason::PackageMember,
+    };
+    // A rename repairs the asset's arc; a reparent beneath it moves the
+    // asset's `over "Bulb"`; a property rename moves its `size`.
+    for (from, to) in [(lamp, renamed), (bulb, moved_bulb), (lamp_size, lamp_size2)] {
+        assert_eq!(
+            scene.compare_move(ROOT, from, to),
+            Err(refused(from, Some(to)))
+        );
+    }
+    // A delete drops the arc and the asset's specs over the lamp.
+    for object in [lamp, bulb, lamp_size] {
+        assert_eq!(
+            scene.compare_delete(ROOT, object),
+            Err(refused(object, None))
+        );
+    }
+    // Through the public entry points too, in words.
+    let target = EditTarget::for_layer(ROOT);
+    let stage = scene.primary.stage();
+    let error =
+        NamespaceEdit::prepare(stage, &mut scene.store, &target, lamp, renamed).unwrap_err();
+    assert_eq!(
+        error.display(&scene.store).to_string(),
+        "cannot move /World/Lamp to /World/Lamp2: the edit would change \
+         @props.usdz[asset.usda]@, which cannot be saved (a package member)"
+    );
+    let error =
+        NamespaceEdit::prepare_delete(stage, &mut scene.store, &target, lamp_size).unwrap_err();
+    assert_eq!(
+        error.display(&scene.store).to_string(),
+        "cannot delete /World/Lamp.size: the edit would change \
+         @props.usdz[asset.usda]@, which cannot be saved (a package member)"
+    );
+    // A move the asset does not see edits the stage's layer alone.
+    let edit = scene.compare_move(ROOT, group, group2).unwrap();
+    assert_eq!(edit.layers_to_edit(), [ROOT]);
+
+    // With a writable asset, each edit changes it.
+    let mut scene = Scene::new(writable, StageOptions::default(), &[]);
+    for (from, to) in [(lamp, renamed), (bulb, moved_bulb), (lamp_size, lamp_size2)] {
+        let edit = scene.compare_move(ROOT, from, to).unwrap();
+        assert!(
+            edit.layers_to_edit().contains(&ASSET),
+            "{}",
+            scene.name(from)
+        );
+    }
+    for object in [lamp, bulb, lamp_size] {
+        let edit = scene.compare_delete(ROOT, object).unwrap();
+        assert!(
+            edit.layers_to_edit().contains(&ASSET),
+            "{}",
+            scene.name(object)
+        );
+    }
 }
 
 /// Renames whose destination subtrees are proven to compose their

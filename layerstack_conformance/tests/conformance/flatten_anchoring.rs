@@ -24,12 +24,13 @@ use serde_json::{Map, Value as Json, json};
 const ORACLE: &str = include_str!("../../fixtures/flatten_anchoring/oracle.json");
 
 /// The session layer of each case, by its file in the fixture.
-const CASES: [(&str, Option<&str>); 5] = [
+const CASES: [(&str, Option<&str>); 6] = [
     ("root", None),
     ("session", Some("sess/session.usda")),
     ("rate", Some("rate/rate.usda")),
     ("session_sublayers", Some("stack/session.usda")),
     ("package", Some("pkg/session.usda")),
+    ("nested", Some("nested/session.usda")),
 ];
 
 /// The stage metadata fields the oracle reads.

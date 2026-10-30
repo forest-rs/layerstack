@@ -1,4 +1,93 @@
 {
+ "nested": {
+  "default_prim": "/World",
+  "flatten": "#usda 1.0\n(\n    customLayerData = {\n        dictionary inner = {\n            asset deep = @<dir>/deep.png@\n        }\n        string notAsset = \"./root.png\"\n        asset rootEmptyExpr = @`\"${EMPTY}\"`@\n        asset rootExpr = @<dir>/root.png@\n        asset[] rootList = [@<dir>/root.png@, @<dir>/textures/beside.png@]\n        asset rootMissing = @<dir>/gone.png@\n        asset rootSearch = @<dir>/textures/beside.png@\n        asset rootSearchMissing = @textures/nowhere.png@\n        asset rootTex = @<dir>/root.png@\n    }\n    defaultPrim = \"World\"\n    expressionVariables = {\n        string EMPTY = \"\"\n        string NAME = \"root\"\n    }\n    upAxis = \"Y\"\n)\n\ndef Xform \"World\" (\n    customData = {\n        asset cd = @<dir>/assets/cd.png@\n        asset cdSearch = @<dir>/assets/maps/m.png@\n    }\n)\n{\n    asset absolute = @/elsewhere/abs.png@\n    asset[] arr = [@<dir>/assets/tex.png@, @<dir>/assets/maps/m.png@, @maps/none.png@]\n    asset beside = @<dir>/textures/beside.png@\n    asset empty = @@\n    asset fromSub = @<dir>/root.png@\n    asset inAsset = @<dir>/assets/maps/m.png@\n    asset nowhere = @textures/nowhere.png@\n    asset own = @<dir>/root.png@\n    asset rootOnly = @textures/beside.png@\n    asset sampled.timeSamples = {\n        1: @<dir>/assets/maps/m.png@,\n        2: @<dir>/assets/tex.png@,\n    }\n    asset spelled = @<dir>/textures/beside.png@\n    asset subBeside = @<dir>/sub/near.png@\n    asset tex = @<dir>/assets/tex.png@\n\n    def Xform \"Nested\"\n    {\n        asset atPackageRoot = @<dir>/nested/outer.usdz[inner.usdz[tex/a.png]]@\n        asset besideMember = @<dir>/nested/outer.usdz[inner.usdz[sub/near.png]]@\n        asset besideOuterPackage = @<dir>/nested/outside.png@\n        asset innerRootBesideOuter = @<dir>/nested/near.png@\n        asset innerRootOuterMember = @tex/o.png@\n        asset innerRootOwn = @<dir>/nested/outer.usdz[inner.usdz[own.png]]@\n        asset innerRootSearch = @<dir>/nested/outer.usdz[inner.usdz[tex/a.png]]@\n        asset nowhere = @nowhere.png@\n        asset outerBesidePackage = @<dir>/nested/near.png@\n        asset outerInner = @<dir>/nested/outer.usdz[inner.usdz[tex/a.png]]@\n        asset outerMember = @tex/o.png@\n        asset outerOwn = @<dir>/nested/outer.usdz[own.png]@\n        asset outerSearch = @<dir>/nested/outer.usdz[tex/o.png]@\n        asset own = @<dir>/nested/outer.usdz[inner.usdz[sub/own.png]]@\n        asset up = @<dir>/nested/outer.usdz[inner.usdz[tex/a.png]]@\n    }\n}\n\n",
+  "metadata": {
+   "customLayerData": {
+    "authored": true,
+    "value": {
+     "dictionary": {
+      "inner": {
+       "dictionary": {
+        "deep": {
+         "authored": "./deep.png",
+         "evaluated": "",
+         "resolved": "<dir>/deep.png"
+        }
+       }
+      },
+      "notAsset": "./root.png",
+      "rootEmptyExpr": {
+       "authored": "`\"${EMPTY}\"`",
+       "evaluated": "",
+       "resolved": ""
+      },
+      "rootExpr": {
+       "authored": "`\"./${NAME}.png\"`",
+       "evaluated": "./root.png",
+       "resolved": "<dir>/root.png"
+      },
+      "rootList": [
+       {
+        "authored": "./root.png",
+        "evaluated": "",
+        "resolved": "<dir>/root.png"
+       },
+       {
+        "authored": "textures/beside.png",
+        "evaluated": "",
+        "resolved": "<dir>/textures/beside.png"
+       }
+      ],
+      "rootMissing": {
+       "authored": "./gone.png",
+       "evaluated": "",
+       "resolved": ""
+      },
+      "rootSearch": {
+       "authored": "textures/beside.png",
+       "evaluated": "",
+       "resolved": "<dir>/textures/beside.png"
+      },
+      "rootSearchMissing": {
+       "authored": "textures/nowhere.png",
+       "evaluated": "",
+       "resolved": ""
+      },
+      "rootTex": {
+       "authored": "./root.png",
+       "evaluated": "",
+       "resolved": "<dir>/root.png"
+      }
+     }
+    }
+   },
+   "defaultPrim": {
+    "authored": true,
+    "value": "World"
+   },
+   "endTimeCode": {
+    "authored": false,
+    "value": 0.0
+   },
+   "framesPerSecond": {
+    "authored": false,
+    "value": 24.0
+   },
+   "startTimeCode": {
+    "authored": false,
+    "value": 0.0
+   },
+   "timeCodesPerSecond": {
+    "authored": false,
+    "value": 24.0
+   },
+   "upAxis": {
+    "authored": true,
+    "value": "Y"
+   }
+  }
+ },
  "openusd": "26.11",
  "package": {
   "default_prim": "/World",

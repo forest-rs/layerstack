@@ -17,6 +17,11 @@
  * - `resolve.aborted`: the `signal` passed to `resolve` aborted.
  * - `resolve.stuck`: an asset was supplied but the stage still wants it.
  * - `resolve.limit`: `resolve` reached its `maxRounds`.
+ * - `target.affinity`: an edit target of another stage was passed to this one.
+ * - `target.not_in_arc`: {@link CompositionArc.editTarget} was given a layer
+ *   outside the arc's layer stack.
+ * - `target.relocate_source`: {@link CompositionArc.editTarget} of a
+ *   `relocates` arc, whose specs never contribute.
  * - `receipt.affinity`: a receipt of another stage was passed to this one.
  * - `receipt.released`: the receipt was undone or released already.
  * - `array.released`: the array handle was released.
@@ -43,7 +48,11 @@
  * - `layer.read_only`: the edits target a layer that cannot be saved (a
  *   USDZ member); open with `editLayer: "session"`.
  * - `layer.outside_stack`: the edits target a layer the stage reaches only
- *   through an arc.
+ *   through an arc: edit it through an {@link Opinion.editTarget} or a
+ *   {@link CompositionArc.editTarget}.
+ * - `target.stale`: no arc maps the {@link EditTarget} any more (the arc
+ *   was removed, or the prim renamed or removed); `path` is the prim.
+ *   Take a new target from the prim's opinions or arcs.
  * - `layer.muted`: the edits target a muted layer ({@link Stage.muteLayer});
  *   unmute it to edit it.
  * - `mute.root_layer`: {@link Stage.muteLayer} was given the root layer,
@@ -81,6 +90,10 @@ export type ErrorCode =
   | "resolve.aborted"
   | "resolve.stuck"
   | "resolve.limit"
+  | "target.affinity"
+  | "target.not_in_arc"
+  | "target.relocate_source"
+  | "target.stale"
   | "receipt.affinity"
   | "receipt.released"
   | "array.released"

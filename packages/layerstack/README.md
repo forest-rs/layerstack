@@ -143,7 +143,7 @@ await stage.resolve(source);
   `setValue`, `clearValue`, `blockValue`, `setTargets`, `addReference`,
   `addPayload`, `removeReference`, `removePayload`, `setVariantSelection`,
   `setActive`, `setInstanceable`, `setKind`, `setMetadata`, `clearMetadata`)
-  to one layer atomically: all of them or none. Each is named after the
+  through one edit target atomically: all of them or none. Each is named after the
   OpenUSD call whose semantics it has (`UsdStage::DefinePrim`,
   `UsdAttribute::Set`, ...). A failure names the edit (`error.edit`, its
   index) and changes nothing.
@@ -174,7 +174,49 @@ await stage.resolve(source);
   target: the root, or for a stage opened with `{ editLayer: "session" }`
   an anonymous session layer in front of it. A USDZ package is read-only:
   open it with `editLayer: "session"` to edit it, and the package stays as
-  read. Edits to a read-only layer fail with `layer.read_only`.
+  read. Edits to a read-only layer fail with `layer.read_only`. A layer of
+  the stage's own stack is edited at the offset the stack reads it at
+  (`stage.editTargetForLayer(layer)`, OpenUSD's
+  `GetEditTargetForLocalLayer`): a sample set at stage time 15 in a
+  sublayer authored with `(offset = 10)` lands at its time 5.
+- **Edits can go through composition arcs.** An `EditTarget` (OpenUSD's
+  `UsdEditTarget`) says where edits are written and how stage paths and
+  times map there. Take one from where an opinion lives
+  (`attribute.explain().opinions[i].editTarget`), from any arc of a prim
+  (`prim.compositionArcs()[i].editTarget(layer?)`), or inside a variant
+  (`prim.variantEditTarget(set, variant)`), and pass it as `apply`'s
+  target. Edits still name stage paths and stage times (a variant target
+  is the exception for times, below):
+
+  ```ts
+  const height = stage.attribute("/World/Robot.height")!;
+  const where = height.explain()!.opinions[0]!.editTarget!; // robot.usda, through the reference
+  stage.apply([{ type: "setValue", path: height.path, value: { type: "double", value: 1.5 } }], where);
+  // robot.usda now authors /Robot.height = 1.5, for every prim that references it
+  stage.isDirty(where.layer); // true; stage.save() writes it
+  ```
+
+  `target.mapPath(path)` and `target.mapTime(time)` say where an edit
+  lands, and `target.composed()` whether the stage reads it now (false for
+  an unselected variant). A path the target does not map is rejected
+  (`edit.rejected.unmappable`), as is a relationship target outside it
+  (`edit.rejected.unmappable_target`); an internal arc's root prim path is
+  authored as given, as OpenUSD does. Targets are values, equal ones the
+  same object; one survives edits and recomposition, and fails with
+  `target.stale` once no arc maps it (the reference was removed, the prim
+  renamed). A `variantEditTarget` is OpenUSD's `ForLocalDirectVariant`,
+  with no layer offset: in a sublayer authored with `(offset = 10)` it
+  writes a sample set at stage time 15 at the sublayer's time 15, read at
+  25, as OpenUSD does (in the root layer this changes nothing). To edit a
+  selected variant in stage time there, use its arc from
+  `prim.compositionArcs()` or an opinion's `editTarget`, which map times
+  through the offset. Editing an opinion that a stronger one shadows changes nothing
+  shown; check `opinion.role` first. A package member is read-only
+  (`target.layer.readOnly`): author an override through
+  `stage.editTargetForLayer(stage.editLayer)` instead. `move` and `delete`
+  edit the stage's own layer stack, so a target through an arc or a variant
+  fails with `namespace.unmappable`. A receipt names its `target` and the
+  `layers` it wrote.
 - **Changes are heard synchronously.** `stage.onChange(listener)` hears
   `{ created, removed, resynced, changedInfoOnly }` (prim paths) for every
   recomposition, in order, before the call that caused it (`apply`, `undo`,
@@ -214,6 +256,10 @@ await stage.resolve(source);
 | `resolve.aborted` | The `signal` aborted. |
 | `resolve.stuck` | An asset was supplied but is still unavailable. |
 | `resolve.limit` | `maxRounds` (100) rounds did not finish. |
+| `target.affinity` | An edit target of another stage was passed in. |
+| `target.stale` | No arc maps the edit target any more (its arc was removed, its prim renamed); `path` is the prim. |
+| `target.not_in_arc` | `arc.editTarget(layer)` was given a layer outside the arc's layer stack. |
+| `target.relocate_source` | `arc.editTarget()` of a `relocates` arc, whose specs never contribute. |
 | `receipt.affinity` | A receipt of another stage was passed in. |
 | `receipt.released` | The receipt was undone or released already. |
 | `array.released` | The array handle was released. |
@@ -230,7 +276,7 @@ await stage.resolve(source);
 | `value.range` | A number that is not an exact integer of the type (past 2^53: send a `bigint`), a `bool` not 0 or 1, a `float` overflow. |
 | `value.unsupported` | A value that cannot be authored yet (a `list` or `opaque` value read from a stage). |
 | `layer.read_only` | The edits target a layer that cannot be saved; open with `editLayer: "session"`. |
-| `layer.outside_stack` | The edits target a layer the stage reaches only through an arc. |
+| `layer.outside_stack` | The edits target a layer the stage reaches only through an arc: pass an opinion's `editTarget` or an arc's instead. |
 | `layer.muted` | The edits target a muted layer; unmute it to edit it. |
 | `mute.root_layer` | `muteLayer` was given the root layer, which cannot be muted. |
 | `edit.stale` | An undo whose slots changed since; nothing changed and the receipt is still undoable. |

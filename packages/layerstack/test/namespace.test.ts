@@ -96,7 +96,13 @@ describe("namespace edits", () => {
     const heard: Changes[] = [];
     stage.onChange((changes) => heard.push(changes));
     const receipt = stage.move("/World/Rock", "/World/Stone");
-    assert.equal(receipt.target, stage.root);
+    assert.equal(receipt.target.layer, stage.root);
+    assert.equal(receipt.target.kind, "layer");
+    assert.deepEqual(
+      new Set(receipt.layers),
+      new Set([stage.root, layer(stage, "sub.usda")]),
+      "one move wrote both layers of the stack",
+    );
     assert.equal(stage.prim("/World/Rock"), null);
     assert.equal(stage.prim("/World/Stone")?.typeName, "Sphere");
     assert.deepEqual(stage.prim("/World/Stone")?.variantSets(), [

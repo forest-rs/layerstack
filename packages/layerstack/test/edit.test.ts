@@ -386,7 +386,9 @@ describe("applying", () => {
     assert.equal(failure(() => stage.apply([], other.root)).code, "layer.affinity");
     const spare = stage.layers().find((layer) => layer.identifier === "spare.usda");
     assert.ok(spare);
-    assert.equal(failure(() => stage.apply([{ type: "setActive", path: "/Part", active: false }], spare)).code, "layer.outside_stack");
+    const outside = failure(() => stage.apply([{ type: "setActive", path: "/Part", active: false }], spare));
+    assert.equal(outside.code, "layer.outside_stack");
+    assert.match(outside.message, /editTarget/, "the error says how to edit it through its arc");
   });
 
   it("undoes once, refuses another stage's receipt and a stale undo", async () => {
@@ -394,7 +396,9 @@ describe("applying", () => {
     using other = await openScene();
     const first = stage.apply([{ type: "setValue", path: "/World.size", value: { type: "double", value: 3 } }], stage.root);
     assert.ok(first instanceof EditReceipt);
-    assert.equal(first.target, stage.root);
+    assert.equal(first.target.layer, stage.root);
+    assert.equal(first.target, stage.editTargetForLayer(stage.root), "the receipt names the target, interned");
+    assert.deepEqual(first.layers, [stage.root]);
     assert.deepEqual(first.changes.changedInfoOnly, ["/World"]);
     assert.deepEqual(
       first.changes.properties,

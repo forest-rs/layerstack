@@ -237,6 +237,7 @@ mod variant_orders;
 mod variant_selection;
 mod variant_set_names;
 mod variant_specs;
+mod variant_target_offsets;
 mod volume;
 mod xform;
 mod xform_ops;

@@ -30,6 +30,7 @@ use crate::{
     error::Error,
     receipt::EditReceipt,
     storage::HostStorage,
+    target::TargetInput,
     value,
     wire::Wire,
 };
@@ -599,12 +600,15 @@ impl Stage {
     /// sample held at `time` is `timeSamples` with a `null` value and a
     /// `block` opinion, as OpenUSD's resolve info names it. Each opinion,
     /// strongest first, is
-    /// `[layer, specPath, arc, role, detail, offset, scale]`: the layer
-    /// id, the spec path in that layer, the arc that reaches it (`null`
-    /// without a node), `contributed`, `block` or `ignored`, what it
+    /// `[layer, specPath, arc, role, detail, offset, scale, target]`: the
+    /// layer id, the spec path in that layer, the arc that reaches it
+    /// (`null` without a node), `contributed`, `block` or `ignored`, what it
     /// contributed (`value`, `arrayEdit`, `dictionary`, `listEdit`) or why
-    /// it was ignored (`shadowed`, `cutOffByBlock`, `incompatible`), and
-    /// the layer offset mapping stage time to its layer.
+    /// it was ignored (`shadowed`, `cutOffByBlock`, `incompatible`), the
+    /// layer offset mapping stage time to its layer, and the record of the
+    /// edit target that writes where the opinion lives ([`crate::target`]:
+    /// the opinion's node, in its layer; `null` without a node, or for a
+    /// layer outside the node's stack, such as a value clip's).
     ///
     /// Spec: AOUSD Core §12.3 (value resolution), §12.3.2.1 (layer
     /// offsets). OpenUSD: `UsdAttribute::GetResolveInfo`.
@@ -622,6 +626,10 @@ impl Stage {
         let Some(why) = attribute.explain(time_of(time)) else {
             return Ok(Wire::Null);
         };
+        let prim = store
+            .try_property_path(path)
+            .map_err(|_| Error::new("path.invalid", "not a property path").at_path(path))?
+            .prim_path();
         let value = match &why.value {
             Some(value) => value::encode(value, attribute.type_name(), store.tokens())
                 .map_err(|error| error.at_path(path))?
@@ -667,6 +675,12 @@ impl Stage {
                     ),
                 };
                 let offset = opinion.layer_offset();
+                let target = opinion
+                    .node
+                    .and_then(|_| {
+                        self.node_target_record(prim, opinion.opinion.node(), opinion.layer())
+                    })
+                    .unwrap_or(Wire::Null);
                 Wire::List(vec![
                     Wire::UInt64(opinion.layer().0),
                     Wire::Text(opinion.spec_path().display(store.paths(), store.tokens())),
@@ -681,6 +695,7 @@ impl Stage {
                     },
                     Wire::Number(offset.offset),
                     Wire::Number(offset.scale),
+                    target,
                 ])
             })
             .collect();
@@ -829,22 +844,53 @@ impl Stage {
     ///   ([`EditError::code`]), naming the edit for a rejected one; nothing
     ///   changed.
     pub fn apply(&mut self, target: u64, batch: &mut EditBatch) -> Result<EditReceipt, Error> {
-        let target = self.local_target(LayerId(target))?;
-        self.apply_through(&target, batch)
+        self.apply_target(&TargetInput::layer(target), batch)
+    }
+
+    /// Applies `batch` through the edit target `input`
+    /// ([`crate::target`]), resolved against the stage now.
+    ///
+    /// # Errors
+    ///
+    /// The errors of [`Self::resolve_target`] (`layer.muted`,
+    /// `layer.outside_stack`, `target.stale`, ...), then those of
+    /// [`Self::apply_recorded`].
+    pub(crate) fn apply_target(
+        &mut self,
+        input: &TargetInput,
+        batch: &mut EditBatch,
+    ) -> Result<EditReceipt, Error> {
+        let resolved = self.resolve_target(input)?;
+        let record = Self::target_record(input, &resolved);
+        self.apply_recorded(&resolved, record, batch)
+    }
+
+    /// [`Self::apply_recorded`], for tests that build a target natively:
+    /// its receipt names the target by its layer's id.
+    #[cfg(test)]
+    pub(crate) fn apply_through(
+        &mut self,
+        target: &Resolved,
+        batch: &mut EditBatch,
+    ) -> Result<EditReceipt, Error> {
+        let record = Wire::UInt64(target.target.layer().0);
+        self.apply_recorded(target, record, batch)
     }
 
     /// Applies `batch` through `target`, as [`Self::apply`] applies it to
     /// a layer: the edits name stage paths and times, which the target
-    /// maps to its layer's specs and times.
+    /// maps to its layer's specs and times. The receipt names the target by
+    /// `record`.
     ///
     /// # Errors
     ///
     /// As [`Self::apply`], `layer.outside_stack` aside: `layer.read_only`,
     /// `layer.muted`, the lowering errors and `edit.*`, among them
     /// `edit.rejected.unmappable` for a path the target does not map.
-    pub(crate) fn apply_through(
+    fn apply_recorded(
         &mut self,
         target: &Resolved,
+        record: Wire,
         batch: &mut EditBatch,
     ) -> Result<EditReceipt, Error> {
         let layer = target.target.layer();
@@ -859,7 +905,7 @@ impl Stage {
             };
             edit::lower(&batch, &scope)?
         };
-        self.commit(layer, &lowered.transaction, |op| {
+        self.commit(record, layer, &lowered.transaction, |op| {
             let index = lowered.edit_of(op)?;
             let path = batch.edits.get(index as usize).map(edit::EditInput::path)?;
             Some((index, path))
@@ -890,7 +936,12 @@ impl Stage {
                 "the receipt was already undone",
             ));
         };
-        match self.commit(receipt.target, &inverse, |_| None) {
+        match self.commit(
+            receipt.target_record.clone(),
+            receipt.target,
+            &inverse,
+            |_| None,
+        ) {
             Ok(redo) => Ok(redo),
             Err(error) => {
                 receipt.inverse = Some(inverse);
@@ -924,8 +975,25 @@ impl Stage {
     /// - `namespace.*` when the move cannot be prepared (the codes are
     ///   listed on [`Error`]); nothing changed.
     pub fn move_object(&mut self, target: u64, from: &str, to: &str) -> Result<EditReceipt, Error> {
-        let target = LayerId(target);
-        self.check_target(target)?;
+        self.move_through(&TargetInput::layer(target), from, to)
+    }
+
+    /// [`Self::move_object`] through the edit target `input`, which must
+    /// be a local layer's: `UsdNamespaceEditor` edits the opinions of the
+    /// stage's layer stack, and refuses an edit target that maps through an
+    /// arc or into a variant (`namespace.unmappable`).
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::move_object`]; `namespace.unmappable` for a `"variant"`
+    /// or `"arc"` target.
+    pub(crate) fn move_through(
+        &mut self,
+        input: &TargetInput,
+        from: &str,
+        to: &str,
+    ) -> Result<EditReceipt, Error> {
+        let (record, target) = self.namespace_target(input, from)?;
         let source = self.target_path(from)?;
         let destination = self.target_path(to)?;
         let prepared = {
@@ -940,7 +1008,7 @@ impl Stage {
         };
         let edit =
             prepared.map_err(|error| namespace_error(&error, self.document.store(), from))?;
-        self.commit_namespace(target, &edit, from)
+        self.commit_namespace(record, target, &edit, from)
     }
 
     /// Deletes the prim or property at `path` from the composed stage
@@ -958,8 +1026,21 @@ impl Stage {
     ///
     /// As [`Self::move_object`].
     pub fn delete_object(&mut self, target: u64, path: &str) -> Result<EditReceipt, Error> {
-        let target = LayerId(target);
-        self.check_target(target)?;
+        self.delete_through(&TargetInput::layer(target), path)
+    }
+
+    /// [`Self::delete_object`] through the edit target `input`, which must
+    /// be a local layer's, as for [`Self::move_through`].
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::move_through`].
+    pub(crate) fn delete_through(
+        &mut self,
+        input: &TargetInput,
+        path: &str,
+    ) -> Result<EditReceipt, Error> {
+        let (record, target) = self.namespace_target(input, path)?;
         let object = self.target_path(path)?;
         let prepared = {
             let (store, live) = self.document.parts_mut();
@@ -972,7 +1053,25 @@ impl Stage {
         };
         let edit =
             prepared.map_err(|error| namespace_error(&error, self.document.store(), path))?;
-        self.commit_namespace(target, &edit, path)
+        self.commit_namespace(record, target, &edit, path)
+    }
+
+    /// The record and layer of a namespace edit's target: a local layer's,
+    /// which must be one of the stage's layer stack and writable.
+    fn namespace_target(&self, input: &TargetInput, path: &str) -> Result<(Wire, LayerId), Error> {
+        if input.kind != "layer" {
+            return Err(Error::new(
+                "namespace.unmappable",
+                "a move or delete edits the opinions of the stage's layer stack, so its target \
+                 must be a layer of the stack, not an arc or a variant: pass a layer, or \
+                 stage.editTargetForLayer(layer)",
+            )
+            .at_path(path));
+        }
+        let resolved = self.resolve_target(input)?;
+        let layer = resolved.target.layer();
+        self.check_target(layer)?;
+        Ok((Self::target_record(input, &resolved), layer))
     }
 
     /// A prim path (`/World/Rock`) or a property path (`/World/Rock.size`)
@@ -998,6 +1097,7 @@ impl Stage {
     /// it edits can be saved.
     fn commit_namespace(
         &mut self,
+        record: Wire,
         target: LayerId,
         edit: &NamespaceEdit,
         path: &str,
@@ -1015,7 +1115,7 @@ impl Stage {
                 });
             }
         }
-        self.commit(target, edit.transaction(), |_| None)
+        self.commit(record, target, edit.transaction(), |_| None)
             .map_err(|error| error.at_path(path))
     }
 
@@ -1098,11 +1198,15 @@ impl Stage {
             ));
         }
         if self.read_only(layer, identifier) {
-            return Err(named(Error::new(
-                "layer.read_only",
+            let message = if self.document.stage().stage().has_local_layer(layer) {
                 "the layer cannot be saved, so it is not edited: open the stage with a session \
-                 layer (editLayer: \"session\") and edit that",
-            )));
+                 layer (editLayer: \"session\") and edit that"
+            } else {
+                "the layer cannot be saved (a package member), so it is not edited: author an \
+                 override in the stage's own layers instead, through \
+                 stage.editTargetForLayer(stage.editLayer)"
+            };
+            return Err(named(Error::new("layer.read_only", message)));
         }
         if self.document.stage().stage().is_layer_muted(layer) {
             return Err(named(Error::new(
@@ -1113,35 +1217,31 @@ impl Stage {
         Ok(())
     }
 
-    /// The edit target of `layer`, a layer of the stage's layer stack, at
-    /// the offset the stack reads it at ([`EditTarget::for_local_layer`],
-    /// OpenUSD's `UsdStage::GetEditTargetForLocalLayer`): a sample set at
-    /// stage time 15 in a sublayer authored with `(offset = 10)` is written
-    /// at its time 5.
-    ///
-    /// Spec: AOUSD Core §10.3.1.1 (sublayer offsets).
-    fn local_target(&self, layer: LayerId) -> Result<Resolved, Error> {
-        self.check_target(layer)?;
-        let stage = self.document.stage().stage();
-        let target = EditTarget::for_local_layer(stage, self.document.store(), layer)
-            .unwrap_or_else(|| EditTarget::for_layer(layer));
-        Ok(Resolved {
-            target,
-            stack: stage.layer_stack().to_vec(),
-        })
-    }
-
-    /// Applies `txn` to `target`, as the receipt of what it did.
+    /// Applies `txn` through the target `record` names, whose layer is
+    /// `target`, as the receipt of what it did.
     fn commit<'a>(
         &mut self,
+        record: Wire,
         target: LayerId,
         txn: &Transaction,
         edit_of: impl Fn(usize) -> Option<(u32, &'a str)>,
     ) -> Result<EditReceipt, Error> {
+        let generations = self.generations();
         match self.document.apply(txn) {
-            Ok((applied, report)) => Ok(self.receipt(target, applied, &report, None)),
+            Ok((applied, report)) => {
+                let written = self.written_since(&generations);
+                Ok(self.receipt(record, target, applied, &report, None, written))
+            }
             Err(ApplyError::Load { applied, error }) => {
-                Ok(self.receipt(target, *applied, &LoadReport::default(), Some(&error)))
+                let written = self.written_since(&generations);
+                Ok(self.receipt(
+                    record,
+                    target,
+                    *applied,
+                    &LoadReport::default(),
+                    Some(&error),
+                    written,
+                ))
             }
             Err(ApplyError::Edit(error)) => {
                 let store = self.document.store();
@@ -1164,19 +1264,41 @@ impl Stage {
         }
     }
 
+    /// Each layer's generation, to tell the layers a transaction wrote.
+    fn generations(&self) -> Vec<(LayerId, u64)> {
+        let store = self.document.store();
+        store
+            .layer_ids()
+            .into_iter()
+            .filter_map(|id| Some((id, store.layer(id)?.generation())))
+            .collect()
+    }
+
+    /// The layers whose generation moved since `before`, ascending.
+    fn written_since(&self, before: &[(LayerId, u64)]) -> Vec<LayerId> {
+        self.generations()
+            .into_iter()
+            .filter(|now| !before.contains(now))
+            .map(|(id, _)| id)
+            .collect()
+    }
+
     /// The receipt of an applied transaction. Its record is
-    /// `[target, changes, loaded, failures, unavailable]`: the target layer's
-    /// id, the composed changes of the transaction
-    /// (`[created, removed, resynced, changedInfoOnly, properties]`), the ids of the
+    /// `[target, changes, loaded, failures, unavailable, layers]`: the
+    /// target's record ([`crate::target`]), the composed changes of the
+    /// transaction (`[created, removed, resynced, changedInfoOnly, properties]`), the ids of the
     /// layers loaded for it, each asset that failed to load as
-    /// `[asset, anchor, code, message]`, and the assets it asks for that
-    /// the host has not supplied yet, as [`Self::unavailable`] rows.
+    /// `[asset, anchor, code, message]`, the assets it asks for that
+    /// the host has not supplied yet, as [`Self::unavailable`] rows, and
+    /// the ids of the layers it wrote (a move can write several).
     fn receipt(
         &self,
+        record: Wire,
         target: LayerId,
         applied: layerstack::Applied,
         report: &LoadReport,
         failed: Option<&IoError>,
+        written: Vec<LayerId>,
     ) -> EditReceipt {
         let store = self.document.store();
         let Wire::List(mut result) = load_result(report) else {
@@ -1206,18 +1328,20 @@ impl Stage {
             })
             .map(|need| unavailable_row(need, store))
             .collect();
-        let record = Wire::List(vec![
-            Wire::UInt64(target.0),
+        let receipt = Wire::List(vec![
+            record.clone(),
             changes_record(&applied.changes, store),
             loaded,
             Wire::List(failures),
             Wire::List(unavailable),
+            Wire::List(written.into_iter().map(|id| Wire::UInt64(id.0)).collect()),
         ]);
         EditReceipt {
             stage: Arc::clone(&self.identity),
             target,
+            target_record: record,
             inverse: Some(applied.inverse),
-            record,
+            record: receipt,
         }
     }
 
@@ -1455,7 +1579,7 @@ impl Stage {
         Ok(())
     }
 
-    fn existing_prim(&self, path: &str) -> Result<layerstack::Prim<'_>, Error> {
+    pub(crate) fn existing_prim(&self, path: &str) -> Result<layerstack::Prim<'_>, Error> {
         check_prim_path(path)?;
         self.document.view().prim(path).ok_or_else(|| {
             Error::new("prim.not_found", "no composed prim is at this path").at_path(path)
@@ -1513,6 +1637,126 @@ impl Stage {
     #[wasm_bindgen(js_name = apply)]
     pub fn js_apply(&mut self, target: u64, batch: &mut EditBatch) -> Result<EditReceipt, JsValue> {
         Ok(self.apply(target, batch)?)
+    }
+
+    /// Applies a batch of edits through an edit target
+    /// (`apply_target`), named by the values of its record
+    /// (`target.rs`): `kind`, `layer`, `prim`, `site`, `arc`,
+    /// `maps_outside`, `offset` and `scale`.
+    #[wasm_bindgen(js_name = applyTarget)]
+    pub fn js_apply_target(
+        &mut self,
+        kind: String,
+        layer: u64,
+        prim: Option<String>,
+        site: Option<String>,
+        arc: Option<String>,
+        maps_outside: bool,
+        offset: f64,
+        scale: f64,
+        batch: &mut EditBatch,
+    ) -> Result<EditReceipt, JsValue> {
+        let input = TargetInput {
+            kind,
+            layer,
+            prim,
+            site,
+            arc,
+            maps_outside,
+            offset,
+            scale,
+        };
+        Ok(self.apply_target(&input, batch)?)
+    }
+
+    /// The record of a local layer's edit target
+    /// (`edit_target_for_layer`).
+    #[wasm_bindgen(js_name = editTargetForLayer)]
+    pub fn js_edit_target_for_layer(&self, layer: u64) -> Result<JsValue, JsValue> {
+        Ok(self.edit_target_for_layer(layer)?.into())
+    }
+
+    /// Whether a layer is in the stage's layer stack
+    /// (`has_local_layer`).
+    #[wasm_bindgen(js_name = hasLocalLayer)]
+    #[must_use]
+    pub fn js_has_local_layer(&self, layer: u64) -> bool {
+        self.has_local_layer(layer)
+    }
+
+    /// The record of a local variant's edit target
+    /// (`variant_edit_target`).
+    #[wasm_bindgen(js_name = variantEditTarget)]
+    pub fn js_variant_edit_target(
+        &self,
+        path: &str,
+        set: &str,
+        variant: &str,
+        layer: u64,
+    ) -> Result<JsValue, JsValue> {
+        Ok(self.variant_edit_target(path, set, variant, layer)?.into())
+    }
+
+    /// The record `composition_arcs` builds, as documented in `target.rs`.
+    #[wasm_bindgen(js_name = compositionArcs)]
+    pub fn js_composition_arcs(&self, path: &str) -> Result<JsValue, JsValue> {
+        Ok(self.composition_arcs(path)?.into())
+    }
+
+    /// The spec path an edit target maps a stage path to
+    /// (`map_edit_target`), the target named as for `apply`.
+    #[wasm_bindgen(js_name = mapEditTarget)]
+    pub fn js_map_edit_target(
+        &self,
+        kind: String,
+        layer: u64,
+        prim: Option<String>,
+        site: Option<String>,
+        arc: Option<String>,
+        maps_outside: bool,
+        offset: f64,
+        scale: f64,
+        path: &str,
+    ) -> Result<Option<String>, JsValue> {
+        let input = TargetInput {
+            kind,
+            layer,
+            prim,
+            site,
+            arc,
+            maps_outside,
+            offset,
+            scale,
+        };
+        Ok(self.map_edit_target(&input, path)?)
+    }
+
+    /// Whether the stage composes what an edit target writes
+    /// (`edit_target_composed`), the target named as for `apply`.
+    #[wasm_bindgen(js_name = editTargetComposed)]
+    #[must_use]
+    pub fn js_edit_target_composed(
+        &self,
+        kind: String,
+        layer: u64,
+        prim: Option<String>,
+        site: Option<String>,
+        arc: Option<String>,
+        maps_outside: bool,
+        offset: f64,
+        scale: f64,
+    ) -> bool {
+        let input = TargetInput {
+            kind,
+            layer,
+            prim,
+            site,
+            arc,
+            maps_outside,
+            offset,
+            scale,
+        };
+        self.edit_target_composed(&input)
     }
 
     /// Undoes a receipt's edits ([`Self::undo`]).
@@ -1799,7 +2043,8 @@ fn time_of(time: Option<f64>) -> Time {
 
 /// An arc kind as the wrapper spells it: the scene description field's
 /// name, `local` for a local opinion.
-fn arc_name(arc: ArcKind) -> &'static str {
+/// The name of an arc kind, as records give it.
+pub(crate) fn arc_name(arc: ArcKind) -> &'static str {
     match arc {
         ArcKind::Local => "local",
         ArcKind::Inherits => "inherits",

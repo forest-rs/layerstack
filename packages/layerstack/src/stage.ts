@@ -46,7 +46,7 @@ export const PACKAGE_VERSION = "0.1.0";
  * The ABI this package speaks: the version of the records it exchanges
  * with the native module (`layerstack_wasm::ABI`).
  */
-export const ABI = 3;
+export const ABI = 4;
 
 /** The native stage the generated glue exports (`layerstack_wasm::Stage`). Borrowed only by same-module extensions. */
 export interface NativeStage extends Disposable {
@@ -73,15 +73,37 @@ export interface NativeStage extends Disposable {
   metadata(path: string, key: string): unknown;
   relationship(path: string): unknown;
   apply(target: bigint, batch: NativeEditBatch): NativeReceipt;
+  applyTarget(...args: [...NativeTarget, batch: NativeEditBatch]): NativeReceipt;
   undo(receipt: NativeReceipt): NativeReceipt;
   moveObject(target: bigint, from: string, to: string): NativeReceipt;
   deleteObject(target: bigint, path: string): NativeReceipt;
+  editTargetForLayer(layer: bigint): unknown;
+  hasLocalLayer(layer: bigint): boolean;
+  variantEditTarget(path: string, set: string, variant: string, layer: bigint): unknown;
+  compositionArcs(path: string): unknown;
+  mapEditTarget(...args: [...NativeTarget, path: string]): string | undefined;
+  editTargetComposed(...args: NativeTarget): boolean;
   takeChanges(render: boolean): unknown;
   save(layer?: bigint | null): unknown;
   exportLayer(layer: bigint, format: string): Uint8Array;
   exportFlattened(format: string): unknown;
   exportPackage(): unknown;
 }
+
+/**
+ * An edit target as the native module takes it back: the values of its
+ * record, `[kind, layer, prim, site, arc, mapsOutside, offset, scale]`.
+ */
+export type NativeTarget = [
+  kind: string,
+  layer: bigint,
+  prim: string | null,
+  site: string | null,
+  arc: string | null,
+  mapsOutside: boolean,
+  offset: number,
+  scale: number,
+];
 
 /** The native receipt the generated glue exports (`layerstack_wasm::EditReceipt`). Not for app use. */
 export interface NativeReceipt extends Disposable {
@@ -608,7 +630,7 @@ export class Stage implements Disposable {
     const batch = this.#ls.batch();
     try {
       lowerEdits(batch, edits, "apply", this.#ls);
-      const native = this.#call("apply", (stage) => stage.apply(layer.id, batch));
+      const native = this.#call("apply", (stage) => stage.applyTarget(...layerTarget(layer), batch));
       const receipt = this.#receipt(native);
       this.#notify();
       return receipt;
@@ -940,10 +962,10 @@ export class Stage implements Disposable {
   }
 
   #receipt(native: NativeReceipt): EditReceipt {
-    const [target, changes, loaded, failures, unavailable] = native.record() as [bigint, Row, bigint[], Row[], Row[]];
+    const [target, changes, loaded, failures, unavailable] = native.record() as [Row, Row, bigint[], Row[], Row[]];
     const receipt = new EditReceipt(
       this,
-      this.#layer(target),
+      this.#layer(target[1] as bigint),
       decodeChanges(changes),
       loaded.map((id) => this.#layer(id)),
       failures.map(([asset, anchor, code, message]) => this.#failure(asset, anchor, code, message)),
@@ -1304,6 +1326,11 @@ export class EditReceipt implements Disposable {
   [Symbol.dispose](): void {
     this.release();
   }
+}
+
+/** A layer's local edit target as the native module takes it. */
+function layerTarget(layer: Layer): NativeTarget {
+  return ["layer", layer.id, null, null, null, true, 0, 1];
 }
 
 function readMetadata(stage: Stage, path: string, key: string): Value | null {

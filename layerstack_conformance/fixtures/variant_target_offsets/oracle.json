@@ -1,0 +1,51 @@
+{
+ "cases": [
+  {
+   "accepted": true,
+   "layer_times": [
+    15.0
+   ],
+   "name": "local_direct_variant",
+   "spec_path": "/Robot{finish=painted}.spin",
+   "stage_times": [
+    25.0
+   ],
+   "variant": "/Robot{finish=painted}"
+  },
+  {
+   "accepted": true,
+   "layer_times": [
+    15.0
+   ],
+   "name": "local_direct_variant_unselected",
+   "spec_path": "/Robot{finish=chrome}.spin",
+   "stage_times": [],
+   "variant": "/Robot{finish=chrome}"
+  },
+  {
+   "accepted": true,
+   "layer_times": [
+    5.0
+   ],
+   "name": "variant_node",
+   "spec_path": "/Robot{finish=painted}.spin",
+   "stage_times": [
+    15.0
+   ],
+   "variant": null
+  },
+  {
+   "accepted": true,
+   "layer_times": [
+    5.0
+   ],
+   "name": "local_layer",
+   "spec_path": "/Robot.spin",
+   "stage_times": [
+    15.0
+   ],
+   "variant": null
+  }
+ ],
+ "openusd_version": "26.11"
+}

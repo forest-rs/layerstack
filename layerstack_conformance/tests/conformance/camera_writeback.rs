@@ -256,9 +256,10 @@ fn stronger_transform_order_rejects_the_entire_camera_group() {
         .unwrap();
     dest.set_focus_distance(&mut edit, 99.);
     let before = edit.transaction().clone();
+    let error = dest.set_from_camera(&mut edit, &camera);
     assert!(
         matches!(
-            dest.set_from_camera(&mut edit, &camera),
+            &error,
             Err(CameraWriteError::Transform(
                 layerstack_schemas::MatrixXformError::StrongerSource {
                     attribute: "xformOpOrder",
@@ -272,6 +273,13 @@ fn stronger_transform_order_rejects_the_entire_camera_group() {
         edit.transaction(),
         &before,
         "matrix guard failure preserves earlier lens edits only"
+    );
+    drop(edit);
+    assert_eq!(
+        error.unwrap_err().display(&store).to_string(),
+        "cannot author the whole camera: cannot replace its transform matrix: `xformOpOrder` \
+         has a stronger opinion at /DestinationParent/Destination.xformOpOrder in layer 1, \
+         which would mask or alter the replacement"
     );
 }
 

@@ -5,6 +5,7 @@
 //! Bounded `UsdLux` computations and transactional authoring helpers.
 //! AOUSD Core §6.3, §7.6.4.1.2, §12.3–12.5; OpenUSD 26.8 `UsdLux`.
 
+use crate::diagnostic::{Describe, Names, with_store};
 use crate::{
     InstanceView, PrimEdit, PrimView, SchemaEdit,
     usd::CollectionApi,
@@ -220,9 +221,44 @@ pub enum LightHelperError {
     /// Transform authoring failed.
     Transform(XformOpError),
 }
+impl LightHelperError {
+    /// The error in words, its prims written as paths with `store`,
+    /// the store the stage was composed from. `Display` writes the same with ids.
+    #[must_use]
+    pub fn display<'a>(
+        &'a self,
+        store: &'a dyn layerstack::LayerStore,
+    ) -> impl core::fmt::Display + 'a {
+        with_store(self, store)
+    }
+}
+impl Describe for LightHelperError {
+    fn describe(&self, f: &mut core::fmt::Formatter<'_>, names: Names<'_>) -> core::fmt::Result {
+        f.write_str("cannot author the light helper edit: ")?;
+        match self {
+            Self::MissingPrim(path) => write!(f, "no prim is at {}", names.path(*path)),
+            Self::InvalidContext(context) => write!(
+                f,
+                "the renderer context `{context}` is neither empty nor a namespaced identifier"
+            ),
+            Self::WrongPropertyType { prim, property } => write!(
+                f,
+                "{}.{property} is a relationship or not a scalar `token` attribute",
+                names.path(*prim)
+            ),
+            Self::InvalidOrientationOp(path) => write!(
+                f,
+                "the dome orientation op of {} is missing or not a scalar floating-point \
+                 attribute",
+                names.path(*path)
+            ),
+            Self::Transform(error) => write!(f, "the transform cannot be authored: {error}"),
+        }
+    }
+}
 impl core::fmt::Display for LightHelperError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "invalid light helper edit: {self:?}")
+        self.describe(f, Names(None))
     }
 }
 impl core::error::Error for LightHelperError {}

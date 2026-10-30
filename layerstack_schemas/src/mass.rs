@@ -9,6 +9,8 @@
 //! `usd-shade` to resolve physics-purpose material bindings.
 //! OpenUSD: `UsdPhysicsMassProperties`, `UsdPhysicsRigidBodyAPI::ComputeMassProperties`.
 //! Composition follows AOUSD Core §12 and physics schema mass precedence rules.
+
+use crate::diagnostic::{Describe, Names, with_store};
 mod diagonalize;
 #[cfg(feature = "usd-shade")]
 mod scene;
@@ -32,9 +34,51 @@ pub enum MassError {
     /// A required composed transform cannot be evaluated or factored.
     UnreadableTransform(layerstack::PathId),
 }
+impl MassError {
+    /// The error in words, its prims written as paths with `store`,
+    /// the store the stage was composed from. `Display` writes the same with ids.
+    #[must_use]
+    pub fn display<'a>(
+        &'a self,
+        store: &'a dyn layerstack::LayerStore,
+    ) -> impl core::fmt::Display + 'a {
+        with_store(self, store)
+    }
+}
+impl Describe for MassError {
+    fn describe(&self, f: &mut core::fmt::Formatter<'_>, names: Names<'_>) -> core::fmt::Result {
+        f.write_str("invalid mass properties: ")?;
+        match self {
+            Self::InvalidMass => f.write_str(
+                "a mass is negative or not finite, or an aggregate has no positive mass",
+            ),
+            Self::InvalidInertia => f.write_str(
+                "an inertia is not finite, not symmetric or has a negative principal moment",
+            ),
+            Self::InvalidTransform => f.write_str(
+                "a position or orientation is not finite, or an orientation is not a unit \
+                 quaternion",
+            ),
+            Self::InvalidUnits => {
+                f.write_str("the stage's length or mass units are not finite and positive")
+            }
+            Self::InvalidCollider(path) => write!(
+                f,
+                "the collider {} has an invalid volume, or no volume and a positive mass \
+                 override",
+                names.path(*path)
+            ),
+            Self::UnreadableTransform(path) => write!(
+                f,
+                "the composed transform of {} cannot be evaluated or factored",
+                names.path(*path)
+            ),
+        }
+    }
+}
 impl core::fmt::Display for MassError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "invalid mass properties: {self:?}")
+        self.describe(f, Names(None))
     }
 }
 impl core::error::Error for MassError {}

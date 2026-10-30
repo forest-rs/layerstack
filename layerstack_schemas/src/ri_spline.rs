@@ -5,6 +5,7 @@
 //!
 //! This module validates authored spline records; it does not evaluate curves.
 //! OpenUSD 26.8 `UsdRiSplineAPI::Validate`; AOUSD Core §12.3 (typed values).
+use crate::diagnostic::{Describe, Names, with_store};
 use crate::{PrimView, Scene};
 use alloc::{format, string::String, vec::Vec};
 use layerstack::{PathId, PropertyKind};
@@ -64,9 +65,48 @@ pub enum RiSplineError {
     /// A position or value is NaN or infinite.
     NonFinite,
 }
+impl RiSplineError {
+    /// The error in words, the prim written as its path with `store`,
+    /// the store the stage was composed from. `Display` writes the same with ids.
+    #[must_use]
+    pub fn display<'a>(
+        &'a self,
+        store: &'a dyn layerstack::LayerStore,
+    ) -> impl core::fmt::Display + 'a {
+        with_store(self, store)
+    }
+}
+impl Describe for RiSplineError {
+    fn describe(&self, f: &mut core::fmt::Formatter<'_>, names: Names<'_>) -> core::fmt::Result {
+        f.write_str("invalid Ri spline: ")?;
+        match self {
+            Self::InvalidName(name) => {
+                write!(f, "`{name}` has empty or invalid namespace components")
+            }
+            Self::MissingPrim(path) => write!(f, "no prim is at {}", names.path(*path)),
+            Self::MissingAttribute(name) => {
+                write!(f, "`{name}` is missing or has no compatible default value")
+            }
+            Self::WrongAttributeType {
+                attribute,
+                expected,
+            } => write!(f, "`{attribute}` is not declared as `{expected}`"),
+            Self::InvalidInterpolation(token) => {
+                write!(f, "`{token}` is not a supported interpolation")
+            }
+            Self::UnsortedPositions => {
+                f.write_str("the positions decrease; they must be nondecreasing")
+            }
+            Self::SizeMismatch { positions, values } => {
+                write!(f, "there are {positions} positions but {values} values")
+            }
+            Self::NonFinite => f.write_str("a position or value is not finite"),
+        }
+    }
+}
 impl core::fmt::Display for RiSplineError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "Ri spline: {self:?}")
+        self.describe(f, Names(None))
     }
 }
 impl core::error::Error for RiSplineError {}

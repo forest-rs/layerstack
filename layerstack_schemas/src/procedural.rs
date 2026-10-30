@@ -159,6 +159,12 @@ impl<E: fmt::Display> ProceduralError<E> {
     /// store the stage was composed from: what kept the recipe from being
     /// evaluated, and how to recover where the caller can. `Display`
     /// writes the same with ids.
+    ///
+    /// The evaluator's own error, [`Self::Evaluation`], has no store to
+    /// write with, so it is written with its `Display`. A host whose error
+    /// names paths matches that variant and writes the error itself, with
+    /// the error's own `display(store)` when it has one, and uses this for
+    /// the other variants.
     #[must_use]
     pub fn display<'a>(&'a self, store: &'a dyn LayerStore) -> impl fmt::Display + 'a {
         with_store(self, store)

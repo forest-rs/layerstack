@@ -7,6 +7,7 @@
 //! return what is authored; these read it the way C++ consults it, and the
 //! setters author the attribute pairs C++ authors together.
 
+use crate::diagnostic::{Describe, Names, with_store};
 use crate::{
     SchemaEdit, Time,
     assets::AssetReference,
@@ -40,14 +41,38 @@ pub enum NodeDefError {
     },
 }
 
+impl NodeDefError {
+    /// The error in words, the prim written as its path with `store`,
+    /// the store the stage was composed from. `Display` writes the same with ids.
+    #[must_use]
+    pub fn display<'a>(
+        &'a self,
+        store: &'a dyn layerstack::LayerStore,
+    ) -> impl core::fmt::Display + 'a {
+        with_store(self, store)
+    }
+}
+impl Describe for NodeDefError {
+    fn describe(&self, f: &mut core::fmt::Formatter<'_>, names: Names<'_>) -> core::fmt::Result {
+        f.write_str("cannot author the node definition: ")?;
+        match self {
+            Self::MissingIdAttribute { prim } => write!(
+                f,
+                "{} has no `info:id` attribute, authored or from its schemas",
+                names.path(*prim)
+            ),
+            Self::WrongPropertyType { prim, property } => write!(
+                f,
+                "{}.{property} is a relationship, an array or of another type than the setter \
+                 authors",
+                names.path(*prim)
+            ),
+        }
+    }
+}
 impl core::fmt::Display for NodeDefError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            Self::MissingIdAttribute { .. } => f.write_str("the prim has no info:id attribute"),
-            Self::WrongPropertyType { property, .. } => {
-                write!(f, "{property} is not of the type the setter authors")
-            }
-        }
+        self.describe(f, Names(None))
     }
 }
 

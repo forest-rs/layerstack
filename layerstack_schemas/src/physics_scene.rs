@@ -27,6 +27,7 @@
 mod articulation;
 mod geometry;
 mod joints;
+use crate::diagnostic::{Describe, Names, with_store};
 use crate::{
     PrimView, Scene, XformCache,
     affine::AffineFactors,
@@ -110,9 +111,54 @@ pub enum PhysicsSceneError {
     /// A collision-group collection could not establish valid membership.
     InvalidCollection,
 }
+impl PhysicsSceneError {
+    /// The error in words, an include written as its path with `store`,
+    /// the store the stage was composed from. `Display` writes the same with ids.
+    #[must_use]
+    pub fn display<'a>(
+        &'a self,
+        store: &'a dyn layerstack::LayerStore,
+    ) -> impl core::fmt::Display + 'a {
+        with_store(self, store)
+    }
+}
+impl Describe for PhysicsSceneError {
+    fn describe(&self, f: &mut core::fmt::Formatter<'_>, names: Names<'_>) -> core::fmt::Result {
+        f.write_str("cannot capture the physics scene: ")?;
+        match self {
+            Self::EmptyIncludes => f.write_str("no include path was supplied"),
+            Self::MissingInclude(path) => write!(
+                f,
+                "the include {} is neither an existing prim nor the pseudo-root",
+                names.path(*path)
+            ),
+            Self::InvalidAttribute(name) => {
+                write!(f, "`{name}` is missing, of another type or not finite")
+            }
+            Self::InvalidTransform => {
+                f.write_str("a transform is singular, sheared, not affine or unreadable")
+            }
+            Self::UnsupportedShape => {
+                f.write_str("a collision API is applied to an unsupported geometry type")
+            }
+            Self::InvalidJointTarget => {
+                f.write_str("a joint target is not a prim path or names no existing prim")
+            }
+            Self::EmptyArticulation => {
+                f.write_str("an articulation has no rooted rigid-body topology")
+            }
+            Self::NestedArticulation => {
+                f.write_str("an articulation API is beneath another articulation API")
+            }
+            Self::InvalidCollection => {
+                f.write_str("a collision group's collection has no valid membership")
+            }
+        }
+    }
+}
 impl core::fmt::Display for PhysicsSceneError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "physics capture: {self:?}")
+        self.describe(f, Names(None))
     }
 }
 impl core::error::Error for PhysicsSceneError {}

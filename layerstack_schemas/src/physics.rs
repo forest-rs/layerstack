@@ -6,6 +6,7 @@
 //! OpenUSD: `UsdPhysicsCollisionGroup::ComputeCollisionGroupTable`.
 //! Relationship and metadata composition follow AOUSD Core §12; default
 //! traversal follows §11.3.3 and defined, non-abstract prim ancestry.
+use crate::diagnostic::{Describe, Names, with_store};
 use crate::{
     InstanceView, PrimView, Scene, usd::CollectionApi, usd_physics::PhysicsCollisionGroup,
 };
@@ -27,9 +28,37 @@ pub enum CollisionGroupError {
     /// The number of merged pairs cannot fit in addressable storage.
     TooManyGroups,
 }
+impl CollisionGroupError {
+    /// The error in words, the group and its filter written as paths with
+    /// `store`, the store the stage was composed from. `Display` writes the same with ids.
+    #[must_use]
+    pub fn display<'a>(
+        &'a self,
+        store: &'a dyn layerstack::LayerStore,
+    ) -> impl core::fmt::Display + 'a {
+        with_store(self, store)
+    }
+}
+impl Describe for CollisionGroupError {
+    fn describe(&self, f: &mut core::fmt::Formatter<'_>, names: Names<'_>) -> core::fmt::Result {
+        f.write_str("invalid collision groups: ")?;
+        match self {
+            Self::InvalidFilteredGroup { group, target } => write!(
+                f,
+                "the group {} filters {}, which is a property or a group outside default \
+                 traversal",
+                names.path(*group),
+                names.target(*target)
+            ),
+            Self::TooManyGroups => {
+                f.write_str("the merged group pairs do not fit in addressable storage")
+            }
+        }
+    }
+}
 impl core::fmt::Display for CollisionGroupError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "invalid collision groups: {self:?}")
+        self.describe(f, Names(None))
     }
 }
 impl core::error::Error for CollisionGroupError {}

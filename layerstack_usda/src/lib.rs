@@ -164,7 +164,6 @@ internal_mod!(
 
 mod byte_order_mark;
 pub use byte_order_mark::ByteOrderMark;
-mod float_text;
 pub mod metadata;
 mod numeric;
 mod read;

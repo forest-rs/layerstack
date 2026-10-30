@@ -113,7 +113,7 @@ use layerstack::spline::SplineData;
 use layerstack::value_type::ValueType;
 use smallvec::SmallVec;
 
-use crate::float_text;
+use layerstack::float_text;
 
 mod walk;
 

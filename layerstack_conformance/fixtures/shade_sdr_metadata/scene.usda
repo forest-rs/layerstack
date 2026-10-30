@@ -52,6 +52,9 @@ def Material "Look"
             double dinf = inf
             double dneg = -0
             float fnan = nan
+            float ftie = 3571017.25
+            float3 ftie3 = (392424.625, -3571017.25, 3571017.75)
+            double dtie = -886093775796624.25
             int[] emptyArray = []
             dictionary emptyDictionary = {
             }

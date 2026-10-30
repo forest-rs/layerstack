@@ -202,6 +202,15 @@ pub(crate) mod compose;
 pub(crate) mod composition_checks;
 mod diagnostic;
 pub mod encoded_bytes;
+#[cfg(feature = "unstable-internals")]
+pub mod float_text;
+#[cfg(not(feature = "unstable-internals"))]
+#[allow(
+    unreachable_pub,
+    dead_code,
+    reason = "public only with the `unstable-internals` feature"
+)]
+mod float_text;
 pub use change_history::{ChangeHistoryBudget, ChangeHistoryStats};
 pub mod composition_error;
 pub mod composition_limits;

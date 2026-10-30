@@ -10,11 +10,15 @@
 //! - `double` and `float` values, alone or in vectors, quaternions and
 //!   matrices, in shortest round-trip form (`TfStreamDouble`,
 //!   `TfStreamFloat`: double-conversion's `ToShortest` with positional
-//!   digits for a decimal exponent from -6 to 14, `inf`, `-inf`, `nan`);
-//! - `half`, `timecode` and `duration` values with the stream's default
-//!   `%g` formatting (`operator<<` for `GfHalf`, `SdfTimeCode`,
-//!   `GfDuration`): six significant digits, trailing zeros dropped, and a
-//!   signed exponent of at least two digits below `1e-4` or from `1e6`;
+//!   digits for a decimal exponent from -6 to 14, the even candidate where
+//!   two are equally close, `inf`, `-inf`, `nan`), and `half` values with
+//!   `%g` (`operator<<` for `GfHalf`), all as the USDA writer spells them
+//!   (`layerstack::float_text`);
+//! - `timecode` and `duration` values with the stream's default `%g`
+//!   formatting (`operator<<` for `SdfTimeCode`, `GfDuration`): six
+//!   significant digits, trailing zeros dropped, and a signed exponent of
+//!   at least two digits below `1e-4` or from `1e6`, which the USDA writer
+//!   departs from where it loses digits;
 //! - vectors as `(x, y)`; quaternions as `(real, i, j, k)`; matrices as
 //!   `( (a, b), (c, d) )` (`Gf_OstreamHelperP`);
 //! - arrays as `[a, b]`; dictionaries as `{'key': value}` in key order
@@ -25,7 +29,7 @@
 //!   edit (which no dictionary holds), as the empty text.
 
 use alloc::{format, string::String, vec::Vec};
-use layerstack::{FieldValue, LayerStore, ListOp, Value, half};
+use layerstack::{FieldValue, LayerStore, ListOp, Value, float_text};
 
 /// A dictionary entry or metadata field value as `TfStringify` spells it.
 pub(super) fn field(value: &FieldValue, store: &dyn LayerStore) -> String {
@@ -76,7 +80,7 @@ pub(super) fn value(value: &Value, store: &dyn LayerStore) -> String {
         Value::UInt64(value) => format!("{value}"),
         Value::Double(value) => double(*value),
         Value::Float(value) => float(*value),
-        Value::Half(bits) => general(f64::from(half::to_f32(*bits))),
+        Value::Half(bits) => half(*bits),
         Value::TimeCode(value) | Value::Duration(value) => general(*value),
         Value::Vec2d(v) => tuple(v.iter().map(|&x| double(x))),
         Value::Vec3d(v) => tuple(v.iter().map(|&x| double(x))),
@@ -84,20 +88,16 @@ pub(super) fn value(value: &Value, store: &dyn LayerStore) -> String {
         Value::Vec2f(v) => tuple(v.iter().map(|&x| float(x))),
         Value::Vec3f(v) => tuple(v.iter().map(|&x| float(x))),
         Value::Vec4f(v) => tuple(v.iter().map(|&x| float(x))),
-        Value::Vec2h(v) => tuple(v.iter().map(|&x| general(f64::from(half::to_f32(x))))),
-        Value::Vec3h(v) => tuple(v.iter().map(|&x| general(f64::from(half::to_f32(x))))),
-        Value::Vec4h(v) => tuple(v.iter().map(|&x| general(f64::from(half::to_f32(x))))),
+        Value::Vec2h(v) => tuple(v.iter().map(|&x| half(x))),
+        Value::Vec3h(v) => tuple(v.iter().map(|&x| half(x))),
+        Value::Vec4h(v) => tuple(v.iter().map(|&x| half(x))),
         Value::Vec2i(v) => tuple(v.iter().map(|x| format!("{x}"))),
         Value::Vec3i(v) => tuple(v.iter().map(|x| format!("{x}"))),
         Value::Vec4i(v) => tuple(v.iter().map(|x| format!("{x}"))),
         // Stored `[i, j, k, r]`; streamed real first.
         Value::Quatd([i, j, k, r]) => tuple([r, i, j, k].into_iter().map(|&x| double(x))),
         Value::Quatf([i, j, k, r]) => tuple([r, i, j, k].into_iter().map(|&x| float(x))),
-        Value::Quath([i, j, k, r]) => tuple(
-            [r, i, j, k]
-                .into_iter()
-                .map(|&x| general(f64::from(half::to_f32(x)))),
-        ),
+        Value::Quath([i, j, k, r]) => tuple([r, i, j, k].into_iter().map(|&x| half(x))),
         Value::Matrix2d(m) => matrix(&m[..], 2),
         Value::Matrix3d(m) => matrix(&m[..], 3),
         Value::Matrix4d(m) => matrix(&m[..], 4),
@@ -160,11 +160,21 @@ fn matrix(flat: &[f64], size: usize) -> String {
 }
 
 fn double(value: f64) -> String {
-    shortest(value, &format!("{value:e}"))
+    let mut out = String::new();
+    float_text::push_double(&mut out, value);
+    out
 }
 
 fn float(value: f32) -> String {
-    shortest(f64::from(value), &format!("{value:e}"))
+    let mut out = String::new();
+    float_text::push_float(&mut out, value);
+    out
+}
+
+fn half(bits: u16) -> String {
+    let mut out = String::new();
+    float_text::push_half(&mut out, bits);
+    out
 }
 
 /// The specials as OpenUSD spells them, or `None` for a finite value.
@@ -178,37 +188,6 @@ fn special(value: f64) -> Option<&'static str> {
     } else {
         None
     }
-}
-
-/// A float in shortest round-trip form, from its `{:e}` spelling
-/// (`scientific`, whose digits are the shortest that read back as the same
-/// value): positional for a decimal exponent from -6 to 14, else
-/// `d.ddde-7`, as double-conversion's `ToShortest` with OpenUSD's settings
-/// (`Tf_ApplyDoubleToStringConverter`) writes it.
-fn shortest(value: f64, scientific: &str) -> String {
-    if let Some(text) = special(value) {
-        return String::from(text);
-    }
-    let (mantissa, exponent) = scientific.split_once('e').unwrap_or((scientific, "0"));
-    let exponent: i32 = exponent.parse().unwrap_or(0);
-    let digits: String = mantissa.chars().filter(char::is_ascii_digit).collect();
-    let mut out = String::new();
-    if value < 0.0 {
-        out.push('-');
-    }
-    if (-6..15).contains(&exponent) {
-        positional(&mut out, &digits, exponent);
-    } else {
-        let (first, rest) = digits.split_at(1);
-        out.push_str(first);
-        if !rest.is_empty() {
-            out.push('.');
-            out.push_str(rest);
-        }
-        out.push('e');
-        out.push_str(&format!("{exponent}"));
-    }
-    out
 }
 
 /// `digits` (`d.ddd` without the point) times `10^exponent`, positionally.
@@ -272,6 +251,10 @@ mod tests {
     use super::{double, float, general};
 
     #[test]
+    #[allow(
+        clippy::excessive_precision,
+        reason = "halfway values, exact in binary"
+    )]
     fn floats_print_as_openusd_prints_them() {
         for (value, text) in [
             (1.5, "1.5"),
@@ -287,6 +270,11 @@ mod tests {
             assert_eq!(double(value), text, "{value}");
         }
         assert_eq!(float(0.1), "0.1");
+        // Halfway between the two shortest candidates: the even one, as
+        // double-conversion breaks the tie.
+        assert_eq!(float(3_571_017.25), "3571017.2");
+        assert_eq!(float(3_571_017.75), "3571017.8");
+        assert_eq!(double(-886_093_775_796_624.25), "-886093775796624.2");
     }
 
     #[test]

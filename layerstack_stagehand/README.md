@@ -24,8 +24,16 @@ browser.
   time changes by `DrawDiff`s that list what changed and count what was
   reused, refilled or rebuilt.
 
-Subdivision surfaces are drawn as their control cage. Cameras, lights,
-materials (beyond their bindings), curves and points are not covered yet.
+- **Cameras and lights** (with `stage`): the draw list also lists
+  `UsdGeomCamera`s (view and projection matrices as `GfCamera` and
+  `GfFrustum` compute them, fitted to a viewport by `conform_window`) and
+  the built-in `UsdLux` lights with renderer-ready values (world placement
+  and direction, emission with exposure, blackbody color and `normalize`,
+  shape, shaping, shadow and link collections), with diffs and
+  time-variability like draw items.
+
+Subdivision surfaces are drawn as their control cage. Materials (beyond their
+bindings), curves, points and light linking evaluation are not covered yet.
 
 ```rust
 use layerstack_stagehand::{MeshInput, MeshOptions, MeshPlan, MeshTopology};

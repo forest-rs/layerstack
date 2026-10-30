@@ -10,11 +10,13 @@ use alloc::vec::Vec;
 use hashbrown::{HashMap, HashSet};
 use layerstack::{Changes, PathId, Time};
 use layerstack_schemas::point_instancer::InstanceTransformOptions;
-use layerstack_schemas::usd_geom::{Imageable, ImageablePurpose, PointInstancer};
+use layerstack_schemas::usd_geom::{Camera, Imageable, ImageablePurpose, PointInstancer};
 use layerstack_schemas::{
     BindingOptions, MaterialPurpose, PrimView, Scene, Visibility, XformCache, is_transform_property,
 };
 
+use crate::camera::{CAMERA_INPUTS, CameraItem};
+use crate::light::{LIGHT_INPUTS, LightItem, LightKind, read_light};
 use crate::plan::{MeshBuffers, MeshOptions, MeshPlan};
 use crate::report::MeshReport;
 use crate::shapes::{Shape, Tessellation, tessellate};
@@ -233,6 +235,10 @@ pub struct DrawWork {
     pub triangulations: u32,
     /// Implicit shapes tessellated.
     pub tessellations: u32,
+    /// Cameras read: computed again.
+    pub cameras_read: u32,
+    /// Lights read again.
+    pub lights_read: u32,
 }
 
 /// What changed in a [`DrawList`] since the diff before, for a renderer to
@@ -265,6 +271,18 @@ pub struct DrawDiff {
     pub rebuilt: Vec<BufferKey>,
     /// Buffers no item draws any more: dropped.
     pub freed: Vec<BufferKey>,
+    /// New cameras.
+    pub cameras_added: Vec<PathId>,
+    /// Cameras gone.
+    pub cameras_removed: Vec<PathId>,
+    /// Cameras read again and found different: moved, or a lens changed.
+    pub cameras_changed: Vec<PathId>,
+    /// New lights.
+    pub lights_added: Vec<PathId>,
+    /// Lights gone.
+    pub lights_removed: Vec<PathId>,
+    /// Lights read again and found different.
+    pub lights_changed: Vec<PathId>,
     /// The work done.
     pub work: DrawWork,
 }
@@ -283,6 +301,12 @@ impl DrawDiff {
             && self.refilled.is_empty()
             && self.rebuilt.is_empty()
             && self.freed.is_empty()
+            && self.cameras_added.is_empty()
+            && self.cameras_removed.is_empty()
+            && self.cameras_changed.is_empty()
+            && self.lights_added.is_empty()
+            && self.lights_removed.is_empty()
+            && self.lights_changed.is_empty()
     }
 }
 
@@ -548,6 +572,12 @@ struct Entry {
 /// - an info-only prim without an inventory: every input of the items
 ///   under it is read again, and compared.
 ///
+/// Cameras ([`CameraItem`]) and lights ([`LightItem`]) are listed beside
+/// the items, by path, and diffed by [`DrawDiff::cameras_changed`] and
+/// [`DrawDiff::lights_changed`]: a change of the camera's or light's own
+/// prim, or of a transform or visibility above it, or a resync over it,
+/// reads it again.
+///
 /// Not read: collection-based material bindings changed through the
 /// collection alone, and primvars a prototype's instances inherit from
 /// above their instance roots (read from the first instance).
@@ -560,8 +590,18 @@ pub struct DrawList {
     buffers: BTreeMap<BufferKey, DrawBuffers>,
     mesh_buffers: HashMap<PathId, BufferKey>,
     shape_buffers: HashMap<ShapeKey, BufferKey>,
+    cameras: BTreeMap<PathId, Held<CameraItem>>,
+    lights: BTreeMap<PathId, Held<LightItem>>,
     next_item: u32,
     next_buffer: u32,
+}
+
+/// A camera or a light, and whether what it reads might differ at another
+/// time, as last read.
+#[derive(Clone, Debug)]
+struct Held<T> {
+    item: T,
+    varies: bool,
 }
 
 /// The diff being gathered, as sets.
@@ -577,7 +617,26 @@ struct Gather {
     refilled: BTreeSet<BufferKey>,
     rebuilt: BTreeSet<BufferKey>,
     freed: BTreeSet<BufferKey>,
+    cameras: Changed,
+    lights: Changed,
     work: DrawWork,
+}
+
+/// Cameras or lights added, removed and changed in the diff being gathered.
+#[derive(Default)]
+struct Changed {
+    added: BTreeSet<PathId>,
+    removed: BTreeSet<PathId>,
+    changed: BTreeSet<PathId>,
+}
+
+impl Changed {
+    fn finish(mut self) -> [Vec<PathId>; 3] {
+        for path in &self.added {
+            self.changed.remove(path);
+        }
+        [self.added, self.removed, self.changed].map(|set| set.into_iter().collect())
+    }
 }
 
 impl Gather {
@@ -606,6 +665,8 @@ impl Gather {
         self.work.items_read = count(read.len());
         self.work.items_untouched =
             count(list.entries.keys().filter(|id| !read.contains(*id)).count());
+        let [cameras_added, cameras_removed, cameras_changed] = self.cameras.finish();
+        let [lights_added, lights_removed, lights_changed] = self.lights.finish();
         DrawDiff {
             added: self.added.into_iter().collect(),
             removed: self.removed.into_iter().collect(),
@@ -617,6 +678,12 @@ impl Gather {
             refilled: self.refilled.into_iter().collect(),
             rebuilt: self.rebuilt.into_iter().collect(),
             freed: self.freed.into_iter().collect(),
+            cameras_added,
+            cameras_removed,
+            cameras_changed,
+            lights_added,
+            lights_removed,
+            lights_changed,
             work: self.work,
         }
     }
@@ -636,6 +703,8 @@ fn count(n: usize) -> u32 {
 struct Found {
     sources: Vec<ItemSource>,
     scopes: Vec<Scope>,
+    cameras: Vec<PathId>,
+    lights: Vec<(PathId, LightKind)>,
     prims: u32,
 }
 
@@ -681,6 +750,8 @@ impl DrawList {
             buffers: BTreeMap::new(),
             mesh_buffers: HashMap::new(),
             shape_buffers: HashMap::new(),
+            cameras: BTreeMap::new(),
+            lights: BTreeMap::new(),
             next_item: 0,
             next_buffer: 0,
         }
@@ -726,6 +797,28 @@ impl DrawList {
     /// Every retained buffer, by key.
     pub fn all_buffers(&self) -> impl Iterator<Item = &DrawBuffers> {
         self.buffers.values()
+    }
+
+    /// The cameras, by path id.
+    pub fn cameras(&self) -> impl Iterator<Item = &CameraItem> {
+        self.cameras.values().map(|held| &held.item)
+    }
+
+    /// The camera at `path`, while it is listed.
+    #[must_use]
+    pub fn camera(&self, path: PathId) -> Option<&CameraItem> {
+        self.cameras.get(&path).map(|held| &held.item)
+    }
+
+    /// The lights, by path id.
+    pub fn lights(&self) -> impl Iterator<Item = &LightItem> {
+        self.lights.values().map(|held| &held.item)
+    }
+
+    /// The light at `path`, while it is listed.
+    #[must_use]
+    pub fn light(&self, path: PathId) -> Option<&LightItem> {
+        self.lights.get(&path).map(|held| &held.item)
     }
 
     /// Reads the whole stage, as a resync of the pseudo-root: the first
@@ -829,6 +922,7 @@ impl DrawList {
             self.discover_prototype(scene, first, &mut found);
         }
         gather.work.prims_traversed = found.prims;
+        self.apply_to_views(scene, changes, &found, &mut gather);
 
         // Discovered items: new ones are added, known ones read again; known
         // items a discovery covers but did not find are gone. Added first,
@@ -927,8 +1021,174 @@ impl DrawList {
                 self.remove(id, &mut gather);
             }
         }
+        let cameras: Vec<PathId> = self
+            .cameras
+            .iter()
+            .filter(|(_, held)| held.varies)
+            .map(|(path, _)| *path)
+            .collect();
+        for path in cameras {
+            self.read_camera(scene, path, &mut gather);
+        }
+        let lights: Vec<(PathId, LightKind)> = self
+            .lights
+            .iter()
+            .filter(|(_, held)| held.varies)
+            .map(|(path, held)| (*path, held.item.kind))
+            .collect();
+        for (path, kind) in lights {
+            self.read_light(scene, path, kind, &mut gather);
+        }
         read.retain(|id| self.entries.contains_key(id));
         gather.finish(local_before, self, &read)
+    }
+
+    /// Brings the cameras and lights up to `scene` after `changes`, given
+    /// what discovery found: new ones are added and read, those a resync
+    /// covers but did not find removed, and those a change reaches read
+    /// again: any change of the prim itself, its transform or visibility
+    /// changing above it, or a resync over it.
+    fn apply_to_views(
+        &mut self,
+        scene: &Scene<'_>,
+        changes: &Changes,
+        found: &Found,
+        gather: &mut Gather,
+    ) {
+        let tokens = scene.store().tokens();
+        let roots: Vec<PathId> = found
+            .scopes
+            .iter()
+            .filter_map(|scope| match scope {
+                Scope::Resync(root) => Some(*root),
+                _ => None,
+            })
+            .collect();
+        let resynced = |path: PathId| roots.iter().any(|&root| under(scene, path, root));
+        // What reaches a camera or light below a changed prim: its
+        // transform or visibility. The prim itself: anything.
+        let mut reached: Vec<(PathId, bool)> = Vec::new();
+        for &prim in &changes.changed_info_only {
+            let placement = changes
+                .property_changes
+                .iter()
+                .find(|changed| changed.prim == prim)
+                .is_none_or(|changed| {
+                    changed.fields.iter().any(|field| {
+                        let dirt = property_dirt(tokens.resolve(field.name));
+                        dirt.transform || dirt.visibility
+                    })
+                });
+            reached.push((prim, placement));
+        }
+        for property in &changes.resynced_properties {
+            let dirt = property_dirt(tokens.resolve(property.property()));
+            reached.push((property.prim_path(), dirt.transform || dirt.visibility));
+        }
+        let reaches = |path: PathId| {
+            resynced(path)
+                || reached.iter().any(|&(prim, placement)| {
+                    prim == path || (placement && under(scene, path, prim))
+                })
+        };
+
+        let cameras: BTreeSet<PathId> = found.cameras.iter().copied().collect();
+        let gone: Vec<PathId> = self
+            .cameras
+            .keys()
+            .filter(|path| resynced(**path) && !cameras.contains(path))
+            .copied()
+            .collect();
+        for path in gone {
+            self.cameras.remove(&path);
+            gather.cameras.removed.insert(path);
+        }
+        let mut read: BTreeSet<PathId> = cameras;
+        read.extend(self.cameras.keys().copied().filter(|&path| reaches(path)));
+        for path in read {
+            self.read_camera(scene, path, gather);
+        }
+
+        let lights: BTreeMap<PathId, LightKind> = found.lights.iter().copied().collect();
+        let gone: Vec<PathId> = self
+            .lights
+            .keys()
+            .filter(|path| resynced(**path) && !lights.contains_key(path))
+            .copied()
+            .collect();
+        for path in gone {
+            self.lights.remove(&path);
+            gather.lights.removed.insert(path);
+        }
+        let mut read = lights;
+        for (path, held) in &self.lights {
+            if reaches(*path) {
+                read.entry(*path).or_insert(held.item.kind);
+            }
+        }
+        for (path, kind) in read {
+            self.read_light(scene, path, kind, gather);
+        }
+    }
+
+    /// Computes the camera at `path` again and records whether it changed.
+    fn read_camera(&mut self, scene: &Scene<'_>, path: PathId, gather: &mut Gather) {
+        gather.work.cameras_read += 1;
+        let Some(view) = Camera::get(scene, path) else {
+            if self.cameras.remove(&path).is_some() {
+                gather.cameras.removed.insert(path);
+            }
+            return;
+        };
+        let item = CameraItem {
+            path,
+            camera: view.compute_camera(&mut self.xforms),
+        };
+        let varies =
+            self.world_might_vary(scene, path) || inputs_might_vary(scene, path, CAMERA_INPUTS);
+        match self.cameras.insert(path, Held { item, varies }) {
+            None => {
+                gather.cameras.added.insert(path);
+            }
+            Some(old) if old.item != self.cameras[&path].item => {
+                gather.cameras.changed.insert(path);
+            }
+            Some(_) => {}
+        }
+    }
+
+    /// Reads the light at `path` again and records whether it changed.
+    fn read_light(
+        &mut self,
+        scene: &Scene<'_>,
+        path: PathId,
+        kind: LightKind,
+        gather: &mut Gather,
+    ) {
+        gather.work.lights_read += 1;
+        if scene.stage().prim(path, scene.store()).is_none() {
+            if self.lights.remove(&path).is_some() {
+                gather.lights.removed.insert(path);
+            }
+            return;
+        }
+        let time = self.options.time;
+        let matrix = self.xforms.local_to_world(scene, path).unwrap_or(IDENTITY);
+        let hidden = Imageable::get(scene, path)
+            .is_some_and(|imageable| imageable.compute_visibility(time) == Visibility::Invisible);
+        let item = read_light(scene, path, kind, time, matrix, hidden);
+        let varies = self.world_might_vary(scene, path)
+            || visibility_might_vary(scene, path)
+            || inputs_might_vary(scene, path, LIGHT_INPUTS);
+        match self.lights.insert(path, Held { item, varies }) {
+            None => {
+                gather.lights.added.insert(path);
+            }
+            Some(old) if old.item != self.lights[&path].item => {
+                gather.lights.changed.insert(path);
+            }
+            Some(_) => {}
+        }
     }
 
     /// Finds the items under `root`.
@@ -979,6 +1239,10 @@ impl DrawList {
             }
             if gprim(scene, path).is_some() {
                 found.sources.push(ItemSource::Gprim { path });
+            } else if scene.is_a(path, "Camera") {
+                found.cameras.push(path);
+            } else if let Some(kind) = LightKind::of(scene, path) {
+                found.lights.push((path, kind));
             }
             let children: Vec<PathId> = prim.all_children().map(|child| child.path()).collect();
             stack.extend(children.into_iter().rev());

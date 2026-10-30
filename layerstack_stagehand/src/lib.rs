@@ -101,15 +101,35 @@
 //! plan, no triangulation), rebuilt or freed, with [`DrawWork`] counting
 //! what was read, reused, recomputed and rebuilt.
 //!
-//! Not yet: cameras, lights, materials beyond their bindings, curves and
-//! points.
+//! # Cameras and lights
+//!
+//! The draw list also lists the stage's cameras ([`CameraItem`]: a
+//! `layerstack_schemas::camera::ComputedCamera`, with view and projection
+//! matrices as `GfCamera` and `GfFrustum` compute them, fitted to a viewport
+//! by `conform_window`) and its built-in `UsdLux` lights ([`LightItem`]:
+//! world placement and direction, emission as `color * blackbody *
+//! intensity * 2^exposure`, divided by the light's world-space size when it
+//! normalizes, its shape, `ShapingAPI` and `ShadowAPI` controls, and its
+//! link collections as data). A diff lists the cameras and lights added,
+//! removed and changed; a change reaches a camera or a light through its
+//! own prim, or a transform or visibility above it; a time change reads
+//! only those whose inputs or transform might vary. Lights and cameras
+//! inside native instances or point instancer prototypes are not listed
+//! yet.
+//!
+//! Not yet: materials beyond their bindings, curves, points and light
+//! linking evaluation.
 
 #![no_std]
 extern crate alloc;
 
 #[cfg(feature = "stage")]
+mod camera;
+#[cfg(feature = "stage")]
 mod draw;
 mod input;
+#[cfg(feature = "stage")]
+mod light;
 mod plan;
 mod report;
 mod shapes;
@@ -121,12 +141,18 @@ mod triangulate;
 mod tests;
 
 #[cfg(feature = "stage")]
+pub use camera::CameraItem;
+#[cfg(feature = "stage")]
 pub use draw::{
     BufferKey, DrawBuffers, DrawDiff, DrawItem, DrawList, DrawOptions, DrawWork, ItemId,
     ItemSource, Purposes,
 };
 pub use input::{
     FaceSubsets, Interpolation, MeshInput, MeshTopology, Orientation, Primvar, SubdivisionScheme,
+};
+#[cfg(feature = "stage")]
+pub use light::{
+    LightEmission, LightGeometry, LightItem, LightKind, LightLink, LightShadow, LightShaping,
 };
 pub use plan::{DrawRange, MeshBuffers, MeshOptions, MeshPlan, PlanMismatch, SmoothNormals};
 pub use report::{

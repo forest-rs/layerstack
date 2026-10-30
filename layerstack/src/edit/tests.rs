@@ -217,6 +217,58 @@ fn targets_map_through_reference_and_variant_nodes() {
     );
 }
 
+/// A local layer target reads the layer at its offset in the stage's layer
+/// stack: the scene's sublayer is authored with `(offset = 5)`, so a sample
+/// set at stage time 7 through it is written at layer time 2, and maps
+/// every path to itself. A layer the stage reaches only through a
+/// reference is not local. OpenUSD: `UsdStage::GetEditTargetForLocalLayer`.
+#[test]
+fn local_layer_targets_read_the_layer_at_its_stack_offset() {
+    let mut store = rocks();
+    let stage = compose(&mut store);
+    let root = EditTarget::for_local_layer(&stage, &store, SCENE).expect("the root is local");
+    assert_eq!(root, EditTarget::for_layer(SCENE), "the root has no offset");
+    let sub = EditTarget::for_local_layer(&stage, &store, SCENE_SUB).expect("a local sublayer");
+    assert_eq!(
+        sub.layer_offset(),
+        LayerOffset {
+            offset: 5.0,
+            scale: 1.0
+        }
+    );
+    assert!(sub.has_root_identity());
+    let rock_b = store.path("/World/RockB");
+    assert_eq!(
+        sub,
+        EditTarget::for_node_layer(&stage, &store, rock_b, NodeId::ROOT, SCENE_SUB).unwrap(),
+        "the root node's target in the sublayer"
+    );
+    assert!(
+        EditTarget::for_local_layer(&stage, &store, ROCK).is_none(),
+        "reached only through a reference"
+    );
+    let reference = EditTarget::for_node(&stage, rock_b, node(&stage, rock_b, ArcKind::References))
+        .expect("reference node");
+    assert!(
+        !reference.has_root_identity(),
+        "a reference maps only its prim"
+    );
+
+    let spin = store.property_path("/World/RockA.spin");
+    let mut edit = Transaction::new();
+    edit.create_property(sub.property(spin), PropertySpec::typed_attribute(double()))
+        .set_time_sample(sub.property(spin), 7.0, Value::Double(70.0));
+    edit.apply(&mut store).expect("applies");
+    let path = spec(&mut store, "/World/RockA.spin");
+    assert_eq!(
+        store.layers[&SCENE_SUB]
+            .property_at(&path)
+            .and_then(|p| p.time_samples.get().map(<[_]>::to_vec)),
+        Some(vec![(2.0, Value::Double(70.0))]),
+        "stage time 7 is layer time 2"
+    );
+}
+
 /// Through `/World/RockB`'s reference (`(offset = 10; scale = 2)`, `/World/RockB`
 /// to `/Rock`), time codes are written in layer time, durations divided
 /// by the scale and path expressions made absolute and mapped to the

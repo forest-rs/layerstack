@@ -154,6 +154,42 @@ impl EditTarget {
         }
     }
 
+    /// Targets `layer`, a layer of the stage's own layer stack (its session
+    /// layer, root layer and their sublayers), as [`Self::for_layer`] does,
+    /// with the layer offset the stack reads it at: stage paths are spec
+    /// paths, and a time sample set at stage time 15 in a sublayer authored
+    /// with `(offset = 10)` is written at layer time 5. Time codes per
+    /// second conversions between the layers of the stack are included.
+    ///
+    /// Returns `None` if `layer` is not in the stage's layer stack (a layer
+    /// reached only through an arc, or a muted one): target it through a
+    /// node of a prim that reads it ([`Self::for_node_layer`]).
+    ///
+    /// OpenUSD: `UsdStage::GetEditTargetForLocalLayer`, the layer with
+    /// `PcpLayerStack::GetLayerOffsetForLayer`. The edit target a bare
+    /// layer converts to (`UsdEditTarget(layer)`) has no offset instead.
+    ///
+    /// Spec: AOUSD Core §10.3.1.1 (sublayer offsets), §12.3.2.1 (layer
+    /// offsets).
+    #[must_use]
+    pub fn for_local_layer(stage: &Stage, store: &dyn LayerStore, layer: LayerId) -> Option<Self> {
+        if !stage.has_local_layer(layer) {
+            return None;
+        }
+        // The pseudo-root's root node reads the stage's own layer stack,
+        // with each layer's offset from the stack's composition.
+        let root = store.paths().intern_segments(&[]);
+        let offset = stage
+            .explain_prim_graph(root)
+            .and_then(|graph| graph.node(NodeId::ROOT))
+            .and_then(|node| node.layer_offset_for_layer(layer))
+            .unwrap_or(LayerOffset::IDENTITY);
+        Some(Self {
+            offset,
+            ..Self::for_layer(layer)
+        })
+    }
+
     /// Targets the variant branch `variant` of `layer`, such as
     /// `/Rock{shape=jagged}`: the prim hosting the branch and its namespace
     /// descendants map inside the branch, and every other path maps to
@@ -278,6 +314,19 @@ impl EditTarget {
     #[must_use]
     pub fn layer_offset(&self) -> LayerOffset {
         self.offset
+    }
+
+    /// Whether the target maps paths outside the namespace it is about to
+    /// themselves: true for a layer target, a local variant target and a
+    /// node reached only through variant, inherit and specialize arcs;
+    /// false through a reference or payload, which maps only the referenced
+    /// prim's namespace, so an edit there of a path outside the prim is
+    /// rejected as unmappable.
+    ///
+    /// OpenUSD: `UsdEditTarget::GetMapFunction().HasRootIdentity()`.
+    #[must_use]
+    pub fn has_root_identity(&self) -> bool {
+        self.map.has_root_identity()
     }
 
     /// Maps the stage prim path `path` to its spec path in the target

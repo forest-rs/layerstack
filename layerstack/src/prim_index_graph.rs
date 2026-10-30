@@ -529,8 +529,12 @@ impl<'a> PrimNode<'a> {
     }
 
     /// The resident, unmuted layers of the node's layer stack, strongest
-    /// first, as composition gathered them.
-    pub(crate) fn stack_layers(self) -> impl Iterator<Item = LayerId> + 'a {
+    /// first, as composition gathered them: the layers an edit through this
+    /// node can target ([`crate::EditTarget::for_node_layer`]), each read
+    /// at [`Self::layer_offset_for_layer`].
+    ///
+    /// OpenUSD: `PcpNodeRef::GetLayerStack()->GetLayers()`.
+    pub fn layers(self) -> impl Iterator<Item = LayerId> + 'a {
         self.shape.stack_offsets.iter().map(|(id, _)| *id)
     }
 

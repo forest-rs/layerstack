@@ -875,7 +875,7 @@ struct Catalog {
     /// The latest failed read of each dependency, by anchor layer and
     /// authored asset path, which [`StageDocument::asset_status`] gives
     /// the unresolved assets composition reports.
-    failures: BTreeMap<(LayerId, String), ReadFailure>,
+    failures: HashMap<(LayerId, String), ReadFailure>,
 }
 /// Why a dependency read failed, kept for [`UnresolvedAsset`].
 #[derive(Clone, Debug)]
@@ -1073,8 +1073,9 @@ pub struct StageDocument<B> {
 /// The assets the stage asked for that storage could not supply yet
 /// ([`IoErrorKind::Unavailable`]), by anchor layer and authored asset path,
 /// with the identifier storage gave each. Kept as the [`ReadFailure`] it
-/// is, so this map and [`Catalog::failures`] compile to one map's code.
-type Unavailable = BTreeMap<(LayerId, String), ReadFailure>;
+/// is, so this map and [`Catalog::failures`] compile to one map's code,
+/// hashed: both are looked up by request, not listed.
+type Unavailable = HashMap<(LayerId, String), ReadFailure>;
 impl<B: core::fmt::Debug> core::fmt::Debug for StageDocument<B> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("StageDocument")

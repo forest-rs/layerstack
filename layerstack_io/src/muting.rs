@@ -156,7 +156,7 @@ impl<B: Storage> StageDocument<B> {
         }
         // A muted layer storage could not supply: bound, so its arcs
         // compose muted, and no longer asked for.
-        let bound: Vec<((LayerId, String), LayerId)> = self
+        let mut bound: Vec<((LayerId, String), LayerId)> = self
             .unavailable
             .iter()
             .filter_map(|(key, failure)| {
@@ -164,6 +164,8 @@ impl<B: Storage> StageDocument<B> {
                 (muted.contains(&id) && self.store.layer(id).is_none()).then(|| (key.clone(), id))
             })
             .collect();
+        // Bound in key order, which the hashed map does not keep.
+        sort::sort_unstable(&mut bound);
         for ((anchor, asset), id) in bound {
             self.unavailable.remove(&(anchor, asset.clone()));
             self.store.insert_asset_layer(anchor, &asset, id);

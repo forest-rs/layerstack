@@ -783,3 +783,126 @@ fn flattened_metadata_holds_only_what_the_root_or_session_authors() {
         Some(&FieldValue::Value(Value::Double(48.0)))
     );
 }
+
+/// Knows where layers 1 (`/set/root.usda`) and 3 (`/sess/session.usda`)
+/// are, and anchors as the trait default does.
+struct RootAndSession;
+
+impl AssetResolver for RootAndSession {
+    fn resolve(
+        &mut self,
+        _: &str,
+        _: Option<LayerId>,
+        _: &crate::interner::TokenInterner,
+        _: &crate::path::PathInterner,
+    ) -> Result<crate::asset::ResolvedAsset, crate::asset::AssetResolveError> {
+        Err(crate::asset::AssetResolveError::NotFound)
+    }
+    fn resolved_path(&self, id: LayerId) -> Option<&str> {
+        match id {
+            LayerId(1) => Some("/set/root.usda"),
+            LayerId(3) => Some("/sess/session.usda"),
+            _ => None,
+        }
+    }
+}
+
+/// A dictionary of `entries`.
+fn dictionary(entries: Vec<(&str, Value)>) -> Value {
+    Value::Dictionary(
+        entries
+            .into_iter()
+            .map(|(key, value)| (Arc::from(key), value.into()))
+            .collect(),
+    )
+}
+
+/// Each asset path of the stage metadata anchors to the layer authoring
+/// it, the root's beneath the session's in a merged dictionary, after an
+/// expression is evaluated with the root layer stack's variables (the
+/// session's over the root's), as `UsdStage::GetMetadata` resolves them;
+/// the flattened layer holds the same.
+///
+/// Spec: AOUSD Core §9.4 (relative asset paths), §9.6 (variable
+/// expressions), §12.2.7 (layer metadata).
+#[test]
+fn stage_metadata_asset_paths_anchor_to_the_layer_authoring_them() {
+    let mut store = InMemoryStore::default();
+    referenced_scene(&mut store, LayerOffset::IDENTITY);
+    let (data, variables) = (
+        store.tokens.intern("customLayerData"),
+        store.tokens.intern("expressionVariables"),
+    );
+    let asset = |path: &str| Value::Asset(Arc::from(path));
+    let name = |name: &str| dictionary(vec![("NAME", Value::string(name))]);
+    store.layers.get_mut(&LayerId(1)).unwrap().set_metadata(
+        data,
+        dictionary(vec![
+            ("tex", asset("./root.png")),
+            ("expr", asset("`\"./${NAME}.png\"`")),
+            ("inner", dictionary(vec![("deep", asset("./deep.png"))])),
+        ]),
+    );
+    store
+        .layers
+        .get_mut(&LayerId(1))
+        .unwrap()
+        .set_metadata(variables, name("rock"));
+    let mut session = Layer::new(LayerId(3));
+    session.set_metadata(
+        data,
+        dictionary(vec![
+            ("tex", asset("./session.png")),
+            ("inner", dictionary(vec![("near", asset("./near.png"))])),
+        ]),
+    );
+    session.set_metadata(variables, name("lamp"));
+    store.insert_layer(session);
+    let options = StageOptions {
+        session_layer: Some(LayerId(3)),
+        ..StageOptions::default()
+    };
+    let stage = Stage::compose(&mut store, LayerId(1), options);
+
+    let anchored = dictionary(vec![
+        ("expr", asset("/set/lamp.png")),
+        (
+            "inner",
+            dictionary(vec![
+                ("deep", asset("/set/deep.png")),
+                ("near", asset("/sess/near.png")),
+            ]),
+        ),
+        ("tex", asset("/sess/session.png")),
+    ]);
+    assert_eq!(
+        stage.layer_metadata_anchored(data, &store, &RootAndSession),
+        Some(anchored.clone())
+    );
+    assert_eq!(
+        stage.layer_metadata(data, &store),
+        Some(dictionary(vec![
+            ("expr", asset("`\"./${NAME}.png\"`")),
+            (
+                "inner",
+                dictionary(vec![
+                    ("deep", asset("./deep.png")),
+                    ("near", asset("./near.png")),
+                ]),
+            ),
+            ("tex", asset("./session.png")),
+        ])),
+        "as authored"
+    );
+    let anchoring = FlattenRequirements {
+        asset_paths: AssetPaths::Anchored(&RootAndSession),
+        ..FlattenRequirements::default()
+    };
+    let flat = stage
+        .flatten(&mut store, LayerId(1), LayerId(9), &anchoring)
+        .expect("flattens");
+    assert_eq!(
+        flat.layer.metadata(data),
+        Some(&FieldValue::Value(anchored))
+    );
+}

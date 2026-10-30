@@ -235,13 +235,17 @@ impl Stage {
             unanchored: HashSet::new(),
             report: FlattenReport::default(),
         };
-        // The layer metadata's asset paths are anchored to the root layer.
+        // The layer metadata's asset paths are evaluated, as the stage
+        // reads them, and anchored to the root layer.
         let mut metadata = core::mem::take(&mut flattener.out.metadata);
         for entry in &mut metadata {
-            if let FieldValue::Value(value) = &mut entry.value
-                && let Some(anchored) = flattener.anchor_value(value, root)
-            {
-                *value = anchored;
+            if let FieldValue::Value(value) = &mut entry.value {
+                if let Some(evaluated) = self.evaluate_layer_metadata(value, flattener.store) {
+                    *value = evaluated;
+                }
+                if let Some(anchored) = flattener.anchor_value(value, root) {
+                    *value = anchored;
+                }
             }
         }
         // Anchor each metadata opinion in its authoring layer before merging
@@ -253,6 +257,9 @@ impl Stage {
                 .map_or_else(Vec::new, |l| l.metadata.clone());
             for mut entry in entries {
                 if let FieldValue::Value(value) = &mut entry.value {
+                    if let Some(evaluated) = self.evaluate_layer_metadata(value, flattener.store) {
+                        *value = evaluated;
+                    }
                     if let Some(anchored) = flattener.anchor_value(value, session) {
                         *value = anchored;
                     }

@@ -1071,17 +1071,110 @@ impl Stage {
     /// its registered default, else its type's (`upAxis` reads `Y`, a
     /// plugin's `int` field without a default `0`). Sublayer metadata does
     /// not participate. Blocks and incompatible field representations do
-    /// not resolve to a fallback.
+    /// not resolve to a fallback. Asset paths are as authored; see
+    /// [`Self::layer_metadata_anchored`] for them anchored to the layer
+    /// that authors each.
     ///
     /// Spec: AOUSD Core §12.2.7 (layer metadata resolution).
     /// OpenUSD: `UsdStage::GetMetadata`, `SdfSchema::GetFallback`.
     #[must_use]
     pub fn layer_metadata(&self, key: TokenId, store: &dyn LayerStore) -> Option<Value> {
-        let root = store.layer(self.root_layer?)?;
-        let session = self
-            .session_layer()
-            .filter(|id| !self.is_layer_muted(*id))
-            .and_then(|id| store.layer(id));
+        self.layer_metadata_mapped(key, store, &mut |_, _| None)
+    }
+
+    /// [`Self::layer_metadata`], with each asset path anchored through
+    /// `assets` to the layer that authors it, the root or the session
+    /// layer ([`AssetResolver::anchor_asset_path`]): in values, arrays and
+    /// dictionaries alike, each opinion anchored before dictionaries
+    /// merge, so an entry the root contributes beneath the session's keeps
+    /// the root's anchor. An asset path expression is evaluated with the
+    /// expression variables of the stage's root layer stack first, the
+    /// session's over the root's. A path `assets` cannot anchor
+    /// (one relative to a layer with no location) stays as authored, or
+    /// as evaluated.
+    ///
+    /// OpenUSD's `UsdStage::GetMetadata` returns such a value as an
+    /// `SdfAssetPath` resolved against its authoring layer
+    /// (`_AssetPathToStage` and `SdfResolveAssetPaths` in
+    /// `pxr/usd/usd/stage.cpp`): its `resolvedPath` is the identifier this
+    /// returns when the asset exists, and empty when it does not; the
+    /// identifier is the same either way, and whether its asset exists is
+    /// the storage's question. A registered fallback names no layer, and
+    /// is as authored.
+    ///
+    /// Spec: AOUSD Core §9.4 (relative asset paths), §12.2.7 (layer
+    /// metadata resolution).
+    ///
+    /// [`AssetResolver::anchor_asset_path`]: crate::AssetResolver::anchor_asset_path
+    #[must_use]
+    pub fn layer_metadata_anchored(
+        &self,
+        key: TokenId,
+        store: &dyn LayerStore,
+        assets: &dyn crate::AssetResolver,
+    ) -> Option<Value> {
+        self.layer_metadata_mapped(key, store, &mut |value, layer| {
+            let evaluated = self.evaluate_layer_metadata(value, store);
+            let value = evaluated.as_ref().unwrap_or(value);
+            let anchored = stage_time::map_leaves(value, &mut |leaf| match leaf {
+                Value::Asset(path)
+                    if !path.is_empty() && !crate::variable_expression::is_expression(path) =>
+                {
+                    assets
+                        .anchor_asset_path(path, layer)
+                        .filter(|anchored| **anchored != **path)
+                        .map(|anchored| Value::Asset(Arc::from(anchored)))
+                }
+                _ => None,
+            });
+            anchored.or(evaluated)
+        })
+    }
+
+    /// `value`, layer metadata the root or session layer authors, with
+    /// each asset path expression (`` @`"./${NAME}.png"`@ ``) evaluated
+    /// with the expression variables of the stage's root layer stack, the
+    /// session's over the root's; `None` when it holds none that evaluates
+    /// to a path. An expression that evaluates to nothing, or fails, stays
+    /// as authored, as OpenUSD keeps it (with no evaluated path).
+    ///
+    /// Spec: AOUSD Core §9.6 (variable expressions). OpenUSD:
+    /// `_AssetPathToStage` in `pxr/usd/usd/stage.cpp`, which evaluates
+    /// with `SdfResolveAssetPaths` and the root layer stack's
+    /// `PcpLayerStack::GetExpressionVariables`.
+    pub(crate) fn evaluate_layer_metadata(
+        &self,
+        value: &Value,
+        store: &dyn LayerStore,
+    ) -> Option<Value> {
+        let stack = crate::LayerStackIdentifier {
+            root: self.root_layer?,
+            session: self.session_layer().filter(|id| !self.is_layer_muted(*id)),
+        };
+        stage_time::map_leaves(value, &mut |leaf| match leaf {
+            Value::Asset(path) if crate::variable_expression::is_expression(path) => {
+                crate::expression_variables::evaluate(store, &[stack], path, None)
+                    .ok()
+                    .flatten()
+                    .map(|path| Value::Asset(Arc::from(path)))
+            }
+            _ => None,
+        })
+    }
+
+    /// [`Self::layer_metadata`], with `map` giving each authored opinion's
+    /// value in its place, from the value and the layer authoring it
+    /// (`None` keeps it).
+    fn layer_metadata_mapped(
+        &self,
+        key: TokenId,
+        store: &dyn LayerStore,
+        map: &mut dyn FnMut(&Value, LayerId) -> Option<Value>,
+    ) -> Option<Value> {
+        let root_id = self.root_layer?;
+        let root = store.layer(root_id)?;
+        let session_id = self.session_layer().filter(|id| !self.is_layer_muted(*id));
+        let session = session_id.and_then(|id| store.layer(id));
         if store.tokens().resolve(key) == "defaultPrim" {
             return session
                 .and_then(|l| l.default_prim)
@@ -1092,17 +1185,23 @@ impl Stage {
             return Some(Value::Double(self.time_codes_per_second(store)));
         }
         let fields = session
-            .and_then(|l| l.metadata(key))
+            .and_then(|l| Some((l.metadata(key)?, session_id?)))
             .into_iter()
-            .chain(root.metadata(key));
-        let mut dictionaries = Vec::new();
-        for field in fields {
+            .chain(root.metadata(key).map(|field| (field, root_id)));
+        type Entries<'e> = alloc::borrow::Cow<'e, [(Arc<str>, FieldValue)]>;
+        let mut dictionaries: Vec<Entries<'_>> = Vec::new();
+        for (field, layer) in fields {
             match field {
-                FieldValue::Value(Value::Dictionary(entries)) => {
-                    dictionaries.push(entries.as_slice());
+                FieldValue::Value(value @ Value::Dictionary(entries)) => {
+                    dictionaries.push(match map(value, layer) {
+                        Some(Value::Dictionary(mapped)) => alloc::borrow::Cow::Owned(mapped),
+                        _ => alloc::borrow::Cow::Borrowed(entries.as_slice()),
+                    });
                 }
                 FieldValue::Value(Value::Blocked) if dictionaries.is_empty() => return None,
-                FieldValue::Value(value) if dictionaries.is_empty() => return Some(value.clone()),
+                FieldValue::Value(value) if dictionaries.is_empty() => {
+                    return Some(map(value, layer).unwrap_or_else(|| value.clone()));
+                }
                 _ if dictionaries.is_empty() => return None,
                 _ => break,
             }
@@ -1119,8 +1218,8 @@ impl Stage {
         if dictionaries.is_empty() {
             return fallback;
         }
-        if let Some(Value::Dictionary(entries)) = &fallback {
-            dictionaries.push(entries.as_slice());
+        if let Some(Value::Dictionary(entries)) = fallback {
+            dictionaries.push(alloc::borrow::Cow::Owned(entries));
         }
         Some(Value::Dictionary(combine_dictionary_chain(dictionaries)))
     }

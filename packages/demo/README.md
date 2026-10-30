@@ -78,7 +78,7 @@ header. The layers panel shows which layers are muted from the changes the
 stage reports (`Changes.mutedIdentifiers` and `unmutedIdentifiers`), not by
 asking the stage again.
 
-The script runs sixteen steps, one button each:
+The script runs seventeen steps, one button each:
 
 1. Open the sample: the stage wants its sublayer, the robot's reference and
    the beacon's (once, for both instances), and `resolve` fetches them.
@@ -141,6 +141,9 @@ The script runs sixteen steps, one button each:
     input its texture's `scale` reads. The draw list reads that material
     alone (no draw, light or camera), and the viewport makes the sign's
     three.js material again, reusing the loaded image.
+17. Document the stage: the root layer's `documentation`, stage metadata
+    that composes nothing. The change record lists `/` info-only, and the
+    draw list reads nothing: no draw, light, camera or material.
 
 `scripts/acceptance.ts` runs the same steps headless in Node, reading the
 sample from disk, and checks the values and explanations after each one,

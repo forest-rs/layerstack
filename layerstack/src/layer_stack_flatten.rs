@@ -104,9 +104,71 @@ pub enum LayerStackFlattenError {
     /// Authored or mapped sample times are non-finite, unsorted, or duplicated.
     InvalidSamples,
 }
+impl LayerStackFlattenError {
+    /// The error in words, its layers and names written with `store`, the
+    /// store the layer stack was read from ("cannot consolidate the layer
+    /// stack: @./set.usda@ authors `timeCodesPerSecond`, which has no
+    /// exact reduction"). `Display` writes the same with ids.
+    #[must_use]
+    pub fn display<'a>(&'a self, store: &'a dyn LayerStore) -> impl core::fmt::Display + 'a {
+        crate::diagnostic::with_store(self, store)
+    }
+}
+
+impl crate::diagnostic::Describe for LayerStackFlattenError {
+    fn describe(
+        &self,
+        f: &mut core::fmt::Formatter<'_>,
+        names: crate::diagnostic::Names<'_>,
+    ) -> core::fmt::Result {
+        f.write_str("cannot consolidate the layer stack: ")?;
+        match self {
+            Self::MissingLayer(layer) => {
+                write!(f, "{} is not in the store", names.layer(*layer))
+            }
+            Self::Gather(errors) => {
+                f.write_str("gathering it found ")?;
+                for (index, error) in errors.iter().enumerate() {
+                    if index > 0 {
+                        f.write_str("; ")?;
+                    }
+                    error.describe(f, names)?;
+                }
+                Ok(())
+            }
+            Self::InvalidOffset(layer) => write!(
+                f,
+                "{} is read through a layer offset that is not finite, or whose scale is not positive",
+                names.layer(*layer)
+            ),
+            Self::Unsupported { layer, feature } => write!(
+                f,
+                "{} authors {feature}, which has no exact reduction",
+                names.layer(*layer)
+            ),
+            Self::Asset { layer, path } => write!(
+                f,
+                "the asset path @{path}@ authored in {} cannot be anchored",
+                names.layer(*layer)
+            ),
+            Self::PropertyKindMismatch => {
+                f.write_str("an attribute and a relationship spec share one property path")
+            }
+            Self::PropertyDeclarationMismatch { property } => write!(
+                f,
+                "the layers declare the property `{}` with different `custom` or variability",
+                names.token(*property)
+            ),
+            Self::InvalidSamples => f.write_str(
+                "authored or mapped sample times are not finite, not sorted, or repeated",
+            ),
+        }
+    }
+}
+
 impl core::fmt::Display for LayerStackFlattenError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "layer-stack consolidation refused: {self:?}")
+        crate::diagnostic::Describe::describe(self, f, crate::diagnostic::Names(None))
     }
 }
 impl core::error::Error for LayerStackFlattenError {}
@@ -979,6 +1041,7 @@ mod tests {
     use super::*;
     use crate::TimeSamples;
     use crate::{InMemoryStore, PropertySpec, SublayerEntry};
+    use alloc::string::ToString;
     use alloc::vec;
 
     #[test]
@@ -1198,21 +1261,34 @@ mod tests {
         spec.rare_mut().inherits.make_mut().add.push(target);
         layer.insert_prim(path, spec);
         store.insert_layer(layer);
+        let unsupported =
+            flatten_layer_stack(&store, LayerId(1).into(), LayerId(3), &mut |_, path| {
+                Some(path.into())
+            })
+            .unwrap_err();
         assert!(matches!(
-            flatten_layer_stack(&store, LayerId(1).into(), LayerId(3), &mut |_, path| Some(
-                path.into()
-            )),
-            Err(LayerStackFlattenError::Unsupported {
+            unsupported,
+            LayerStackFlattenError::Unsupported {
                 feature: "add/reorder list operations",
                 ..
-            })
+            }
         ));
-        assert!(matches!(
-            flatten_layer_stack(&store, LayerId(2).into(), LayerId(3), &mut |_, path| Some(
-                path.into()
-            )),
-            Err(LayerStackFlattenError::MissingLayer(LayerId(2)))
-        ));
+        let missing = flatten_layer_stack(&store, LayerId(2).into(), LayerId(3), &mut |_, path| {
+            Some(path.into())
+        })
+        .unwrap_err();
+        assert_eq!(missing, LayerStackFlattenError::MissingLayer(LayerId(2)));
+        // In words: the layer by its identifier when the store names it.
+        store.set_layer_identifier(LayerId(1), "./rock.usda");
+        assert_eq!(
+            unsupported.display(&store).to_string(),
+            "cannot consolidate the layer stack: @./rock.usda@ authors add/reorder list \
+             operations, which has no exact reduction"
+        );
+        assert_eq!(
+            missing.to_string(),
+            "cannot consolidate the layer stack: layer 2 is not in the store"
+        );
     }
 
     #[test]

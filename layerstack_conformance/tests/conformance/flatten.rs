@@ -691,11 +691,11 @@ fn declarations_follow_the_schema_and_the_weakest_opinion() {
         [
             "/Grove/Tree.height: transformed: custom = false, from the weakest opinion \
              (layer 1, /Grove/Tree.height)",
-            "/Grove/Tree.purpose: transformed: declared by its schema (Uniform, not custom) \
+            "/Grove/Tree.purpose: transformed: declared by its schema (uniform, not custom) \
              (layer 2, /Tree.purpose)",
-            "/Grove/Tree.visibility: transformed: declared by its schema (Varying, not custom) \
+            "/Grove/Tree.visibility: transformed: declared by its schema (varying, not custom) \
              (layer 2, /Tree.visibility)",
-            "/Grove/Tree.xformOpOrder: transformed: declared by its schema (Uniform, not \
+            "/Grove/Tree.xformOpOrder: transformed: declared by its schema (uniform, not \
              custom) (layer 1, /Grove/Tree.xformOpOrder)",
         ]
     );

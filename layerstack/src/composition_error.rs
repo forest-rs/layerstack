@@ -247,7 +247,7 @@ const CODES: [&str; 20] = [
 ];
 
 /// The arc as an error names it.
-fn arc_name(arc: ArcKind) -> &'static str {
+pub(crate) fn arc_name(arc: ArcKind) -> &'static str {
     match arc {
         ArcKind::Local => "local opinion",
         ArcKind::Inherits => "inherit",
@@ -396,7 +396,7 @@ impl Describe for CompositionError {
             ),
             Self::InvalidAuthoredRelocation(error) => write!(
                 f,
-                "{}: the relocate {} -> {} is invalid ({:?}); it is ignored",
+                "{}: the relocate {} -> {} is invalid: {}; it is ignored",
                 names.layer(error.layer),
                 names.path(error.source),
                 target(error.target),
@@ -404,7 +404,7 @@ impl Describe for CompositionError {
             ),
             Self::InvalidConflictingRelocation(error) => write!(
                 f,
-                "{}: the relocate {} -> {} conflicts with {} -> {} in {} ({:?}); it is ignored",
+                "{}: the relocate {} -> {} conflicts with {} -> {} in {}: {}; it is ignored",
                 names.layer(error.layer),
                 names.path(error.source),
                 target(error.target),
@@ -909,6 +909,18 @@ pub enum InvalidRelocationReason {
     TargetIsDescendant,
 }
 
+impl fmt::Display for InvalidRelocationReason {
+    /// The reason in words, of the relocate: "its target is its source".
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::RootPrimSource => "its source is a root prim",
+            Self::TargetIsSource => "its target is its source",
+            Self::TargetIsAncestor => "its target is an ancestor of its source",
+            Self::TargetIsDescendant => "its target is a descendant of its source",
+        })
+    }
+}
+
 /// A `layerRelocates` entry that conflicts with another valid entry of the
 /// same layer stack, found when computing that layer stack's relocation
 /// table. Each side of a conflict is reported on its own, and both entries
@@ -953,6 +965,19 @@ pub enum RelocationConflict {
     /// The entry's source is a namespace descendant of the other entry's
     /// source, so it does not use the ancestral relocated path.
     SourceIsConflictSourceDescendant,
+}
+
+impl fmt::Display for RelocationConflict {
+    /// The conflict in words, of the entry and the other one: "its target
+    /// is the other's source".
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::TargetIsConflictSource => "its target is the other's source",
+            Self::SourceIsConflictTarget => "its source is the other's target",
+            Self::TargetIsConflictSourceDescendant => "its target is beneath the other's source",
+            Self::SourceIsConflictSourceDescendant => "its source is beneath the other's source",
+        })
+    }
 }
 
 /// `layerRelocates` entries of one layer stack that move different sources
@@ -1241,6 +1266,33 @@ mod tests {
             inconsistent.display(&store).to_string(),
             "/World/Moss.height: the spec at /World/Moss.height in layer 2 is not an attribute, \
              as the defining spec at /World/Moss.height in layer 1 is; it is ignored"
+        );
+        let (rock, pebble) = (store.path("/World/Rock"), store.path("/World/Rock/Pebble"));
+        let invalid = CompositionError::InvalidAuthoredRelocation(InvalidAuthoredRelocation {
+            layer: LayerId(1),
+            source: pebble,
+            target: Some(rock),
+            reason: InvalidRelocationReason::TargetIsAncestor,
+        });
+        assert_eq!(
+            invalid.display(&store).to_string(),
+            "layer 1: the relocate /World/Rock/Pebble -> /World/Rock is invalid: its target is \
+             an ancestor of its source; it is ignored"
+        );
+        let conflicting =
+            CompositionError::InvalidConflictingRelocation(InvalidConflictingRelocation {
+                layer: LayerId(1),
+                source: rock,
+                target: Some(moss),
+                conflict_layer: LayerId(2),
+                conflict_source: moss,
+                conflict_target: Some(pebble),
+                reason: RelocationConflict::TargetIsConflictSource,
+            });
+        assert_eq!(
+            conflicting.display(&store).to_string(),
+            "layer 1: the relocate /World/Rock -> /World/Moss conflicts with /World/Moss -> \
+             /World/Rock/Pebble in layer 2: its target is the other's source; it is ignored"
         );
     }
 

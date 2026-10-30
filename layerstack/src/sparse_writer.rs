@@ -47,7 +47,21 @@ pub enum SparseWriterError {
 }
 impl core::fmt::Display for SparseWriterError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "invalid sparse sample: {self:?}")
+        match self {
+            Self::DefaultAfterSamples => f.write_str(
+                "invalid sparse sample: the default cannot change after the first time sample",
+            ),
+            Self::NonfiniteTime => {
+                f.write_str("invalid sparse sample: the sample time is not finite")
+            }
+            Self::NonIncreasingTime {
+                previous,
+                requested,
+            } => write!(
+                f,
+                "invalid sparse sample: the time {requested} is not after the previous time {previous}"
+            ),
+        }
     }
 }
 impl core::error::Error for SparseWriterError {}
@@ -238,6 +252,30 @@ mod tests {
         );
         (store, property, writer)
     }
+    #[test]
+    fn errors_are_written_in_words() {
+        let (_, _, mut writer) = fixture();
+        let mut edits = Transaction::new();
+        writer
+            .set_time_sample(&mut edits, 2., Value::Float(1.))
+            .unwrap();
+        let error = writer
+            .set_time_sample(&mut edits, 1., Value::Float(2.))
+            .unwrap_err();
+        assert_eq!(
+            alloc::string::ToString::to_string(&error),
+            "invalid sparse sample: the time 1 is not after the previous time 2"
+        );
+        assert_eq!(
+            alloc::string::ToString::to_string(
+                &writer
+                    .set_default(&mut edits, Value::Float(0.))
+                    .unwrap_err()
+            ),
+            "invalid sparse sample: the default cannot change after the first time sample"
+        );
+    }
+
     #[test]
     fn preserves_run_endpoints_and_suppresses_fallback_with_undo() {
         // Pinned C++ sparse writer: default 0; samples 0,0,2,2,2,4 => 1:0,2:2,4:2,5:4.

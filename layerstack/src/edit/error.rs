@@ -515,7 +515,7 @@ impl Describe for Rejection {
             }
             Self::InvalidRelocate { source, reason } => write!(
                 f,
-                "composition would ignore the relocate of {}: {reason:?}",
+                "composition would ignore the relocate of {}: {reason}",
                 names.path(*source)
             ),
             Self::DuplicateRelocateSource(source) => {

@@ -480,3 +480,34 @@ def "Loose" {
     assert.equal(failure(() => stage.pointInstances("/Loose")).code, "instancer.not_instancer");
   });
 });
+
+describe("mesh topology", () => {
+  it("reads each mesh's topology and its validation as OpenUSD 26.11 does", async () => {
+    const stage = await openFixture("mesh_topology/", "scene.usda");
+    const expected = oracle("mesh_topology/oracle.json");
+    for (const read of expected.meshes) {
+      const label = `${read.mesh} at ${read.time}`;
+      const time = read.time === "default" ? {} : { time: Number(read.time) };
+      const topology = stage.prim(read.mesh)!.meshTopology(time)!;
+      assert.deepEqual([...topology.faceVertexCounts], read.face_vertex_counts ?? [], label);
+      assert.deepEqual([...topology.faceVertexIndices], read.face_vertex_indices ?? [], label);
+      assert.deepEqual([...topology.holeIndices], read.hole_indices ?? [], label);
+      assert.equal(topology.orientation, read.orientation, label);
+      assert.equal(topology.subdivisionScheme, read.subdivision_scheme, label);
+      assert.equal(topology.pointCount, read.points, label);
+      assert.equal(topology.valid, read.valid, label);
+      if (read.valid) {
+        assert.equal(topology.problem, null, label);
+      } else {
+        const code = read.reason.startsWith("Sum of") ? "sizeMismatch" : "vertexIndex";
+        assert.equal(topology.problem?.code, code, label);
+      }
+    }
+    // Not a mesh.
+    const other = layerstack.open({
+      identifier: "lamp.usda",
+      bytes: new TextEncoder().encode('#usda 1.0\ndef Xform "Lamp" {\n}\n'),
+    });
+    assert.equal(other.prim("/Lamp")!.meshTopology(), null);
+  });
+});

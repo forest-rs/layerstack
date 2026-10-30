@@ -2288,6 +2288,12 @@ impl Stage {
             .into())
     }
 
+    /// The record `mesh_topology` builds, as documented in `schemas.rs`.
+    #[wasm_bindgen(js_name = meshTopology)]
+    pub fn js_mesh_topology(&self, path: &str, time: Option<f64>) -> Result<JsValue, JsValue> {
+        Ok(self.mesh_topology(path, time)?.into())
+    }
+
     /// The record `subset_family_type` builds, as documented in `schemas.rs`.
     #[wasm_bindgen(js_name = subsetFamilyType)]
     pub fn js_subset_family_type(&self, path: &str, family: &str) -> Result<String, JsValue> {

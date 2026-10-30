@@ -17,6 +17,7 @@
 //! needs (`export_fixtures::minimum_openusd`) are skipped with the reason
 //! printed; without the tools the tests report that they skipped and pass.
 
+use crate::support::scratch::fresh_scratch_dir;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Instant;
@@ -28,29 +29,6 @@ use layerstack_conformance::export_fixtures::{
 use layerstack_conformance::instancer_fixtures::{Field, PINE, SHRUB};
 use layerstack_mesh_export::{Node, OrientationPrecision, UsdzProfile};
 use serde::Deserialize;
-
-/// A per-test directory under Cargo's integration-test scratch space.
-///
-/// Under WASI only the crate directory and its parent are preopened (see
-/// `.cargo/config.toml`), so the path is made relative to them there.
-fn scratch_dir(name: &str) -> PathBuf {
-    let tmp = Path::new(env!("CARGO_TARGET_TMPDIR"));
-    let base = if cfg!(target_os = "wasi") {
-        let workspace = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .expect("crate is inside the workspace");
-        Path::new("..").join(
-            tmp.strip_prefix(workspace)
-                .expect("target directory is inside the workspace"),
-        )
-    } else {
-        tmp.to_path_buf()
-    };
-    let dir = base.join(format!("point-instancer-{name}"));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    dir
-}
 
 /// Why a tool reporting `version` cannot check fixture `name`, or `None`
 /// when it can. An unreadable version counts as too old.
@@ -148,7 +126,7 @@ fn instance_transforms_match_openusd() {
         field.proto_indices.contains(&PINE) && field.proto_indices.contains(&SHRUB),
         "the field mixes prototypes"
     );
-    let dir = scratch_dir("oracle");
+    let dir = fresh_scratch_dir("point-instancer-oracle");
     let mut layers = write_field(&field, &dir);
     // Both orientation attributes: readers must prefer `orientationsf`.
     let mut both = field.scene();
@@ -293,7 +271,7 @@ fn usdchecker_accepts_the_field() {
         return;
     }
     eprintln!("usdchecker: {version}");
-    let dir = scratch_dir("checker");
+    let dir = fresh_scratch_dir("point-instancer-checker");
     let layers = write_field(&Field::new(8, 8), &dir);
     let mut failures = Vec::new();
     for layer in &layers {

@@ -10,6 +10,7 @@
 //! compared by what they say: saved as USDA text, which must be the same
 //! byte for byte, with the same diagnostics.
 
+use crate::support::scratch::scratch_dir;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -42,7 +43,7 @@ impl AssetResolver for NoAssets {
 
 /// Every USDC layer of the small library and registry, by file name.
 fn layers() -> Vec<(String, Vec<u8>)> {
-    let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join("threaded_usdc_read");
+    let dir = scratch_dir("threaded_usdc_read");
     let shape = LibraryShape {
         average_tags: 40,
         ..LibraryShape::SMALL

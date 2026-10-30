@@ -29,6 +29,7 @@
 //! Spec: AOUSD Core §8 (spec paths), §12.4 (targets). OpenUSD:
 //! `UsdEditTarget`, `PcpMapFunction`.
 
+use crate::support::scratch::scratch_dir;
 use std::collections::BTreeMap;
 
 use layerstack::edit::{EditError, EditTarget, Rejection, Transaction};
@@ -172,7 +173,7 @@ fn the_scene_is_the_fixture() {
         ("asset.usda", save(ASSET_LAYER), ASSET),
     ] {
         if text != fixture {
-            let out = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join(name);
+            let out = scratch_dir(name);
             std::fs::write(&out, &text).expect("writes");
             panic!(
                 "the scene is no longer fixtures/edit_target_maps/{name}; the new layer is {}: \
@@ -347,7 +348,7 @@ fn authored_targets_compose_as_openusd_composes_them() {
         layerstack_usda::save_usda(store.layer(ROOT).unwrap(), store.tokens(), store.paths())
             .expect("saves");
     if text != AUTHORED {
-        let out = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("edit_target_maps.usda");
+        let out = scratch_dir("edit_target_maps.usda");
         std::fs::write(&out, &text).expect("writes");
         panic!(
             "the edits no longer author fixtures/edit_target_maps/authored.usda; the new layer is \

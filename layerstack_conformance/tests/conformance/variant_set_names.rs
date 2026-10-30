@@ -34,6 +34,7 @@
 //! Spec: AOUSD Core §7.3.6 (variant set specs), §7.6.2.3.5
 //! (`variantSetNames`), §10.5 (variant selection), §12.4 (list ops).
 
+use crate::support::scratch::scratch_dir;
 use std::collections::BTreeMap;
 use std::path::{Path as FsPath, PathBuf};
 use std::process::Command;
@@ -329,7 +330,7 @@ fn list_op_forms_read_and_save_as_authored() {
         eprintln!("skipped OpenUSD reading the saved files: no Python with pxr");
         return;
     };
-    let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("variant-set-names");
+    let dir = scratch_dir("variant-set-names");
     std::fs::create_dir_all(&dir).unwrap();
     let (usda, usdc) = (dir.join("saved.usda"), dir.join("saved.usdc"));
     std::fs::write(&usda, &saved_usda).unwrap();

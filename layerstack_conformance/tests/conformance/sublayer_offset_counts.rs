@@ -13,7 +13,8 @@
 //! layer the same way and reports `InvalidSublayerAndOffsetCount`.
 #![cfg(not(target_arch = "wasm32"))]
 
-use std::path::{Path, PathBuf};
+use crate::support::scratch::fresh_scratch_dir;
+use std::path::Path;
 use std::process::Command;
 
 use layerstack::{CompositionError, LayerStack, StageOptions};
@@ -68,11 +69,6 @@ for path in sys.argv[1:]:
     offsets = " ".join(f"{o.offset}/{o.scale}" for o in stack.layerOffsets)
     print(f"{reported} {offsets}")
 "#;
-
-/// A per-test directory under Cargo's integration-test scratch space.
-fn scratch_dir() -> PathBuf {
-    Path::new(env!("CARGO_TARGET_TMPDIR")).join("sublayer_offset_counts")
-}
 
 /// The crate root layer of `case`.
 fn root_layer(case: &Case) -> Vec<u8> {
@@ -129,9 +125,7 @@ fn layerstack_reading(dir: &Path, case: &Case) -> String {
 /// usd-core 26.11 does, and a paired layer keeps its offsets.
 #[test]
 fn unpaired_sublayer_offsets_are_reported_as_openusd_reports_them() {
-    let dir = scratch_dir();
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = fresh_scratch_dir("sublayer_offset_counts");
     for name in ["a.usda", "b.usda"] {
         std::fs::write(dir.join(name), SUBLAYER).unwrap();
     }

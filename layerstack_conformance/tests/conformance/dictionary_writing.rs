@@ -13,7 +13,8 @@
 //! an entry.
 #![cfg(not(target_arch = "wasm32"))]
 
-use std::path::{Path, PathBuf};
+use crate::support::scratch::fresh_scratch_dir;
+use std::path::Path;
 use std::process::Command;
 
 use layerstack::{
@@ -62,11 +63,6 @@ impl AssetResolver for NoAssets {
     fn resolved_path(&self, _: LayerId) -> Option<&str> {
         None
     }
-}
-
-/// A per-test directory under Cargo's integration-test scratch space.
-fn scratch_dir() -> PathBuf {
-    Path::new(env!("CARGO_TARGET_TMPDIR")).join("dictionary_writing")
 }
 
 /// OpenUSD's Python, or `None` (skipping) when none is configured.
@@ -118,9 +114,7 @@ fn dictionary_path_expressions_round_trip_with_openusd() {
         eprintln!("skipped dictionary oracle: set LAYERSTACK_USD_PYTHON");
         return;
     };
-    let dir = scratch_dir().join("path_expressions");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = fresh_scratch_dir("dictionary_writing-path_expressions");
     let source = dir.join("source.usda");
     let theirs = dir.join("openusd.usdc");
     std::fs::write(&source, SOURCE).unwrap();
@@ -225,9 +219,7 @@ fn empty_dictionary_entries_are_skipped_as_openusd_skips_them() {
         eprintln!("skipped dictionary oracle: set LAYERSTACK_USD_PYTHON");
         return;
     };
-    let dir = scratch_dir().join("empty_entries");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = fresh_scratch_dir("dictionary_writing-empty_entries");
     let output = openusd(
         python.as_str(),
         EMPTY_ENTRIES_ORACLE,

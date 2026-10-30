@@ -27,6 +27,7 @@
 //! Spec: AOUSD Core §16 (the USDA text format).
 #![cfg(not(target_arch = "wasm32"))]
 
+use crate::support::scratch::fresh_scratch_dir;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -211,9 +212,7 @@ fn corpus_reads_and_writes_as_openusd() {
     let Some((corpus, python)) = setup() else {
         return;
     };
-    let exported = Path::new(env!("CARGO_TARGET_TMPDIR")).join("usda_corpus");
-    let _ = std::fs::remove_dir_all(&exported);
-    std::fs::create_dir_all(&exported).unwrap();
+    let exported = fresh_scratch_dir("usda_corpus");
     let status = Command::new(&python)
         .args(["-c", EXPORT])
         .arg(&corpus)

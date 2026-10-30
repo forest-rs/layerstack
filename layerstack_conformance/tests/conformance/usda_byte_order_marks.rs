@@ -11,8 +11,9 @@
 //! error.
 #![cfg(not(target_arch = "wasm32"))]
 
+use crate::support::scratch::fresh_scratch_dir;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Command, Stdio};
 
 use layerstack::{
@@ -71,11 +72,6 @@ impl AssetResolver for NoAssets {
     }
 }
 
-/// A per-test directory under Cargo's integration-test scratch space.
-fn scratch_dir() -> PathBuf {
-    Path::new(env!("CARGO_TARGET_TMPDIR")).join("usda_byte_order_marks")
-}
-
 /// OpenUSD's Python, or `None` (skipping) when none is configured.
 fn openusd_python() -> Option<String> {
     let explicit = std::env::var("LAYERSTACK_USD_PYTHON").ok();
@@ -109,9 +105,7 @@ fn layerstack_refusal(dir: &Path, name: &str) -> String {
 /// Each marked file is refused for the reason OpenUSD gives.
 #[test]
 fn marked_files_are_refused_as_openusd_refuses_them() {
-    let dir = scratch_dir();
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = fresh_scratch_dir("usda_byte_order_marks");
     let mut paths = Vec::new();
     for (name, mark) in MARKS {
         let path = dir.join(format!("{name}.usda"));

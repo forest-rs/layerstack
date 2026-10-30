@@ -35,6 +35,7 @@
 //! (`pxr/usd/pcp/composeSite.cpp`), `UsdPrim::_GetPropertyNames`
 //! (`pxr/usd/usd/prim.cpp`).
 
+use crate::support::scratch::fresh_scratch_dir;
 use std::collections::BTreeMap;
 
 use layerstack::{
@@ -281,9 +282,7 @@ fn openusd_reads_variant_orders_from_layerstack_usdc() {
         return;
     };
     let oracle = oracle();
-    let dir = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("variant_orders");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = fresh_scratch_dir("variant_orders");
     let mut store = InMemoryStore::default();
     for (i, name) in oracle.text.keys().enumerate() {
         let layer = read_layer(&mut store, LayerId(i as u64 + 1), name);

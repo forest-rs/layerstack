@@ -21,6 +21,7 @@
 //! instead: the Python named by `LAYERSTACK_USD_PYTHON`, or `python3`, when
 //! it imports `pxr`, under the same version rule.
 
+use crate::support::scratch::{fresh_scratch_dir, scratch_dir};
 use std::cell::RefCell;
 use std::io::{BufRead as _, BufReader, Write as _};
 use std::path::Path;
@@ -44,26 +45,6 @@ fn tool(name: &str) -> Option<String> {
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
 }
 
-/// A per-test directory under Cargo's integration-test scratch space.
-///
-/// Under WASI only the crate directory and its parent are preopened (see
-/// `.cargo/config.toml`), so the path is made relative to them there.
-fn scratch_dir(name: &str) -> std::path::PathBuf {
-    let tmp = Path::new(env!("CARGO_TARGET_TMPDIR"));
-    let base = if cfg!(target_os = "wasi") {
-        let workspace = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .expect("crate is inside the workspace");
-        Path::new("..").join(
-            tmp.strip_prefix(workspace)
-                .expect("target directory is inside the workspace"),
-        )
-    } else {
-        tmp.to_path_buf()
-    };
-    base.join(format!("export-interop-{name}"))
-}
-
 #[test]
 fn external_usd_tools_accept_exporter_output() {
     let Some(usdcat) = tool("usdcat") else {
@@ -73,7 +54,7 @@ fn external_usd_tools_accept_exporter_output() {
     let usdchecker = tool("usdchecker");
     eprintln!("usdcat: {usdcat}; usdchecker: {usdchecker:?}");
 
-    let dir = scratch_dir("fixtures");
+    let dir = scratch_dir("export-interop-fixtures");
     let _ = std::fs::remove_dir_all(&dir);
     let fixtures = write_all(&dir);
     let mut failures = Vec::new();
@@ -199,9 +180,7 @@ fn usdc_writer_matches_openusd() {
         return;
     };
     let release = parse_openusd_release(&version);
-    let dir = scratch_dir("usdc-differential");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = fresh_scratch_dir("export-interop-usdc-differential");
     let mut failures = Vec::new();
     for (name, doc) in documents() {
         if let Some(reason) = too_old(release, minimum_openusd(name)) {
@@ -452,9 +431,7 @@ fn usdc_inlined_values_match_openusd() {
     }
     usda.push_str("}\n");
 
-    let dir = scratch_dir("usdc-inlined");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = fresh_scratch_dir("export-interop-usdc-inlined");
     let text = dir.join("values.usda");
     let ours = dir.join("values.usdc");
     let reference = dir.join("values.openusd.usdc");
@@ -538,9 +515,7 @@ fn escaped_strings_read_in_openusd_as_written() {
     .to_usda()
     .unwrap();
 
-    let dir = scratch_dir("escaped-strings");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = fresh_scratch_dir("export-interop-escaped-strings");
     let usda = dir.join("strings.usda");
     let usdc = dir.join("strings.usdc");
     std::fs::write(&usda, &text).unwrap();
@@ -573,7 +548,7 @@ fn escaped_strings_read_in_openusd_as_written() {
 /// the same with Python's `zipfile`).
 #[test]
 fn arkit_packages_have_a_single_usdc_root() {
-    let dir = scratch_dir("arkit-layout");
+    let dir = scratch_dir("export-interop-arkit-layout");
     let _ = std::fs::remove_dir_all(&dir);
     let fixtures = write_all(&dir);
     let arkit: Vec<_> = fixtures
@@ -718,9 +693,7 @@ fn saved_layers_round_trip_through_openusd() {
     eprintln!("OpenUSD {version} via {python}");
     let oracle = LayerSnapshot::start(&python);
     let release = parse_openusd_release(&version);
-    let dir = scratch_dir("layer-save");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = fresh_scratch_dir("export-interop-layer-save");
     let mut failures = Vec::new();
     for case in cases() {
         let name = case.name;

@@ -28,8 +28,8 @@
 //!
 //! Spec: AOUSD Core §15 (collections); OpenUSD's `UsdCollectionAPI`.
 
+use crate::support::scratch::scratch_dir;
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::Path;
 use std::sync::Arc;
 
 use layerstack::edit::{EditTarget, Transaction};
@@ -626,32 +626,12 @@ fn library_answers(loaded: LoadedStage) -> (Vec<String>, Vec<String>, Vec<String
     )
 }
 
-/// A per-test directory under Cargo's integration-test scratch space.
-///
-/// Under WASI only the crate directory and its parent are preopened (see
-/// `.cargo/config.toml`), so the path is made relative to them there.
-fn scratch_dir(name: &str) -> std::path::PathBuf {
-    let tmp = Path::new(env!("CARGO_TARGET_TMPDIR"));
-    let base = if cfg!(target_os = "wasi") {
-        let workspace = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .expect("crate is inside the workspace");
-        Path::new("..").join(
-            tmp.strip_prefix(workspace)
-                .expect("target directory is inside the workspace"),
-        )
-    } else {
-        tmp.to_path_buf()
-    };
-    base.join(format!("membership-index-{name}"))
-}
-
 /// The generated parts library composes, binds and answers membership the
 /// same from its USDA and its USDC files.
 #[test]
 fn library_usda_and_usdc_agree() {
     let scene = LibraryScene::generate(&LibraryShape::SMALL);
-    let dir = scratch_dir("library-scene");
+    let dir = scratch_dir("membership-index-library-scene");
     // Start clean if an earlier run was interrupted.
     let _ = std::fs::remove_dir_all(&dir);
     let usda = scene

@@ -24,6 +24,7 @@
 //! Spec: AOUSD Core §10.3.2 (arcs map namespace), §11.3 (population),
 //! §12.4 (target lists), §15 (collections).
 
+use crate::support::scratch::scratch_dir;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
@@ -351,26 +352,6 @@ fn layer_report_counts_and_displays() {
     );
 }
 
-/// A per-test directory under Cargo's integration-test scratch space.
-///
-/// Under WASI only the crate directory and its parent are preopened (see
-/// `.cargo/config.toml`), so the path is made relative to them there.
-fn scratch_dir(name: &str) -> std::path::PathBuf {
-    let tmp = std::path::Path::new(env!("CARGO_TARGET_TMPDIR"));
-    let base = if cfg!(target_os = "wasi") {
-        let workspace = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .expect("crate is inside the workspace");
-        std::path::Path::new("..").join(
-            tmp.strip_prefix(workspace)
-                .expect("target directory is inside the workspace"),
-        )
-    } else {
-        tmp.to_path_buf()
-    };
-    base.join(format!("layer-dangling-targets-{name}"))
-}
-
 /// Each layer's report, as text, by the layer's file stem.
 fn library_report(mut loaded: LoadedStage) -> BTreeMap<String, (usize, usize, usize, Vec<String>)> {
     let store = &mut loaded.store;
@@ -413,7 +394,7 @@ fn library_usda_and_usdc_agree() {
         dangling: 30,
         ..LibraryShape::SMALL
     });
-    let dir = scratch_dir("library");
+    let dir = scratch_dir("layer-dangling-targets-library");
     let _ = std::fs::remove_dir_all(&dir);
     let usda = library
         .write(&dir.join("usda"), LibraryFormat::Usda)

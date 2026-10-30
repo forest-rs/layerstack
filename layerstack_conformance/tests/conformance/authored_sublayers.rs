@@ -15,7 +15,8 @@
 //! §10.6.
 #![cfg(not(target_arch = "wasm32"))]
 
-use std::path::{Path, PathBuf};
+use crate::support::scratch::scratch_dir;
+use std::path::Path;
 use std::process::Command;
 
 use layerstack::{
@@ -95,11 +96,6 @@ report(stage)
 "#;
 
 const SESSION: LayerId = LayerId(7);
-
-/// A per-test directory under Cargo's integration-test scratch space.
-fn scratch_dir() -> PathBuf {
-    Path::new(env!("CARGO_TARGET_TMPDIR")).join("authored_sublayers")
-}
 
 fn base_name(identifier: &str) -> String {
     Path::new(identifier)
@@ -216,7 +212,7 @@ fn layerstack_steps(dir: &Path) -> Vec<String> {
 /// Each step composes what usd-core 26.11 composes for it.
 #[test]
 fn authored_sublayers_load_as_openusd_loads_them() {
-    let dir = scratch_dir();
+    let dir = scratch_dir("authored_sublayers");
     let _ = std::fs::remove_dir_all(&dir);
     for (path, text) in FILES {
         let path = dir.join(path);

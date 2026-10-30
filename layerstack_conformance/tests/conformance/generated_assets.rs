@@ -4,6 +4,7 @@
 //! Exercises the exact runnable multi-producer example, including source edits and OpenUSD round trips.
 #[path = "../../../layerstack_examples/examples/support/generated_assets.rs"]
 mod support;
+use crate::support::scratch::scratch_dir;
 use layerstack::{
     EditTarget, FieldValue, InMemoryStore, ListOp, NodeId, Stage, StageOptions, Time, Transaction,
     TypedArray, Value,
@@ -1006,7 +1007,7 @@ fn authored_layers_round_trip_in_both_formats_and_match_openusd() {
         ])
     );
     assert_eq!(expected["ids"], serde_json::json!([101, 103]));
-    let base = Path::new(env!("CARGO_TARGET_TMPDIR")).join("generated-assets");
+    let base = scratch_dir("generated-assets");
     std::fs::create_dir_all(&base).unwrap();
     for binary in [false, true] {
         let directory = base.join(if binary { "usdc" } else { "usda" });

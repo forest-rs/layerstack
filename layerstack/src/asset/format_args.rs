@@ -11,15 +11,18 @@
 //! `Sdf_CreateIdentifier` (`pxr/usd/sdf/assetPathResolver.cpp`). AOUSD Core
 //! §9 (asset resolution).
 
-use alloc::{collections::BTreeMap, string::String};
+use alloc::{string::String, vec::Vec};
 use core::fmt;
 
 /// The separator between an asset path and its format arguments.
 pub const FORMAT_ARGS_DELIMITER: &str = ":SDF_FORMAT_ARGS:";
 
 /// Format arguments: `key=value` pairs, ordered by key.
+///
+/// An asset path carries a handful of arguments, so they are kept as a
+/// vector sorted by key rather than a map.
 #[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct FormatArgs(BTreeMap<String, String>);
+pub struct FormatArgs(Vec<(String, String)>);
 
 /// An asset path whose format arguments do not parse.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -83,7 +86,16 @@ impl FormatArgs {
 
     /// Sets `key` to `value`, replacing any earlier value.
     pub fn insert(&mut self, key: impl Into<String>, value: impl Into<String>) {
-        self.0.insert(key.into(), value.into());
+        let (key, value) = (key.into(), value.into());
+        match self.position(&key) {
+            Ok(at) => self.0[at].1 = value,
+            Err(at) => self.0.insert(at, (key, value)),
+        }
+    }
+
+    /// Where `key` is, or where it would go.
+    fn position(&self, key: &str) -> Result<usize, usize> {
+        self.0.binary_search_by(|(at, _)| at.as_str().cmp(key))
     }
 
     /// Sets `key` to `value`.
@@ -95,24 +107,28 @@ impl FormatArgs {
 
     /// Removes `key`, returning its value.
     pub fn remove(&mut self, key: &str) -> Option<String> {
-        self.0.remove(key)
+        let at = self.position(key).ok()?;
+        Some(self.0.remove(at).1)
     }
 
     /// Keeps only the arguments `keep` accepts.
     pub fn retain(&mut self, mut keep: impl FnMut(&str, &str) -> bool) {
-        self.0.retain(|key, value| keep(key, value));
+        self.0.retain(|(key, value)| keep(key, value));
     }
 
     /// Sets every argument of `other` here, replacing values for keys both
     /// hold.
     pub fn extend(&mut self, other: Self) {
-        self.0.extend(other.0);
+        for (key, value) in other.0 {
+            self.insert(key, value);
+        }
     }
 
     /// The value of `key`.
     #[must_use]
     pub fn get(&self, key: &str) -> Option<&str> {
-        self.0.get(key).map(String::as_str)
+        let at = self.position(key).ok()?;
+        Some(&self.0[at].1)
     }
 
     /// The arguments, ordered by key.
@@ -149,11 +165,11 @@ impl FormatArgs {
 
 impl<K: Into<String>, V: Into<String>> FromIterator<(K, V)> for FormatArgs {
     fn from_iter<I: IntoIterator<Item = (K, V)>>(iter: I) -> Self {
-        Self(
-            iter.into_iter()
-                .map(|(k, v)| (k.into(), v.into()))
-                .collect(),
-        )
+        let mut args = Self::new();
+        for (key, value) in iter {
+            args.insert(key, value);
+        }
+        args
     }
 }
 

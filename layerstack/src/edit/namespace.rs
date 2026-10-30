@@ -1502,8 +1502,9 @@ fn repair_fields(
 
 /// Variant specs no composed prim index uses, by the path of their prim
 /// and the branches enclosing them (for a variant spec, ending with its
-/// own selection): a namespace edit moves them with their prim, but the
-/// paths they author stay as they are.
+/// own selection; none for a prim spec of a layer outside every layer
+/// stack, which no arc reaches): a namespace edit moves them with their
+/// prim, but the paths they author stay as they are.
 ///
 /// OpenUSD fixes path-bearing fields only for the composed objects that
 /// depend on the edited path (`_GatherPathBearingFieldEditsForStage`,
@@ -1569,7 +1570,7 @@ pub(super) fn repair_prim(
     dormant: &Dormant,
 ) -> Result<(), NamespaceError> {
     let outer = spec.outer_variant_sites();
-    if !outer.is_empty() && dormant.contains(path, outer) {
+    if dormant.contains(path, outer) {
         return Ok(());
     }
     let outer = outer.to_vec();

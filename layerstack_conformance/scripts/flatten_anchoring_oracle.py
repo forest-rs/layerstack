@@ -30,6 +30,15 @@ the package itself, whose layers author search paths found beside the
 member, beside the package's root layer, beside the package file and
 nowhere: OpenUSD looks inside the package first
 (`SdfComputeAssetPathRelativeToLayer` in `pxr/usd/sdf/layerUtils.cpp`).
+A fifth, `nested/session.usda`, defines `/World/Nested`, referencing a
+member of `inner.usdz`, a package inside `nested/outer.usdz`, and the
+outer package, whose root layer references the inner package: the inner
+layers author search paths found beside the member, beside the inner
+package's root layer, only in the outer package, beside the outer package
+file and nowhere; the outer root layer names a member of the inner
+package. A path anchors within the innermost package
+(`outer.usdz[inner.usdz[tex/a.png]]`), never in the package around it,
+and then beside the outermost package file.
 
 OpenUSD's flatten anchors every asset path to the layer that authors it
 (`SdfAnchorAssetPaths` through `SdfComputeAssetPathRelativeToLayer`),
@@ -47,7 +56,8 @@ what it resolves.
 It records, for the stage opened on `root.usda` alone (`root`), with
 `sess/session.usda` as its session layer (`session`), with
 `rate/rate.usda` (`rate`), with `stack/session.usda`
-(`session_sublayers`) and with `pkg/session.usda` (`package`):
+(`session_sublayers`), with `pkg/session.usda` (`package`) and with
+`nested/session.usda` (`nested`):
 
 - `flatten`: `UsdStage::Flatten`'s `ExportToString`, without its `doc`;
 - `metadata`: for each stage metadata field, `HasAuthoredMetadata` and
@@ -61,6 +71,7 @@ fixture.
 """
 import argparse
 import filecmp
+import io
 import json
 import os
 import struct
@@ -215,8 +226,51 @@ over "World"
     }
 }
 """,
+    "nested/session.usda": """#usda 1.0
+
+over "World"
+{
+    def "Nested" (
+        references = [
+            @./outer.usdz[inner.usdz[sub/inner.usda]]@</Inner>,
+            @./outer.usdz@</Outer>
+        ]
+    )
+    {
+    }
 }
-# Packages, each its members in package order, the root layer first.
+""",
+}
+# A package inside `nested/outer.usdz`.
+INNER = [
+    ("root.usda", """#usda 1.0
+
+def Xform "Root"
+{
+    asset innerRootBesideOuter = @near.png@
+    asset innerRootOuterMember = @tex/o.png@
+    asset innerRootOwn = @./own.png@
+    asset innerRootSearch = @tex/a.png@
+}
+"""),
+    ("sub/inner.usda", """#usda 1.0
+
+def Xform "Inner"
+{
+    asset atPackageRoot = @tex/a.png@
+    asset besideMember = @near.png@
+    asset besideOuterPackage = @outside.png@
+    asset nowhere = @nowhere.png@
+    asset outerMember = @tex/o.png@
+    asset own = @./own.png@
+    asset up = @../tex/a.png@
+}
+"""),
+    ("sub/near.png", ""),
+    ("tex/a.png", ""),
+]
+# Packages, each its members in package order, the root layer first; a
+# member given as a list is a package of those members.
 PACKAGES = {
     "pkg/pkg.usdz": [
         ("root.usda", """#usda 1.0
@@ -245,6 +299,22 @@ def Xform "Inner"
         ("tex/a.png", ""),
         ("both.png", ""),
     ],
+    "nested/outer.usdz": [
+        ("root.usda", """#usda 1.0
+
+def Xform "Outer" (
+    references = @inner.usdz@</Root>
+)
+{
+    asset outerBesidePackage = @near.png@
+    asset outerInner = @inner.usdz[tex/a.png]@
+    asset outerOwn = @./own.png@
+    asset outerSearch = @tex/o.png@
+}
+"""),
+        ("tex/o.png", ""),
+        ("inner.usdz", INNER),
+    ],
 }
 # Files the paths name, so that OpenUSD finds them; the others are missing.
 FILES = [
@@ -253,6 +323,7 @@ FILES = [
     "sess/sess.png", "sess/deep.png", "sess/stex/s.png",
     "stack/s.png", "stack/weak/w.png", "stack/weak/tex/w.png",
     "pkg/outside.png", "pkg/both.png", "pkg/near.png",
+    "nested/outside.png", "nested/near.png",
 ]
 FIELDS = [
     "customLayerData", "defaultPrim", "upAxis", "startTimeCode", "endTimeCode",
@@ -264,6 +335,7 @@ SESSIONS = {
     "rate": "rate/rate.usda",
     "session_sublayers": "stack/session.usda",
     "package": "pkg/session.usda",
+    "nested": "nested/session.usda",
 }
 
 
@@ -321,16 +393,26 @@ def record(directory, session):
     }
 
 
-def package(members, path):
-    """Packages the members as `usdzip` lays them out: stored, with every
-    member's data 64-byte aligned by a `0x1986` extra field."""
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_STORED) as z:
-        for name, text in members:
+def package_bytes(members):
+    """The members packaged as `usdzip` lays them out: stored, with every
+    member's data 64-byte aligned by a `0x1986` extra field. A member
+    given as a list is itself a package of those members."""
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_STORED) as z:
+        for name, data in members:
+            data = package_bytes(data) if isinstance(data, list) else data.encode()
             info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
             pad = (-(z.fp.tell() + 30 + len(name.encode()) + 4)) % 64
             info.extra = struct.pack("<HH", 0x1986, pad) + bytes(pad)
-            z.writestr(info, text.encode())
+            z.writestr(info, data)
+    return buffer.getvalue()
+
+
+def package(members, path):
+    """Writes the members packaged at `path` (`package_bytes`)."""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "wb") as f:
+        f.write(package_bytes(members))
 
 
 def write(out):

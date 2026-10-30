@@ -1,0 +1,13 @@
+#usda 1.0
+
+over "World"
+{
+    def "Nested" (
+        references = [
+            @./outer.usdz[inner.usdz[sub/inner.usda]]@</Inner>,
+            @./outer.usdz@</Outer>
+        ]
+    )
+    {
+    }
+}

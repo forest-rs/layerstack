@@ -8,6 +8,7 @@ use std::{
     io::Write,
     path::{Component, Path, PathBuf},
     sync::atomic::{AtomicU64, Ordering},
+    time::Duration,
 };
 
 /// Filesystem transport with an explicit root and ordered search directories.
@@ -44,18 +45,24 @@ use std::{
 /// holds it open without sharing it. Windows reports both as access denied
 /// or a sharing violation, which may also be lasting. Reads, existence
 /// checks and the steps of a write that open, query or rename a file retry
-/// those two errors, waiting longer each time, for up to about one second
-/// before reporting them as [`IoErrorKind::Storage`]. A reader concurrent
-/// with writers therefore sees the old file or a new one, as on other
-/// platforms, unless something holds the file for longer than that; a
-/// file that is truly inaccessible takes that second to fail. Other
-/// platforms do not retry.
+/// those two errors, waiting longer each time, for up to the lock retry
+/// budget ([`Self::DEFAULT_LOCK_RETRY`], one second, unless
+/// [`Self::with_lock_retry`] sets another) before reporting them as
+/// [`IoErrorKind::Storage`]. A reader concurrent with writers therefore
+/// sees the old file or a new one, as on other platforms, unless something
+/// holds the file for longer than the budget; a file that is truly
+/// inaccessible takes the whole budget to fail. Other platforms do not
+/// retry, and ignore the budget.
 #[derive(Clone, Debug)]
 pub struct Filesystem {
     root: PathBuf,
     search_paths: Vec<PathBuf>,
+    lock_retry: Duration,
 }
 impl Filesystem {
+    /// The lock retry budget a new backend starts with: one second.
+    pub const DEFAULT_LOCK_RETRY: Duration = Duration::from_secs(1);
+
     /// Creates a filesystem backend. Relative roots/search paths are captured
     /// against the current directory once, avoiding later working-directory drift.
     pub fn new(
@@ -73,7 +80,23 @@ impl Filesystem {
         Ok(Self {
             root: absolute(root.as_ref()),
             search_paths: search_paths.into_iter().map(|p| absolute(&p)).collect(),
+            lock_retry: Self::DEFAULT_LOCK_RETRY,
         })
+    }
+
+    /// This backend, retrying Windows access-denied and sharing-violation
+    /// errors for at most `budget` per open, query or rename instead of
+    /// [`Self::DEFAULT_LOCK_RETRY`]; [`Duration::ZERO`] tries each once.
+    ///
+    /// A shorter budget fails sooner on a file that is truly inaccessible,
+    /// and gives up sooner on one that a concurrent replacement or another
+    /// process holds only briefly. The setting exists on every platform so
+    /// callers need no `cfg`, but has effect only on Windows: other
+    /// platforms never retry.
+    #[must_use]
+    pub fn with_lock_retry(mut self, budget: Duration) -> Self {
+        self.lock_retry = budget;
+        self
     }
 }
 impl Storage for Filesystem {
@@ -110,14 +133,16 @@ impl Storage for Filesystem {
     }
     fn read(&self, identifier: &str) -> Result<Vec<u8>, IoError> {
         use std::io::Read;
-        let mut file = retry_transient(|| fs::File::open(identifier)).map_err(storage_error)?;
+        let mut file = retry_transient(self.lock_retry, || fs::File::open(identifier))
+            .map_err(storage_error)?;
         let mut bytes = Vec::new();
         file.read_to_end(&mut bytes).map_err(storage_error)?;
         Ok(bytes)
     }
     fn read_bounded(&self, identifier: &str, max_bytes: u64) -> Result<Vec<u8>, IoError> {
         use std::io::Read;
-        let file = retry_transient(|| fs::File::open(identifier)).map_err(storage_error)?;
+        let file = retry_transient(self.lock_retry, || fs::File::open(identifier))
+            .map_err(storage_error)?;
         if file.metadata().map_err(storage_error)?.len() > max_bytes {
             return Err(IoError::new(
                 IoErrorKind::Rejected,
@@ -141,7 +166,7 @@ impl Storage for Filesystem {
     }
     fn exists(&self, identifier: &str) -> Result<bool, IoError> {
         // A file, as `identify` selects candidates; a directory is no source.
-        match retry_transient(|| fs::metadata(identifier)) {
+        match retry_transient(self.lock_retry, || fs::metadata(identifier)) {
             Ok(metadata) => Ok(metadata.is_file()),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
             Err(error) => Err(storage_error(error)),
@@ -178,7 +203,8 @@ impl Storage for Filesystem {
         identifier: &str,
     ) -> Result<Arc<dyn layerstack_usdz::range::RangeSource<Error = IoError> + Send + Sync>, IoError>
     {
-        let file = retry_transient(|| fs::File::open(identifier)).map_err(storage_error)?;
+        let file = retry_transient(self.lock_retry, || fs::File::open(identifier))
+            .map_err(storage_error)?;
         let metadata = file.metadata().map_err(storage_error)?;
         if !metadata.is_file() {
             return Err(IoError::new(
@@ -193,7 +219,10 @@ impl Storage for Filesystem {
         }))
     }
     fn write(&mut self, identifier: &str, bytes: &[u8]) -> Result<(), IoError> {
-        atomic_write(Path::new(identifier), |file| file.write_all(bytes)).map_err(storage_error)
+        atomic_write(Path::new(identifier), self.lock_retry, |file| {
+            file.write_all(bytes)
+        })
+        .map_err(storage_error)
     }
     /// Streams into the temporary file [`Self::write`] renames over the
     /// destination; a failure removes it and replaces nothing.
@@ -203,7 +232,7 @@ impl Storage for Filesystem {
         produce: &mut dyn FnMut(&mut dyn ByteSink) -> Result<(), IoError>,
     ) -> Result<(), IoError> {
         let mut failure = None;
-        let written = atomic_write(Path::new(identifier), |file| {
+        let written = atomic_write(Path::new(identifier), self.lock_retry, |file| {
             produce(&mut FileSink { file }).map_err(|error| {
                 failure = Some(error);
                 std::io::Error::other("the source being written failed")
@@ -278,17 +307,20 @@ impl layerstack_usdz::range::RangeSource for FileRanges {
 static NEXT_CANDIDATE: AtomicU64 = AtomicU64::new(0);
 
 /// The callback seam permits deterministic partial-write failures in tests.
+/// `lock_retry` is the [`retry_transient`] budget of each open, query and
+/// rename.
 fn atomic_write(
     path: &Path,
+    lock_retry: Duration,
     write: impl FnOnce(&mut fs::File) -> std::io::Result<()>,
 ) -> std::io::Result<()> {
-    let target = match retry_transient(|| fs::symlink_metadata(path)) {
+    let target = match retry_transient(lock_retry, || fs::symlink_metadata(path)) {
         Ok(metadata) if metadata.file_type().is_symlink() => fs::canonicalize(path)?,
         Ok(_) => path.to_path_buf(),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => path.to_path_buf(),
         Err(error) => return Err(error),
     };
-    let metadata = match retry_transient(|| fs::metadata(&target)) {
+    let metadata = match retry_transient(lock_retry, || fs::metadata(&target)) {
         Ok(metadata) => {
             // WASI exposes filesystem rights rather than file permission bits.
             if !metadata.is_file()
@@ -349,21 +381,17 @@ fn atomic_write(
         file.sync_all()?;
         candidate
     };
-    retry_transient(|| fs::rename(&candidate.0, &target))?;
+    retry_transient(lock_retry, || fs::rename(&candidate.0, &target))?;
     Ok(())
 }
-
-/// The longest [`retry_transient`] keeps retrying on Windows.
-#[cfg(windows)]
-const TRANSIENT_RETRY_BUDGET: std::time::Duration = std::time::Duration::from_secs(1);
 
 /// `operation`, retried while it fails with an error Windows reports for a
 /// file that a concurrent replacement or another process's unshared handle
 /// makes briefly inaccessible: `ERROR_ACCESS_DENIED` (a replaced file is
 /// pending deletion, or a rename meets an open destination) or
 /// `ERROR_SHARING_VIOLATION`. Waits start at a millisecond and double, to
-/// at most 100 ms, for up to `TRANSIENT_RETRY_BUDGET` in all; then the
-/// last error is returned.
+/// at most 100 ms, for up to `budget` in all; then the last error is
+/// returned. A zero `budget` runs `operation` once.
 ///
 /// Neither error says whether it will pass, so a lasting one costs the
 /// whole budget. POSIX renames and opens have no such window, so other
@@ -371,30 +399,36 @@ const TRANSIENT_RETRY_BUDGET: std::time::Duration = std::time::Duration::from_se
 ///
 /// The Go toolchain retries the same two errors for the same reason
 /// (`cmd/internal/robustio`, golang.org/issue/32188).
-fn retry_transient<T>(mut operation: impl FnMut() -> std::io::Result<T>) -> std::io::Result<T> {
+fn retry_transient<T>(
+    budget: Duration,
+    mut operation: impl FnMut() -> std::io::Result<T>,
+) -> std::io::Result<T> {
     #[cfg(windows)]
     {
         const ERROR_ACCESS_DENIED: i32 = 5;
         const ERROR_SHARING_VIOLATION: i32 = 32;
         let start = std::time::Instant::now();
-        let mut wait = std::time::Duration::from_millis(1);
+        let mut wait = Duration::from_millis(1);
         loop {
             match operation() {
                 Err(error)
                     if matches!(
                         error.raw_os_error(),
                         Some(ERROR_ACCESS_DENIED | ERROR_SHARING_VIOLATION)
-                    ) && start.elapsed() + wait <= TRANSIENT_RETRY_BUDGET =>
+                    ) && start.elapsed() + wait <= budget =>
                 {
                     std::thread::sleep(wait);
-                    wait = (wait * 2).min(std::time::Duration::from_millis(100));
+                    wait = (wait * 2).min(Duration::from_millis(100));
                 }
                 result => return result,
             }
         }
     }
     #[cfg(not(windows))]
-    operation()
+    {
+        let _ = budget;
+        operation()
+    }
 }
 
 struct Candidate(PathBuf);
@@ -496,7 +530,9 @@ mod tests {
                 scope.spawn(move || {
                     let bytes = alloc::vec![value; SIZE];
                     barrier.wait();
-                    let result = atomic_write(target, |file| file.write_all(&bytes));
+                    let result = atomic_write(target, Filesystem::DEFAULT_LOCK_RETRY, |file| {
+                        file.write_all(&bytes)
+                    });
                     pending.fetch_sub(1, Ordering::Release);
                     result.unwrap();
                 });
@@ -550,15 +586,32 @@ mod tests {
         let holder = std::thread::spawn(move || {
             let file = unshared(&path);
             held.send(()).unwrap();
-            std::thread::sleep(std::time::Duration::from_millis(200));
+            std::thread::sleep(Duration::from_millis(200));
             drop(file);
         });
         wait.recv().unwrap();
         holder
     }
 
+    /// A new backend retries for the default budget, and the budget it is
+    /// given replaces that on every platform, including a zero one.
+    #[test]
+    fn lock_retry_defaults_to_a_second_and_takes_the_budget_given() {
+        // WASI has no temporary directory; any existing root will do.
+        let root = std::env::current_dir().unwrap();
+        let storage = Filesystem::new(&root, []).unwrap();
+        assert_eq!(storage.lock_retry, Filesystem::DEFAULT_LOCK_RETRY);
+        assert_eq!(Filesystem::DEFAULT_LOCK_RETRY, Duration::from_secs(1));
+        let short = storage.with_lock_retry(Duration::from_millis(100));
+        assert_eq!(short.lock_retry, Duration::from_millis(100));
+        let once = short.clone().with_lock_retry(Duration::ZERO);
+        assert_eq!(once.lock_retry, Duration::ZERO);
+        assert_eq!(short.lock_retry, Duration::from_millis(100));
+    }
+
     /// Reads and replacements wait out another handle that briefly keeps a
-    /// Windows file to itself, rather than failing as a single attempt does.
+    /// Windows file to itself for less than the default budget, rather than
+    /// failing as a single attempt does.
     #[cfg(windows)]
     #[test]
     fn brief_windows_locks_are_waited_out() {
@@ -578,13 +631,15 @@ mod tests {
 
     /// A Windows file held for longer than the retry budget fails reads and
     /// replacements as storage errors once the budget is spent, and a failed
-    /// replacement leaves the destination and no candidate behind.
+    /// replacement leaves the destination and no candidate behind. A short
+    /// budget keeps the test from spending the default second twice.
     #[cfg(windows)]
     #[test]
     fn lasting_windows_locks_fail_after_the_retry_budget() {
         let (root, target) = windows_scene("save-lasting-lock");
         let identifier = target.to_str().unwrap();
-        let mut storage = Filesystem::new(&root, []).unwrap();
+        let budget = Duration::from_millis(100);
+        let mut storage = Filesystem::new(&root, []).unwrap().with_lock_retry(budget);
         let probe = root.join("probe.usda");
         fs::write(&probe, b"probe").unwrap();
         let held = unshared(&target);
@@ -596,10 +651,35 @@ mod tests {
         assert_eq!(read.kind, IoErrorKind::Storage);
         let write = storage.write(identifier, b"replacement").unwrap_err();
         assert_eq!(write.kind, IoErrorKind::Storage);
-        assert!(start.elapsed() >= TRANSIENT_RETRY_BUDGET);
+        // Each gives up once the next wait would pass the budget, so the
+        // two together wait at least one budget.
+        assert!(start.elapsed() >= budget);
         drop(held);
         assert_eq!(fs::read(&target).unwrap(), b"previous scene");
         assert_eq!(fs::read_dir(&root).unwrap().count(), 2);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    /// A zero budget tries a held Windows file once: reads and
+    /// replacements fail without waiting, well inside the default budget.
+    #[cfg(windows)]
+    #[test]
+    fn zero_lock_retry_fails_windows_locks_at_once() {
+        let (root, target) = windows_scene("save-zero-retry");
+        let identifier = target.to_str().unwrap();
+        let mut storage = Filesystem::new(&root, [])
+            .unwrap()
+            .with_lock_retry(Duration::ZERO);
+        let held = unshared(&target);
+        let start = std::time::Instant::now();
+        let read = storage.read(identifier).unwrap_err();
+        assert_eq!(read.kind, IoErrorKind::Storage);
+        let write = storage.write(identifier, b"replacement").unwrap_err();
+        assert_eq!(write.kind, IoErrorKind::Storage);
+        assert!(start.elapsed() < Filesystem::DEFAULT_LOCK_RETRY / 2);
+        drop(held);
+        assert_eq!(fs::read(&target).unwrap(), b"previous scene");
+        assert_eq!(fs::read_dir(&root).unwrap().count(), 1);
         fs::remove_dir_all(root).unwrap();
     }
 
@@ -625,7 +705,10 @@ mod tests {
             "{}",
             String::from_utf8_lossy(&set.stderr)
         );
-        atomic_write(&target, |file| file.write_all(b"replacement")).unwrap();
+        atomic_write(&target, Filesystem::DEFAULT_LOCK_RETRY, |file| {
+            file.write_all(b"replacement")
+        })
+        .unwrap();
         let get = Command::new("/usr/bin/xattr")
             .args(["-p", attribute])
             .arg(&target)
@@ -655,7 +738,7 @@ mod tests {
         fs::create_dir_all(&root).unwrap();
         let target = root.join("scene.usda");
         fs::write(&target, b"previous scene").unwrap();
-        let error = atomic_write(&target, |file| {
+        let error = atomic_write(&target, Filesystem::DEFAULT_LOCK_RETRY, |file| {
             file.write_all(b"partial replacement")?;
             Err(std::io::Error::other("injected write failure"))
         })
@@ -665,7 +748,7 @@ mod tests {
         assert_eq!(fs::read_dir(&root).unwrap().count(), 1);
         // Force rename failure after a complete write without touching the old file.
         let moved = root.join("moved.usda");
-        atomic_write(&target, |file| {
+        atomic_write(&target, Filesystem::DEFAULT_LOCK_RETRY, |file| {
             file.write_all(b"complete candidate")?;
             fs::rename(&target, &moved)?;
             fs::create_dir(&target)
@@ -739,7 +822,10 @@ mod tests {
         fs::write(&target, b"old").unwrap();
         fs::set_permissions(&target, fs::Permissions::from_mode(0o640)).unwrap();
         symlink(&target, &link).unwrap();
-        atomic_write(&link, |file| file.write_all(b"new")).unwrap();
+        atomic_write(&link, Filesystem::DEFAULT_LOCK_RETRY, |file| {
+            file.write_all(b"new")
+        })
+        .unwrap();
         assert!(
             fs::symlink_metadata(&link)
                 .unwrap()
@@ -752,7 +838,11 @@ mod tests {
             0o640
         );
         fs::set_permissions(&target, fs::Permissions::from_mode(0o400)).unwrap();
-        assert!(atomic_write(&target, |file| file.write_all(b"forbidden")).is_err());
+        assert!(
+            atomic_write(&target, Filesystem::DEFAULT_LOCK_RETRY, |file| file
+                .write_all(b"forbidden"))
+            .is_err()
+        );
         assert_eq!(fs::read(&target).unwrap(), b"new");
         fs::remove_dir_all(root).unwrap();
     }

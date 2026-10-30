@@ -78,6 +78,41 @@ impl LiveStage {
             .extend(supports.iter().map(|p| (layer, *p)));
     }
 
+    /// The composed prims the source prim `source` of `layer` composes
+    /// into, or would if it held a spec: `source` itself in the stage's
+    /// own layer stack, and the prims of the nearest site at or above it
+    /// that a prim composes from, with the rest of its path.
+    pub(super) fn source_prims(
+        &mut self,
+        store: &dyn LayerStore,
+        layer: LayerId,
+        source: PathId,
+    ) -> Vec<PathId> {
+        let mut prims = Vec::new();
+        if self.stage.layer_stack().contains(&layer) {
+            prims.push(source);
+        }
+        let source_path = store.paths().resolve(source).clone();
+        let mut ancestor = Some(source_path.clone());
+        while let Some(path) = ancestor {
+            if let Some(id) = store.paths().lookup(&path) {
+                let dests: Vec<PathId> = self.source_share(layer).prims(id).copied().collect();
+                if !dests.is_empty() {
+                    let suffix = source_path.strip_prefix(&path).expect("ancestor");
+                    let paths = store.paths();
+                    prims.extend(
+                        dests
+                            .into_iter()
+                            .map(|dest| paths.intern_joined(dest, suffix)),
+                    );
+                    break;
+                }
+            }
+            ancestor = path.parent();
+        }
+        prims
+    }
+
     /// Map new/deleted source slots through the nearest retained source sites.
     /// Empty external layers use their recorded hosts as conservative roots.
     fn map_source_structure(
@@ -142,9 +177,14 @@ impl LiveStage {
         }
     }
 
-    /// The roots of the namespace to recompose, and the prims beyond them
-    /// whose prim indexes alone need refreshing; None for a full rebuild.
-    fn control_roots(&mut self, store: &mut dyn LayerStore) -> Option<(Vec<PathId>, Vec<PathId>)> {
+    /// The roots of the namespace to recompose, the prims beyond them
+    /// whose prim indexes alone need refreshing, and every root requested
+    /// before the roots beneath others were dropped; None for a full
+    /// rebuild.
+    fn control_roots(
+        &mut self,
+        store: &mut dyn LayerStore,
+    ) -> Option<(Vec<PathId>, Vec<PathId>, Vec<PathId>)> {
         // Unnotified authoring and relocation changes need a unified rebuild.
         if self
             .generations
@@ -260,12 +300,13 @@ impl LiveStage {
             }
             *root = store.paths().intern(path);
         }
+        let requested = roots.clone();
         let roots = minimal_roots(store, &roots);
         let within: HashSet<PathId> = roots.iter().copied().collect();
         refreshed.retain(|prim| !is_beneath_set(store, *prim, &within));
         sort::sort_unstable(&mut refreshed);
         refreshed.dedup();
-        Some((roots, refreshed))
+        Some((roots, refreshed, requested))
     }
 
     /// Checks that each boundary parent of `retained`, whose index an edit
@@ -301,11 +342,13 @@ impl LiveStage {
         // the new ones (an `over` above them), which the parent may draw
         // on through an arc: then the parents' indexes are composed again.
         let retain_boundaries = self.support_sources.is_empty();
-        let Some((mut roots, mut refreshed)) = self.control_roots(store) else {
+        let Some((mut roots, mut refreshed, mut requested)) = self.control_roots(store) else {
             return self.full_rebuild(store, changes);
         };
         self.controls_pending = false;
         self.structural_roots.clear();
+        // The prims recomposed for depending on what the roots hold.
+        let mut dependent_roots = Vec::new();
         if roots.is_empty() {
             self.stage.capture_controls(self.options.clone());
             self.record_generations(store);
@@ -326,6 +369,7 @@ impl LiveStage {
                 .scratch(&mut self.traversal_scratch)
                 .run()
                 .collect();
+            dependent_roots.extend(dependents.iter().copied());
             roots.extend(dependents);
             roots = minimal_roots(store, &roots);
             if roots
@@ -385,6 +429,7 @@ impl LiveStage {
                 .filter(|parent| self.stage.has_prim(*parent) && !indexed(&partial, *parent))
                 .collect();
             if !missing_parents.is_empty() {
+                requested.extend(missing_parents.iter().copied());
                 roots.extend(missing_parents);
                 roots = minimal_roots(store, &roots);
                 continue;
@@ -398,6 +443,7 @@ impl LiveStage {
                 .collect();
             if !unrefreshed.is_empty() {
                 refreshed.retain(|prim| partial.has_prim(*prim));
+                requested.extend(unrefreshed.iter().copied());
                 roots.extend(unrefreshed);
                 roots = minimal_roots(store, &roots);
                 within = roots.iter().copied().collect();
@@ -424,6 +470,7 @@ impl LiveStage {
             {
                 break (partial, within);
             }
+            dependent_roots.extend(dependents.iter().copied());
             roots.extend(dependents);
             roots = minimal_roots(store, &roots);
         };
@@ -471,11 +518,80 @@ impl LiveStage {
         // makes for its first listed child (OpenUSD's always exists), never
         // does.
         let pseudo_root = store.paths().lookup(&crate::Path::root());
-        let restacked: HashSet<PathId> = refreshed
+        let mut restacked: HashSet<PathId> = refreshed
             .iter()
             .copied()
             .filter(|&prim| {
                 Some(prim) != pseudo_root && self.stage.prim_stack(prim) != partial.prim_stack(prim)
+            })
+            .collect();
+        // A root the transaction changed only by inert specs, at it and at
+        // every root requested beneath it, whose subtree composes the same
+        // prims in the same order, changed only the spec stacks of the
+        // prims an inert spec came to or left: OpenUSD's `DidChangeSpecs`
+        // (`pxr/usd/pcp/changes.cpp`), which `UsdStage` reports info-only.
+        // When every root requested is such a prim, the prims depending on
+        // them changed only their spec stacks too (`DidChangeSpecs` of each
+        // dependency); otherwise a dependent may depend on another change.
+        let mut inert = core::mem::take(&mut self.inert_prims);
+        if requested.iter().all(|root| inert.contains(root)) {
+            inert.extend(dependent_roots.iter().copied());
+        } else {
+            requested.append(&mut dependent_roots);
+        }
+        // Beneath such a root, the roots requested for other changes are
+        // resynced on their own, as OpenUSD resyncs `/Sky/Cloud` and
+        // changes `/Sky` info-only when `DefinePrim` of `/Sky/Cloud`
+        // authors an `over` of `/Sky` too, provided the rest of the root's
+        // subtree composes the same prims in the same order.
+        let mut restacked_roots: HashSet<PathId> = HashSet::new();
+        let mut inner_resyncs = Vec::new();
+        for &root in &roots {
+            if Some(root) == pseudo_root
+                || !inert.contains(&root)
+                || !self.stage.has_prim(root)
+                || !partial.has_prim(root)
+            {
+                continue;
+            }
+            let at_root = HashSet::from([root]);
+            let inner: Vec<PathId> = requested
+                .iter()
+                .copied()
+                .filter(|&at| !inert.contains(&at) && is_beneath_set(store, at, &at_root))
+                .collect();
+            if inner.contains(&root) {
+                continue;
+            }
+            let inner = minimal_roots(store, &inner);
+            let changed: HashSet<PathId> = inner.iter().copied().collect();
+            let kept = |prim: &PathId| !is_beneath_set(store, *prim, &changed);
+            if !self
+                .stage
+                .traverse_all(root)
+                .filter(kept)
+                .eq(partial.traverse_all(root).filter(kept))
+            {
+                continue;
+            }
+            restacked.extend(
+                self.stage
+                    .traverse_all(root)
+                    .filter(kept)
+                    .filter(|&prim| self.stage.prim_stack(prim) != partial.prim_stack(prim)),
+            );
+            restacked_roots.insert(root);
+            inner_resyncs.extend(inner.into_iter().map(|at| (root, at)));
+        }
+        // The boundary parents' child lists before the merge: an edit that
+        // keeps every child can still change their order.
+        let boundary_lists: Vec<(PathId, Vec<PathId>)> = roots
+            .iter()
+            .filter_map(|&root| store.paths().parent(root))
+            .filter(|&parent| !is_beneath_set(store, parent, &within))
+            .map(|parent| {
+                let children = self.stage.all_children_of(parent).unwrap_or_default();
+                (parent, children.to_vec())
             })
             .collect();
         affected.extend(refreshed.iter().copied());
@@ -519,9 +635,39 @@ impl LiveStage {
             // not reported: OpenUSD resyncs the child's path alone (see
             // `LiveStage::refresh_local_structure`). A refreshed prim whose
             // spec stack changed is.
-            changes.changed_info_only = filtered(&|p| restacked.contains(&p));
+            // A child list that keeps its children can change order: a spec
+            // added to or removed from a layer weaker than the others of a
+            // child moves it, as child names compose weakest layer first.
+            // The child is resynced, so that a client reads its parent's
+            // children again, whether or not its spec is inert (OpenUSD
+            // reports the inert one info-only, and keeps the old order:
+            // `override_reorders_children` in `prim_resync_oracle.py`).
+            let reordered: HashSet<PathId> = boundary_lists
+                .iter()
+                .filter(|(parent, before)| {
+                    let after = self.stage.all_children_of(*parent).unwrap_or_default();
+                    kept_order(before, after) != kept_order(after, before)
+                })
+                .map(|(parent, _)| *parent)
+                .collect();
+            restacked_roots.retain(|root| {
+                store
+                    .paths()
+                    .parent(*root)
+                    .is_none_or(|parent| !reordered.contains(&parent))
+            });
             // A root no prim was or is at is not among `affected`.
-            changes.resynced = filtered(&|p| within.contains(&p));
+            roots.retain(|root| !restacked_roots.contains(root));
+            roots.extend(
+                inner_resyncs
+                    .iter()
+                    .filter(|(root, _)| restacked_roots.contains(root))
+                    .map(|(_, at)| *at),
+            );
+            let resynced: HashSet<PathId> = roots.iter().copied().collect();
+            changes.changed_info_only =
+                filtered(&|p| restacked.contains(&p) && !is_beneath_set(store, p, &resynced));
+            changes.resynced = filtered(&|p| resynced.contains(&p));
             if changes.resynced.len() < roots.len() {
                 changes.resynced = roots;
                 store
@@ -531,6 +677,12 @@ impl LiveStage {
         }
         affected
     }
+}
+
+/// The paths of `list` that `other` lists too, in `list`'s order.
+fn kept_order(list: &[PathId], other: &[PathId]) -> Vec<PathId> {
+    let other: HashSet<PathId> = other.iter().copied().collect();
+    list.iter().copied().filter(|p| other.contains(p)).collect()
 }
 
 /// Whether the partial composition `partial` indexed `prim`: it holds the
@@ -841,6 +993,68 @@ mod tests {
             );
             assert_prim_stacks_match_fresh(live, &mut store);
         }
+    }
+
+    /// An inert `over` added to a sublayer for a prim that composes
+    /// already changes that prim's spec stack, and that of the prim
+    /// inheriting it, info-only, as its removal does. With another edit of
+    /// the same prim in the same transaction, the prim is resynced: the
+    /// inert spec does not hide the other edit. One that moves its prim
+    /// among its siblings (child names compose weakest layer first)
+    /// resyncs it.
+    ///
+    /// Spec: AOUSD Core §10 (namespace composition), §11.3.1 (child
+    /// order). OpenUSD: `PcpChanges::DidChangeSpecs` for an inert prim spec
+    /// (`didAddInertPrim`), which `UsdStage` reports info-only.
+    #[test]
+    fn an_inert_over_changes_its_prim_info_only_unless_edited_otherwise() {
+        use crate::SublayerEntry;
+        let mut store = InMemoryStore::default();
+        let lamp = store.path("/Lamp");
+        let rock = store.path("/Rock");
+        let mut root = Layer::new(LayerId(1));
+        root.insert_prim(lamp, PrimSpec::def());
+        root.insert_prim(rock, PrimSpec::def().with_inherit(lamp));
+        root.sublayers.push(SublayerEntry::new(LayerId(2)));
+        store.insert_layer(root);
+        store.insert_layer(Layer::new(LayerId(2)));
+        let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+        let over = |path| {
+            let mut create = Transaction::new();
+            create.create_prim(
+                EditTarget::for_layer(LayerId(2)).prim(path),
+                Specifier::Over,
+                None,
+            );
+            create
+        };
+        let create = over(lamp);
+        let added = live.apply(&mut store, &create).expect("edit applies");
+        assert!(added.changes.resynced.is_empty(), "{:?}", added.changes);
+        assert_eq!(added.changes.changed_info_only, [lamp, rock]);
+        assert_prim_stacks_match_fresh(&live, &mut store);
+        let removed = live.apply(&mut store, &added.inverse).expect("undo");
+        assert!(removed.changes.resynced.is_empty(), "{:?}", removed.changes);
+        assert_eq!(removed.changes.changed_info_only, [lamp, rock]);
+        assert_prim_stacks_match_fresh(&live, &mut store);
+
+        let scope = store.tokens().intern("Scope");
+        let mut both = create.clone();
+        both.set_type_name(EditTarget::for_layer(LayerId(1)).prim(lamp), scope);
+        let typed = live.apply(&mut store, &both).expect("edit applies");
+        assert!(
+            typed.changes.resynced.contains(&lamp),
+            "{:?}",
+            typed.changes
+        );
+        assert!(!typed.changes.changed_info_only.contains(&lamp));
+        assert_prim_stacks_match_fresh(&live, &mut store);
+        live.apply(&mut store, &typed.inverse).expect("undo");
+
+        // `Rock` comes first in the sublayer, which lists it alone.
+        let moved = live.apply(&mut store, &over(rock)).expect("edit applies");
+        assert_eq!(moved.changes.resynced, [rock], "{:?}", moved.changes);
+        assert_prim_stacks_match_fresh(&live, &mut store);
     }
 
     /// The prim stack of every prim of `live` matches that of a fresh

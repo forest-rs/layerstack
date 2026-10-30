@@ -1,23 +1,30 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-//! Change reports for prim spec additions, removals and child reorders, as
-//! OpenUSD 26.11 sends them.
+//! Change reports for prim spec additions, removals and child reorders,
+//! and for the arcs, metadata and layers above them, as OpenUSD 26.11
+//! sends them.
 //!
 //! `scripts/prim_resync_oracle.py` takes a fixed sequence of edits on
 //! `fixtures/prim_resync/scene.usda` and records, call by call, the
 //! `UsdNotice::ObjectsChanged` notices each sent and the composed child
-//! names after it. Here each edit is one transaction on a `LiveStage`, and
-//! its [`Changes`] must report what the edit's notices do, merged as one
+//! names after it. Here each edit is one transaction on a `LiveStage` (a
+//! layer muted or unmuted is a stage control, recomposed), and its
+//! [`Changes`] must report what the edit's notices do, merged as one
 //! `SdfChangeBlock` merges them: a path resynced by one notice and
 //! info-only in another is resynced, and a path beneath a resync is not
 //! reported.
 //!
-//! The point it pins: a prim created or removed resyncs that prim alone.
+//! The points it pins: a prim created or removed resyncs that prim alone.
 //! Its parent, whose spec lists one child more or fewer, is not reported
 //! (OpenUSD records no field change for `primChildren`), so a client
 //! caching the parent's other inputs keeps them. A reorder (`primOrder`)
-//! resyncs the parent.
+//! resyncs the parent. An inert `over` added or removed for a prim that
+//! composes either way, in any layer of the root layer stack, the session
+//! layer or a referenced asset, changes that prim info-only, and each
+//! prim composing from it (`/Echo` inherits `/World/Lamp`); one holding an
+//! attribute spec resyncs the attribute too, and one holding metadata
+//! composing nothing is info-only. `kind` resyncs its prim.
 //!
 //! Differences, deliberate:
 //!
@@ -31,16 +38,29 @@
 //!   was built from `/Robot`, and sends nothing when from `/Drone`, which
 //!   varies run to run (the oracle records none); layerstack resyncs the
 //!   path authored.
-//! - An inert `over` added through a sublayer for a prim already composed
-//!   changes only that prim's spec stack, which OpenUSD reports info-only.
-//!   layerstack recomposes such a prim with its namespace, and resyncs it:
-//!   conservative, and it covers a new child the `over` lists.
+//! - An `over` of `/Thing` added to the weaker layer moves `Thing` before
+//!   `Robot` and `Drone` (child names compose weakest layer first).
+//!   OpenUSD reports `/Thing` info-only and keeps the old order, which a
+//!   stage opened afresh does not compose (the oracle records the fresh
+//!   order); layerstack composes the new order and resyncs `/Thing`, so
+//!   that a client reads the root prims again.
+//! - OpenUSD reports `/Echo` info-only with every change of the root
+//!   layer's own fields, which compose nothing into it; layerstack does
+//!   not.
+//! - A field of the root layer, `documentation` among them, resyncs `/`
+//!   here; OpenUSD changes `/` info-only.
+//! - A sublayer inserted or removed, or a layer of the root layer stack
+//!   muted or unmuted, recomposes the stage whole here, and resyncs `/`.
+//!   OpenUSD resyncs the prims and properties whose specs came or went,
+//!   and changes the rest of the prims whose spec stacks changed, and `/`,
+//!   info-only.
 
 use std::collections::BTreeMap;
 
 use layerstack::{
-    Changes, EditTarget, LayerId, LiveStage, NamespaceEdit, PathId, PropertySpec, PropertyType,
-    Specifier, StageOptions, TargetPath, Transaction,
+    Changes, EditTarget, FieldValue, Layer, LayerId, ListPosition, LiveStage, NamespaceEdit,
+    PathId, PropertySpec, PropertyType, Reference, Specifier, StageOptions, SublayerEntry,
+    TargetPath, Transaction, Value,
 };
 use layerstack_conformance::{
     usda_real::{LoadedStage, load_entry_usda},
@@ -145,11 +165,44 @@ fn layer(loaded: &LoadedStage, name: &str) -> LayerId {
         .0
 }
 
+/// The layers the replay adds to the loaded store: the session layer (an
+/// anonymous one, as `UsdStage::Open` makes), and the sublayers the
+/// sequence inserts.
+struct Extra {
+    session: LayerId,
+    empty: LayerId,
+    comet: LayerId,
+}
+
+impl Extra {
+    fn add(loaded: &mut LoadedStage) -> Self {
+        let next = loaded.store.layer_ids().into_iter().max().unwrap().0 + 1;
+        let [session, empty, comet] = [0, 1, 2].map(|at| LayerId(next + at));
+        for id in [session, empty, comet] {
+            loaded.store.insert_layer(Layer::new(id));
+        }
+        let mut txn = Transaction::new();
+        let path = loaded.store.path("/Comet");
+        txn.create_prim(
+            EditTarget::for_layer(comet).prim(path),
+            Specifier::Def,
+            None,
+        );
+        txn.apply(&mut loaded.store).expect("comet.usda");
+        Self {
+            session,
+            empty,
+            comet,
+        }
+    }
+}
+
 /// The transaction that makes the oracle's edit `name`.
-fn edit(name: &str, loaded: &mut LoadedStage, live: &LiveStage) -> Transaction {
+fn edit(name: &str, loaded: &mut LoadedStage, live: &LiveStage, added: &Extra) -> Transaction {
     let scene = layer(loaded, "scene.usda");
     let weak = layer(loaded, "weak.usda");
     let asset = layer(loaded, "asset.usda");
+    let session = added.session;
     let store = &mut loaded.store;
     let path = |text: &str| store.path(text);
     let pebble = path("/World/Pebble");
@@ -166,7 +219,18 @@ fn edit(name: &str, loaded: &mut LoadedStage, live: &LiveStage) -> Transaction {
     let cloud = path("/Sky/Cloud");
     let extra = path("/Robot/Extra");
     let antenna = path("/Asset/Antenna");
+    let moon = path("/Moon");
+    let thing = path("/Thing");
+    let thing_ball = path("/Thing/Ball");
+    let asset_root = path("/Asset");
+    let asset_ball = path("/Asset/Ball");
+    let sky = path("/Sky");
+    let robot = path("/Robot");
+    let switch = path("/Switch");
+    let rover = path("/Rover");
+    let rock = path("/World/Rock");
     let roughness = store.property_path("/World/Rock.roughness");
+    let weight = store.property_path("/Moon.weight");
     let tokens = store.tokens();
     let token = |text: &str| Some(tokens.intern(text));
     let prim = |layer: LayerId, path: PathId| EditTarget::for_layer(layer).prim(path);
@@ -245,6 +309,105 @@ fn edit(name: &str, loaded: &mut LoadedStage, live: &LiveStage) -> Transaction {
         "remove_from_prototype_source" => {
             txn.remove_spec(prim(asset, antenna));
         }
+        "override_in_root" => {
+            txn.create_prim(prim(scene, moon), Specifier::Over, None);
+        }
+        "remove_override_in_root" => {
+            txn.remove_spec(prim(scene, moon));
+        }
+        "remove_override_in_sublayer" => {
+            txn.remove_spec(prim(weak, lamp));
+        }
+        "override_reference_child" => {
+            txn.create_prim(prim(scene, thing_ball), Specifier::Over, None);
+        }
+        "override_in_asset" => {
+            txn.create_prim(prim(asset, asset_ball), Specifier::Over, None);
+        }
+        "remove_override_in_asset" => {
+            txn.remove_spec(prim(asset, asset_ball));
+        }
+        "override_with_attribute" => {
+            txn.create_prim(prim(scene, moon), Specifier::Over, None);
+            let float = PropertySpec::typed_attribute(PropertyType::parse("float").unwrap());
+            txn.create_property(EditTarget::for_layer(scene).property(weight), float);
+        }
+        "override_with_metadata" => {
+            txn.create_prim(prim(session, sky), Specifier::Over, None);
+            txn.set_metadata(
+                prim(session, sky),
+                tokens.intern("documentation"),
+                FieldValue::Value(Value::string("clear")),
+            );
+        }
+        "override_in_session" => {
+            txn.create_prim(prim(session, lamp), Specifier::Over, None);
+        }
+        "override_instance_root" => {
+            txn.create_prim(prim(weak, robot), Specifier::Over, None);
+        }
+        "remove_override_instance_root" => {
+            txn.remove_spec(prim(weak, robot));
+        }
+        "select_variant" | "clear_variant" => {
+            let night = (name == "select_variant").then(|| tokens.intern("night"));
+            txn.set_variant_selection(prim(scene, switch), tokens.intern("look"), night);
+        }
+        "add_reference" => {
+            txn.add_reference(
+                prim(scene, rover),
+                Reference::new(asset, asset_root),
+                ListPosition::FrontOfPrepend,
+            );
+        }
+        "clear_references" => {
+            txn.clear_references(prim(scene, rover));
+        }
+        "set_kind" => {
+            let component = tokens.intern("component");
+            txn.set_metadata(
+                prim(scene, rock),
+                tokens.intern("kind"),
+                FieldValue::Value(Value::Token(component)),
+            );
+        }
+        "set_documentation" => {
+            txn.set_metadata(
+                prim(scene, rock),
+                tokens.intern("documentation"),
+                FieldValue::Value(Value::string("granite")),
+            );
+        }
+        "deactivate" | "activate" => {
+            txn.set_active(prim(scene, lamp), name == "activate");
+        }
+        "set_type_name" => {
+            txn.set_type_name(prim(scene, lamp), tokens.intern("Scope"));
+        }
+        "set_specifier" => {
+            txn.set_specifier(prim(scene, rover), Specifier::Class);
+        }
+        "override_reorders_children" => {
+            txn.create_prim(prim(weak, thing), Specifier::Over, None);
+        }
+        "set_layer_documentation" => {
+            txn.set_layer_metadata(
+                scene,
+                tokens.intern("documentation"),
+                FieldValue::Value(Value::string("a scene")),
+            );
+        }
+        "insert_empty_sublayer" | "insert_prim_sublayer" => {
+            let sublayer = if name == "insert_empty_sublayer" {
+                added.empty
+            } else {
+                added.comet
+            };
+            txn.insert_sublayer(scene, 1, SublayerEntry::new(sublayer));
+        }
+        "remove_empty_sublayer" | "remove_prim_sublayer" => {
+            txn.remove_sublayer(scene, 1);
+        }
         other => panic!("no edit for {other}"),
     }
     txn
@@ -252,17 +415,29 @@ fn edit(name: &str, loaded: &mut LoadedStage, live: &LiveStage) -> Transaction {
 
 /// The oracle's report of `name` with the differences of the module docs.
 fn corrected(name: &str, mut report: Report) -> Report {
+    // The root layer's own fields compose nothing into `/Echo`.
+    if report.info.contains_key("/") {
+        report.info.remove("/Echo");
+    }
     match name {
         "define_under_instance" => {
             report.resynced = vec!["/Robot/Extra".into()];
         }
-        "define_in_sublayer_with_new_over" => {
-            report.info.remove("/Sky");
-            report.resynced = vec!["/Sky".into()];
+        "override_reorders_children" => {
+            report.info.remove("/Thing");
+            report.resynced = vec!["/Thing".into()];
         }
-        "override_in_sublayer" => {
-            report.info.remove("/World/Lamp");
-            report.resynced = vec!["/World/Lamp".into()];
+        "set_layer_documentation"
+        | "insert_empty_sublayer"
+        | "remove_empty_sublayer"
+        | "insert_prim_sublayer"
+        | "remove_prim_sublayer"
+        | "mute_sublayer"
+        | "unmute_sublayer" => {
+            report = Report {
+                resynced: vec!["/".into()],
+                ..Report::default()
+            };
         }
         _ => {}
     }
@@ -281,19 +456,34 @@ fn prim_spec_edits_resync_only_the_prim() {
         &workspace_root().join("layerstack_conformance/fixtures/prim_resync/scene.usda"),
     );
     assert!(loaded.invalid.is_empty(), "{:?}", loaded.invalid);
+    let extra = Extra::add(&mut loaded);
     let options = StageOptions {
         schemas: Some(std::sync::Arc::new(layerstack_schemas::openusd(
             loaded.store.tokens(),
         ))),
+        session_layer: Some(extra.session),
         ..StageOptions::default()
     };
     let mut live = LiveStage::compose(&mut loaded.store, loaded.root_layer, options);
     let mut failures = Vec::new();
     for record in oracle["records"].as_array().unwrap() {
         let name = record["name"].as_str().unwrap();
-        let txn = edit(name, &mut loaded, &live);
-        let applied = live.apply(&mut loaded.store, &txn).expect(name);
-        let found = actual(&applied.changes, &loaded);
+        let changes = if let Some(mute) = name
+            .strip_suffix("_sublayer")
+            .filter(|verb| *verb == "mute" || *verb == "unmute")
+        {
+            let weak = layer(&loaded, "weak.usda");
+            if mute == "mute" {
+                live.mute_layer(weak).expect(name);
+            } else {
+                live.unmute_layer(weak);
+            }
+            live.recompose_changes(&mut loaded.store)
+        } else {
+            let txn = edit(name, &mut loaded, &live, &extra);
+            live.apply(&mut loaded.store, &txn).expect(name).changes
+        };
+        let found = actual(&changes, &loaded);
         let mut want = corrected(name, expected(record));
         // Fields are compared for info-only paths only, which a prim spec
         // edit never reports in the oracle.

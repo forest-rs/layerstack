@@ -21,9 +21,14 @@
       "children": {
         "/": [
           "World",
+          "Moon",
           "Sky",
           "Robot",
-          "Drone"
+          "Drone",
+          "Thing",
+          "Switch",
+          "Rover",
+          "Echo"
         ],
         "/World": [
           "Rock",
@@ -31,6 +36,13 @@
           "Pebble"
         ],
         "/Robot": [],
+        "/Thing": [
+          "Ball"
+        ],
+        "/Switch": [
+          "Sun"
+        ],
+        "/Rover": [],
         "prototype": [
           "Ball"
         ]
@@ -67,9 +79,14 @@
       "children": {
         "/": [
           "World",
+          "Moon",
           "Sky",
           "Robot",
-          "Drone"
+          "Drone",
+          "Thing",
+          "Switch",
+          "Rover",
+          "Echo"
         ],
         "/World": [
           "Rock",
@@ -78,6 +95,13 @@
           "Moss"
         ],
         "/Robot": [],
+        "/Thing": [
+          "Ball"
+        ],
+        "/Switch": [
+          "Sun"
+        ],
+        "/Rover": [],
         "prototype": [
           "Ball"
         ]
@@ -100,9 +124,14 @@
       "children": {
         "/": [
           "World",
+          "Moon",
           "Sky",
           "Robot",
-          "Drone"
+          "Drone",
+          "Thing",
+          "Switch",
+          "Rover",
+          "Echo"
         ],
         "/World": [
           "Rock",
@@ -112,6 +141,13 @@
           "Ghost"
         ],
         "/Robot": [],
+        "/Thing": [
+          "Ball"
+        ],
+        "/Switch": [
+          "Sun"
+        ],
+        "/Rover": [],
         "prototype": [
           "Ball"
         ]
@@ -147,9 +183,14 @@
       "children": {
         "/": [
           "World",
+          "Moon",
           "Sky",
           "Robot",
           "Drone",
+          "Thing",
+          "Switch",
+          "Rover",
+          "Echo",
           "_Base"
         ],
         "/World": [
@@ -160,6 +201,13 @@
           "Ghost"
         ],
         "/Robot": [],
+        "/Thing": [
+          "Ball"
+        ],
+        "/Switch": [
+          "Sun"
+        ],
+        "/Rover": [],
         "prototype": [
           "Ball"
         ]
@@ -185,9 +233,14 @@
       "children": {
         "/": [
           "World",
+          "Moon",
           "Sky",
           "Robot",
           "Drone",
+          "Thing",
+          "Switch",
+          "Rover",
+          "Echo",
           "_Base",
           "Ground"
         ],
@@ -199,6 +252,13 @@
           "Ghost"
         ],
         "/Robot": [],
+        "/Thing": [
+          "Ball"
+        ],
+        "/Switch": [
+          "Sun"
+        ],
+        "/Rover": [],
         "prototype": [
           "Ball"
         ]
@@ -221,9 +281,14 @@
       "children": {
         "/": [
           "World",
+          "Moon",
           "Sky",
           "Robot",
           "Drone",
+          "Thing",
+          "Switch",
+          "Rover",
+          "Echo",
           "_Base",
           "Ground"
         ],
@@ -234,6 +299,13 @@
           "Ghost"
         ],
         "/Robot": [],
+        "/Thing": [
+          "Ball"
+        ],
+        "/Switch": [
+          "Sun"
+        ],
+        "/Rover": [],
         "prototype": [
           "Ball"
         ]
@@ -256,9 +328,14 @@
       "children": {
         "/": [
           "World",
+          "Moon",
           "Sky",
           "Robot",
           "Drone",
+          "Thing",
+          "Switch",
+          "Rover",
+          "Echo",
           "_Base",
           "Ground"
         ],
@@ -268,6 +345,13 @@
           "Ghost"
         ],
         "/Robot": [],
+        "/Thing": [
+          "Ball"
+        ],
+        "/Switch": [
+          "Sun"
+        ],
+        "/Rover": [],
         "prototype": [
           "Ball"
         ]
@@ -290,9 +374,14 @@
       "children": {
         "/": [
           "World",
+          "Moon",
           "Sky",
           "Robot",
           "Drone",
+          "Thing",
+          "Switch",
+          "Rover",
+          "Echo",
           "_Base"
         ],
         "/World": [
@@ -301,6 +390,13 @@
           "Ghost"
         ],
         "/Robot": [],
+        "/Thing": [
+          "Ball"
+        ],
+        "/Switch": [
+          "Sun"
+        ],
+        "/Rover": [],
         "prototype": [
           "Ball"
         ]
@@ -312,10 +408,14 @@
       "notices": [
         {
           "resynced": [
+            "/Echo",
             "/World"
           ],
           "info": [],
           "fields": {
+            "/Echo": [
+              "primOrder"
+            ],
             "/World": [
               "primOrder"
             ]
@@ -325,9 +425,14 @@
       "children": {
         "/": [
           "World",
+          "Moon",
           "Sky",
           "Robot",
           "Drone",
+          "Thing",
+          "Switch",
+          "Rover",
+          "Echo",
           "_Base"
         ],
         "/World": [
@@ -336,6 +441,13 @@
           "Rock"
         ],
         "/Robot": [],
+        "/Thing": [
+          "Ball"
+        ],
+        "/Switch": [
+          "Sun"
+        ],
+        "/Rover": [],
         "prototype": [
           "Ball"
         ]
@@ -347,10 +459,14 @@
       "notices": [
         {
           "resynced": [
+            "/Echo",
             "/World"
           ],
           "info": [],
           "fields": {
+            "/Echo": [
+              "primOrder"
+            ],
             "/World": [
               "primOrder"
             ]
@@ -360,9 +476,14 @@
       "children": {
         "/": [
           "World",
+          "Moon",
           "Sky",
           "Robot",
           "Drone",
+          "Thing",
+          "Switch",
+          "Rover",
+          "Echo",
           "_Base"
         ],
         "/World": [
@@ -371,6 +492,13 @@
           "Ghost"
         ],
         "/Robot": [],
+        "/Thing": [
+          "Ball"
+        ],
+        "/Switch": [
+          "Sun"
+        ],
+        "/Rover": [],
         "prototype": [
           "Ball"
         ]
@@ -395,9 +523,14 @@
       "children": {
         "/": [
           "World",
+          "Moon",
           "Sky",
           "Robot",
           "Drone",
+          "Thing",
+          "Switch",
+          "Rover",
+          "Echo",
           "_Base"
         ],
         "/World": [
@@ -406,6 +539,13 @@
           "Spirit"
         ],
         "/Robot": [],
+        "/Thing": [
+          "Ball"
+        ],
+        "/Switch": [
+          "Sun"
+        ],
+        "/Rover": [],
         "prototype": [
           "Ball"
         ]
@@ -430,9 +570,14 @@
       "children": {
         "/": [
           "World",
+          "Moon",
           "Sky",
           "Robot",
           "Drone",
+          "Thing",
+          "Switch",
+          "Rover",
+          "Echo",
           "_Base",
           "Spirit"
         ],
@@ -441,6 +586,13 @@
           "Lamp"
         ],
         "/Robot": [],
+        "/Thing": [
+          "Ball"
+        ],
+        "/Switch": [
+          "Sun"
+        ],
+        "/Rover": [],
         "prototype": [
           "Ball"
         ]
@@ -466,9 +618,14 @@
       "children": {
         "/": [
           "World",
+          "Moon",
           "Sky",
           "Robot",
           "Drone",
+          "Thing",
+          "Switch",
+          "Rover",
+          "Echo",
           "_Base",
           "Spirit"
         ],
@@ -477,6 +634,13 @@
           "Lamp"
         ],
         "/Robot": [],
+        "/Thing": [
+          "Ball"
+        ],
+        "/Switch": [
+          "Sun"
+        ],
+        "/Rover": [],
         "prototype": [
           "Ball"
         ]
@@ -502,9 +666,14 @@
       "children": {
         "/": [
           "World",
+          "Moon",
           "Sky",
           "Robot",
           "Drone",
+          "Thing",
+          "Switch",
+          "Rover",
+          "Echo",
           "_Base",
           "Spirit"
         ],
@@ -514,6 +683,13 @@
           "Lamp"
         ],
         "/Robot": [],
+        "/Thing": [
+          "Ball"
+        ],
+        "/Switch": [
+          "Sun"
+        ],
+        "/Rover": [],
         "prototype": [
           "Ball"
         ]
@@ -542,9 +718,14 @@
       "children": {
         "/": [
           "World",
+          "Moon",
           "Sky",
           "Robot",
           "Drone",
+          "Thing",
+          "Switch",
+          "Rover",
+          "Echo",
           "_Base",
           "Spirit"
         ],
@@ -554,6 +735,13 @@
           "Lamp"
         ],
         "/Robot": [],
+        "/Thing": [
+          "Ball"
+        ],
+        "/Switch": [
+          "Sun"
+        ],
+        "/Rover": [],
         "prototype": [
           "Ball"
         ]
@@ -566,9 +754,11 @@
         {
           "resynced": [],
           "info": [
+            "/Echo",
             "/World/Lamp"
           ],
           "fields": {
+            "/Echo": [],
             "/World/Lamp": []
           }
         }
@@ -576,9 +766,14 @@
       "children": {
         "/": [
           "World",
+          "Moon",
           "Sky",
           "Robot",
           "Drone",
+          "Thing",
+          "Switch",
+          "Rover",
+          "Echo",
           "_Base",
           "Spirit"
         ],
@@ -588,6 +783,13 @@
           "Lamp"
         ],
         "/Robot": [],
+        "/Thing": [
+          "Ball"
+        ],
+        "/Switch": [
+          "Sun"
+        ],
+        "/Rover": [],
         "prototype": [
           "Ball"
         ]
@@ -600,9 +802,14 @@
       "children": {
         "/": [
           "World",
+          "Moon",
           "Sky",
           "Robot",
           "Drone",
+          "Thing",
+          "Switch",
+          "Rover",
+          "Echo",
           "_Base",
           "Spirit"
         ],
@@ -612,6 +819,13 @@
           "Lamp"
         ],
         "/Robot": [],
+        "/Thing": [
+          "Ball"
+        ],
+        "/Switch": [
+          "Sun"
+        ],
+        "/Rover": [],
         "prototype": [
           "Ball"
         ]
@@ -623,10 +837,15 @@
       "notices": [
         {
           "resynced": [
+            "/Thing/Antenna",
             "/__Prototype_1/Antenna"
           ],
           "info": [],
           "fields": {
+            "/Thing/Antenna": [
+              "specifier",
+              "typeName"
+            ],
             "/__Prototype_1/Antenna": [
               "specifier",
               "typeName"
@@ -637,9 +856,14 @@
       "children": {
         "/": [
           "World",
+          "Moon",
           "Sky",
           "Robot",
           "Drone",
+          "Thing",
+          "Switch",
+          "Rover",
+          "Echo",
           "_Base",
           "Spirit"
         ],
@@ -649,6 +873,14 @@
           "Lamp"
         ],
         "/Robot": [],
+        "/Thing": [
+          "Ball",
+          "Antenna"
+        ],
+        "/Switch": [
+          "Sun"
+        ],
+        "/Rover": [],
         "prototype": [
           "Ball",
           "Antenna"
@@ -661,10 +893,12 @@
       "notices": [
         {
           "resynced": [
+            "/Thing/Antenna",
             "/__Prototype_1/Antenna"
           ],
           "info": [],
           "fields": {
+            "/Thing/Antenna": [],
             "/__Prototype_1/Antenna": []
           }
         }
@@ -672,9 +906,14 @@
       "children": {
         "/": [
           "World",
+          "Moon",
           "Sky",
           "Robot",
           "Drone",
+          "Thing",
+          "Switch",
+          "Rover",
+          "Echo",
           "_Base",
           "Spirit"
         ],
@@ -684,6 +923,1455 @@
           "Lamp"
         ],
         "/Robot": [],
+        "/Thing": [
+          "Ball"
+        ],
+        "/Switch": [
+          "Sun"
+        ],
+        "/Rover": [],
+        "prototype": [
+          "Ball"
+        ]
+      }
+    },
+    {
+      "name": "override_in_root",
+      "call": "`SdfCreatePrimInLayer` adds an `over` for `/Moon`, defined in the weaker layer alone, to the root layer",
+      "notices": [
+        {
+          "resynced": [],
+          "info": [
+            "/Moon"
+          ],
+          "fields": {
+            "/Moon": []
+          }
+        }
+      ],
+      "children": {
+        "/": [
+          "World",
+          "Moon",
+          "Sky",
+          "Robot",
+          "Drone",
+          "Thing",
+          "Switch",
+          "Rover",
+          "Echo",
+          "_Base",
+          "Spirit"
+        ],
+        "/World": [
+          "Rock",
+          "Shrub",
+          "Lamp"
+        ],
+        "/Robot": [],
+        "/Thing": [
+          "Ball"
+        ],
+        "/Switch": [
+          "Sun"
+        ],
+        "/Rover": [],
+        "prototype": [
+          "Ball"
+        ]
+      }
+    },
+    {
+      "name": "remove_override_in_root",
+      "call": "that `over` removed",
+      "notices": [
+        {
+          "resynced": [],
+          "info": [
+            "/Moon"
+          ],
+          "fields": {
+            "/Moon": []
+          }
+        }
+      ],
+      "children": {
+        "/": [
+          "World",
+          "Moon",
+          "Sky",
+          "Robot",
+          "Drone",
+          "Thing",
+          "Switch",
+          "Rover",
+          "Echo",
+          "_Base",
+          "Spirit"
+        ],
+        "/World": [
+          "Rock",
+          "Shrub",
+          "Lamp"
+        ],
+        "/Robot": [],
+        "/Thing": [
+          "Ball"
+        ],
+        "/Switch": [
+          "Sun"
+        ],
+        "/Rover": [],
+        "prototype": [
+          "Ball"
+        ]
+      }
+    },
+    {
+      "name": "remove_override_in_sublayer",
+      "call": "the weaker layer's `over` for `/World/Lamp` removed",
+      "notices": [
+        {
+          "resynced": [],
+          "info": [
+            "/Echo",
+            "/World/Lamp"
+          ],
+          "fields": {
+            "/Echo": [],
+            "/World/Lamp": []
+          }
+        }
+      ],
+      "children": {
+        "/": [
+          "World",
+          "Moon",
+          "Sky",
+          "Robot",
+          "Drone",
+          "Thing",
+          "Switch",
+          "Rover",
+          "Echo",
+          "_Base",
+          "Spirit"
+        ],
+        "/World": [
+          "Rock",
+          "Shrub",
+          "Lamp"
+        ],
+        "/Robot": [],
+        "/Thing": [
+          "Ball"
+        ],
+        "/Switch": [
+          "Sun"
+        ],
+        "/Rover": [],
+        "prototype": [
+          "Ball"
+        ]
+      }
+    },
+    {
+      "name": "override_reference_child",
+      "call": "an `over` for `/Thing/Ball`, which `/Thing` references, in the root layer",
+      "notices": [
+        {
+          "resynced": [],
+          "info": [
+            "/Thing/Ball"
+          ],
+          "fields": {
+            "/Thing/Ball": []
+          }
+        }
+      ],
+      "children": {
+        "/": [
+          "World",
+          "Moon",
+          "Sky",
+          "Robot",
+          "Drone",
+          "Thing",
+          "Switch",
+          "Rover",
+          "Echo",
+          "_Base",
+          "Spirit"
+        ],
+        "/World": [
+          "Rock",
+          "Shrub",
+          "Lamp"
+        ],
+        "/Robot": [],
+        "/Thing": [
+          "Ball"
+        ],
+        "/Switch": [
+          "Sun"
+        ],
+        "/Rover": [],
+        "prototype": [
+          "Ball"
+        ]
+      }
+    },
+    {
+      "name": "override_in_asset",
+      "call": "an `over` for `/Asset/Ball` in the referenced asset's root layer; its sublayer defines `Ball`",
+      "notices": [
+        {
+          "resynced": [],
+          "info": [
+            "/Thing/Ball",
+            "/__Prototype_1/Ball"
+          ],
+          "fields": {
+            "/Thing/Ball": [],
+            "/__Prototype_1/Ball": []
+          }
+        }
+      ],
+      "children": {
+        "/": [
+          "World",
+          "Moon",
+          "Sky",
+          "Robot",
+          "Drone",
+          "Thing",
+          "Switch",
+          "Rover",
+          "Echo",
+          "_Base",
+          "Spirit"
+        ],
+        "/World": [
+          "Rock",
+          "Shrub",
+          "Lamp"
+        ],
+        "/Robot": [],
+        "/Thing": [
+          "Ball"
+        ],
+        "/Switch": [
+          "Sun"
+        ],
+        "/Rover": [],
+        "prototype": [
+          "Ball"
+        ]
+      }
+    },
+    {
+      "name": "remove_override_in_asset",
+      "call": "that `over` removed",
+      "notices": [
+        {
+          "resynced": [],
+          "info": [
+            "/Thing/Ball",
+            "/__Prototype_1/Ball"
+          ],
+          "fields": {
+            "/Thing/Ball": [],
+            "/__Prototype_1/Ball": []
+          }
+        }
+      ],
+      "children": {
+        "/": [
+          "World",
+          "Moon",
+          "Sky",
+          "Robot",
+          "Drone",
+          "Thing",
+          "Switch",
+          "Rover",
+          "Echo",
+          "_Base",
+          "Spirit"
+        ],
+        "/World": [
+          "Rock",
+          "Shrub",
+          "Lamp"
+        ],
+        "/Robot": [],
+        "/Thing": [
+          "Ball"
+        ],
+        "/Switch": [
+          "Sun"
+        ],
+        "/Rover": [],
+        "prototype": [
+          "Ball"
+        ]
+      }
+    },
+    {
+      "name": "override_with_attribute",
+      "call": "one `SdfChangeBlock` adds an `over` for `/Moon` to the root layer and an attribute spec to it",
+      "notices": [
+        {
+          "resynced": [
+            "/Moon.weight"
+          ],
+          "info": [
+            "/Moon"
+          ],
+          "fields": {
+            "/Moon.weight": [
+              "typeName"
+            ],
+            "/Moon": []
+          }
+        }
+      ],
+      "children": {
+        "/": [
+          "World",
+          "Moon",
+          "Sky",
+          "Robot",
+          "Drone",
+          "Thing",
+          "Switch",
+          "Rover",
+          "Echo",
+          "_Base",
+          "Spirit"
+        ],
+        "/World": [
+          "Rock",
+          "Shrub",
+          "Lamp"
+        ],
+        "/Robot": [],
+        "/Thing": [
+          "Ball"
+        ],
+        "/Switch": [
+          "Sun"
+        ],
+        "/Rover": [],
+        "prototype": [
+          "Ball"
+        ]
+      }
+    },
+    {
+      "name": "override_with_metadata",
+      "call": "one `SdfChangeBlock` adds an `over` for `/Sky` to the session layer and sets its `documentation`",
+      "notices": [
+        {
+          "resynced": [],
+          "info": [
+            "/Sky"
+          ],
+          "fields": {
+            "/Sky": [
+              "documentation"
+            ]
+          }
+        }
+      ],
+      "children": {
+        "/": [
+          "World",
+          "Moon",
+          "Sky",
+          "Robot",
+          "Drone",
+          "Thing",
+          "Switch",
+          "Rover",
+          "Echo",
+          "_Base",
+          "Spirit"
+        ],
+        "/World": [
+          "Rock",
+          "Shrub",
+          "Lamp"
+        ],
+        "/Robot": [],
+        "/Thing": [
+          "Ball"
+        ],
+        "/Switch": [
+          "Sun"
+        ],
+        "/Rover": [],
+        "prototype": [
+          "Ball"
+        ]
+      }
+    },
+    {
+      "name": "override_in_session",
+      "call": "an `over` for `/World/Lamp` in the session layer, which has no `/World` spec",
+      "notices": [
+        {
+          "resynced": [],
+          "info": [
+            "/Echo",
+            "/World",
+            "/World/Lamp"
+          ],
+          "fields": {
+            "/Echo": [],
+            "/World": [],
+            "/World/Lamp": []
+          }
+        }
+      ],
+      "children": {
+        "/": [
+          "World",
+          "Moon",
+          "Sky",
+          "Robot",
+          "Drone",
+          "Thing",
+          "Switch",
+          "Rover",
+          "Echo",
+          "_Base",
+          "Spirit"
+        ],
+        "/World": [
+          "Rock",
+          "Shrub",
+          "Lamp"
+        ],
+        "/Robot": [],
+        "/Thing": [
+          "Ball"
+        ],
+        "/Switch": [
+          "Sun"
+        ],
+        "/Rover": [],
+        "prototype": [
+          "Ball"
+        ]
+      }
+    },
+    {
+      "name": "override_instance_root",
+      "call": "an `over` for the instance root `/Robot` in the weaker layer",
+      "notices": [
+        {
+          "resynced": [],
+          "info": [
+            "/Robot"
+          ],
+          "fields": {
+            "/Robot": []
+          }
+        }
+      ],
+      "children": {
+        "/": [
+          "World",
+          "Moon",
+          "Sky",
+          "Robot",
+          "Drone",
+          "Thing",
+          "Switch",
+          "Rover",
+          "Echo",
+          "_Base",
+          "Spirit"
+        ],
+        "/World": [
+          "Rock",
+          "Shrub",
+          "Lamp"
+        ],
+        "/Robot": [],
+        "/Thing": [
+          "Ball"
+        ],
+        "/Switch": [
+          "Sun"
+        ],
+        "/Rover": [],
+        "prototype": [
+          "Ball"
+        ]
+      }
+    },
+    {
+      "name": "remove_override_instance_root",
+      "call": "that `over` removed",
+      "notices": [
+        {
+          "resynced": [],
+          "info": [
+            "/Robot"
+          ],
+          "fields": {
+            "/Robot": []
+          }
+        }
+      ],
+      "children": {
+        "/": [
+          "World",
+          "Moon",
+          "Sky",
+          "Robot",
+          "Drone",
+          "Thing",
+          "Switch",
+          "Rover",
+          "Echo",
+          "_Base",
+          "Spirit"
+        ],
+        "/World": [
+          "Rock",
+          "Shrub",
+          "Lamp"
+        ],
+        "/Robot": [],
+        "/Thing": [
+          "Ball"
+        ],
+        "/Switch": [
+          "Sun"
+        ],
+        "/Rover": [],
+        "prototype": [
+          "Ball"
+        ]
+      }
+    },
+    {
+      "name": "select_variant",
+      "call": "`UsdVariantSet::SetVariantSelection`",
+      "notices": [
+        {
+          "resynced": [
+            "/Switch"
+          ],
+          "info": [],
+          "fields": {
+            "/Switch": [
+              "variantSelection"
+            ]
+          }
+        }
+      ],
+      "children": {
+        "/": [
+          "World",
+          "Moon",
+          "Sky",
+          "Robot",
+          "Drone",
+          "Thing",
+          "Switch",
+          "Rover",
+          "Echo",
+          "_Base",
+          "Spirit"
+        ],
+        "/World": [
+          "Rock",
+          "Shrub",
+          "Lamp"
+        ],
+        "/Robot": [],
+        "/Thing": [
+          "Ball"
+        ],
+        "/Switch": [
+          "Star"
+        ],
+        "/Rover": [],
+        "prototype": [
+          "Ball"
+        ]
+      }
+    },
+    {
+      "name": "clear_variant",
+      "call": "`UsdVariantSet::ClearVariantSelection`",
+      "notices": [
+        {
+          "resynced": [
+            "/Switch"
+          ],
+          "info": [],
+          "fields": {
+            "/Switch": [
+              "variantSelection"
+            ]
+          }
+        }
+      ],
+      "children": {
+        "/": [
+          "World",
+          "Moon",
+          "Sky",
+          "Robot",
+          "Drone",
+          "Thing",
+          "Switch",
+          "Rover",
+          "Echo",
+          "_Base",
+          "Spirit"
+        ],
+        "/World": [
+          "Rock",
+          "Shrub",
+          "Lamp"
+        ],
+        "/Robot": [],
+        "/Thing": [
+          "Ball"
+        ],
+        "/Switch": [],
+        "/Rover": [],
+        "prototype": [
+          "Ball"
+        ]
+      }
+    },
+    {
+      "name": "add_reference",
+      "call": "`UsdReferences::AddReference`",
+      "notices": [
+        {
+          "resynced": [
+            "/Rover"
+          ],
+          "info": [],
+          "fields": {
+            "/Rover": [
+              "references"
+            ]
+          }
+        }
+      ],
+      "children": {
+        "/": [
+          "World",
+          "Moon",
+          "Sky",
+          "Robot",
+          "Drone",
+          "Thing",
+          "Switch",
+          "Rover",
+          "Echo",
+          "_Base",
+          "Spirit"
+        ],
+        "/World": [
+          "Rock",
+          "Shrub",
+          "Lamp"
+        ],
+        "/Robot": [],
+        "/Thing": [
+          "Ball"
+        ],
+        "/Switch": [],
+        "/Rover": [
+          "Ball"
+        ],
+        "prototype": [
+          "Ball"
+        ]
+      }
+    },
+    {
+      "name": "clear_references",
+      "call": "`UsdReferences::ClearReferences`",
+      "notices": [
+        {
+          "resynced": [
+            "/Rover"
+          ],
+          "info": [],
+          "fields": {
+            "/Rover": [
+              "references"
+            ]
+          }
+        }
+      ],
+      "children": {
+        "/": [
+          "World",
+          "Moon",
+          "Sky",
+          "Robot",
+          "Drone",
+          "Thing",
+          "Switch",
+          "Rover",
+          "Echo",
+          "_Base",
+          "Spirit"
+        ],
+        "/World": [
+          "Rock",
+          "Shrub",
+          "Lamp"
+        ],
+        "/Robot": [],
+        "/Thing": [
+          "Ball"
+        ],
+        "/Switch": [],
+        "/Rover": [],
+        "prototype": [
+          "Ball"
+        ]
+      }
+    },
+    {
+      "name": "set_kind",
+      "call": "`UsdObject::SetMetadata` of `kind`",
+      "notices": [
+        {
+          "resynced": [
+            "/World/Rock"
+          ],
+          "info": [],
+          "fields": {
+            "/World/Rock": [
+              "kind"
+            ]
+          }
+        }
+      ],
+      "children": {
+        "/": [
+          "World",
+          "Moon",
+          "Sky",
+          "Robot",
+          "Drone",
+          "Thing",
+          "Switch",
+          "Rover",
+          "Echo",
+          "_Base",
+          "Spirit"
+        ],
+        "/World": [
+          "Rock",
+          "Shrub",
+          "Lamp"
+        ],
+        "/Robot": [],
+        "/Thing": [
+          "Ball"
+        ],
+        "/Switch": [],
+        "/Rover": [],
+        "prototype": [
+          "Ball"
+        ]
+      }
+    },
+    {
+      "name": "set_documentation",
+      "call": "`UsdObject::SetMetadata` of `documentation`",
+      "notices": [
+        {
+          "resynced": [],
+          "info": [
+            "/World/Rock"
+          ],
+          "fields": {
+            "/World/Rock": [
+              "documentation"
+            ]
+          }
+        }
+      ],
+      "children": {
+        "/": [
+          "World",
+          "Moon",
+          "Sky",
+          "Robot",
+          "Drone",
+          "Thing",
+          "Switch",
+          "Rover",
+          "Echo",
+          "_Base",
+          "Spirit"
+        ],
+        "/World": [
+          "Rock",
+          "Shrub",
+          "Lamp"
+        ],
+        "/Robot": [],
+        "/Thing": [
+          "Ball"
+        ],
+        "/Switch": [],
+        "/Rover": [],
+        "prototype": [
+          "Ball"
+        ]
+      }
+    },
+    {
+      "name": "deactivate",
+      "call": "`UsdPrim::SetActive(false)`",
+      "notices": [
+        {
+          "resynced": [
+            "/Echo",
+            "/World/Lamp"
+          ],
+          "info": [],
+          "fields": {
+            "/Echo": [
+              "active"
+            ],
+            "/World/Lamp": [
+              "active"
+            ]
+          }
+        }
+      ],
+      "children": {
+        "/": [
+          "World",
+          "Moon",
+          "Sky",
+          "Robot",
+          "Drone",
+          "Thing",
+          "Switch",
+          "Rover",
+          "Echo",
+          "_Base",
+          "Spirit"
+        ],
+        "/World": [
+          "Rock",
+          "Shrub",
+          "Lamp"
+        ],
+        "/Robot": [],
+        "/Thing": [
+          "Ball"
+        ],
+        "/Switch": [],
+        "/Rover": [],
+        "prototype": [
+          "Ball"
+        ]
+      }
+    },
+    {
+      "name": "activate",
+      "call": "`UsdPrim::SetActive(true)`",
+      "notices": [
+        {
+          "resynced": [
+            "/Echo",
+            "/World/Lamp"
+          ],
+          "info": [],
+          "fields": {
+            "/Echo": [
+              "active"
+            ],
+            "/World/Lamp": [
+              "active"
+            ]
+          }
+        }
+      ],
+      "children": {
+        "/": [
+          "World",
+          "Moon",
+          "Sky",
+          "Robot",
+          "Drone",
+          "Thing",
+          "Switch",
+          "Rover",
+          "Echo",
+          "_Base",
+          "Spirit"
+        ],
+        "/World": [
+          "Rock",
+          "Shrub",
+          "Lamp"
+        ],
+        "/Robot": [],
+        "/Thing": [
+          "Ball"
+        ],
+        "/Switch": [],
+        "/Rover": [],
+        "prototype": [
+          "Ball"
+        ]
+      }
+    },
+    {
+      "name": "set_type_name",
+      "call": "`UsdPrim::SetTypeName`",
+      "notices": [
+        {
+          "resynced": [
+            "/Echo",
+            "/World/Lamp"
+          ],
+          "info": [],
+          "fields": {
+            "/Echo": [
+              "typeName"
+            ],
+            "/World/Lamp": [
+              "typeName"
+            ]
+          }
+        }
+      ],
+      "children": {
+        "/": [
+          "World",
+          "Moon",
+          "Sky",
+          "Robot",
+          "Drone",
+          "Thing",
+          "Switch",
+          "Rover",
+          "Echo",
+          "_Base",
+          "Spirit"
+        ],
+        "/World": [
+          "Rock",
+          "Shrub",
+          "Lamp"
+        ],
+        "/Robot": [],
+        "/Thing": [
+          "Ball"
+        ],
+        "/Switch": [],
+        "/Rover": [],
+        "prototype": [
+          "Ball"
+        ]
+      }
+    },
+    {
+      "name": "set_specifier",
+      "call": "`UsdPrim::SetSpecifier` makes `/Rover` a `class`",
+      "notices": [
+        {
+          "resynced": [
+            "/Rover"
+          ],
+          "info": [],
+          "fields": {
+            "/Rover": [
+              "specifier"
+            ]
+          }
+        }
+      ],
+      "children": {
+        "/": [
+          "World",
+          "Moon",
+          "Sky",
+          "Robot",
+          "Drone",
+          "Thing",
+          "Switch",
+          "Rover",
+          "Echo",
+          "_Base",
+          "Spirit"
+        ],
+        "/World": [
+          "Rock",
+          "Shrub",
+          "Lamp"
+        ],
+        "/Robot": [],
+        "/Thing": [
+          "Ball"
+        ],
+        "/Switch": [],
+        "/Rover": [],
+        "prototype": [
+          "Ball"
+        ]
+      }
+    },
+    {
+      "name": "set_layer_documentation",
+      "call": "`SdfLayer::SetDocumentation` on the root layer",
+      "notices": [
+        {
+          "resynced": [],
+          "info": [
+            "/",
+            "/Echo"
+          ],
+          "fields": {
+            "/": [
+              "documentation"
+            ],
+            "/Echo": [
+              "documentation"
+            ]
+          }
+        }
+      ],
+      "children": {
+        "/": [
+          "World",
+          "Moon",
+          "Sky",
+          "Robot",
+          "Drone",
+          "Thing",
+          "Switch",
+          "Rover",
+          "Echo",
+          "_Base",
+          "Spirit"
+        ],
+        "/World": [
+          "Rock",
+          "Shrub",
+          "Lamp"
+        ],
+        "/Robot": [],
+        "/Thing": [
+          "Ball"
+        ],
+        "/Switch": [],
+        "/Rover": [],
+        "prototype": [
+          "Ball"
+        ]
+      }
+    },
+    {
+      "name": "insert_empty_sublayer",
+      "call": "an empty sublayer appended to the root layer's",
+      "notices": [
+        {
+          "resynced": [],
+          "info": [
+            "/",
+            "/Echo"
+          ],
+          "fields": {
+            "/": [
+              "subLayerOffsets",
+              "subLayers"
+            ],
+            "/Echo": [
+              "subLayerOffsets",
+              "subLayers"
+            ]
+          }
+        }
+      ],
+      "children": {
+        "/": [
+          "World",
+          "Moon",
+          "Sky",
+          "Robot",
+          "Drone",
+          "Thing",
+          "Switch",
+          "Rover",
+          "Echo",
+          "_Base",
+          "Spirit"
+        ],
+        "/World": [
+          "Rock",
+          "Shrub",
+          "Lamp"
+        ],
+        "/Robot": [],
+        "/Thing": [
+          "Ball"
+        ],
+        "/Switch": [],
+        "/Rover": [],
+        "prototype": [
+          "Ball"
+        ]
+      }
+    },
+    {
+      "name": "remove_empty_sublayer",
+      "call": "that sublayer removed",
+      "notices": [
+        {
+          "resynced": [],
+          "info": [
+            "/",
+            "/Echo"
+          ],
+          "fields": {
+            "/": [
+              "subLayerOffsets",
+              "subLayers"
+            ],
+            "/Echo": [
+              "subLayerOffsets",
+              "subLayers"
+            ]
+          }
+        }
+      ],
+      "children": {
+        "/": [
+          "World",
+          "Moon",
+          "Sky",
+          "Robot",
+          "Drone",
+          "Thing",
+          "Switch",
+          "Rover",
+          "Echo",
+          "_Base",
+          "Spirit"
+        ],
+        "/World": [
+          "Rock",
+          "Shrub",
+          "Lamp"
+        ],
+        "/Robot": [],
+        "/Thing": [
+          "Ball"
+        ],
+        "/Switch": [],
+        "/Rover": [],
+        "prototype": [
+          "Ball"
+        ]
+      }
+    },
+    {
+      "name": "insert_prim_sublayer",
+      "call": "a sublayer defining `/Comet` appended",
+      "notices": [
+        {
+          "resynced": [
+            "/Comet"
+          ],
+          "info": [
+            "/",
+            "/Echo"
+          ],
+          "fields": {
+            "/Comet": [
+              "specifier"
+            ],
+            "/": [
+              "subLayerOffsets",
+              "subLayers"
+            ],
+            "/Echo": [
+              "subLayerOffsets",
+              "subLayers"
+            ]
+          }
+        }
+      ],
+      "children": {
+        "/": [
+          "Comet",
+          "World",
+          "Moon",
+          "Sky",
+          "Robot",
+          "Drone",
+          "Thing",
+          "Switch",
+          "Rover",
+          "Echo",
+          "_Base",
+          "Spirit"
+        ],
+        "/World": [
+          "Rock",
+          "Shrub",
+          "Lamp"
+        ],
+        "/Robot": [],
+        "/Thing": [
+          "Ball"
+        ],
+        "/Switch": [],
+        "/Rover": [],
+        "prototype": [
+          "Ball"
+        ]
+      }
+    },
+    {
+      "name": "remove_prim_sublayer",
+      "call": "that sublayer removed",
+      "notices": [
+        {
+          "resynced": [
+            "/Comet"
+          ],
+          "info": [
+            "/",
+            "/Echo"
+          ],
+          "fields": {
+            "/Comet": [],
+            "/": [
+              "subLayerOffsets",
+              "subLayers"
+            ],
+            "/Echo": [
+              "subLayerOffsets",
+              "subLayers"
+            ]
+          }
+        }
+      ],
+      "children": {
+        "/": [
+          "World",
+          "Moon",
+          "Sky",
+          "Robot",
+          "Drone",
+          "Thing",
+          "Switch",
+          "Rover",
+          "Echo",
+          "_Base",
+          "Spirit"
+        ],
+        "/World": [
+          "Rock",
+          "Shrub",
+          "Lamp"
+        ],
+        "/Robot": [],
+        "/Thing": [
+          "Ball"
+        ],
+        "/Switch": [],
+        "/Rover": [],
+        "prototype": [
+          "Ball"
+        ]
+      }
+    },
+    {
+      "name": "mute_sublayer",
+      "call": "`UsdStage::MuteLayer` of the weaker layer",
+      "notices": [
+        {
+          "resynced": [
+            "/Moon",
+            "/Sky/Cloud",
+            "/World/Rock.size",
+            "/World/Shrub"
+          ],
+          "info": [
+            "/Echo",
+            "/Sky",
+            "/World",
+            "/World/Rock"
+          ],
+          "fields": {
+            "/Moon": [
+              "typeName"
+            ],
+            "/Sky/Cloud": [
+              "typeName"
+            ],
+            "/World/Rock.size": [],
+            "/World/Shrub": [
+              "typeName"
+            ],
+            "/Echo": [],
+            "/Sky": [],
+            "/World": [],
+            "/World/Rock": []
+          }
+        }
+      ],
+      "children": {
+        "/": [
+          "World",
+          "Sky",
+          "Robot",
+          "Drone",
+          "Thing",
+          "Switch",
+          "Rover",
+          "Echo",
+          "_Base",
+          "Spirit",
+          "Moon"
+        ],
+        "/World": [
+          "Rock",
+          "Lamp"
+        ],
+        "/Robot": [],
+        "/Thing": [
+          "Ball"
+        ],
+        "/Switch": [],
+        "/Rover": [],
+        "prototype": [
+          "Ball"
+        ]
+      }
+    },
+    {
+      "name": "unmute_sublayer",
+      "call": "`UsdStage::UnmuteLayer` of it",
+      "notices": [
+        {
+          "resynced": [
+            "/Moon",
+            "/Sky/Cloud",
+            "/World/Rock.size",
+            "/World/Shrub"
+          ],
+          "info": [
+            "/Echo",
+            "/Sky",
+            "/World",
+            "/World/Rock"
+          ],
+          "fields": {
+            "/Moon": [
+              "specifier",
+              "typeName"
+            ],
+            "/Sky/Cloud": [
+              "specifier",
+              "typeName"
+            ],
+            "/World/Rock.size": [],
+            "/World/Shrub": [
+              "specifier",
+              "typeName"
+            ],
+            "/Echo": [],
+            "/Sky": [],
+            "/World": [],
+            "/World/Rock": []
+          }
+        }
+      ],
+      "children": {
+        "/": [
+          "World",
+          "Moon",
+          "Sky",
+          "Robot",
+          "Drone",
+          "Thing",
+          "Switch",
+          "Rover",
+          "Echo",
+          "_Base",
+          "Spirit"
+        ],
+        "/World": [
+          "Rock",
+          "Shrub",
+          "Lamp"
+        ],
+        "/Robot": [],
+        "/Thing": [
+          "Ball"
+        ],
+        "/Switch": [],
+        "/Rover": [],
+        "prototype": [
+          "Ball"
+        ]
+      }
+    },
+    {
+      "name": "override_reorders_children",
+      "call": "an `over` for `/Thing` in the weaker layer, which changes the composed order of the root prims",
+      "notices": [
+        {
+          "resynced": [],
+          "info": [
+            "/Thing"
+          ],
+          "fields": {
+            "/Thing": []
+          }
+        }
+      ],
+      "children": {
+        "/": [
+          "World",
+          "Moon",
+          "Sky",
+          "Thing",
+          "Robot",
+          "Drone",
+          "Switch",
+          "Rover",
+          "Echo",
+          "_Base",
+          "Spirit"
+        ],
+        "/World": [
+          "Rock",
+          "Shrub",
+          "Lamp"
+        ],
+        "/Robot": [],
+        "/Thing": [
+          "Ball"
+        ],
+        "/Switch": [],
+        "/Rover": [],
         "prototype": [
           "Ball"
         ]

@@ -31,10 +31,10 @@
 //!   descendants per instance. An edit OpenUSD reports at
 //!   `/__Prototype_1/Ball.radius`, the prototype of the one instance
 //!   `/Robot`, is reported at `/Robot/Ball.radius`.
-//! - Creating the attribute `/Lamp.weight` through a layer that has no
-//!   `/Lamp` spec creates the `over` too. OpenUSD reports the inert spec as
-//!   an info-only change of `/Lamp`; here a prim spec created resyncs the
-//!   prim, which covers the property.
+//!
+//! Creating the attribute `/Lamp.weight` through a layer that has no
+//! `/Lamp` spec creates the `over` too: the inert spec changes `/Lamp`
+//! info-only, and the attribute is resynced, in both.
 
 use std::collections::BTreeMap;
 
@@ -327,16 +327,9 @@ fn edit(name: &str, loaded: &mut LoadedStage, live: &LiveStage) -> Transaction {
 
 /// The oracle's report of `name` with the differences of the module docs.
 fn corrected(name: &str, mut report: Report) -> Report {
-    match name {
-        "rename_property" => {
-            report.info.remove("/Rock.gloss");
-            report.resynced = vec!["/Rock".into()];
-        }
-        "create_with_new_over" => {
-            report.info.remove("/Lamp");
-            report.resynced = vec!["/Lamp".into()];
-        }
-        _ => {}
+    if name == "rename_property" {
+        report.info.remove("/Rock.gloss");
+        report.resynced = vec!["/Rock".into()];
     }
     report
 }

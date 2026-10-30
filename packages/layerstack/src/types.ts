@@ -426,7 +426,14 @@ export interface VariantSet {
  * list gained or lost it, is not reported unless its own opinions changed
  * too, as OpenUSD's `UsdNotice::ObjectsChanged` does not report it. A
  * listener caching a prim's children updates them from its children's
- * resyncs. Reordering children (`primOrder`) resyncs the parent.
+ * resyncs. Reordering children (`primOrder`) resyncs the parent; a spec
+ * added to or removed from a weaker layer can move a child too, and
+ * resyncs that child.
+ *
+ * An inert spec (an `over` with no opinions of its own) added or removed
+ * for a prim that exists before and after changes that prim, and each
+ * prim composing from it through an arc, info-only, as OpenUSD reports
+ * it; a property spec in it is in `resyncedProperties`.
  */
 export interface Changes {
   /** Prims that exist now and did not before. */

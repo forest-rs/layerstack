@@ -12,4 +12,4 @@
 
 export type { NativeArrayHandle } from "./arrays.js";
 export type { NativeEditBatch } from "./edits.js";
-export type { NativeModule, NativeReceipt, NativeStage } from "./stage.js";
+export type { NativeModule, NativeReceipt, NativeStage, NativeTarget } from "./stage.js";

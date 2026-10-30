@@ -27,9 +27,12 @@ pub struct EditReceipt {
     pub(crate) stage: Arc<()>,
     /// The layer the edits went to.
     pub(crate) target: LayerId,
+    /// The record of the edit target they went through
+    /// ([`crate::target`]), which the receipt of an undo names too.
+    pub(crate) target_record: Wire,
     /// The transaction that undoes the edits; `None` once undone.
     pub(crate) inverse: Option<Transaction>,
-    /// `[target, changes, loaded, failures, unavailable]`, as
+    /// `[target, changes, loaded, failures, unavailable, layers]`, as
     /// `Stage::receipt` documents it.
     pub(crate) record: Wire,
 }

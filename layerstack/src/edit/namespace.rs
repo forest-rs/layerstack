@@ -483,12 +483,21 @@ impl NamespaceEdit {
     /// expression terms (`/A /B` without `/A` is `/B`) and `defaultPrim`;
     /// those in a variant no composed prim index selects stay, as
     /// `UsdNamespaceEditor` leaves them ([`Self::unrepaired_paths`] lists
-    /// them, and the arcs into the root layer stack that other layers
-    /// author, which a delete never edits). The local specs that compose over
+    /// them). The local specs that compose over
     /// the deleted namespace through an internal arc authored at an
     /// ancestor (`/X/Kid` when `/X` inherits `/B` and `/B/Kid` goes), or
     /// over a deleted property (`/X.x` for `/B.x`), go too, outside every
     /// variant and inside the selected ones holding the arc.
+    ///
+    /// The other layers the stage reaches lose their references and
+    /// payloads into the root layer stack that name the object, or a prim
+    /// beneath it, from the specs a composed prim index uses (an asset's
+    /// `/Asset/Front` referencing `@scene.usda@</World/Lamp>`), and the
+    /// specs that composed over the deleted namespace through such an arc,
+    /// in every layer stack between it and the stage (the asset's `over
+    /// "Bulb"` beneath `/Asset/Front`, the stage's beneath
+    /// `/World/Shelf/Front`). The arcs of the specs no prim index uses
+    /// stay, and are listed.
     ///
     /// `target` must address a layer of the root layer stack without
     /// remapping paths ([`NamespaceError::Unmappable`]). The object must be
@@ -528,10 +537,14 @@ impl NamespaceEdit {
     /// Masks, muted layers, unloaded payloads and ambiguous mappings are
     /// rejected explicitly, as is a `target` that maps paths into a variant
     /// ([`NamespaceError::Unmappable`]), which `UsdNamespaceEditor` refuses.
-    /// Dependent mappings currently require direct, non-implied arcs from
-    /// their local stack (or authored in the local variants their prim
-    /// selects, whose specs then move inside those variants); nested arcs
-    /// return an error. A reparent leaving an arc's source domain deletes
+    /// Dependent mappings require non-implied arcs to sites outside variant
+    /// branches: from their local stack (or authored in the local variants
+    /// their prim selects, whose specs then move inside those variants), or
+    /// nested in another layer stack's arc target, as an asset's arc back
+    /// into the stage is. Moving that arc's target repairs the arc in the
+    /// asset; moving beneath it moves the specs over the moved namespace in
+    /// every layer stack between the arc and the stage, the asset's too. A
+    /// reparent leaving an arc's source domain deletes
     /// the dependent specs over the moved namespace, which no longer
     /// compose there, as `UsdNamespaceEditor` does. Preparation composes the edited layers to verify the
     /// proposed namespace before returning: where every snapshot is a live

@@ -1184,7 +1184,7 @@ pub(super) fn push_unique(out: &mut Vec<ChainEdit>, edits: Vec<ChainEdit>) {
 /// in a layer stack holding an edited layer would edit that namespace
 /// twice, which is refused. AOUSD Core §10 (composition arcs).
 #[allow(clippy::too_many_arguments, reason = "the walk's whole context")]
-fn chain_edits(
+pub(super) fn chain_edits(
     store: &mut dyn LayerStore,
     graph: &crate::PrimIndexGraph,
     node: crate::prim_index_graph::PrimNode<'_>,

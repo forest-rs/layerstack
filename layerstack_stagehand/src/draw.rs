@@ -1184,6 +1184,12 @@ impl DrawList {
     /// found as the item is read, so [`Self::apply_changes`] keeps it up to
     /// date: a time sample authored on a static input makes its item read
     /// at the next time.
+    ///
+    /// Cameras, lights and materials whose inputs might vary are read
+    /// again too. A material's `UsdPrimvarReader_float2` `varname` (or the
+    /// interface input it connects to) is one of them: when the sets the
+    /// materials read differ at `time`, the meshes drawing them are
+    /// planned again, listed in [`DrawDiff::rebuilt`].
     pub fn set_time(&mut self, scene: &Scene<'_>, time: Time) -> DrawDiff {
         let local_before = self.xforms.stats().local_computed;
         self.options.time = time;
@@ -1239,6 +1245,8 @@ impl DrawList {
         for path in materials {
             self.read_material(scene, path, &mut gather);
         }
+        // A `varname` read at the new time may name other sets.
+        self.apply_to_uv_sets(scene, &mut gather);
         read.retain(|id| self.entries.contains_key(id));
         gather.finish(local_before, self, &read)
     }
@@ -1464,6 +1472,7 @@ impl DrawList {
             }
         }
         let time = self.options.time;
+        let mut planned: Vec<BufferKey> = Vec::new();
         for (key, names) in wanted {
             let names: Vec<String> = names.into_iter().collect();
             let Some(buffer) = self.buffers.get_mut(&key) else {
@@ -1490,6 +1499,14 @@ impl DrawList {
             drop(uv_sets);
             buffer.mesh = Some(mesh);
             buffer.uv_sets = names;
+            planned.push(key);
+        }
+        // The sets drawn now might vary where the old ones did not.
+        for entry in self.entries.values_mut() {
+            if planned.contains(&entry.item.buffer) {
+                let buffer = self.buffers.get(&entry.item.buffer);
+                entry.varies.geometry = geometry_might_vary(scene, entry.item.prim, buffer);
+            }
         }
     }
 
@@ -3157,6 +3174,71 @@ def Scope "Looks" {{{}{}
             .map(|set| set.name.as_str())
             .collect();
         assert_eq!(names, ["st1", "st2"]);
+    }
+
+    /// A `varname` that varies over time: `set_time` reads the material
+    /// again and plans the mesh again with the set it names, and the set's
+    /// own time samples then refill it.
+    #[test]
+    fn set_time_follows_a_varname_that_varies() {
+        let text = alloc::format!(
+            r#"#usda 1.0
+def Mesh "Plate" (
+    prepend apiSchemas = ["MaterialBindingAPI"]
+) {{
+    int[] faceVertexCounts = [4]
+    int[] faceVertexIndices = [0, 1, 2, 3]
+    point3f[] points = [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0)]
+    texCoord2f[] primvars:st1 (
+        interpolation = "vertex"
+    )
+    texCoord2f[] primvars:st1.timeSamples = {{
+        0: [(0, 0), (2, 0), (2, 2), (0, 2)],
+        20: [(0, 0), (4, 0), (4, 4), (0, 4)],
+    }}
+    rel material:binding = </Looks/Shifting>
+}}
+def Scope "Looks" {{{}
+}}
+"#,
+            reading(
+                "Shifting",
+                r#"token inputs:coordinates.timeSamples = {0: "st", 10: "st1"}"#
+            ),
+        );
+        let (store, live) = compose(&text);
+        let scene = Scene::new(live.stage(), &store);
+        let mut list = DrawList::new(DrawOptions {
+            time: Time::at(0.0),
+            ..DrawOptions::default()
+        });
+        list.refresh(&scene);
+        let key = list.items().next().unwrap().buffer;
+        assert!(list.buffers(key).unwrap().buffers.uv_sets.is_empty());
+
+        let diff = list.set_time(&scene, Time::at(10.0));
+        assert_eq!(diff.materials_changed, [store.path("/Looks/Shifting")]);
+        assert_eq!(diff.rebuilt, [key]);
+        assert_eq!(diff.work.triangulations, 1);
+        let buffers = &list.buffers(key).unwrap().buffers;
+        assert_eq!(buffers.uv_sets[0].name, "st1");
+        assert_eq!(
+            buffers.uv_sets[0].values[2],
+            [3., 3.],
+            "st1 between samples"
+        );
+
+        // `st1` is drawn now, and its samples make the mesh read again.
+        let diff = list.set_time(&scene, Time::at(20.0));
+        assert_eq!(diff.refilled, [key]);
+        assert_eq!(diff.work.triangulations, 0);
+        let buffers = &list.buffers(key).unwrap().buffers;
+        assert_eq!(buffers.uv_sets[0].values[2], [4., 4.]);
+
+        // And back: planned again without it.
+        let diff = list.set_time(&scene, Time::at(0.0));
+        assert_eq!(diff.rebuilt, [key]);
+        assert!(list.buffers(key).unwrap().buffers.uv_sets.is_empty());
     }
 
     #[test]

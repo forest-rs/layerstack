@@ -8,6 +8,7 @@ import type {
   Changes,
   Edit,
   EditReceipt,
+  EditTarget,
   Layer,
   Layerstack,
   ResolveResult,
@@ -194,6 +195,18 @@ export class Editor implements Disposable {
     return time === null
       ? this.apply(`set ${path}`, [{ type: "setValue", path, value }])
       : this.apply(`set ${path} at ${time}`, [{ type: "setValue", path, value, time }]);
+  }
+
+  /**
+   * Authors `value` for the attribute at `path` through `target`, such as
+   * the edit target of an opinion in a referenced asset: the path and time
+   * are the stage's, and the target writes them where it maps them (the
+   * asset's `/Robot.height` for `/World/Robot.height`).
+   */
+  setValueThrough(target: EditTarget, path: string, value: ValueInput, time: number | null = null): EditReceipt {
+    const where = `${target.layer.identifier ?? "(anonymous)"}${target.site === null ? "" : ` at ${target.site}`}`;
+    const edit: Edit = time === null ? { type: "setValue", path, value } : { type: "setValue", path, value, time };
+    return this.#record(`set ${path}${time === null ? "" : ` at ${time}`} in ${where}`, () => this.stage.apply([edit], target));
   }
 
   /**

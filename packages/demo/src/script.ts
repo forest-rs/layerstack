@@ -4,7 +4,7 @@
 // The demo's script over the sample scene. The page runs it one
 // step at a time; `scripts/acceptance.ts` runs it headless and checks the
 // stage after each step.
-import type { Layerstack } from "@forest-rs/layerstack";
+import type { EditTarget, Layerstack } from "@forest-rs/layerstack";
 import { Editor } from "./editor.ts";
 import type { Fetcher, LayerFile } from "./editor.ts";
 
@@ -20,6 +20,11 @@ export const sample = {
   /** A robot referenced from `assets/robot.usda`, with the variant set `finish`. */
   robot: "/World/Robot",
   color: "/World/Robot.color",
+  /** The robot's height, authored only in its asset, and the height the script writes there through the reference. */
+  height: "/World/Robot.height",
+  assetHeight: 1.5,
+  /** The robot's own file, which the reference reads. */
+  robotAsset: "assets/robot.usda",
   set: "finish",
   /** The variant whose reference (`assets/chrome.usda`) is not fetched until it is selected. */
   variant: "chrome",
@@ -65,6 +70,11 @@ export class Session {
   attribute: string | null = null;
   /** The time code the inspector and the explanation read at; `null` reads the defaults. */
   time: number | null = null;
+  /**
+   * Where the edit field writes: an opinion's edit target the user picked
+   * in the explanation, or `null` for the stage's edit layer.
+   */
+  target: EditTarget | null = null;
 
   /** The current editor; throws before the first step. */
   get current(): Editor {
@@ -78,8 +88,13 @@ export class Session {
     this.editor = editor;
   }
 
-  /** Selects a prim, and one of its attributes or none, read at `time` (the defaults by default). */
+  /**
+   * Selects a prim, and one of its attributes or none, read at `time` (the
+   * defaults by default). Selecting another attribute sends edits to the
+   * edit layer again.
+   */
   select(prim: string | null, attribute: string | null = null, time: number | null = null): void {
+    if (attribute !== this.attribute) this.target = null;
     this.prim = prim;
     this.attribute = attribute;
     this.time = time;
@@ -162,8 +177,20 @@ export const steps: readonly Step[] = [
     },
   },
   {
+    title: "Edit the robot asset through its reference",
+    look: "The explanation: the height comes from assets/robot.usda through the reference, and that opinion's edit target writes /Robot.height in that file. The height is 1.5 now, written in the asset, not in scene.usda: assets/robot.usda is dirty, and any other prim referencing the asset reads it too.",
+    async run(session) {
+      const editor = session.current;
+      session.select(sample.robot, sample.height);
+      const opinion = editor.stage.attribute(sample.height)?.explain()?.opinions[0];
+      if (opinion?.editTarget == null) throw new Error(`${sample.height} has no opinion to edit through`);
+      session.target = opinion.editTarget;
+      editor.setValueThrough(opinion.editTarget, sample.height, { type: "double", value: sample.assetHeight });
+    },
+  },
+  {
     title: "Rename the robot to Rover",
-    look: "The explanation: the painted color now comes from /World/Rover{finish=painted}; the variant set moved with the prim. The lamp's aim, in library.usda, targets /World/Rover: one rename edited two layers, and both are dirty.",
+    look: "The explanation: the painted color now comes from /World/Rover{finish=painted}; the variant set moved with the prim. The lamp's aim, in library.usda, targets /World/Rover: one rename edited two layers. The edit target of the robot's reference is stale now: no arc of /World/Robot maps it, and a rename through it is refused.",
     async run(session) {
       session.current.move(sample.robot, sample.rover);
       session.select(sample.rover, sample.roverColor);
@@ -185,7 +212,7 @@ export const steps: readonly Step[] = [
   },
   {
     title: "Save, download, reopen",
-    look: "The layers: scene.usda and library.usda were dirty. The reopened stage reads them from the downloaded bytes and fetches the rest; the override, the pebble and the rename are there.",
+    look: "The layers: scene.usda, library.usda and assets/robot.usda were dirty. The reopened stage reads them from the downloaded bytes and fetches the rest; the override, the pebble, the asset's height and the rename are there.",
     async run(session, host) {
       const editor = session.current;
       editor.save();

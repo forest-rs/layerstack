@@ -12,12 +12,13 @@ a beacon, which share one prototype.
 Panels: the prim tree (instances and instance proxies badged), the
 attribute inspector (the variant dropdowns, the time to read at, the
 relationships and their targets, an edit field, and rename and delete), the
-explanation (every opinion with its layer, arc and role, and the value's
-source), the layers (dirty, edit layer, save and reopen), the undo stack,
+explanation (every opinion with its layer, arc and role, the value's source,
+and an "Edit here" button that points the edit field at where the opinion
+lives, through the arc that reaches it), the layers (dirty, edit layer, save and reopen), the undo stack,
 the asset loop (want, fetch, supply, load), the change log, and the transfer
 counters in the header.
 
-The script runs eleven steps, one button each:
+The script runs twelve steps, one button each:
 
 1. Open the sample: the stage wants its sublayer, the robot's reference and
    the beacon's (once, for both instances), and `resolve` fetches them.
@@ -31,18 +32,26 @@ The script runs eleven steps, one button each:
    the attribute is typed by the schema of a prim the same edit defines.
 7. Retype the pebble as a `Cube` and set its `size` in one edit: the new
    type's attribute; the radius it authored stays.
-8. Rename the robot to `Rover` (`Stage.move`): the variant set and the
+8. Edit the robot asset through its reference: the robot's `height` comes
+   from `assets/robot.usda`, and that opinion's `editTarget` writes
+   `/Robot.height` in the asset (`stage.apply(edits, opinion.editTarget)`),
+   with the stage path `/World/Robot.height`. The asset is dirty, not
+   `scene.usda`, and every prim referencing it reads 1.5.
+9. Rename the robot to `Rover` (`Stage.move`): the variant set and the
    specs inside its variants move with it, so the painted color now comes
    from `/World/Rover{finish=painted}`, and the lamp's `aim` in the
-   sublayer is repaired, so one rename dirties two layers. It is one entry
-   on the undo stack.
-9. Read the lamp's `flicker` at time 30: the explanation names the time
-   samples as the source, held from 24, where a block is authored, so there
-   is no value. At time 6 it reads 0.5, between the samples at 0 and 12.
-10. Explain `/World/Beacons/North/Bulb`, an instance proxy: its radius
+   sublayer is repaired, so one rename edits two layers. It is one entry
+   on the undo stack. The reference's edit target from step 8 is stale now
+   (`target.stale`): no arc of `/World/Robot` maps it.
+10. Read the lamp's `flicker` at time 30: the explanation names the time
+    samples as the source, held from 24, where a block is authored, so
+    there is no value. At time 6 it reads 0.5, between the samples at 0
+    and 12.
+11. Explain `/World/Beacons/North/Bulb`, an instance proxy: its radius
     comes from `assets/beacon.usda` through North's reference.
-11. Save: the two dirty layers are downloaded, and the root is opened again
-    from the downloaded bytes, the rest fetched; every edit is there, and
+12. Save: the three dirty layers are downloaded, and the root is opened again
+    from the downloaded bytes, the rest fetched; every edit is there (the
+    asset's height included), and
     the reopened stage explains the instance proxy as the edited live
     stage did.
 

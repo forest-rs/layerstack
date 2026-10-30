@@ -394,6 +394,30 @@ impl StagehandMesh {
         plan.refill(&mut self.buffers, &points, primvar.as_ref())
             .map_err(|mismatch| error("refill", &alloc::format!("{mismatch}")))
     }
+
+    /// Fills every buffer again from the mesh `builder` gathered: new
+    /// points, normals, `st` and colors, by the kept plan, without
+    /// triangulating again. Consumes the builder.
+    ///
+    /// # Errors
+    ///
+    /// For a shape; when the topology differs from the plan's; or when the
+    /// points or primvars are not shaped as the plan's (`PlanMismatch`).
+    #[wasm_bindgen(js_name = refillFrom)]
+    pub fn refill_from(&mut self, builder: MeshBuilder) -> Result<(), JsValue> {
+        let plan = self
+            .plan
+            .as_ref()
+            .ok_or_else(|| error("refillFrom", "a shape has no plan"))?;
+        let input = builder.input();
+        if !plan.same_topology(&input.topology) {
+            return Err(error("refillFrom", "the topology is not the plan's"));
+        }
+        self.buffers = plan
+            .buffers(&input)
+            .map_err(|mismatch| error("refillFrom", &alloc::format!("{mismatch}")))?;
+        Ok(())
+    }
 }
 
 /// The triangles of an implicit shape: `kind` (`Cube`, `Sphere`,

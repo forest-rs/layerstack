@@ -16,12 +16,20 @@
  * ```ts
  * const stagehand = await loadStagehand();
  * const input = readMesh(stage, "/World/Rock", { time });
- * using mesh = stagehand.buildMesh(input!);
- * geometry.setIndex(new BufferAttribute(mesh.indices, 1));
- * geometry.setAttribute("position", new BufferAttribute(mesh.positions, 3));
- * mesh.report; // { triangles, vertices, concaveFaces, faceNotes, ... }
- * mesh.refill(readPoints(stage, "/World/Rock", { time: next })!); // animation: no new triangulation
+ * const mesh = stagehand.buildMesh(input!);
+ * try {
+ *   geometry.setIndex(new BufferAttribute(mesh.indices, 1));
+ *   geometry.setAttribute("position", new BufferAttribute(mesh.positions, 3));
+ *   mesh.report; // { triangles, vertices, concaveFaces, faceNotes, ... }
+ *   mesh.refill(readPoints(stage, "/World/Rock", { time: next })!); // animation: no new triangulation
+ * } finally {
+ *   mesh.dispose(); // or `using mesh = ...` where the runtime supports it
+ * }
  * ```
+ *
+ * A {@link DrawList} ({@link Stagehand.drawList}) keeps a whole stage's
+ * instanced draws and buffers, and applies the stage's change records as
+ * diffs.
  *
  * @module
  */
@@ -31,9 +39,14 @@ import init, {
   stagehandAbi,
   tessellateShape,
 } from "../wasm/layerstack_stagehand.js";
+import type { Stage } from "@forest-rs/layerstack";
+import { DrawList } from "./draw.js";
+import type { DrawOptions } from "./draw.js";
 import type { DrawRange, MeshInput, MeshOptions, MeshReport, PrimvarInput, Shape, Tessellation } from "./types.js";
 
 export type * from "./types.js";
+export { DrawList } from "./draw.js";
+export type { DrawBuffers, DrawDiff, DrawItem, DrawOptions, DrawWork, ItemSource, Purpose } from "./draw.js";
 export { readMesh, readPoints, readShape } from "./read.js";
 
 /** The exports' version this wrapper speaks (`layerstack_stagehand_wasm::ABI`). */
@@ -65,10 +78,62 @@ function call<T>(code: StagehandError["code"], operation: string, body: () => T)
   }
 }
 
+/** Copies `input` into a new {@link MeshBuilder} of the module, for `operation`. */
+function gather(operation: string, input: MeshInput): MeshBuilder {
+  const builder = call(
+    "argument.invalid",
+    operation,
+    () =>
+      new MeshBuilder(
+        input.faceVertexCounts,
+        input.faceVertexIndices,
+        input.holeIndices ?? new Int32Array(),
+        input.orientation ?? "rightHanded",
+        input.subdivisionScheme ?? "catmullClark",
+        input.points,
+      ),
+  );
+  try {
+    const primvar = (set: (p: PrimvarInput) => void, primvar: PrimvarInput | null | undefined) => {
+      if (primvar != null) call("argument.invalid", operation, () => set(primvar));
+    };
+    primvar(
+      (p) => builder.normals(p.values, p.indices ?? undefined, p.interpolation, p.elementSize ?? 1),
+      input.normals,
+    );
+    primvar((p) => builder.st(p.values, p.indices ?? undefined, p.interpolation, p.elementSize ?? 1), input.st);
+    primvar(
+      (p) => builder.displayColor(p.values, p.indices ?? undefined, p.interpolation, p.elementSize ?? 1),
+      input.displayColor,
+    );
+    const subsets = input.subsets ?? [];
+    if (subsets.length > 0) {
+      const ends = new Uint32Array(subsets.length);
+      let total = 0;
+      subsets.forEach((subset, i) => {
+        total += subset.faces.length;
+        ends[i] = total;
+      });
+      const faces = new Int32Array(total);
+      let at = 0;
+      for (const subset of subsets) {
+        faces.set(subset.faces, at);
+        at += subset.faces.length;
+      }
+      builder.subsets(faces, ends);
+    }
+  } catch (error) {
+    builder.free();
+    throw error;
+  }
+  return builder;
+}
+
 /**
  * A mesh's (or shape's) buffers, copied out of the module, and, for a
  * mesh, the plan kept in the module for {@link StagehandMesh.refill}.
- * Dispose it (`using`, or {@link StagehandMesh.dispose}) to free the plan.
+ * Dispose it ({@link StagehandMesh.dispose} in a `finally`, or `using`
+ * where the runtime supports it) to free the plan.
  */
 export class StagehandMesh implements Disposable {
   /** Positions, three per vertex. */
@@ -76,9 +141,9 @@ export class StagehandMesh implements Disposable {
   /** Unit normals, three per vertex. */
   normals: Float32Array;
   /** Texture coordinates, two per vertex; `null` when `st` is not drawn. */
-  readonly st: Float32Array | null;
+  st: Float32Array | null;
   /** Linear RGB colors, three per vertex; `null` when `displayColor` is not drawn. */
-  readonly colors: Float32Array | null;
+  colors: Float32Array | null;
   /** Three vertex indices per triangle, counter-clockwise seen from the front. */
   readonly indices: Uint32Array;
   /** The authored face of each triangle. */
@@ -129,6 +194,27 @@ export class StagehandMesh implements Disposable {
     this.normals = native.normals();
   }
 
+  /**
+   * Replaces every buffer ({@link positions}, {@link normals}, {@link st},
+   * {@link colors}) from a whole `input` of the plan's topology, subsets
+   * and primvar layouts, without triangulating again: for new points and
+   * primvar values at once.
+   *
+   * Throws `plan.mismatch` when the topology or layouts differ,
+   * `argument.invalid` for a shape or malformed values, `mesh.disposed`
+   * after {@link dispose}.
+   */
+  refillFrom(input: MeshInput): void {
+    if (this.report === null) throw new StagehandError("argument.invalid", "refillFrom", "a shape has no plan");
+    const native = this.#live("refillFrom");
+    const builder = gather("refillFrom", input);
+    call("plan.mismatch", "refillFrom", () => native.refillFrom(builder));
+    this.positions = native.positions();
+    this.normals = native.normals();
+    this.st = native.st() ?? null;
+    this.colors = native.colors() ?? null;
+  }
+
   /** Frees the plan in the module. Idempotent; the buffers stay. */
   dispose(): void {
     this.#native?.free();
@@ -164,53 +250,18 @@ export class Stagehand {
    * whole elements, or an unknown interpolation.
    */
   buildMesh(input: MeshInput, options: MeshOptions = {}): StagehandMesh {
-    const builder = call(
-      "argument.invalid",
-      "buildMesh",
-      () =>
-        new MeshBuilder(
-          input.faceVertexCounts,
-          input.faceVertexIndices,
-          input.holeIndices ?? new Int32Array(),
-          input.orientation ?? "rightHanded",
-          input.subdivisionScheme ?? "catmullClark",
-          input.points,
-        ),
-    );
-    try {
-      const primvar = (set: (p: PrimvarInput) => void, primvar: PrimvarInput | null | undefined) => {
-        if (primvar != null) call("argument.invalid", "buildMesh", () => set(primvar));
-      };
-      primvar(
-        (p) => builder.normals(p.values, p.indices ?? undefined, p.interpolation, p.elementSize ?? 1),
-        input.normals,
-      );
-      primvar((p) => builder.st(p.values, p.indices ?? undefined, p.interpolation, p.elementSize ?? 1), input.st);
-      primvar(
-        (p) => builder.displayColor(p.values, p.indices ?? undefined, p.interpolation, p.elementSize ?? 1),
-        input.displayColor,
-      );
-      const subsets = input.subsets ?? [];
-      if (subsets.length > 0) {
-        const ends = new Uint32Array(subsets.length);
-        let total = 0;
-        subsets.forEach((subset, i) => {
-          total += subset.faces.length;
-          ends[i] = total;
-        });
-        const faces = new Int32Array(total);
-        let at = 0;
-        for (const subset of subsets) {
-          faces.set(subset.faces, at);
-          at += subset.faces.length;
-        }
-        builder.subsets(faces, ends);
-      }
-    } catch (error) {
-      builder.free();
-      throw error;
-    }
+    const builder = gather("buildMesh", input);
     return new StagehandMesh(builder.build(options.triangulation === "hydraFan", options.normals === "faceOriented"));
+  }
+
+  /**
+   * A {@link DrawList} of `stage`, empty until its first
+   * {@link DrawList.refresh}: the instanced draws a renderer makes of the
+   * stage, kept up to date from its change records with diffs that say
+   * what changed and count the work done. Dispose it to free its buffers.
+   */
+  drawList(stage: Stage, options: DrawOptions = {}): DrawList {
+    return new DrawList(this, stage, options);
   }
 
   /**

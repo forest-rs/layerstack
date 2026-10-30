@@ -186,6 +186,19 @@ describe("meshes", () => {
     assert.equal(zOfPoint3(oriented), 1);
   });
 
+  it("refills every buffer from a whole input of the plan's topology", () => {
+    using stage = open();
+    const input = readMesh(stage, "/World/Rock")!;
+    using mesh = stagehand.buildMesh(input);
+    const indices = [...mesh.indices];
+    mesh.refillFrom({ ...input, displayColor: { values: new Float32Array([1, 0, 0]), interpolation: "constant" } });
+    assert.deepEqual([...mesh.indices], indices);
+    assert.deepEqual([...mesh.colors!.subarray(0, 3)], [1, 0, 0]);
+    assert.throws(() => mesh.refillFrom({ ...input, faceVertexCounts: new Int32Array([4, 6, 4, 2]) }), {
+      code: "plan.mismatch",
+    });
+  });
+
   it("reports an invalid topology and draws nothing", () => {
     using stage = open();
     const input = readMesh(stage, "/World/Broken")!;

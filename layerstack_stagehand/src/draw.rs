@@ -16,7 +16,7 @@ use layerstack_schemas::{
 };
 
 use crate::camera::{CAMERA_INPUTS, CameraItem};
-use crate::light::{LIGHT_INPUTS, LightItem, LightKind, read_light};
+use crate::light::{LIGHT_INPUTS, LightId, LightInstance, LightItem, LightKind, read_light};
 use crate::material::{MaterialItem, read_material};
 use crate::plan::{MeshBuffers, MeshOptions, MeshPlan};
 use crate::report::MeshReport;
@@ -287,11 +287,11 @@ pub struct DrawDiff {
     /// Cameras read again and found different: moved, or a lens changed.
     pub cameras_changed: Vec<PathId>,
     /// New lights.
-    pub lights_added: Vec<PathId>,
+    pub lights_added: Vec<LightId>,
     /// Lights gone.
-    pub lights_removed: Vec<PathId>,
+    pub lights_removed: Vec<LightId>,
     /// Lights read again and found different.
-    pub lights_changed: Vec<PathId>,
+    pub lights_changed: Vec<LightId>,
     /// Materials newly bound by an item.
     pub materials_added: Vec<PathId>,
     /// Materials no item binds any more, or no longer materials.
@@ -672,12 +672,16 @@ struct Entry {
 ///   nothing in the list reads: it reads nothing.
 ///
 /// Cameras ([`CameraItem`]) and lights ([`LightItem`]) are listed beside
-/// the items, by path, and diffed by [`DrawDiff::cameras_changed`] and
+/// the items, by path (an instance proxy's inside a native instance, one
+/// per instance) and, for a light a point instancer places, by instance
+/// ([`LightId`]), and diffed by [`DrawDiff::cameras_changed`] and
 /// [`DrawDiff::lights_changed`]: a change of an input it reads, of its
 /// transform or visibility or one above it, or a resync over it, reads it
-/// again; other properties of its prim (a lamp's `aim`) do not. A light
-/// input connected elsewhere is read again when a shading property of a
-/// prim its connections reach changes.
+/// again; other properties of its prim (a lamp's `aim`) do not. Moving
+/// one native instance reads its own lights and cameras again; a change of
+/// a point instancer reads the lights it places. A light input connected
+/// elsewhere is read again when a shading property of a prim its
+/// connections reach changes.
 ///
 /// Materials ([`MaterialItem`]) are held for the materials the items bind,
 /// by path, and diffed by [`DrawDiff::materials_added`],
@@ -701,7 +705,7 @@ pub struct DrawList {
     mesh_buffers: HashMap<PathId, BufferKey>,
     shape_buffers: HashMap<ShapeKey, BufferKey>,
     cameras: BTreeMap<PathId, Held<CameraItem>>,
-    lights: BTreeMap<PathId, Held<LightItem>>,
+    lights: BTreeMap<LightId, Held<LightItem>>,
     materials: BTreeMap<PathId, Held<MaterialItem>>,
     next_item: u32,
     next_buffer: u32,
@@ -730,22 +734,32 @@ struct Gather {
     refilled: BTreeSet<BufferKey>,
     rebuilt: BTreeSet<BufferKey>,
     freed: BTreeSet<BufferKey>,
-    cameras: Changed,
-    lights: Changed,
-    shading: Changed,
+    cameras: Changed<PathId>,
+    lights: Changed<LightId>,
+    shading: Changed<PathId>,
     work: DrawWork,
 }
 
-/// Cameras or lights added, removed and changed in the diff being gathered.
-#[derive(Default)]
-struct Changed {
-    added: BTreeSet<PathId>,
-    removed: BTreeSet<PathId>,
-    changed: BTreeSet<PathId>,
+/// Cameras, lights or materials added, removed and changed in the diff
+/// being gathered.
+struct Changed<K> {
+    added: BTreeSet<K>,
+    removed: BTreeSet<K>,
+    changed: BTreeSet<K>,
 }
 
-impl Changed {
-    fn finish(mut self) -> [Vec<PathId>; 3] {
+impl<K> Default for Changed<K> {
+    fn default() -> Self {
+        Self {
+            added: BTreeSet::new(),
+            removed: BTreeSet::new(),
+            changed: BTreeSet::new(),
+        }
+    }
+}
+
+impl<K: Ord + Copy> Changed<K> {
+    fn finish(mut self) -> [Vec<K>; 3] {
         for path in &self.added {
             self.changed.remove(path);
         }
@@ -822,7 +836,7 @@ struct Found {
     sources: Vec<ItemSource>,
     scopes: Vec<Scope>,
     cameras: Vec<PathId>,
-    lights: Vec<(PathId, LightKind)>,
+    lights: Vec<(LightId, LightKind)>,
     prims: u32,
 }
 
@@ -929,15 +943,18 @@ impl DrawList {
         self.cameras.get(&path).map(|held| &held.item)
     }
 
-    /// The lights, by path id.
+    /// The lights, by [`LightId`]: a light inside a native instance once
+    /// per instance (by its instance proxy's path), one inside a point
+    /// instancer's prototype once per unmasked instance.
     pub fn lights(&self) -> impl Iterator<Item = &LightItem> {
         self.lights.values().map(|held| &held.item)
     }
 
-    /// The light at `path`, while it is listed.
+    /// The light `id` (a [`PathId`] for one no point instancer places),
+    /// while it is listed.
     #[must_use]
-    pub fn light(&self, path: PathId) -> Option<&LightItem> {
-        self.lights.get(&path).map(|held| &held.item)
+    pub fn light(&self, id: impl Into<LightId>) -> Option<&LightItem> {
+        self.lights.get(&id.into()).map(|held| &held.item)
     }
 
     /// The materials the items bind, by path id.
@@ -1052,7 +1069,7 @@ impl DrawList {
         }
         for first in prototypes {
             found.scopes.push(Scope::Prototype(first));
-            self.discover_prototype(scene, first, &mut found);
+            self.discover_prototype(scene, first, false, &mut found);
         }
         gather.work.prims_traversed = found.prims;
         self.apply_to_views(scene, changes, &found, &mut gather);
@@ -1172,14 +1189,15 @@ impl DrawList {
         for path in cameras {
             self.read_camera(scene, path, &mut gather);
         }
-        let lights: Vec<(PathId, LightKind)> = self
+        let lights: Vec<(LightId, LightKind)> = self
             .lights
             .iter()
             .filter(|(_, held)| held.varies)
-            .map(|(path, held)| (*path, held.item.kind))
+            .map(|(id, held)| (*id, held.item.kind))
             .collect();
-        for (path, kind) in lights {
-            self.read_light(scene, path, kind, &mut gather);
+        let mut placements = Placements::default();
+        for (id, kind) in lights {
+            self.read_light(scene, id, kind, &mut placements, &mut gather);
         }
         let materials: Vec<PathId> = self
             .materials
@@ -1284,30 +1302,46 @@ impl DrawList {
             self.read_camera(scene, path, gather);
         }
 
-        let lights: BTreeMap<PathId, LightKind> = found.lights.iter().copied().collect();
-        let gone: Vec<PathId> = self
+        let lights: BTreeMap<LightId, LightKind> = found.lights.iter().copied().collect();
+        // A point instancer's discovery covers the lights it places.
+        let instancers: Vec<PathId> = found
+            .scopes
+            .iter()
+            .filter_map(|scope| match scope {
+                Scope::Instancer(at) => Some(*at),
+                _ => None,
+            })
+            .collect();
+        let gone: Vec<LightId> = self
             .lights
             .keys()
-            .filter(|path| resynced(**path) && !lights.contains_key(path))
+            .filter(|id| {
+                !lights.contains_key(id)
+                    && (resynced(id.path)
+                        || id
+                            .instance
+                            .is_some_and(|instance| instancers.contains(&instance.instancer)))
+            })
             .copied()
             .collect();
-        for path in gone {
-            self.lights.remove(&path);
-            gather.lights.removed.insert(path);
+        for id in gone {
+            self.lights.remove(&id);
+            gather.lights.removed.insert(id);
         }
         let mut read = lights;
-        for (path, held) in &self.lights {
-            if reaches(*path, LIGHT_INPUTS)
+        for (id, held) in &self.lights {
+            if reaches(id.path, LIGHT_INPUTS)
                 || held
                     .sources
                     .iter()
                     .any(|&source| shading_touched(scene, changes, &roots, source))
             {
-                read.entry(*path).or_insert(held.item.kind);
+                read.entry(*id).or_insert(held.item.kind);
             }
         }
-        for (path, kind) in read {
-            self.read_light(scene, path, kind, gather);
+        let mut placements = Placements::default();
+        for (id, kind) in read {
+            self.read_light(scene, id, kind, &mut placements, gather);
         }
     }
 
@@ -1429,35 +1463,57 @@ impl DrawList {
         }
     }
 
-    /// Reads the light at `path` again and records whether it changed.
+    /// Reads the light `id` again and records whether it changed; drops it
+    /// when its prim, or the instance placing it, is gone.
     fn read_light(
         &mut self,
         scene: &Scene<'_>,
-        path: PathId,
+        id: LightId,
         kind: LightKind,
+        placements: &mut Placements,
         gather: &mut Gather,
     ) {
         gather.work.lights_read += 1;
-        if scene.stage().prim(path, scene.store()).is_none() {
-            if self.lights.remove(&path).is_some() {
-                gather.lights.removed.insert(path);
+        let path = id.path;
+        let time = self.options.time;
+        let matrix = if scene.stage().prim(path, scene.store()).is_none() {
+            None
+        } else if let Some(instance) = id.instance {
+            self.placed_matrix(scene, path, instance, placements)
+        } else {
+            Some(self.xforms.local_to_world(scene, path).unwrap_or(IDENTITY))
+        };
+        let Some(matrix) = matrix else {
+            if self.lights.remove(&id).is_some() {
+                gather.lights.removed.insert(id);
             }
             return;
-        }
-        let time = self.options.time;
-        let matrix = self.xforms.local_to_world(scene, path).unwrap_or(IDENTITY);
-        let hidden = Imageable::get(scene, path)
-            .is_some_and(|imageable| imageable.compute_visibility(time) == Visibility::Invisible);
-        let (item, sources) = read_light(scene, path, kind, time, matrix, hidden);
-        // A connected input's source might vary as well as its own value.
+        };
+        let invisible = |at: PathId| {
+            Imageable::get(scene, at).is_some_and(|imageable| {
+                imageable.compute_visibility(time) == Visibility::Invisible
+            })
+        };
+        let hidden = invisible(path)
+            || id
+                .instance
+                .is_some_and(|instance| invisible(instance.instancer));
+        let (item, sources) = read_light(scene, id, kind, time, matrix, hidden);
+        // A connected input's source might vary as well as its own value;
+        // a placed light moves with its instancer's placement.
         let varies = self.world_might_vary(scene, path)
             || visibility_might_vary(scene, path)
             || inputs_might_vary(scene, path, LIGHT_INPUTS)
             || sources
                 .iter()
-                .any(|&source| shading_might_vary(scene, source));
+                .any(|&source| shading_might_vary(scene, source))
+            || id.instance.is_some_and(|instance| {
+                inputs_might_vary(scene, instance.instancer, INSTANCER_INPUTS)
+                    || visibility_might_vary(scene, instance.instancer)
+                    || self.world_might_vary(scene, instance.instancer)
+            });
         match self.lights.insert(
-            path,
+            id,
             Held {
                 item,
                 varies,
@@ -1465,13 +1521,69 @@ impl DrawList {
             },
         ) {
             None => {
-                gather.lights.added.insert(path);
+                gather.lights.added.insert(id);
             }
-            Some(old) if old.item != self.lights[&path].item => {
-                gather.lights.changed.insert(path);
+            Some(old) if old.item != self.lights[&id].item => {
+                gather.lights.changed.insert(id);
             }
             Some(_) => {}
         }
+    }
+
+    /// The world matrix of the light at `path` placed by `instance`: its
+    /// transform relative to its prototype, the instance's
+    /// (`UsdGeomPointInstancer::ComputeInstanceTransformsAtTime`, the
+    /// prototype's own transform included, masked instances left out),
+    /// then the instancer's world transform, as the instancer's draw items
+    /// are placed. `None` when the instance is masked or gone, or no longer
+    /// of a prototype holding the light.
+    fn placed_matrix(
+        &mut self,
+        scene: &Scene<'_>,
+        path: PathId,
+        instance: LightInstance,
+        placements: &mut Placements,
+    ) -> Option<[[f64; 4]; 4]> {
+        let time = self.options.time;
+        let placed = placements
+            .entry(instance.instancer)
+            .or_insert_with(|| {
+                let view = PointInstancer::get(scene, instance.instancer)?;
+                let instances = view
+                    .compute_instance_transforms(time, time, InstanceTransformOptions::default())
+                    .ok()?;
+                Some(Placed {
+                    prototypes: view
+                        .prototypes()
+                        .iter()
+                        .map(|target| target.prim_path())
+                        .collect(),
+                    instances: instances
+                        .into_iter()
+                        .map(|placed| {
+                            (count(placed.index), (placed.prototype_index, placed.matrix))
+                        })
+                        .collect(),
+                })
+            })
+            .as_ref()?;
+        let &(index, matrix) = placed.instances.get(&instance.index)?;
+        let prototype = *placed.prototypes.get(index)?;
+        if !under(scene, path, prototype) {
+            return None;
+        }
+        let world = self
+            .xforms
+            .local_to_world(scene, instance.instancer)
+            .unwrap_or(IDENTITY);
+        let inner = if path == prototype {
+            IDENTITY
+        } else {
+            self.xforms
+                .relative_transform(scene, path, prototype)
+                .map_or(IDENTITY, |relative| relative.matrix)
+        };
+        Some(multiply(&multiply(&inner, &matrix), &world))
     }
 
     /// Finds the items under `root`.
@@ -1522,23 +1634,30 @@ impl DrawList {
             }
             if gprim(scene, path).is_some() {
                 found.sources.push(ItemSource::Gprim { path });
-            } else if scene.is_a(path, "Camera") {
+            }
+            // A mesh light is a gprim drawn and a light listed.
+            if scene.is_a(path, "Camera") {
                 found.cameras.push(path);
             } else if let Some(kind) = LightKind::of(scene, path) {
-                found.lights.push((path, kind));
+                found.lights.push((path.into(), kind));
             }
             let children: Vec<PathId> = prim.all_children().map(|child| child.path()).collect();
             stack.extend(children.into_iter().rev());
         }
         for first in prototypes {
             found.scopes.push(Scope::Prototype(first));
-            self.discover_prototype(scene, first, found);
+            self.discover_prototype(scene, first, true, found);
         }
     }
 
     /// Finds a native instancing prototype's items, from its first
-    /// instance: one per gprim and material its instances bind.
-    fn discover_prototype(&self, scene: &Scene<'_>, first: PathId, found: &mut Found) {
+    /// instance: one per gprim and material its instances bind; with
+    /// `views`, its cameras and lights too, once per instance, by their
+    /// instance proxies' paths. Hydra lists them per instance as well:
+    /// `UsdImagingInstanceAdapter::_Populate` gives each prim of a
+    /// prototype its own adapter, lights included, and
+    /// `GetLightParamValue` reads a light's parameters per instance.
+    fn discover_prototype(&self, scene: &Scene<'_>, first: PathId, views: bool, found: &mut Found) {
         let stage = scene.stage();
         let store = scene.store();
         let roots = instances_of(scene, first);
@@ -1569,17 +1688,36 @@ impl DrawList {
                     });
                 }
             }
+            if views {
+                let camera = scene.is_a(path, "Camera");
+                let light = if camera {
+                    None
+                } else {
+                    LightKind::of(scene, path)
+                };
+                if camera || light.is_some() {
+                    for proxy in proxies(scene, first, path, &roots) {
+                        match light {
+                            Some(kind) => found.lights.push((proxy.into(), kind)),
+                            None => found.cameras.push(proxy),
+                        }
+                    }
+                }
+            }
             stack.extend(prim.all_children().map(|child| child.path()));
         }
     }
 
-    /// Finds a point instancer's items: each prototype's gprims.
+    /// Finds a point instancer's items, each prototype's gprims, and the
+    /// lights inside its prototypes, once per unmasked instance of their
+    /// prototype. Cameras inside prototypes are not listed.
     fn discover_instancer(&self, scene: &Scene<'_>, instancer: PathId, found: &mut Found) {
         let Some(view) = PointInstancer::get(scene, instancer) else {
             return;
         };
         let stage = scene.stage();
         let store = scene.store();
+        let mut lights: Vec<(usize, PathId, LightKind)> = Vec::new();
         for (index, target) in view.prototypes().iter().enumerate() {
             let prototype = target.prim_path();
             let mut stack = alloc::vec![prototype];
@@ -1598,7 +1736,31 @@ impl DrawList {
                         prim: path,
                     });
                 }
+                if let Some(kind) = LightKind::of(scene, path) {
+                    lights.push((index, path, kind));
+                }
                 stack.extend(prim.all_children().map(|child| child.path()));
+            }
+        }
+        if lights.is_empty() {
+            return;
+        }
+        let time = self.options.time;
+        let placed = view
+            .compute_instance_transforms(time, time, InstanceTransformOptions::default())
+            .unwrap_or_default();
+        for instance in &placed {
+            for &(index, path, kind) in &lights {
+                if instance.prototype_index == index {
+                    let id = LightId {
+                        path,
+                        instance: Some(LightInstance {
+                            instancer,
+                            index: count(instance.index),
+                        }),
+                    };
+                    found.lights.push((id, kind));
+                }
             }
         }
     }
@@ -1991,6 +2153,17 @@ impl DrawList {
             gather.removed.insert(id);
         }
     }
+}
+
+/// The instances of the point instancers read in one diff, by instancer,
+/// computed once for all the lights they place.
+type Placements = HashMap<PathId, Option<Placed>>;
+
+/// A point instancer's prototypes and its unmasked instances, by position:
+/// their prototype index and matrix.
+struct Placed {
+    prototypes: Vec<PathId>,
+    instances: HashMap<u32, (usize, [[f64; 4]; 4])>,
 }
 
 const IDENTITY: [[f64; 4]; 4] = [

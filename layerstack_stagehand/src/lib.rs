@@ -110,14 +110,18 @@
 //! world placement and direction, emission as `color * blackbody *
 //! intensity * 2^exposure`, divided by the light's world-space size when it
 //! normalizes, its shape, `ShapingAPI` and `ShadowAPI` controls, and its
-//! link collections as data). A diff lists the cameras and lights added,
+//! link collections as data), a `Mesh` with `MeshLightAPI` applied (its
+//! faces emit; normalized by their world-space area) and a `GeometryLight`
+//! (its target as data). Lights and cameras inside a native instance are
+//! listed once per instance, by their instance proxies' paths; lights inside
+//! a point instancer's prototype once per unmasked instance ([`LightId`]:
+//! the light's path and the instance's position). A diff lists the cameras and lights added,
 //! removed and changed; a change reaches a camera or a light through an
 //! input it reads, or its transform or visibility or one above it; a time
 //! change reads
 //! only those whose inputs or transform might vary. A light input connected
 //! to a node graph or another prim's input reads what the connection leads
-//! to. Lights and cameras inside native instances or point instancer
-//! prototypes are not listed yet.
+//! to. Cameras inside a point instancer's prototypes are not listed.
 //!
 //! # Materials
 //!
@@ -173,7 +177,8 @@ pub use input::{
 };
 #[cfg(feature = "stage")]
 pub use light::{
-    LightEmission, LightGeometry, LightItem, LightKind, LightLink, LightShadow, LightShaping,
+    LightEmission, LightGeometry, LightId, LightInstance, LightItem, LightKind, LightLink,
+    LightShadow, LightShaping,
 };
 #[cfg(feature = "stage")]
 pub use material::{

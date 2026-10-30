@@ -1,0 +1,1178 @@
+{
+ "rows": [
+  {
+   "camera": false,
+   "instance": null,
+   "path": "/World/Lamps/North/Bulb",
+   "proxy": true,
+   "time": null,
+   "type": "SphereLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     4.0,
+     1.0,
+     -2.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "camera": true,
+   "instance": null,
+   "path": "/World/Lamps/North/Eye",
+   "proxy": true,
+   "time": null,
+   "type": "Camera",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     4.0,
+     1.0,
+     1.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "camera": false,
+   "instance": null,
+   "path": "/World/Lamps/South/Bulb",
+   "proxy": true,
+   "time": null,
+   "type": "SphereLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     2.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     2.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     2.0,
+     0.0
+    ],
+    [
+     0.0,
+     2.0,
+     -2.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "camera": true,
+   "instance": null,
+   "path": "/World/Lamps/South/Eye",
+   "proxy": true,
+   "time": null,
+   "type": "Camera",
+   "visibility": "inherited",
+   "world": [
+    [
+     2.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     2.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     2.0,
+     0.0
+    ],
+    [
+     0.0,
+     2.0,
+     4.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "camera": false,
+   "instance": null,
+   "path": "/World/Lamps/Dark/Bulb",
+   "proxy": true,
+   "time": null,
+   "type": "SphereLight",
+   "visibility": "invisible",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     -2.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "camera": true,
+   "instance": null,
+   "path": "/World/Lamps/Dark/Eye",
+   "proxy": true,
+   "time": null,
+   "type": "Camera",
+   "visibility": "invisible",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     1.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "camera": false,
+   "instance": null,
+   "path": "/World/Panel",
+   "proxy": false,
+   "time": null,
+   "type": "Mesh",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     3.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "camera": false,
+   "instance": null,
+   "path": "/World/Glow",
+   "proxy": false,
+   "time": null,
+   "type": "GeometryLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "camera": false,
+   "instance": null,
+   "path": "/World/Sun",
+   "proxy": false,
+   "time": null,
+   "type": "SphereLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     10.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "camera": false,
+   "instance": {
+    "index": 0,
+    "instancer": "/World/Field"
+   },
+   "path": "/World/Field/Protos/Torch/Flame",
+   "proxy": false,
+   "time": null,
+   "type": "DiskLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.5,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "camera": false,
+   "instance": {
+    "index": 2,
+    "instancer": "/World/Field"
+   },
+   "path": "/World/Field/Protos/Torch/Flame",
+   "proxy": false,
+   "time": null,
+   "type": "DiskLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     2.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     2.0,
+     3.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "camera": false,
+   "instance": null,
+   "path": "/World/Lamps/North/Bulb",
+   "proxy": true,
+   "time": 0.0,
+   "type": "SphereLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     4.0,
+     1.0,
+     -2.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "camera": true,
+   "instance": null,
+   "path": "/World/Lamps/North/Eye",
+   "proxy": true,
+   "time": 0.0,
+   "type": "Camera",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     4.0,
+     1.0,
+     1.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "camera": false,
+   "instance": null,
+   "path": "/World/Lamps/South/Bulb",
+   "proxy": true,
+   "time": 0.0,
+   "type": "SphereLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     2.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     2.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     2.0,
+     0.0
+    ],
+    [
+     -4.0,
+     2.0,
+     -2.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "camera": true,
+   "instance": null,
+   "path": "/World/Lamps/South/Eye",
+   "proxy": true,
+   "time": 0.0,
+   "type": "Camera",
+   "visibility": "inherited",
+   "world": [
+    [
+     2.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     2.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     2.0,
+     0.0
+    ],
+    [
+     -4.0,
+     2.0,
+     4.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "camera": false,
+   "instance": null,
+   "path": "/World/Lamps/Dark/Bulb",
+   "proxy": true,
+   "time": 0.0,
+   "type": "SphereLight",
+   "visibility": "invisible",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     -2.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "camera": true,
+   "instance": null,
+   "path": "/World/Lamps/Dark/Eye",
+   "proxy": true,
+   "time": 0.0,
+   "type": "Camera",
+   "visibility": "invisible",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     1.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "camera": false,
+   "instance": null,
+   "path": "/World/Panel",
+   "proxy": false,
+   "time": 0.0,
+   "type": "Mesh",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     3.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "camera": false,
+   "instance": null,
+   "path": "/World/Glow",
+   "proxy": false,
+   "time": 0.0,
+   "type": "GeometryLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "camera": false,
+   "instance": null,
+   "path": "/World/Sun",
+   "proxy": false,
+   "time": 0.0,
+   "type": "SphereLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     10.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "camera": false,
+   "instance": {
+    "index": 0,
+    "instancer": "/World/Field"
+   },
+   "path": "/World/Field/Protos/Torch/Flame",
+   "proxy": false,
+   "time": 0.0,
+   "type": "DiskLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.5,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "camera": false,
+   "instance": {
+    "index": 2,
+    "instancer": "/World/Field"
+   },
+   "path": "/World/Field/Protos/Torch/Flame",
+   "proxy": false,
+   "time": 0.0,
+   "type": "DiskLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     2.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     2.0,
+     3.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "camera": false,
+   "instance": null,
+   "path": "/World/Lamps/North/Bulb",
+   "proxy": true,
+   "time": 10.0,
+   "type": "SphereLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     4.0,
+     1.0,
+     -2.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "camera": true,
+   "instance": null,
+   "path": "/World/Lamps/North/Eye",
+   "proxy": true,
+   "time": 10.0,
+   "type": "Camera",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     4.0,
+     1.0,
+     1.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "camera": false,
+   "instance": null,
+   "path": "/World/Lamps/South/Bulb",
+   "proxy": true,
+   "time": 10.0,
+   "type": "SphereLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     2.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     2.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     2.0,
+     0.0
+    ],
+    [
+     -4.0,
+     4.0,
+     -2.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "camera": true,
+   "instance": null,
+   "path": "/World/Lamps/South/Eye",
+   "proxy": true,
+   "time": 10.0,
+   "type": "Camera",
+   "visibility": "inherited",
+   "world": [
+    [
+     2.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     2.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     2.0,
+     0.0
+    ],
+    [
+     -4.0,
+     4.0,
+     4.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "camera": false,
+   "instance": null,
+   "path": "/World/Lamps/Dark/Bulb",
+   "proxy": true,
+   "time": 10.0,
+   "type": "SphereLight",
+   "visibility": "invisible",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     -2.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "camera": true,
+   "instance": null,
+   "path": "/World/Lamps/Dark/Eye",
+   "proxy": true,
+   "time": 10.0,
+   "type": "Camera",
+   "visibility": "invisible",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     1.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "camera": false,
+   "instance": null,
+   "path": "/World/Panel",
+   "proxy": false,
+   "time": 10.0,
+   "type": "Mesh",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     3.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "camera": false,
+   "instance": null,
+   "path": "/World/Glow",
+   "proxy": false,
+   "time": 10.0,
+   "type": "GeometryLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "camera": false,
+   "instance": null,
+   "path": "/World/Sun",
+   "proxy": false,
+   "time": 10.0,
+   "type": "SphereLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     10.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "camera": false,
+   "instance": {
+    "index": 0,
+    "instancer": "/World/Field"
+   },
+   "path": "/World/Field/Protos/Torch/Flame",
+   "proxy": false,
+   "time": 10.0,
+   "type": "DiskLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.5,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "camera": false,
+   "instance": {
+    "index": 2,
+    "instancer": "/World/Field"
+   },
+   "path": "/World/Field/Protos/Torch/Flame",
+   "proxy": false,
+   "time": 10.0,
+   "type": "DiskLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     2.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     2.0,
+     3.0,
+     0.0,
+     1.0
+    ]
+   ]
+  }
+ ],
+ "version": "26.11"
+}

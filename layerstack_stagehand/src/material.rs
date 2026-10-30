@@ -1297,7 +1297,7 @@ mod tests {
         let diff = edit(&mut store, &mut live, &mut list, &|edit| {
             PrimEdit::from_path_unchecked(rig).write_value(edit, "inputs:power", Value::Float(9.0));
         });
-        assert_eq!(diff.lights_changed, [lamp]);
+        assert_eq!(diff.lights_changed, [crate::LightId::from(lamp)]);
         assert_eq!(diff.work.lights_read, 1);
         assert_eq!(diff.work.materials_read, 0);
         assert_eq!(list.light(lamp).unwrap().emission.intensity, 9.0);

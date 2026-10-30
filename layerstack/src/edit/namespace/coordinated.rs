@@ -581,7 +581,7 @@ fn prepare_with(
     sort::sort_unstable_by(&mut specs, |a, b| {
         a.0.cmp(&b.0).then(a.1.prim_path().cmp(&b.1.prim_path()))
     });
-    Ok(NamespaceEdit {
+    NamespaceEdit {
         transaction,
         source,
         destination: Some(destination),
@@ -598,7 +598,8 @@ fn prepare_with(
             .collect(),
         relocates,
         unrepaired: unrepaired_paths,
-    })
+    }
+    .writable(store)
 }
 
 /// The variant specs of `layer`, before the edit, that no prim index of
@@ -1673,6 +1674,9 @@ impl LayerStore for Overlay<'_> {
     }
     fn layer_identifier(&self, id: LayerId) -> Option<&str> {
         self.store.layer_identifier(id)
+    }
+    fn layer_read_only(&self, id: LayerId) -> Option<ReadOnlyReason> {
+        self.store.layer_read_only(id)
     }
     fn asset_layer(&self, anchor: LayerId, path: &str) -> Option<LayerId> {
         self.store.asset_layer(anchor, path)

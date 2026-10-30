@@ -36,8 +36,8 @@ use crate::target_translation::{
 };
 use crate::{
     FieldEntry, FieldValue, Layer, LayerId, LayerStack, LayerStore, ListOp, Path, PathId, PrimSpec,
-    PropertyEntry, PropertyPath, Reference, ReferenceTarget, SpecPath, Stage, TargetPath, TokenId,
-    Value, VariantSets, VariantSpec, spec_path::VariantSelectionSite,
+    PropertyEntry, PropertyPath, ReadOnlyReason, Reference, ReferenceTarget, SpecPath, Stage,
+    TargetPath, TokenId, Value, VariantSets, VariantSpec, spec_path::VariantSelectionSite,
 };
 
 /// A validated namespace move or delete, including dependent authored path
@@ -120,6 +120,29 @@ pub enum NamespaceError {
     },
     /// A composition case cannot yet be handled without changing its meaning.
     UnsupportedComposition(&'static str),
+    /// The edit would change a layer that cannot be saved where it was
+    /// read ([`LayerStore::layer_read_only`]): an asset's package member
+    /// whose arc back into the stage it would repair, say. Changing it in
+    /// memory would leave an edit that no save can keep, so preparation
+    /// refuses the whole edit, as it refuses any other, before any layer
+    /// changes. Author the change in a layer that can be saved, or export
+    /// the read-only layer and compose the copy in its place.
+    ///
+    /// A deliberate divergence from OpenUSD: `UsdNamespaceEditor`
+    /// (`pxr/usd/usd/namespaceEditor.cpp`) edits such a layer in memory
+    /// without a word from `CanApplyEdits`, and its save then fails in
+    /// `SdfLayer::_CheckFormatWritability` (`pxr/usd/sdf/layer.cpp`).
+    ReadOnlyLayer {
+        /// The object the edit moves or deletes.
+        source: TargetPath,
+        /// Where a move takes it; `None` for a delete.
+        destination: Option<TargetPath>,
+        /// The read-only layer the edit would change: of several, the
+        /// one with the smallest id.
+        layer: LayerId,
+        /// Why the layer cannot be saved.
+        reason: ReadOnlyReason,
+    },
 }
 
 impl NamespaceError {
@@ -153,6 +176,27 @@ impl Describe for NamespaceError {
                 );
             }
             Self::UnsupportedComposition(reason) => reason,
+            Self::ReadOnlyLayer {
+                source,
+                destination,
+                layer,
+                reason,
+            } => {
+                match destination {
+                    Some(destination) => write!(
+                        f,
+                        "cannot move {} to {}",
+                        names.target(*source),
+                        names.target(*destination)
+                    )?,
+                    None => write!(f, "cannot delete {}", names.target(*source))?,
+                }
+                return write!(
+                    f,
+                    ": the edit would change {}, which cannot be saved ({reason})",
+                    names.layer(*layer)
+                );
+            }
         })
     }
 }
@@ -344,7 +388,7 @@ impl NamespaceEdit {
         sort::sort_unstable_by(&mut specs, |a, b| {
             a.0.cmp(&b.0).then(a.1.prim_path().cmp(&b.1.prim_path()))
         });
-        Ok(Self {
+        Self {
             transaction,
             source,
             destination: Some(destination),
@@ -354,7 +398,37 @@ impl NamespaceEdit {
             relocates: Vec::new(),
             // Every variant of the source asset is repaired.
             unrepaired: Vec::new(),
-        })
+        }
+        .writable(store)
+    }
+
+    /// The edit, once no layer it changes is read-only
+    /// ([`NamespaceError::ReadOnlyLayer`]): the last step of every
+    /// preparation, so a refused edit has changed nothing.
+    ///
+    /// OpenUSD diverges here: `UsdNamespaceEditor`
+    /// (`pxr/usd/usd/namespaceEditor.cpp`) does not ask whether a layer
+    /// it edits can be saved, so it repairs an arc in a package member in
+    /// memory and `SdfLayer::_CheckFormatWritability`
+    /// (`pxr/usd/sdf/layer.cpp`) refuses the save. Refusing the edit
+    /// instead keeps every edit this type prepares savable; explicit
+    /// edits of such a layer ([`Transaction`]) stay allowed, as in
+    /// OpenUSD, since their caller chose that layer.
+    fn writable(self, store: &dyn LayerStore) -> Result<Self, NamespaceError> {
+        let read_only = self
+            .layers
+            .iter()
+            .filter_map(|&layer| Some((layer, store.layer_read_only(layer)?)))
+            .min_by_key(|&(layer, _)| layer);
+        match read_only {
+            Some((layer, reason)) => Err(NamespaceError::ReadOnlyLayer {
+                source: self.source,
+                destination: self.destination,
+                layer,
+                reason,
+            }),
+            None => Ok(self),
+        }
     }
 
     /// Original composed object path.

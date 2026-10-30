@@ -281,11 +281,11 @@ pub use dependency_map::{ArcDependency, LayerDependencyStorage};
 pub use doc::{
     AssetAvailability, FieldEntry, FieldValue, InMemoryStore, InterpolationType, Layer, LayerId,
     LayerOffset, LayerPrims, LayerPrimsIntoIter, LayerPrimsIter, LayerPrimsIterMut, LayerStore,
-    MaybeSync, PrimSpec, RarePrimFields, Reference, ReferenceSource, ReferenceTarget, Relocate,
-    Specifier, SublayerEntry, Value, VariantBranch, VariantBranches, VariantPrims,
-    VariantSelections, VariantSelectionsIter, VariantSetSpec, VariantSets, VariantSetsIter,
-    VariantSetsIterMut, VariantSpec, Variants, VariantsIter, VariantsIterMut, combine_dictionaries,
-    combine_dictionary_chain,
+    MaybeSync, PrimSpec, RarePrimFields, ReadOnlyReason, Reference, ReferenceSource,
+    ReferenceTarget, Relocate, Specifier, SublayerEntry, Value, VariantBranch, VariantBranches,
+    VariantPrims, VariantSelections, VariantSelectionsIter, VariantSetSpec, VariantSets,
+    VariantSetsIter, VariantSetsIterMut, VariantSpec, Variants, VariantsIter, VariantsIterMut,
+    combine_dictionaries, combine_dictionary_chain,
 };
 #[cfg(feature = "unstable-internals")]
 pub use doc::{get_field, get_field_mut, insert_field_if_absent, remove_field, set_field_vec};

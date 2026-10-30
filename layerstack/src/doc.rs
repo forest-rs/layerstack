@@ -4620,6 +4620,41 @@ pub enum AssetAvailability {
     Unavailable,
 }
 
+/// Why a layer cannot be saved where it was read
+/// ([`LayerStore::layer_read_only`]).
+///
+/// The store holds the layer as any other: composition reads it and an
+/// explicit edit ([`crate::Transaction`] through
+/// [`crate::EditTarget::for_layer`]) changes it in memory, as OpenUSD
+/// edits such a layer, and saving it fails (`layerstack_io` reports
+/// `io.read_only`) where exporting a copy does not. A namespace edit
+/// ([`crate::NamespaceEdit`]), which finds the layers it changes itself,
+/// refuses to change one ([`crate::NamespaceError::ReadOnlyLayer`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum ReadOnlyReason {
+    /// A layer of a package (`props.usdz[geo.usdc]`, or the package
+    /// itself): a package's layers are written by packaging them again,
+    /// not one at a time. OpenUSD: `SdfLayer::_CheckFormatWritability`
+    /// (`pxr/usd/sdf/layer.cpp`) refuses to save one.
+    PackageMember,
+    /// A layer a file format builds from the arguments its identifier
+    /// carries ([`crate::asset::FORMAT_ARGS_DELIMITER`]), such as a
+    /// dynamic payload's: it has no source of its own to write back to.
+    FormatArguments,
+}
+
+/// The reason in words: "a package member", "built from file format
+/// arguments".
+impl fmt::Display for ReadOnlyReason {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::PackageMember => "a package member",
+            Self::FormatArguments => "built from file format arguments",
+        })
+    }
+}
+
 /// [`Sync`] with the `std` feature, so that a stage can compose from
 /// several threads reading one store ([`crate::StageOptions::threads`]);
 /// every type without it. A [`LayerStore`] must be one.
@@ -4719,6 +4754,20 @@ pub trait LayerStore: MaybeSync {
         None
     }
 
+    /// Why the layer `id` cannot be saved where it was read, if the host
+    /// knows it cannot: a package member, or a layer built from file
+    /// format arguments ([`ReadOnlyReason`]). `None` for a layer the host
+    /// can save, and for one it does not hold.
+    ///
+    /// Composition does not read it; a namespace edit refuses to change a
+    /// layer it returns a reason for
+    /// ([`crate::NamespaceError::ReadOnlyLayer`]). The default knows no
+    /// read-only layer.
+    fn layer_read_only(&self, id: LayerId) -> Option<ReadOnlyReason> {
+        let _ = id;
+        None
+    }
+
     /// Returns the loaded layer that `asset_path`, anchored to the layer
     /// `anchor`, resolves to; `None` when it is not known.
     ///
@@ -4772,6 +4821,9 @@ pub struct InMemoryStore {
     /// The identifiers hosts named layers by
     /// ([`Self::set_layer_identifier`], [`LayerStore::layer_identifier`]).
     pub(crate) identifiers: HashMap<LayerId, Arc<str>>,
+    /// The layers hosts marked as unsavable
+    /// ([`Self::set_layer_read_only`], [`LayerStore::layer_read_only`]).
+    pub(crate) read_only: HashMap<LayerId, ReadOnlyReason>,
 }
 
 impl InMemoryStore {
@@ -4809,6 +4861,7 @@ impl InMemoryStore {
             layers: self.layers.clone(),
             asset_layers: self.asset_layers.clone(),
             identifiers: self.identifiers.clone(),
+            read_only: self.read_only.clone(),
         }
     }
 
@@ -4819,6 +4872,22 @@ impl InMemoryStore {
     /// renames it.
     pub fn set_layer_identifier(&mut self, layer: LayerId, identifier: impl Into<Arc<str>>) {
         self.identifiers.insert(layer, identifier.into());
+    }
+    /// Marks the layer `layer` as one that cannot be saved where it was
+    /// read, for `reason`, or with `None` as one that can
+    /// ([`LayerStore::layer_read_only`]). The host that reads layers says
+    /// so as it names them (`layerstack_io` marks the layers of a package
+    /// and those built from format arguments); the layer need not be held
+    /// yet, and its content and generations do not change.
+    pub fn set_layer_read_only(&mut self, layer: LayerId, reason: Option<ReadOnlyReason>) {
+        match reason {
+            Some(reason) => {
+                self.read_only.insert(layer, reason);
+            }
+            None => {
+                self.read_only.remove(&layer);
+            }
+        }
     }
     /// Inserts (or replaces) a layer.
     /// Replacing a layer advances its generations so live stages detect reloads,
@@ -5131,6 +5200,10 @@ impl LayerStore for InMemoryStore {
 
     fn layer_identifier(&self, id: LayerId) -> Option<&str> {
         self.identifiers.get(&id).map(|identifier| &**identifier)
+    }
+
+    fn layer_read_only(&self, id: LayerId) -> Option<ReadOnlyReason> {
+        self.read_only.get(&id).copied()
     }
 
     fn asset_layer(&self, anchor: LayerId, asset_path: &str) -> Option<LayerId> {

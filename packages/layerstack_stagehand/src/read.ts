@@ -3,7 +3,7 @@
 
 // Reading a mesh or an implicit shape off a stage through
 // `@forest-rs/layerstack`'s typed reads, into plain typed arrays.
-import type { ArrayData, Stage, Value } from "@forest-rs/layerstack";
+import type { ArrayData, Prim, Stage, Value } from "@forest-rs/layerstack";
 import type { Axis, Interpolation, MeshInput, PrimvarInput, Shape, SubsetInput } from "./types.js";
 
 const INTERPOLATIONS = new Set<string>(["constant", "uniform", "varying", "vertex", "faceVarying"]);
@@ -141,15 +141,40 @@ function axis(stage: Stage, path: string): Axis {
   return value?.kind === "scalar" && (value.value === "X" || value.value === "Y") ? value.value : "Z";
 }
 
+/** The implicit shape schemas, in the order a prim is matched against them, as `layerstack_stagehand::read_shape` matches. */
+export const SHAPE_SCHEMAS: readonly Shape["kind"][] = [
+  "Cube",
+  "Sphere",
+  "Cylinder",
+  "Cone",
+  "Capsule",
+  "Plane",
+  "Cylinder_1",
+  "Capsule_1",
+];
+
 /**
- * The implicit shape at `path` at `time` (`Cube`, `Sphere`, `Cylinder`,
- * `Cone`, `Capsule`, `Plane`, `Cylinder_1`, `Capsule_1`) with its size
- * attributes, schema fallbacks included; `null` for any other prim.
+ * The implicit shape schema `prim` is (`IsA`, {@link Prim.isA}): its own
+ * type when that is one, else the first it derives from, so a schema
+ * derived from `Sphere` reads as a sphere; `null` for any other prim.
+ */
+export function shapeSchema(prim: Prim): Shape["kind"] | null {
+  const own = SHAPE_SCHEMAS.find((schema) => schema === prim.typeName);
+  return own ?? SHAPE_SCHEMAS.find((schema) => prim.isA(schema)) ?? null;
+}
+
+/**
+ * The implicit shape at `path` at `time` (a prim that is a `Cube`,
+ * `Sphere`, `Cylinder`, `Cone`, `Capsule`, `Plane`, `Cylinder_1` or
+ * `Capsule_1`, or of a schema derived from one: {@link shapeSchema}) with
+ * its size attributes, schema fallbacks included; `null` for any other
+ * prim.
  */
 export function readShape(stage: Stage, path: string, options: { readonly time?: number } = {}): Shape | null {
   const { time } = options;
   const at = (name: string, fallback: number) => number(stage, `${path}.${name}`, time, fallback);
-  switch (stage.prim(path)?.typeName ?? null) {
+  const prim = stage.prim(path);
+  switch (prim === null ? null : shapeSchema(prim)) {
     case "Cube":
       return { kind: "Cube", size: at("size", 2) };
     case "Sphere":

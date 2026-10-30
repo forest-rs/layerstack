@@ -72,5 +72,21 @@ def "World"
         prepend references = @asset.usda@</Asset>
     )
     {
+        # Over the lamp `asset.usda`'s `/Asset/Front` references back.
+        over "Front"
+        {
+            float intensity = 3
+
+            over "Bulb"
+            {
+            }
+        }
+    }
+
+    # The asset again, through a payload.
+    def "Rack" (
+        prepend payload = @asset.usda@</Asset>
+    )
+    {
     }
 }

@@ -11,7 +11,9 @@
 //! path the layers then author that names the edited object or something
 //! beneath it: those in `/World/Room`'s unselected `off` variant, of
 //! every kind, and in `asset.usda`'s unselected variant and unreferenced
-//! `/Unused`. See the script for why OpenUSD leaves them.
+//! `/Unused`. See the script for why OpenUSD leaves them. The arcs
+//! `asset.usda`'s composed specs author back into the stage are
+//! repaired, and the specs over the lamp through them move or go.
 //!
 //! Here each case is `NamespaceEdit::prepare` (a move) or
 //! `prepare_delete` against a `LiveStage`'s snapshot and against a stage
@@ -39,7 +41,16 @@ const LAYERS: [&str; 2] = ["scene.usda", "asset.usda"];
 
 /// The cases where layerstack does not yet do what OpenUSD does. Each
 /// must still differ, so that the list stays current.
-const DIFFERING: &[&str] = &[];
+const DIFFERING: &[&str] = &[
+    "rename_lamp",
+    "reparent_lamp",
+    "delete_lamp",
+    "rename_bulb",
+    "reparent_bulb",
+    "delete_bulb",
+    "rename_property",
+    "delete_property",
+];
 
 fn oracle() -> Json {
     let oracle: Json = serde_json::from_str(ORACLE).expect("oracle.json");

@@ -24,6 +24,7 @@ import {
   Primvar,
   Xformable,
   decodeBounds,
+  decodeInstances,
   decodeLocalTransform,
   decodePurpose,
 } from "./geometry.js";
@@ -33,7 +34,9 @@ import type {
   BoundingBoxes,
   BoundsCacheStats,
   BoundsOptions,
+  InstanceOptions,
   LocalTransform,
+  PointInstances,
   PurposeInfo,
   TransformCacheStats,
   Visibility,
@@ -178,6 +181,14 @@ export interface NativeStage extends Disposable {
     hints: boolean,
     ignoreVisibility: boolean,
   ): Float64Array;
+  instanceTransforms(
+    path: string,
+    time: number | null | undefined,
+    baseTime: number | null | undefined,
+    includePrototypeTransform: boolean,
+    applyMask: boolean,
+  ): unknown;
+  instanceMask(path: string, time?: number | null): Uint8Array;
 }
 
 /**
@@ -1313,6 +1324,45 @@ export class Stage implements Disposable {
         options.ignoreVisibility ?? false,
       ),
     );
+  }
+
+  /**
+   * The instances of the point instancer at `path` at `time`, in the
+   * instancer's space: one matrix per instance in one `Float64Array`
+   * (laid out as {@link Stage.worldTransforms}), with its prototype index,
+   * id and authored position, and the `prototypes` the indices address
+   * (`UsdGeomPointInstancer::ComputeInstanceTransformsAtTime`). By default
+   * each prototype's own transform applies first and the mask leaves
+   * inactive and invisible ids out. Multiply by the instancer's world
+   * transform to place them.
+   *
+   * Throws `instancer.not_instancer` for a prim that is not a
+   * `PointInstancer`, an `instancer.*` code for invalid instance data
+   * (`instancer.length`, `instancer.prototype_index`).
+   */
+  pointInstances(path: string, options: InstanceOptions = {}): PointInstances {
+    const row = this.#call("pointInstances", (native) =>
+      native.instanceTransforms(
+        path,
+        options.time,
+        options.baseTime,
+        options.includePrototypeTransform ?? true,
+        options.applyMask ?? true,
+      ),
+    ) as Row;
+    return decodeInstances(row);
+  }
+
+  /**
+   * The mask of the point instancer at `path` at `time`, one byte per
+   * authored instance: 1 drawn, 0 inactive (`inactiveIds`) or invisible
+   * (`invisibleIds`); empty when every instance is drawn
+   * (`UsdGeomPointInstancer::ComputeMaskAtTime`).
+   *
+   * Throws `instancer.not_instancer`.
+   */
+  instanceMask(path: string, options: { readonly time?: number } = {}): Uint8Array {
+    return this.#call("instanceMask", (native) => native.instanceMask(path, options.time));
   }
 
   #bounds(operation: string, paths: readonly string[], options: BoundsOptions, space: string): BoundingBoxes {

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 // The reads a renderer makes each frame: transforms, visibility and
-// purpose, primvars and bounds, checked against the
+// purpose, primvars, bounds and point instances, checked against the
 // answers OpenUSD 26.11 gives for the conformance fixtures
 // (`layerstack_conformance/fixtures`), and the retained caches behind
 // them hearing edits.
@@ -363,5 +363,89 @@ def "Empty" {
     assert.deepEqual([...bounds.alignedRanges.subarray(6, 12)], [-2, -2, 8, 2, 2, 12]);
     assert.ok(bounds.alignedRanges[12]! > bounds.alignedRanges[15]!, "an empty box's minimum is above its maximum");
     assert.equal(failure(() => stage.worldBounds(["/Gone"])).code, "prim.not_found");
+  });
+});
+
+describe("point instancers", () => {
+  it("compute instance transforms as OpenUSD does", async () => {
+    const stage = await openFixture("point_instancer_transforms/", "scene.usda");
+    const { cases } = oracle("point_instancer_transforms/oracle.json");
+    const options: Record<string, { includePrototypeTransform: boolean; applyMask: boolean }> = {
+      include_mask: { includePrototypeTransform: true, applyMask: true },
+      include_all: { includePrototypeTransform: true, applyMask: false },
+      exclude_mask: { includePrototypeTransform: false, applyMask: true },
+      exclude_all: { includePrototypeTransform: false, applyMask: false },
+    };
+    for (const { case: [path, time, base], transforms } of cases) {
+      for (const [label, expected] of Object.entries(transforms) as [string, number[][][] | null][]) {
+        const read = () =>
+          stage.pointInstances(path, {
+            ...at(time ?? undefined),
+            ...(base === null ? {} : { baseTime: base }),
+            ...options[label]!,
+          });
+        const context = `${path} ${time} ${base} ${label}`;
+        // OpenUSD returns no transforms for a refused computation.
+        if (expected === null || expected.length === 0) {
+          let count = 0;
+          try {
+            count = read().count;
+          } catch (error) {
+            assert.ok(error instanceof LayerstackError, context);
+          }
+          assert.equal(count, 0, context);
+          continue;
+        }
+        const instances = read();
+        assert.equal(instances.count, expected.length, context);
+        assert.ok(close(instances.matrices, expected.flat(2), 1e-9), context);
+      }
+    }
+  });
+
+  it("mask and bound instances as OpenUSD does", async () => {
+    const stage = await openFixture("", "point_instancer_behavior.usda");
+    const expected = oracle("point_instancer_behavior.json");
+    const bools = (mask: Uint8Array) => [...mask].map((drawn) => drawn === 1);
+    assert.deepEqual(bools(stage.instanceMask("/World/Instances")), expected.mask);
+    assert.deepEqual(bools(stage.instanceMask("/World/ImplicitIds")), expected.implicitMask);
+    const motion = stage.pointInstances("/World/Instances", { time: 2, baseTime: 0, applyMask: false });
+    assert.ok(close(motion.matrices, expected.motion.flat(2)));
+    for (const [label, time] of [["boundsDefault", undefined], ["boundsAt2", 2]] as const) {
+      const bounds = stage.worldBounds(["/World/Instances"], at(time));
+      assert.ok(close(bounds.alignedRanges, expected[label].flat()), `${label}: ${bounds.alignedRanges}`);
+    }
+  });
+
+  it("report prototypes, indices, ids and the mask", () => {
+    const stage = layerstack.open({
+      identifier: "rocks.usda",
+      bytes: new TextEncoder().encode(`#usda 1.0
+def PointInstancer "Rocks" {
+    rel prototypes = [</Rocks/Pebble>, </Rocks/Boulder>]
+    int[] protoIndices = [0, 1, 0]
+    point3f[] positions = [(0, 0, 0), (2, 0, 0), (4, 0, 0)]
+    int64[] ids = [10, 11, 12]
+    int64[] invisibleIds = [11]
+    def Cube "Pebble" {
+    }
+    def Cube "Boulder" {
+    }
+}
+def "Loose" {
+}
+`),
+    });
+    const visible = stage.pointInstances("/Rocks");
+    assert.deepEqual(visible.prototypes, ["/Rocks/Pebble", "/Rocks/Boulder"]);
+    assert.equal(visible.count, 2);
+    assert.deepEqual([...visible.prototypeIndices], [0, 0]);
+    assert.deepEqual([...visible.ids], [10n, 12n]);
+    assert.deepEqual([...visible.indices], [0, 2]);
+    assert.deepEqual([...visible.matrices.subarray(28, 31)], [4, 0, 0]);
+    const all = stage.pointInstances("/Rocks", { applyMask: false });
+    assert.deepEqual([...all.prototypeIndices], [0, 1, 0]);
+    assert.deepEqual([...stage.instanceMask("/Rocks")], [1, 0, 1]);
+    assert.equal(failure(() => stage.pointInstances("/Loose")).code, "instancer.not_instancer");
   });
 });

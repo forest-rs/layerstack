@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 // The geometry a renderer reads: `Xformable` and `Primvar`, over the
-// native module's transform, primvar and bounds reads, and the
+// native module's transform, primvar, bounds and instancer reads, and the
 // decoders of their records.
 import { ArrayHandle } from "./arrays.js";
 import type { NativeArrayHandle } from "./arrays.js";
@@ -12,6 +12,7 @@ import type {
   ArrayData,
   BoundingBoxes,
   LocalTransform,
+  PointInstances,
   PurposeInfo,
   Value,
   XformOp,
@@ -157,4 +158,23 @@ export function decodePurpose(row: unknown): PurposeInfo | null {
 export function decodeBounds(row: Row): BoundingBoxes {
   const [ranges, matrices, aligned] = row as [Float64Array, Float64Array, Float64Array];
   return Object.freeze({ count: ranges.length / 6, ranges, matrices, alignedRanges: aligned });
+}
+
+/** @internal An instance-transforms record. */
+export function decodeInstances(row: Row): PointInstances {
+  const [prototypes, matrices, prototypeIndices, ids, indices] = row as [
+    string[],
+    Float64Array,
+    Int32Array,
+    BigInt64Array,
+    Int32Array,
+  ];
+  return Object.freeze({
+    count: prototypeIndices.length,
+    prototypes: Object.freeze([...prototypes]),
+    matrices,
+    prototypeIndices,
+    ids,
+    indices,
+  });
 }

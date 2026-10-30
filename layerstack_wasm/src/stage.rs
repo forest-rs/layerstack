@@ -2435,6 +2435,33 @@ impl Stage {
         Ok(self.extents_hint(path, time, &purposes, hints, ignore_visibility)?)
     }
 
+    /// The record `instance_transforms` builds, as documented in `geom.rs`.
+    #[wasm_bindgen(js_name = instanceTransforms)]
+    pub fn js_instance_transforms(
+        &self,
+        path: &str,
+        time: Option<f64>,
+        base_time: Option<f64>,
+        include_prototype_transform: bool,
+        apply_mask: bool,
+    ) -> Result<JsValue, JsValue> {
+        Ok(self
+            .instance_transforms(
+                path,
+                time,
+                base_time,
+                include_prototype_transform,
+                apply_mask,
+            )?
+            .into())
+    }
+
+    /// The mask `instance_mask` computes, as documented in `geom.rs`.
+    #[wasm_bindgen(js_name = instanceMask)]
+    pub fn js_instance_mask(&self, path: &str, time: Option<f64>) -> Result<Vec<u8>, JsValue> {
+        Ok(self.instance_mask(path, time)?)
+    }
+
     /// The record `supplied_bytes` builds, as documented in `stage.rs`.
     #[wasm_bindgen(js_name = suppliedBytes)]
     pub fn js_supplied_bytes(&self) -> u64 {

@@ -91,6 +91,12 @@ use crate::wire::Wire;
 /// - `bounds.*`: the cases of `layerstack_schemas::bounds::BoundsError`:
 ///   `bounds.extent`, `bounds.extent_provider`, `bounds.instancer`,
 ///   `bounds.instancer_cycle`, `bounds.singular`.
+/// - `instancer.*`: `instancer.not_instancer` (the prim is not a
+///   `PointInstancer`), and the cases of
+///   `layerstack_schemas::point_instancer::PointInstancerError`:
+///   `instancer.missing_attribute`, `instancer.length`,
+///   `instancer.prototypes`, `instancer.prototype_index`, `instancer.time`,
+///   `instancer.motion`.
 /// - `flatten.failed`, `package.failed`: the stage has no root layer to
 ///   flatten or package.
 /// - `receipt.affinity`: a receipt of another stage was passed in.

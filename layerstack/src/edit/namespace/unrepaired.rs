@@ -238,7 +238,7 @@ pub(super) fn collect(
     for (path, spec) in specs {
         let outer = spec.outer_variant_sites();
         let mut sites = outer.to_vec();
-        if !outer.is_empty() && dormant.contains(*path, outer) {
+        if dormant.contains(*path, outer) {
             visit.prim(*path, &mut sites, spec);
         } else {
             visit.branches(*path, &mut sites, spec.variant_sets(), Some(dormant));

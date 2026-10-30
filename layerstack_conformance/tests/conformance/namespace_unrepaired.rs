@@ -39,11 +39,7 @@ const LAYERS: [&str; 2] = ["scene.usda", "asset.usda"];
 
 /// The cases where layerstack does not yet do what OpenUSD does. Each
 /// must still differ, so that the list stays current.
-///
-/// A move retargets `asset.usda`'s arcs into the stage from `/Unused`,
-/// which no arc reaches, and, against a live stage's snapshot, from the
-/// unselected `mode=lit` variant; OpenUSD leaves both naming the lamp.
-const DIFFERING: &[&str] = &["rename_lamp", "reparent_lamp"];
+const DIFFERING: &[&str] = &[];
 
 fn oracle() -> Json {
     let oracle: Json = serde_json::from_str(ORACLE).expect("oracle.json");

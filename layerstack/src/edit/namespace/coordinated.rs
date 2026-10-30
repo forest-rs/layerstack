@@ -525,7 +525,8 @@ fn prepare_with(
 }
 
 /// The variant specs of `layer`, before the edit, that no prim index of
-/// `stages` uses ([`Dormant`]).
+/// `stages` uses ([`Dormant`]), and outside every stage's layer stack the
+/// prim specs too.
 ///
 /// In a layer of a stage's root layer stack, a variant spec is used where
 /// the prim at its path has a node at its site in that stack: OpenUSD
@@ -533,10 +534,13 @@ fn prepare_with(
 /// nodes (`_GatherPathBearingFieldEditsForStage`), and a variant spec
 /// reached through another arc (`/World/Copy` referencing `/World/A` with
 /// another selection) is that arc's to keep. In any other layer the edit
-/// repairs only reference and payload targets, so only the variant specs
+/// repairs only reference and payload targets, so only the specs
 /// authoring those into the `edited` layers are looked up, among the
-/// prims with a node at their path. AOUSD Core §10.4 (prim index nodes),
-/// §10.5 (variants).
+/// prims with a node at their path: a prim spec no arc reaches (an
+/// asset's `/Unused` beside the `/Asset` a stage references) is as
+/// dormant as an unselected variant, as `PcpGatherDependentNamespaceEdits`
+/// finds only the sites a prim index depends on. AOUSD Core §10.4 (prim
+/// index nodes), §10.5 (variants).
 pub(super) fn dormant_variants(
     store: &dyn LayerStore,
     stages: &[&Stage],
@@ -546,7 +550,15 @@ pub(super) fn dormant_variants(
 ) -> Dormant {
     let local = stages.iter().any(|s| s.layer_stack().contains(&layer.id));
     let mut out = Dormant::default();
-    if layer.variant_prims.is_empty() && layer.prims.values().all(|p| p.variant_sets().is_empty()) {
+    // A working copy may hold a variant's child prim spec without the
+    // prim hosting the variant set, so each spec's own branches count.
+    if local
+        && layer.variant_prims.is_empty()
+        && layer
+            .prims
+            .values()
+            .all(|p| p.variant_sets().is_empty() && p.outer_variant_sites().is_empty())
+    {
         return out;
     }
     let used = |path: PathId, sites: &[VariantSelectionSite]| {
@@ -630,7 +642,9 @@ pub(super) fn dormant_variants(
     );
     for (path, spec) in specs {
         let mut sites = spec.outer_variant_sites().to_vec();
-        if !sites.is_empty() && repairable(&spec.references, &spec.payloads) && !used(path, &sites)
+        if (!sites.is_empty() || !local)
+            && repairable(&spec.references, &spec.payloads)
+            && !used(path, &sites)
         {
             // Everything inside it is unused too.
             unused_specs.push((path, sites));

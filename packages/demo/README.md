@@ -78,7 +78,7 @@ header. The layers panel shows which layers are muted from the changes the
 stage reports (`Changes.mutedIdentifiers` and `unmutedIdentifiers`), not by
 asking the stage again.
 
-The script runs seventeen steps, one button each:
+The script runs eighteen steps, one button each:
 
 1. Open the sample: the stage wants its sublayer, the robot's reference and
    the beacon's (once, for both instances), and `resolve` fetches them.
@@ -146,6 +146,12 @@ The script runs seventeen steps, one button each:
 17. Document the stage: the root layer's `documentation`, stage metadata
     that composes nothing. The change record lists `/` info-only, and the
     draw list reads nothing: no draw, light, camera or material.
+18. Read the checker through the sign's card set: the checker material's
+    `coordinates` input names `card`, the sign's second texture coordinate
+    set, instead of `st`. The draw list reads that material again and
+    plans the sign's mesh again with `card` as a buffer channel of its own
+    (rebuilt); the viewport gives it to three.js as `uv1` and samples the
+    checker from it, and its checks turn square.
 
 `scripts/acceptance.ts` runs the same steps headless in Node, reading the
 sample from disk, and checks the values and explanations after each one,

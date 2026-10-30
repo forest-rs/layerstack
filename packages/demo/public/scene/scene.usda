@@ -182,6 +182,10 @@ def Xform "World"
         texCoord2f[] primvars:st = [(0, 0), (1, 0), (1, 1), (0, 1)] (
             interpolation = "vertex"
         )
+        texCoord2f[] primvars:card = [(0, 0), (1.3333334, 0), (1.3333334, 1), (0, 1)] (
+            doc = "Square checks on the 2 x 1.5 sign: the set the last step reads."
+            interpolation = "vertex"
+        )
         uniform token subdivisionScheme = "none"
         rel material:binding = </World/Looks/Checker>
         double3 xformOp:translate = (-0.5, 0, 1.2)

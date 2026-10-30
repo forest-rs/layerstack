@@ -58,6 +58,25 @@ export interface MeshInput {
  */
 export type Triangulation = "concave" | "hydraFan";
 
+/**
+ * How smooth normals are computed for a mesh without authored ones.
+ * `hydra` (the default) sums each corner's cross product as Hydra does
+ * (`pxr/imaging/hd/smoothNormals.cpp`): at the reflex corner of a lone
+ * concave face the normal points away from the face's front and shades
+ * dark. `faceOriented` turns each corner's contribution to agree with its
+ * face's normal (Newell's method): the same normals wherever every face is
+ * convex, a front-facing one at a reflex corner.
+ */
+export type SmoothNormals = "hydra" | "faceOriented";
+
+/** How {@link Stagehand.buildMesh} plans a mesh. */
+export interface MeshOptions {
+  /** Default `concave`. */
+  readonly triangulation?: Triangulation;
+  /** Default `hydra`. */
+  readonly normals?: SmoothNormals;
+}
+
 /** A run of triangles in {@link StagehandMesh.indices}: one subset's faces, or the faces in no subset. */
 export interface DrawRange {
   /** The subset's position in {@link MeshInput.subsets}; `null` for the faces in no subset (always last). */
@@ -92,6 +111,8 @@ export interface MeshReport {
   /** Why nothing is drawn, when the topology is invalid. */
   readonly topologyProblem: { readonly code: string; readonly reason: string } | null;
   readonly triangulation: Triangulation;
+  /** How smooth normals were computed, when `normals` is `computed`. */
+  readonly smoothNormals: SmoothNormals;
   readonly orientation: "rightHanded" | "leftHanded";
   /** The subdivision scheme; with `refined` false, a subdivision surface is drawn as its control cage. */
   readonly subdivisionScheme: string;

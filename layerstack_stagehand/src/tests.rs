@@ -11,7 +11,7 @@ use alloc::vec::Vec;
 use crate::{
     ChannelState, DrawRange, DropReason, FaceNoteKind, FaceSubsets, Interpolation, MeshBuffers,
     MeshInput, MeshOptions, MeshPlan, MeshTopology, NormalsSource, Orientation, PlanMismatch,
-    Primvar, Shape, Tessellation, TopologyProblem, Triangulation, tessellate,
+    Primvar, Shape, SmoothNormals, Tessellation, TopologyProblem, Triangulation, tessellate,
 };
 
 fn mesh<'a>(counts: &'a [i32], indices: &'a [i32], points: &'a [[f32; 3]]) -> MeshInput<'a> {
@@ -27,7 +27,11 @@ fn mesh<'a>(counts: &'a [i32], indices: &'a [i32], points: &'a [[f32; 3]]) -> Me
 }
 
 fn plan(input: &MeshInput<'_>, triangulation: Triangulation) -> (MeshPlan, MeshBuffers) {
-    let plan = MeshPlan::new(input, &MeshOptions { triangulation });
+    let options = MeshOptions {
+        triangulation,
+        ..MeshOptions::default()
+    };
+    let plan = MeshPlan::new(input, &options);
     let buffers = plan.buffers(input).unwrap();
     (plan, buffers)
 }
@@ -767,3 +771,71 @@ fn a_lone_concave_faces_reflex_corner_gets_hydras_flipped_normal() {
         assert_eq!(*normal, [0.0, 0.0, expected], "point {point}");
     }
 }
+
+#[test]
+fn face_oriented_normals_turn_the_reflex_corner_to_the_face_and_change_nothing_else() {
+    let counts = [6];
+    let indices = [0, 1, 2, 3, 4, 5];
+    for (orientation, front) in [
+        (Orientation::RightHanded, 1.0),
+        (Orientation::LeftHanded, -1.0),
+    ] {
+        let mut input = mesh(&counts, &indices, &L);
+        input.topology.orientation = orientation;
+        let options = MeshOptions {
+            normals: SmoothNormals::FaceOriented,
+            ..MeshOptions::default()
+        };
+        let plan = MeshPlan::new(&input, &options);
+        assert_eq!(plan.report().smooth_normals, SmoothNormals::FaceOriented);
+        let buffers = plan.buffers(&input).unwrap();
+        assert!(
+            buffers.normals.iter().all(|n| *n == [0.0, 0.0, front]),
+            "{orientation:?}: {:?}",
+            buffers.normals
+        );
+        // Under Hydra's, the reflex corner alone faces the other way.
+        let hydra = MeshPlan::new(&input, &MeshOptions::default());
+        let hydra_normals = hydra.buffers(&input).unwrap().normals;
+        for (&point, normal) in hydra.vertex_points().iter().zip(&hydra_normals) {
+            let expected = if point == 3 { -front } else { front };
+            assert_eq!(
+                *normal,
+                [0.0, 0.0, expected],
+                "{orientation:?} point {point}"
+            );
+        }
+        // A refill keeps the plan's mode.
+        let mut refilled = buffers.clone();
+        plan.refill(&mut refilled, &L, None).unwrap();
+        assert_eq!(refilled.normals, buffers.normals);
+    }
+    // Where every face is convex, both modes agree bit for bit: an open box
+    // of five quads, bent at every edge.
+    let points = [
+        [0.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0],
+        [1.0, 1.0, 0.0],
+        [0.0, 1.0, 0.0],
+        [0.0, 0.0, 1.0],
+        [1.0, 0.0, 1.0],
+        [1.0, 1.0, 1.0],
+        [0.0, 1.0, 1.0],
+    ];
+    let counts = [4, 4, 4, 4, 4];
+    let indices = [0, 3, 2, 1, 0, 1, 5, 4, 1, 2, 6, 5, 2, 3, 7, 6, 3, 0, 4, 7];
+    let input = mesh(&counts, &indices, &points);
+    let hydra = MeshPlan::new(&input, &MeshOptions::default());
+    let oriented = MeshPlan::new(
+        &input,
+        &MeshOptions {
+            normals: SmoothNormals::FaceOriented,
+            ..MeshOptions::default()
+        },
+    );
+    assert_eq!(
+        hydra.buffers(&input).unwrap(),
+        oriented.buffers(&input).unwrap()
+    );
+}
+

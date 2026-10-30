@@ -10,6 +10,7 @@ use core::fmt;
 use exedra_triangulate::TriError;
 
 use crate::input::{Interpolation, Orientation, SubdivisionScheme};
+use crate::plan::SmoothNormals;
 use crate::triangulate::Triangulation;
 
 /// Why a mesh's topology cannot be drawn: nothing is drawn.
@@ -170,12 +171,13 @@ pub enum ChannelState {
 /// Where the buffers' normals come from.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum NormalsSource {
-    /// Smooth normals computed from the points, per point, as Hydra
-    /// computes them (`pxr/imaging/hd/smoothNormals.cpp`): the default
-    /// when no usable normals are authored. As in Hydra, the reflex corner
-    /// of a lone concave face gets a normal facing away from the face's
-    /// (its corner cross product turns the other way); author normals for
-    /// such faces.
+    /// Smooth normals computed from the points, per point: the default
+    /// when no usable normals are authored. Under the default
+    /// [`SmoothNormals::Hydra`] they are Hydra's
+    /// (`pxr/imaging/hd/smoothNormals.cpp`), and the reflex corner of a
+    /// lone concave face gets a normal facing away from the face's (its
+    /// corner cross product turns the other way);
+    /// [`SmoothNormals::FaceOriented`] turns it to the face's side.
     #[default]
     Computed,
     /// The authored normals.
@@ -204,6 +206,9 @@ pub struct MeshReport {
     pub topology_problem: Option<TopologyProblem>,
     /// The triangulation used.
     pub triangulation: Triangulation,
+    /// How smooth normals are computed, when [`Self::normals`] is
+    /// [`NormalsSource::Computed`].
+    pub smooth_normals: SmoothNormals,
     /// The mesh's orientation; left-handed triangles are flipped.
     pub orientation: Orientation,
     /// The subdivision scheme. Every mesh is drawn as its control cage:

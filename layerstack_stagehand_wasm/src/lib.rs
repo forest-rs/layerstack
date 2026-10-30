@@ -28,7 +28,8 @@ use alloc::vec::Vec;
 
 use layerstack_stagehand::{
     Axis, FaceSubsets, Interpolation, MeshBuffers, MeshInput, MeshOptions, MeshPlan, MeshTopology,
-    Orientation, Primvar, Shape, SubdivisionScheme, Tessellation, Triangulation, tessellate,
+    Orientation, Primvar, Shape, SmoothNormals, SubdivisionScheme, Tessellation, Triangulation,
+    tessellate,
 };
 use wasm_bindgen::prelude::*;
 
@@ -46,8 +47,8 @@ mod standalone {
     }
 }
 
-/// The version of the exports the TypeScript wrapper speaks: 1.
-pub const ABI: u32 = 1;
+/// The version of the exports the TypeScript wrapper speaks: 2.
+pub const ABI: u32 = 2;
 
 /// [`ABI`], which the wrapper checks before using the module.
 #[wasm_bindgen(js_name = stagehandAbi)]
@@ -231,16 +232,25 @@ impl MeshBuilder {
         self.subset_ends = ends;
     }
 
-    /// Plans the mesh (`hydraFan` fans every face) and fills its buffers.
+    /// Plans the mesh (`hydra_fan` fans every face; `face_oriented`
+    /// computes [`SmoothNormals::FaceOriented`] normals) and fills its
+    /// buffers.
     #[must_use]
-    pub fn build(self, hydra_fan: bool) -> StagehandMesh {
-        let triangulation = if hydra_fan {
-            Triangulation::HydraFan
-        } else {
-            Triangulation::Concave
+    pub fn build(self, hydra_fan: bool, face_oriented: bool) -> StagehandMesh {
+        let options = MeshOptions {
+            triangulation: if hydra_fan {
+                Triangulation::HydraFan
+            } else {
+                Triangulation::Concave
+            },
+            normals: if face_oriented {
+                SmoothNormals::FaceOriented
+            } else {
+                SmoothNormals::Hydra
+            },
         };
         let input = self.input();
-        let plan = MeshPlan::new(&input, &MeshOptions { triangulation });
+        let plan = MeshPlan::new(&input, &options);
         let buffers = plan
             .buffers(&input)
             .expect("a plan fills from the input it was built from");

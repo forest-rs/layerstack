@@ -6,7 +6,9 @@
 use alloc::string::String;
 use core::fmt::Write;
 
-use layerstack_stagehand::{ChannelState, FaceNoteKind, MeshReport, NormalsSource, Triangulation};
+use layerstack_stagehand::{
+    ChannelState, FaceNoteKind, MeshReport, NormalsSource, SmoothNormals, Triangulation,
+};
 
 /// `text` as a JSON string.
 fn quoted(out: &mut String, text: &str) {
@@ -61,13 +63,17 @@ pub(crate) fn json(report: &MeshReport) -> String {
         Triangulation::HydraFan => "hydraFan",
         _ => "concave",
     };
+    let smooth = match report.smooth_normals {
+        SmoothNormals::FaceOriented => "faceOriented",
+        _ => "hydra",
+    };
     let normals = match report.normals {
         NormalsSource::Authored => "authored",
         _ => "computed",
     };
     let _ = write!(
         out,
-        r#","triangulation":"{triangulation}","orientation":"{}","subdivisionScheme":"{}","refined":false"#,
+        r#","triangulation":"{triangulation}","smoothNormals":"{smooth}","orientation":"{}","subdivisionScheme":"{}","refined":false"#,
         report.orientation.as_str(),
         report.subdivision_scheme.as_str(),
     );
@@ -148,7 +154,7 @@ mod tests {
         let text = json(plan.report());
         assert!(
             text.starts_with(
-                r#"{"topologyProblem":null,"triangulation":"concave","orientation":"rightHanded""#
+                r#"{"topologyProblem":null,"triangulation":"concave","smoothNormals":"hydra","orientation":"rightHanded""#
             ),
             "{text}"
         );

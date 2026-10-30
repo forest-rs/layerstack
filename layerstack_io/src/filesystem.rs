@@ -37,6 +37,19 @@ use std::{
 /// Range sources retain an open handle across atomic replacement. Hosts must
 /// exclude external in-place writes for their lifetime; size/mtime checks reject
 /// observed changes but do not provide a filesystem snapshot.
+///
+/// On Windows a file can briefly refuse to be opened, queried or replaced
+/// where POSIX systems never refuse: while a concurrent replacement renames
+/// over it, or while another process (an indexer or virus scanner, say)
+/// holds it open without sharing it. Windows reports both as access denied
+/// or a sharing violation, which may also be lasting. Reads, existence
+/// checks and the steps of a write that open, query or rename a file retry
+/// those two errors, waiting longer each time, for up to about one second
+/// before reporting them as [`IoErrorKind::Storage`]. A reader concurrent
+/// with writers therefore sees the old file or a new one, as on other
+/// platforms, unless something holds the file for longer than that; a
+/// file that is truly inaccessible takes that second to fail. Other
+/// platforms do not retry.
 #[derive(Clone, Debug)]
 pub struct Filesystem {
     root: PathBuf,
@@ -96,11 +109,15 @@ impl Storage for Filesystem {
         })
     }
     fn read(&self, identifier: &str) -> Result<Vec<u8>, IoError> {
-        fs::read(identifier).map_err(storage_error)
+        use std::io::Read;
+        let mut file = retry_transient(|| fs::File::open(identifier)).map_err(storage_error)?;
+        let mut bytes = Vec::new();
+        file.read_to_end(&mut bytes).map_err(storage_error)?;
+        Ok(bytes)
     }
     fn read_bounded(&self, identifier: &str, max_bytes: u64) -> Result<Vec<u8>, IoError> {
         use std::io::Read;
-        let file = fs::File::open(identifier).map_err(storage_error)?;
+        let file = retry_transient(|| fs::File::open(identifier)).map_err(storage_error)?;
         if file.metadata().map_err(storage_error)?.len() > max_bytes {
             return Err(IoError::new(
                 IoErrorKind::Rejected,
@@ -124,7 +141,7 @@ impl Storage for Filesystem {
     }
     fn exists(&self, identifier: &str) -> Result<bool, IoError> {
         // A file, as `identify` selects candidates; a directory is no source.
-        match fs::metadata(identifier) {
+        match retry_transient(|| fs::metadata(identifier)) {
             Ok(metadata) => Ok(metadata.is_file()),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
             Err(error) => Err(storage_error(error)),
@@ -161,7 +178,7 @@ impl Storage for Filesystem {
         identifier: &str,
     ) -> Result<Arc<dyn layerstack_usdz::range::RangeSource<Error = IoError> + Send + Sync>, IoError>
     {
-        let file = fs::File::open(identifier).map_err(storage_error)?;
+        let file = retry_transient(|| fs::File::open(identifier)).map_err(storage_error)?;
         let metadata = file.metadata().map_err(storage_error)?;
         if !metadata.is_file() {
             return Err(IoError::new(
@@ -265,13 +282,13 @@ fn atomic_write(
     path: &Path,
     write: impl FnOnce(&mut fs::File) -> std::io::Result<()>,
 ) -> std::io::Result<()> {
-    let target = match fs::symlink_metadata(path) {
+    let target = match retry_transient(|| fs::symlink_metadata(path)) {
         Ok(metadata) if metadata.file_type().is_symlink() => fs::canonicalize(path)?,
         Ok(_) => path.to_path_buf(),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => path.to_path_buf(),
         Err(error) => return Err(error),
     };
-    let metadata = match fs::metadata(&target) {
+    let metadata = match retry_transient(|| fs::metadata(&target)) {
         Ok(metadata) => {
             // WASI exposes filesystem rights rather than file permission bits.
             if !metadata.is_file()
@@ -332,8 +349,52 @@ fn atomic_write(
         file.sync_all()?;
         candidate
     };
-    fs::rename(&candidate.0, &target)?;
+    retry_transient(|| fs::rename(&candidate.0, &target))?;
     Ok(())
+}
+
+/// The longest [`retry_transient`] keeps retrying on Windows.
+#[cfg(windows)]
+const TRANSIENT_RETRY_BUDGET: std::time::Duration = std::time::Duration::from_secs(1);
+
+/// `operation`, retried while it fails with an error Windows reports for a
+/// file that a concurrent replacement or another process's unshared handle
+/// makes briefly inaccessible: `ERROR_ACCESS_DENIED` (a replaced file is
+/// pending deletion, or a rename meets an open destination) or
+/// `ERROR_SHARING_VIOLATION`. Waits start at a millisecond and double, to
+/// at most 100 ms, for up to `TRANSIENT_RETRY_BUDGET` in all; then the
+/// last error is returned.
+///
+/// Neither error says whether it will pass, so a lasting one costs the
+/// whole budget. POSIX renames and opens have no such window, so other
+/// platforms run `operation` once.
+///
+/// The Go toolchain retries the same two errors for the same reason
+/// (`cmd/internal/robustio`, golang.org/issue/32188).
+fn retry_transient<T>(mut operation: impl FnMut() -> std::io::Result<T>) -> std::io::Result<T> {
+    #[cfg(windows)]
+    {
+        const ERROR_ACCESS_DENIED: i32 = 5;
+        const ERROR_SHARING_VIOLATION: i32 = 32;
+        let start = std::time::Instant::now();
+        let mut wait = std::time::Duration::from_millis(1);
+        loop {
+            match operation() {
+                Err(error)
+                    if matches!(
+                        error.raw_os_error(),
+                        Some(ERROR_ACCESS_DENIED | ERROR_SHARING_VIOLATION)
+                    ) && start.elapsed() + wait <= TRANSIENT_RETRY_BUDGET =>
+                {
+                    std::thread::sleep(wait);
+                    wait = (wait * 2).min(std::time::Duration::from_millis(100));
+                }
+                result => return result,
+            }
+        }
+    }
+    #[cfg(not(windows))]
+    operation()
 }
 
 struct Candidate(PathBuf);
@@ -407,6 +468,10 @@ mod tests {
     }
 
     // wasm32-wasip1 has no thread spawning support.
+    //
+    // On Windows a reader can meet the destination while a replacement
+    // renames over it, which refuses the open (golang.org/issue/32188), so
+    // the reader goes through `Filesystem::read`, which waits that out.
     #[cfg(not(target_family = "wasm"))]
     #[test]
     fn concurrent_replacements_publish_complete_files_and_clean_candidates() {
@@ -419,6 +484,8 @@ mod tests {
         let target = root.join("scene.usda");
         const SIZE: usize = 128 * 1024;
         fs::write(&target, alloc::vec![0; SIZE]).unwrap();
+        let identifier = target.to_str().unwrap();
+        let storage = Filesystem::new(&root, []).unwrap();
         let barrier = Arc::new(Barrier::new(5));
         let pending = Arc::new(AtomicUsize::new(4));
         std::thread::scope(|scope| {
@@ -436,7 +503,7 @@ mod tests {
             }
             barrier.wait();
             loop {
-                let bytes = fs::read(&target).unwrap();
+                let bytes = storage.read(identifier).unwrap();
                 assert_eq!(bytes.len(), SIZE);
                 assert!(bytes[0] <= 4);
                 assert!(bytes.iter().all(|value| *value == bytes[0]));
@@ -446,6 +513,93 @@ mod tests {
             }
         });
         assert_eq!(fs::read_dir(&root).unwrap().count(), 1);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    /// A Windows handle that shares the file with no one, as an indexer or
+    /// virus scanner may hold one: opens and renames of the file fail with
+    /// a sharing violation while it is open.
+    #[cfg(windows)]
+    fn unshared(path: &Path) -> fs::File {
+        use std::os::windows::fs::OpenOptionsExt;
+        fs::OpenOptions::new()
+            .read(true)
+            .share_mode(0)
+            .open(path)
+            .unwrap()
+    }
+
+    /// A Windows directory of its own for `name`, holding `scene.usda`.
+    #[cfg(windows)]
+    fn windows_scene(name: &str) -> (PathBuf, PathBuf) {
+        let root =
+            std::env::temp_dir().join(alloc::format!("layerstack-{name}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let target = root.join("scene.usda");
+        fs::write(&target, b"previous scene").unwrap();
+        (root, target)
+    }
+
+    /// Holds `path` unshared on another thread for 200 ms, returning once
+    /// it is held.
+    #[cfg(windows)]
+    fn hold_briefly(path: &Path) -> std::thread::JoinHandle<()> {
+        let (held, wait) = std::sync::mpsc::channel();
+        let path = path.to_path_buf();
+        let holder = std::thread::spawn(move || {
+            let file = unshared(&path);
+            held.send(()).unwrap();
+            std::thread::sleep(std::time::Duration::from_millis(200));
+            drop(file);
+        });
+        wait.recv().unwrap();
+        holder
+    }
+
+    /// Reads and replacements wait out another handle that briefly keeps a
+    /// Windows file to itself, rather than failing as a single attempt does.
+    #[cfg(windows)]
+    #[test]
+    fn brief_windows_locks_are_waited_out() {
+        let (root, target) = windows_scene("save-brief-lock");
+        let identifier = target.to_str().unwrap();
+        let mut storage = Filesystem::new(&root, []).unwrap();
+        let holder = hold_briefly(&target);
+        assert_eq!(storage.read(identifier).unwrap(), b"previous scene");
+        holder.join().unwrap();
+        let holder = hold_briefly(&target);
+        storage.write(identifier, b"replacement").unwrap();
+        holder.join().unwrap();
+        assert_eq!(fs::read(&target).unwrap(), b"replacement");
+        assert_eq!(fs::read_dir(&root).unwrap().count(), 1);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    /// A Windows file held for longer than the retry budget fails reads and
+    /// replacements as storage errors once the budget is spent, and a failed
+    /// replacement leaves the destination and no candidate behind.
+    #[cfg(windows)]
+    #[test]
+    fn lasting_windows_locks_fail_after_the_retry_budget() {
+        let (root, target) = windows_scene("save-lasting-lock");
+        let identifier = target.to_str().unwrap();
+        let mut storage = Filesystem::new(&root, []).unwrap();
+        let probe = root.join("probe.usda");
+        fs::write(&probe, b"probe").unwrap();
+        let held = unshared(&target);
+        // One attempt fails: the retries below are what the lock exercises.
+        assert!(fs::File::open(&target).is_err());
+        assert!(fs::rename(&probe, &target).is_err());
+        let start = std::time::Instant::now();
+        let read = storage.read(identifier).unwrap_err();
+        assert_eq!(read.kind, IoErrorKind::Storage);
+        let write = storage.write(identifier, b"replacement").unwrap_err();
+        assert_eq!(write.kind, IoErrorKind::Storage);
+        assert!(start.elapsed() >= TRANSIENT_RETRY_BUDGET);
+        drop(held);
+        assert_eq!(fs::read(&target).unwrap(), b"previous scene");
+        assert_eq!(fs::read_dir(&root).unwrap().count(), 2);
         fs::remove_dir_all(root).unwrap();
     }
 

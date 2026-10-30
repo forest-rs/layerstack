@@ -1363,6 +1363,33 @@ impl XformCache {
         Some(above)
     }
 
+    /// Whether the transform from the prim at `path` to the world might
+    /// differ at another time, the default time included: an op of its
+    /// local transform, or of an ancestor's up to the nearest
+    /// `!resetXformStack!`, has time samples (even one), a spline or value
+    /// clips, in any opinion, masked ones included. These are the locals
+    /// [`Self::set_time`] evaluates again; `false` means every time reads
+    /// the same matrix. `None` if no prim is there; the pseudo-root's never
+    /// varies. Computes the chain as [`Self::local_to_world`] does, and
+    /// keeps it.
+    ///
+    /// OpenUSD has no world-space query: `UsdGeomXformable::
+    /// TransformMightBeTimeVarying` answers for the prim's own ops, and
+    /// not for a single sample (see
+    /// [`Xformable::transform_might_be_time_varying`]); this answers as
+    /// `UsdAttributeQuery::ValueSourceMightBeTimeVarying` does for each op
+    /// of the chain.
+    ///
+    /// Spec: AOUSD Core §12.3 (default values and time samples).
+    pub fn local_to_world_might_vary(&mut self, scene: &Scene<'_>, path: PathId) -> Option<bool> {
+        self.local_to_world(scene, path)?;
+        if scene.store().paths().resolve(path).segments().is_empty() {
+            return Some(false);
+        }
+        let slot = *self.entries.get(&path)?;
+        Some(self.nodes[slot.get() - 1].world_time_dependent)
+    }
+
     /// Compose local operations up to, but excluding, `ancestor`.
     ///
     /// OpenUSD: `UsdGeomXformCache::ComputeRelativeTransform`. Stops at a
@@ -2183,6 +2210,55 @@ mod cache_tests {
             cache.local_to_world(&scene, normal),
             XformCache::new(Time::at(3.0)).local_to_world(&scene, normal)
         );
+    }
+
+    /// A world transform might vary when an op in its chain up to the
+    /// nearest reset has a time sample, even one: an animated ancestor
+    /// makes its descendants vary, a reset stops it, and removing the
+    /// sample makes them static again.
+    #[test]
+    fn world_transforms_might_vary_through_their_chain() {
+        let (mut store, mut live, paths) = transform_scene();
+        let [root, normal, reset, leaf, other] = paths;
+        let scene = Scene::new(live.stage(), &store);
+        let mut cache = XformCache::new(Time::Default);
+        for path in paths {
+            assert_eq!(cache.local_to_world_might_vary(&scene, path), Some(false));
+        }
+        let pseudo_root = store.path("/");
+        let scene = Scene::new(live.stage(), &store);
+        assert_eq!(
+            cache.local_to_world_might_vary(&scene, pseudo_root),
+            Some(false)
+        );
+        let translate = store.tokens().intern("xformOp:translate");
+        let mut tx = Transaction::new();
+        let address =
+            EditTarget::for_layer(LayerId(1)).property(PropertyPath::new(root, translate));
+        tx.set_time_sample(address, 1.0, Value::Vec3d([2.0, 0.0, 0.0]));
+        let edited = live.apply(&mut store, &tx).unwrap();
+        let scene = Scene::new(live.stage(), &store);
+        cache.apply_changes(&scene, &edited.changes);
+        let varies = paths.map(|path| cache.local_to_world_might_vary(&scene, path));
+        assert_eq!(
+            varies,
+            [
+                Some(true),
+                Some(true),
+                Some(false),
+                Some(false),
+                Some(false)
+            ],
+            "{:?}",
+            [root, normal, reset, leaf, other]
+        );
+        let undone = live.apply(&mut store, &edited.inverse).unwrap();
+        let scene = Scene::new(live.stage(), &store);
+        cache.apply_changes(&scene, &undone.changes);
+        assert_eq!(cache.local_to_world_might_vary(&scene, normal), Some(false));
+        let missing = store.path("/Missing");
+        let scene = Scene::new(live.stage(), &store);
+        assert_eq!(cache.local_to_world_might_vary(&scene, missing), None);
     }
 
     #[test]

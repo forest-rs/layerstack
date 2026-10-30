@@ -70,7 +70,8 @@ row, as OpenUSD's.
 The list also holds the stage's cameras and lights, by path:
 `list.cameras()` (`CameraItem`: the `Camera` `stage.camera` computes, view
 and projection matrices as `GfFrustum` computes them; conform it to a
-viewport with `stage.camera(path, { conform: { policy, aspect } })`) and
+viewport with `conformCamera(camera, policy, aspect)`, as
+`CameraUtilConformWindow` fits it) and
 `list.lights()` (`LightItem`: world `matrix`, `position` and `direction`,
 `emission` with `radiance = color * blackbody * intensity * 2^exposure /
 sizeFactor` in nits as `UsdLux` defines it, `geometry`, `shaping`,

@@ -49,6 +49,7 @@ export { DrawList } from "./draw.js";
 export type { DrawBuffers, DrawDiff, DrawItem, DrawOptions, DrawWork, ItemSource, Purpose } from "./draw.js";
 export { SHAPE_SCHEMAS, readMesh, readPoints, readShape, shapeSchema } from "./read.js";
 export { LIGHT_SCHEMAS, lightKind, lightSizeFactor, readLight } from "./light.js";
+export { conformCamera } from "./camera.js";
 export type {
   CameraItem,
   LightEmission,

@@ -10,7 +10,7 @@ import { describe, it } from "node:test";
 
 import { loadLayerstack } from "@forest-rs/layerstack";
 import type { Changes, Edit, Stage } from "@forest-rs/layerstack";
-import { loadStagehand } from "../dist/index.js";
+import { conformCamera, loadStagehand } from "../dist/index.js";
 import type { DrawDiff, DrawList, LightGeometry } from "../dist/index.js";
 
 const layerstack = await loadLayerstack();
@@ -302,6 +302,28 @@ describe("a draw list's cameras and lights", () => {
       }
     } finally {
       list.dispose();
+      stage.free();
+    }
+  });
+
+  // `camera_conform.json`: `CameraUtilConformWindow` through OpenUSD's
+  // C++, every policy at five aspects.
+  it("conform to a viewport as OpenUSD does", () => {
+    const stage = layerstack.open({ identifier: "camera.usda", bytes: readFileSync(new URL("camera.usda", fixtures)) });
+    try {
+      const oracle = JSON.parse(readFileSync(new URL("camera_conform.json", fixtures), "utf8"));
+      for (const row of oracle.rows) {
+        const camera = stage.camera(row.path, row.time === null ? {} : { time: row.time })!;
+        const conformed = conformCamera(camera, row.policy, row.aspect);
+        const where = `${row.path} ${row.time} ${row.policy} ${row.aspect}`;
+        assert.deepEqual([...conformed.aperture], row.aperture.map(Math.fround), where);
+        row.window.forEach((value: number, i: number) => close(conformed.window[i]!, value, 2e-10));
+        row.projection.flat().forEach((value: number, i: number) => close(conformed.projectionMatrix[i]!, value, 2e-10));
+        assert.deepEqual(conformed.view, camera.view);
+        const native = stage.camera(row.path, { ...(row.time === null ? {} : { time: row.time }), conform: { policy: row.policy, aspect: row.aspect } })!;
+        assert.deepEqual([...conformed.projectionMatrix], [...native.projectionMatrix], where);
+      }
+    } finally {
       stage.free();
     }
   });

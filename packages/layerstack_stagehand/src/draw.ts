@@ -398,11 +398,26 @@ function shadingProperty(name: string): boolean {
   return name.startsWith("inputs:") || name.startsWith("outputs:") || name.startsWith("info:");
 }
 
+/**
+ * Whether an info-only change of `prim` reaches nothing a draw list reads:
+ * the pseudo-root's, whose fields are the stage's metadata
+ * (`documentation`, `customLayerData`, the start and end time codes,
+ * `metersPerUnit`, `upAxis`, or a sublayer's `subLayers`, whose prims are
+ * listed on their own). No buffer, matrix, camera, light or material reads
+ * them; a renderer that scales or orients the scene by `metersPerUnit` or
+ * `upAxis` reads them off the stage again. As `layerstack_stagehand`
+ * decides it.
+ */
+function stageMetadata(prim: string): boolean {
+  return prim === "/";
+}
+
 /** Whether `changes` reach the shading properties of the prim at `prim`, as `layerstack_stagehand` decides it. */
 function shadingTouched(changes: Pick<Changes, "changedInfoOnly" | "properties" | "resyncedProperties">, roots: readonly string[], prim: string): boolean {
   return (
     roots.some((root) => under(prim, root)) ||
     changes.changedInfoOnly.some((changed) => {
+      if (stageMetadata(changed)) return false;
       const inventory = changes.properties.find((properties) => properties.prim === changed);
       return inventory === undefined ? under(prim, changed) : changed === prim && inventory.fields.some((field) => shadingProperty(field.property));
     }) ||
@@ -508,7 +523,8 @@ const sorted = (set: Set<number>) => [...set].sort((a, b) => a - b);
  *   {@link applyChanges} reads what a change record reaches (resynced
  *   paths rediscover their subtree; changed properties are classified by
  *   name into transform, visibility, material and geometry work under
- *   their prim); {@link setTime} reads at a new time only the items
+ *   their prim; the pseudo-root changed info-only, which is the stage's
+ *   metadata, reads nothing); {@link setTime} reads at a new time only the items
  *   whose inputs might vary with time, and rebuilds only what changed.
  *
  * ```ts
@@ -690,6 +706,7 @@ export class DrawList implements Disposable {
     }
     const reached: [string, Dirty][] = [];
     for (const prim of changes.changedInfoOnly) {
+      if (stageMetadata(prim)) continue;
       const inventory = changes.properties.find((changed) => changed.prim === prim);
       const what = inventory === undefined ? all() : none();
       for (const field of inventory?.fields ?? []) merge(what, propertyDirt(field.property));
@@ -932,6 +949,7 @@ export class DrawList implements Disposable {
     // inventory of them, which reaches everything under the prim.
     const reached: [string, string[] | null][] = [];
     for (const prim of changes.changedInfoOnly) {
+      if (stageMetadata(prim)) continue;
       const inventory = changes.properties.find((changed) => changed.prim === prim);
       reached.push([prim, inventory === undefined ? null : inventory.fields.map((field) => field.property)]);
     }

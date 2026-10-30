@@ -123,14 +123,23 @@ await stage.resolve(source);
   without a layer's opinions and sublayers wherever it reaches it (a
   sublayer, the session layer, a referenced layer), as OpenUSD's
   `UsdStage::MuteLayer` does, and `unmuteLayer(layer)` brings them back;
-  each returns whether the muting changed. `mutedLayers()` and
-  `isMuted(layer)` read it. The root cannot be muted
-  (`mute.root_layer`). Muting is not an edit: it makes no receipt and
-  undo neither reverts it nor is blocked by it. A muted layer keeps its
-  content and unsaved edits; edits targeting it fail with `layer.muted`,
-  `save()` skips it until it is unmuted (`save(layer)` writes it), and
-  `move` and `delete` fail with `namespace.unsupported` while any layer is
-  muted, since they could not repair the paths a muted layer names.
+  each returns whether the muting changed. A layer is a `Layer` or an
+  identifier, anchored to the root layer as OpenUSD anchors one
+  (`muteLayer("./lamp.usda")`), which may name a layer the stage has not
+  read: it is then not read, and an arc to it, now or added later,
+  composes muted (`composition.muted_asset`) instead of being asked for.
+  `muteAndUnmuteLayers(mute, unmute)` does both as one request, heard as
+  one change (`UsdStage::MuteAndUnmuteLayers`); an unmute spelled as a
+  mute is dropped, as in OpenUSD. `mutedLayers()` lists the muted layers
+  the stage holds, `mutedIdentifiers()` every muted identifier, read or
+  not (`UsdStage::GetMutedLayers`), and `isMuted(layer)` asks about one.
+  The root cannot be muted (`mute.root_layer`, refusing the whole
+  request). Muting is not an edit: it makes no receipt and undo neither
+  reverts it nor is blocked by it. A muted layer keeps its content and
+  unsaved edits; edits targeting it fail with `layer.muted`, `save()`
+  skips it until it is unmuted (`save(layer)` writes it), and `move` and
+  `delete` neither read nor edit it, as OpenUSD's `UsdNamespaceEditor`
+  does: its specs stay at the old path.
 - **Everything native is disposable.** A `Stage` owns native memory: call
   `free()` or declare it with `using`. Afterwards every call fails with
   `stage.disposed`.
@@ -225,7 +234,8 @@ await stage.resolve(source);
   `{ created, removed, resynced, changedInfoOnly }` (prim paths) for every
   recomposition, in order, before the call that caused it (`apply`, `undo`,
   `muteLayer`, `loadSupplied`, each round of `resolve`) returns, with the
-  `mutedLayers` and `unmutedLayers` whose muting changed (as OpenUSD's
+  `mutedLayers` and `unmutedLayers` whose muting changed, and their
+  `mutedIdentifiers` and `unmutedIdentifiers` (as OpenUSD's
   `UsdNotice::LayerMutingChanged`), natively muted ones included. A listener that throws
   is reported as `listener.failed` and the others still run.
 - **Saving hands you the bytes.** The module writes nothing anywhere.
@@ -284,7 +294,8 @@ await stage.resolve(source);
 | `layer.read_only` | The edits target a layer that cannot be saved; open with `editLayer: "session"`. |
 | `layer.outside_stack` | The edits target a layer the stage reaches only through an arc: pass an opinion's `editTarget` or an arc's instead. |
 | `layer.muted` | The edits target a muted layer; unmute it to edit it. |
-| `mute.root_layer` | `muteLayer` was given the root layer, which cannot be muted. |
+| `mute.root_layer` | `muteLayer` or `muteAndUnmuteLayers` was given the root layer, by any spelling, which cannot be muted; nothing changed. |
+| `mute.refused` | The module refused a mute request for a reason this package does not know yet. |
 | `edit.stale` | An undo whose slots changed since; nothing changed and the receipt is still undoable. |
 | `edit.rejected.*` | The edits were rejected and nothing changed: `edit.rejected.type_mismatch`, `edit.rejected.reserved_field`, ... |
 | `namespace.*` | A `move` or `delete` cannot be made and nothing changed: `namespace.collision` (the destination is occupied), `namespace.missing_parent`, `namespace.not_found`, `namespace.cycle`, `namespace.instance_proxy`, `namespace.invalid_paths`, `namespace.unmappable`, `namespace.split_opinions`, `namespace.unsupported`. |
@@ -300,7 +311,7 @@ The package and the `layerstack_wasm` crate are released together, at the
 same version. They meet at an ABI number, the layout of the records the
 module exchanges with this package: `layerstack.version` is `{ package,
 crate, revision, abi }`, and loading a module of another ABI fails with
-`module.abi`. This package speaks ABI 5; changing an export's arguments or
+`module.abi`. This package speaks ABI 6; changing an export's arguments or
 record layout brings a new ABI.
 
 ## Building and testing

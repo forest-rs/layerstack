@@ -414,6 +414,16 @@ export interface Changes {
   readonly mutedLayers: readonly Layer[];
   /** Layers unmuted since the changes heard before, as `mutedLayers`. */
   readonly unmutedLayers: readonly Layer[];
+  /**
+   * The identifiers of the layers muted since the changes heard before,
+   * sorted, as `UsdNotice::LayerMutingChanged::GetMutedLayers` lists
+   * them: those of `mutedLayers`, and of layers muted by identifier before
+   * the stage read them, which have no {@link Layer}
+   * ({@link Stage.mutedIdentifiers}). An anonymous layer has none.
+   */
+  readonly mutedIdentifiers: readonly string[];
+  /** The identifiers of the layers unmuted since the changes heard before, as `mutedIdentifiers`. */
+  readonly unmutedIdentifiers: readonly string[];
 }
 
 /** The property fields that may have changed on one `changedInfoOnly` prim, ordered by property, then field. */

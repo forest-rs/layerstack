@@ -312,43 +312,159 @@ impl Stage {
     }
 
     /// Mutes layer `id` (`muted` true) or unmutes it, and recomposes:
-    /// whether its muting changed. A muted layer contributes no opinions
-    /// and no sublayers wherever the stage reaches it, and the stage keeps
-    /// it as it is: its content, edits and dirty state stay, and
-    /// unmuting composes it again. Muting is the stage's state, not an
-    /// authored edit, so it makes no receipt.
-    ///
-    /// Any layer of the stage may be muted, one the stage reaches only
-    /// through an arc or does not use included, except the root
-    /// (`mute.root_layer`). Muting an unused layer changes no prim. While
-    /// it is muted, edits that target it fail with `layer.muted`, and
-    /// saving the stage skips it, as a layer the stage does not use.
-    ///
-    /// Spec: AOUSD Core composes the layer stacks (§10.3.1) of the layers
-    /// it is given and has no muting; this follows OpenUSD's
-    /// `UsdStage::MuteLayer` and `UsdStage::UnmuteLayer`.
+    /// whether its muting changed ([`Self::mute_and_unmute_layers`] with
+    /// the one layer).
     ///
     /// # Errors
     ///
-    /// `layer.unknown` when the document has no such layer;
-    /// `mute.root_layer` when `muted` names the root.
+    /// As [`Self::mute_and_unmute_layers`].
     pub(crate) fn set_layer_muted(&mut self, id: u64, muted: bool) -> Result<bool, Error> {
-        let layer = LayerId(id);
-        self.check_layer(layer)?;
-        let was = self.document.stage().stage().is_layer_muted(layer);
-        let (_, live) = self.document.parts_mut();
+        let named = [MuteRequest::Layer(id)];
         if muted {
-            live.mute_layer(layer).map_err(mute_error)?;
+            self.mute_and_unmute_layers(&named, &[])
         } else {
-            live.unmute_layer(layer);
+            self.mute_and_unmute_layers(&[], &named)
         }
-        self.document.synchronize();
-        Ok(self.document.stage().stage().is_layer_muted(layer) != was)
     }
 
-    /// The ids of the layers the composed stage mutes, ascending
-    /// (`layerstack::Stage::muted_layers`): what was muted and composed,
-    /// not a control queued since and not yet synchronized.
+    /// Mutes the layers `mute` names, then unmutes those `unmute` names,
+    /// as one request, and recomposes once: OpenUSD's
+    /// `UsdStage::MuteAndUnmuteLayers`. Returns whether the muted set
+    /// changed. A muted layer contributes no opinions and no sublayers
+    /// wherever the stage reaches it, and the stage keeps it as it is: its
+    /// content, edits and dirty state stay, and unmuting composes it again.
+    /// Muting is the stage's state, not an authored edit, so it makes no
+    /// receipt.
+    ///
+    /// A request names a layer by id, or by identifier anchored to the
+    /// root layer as OpenUSD anchors a muted identifier
+    /// ([`StageDocument::anchored_identifier`]), which may name a layer the
+    /// stage has not read: it is then not read, and an arc to it composes
+    /// muted (`composition.muted_asset`) rather than asking for it.
+    /// Unmuting a layer not read asks for it ([`Self::unavailable`]). An
+    /// empty identifier names nothing, as in OpenUSD.
+    ///
+    /// As `PcpCache::RequestLayerMuting` does, an unmute request spelled
+    /// as a mute request is dropped, so the layer stays muted: a layer is
+    /// spelled by its identifier, an anonymous one by its id. A layer
+    /// muted and unmuted under two spellings (`b.usda`, `./b.usda`) ends
+    /// unmuted. Any layer may be muted except the root (`mute.root_layer`),
+    /// which refuses the whole request; unmuting the root, or a layer not
+    /// muted, changes nothing. While a layer is muted, edits that target it
+    /// fail with `layer.muted`, and saving the stage skips it, as a layer
+    /// the stage does not use.
+    ///
+    /// Spec: AOUSD Core composes the layer stacks (§10.3.1) of the layers
+    /// it is given and has no muting; this follows OpenUSD's
+    /// `UsdStage::MuteAndUnmuteLayers` (`pxr/usd/usd/stage.cpp`) and
+    /// `Pcp_MutedLayers` (`pxr/usd/pcp/layerStackRegistry.cpp`).
+    ///
+    /// # Errors
+    ///
+    /// `layer.unknown` for an id the document has no layer for;
+    /// `mute.root_layer` when `mute` names the root; the `io.*` error of
+    /// an identifier storage cannot anchor. Nothing changes on any of
+    /// them. Reading the layers unmuting asks for that storage holds
+    /// fails as [`Self::load_supplied`] does, after the muting changed.
+    pub(crate) fn mute_and_unmute_layers(
+        &mut self,
+        mute: &[MuteRequest<'_>],
+        unmute: &[MuteRequest<'_>],
+    ) -> Result<bool, Error> {
+        let spelled: Vec<String> = mute
+            .iter()
+            .filter_map(|request| self.spelling(request))
+            .collect();
+        let unmute: Vec<&MuteRequest<'_>> = unmute
+            .iter()
+            .filter(|request| {
+                self.spelling(request)
+                    .is_some_and(|spelling| !spelled.contains(&spelling))
+            })
+            .collect();
+        let mut muting = Vec::with_capacity(mute.len());
+        for request in mute {
+            match *request {
+                MuteRequest::Layer(id) => {
+                    self.check_layer(LayerId(id))?;
+                    muting.push(LayerId(id));
+                }
+                MuteRequest::Identifier("") => {}
+                MuteRequest::Identifier(identifier) => {
+                    self.document.anchored_identifier(identifier)?;
+                }
+            }
+        }
+        let mut unmuting = Vec::with_capacity(unmute.len());
+        for request in unmute {
+            match *request {
+                MuteRequest::Layer(id) => {
+                    self.check_layer(LayerId(id))?;
+                    unmuting.push(LayerId(id));
+                }
+                MuteRequest::Identifier("") => {}
+                MuteRequest::Identifier(identifier) => {
+                    unmuting.extend(self.document.find_layer_named(identifier)?);
+                }
+            }
+        }
+        // Checked above: naming the identifiers now reserves no id for a
+        // request that fails.
+        for request in mute {
+            if let MuteRequest::Identifier(identifier) = *request
+                && !identifier.is_empty()
+            {
+                let id = self.document.layer_named(identifier)?;
+                if id == self.document.root_layer() {
+                    return Err(mute_error(LayerMuteError::RootLayer));
+                }
+                muting.push(id);
+            }
+        }
+        // Two spellings of one layer: muted, then unmuted.
+        muting.retain(|id| !unmuting.contains(id));
+        let changed = self
+            .document
+            .mute_and_unmute_layers(&muting, &unmuting)
+            .map_err(mute_error)?;
+        self.document.load_requested_assets()?;
+        Ok(changed)
+    }
+
+    /// How a mute request is spelled, as OpenUSD compares the requests of
+    /// one call: an identifier as given, a layer by its identifier, an
+    /// anonymous one by its id; `None` for the empty identifier, which
+    /// names nothing.
+    fn spelling(&self, request: &MuteRequest<'_>) -> Option<String> {
+        match *request {
+            MuteRequest::Identifier("") => None,
+            MuteRequest::Identifier(identifier) => Some(identifier.to_string()),
+            MuteRequest::Layer(id) => Some(
+                self.document
+                    .identifier(LayerId(id))
+                    .map_or_else(|| format!("#{id}"), ToString::to_string),
+            ),
+        }
+    }
+
+    /// Whether the stage mutes the layer `identifier`, anchored to the
+    /// root layer, names: OpenUSD's `UsdStage::IsLayerMuted`, which an
+    /// identifier the stage never muted answers `false`.
+    ///
+    /// # Errors
+    ///
+    /// The `io.*` error of an identifier storage cannot anchor.
+    pub(crate) fn is_layer_muted_named(&self, identifier: &str) -> Result<bool, Error> {
+        Ok(self
+            .document
+            .find_layer_named(identifier)?
+            .is_some_and(|id| self.document.stage().stage().is_layer_muted(id)))
+    }
+
+    /// The layers the composed stage mutes, by ascending id
+    /// (`layerstack::Stage::muted_layers`), each `[id, identifier, held]`
+    /// ([`Self::muting_row`]): what was muted and composed, not a control
+    /// queued since and not yet synchronized.
     #[must_use]
     pub(crate) fn muted_layers(&self) -> Wire {
         Wire::List(
@@ -357,9 +473,21 @@ impl Stage {
                 .stage()
                 .muted_layers()
                 .iter()
-                .map(|id| Wire::UInt64(id.0))
+                .map(|&id| self.muting_row(id))
                 .collect(),
         )
+    }
+
+    /// `[id, identifier, held]` for a muted or unmuted layer: its
+    /// identifier (`null` for an anonymous layer), and whether the stage
+    /// holds it, which it does not for a layer muted by identifier before
+    /// it was read.
+    fn muting_row(&self, id: LayerId) -> Wire {
+        Wire::List(vec![
+            Wire::UInt64(id.0),
+            self.document.identifier(id).map_or(Wire::Null, Wire::text),
+            Wire::Bool(self.document.store().layer(id).is_some()),
+        ])
     }
 
     /// The stage's state now: `[prims, compositionErrors, unresolved]`,
@@ -1147,20 +1275,20 @@ impl Stage {
             ),
             Err(_) => Wire::Null,
         };
-        let muted = self.document.stage().stage().muted_layers();
-        let ids = |ids: &mut dyn Iterator<Item = &LayerId>| {
+        let muted = self.document.stage().stage().muted_layers().clone();
+        let rows = |ids: &mut dyn Iterator<Item = &LayerId>| {
             Wire::List(
                 ids.filter(|_| render)
-                    .map(|id| Wire::UInt64(id.0))
+                    .map(|&id| self.muting_row(id))
                     .collect(),
             )
         };
         let record = Wire::List(vec![
             batches,
-            ids(&mut muted.difference(&self.heard_muted)),
-            ids(&mut self.heard_muted.difference(muted)),
+            rows(&mut muted.difference(&self.heard_muted)),
+            rows(&mut self.heard_muted.difference(&muted)),
         ]);
-        self.heard_muted.clone_from(muted);
+        self.heard_muted = muted;
         record
     }
 
@@ -1892,6 +2020,28 @@ impl Stage {
         Ok(self.set_layer_muted(id, muted)?)
     }
 
+    /// Mutes the layers of `mute_ids` and `mute_identifiers`, then unmutes
+    /// those of `unmute_ids` and `unmute_identifiers`, as one request
+    /// (`mute_and_unmute_layers`, as documented in `stage.rs`).
+    #[wasm_bindgen(js_name = muteAndUnmuteLayers)]
+    pub fn js_mute_and_unmute_layers(
+        &mut self,
+        mute_ids: Vec<u64>,
+        mute_identifiers: Vec<String>,
+        unmute_ids: Vec<u64>,
+        unmute_identifiers: Vec<String>,
+    ) -> Result<bool, JsValue> {
+        let mute = MuteRequest::list(&mute_ids, &mute_identifiers);
+        let unmute = MuteRequest::list(&unmute_ids, &unmute_identifiers);
+        Ok(self.mute_and_unmute_layers(&mute, &unmute)?)
+    }
+
+    /// Whether an identifier's layer is muted (`is_layer_muted_named`, as documented in `stage.rs`).
+    #[wasm_bindgen(js_name = isLayerMuted)]
+    pub fn js_is_layer_muted(&self, identifier: &str) -> Result<bool, JsValue> {
+        Ok(self.is_layer_muted_named(identifier)?)
+    }
+
     /// The record `muted_layers` builds, as documented in `stage.rs`.
     #[wasm_bindgen(js_name = mutedLayers)]
     pub fn js_muted_layers(&self) -> JsValue {
@@ -2034,15 +2184,36 @@ fn changes_record(changes: &Changes, store: &InMemoryStore) -> Wire {
     ])
 }
 
-/// The error of a mute request the live stage refuses: `mute.root_layer`,
-/// or `mute.conflicting_request` for a layer both muted and unmuted in
-/// one request, which the bindings never make.
+/// The error of a mute request the live stage refuses: `mute.root_layer`.
 fn mute_error(error: LayerMuteError) -> Error {
     match error {
         LayerMuteError::RootLayer => {
             Error::new("mute.root_layer", "the root layer cannot be muted")
         }
-        _ => Error::new("mute.conflicting_request", error.to_string()),
+        _ => Error::new("mute.refused", error.to_string()),
+    }
+}
+
+/// A layer a mute or unmute request names: by id, or by identifier.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum MuteRequest<'a> {
+    /// The layer with this id, which the stage holds.
+    Layer(u64),
+    /// The layer this identifier names, anchored to the root layer.
+    Identifier(&'a str),
+}
+
+impl<'a> MuteRequest<'a> {
+    /// The requests naming the layers `ids`, then those `identifiers` name.
+    fn list(ids: &[u64], identifiers: &'a [String]) -> Vec<Self> {
+        ids.iter()
+            .map(|&id| Self::Layer(id))
+            .chain(
+                identifiers
+                    .iter()
+                    .map(|identifier| Self::Identifier(identifier)),
+            )
+            .collect()
     }
 }
 
@@ -3066,18 +3237,29 @@ def Mesh "Rock" {
 
     /// The layers a `take_changes` record says were muted and unmuted.
     fn muting(record: &Wire) -> (Vec<u64>, Vec<u64>) {
-        let ids = |wire: &Wire| -> Vec<u64> {
-            wire.as_list()
-                .unwrap()
-                .iter()
-                .map(|id| match id {
-                    Wire::UInt64(id) => *id,
-                    other => panic!("{other:?}"),
-                })
-                .collect()
-        };
+        let ids =
+            |wire: &Wire| -> Vec<u64> { wire.as_list().unwrap().iter().map(row_id).collect() };
         let record = record.as_list().unwrap();
         (ids(&record[1]), ids(&record[2]))
+    }
+
+    /// The id of a `[id, identifier, held]` muting row.
+    fn row_id(row: &Wire) -> u64 {
+        match &row.as_list().unwrap()[0] {
+            Wire::UInt64(id) => *id,
+            other => panic!("{other:?}"),
+        }
+    }
+
+    /// The ids `muted_layers` lists.
+    fn muted_ids(stage: &Stage) -> Vec<u64> {
+        stage
+            .muted_layers()
+            .as_list()
+            .unwrap()
+            .iter()
+            .map(row_id)
+            .collect()
     }
 
     fn layer_named(stage: &Stage, identifier: &str) -> LayerId {
@@ -3106,7 +3288,7 @@ def Mesh "Rock" {
             !has_attribute(&stage, "/Ball.serial"),
             "the muted sublayer gives no opinions"
         );
-        assert_eq!(stage.muted_layers(), Wire::List(vec![Wire::UInt64(sub.0)]));
+        assert_eq!(muted_ids(&stage), [sub.0]);
         let heard = stage.take_changes(true);
         assert!(!batches(&heard).is_empty(), "the stage recomposed");
         assert_eq!(muting(&heard), (vec![sub.0], vec![]));
@@ -3125,7 +3307,7 @@ def Mesh "Rock" {
             has_attribute(&stage, "/Ball.serial"),
             "unmuted, it composes again"
         );
-        assert_eq!(stage.muted_layers(), Wire::List(vec![]));
+        assert!(muted_ids(&stage).is_empty());
         assert_eq!(muting(&stage.take_changes(true)), (vec![], vec![sub.0]));
         assert!(!stage.set_layer_muted(sub.0, false).unwrap(), "not muted");
     }
@@ -3140,7 +3322,7 @@ def Mesh "Rock" {
             !stage.set_layer_muted(root.0, false).unwrap(),
             "unmuting the root, never muted, changes nothing"
         );
-        assert_eq!(stage.muted_layers(), Wire::List(vec![]));
+        assert!(muted_ids(&stage).is_empty());
         let error = stage.set_layer_muted(u64::MAX, true).unwrap_err();
         assert_eq!(error.code, "layer.unknown");
     }
@@ -3246,6 +3428,102 @@ def Mesh "Rock" {
         assert_eq!(
             stage.apply(session.0, &mut batch).unwrap_err().code,
             "layer.muted"
+        );
+    }
+
+    #[test]
+    fn a_layer_muted_by_identifier_before_it_is_read_composes_muted() {
+        let mut stage = Stage::open(
+            "scene.usda",
+            ROOT.as_bytes().to_vec(),
+            false,
+            false,
+            BROWSER_LIMITS,
+        )
+        .unwrap();
+        stage
+            .document_mut()
+            .storage_mut()
+            .supply("sub.usda", SUB.as_bytes().to_vec());
+        stage.load_supplied().unwrap();
+        assert_eq!(identifiers(&stage.unavailable()), ["parts/ball.usda"]);
+        let _ = stage.take_changes(false);
+
+        // Unavailable, then muted by another spelling: no longer asked for.
+        let ball = [MuteRequest::Identifier("./parts/../parts/ball.usda")];
+        assert!(stage.mute_and_unmute_layers(&ball, &[]).unwrap());
+        assert!(stage.unavailable().as_list().unwrap().is_empty());
+        assert!(stage.is_layer_muted_named("parts/ball.usda").unwrap());
+        let rows = stage.muted_layers();
+        let row = rows.as_list().unwrap()[0].as_list().unwrap();
+        assert_eq!(row[1], Wire::text("parts/ball.usda"));
+        assert_eq!(row[2], Wire::Bool(false), "not read");
+        let errors = stage.status().as_list().unwrap()[1].clone();
+        let codes: Vec<&str> = errors
+            .as_list()
+            .unwrap()
+            .iter()
+            .map(|error| error.as_list().unwrap()[0].as_text().unwrap())
+            .collect();
+        assert_eq!(codes, ["composition.muted_asset"]);
+        let heard = stage.take_changes(true);
+        assert_eq!(muting(&heard).0.len(), 1, "heard muted while not read");
+
+        // Supplied while muted: not read.
+        stage
+            .document_mut()
+            .storage_mut()
+            .supply("parts/ball.usda", BALL.as_bytes().to_vec());
+        stage.load_supplied().unwrap();
+        assert!(!has_attribute(&stage, "/Ball.points"));
+
+        // Unmuted: read, as OpenUSD opens it on recomposing.
+        assert!(stage.mute_and_unmute_layers(&[], &ball).unwrap());
+        assert!(has_attribute(&stage, "/Ball.points"));
+        assert!(stage.unavailable().as_list().unwrap().is_empty());
+        let codes = stage.status().as_list().unwrap()[1]
+            .as_list()
+            .unwrap()
+            .len();
+        assert_eq!(codes, 0);
+    }
+
+    #[test]
+    fn an_unmute_spelled_as_a_mute_is_dropped() {
+        let mut stage = resolved();
+        let sub = layer_named(&stage, "sub.usda");
+        let both = [MuteRequest::Identifier("sub.usda")];
+        assert!(stage.mute_and_unmute_layers(&both, &both).unwrap());
+        assert_eq!(muted_ids(&stage), [sub.0], "the same spelling stays muted");
+        let by_layer = [MuteRequest::Layer(sub.0)];
+        assert!(
+            !stage.mute_and_unmute_layers(&by_layer, &both).unwrap(),
+            "a layer is spelled by its identifier"
+        );
+        let other = [MuteRequest::Identifier("./sub.usda")];
+        assert!(stage.mute_and_unmute_layers(&both, &other).unwrap());
+        assert!(
+            muted_ids(&stage).is_empty(),
+            "two spellings: muted, then unmuted"
+        );
+
+        let root = [
+            MuteRequest::Identifier("./scene.usda"),
+            MuteRequest::Layer(sub.0),
+        ];
+        let error = stage.mute_and_unmute_layers(&root, &[]).unwrap_err();
+        assert_eq!(error.code, "mute.root_layer");
+        assert!(muted_ids(&stage).is_empty(), "refused whole");
+        assert!(
+            !stage
+                .mute_and_unmute_layers(&[MuteRequest::Identifier("")], &[])
+                .unwrap()
+        );
+        assert!(!stage.is_layer_muted_named("never.usda").unwrap());
+        assert!(
+            !stage
+                .mute_and_unmute_layers(&[], &[MuteRequest::Identifier("never.usda")])
+                .unwrap()
         );
     }
 }

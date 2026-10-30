@@ -37,8 +37,12 @@ use crate::wire::Wire;
 ///   layer stack, such as a referenced asset's.
 /// - `layer.muted`: an edit targets a muted layer, which the stage does
 ///   not compose until it is unmuted.
-/// - `mute.root_layer`: a request to mute the root layer, which cannot be
-///   muted ([`layerstack::LayerMuteError`]).
+/// - `mute.root_layer`: a request to mute the root layer, by id or by any
+///   spelling of its identifier, which cannot be muted
+///   ([`layerstack::LayerMuteError`]).
+/// - `mute.refused`: a mute request the live stage refuses for a reason
+///   this module does not know ([`layerstack::LayerMuteError`] is
+///   non-exhaustive).
 /// - `edit.*`: [`layerstack::EditError::code`], such as `edit.stale` for
 ///   an undo whose guard no longer holds, or
 ///   `edit.rejected.type_mismatch`; [`layerstack_io::ApplyError::code`].

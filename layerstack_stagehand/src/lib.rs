@@ -116,7 +116,10 @@
 //! (its target as data). Lights and cameras inside a native instance are
 //! listed once per instance, by their instance proxies' paths; lights inside
 //! a point instancer's prototype once per unmasked instance ([`LightId`]:
-//! the light's path and the instance's position). A diff lists the cameras and lights added,
+//! the light's path and the instance's [`InstanceId`], its authored `ids`
+//! entry, or its position when the instancer authors no `ids`, so
+//! reordering the arrays of one that does moves its lights rather than
+//! replacing them). A diff lists the cameras and lights added,
 //! removed and changed; a change reaches a camera or a light through an
 //! input it reads, or its transform or visibility or one above it; a time
 //! change reads
@@ -182,8 +185,8 @@ pub use input::{
 };
 #[cfg(feature = "stage")]
 pub use light::{
-    LightEmission, LightGeometry, LightId, LightInstance, LightItem, LightKind, LightLink,
-    LightShadow, LightShaping,
+    InstanceId, LightEmission, LightGeometry, LightId, LightInstance, LightItem, LightKind,
+    LightLink, LightShadow, LightShaping,
 };
 #[cfg(feature = "stage")]
 pub use material::{

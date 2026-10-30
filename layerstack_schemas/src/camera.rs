@@ -82,6 +82,94 @@ pub struct ComputedCamera {
     f_stop: f32,
     focus_distance: f32,
     shutter_offsets: [f64; 2],
+    exposure: CameraExposure,
+}
+
+/// A camera's exposure controls (`UsdGeomCamera`'s `exposure` and
+/// `exposure:*` attributes), each the value read or, when none can be read,
+/// the constant `UsdGeomCamera::ComputeLinearExposureScale` starts from (the
+/// schema fallbacks).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CameraExposure {
+    /// Exposure adjustment in stops (`exposure`, fallback 0).
+    pub exposure: f32,
+    /// Lens aperture for exposure (`exposure:fStop`, fallback 1).
+    pub f_stop: f32,
+    /// Sensor sensitivity (`exposure:iso`, fallback 100).
+    pub iso: f32,
+    /// Sensor responsivity scale (`exposure:responsivity`, fallback 1).
+    pub responsivity: f32,
+    /// Exposure time in seconds (`exposure:time`, fallback 1).
+    pub time: f32,
+}
+
+impl Default for CameraExposure {
+    fn default() -> Self {
+        Self {
+            exposure: 0.,
+            f_stop: 1.,
+            iso: 100.,
+            responsivity: 1.,
+            time: 1.,
+        }
+    }
+}
+
+impl CameraExposure {
+    /// The scale applied to scene luminance before the image is written:
+    /// `time * iso * 2^exposure * responsivity / (100 * fStop^2)`, in `f32`
+    /// as OpenUSD computes it, 1 for the fallbacks.
+    /// OpenUSD `UsdGeomCamera::ComputeLinearExposureScale`
+    /// (`pxr/usd/usdGeom/camera.cpp`).
+    #[must_use]
+    #[doc(alias = "ComputeLinearExposureScale")]
+    pub fn linear_scale(&self) -> f32 {
+        (self.time * self.iso * libm::powf(2., self.exposure) * self.responsivity)
+            / (100. * self.f_stop * self.f_stop)
+    }
+}
+
+/// How [`ComputedCamera::conform_window`] fits a camera's aperture to a
+/// target aspect ratio (width over height), as OpenUSD's
+/// `CameraUtilConformWindowPolicy`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum ConformWindowPolicy {
+    /// Keep the height, change the width.
+    MatchVertically,
+    /// Keep the width, change the height.
+    MatchHorizontally,
+    /// Grow the width or the height: everything the camera saw stays in view.
+    Fit,
+    /// Shrink the width or the height: the view is filled, edges cut.
+    Crop,
+    /// Leave the aperture as it is; the image stretches to the target.
+    DontConform,
+}
+
+/// The reference window `[left, bottom, right, top]` of a lens, as
+/// `GfCamera::GetFrustum` makes it: apertures halved in `f32`, offsets added,
+/// tenths of a scene unit to scene units (`GfCamera::APERTURE_UNIT`), and,
+/// for a perspective camera, divided by the focal length to depth 1.
+fn lens_window(
+    projection: &CameraProjection,
+    aperture: [f32; 2],
+    aperture_offset: [f32; 2],
+    focal_length: f32,
+) -> [f64; 4] {
+    // GfCamera halves authored float apertures before widening to double.
+    let half = aperture.map(|v| f64::from(v / 2.));
+    let offset = aperture_offset.map(f64::from);
+    let mut window = [
+        -half[0] + offset[0],
+        -half[1] + offset[1],
+        half[0] + offset[0],
+        half[1] + offset[1],
+    ]
+    .map(|v| v * 0.1);
+    if *projection == CameraProjection::Perspective && focal_length != 0. {
+        window = window.map(|v| v / (f64::from(focal_length) * 0.1));
+    }
+    window
 }
 
 impl ComputedCamera {
@@ -168,6 +256,63 @@ impl ComputedCamera {
             return Err(CameraError::InvalidTime);
         }
         Ok(interval)
+    }
+    /// The exposure controls, and their linear scale
+    /// ([`CameraExposure::linear_scale`]).
+    #[must_use]
+    pub fn exposure(&self) -> &CameraExposure {
+        &self.exposure
+    }
+    /// The camera with its aperture fitted to `aspect` (width over height),
+    /// as OpenUSD's `CameraUtilConformWindow` fits a `GfCamera`: the
+    /// apertures change (computed in `f64`, stored as `f32`), the offsets
+    /// and everything else are kept, and the window, projection matrix and
+    /// frustum follow. `Fit` and `Crop` match vertically or horizontally by
+    /// comparing the aperture's aspect (1 for a zero height) with `aspect`;
+    /// a zero `aspect` keeps the width when matching horizontally.
+    /// OpenUSD `pxr/imaging/cameraUtil/conformWindow.cpp`.
+    #[must_use]
+    #[doc(alias = "CameraUtilConformWindow")]
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "GfCamera stores the conformed apertures as float"
+    )]
+    pub fn conform_window(&self, policy: ConformWindowPolicy, aspect: f64) -> Self {
+        let [width, height] = self.aperture.map(f64::from);
+        let resolved = match policy {
+            ConformWindowPolicy::DontConform => return self.clone(),
+            ConformWindowPolicy::MatchVertically | ConformWindowPolicy::MatchHorizontally => policy,
+            ConformWindowPolicy::Fit | ConformWindowPolicy::Crop => {
+                let own = if height == 0. { 1. } else { width / height };
+                if (policy == ConformWindowPolicy::Fit) ^ (own > aspect) {
+                    ConformWindowPolicy::MatchVertically
+                } else {
+                    ConformWindowPolicy::MatchHorizontally
+                }
+            }
+        };
+        let aperture = if resolved == ConformWindowPolicy::MatchHorizontally {
+            [width, if aspect == 0. { width } else { width / aspect }]
+        } else {
+            [height * aspect, height]
+        }
+        .map(|v| v as f32);
+        let window = lens_window(
+            &self.projection,
+            aperture,
+            self.aperture_offset,
+            self.focal_length,
+        );
+        Self {
+            aperture,
+            window,
+            projection_matrix: frustum::projection_matrix(
+                window,
+                self.clipping_range,
+                self.frustum_projection(),
+            ),
+            ..self.clone()
+        }
     }
     /// Eight world-space corners: near then far, each in lower-left,
     /// lower-right, upper-left, upper-right order, as `GfFrustum::ComputeCorners`.
@@ -284,19 +429,7 @@ impl Camera<'_> {
             .ok_or(CameraError::InvalidTransform)?;
         let ConformedView { view, view_inverse } =
             frustum::conform(&camera_to_world).ok_or(CameraError::InvalidTransform)?;
-        // GfCamera halves authored float apertures before widening to double.
-        let half = aperture.map(|v| f64::from(v / 2.));
-        let offset = aperture_offset.map(f64::from);
-        let mut window = [
-            -half[0] + offset[0],
-            -half[1] + offset[1],
-            half[0] + offset[0],
-            half[1] + offset[1],
-        ]
-        .map(|v| v * 0.1);
-        if projection == CameraProjection::Perspective && focal_length != 0. {
-            window = window.map(|v| v / (f64::from(focal_length) * 0.1));
-        }
+        let window = lens_window(&projection, aperture, aperture_offset, focal_length);
         let projection_matrix = frustum::projection_matrix(
             window,
             clipping_range,
@@ -339,6 +472,7 @@ impl Camera<'_> {
             f_stop: float("fStop")?,
             focus_distance: float("focusDistance")?,
             shutter_offsets: [double("shutter:open")?, double("shutter:close")?],
+            exposure: read_exposure(self, time),
         };
         if camera
             .frustum_corners()
@@ -354,6 +488,21 @@ impl Camera<'_> {
             return Err(CameraError::InvalidTransform);
         }
         Ok(camera)
+    }
+}
+
+/// The exposure controls at `time`; each one that cannot be read keeps the
+/// constant `UsdGeomCamera::ComputeLinearExposureScale` starts from.
+fn read_exposure(prim: &PrimView<'_>, time: Time) -> CameraExposure {
+    let fallback = CameraExposure::default();
+    let float =
+        |name, otherwise| read(prim, name, time, crate::value::read_float).unwrap_or(otherwise);
+    CameraExposure {
+        exposure: float("exposure", fallback.exposure),
+        f_stop: float("exposure:fStop", fallback.f_stop),
+        iso: float("exposure:iso", fallback.iso),
+        responsivity: float("exposure:responsivity", fallback.responsivity),
+        time: float("exposure:time", fallback.time),
     }
 }
 

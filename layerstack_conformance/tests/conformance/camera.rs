@@ -10,7 +10,7 @@ use layerstack::{
 use layerstack_schemas::{
     Scene, Time, XformCache,
     bounds::{BoundingBox, Range3d},
-    camera::{CameraError, ComputedCamera},
+    camera::{CameraError, ComputedCamera, ConformWindowPolicy},
     usd_geom::Camera,
 };
 use serde::Deserialize;
@@ -362,4 +362,107 @@ fn pinned_camera_oracle_matches_configured_openusd() {
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
+}
+
+#[derive(Deserialize)]
+struct ConformOracle {
+    version: String,
+    rows: Vec<ConformRow>,
+}
+#[derive(Deserialize)]
+struct ConformRow {
+    path: String,
+    time: Option<f64>,
+    policy: String,
+    aspect: f64,
+    aperture: [f32; 2],
+    window: [f64; 4],
+    view: Matrix,
+    projection: Matrix,
+}
+
+/// `CameraUtilConformWindow` on a `GfCamera`, every policy at five target
+/// aspects, through the C++ tool `camera_conform_oracle.cpp`.
+#[test]
+fn conformed_windows_match_openusd_for_every_policy() {
+    let oracle: ConformOracle =
+        serde_json::from_str(include_str!("../../fixtures/camera_conform.json")).unwrap();
+    assert_eq!(oracle.version, layerstack_schemas::OPENUSD_VERSION);
+    assert_eq!(oracle.rows.len(), 150);
+    let (store, live) = support::scene(include_str!("../../fixtures/camera.usda"));
+    let scene = Scene::new(live.stage(), &store);
+    for row in oracle.rows {
+        let time = row.time.map_or(Time::Default, Time::at);
+        let camera = Camera::get(&scene, store.path(&row.path))
+            .unwrap()
+            .compute_camera(&mut XformCache::new(time))
+            .unwrap();
+        let policy = match row.policy.as_str() {
+            "matchVertically" => ConformWindowPolicy::MatchVertically,
+            "matchHorizontally" => ConformWindowPolicy::MatchHorizontally,
+            "fit" => ConformWindowPolicy::Fit,
+            "crop" => ConformWindowPolicy::Crop,
+            _ => ConformWindowPolicy::DontConform,
+        };
+        let conformed = camera.conform_window(policy, row.aspect);
+        eprintln!("{} {time:?} {} {}", row.path, row.policy, row.aspect);
+        assert_eq!(conformed.aperture(), row.aperture);
+        assert_eq!(conformed.aperture_offset(), camera.aperture_offset());
+        close(conformed.window(), row.window);
+        close(
+            conformed.view_matrix().iter().flatten().copied(),
+            row.view.into_iter().flatten(),
+        );
+        close(
+            conformed.projection_matrix().iter().flatten().copied(),
+            row.projection.into_iter().flatten(),
+        );
+    }
+}
+
+#[derive(Deserialize)]
+struct ExposureOracle {
+    version: String,
+    rows: Vec<ExposureRow>,
+}
+#[derive(Deserialize)]
+struct ExposureRow {
+    path: String,
+    time: Option<f64>,
+    exposure: Option<f32>,
+    f_stop: Option<f32>,
+    iso: Option<f32>,
+    responsivity: Option<f32>,
+    exposure_time: Option<f32>,
+    linear_exposure_scale: f32,
+}
+
+/// The exposure controls and `UsdGeomCamera::ComputeLinearExposureScale`;
+/// a control `Get` cannot read keeps the constant OpenUSD starts from.
+#[test]
+fn camera_exposure_matches_openusd() {
+    let oracle: ExposureOracle =
+        serde_json::from_str(include_str!("../../fixtures/camera_exposure.json")).unwrap();
+    assert_eq!(oracle.version, layerstack_schemas::OPENUSD_VERSION);
+    let (store, live) = support::scene(include_str!("../../fixtures/camera_exposure.usda"));
+    let scene = Scene::new(live.stage(), &store);
+    for row in oracle.rows {
+        let time = row.time.map_or(Time::Default, Time::at);
+        let camera = Camera::get(&scene, store.path(&row.path))
+            .unwrap()
+            .compute_camera(&mut XformCache::new(time))
+            .unwrap();
+        let exposure = camera.exposure();
+        let at = format!("{} {time:?}", row.path);
+        assert_eq!(exposure.exposure, row.exposure.unwrap_or(0.), "{at}");
+        assert_eq!(exposure.f_stop, row.f_stop.unwrap_or(1.), "{at}");
+        assert_eq!(exposure.iso, row.iso.unwrap_or(100.), "{at}");
+        assert_eq!(
+            exposure.responsivity,
+            row.responsivity.unwrap_or(1.),
+            "{at}"
+        );
+        assert_eq!(exposure.time, row.exposure_time.unwrap_or(1.), "{at}");
+        assert_eq!(exposure.linear_scale(), row.linear_exposure_scale, "{at}");
+    }
 }

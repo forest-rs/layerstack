@@ -1,0 +1,20 @@
+#usda 1.0
+# Copyright 2026 the LayerStack Authors
+# SPDX-License-Identifier: Apache-2.0 OR MIT
+
+def Camera "Defaults" {}
+def Camera "Metered" {
+    float exposure = 1.5
+    float exposure:fStop = 2.8
+    float exposure:iso = 400
+    float exposure:responsivity = 1.25
+    float exposure:time = 0.02
+}
+def Camera "Animated" {
+    float exposure.timeSamples = {0: -1, 10: 3}
+    float exposure:fStop.timeSamples = {0: 1.4, 10: 8}
+}
+def Camera "Blocked" {
+    float exposure = None
+    float exposure:fStop = None
+}

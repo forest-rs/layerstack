@@ -478,8 +478,9 @@ impl<B: Storage> StageDocument<B> {
             // asset is `assets/000001.png`; a set keeps its file name in a
             // directory, `assets/000002/color.<UDIM>.png`, so every tile
             // member is the pattern with its number.
-            let mut asset_names = BTreeMap::new();
-            let mut set_names = BTreeMap::new();
+            // Looked up only, so hashed.
+            let mut asset_names = HashMap::new();
+            let mut set_names = HashMap::new();
             let mut keys: Vec<(&str, bool)> = assets
                 .keys()
                 .map(|identifier| (identifier.as_str(), false))

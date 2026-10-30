@@ -109,11 +109,13 @@ pub struct UdimTiles {
 #[derive(Clone, Debug, Default)]
 pub struct UdimDiscovery {
     probing: bool,
-    uses: BTreeMap<(Option<LayerId>, String), Known>,
+    /// What each use, each directory's listing and each package found;
+    /// looked up only, so hashed.
+    uses: HashMap<(Option<LayerId>, String), Known>,
     sets: BTreeMap<String, BTreeSet<UdimTile>>,
     /// Sorted listings by directory ([`directory`]).
-    listings: BTreeMap<String, Arc<Listing>>,
-    archives: BTreeMap<String, Arc<PackageSnapshot>>,
+    listings: HashMap<String, Arc<Listing>>,
+    archives: HashMap<String, Arc<PackageSnapshot>>,
     work: UdimDiscoveryWork,
 }
 

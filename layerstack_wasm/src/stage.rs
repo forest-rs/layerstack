@@ -3592,6 +3592,16 @@ def Mesh "Rock" {
             .collect()
     }
 
+    /// The ids `layers` lists.
+    fn layer_rows(stage: &Stage) -> Vec<u64> {
+        stage.layers().as_list().unwrap()[2]
+            .as_list()
+            .unwrap()
+            .iter()
+            .map(row_id)
+            .collect()
+    }
+
     fn layer_named(stage: &Stage, identifier: &str) -> LayerId {
         stage
             .document()
@@ -3788,14 +3798,31 @@ def Mesh "Rock" {
         let row = rows.as_list().unwrap()[0].as_list().unwrap();
         assert_eq!(row[1], Wire::text("parts/ball.usda"));
         assert_eq!(row[2], Wire::Bool(false), "not read");
+        // As OpenUSD opens no layer for it (`SdfLayer::Find` gives none),
+        // its id names no layer until it is unmuted and read.
+        let reserved = row_id(&rows.as_list().unwrap()[0]);
+        assert!(!layer_rows(&stage).contains(&reserved));
+        assert_eq!(
+            stage.layer_dirty(reserved).unwrap_err().code,
+            "layer.unknown"
+        );
         let errors = stage.status().as_list().unwrap()[1].clone();
-        let codes: Vec<&str> = errors
+        let errors: Vec<&[Wire]> = errors
             .as_list()
             .unwrap()
             .iter()
-            .map(|error| error.as_list().unwrap()[0].as_text().unwrap())
+            .map(|error| error.as_list().unwrap())
             .collect();
-        assert_eq!(codes, ["composition.muted_asset"]);
+        assert_eq!(errors.len(), 1);
+        assert_eq!(errors[0][0], Wire::text("composition.muted_asset"));
+        assert_eq!(
+            errors[0][1],
+            Wire::text(
+                "/Ball: the reference authored at /Ball in @scene.usda@ targets \
+                 @parts/ball.usda@, which the stage mutes; it contributes nothing"
+            ),
+            "named by its identifier, not read"
+        );
         let heard = stage.take_changes(true);
         assert_eq!(muting(&heard).0.len(), 1, "heard muted while not read");
 
@@ -3807,9 +3834,16 @@ def Mesh "Rock" {
         stage.load_supplied().unwrap();
         assert!(!has_attribute(&stage, "/Ball.points"));
 
-        // Unmuted: read, as OpenUSD opens it on recomposing.
+        // Unmuted: read, as OpenUSD opens it on recomposing, under the id
+        // it was muted by.
         assert!(stage.mute_and_unmute_layers(&[], &ball).unwrap());
         assert!(has_attribute(&stage, "/Ball.points"));
+        assert!(layer_rows(&stage).contains(&reserved));
+        assert_eq!(
+            stage.document().identifier(LayerId(reserved)),
+            Some("parts/ball.usda")
+        );
+        assert_eq!(stage.layer_dirty(reserved), Ok(false));
         assert!(stage.unavailable().as_list().unwrap().is_empty());
         let codes = stage.status().as_list().unwrap()[1]
             .as_list()

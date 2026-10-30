@@ -884,9 +884,17 @@ export class Stage implements Disposable {
    * has one, a muted layer and a layer reached only through an arc
    * included ({@link Stage.layers}).
    *
+   * A layer muted by identifier before the stage read it has an id but
+   * no `Layer`: as OpenUSD never opens a muted layer (`SdfLayer::Find`
+   * gives none, and `UsdStage::GetLayerStack` leaves it out), the stage
+   * does not read it, and {@link Stage.mutedIdentifiers} lists it. Once
+   * unmuted and read ({@link Stage.resolve}), its id names the `Layer`
+   * read from it.
+   *
    * Throws `argument.invalid` when `id` is not a `bigint`, and
-   * `layer.unknown` when the stage holds no layer with it (an asset it
-   * has not read yet has none).
+   * `layer.unknown` when the stage holds no layer with it: an asset it
+   * has not read yet has none, a layer muted before it was read
+   * included.
    */
   layer(id: bigint): Layer {
     if (typeof id !== "bigint") {

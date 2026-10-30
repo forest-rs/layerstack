@@ -6,9 +6,9 @@
 //!
 //! `scripts/layer_muting_oracle.py` records, call by call, a stage on
 //! `fixtures/layer_muting/calls/scene.usda` muting and unmuting layers by
-//! identifier (some before anything opened them), adding references to
-//! them, and the muted set, notices, composed properties and muted-asset
-//! errors after each call; and, per case, a `UsdNamespaceEditor` move or
+//! identifier (some before anything opened them), adding references and a
+//! sublayer to them, and the muted set, notices, composed properties,
+//! muted-asset errors, layer stack and open layers after each call; and, per case, a `UsdNamespaceEditor` move or
 //! delete on `fixtures/layer_muting/namespace/scene.usda` with a layer
 //! muted, and every layer's text afterwards. See the script for the 26.11
 //! code each shows.
@@ -32,7 +32,8 @@ use std::path::{Path, PathBuf};
 
 use layerstack::{
     CompositionError, EditTarget, LayerId, LayerMuteError, LayerOffset, ListPosition, LiveStage,
-    NamespaceEdit, Reference, ReferenceTarget, Specifier, StageOptions, TargetPath, Transaction,
+    NamespaceEdit, Reference, ReferenceTarget, Specifier, StageOptions, SublayerEntry, TargetPath,
+    Transaction,
 };
 use layerstack_conformance::{usda_real::load_entry_usda, workspace_root};
 use layerstack_io::{Filesystem, StageDocument};
@@ -170,6 +171,37 @@ impl Calls {
         self.doc.apply(&edit).unwrap();
     }
 
+    /// Appends `asset` to the root layer's sublayers, as
+    /// `SdfLayer::subLayerPaths.append` does.
+    fn sublayer(&mut self, asset: &str) {
+        let root = self.doc.root_layer();
+        let count = self
+            .doc
+            .store()
+            .layer(root)
+            .map_or(0, |layer| layer.sublayers().len());
+        let mut edit = Transaction::new();
+        edit.insert_sublayer(
+            root,
+            count,
+            SublayerEntry::unresolved(asset, LayerOffset::IDENTITY),
+        );
+        self.doc.apply(&edit).unwrap();
+        self.doc.load_requested_assets().unwrap();
+    }
+
+    /// The stage's layer stack, strongest first, as
+    /// `UsdStage::GetLayerStack(false)` lists it: never a muted layer.
+    fn layer_stack(&self) -> Vec<String> {
+        self.doc
+            .stage()
+            .stage()
+            .layer_stack()
+            .iter()
+            .map(|&id| relative(&self.directory, self.doc.identifier(id).unwrap()))
+            .collect()
+    }
+
     fn properties(&self, path: &str) -> Json {
         let store = self.doc.store();
         let view = self.doc.view();
@@ -263,6 +295,7 @@ fn muting_by_identifier_replays_openusd_call_by_call() {
                 call[2].as_str().unwrap(),
                 call[3].as_str().unwrap(),
             ),
+            "sublayer" => calls.sublayer(call[1].as_str().unwrap()),
             other => panic!("unknown call {other}"),
         }
         assert_eq!(
@@ -300,12 +333,21 @@ fn muting_by_identifier_replays_openusd_call_by_call() {
             );
         }
         assert_eq!(calls.muted_assets(), step["muted_assets"], "{call}");
-        let opened = strings(&step["open"]).contains(&"lamp.usda".to_string());
         assert_eq!(
-            calls.holds("lamp.usda"),
-            opened,
-            "{call}: a layer muted before anything read it is not read"
+            json!(calls.layer_stack()),
+            step["layer_stack"],
+            "{call}: GetLayerStack"
         );
+        // OpenUSD also closes a muted layer nothing else holds; the
+        // document keeps its content (`StageDocument::mute_and_unmute_layers`).
+        for layer in ["lamp.usda", "c.usda"] {
+            let opened = strings(&step["open"]).contains(&layer.to_string());
+            assert_eq!(
+                calls.holds(layer),
+                opened,
+                "{call}: a layer muted before anything read it is not read"
+            );
+        }
     }
 }
 

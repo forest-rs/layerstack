@@ -326,6 +326,7 @@ stage objects and authored as `Edit`s, as OpenUSD's `UsdShade`,
 | `stage.material(path)` | `Material \| null`: `baseMaterial`, `surface(contexts?)` / `displacement` / `volume` (`TerminalSource`: `shader`, `context`, `sources`), `inputs()`, `outputs()`, `input(name)`, `output(name)` |
 | `stage.shader(path)` | `Shader \| null`: `id`, `implementationSource`, `sdrMetadata`, `inputs()`, `outputs()`, `input(name)`, `output(name)` |
 | `prim.inputs()`, `prim.outputs()`, `stage.port(path)` | `ShaderPort`: `name`, `kind`, `typeName`, `sdrMetadata`, `connections`, `invalidConnections`, `get(time?)`, `valueSources()` |
+| `stage.connectionSourceInfo(path)` | `ConnectionSourceInfo`: `prim`, `name`, `kind`, `typeName`, `source`, `valid`: the source a path names, checked against the stage |
 | `prim.geomSubsets({ elementType?, familyName?, time? })`, `subsetFamilyType(family)`, `validateSubsetFamily(family, elementType, { time? })` | `GeomSubset[]`, the family type, `SubsetProblem[]` |
 | `prim.coordSysBindings({ inherited? })` | `CoordSysBinding[]`: `name`, `relationship`, `target` |
 | `stage.skinning(path)`, `prim.skinning()` | `SkinningQuery \| null`: `skeleton`, `joints`, `jointMapping`, `elementSize`, `interpolation`, `rigid`, `method`, `animation`, `blendShapes`; `influences(time?)`, `interleavedInfluences(time?)`, `skinningTransforms(time?)`, `deformedPoints(time?)`, `deformedNormals(time?)` |
@@ -379,7 +380,11 @@ influences that do not fit the points with `skel.deformation`.
 `definePrim` the `Material` and its `Shader`, `setShaderInput` (the input is
 created with the value's type), `connectToSource` the material's
 `outputs:surface` to the shader's (a port that does not exist is created
-with `typeName`), `setSdrMetadata`, `setBaseMaterial`, then `bindMaterial`
+with `typeName`; an editor taking a source path from its user first asks
+`stage.connectionSourceInfo(path)`, as OpenUSD's
+`UsdShadeConnectionSourceInfo(stage, sourcePath)` does, whether it names a
+prim on the stage, an input or an output and an existing attribute's
+type), `setSdrMetadata`, `setBaseMaterial`, then `bindMaterial`
 (which applies `MaterialBindingAPI`, as `Apply(prim).Bind(material)`),
 `createMaterialSubset` and a `bindMaterial` of the new subset, and
 `bindCoordSys`. Schema-shaped edits see the prims, types and API schemas

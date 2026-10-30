@@ -16,6 +16,7 @@ import {
   decodeMaterialSubsets,
   decodeProblems,
   decodeSubsets,
+  readConnectionSourceInfo,
   readPort,
   readPorts,
 } from "./schemas.js";
@@ -46,6 +47,7 @@ import type {
   AssetUse,
   ChangeListener,
   Changes,
+  ConnectionSourceInfo,
   CoordSysBinding,
   Edit,
   Explanation,
@@ -145,6 +147,7 @@ export interface NativeStage extends Disposable {
   ports(path: string, kind: string): unknown;
   port(path: string): unknown;
   valueSources(path: string): unknown;
+  connectionSourceInfo(path: string): unknown;
   geomSubsets(path: string, element?: string | null, family?: string | null, time?: number | null): unknown;
   subsetFamilyType(path: string, family: string): string;
   validateSubsetFamily(path: string, element: string, family: string, time?: number | null): unknown;
@@ -1449,6 +1452,18 @@ export class Stage implements Disposable {
   /** The shading input or output at the property path `path` (`/Looks/Stone/Surface.inputs:roughness`), or `null`. */
   port(path: string): ShaderPort | null {
     return readPort(this, path);
+  }
+
+  /**
+   * The connection source the path text `path` names
+   * (`/Looks/Stone/Texture.outputs:rgb`), checked against the stage, as
+   * OpenUSD's `UsdShadeConnectionSourceInfo(stage, sourcePath)` reads it.
+   * Its `source` is what {@link Edit} `connectToSource` takes when it is
+   * `valid`. Text that is not a property path gives an empty info rather
+   * than throwing; see {@link ConnectionSourceInfo}.
+   */
+  connectionSourceInfo(path: string): ConnectionSourceInfo {
+    return readConnectionSourceInfo(this, path);
   }
 
   /**

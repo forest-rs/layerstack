@@ -410,6 +410,14 @@ describe("lights and cameras inside instances", () => {
       assert.deepEqual(diff.lightsChanged, [flame(0), flame(2)]);
       assert.equal(diff.work.lightsRead, 2);
       assert.deepEqual([...list.light(flame(2))!.position], [2, 3, 1]);
+      // The prototype's light itself: each instance's read again.
+      diff = edit([{ type: "setValue", path: "/World/Field/Protos/Torch/Flame.inputs:intensity", value: { type: "float", value: 40 } }]);
+      assert.deepEqual(diff.lightsChanged, [flame(0), flame(2)]);
+      assert.equal(diff.work.itemsRead, 0);
+      // The rig the lamps reference: every instance's bulb read again.
+      diff = edit([{ type: "setValue", path: "/LampRig/Bulb.inputs:intensity", value: { type: "float", value: 3 } }]);
+      assert.deepEqual(diff.lightsChanged, ["/World/Lamps/Dark/Bulb", "/World/Lamps/North/Bulb", "/World/Lamps/South/Bulb"]);
+      assert.deepEqual([diff.work.lightsRead, diff.work.camerasRead], [3, 0]);
     } finally {
       list.dispose();
       stage.free();

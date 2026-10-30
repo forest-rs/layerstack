@@ -1265,6 +1265,7 @@ def Xform "World" {
 
         let field = store.path("/World/Field");
         let positions = store.tokens().intern("positions");
+        let intensity = store.tokens().intern("inputs:intensity");
         let mut placing = Transaction::new();
         placing.set_default(
             EditTarget::for_layer(LayerId(1)).property(PropertyPath::new(field, positions)),
@@ -1289,6 +1290,39 @@ def Xform "World" {
         assert_eq!(diff.lights_changed, [placed(0), placed(2)]);
         assert_eq!(diff.work.lights_read, 2);
         assert_eq!(list.light(placed(2)).unwrap().position, [2., 3., 1.]);
+        // The prototype's light itself: each instance's read again.
+        let mut brighter = Transaction::new();
+        brighter.set_default(
+            EditTarget::for_layer(LayerId(1)).property(PropertyPath::new(flame, intensity)),
+            Value::Float(40.),
+        );
+        let applied = live.apply(&mut store, &brighter).unwrap();
+        let scene = Scene::new(live.stage(), &store);
+        let diff = list.apply_changes(&scene, &applied.changes);
+        assert_eq!(diff.lights_changed, [placed(0), placed(2)]);
+        assert_eq!(diff.work.lights_read, 2);
+        assert_eq!(diff.work.items_read, 0);
+
+        // The rig's bulb, edited where the instances reference it: every
+        // instance's light read again, and nothing else.
+        let rig_bulb = store.path("/LampRig/Bulb");
+        let mut brighter = Transaction::new();
+        brighter.set_default(
+            EditTarget::for_layer(LayerId(1)).property(PropertyPath::new(rig_bulb, intensity)),
+            Value::Float(3.),
+        );
+        let applied = live.apply(&mut store, &brighter).unwrap();
+        let scene = Scene::new(live.stage(), &store);
+        let diff = list.apply_changes(&scene, &applied.changes);
+        let bulbs: Vec<LightId> = ["North", "South", "Dark"]
+            .map(|lamp| LightId::from(store.path(&alloc::format!("/World/Lamps/{lamp}/Bulb"))))
+            .into_iter()
+            .collect::<alloc::collections::BTreeSet<_>>()
+            .into_iter()
+            .collect();
+        assert_eq!(diff.lights_changed, bulbs, "{:?}", applied.changes);
+        assert_eq!(diff.work.lights_read, 3);
+        assert_eq!(diff.work.cameras_read, 0);
 
         // A 2 x 1 quad scaled by 3 along Y: 6 square units.
         let panel = list.light(store.path("/World/Panel")).unwrap();

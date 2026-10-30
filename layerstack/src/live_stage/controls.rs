@@ -232,6 +232,10 @@ impl LiveStage {
             };
             let local = crate::LayerStack::gather_identifier(store, identifier);
             if changed.iter().any(|id| local.layers.contains(id)) {
+                // The stage is composed again whole; with nothing else to
+                // recompose, its report compares the stages.
+                self.layer_stack_diff =
+                    (roots.is_empty() && self.support_sources.is_empty()).then_some(false);
                 return None;
             }
             let stacks: Vec<_> = core::iter::once(self.root)

@@ -3,13 +3,17 @@
 
 //! Pure-Rust CRC-32 implementation.
 //!
-//! Uses the standard IEEE polynomial (0xEDB88320, bit-reflected) and a
-//! const-computed slicing-by-eight lookup tables to process eight bytes
-//! per checksum step.
+//! Uses the standard IEEE polynomial (0xEDB88320, bit-reflected) and
+//! slicing-by-eight lookup tables to process eight bytes per checksum
+//! step: computed while compiling, or on WebAssembly for each checksum.
 
-/// Const-computed CRC-32 lookup table (IEEE polynomial, reflected).
-const TABLE: [u32; 256] = {
-    let mut table = [0_u32; 256];
+/// The slicing-by-eight lookup tables of the IEEE polynomial (reflected).
+///
+/// Table 0 is the byte-at-a-time table; table n advances one input byte
+/// through n additional zero bytes. Together they apply the polynomial to
+/// eight bytes at once.
+const fn slicing_tables() -> [[u32; 256]; 8] {
+    let mut slices = [[0_u32; 256]; 8];
     let mut i = 0_u32;
     while i < 256 {
         let mut crc = i;
@@ -22,29 +26,28 @@ const TABLE: [u32; 256] = {
             }
             j += 1;
         }
-        table[i as usize] = crc;
+        slices[0][i as usize] = crc;
         i += 1;
     }
-    table
-};
-
-// Table n advances one input byte through n additional zero bytes.
-// Together these apply the same reflected IEEE polynomial to eight bytes
-// at once. Chunk decoding is explicit little-endian, independent of the host.
-const SLICES: [[u32; 256]; 8] = {
-    let mut slices = [TABLE; 8];
     let mut n = 1;
     while n < slices.len() {
         let mut i = 0;
         while i < 256 {
             let previous = slices[n - 1][i];
-            slices[n][i] = (previous >> 8) ^ TABLE[(previous & 0xff) as usize];
+            slices[n][i] = (previous >> 8) ^ slices[0][(previous & 0xff) as usize];
             i += 1;
         }
         n += 1;
     }
     slices
-};
+}
+
+/// The tables, computed while compiling. WebAssembly computes them for
+/// each checksum instead: as data they are 8 KiB of the module that does
+/// not compress, and computing them is a few thousand integer steps, next
+/// to checksumming a package member.
+#[cfg(not(target_family = "wasm"))]
+const SLICES: [[u32; 256]; 8] = slicing_tables();
 
 /// Computes the CRC-32 checksum of `data`.
 ///
@@ -55,23 +58,28 @@ const SLICES: [[u32; 256]; 8] = {
 /// assert_eq!(crc32(b""), 0);
 /// ```
 pub fn crc32(data: &[u8]) -> u32 {
+    #[cfg(not(target_family = "wasm"))]
+    let slices = &SLICES;
+    #[cfg(target_family = "wasm")]
+    let slices = &slicing_tables();
     let mut crc = 0xFFFF_FFFF_u32;
+    // Chunk decoding is explicit little-endian, independent of the host.
     let (chunks, remainder) = data.as_chunks::<8>();
     for chunk in chunks {
         let first =
             (crc ^ u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]])).to_le_bytes();
-        crc = SLICES[7][usize::from(first[0])]
-            ^ SLICES[6][usize::from(first[1])]
-            ^ SLICES[5][usize::from(first[2])]
-            ^ SLICES[4][usize::from(first[3])]
-            ^ SLICES[3][usize::from(chunk[4])]
-            ^ SLICES[2][usize::from(chunk[5])]
-            ^ SLICES[1][usize::from(chunk[6])]
-            ^ SLICES[0][usize::from(chunk[7])];
+        crc = slices[7][usize::from(first[0])]
+            ^ slices[6][usize::from(first[1])]
+            ^ slices[5][usize::from(first[2])]
+            ^ slices[4][usize::from(first[3])]
+            ^ slices[3][usize::from(chunk[4])]
+            ^ slices[2][usize::from(chunk[5])]
+            ^ slices[1][usize::from(chunk[6])]
+            ^ slices[0][usize::from(chunk[7])];
     }
     for &byte in remainder {
         let idx = ((crc ^ u32::from(byte)) & 0xFF) as usize;
-        crc = (crc >> 8) ^ TABLE[idx];
+        crc = (crc >> 8) ^ slices[0][idx];
     }
     !crc
 }

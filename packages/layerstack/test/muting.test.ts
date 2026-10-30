@@ -240,4 +240,25 @@ describe("layer muting", () => {
     assert.equal(stage.muteLayer(""), false, "the empty identifier names nothing");
     assert.equal(failure(() => stage.muteLayer(7 as unknown as string)).code, "argument.invalid");
   });
+
+  it("moves and deletes without reading or editing muted layers, as UsdNamespaceEditor does", async () => {
+    using stage = await resolved();
+    const sub = layerNamed(stage, "sub.usda");
+    stage.muteLayer(sub);
+    const moved = stage.move("/Ball", "/Bowl");
+    assert.deepEqual(moved.layers, [stage.root], "the muted sublayer is not edited");
+    assert.ok(stage.prim("/Bowl"));
+    assert.equal(stage.prim("/Ball"), null);
+    stage.unmuteLayer(sub);
+    assert.equal(stage.attribute("/Ball.serial")?.get()?.kind, "scalar", "its over stays at the old path");
+    assert.equal(stage.attribute("/Bowl.serial"), null);
+    moved.undo();
+
+    stage.muteLayer("parts/ball.usda");
+    const deleted = stage.delete("/Ball");
+    assert.equal(stage.prim("/Ball"), null);
+    assert.deepEqual(stage.mutedIdentifiers(), ["parts/ball.usda"]);
+    deleted.undo();
+    assert.ok(stage.prim("/Ball"));
+  });
 });

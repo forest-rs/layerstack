@@ -254,14 +254,42 @@ pub struct LightLink {
 }
 
 /// Which instance of a point instancer places a light: the instancer and
-/// the instance's position in its arrays (`protoIndices`, `positions`),
-/// masked instances included in the count.
+/// the instance's [`InstanceId`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct LightInstance {
     /// The `PointInstancer`.
     pub instancer: PathId,
-    /// The instance's position in the instancer's arrays.
-    pub index: u32,
+    /// The instance's identity in the instancer.
+    pub id: InstanceId,
+}
+
+/// A point instancer's instance as a draw list tells it apart: by its
+/// authored id when the instancer authors `ids`, by its position in the
+/// arrays otherwise.
+///
+/// `UsdGeomPointInstancer`'s `ids` exist for identity tracking: a
+/// simulation may reuse array positions as instances are born and die,
+/// and "the 64 bit integer ID of the particle at each index" follows the
+/// instance (`pxr/usd/usdGeom/pointInstancer.h`, "Varying Instance
+/// Identity over Time"). Keyed by it, reordering or compacting the arrays
+/// moves a light rather than removing one and adding another. Hydra does
+/// not track identity: `UsdImagingPointInstancerAdapter` hands a
+/// prototype's light (`GetLightParamValue`) to the instancer, whose
+/// instances are array positions (`HdInstancerTopologySchema`'s
+/// `instanceIndices` and `mask`), `ids` used only to compute the mask
+/// (`ComputeMaskAtTime`).
+///
+/// Ids repeated among the unmasked instances, which would give two
+/// instances one key, make the whole instancer keyed by position.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum InstanceId {
+    /// Its `ids` entry, when the instancer authors `ids` at the list's
+    /// time, each unmasked instance's distinct.
+    Authored(i64),
+    /// Its position in the instancer's arrays (`protoIndices`,
+    /// `positions`), masked instances included in the count, when the
+    /// instancer authors no `ids` (or repeats one).
+    Index(u32),
 }
 
 /// A light's identity in a [`crate::DrawList`]: its prim's path, and for a
@@ -822,7 +850,7 @@ mod tests {
     use layerstack_schemas::usd_lux::LightApiEdit;
     use layerstack_schemas::{Scene, SchemaEdit};
 
-    use super::{LightGeometry, LightKind, TargetPath, singular_values, size_factor};
+    use super::{LightGeometry, LightItem, LightKind, TargetPath, singular_values, size_factor};
     use crate::{DrawDiff, DrawList, DrawOptions};
 
     const SCENE: &str = r#"#usda 1.0
@@ -1169,7 +1197,7 @@ def Xform "World" {
     /// `MeshLightAPI` mesh and a `GeometryLight`.
     #[test]
     fn instanced_lights_match_openusd() {
-        use crate::{LightId, LightInstance};
+        use crate::{InstanceId, LightId, LightInstance};
         use serde_json::Value as Json;
         let oracle: Json = serde_json::from_str(include_str!(
             "../../layerstack_conformance/fixtures/stagehand_instanced_lights/oracle.json"
@@ -1182,7 +1210,7 @@ def Xform "World" {
         let (store, live, mut list) = instanced();
         let scene = Scene::new(live.stage(), &store);
         let rows = oracle["rows"].as_array().unwrap();
-        assert_eq!(rows.len(), 33);
+        assert_eq!(rows.len(), 39);
         for time in [Time::Default, Time::at(0.0), Time::at(10.0)] {
             if list.options().time != time {
                 list.set_time(&scene, time);
@@ -1205,7 +1233,13 @@ def Xform "World" {
                 } else {
                     let instance = row["instance"].as_object().map(|instance| LightInstance {
                         instancer: store.path(instance["instancer"].as_str().unwrap()),
-                        index: u32::try_from(instance["index"].as_u64().unwrap()).unwrap(),
+                        id: instance["id"].as_i64().map_or_else(
+                            || {
+                                let index = instance["index"].as_u64().unwrap();
+                                InstanceId::Index(u32::try_from(index).unwrap())
+                            },
+                            InstanceId::Authored,
+                        ),
                     });
                     let id = LightId { path, instance };
                     lights.push(id);
@@ -1245,7 +1279,7 @@ def Xform "World" {
     /// world-space area.
     #[test]
     fn instanced_lights_follow_their_instances() {
-        use crate::{LightId, LightInstance};
+        use crate::{InstanceId, LightId, LightInstance};
         let (mut store, mut live, mut list) = instanced();
         let north = store.path("/World/Lamps/North");
         let translate = store.tokens().intern("xformOp:translate");
@@ -1284,7 +1318,7 @@ def Xform "World" {
             path: flame,
             instance: Some(LightInstance {
                 instancer: field,
-                index,
+                id: InstanceId::Index(index),
             }),
         };
         assert_eq!(diff.lights_changed, [placed(0), placed(2)]);
@@ -1335,6 +1369,78 @@ def Xform "World" {
                 geometry: Some(store.path("/World/Panel"))
             }
         );
+    }
+
+    /// A point instancer authoring `ids` keys the lights it places by id:
+    /// reordering and compacting its arrays moves them, listed as changed,
+    /// never removed and added again; dropping an id removes its light.
+    #[test]
+    fn placed_lights_follow_their_ids() {
+        use crate::{InstanceId, LightId, LightInstance};
+        let (mut store, mut live, mut list) = instanced();
+        let swarm = store.path("/World/Swarm");
+        let firefly = store.path("/World/Swarm/Protos/Firefly");
+        let placed = |id| LightId {
+            path: firefly,
+            instance: Some(LightInstance {
+                instancer: swarm,
+                id: InstanceId::Authored(id),
+            }),
+        };
+        let listed: Vec<LightId> = list
+            .lights()
+            .map(LightItem::id)
+            .filter(|id| id.path == firefly)
+            .collect();
+        assert_eq!(listed, [placed(7), placed(11)], "id 3 is masked");
+        let arrays = |store: &mut InMemoryStore, ids: &[i64], positions: &[[f32; 3]]| {
+            let tokens = store.tokens();
+            let property = |name: &str| {
+                EditTarget::for_layer(LayerId(1))
+                    .property(PropertyPath::new(swarm, tokens.intern(name)))
+            };
+            let mut edit = Transaction::new();
+            edit.set_default(
+                property("protoIndices"),
+                Value::array(ids.iter().map(|_| Value::Int(0)).collect()),
+            );
+            edit.set_default(
+                property("ids"),
+                Value::array(ids.iter().map(|&id| Value::Int64(id)).collect()),
+            );
+            edit.set_default(
+                property("positions"),
+                Value::array(positions.iter().map(|&p| Value::Vec3f(p)).collect()),
+            );
+            edit
+        };
+
+        // Reversed, the masked instance last: the same instances, unmoved.
+        let edit = arrays(
+            &mut store,
+            &[11, 3, 7],
+            &[[2., 2., 0.], [1., 2., 0.], [0., 2., 0.]],
+        );
+        let applied = live.apply(&mut store, &edit).unwrap();
+        let diff = list.apply_changes(&Scene::new(live.stage(), &store), &applied.changes);
+        assert!(diff.lights_added.is_empty() && diff.lights_removed.is_empty());
+        assert!(diff.lights_changed.is_empty(), "{:?}", diff.lights_changed);
+
+        // Compacted (the masked instance dropped) and moved: two matrix
+        // changes.
+        let edit = arrays(&mut store, &[7, 11], &[[0., 2., 1.], [2., 2., 1.]]);
+        let applied = live.apply(&mut store, &edit).unwrap();
+        let diff = list.apply_changes(&Scene::new(live.stage(), &store), &applied.changes);
+        assert!(diff.lights_added.is_empty() && diff.lights_removed.is_empty());
+        assert_eq!(diff.lights_changed, [placed(7), placed(11)]);
+        assert_eq!(list.light(placed(11)).unwrap().position, [2., 2., 6.]);
+
+        // An id gone: its light removed.
+        let edit = arrays(&mut store, &[11], &[[2., 2., 1.]]);
+        let applied = live.apply(&mut store, &edit).unwrap();
+        let diff = list.apply_changes(&Scene::new(live.stage(), &store), &applied.changes);
+        assert_eq!(diff.lights_removed, [placed(7)]);
+        assert!(diff.lights_added.is_empty() && diff.lights_changed.is_empty());
     }
 
     /// Every light of `stagehand_lights/scene.usda` at four times against

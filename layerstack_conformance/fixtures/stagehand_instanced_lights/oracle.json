@@ -318,6 +318,7 @@
   {
    "camera": false,
    "instance": {
+    "id": null,
     "index": 0,
     "instancer": "/World/Field"
    },
@@ -356,6 +357,7 @@
   {
    "camera": false,
    "instance": {
+    "id": null,
     "index": 2,
     "instancer": "/World/Field"
    },
@@ -387,6 +389,84 @@
      2.0,
      3.0,
      0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "camera": false,
+   "instance": {
+    "id": 7,
+    "index": 0,
+    "instancer": "/World/Swarm"
+   },
+   "path": "/World/Swarm/Protos/Firefly",
+   "proxy": false,
+   "time": null,
+   "type": "SphereLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     2.0,
+     5.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "camera": false,
+   "instance": {
+    "id": 11,
+    "index": 2,
+    "instancer": "/World/Swarm"
+   },
+   "path": "/World/Swarm/Protos/Firefly",
+   "proxy": false,
+   "time": null,
+   "type": "SphereLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     2.0,
+     2.0,
+     5.0,
      1.0
     ]
    ]
@@ -709,6 +789,7 @@
   {
    "camera": false,
    "instance": {
+    "id": null,
     "index": 0,
     "instancer": "/World/Field"
    },
@@ -747,6 +828,7 @@
   {
    "camera": false,
    "instance": {
+    "id": null,
     "index": 2,
     "instancer": "/World/Field"
    },
@@ -778,6 +860,84 @@
      2.0,
      3.0,
      0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "camera": false,
+   "instance": {
+    "id": 7,
+    "index": 0,
+    "instancer": "/World/Swarm"
+   },
+   "path": "/World/Swarm/Protos/Firefly",
+   "proxy": false,
+   "time": 0.0,
+   "type": "SphereLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     2.0,
+     5.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "camera": false,
+   "instance": {
+    "id": 11,
+    "index": 2,
+    "instancer": "/World/Swarm"
+   },
+   "path": "/World/Swarm/Protos/Firefly",
+   "proxy": false,
+   "time": 0.0,
+   "type": "SphereLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     2.0,
+     2.0,
+     5.0,
      1.0
     ]
    ]
@@ -1100,6 +1260,7 @@
   {
    "camera": false,
    "instance": {
+    "id": null,
     "index": 0,
     "instancer": "/World/Field"
    },
@@ -1138,6 +1299,7 @@
   {
    "camera": false,
    "instance": {
+    "id": null,
     "index": 2,
     "instancer": "/World/Field"
    },
@@ -1169,6 +1331,84 @@
      2.0,
      3.0,
      0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "camera": false,
+   "instance": {
+    "id": 7,
+    "index": 0,
+    "instancer": "/World/Swarm"
+   },
+   "path": "/World/Swarm/Protos/Firefly",
+   "proxy": false,
+   "time": 10.0,
+   "type": "SphereLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     2.0,
+     5.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "camera": false,
+   "instance": {
+    "id": 11,
+    "index": 2,
+    "instancer": "/World/Swarm"
+   },
+   "path": "/World/Swarm/Protos/Firefly",
+   "proxy": false,
+   "time": 10.0,
+   "type": "SphereLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     2.0,
+     2.0,
+     5.0,
      1.0
     ]
    ]

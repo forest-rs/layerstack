@@ -10,7 +10,7 @@ use alloc::vec::Vec;
 
 use hashbrown::{HashMap, HashSet};
 use layerstack::{Changes, PathId, Time};
-use layerstack_schemas::point_instancer::InstanceTransformOptions;
+use layerstack_schemas::point_instancer::{InstanceTransform, InstanceTransformOptions};
 use layerstack_schemas::usd_geom::{
     Camera, GeomSubsetElementType, Imageable, ImageablePurpose, PointInstancer,
 };
@@ -20,7 +20,9 @@ use layerstack_schemas::{
 
 use crate::camera::{CAMERA_INPUTS, CameraItem};
 use crate::input::MeshInput;
-use crate::light::{LIGHT_INPUTS, LightId, LightInstance, LightItem, LightKind, read_light};
+use crate::light::{
+    InstanceId, LIGHT_INPUTS, LightId, LightInstance, LightItem, LightKind, read_light,
+};
 use crate::material::{MaterialItem, read_material};
 use crate::plan::{MeshBuffers, MeshOptions, MeshPlan};
 use crate::report::MeshReport;
@@ -1666,22 +1668,22 @@ impl DrawList {
                 let instances = view
                     .compute_instance_transforms(time, time, InstanceTransformOptions::default())
                     .ok()?;
+                let ids = instance_ids(&view, time, &instances);
                 Some(Placed {
                     prototypes: view
                         .prototypes()
                         .iter()
                         .map(|target| target.prim_path())
                         .collect(),
-                    instances: instances
+                    instances: ids
                         .into_iter()
-                        .map(|placed| {
-                            (count(placed.index), (placed.prototype_index, placed.matrix))
-                        })
+                        .zip(instances)
+                        .map(|(id, placed)| (id, (placed.prototype_index, placed.matrix)))
                         .collect(),
                 })
             })
             .as_ref()?;
-        let &(index, matrix) = placed.instances.get(&instance.index)?;
+        let &(index, matrix) = placed.instances.get(&instance.id)?;
         let prototype = *placed.prototypes.get(index)?;
         if !under(scene, path, prototype) {
             return None;
@@ -1863,15 +1865,13 @@ impl DrawList {
         let placed = view
             .compute_instance_transforms(time, time, InstanceTransformOptions::default())
             .unwrap_or_default();
-        for instance in &placed {
+        let ids = instance_ids(&view, time, &placed);
+        for (instance, &key) in placed.iter().zip(&ids) {
             for &(index, path, kind) in &lights {
                 if instance.prototype_index == index {
                     let id = LightId {
                         path,
-                        instance: Some(LightInstance {
-                            instancer,
-                            index: count(instance.index),
-                        }),
+                        instance: Some(LightInstance { instancer, id: key }),
                     };
                     found.lights.push((id, kind));
                 }
@@ -2313,11 +2313,35 @@ impl DrawList {
 /// computed once for all the lights they place.
 type Placements = HashMap<PathId, Option<Placed>>;
 
-/// A point instancer's prototypes and its unmasked instances, by position:
-/// their prototype index and matrix.
+/// A point instancer's prototypes and its unmasked instances, by
+/// [`InstanceId`]: their prototype index and matrix.
 struct Placed {
     prototypes: Vec<PathId>,
-    instances: HashMap<u32, (usize, [[f64; 4]; 4])>,
+    instances: HashMap<InstanceId, (usize, [[f64; 4]; 4])>,
+}
+
+/// The [`InstanceId`] of each of `placed`, a point instancer's unmasked
+/// instances at `time`: their `ids` entries when it authors `ids` and
+/// they are distinct, their array positions otherwise.
+fn instance_ids(
+    view: &PointInstancer<'_>,
+    time: Time,
+    placed: &[InstanceTransform],
+) -> Vec<InstanceId> {
+    let authored = view.ids_at(time).is_some() && {
+        let mut seen = HashSet::with_capacity(placed.len());
+        placed.iter().all(|instance| seen.insert(instance.id))
+    };
+    placed
+        .iter()
+        .map(|instance| {
+            if authored {
+                InstanceId::Authored(instance.id)
+            } else {
+                InstanceId::Index(count(instance.index))
+            }
+        })
+        .collect()
 }
 
 const IDENTITY: [[f64; 4]; 4] = [

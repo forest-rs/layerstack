@@ -78,6 +78,25 @@ def Xform "World"
         }
     }
 
+    def PointInstancer "Swarm"
+    {
+        rel prototypes = [</World/Swarm/Protos/Firefly>]
+        int[] protoIndices = [0, 0, 0]
+        int64[] ids = [7, 3, 11]
+        point3f[] positions = [(0, 2, 0), (1, 2, 0), (2, 2, 0)]
+        int64[] invisibleIds = [3]
+        double3 xformOp:translate = (0, 0, 5)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+
+        def Scope "Protos"
+        {
+            def SphereLight "Firefly"
+            {
+                float inputs:radius = 0.05
+            }
+        }
+    }
+
     def Mesh "Panel" (
         prepend apiSchemas = ["MeshLightAPI"]
     )

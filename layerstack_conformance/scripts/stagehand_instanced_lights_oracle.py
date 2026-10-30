@@ -14,7 +14,8 @@ at times 0 and 10, the lights and cameras a draw list lists:
 - for each light inside a `PointInstancer`'s prototype, once per instance
   `ComputeInstanceTransformsAtTime` keeps (the mask applied, the
   prototype's transform included): the instance's position in the
-  instancer's arrays, and the light's transform relative to its prototype
+  instancer's arrays, its `ids` entry when the instancer authors `ids`
+  (`invisibleIds` naming ids, not positions), and the light's transform relative to its prototype
   (`UsdGeomXformCache.ComputeRelativeTransform`) times the instance's
   times the instancer's `ComputeLocalToWorldTransform`, and the
   instancer's visibility.
@@ -73,6 +74,7 @@ for time in [None, 0.0, 10.0]:
             continue
         prototypes = instancer.GetPrototypesRel().GetTargets()
         indices = instancer.GetProtoIndicesAttr().Get(tc)
+        ids = instancer.GetIdsAttr().Get(tc)
         mask = instancer.ComputeMaskAtTime(tc)
         placed = instancer.ComputeInstanceTransformsAtTime(tc, tc)
         world = UsdGeom.Xformable(prim).ComputeLocalToWorldTransform(tc)
@@ -88,7 +90,11 @@ for time in [None, 0.0, 10.0]:
                 rows.append({
                     "time": time,
                     "path": str(inner.GetPath()),
-                    "instance": {"instancer": str(prim.GetPath()), "index": index},
+                    "instance": {
+                        "instancer": str(prim.GetPath()),
+                        "index": index,
+                        "id": None if ids is None else int(ids[index]),
+                    },
                     "proxy": False,
                     "type": str(inner.GetTypeName()),
                     "camera": False,

@@ -187,6 +187,21 @@ export interface StageStatus {
 }
 
 /** Options of {@link Layerstack.open}. */
+/**
+ * A concrete typed schema a stage registers when it opens, besides
+ * OpenUSD's: `name` is `base` (OpenUSD's, or one listed before it), with
+ * `base`'s properties and none of its own, as a codeless schema whose
+ * `generatedSchema.usda` declares `class "Name" (inherits = </Base>)` and
+ * nothing else. A prim of type `name` is `base` to every `IsA` read
+ * ({@link Prim.isA}), so it draws, bounds and binds as `base` does.
+ */
+export interface TypedSchema {
+  /** The schema's name: an identifier no registered schema has. */
+  readonly name: string;
+  /** The typed schema it derives from (`Mesh`, `Xform`). */
+  readonly base: string;
+}
+
 export interface OpenOptions {
   /**
    * Include the winning source layer, spec path and field in native resolved
@@ -237,6 +252,13 @@ export interface OpenOptions {
    * `editLayer: "root"` with it is `argument.invalid`.
    */
   readonly sessionLayer?: { readonly identifier: string; readonly bytes: Uint8Array };
+  /**
+   * Typed schemas to register besides OpenUSD's, each derived from a
+   * registered one ({@link TypedSchema}). A name that is not an
+   * identifier or is registered already, or a base that is not a
+   * registered typed schema, is `argument.invalid`.
+   */
+  readonly schemas?: readonly TypedSchema[];
   /**
    * How much work composition may do (`layerstack::CompositionLimits`), for
    * the open and every edit after: each limit `undefined` for the module's

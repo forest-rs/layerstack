@@ -174,6 +174,17 @@ impl<'a, T> Primvar<'a, T> {
     }
 }
 
+/// A texture coordinate set besides `st`: a `float2` primvar a material
+/// reads by name (`UsdPrimvarReader_float2`'s `varname`, such as `st1` or
+/// `uv`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct UvSetInput<'a> {
+    /// The primvar's name, without `primvars:`.
+    pub name: &'a str,
+    /// Its data.
+    pub primvar: Primvar<'a, [f32; 2]>,
+}
+
 /// A mesh's topology (`UsdGeomMesh`): what the triangulation depends on.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct MeshTopology<'a> {
@@ -245,6 +256,10 @@ pub struct MeshInput<'a> {
     pub st: Option<Primvar<'a, [f32; 2]>>,
     /// The display color (`primvars:displayColor`).
     pub display_color: Option<Primvar<'a, [f32; 3]>>,
+    /// Texture coordinate sets besides `st`, each drawn as a channel of
+    /// its own ([`crate::MeshBuffers::uv_sets`]), splitting vertices where
+    /// it differs; names repeated or `st` are drawn once, the first.
+    pub uv_sets: &'a [UvSetInput<'a>],
     /// The face subsets drawn as ranges, typically the `materialBind`
     /// family.
     pub subsets: FaceSubsets<'a>,

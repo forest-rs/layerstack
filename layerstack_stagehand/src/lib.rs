@@ -24,8 +24,9 @@
 //!   and fanned only if the ear clipper refuses it, which the report
 //!   notes. [`Triangulation::HydraFan`] fans everything, for parity.
 //! - **Vertices.** Corners are split where a face-varying or uniform
-//!   normal, `st` or `displayColor` differs, indexed primvars included,
-//!   and merged where they agree.
+//!   normal, `st`, `displayColor` or another texture coordinate set
+//!   ([`MeshInput::uv_sets`], each a [`UvSet`] channel of its own) differs,
+//!   indexed primvars included, and merged where they agree.
 //! - **Normals.** Authored normals (`vertex`, `varying`, `faceVarying`,
 //!   `uniform` or `constant`) are used; without them, smooth normals are
 //!   computed per point as Hydra computes them, or, with
@@ -128,7 +129,10 @@
 //! The draw list holds a [`MaterialItem`] for each material its items bind:
 //! the `UsdPreviewSurface` the material's surface output resolves to
 //! (through [`DrawOptions::render_contexts`], then the universal context),
-//! with each input a constant, a primvar or a [`MaterialTexture`] lookup,
+//! with each input a constant, a primvar or a [`MaterialTexture`] lookup
+//! (a texture reading a primvar other than `st`, `st1` say, gets its mesh
+//! that primvar as a [`UvSet`] channel, and the mesh is planned again when
+//! the sets its materials read change),
 //! connections followed through node graphs and material interface inputs,
 //! fallbacks from the shader definitions, texture files anchored to the
 //! layers authoring them ([`TextureFile`], with UDIM tiles listed by
@@ -174,6 +178,7 @@ pub use draw::{
 };
 pub use input::{
     FaceSubsets, Interpolation, MeshInput, MeshTopology, Orientation, Primvar, SubdivisionScheme,
+    UvSetInput,
 };
 #[cfg(feature = "stage")]
 pub use light::{
@@ -186,10 +191,10 @@ pub use material::{
     TextureChannel, TextureColorSpace, TextureCoordinates, TextureFile, TextureTransform,
     TextureWrap, UdimTileFile,
 };
-pub use plan::{DrawRange, MeshBuffers, MeshOptions, MeshPlan, PlanMismatch, SmoothNormals};
+pub use plan::{DrawRange, MeshBuffers, MeshOptions, MeshPlan, PlanMismatch, SmoothNormals, UvSet};
 pub use report::{
     ChannelState, DropReason, FaceNote, FaceNoteKind, MeshReport, NormalsSource, SubsetReport,
-    TopologyProblem,
+    TopologyProblem, UvSetReport,
 };
 pub use shapes::{Axis, Shape, Tessellation, tessellate};
 #[cfg(feature = "stage")]

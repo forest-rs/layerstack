@@ -16,8 +16,11 @@ use layerstack_schemas::usd_geom::{
 use layerstack_schemas::value::{read_float2_array_shared, read_float3_array_shared};
 use layerstack_schemas::{PrimView, Scene};
 
+use alloc::string::String;
+
 use crate::input::{
     FaceSubsets, Interpolation, MeshInput, MeshTopology, Orientation, Primvar, SubdivisionScheme,
+    UvSetInput,
 };
 use crate::shapes::{Axis, Shape};
 
@@ -67,6 +70,7 @@ pub struct StageMesh {
     normals: Option<Owned<[f32; 3]>>,
     st: Option<Owned<[f32; 2]>>,
     display_color: Option<Owned<[f32; 3]>>,
+    uv_sets: Vec<(String, Owned<[f32; 2]>)>,
     subset_paths: Vec<PathId>,
     subset_faces: Vec<i32>,
     subset_ends: Vec<u32>,
@@ -77,6 +81,21 @@ impl StageMesh {
     /// The mesh at `path` at `time`; `None` when there is no `Mesh` there.
     #[must_use]
     pub fn read(scene: &Scene<'_>, path: impl PrimPathArg, time: Time) -> Option<Self> {
+        Self::read_with_uv_sets(scene, path, time, &[])
+    }
+
+    /// The mesh at `path` at `time`, with the `float2` primvars `uv_sets`
+    /// names (`st1`, `uv`, ...) besides `st`: the texture coordinate sets
+    /// its materials read ([`Self::uv_sets`]). A name the mesh has no
+    /// primvar of is left out; one of another type is named in
+    /// [`Self::unread`] as `primvars:uvSets`.
+    #[must_use]
+    pub fn read_with_uv_sets(
+        scene: &Scene<'_>,
+        path: impl PrimPathArg,
+        time: Time,
+        uv_sets: &[String],
+    ) -> Option<Self> {
         let mesh = Mesh::get(scene, path)?;
         let prim = scene.prim_path(mesh.path())?;
         let topology = mesh.topology(time);
@@ -117,6 +136,15 @@ impl StageMesh {
             read_float3_array_shared,
         )
         .keep("primvars:displayColor", &mut unread);
+        let uv_sets = uv_sets
+            .iter()
+            .filter(|name| name.as_str() != "st")
+            .filter_map(|name| {
+                primvar(scene, prim, name, false, time, read_float2_array_shared)
+                    .keep("primvars:uvSets", &mut unread)
+                    .map(|set| (name.clone(), set))
+            })
+            .collect();
         let mut subset_paths = Vec::new();
         let mut subset_faces = Vec::new();
         let mut subset_ends = Vec::new();
@@ -135,6 +163,7 @@ impl StageMesh {
             normals,
             st,
             display_color,
+            uv_sets,
             subset_paths,
             subset_faces,
             subset_ends,
@@ -173,12 +202,31 @@ impl StageMesh {
         }
     }
 
-    /// Whether `other` holds the same `st` and colors, value for value:
-    /// then new points and normals alone refill the buffers.
+    /// Whether `other` holds the same `st`, colors and texture coordinate
+    /// sets, value for value: then new points and normals alone refill the
+    /// buffers.
     pub(crate) fn same_primvars(&self, other: &Self) -> bool {
         let (a, b) = (self.input(), other.input());
         same_primvar(a.st.as_ref(), b.st.as_ref())
             && same_primvar(a.display_color.as_ref(), b.display_color.as_ref())
+            && self.uv_sets.len() == other.uv_sets.len()
+            && self.uv_sets.iter().zip(&other.uv_sets).all(|(a, b)| {
+                a.0 == b.0 && same_primvar(Some(&a.1.primvar()), Some(&b.1.primvar()))
+            })
+    }
+
+    /// The texture coordinate sets read besides `st`, for
+    /// [`MeshInput::uv_sets`]:
+    /// `MeshInput { uv_sets: &mesh.uv_sets(), ..mesh.input() }`.
+    #[must_use]
+    pub fn uv_sets(&self) -> Vec<UvSetInput<'_>> {
+        self.uv_sets
+            .iter()
+            .map(|(name, set)| UvSetInput {
+                name,
+                primvar: set.primvar(),
+            })
+            .collect()
     }
 
     /// The mesh as a plan's input, borrowing the arrays.
@@ -198,6 +246,7 @@ impl StageMesh {
             normals: self.normals.as_ref().map(Owned::primvar),
             st: self.st.as_ref().map(Owned::primvar),
             display_color: self.display_color.as_ref().map(Owned::primvar),
+            uv_sets: &[],
             subsets: FaceSubsets {
                 faces: &self.subset_faces,
                 ends: &self.subset_ends,

@@ -5,17 +5,21 @@
 //! into instanced draws, kept up to date from change records.
 
 use alloc::collections::{BTreeMap, BTreeSet};
+use alloc::string::String;
 use alloc::vec::Vec;
 
 use hashbrown::{HashMap, HashSet};
 use layerstack::{Changes, PathId, Time};
 use layerstack_schemas::point_instancer::InstanceTransformOptions;
-use layerstack_schemas::usd_geom::{Camera, Imageable, ImageablePurpose, PointInstancer};
+use layerstack_schemas::usd_geom::{
+    Camera, GeomSubsetElementType, Imageable, ImageablePurpose, PointInstancer,
+};
 use layerstack_schemas::{
     BindingOptions, MaterialPurpose, PrimView, Scene, Visibility, XformCache, is_transform_property,
 };
 
 use crate::camera::{CAMERA_INPUTS, CameraItem};
+use crate::input::MeshInput;
 use crate::light::{LIGHT_INPUTS, LightId, LightInstance, LightItem, LightKind, read_light};
 use crate::material::{MaterialItem, read_material};
 use crate::plan::{MeshBuffers, MeshOptions, MeshPlan};
@@ -201,6 +205,9 @@ pub struct DrawBuffers {
     plan: Option<MeshPlan>,
     /// The mesh as last read, for a mesh.
     mesh: Option<StageMesh>,
+    /// The texture coordinate sets besides `st` the materials its items
+    /// bind read, sorted: those it was read with.
+    uv_sets: Vec<String>,
     /// Items drawing it.
     users: u32,
 }
@@ -276,7 +283,9 @@ pub struct DrawDiff {
     /// Buffers filled again by their kept plan: same indices, ranges and
     /// vertex count; positions, normals, `st` or colors rewritten.
     pub refilled: Vec<BufferKey>,
-    /// Buffers planned again: new indices, ranges and vertices.
+    /// Buffers planned again: new indices, ranges and vertices; also when
+    /// the texture coordinate sets its items' materials read change
+    /// ([`crate::MeshBuffers::uv_sets`]).
     pub rebuilt: Vec<BufferKey>,
     /// Buffers no item draws any more: dropped.
     pub freed: Vec<BufferKey>,
@@ -660,7 +669,8 @@ struct Entry {
 ///   the matrices of the items under the prim; `visibility`, `purpose` and
 ///   the purpose visibilities their visibility; `material:binding*` their
 ///   materials; `points`, `normals`, the topology, the drawn primvars
-///   (`primvars:normals`, `primvars:st`, `primvars:displayColor`), a
+///   (`primvars:normals`, `primvars:st`, `primvars:displayColor`, and the
+///   texture coordinate sets the items' materials read), a
 ///   shape's size attributes and a `GeomSubset`'s `indices` the geometry
 ///   of the items they belong to (a refill when the plan still fits, a new
 ///   plan when not). A point instancer's properties recompute its items'
@@ -737,6 +747,8 @@ struct Gather {
     cameras: Changed<PathId>,
     lights: Changed<LightId>,
     shading: Changed<PathId>,
+    /// Materials read in this diff, so none is read twice.
+    materials_read: BTreeSet<PathId>,
     work: DrawWork,
 }
 
@@ -1016,7 +1028,7 @@ impl DrawList {
                 .map_or(Dirty::ALL, |changed| {
                     let mut what = Dirty::default();
                     for field in &changed.fields {
-                        what.merge(property_dirt(tokens.resolve(field.name)));
+                        what.merge(self.property_dirt(tokens.resolve(field.name)));
                     }
                     what
                 });
@@ -1025,7 +1037,7 @@ impl DrawList {
         for property in &changes.resynced_properties {
             reached.push((
                 property.prim_path(),
-                property_dirt(tokens.resolve(property.property())),
+                self.property_dirt(tokens.resolve(property.property())),
             ));
         }
         let mut prototypes: BTreeSet<PathId> = BTreeSet::new();
@@ -1391,14 +1403,116 @@ impl DrawList {
             })
             .collect();
         for path in read {
-            self.read_material(scene, path, gather);
+            if !gather.materials_read.contains(&path) {
+                self.read_material(scene, path, gather);
+            }
         }
+        self.apply_to_uv_sets(scene, gather);
+    }
+
+    /// Plans again the meshes whose items' materials now read other
+    /// texture coordinate sets besides `st` than the mesh was read with:
+    /// listed in [`DrawDiff::rebuilt`]. Only when a material or an item's
+    /// binding changed, or an item came.
+    fn apply_to_uv_sets(&mut self, scene: &Scene<'_>, gather: &mut Gather) {
+        if gather.shading.added.is_empty()
+            && gather.shading.changed.is_empty()
+            && gather.shading.removed.is_empty()
+            && gather.materials.is_empty()
+            && gather.added.is_empty()
+        {
+            return;
+        }
+        let mut wanted: BTreeMap<BufferKey, BTreeSet<String>> = BTreeMap::new();
+        for entry in self.entries.values() {
+            if self
+                .buffers
+                .get(&entry.item.buffer)
+                .is_none_or(|buffer| buffer.mesh.is_none())
+            {
+                continue;
+            }
+            let names = wanted.entry(entry.item.buffer).or_default();
+            for material in entry
+                .item
+                .material
+                .iter()
+                .chain(entry.item.subset_materials.iter().flatten())
+            {
+                if let Some(held) = self.materials.get(material) {
+                    names.extend(uv_sets_read(&held.item));
+                }
+            }
+        }
+        let time = self.options.time;
+        for (key, names) in wanted {
+            let names: Vec<String> = names.into_iter().collect();
+            let Some(buffer) = self.buffers.get_mut(&key) else {
+                continue;
+            };
+            if buffer.uv_sets == names {
+                continue;
+            }
+            let Some(mesh) = StageMesh::read_with_uv_sets(scene, buffer.prim, time, &names) else {
+                continue;
+            };
+            let uv_sets = mesh.uv_sets();
+            let input = MeshInput {
+                uv_sets: &uv_sets,
+                ..mesh.input()
+            };
+            let plan = MeshPlan::new(&input, &self.options.mesh);
+            gather.work.triangulations += 1;
+            gather.rebuilt.insert(key);
+            buffer.buffers = plan.buffers(&input).expect("its own input");
+            buffer.revision += 1;
+            buffer.subsets = mesh.subset_paths().to_vec();
+            buffer.plan = Some(plan);
+            drop(uv_sets);
+            buffer.mesh = Some(mesh);
+            buffer.uv_sets = names;
+        }
+    }
+
+    /// The texture coordinate sets besides `st` the materials bound to a
+    /// new mesh item read: its own, or its prototype group's, and its
+    /// `materialBind` subsets'. A material not held yet is read now, once
+    /// for the diff, so the mesh is planned once with them.
+    fn uv_sets_for(
+        &mut self,
+        scene: &Scene<'_>,
+        item: &DrawItem,
+        gather: &mut Gather,
+    ) -> Vec<String> {
+        let mut materials = alloc::vec![match item.source {
+            ItemSource::Prototype { material, .. } => material,
+            _ => bound_material(scene, item.prim),
+        }];
+        if let Some(imageable) = Imageable::get(scene, item.prim) {
+            for subset in
+                imageable.geom_subsets(Some(&GeomSubsetElementType::Face), Some("materialBind"))
+            {
+                materials.push(bound_material(scene, subset.path()));
+            }
+        }
+        let mut names = BTreeSet::new();
+        for material in materials.into_iter().flatten() {
+            if !self.materials.contains_key(&material) && !gather.materials_read.contains(&material)
+            {
+                self.read_material(scene, material, gather);
+            }
+            if let Some(held) = self.materials.get(&material) {
+                names.extend(uv_sets_read(&held.item));
+            }
+        }
+        names.into_iter().collect()
     }
 
     /// Reads the material at `path` again and records whether it changed;
     /// drops it when it is no longer a material.
     fn read_material(&mut self, scene: &Scene<'_>, path: PathId, gather: &mut Gather) {
         gather.work.materials_read += 1;
+        gather.materials_read.insert(path);
         let Some(read) =
             read_material(scene, path, self.options.time, self.options.render_contexts)
         else {
@@ -1951,6 +2065,11 @@ impl DrawList {
                         .subsets
                         .iter()
                         .any(|&subset| inputs_might_vary(scene, subset, SUBSET_INPUTS))
+                        || buffer.uv_sets.iter().any(|name| {
+                            let primvar = alloc::format!("primvars:{name}");
+                            let indices = alloc::format!("primvars:{name}:indices");
+                            inputs_might_vary(scene, item.prim, &[&primvar, &indices])
+                        })
                 });
         }
 
@@ -1999,6 +2118,21 @@ impl DrawList {
         true
     }
 
+    /// What a property's change may change of the items under its prim
+    /// ([`property_dirt`]); a texture coordinate set a buffer is drawn
+    /// with (`primvars:<name>` and its `:indices`) is geometry too.
+    fn property_dirt(&self, name: &str) -> Dirty {
+        let mut dirty = property_dirt(name);
+        if let Some(set) = name.strip_prefix("primvars:") {
+            let set = set.strip_suffix(":indices").unwrap_or(set);
+            dirty.geometry |= self
+                .buffers
+                .values()
+                .any(|buffer| buffer.uv_sets.iter().any(|drawn| drawn == set));
+        }
+        dirty
+    }
+
     /// Whether the prim's local-to-world transform might differ at another
     /// time ([`XformCache::local_to_world_might_vary`]).
     fn world_might_vary(&mut self, scene: &Scene<'_>, path: PathId) -> bool {
@@ -2019,17 +2153,26 @@ impl DrawList {
         let time = self.options.time;
         match gprim(scene, item.prim)? {
             Gprim::Mesh => {
-                let mesh = StageMesh::read(scene, item.prim, time)?;
+                let uv_sets = match self.mesh_buffers.get(&item.prim) {
+                    Some(key) => self.buffers[key].uv_sets.clone(),
+                    None => self.uv_sets_for(scene, item, gather),
+                };
+                let mesh = StageMesh::read_with_uv_sets(scene, item.prim, time, &uv_sets)?;
+                let sets = mesh.uv_sets();
                 if let Some(&key) = self.mesh_buffers.get(&item.prim) {
                     let buffer = self.buffers.get_mut(&key).expect("a kept buffer");
                     let old = buffer.mesh.as_ref().expect("a mesh's buffer");
                     let plan = buffer.plan.as_ref().expect("a mesh's buffer");
-                    let input = mesh.input();
+                    let input = MeshInput {
+                        uv_sets: &sets,
+                        ..mesh.input()
+                    };
                     let same_shape = plan.same_topology(&input.topology)
                         && old.topology().subdivision_scheme == mesh.topology().subdivision_scheme
                         && old.input().subsets == input.subsets;
                     if same_shape && old.same_values(&mesh) {
                         gather.work.buffers_reused += 1;
+                        drop(sets);
                         buffer.mesh = Some(mesh);
                         return Some(key);
                     }
@@ -2047,6 +2190,7 @@ impl DrawList {
                             buffer.buffers = filled;
                             buffer.revision += 1;
                             buffer.subsets = mesh.subset_paths().to_vec();
+                            drop(sets);
                             buffer.mesh = Some(mesh);
                             return Some(key);
                         }
@@ -2058,10 +2202,14 @@ impl DrawList {
                     buffer.revision += 1;
                     buffer.subsets = mesh.subset_paths().to_vec();
                     buffer.plan = Some(plan);
+                    drop(sets);
                     buffer.mesh = Some(mesh);
                     return Some(key);
                 }
-                let input = mesh.input();
+                let input = MeshInput {
+                    uv_sets: &sets,
+                    ..mesh.input()
+                };
                 let plan = MeshPlan::new(&input, &self.options.mesh);
                 gather.work.triangulations += 1;
                 let key = self.next_key();
@@ -2076,10 +2224,15 @@ impl DrawList {
                         revision: 0,
                         shape: None,
                         plan: Some(plan),
-                        mesh: Some(mesh),
+                        mesh: None,
+                        uv_sets,
                         users: 0,
                     },
                 );
+                drop(sets);
+                if let Some(buffer) = self.buffers.get_mut(&key) {
+                    buffer.mesh = Some(mesh);
+                }
                 self.mesh_buffers.insert(item.prim, key);
                 Some(key)
             }
@@ -2106,6 +2259,7 @@ impl DrawList {
                         shape: Some(shape),
                         plan: None,
                         mesh: None,
+                        uv_sets: Vec::new(),
                         users: 0,
                     },
                 );
@@ -2182,6 +2336,16 @@ fn multiply(a: &[[f64; 4]; 4], b: &[[f64; 4]; 4]) -> [[f64; 4]; 4] {
         }
     }
     out
+}
+
+/// The texture coordinate sets besides `st` a material's textures read
+/// (their `UsdPrimvarReader_float2`'s `varname`).
+fn uv_sets_read(material: &MaterialItem) -> impl Iterator<Item = String> + '_ {
+    material
+        .textures
+        .iter()
+        .filter_map(|texture| texture.coordinates.primvar.clone())
+        .filter(|name| name != "st")
 }
 
 /// The path an item is discovered at.
@@ -2706,6 +2870,125 @@ def Xform "Lab" {
                 "{key}"
             );
         }
+    }
+
+    /// A quad authoring `st` and `st1`, whose material reads `st1`
+    /// (`UsdPrimvarReader_float2` `varname`), split where either differs.
+    const UV_SETS: &str = r#"#usda 1.0
+def Mesh "Plate" (
+    prepend apiSchemas = ["MaterialBindingAPI"]
+) {
+    int[] faceVertexCounts = [3, 3]
+    int[] faceVertexIndices = [0, 1, 2, 0, 2, 3]
+    point3f[] points = [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0)]
+    texCoord2f[] primvars:st = [(0, 0), (1, 0), (1, 1), (0, 1)] (
+        interpolation = "vertex"
+    )
+    texCoord2f[] primvars:st1 = [(0, 0), (2, 0), (2, 2), (0, 2), (5, 5), (5, 5)] (
+        interpolation = "faceVarying"
+    )
+    rel material:binding = </Looks/Tiled>
+}
+def Scope "Looks" {
+    def Material "Tiled" {
+        token outputs:surface.connect = </Looks/Tiled/Surface.outputs:surface>
+        token inputs:coordinates = "st1"
+        def Shader "Surface" {
+            uniform token info:id = "UsdPreviewSurface"
+            color3f inputs:diffuseColor.connect = </Looks/Tiled/Texture.outputs:rgb>
+            token outputs:surface
+        }
+        def Shader "Texture" {
+            uniform token info:id = "UsdUVTexture"
+            asset inputs:file = @tile.png@
+            float2 inputs:st.connect = </Looks/Tiled/Reader.outputs:result>
+            float3 outputs:rgb
+        }
+        def Shader "Reader" {
+            uniform token info:id = "UsdPrimvarReader_float2"
+            string inputs:varname.connect = </Looks/Tiled.inputs:coordinates>
+            float2 outputs:result
+        }
+    }
+}
+"#;
+
+    /// A material reading `st1` gets the mesh a buffer channel of its own,
+    /// planned once; making it read `st` instead plans the mesh again
+    /// without it, listed as rebuilt.
+    #[test]
+    fn a_material_reading_another_uv_set_gets_its_channel() {
+        let mut store = InMemoryStore::default();
+        let read = layerstack_usda::read_usda(
+            UV_SETS,
+            LayerId(1),
+            store.tokens(),
+            store.paths(),
+            &mut NoAssets,
+        );
+        assert!(
+            !read.has_errors(),
+            "{:?}",
+            read.diagnostics().collect::<Vec<_>>()
+        );
+        store.insert_layer(read.emitted.layer);
+        let schemas = Arc::new(layerstack_schemas::openusd(store.tokens()));
+        let mut live = LiveStage::compose(
+            &mut store,
+            LayerId(1),
+            StageOptions {
+                schemas: Some(schemas),
+                ..StageOptions::default()
+            },
+        );
+        let mut list = DrawList::new(DrawOptions::default());
+        let diff = list.refresh(&Scene::new(live.stage(), &store));
+        assert_eq!(diff.work.triangulations, 1, "planned once, with st1");
+        assert_eq!(diff.work.materials_read, 1, "read once");
+        let item = list.items().next().unwrap();
+        let buffers = &list.buffers(item.buffer).unwrap().buffers;
+        assert_eq!(buffers.uv_sets.len(), 1);
+        assert_eq!(buffers.uv_sets[0].name, "st1");
+        // The second face's st1 differs at the shared corners: six
+        // vertices, not four.
+        assert_eq!(buffers.positions.len(), 6);
+        let at = |position: [f32; 3], face: u32| {
+            (0..buffers.positions.len())
+                .find(|&v| {
+                    buffers.positions[v] == position
+                        && buffers.indices[3 * face as usize..3 * face as usize + 3]
+                            .contains(&u32::try_from(v).unwrap())
+                })
+                .unwrap()
+        };
+        assert_eq!(buffers.uv_sets[0].values[at([1., 1., 0.], 0)], [2., 2.]);
+        assert_eq!(buffers.uv_sets[0].values[at([1., 1., 0.], 1)], [5., 5.]);
+        assert_eq!(
+            buffers.st.as_ref().unwrap()[at([1., 1., 0.], 1)],
+            [1., 1.],
+            "st drawn as well"
+        );
+        let report = list.buffers(item.buffer).unwrap().report().unwrap();
+        assert_eq!(report.uv_sets.len(), 1);
+
+        let key = item.buffer;
+        let coordinates = store.tokens().intern("inputs:coordinates");
+        let mut back = Transaction::new();
+        back.set_default(
+            EditTarget::for_layer(LayerId(1)).property(layerstack::PropertyPath::new(
+                store.path("/Looks/Tiled"),
+                coordinates,
+            )),
+            Value::Token(store.tokens().intern("st")),
+        );
+        let applied = live.apply(&mut store, &back).unwrap();
+        let diff = list.apply_changes(&Scene::new(live.stage(), &store), &applied.changes);
+        assert_eq!(diff.materials_changed, [store.path("/Looks/Tiled")]);
+        assert_eq!(diff.rebuilt, [key]);
+        assert_eq!(diff.work.triangulations, 1);
+        let buffers = &list.buffers(key).unwrap().buffers;
+        assert!(buffers.uv_sets.is_empty());
+        assert_eq!(buffers.positions.len(), 4);
     }
 
     #[test]

@@ -254,6 +254,11 @@ const checks: ((session: Session) => void)[] = [
       "the receipt names both",
     );
     assert.equal(current.undoStack.at(-1)?.label, `move ${sample.robot} to ${sample.rover}`);
+    assert.deepEqual(
+      current.undoStack.at(-1)?.receipt.unrepaired.map((left) => `${left.layer.identifier} ${left.spec} ${left.field} ${left.path}`),
+      [`${sample.root} ${sample.rover}{finish=chrome}.mirrors targets ${sample.robot}`],
+      "the receipt names the path the unselected chrome finish keeps",
+    );
     const stale = throughReference;
     assert.ok(stale !== null);
     assert.equal(code(() => stale.mapPath(sample.height)), "target.stale", "no arc of the renamed prim maps it");

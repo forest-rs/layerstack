@@ -267,6 +267,10 @@ button:disabled {
   font-size: 12px;
 }
 
+.detail.unrepaired {
+  color: var(--warn);
+}
+
 .badge {
   padding: 0 5px;
   border: 1px solid var(--line);

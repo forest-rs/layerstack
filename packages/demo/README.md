@@ -41,8 +41,11 @@ The script runs twelve steps, one button each:
    specs inside its variants move with it, so the painted color now comes
    from `/World/Rover{finish=painted}`, and the lamp's `aim` in the
    sublayer is repaired, so one rename edits two layers. It is one entry
-   on the undo stack. The reference's edit target from step 8 is stale now
-   (`target.stale`): no arc of `/World/Robot` maps it.
+   on the undo stack, which shows the path the rename leaves naming
+   `/World/Robot` (`EditReceipt.unrepaired`): the unselected chrome
+   finish's `mirrors`, which OpenUSD does not repair either. The
+   reference's edit target from step 8 is stale now (`target.stale`): no
+   arc of `/World/Robot` maps it.
 10. Read the lamp's `flicker` at time 30: the explanation names the time
     samples as the source, held from 24, where a block is authored, so
     there is no value. At time 6 it reads 0.5, between the samples at 0

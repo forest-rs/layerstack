@@ -1,0 +1,17 @@
+#usda 1.0
+(
+    subLayers = [
+        @a.usda@,
+        @b.usda@
+    ]
+)
+
+def "Ball" (
+    prepend references = @parts/ball.usda@</Ball>
+)
+{
+}
+
+def "Lamp"
+{
+}

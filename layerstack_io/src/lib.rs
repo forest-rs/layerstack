@@ -101,6 +101,7 @@ mod apply;
 pub use apply::ApplyError;
 pub mod format;
 mod layer_ids;
+mod muting;
 pub use format::{
     FORMAT_ARGS_DELIMITER, FileFormat, FileFormats, FormatArgs, FormatRegistrationError,
     FormatSource,
@@ -1207,6 +1208,7 @@ impl<B: Storage> StageDocument<B> {
             );
             reader.variant_arcs = self.variant_arcs;
             reader.formats = self.formats.clone();
+            reader.muted.clone_from(&self.stage.options().muted_layers);
             for (anchor, asset) in requests {
                 let result = reader.load(
                     &asset,
@@ -1277,6 +1279,7 @@ impl<B: Storage> StageDocument<B> {
         );
         reader.variant_arcs = self.variant_arcs;
         reader.formats = self.formats.clone();
+        reader.muted.clone_from(&self.stage.options().muted_layers);
         let resolved = reader.load(asset, anchor, self.store.tokens(), self.store.paths())?;
         let id = resolved.layer_id;
         if let Some(anchor) = anchor {
@@ -1751,6 +1754,10 @@ struct Reader<'a, B> {
     /// on afterwards ([`StageOptions::threads`]); one unless an open sets
     /// them.
     threads: Threads,
+    /// The layers the document's stage mutes, which the operation does not
+    /// read: an asset resolving to one it has not read binds to its id,
+    /// so the arc composes muted ([`Reader::unread_muted`]).
+    muted: BTreeSet<LayerId>,
 }
 impl<'a, B: Storage> Reader<'a, B> {
     fn new(
@@ -1777,7 +1784,16 @@ impl<'a, B: Storage> Reader<'a, B> {
             variant_arcs: VariantArcLoading::All,
             formats: FileFormats::default(),
             threads: Threads::new(1),
+            muted: BTreeSet::new(),
         }
+    }
+    /// Whether `id` is a layer the stage mutes that this document has not
+    /// read: OpenUSD checks `Pcp_MutedLayers::IsLayerMuted` before it
+    /// opens a sublayer (`PcpLayerStack::_BuildLayerStack`) or the target
+    /// of a reference or payload (`_EvalRefOrPayloadArcs`), so a layer
+    /// muted before anything read it is never read while it stays muted.
+    fn unread_muted(&self, id: LayerId) -> bool {
+        self.muted.contains(&id) && !self.catalog.states.contains_key(&id)
     }
     fn resolve_expressions(
         &mut self,
@@ -2355,7 +2371,7 @@ impl<B: Storage> Reader<'_, B> {
             "{}[{member}]",
             self.catalog.package_identifier(package)
         ));
-        if self.catalog.states.contains_key(&id) {
+        if self.catalog.states.contains_key(&id) || self.unread_muted(id) {
             return Ok(ResolvedAsset {
                 layer_id: id,
                 resolved_path: identifier,
@@ -2435,7 +2451,7 @@ impl<B: Storage> Reader<'_, B> {
             );
             id
         };
-        if self.catalog.states.contains_key(&id) {
+        if self.catalog.states.contains_key(&id) || self.unread_muted(id) {
             return Ok(ResolvedAsset {
                 layer_id: id,
                 resolved_path: identifier,
@@ -2479,6 +2495,18 @@ impl<B: Storage> AssetResolver for Reader<'_, B> {
         paths: &PathInterner,
     ) -> Result<ResolvedAsset, AssetResolveError> {
         let result = self.load(asset, anchor, tokens, paths);
+        // An asset naming a muted layer not read is bound to its id with
+        // its arc left deferred, so the binding, which unmuting forgets
+        // ([`StageDocument::mute_and_unmute_layers`]), decides where it
+        // composes.
+        if let (Ok(resolved), Some(anchor)) = (&result, anchor)
+            && resolved.layer.is_none()
+            && self.unread_muted(resolved.layer_id)
+        {
+            let id = resolved.layer_id;
+            self.bind(anchor, asset, id);
+            return Err(AssetResolveError::Unavailable);
+        }
         // An asset storage cannot supply yet is neither loaded nor missing:
         // it stays unbound, and its arc deferred, so composition asks for
         // it again.

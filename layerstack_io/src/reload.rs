@@ -213,6 +213,7 @@ impl<B: Storage> StageDocument<B> {
         reader.variant_arcs = self.variant_arcs;
         reader.formats = self.formats.clone();
         reader.reachable_only = root_closure;
+        reader.muted.clone_from(&self.stage.options().muted_layers);
         for id in roots {
             let identifier = reader.catalog.sources[&id].identifier.clone();
             let result = reader.load(&identifier, None, store.tokens(), store.paths())?;

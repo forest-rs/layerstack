@@ -4983,6 +4983,37 @@ impl InMemoryStore {
         }
     }
 
+    /// Forgets every asset path bound to the layer `layer`, so composition
+    /// asks for each again ([`crate::Stage::asset_requests`]). Each anchor
+    /// that bound one records a structural change, as a changed binding
+    /// does ([`Self::insert_asset_layer`]), so a live stage recomposes what
+    /// those arcs reach.
+    ///
+    /// A host binds the assets of a layer the stage mutes before it is read
+    /// to that layer's id, so their arcs compose muted without reading it,
+    /// as OpenUSD composes them without opening it; once the layer is
+    /// unmuted, forgetting them asks for the layer to be read.
+    pub fn forget_assets_bound_to(&mut self, layer: LayerId) {
+        for (anchor, assets) in &mut self.asset_layers {
+            let forgotten: Vec<Arc<str>> = assets
+                .iter()
+                .filter(|(_, bound)| **bound == layer)
+                .map(|(asset, _)| Arc::clone(asset))
+                .collect();
+            if forgotten.is_empty() {
+                continue;
+            }
+            for asset in &forgotten {
+                assets.remove(asset);
+            }
+            if let Some(source) = self.layers.get_mut(anchor) {
+                let forgotten: Vec<&str> = forgotten.iter().map(|asset| &**asset).collect();
+                let paths = source.deferred_arc_paths(&forgotten);
+                source.record_change(true, paths);
+            }
+        }
+    }
+
     /// Records that `asset_path`, anchored to the layer `anchor`, resolves
     /// to the layer `layer` (see [`LayerStore::asset_layer`]).
     ///

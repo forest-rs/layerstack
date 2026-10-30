@@ -215,6 +215,10 @@ pub struct DrawWork {
     pub items_read: u32,
     /// Items no change reached: nothing of them was read.
     pub items_untouched: u32,
+    /// Items [`DrawList::set_time`] did not read because nothing they read
+    /// might differ at another time; counted in [`Self::items_untouched`]
+    /// too.
+    pub items_time_invariant: u32,
     /// Instance world matrices computed.
     pub matrices_computed: u32,
     /// Local transforms the transform cache computed (the rest it reused).
@@ -327,37 +331,94 @@ fn property_dirt(name: &str) -> Dirty {
         dirty.visibility = true;
     } else if name.starts_with("material:binding") {
         dirty.material = true;
-    } else if matches!(
-        name,
-        "points"
-            | "normals"
-            | "faceVertexCounts"
-            | "faceVertexIndices"
-            | "holeIndices"
-            | "orientation"
-            | "subdivisionScheme"
-            | "size"
-            | "radius"
-            | "radiusTop"
-            | "radiusBottom"
-            | "height"
-            | "width"
-            | "length"
-            | "axis"
-            // A `GeomSubset`'s, read by its mesh.
-            | "indices"
-            | "elementType"
-            | "familyName"
-    ) || ["primvars:normals", "primvars:st", "primvars:displayColor"]
-        .iter()
-        .any(|primvar| {
-            name.strip_prefix(primvar)
-                .is_some_and(|rest| rest.is_empty() || rest == ":indices")
-        })
-    {
+    } else if GEOMETRY_INPUTS.contains(&name) || SUBSET_INPUTS.contains(&name) {
         dirty.geometry = true;
     }
     dirty
+}
+
+/// The attributes a mesh's or a shape's buffer is read from: points,
+/// normals, topology, the drawn primvars and their indices, and a shape's
+/// size attributes.
+const GEOMETRY_INPUTS: &[&str] = &[
+    "points",
+    "normals",
+    "faceVertexCounts",
+    "faceVertexIndices",
+    "holeIndices",
+    "orientation",
+    "subdivisionScheme",
+    "size",
+    "radius",
+    "radiusTop",
+    "radiusBottom",
+    "height",
+    "width",
+    "length",
+    "axis",
+    "primvars:normals",
+    "primvars:normals:indices",
+    "primvars:st",
+    "primvars:st:indices",
+    "primvars:displayColor",
+    "primvars:displayColor:indices",
+];
+
+/// A `GeomSubset`'s attributes, read by its mesh.
+const SUBSET_INPUTS: &[&str] = &["indices", "elementType", "familyName"];
+
+/// The attributes a `PointInstancer` places its instances from
+/// (`UsdGeomPointInstancer::ComputeInstanceTransformsAtTime`).
+const INSTANCER_INPUTS: &[&str] = &[
+    "protoIndices",
+    "ids",
+    "positions",
+    "orientations",
+    "orientationsf",
+    "scales",
+    "velocities",
+    "accelerations",
+    "angularVelocities",
+    "invisibleIds",
+];
+
+/// Whether any of the prim's attributes `names` might hold another value
+/// at another time, the default time included: time samples (even one), a
+/// spline or value clips supply it.
+/// OpenUSD: `UsdAttributeQuery::ValueSourceMightBeTimeVarying`.
+fn inputs_might_vary(scene: &Scene<'_>, path: PathId, names: &[&str]) -> bool {
+    scene.stage().prim(path, scene.store()).is_some_and(|prim| {
+        names.iter().any(|name| {
+            prim.attribute(*name)
+                .is_some_and(layerstack::Attribute::value_source_might_be_time_varying)
+        })
+    })
+}
+
+/// Whether the prim's computed visibility might differ at another time:
+/// its `visibility` or an ancestor's might. `purpose` is uniform.
+fn visibility_might_vary(scene: &Scene<'_>, path: PathId) -> bool {
+    let mut at = Some(path);
+    while let Some(current) = at {
+        if inputs_might_vary(scene, current, &["visibility"]) {
+            return true;
+        }
+        at = parent(scene, current);
+    }
+    false
+}
+
+/// What of an item might differ at another time, as last read: what
+/// [`DrawList::set_time`] reads again.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct Varies {
+    /// Its matrices: a drawn instance's world transform, or an instancer's
+    /// placement.
+    matrices: bool,
+    /// Whether it, or any instance, is shown.
+    visibility: bool,
+    /// Its buffer's inputs.
+    geometry: bool,
 }
 
 /// The drawn gprim types: a mesh or an implicit shape.
@@ -443,6 +504,8 @@ struct Entry {
     /// them, hidden ones included), its prim, and an instancer's
     /// prototype prims.
     depends: Vec<PathId>,
+    /// What of it might differ at another time.
+    varies: Varies,
 }
 
 /// The items and buffers a renderer draws from a stage, retained and kept
@@ -463,9 +526,9 @@ struct Entry {
 ///   [`DrawDiff::freed`], in the diff that drops its last item.
 /// - **Diffs** ([`DrawDiff`]): [`Self::refresh`] reads the whole stage;
 ///   [`Self::apply_changes`] reads only what a change record reaches;
-///   [`Self::set_time`] reads every item at the new time but rebuilds
-///   nothing that did not change. Each lists what changed and counts the
-///   work ([`DrawWork`]).
+///   [`Self::set_time`] reads at the new time only the items whose
+///   inputs might vary with time, and rebuilds nothing that did not
+///   change. Each lists what changed and counts the work ([`DrawWork`]).
 ///
 /// What a change record reaches (`layerstack::Changes`, OpenUSD's
 /// `UsdNotice::ObjectsChanged`):
@@ -820,10 +883,23 @@ impl DrawList {
         gather.finish(local_before, self, &read)
     }
 
-    /// Reads every item at `time`: matrices, visibility, geometry and
-    /// materials are compared with the time before, and only what differs
+    /// Reads at `time` the items whose inputs might differ at another
+    /// time, and only what of them might: matrices, visibility and
+    /// geometry are compared with the time before, and only what differs
     /// is listed; a mesh whose points changed is refilled by its plan,
     /// never triangulated again unless its topology changed.
+    ///
+    /// An item's inputs might vary when time samples (even one), a spline
+    /// or value clips supply them (`UsdAttributeQuery::
+    /// ValueSourceMightBeTimeVarying`): its geometry's attributes (and its
+    /// face subsets' `indices`), the `visibility` of it or an ancestor, an
+    /// op of its world transform's chain
+    /// ([`XformCache::local_to_world_might_vary`]), or a point
+    /// instancer's placement attributes. The rest are left untouched and
+    /// counted in [`DrawWork::items_time_invariant`]. What might vary is
+    /// found as the item is read, so [`Self::apply_changes`] keeps it up to
+    /// date: a time sample authored on a static input makes its item read
+    /// at the next time.
     pub fn set_time(&mut self, scene: &Scene<'_>, time: Time) -> DrawDiff {
         let local_before = self.xforms.stats().local_computed;
         self.options.time = time;
@@ -832,9 +908,22 @@ impl DrawList {
         let ids: Vec<ItemId> = self.entries.keys().copied().collect();
         let mut read = HashSet::new();
         for id in ids {
-            let source = self.entries[&id].item.source;
+            let entry = &self.entries[&id];
+            let source = entry.item.source;
+            let varies = entry.varies;
+            let what = Dirty {
+                instances: varies.matrices,
+                transform: varies.matrices,
+                visibility: varies.visibility,
+                geometry: varies.geometry,
+                material: false,
+            };
+            if !what.any() {
+                gather.work.items_time_invariant += 1;
+                continue;
+            }
             read.insert(id);
-            if !self.read_item(scene, id, source, Dirty::ALL, false, &mut gather) {
+            if !self.read_item(scene, id, source, what, false, &mut gather) {
                 self.remove(id, &mut gather);
             }
         }
@@ -1002,22 +1091,31 @@ impl DrawList {
             .get(&id)
             .map(|entry| entry.depends.clone())
             .unwrap_or_default();
+        let mut varies = self
+            .entries
+            .get(&id)
+            .map(|entry| entry.varies)
+            .unwrap_or_default();
 
         // Instances, visibility and matrices.
         if what.instances || what.transform || what.visibility || new {
             let mut matrices = Vec::new();
             let mut instances = Vec::new();
             let mut ids = Vec::new();
+            varies.matrices = false;
+            varies.visibility = false;
             match source {
                 ItemSource::Gprim { path } => {
                     if scene.stage().prim(path, scene.store()).is_none() {
                         return false;
                     }
                     depends = alloc::vec![path];
+                    varies.visibility = visibility_might_vary(scene, path);
                     if shown(scene, path, time, &purposes) {
                         gather.work.matrices_computed += 1;
                         matrices.push(self.xforms.local_to_world(scene, path).unwrap_or(IDENTITY));
                         instances.push(path);
+                        varies.matrices = self.world_might_vary(scene, path);
                     }
                 }
                 ItemSource::Prototype { prim, material } => {
@@ -1037,12 +1135,14 @@ impl DrawList {
                             continue;
                         }
                         members += 1;
+                        varies.visibility |= visibility_might_vary(scene, proxy);
                         if !shown(scene, proxy, time, &purposes) {
                             continue;
                         }
                         gather.work.matrices_computed += 1;
                         matrices.push(self.xforms.local_to_world(scene, proxy).unwrap_or(IDENTITY));
                         instances.push(proxy);
+                        varies.matrices |= self.world_might_vary(scene, proxy);
                     }
                     if members == 0 {
                         return false;
@@ -1071,7 +1171,13 @@ impl DrawList {
                         return false;
                     }
                     depends = alloc::vec![instancer, prototype, prim];
+                    varies.visibility = visibility_might_vary(scene, instancer);
                     if shown(scene, instancer, time, &purposes) {
+                        // The prim's world chain covers its transform
+                        // relative to the prototype and the instancer's.
+                        varies.matrices = inputs_might_vary(scene, instancer, INSTANCER_INPUTS)
+                            || self.world_might_vary(scene, instancer)
+                            || (prim != prototype && self.world_might_vary(scene, prim));
                         let placed = view.compute_instance_transforms(
                             time,
                             time,
@@ -1130,6 +1236,13 @@ impl DrawList {
                 }
                 item.buffer = key;
             }
+            varies.geometry = inputs_might_vary(scene, item.prim, GEOMETRY_INPUTS)
+                || self.buffers.get(&key).is_some_and(|buffer| {
+                    buffer
+                        .subsets
+                        .iter()
+                        .any(|&subset| inputs_might_vary(scene, subset, SUBSET_INPUTS))
+                });
         }
 
         // Materials.
@@ -1166,8 +1279,23 @@ impl DrawList {
         if previous.is_none() {
             self.keys.insert(source, id);
         }
-        self.entries.insert(id, Entry { item, depends });
+        self.entries.insert(
+            id,
+            Entry {
+                item,
+                depends,
+                varies,
+            },
+        );
         true
+    }
+
+    /// Whether the prim's local-to-world transform might differ at another
+    /// time ([`XformCache::local_to_world_might_vary`]).
+    fn world_might_vary(&mut self, scene: &Scene<'_>, path: PathId) -> bool {
+        self.xforms
+            .local_to_world_might_vary(scene, path)
+            .unwrap_or(false)
     }
 
     /// The buffer `item` draws, read again: kept, refilled or rebuilt in
@@ -1447,8 +1575,8 @@ mod tests {
     use alloc::vec::Vec;
 
     use layerstack::{
-        EditTarget, InMemoryStore, LayerId, LiveStage, NoAssets, StageOptions, Time, Transaction,
-        Value,
+        EditTarget, InMemoryStore, LayerId, LiveStage, NoAssets, PropertySpec, PropertyType,
+        StageOptions, Time, Transaction, Value,
     };
     use layerstack_schemas::usd_geom::{MeshEdit, PointInstancerEdit, SphereEdit};
     use layerstack_schemas::usd_shade::MaterialBindingApi;
@@ -1667,11 +1795,96 @@ class Xform "Beacon" {
         assert_eq!(diff.work.refills, 1);
         assert_eq!(diff.work.triangulations, 0);
         assert_eq!(diff.work.tessellations, 0);
-        // The other meshes and shapes were read and kept.
-        assert_eq!(diff.work.buffers_reused, 5);
+        // Nothing the other items read is animated: none was read.
+        assert_eq!(diff.work.items_read, 1);
+        assert_eq!(diff.work.items_untouched, 5);
+        assert_eq!(diff.work.items_time_invariant, 5);
+        assert_eq!(diff.work.buffers_reused, 0);
         let buffers = fixture.list.buffers(buffer).unwrap();
         assert_eq!(buffers.revision, 1);
         assert!(buffers.buffers.positions.iter().all(|p| p[2] == 1.0));
+    }
+
+    /// An edit that animates a static input makes its items read at the
+    /// next time, and undoing it makes them time-invariant again: a sample
+    /// on the pebble's radius reaches the pebble alone, one on the rocks'
+    /// transform every item beneath them, one on a beacon instance's
+    /// visibility the beacon's items.
+    #[test]
+    fn edits_that_animate_an_input_make_its_items_read_at_a_new_time() {
+        let (mut fixture, _) = Fixture::new();
+        let rock = fixture.item("/World/Rocks/Rock");
+        let pebble = fixture.item("/World/Rocks/Pebble");
+        let stone = fixture.item("/World/Rocks/Stone");
+        let read_at = |fixture: &mut Fixture, time: f64| {
+            let scene = Scene::new(fixture.live.stage(), &fixture.store);
+            let diff = fixture.list.set_time(&scene, Time::at(time));
+            assert_eq!(
+                diff.work.items_read + diff.work.items_time_invariant,
+                6,
+                "every item read or skipped"
+            );
+            diff
+        };
+        let property = |fixture: &Fixture, path: &str, name: &str| {
+            let name = fixture.store.tokens().intern(name);
+            EditTarget::for_layer(LayerId(1))
+                .property(layerstack::PropertyPath::new(fixture.path(path), name))
+        };
+        let token =
+            |fixture: &Fixture, text: &str| Value::Token(fixture.store.tokens().intern(text));
+
+        let mut sample = Transaction::new();
+        sample.set_time_sample(
+            property(&fixture, "/World/Rocks/Pebble", "radius"),
+            3.0,
+            Value::Double(2.0),
+        );
+        let applied = fixture.live.apply(&mut fixture.store, &sample).unwrap();
+        let scene = Scene::new(fixture.live.stage(), &fixture.store);
+        let diff = fixture.list.apply_changes(&scene, &applied.changes);
+        // A single sample holds at every numeric time: the pebble is
+        // larger already.
+        assert_eq!(diff.work.items_read, 1);
+        assert_eq!(diff.rebound, [pebble]);
+        let diff = read_at(&mut fixture, 3.0);
+        assert_eq!(diff.work.items_read, 2, "the rock and the pebble");
+        let undo = fixture.apply(&applied.inverse);
+        assert_eq!(undo.rebound, [pebble], "back to the radius at default");
+        assert_eq!(
+            read_at(&mut fixture, 4.0).work.items_read,
+            1,
+            "the rock alone"
+        );
+
+        let typed = |name: &str| PropertySpec::typed_attribute(PropertyType::parse(name).unwrap());
+        let mut moving = Transaction::new();
+        moving.create_property(
+            property(&fixture, "/World/Rocks", "xformOpOrder"),
+            typed("token[]").with_default(Value::array(alloc::vec![token(
+                &fixture,
+                "xformOp:translate"
+            )])),
+        );
+        let translate = property(&fixture, "/World/Rocks", "xformOp:translate");
+        moving.create_property(translate.clone(), typed("double3"));
+        moving.set_time_sample(translate.clone(), 5.0, Value::Vec3d([0.0, 5.0, 0.0]));
+        moving.set_time_sample(translate, 7.0, Value::Vec3d([0.0, 7.0, 0.0]));
+        let diff = fixture.apply(&moving);
+        assert_eq!(diff.work.items_read, 3, "the items beneath the rocks");
+        let diff = read_at(&mut fixture, 7.0);
+        assert_eq!(diff.work.items_read, 3);
+        assert_eq!(diff.matrices, [rock, pebble, stone]);
+
+        let mut blink = Transaction::new();
+        let visibility = property(&fixture, "/World/Beacons/North", "visibility");
+        blink.create_property(visibility.clone(), typed("token"));
+        blink.set_time_sample(visibility, 6.0, token(&fixture, "invisible"));
+        fixture.apply(&blink);
+        let diff = read_at(&mut fixture, 8.0);
+        // The rocks (moving) and the beacon's post and bulb (blinking).
+        assert_eq!(diff.work.items_read, 5);
+        assert_eq!(diff.work.items_time_invariant, 1, "the stones");
     }
 
     #[test]

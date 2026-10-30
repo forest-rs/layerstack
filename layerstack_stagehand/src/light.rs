@@ -593,7 +593,7 @@ mod tests {
     use layerstack_schemas::usd_lux::LightApiEdit;
     use layerstack_schemas::{Scene, SchemaEdit};
 
-    use super::{LightGeometry, LightKind, singular_values, size_factor};
+    use super::{LightGeometry, LightKind, TargetPath, singular_values, size_factor};
     use crate::{DrawDiff, DrawList, DrawOptions};
 
     const SCENE: &str = r#"#usda 1.0
@@ -885,5 +885,188 @@ def Xform "World" {
         let disk = LightGeometry::Disk { radius: 1. };
         assert_eq!(size_factor(&disk, &flat), 1.);
         close(size_factor(&disk, &identity), PI);
+    }
+
+    /// Every light of `stagehand_lights/scene.usda` at four times against
+    /// what usd-core answers: inputs through the `UsdLux` schema API
+    /// (authored or fallback), blackbody colors,
+    /// `ComputeLocalToWorldTransform`, `ComputeVisibility`, `ShapingAPI`
+    /// and `ShadowAPI` inputs and link collections.
+    #[test]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "the oracle writes `float` inputs widened to double"
+    )]
+    fn lights_match_openusd() {
+        use serde_json::Value as Json;
+        let oracle: Json = serde_json::from_str(include_str!(
+            "../../layerstack_conformance/fixtures/stagehand_lights/oracle.json"
+        ))
+        .unwrap();
+        assert_eq!(
+            oracle["version"].as_str(),
+            Some(layerstack_schemas::OPENUSD_VERSION)
+        );
+        let mut store = InMemoryStore::default();
+        let read = layerstack_usda::read_usda(
+            include_str!("../../layerstack_conformance/fixtures/stagehand_lights/scene.usda"),
+            LayerId(1),
+            store.tokens(),
+            store.paths(),
+            &mut NoAssets,
+        );
+        store.insert_layer(read.emitted.layer);
+        let schemas = Arc::new(layerstack_schemas::openusd(store.tokens()));
+        let live = LiveStage::compose(
+            &mut store,
+            LayerId(1),
+            StageOptions {
+                schemas: Some(schemas),
+                ..StageOptions::default()
+            },
+        );
+        let scene = Scene::new(live.stage(), &store);
+        let mut list = DrawList::new(DrawOptions::default());
+        list.refresh(&scene);
+        let f32_of = |value: &Json| value.as_f64().unwrap() as f32;
+        let color_of = |value: &Json| -> [f32; 3] {
+            core::array::from_fn(|i| value[i].as_f64().unwrap() as f32)
+        };
+        let text_of = |value: &Json| value.as_str().map(Arc::<str>::from);
+        let rows = oracle["rows"].as_array().unwrap();
+        assert_eq!(rows.len(), 36);
+        for row in rows {
+            let time = row["time"].as_f64().map_or(Time::Default, Time::at);
+            if list.options().time != time {
+                list.set_time(&scene, time);
+            }
+            let at = alloc::format!("{} {time:?}", row["path"]);
+            let light = list
+                .light(store.path(row["path"].as_str().unwrap()))
+                .unwrap_or_else(|| panic!("{at} is not listed"));
+            let inputs = &row["inputs"];
+            for (i, matrix_row) in light.matrix.iter().enumerate() {
+                for (j, value) in matrix_row.iter().enumerate() {
+                    let expected = row["world"][i][j].as_f64().unwrap();
+                    assert!((value - expected).abs() <= 1e-12, "{at}: world {i} {j}");
+                }
+            }
+            assert_eq!(light.hidden, row["visibility"] == "invisible", "{at}");
+            let emission = &light.emission;
+            assert_eq!(emission.color, color_of(&inputs["color"]), "{at}");
+            assert_eq!(emission.intensity, f32_of(&inputs["intensity"]), "{at}");
+            assert_eq!(emission.exposure, f32_of(&inputs["exposure"]), "{at}");
+            assert_eq!(emission.normalize, inputs["normalize"] == true, "{at}");
+            assert_eq!(emission.diffuse, f32_of(&inputs["diffuse"]), "{at}");
+            assert_eq!(emission.specular, f32_of(&inputs["specular"]), "{at}");
+            if inputs["enableColorTemperature"] == true {
+                assert_eq!(
+                    emission.color_temperature,
+                    Some(f32_of(&inputs["colorTemperature"])),
+                    "{at}"
+                );
+                assert_eq!(
+                    emission.temperature_color,
+                    color_of(&row["blackbody"]),
+                    "{at}"
+                );
+            } else {
+                assert_eq!(emission.color_temperature, None, "{at}");
+            }
+            let attribute = &row["attributes"];
+            match &light.geometry {
+                LightGeometry::Distant { angle } => {
+                    assert_eq!(*angle, f32_of(&inputs["angle"]), "{at}");
+                }
+                LightGeometry::Sphere {
+                    radius,
+                    treat_as_point,
+                } => {
+                    assert_eq!(*radius, f32_of(&inputs["radius"]), "{at}");
+                    assert_eq!(*treat_as_point, attribute["treatAsPoint"] == true, "{at}");
+                }
+                LightGeometry::Rect {
+                    width,
+                    height,
+                    texture,
+                } => {
+                    assert_eq!(*width, f32_of(&inputs["width"]), "{at}");
+                    assert_eq!(*height, f32_of(&inputs["height"]), "{at}");
+                    assert_eq!(*texture, text_of(&inputs["texture:file"]), "{at}");
+                }
+                LightGeometry::Disk { radius } => {
+                    assert_eq!(*radius, f32_of(&inputs["radius"]), "{at}");
+                }
+                LightGeometry::Cylinder {
+                    radius,
+                    length,
+                    treat_as_line,
+                } => {
+                    assert_eq!(*radius, f32_of(&inputs["radius"]), "{at}");
+                    assert_eq!(*length, f32_of(&inputs["length"]), "{at}");
+                    assert_eq!(*treat_as_line, attribute["treatAsLine"] == true, "{at}");
+                }
+                LightGeometry::Dome {
+                    texture,
+                    format,
+                    pole_axis,
+                } => {
+                    assert_eq!(*texture, text_of(&inputs["texture:file"]), "{at}");
+                    assert_eq!(
+                        Some(format.clone()),
+                        text_of(&inputs["texture:format"]),
+                        "{at}"
+                    );
+                    assert_eq!(*pole_axis, text_of(&attribute["poleAxis"]), "{at}");
+                }
+                LightGeometry::Portal { width, height } => {
+                    assert_eq!(*width, f32_of(&inputs["width"]), "{at}");
+                    assert_eq!(*height, f32_of(&inputs["height"]), "{at}");
+                }
+            }
+            assert_eq!(light.shaping.is_some(), row["shaping"] == true, "{at}");
+            if let Some(shaping) = &light.shaping {
+                assert_eq!(shaping.cone_angle, f32_of(&inputs["shaping:cone:angle"]));
+                assert_eq!(
+                    shaping.cone_softness,
+                    f32_of(&inputs["shaping:cone:softness"])
+                );
+                assert_eq!(shaping.focus, f32_of(&inputs["shaping:focus"]));
+                assert_eq!(shaping.focus_tint, color_of(&inputs["shaping:focusTint"]));
+                assert_eq!(shaping.ies_file, text_of(&inputs["shaping:ies:file"]));
+                assert_eq!(
+                    shaping.ies_angle_scale,
+                    f32_of(&inputs["shaping:ies:angleScale"])
+                );
+                assert_eq!(
+                    shaping.ies_normalize,
+                    inputs["shaping:ies:normalize"] == true
+                );
+            }
+            assert_eq!(light.shadow.is_some(), row["shadow"] == true, "{at}");
+            if let Some(shadow) = &light.shadow {
+                assert_eq!(shadow.enable, inputs["shadow:enable"] == true);
+                assert_eq!(shadow.color, color_of(&inputs["shadow:color"]));
+                assert_eq!(shadow.distance, f32_of(&inputs["shadow:distance"]));
+                assert_eq!(shadow.falloff, f32_of(&inputs["shadow:falloff"]));
+                assert_eq!(shadow.falloff_gamma, f32_of(&inputs["shadow:falloffGamma"]));
+            }
+            for (link, name) in [
+                (&light.light_link, "lightLink"),
+                (&light.shadow_link, "shadowLink"),
+            ] {
+                let expected = &row["links"][name];
+                assert_eq!(link.include_root, expected["includeRoot"] == true, "{at}");
+                let targets = |list: &Json| -> Vec<TargetPath> {
+                    list.as_array()
+                        .unwrap()
+                        .iter()
+                        .map(|path| TargetPath::Prim(store.path(path.as_str().unwrap())))
+                        .collect()
+                };
+                assert_eq!(link.includes, targets(&expected["includes"]), "{at}");
+                assert_eq!(link.excludes, targets(&expected["excludes"]), "{at}");
+            }
+        }
     }
 }

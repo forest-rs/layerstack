@@ -423,6 +423,7 @@ dependencies = [
  "layerstack_schemas",
  "layerstack_usda",
  "libm",
+ "serde_json",
 ]
 
 [[package]]

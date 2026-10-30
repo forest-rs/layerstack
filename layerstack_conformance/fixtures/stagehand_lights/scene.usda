@@ -1,0 +1,79 @@
+#usda 1.0
+# Copyright 2026 the LayerStack Authors
+# SPDX-License-Identifier: Apache-2.0 OR MIT
+(
+    startTimeCode = 0
+    endTimeCode = 10
+)
+
+def Xform "World" {
+    def Xform "Rig" {
+        double3 xformOp:translate.timeSamples = {0: (0, 1, 0), 10: (2, 1, 0)}
+        float3 xformOp:rotateXYZ = (0, 30, 0)
+        double3 xformOp:scale = (2, 2, 2)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
+        def SphereLight "Bulb" (
+            prepend apiSchemas = ["ShapingAPI", "ShadowAPI"]
+        ) {
+            float inputs:radius = 0.25
+            float inputs:intensity = 8
+            float inputs:exposure.timeSamples = {0: 0, 10: 2}
+            bool inputs:normalize = true
+            color3f inputs:color = (1, 0.5, 0.25)
+            float inputs:shaping:cone:angle = 40
+            float inputs:shaping:cone:softness = 0.2
+            float inputs:shaping:focus = 2
+            color3f inputs:shaping:focusTint = (0.5, 0.5, 1)
+            asset inputs:shaping:ies:file = @lamp.ies@
+            float inputs:shaping:ies:angleScale = 0.5
+            bool inputs:shaping:ies:normalize = true
+            bool inputs:shadow:enable = false
+            color3f inputs:shadow:color = (0.1, 0, 0)
+            float inputs:shadow:distance = 5
+            float inputs:shadow:falloff = 1
+            float inputs:shadow:falloffGamma = 2
+            bool treatAsPoint = true
+        }
+    }
+    def RectLight "Panel" {
+        float inputs:width = 2
+        float inputs:height = 0.5
+        bool inputs:enableColorTemperature = true
+        float inputs:colorTemperature.timeSamples = {0: 2700, 10: 9000}
+        asset inputs:texture:file = @panel.png@
+        double3 xformOp:scale = (3, 2, 1)
+        uniform token[] xformOpOrder = ["xformOp:scale"]
+    }
+    def DistantLight "Sun" {
+        float inputs:angle = 1.5
+        float3 xformOp:rotateXYZ = (-60, 20, 0)
+        uniform token[] xformOpOrder = ["xformOp:rotateXYZ"]
+    }
+    def DiskLight "Spot" {
+        float inputs:radius = 0.75
+        token visibility = "invisible"
+        rel collection:lightLink:includes = </World/Rig>
+        rel collection:lightLink:excludes = </World/Rig/Bulb>
+        uniform bool collection:lightLink:includeRoot = false
+        rel collection:shadowLink:includes = </World/Panel>
+    }
+    def CylinderLight "Tube" {
+        float inputs:length = 3
+        float inputs:radius = 0.1
+        bool treatAsLine = true
+        float inputs:diffuse = 0.5
+        float inputs:specular = 2
+    }
+    def DomeLight "Sky" {
+        asset inputs:texture:file = @sky.exr@
+        token inputs:texture:format = "latlong"
+    }
+    def DomeLight_1 "Sky1" {
+        token inputs:texture:format = "mirroredBall"
+        uniform token poleAxis = "Z"
+    }
+    def PortalLight "Window" {
+        float inputs:width = 1.5
+    }
+    def SphereLight "Fallbacks" {}
+}

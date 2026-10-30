@@ -27,7 +27,10 @@ pub use node_def::NodeDefError;
 mod ports;
 mod sdr_metadata;
 mod stringify;
-pub use ports::{ConnectionModification, ConnectionSource, Port, PortEdit, PortError, PortKind};
+pub use ports::{
+    ConnectionModification, ConnectionSource, ConnectionSourceInfo, Port, PortEdit, PortError,
+    PortKind,
+};
 /// Immutable upstream material capture and caller-owned retention.
 pub mod network;
 /// Bounded standard Preview Surface handoff without shader execution.

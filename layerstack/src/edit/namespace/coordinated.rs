@@ -130,7 +130,7 @@ fn prepare_with(
             if arcs
                 .main_layers()
                 .iter()
-                .any(|id| store.layer(*id).is_none())
+                .any(|id| store.layer(*id).is_none() && !primary.is_layer_muted(*id))
             {
                 return Err(unresolved_arcs());
             }
@@ -139,7 +139,7 @@ fn prepare_with(
                 .iter()
                 .filter_map(|path| layer.prims.get(path))
             {
-                validate_arcs(store, spec)?;
+                validate_arcs(primary, store, spec)?;
             }
             if stages.iter().any(|stage| stage.layer_stack().contains(id)) {
                 links.insert(*id, retained::links_of(indexes, layer));
@@ -161,7 +161,7 @@ fn prepare_with(
             continue;
         }
         for spec in layer.prims.values() {
-            validate_arcs(store, spec)?;
+            validate_arcs(primary, store, spec)?;
         }
     }
 
@@ -748,7 +748,15 @@ fn unresolved_arcs() -> NamespaceError {
 /// passes: a selected variant's unresolved arc is a composition error the
 /// snapshot check rejects, and one in a variant no prim selects composes
 /// nothing for the edit to keep.
-fn validate_arcs(store: &dyn LayerStore, spec: &PrimSpec) -> Result<(), NamespaceError> {
+///
+/// An arc to a layer `stage` mutes is resolved: it composes nothing, on
+/// purpose, and the edit neither reads nor edits that layer
+/// (`UsdNamespaceEditor` edits around a `PcpErrorMutedAssetPath`).
+fn validate_arcs(
+    stage: &Stage,
+    store: &dyn LayerStore,
+    spec: &PrimSpec,
+) -> Result<(), NamespaceError> {
     if !spec.outer_variant_sites().is_empty() {
         return Ok(());
     }
@@ -758,7 +766,7 @@ fn validate_arcs(store: &dyn LayerStore, spec: &PrimSpec) -> Result<(), Namespac
         .chain(spec.payloads.items())
         .any(|r| {
             r.stored_target_layer(store)
-                .is_none_or(|target| store.layer(target).is_none())
+                .is_none_or(|target| store.layer(target).is_none() && !stage.is_layer_muted(target))
                 || r.is_expression()
         })
     {
@@ -827,15 +835,14 @@ fn validate_snapshot(
         ));
     }
     if stage.population_mask().is_some()
-        || !stage.muted_layers().is_empty()
         || stage
             .load_rules()
             .rules()
             .any(|(_, r)| r != crate::PayloadRule::All)
-        || !stage.composition_errors().is_empty()
+        || blocking_errors(stage)
     {
         return Err(NamespaceError::UnsupportedComposition(
-            "masked, muted, unloaded or unresolved composition requires explicit dependency coordination",
+            "masked, unloaded or unresolved composition requires explicit dependency coordination",
         ));
     }
     if index.is_some_and(|index| index.is_current(store)) {
@@ -2158,7 +2165,7 @@ fn validate_projected_stages(
             }
             None => whole(store),
         };
-        if !projected.stage.composition_errors().is_empty() {
+        if blocking_errors(&projected.stage) {
             return Err(NamespaceError::UnsupportedComposition(
                 "prepared namespace edit would create invalid composition",
             ));
@@ -2179,7 +2186,7 @@ fn validate_projected_stages(
 #[cfg(test)]
 fn projection_findings(projected: &Projection, moves: &[PathMove]) -> (bool, Vec<(bool, bool)>) {
     (
-        projected.stage.composition_errors().is_empty(),
+        !blocking_errors(&projected.stage),
         moves
             .iter()
             .map(|m| (projected.exists(m.from), projected.exists(m.to)))

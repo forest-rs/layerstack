@@ -958,10 +958,15 @@ impl LiveStage {
             .filter(|root| self.stage.has_prim(*root) || partial.has_prim(*root))
             .collect();
         let resynced: HashSet<PathId> = changes.resynced.iter().copied().collect();
-        changes.changed_info_only = parents
+        // The boundary parents' child lists changed, and nothing else of
+        // them: a parent is not reported, as OpenUSD does not report it.
+        // `SdfLayer::_PrimPushChild` (`pxr/usd/sdf/layer.cpp`) records no
+        // field change for a parent's `primChildren`, and
+        // `PcpChanges::DidChange` resyncs the child's path alone; a client
+        // caching a child list reads it from the child's resync.
+        changes.changed_info_only = touched
             .iter()
-            .copied()
-            .chain(touched.iter().map(|(_, path)| *path))
+            .map(|(_, path)| *path)
             .filter(|path| partial.has_prim(*path) && !is_beneath_set(store, *path, &resynced))
             .collect();
         let mut affected: Vec<_> = affected.into_iter().collect();
@@ -5184,10 +5189,10 @@ mod tests {
     /// `defaultPrim` and adding a sublayer, then undoing each, on a layer
     /// built without a pseudo-root spec, compose what a fresh composition
     /// does. A root prim created or removed resyncs that prim alone, with
-    /// the pseudo-root's child list composed once and reported info-only,
-    /// even when the first one brings the pseudo-root's spec into being
-    /// and its undo takes it away. A reorder, a `defaultPrim` edit and a
-    /// sublayer resync the stage.
+    /// the pseudo-root's child list composed once and the pseudo-root not
+    /// reported, even when the first one brings the pseudo-root's spec into
+    /// being and its undo takes it away. A reorder, a `defaultPrim` edit
+    /// and a sublayer resync the stage.
     ///
     /// Spec: AOUSD Core §11.3.1 (child order), §10.3.1 (layer stacks),
     /// §7.6.1.2.3 (`defaultPrim`). OpenUSD resyncs the child a spec is added
@@ -5227,7 +5232,7 @@ mod tests {
             &txn,
             (2, 2, false),
             &["/Plant"],
-            &["/"],
+            &[],
         ));
         assert!(store.layers[&LayerId(1)].prims.contains_key(&root));
         let txn = create(&mut store, "/Fern");
@@ -5237,7 +5242,7 @@ mod tests {
             &txn,
             (2, 1, false),
             &["/Fern"],
-            &["/"],
+            &[],
         ));
         let mut txn = Transaction::new();
         txn.remove_spec(target.prim(p(&mut store, "/Rock")));
@@ -5247,7 +5252,7 @@ mod tests {
             &txn,
             (1, 2, false),
             &["/Rock"],
-            &["/"],
+            &[],
         ));
 
         let names = ["Fern", "World"].map(|name| store.tokens.intern(name));
@@ -5285,9 +5290,9 @@ mod tests {
 
         let expected: [(Work, &[&str], &[&str]); 6] = [
             // Removing the first root prim takes the pseudo-root's spec too.
-            ((1, 2, false), &["/Plant"], &["/"]),
-            ((1, 1, false), &["/Fern"], &["/"]),
-            ((3, 2, false), &["/Rock"], &["/"]),
+            ((1, 2, false), &["/Plant"], &[]),
+            ((1, 1, false), &["/Fern"], &[]),
+            ((3, 2, false), &["/Rock"], &[]),
             ((6, 6, true), &["/"], &[]),
             ((6, 6, true), &["/"], &[]),
             ((6, 7, true), &["/"], &[]),
@@ -5352,21 +5357,15 @@ mod tests {
                     "/Stone",
                     (4, 7, false),
                     ["/Stone", "/World"],
-                    &["/"][..],
+                    &[][..],
                 ),
-                (
-                    "/Stone/A",
-                    "/A",
-                    (4, 6, false),
-                    ["/A", "/Stone/A"],
-                    &["/", "/Stone"],
-                ),
+                ("/Stone/A", "/A", (4, 6, false), ["/A", "/Stone/A"], &[]),
                 (
                     "/Rock",
                     "/Stone/Rock",
                     (4, 6, false),
                     ["/Rock", "/Stone/Rock"],
-                    &["/", "/Stone"],
+                    &[],
                 ),
             ];
             let mut undo = Vec::new();
@@ -5396,8 +5395,9 @@ mod tests {
     /// leaves the order as it is, as `UsdNamespaceEditor` does: the moved
     /// child's old name stays listed and its new one is not, so renaming it
     /// back, or moving it home, restores the original child order. Each
-    /// edit resyncs the moved prim alone, reports each parent whose child
-    /// list changed, and composes what a fresh composition does.
+    /// edit resyncs the moved prim alone, reports neither parent (OpenUSD
+    /// resyncs the old and new paths alone), and composes what a fresh
+    /// composition does.
     ///
     /// Spec: AOUSD Core §7.6.2.4.5 (`primOrder`), §11.3.1 (child order).
     /// OpenUSD: `UsdNamespaceEditor`, which applies `SdfLayer::Apply`
@@ -5445,28 +5445,28 @@ mod tests {
                 "/World/Z",
                 (3, 3, false),
                 ["/World/A", "/World/Z"],
-                &["/World"][..],
+                &[][..],
             ),
             (
                 "/World/Z",
                 "/World/A",
                 (3, 3, false),
                 ["/World/A", "/World/Z"],
-                &["/World"],
+                &[],
             ),
             (
                 "/World/C",
                 "/Other/C",
                 (4, 4, false),
                 ["/Other/C", "/World/C"],
-                &["/Other", "/World"],
+                &[],
             ),
             (
                 "/Other/C",
                 "/World/C",
                 (4, 4, false),
                 ["/Other/C", "/World/C"],
-                &["/Other", "/World"],
+                &[],
             ),
         ];
         let mut orders = Vec::new();
@@ -5500,16 +5500,17 @@ mod tests {
     }
 
     /// On a stage whose arcs keep it off the local path, creating and
-    /// removing prims, root prims among them, reports each parent whose
-    /// child list gained or lost the prim as changed info, as the local
-    /// path does, whether or not its spec changed. A parent beneath the
-    /// pseudo-root keeps its index: only the prim and the pseudo-root's are
-    /// replaced.
+    /// removing prims, root prims among them, resyncs the prim alone, as
+    /// the local path does: the parent whose child list gained or lost it
+    /// is not reported, whether or not its spec changed. A parent beneath
+    /// the pseudo-root keeps its index: only the prim and the pseudo-root's
+    /// are replaced.
     ///
     /// Spec: AOUSD Core §11.3.1 (child order). OpenUSD:
-    /// `UsdNotice::ObjectsChanged::GetChangedInfoOnlyPaths`.
+    /// `UsdNotice::ObjectsChanged::GetChangedInfoOnlyPaths` does not list
+    /// the parent (`SdfLayer::_PrimPushChild` records no field change).
     #[test]
-    fn general_structural_edits_report_parents_whose_child_lists_change() {
+    fn general_structural_edits_resync_only_the_prims_they_change() {
         use crate::{EditTarget, Specifier};
         let mut store = InMemoryStore::default();
         let field = store.tokens.intern("x");
@@ -5528,11 +5529,11 @@ mod tests {
         assert!(live.local_index(&store).is_none());
         let target = EditTarget::for_layer(LayerId(1));
         let mut undo = Vec::new();
-        for (remove, path, work, info) in [
-            (true, "/Rock", (1, 2, false), "/"),
-            (true, "/World/A/X", (3, 1, false), "/World/A"),
-            (false, "/World/B", (3, 1, false), "/World"),
-            (false, "/Plant", (2, 2, false), "/"),
+        for (remove, path, work) in [
+            (true, "/Rock", (1, 2, false)),
+            (true, "/World/A/X", (3, 1, false)),
+            (false, "/World/B", (3, 1, false)),
+            (false, "/Plant", (2, 2, false)),
         ] {
             let mut txn = Transaction::new();
             let at = target.prim(p(&mut store, path));
@@ -5541,13 +5542,13 @@ mod tests {
             } else {
                 txn.create_prim(at, Specifier::Def, None);
             }
-            let inverse = apply_root_edit(&mut live, &mut store, &txn, work, &[path], &[info]);
-            undo.push((inverse, path, info));
+            let inverse = apply_root_edit(&mut live, &mut store, &txn, work, &[path], &[]);
+            undo.push((inverse, path));
         }
-        while let Some((inverse, path, info)) = undo.pop() {
+        while let Some((inverse, path)) = undo.pop() {
             let applied = live.apply(&mut store, &inverse).unwrap();
             assert_eq!(applied.changes.resynced, [p(&mut store, path)]);
-            assert_eq!(applied.changes.changed_info_only, [p(&mut store, info)]);
+            assert!(applied.changes.changed_info_only.is_empty());
             assert_lists_match_fresh(&live, &mut store);
         }
     }

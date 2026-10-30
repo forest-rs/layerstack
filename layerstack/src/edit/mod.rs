@@ -224,7 +224,15 @@ pub struct Changes {
     /// resyncs the property paths of `SdfChangeList` entries that add or
     /// remove property specs).
     pub resynced_properties: Vec<crate::PropertyPath>,
-    /// Surviving prims with opinion or child-list changes, without subtree resync.
+    /// Surviving prims with opinion changes, without subtree resync.
+    ///
+    /// A prim created or removed is resynced alone: its parent, whose
+    /// child list gained or lost it, is not listed here unless its own
+    /// opinions changed too, as OpenUSD does not list it (a parent's
+    /// `primChildren` records no field change, `SdfLayer::_PrimPushChild`).
+    /// A consumer caching a prim's children updates them from the
+    /// resyncs (and [`Self::created`], [`Self::removed`]) of its children.
+    /// Reordering children (`primOrder`) resyncs the parent.
     pub changed_info_only: Vec<PathId>,
     /// Complete property-field inventories for a subset of info-only prims.
     /// A prim absent here must be treated conservatively: any field may have

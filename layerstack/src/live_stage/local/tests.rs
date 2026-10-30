@@ -134,7 +134,10 @@ fn local_subtree_delete_undo_and_value_sequence_has_precise_reports() {
     let removed = live.apply(&mut store, &remove).unwrap();
     assert_eq!(removed.changes.removed, [a, x]);
     assert_eq!(removed.changes.resynced, [a]);
-    assert_eq!(removed.changes.changed_info_only, [world]);
+    // The parent's child list changed, and nothing else of it: OpenUSD
+    // does not report it.
+    assert!(removed.changes.changed_info_only.is_empty());
+    assert!(live.stage().children_of(world).is_some());
     assert!(removed.changes.created.is_empty());
     matches_clean(&mut store, &live);
     let restored = live.apply(&mut store, &removed.inverse).unwrap();

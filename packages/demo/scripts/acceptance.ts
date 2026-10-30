@@ -571,16 +571,16 @@ const updates: UpdateSummary[] = [
   update({ itemsRead: 4, itemsUntouched: 6, localTransforms: 3 }),
   // Undo, undo, redo: the shapes of both radii are still held.
   update({ itemsRead: 4, itemsUntouched: 7, localTransforms: 3 }),
-  // A new prim: its draw added. `/World`'s child list changed with no
-  // property inventory, so every draw under it is read again, and every
-  // buffer found unchanged.
-  update({ added: 1, tessellations: 1, itemsRead: 9, localTransforms: 2 }),
+  // A new prim: its draw added, and nothing else read. The prim alone is
+  // resynced, as OpenUSD reports it, not `/World` with it.
+  update({ added: 1, tessellations: 1, itemsRead: 1, itemsUntouched: 8, localTransforms: 1 }),
   // Retyped: the pebble alone, a cube now.
   update({ tessellations: 1, itemsRead: 1, itemsUntouched: 8, localTransforms: 1 }),
   // The asset's height: the robot's two draws read, nothing rebuilt.
   update({ itemsRead: 2, itemsUntouched: 7 }),
-  // Renamed: the robot's draws gone, the rover's added, drawing the same buffers.
-  update({ added: 2, removed: 2, itemsRead: 9, localTransforms: 4 }),
+  // Renamed: the robot's draws gone, the rover's added, drawing the same
+  // buffers; the old and new paths alone are resynced.
+  update({ added: 2, removed: 2, itemsRead: 2, itemsUntouched: 7, localTransforms: 3 }),
   // Time 30, then the default time again: every draw read at the time, nothing animated.
   update({ itemsRead: 9 }),
   update({ itemsRead: 9 }),

@@ -399,6 +399,12 @@ export interface VariantSet {
  * changed; a `changedInfoOnly` prim kept its children, but its fields and
  * properties may have changed; a `resyncedProperties` property may have
  * been added or removed, and nothing else of its prim changed for it.
+ *
+ * A prim created or removed is resynced alone: its parent, whose child
+ * list gained or lost it, is not reported unless its own opinions changed
+ * too, as OpenUSD's `UsdNotice::ObjectsChanged` does not report it. A
+ * listener caching a prim's children updates them from its children's
+ * resyncs. Reordering children (`primOrder`) resyncs the parent.
  */
 export interface Changes {
   /** Prims that exist now and did not before. */

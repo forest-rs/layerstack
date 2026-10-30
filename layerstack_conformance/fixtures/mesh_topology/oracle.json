@@ -363,6 +363,222 @@
       "subdivision_scheme": "catmullClark",
       "time": "2",
       "valid": true
+    },
+    {
+      "face_vertex_counts": null,
+      "face_vertex_indices": null,
+      "hole_indices": [],
+      "mesh": "/Empty",
+      "orientation": "rightHanded",
+      "points": 0,
+      "reason": null,
+      "subdivision_scheme": "catmullClark",
+      "time": "default",
+      "valid": true
+    },
+    {
+      "face_vertex_counts": null,
+      "face_vertex_indices": null,
+      "hole_indices": [],
+      "mesh": "/Empty",
+      "orientation": "rightHanded",
+      "points": 0,
+      "reason": null,
+      "subdivision_scheme": "catmullClark",
+      "time": "1",
+      "valid": true
+    },
+    {
+      "face_vertex_counts": null,
+      "face_vertex_indices": null,
+      "hole_indices": [],
+      "mesh": "/Empty",
+      "orientation": "rightHanded",
+      "points": 0,
+      "reason": null,
+      "subdivision_scheme": "catmullClark",
+      "time": "2",
+      "valid": true
+    },
+    {
+      "face_vertex_counts": null,
+      "face_vertex_indices": null,
+      "hole_indices": [],
+      "mesh": "/PointsOnly",
+      "orientation": "rightHanded",
+      "points": 3,
+      "reason": null,
+      "subdivision_scheme": "catmullClark",
+      "time": "default",
+      "valid": true
+    },
+    {
+      "face_vertex_counts": null,
+      "face_vertex_indices": null,
+      "hole_indices": [],
+      "mesh": "/PointsOnly",
+      "orientation": "rightHanded",
+      "points": 3,
+      "reason": null,
+      "subdivision_scheme": "catmullClark",
+      "time": "1",
+      "valid": true
+    },
+    {
+      "face_vertex_counts": null,
+      "face_vertex_indices": null,
+      "hole_indices": [],
+      "mesh": "/PointsOnly",
+      "orientation": "rightHanded",
+      "points": 3,
+      "reason": null,
+      "subdivision_scheme": "catmullClark",
+      "time": "2",
+      "valid": true
+    },
+    {
+      "face_vertex_counts": [
+        3
+      ],
+      "face_vertex_indices": [
+        0,
+        1,
+        2
+      ],
+      "hole_indices": [],
+      "mesh": "/NoPoints",
+      "orientation": "rightHanded",
+      "points": 0,
+      "reason": "Out of range face vertex index 0: Vertex must be in the range [0,0).",
+      "subdivision_scheme": "catmullClark",
+      "time": "default",
+      "valid": false
+    },
+    {
+      "face_vertex_counts": [
+        3
+      ],
+      "face_vertex_indices": [
+        0,
+        1,
+        2
+      ],
+      "hole_indices": [],
+      "mesh": "/NoPoints",
+      "orientation": "rightHanded",
+      "points": 0,
+      "reason": "Out of range face vertex index 0: Vertex must be in the range [0,0).",
+      "subdivision_scheme": "catmullClark",
+      "time": "1",
+      "valid": false
+    },
+    {
+      "face_vertex_counts": [
+        3
+      ],
+      "face_vertex_indices": [
+        0,
+        1,
+        2
+      ],
+      "hole_indices": [],
+      "mesh": "/NoPoints",
+      "orientation": "rightHanded",
+      "points": 0,
+      "reason": "Out of range face vertex index 0: Vertex must be in the range [0,0).",
+      "subdivision_scheme": "catmullClark",
+      "time": "2",
+      "valid": false
+    },
+    {
+      "face_vertex_counts": null,
+      "face_vertex_indices": [
+        0,
+        1,
+        2
+      ],
+      "hole_indices": [],
+      "mesh": "/NoCounts",
+      "orientation": "rightHanded",
+      "points": 3,
+      "reason": "Sum of faceVertexCounts [0] != size of faceVertexIndices [3].",
+      "subdivision_scheme": "catmullClark",
+      "time": "default",
+      "valid": false
+    },
+    {
+      "face_vertex_counts": null,
+      "face_vertex_indices": [
+        0,
+        1,
+        2
+      ],
+      "hole_indices": [],
+      "mesh": "/NoCounts",
+      "orientation": "rightHanded",
+      "points": 3,
+      "reason": "Sum of faceVertexCounts [0] != size of faceVertexIndices [3].",
+      "subdivision_scheme": "catmullClark",
+      "time": "1",
+      "valid": false
+    },
+    {
+      "face_vertex_counts": null,
+      "face_vertex_indices": [
+        0,
+        1,
+        2
+      ],
+      "hole_indices": [],
+      "mesh": "/NoCounts",
+      "orientation": "rightHanded",
+      "points": 3,
+      "reason": "Sum of faceVertexCounts [0] != size of faceVertexIndices [3].",
+      "subdivision_scheme": "catmullClark",
+      "time": "2",
+      "valid": false
+    },
+    {
+      "face_vertex_counts": [
+        3
+      ],
+      "face_vertex_indices": null,
+      "hole_indices": [],
+      "mesh": "/NoIndices",
+      "orientation": "rightHanded",
+      "points": 3,
+      "reason": "Sum of faceVertexCounts [3] != size of faceVertexIndices [0].",
+      "subdivision_scheme": "catmullClark",
+      "time": "default",
+      "valid": false
+    },
+    {
+      "face_vertex_counts": [
+        3
+      ],
+      "face_vertex_indices": null,
+      "hole_indices": [],
+      "mesh": "/NoIndices",
+      "orientation": "rightHanded",
+      "points": 3,
+      "reason": "Sum of faceVertexCounts [3] != size of faceVertexIndices [0].",
+      "subdivision_scheme": "catmullClark",
+      "time": "1",
+      "valid": false
+    },
+    {
+      "face_vertex_counts": [
+        3
+      ],
+      "face_vertex_indices": null,
+      "hole_indices": [],
+      "mesh": "/NoIndices",
+      "orientation": "rightHanded",
+      "points": 3,
+      "reason": "Sum of faceVertexCounts [3] != size of faceVertexIndices [0].",
+      "subdivision_scheme": "catmullClark",
+      "time": "2",
+      "valid": false
     }
   ],
   "openusd_version": "26.11",

@@ -1199,7 +1199,7 @@ export interface MaterialSubsets {
  * sum to the number of indices), `vertexIndex` (an index names no point),
  * `decode` (an array failed to decode).
  */
-export type MeshTopologyProblemCode = "faceCounts" | "sizeMismatch" | "vertexIndex" | "missing" | "decode";
+export type MeshTopologyProblemCode = "faceCounts" | "sizeMismatch" | "vertexIndex" | "decode";
 
 /**
  * A mesh's topology at one time, what a renderer triangulates

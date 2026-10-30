@@ -7,9 +7,10 @@
 //! on hand-written cases, and reads each mesh of
 //! `fixtures/mesh_topology/scene.usda` at the default time and at times 1
 //! and 2: its face counts, face indices, hole indices, orientation,
-//! subdivision scheme and point count, and `ValidateTopology` on them. The
-//! test replays the cases through `validate_mesh_topology` and the reads
-//! through `Mesh::topology`.
+//! subdivision scheme and point count, and `ValidateTopology` on them,
+//! an unauthored array read as empty, as `Get` leaves it. The test replays
+//! the cases through `validate_mesh_topology` and the reads through
+//! `Mesh::topology` and `Mesh::validate_topology`.
 //!
 //! One difference is deliberate: OpenUSD sums `faceVertexCounts` without
 //! checking their signs, so negative counts that sum to the number of
@@ -171,5 +172,40 @@ fn mesh_topology_reads_match_openusd() {
             read.valid,
             read.reason.as_deref(),
         );
+        assert_same_outcome(
+            &label,
+            &mesh.validate_topology(time),
+            read.valid,
+            read.reason.as_deref(),
+        );
+    }
+}
+
+/// An unauthored `points`, `faceVertexCounts` or `faceVertexIndices`
+/// reads as empty, as OpenUSD's `Get` leaves it, so a mesh with none of
+/// them is valid and one with faces but no points names points that are
+/// not there; the fixture's meshes that show it are all in the oracle.
+#[test]
+fn unauthored_topology_reads_as_empty() {
+    let oracle: Oracle = serde_json::from_str(ORACLE).unwrap();
+    let (store, live) = support::scene(SCENE);
+    let scene = Scene::new(live.stage(), &store);
+    for (mesh, valid) in [
+        ("/Empty", true),
+        ("/PointsOnly", true),
+        ("/NoPoints", false),
+        ("/NoCounts", false),
+        ("/NoIndices", false),
+    ] {
+        let read = oracle
+            .meshes
+            .iter()
+            .find(|read| read.mesh == mesh && read.time == "default")
+            .unwrap_or_else(|| panic!("{mesh} is in the oracle"));
+        assert_eq!(read.valid, valid, "{mesh}");
+        let result = Mesh::get(&scene, mesh)
+            .unwrap()
+            .validate_topology(Time::Default);
+        assert_eq!(result.is_ok(), valid, "{mesh}: {result:?}");
     }
 }

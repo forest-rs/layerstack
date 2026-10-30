@@ -93,7 +93,20 @@ pub enum BuiltinRule {
     /// Root-layer metersPerUnit and upAxis must be authored (fallbacks do not count).
     #[cfg(feature = "usd-geom")]
     GeometryStageMetadata,
-    /// Mesh point/count/index consistency at the requested times.
+    /// Mesh point/count/index consistency at the requested times:
+    /// [`Mesh::validate_topology`], OpenUSD's `UsdGeomMesh::ValidateTopology`
+    /// on the arrays `Get` reads, so an unauthored array reads as empty and
+    /// a mesh with no topology is valid. [`ValidationProblemKind::MeshTopology`]
+    /// carries the failure.
+    ///
+    /// OpenUSD 26.11 registers no `UsdValidation` validator that calls
+    /// `ValidateTopology`, so running it as a rule is layerstack's own; what
+    /// it reports is OpenUSD's check, except that a negative face count is
+    /// refused ([`validate_mesh_topology`]) and an undecodable array is
+    /// reported.
+    ///
+    /// [`Mesh::validate_topology`]: crate::usd_geom::Mesh::validate_topology
+    /// [`validate_mesh_topology`]: crate::subset::validate_mesh_topology
     #[cfg(feature = "usd-geom")]
     MeshTopology,
     /// All subset families of each selected imageable, at their authored samples.

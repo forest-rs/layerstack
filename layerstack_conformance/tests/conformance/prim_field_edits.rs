@@ -1,13 +1,14 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-//! Prim field and composition arc edits agree with OpenUSD 26.08's
+//! Prim field and composition arc edits agree with OpenUSD 26.11's
 //! authoring calls, call by call.
 //!
 //! `scripts/prim_field_edits_oracle.py` opens
 //! `fixtures/prim_field_edits/scene.usda` once per case, points the stage
-//! at an edit target (the root layer, its sublayer, `/V`'s variant branch,
-//! or `/R`'s reference into `asset.usda`) and makes a sequence of
+//! at an edit target (the root layer, its sublayer, `/V`'s variant branch
+//! or local direct variant `{v=x}`, `/I`'s inherit of `/Cls`, or `/R`'s
+//! reference into `asset.usda`) and makes a sequence of
 //! `UsdPrim`, `UsdReferences`, `UsdPayloads`, `UsdInherits` and
 //! `UsdSpecializes` calls. It records whether each call was accepted and
 //! the fields the addressed spec then authors. Here each call is one
@@ -15,10 +16,10 @@
 //! it as OpenUSD does and leave the same spec; applying the inverses in
 //! reverse order must then restore every layer.
 //!
-//! Through `/R`'s reference, OpenUSD drops an inherit path the edit target
-//! does not map, and authors an internal reference to an unmapped path
-//! unchanged, reporting success either way; layerstack rejects both edits,
-//! so a caller learns that nothing was authored (`DELIBERATE`).
+//! The `translate_*` cases make one call each through a non-local target:
+//! a root prim path of an inherit, a specialize or an internal arc is
+//! authored as given, mapped or not, and any other path is mapped or the
+//! call is rejected (`Usd_ListEditImplBase::_TranslatePath`).
 //!
 //! Spec: AOUSD Core §7.6.2 (prim spec fields), §10 (composition arcs),
 //! §12.4 (list ops). OpenUSD: `pxr/usd/usd/listEditImpl.h`,
@@ -26,8 +27,8 @@
 
 use layerstack::{
     ArcKind, EditTarget, InMemoryStore, LayerId, ListOp, ListPosition, LiveStage, Path, PathId,
-    PrimSpec, Reference, ReferenceTarget, SpecPath, Specifier, Stage, StageOptions, Transaction,
-    VariantSpec,
+    PrimSpec, Reference, ReferenceSource, ReferenceTarget, SpecPath, Specifier, Stage,
+    StageOptions, Transaction, VariantSpec,
 };
 use layerstack_conformance::{
     usda_real::{LoadedStage, load_entry_usda},
@@ -36,10 +37,6 @@ use layerstack_conformance::{
 use serde_json::{Value as Json, json};
 
 const ORACLE: &str = include_str!("../../fixtures/prim_field_edits/oracle.json");
-
-/// Cases where layerstack deliberately differs, with what it does instead:
-/// every call rejected, and the spec as the scene authors it.
-const DELIBERATE: &[(&str, &[bool])] = &[("reference_target_rejects_unmapped", &[false; 4])];
 
 fn load() -> LoadedStage {
     let path = workspace_root().join("layerstack_conformance/fixtures/prim_field_edits/scene.usda");
@@ -61,7 +58,14 @@ fn edit_target(loaded: &mut LoadedStage, live: &LiveStage, target: &Json) -> Edi
     let kind = match target["kind"].as_str().unwrap() {
         "root" => return EditTarget::for_layer(loaded.root_layer),
         "sublayer" => return EditTarget::for_layer(layer_named(loaded, "sub.usda")),
+        "local_direct_variant" => {
+            let variant = target["variant"].as_str().unwrap();
+            let variant = SpecPath::parse(variant, loaded.store.tokens(), loaded.store.paths())
+                .expect("a variant path");
+            return EditTarget::for_local_variant(loaded.root_layer, &variant);
+        }
         "variant" => ArcKind::Variants,
+        "inherit" => ArcKind::Inherits,
         "reference" => ArcKind::References,
         other => panic!("no target {other}"),
     };
@@ -95,6 +99,10 @@ fn position(step: &Json) -> ListPosition {
 fn arc(loaded: &mut LoadedStage, layer: LayerId, item: &Json) -> Reference {
     let path = item["path"].as_str().unwrap();
     let mut reference = match item["asset"].as_str().unwrap_or("") {
+        "" if path.is_empty() => Reference::from_source(
+            ReferenceSource::Layer { layer, asset: None },
+            ReferenceTarget::DefaultPrim,
+        ),
         "" => Reference::new(layer, loaded.store.path(path)),
         asset => {
             let id = layer_named(loaded, asset);
@@ -438,18 +446,14 @@ fn prim_field_edits_agree_with_openusd_call_by_call() {
             let context = format!("{name}: step {} recomposes", accepted.len());
             assert_fresh(&live, &mut loaded.store, loaded.root_layer, &context);
         }
-        let deliberate = DELIBERATE.iter().find(|(n, _)| *n == name);
-        let expected: Vec<bool> = match deliberate {
-            Some((_, accepted)) => accepted.to_vec(),
-            None => serde_json::from_value(case["accepted"].clone()).unwrap(),
-        };
+        let expected: Vec<bool> = serde_json::from_value(case["accepted"].clone()).unwrap();
         assert_eq!(accepted, expected, "{name}: accepted calls");
+        if !accepted.iter().any(|accepted| *accepted) {
+            assert_eq!(authored(&loaded), before, "{name}: nothing authored");
+        }
 
         let got = authored(&loaded);
-        let want = match deliberate {
-            Some(_) => before,
-            None => Some(case["spec"].clone()).filter(|spec| !spec.is_null()),
-        };
+        let want = Some(case["spec"].clone()).filter(|spec| !spec.is_null());
         // The pseudo-root holds none of the recorded fields.
         let got = got.filter(|_| name != "pseudo_root");
         let want = want.filter(|spec| spec.as_object().is_some_and(|o| !o.is_empty()));

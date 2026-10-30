@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0 OR MIT
 """Records what OpenUSD's prim authoring calls author, call by call.
 
-Usage: prim_field_edits_oracle.py [FIXTURES [OUT]]
+Usage: prim_field_edits_oracle.py [--check] [FIXTURES [OUT]]
 
 Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.11`.
 
@@ -18,11 +18,24 @@ target's layer, as normalized fields; `null` when there is none.
 `tests/conformance/prim_field_edits.rs` makes the same calls through layerstack's
 `Transaction` and must agree with every record.
 
-Writes `fixtures/prim_field_edits/oracle.json` by default.
+The `translate_*` cases make one call each, so each records exactly what
+that call authors: how `Usd_ListEditImplBase::_TranslatePath`
+(`pxr/usd/usd/listEditImpl.h`) takes the path of an inherit, a specialize
+or an internal reference or payload through a non-local edit target
+(`/R`'s reference, `/I`'s inherit, `/V`'s local direct variant). A root
+prim path is authored as given, whether or not the target maps it; any
+other path is mapped, with its variant selections stripped, and a call
+whose path does not map raises a coding error and authors nothing.
+
+Writes `fixtures/prim_field_edits/oracle.json` by default. `--check` writes
+it into a temporary directory instead and fails unless it matches the
+checked-in one.
 """
+import argparse
+import filecmp
 import json
 import os
-import sys
+import tempfile
 
 from pxr import Sdf, Usd
 
@@ -168,6 +181,8 @@ def edit_target(stage, target):
         return Usd.EditTarget(root)
     if kind == "sublayer":
         return Usd.EditTarget(Sdf.Layer.Find(os.path.join(os.path.dirname(root.realPath), "sub.usda")))
+    if kind == "local_direct_variant":
+        return Usd.EditTarget.ForLocalDirectVariant(root, Sdf.Path(target["variant"]))
     node = node_of(stage.GetPrimAtPath(target["prim"]), kind)
     return Usd.EditTarget(node.layerStack.layerTree.layer, node)
 
@@ -340,9 +355,47 @@ CASES = [
 ]
 
 
-def main():
-    fixtures = sys.argv[1] if len(sys.argv) > 1 else FIXTURES
-    out_path = sys.argv[2] if len(sys.argv) > 2 else os.path.join(fixtures, "oracle.json")
+# One call through each non-local target per path kind: a root prim path
+# the target maps, one it does not, and non-root paths it maps and does not.
+TRANSLATE_TARGETS = [
+    ("reference", {"kind": "reference", "prim": "/R"}, "/R",
+     ["/R", "/B", "/R/Child", "/B/Child"]),
+    ("inherit", {"kind": "inherit", "prim": "/I"}, "/I",
+     ["/I", "/B", "/I/Child", "/B/Child"]),
+    ("variant", {"kind": "local_direct_variant", "variant": "/V{v=x}"}, "/V",
+     ["/V", "/B", "/V/Child"]),
+]
+
+
+def translate_cases():
+    out = []
+    for target_name, target, prim, paths in TRANSLATE_TARGETS:
+        for path in paths:
+            label = path.strip("/").replace("/", "_").lower()
+            for call_name in ("add_inherit", "add_specialize", "add_reference", "add_payload",
+                              "remove_inherit", "remove_reference"):
+                out.append((f"translate_{target_name}_{call_name}_{label}", target, prim,
+                            [{"call": call_name, "path": path}]))
+    reference = {"kind": "reference", "prim": "/R"}
+    out += [
+        ("translate_reference_set_inherits_kept_and_mapped", reference, "/R",
+         [{"call": "set_inherits", "value": ["/B", "/R", "/R/Child"]}]),
+        ("translate_reference_set_inherits_unmapped", reference, "/R",
+         [{"call": "set_inherits", "value": ["/B", "/B/Child"]}]),
+        ("translate_reference_set_references_kept", reference, "/R",
+         [{"call": "set_references", "value": [{"path": "/R"}, {"path": "/R/Child"}]}]),
+        ("translate_reference_external_kept", reference, "/R",
+         [{"call": "add_reference", "path": "/Other/Deep", "asset": "asset.usda"}]),
+        ("translate_reference_default_prim_kept", reference, "/R",
+         [{"call": "add_reference", "path": ""}]),
+    ]
+    return out
+
+
+CASES += translate_cases()
+
+
+def write(fixtures, out_path):
     cases = []
     for name, target_desc, prim_path, steps in CASES:
         for layer in list(Sdf.Layer.GetLoadedLayers()):
@@ -382,6 +435,23 @@ def main():
     with open(out_path, "w") as f:
         json.dump({"openusd_version": f"{minor}.{patch}", "cases": cases}, f, indent=1, sort_keys=True)
         f.write("\n")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--check", action="store_true")
+    parser.add_argument("fixtures", nargs="?", default=FIXTURES)
+    parser.add_argument("out", nargs="?")
+    args = parser.parse_args()
+    committed = os.path.join(args.fixtures, "oracle.json")
+    if not args.check:
+        write(args.fixtures, args.out or committed)
+        return
+    with tempfile.TemporaryDirectory() as tmp:
+        out = os.path.join(tmp, "oracle.json")
+        write(args.fixtures, out)
+        if not filecmp.cmp(out, committed, shallow=False):
+            raise SystemExit(f"oracle.json differs from {committed}")
 
 
 if __name__ == "__main__":

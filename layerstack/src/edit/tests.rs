@@ -2797,26 +2797,40 @@ fn prim_field_edits_reject_what_they_cannot_author() {
         Rejection::NotOnVariant(PrimField::Specifier)
     );
 
-    // Through `/World/RockA`'s reference, `/Rock` (a path outside the
-    // reference's namespace) does not map.
+    // Through `/World/RockA`'s reference, `/World/Moss` (a path outside the
+    // reference's namespace) does not map, and is rejected; a root prim
+    // path, mapped or not, is authored as given (OpenUSD:
+    // `Usd_ListEditImplBase::_TranslatePath`).
     let node = node(&stage, rock_a, ArcKind::References);
     let target = EditTarget::for_node(&stage, rock_a, node).unwrap();
+    let moss = store.path("/World/Moss");
     let mut txn = Transaction::new();
-    txn.add_inherit(target.prim(rock_a), rock, ListPosition::BackOfPrepend);
+    txn.add_inherit(target.prim(rock_a), moss, ListPosition::BackOfPrepend);
     assert_eq!(
         reason(&mut store, &txn),
-        Rejection::UnmappableTarget(TargetPath::Prim(rock))
+        Rejection::UnmappableTarget(TargetPath::Prim(moss))
     );
     let mut txn = Transaction::new();
     txn.add_reference(
         target.prim(rock_a),
-        Reference::new(ROCK, rock),
+        Reference::new(ROCK, moss),
         ListPosition::BackOfPrepend,
     );
     assert_eq!(
         reason(&mut store, &txn),
-        Rejection::UnmappableTarget(TargetPath::Prim(rock))
+        Rejection::UnmappableTarget(TargetPath::Prim(moss))
     );
+    let world = store.path("/World");
+    let child = store.path("/World/RockA/Pebble");
+    let mut txn = Transaction::new();
+    txn.add_inherit(target.prim(rock_a), world, ListPosition::BackOfPrepend)
+        .add_specialize(target.prim(rock_a), child, ListPosition::BackOfPrepend);
+    let undo = txn.apply(&mut store).expect("a root prim path is kept");
+    let pebble = store.path("/Rock/Pebble");
+    let spec = store.layers[&ROCK].prim(rock).unwrap();
+    assert_eq!(spec.inherits().prepend, [world], "kept as given");
+    assert_eq!(spec.specializes().prepend, [pebble], "mapped");
+    undo.apply(&mut store).unwrap();
 }
 
 #[test]

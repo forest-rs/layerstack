@@ -451,7 +451,7 @@ impl BlendShapeQuery {
             }
         }
         let mut point_corners: Vec<_> = corners.iter().enumerate().map(|(i, &p)| (p, i)).collect();
-        point_corners.sort_unstable_by_key(|&(p, _)| p);
+        sort::sort_unstable_by_key(&mut point_corners, |&(p, _)| p);
         for c in contributions {
             let shape = &self.shapes[c.shape];
             let offsets = &shape.samples[c.sample].normals;

@@ -3016,7 +3016,7 @@ impl Writer<'_> {
             if !doc.sublayers.is_empty() {
                 fields.push(LayerField::SubLayers(&doc.sublayers));
             }
-            fields.sort_unstable_by(|a, b| a.name().cmp(b.name()));
+            sort::sort_unstable_by(&mut fields, |a, b| a.name().cmp(b.name()));
             for field in fields {
                 match field {
                     LayerField::DefaultPrim(name) => {
@@ -3269,7 +3269,7 @@ impl Writer<'_> {
                 .as_ref()
                 .map(PrimField::VariantSetNames),
         );
-        fields.sort_unstable_by(|a, b| dictionary_cmp(a.name(), b.name()));
+        sort::sort_unstable_by(&mut fields, |a, b| dictionary_cmp(a.name(), b.name()));
         for field in fields {
             match field {
                 PrimField::Metadatum(entry) => self.metadatum(entry, depth),
@@ -3378,7 +3378,7 @@ impl Writer<'_> {
     fn sorted_properties(&mut self, properties: &[Property], depth: usize) {
         let mut keyed: SmallVec<[(PropertyKey<'_>, &Property); 16]> =
             properties.iter().map(|p| (property_key(p), p)).collect();
-        keyed.sort_unstable_by(|a, b| property_order(&a.0, &b.0));
+        sort::sort_unstable_by(&mut keyed, |a, b| property_order(&a.0, &b.0));
         for (_, property) in keyed {
             self.property(property, depth);
         }

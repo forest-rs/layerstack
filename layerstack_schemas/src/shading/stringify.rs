@@ -29,7 +29,7 @@
 //!   edit (which no dictionary holds), as the empty text.
 
 use alloc::{format, string::String, vec::Vec};
-use layerstack::{FieldValue, LayerStore, ListOp, Value, float_text};
+use layerstack::{FieldValue, LayerStore, ListOp, Value, float_text, sort};
 
 /// A dictionary entry or metadata field value as `TfStringify` spells it.
 pub(super) fn field(value: &FieldValue, store: &dyn LayerStore) -> String {
@@ -105,7 +105,7 @@ pub(super) fn value(value: &Value, store: &dyn LayerStore) -> String {
         Value::TypedArray(items) => list(items.values().map(|item| self::value(&item, store))),
         Value::Dictionary(entries) => {
             let mut sorted: Vec<_> = entries.iter().collect();
-            sorted.sort_by(|a, b| a.0.as_bytes().cmp(b.0.as_bytes()));
+            sort::sort_by(&mut sorted, |a, b| a.0.as_bytes().cmp(b.0.as_bytes()));
             let body: Vec<String> = sorted
                 .into_iter()
                 .map(|(key, value)| format!("'{key}': {}", field(value, store)))

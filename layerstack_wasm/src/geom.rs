@@ -32,7 +32,7 @@ use alloc::{
 };
 
 use layerstack::{
-    ChangeCursor, InMemoryStore, LiveStage, PathId, StageView, TargetPath, Time, TypedArray,
+    ChangeCursor, InMemoryStore, LiveStage, PathId, StageView, TargetPath, Time, TypedArray, sort,
 };
 use layerstack_schemas::{
     PrimView, Scene, Visibility, XformCache, XformCacheStats, XformProblemKind,
@@ -269,7 +269,7 @@ fn bounds_key(purposes: &[String], hints: bool, ignore_visibility: bool) -> Boun
     } else {
         purposes.to_vec()
     };
-    purposes.sort_unstable();
+    sort::sort_unstable(&mut purposes);
     purposes.dedup();
     BoundsKey {
         purposes,

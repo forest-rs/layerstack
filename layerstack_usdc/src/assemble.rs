@@ -885,7 +885,7 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
                 Some((path?, prim))
             });
         layer.insert_prims(plain);
-        branched.sort_unstable_by_key(|(path, _)| *path);
+        sort::sort_unstable_by_key(&mut branched, |(path, _)| *path);
         for (path_str, mut prim) in branched {
             let namespace = match split_branch_path(path_str) {
                 Some((namespace, sites)) => {

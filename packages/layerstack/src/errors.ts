@@ -126,6 +126,9 @@
  *   `instancer.length` (an array of another length than the instances),
  *   `instancer.prototype_index`, `instancer.prototypes` (no prototypes),
  *   `instancer.missing_attribute`, `instancer.time`, `instancer.motion`.
+ * - `camera.invalid`: a camera whose parameters or transform make no
+ *   camera (an unknown projection, an aperture or clipping range that
+ *   makes no frustum, a singular transform).
  *
  * Composition errors are not thrown; {@link Stage.status} lists them as
  * {@link Issue}s with `composition.*` codes
@@ -169,6 +172,7 @@ export type ErrorCode =
   | "mute.refused"
   | "flatten.failed"
   | "package.failed"
+  | "camera.invalid"
   | `edit.${string}`
   | `namespace.${string}`
   | `subset.${string}`

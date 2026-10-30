@@ -127,6 +127,7 @@ pub use stage::{BROWSER_LIMITS, SessionLayer, Stage, TypedSchema};
 pub use storage::HostStorage;
 
 use alloc::vec;
+use alloc::vec::Vec;
 
 use wasm_bindgen::prelude::*;
 
@@ -148,4 +149,20 @@ pub fn native_version() -> JsValue {
         wire::Wire::Number(f64::from(ABI)),
     ])
     .into()
+}
+
+/// The linear Rec. 709 color of a blackbody at `kelvin` (clamped to
+/// 1000–10000 K), normalized to unit luminance, as OpenUSD's
+/// `UsdLuxBlackbodyTemperatureAsRgb`: what a light's `colorTemperature`
+/// multiplies its color by.
+///
+/// # Errors
+///
+/// `argument.invalid` for a temperature that is not finite.
+#[wasm_bindgen(js_name = blackbodyTemperatureRgb)]
+pub fn blackbody_temperature_rgb(kelvin: f32) -> Result<Vec<f32>, JsValue> {
+    use alloc::string::ToString;
+    layerstack_schemas::light::blackbody_temperature_rgb(kelvin)
+        .map(|rgb| rgb.to_vec())
+        .map_err(|problem| Error::new("argument.invalid", problem.to_string()).into())
 }

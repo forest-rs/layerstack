@@ -1964,6 +1964,25 @@ impl Stage {
         Ok(scene.is_a(prim, schema))
     }
 
+    /// Whether the prim has the API schema `schema` applied (`instance`
+    /// naming a multiple-apply instance), its type's built-in ones
+    /// included, as `UsdPrim::HasAPI` answers.
+    ///
+    /// # Errors
+    ///
+    /// `path.invalid`, or `prim.not_found` when no prim is at `path`.
+    pub(crate) fn has_api(
+        &self,
+        path: &str,
+        schema: &str,
+        instance: Option<&str>,
+    ) -> Result<bool, Error> {
+        let prim = self.existing_prim(path)?.path();
+        let scene =
+            layerstack_schemas::Scene::new(self.document.stage().stage(), self.document.store());
+        Ok(scene.has_api(prim, schema, instance))
+    }
+
     pub(crate) fn existing_prim(&self, path: &str) -> Result<layerstack::Prim<'_>, Error> {
         check_prim_path(path)?;
         self.document.view().prim(path).ok_or_else(|| {
@@ -2326,6 +2345,18 @@ impl Stage {
         Ok(self.is_a(path, schema)?)
     }
 
+    /// Whether the prim has an API schema applied (`has_api`), as
+    /// documented in `stage.rs`.
+    #[wasm_bindgen(js_name = hasAPI)]
+    pub fn js_has_api(
+        &self,
+        path: &str,
+        schema: &str,
+        instance: Option<String>,
+    ) -> Result<bool, JsValue> {
+        Ok(self.has_api(path, schema, instance.as_deref())?)
+    }
+
     /// The record `time_samples` builds, as documented in `stage.rs`.
     #[wasm_bindgen(js_name = timeSamples)]
     pub fn js_time_samples(&self, path: &str) -> Result<Vec<f64>, JsValue> {
@@ -2547,6 +2578,18 @@ impl Stage {
     #[wasm_bindgen(js_name = boundsCache)]
     pub fn js_bounds_cache(&self) -> JsValue {
         self.bounds_cache().into()
+    }
+
+    /// The record `camera` builds, as documented in `geom.rs`.
+    #[wasm_bindgen(js_name = camera)]
+    pub fn js_camera(
+        &mut self,
+        path: &str,
+        time: Option<f64>,
+        policy: Option<String>,
+        aspect: Option<f64>,
+    ) -> Result<JsValue, JsValue> {
+        Ok(self.camera(path, time, policy.as_deref(), aspect)?.into())
     }
 
     /// The record `local_transform` builds, as documented in `geom.rs`.

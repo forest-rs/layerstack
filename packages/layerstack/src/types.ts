@@ -1460,6 +1460,70 @@ export interface XformProblem {
   readonly kind: "noAttribute" | "unknownOpType" | "noValue" | "valueType" | "singular" | "other";
 }
 
+/** How {@link Stage.camera} fits a camera's aperture to an aspect ratio (`CameraUtilConformWindowPolicy`). */
+export type ConformWindowPolicy =
+  /** Keep the height, change the width. */
+  | "matchVertically"
+  /** Keep the width, change the height. */
+  | "matchHorizontally"
+  /** Grow the width or the height: everything the camera saw stays in view. */
+  | "fit"
+  /** Shrink the width or the height: the view is filled, edges cut. */
+  | "crop"
+  /** Leave the aperture as it is. */
+  | "dontConform";
+
+/** What {@link Stage.camera} reads. */
+export interface CameraOptions {
+  /** The time; the default time when absent. */
+  readonly time?: number;
+  /** Fit the aperture to `aspect` (width over height) by `policy` first (`CameraUtilConformWindow`). */
+  readonly conform?: { readonly policy: ConformWindowPolicy; readonly aspect: number };
+}
+
+/**
+ * A `UsdGeomCamera` at one time, as a renderer reads it ({@link Stage.camera}).
+ * Matrices are 16 numbers row by row in OpenUSD's row-vector convention;
+ * eye space looks down -Z; the projection maps depth to OpenGL's `[-1, 1]`.
+ */
+export interface Camera {
+  readonly projection: "perspective" | "orthographic";
+  /** The camera's local-to-world matrix, scale and shear included. */
+  readonly cameraToWorld: Float64Array;
+  /** World to eye, conformed as `GfFrustum::ComputeViewMatrix` conforms it (no scale or shear). */
+  readonly view: Float64Array;
+  /** Eye to clip (`GfFrustum::ComputeProjectionMatrix`). */
+  readonly projectionMatrix: Float64Array;
+  /** The window `[left, bottom, right, top]`: at depth 1 for a perspective camera, in scene units for an orthographic one; offsets included. */
+  readonly window: Float64Array;
+  /** `[near, far]`, in scene units. */
+  readonly clippingRange: Float64Array;
+  /** `[horizontalAperture, verticalAperture]`, in tenths of a scene unit; conformed when asked. */
+  readonly aperture: Float64Array;
+  /** `[horizontalApertureOffset, verticalApertureOffset]`, in tenths of a scene unit. */
+  readonly apertureOffset: Float64Array;
+  /** `focalLength`, in tenths of a scene unit. */
+  readonly focalLength: number;
+  /** `fStop`: the lens aperture for depth of field; 0 turns it off. */
+  readonly fStop: number;
+  /** `focusDistance`, in scene units. */
+  readonly focusDistance: number;
+  /** `clippingPlanes`, four numbers `[a, b, c, d]` a plane, in camera space. */
+  readonly clippingPlanes: Float64Array;
+  /** `[shutter:open, shutter:close]`, in time codes relative to the frame. */
+  readonly shutter: Float64Array;
+  /** The exposure controls (`exposure`, `exposure:fStop`, `exposure:iso`, `exposure:responsivity`, `exposure:time`). */
+  readonly exposure: {
+    readonly exposure: number;
+    readonly fStop: number;
+    readonly iso: number;
+    readonly responsivity: number;
+    readonly time: number;
+  };
+  /** `UsdGeomCamera::ComputeLinearExposureScale`: what scene luminance is multiplied by. */
+  readonly linearExposureScale: number;
+}
+
 /** A prim's local transform at one time (`UsdGeomXformCache::GetLocalTransformation`). */
 export interface LocalTransform {
   /** 16 numbers, row by row, in OpenUSD's row-vector convention (see {@link Stage.worldTransforms}); the identity for a prim that is not `Xformable`. */

@@ -28,6 +28,7 @@
 import init, {
   EditBatch as GlueEditBatch,
   Stage as GlueStage,
+  blackbodyTemperatureRgb,
   nativeVersion,
   skinNormals,
   skinPoints,
@@ -107,6 +108,7 @@ async function instantiate(source: URL | string | BufferSource | WebAssembly.Mod
     skinPoints,
     skinNormals,
     skinTransform,
+    blackbodyTemperatureRgb,
     memory,
   });
 }

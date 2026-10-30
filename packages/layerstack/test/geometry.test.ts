@@ -588,3 +588,93 @@ def "Loose" (
     assert.equal(stage.prim("/North/Bulb")?.instanceProxy, true);
   });
 });
+
+describe("cameras and lights", () => {
+  // `camera.json`: `UsdGeomCamera::GetCamera` and its frustum, every
+  // camera at the default time and three numeric times, linear and held.
+  it("computes cameras as OpenUSD does", async () => {
+    const stage = await openFixture("", "camera.usda");
+    for (const row of oracle("camera.json").rows) {
+      if (row.interpolation !== "linear") continue;
+      const camera = stage.camera(row.path, at(row.time ?? undefined))!;
+      const where = `${row.path} ${row.time}`;
+      assert.ok(close(camera.view, row.view.flat(), 2e-10), where);
+      assert.ok(close(camera.projectionMatrix, row.projection.flat(), 2e-10), where);
+      assert.ok(close(camera.cameraToWorld, row.transform.flat(), 2e-10), where);
+      assert.ok(close(camera.window, row.window, 2e-10), where);
+      assert.deepEqual([...camera.clippingRange], row.clipping_range, where);
+      assert.deepEqual([...camera.aperture], row.aperture, where);
+      assert.deepEqual([...camera.apertureOffset], row.aperture_offset, where);
+      assert.equal(camera.focalLength, row.focal_length, where);
+      assert.equal(camera.fStop, row.f_stop, where);
+      assert.equal(camera.focusDistance, row.focus_distance, where);
+      assert.deepEqual([...camera.shutter], row.shutter, where);
+      assert.deepEqual([...camera.clippingPlanes], row.clipping_planes.flat(), where);
+    }
+    assert.equal(stage.camera("/Rig"), null, "not a camera");
+    const inverted = layerstack.open({
+      identifier: "inverted.usda",
+      bytes: new TextEncoder().encode('#usda 1.0\ndef Camera "Eye" {\n    float2 clippingRange = (5, 1)\n}\n'),
+    });
+    assert.equal(failure(() => inverted.camera("/Eye")).code, "camera.invalid");
+    assert.equal(
+      failure(() => stage.camera("/Defaults", { conform: { policy: "squash" as "fit", aspect: 1 } })).code,
+      "argument.invalid",
+    );
+  });
+
+  // `camera_conform.json`: `CameraUtilConformWindow`, every policy at five
+  // aspects, through OpenUSD's C++.
+  it("conforms a camera's window as OpenUSD does", async () => {
+    const stage = await openFixture("", "camera.usda");
+    for (const row of oracle("camera_conform.json").rows) {
+      const camera = stage.camera(row.path, { ...at(row.time ?? undefined), conform: { policy: row.policy, aspect: row.aspect } })!;
+      const where = `${row.path} ${row.time} ${row.policy} ${row.aspect}`;
+      assert.deepEqual([...camera.aperture], row.aperture.map(Math.fround), where);
+      assert.ok(close(camera.window, row.window, 2e-10), where);
+      assert.ok(close(camera.projectionMatrix, row.projection.flat(), 2e-10), where);
+      assert.ok(close(camera.view, row.view.flat(), 2e-10), where);
+    }
+  });
+
+  // `camera_exposure.json`: the exposure controls and
+  // `UsdGeomCamera::ComputeLinearExposureScale`.
+  it("reads a camera's exposure as OpenUSD does", async () => {
+    const stage = await openFixture("", "camera_exposure.usda");
+    for (const row of oracle("camera_exposure.json").rows) {
+      const camera = stage.camera(row.path, at(row.time ?? undefined))!;
+      const where = `${row.path} ${row.time}`;
+      assert.equal(camera.exposure.exposure, row.exposure ?? 0, where);
+      assert.equal(camera.exposure.fStop, row.f_stop ?? 1, where);
+      assert.equal(camera.exposure.iso, row.iso ?? 100, where);
+      assert.equal(camera.exposure.responsivity, row.responsivity ?? 1, where);
+      assert.equal(camera.exposure.time, row.exposure_time ?? 1, where);
+      assert.equal(camera.linearExposureScale, row.linear_exposure_scale, where);
+    }
+  });
+
+  // `lux_helpers/oracle.json`: `UsdLuxBlackbodyTemperatureAsRgb`.
+  it("converts color temperatures as OpenUSD does", () => {
+    for (const { kelvin, rgb } of oracle("lux_helpers/oracle.json").blackbody) {
+      if (!Number.isFinite(Math.fround(kelvin))) {
+        assert.equal(failure(() => layerstack.blackbodyTemperatureRgb(kelvin)).code, "argument.invalid");
+        continue;
+      }
+      assert.deepEqual([...layerstack.blackbodyTemperatureRgb(kelvin)], rgb, `${kelvin}`);
+    }
+  });
+
+  // `stagehand_lights/oracle.json`: which lights carry `ShapingAPI` and
+  // `ShadowAPI`, as `UsdPrim::HasAPI` answers.
+  it("says which API schemas a prim has", async () => {
+    const stage = await openFixture("stagehand_lights/", "scene.usda");
+    for (const row of oracle("stagehand_lights/oracle.json").rows) {
+      const prim = stage.prim(row.path)!;
+      assert.equal(prim.hasAPI("ShapingAPI"), row.shaping, row.path);
+      assert.equal(prim.hasAPI("ShadowAPI"), row.shadow, row.path);
+      assert.ok(prim.hasAPI("LightAPI"), "built in");
+      assert.ok(prim.hasAPI("CollectionAPI", "lightLink"), "built in, multiple-apply");
+      assert.ok(!prim.hasAPI("CollectionAPI", "other"));
+    }
+  });
+});

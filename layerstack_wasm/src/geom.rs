@@ -37,9 +37,10 @@ use layerstack::{
 use layerstack_schemas::{
     PrimView, Scene, Visibility, XformCache, XformCacheStats, XformProblemKind,
     bounds::{BoundingBox, BoundsCache, BoundsError, BoundsOptions, BoundsStats, Range3d},
+    camera::ConformWindowPolicy,
     point_instancer::{InstanceTransformOptions, PointInstancerError},
     primvar::{Primvar, PrimvarError},
-    usd_geom::{Imageable, ImageablePurpose, PointInstancer, Xformable},
+    usd_geom::{Camera, CameraProjection, Imageable, ImageablePurpose, PointInstancer, Xformable},
 };
 
 use crate::{
@@ -400,6 +401,98 @@ impl Stage {
                     })
                     .collect(),
             ),
+        ]))
+    }
+
+    /// The camera at `path` at `time` as a renderer reads it
+    /// (`layerstack_schemas::camera::ComputedCamera`), its window fitted to
+    /// `aspect` by `policy` (`matchVertically`, `matchHorizontally`, `fit`,
+    /// `crop` or `dontConform`) when both are given; `null` when the prim
+    /// is not a `Camera`. `[projection, cameraToWorld, view, projectionMatrix,
+    /// window, clippingRange, aperture, apertureOffset, focalLength, fStop,
+    /// focusDistance, clippingPlanes, shutter, exposure, linearExposureScale]`:
+    /// matrices 16 numbers row by row, `window` `[left, bottom, right, top]`,
+    /// `clippingPlanes` 4 numbers a plane, `exposure` `[exposure, fStop, iso,
+    /// responsivity, time]`.
+    ///
+    /// OpenUSD: `UsdGeomCamera::GetCamera`, `GfCamera::GetFrustum`,
+    /// `GfFrustum::ComputeViewMatrix`, `ComputeProjectionMatrix`,
+    /// `CameraUtilConformWindow`, `UsdGeomCamera::ComputeLinearExposureScale`.
+    ///
+    /// # Errors
+    ///
+    /// `path.invalid`, `prim.not_found`; `argument.invalid` for an unknown
+    /// policy; `camera.invalid` when its parameters or transform make no
+    /// camera.
+    pub(crate) fn camera(
+        &mut self,
+        path: &str,
+        time: Option<f64>,
+        policy: Option<&str>,
+        aspect: Option<f64>,
+    ) -> Result<Wire, Error> {
+        let prim = self.existing_prim(path)?.path();
+        let policy = match policy {
+            None => None,
+            Some("matchVertically") => Some(ConformWindowPolicy::MatchVertically),
+            Some("matchHorizontally") => Some(ConformWindowPolicy::MatchHorizontally),
+            Some("fit") => Some(ConformWindowPolicy::Fit),
+            Some("crop") => Some(ConformWindowPolicy::Crop),
+            Some("dontConform") => Some(ConformWindowPolicy::DontConform),
+            Some(other) => {
+                return Err(Error::new(
+                    "argument.invalid",
+                    format!("no conform policy is named `{other}`"),
+                ));
+            }
+        };
+        let (document, geom) = self.document_and_geom();
+        let store = document.store();
+        let live = document.stage();
+        let cache = geom.transforms_at(live, store, time_of(time));
+        let scene = Scene::new(live.stage(), store);
+        let Some(camera) = Camera::get(&scene, prim) else {
+            return Ok(Wire::Null);
+        };
+        let mut camera = camera
+            .compute_camera(cache)
+            .map_err(|error| Error::new("camera.invalid", error.to_string()).at_path(path))?;
+        if let (Some(policy), Some(aspect)) = (policy, aspect) {
+            camera = camera.conform_window(policy, aspect);
+        }
+        let matrix = |m: &[[f64; 4]; 4]| {
+            let mut out = Vec::with_capacity(16);
+            push_matrix(&mut out, m);
+            Wire::Floats(out)
+        };
+        let floats = |values: &[f32]| Wire::Floats(values.iter().map(|&v| f64::from(v)).collect());
+        let exposure = camera.exposure();
+        Ok(Wire::List(vec![
+            Wire::text(if *camera.projection() == CameraProjection::Orthographic {
+                "orthographic"
+            } else {
+                "perspective"
+            }),
+            matrix(camera.camera_to_world()),
+            matrix(camera.view_matrix()),
+            matrix(camera.projection_matrix()),
+            Wire::Floats(camera.window().to_vec()),
+            Wire::Floats(camera.clipping_range().to_vec()),
+            floats(&camera.aperture()),
+            floats(&camera.aperture_offset()),
+            Wire::Number(f64::from(camera.focal_length())),
+            Wire::Number(f64::from(camera.f_stop())),
+            Wire::Number(f64::from(camera.focus_distance())),
+            floats(camera.clipping_planes().as_flattened()),
+            Wire::Floats(camera.shutter_offsets().to_vec()),
+            floats(&[
+                exposure.exposure,
+                exposure.f_stop,
+                exposure.iso,
+                exposure.responsivity,
+                exposure.time,
+            ]),
+            Wire::Number(f64::from(exposure.linear_scale())),
         ]))
     }
 

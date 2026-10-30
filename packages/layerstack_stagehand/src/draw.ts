@@ -7,8 +7,8 @@
 // `@forest-rs/layerstack` and building buffers in this package's module.
 import type { Changes, Prim, Stage } from "@forest-rs/layerstack";
 import type { Stagehand, StagehandMesh } from "./index.js";
-import { CAMERA_INPUTS, LIGHT_INPUTS, lightKind, readLight } from "./light.js";
-import type { CameraItem, LightItem, LightKind } from "./light.js";
+import { CAMERA_INPUTS, LIGHT_INPUTS, lightKey, lightKind, readLight } from "./light.js";
+import type { CameraItem, LightInstance, LightItem, LightKind } from "./light.js";
 import { readMaterial } from "./material.js";
 import type { MaterialItem } from "./material.js";
 import { readMesh, readShape, shapeSchema } from "./read.js";
@@ -153,6 +153,7 @@ export interface DrawDiff {
   readonly camerasRemoved: readonly string[];
   /** Cameras read again and found different: moved, or a lens changed. */
   readonly camerasChanged: readonly string[];
+  /** New lights, by key ({@link LightItem.key}). */
   readonly lightsAdded: readonly string[];
   readonly lightsRemoved: readonly string[];
   /** Lights read again and found different. */
@@ -374,12 +375,26 @@ function covers(scope: Scope, source: ItemSource): boolean {
   }
 }
 
+/** A light discovery found: its path, the point instancer's instance placing it, its kind. */
+interface FoundLight {
+  readonly path: string;
+  readonly instance: LightInstance | null;
+  readonly kind: LightKind;
+}
+
 interface Found {
   sources: ItemSource[];
   scopes: Scope[];
   cameras: string[];
-  lights: [string, LightKind][];
+  /** By key ({@link lightKey}). */
+  lights: Map<string, FoundLight>;
   prims: number;
+}
+
+/** A point instancer's prototypes and its unmasked instances, by position: prototype index and matrix. */
+interface Placed {
+  readonly prototypes: readonly string[];
+  readonly instances: Map<number, [number, Float64Array]>;
 }
 
 /**
@@ -597,14 +612,18 @@ export class DrawList implements Disposable {
     return this.#cameras.get(path)?.item ?? null;
   }
 
-  /** The lights ({@link LightItem}), by path. */
+  /**
+   * The lights ({@link LightItem}), by key: a light inside a native
+   * instance once per instance (its instance proxy's path), one inside a
+   * point instancer's prototype once per unmasked instance.
+   */
   lights(): LightItem[] {
     return [...this.#lights.values()].map((held) => held.item);
   }
 
-  /** The light at `path`, while it is listed. */
-  light(path: string): LightItem | null {
-    return this.#lights.get(path)?.item ?? null;
+  /** The light of `key` ({@link LightItem.key}: its path, for one no point instancer places), while it is listed. */
+  light(key: string): LightItem | null {
+    return this.#lights.get(key)?.item ?? null;
   }
 
   /** The materials the items bind ({@link MaterialItem}), by path. */
@@ -661,7 +680,11 @@ export class DrawList implements Disposable {
       if (!this.#read(id, entry.item.source, what, false, gather)) this.#remove(id, gather);
     }
     for (const [path, held] of [...this.#cameras]) if (held.varies) this.#readCamera(path, gather);
-    for (const [path, held] of [...this.#lights]) if (held.varies) this.#readLight(path, held.item.kind, gather);
+    const placements = new Map<string, Placed | null>();
+    for (const held of [...this.#lights.values()]) {
+      const { path, instance, kind } = held.item;
+      if (held.varies) this.#readLight({ path, instance, kind }, placements, gather);
+    }
     for (const [path, held] of [...this.#materials]) if (held.varies) this.#readMaterial(path, gather);
     return this.#finish(gather, read, before);
   }
@@ -693,7 +716,7 @@ export class DrawList implements Disposable {
       if (at === undefined) dirty.set(id, { ...what });
       else merge(at, what);
     };
-    const found: Found = { sources: [], scopes: [], cameras: [], lights: [], prims: 0 };
+    const found: Found = { sources: [], scopes: [], cameras: [], lights: new Map(), prims: 0 };
     const firsts = new Map<string, string>();
     for (const prototype of stage.prototypes()) {
       for (const instance of prototype.instances) firsts.set(instance, prototype.instances[0]!);
@@ -743,7 +766,7 @@ export class DrawList implements Disposable {
     }
     for (const first of prototypes) {
       found.scopes.push({ kind: "prototype", first });
-      this.#discoverPrototype(first, found);
+      this.#discoverPrototype(first, found, false);
     }
     gather.work.primsTraversed = found.prims;
     this.#applyToViews(changes, found, gather);
@@ -884,7 +907,8 @@ export class DrawList implements Disposable {
       };
       this.#kinds.set(key, kind);
     }
-    return kind;
+    // A mesh is a light by its applied API schemas, not its type.
+    return kind.gprim === "mesh" ? { ...kind, light: lightKind(prim) } : kind;
   }
 
   #drawn(prim: Prim): boolean {
@@ -920,13 +944,14 @@ export class DrawList implements Disposable {
       }
       const kind = this.#kind(prim);
       if (kind.gprim !== null) found.sources.push({ kind: "gprim", path });
-      else if (kind.camera) found.cameras.push(path);
-      else if (kind.light !== null) found.lights.push([path, kind.light]);
+      // A mesh light is a gprim drawn and a light listed.
+      if (kind.camera) found.cameras.push(path);
+      else if (kind.light !== null) found.lights.set(path, { path, instance: null, kind: kind.light });
       stack.push(...prim.children().reverse());
     }
     for (const first of prototypes) {
       found.scopes.push({ kind: "prototype", first });
-      this.#discoverPrototype(first, found);
+      this.#discoverPrototype(first, found, true);
     }
   }
 
@@ -983,18 +1008,22 @@ export class DrawList implements Disposable {
     for (const path of this.#cameras.keys()) if (reaches(path, CAMERA_INPUTS)) cameras.add(path);
     for (const path of [...cameras].sort()) this.#readCamera(path, gather);
 
+    // A point instancer's discovery covers the lights it places.
+    const instancers = new Set(found.scopes.flatMap((scope) => (scope.kind === "instancer" ? [scope.path] : [])));
     const lights = new Map(found.lights);
-    for (const path of [...this.#lights.keys()]) {
-      if (resynced(path) && !lights.has(path)) {
-        this.#lights.delete(path);
-        gather.lights.removed.add(path);
+    for (const [key, held] of [...this.#lights]) {
+      const { path, instance } = held.item;
+      if (!lights.has(key) && (resynced(path) || (instance !== null && instancers.has(instance.instancer)))) {
+        this.#lights.delete(key);
+        gather.lights.removed.add(key);
       }
     }
-    for (const [path, held] of this.#lights) {
-      const touched = reaches(path, LIGHT_INPUTS) || held.sources.some((source) => shadingTouched(changes, roots, source));
-      if (touched && !lights.has(path)) lights.set(path, held.item.kind);
+    for (const [key, held] of this.#lights) {
+      const touched = reaches(held.item.path, LIGHT_INPUTS) || held.sources.some((source) => shadingTouched(changes, roots, source));
+      if (touched && !lights.has(key)) lights.set(key, { path: held.item.path, instance: held.item.instance, kind: held.item.kind });
     }
-    for (const [path, kind] of [...lights].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) this.#readLight(path, kind, gather);
+    const placements = new Map<string, Placed | null>();
+    for (const [, light] of [...lights].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) this.#readLight(light, placements, gather);
   }
 
   /** Computes the camera at `path` again ({@link Stage.camera}) and records whether it changed. */
@@ -1019,30 +1048,89 @@ export class DrawList implements Disposable {
     else if (!sameRecord(old.item, item)) gather.cameras.changed.add(path);
   }
 
-  /** Reads the light at `path` again ({@link readLight}) and records whether it changed. */
-  #readLight(path: string, kind: LightKind, gather: Gather): void {
+  /**
+   * Reads the light `light` again ({@link readLight}) and records whether
+   * it changed; drops it when its prim, or the instance placing it, is
+   * gone.
+   */
+  #readLight(light: FoundLight, placements: Map<string, Placed | null>, gather: Gather): void {
     gather.work.lightsRead++;
-    if (this.#stage.prim(path) === null) {
-      if (this.#lights.delete(path)) gather.lights.removed.add(path);
+    const { path, instance, kind } = light;
+    const key = lightKey(path, instance);
+    const matrix =
+      this.#stage.prim(path) === null ? null : instance === null ? this.#world([path]) : this.#placedMatrix(path, instance, placements);
+    if (matrix === null) {
+      if (this.#lights.delete(key)) gather.lights.removed.add(key);
       return;
     }
     const at = this.#time === undefined ? {} : { time: this.#time };
-    const hidden = this.#stage.visibilities([path], at)[0] === "invisible";
+    const visibility = this.#stage.visibilities(instance === null ? [path] : [path, instance.instancer], at);
+    const hidden = visibility.includes("invisible");
     const sources: string[] = [];
-    const item = readLight(this.#stage, path, kind, this.#time, this.#world([path]), hidden, sources);
-    // A connected input's source might vary as well as its own value.
+    const item = readLight(this.#stage, path, kind, this.#time, matrix, hidden, sources, instance);
+    // A connected input's source might vary as well as its own value; a
+    // placed light moves with its instancer's placement.
     const varies =
       this.#worldMightVary([path]) ||
       this.#visibilityMightVary([path]) ||
       this.#inputsMightVary([path], LIGHT_INPUTS) ||
-      this.#shadingMightVary(sources);
-    const old = this.#lights.get(path);
-    this.#lights.set(path, { item, varies, sources });
-    if (old === undefined) gather.lights.added.add(path);
-    else if (!sameRecord(old.item, item)) gather.lights.changed.add(path);
+      this.#shadingMightVary(sources) ||
+      (instance !== null &&
+        (this.#inputsMightVary([instance.instancer], INSTANCER_INPUTS) ||
+          this.#visibilityMightVary([instance.instancer]) ||
+          this.#worldMightVary([instance.instancer])));
+    const old = this.#lights.get(key);
+    this.#lights.set(key, { item, varies, sources });
+    if (old === undefined) gather.lights.added.add(key);
+    else if (!sameRecord(old.item, item)) gather.lights.changed.add(key);
   }
 
-  #discoverPrototype(first: string, found: Found): void {
+  /**
+   * The world matrix of the light at `path` placed by `instance`, as
+   * `layerstack_stagehand` places it: its transform relative to its
+   * prototype, the instance's (the prototype's own transform included,
+   * masked instances left out), then the instancer's world transform;
+   * `null` when the instance is masked or gone, or not of a prototype
+   * holding the light.
+   */
+  #placedMatrix(path: string, instance: LightInstance, placements: Map<string, Placed | null>): Float64Array | null {
+    let placed = placements.get(instance.instancer);
+    if (placed === undefined) {
+      placed = null;
+      try {
+        const read = this.#stage.pointInstances(instance.instancer, this.#time === undefined ? {} : { time: this.#time });
+        const instances = new Map<number, [number, Float64Array]>();
+        read.indices.forEach((index, i) => instances.set(index, [read.prototypeIndices[i]!, read.matrices.subarray(16 * i, 16 * i + 16)]));
+        placed = { prototypes: read.prototypes, instances };
+      } catch (error) {
+        if (!String((error as { code?: string }).code).startsWith("instancer.") && (error as { code?: string }).code !== "prim.not_found") throw error;
+      }
+      placements.set(instance.instancer, placed);
+    }
+    const found = placed?.instances.get(instance.index);
+    const prototype = found === undefined ? undefined : placed!.prototypes[found[0]];
+    if (found === undefined || prototype === undefined || !under(path, prototype)) return null;
+    const world = this.#world([instance.instancer]);
+    const out = new Float64Array(16);
+    if (path === prototype) {
+      multiply(found[1], world, out, 0);
+      return out;
+    }
+    const both = this.#world([path, prototype]);
+    const inner = new Float64Array(16);
+    multiply(both.subarray(0, 16), inverseAffine(both.subarray(16, 32)), inner, 0);
+    const scratch = new Float64Array(16);
+    multiply(inner, found[1], scratch, 0);
+    multiply(scratch, world, out, 0);
+    return out;
+  }
+
+  /**
+   * Finds a native instancing prototype's items from its first instance;
+   * with `views`, its cameras and lights too, once per instance, by their
+   * instance proxies' paths, as `layerstack_stagehand` lists them.
+   */
+  #discoverPrototype(first: string, found: Found, views: boolean): void {
     const stage = this.#stage;
     const roots = this.#instancesOf(first);
     const stack = stage.prim(first)?.children() ?? [];
@@ -1060,13 +1148,22 @@ export class DrawList implements Disposable {
         }
         for (const material of materials) found.sources.push({ kind: "prototype", prim: path, material });
       }
+      const kind = this.#kind(prim);
+      if (views && (kind.camera || kind.light !== null)) {
+        for (const proxy of proxies(first, path, roots)) {
+          if (kind.camera) found.cameras.push(proxy);
+          else found.lights.set(proxy, { path: proxy, instance: null, kind: kind.light! });
+        }
+      }
       stack.push(...prim.children());
     }
   }
 
+  /** Finds a point instancer's items, and the lights inside its prototypes once per unmasked instance. */
   #discoverInstancer(instancer: string, found: Found): void {
     const stage = this.#stage;
     const prototypes = stage.relationship(`${instancer}.prototypes`)?.targets() ?? [];
+    const lights: [number, string, LightKind][] = [];
     prototypes.forEach((prototype, index) => {
       const stack = [prototype];
       while (stack.length > 0) {
@@ -1076,7 +1173,24 @@ export class DrawList implements Disposable {
         found.prims++;
         if (!prim.active || !prim.defined) continue;
         if (this.#drawn(prim)) found.sources.push({ kind: "pointInstancer", instancer, index, prim: path });
+        const light = this.#kind(prim).light;
+        if (light !== null) lights.push([index, path, light]);
         stack.push(...prim.children());
+      }
+    });
+    if (lights.length === 0) return;
+    let placed;
+    try {
+      placed = stage.pointInstances(instancer, this.#time === undefined ? {} : { time: this.#time });
+    } catch (error) {
+      if (String((error as { code?: string }).code).startsWith("instancer.")) return;
+      throw error;
+    }
+    placed.prototypeIndices.forEach((prototype, i) => {
+      for (const [index, path, kind] of lights) {
+        if (index !== prototype) continue;
+        const instance = Object.freeze({ instancer, index: placed.indices[i]! });
+        found.lights.set(lightKey(path, instance), { path, instance, kind });
       }
     });
   }

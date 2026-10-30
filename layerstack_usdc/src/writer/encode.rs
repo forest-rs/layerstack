@@ -236,14 +236,17 @@ impl<'a> Packer<'a> {
             Leave(CratePath),
         }
         // Entered and not yet left: `_AddPath` finds such a path present.
-        let mut entered = BTreeSet::new();
+        // They are the path's ancestors and targets being added, a few, so
+        // a vector rather than a set.
+        let mut entered: Vec<CratePath> = Vec::new();
         let mut steps = alloc::vec![Step::Enter(path.clone())];
         while let Some(step) = steps.pop() {
             match step {
                 Step::Enter(path) => {
-                    if self.path_index.contains_key(&path) || !entered.insert(path.clone()) {
+                    if self.path_index.contains_key(&path) || entered.contains(&path) {
                         continue;
                     }
+                    entered.push(path.clone());
                     let parent = path.parent();
                     let target = path.target().cloned();
                     steps.push(Step::Leave(path));
@@ -255,7 +258,9 @@ impl<'a> Packer<'a> {
                     self.token(&path.element_token())?;
                     let i = index(self.paths.len())?;
                     self.paths.push(Some(path.clone()));
-                    entered.remove(&path);
+                    if let Some(at) = entered.iter().position(|p| *p == path) {
+                        entered.swap_remove(at);
+                    }
                     self.path_index.insert(path, i);
                 }
             }
@@ -1284,14 +1289,17 @@ impl<'a> Packer<'a> {
                 continue;
             }
             bytes.extend_from_slice(&(list.len() as u64).to_le_bytes());
-            let mut seen = BTreeSet::new();
+            // Sorted, a repeat sits next to its first copy.
+            let mut encodings = Vec::with_capacity(list.len());
             for x in list {
                 let mut encoded = Vec::new();
                 item(self, x, &mut encoded)?;
                 bytes.extend_from_slice(&encoded);
-                if !seen.insert(encoded) {
-                    return Err(site.list_op("an item repeats within a list"));
-                }
+                encodings.push(encoded);
+            }
+            sort::sort_unstable(&mut encodings);
+            if encodings.windows(2).any(|pair| pair[0] == pair[1]) {
+                return Err(site.list_op("an item repeats within a list"));
             }
         }
         Ok(bytes)

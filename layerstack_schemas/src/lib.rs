@@ -115,7 +115,9 @@
 //! with a coding error: the prim is checked once, when the handle is had,
 //! so a handle's setters never author an instance proxy and stay
 //! infallible. [`SchemaEdit::can_edit`] asks without authoring.
-//! No edit manufactures an `over` for a missing prim.
+//! No edit but [`SchemaEdit::override_prim`] (OpenUSD's `OverridePrim`)
+//! manufactures an `over` for a missing prim; [`SchemaEdit::create_class_prim`]
+//! makes a class (`CreateClassPrim`).
 //! Relationship targets are stage paths, mapped through the edit target
 //! (through a reference, `/Instance/Light` is authored as `/Asset/Light`);
 //! one it does not map rejects the transaction when it is applied.
@@ -134,6 +136,7 @@
 //! handle wraps a [`PrimEdit`] with `from_prim` (or an [`InstanceEdit`]
 //! with `from_instance`). A [`PrimEdit`] is had for a prim that exists and
 //! the edit may author ([`PrimEdit::new`], [`SchemaEdit::define_prim`],
+//! [`SchemaEdit::override_prim`], [`SchemaEdit::create_class_prim`],
 //! [`SchemaEdit::apply_api`]), or with [`PrimEdit::from_path_unchecked`],
 //! which checks neither.
 //!
@@ -523,7 +526,7 @@ pub use common_xform::{
     CommonComponent, CommonTransform, CommonTransformError, CommonTransformReading,
     CommonTransformSource, RotationOrder,
 };
-pub use edit::{ApplySchemaError, CannotEdit};
+pub use edit::{ApplySchemaError, CannotEdit, ClassPrimError};
 
 #[cfg(all(feature = "usd-geom", feature = "usd-shade"))]
 mod material_subsets;

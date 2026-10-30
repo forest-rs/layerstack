@@ -1,8 +1,10 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-//! `SchemaEdit::define_prim` against OpenUSD's `UsdStage::DefinePrim`;
-//! `layerstack_conformance/tests/conformance/define_prim.rs` checks it call by call
+//! `SchemaEdit::define_prim`, `override_prim` and `create_class_prim`
+//! against OpenUSD's `UsdStage::DefinePrim`, `OverridePrim` and
+//! `CreateClassPrim`; `layerstack_conformance/tests/conformance/define_prim.rs`
+//! checks them call by call
 //! against OpenUSD itself.
 
 use alloc::string::String;
@@ -293,4 +295,37 @@ fn appended_generic_edits_keep_their_place_in_one_transaction() {
         spec(&mut store, "/Lamp"),
         Some((Some(Specifier::Over), None))
     );
+}
+
+/// `CreateClassPrim` makes classes only in the local layer stack, or
+/// through an arc's target: a layer outside the stack that maps every path
+/// to itself is refused, before anything else is checked.
+#[test]
+fn classes_are_created_in_the_local_layer_stack() {
+    use super::ClassPrimError;
+
+    let (mut store, live) = stage(|_, _| {});
+    let outside = LayerId(2);
+    store.insert_layer(Layer::new(outside));
+    let base = store.path("/Base");
+    let root = store.path("/");
+    let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(outside));
+    assert_eq!(
+        edit.create_class_prim(base).map(|_| ()),
+        Err(ClassPrimError::NotLocal)
+    );
+    assert!(edit.transaction().is_empty(), "nothing is authored");
+    let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(ROOT));
+    assert_eq!(
+        edit.create_class_prim(root).map(|_| ()),
+        Err(ClassPrimError::DefinedNotClass),
+        "the pseudo-root is defined"
+    );
+    edit.create_class_prim(base).expect("a new class");
+    assert_eq!(
+        edit.override_prim(base).map(|_| ()),
+        Ok(()),
+        "the class is there"
+    );
+    assert_eq!(edit.transaction().len(), 2, "`def`, then `class`");
 }

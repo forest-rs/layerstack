@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 import type { ArrayHandle } from "./arrays.js";
-import type { Layer } from "./stage.js";
+import type { EditTarget, Layer } from "./stage.js";
 
 /** The arc that reaches an opinion: the scene description field's name, `local` for a local opinion. */
 export type ArcKind =
@@ -13,6 +13,16 @@ export type ArcKind =
   | "references"
   | "payloads"
   | "specializes";
+
+/**
+ * What an {@link EditTarget} writes through: `"layer"`, a layer of the
+ * stage's own layer stack, every path mapped to itself; `"variant"`, a
+ * variant branch on a prim, in such a layer, with no layer offset
+ * (OpenUSD's `ForLocalDirectVariant`); `"arc"`, a layer reached through
+ * any other arc (a reference, a payload, an inherit, ...) or a variant's
+ * node in a sublayer read with an offset.
+ */
+export type EditTargetKind = "layer" | "variant" | "arc";
 
 /** What uses an asset: a sublayer, a reference or a payload. */
 export type AssetUse = "sublayer" | "reference" | "payload";
@@ -286,6 +296,16 @@ export interface Opinion {
   readonly cause: "shadowed" | "cutOffByBlock" | "incompatible" | null;
   /** The layer offset mapping stage time to the opinion's layer time. */
   readonly layerOffset: { readonly offset: number; readonly scale: number };
+  /**
+   * The target that writes where this opinion lives: its layer, through
+   * the arc that reaches it, so an edit through it replaces this opinion
+   * (`stage.apply(edits, opinion.editTarget)`). An opinion in a referenced
+   * asset is edited in that asset, and every prim referencing it changes;
+   * a shadowed opinion's edit does not change the value shown. `null`
+   * without a composition node, or for a layer outside the node's stack
+   * (a value clip's).
+   */
+  readonly editTarget: EditTarget | null;
 }
 
 /** Why an attribute has its value. */
@@ -541,8 +561,11 @@ export interface SetTargetsEdit {
 
 /**
  * `UsdReferences::AddReference` / `UsdPayloads::AddPayload`. With `asset`
- * an external arc (resolved against the target layer, as authored); without
- * one an internal arc. Without `primPath` it targets the default prim. An
+ * an external arc (resolved against the target layer, as authored), whose
+ * `primPath` names a prim in that asset; without one an internal arc, whose
+ * `primPath` is a stage path the target maps into its layer, except a root
+ * prim path (`/Library`), which is authored as given, as OpenUSD's
+ * `_TranslatePath` does. Without `primPath` it targets the default prim. An
  * asset the stage has not read is unavailable ({@link EditReceipt.unavailable}): run
  * {@link Stage.resolve}.
  */
@@ -626,8 +649,9 @@ export interface ClearMetadataEdit {
 
 /**
  * One edit: plain data, so edits can be logged, sent and replayed. A list
- * of them is applied atomically to one layer by {@link Stage.apply}.
- * Paths are stage paths; times are stage time codes.
+ * of them is applied atomically through one edit target by
+ * {@link Stage.apply}. Paths are stage paths; times are stage time codes:
+ * the target maps both into its layer.
  */
 export type Edit =
   | DefinePrimEdit

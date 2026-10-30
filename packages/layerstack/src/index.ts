@@ -33,7 +33,19 @@ import type { NativeModule } from "./stage.js";
 export { ArrayCopy, ArrayHandle } from "./arrays.js";
 export { LayerstackError } from "./errors.js";
 export type { ErrorCode, ErrorDetails, HostErrorCode } from "./errors.js";
-export { ABI, Attribute, EditReceipt, Layer, Layerstack, PACKAGE_VERSION, Prim, Relationship, Stage } from "./stage.js";
+export {
+  ABI,
+  Attribute,
+  CompositionArc,
+  EditReceipt,
+  EditTarget,
+  Layer,
+  Layerstack,
+  PACKAGE_VERSION,
+  Prim,
+  Relationship,
+  Stage,
+} from "./stage.js";
 export type * from "./types.js";
 
 let own: Promise<Layerstack> | undefined;

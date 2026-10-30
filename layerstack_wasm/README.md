@@ -17,9 +17,12 @@ explains where a value comes from. Failures carry a stable dotted code
 
 Edits arrive as an `EditBatch` the wrapper fills from its plain-data `Edit[]`,
 and `Stage::apply` lowers it to one atomic `layerstack::Transaction` on the
-target layer, loading what the edits ask for that the host supplied. It
-returns an `EditReceipt` holding the guarded inverse; `Stage::undo` applies it
-and returns the receipt that redoes. The stage keeps one change cursor, which
+target, loading what the edits ask for that the host supplied. The target is
+a layer of the stage's layer stack, a local variant, or an arc of a composed
+prim, such as the reference an opinion comes through: the stage mints each
+as a record and finds it again in the prim's current composition when it is
+used. It returns an `EditReceipt` holding the guarded inverse; `Stage::undo`
+applies it and returns the receipt that redoes. The stage keeps one change cursor, which
 the wrapper drains after each mutating call to dispatch change listeners
 (JavaScript callbacks cannot satisfy `subscribe_changes`' `Send + Sync`). A
 root that cannot be saved, such as a USDZ package, is edited through an

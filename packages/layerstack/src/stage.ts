@@ -10,6 +10,7 @@ import type { ErrorCode, HostErrorCode } from "./errors.js";
 import type {
   ArcKind,
   ArrayData,
+  EditTargetKind,
   AssetFailure,
   AssetSource,
   AssetUse,
@@ -310,6 +311,209 @@ export class Layer {
 }
 
 /**
+ * Where edits are written, and how their stage paths and times map there:
+ * OpenUSD's `UsdEditTarget`. Minted by the stage, never constructed:
+ * {@link Opinion.editTarget} (where an opinion lives),
+ * {@link CompositionArc.editTarget} (any arc of a prim, opinion or not),
+ * {@link Prim.variantEditTarget} (inside a variant) and
+ * {@link Stage.editTargetForLayer} (a layer of the stage's own stack).
+ * Pass one as the `target` of {@link Stage.apply}.
+ *
+ * Edits through a target still take stage paths and stage times: through
+ * `/World/Robot`'s reference to `robot.usda`'s `/Robot`, a value set on
+ * `/World/Robot.height` is written to `/Robot.height` in `robot.usda`, and
+ * every prim that references the asset changes. A path the target does not
+ * map is rejected (`edit.rejected.unmappable`).
+ *
+ * A target is a value, identified by its mapping as `UsdEditTarget` is:
+ * targets with the same layer, prim, site, arc and offset are the same
+ * object (`===`), whichever way they were minted. It survives edits and
+ * unrelated recomposition: each use finds the arc again, and one no arc
+ * maps any more (the reference was removed, the prim renamed) fails with
+ * `target.stale`.
+ */
+export class EditTarget {
+  /**
+   * `"layer"` for a layer of the stage's layer stack, `"variant"` inside a
+   * variant on its prim with no layer offset (OpenUSD's
+   * `ForLocalDirectVariant`), `"arc"` through any other arc, a variant's
+   * node in a sublayer with an offset included.
+   */
+  readonly kind: EditTargetKind;
+  /** The layer written. A package member is read-only ({@link Layer.readOnly}): edits through it fail with `layer.read_only`. */
+  readonly layer: Layer;
+  /** The stage prim whose namespace is mapped (`/World/Robot`); `null` for a `"layer"` target, which maps every path to itself. */
+  readonly prim: string | null;
+  /** The spec path `prim` maps to in `layer` (`/Robot`, `/World/Robot{finish=painted}`); `null` for a `"layer"` target. */
+  readonly site: string | null;
+  /** The arc it goes through; `null` for a `"layer"` target. */
+  readonly arc: ArcKind | null;
+  /**
+   * Whether paths outside `prim` map to themselves: true through variants,
+   * inherits and specializes; false across a reference or payload, which
+   * maps only the referenced prim's namespace.
+   */
+  readonly mapsOutsidePrim: boolean;
+  /** The offset from `layer`'s times to stage times: a stage time `t` is written at layer time `(t - offset) / scale`. */
+  readonly layerOffset: { readonly offset: number; readonly scale: number };
+  readonly #native: NativeTarget;
+
+  /** @internal Minted by the stage. */
+  constructor(stage: Stage, layer: Layer, native: NativeTarget) {
+    const [kind, , prim, site, arc, mapsOutside, offset, scale] = native;
+    this.kind = kind as EditTargetKind;
+    this.layer = layer;
+    this.prim = prim;
+    this.site = site;
+    this.arc = arc as ArcKind | null;
+    this.mapsOutsidePrim = mapsOutside;
+    this.layerOffset = Object.freeze({ offset, scale });
+    this.#native = native;
+    owners.set(this, stage);
+    Object.freeze(this);
+  }
+
+  /** The stage that minted it. */
+  get stage(): Stage {
+    return owners.get(this) as Stage;
+  }
+
+  /**
+   * The spec path the stage prim or property path `path` is written at
+   * in {@link EditTarget.layer} (`/Robot.height` for `/World/Robot.height`
+   * through the robot's reference), or `null` when the target does not map
+   * it. OpenUSD's `UsdEditTarget::MapToSpecPath`.
+   *
+   * Throws `path.invalid`, `layer.muted`, and `target.stale` when no arc
+   * maps the target any more.
+   */
+  mapPath(path: string): string | null {
+    if (typeof path !== "string") {
+      throw new LayerstackError("argument.invalid", "mapPath", "expected a path string");
+    }
+    return this.stage.native("mapPath", (native) => native.mapEditTarget(...this.#native, path)) ?? null;
+  }
+
+  /** The time in {@link EditTarget.layer} a stage time code is written at: `(time - offset) / scale`. */
+  mapTime(time: number): number {
+    return (time - this.layerOffset.offset) / this.layerOffset.scale;
+  }
+
+  /**
+   * Whether the stage composes what this target writes now: false for a
+   * variant that is not selected, an arc that was removed, or a muted
+   * layer. Edits through a target that is not composed are kept, and
+   * change no composed value until it is.
+   */
+  composed(): boolean {
+    return this.stage.native("composed", (native) => native.editTargetComposed(...this.#native));
+  }
+
+  /** @internal The values the native module takes it back as. */
+  get nativeTarget(): NativeTarget {
+    return this.#native;
+  }
+}
+
+/**
+ * One arc of a prim's composition, strongest first, as
+ * {@link Prim.compositionArcs} lists them: OpenUSD's
+ * `UsdPrimCompositionQueryArc`. Read when it was returned; take its
+ * {@link CompositionArc.editTarget} to author through it.
+ */
+export class CompositionArc {
+  /** The arc kind: `local` for the prim's own opinions, else the arc that reaches the node. */
+  readonly arc: ArcKind;
+  /** The spec path the arc reads in its layer stack (`/Robot`, `/World/Robot{finish=painted}`). */
+  readonly site: string;
+  /** The root layer of the layer stack the arc reads. */
+  readonly layerStack: Layer;
+  /** The layers of that stack, strongest first: the layers {@link CompositionArc.editTarget} can write. */
+  readonly layers: readonly Layer[];
+  /** The offset from the stack's root layer's times to stage times. */
+  readonly layerOffset: { readonly offset: number; readonly scale: number };
+  /** Whether the arc is implied: a class arc authored inside a reference, mapped to the referencing site. */
+  readonly implied: boolean;
+  /** The index, in the list it came in, of the arc it is authored beneath; `null` for the `local` arc. */
+  readonly parent: number | null;
+  readonly #prim: string;
+  readonly #editable: boolean;
+  readonly #mapsOutside: boolean;
+  /** Per layer: the offset and the kind of a target through the arc in it. */
+  readonly #targets: readonly (readonly [number, number, EditTargetKind])[];
+
+  /** @internal Use {@link Prim.compositionArcs}. */
+  constructor(stage: Stage, prim: string, row: Row) {
+    const [arc, site, layerStack, layers, implied, parent, kind, mapsOutside] = row;
+    const entries = layers as [bigint, number, number, EditTargetKind | null][];
+    this.arc = arc as ArcKind;
+    this.site = site as string;
+    this.layerStack = stage.layer(layerStack as bigint);
+    this.layers = Object.freeze(entries.map(([id]) => stage.layer(id)));
+    const [, offset, scale] = entries.find(([id]) => id === layerStack) ?? [0n, 0, 1];
+    this.layerOffset = Object.freeze({ offset, scale });
+    this.implied = implied as boolean;
+    this.parent = parent as number | null;
+    this.#prim = prim;
+    this.#editable = kind !== null;
+    this.#mapsOutside = mapsOutside as boolean;
+    this.#targets = entries.map(([, offset, scale, layerKind]) => [offset, scale, layerKind ?? "arc"] as const);
+    owners.set(this, stage);
+    Object.freeze(this);
+  }
+
+  /**
+   * The target that writes through this arc in `layer`, one of
+   * {@link CompositionArc.layers} (the stack's root layer by default), as
+   * OpenUSD's `UsdEditTarget(layer, node)`: whether or not the prim has an
+   * opinion there yet. Times map through the offset `layer` is read at, a
+   * sublayer's included; for the `local` arc this is
+   * {@link Stage.editTargetForLayer}. A selected variant's arc in a layer
+   * read with no offset gives the same target as
+   * {@link Prim.variantEditTarget}; in a sublayer with an offset it gives
+   * an `"arc"` target that maps times through it, where
+   * `variantEditTarget` does not.
+   *
+   * Throws `target.not_in_arc` for a layer outside the arc's stack, and
+   * `target.relocate_source` for a `relocates` arc, whose specs never
+   * contribute: edit a relocated prim through its other arcs.
+   */
+  editTarget(layer: Layer = this.layerStack): EditTarget {
+    const stage = owners.get(this) as Stage;
+    if (!this.#editable) {
+      throw new LayerstackError(
+        "target.relocate_source",
+        "editTarget",
+        "a relocates arc reads the relocation source, whose specs never contribute: edit the prim through its other arcs",
+        { path: this.#prim },
+      );
+    }
+    const index = this.layers.indexOf(layer);
+    const through = this.#targets[index];
+    if (through === undefined) {
+      throw new LayerstackError(
+        "target.not_in_arc",
+        "editTarget",
+        `the layer is not in the arc's layer stack: pick one of arc.layers`,
+        { path: this.#prim, identifier: layer instanceof Layer ? (layer.identifier ?? undefined) : undefined },
+      );
+    }
+    const [offset, scale, kind] = through;
+    const local = kind === "layer";
+    return stage.mintTarget([
+      kind,
+      layer.id,
+      local ? null : this.#prim,
+      local ? null : this.site,
+      local ? null : this.arc,
+      this.#mapsOutside,
+      offset,
+      scale,
+    ]);
+  }
+}
+
+/**
  * An open stage. Reads are synchronous; only {@link Stage.resolve}, which
  * waits on the host's fetches, is asynchronous.
  *
@@ -327,6 +531,11 @@ export class Stage implements Disposable {
   readonly #ls: Layerstack;
   #native: NativeStage | null;
   readonly #layers = new Map<bigint, Layer>();
+  /** The targets minted, by their values, so equal targets are one object. */
+  readonly #targets = new Map<string, WeakRef<EditTarget>>();
+  readonly #forget = new FinalizationRegistry<string>((key) => {
+    if (this.#targets.get(key)?.deref() === undefined) this.#targets.delete(key);
+  });
   #root: Layer | null = null;
   #editLayer: Layer | null | undefined = undefined;
   readonly #provenance: boolean;
@@ -512,6 +721,35 @@ export class Stage implements Disposable {
   }
 
   /**
+   * The edit target of `layer`, a layer of the stage's own layer stack
+   * (the session layer, the root and their sublayers), as OpenUSD's
+   * `UsdStage::GetEditTargetForLocalLayer` makes it: every path maps to
+   * itself, and stage times map through the offset the stack reads the
+   * layer at, so a sample set at stage time 15 in a sublayer authored with
+   * `(offset = 10)` lands at its time 5. A bare `Layer` passed as a target
+   * means this target.
+   *
+   * Throws `layer.affinity`, `layer.muted`, and `layer.outside_stack` for
+   * a layer the stage reaches only through an arc: edit that through an
+   * {@link Opinion.editTarget} or a {@link CompositionArc.editTarget}.
+   */
+  editTargetForLayer(layer: Layer): EditTarget {
+    this.#own("editTargetForLayer", layer);
+    const record = this.#call("editTargetForLayer", (native) => native.editTargetForLayer(layer.id)) as NativeTarget;
+    return this.mintTarget(record);
+  }
+
+  /**
+   * Whether `layer` is in the stage's own layer stack, unmuted, as
+   * OpenUSD's `UsdStage::HasLocalLayer` says: whether it can be passed as
+   * a bare `target`. Throws `layer.affinity` for another stage's layer.
+   */
+  hasLocalLayer(layer: Layer): boolean {
+    this.#own("hasLocalLayer", layer);
+    return this.#call("hasLocalLayer", (native) => native.hasLocalLayer(layer.id));
+  }
+
+  /**
    * Mutes `layer`, as OpenUSD's `UsdStage::MuteLayer` does: the stage
    * recomposes without its opinions and its sublayers, wherever it reaches
    * it (a sublayer, the session layer, a reference's or payload's layer),
@@ -612,25 +850,35 @@ export class Stage implements Disposable {
   }
 
   /**
-   * Applies `edits` to the layer `target`, the {@link Stage.editLayer} by
+   * Applies `edits` through `target`, the {@link Stage.editLayer} by
    * default, atomically: every edit applies, or none does and this throws. Assets the edits ask for that the stage
    * has not read (a new reference, a variant's payload) are unavailable
    * afterwards: the receipt lists them, and {@link Stage.resolve} fetches
    * them. Change listeners run before this returns.
    *
-   * Throws `layer.affinity` (another stage's layer), `layer.read_only` (a
-   * USDZ member, or no `target` and no edit layer: open with
-   * `editLayer: "session"`), `layer.outside_stack`,
+   * `target` is a layer of the stage's own layer stack (its
+   * {@link Stage.editTargetForLayer}) or an {@link EditTarget}: an
+   * opinion's, to edit where it lives, such as inside a referenced asset,
+   * or a variant's. The edits always name stage paths and stage times,
+   * which the target maps into its layer.
+   *
+   * Throws `layer.affinity` (another stage's layer), `target.affinity`
+   * (another stage's target), `layer.read_only` (a USDZ member, or no
+   * `target` and no edit layer: open with `editLayer: "session"`),
+   * `layer.muted`, `layer.outside_stack` (a layer reached only through an
+   * arc: pass an opinion's {@link Opinion.editTarget} instead),
+   * `target.stale` (no arc maps the target any more),
    * `argument.invalid` or `value.*` for a malformed edit, and `edit.*`
-   * when the edits are rejected (`edit.rejected.type_mismatch`, ...); the
-   * error's `edit` is the index of the edit at fault.
+   * when the edits are rejected (`edit.rejected.type_mismatch`,
+   * `edit.rejected.unmappable` for a path the target does not map, ...);
+   * the error's `edit` is the index of the edit at fault.
    */
-  apply(edits: readonly Edit[], target?: Layer): EditReceipt {
-    const layer = this.#target("apply", target);
+  apply(edits: readonly Edit[], target?: Layer | EditTarget): EditReceipt {
+    const through = this.#target("apply", target);
     const batch = this.#ls.batch();
     try {
       lowerEdits(batch, edits, "apply", this.#ls);
-      const native = this.#call("apply", (stage) => stage.applyTarget(...layerTarget(layer), batch));
+      const native = this.#call("apply", (stage) => stage.applyTarget(...through, batch));
       const receipt = this.#receipt(native);
       this.#notify();
       return receipt;
@@ -669,9 +917,10 @@ export class Stage implements Disposable {
    * `setVariantSelection` edit. A variant whose arcs need assets the stage
    * has not read leaves them unavailable: `await stage.resolve(source)` after.
    *
-   * Throws `layer.read_only` when there is no `target` and no edit layer.
+   * Throws as {@link Stage.apply}; `layer.read_only` when there is no
+   * `target` and no edit layer.
    */
-  setVariantSelection(prim: Prim | string, set: string, variant: string | null, target?: Layer): EditReceipt {
+  setVariantSelection(prim: Prim | string, set: string, variant: string | null, target?: Layer | EditTarget): EditReceipt {
     const path = typeof prim === "string" ? prim : prim.path;
     return this.apply([{ type: "setVariantSelection", path, set, variant }], target);
   }
@@ -688,18 +937,24 @@ export class Stage implements Disposable {
    * several layers of the stack. Atomic, with change listeners run before
    * it returns; the receipt undoes it.
    *
+   * `target` must be a layer of the stage's layer stack (or its
+   * `"layer"` {@link EditTarget}): as OpenUSD's `UsdNamespaceEditor`, a
+   * move does not go through an arc or into a variant, and such a target
+   * fails with `namespace.unmappable`.
+   *
    * Throws `path.invalid`, the target errors of {@link Stage.apply}, and
    * `namespace.*` when the move cannot be made, nothing changed:
    * `namespace.collision` (the destination is occupied),
    * `namespace.missing_parent`, `namespace.not_found`,
-   * `namespace.instance_proxy` (inside an instance), ...
+   * `namespace.instance_proxy` (inside an instance),
+   * `namespace.unmappable`, ...
    */
-  move(path: string, to: string, target?: Layer): EditReceipt {
+  move(path: string, to: string, target?: Layer | EditTarget): EditReceipt {
     if (typeof path !== "string" || typeof to !== "string") {
       throw new LayerstackError("argument.invalid", "move", "expected (path: string, to: string)");
     }
-    const layer = this.#target("move", target);
-    const native = this.#call("move", (stage) => stage.moveObject(layer.id, path, to));
+    const layer = this.#namespaceLayer("move", path, target);
+    const native = this.#call("move", (stage) => stage.moveObject(layer, path, to));
     const receipt = this.#receipt(native);
     this.#notify();
     return receipt;
@@ -713,14 +968,15 @@ export class Stage implements Disposable {
    * A `removePrim` edit, by contrast, removes one spec from one layer.
    * Atomic; the receipt undoes it.
    *
-   * Throws as {@link Stage.move}.
+   * Throws as {@link Stage.move}; `target` must be a layer of the stage's
+   * layer stack, as for a move.
    */
-  delete(path: string, target?: Layer): EditReceipt {
+  delete(path: string, target?: Layer | EditTarget): EditReceipt {
     if (typeof path !== "string") {
       throw new LayerstackError("argument.invalid", "delete", "expected (path: string)");
     }
-    const layer = this.#target("delete", target);
-    const native = this.#call("delete", (stage) => stage.deleteObject(layer.id, path));
+    const layer = this.#namespaceLayer("delete", path, target);
+    const native = this.#call("delete", (stage) => stage.deleteObject(layer, path));
     const receipt = this.#receipt(native);
     this.#notify();
     return receipt;
@@ -940,6 +1196,17 @@ export class Stage implements Disposable {
     return this.#call(operation, f);
   }
 
+  /** @internal The one {@link EditTarget} of a target record. */
+  mintTarget(record: NativeTarget): EditTarget {
+    const key = record.join("\u0000");
+    const known = this.#targets.get(key)?.deref();
+    if (known !== undefined) return known;
+    const target = new EditTarget(this, this.#layer(record[1]), [...record]);
+    this.#targets.set(key, new WeakRef(target));
+    this.#forget.register(target, key);
+    return target;
+  }
+
   #setMuted(operation: string, layer: Layer, muted: boolean): boolean {
     this.#own(operation, layer);
     const changed = this.#call(operation, (native) => native.setLayerMuted(layer.id, muted));
@@ -947,8 +1214,14 @@ export class Stage implements Disposable {
     return changed;
   }
 
-  /** The layer edits go to: `target`, else the edit layer. */
-  #target(operation: string, target: Layer | undefined): Layer {
+  /** The target edits go through, as the native module takes it: `target`, else the edit layer. */
+  #target(operation: string, target: Layer | EditTarget | undefined): NativeTarget {
+    if (target instanceof EditTarget) {
+      if (owners.get(target) !== this) {
+        throw new LayerstackError("target.affinity", operation, "the edit target belongs to another stage");
+      }
+      return target.nativeTarget;
+    }
     const layer = target ?? this.editLayer;
     if (layer === null) {
       throw new LayerstackError(
@@ -958,14 +1231,36 @@ export class Stage implements Disposable {
       );
     }
     this.#own(operation, layer);
+    return ["layer", layer.id, null, null, null, true, 0, 1];
+  }
+
+  /** The layer a namespace edit goes to: a layer target, refusing one through an arc or a variant. */
+  #namespaceLayer(operation: string, path: string, target: Layer | EditTarget | undefined): bigint {
+    const [kind, layer] = this.#target(operation, target);
+    if (kind !== "layer") {
+      throw new LayerstackError(
+        "namespace.unmappable",
+        operation,
+        "a move or delete edits the opinions of the stage's layer stack, so its target must be a layer of the stack, not an arc or a variant: pass a layer, or stage.editTargetForLayer(layer)",
+        { path },
+      );
+    }
     return layer;
   }
 
   #receipt(native: NativeReceipt): EditReceipt {
-    const [target, changes, loaded, failures, unavailable] = native.record() as [Row, Row, bigint[], Row[], Row[]];
+    const [target, changes, loaded, failures, unavailable, layers] = native.record() as [
+      NativeTarget,
+      Row,
+      bigint[],
+      Row[],
+      Row[],
+      bigint[],
+    ];
     const receipt = new EditReceipt(
       this,
-      this.#layer(target[1] as bigint),
+      this.mintTarget(target),
+      layers.map((id) => this.#layer(id)),
       decodeChanges(changes),
       loaded.map((id) => this.#layer(id)),
       failures.map(([asset, anchor, code, message]) => this.#failure(asset, anchor, code, message)),
@@ -1146,6 +1441,64 @@ export class Prim {
   metadata(key: string): Value | null {
     return readMetadata(this.stage, this.path, key);
   }
+
+  /**
+   * The arcs of its composition, strongest first: its own (`local`)
+   * opinions, then each variant, inherit, reference, payload and
+   * specialize that reaches it, as OpenUSD's `UsdPrimCompositionQuery`
+   * lists them. Author through one with {@link CompositionArc.editTarget},
+   * whether or not the prim has an opinion there yet.
+   *
+   * Throws `prim.not_found` when the prim is gone.
+   */
+  compositionArcs(): CompositionArc[] {
+    const rows = this.stage.native("compositionArcs", (native) => native.compositionArcs(this.path)) as Row[];
+    return rows.map((row) => new CompositionArc(this.stage, this.path, row));
+  }
+
+  /**
+   * The target inside the variant `variant` of its variant set `set`, in
+   * `layer` (the {@link Stage.editLayer} by default), a layer of the
+   * stage's layer stack: edits of this prim and its descendants are
+   * written inside the branch (`/World/Robot{finish=painted}.color`), and
+   * of any other path outside it, as OpenUSD's
+   * `UsdEditTarget::ForLocalDirectVariant` writes them. The variant does
+   * not have to be selected, or to exist yet: edits through the target
+   * create it, and {@link EditTarget.composed} says whether it is
+   * selected.
+   *
+   * As `ForLocalDirectVariant`, the target has no layer offset: times are
+   * written as given, not mapped through the offset the stack reads
+   * `layer` at. In the root layer that changes nothing; in a sublayer
+   * authored with `(offset = 10)`, a sample set at stage time 15 is written
+   * at its time 15 and read at stage time 25. To edit the selected
+   * variant in stage time, use the variant's arc instead
+   * (`prim.compositionArcs()`, `arc.editTarget(layer)`, or the
+   * `editTarget` of an opinion inside it), which maps times through the
+   * sublayer's offset; an unselected variant has no arc.
+   *
+   * Throws `path.invalid` for names that are not a variant set and a
+   * variant, and the layer errors of {@link Stage.editTargetForLayer}.
+   */
+  variantEditTarget(set: string, variant: string, layer: Layer | null = this.stage.editLayer): EditTarget {
+    if (typeof set !== "string" || typeof variant !== "string") {
+      throw new LayerstackError("argument.invalid", "variantEditTarget", "expected (set: string, variant: string)");
+    }
+    if (layer === null) {
+      throw new LayerstackError(
+        "layer.read_only",
+        "variantEditTarget",
+        'the stage has no edit layer: its root cannot be saved; open it with editLayer: "session"',
+      );
+    }
+    if (!(layer instanceof Layer) || owners.get(layer) !== this.stage) {
+      throw new LayerstackError("layer.affinity", "variantEditTarget", "the layer belongs to another stage");
+    }
+    const record = this.stage.native("variantEditTarget", (native) =>
+      native.variantEditTarget(this.path, set, variant, layer.id),
+    ) as NativeTarget;
+    return this.stage.mintTarget(record);
+  }
 }
 
 /**
@@ -1210,7 +1563,8 @@ export class Attribute {
       source: source as ValueSource,
       samples: lower === null ? null : { lower: lower as number, upper: upper as number },
       opinions: (opinions as Row[]).map(
-        ([layer, specPath, arc, role, detail, offset, scale]): Opinion => ({
+        ([layer, specPath, arc, role, detail, offset, scale, target]): Opinion => ({
+          editTarget: target === null ? null : this.stage.mintTarget(target as NativeTarget),
           layer: this.stage.layer(layer as bigint),
           specPath: specPath as string,
           arc: arc as ArcKind | null,
@@ -1277,8 +1631,10 @@ export class Relationship {
 export class EditReceipt implements Disposable {
   /** The stage it belongs to. */
   readonly stage: Stage;
-  /** The layer the edits went to. */
-  readonly target: Layer;
+  /** The edit target the edits went through; its {@link EditTarget.layer} is the layer they were written to. */
+  readonly target: EditTarget;
+  /** Every layer the edits wrote: the target's, and, for a move, each layer of the stack whose opinions moved. */
+  readonly layers: readonly Layer[];
   /** The composed changes of the edits themselves (loading the assets they ask for is heard separately). */
   readonly changes: Changes;
   /** The layers read for the edits: assets the host had supplied already. */
@@ -1291,7 +1647,8 @@ export class EditReceipt implements Disposable {
   /** @internal Use {@link Stage.apply}. */
   constructor(
     stage: Stage,
-    target: Layer,
+    target: EditTarget,
+    layers: readonly Layer[],
     changes: Changes,
     loaded: readonly Layer[],
     failures: readonly AssetFailure[],
@@ -1299,6 +1656,7 @@ export class EditReceipt implements Disposable {
   ) {
     this.stage = stage;
     this.target = target;
+    this.layers = layers;
     this.changes = changes;
     this.loaded = loaded;
     this.failures = failures;
@@ -1326,11 +1684,6 @@ export class EditReceipt implements Disposable {
   [Symbol.dispose](): void {
     this.release();
   }
-}
-
-/** A layer's local edit target as the native module takes it. */
-function layerTarget(layer: Layer): NativeTarget {
-  return ["layer", layer.id, null, null, null, true, 0, 1];
 }
 
 function readMetadata(stage: Stage, path: string, key: string): Value | null {

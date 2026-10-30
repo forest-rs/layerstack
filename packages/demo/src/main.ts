@@ -556,7 +556,7 @@ function renderUndo(editor: Editor): void {
           "ol",
           { class: "stack" },
           ...[...stack].reverse().map((entry) =>
-            h("li", {}, entry.label, h("span", { class: "detail" }, ` in ${layerName(entry.receipt.target)}`)),
+            h("li", {}, entry.label, h("span", { class: "detail" }, ` in ${entry.receipt.layers.map(layerName).join(", ") || layerName(entry.receipt.target.layer)}`)),
           ),
         );
   fill(panel("undo-body"), 

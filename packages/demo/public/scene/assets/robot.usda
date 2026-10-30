@@ -6,11 +6,13 @@
 
 def Xform "Robot" (
     kind = "component"
+    prepend apiSchemas = ["MaterialBindingAPI"]
 )
 {
     color3f color = (0.5, 0.5, 0.5)
     double roughness = 0.6
     double height = 1.2
+    rel material:binding = </Robot/Looks/Paint>
 
     def Cube "Body"
     {
@@ -20,5 +22,21 @@ def Xform "Robot" (
     def Sphere "Head"
     {
         double radius = 0.4
+    }
+
+    def Scope "Looks"
+    {
+        def Material "Paint"
+        {
+            token outputs:surface.connect = </Robot/Looks/Paint/Surface.outputs:surface>
+
+            def Shader "Surface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor = (0.5, 0.5, 0.5)
+                float inputs:roughness = 0.6
+                token outputs:surface
+            }
+        }
     }
 }

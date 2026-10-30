@@ -95,6 +95,9 @@
  *   output at the path), `shading.not_shader`, `shading.type_mismatch`
  *   (an input exists with another type), `shading.invalid_name`,
  *   `shading.invalid_attribute`.
+ * - `prim.not_class`: a {@link DefinePrimEdit} with specifier `class` of
+ *   a defined prim that is not a class, which OpenUSD's `CreateClassPrim`
+ *   refuses.
  * - `schema.cannot_edit`: a schema edit of a prim beneath an instance or
  *   in a prototype, which OpenUSD refuses; `schema.cannot_apply`: an API
  *   schema the prim may not have.

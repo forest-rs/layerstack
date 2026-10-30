@@ -249,6 +249,77 @@ fn arcs_scene(relocated: bool) -> InMemoryStore {
     store
 }
 
+/// An asset whose composed specs author arcs back into the stage:
+/// `/World/Shelf` references `/Asset`, whose `Front` references
+/// `/World/Lamp` and overs its bulb and `size`, and whose `Base`
+/// (inherited by `Side`) payloads the bulb; `/World/Shelf` overs `Front`
+/// too.
+fn nested_arcs_scene() -> InMemoryStore {
+    let mut store = InMemoryStore::default();
+    let size = store.tokens.intern("size");
+    let mut root = Layer::new(ROOT);
+    author(&mut store, &mut root, "/World", PrimSpec::def());
+    let lamp = author(
+        &mut store,
+        &mut root,
+        "/World/Lamp",
+        PrimSpec::def().with_property(size, attribute(1.0)),
+    );
+    let bulb = author(&mut store, &mut root, "/World/Lamp/Bulb", PrimSpec::def());
+    author(&mut store, &mut root, "/World/Group", PrimSpec::def());
+    let asset_root = store.path("/Asset");
+    author(
+        &mut store,
+        &mut root,
+        "/World/Shelf",
+        PrimSpec::def().with_reference(Reference::with_asset(ASSET, asset_root, "asset.usda")),
+    );
+    author(
+        &mut store,
+        &mut root,
+        "/World/Shelf/Front",
+        PrimSpec::over().with_property(size, attribute(3.0)),
+    );
+    author(
+        &mut store,
+        &mut root,
+        "/World/Shelf/Front/Bulb",
+        PrimSpec::over(),
+    );
+    store.insert_layer(root);
+    let mut asset = Layer::new(ASSET);
+    author(&mut store, &mut asset, "/Asset", PrimSpec::def());
+    author(
+        &mut store,
+        &mut asset,
+        "/Asset/Front",
+        PrimSpec::def()
+            .with_reference(Reference::with_asset(ROOT, lamp, "root.usda"))
+            .with_property(size, attribute(2.0)),
+    );
+    author(
+        &mut store,
+        &mut asset,
+        "/Asset/Front/Bulb",
+        PrimSpec::over(),
+    );
+    author(
+        &mut store,
+        &mut asset,
+        "/Asset/Base",
+        PrimSpec::def().with_payload(Reference::with_asset(ROOT, bulb, "root.usda")),
+    );
+    let base = store.path("/Asset/Base");
+    author(
+        &mut store,
+        &mut asset,
+        "/Asset/Side",
+        PrimSpec::def().with_inherit(base),
+    );
+    store.insert_layer(asset);
+    store
+}
+
 /// Inactive, instanced and variant prims, which preparation rejects in
 /// their own ways, beside plain ones it moves.
 fn rejections_scene() -> InMemoryStore {
@@ -937,6 +1008,15 @@ fn retained_preparation_matches_composition_across_arcs_and_dependents() {
         let mut scene = Scene::new(arcs_scene(relocated), StageOptions::default(), &[DEPENDENT]);
         scene.exercise(&[ROOT], 4);
     }
+}
+
+/// Edits reaching an asset's arcs back into the stage repair them and
+/// move or remove the asset's specs over the edited namespace.
+#[test]
+fn retained_preparation_matches_composition_through_nested_arcs() {
+    let mut scene = Scene::new(nested_arcs_scene(), StageOptions::default(), &[]);
+    assert!(scene.primary.stage().composition_errors().is_empty());
+    assert!(scene.exercise(&[ROOT], 4) > 0);
 }
 
 /// Renames whose destination subtrees are proven to compose their

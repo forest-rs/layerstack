@@ -208,6 +208,63 @@ describe("draw lists", () => {
     }
   });
 
+  it("draw prims of schemas derived from Mesh or a shape, as Rust's IsA does", () => {
+    const bytes = new TextEncoder().encode(`#usda 1.0
+def Xform "Lab" {
+    def RockMesh "Rock" {
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points = [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0)]
+    }
+    def Boulder "Boulder" {
+        int[] faceVertexCounts = [3]
+        int[] faceVertexIndices = [0, 1, 2]
+        point3f[] points = [(0, 0, 0), (1, 0, 0), (1, 1, 0)]
+    }
+    def Lamp "Lamp" {
+        double radius = 0.25
+    }
+    def Robot "Robot" {
+    }
+}
+`);
+    const schemas = [
+      { name: "RockMesh", base: "Mesh" },
+      { name: "Boulder", base: "RockMesh" },
+      { name: "Lamp", base: "Sphere" },
+      { name: "Robot", base: "Xform" },
+    ];
+    const stage = layerstack.open({ identifier: "lab.usda", bytes }, { schemas });
+    const list = stagehand.drawList(stage);
+    try {
+      const diff = list.refresh();
+      assert.deepEqual(
+        list.items().map((item) => item.prim),
+        ["/Lab/Rock", "/Lab/Boulder", "/Lab/Lamp"],
+        "the meshes and the sphere; the robot is an Xform",
+      );
+      assert.equal(diff.work.triangulations, 2);
+      assert.equal(diff.work.tessellations, 1);
+      const lamp = list.item(itemOf(list, "/Lab/Lamp"))!;
+      assert.deepEqual(list.buffers(lamp.buffer)!.shape, { kind: "Sphere", radius: 0.25 });
+      const boulder = list.item(itemOf(list, "/Lab/Boulder"))!;
+      assert.equal(list.buffers(boulder.buffer)!.mesh.indices.length, 3);
+    } finally {
+      list.dispose();
+      stage.free();
+    }
+    // Unregistered, the types are unknown and nothing is drawn.
+    const plain = layerstack.open({ identifier: "lab.usda", bytes });
+    const none = stagehand.drawList(plain);
+    try {
+      none.refresh();
+      assert.deepEqual(none.items(), []);
+    } finally {
+      none.dispose();
+      plain.free();
+    }
+  });
+
   it("change only matrices for an instancer edit", () => {
     const { stage, list, edit } = fixture();
     try {

@@ -5,9 +5,9 @@
 // instanced draws and kept up to date from change records. It mirrors
 // `layerstack_stagehand::DrawList`, reading the stage through
 // `@forest-rs/layerstack` and building buffers in this package's module.
-import type { Changes, Stage } from "@forest-rs/layerstack";
+import type { Changes, Prim, Stage } from "@forest-rs/layerstack";
 import type { Stagehand, StagehandMesh } from "./index.js";
-import { readMesh, readShape } from "./read.js";
+import { readMesh, readShape, shapeSchema } from "./read.js";
 import type { MeshInput, MeshOptions, PrimvarInput, Shape, Tessellation } from "./types.js";
 
 /** A `UsdGeomImageable` purpose. */
@@ -136,7 +136,12 @@ export interface DrawDiff {
   readonly work: DrawWork;
 }
 
-const SHAPES = new Set(["Cube", "Sphere", "Cylinder", "Cone", "Capsule", "Plane", "Cylinder_1", "Capsule_1"]);
+/** What a prim's schema makes of it for a draw list, by `IsA`: a drawn gprim, a point instancer, a face subset. */
+interface Kind {
+  readonly gprim: "mesh" | "shape" | null;
+  readonly instancer: boolean;
+  readonly subset: boolean;
+}
 
 /** What a change may have changed of an item. */
 interface Dirty {
@@ -418,6 +423,8 @@ export class DrawList implements Disposable {
   readonly #buffers = new Map<number, Retained>();
   readonly #meshBuffers = new Map<string, number>();
   readonly #shapeBuffers = new Map<string, number>();
+  /** Each prim type's {@link Kind}: `IsA` depends on the type alone. */
+  readonly #kinds = new Map<string, Kind>();
   #nextItem = 0;
   #nextBuffer = 0;
 
@@ -545,13 +552,13 @@ export class DrawList implements Disposable {
     }
     const prototypes = new Set<string>();
     for (const [prim, what] of reached) {
-      const typeName = stage.prim(prim)?.typeName ?? null;
-      const instancer = typeName === "PointInstancer";
+      const kind = this.#kind(stage.prim(prim));
+      const instancer = kind.instancer;
       if (instancer) {
         found.scopes.push({ kind: "instancer", path: prim });
         this.#discoverInstancer(prim, found);
       }
-      const subsetOf = typeName === "GeomSubset" ? parent(prim) : null;
+      const subsetOf = kind.subset ? parent(prim) : null;
       for (const [id, entry] of this.#entries) {
         const reach = { ...what };
         let hit = entry.depends.some((path) => under(path, prim)) || subsetOf === entry.item.prim;
@@ -637,8 +644,29 @@ export class DrawList implements Disposable {
     };
   }
 
-  #drawn(typeName: string | null): boolean {
-    return typeName === "Mesh" || (typeName !== null && SHAPES.has(typeName));
+  /**
+   * What `prim`'s schema makes of it, by `IsA`, as `layerstack_stagehand`
+   * classifies a prim: a schema derived from `Mesh` or a shape is drawn
+   * as one. Cached by type name.
+   */
+  #kind(prim: Prim | null): Kind {
+    if (prim === null) return { gprim: null, instancer: false, subset: false };
+    const key = prim.typeName ?? "";
+    let kind = this.#kinds.get(key);
+    if (kind === undefined) {
+      const mesh = prim.typeName === "Mesh" || prim.isA("Mesh");
+      kind = {
+        gprim: mesh ? "mesh" : shapeSchema(prim) !== null ? "shape" : null,
+        instancer: prim.typeName === "PointInstancer" || prim.isA("PointInstancer"),
+        subset: prim.typeName === "GeomSubset" || prim.isA("GeomSubset"),
+      };
+      this.#kinds.set(key, kind);
+    }
+    return kind;
+  }
+
+  #drawn(prim: Prim): boolean {
+    return this.#kind(prim).gprim !== null;
   }
 
   #discover(root: string, firsts: Map<string, string>, found: Found): void {
@@ -647,7 +675,7 @@ export class DrawList implements Disposable {
     let start = root;
     for (let at = parent(root); at !== null; at = parent(at)) {
       const prim = stage.prim(at);
-      if (prim !== null && (prim.instance || prim.typeName === "PointInstancer")) start = at;
+      if (prim !== null && (prim.instance || this.#kind(prim).instancer)) start = at;
     }
     found.scopes.push({ kind: "resync", root: start });
     const prototypes = new Set<string>();
@@ -658,7 +686,7 @@ export class DrawList implements Disposable {
       if (prim === null) continue;
       found.prims++;
       if (!prim.active || !prim.defined || prim.abstract) continue;
-      if (prim.typeName === "PointInstancer") {
+      if (this.#kind(prim).instancer) {
         found.scopes.push({ kind: "instancer", path });
         this.#discoverInstancer(path, found);
         continue;
@@ -668,7 +696,7 @@ export class DrawList implements Disposable {
         if (first !== undefined) prototypes.add(first);
         continue;
       }
-      if (this.#drawn(prim.typeName)) found.sources.push({ kind: "gprim", path });
+      if (this.#drawn(prim)) found.sources.push({ kind: "gprim", path });
       stack.push(...prim.children().reverse());
     }
     for (const first of prototypes) {
@@ -687,7 +715,7 @@ export class DrawList implements Disposable {
       if (prim === null) continue;
       found.prims++;
       if (!prim.active || !prim.defined || prim.abstract) continue;
-      if (this.#drawn(prim.typeName)) {
+      if (this.#drawn(prim)) {
         const materials: (string | null)[] = [];
         for (const proxy of proxies(first, path, roots)) {
           const material = this.#material(proxy);
@@ -710,7 +738,7 @@ export class DrawList implements Disposable {
         if (prim === null) continue;
         found.prims++;
         if (!prim.active || !prim.defined) continue;
-        if (this.#drawn(prim.typeName)) found.sources.push({ kind: "pointInstancer", instancer, index, prim: path });
+        if (this.#drawn(prim)) found.sources.push({ kind: "pointInstancer", instancer, index, prim: path });
         stack.push(...prim.children());
       }
     });
@@ -906,8 +934,7 @@ export class DrawList implements Disposable {
   #geometry(item: DrawItem, gather: Gather): number | null {
     const stage = this.#stage;
     const at = this.#time === undefined ? {} : { time: this.#time };
-    const typeName = stage.prim(item.prim)?.typeName ?? null;
-    if (typeName === "Mesh") {
+    if (this.#kind(stage.prim(item.prim)).gprim === "mesh") {
       const input = readMesh(stage, item.prim, at);
       if (input === null) return null;
       const subsets = (input.subsets ?? []).map((subset) => subset.path ?? "");

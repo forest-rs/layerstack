@@ -1887,6 +1887,70 @@ class Xform "Beacon" {
         assert_eq!(diff.work.items_time_invariant, 1, "the stones");
     }
 
+    /// A prim of a schema derived from `Mesh`, or from a shape, is drawn
+    /// as one (`IsA`), as the TypeScript draw list draws it.
+    #[test]
+    fn prims_of_derived_schemas_are_drawn_as_their_base() {
+        use layerstack::{SchemaDefinition, SchemaRegistry};
+        let mut store = InMemoryStore::default();
+        let read = layerstack_usda::read_usda(
+            r#"#usda 1.0
+def Xform "Lab" {
+    def RockMesh "Rock" {
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points = [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0)]
+    }
+    def Lamp "Lamp" {
+        double radius = 0.25
+    }
+    def Robot "Robot" {
+    }
+}
+"#,
+            LayerId(1),
+            store.tokens(),
+            store.paths(),
+            &mut NoAssets,
+        );
+        store.insert_layer(read.emitted.layer);
+        let tokens = store.tokens();
+        let mut builder = SchemaRegistry::builder();
+        layerstack_schemas::register(&mut builder, layerstack_schemas::Domain::ALL, tokens)
+            .unwrap();
+        for (name, base) in [("RockMesh", "Mesh"), ("Lamp", "Sphere"), ("Robot", "Xform")] {
+            builder.register(
+                SchemaDefinition::typed(tokens.intern(name)).with_parent(tokens.intern(base)),
+            );
+        }
+        let schemas = Arc::new(builder.build(tokens));
+        let live = LiveStage::compose(
+            &mut store,
+            LayerId(1),
+            StageOptions {
+                schemas: Some(schemas),
+                ..StageOptions::default()
+            },
+        );
+        let mut list = DrawList::new(DrawOptions::default());
+        let diff = list.refresh(&Scene::new(live.stage(), &store));
+        let drawn: Vec<_> = list
+            .items()
+            .map(|item| store.paths().display(item.prim, store.tokens()))
+            .collect();
+        assert_eq!(drawn, ["/Lab/Rock", "/Lab/Lamp"]);
+        assert_eq!(diff.work.triangulations, 1);
+        assert_eq!(diff.work.tessellations, 1);
+        let lamp = list
+            .items()
+            .find(|item| item.prim == store.path("/Lab/Lamp"))
+            .unwrap();
+        assert_eq!(
+            list.buffers(lamp.buffer).unwrap().shape,
+            Some(crate::shapes::Shape::Sphere { radius: 0.25 })
+        );
+    }
+
     #[test]
     fn an_instancer_edit_only_changes_matrices() {
         let (mut fixture, _) = Fixture::new();

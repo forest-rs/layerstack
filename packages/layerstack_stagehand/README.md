@@ -39,7 +39,10 @@ A `DrawList` is what a renderer draws, retained: instanced draws
 (`items()`: a gprim drawn once, a native instancing prototype's gprim at
 every instance, a point instancer's prototype at every unmasked
 instance) over buffers the list owns (`buffers(key)`), kept up to date
-from the stage's change records.
+from the stage's change records. Prims are classified by schema
+(`prim.isA`), as the Rust list classifies them: a prim of a schema derived
+from `Mesh` or from a shape (registered with the stage's `schemas` open
+option) is drawn as one, and `readShape` reads it (`shapeSchema`).
 
 ```ts
 const list = stagehand.drawList(stage, { time, purposes: ["default", "proxy"] });

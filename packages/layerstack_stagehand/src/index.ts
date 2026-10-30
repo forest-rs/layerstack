@@ -47,7 +47,7 @@ import type { DrawRange, MeshInput, MeshOptions, MeshReport, PrimvarInput, Shape
 export type * from "./types.js";
 export { DrawList } from "./draw.js";
 export type { DrawBuffers, DrawDiff, DrawItem, DrawOptions, DrawWork, ItemSource, Purpose } from "./draw.js";
-export { readMesh, readPoints, readShape } from "./read.js";
+export { SHAPE_SCHEMAS, readMesh, readPoints, readShape, shapeSchema } from "./read.js";
 
 /** The exports' version this wrapper speaks (`layerstack_stagehand_wasm::ABI`). */
 const ABI = 2;

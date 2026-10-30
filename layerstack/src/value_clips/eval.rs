@@ -35,7 +35,34 @@ pub enum ClipEvalError {
 }
 impl core::fmt::Display for ClipEvalError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "invalid clip evaluation: {self:?}")
+        f.write_str(match self {
+            Self::EmptySchedule => {
+                "invalid clip evaluation: the schedule needs an activation and an asset"
+            }
+            Self::InvalidActivation => {
+                "invalid clip evaluation: an activation is not finite, repeats a time, or \
+                 indexes no asset"
+            }
+            Self::InvalidTimeMapping => {
+                "invalid clip evaluation: a time mapping is not finite, or maps one stage time \
+                 more than twice"
+            }
+            Self::InvalidSamples => {
+                "invalid clip evaluation: the clip's sample times are not finite, not \
+                 increasing, or repeated"
+            }
+            Self::InvalidQuery => {
+                "invalid clip evaluation: the query time, or the time it maps to, is not finite"
+            }
+            Self::UnsupportedSpline => {
+                "invalid clip evaluation: the clip's spline has regressive tangents or other \
+                 features it does not evaluate"
+            }
+            Self::InvalidSpline => {
+                "invalid clip evaluation: the clip's spline has invalid knots or tangents, or \
+                 data that is not finite"
+            }
+        })
     }
 }
 impl core::error::Error for ClipEvalError {}

@@ -88,13 +88,36 @@ pub enum GeneratedSchemaError {
     },
 }
 
+impl GeneratedSchemaError {
+    /// The error in words, the schema named with `tokens`, the interner
+    /// [`read_generated_schema`] read with ("no root prim of the layer
+    /// defines the declared schema `Tile`"). `Display` writes the same
+    /// with ids.
+    #[must_use]
+    pub fn display<'a>(&'a self, tokens: &'a TokenInterner) -> impl core::fmt::Display + 'a {
+        crate::diagnostic::Shown(move |f: &mut core::fmt::Formatter<'_>| {
+            self.write(f, Some(tokens))
+        })
+    }
+
+    fn write(
+        &self,
+        f: &mut core::fmt::Formatter<'_>,
+        tokens: Option<&TokenInterner>,
+    ) -> core::fmt::Result {
+        match self {
+            Self::MissingSchema { name } => write!(
+                f,
+                "no root prim of the layer defines the declared schema `{}`",
+                crate::diagnostic::token(tokens, *name)
+            ),
+        }
+    }
+}
+
 impl core::fmt::Display for GeneratedSchemaError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            Self::MissingSchema { name } => {
-                write!(f, "no prim defines declared schema {name:?}")
-            }
-        }
+        self.write(f, None)
     }
 }
 

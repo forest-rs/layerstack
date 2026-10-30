@@ -560,7 +560,11 @@ impl fmt::Display for Transformation {
                 write!(f, "custom = {custom}, from the weakest opinion")
             }
             Self::DefinedBySchema { variability } => {
-                write!(f, "declared by its schema ({variability:?}, not custom)")
+                let variability = match variability {
+                    Variability::Varying => "varying",
+                    Variability::Uniform => "uniform",
+                };
+                write!(f, "declared by its schema ({variability}, not custom)")
             }
         }
     }

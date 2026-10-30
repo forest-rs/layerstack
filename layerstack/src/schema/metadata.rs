@@ -697,13 +697,29 @@ pub struct MetadataConflict {
     pub registered_by: MetadataOrigin,
 }
 
-impl fmt::Display for MetadataConflict {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl MetadataConflict {
+    /// The conflict in words, the field named with `tokens`, the interner
+    /// it was registered with ("conflicting metadata declaration for
+    /// `kind`, which Sdf registers already"). `Display` writes the
+    /// same with ids.
+    #[must_use]
+    pub fn display<'a>(&'a self, tokens: &'a TokenInterner) -> impl fmt::Display + 'a {
+        crate::diagnostic::Shown(move |f: &mut fmt::Formatter<'_>| self.write(f, Some(tokens)))
+    }
+
+    fn write(&self, f: &mut fmt::Formatter<'_>, tokens: Option<&TokenInterner>) -> fmt::Result {
         write!(
             f,
-            "conflicting metadata declaration for {:?}, which {} registers already",
-            self.name, self.registered_by
+            "conflicting metadata declaration for `{}`, which {} registers already",
+            crate::diagnostic::token(tokens, self.name),
+            self.registered_by
         )
+    }
+}
+
+impl fmt::Display for MetadataConflict {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.write(f, None)
     }
 }
 impl core::error::Error for MetadataConflict {}

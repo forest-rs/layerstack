@@ -86,6 +86,24 @@ impl Names<'_> {
     }
 }
 
+/// A `Display` that writes with a closure, for a diagnostic whose names
+/// come from something other than a store.
+pub(crate) struct Shown<F>(pub(crate) F);
+
+impl<F: Fn(&mut fmt::Formatter<'_>) -> fmt::Result> fmt::Display for Shown<F> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        (self.0)(f)
+    }
+}
+
+/// A token written with `tokens`, or without them, its id.
+pub(crate) fn token(tokens: Option<&crate::TokenInterner>, id: TokenId) -> String {
+    match tokens {
+        Some(tokens) => tokens.resolve(id).into(),
+        None => format!("{id:?}"),
+    }
+}
+
 /// A diagnostic that writes itself in words with [`Names`].
 pub(crate) trait Describe {
     /// Writes the diagnostic, its ids written by `names`.

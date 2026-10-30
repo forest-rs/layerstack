@@ -40,7 +40,14 @@ pub enum StitchError {
 }
 impl core::fmt::Display for StitchError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "invalid layer stitching input: {self:?}")
+        f.write_str(match self {
+            Self::PropertyKindMismatch => {
+                "cannot stitch the layers: an attribute and a relationship spec share one property path"
+            }
+            Self::InvalidTimeSamples => {
+                "cannot stitch the layers: sample times are not finite, not increasing, or repeated"
+            }
+        })
     }
 }
 impl core::error::Error for StitchError {}

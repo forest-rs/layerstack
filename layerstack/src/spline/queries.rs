@@ -26,7 +26,29 @@ pub enum SplineQueryError {
 }
 impl core::fmt::Display for SplineQueryError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "invalid spline query: {self:?}")
+        f.write_str(match self {
+            Self::InvalidInput => {
+                "invalid spline query: an input is not finite, the knots are not in order, a \
+                 tangent width is negative or the tolerance is invalid"
+            }
+            Self::UnsupportedLoops => {
+                "invalid spline query: adaptive sampling and change intervals need the spline's \
+                 inner loops baked"
+            }
+            Self::UnsupportedLoopRange => {
+                "invalid spline query: the query spans too many extrapolation periods to tell \
+                 them apart in `f64`"
+            }
+            Self::RegressiveTangents => {
+                "invalid spline query: a Bézier segment's time curve reverses, so it cannot be inverted"
+            }
+            Self::SingularDerivative => {
+                "invalid spline query: the time derivative is zero at the query, so the slope is singular"
+            }
+            Self::SampleBudgetExceeded => {
+                "invalid spline query: the approximation needs more vertices than its budget"
+            }
+        })
     }
 }
 impl core::error::Error for SplineQueryError {}

@@ -29,7 +29,7 @@ use alloc::vec::Vec;
 use layerstack_stagehand::{
     Axis, FaceSubsets, Interpolation, MeshBuffers, MeshInput, MeshOptions, MeshPlan, MeshTopology,
     Orientation, Primvar, Shape, SmoothNormals, SubdivisionScheme, Tessellation, Triangulation,
-    tessellate,
+    UvSetInput, tessellate,
 };
 use wasm_bindgen::prelude::*;
 
@@ -47,8 +47,8 @@ mod standalone {
     }
 }
 
-/// The version of the exports the TypeScript wrapper speaks: 2.
-pub const ABI: u32 = 2;
+/// The version of the exports the TypeScript wrapper speaks: 3.
+pub const ABI: u32 = 3;
 
 /// [`ABI`], which the wrapper checks before using the module.
 #[wasm_bindgen(js_name = stagehandAbi)]
@@ -127,6 +127,7 @@ pub struct MeshBuilder {
     normals: Option<OwnedPrimvar<3>>,
     st: Option<OwnedPrimvar<2>>,
     color: Option<OwnedPrimvar<3>>,
+    uv_sets: Vec<(String, OwnedPrimvar<2>)>,
     subset_faces: Vec<i32>,
     subset_ends: Vec<u32>,
 }
@@ -226,6 +227,25 @@ impl MeshBuilder {
         Ok(())
     }
 
+    /// A texture coordinate set besides `st`: the `float2` primvar `name`.
+    ///
+    /// # Errors
+    ///
+    /// An unknown interpolation, or values that are not whole pairs.
+    #[wasm_bindgen(js_name = uvSet)]
+    pub fn uv_set(
+        &mut self,
+        name: String,
+        values: &[f32],
+        indices: Option<Vec<i32>>,
+        interpolation: &str,
+        element_size: u32,
+    ) -> Result<(), JsValue> {
+        let primvar = OwnedPrimvar::new("buildMesh", values, indices, interpolation, element_size)?;
+        self.uv_sets.push((name, primvar));
+        Ok(())
+    }
+
     /// Its face subsets, flat: subset `i` is `faces[ends[i - 1]..ends[i]]`.
     pub fn subsets(&mut self, faces: Vec<i32>, ends: Vec<u32>) {
         self.subset_faces = faces;
@@ -249,7 +269,11 @@ impl MeshBuilder {
                 SmoothNormals::Hydra
             },
         };
-        let input = self.input();
+        let sets = self.sets();
+        let input = MeshInput {
+            uv_sets: &sets,
+            ..self.input()
+        };
         let plan = MeshPlan::new(&input, &options);
         let buffers = plan
             .buffers(&input)
@@ -258,6 +282,18 @@ impl MeshBuilder {
             plan: Some(plan),
             buffers,
         }
+    }
+
+    fn sets(&self) -> Vec<UvSetInput<'_>> {
+        self.uv_sets
+            .iter()
+            .filter_map(|(name, set)| {
+                Some(UvSetInput {
+                    name,
+                    primvar: set.primvar()?,
+                })
+            })
+            .collect()
     }
 
     fn input(&self) -> MeshInput<'_> {
@@ -273,6 +309,7 @@ impl MeshBuilder {
             normals: self.normals.as_ref().and_then(OwnedPrimvar::primvar),
             st: self.st.as_ref().and_then(OwnedPrimvar::primvar),
             display_color: self.color.as_ref().and_then(OwnedPrimvar::primvar),
+            uv_sets: &[],
             subsets: FaceSubsets {
                 faces: &self.subset_faces,
                 ends: &self.subset_ends,
@@ -320,6 +357,29 @@ impl StagehandMesh {
             .colors
             .as_ref()
             .map(|colors| colors.as_flattened().to_vec())
+    }
+
+    /// The texture coordinate sets drawn besides `st`, by name, in order.
+    #[wasm_bindgen(js_name = uvSetNames)]
+    #[must_use]
+    pub fn uv_set_names(&self) -> Vec<String> {
+        self.buffers
+            .uv_sets
+            .iter()
+            .map(|set| set.name.clone())
+            .collect()
+    }
+
+    /// The texture coordinate set `index` of [`Self::uv_set_names`], two
+    /// numbers per vertex; empty past the last.
+    #[wasm_bindgen(js_name = uvSetValues)]
+    #[must_use]
+    pub fn uv_set_values(&self, index: u32) -> Vec<f32> {
+        self.buffers
+            .uv_sets
+            .get(index as usize)
+            .map(|set| set.values.as_flattened().to_vec())
+            .unwrap_or_default()
     }
 
     /// Three vertex indices per triangle.
@@ -409,7 +469,11 @@ impl StagehandMesh {
             .plan
             .as_ref()
             .ok_or_else(|| error("refillFrom", "a shape has no plan"))?;
-        let input = builder.input();
+        let sets = builder.sets();
+        let input = MeshInput {
+            uv_sets: &sets,
+            ..builder.input()
+        };
         if !plan.same_topology(&input.topology) {
             return Err(error("refillFrom", "the topology is not the plan's"));
         }

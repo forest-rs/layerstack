@@ -79,7 +79,8 @@ export function readPoints(stage: Stage, path: string, options: { readonly time?
  *   `normals` attribute with its `interpolation` (`vertex` when
  *   unauthored), as `UsdGeomPointBased` reads them;
  * - `st`: `primvars:st`; `displayColor`: `primvars:displayColor`, its own or
- *   inherited from an ancestor, as primvars inherit;
+ *   inherited from an ancestor, as primvars inherit; `uvSets`: the `float2`
+ *   primvars `options.uvSets` names besides `st`, those the mesh has;
  * - subsets: the active `GeomSubset` children of family `materialBind` and
  *   element type `face`, in namespace order.
  *
@@ -87,7 +88,11 @@ export function readPoints(stage: Stage, path: string, options: { readonly time?
  * and colors, two for `st`) is left out. The topology is read even when
  * invalid: the plan's report then says why it draws nothing.
  */
-export function readMesh(stage: Stage, path: string, options: { readonly time?: number } = {}): MeshInput | null {
+export function readMesh(
+  stage: Stage,
+  path: string,
+  options: { readonly time?: number; readonly uvSets?: readonly string[] } = {},
+): MeshInput | null {
   const { time } = options;
   const prim = stage.prim(path);
   const topology = prim?.meshTopology(time === undefined ? {} : { time }) ?? null;
@@ -118,6 +123,10 @@ export function readMesh(stage: Stage, path: string, options: { readonly time?: 
     normals,
     st: primvar(stage, path, "st", 2, time, false),
     displayColor: primvar(stage, path, "displayColor", 3, time, true),
+    uvSets: (options.uvSets ?? []).flatMap((name) => {
+      const set = name === "st" ? null : primvar(stage, path, name, 2, time, false);
+      return set === null ? [] : [{ name, primvar: set }];
+    }),
     subsets,
   };
 }

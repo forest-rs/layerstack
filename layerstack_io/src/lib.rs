@@ -1331,7 +1331,8 @@ impl<B: Storage> StageDocument<B> {
     /// recomposes (`PcpLayerStack::_BuildLayerStack`).
     pub fn load_requested_assets(&mut self) -> Result<LoadReport, IoError> {
         let mut report = LoadReport::default();
-        let mut attempted = BTreeSet::new();
+        // Only asked whether a request was met before, never listed.
+        let mut attempted = HashSet::new();
         loop {
             let requests: Vec<(LayerId, String)> = self
                 .stage
@@ -1997,7 +1998,8 @@ impl<'a, B: Storage> Reader<'a, B> {
         {
             return Ok(());
         }
-        let mut attempted = BTreeSet::new();
+        // Only asked whether a request was met before, never listed.
+        let mut attempted = HashSet::new();
         loop {
             let overlay = Overlay {
                 store,

@@ -265,6 +265,13 @@ fn generated_layers_save_only_as_copies() {
         .copied()
         .find(|&id| doc.identifier(id) == Some("field.grid"))
         .unwrap();
+    // The document marks the layer built from arguments read-only in its
+    // store, where saves and namespace edits read it.
+    assert_eq!(
+        doc.store().layer_read_only(grid),
+        Some(ReadOnlyReason::FormatArguments)
+    );
+    assert_eq!(doc.store().layer_read_only(plain), None);
     let row = doc.store_mut().path("/Grid/Row1");
     for layer in [grid, plain] {
         let layer = doc.store_mut().layer_mut(layer).unwrap();

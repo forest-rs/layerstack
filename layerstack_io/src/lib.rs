@@ -90,7 +90,7 @@ use hashbrown::{HashMap, HashSet};
 use layerstack::sort;
 use layerstack::{
     AssetResolveError, AssetResolver, AssetUse, InMemoryStore, Layer, LayerId, LayerStore,
-    LiveStage, PathId, PathInterner, ResolvedAsset, StageOptions, TokenInterner,
+    LiveStage, PathId, PathInterner, ReadOnlyReason, ResolvedAsset, StageOptions, TokenInterner,
 };
 use layerstack::{asset::PackagePath, encoded_bytes::EncodedBytes, parallel::Threads};
 use layerstack_usdz::snapshot::{PackageLimits, PackageSnapshot, PackageStats};
@@ -795,6 +795,22 @@ struct Source {
     format: Format,
     package: Option<LayerId>,
 }
+impl Source {
+    /// Why the layer read from this source cannot be saved back to it:
+    /// the one place the document decides it, recorded in its store as it
+    /// names the layer ([`InMemoryStore::set_layer_read_only`]), where
+    /// saves, namespace edits and bindings read it
+    /// ([`LayerStore::layer_read_only`]).
+    fn read_only(&self) -> Option<ReadOnlyReason> {
+        if self.package.is_some() {
+            Some(ReadOnlyReason::PackageMember)
+        } else if self.identifier.contains(FORMAT_ARGS_DELIMITER) {
+            Some(ReadOnlyReason::FormatArguments)
+        } else {
+            None
+        }
+    }
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum State {
     Loading,
@@ -1008,6 +1024,7 @@ impl<B: Storage> StageDocument<B> {
         );
         catalog.states.insert(root, State::Loaded);
         store.set_layer_identifier(root, Arc::clone(&catalog.sources[&root].identifier));
+        store.set_layer_read_only(root, catalog.sources[&root].read_only());
         store.insert_layer(Layer::new(root));
         let stage = LiveStage::compose(&mut store, root, options);
         let mut document = Self {
@@ -1534,18 +1551,20 @@ impl<B: Storage> StageDocument<B> {
                 report.anonymous.push(id);
                 continue;
             };
-            let result = if source.package.is_some() {
-                Err(IoError::new(
+            let result = match self.store.layer_read_only(id) {
+                None => self.write_layer(id, source.format, &source.identifier),
+                Some(ReadOnlyReason::PackageMember) => Err(IoError::new(
                     IoErrorKind::ReadOnly,
                     "package layers are read-only; export a localization plan instead",
-                ))
-            } else if source.identifier.contains(FORMAT_ARGS_DELIMITER) {
-                Err(IoError::new(
+                )),
+                Some(ReadOnlyReason::FormatArguments) => Err(IoError::new(
                     IoErrorKind::ReadOnly,
                     "a layer read with format arguments is built from them; export a copy instead",
-                ))
-            } else {
-                self.write_layer(id, source.format, &source.identifier)
+                )),
+                Some(reason) => Err(IoError::new(
+                    IoErrorKind::ReadOnly,
+                    alloc::format!("the layer cannot be saved ({reason}); export a copy instead"),
+                )),
             };
             match result {
                 Ok(()) => {
@@ -1893,6 +1912,7 @@ impl<'a, B: Storage> Reader<'a, B> {
                 layer.forget_change_history();
                 if let Some(source) = self.catalog.sources.get(&id) {
                     store.set_layer_identifier(id, Arc::clone(&source.identifier));
+                    store.set_layer_read_only(id, source.read_only());
                 }
                 store.insert_layer(layer);
             }
@@ -2736,6 +2756,9 @@ impl LayerStore for Overlay<'_> {
     }
     fn layer_identifier(&self, id: LayerId) -> Option<&str> {
         self.store.layer_identifier(id)
+    }
+    fn layer_read_only(&self, id: LayerId) -> Option<ReadOnlyReason> {
+        self.store.layer_read_only(id)
     }
     fn asset_layer(&self, anchor: LayerId, asset: &str) -> Option<LayerId> {
         match self

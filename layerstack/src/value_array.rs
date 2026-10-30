@@ -265,6 +265,9 @@ macro_rules! array_types {
                     let Ok(native) = self.try_materialize() else { return true; };
                     *self = native.clone();
                 }
+                #[cfg(target_family = "wasm")]
+                return self.apply_edit_by_plan(edit, fill);
+                #[cfg(not(target_family = "wasm"))]
                 match self {
                     $(Self::$variant(items) => {
                         let Some(edit) = convert_edit(edit, $read) else { return false; };
@@ -312,6 +315,48 @@ macro_rules! array_types {
                             let edited: StringArray = elements.into_iter().collect();
                             *items = Arc::new(edited);
                         }
+                        true
+                    },
+                    Self::Deferred(_) => unreachable!("materialized above"),
+                }
+            }
+
+            /// [`Self::apply_edit`] on WebAssembly: the edit runs once over
+            /// an [`EditPlan`] of element sources, and each element kind
+            /// only gathers its elements from the plan, so the instruction
+            /// interpreter is compiled once rather than for every kind.
+            /// The result is the per-kind interpreter's, and a uniquely
+            /// owned buffer keeps its allocation, as there.
+            #[cfg(any(target_family = "wasm", test))]
+            fn apply_edit_by_plan(&mut self, edit: &ArrayEdit, fill: Option<&Value>) -> bool {
+                match self {
+                    $(Self::$variant(items) => {
+                        if !edit_reads(edit, fill, &|value| ($read)(value).is_some()) { return false; }
+                        let Some(plan) = EditPlan::new(edit, items.len(), fill) else { return true; };
+                        let edited: Vec<$ty> = plan.gather(|at| items[at], |value| ($read)(value));
+                        match Arc::get_mut(items) {
+                            Some(unique) => {
+                                unique.clear();
+                                unique.extend_from_slice(&edited);
+                            }
+                            None => *items = Arc::new(edited),
+                        }
+                        true
+                    },)*
+                    Self::Token(items) => {
+                        let token = |value: &Value| if let Value::Token(token) = value { Some(*token) } else { None };
+                        if !edit_reads(edit, fill, &|value| token(value).is_some()) { return false; }
+                        let Some(plan) = EditPlan::new(edit, items.len(), fill) else { return true; };
+                        let edited: Vec<TokenId> = plan.gather(|at| items[at], token);
+                        *items = edited.into();
+                        true
+                    },
+                    Self::String(items) => {
+                        if !edit_reads(edit, fill, &|value| string_element(value).is_some()) { return false; }
+                        let Some(plan) = EditPlan::new(edit, items.len(), fill) else { return true; };
+                        let edited: Vec<&str> = plan.gather(|at| items.get(at).expect("a planned element is in the array"), string_element);
+                        let edited: StringArray = edited.into_iter().collect();
+                        *items = Arc::new(edited);
                         true
                     },
                     Self::Deferred(_) => unreachable!("materialized above"),
@@ -498,6 +543,104 @@ impl<S: AsRef<str>> Extend<S> for StringArray {
     }
 }
 
+/// Whether every value `edit` holds (its literals and sized fills) and
+/// `fill` read as the element kind `reads` accepts: the per-kind
+/// interpreter's conversion succeeds exactly then.
+#[cfg(any(target_family = "wasm", test))]
+fn edit_reads(edit: &ArrayEdit, fill: Option<&Value>, reads: &dyn Fn(&Value) -> bool) -> bool {
+    fill.is_none_or(reads)
+        && edit.ops.iter().all(|op| match op {
+            ArrayEditOp::Write { src, .. } | ArrayEditOp::Insert { src, .. } => match src {
+                ArrayEditOperand::Literal(value) => reads(value),
+                ArrayEditOperand::CopyFrom(_) => true,
+            },
+            ArrayEditOp::MinSizeFill { fill, .. } | ArrayEditOp::ResizeFill { fill, .. } => {
+                reads(fill)
+            }
+            ArrayEditOp::Erase { .. }
+            | ArrayEditOp::MinSize { .. }
+            | ArrayEditOp::MaxSize { .. }
+            | ArrayEditOp::Resize { .. } => true,
+        })
+}
+
+/// Where one element of an edited array comes from.
+#[cfg(any(target_family = "wasm", test))]
+#[derive(Clone, Copy)]
+enum Source<'e> {
+    /// The element at this position of the array before the edit.
+    Kept(usize),
+    /// A value the edit holds: a literal, a sized fill or the fill.
+    Held(&'e Value),
+}
+
+/// An array edit run over the positions of an array rather than its
+/// elements: the edited array's elements, each as its [`Source`].
+#[cfg(any(target_family = "wasm", test))]
+struct EditPlan<'e>(Vec<Source<'e>>);
+
+#[cfg(any(target_family = "wasm", test))]
+impl<'e> EditPlan<'e> {
+    /// Runs `edit` over an array of `len` elements, growing with `fill`;
+    /// `None` for an edit with no instructions, which changes nothing.
+    fn new(edit: &'e ArrayEdit, len: usize, fill: Option<&'e Value>) -> Option<Self> {
+        use opinionated::{ArrayEditOp as Op, ArrayEditOperand as Operand};
+        if edit.is_identity() {
+            return None;
+        }
+        let operand = |src: &'e ArrayEditOperand| match src {
+            ArrayEditOperand::Literal(value) => Operand::Literal(Source::Held(value)),
+            ArrayEditOperand::CopyFrom(index) => Operand::CopyFrom(*index),
+        };
+        let ops = edit
+            .ops
+            .iter()
+            .map(|op| match op {
+                ArrayEditOp::Write { src, index } => Op::Write {
+                    src: operand(src),
+                    index: *index,
+                },
+                ArrayEditOp::Insert { src, index } => Op::Insert {
+                    src: operand(src),
+                    index: *index,
+                },
+                ArrayEditOp::Erase { index } => Op::Erase { index: *index },
+                ArrayEditOp::MinSize { len } => Op::MinSize { len: *len },
+                ArrayEditOp::MaxSize { len } => Op::MaxSize { len: *len },
+                ArrayEditOp::Resize { len } => Op::Resize { len: *len },
+                ArrayEditOp::MinSizeFill { len, fill } => Op::MinSizeFill {
+                    len: *len,
+                    fill: Source::Held(fill),
+                },
+                ArrayEditOp::ResizeFill { len, fill } => Op::ResizeFill {
+                    len: *len,
+                    fill: Source::Held(fill),
+                },
+            })
+            .collect();
+        let mut sources: Vec<Source<'e>> = (0..len).map(Source::Kept).collect();
+        opinionated::ArrayEdit { ops }.apply_in_place(&mut sources, fill.map(Source::Held));
+        Some(Self(sources))
+    }
+
+    /// The edited elements: `kept` reads an element of the array before the
+    /// edit, `read` one the edit holds, which [`edit_reads`] checked.
+    fn gather<T>(
+        &self,
+        kept: impl Fn(usize) -> T,
+        read: impl Fn(&'e Value) -> Option<T>,
+    ) -> Vec<T> {
+        self.0
+            .iter()
+            .map(|source| match *source {
+                Source::Kept(at) => kept(at),
+                Source::Held(value) => read(value).expect("checked by `edit_reads`"),
+            })
+            .collect()
+    }
+}
+
+#[cfg(not(target_family = "wasm"))]
 fn convert_edit<'e, T: Copy>(
     edit: &'e ArrayEdit,
     read: impl Fn(&'e Value) -> Option<T>,
@@ -612,6 +755,127 @@ mod tests {
         assert!(array.shares_storage(&array.clone()));
         assert!(!array.shares_storage(&TypedArray::Int(Arc::new(vec![1, 2, 3]))));
         assert!(!array.shares_storage(&TypedArray::Float(Arc::new(vec![1., 2., 3.]))));
+    }
+
+    /// Every short program over a pool of instructions edits each kind of
+    /// buffer the same through the plan (WebAssembly's path) as through
+    /// the per-kind interpreter, and both refuse the same mismatched
+    /// literals and fills.
+    #[test]
+    fn the_edit_plan_matches_the_per_kind_interpreter() {
+        use ArrayEditOp as Op;
+        use ArrayEditOperand as Operand;
+        let kinds: [(TypedArray, Value, Value); 4] = [
+            (
+                TypedArray::Int(Arc::new(vec![1, 2, 3])),
+                Value::Int(7),
+                Value::Float(0.5),
+            ),
+            (
+                TypedArray::Vec3f(Arc::new(vec![[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])),
+                Value::Vec3f([7.0, 8.0, 9.0]),
+                Value::Int(1),
+            ),
+            (
+                TypedArray::Token(vec![TokenId::EMPTY; 2].into()),
+                Value::Token(TokenId::EMPTY),
+                Value::string("text"),
+            ),
+            (
+                TypedArray::String(Arc::new(["a", "b", "c", "d"].into_iter().collect())),
+                Value::string("x"),
+                Value::Token(TokenId::EMPTY),
+            ),
+        ];
+        for (array, literal, other) in kinds {
+            let indices = [
+                ArrayIndex::Position(0),
+                ArrayIndex::Position(-1),
+                ArrayIndex::Position(2),
+                ArrayIndex::Position(9),
+                ArrayIndex::End,
+            ];
+            let mut pool = vec![
+                Op::Erase {
+                    index: ArrayIndex::Position(1),
+                },
+                Op::MinSize { len: 6 },
+                Op::MinSizeFill {
+                    len: 5,
+                    fill: literal.clone(),
+                },
+                Op::MaxSize { len: 2 },
+                Op::Resize { len: 4 },
+                Op::ResizeFill {
+                    len: 1,
+                    fill: literal.clone(),
+                },
+                Op::Write {
+                    src: Operand::Literal(other.clone()),
+                    index: ArrayIndex::Position(0),
+                },
+            ];
+            for index in indices {
+                pool.push(Op::Write {
+                    src: Operand::Literal(literal.clone()),
+                    index,
+                });
+                pool.push(Op::Insert {
+                    src: Operand::CopyFrom(index),
+                    index: ArrayIndex::Position(1),
+                });
+                pool.push(Op::Insert {
+                    src: Operand::Literal(literal.clone()),
+                    index,
+                });
+                pool.push(Op::Write {
+                    src: Operand::CopyFrom(index),
+                    index: ArrayIndex::Position(0),
+                });
+            }
+            let mut programs: Vec<Vec<ArrayEditOp>> = vec![Vec::new()];
+            for a in &pool {
+                programs.push(vec![a.clone()]);
+                for b in &pool {
+                    programs.push(vec![a.clone(), b.clone()]);
+                    programs.push(vec![b.clone(), a.clone(), b.clone()]);
+                }
+            }
+            for ops in programs {
+                let edit = ArrayEdit { ops };
+                for fill in [None, Some(&literal), Some(&other)] {
+                    let mut by_kind = array.clone();
+                    let mut by_plan = array.clone();
+                    let kind_applied = by_kind.apply_edit(&edit, fill);
+                    let plan_applied = by_plan.apply_edit_by_plan(&edit, fill);
+                    assert_eq!(kind_applied, plan_applied, "{edit:?} with {fill:?}");
+                    assert_eq!(by_kind, by_plan, "{edit:?} with {fill:?}");
+                }
+            }
+        }
+    }
+
+    /// The plan keeps a uniquely owned buffer's allocation, as the
+    /// per-kind interpreter does.
+    #[test]
+    fn the_edit_plan_keeps_a_unique_allocation() {
+        let mut array = TypedArray::Vec3f(Arc::new(vec![[1.0, 2.0, 3.0]; 8]));
+        let TypedArray::Vec3f(items) = &array else {
+            unreachable!()
+        };
+        let allocation = items.as_ptr();
+        let edit = ArrayEdit {
+            ops: vec![ArrayEditOp::Write {
+                src: ArrayEditOperand::Literal(Value::Vec3f([4.0, 5.0, 6.0])),
+                index: ArrayIndex::Position(0),
+            }],
+        };
+        assert!(array.apply_edit_by_plan(&edit, None));
+        let TypedArray::Vec3f(items) = &array else {
+            unreachable!()
+        };
+        assert_eq!(items.as_ptr(), allocation);
+        assert_eq!(items[0], [4.0, 5.0, 6.0]);
     }
 
     #[test]

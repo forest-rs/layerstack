@@ -14,21 +14,25 @@ of five stones.
 
 The viewport (`src/viewport.ts`, drawn by three.js in `src/viewport3d.ts`)
 takes everything from layerstack, with no USD loader: the drawable prims
-(meshes, spheres, cubes and point instancers) from the composed tree, one
+(meshes, implicit shapes and point instancers) from the composed tree, one
 batched `stage.visibilities` and `stage.purposeInfos` read to leave out
 what is invisible or of a purpose not drawn (default and proxy are, as in
-usdview), one batched `stage.worldTransforms` read for every placement, a
-mesh's `points` and face indices (fanned into triangles) or a sphere's
-radius and a cube's size, the `displayColor` primvar (inherited from an
-ancestor or a class too) or else the bound material's surface
-`diffuseColor`, `stage.pointInstances` for the stones, each matrix times the
+usdview), one batched `stage.worldTransforms` read for every placement,
+triangles built by `@forest-rs/layerstack_stagehand` (`../layerstack_stagehand`)
+from typed arrays read through layerstack (a mesh's topology, points,
+primvars and `materialBind` subsets, or a shape's size attributes): indexed
+buffers with normals, per-vertex `displayColor` where it varies, concave
+faces ear-clipped (the path), and a three.js group per subset range (the
+ground), the `displayColor` primvar (inherited from an ancestor or a class
+too) or else the bound material's surface `diffuseColor`,
+`stage.pointInstances` for the stones, each matrix times the
 instancer's world transform, and `stage.worldBounds(["/"])` to frame the
 camera. It is read again after every action, so the edits, undos, the
 variant switch, the rename and the muted asset show in it; selecting a prim
 highlights it. Drag to orbit, scroll to zoom. Under it, the same read
-summarized: the prims drawn, the instances, the triangles and the framed
-bounds, which `scripts/acceptance.ts` checks after every step without
-rendering a pixel.
+summarized: the prims drawn, the instances, the triangles, the framed
+bounds and each mesh's stagehand report in brief, which
+`scripts/acceptance.ts` checks after every step without rendering a pixel.
 
 Panels: the prim tree (instances, instance proxies and composition errors
 badged), the
@@ -106,8 +110,9 @@ sample from disk, and checks the values and explanations after each one,
 then unmutes the robot asset as the layers panel's toggle does; CI runs it.
 
 ```sh
-# Build the package first (see ../layerstack/README.md):
+# Build the packages first (see ../layerstack/README.md):
 (cd ../layerstack && npm ci && npm run build:wasm && npm run build)
+(cd ../layerstack_stagehand && npm ci && npm run build:wasm && npm run build)
 npm ci
 npm run dev          # the editor at http://localhost:5173
 npm run build        # type-check, then vite build into dist/

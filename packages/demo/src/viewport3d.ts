@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 // The viewport: three.js draws what `viewport.ts` read from the stage.
-// Every matrix, triangle and color comes from layerstack; three.js only
-// rasterizes them. No USD loader is involved.
+// Every matrix and color comes from layerstack and every triangle from
+// stagehand's buffers (indexed, with normals, per-vertex colors and a
+// group per subset range); three.js only rasterizes them. No USD loader is
+// involved.
 import {
   BufferAttribute,
   BufferGeometry,
@@ -58,7 +60,7 @@ export class Viewport {
   update(scene: ViewportScene, selected: string | null): void {
     for (const object of this.#objects) {
       this.#scene.remove(object);
-      (object.material as MeshStandardMaterial).dispose();
+      for (const material of [object.material].flat()) material.dispose();
       if (object instanceof InstancedMesh) object.dispose();
     }
     this.#objects = scene.items.map((item) => this.#object(item, selected));
@@ -79,25 +81,32 @@ export class Viewport {
 
   #object(item: DrawItem, selected: string | null): Mesh | InstancedMesh {
     const geometry = this.#geometry(item.triangles);
-    const [r, g, b] = item.color;
     const highlighted = selected !== null && (selected === item.path || selected.startsWith(`${item.path}/`) || item.path.startsWith(`${selected}/`));
-    const material = new MeshStandardMaterial({
-      color: new Color().setRGB(r, g, b),
-      roughness: 0.7,
-      ...(item.kind === "mesh" ? { side: DoubleSide } : {}),
-      emissive: highlighted ? new Color(0x2f5fd0) : new Color(0),
-      emissiveIntensity: highlighted ? 0.6 : 0,
-    });
+    // Per-vertex displayColor multiplies a white base; a subset's material
+    // color replaces it for its range.
+    const material = (color: readonly [number, number, number] | null) => {
+      const vertexColors = color === null && item.triangles.colors !== null;
+      const [r, g, b] = vertexColors ? [1, 1, 1] : (color ?? item.color);
+      return new MeshStandardMaterial({
+        color: new Color().setRGB(r, g, b),
+        vertexColors,
+        roughness: 0.7,
+        ...(item.kind === "mesh" || item.kind === "Plane" ? { side: DoubleSide } : {}),
+        emissive: highlighted ? new Color(0x2f5fd0) : new Color(0),
+        emissiveIntensity: highlighted ? 0.6 : 0,
+      });
+    };
+    const materials = item.triangles.ranges.length > 1 ? item.rangeColors.map(material) : material(null);
     const matrix = new Matrix4();
     const placements = item.matrices.length / 16;
     // Row-by-row row-vector matrices are three.js's column-major column-vector ones.
     if (item.prototype === null) {
-      const mesh = new Mesh(geometry, material);
+      const mesh = new Mesh(geometry, materials);
       mesh.matrixAutoUpdate = false;
       mesh.matrix.fromArray(item.matrices);
       return mesh;
     }
-    const instances = new InstancedMesh(geometry, material, placements);
+    const instances = new InstancedMesh(geometry, materials, placements);
     for (let i = 0; i < placements; i++) instances.setMatrixAt(i, matrix.fromArray(item.matrices, 16 * i));
     instances.instanceMatrix.needsUpdate = true;
     instances.computeBoundingSphere();
@@ -108,8 +117,14 @@ export class Viewport {
     let geometry = this.#geometries.get(triangles.key);
     if (geometry === undefined) {
       geometry = new BufferGeometry();
+      geometry.setIndex(new BufferAttribute(triangles.indices, 1));
       geometry.setAttribute("position", new BufferAttribute(triangles.positions, 3));
       geometry.setAttribute("normal", new BufferAttribute(triangles.normals, 3));
+      if (triangles.colors !== null) geometry.setAttribute("color", new BufferAttribute(triangles.colors, 3));
+      // A group per range when there are subsets, each drawn with its range's material.
+      if (triangles.ranges.length > 1) {
+        triangles.ranges.forEach((range, index) => geometry!.addGroup(range.first, range.count, index));
+      }
       geometry.computeBoundingSphere();
       this.#geometries.set(triangles.key, geometry);
     }

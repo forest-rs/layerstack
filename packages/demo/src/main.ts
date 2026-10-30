@@ -5,6 +5,7 @@
 // from the stage after each action; the sample is small, and reading the
 // stage is what the demo shows.
 import { LayerstackError, loadLayerstack } from "@forest-rs/layerstack";
+import { loadStagehand } from "@forest-rs/layerstack_stagehand";
 import type { Attribute, EditTarget, Issue, Layer, Prim, Stage } from "@forest-rs/layerstack";
 import type { Editor, LayerFile } from "./editor.ts";
 import { Session, steps } from "./script.ts";
@@ -59,6 +60,8 @@ function layerName(layer: Layer): string {
 }
 
 const sceneBase = new URL("scene/", document.baseURI);
+/** Builds the viewport's triangles: its own module, fed typed arrays read through layerstack. */
+const stagehand = await loadStagehand();
 /** The download links of the last save, revoked at the next. */
 let links: { identifier: string; url: string; size: number }[] = [];
 
@@ -184,7 +187,7 @@ function renderViewport(stage: Stage): void {
   const body = panel("viewport-body");
   let scene: ReturnType<typeof buildViewport>;
   try {
-    scene = buildViewport(stage, session.time ?? undefined);
+    scene = buildViewport(stage, stagehand, session.time ?? undefined);
   } catch (error) {
     // A read the viewport cannot make (an invalid instancer, say) must not take the panels down.
     fill(body, `The viewport could not read the stage: ${error instanceof Error ? error.message : String(error)}`);

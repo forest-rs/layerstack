@@ -14,9 +14,9 @@ export default defineConfig({
     // three.js loads in a chunk of its own, after the editor, at 560 kB.
     chunkSizeWarningLimit: 600,
   },
-  // The package loads its module with `new URL(..., import.meta.url)`;
-  // pre-bundling it would move it away from its module file.
-  optimizeDeps: { exclude: ["@forest-rs/layerstack"] },
-  // The package is linked from ../layerstack.
+  // The packages load their modules with `new URL(..., import.meta.url)`;
+  // pre-bundling them would move them away from their module files.
+  optimizeDeps: { exclude: ["@forest-rs/layerstack", "@forest-rs/layerstack_stagehand"] },
+  // The packages are linked from ../layerstack and ../layerstack_stagehand.
   server: { fs: { allow: [".."] } },
 });

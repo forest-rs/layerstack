@@ -33,7 +33,8 @@ use layerstack_schemas::shading::ValueSourceKind;
 use layerstack_schemas::value::{read_asset, read_bool, read_float, read_float3, read_token};
 use layerstack_schemas::{PrimView, Scene};
 
-/// The built-in `UsdLux` light a [`LightItem`] is, by its typed schema.
+/// The `UsdLux` light a [`LightItem`] is: a built-in light by its typed
+/// schema, or a mesh made a light by an applied API schema.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum LightKind {
     /// `DistantLight`: parallel light along the light's -Z axis.
@@ -53,13 +54,28 @@ pub enum LightKind {
     Dome,
     /// `PortalLight`: a rectangle in the XY plane guiding a dome's light.
     Portal,
+    /// A `Mesh` with `MeshLightAPI` (or `LightAPI` itself) applied: its
+    /// faces emit (`UsdLuxMeshLightAPI`). The mesh is drawn as an item too;
+    /// its geometry is the item's buffer.
+    Mesh,
+    /// `GeometryLight` (deprecated in `UsdLux` for `MeshLightAPI`): the prim
+    /// its `geometry` relationship targets emits. Listed as data: the
+    /// target is not drawn as an emitter.
+    Geometry,
 }
 
 impl LightKind {
-    /// The kind of the prim at `path`, by `IsA`; `None` for anything else
-    /// (mesh, volume, geometry and plugin lights are not listed yet).
+    /// The kind of the prim at `path`: a built-in light by `IsA`, a `Mesh`
+    /// with `MeshLightAPI` or `LightAPI` applied (`HasAPI`); `None` for
+    /// anything else (volume lights, `LightAPI` on other gprims and plugin
+    /// lights are not listed yet).
     #[must_use]
     pub fn of(scene: &Scene<'_>, path: PathId) -> Option<Self> {
+        if scene.is_a(path, "Mesh") {
+            return (scene.has_api(path, "MeshLightAPI", None)
+                || scene.has_api(path, "LightAPI", None))
+            .then_some(Self::Mesh);
+        }
         [
             ("DistantLight", Self::Distant),
             ("SphereLight", Self::Sphere),
@@ -69,6 +85,7 @@ impl LightKind {
             ("DomeLight", Self::Dome),
             ("DomeLight_1", Self::Dome),
             ("PortalLight", Self::Portal),
+            ("GeometryLight", Self::Geometry),
         ]
         .into_iter()
         .find(|(schema, _)| scene.is_a(path, schema))
@@ -108,8 +125,10 @@ pub struct LightEmission {
     /// area (its world length times the perimeter of its world cross-section
     /// perpendicular to its axis, by Ramanujan's second formula, exact for a
     /// circle), a `DistantLight` `π sin²θ` (or `π (2 - sin²θ)` past a
-    /// hemisphere) for `θ` half its `angle`, 1 at angle 0, and a dome or
-    /// portal light 1. `treatAsPoint` and `treatAsLine` do not change it.
+    /// hemisphere) for `θ` half its `angle`, 1 at angle 0, a mesh light the
+    /// world-space area of its faces (each fanned from its first vertex,
+    /// holes left out), and a dome, portal or geometry light 1.
+    /// `treatAsPoint` and `treatAsLine` do not change it.
     pub size_factor: f64,
     /// `color * temperature_color * intensity * 2^exposure / size_factor`:
     /// the luminance in nits, per channel, that a renderer emits.
@@ -172,6 +191,17 @@ pub enum LightGeometry {
         /// `inputs:height`, along Y.
         height: f32,
     },
+    /// A mesh light: the mesh's own faces, which the draw list draws as
+    /// the item of the same prim.
+    Mesh {
+        /// The world-space area of its faces.
+        area: f64,
+    },
+    /// A `GeometryLight`.
+    Geometry {
+        /// The prim its `geometry` relationship targets, if any.
+        geometry: Option<PathId>,
+    },
 }
 
 /// `ShapingAPI`'s controls, as authored: a spot light's cone and an IES
@@ -223,19 +253,76 @@ pub struct LightLink {
     pub excludes: Vec<TargetPath>,
 }
 
+/// Which instance of a point instancer places a light: the instancer and
+/// the instance's position in its arrays (`protoIndices`, `positions`),
+/// masked instances included in the count.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct LightInstance {
+    /// The `PointInstancer`.
+    pub instancer: PathId,
+    /// The instance's position in the instancer's arrays.
+    pub index: u32,
+}
+
+/// A light's identity in a [`crate::DrawList`]: its prim's path, and for a
+/// light a point instancer places, the instance.
+///
+/// - A light outside any instance: its path.
+/// - A light inside a native instance: its instance proxy's path (the
+///   instance's path joined with the light's path in the prototype), one
+///   per instance, as `Usd.PrimRange` with instance proxies walks it.
+/// - A light inside a point instancer's prototype: the light's path under
+///   the prototype, and [`LightInstance`], one per unmasked instance of
+///   that prototype.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct LightId {
+    /// The light prim, or its instance proxy.
+    pub path: PathId,
+    /// The point instancer's instance, for a light it places.
+    pub instance: Option<LightInstance>,
+}
+
+impl LightItem {
+    /// Its identity in the draw list.
+    #[must_use]
+    pub fn id(&self) -> LightId {
+        LightId {
+            path: self.path,
+            instance: self.instance,
+        }
+    }
+}
+
+impl From<PathId> for LightId {
+    fn from(path: PathId) -> Self {
+        Self {
+            path,
+            instance: None,
+        }
+    }
+}
+
 /// One light, read at the list's time: what a renderer needs to light the
 /// scene with it.
 #[derive(Clone, Debug, PartialEq)]
 pub struct LightItem {
-    /// The light prim.
+    /// The light prim, or its instance proxy inside a native instance.
     pub path: PathId,
+    /// The point instancer's instance placing it, for a light inside a
+    /// point instancer's prototype.
+    pub instance: Option<LightInstance>,
     /// Its kind.
     pub kind: LightKind,
     /// Its local-to-world matrix, row-vector as OpenUSD's (`row[3]` is the
-    /// translation): `UsdGeomXformable::ComputeLocalToWorldTransform`.
+    /// translation): `UsdGeomXformable::ComputeLocalToWorldTransform` (of
+    /// the instance proxy, inside a native instance); for a light a point
+    /// instancer places, its transform relative to the prototype, then the
+    /// instance's (`ComputeInstanceTransformsAtTime`, the prototype's own
+    /// transform included), then the instancer's world transform.
     pub matrix: [[f64; 4]; 4],
-    /// Whether it is invisible (`ComputeVisibility`); a renderer leaves it
-    /// out. It stays listed.
+    /// Whether it is invisible (`ComputeVisibility`, of the instancer and
+    /// what is above it too for one a point instancer places); a renderer
+    /// leaves it out. It stays listed.
     pub hidden: bool,
     /// Its world position: the matrix's translation.
     pub position: [f64; 3],
@@ -287,20 +374,26 @@ pub(crate) const LIGHT_INPUTS: &[&str] = &[
     "inputs:shadow:distance",
     "inputs:shadow:falloff",
     "inputs:shadow:falloffGamma",
+    // A normalized mesh light's area.
+    "points",
+    "faceVertexCounts",
+    "faceVertexIndices",
+    "holeIndices",
 ];
 
-/// Reads the light at `path` of `kind` at `time`, given its world matrix
-/// and visibility, and the prims its connected inputs read. Inputs are read
+/// Reads the light `id` of `kind` at `time`, given its world matrix and
+/// visibility, and the prims its connected inputs read. Inputs are read
 /// with the schema fallbacks; a connected input reads its source
 /// ([`input_at`]).
 pub(crate) fn read_light(
     scene: &Scene<'_>,
-    path: PathId,
+    id: LightId,
     kind: LightKind,
     time: Time,
     matrix: [[f64; 4]; 4],
     hidden: bool,
 ) -> (LightItem, Vec<PathId>) {
+    let path = id.path;
     let prim = PrimView::new(*scene, path);
     let sources = RefCell::new(Vec::new());
     let float = |name: &str, fallback: f32| {
@@ -393,6 +486,15 @@ pub(crate) fn read_light(
             width: float("inputs:width", 1.),
             height: float("inputs:height", 1.),
         },
+        LightKind::Mesh => LightGeometry::Mesh {
+            area: mesh_area(scene, path, time, &matrix),
+        },
+        LightKind::Geometry => LightGeometry::Geometry {
+            geometry: prim
+                .read_targets("geometry")
+                .first()
+                .map(|target| target.prim_path()),
+        },
     };
     let color_temperature = boolean("inputs:enableColorTemperature", false)
         .then(|| float("inputs:colorTemperature", 6500.));
@@ -454,6 +556,7 @@ pub(crate) fn read_light(
     };
     let item = LightItem {
         path,
+        instance: id.instance,
         kind,
         matrix,
         hidden,
@@ -562,7 +665,10 @@ pub(crate) fn size_factor(geometry: &LightGeometry, matrix: &[[f64; 4]; 4]) -> f
                 (2. - sin2) * core::f64::consts::PI
             }
         }
-        LightGeometry::Dome { .. } | LightGeometry::Portal { .. } => 1.,
+        LightGeometry::Mesh { area } => area,
+        LightGeometry::Dome { .. }
+        | LightGeometry::Portal { .. }
+        | LightGeometry::Geometry { .. } => 1.,
     };
     // A light the transform flattens has no area to spread over: emit as
     // if not normalized rather than divide by zero.
@@ -571,6 +677,51 @@ pub(crate) fn size_factor(geometry: &LightGeometry, matrix: &[[f64; 4]; 4]) -> f
     } else {
         1.
     }
+}
+
+/// The world-space area of the mesh at `path`: its faces (holes left out)
+/// fanned from their first vertex, through `matrix`; 0 for a mesh without
+/// a valid topology.
+fn mesh_area(scene: &Scene<'_>, path: PathId, time: Time, matrix: &[[f64; 4]; 4]) -> f64 {
+    let Some(mesh) = crate::stage::StageMesh::read(scene, path, time) else {
+        return 0.;
+    };
+    let input = mesh.input();
+    let topology = input.topology;
+    let world = |index: i32| -> Option<[f64; 3]> {
+        let p = input.points.get(usize::try_from(index).ok()?)?;
+        let p = p.map(f64::from);
+        Some(core::array::from_fn(|j| {
+            p[0] * matrix[0][j] + p[1] * matrix[1][j] + p[2] * matrix[2][j] + matrix[3][j]
+        }))
+    };
+    let mut area = 0.;
+    let mut first = 0_usize;
+    for (face, &count) in topology.face_vertex_counts.iter().enumerate() {
+        let Ok(count) = usize::try_from(count) else {
+            return 0.;
+        };
+        let Some(corners) = topology.face_vertex_indices.get(first..first + count) else {
+            return 0.;
+        };
+        first += count;
+        if topology
+            .hole_indices
+            .iter()
+            .any(|&hole| usize::try_from(hole) == Ok(face))
+        {
+            continue;
+        }
+        let Some(origin) = corners.first().and_then(|&corner| world(corner)) else {
+            continue;
+        };
+        for pair in corners[1..].windows(2) {
+            if let (Some(b), Some(c)) = (world(pair[0]), world(pair[1])) {
+                area += length(cross(sub(b, origin), sub(c, origin))) / 2.;
+            }
+        }
+    }
+    area
 }
 
 fn dot(a: [f64; 3], b: [f64; 3]) -> f64 {
@@ -882,7 +1033,7 @@ def Xform "World" {
                 .unwrap()
                 .set_intensity(edit, 16.);
         });
-        assert_eq!(diff.lights_changed, [bulb]);
+        assert_eq!(diff.lights_changed, [crate::LightId::from(bulb)]);
         assert_eq!(diff.work.lights_read, 1);
         assert_eq!(diff.work.cameras_read, 0);
         assert_eq!(diff.work.items_read, 0);
@@ -901,7 +1052,7 @@ def Xform "World" {
         let applied = fixture.live.apply(&mut fixture.store, &scale).unwrap();
         let scene = Scene::new(fixture.live.stage(), &fixture.store);
         let diff = fixture.list.apply_changes(&scene, &applied.changes);
-        assert_eq!(diff.lights_changed, [bulb]);
+        assert_eq!(diff.lights_changed, [crate::LightId::from(bulb)]);
         assert_eq!(diff.work.lights_read, 1);
         // A property the light does not read: nothing read.
         let aim = fixture.store.tokens().intern("aim");
@@ -927,7 +1078,7 @@ def Xform "World" {
         let diff = fixture.list.set_time(&scene, Time::at(10.0));
         let sun = fixture.path("/World/Sun");
         let eye = fixture.path("/World/Eye");
-        assert_eq!(diff.lights_changed, [sun]);
+        assert_eq!(diff.lights_changed, [crate::LightId::from(sun)]);
         assert_eq!(diff.cameras_changed, [eye]);
         assert_eq!((diff.work.lights_read, diff.work.cameras_read), (1, 1));
         close(
@@ -945,7 +1096,7 @@ def Xform "World" {
         let diff = fixture.edit(|edit| {
             edit.define_prim(lamp, "SphereLight").unwrap();
         });
-        assert_eq!(diff.lights_added, [lamp]);
+        assert_eq!(diff.lights_added, [crate::LightId::from(lamp)]);
         assert_eq!(diff.work.lights_read, 1);
     }
 
@@ -978,6 +1129,178 @@ def Xform "World" {
         let disk = LightGeometry::Disk { radius: 1. };
         assert_eq!(size_factor(&disk, &flat), 1.);
         close(size_factor(&disk, &identity), PI);
+    }
+
+    /// `stagehand_instanced_lights/scene.usda`, its stage and a refreshed
+    /// draw list.
+    fn instanced() -> (InMemoryStore, LiveStage, DrawList) {
+        let mut store = InMemoryStore::default();
+        let read = layerstack_usda::read_usda(
+            include_str!(
+                "../../layerstack_conformance/fixtures/stagehand_instanced_lights/scene.usda"
+            ),
+            LayerId(1),
+            store.tokens(),
+            store.paths(),
+            &mut NoAssets,
+        );
+        assert!(!read.has_errors());
+        store.insert_layer(read.emitted.layer);
+        let schemas = Arc::new(layerstack_schemas::openusd(store.tokens()));
+        let live = LiveStage::compose(
+            &mut store,
+            LayerId(1),
+            StageOptions {
+                schemas: Some(schemas),
+                ..StageOptions::default()
+            },
+        );
+        let mut list = DrawList::new(DrawOptions::default());
+        list.refresh(&Scene::new(live.stage(), &store));
+        (store, live, list)
+    }
+
+    /// The lights and cameras of `stagehand_instanced_lights/scene.usda` at
+    /// three times against what usd-core answers: those inside native
+    /// instances once per instance, by their instance proxies' paths, with
+    /// the proxies' `ComputeLocalToWorldTransform` and `ComputeVisibility`;
+    /// those inside a point instancer's prototype once per unmasked
+    /// instance, placed as `ComputeInstanceTransformsAtTime` places it; a
+    /// `MeshLightAPI` mesh and a `GeometryLight`.
+    #[test]
+    fn instanced_lights_match_openusd() {
+        use crate::{LightId, LightInstance};
+        use serde_json::Value as Json;
+        let oracle: Json = serde_json::from_str(include_str!(
+            "../../layerstack_conformance/fixtures/stagehand_instanced_lights/oracle.json"
+        ))
+        .unwrap();
+        assert_eq!(
+            oracle["version"].as_str(),
+            Some(layerstack_schemas::OPENUSD_VERSION)
+        );
+        let (store, live, mut list) = instanced();
+        let scene = Scene::new(live.stage(), &store);
+        let rows = oracle["rows"].as_array().unwrap();
+        assert_eq!(rows.len(), 33);
+        for time in [Time::Default, Time::at(0.0), Time::at(10.0)] {
+            if list.options().time != time {
+                list.set_time(&scene, time);
+            }
+            let at_time: Vec<&Json> = rows
+                .iter()
+                .filter(|row| row["time"].as_f64().map_or(Time::Default, Time::at) == time)
+                .collect();
+            let mut lights = Vec::new();
+            let mut cameras = Vec::new();
+            for row in at_time {
+                let path = store.path(row["path"].as_str().unwrap());
+                let at = alloc::format!("{} {time:?}", row["path"]);
+                let world = |i: usize, j: usize| row["world"][i][j].as_f64().unwrap();
+                let (matrix, hidden) = if row["camera"] == true {
+                    cameras.push(path);
+                    let camera = list.camera(path).unwrap_or_else(|| panic!("{at}"));
+                    let computed = camera.camera.as_ref().unwrap();
+                    (*computed.camera_to_world(), None)
+                } else {
+                    let instance = row["instance"].as_object().map(|instance| LightInstance {
+                        instancer: store.path(instance["instancer"].as_str().unwrap()),
+                        index: u32::try_from(instance["index"].as_u64().unwrap()).unwrap(),
+                    });
+                    let id = LightId { path, instance };
+                    lights.push(id);
+                    let light = list
+                        .light(id)
+                        .unwrap_or_else(|| panic!("{at} is not listed"));
+                    let kind = match row["type"].as_str().unwrap() {
+                        "Mesh" => LightKind::Mesh,
+                        "GeometryLight" => LightKind::Geometry,
+                        "DiskLight" => LightKind::Disk,
+                        _ => LightKind::Sphere,
+                    };
+                    assert_eq!(light.kind, kind, "{at}");
+                    (light.matrix, Some(light.hidden))
+                };
+                for (i, matrix_row) in matrix.iter().enumerate() {
+                    for (j, value) in matrix_row.iter().enumerate() {
+                        assert!((value - world(i, j)).abs() <= 1e-12, "{at}: world {i} {j}");
+                    }
+                }
+                if let Some(hidden) = hidden {
+                    assert_eq!(hidden, row["visibility"] == "invisible", "{at}");
+                }
+            }
+            lights.sort();
+            cameras.sort();
+            let listed: Vec<LightId> = list.lights().map(|light| light.id()).collect();
+            assert_eq!(listed, lights, "{time:?}: every light listed, and no other");
+            let listed: Vec<_> = list.cameras().map(|camera| camera.path).collect();
+            assert_eq!(listed, cameras, "{time:?}");
+        }
+    }
+
+    /// Moving one native instance reads its own light and camera again,
+    /// not the other instances'; moving a point instancer's instances
+    /// reads the lights it places; a mesh light normalizes by its
+    /// world-space area.
+    #[test]
+    fn instanced_lights_follow_their_instances() {
+        use crate::{LightId, LightInstance};
+        let (mut store, mut live, mut list) = instanced();
+        let north = store.path("/World/Lamps/North");
+        let translate = store.tokens().intern("xformOp:translate");
+        let mut moving = Transaction::new();
+        moving.set_default(
+            EditTarget::for_layer(LayerId(1)).property(PropertyPath::new(north, translate)),
+            Value::Vec3d([6., 0., 0.]),
+        );
+        let applied = live.apply(&mut store, &moving).unwrap();
+        let scene = Scene::new(live.stage(), &store);
+        let diff = list.apply_changes(&scene, &applied.changes);
+        let bulb = store.path("/World/Lamps/North/Bulb");
+        assert_eq!(diff.lights_changed, [LightId::from(bulb)]);
+        assert_eq!(diff.cameras_changed, [store.path("/World/Lamps/North/Eye")]);
+        assert_eq!((diff.work.lights_read, diff.work.cameras_read), (1, 1));
+        assert_eq!(list.light(bulb).unwrap().position, [6., 1., -2.]);
+
+        let field = store.path("/World/Field");
+        let positions = store.tokens().intern("positions");
+        let mut placing = Transaction::new();
+        placing.set_default(
+            EditTarget::for_layer(LayerId(1)).property(PropertyPath::new(field, positions)),
+            Value::array(alloc::vec![
+                Value::Vec3f([0., 0., 1.]),
+                Value::Vec3f([1., 0., 1.]),
+                Value::Vec3f([2., 0., 1.]),
+                Value::Vec3f([3., 0., 1.]),
+            ]),
+        );
+        let applied = live.apply(&mut store, &placing).unwrap();
+        let scene = Scene::new(live.stage(), &store);
+        let diff = list.apply_changes(&scene, &applied.changes);
+        let flame = store.path("/World/Field/Protos/Torch/Flame");
+        let placed = |index| LightId {
+            path: flame,
+            instance: Some(LightInstance {
+                instancer: field,
+                index,
+            }),
+        };
+        assert_eq!(diff.lights_changed, [placed(0), placed(2)]);
+        assert_eq!(diff.work.lights_read, 2);
+        assert_eq!(list.light(placed(2)).unwrap().position, [2., 3., 1.]);
+
+        // A 2 x 1 quad scaled by 3 along Y: 6 square units.
+        let panel = list.light(store.path("/World/Panel")).unwrap();
+        assert_eq!(panel.geometry, LightGeometry::Mesh { area: 6. });
+        assert_eq!(panel.emission.radiance, [1., 1., 1.]);
+        let glow = list.light(store.path("/World/Glow")).unwrap();
+        assert_eq!(
+            glow.geometry,
+            LightGeometry::Geometry {
+                geometry: Some(store.path("/World/Panel"))
+            }
+        );
     }
 
     /// Every light of `stagehand_lights/scene.usda` at four times against
@@ -1115,6 +1438,9 @@ def Xform "World" {
                 LightGeometry::Portal { width, height } => {
                     assert_eq!(*width, f32_of(&inputs["width"]), "{at}");
                     assert_eq!(*height, f32_of(&inputs["height"]), "{at}");
+                }
+                LightGeometry::Mesh { .. } | LightGeometry::Geometry { .. } => {
+                    panic!("{at}: the oracle lists built-in lights");
                 }
             }
             assert_eq!(light.shaping.is_some(), row["shaping"] == true, "{at}");

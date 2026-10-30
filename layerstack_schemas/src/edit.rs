@@ -1341,10 +1341,26 @@ impl<'s> SchemaEdit<'s> {
         key_path: &str,
         value: Option<FieldValue>,
     ) -> Result<(), MetadataError> {
-        let keys: Vec<&str> = key_path.split(':').collect();
-        if keys.iter().any(|part| part.is_empty()) {
+        if key_path.split(':').any(str::is_empty) {
             return Err(MetadataError::InvalidKeyPath(key_path.into()));
         }
+        self.author_metadata_at_key(target, key, key_path, value)
+    }
+
+    /// [`Self::author_metadata_by_key`] for any nonempty `key_path`, an
+    /// empty part naming an entry named `""`, as OpenUSD's
+    /// `UsdObject::SetMetadataByDictKey` splits the path.
+    pub(crate) fn author_metadata_at_key(
+        &mut self,
+        target: TargetPath,
+        key: &str,
+        key_path: &str,
+        value: Option<FieldValue>,
+    ) -> Result<(), MetadataError> {
+        if key_path.is_empty() {
+            return Err(MetadataError::InvalidKeyPath(key_path.into()));
+        }
+        let keys: Vec<&str> = key_path.split(':').collect();
         let spec_kind = match target {
             TargetPath::Prim(path) => {
                 if !self.exists(path) {
@@ -1375,7 +1391,7 @@ impl<'s> SchemaEdit<'s> {
             None => self.local_dictionary(target, field),
         };
         let erase = value.is_none();
-        if erase && crate::metadata::dictionary_entry(&dictionary, key_path).is_none() {
+        if erase && crate::metadata::dictionary_entry_at(&dictionary, key_path).is_none() {
             // Nothing to erase: C++ authors nothing either.
             return Ok(());
         }

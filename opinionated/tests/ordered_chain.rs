@@ -5,7 +5,7 @@
 
 use opinionated::{
     ChainOpinion, IgnoreReason, ListOp, OpinionKind, OpinionOp, Resolution, ResolutionEvent,
-    resolve_ordered_chain, resolve_ordered_chain_report,
+    ordered_chain_events, resolve_ordered_chain, resolve_ordered_chain_report,
 };
 
 #[test]
@@ -198,4 +198,28 @@ fn report_marks_every_operation_below_an_explicit_list_as_hidden() {
             reason: IgnoreReason::WeakerThanExplicit
         })
     );
+}
+
+#[test]
+fn events_alone_match_the_report() {
+    let ops = [
+        OpinionOp::<(), u32, ()>::List(ListOp::appended(vec![2])),
+        OpinionOp::List(ListOp::explicit(vec![1])),
+        OpinionOp::Set(()),
+        OpinionOp::Block,
+        OpinionOp::Dictionary(Vec::new()),
+    ];
+    let positions = [0, 1, 2, 3, 4];
+    // Every suffix starts the chain at another kind of opinion.
+    for start in 0..=ops.len() {
+        let chain: Vec<_> = ops[start..]
+            .iter()
+            .zip(&positions[start..])
+            .map(|(op, provenance)| ChainOpinion { op, provenance })
+            .collect();
+        assert_eq!(
+            ordered_chain_events(&chain),
+            resolve_ordered_chain_report(chain.iter().copied()).events
+        );
+    }
 }

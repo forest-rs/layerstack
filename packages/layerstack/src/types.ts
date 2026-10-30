@@ -1279,3 +1279,66 @@ export interface SkinningCacheStats {
   /** Bytes of retained array capacity. */
   readonly capacityBytes: number;
 }
+
+/**
+ * What a stage's transform cache has done and holds
+ * ({@link Stage.transformCache}). Counters are cumulative since the stage
+ * opened.
+ */
+export interface TransformCacheStats {
+  /** Local transforms computed (not reused). */
+  readonly localComputed: number;
+  /** Local-to-world transforms computed (not reused). */
+  readonly worldComputed: number;
+  /** Queries answered from the cache. */
+  readonly hits: number;
+  /** Prims it holds transforms for now. */
+  readonly prims: number;
+  /** Change batches (edits, undos, loads, mutes) it heard and invalidated by. */
+  readonly changeBatches: number;
+  /** Times the stage's change history expired before a read, so the cache started over. */
+  readonly resets: number;
+}
+
+/** Why an op of `xformOpOrder` did not contribute as written; OpenUSD evaluates it as the identity (a huge scale for `singular`). */
+export interface XformProblem {
+  /** The `xformOpOrder` entry. */
+  readonly op: string;
+  /** No such attribute, a name of no op type, no value at the time, a value of another type, or an inverted singular matrix. */
+  readonly kind: "noAttribute" | "unknownOpType" | "noValue" | "valueType" | "singular" | "other";
+}
+
+/** A prim's local transform at one time (`UsdGeomXformCache::GetLocalTransformation`). */
+export interface LocalTransform {
+  /** 16 numbers, row by row, in OpenUSD's row-vector convention (see {@link Stage.worldTransforms}); the identity for a prim that is not `Xformable`. */
+  readonly matrix: Float64Array;
+  /** Whether it resets the transform stack: it is also the prim's world transform. */
+  readonly resetsXformStack: boolean;
+  /** The ops that did not contribute as written. */
+  readonly problems: readonly XformProblem[];
+}
+
+/** One op of a prim's `xformOpOrder` ({@link Xformable.ops}). */
+export interface XformOp {
+  /** The entry as `xformOpOrder` lists it (`!invert!xformOp:translate:pivot`). */
+  readonly name: string;
+  /** The attribute it reads (`xformOp:translate:pivot`). */
+  readonly attribute: string;
+  /** Its type (`translate`, `rotateXYZ`, `orient`, `transform`, ...); `null` for a name of no op type, which evaluates as the identity. */
+  readonly type: string | null;
+  /** Whether it applies its inverse. */
+  readonly inverse: boolean;
+}
+
+/** A computed visibility: `invisible`, `inherited` (visible unless an ancestor is not), or for a purpose, `visible`. */
+export type Visibility = "inherited" | "invisible" | "visible";
+
+/** A prim's computed purpose (`UsdGeomImageable::ComputePurposeInfo`). */
+export interface PurposeInfo {
+  /** `default`, `render`, `proxy` or `guide`. */
+  readonly purpose: string;
+  /** Whether it was authored on the prim or an ancestor, and so is inherited by descendants that author none; a fallback is not. */
+  readonly inheritable: boolean;
+  /** The prim whose authored `purpose` it is; `null` for a fallback. */
+  readonly authoredOn: string | null;
+}

@@ -265,6 +265,35 @@ await stage.resolve(source);
   in (sources) and out (array copies, saved and exported bytes), the views
   built and the bytes they exposed without a copy, and the module's memory.
 
+## Transforms, visibility and primvars
+
+What a renderer reads to place and show geometry, as OpenUSD's
+`UsdGeomXformCache`, `UsdGeomImageable` and `UsdGeomPrimvarsAPI` compute it
+(through `layerstack_schemas`). Batched reads
+take many paths and return one JS-owned typed array.
+
+| Read | Returns |
+|---|---|
+| `stage.worldTransforms(paths, { time? })`, `parentToWorldTransforms(...)`, `prim.worldTransform({ time? })` | One `Float64Array`, 16 numbers per prim, row by row (row-vector `GfMatrix4d`: translation in the last row; read as column-major, the matrix WebGL takes) |
+| `stage.localTransform(path, { time? })`, `prim.localTransform(...)` | `LocalTransform`: `matrix`, `resetsXformStack`, `problems` |
+| `stage.xformable(path)`, `prim.xformable()` | `Xformable \| null`: `resetsXformStack`, `ops`, `transformMightBeTimeVarying`, `transformTimeSamples` |
+| `stage.visibilities(paths, { time?, purpose? })`, `prim.visibility(...)` | `inherited` or `invisible` (`ComputeVisibility`), or with a purpose `visible` among them (`ComputeEffectiveVisibility`); `null` for a prim that is not `Imageable` |
+| `stage.purposeInfos(paths)`, `prim.purposeInfo()` | `PurposeInfo \| null`: `purpose`, `inheritable`, `authoredOn` |
+| `stage.primvars(path, { inherited? })`, `stage.primvar(path, name, { inherited? })`, `prim.primvars(...)`, `prim.primvar(...)` | `Primvar`: `prim`, `name`, `typeName`, `interpolation`, `elementSize`, `indexed`, `idTarget`, `mightBeTimeVarying`; `get(time?)`, `flattened(time?)` (through its indices), `indices(time?)` |
+| `stage.transformCache()` | `TransformCacheStats`: what the retained transform cache computed, reused, heard and holds |
+
+**A renderer drawing a frame.** At load it lists the prims to draw, and
+for each its `primvars({ inherited: true })` (a `displayColor` from an
+ancestor included) and bound material. Each frame it makes one
+`stage.worldTransforms(paths, { time })` call and uploads the
+`Float64Array` slices as model matrices, one `stage.visibilities(paths,
+{ time })` and `purposeInfos(paths)` to skip what is hidden or of another
+purpose. The stage keeps one native transform cache, which hears the
+stage's edits before each read and invalidates only what they touch: a
+frame after an edit recomputes the edited prim's transform and its
+descendants' world transforms, and nothing else. `stage.transformCache()`
+reports what each frame computed and reused.
+
 ## Materials, subsets, coordinate systems and skinning
 
 The shading, subset, coordinate-system and skinning schemas are read on the
@@ -395,6 +424,7 @@ exist, `subset.indices` for a face past the mesh, `coord_sys.no_binding`,
 | `coord_sys.no_binding` | `clearCoordSys` of a binding that does not exist. |
 | `metadata.*` | `metadata.key_path` (an `sdrMetadata` key with an empty part), `metadata.field`. |
 | `skel.*` | A skinning read or computation that cannot be made: `skel.unbound` (nothing skins the prim), `skel.influences` (not as many weights as joint indices, or not whole blocks), `skel.deformation` (influences that do not fit the points or name a joint past the palette), `skel.input`, `skel.array_length`, `skel.target`, `skel.topology`, `skel.primvar`, `skel.method`, `skel.singular`. |
+| `primvar.*` | `primvar.not_found` (the prim declares no such primvar), `primvar.indices` (an indexed primvar without readable indices), `primvar.index` (an index past the values). |
 | `io.*` | A read or import failed: `io.rejected` (does not parse), `io.not_found`, `io.unavailable`, ... |
 | `composition.*` | In `status().compositionErrors`: `composition.unresolved_asset`, `composition.arc_cycle`, ... |
 
@@ -407,7 +437,7 @@ The package and the `layerstack_wasm` crate are released together, at the
 same version. They meet at an ABI number, the layout of the records the
 module exchanges with this package: `layerstack.version` is `{ package,
 crate, revision, abi }`, and loading a module of another ABI fails with
-`module.abi`. This package speaks ABI 7; changing an export's arguments or
+`module.abi`. This package speaks ABI 8; changing an export's arguments or
 record layout brings a new ABI.
 
 ## Building and testing

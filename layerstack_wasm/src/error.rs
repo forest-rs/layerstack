@@ -85,6 +85,9 @@ use crate::wire::Wire;
 ///   `skel.array_length`, `skel.target`, `skel.topology`, `skel.primvar`,
 ///   `skel.method`, `skel.singular` (and `value.decode` for a retained
 ///   array that fails to decode).
+/// - `primvar.*`: `primvar.not_found` (the prim declares no such
+///   primvar), and the cases of `layerstack_schemas::primvar::PrimvarError`
+///   a read meets: `primvar.indices`, `primvar.index`, `primvar.invalid`.
 /// - `flatten.failed`, `package.failed`: the stage has no root layer to
 ///   flatten or package.
 /// - `receipt.affinity`: a receipt of another stage was passed in.

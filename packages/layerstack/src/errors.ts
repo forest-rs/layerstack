@@ -109,6 +109,10 @@
  *   missing or of another type), `skel.array_length`, `skel.target`,
  *   `skel.topology`, `skel.primvar`, `skel.method` (an unknown skinning
  *   method), `skel.singular` (a transform without an inverse).
+ * - `primvar.*`: a primvar read that cannot be made: `primvar.not_found`
+ *   (the prim declares no such primvar), `primvar.indices` (an indexed
+ *   primvar without readable indices), `primvar.index` (an index past the
+ *   values).
  *
  * Composition errors are not thrown; {@link Stage.status} lists them as
  * {@link Issue}s with `composition.*` codes
@@ -161,6 +165,7 @@ export type ErrorCode =
   | `coord_sys.${string}`
   | `metadata.${string}`
   | `skel.${string}`
+  | `primvar.${string}`
   | `io.${string}`;
 
 /**

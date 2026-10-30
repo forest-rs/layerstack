@@ -92,6 +92,7 @@ extern crate std;
 mod array;
 mod edit;
 mod error;
+mod geom;
 mod receipt;
 mod schema_edit;
 mod schemas;
@@ -133,7 +134,7 @@ use wasm_bindgen::prelude::*;
 /// wrapper: currently 7. It changes whenever an export's arguments or a
 /// record's layout change incompatibly; the wrapper
 /// refuses a module whose ABI differs from its own (`module.abi`).
-pub const ABI: u32 = 7;
+pub const ABI: u32 = 8;
 
 /// The crate version, the source revision the module was built from
 /// (`LAYERSTACK_REVISION` at build time, `unknown` when unset) and [`ABI`],

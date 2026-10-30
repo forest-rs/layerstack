@@ -40,6 +40,7 @@ import type { NativeModule } from "./stage.js";
 export { ArrayCopy, ArrayHandle } from "./arrays.js";
 export { LayerstackError } from "./errors.js";
 export { Material, Shader, ShaderPort } from "./schemas.js";
+export { Primvar, Xformable } from "./geometry.js";
 export { SkinningQuery } from "./skinning.js";
 export type { ErrorCode, ErrorDetails, HostErrorCode } from "./errors.js";
 export {

@@ -34,6 +34,8 @@ pub(crate) enum Wire {
     List(Vec<Self>),
     /// Bytes, copied into a `Uint8Array`: saved and exported sources.
     Bytes(Vec<u8>),
+    /// Numbers, copied into a JS-owned `Float64Array`.
+    Floats(Vec<f64>),
     /// A pinned numeric array, which becomes the native `ArrayHandle`
     /// object: its bytes stay in Wasm memory.
     Array(ArrayHandle),
@@ -82,6 +84,7 @@ impl From<Wire> for JsValue {
                 Self::from(items.into_iter().map(Self::from).collect::<Vec<Self>>())
             }
             Wire::Bytes(bytes) => Self::from(bytes),
+            Wire::Floats(values) => Self::from(values),
             Wire::Array(handle) => Self::from(handle),
         }
     }

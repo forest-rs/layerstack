@@ -787,8 +787,15 @@ def Scope "Looks" {
                 format!("[{}]", items.join(", "))
             }
             Wire::Bytes(bytes) => format!("<{} bytes>", bytes.len()),
+            Wire::Floats(values) => show_numbers(values),
             Wire::Array(handle) => format!("{:?}", handle.array()),
         }
+    }
+
+    /// Numbers in brackets, as `Wire::Number`s show.
+    fn show_numbers<T: core::fmt::Display>(values: &[T]) -> String {
+        let items: Vec<String> = values.iter().map(|value| format!("{value}")).collect();
+        format!("[{}]", items.join(", "))
     }
 
     fn texts(items: &[&str]) -> Vec<String> {

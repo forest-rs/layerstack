@@ -88,6 +88,8 @@ pub struct Stage {
     identity: Arc<()>,
     /// The retained skinning evaluator and the changes it has heard.
     skel: crate::skel::SkelState,
+    /// The retained transform cache and the changes it has heard.
+    geom: crate::geom::GeomState,
 }
 
 impl Stage {
@@ -172,12 +174,14 @@ impl Stage {
         )?;
         let cursor = document.parts_mut().1.change_cursor();
         let skel = crate::skel::SkelState::new(document.parts_mut().1);
+        let geom = crate::geom::GeomState::new(document.parts_mut().1);
         Ok(Self {
             document,
             cursor,
             heard_muted: BTreeSet::new(),
             identity: Arc::new(()),
             skel,
+            geom,
         })
     }
 
@@ -197,6 +201,18 @@ impl Stage {
         &mut self,
     ) -> (&StageDocument<HostStorage>, &mut crate::skel::SkelState) {
         (&self.document, &mut self.skel)
+    }
+
+    /// The geometry state.
+    pub(crate) fn geom_state(&self) -> &crate::geom::GeomState {
+        &self.geom
+    }
+
+    /// The document, and the geometry state, which reads it.
+    pub(crate) fn document_and_geom(
+        &mut self,
+    ) -> (&StageDocument<HostStorage>, &mut crate::geom::GeomState) {
+        (&self.document, &mut self.geom)
     }
 
     /// The document, mutably, for a crate that links these bindings and
@@ -2296,6 +2312,91 @@ impl Stage {
         time: Option<f64>,
     ) -> Result<JsValue, JsValue> {
         Ok(self.deformed_normals(path, time)?.into())
+    }
+
+    /// The record `transform_cache` builds, as documented in `geom.rs`.
+    #[wasm_bindgen(js_name = transformCache)]
+    pub fn js_transform_cache(&self) -> JsValue {
+        self.transform_cache().into()
+    }
+
+    /// The record `local_transform` builds, as documented in `geom.rs`.
+    #[wasm_bindgen(js_name = localTransform)]
+    pub fn js_local_transform(
+        &mut self,
+        path: &str,
+        time: Option<f64>,
+    ) -> Result<JsValue, JsValue> {
+        Ok(self.local_transform(path, time)?.into())
+    }
+
+    /// The matrices `world_transforms` computes, as documented in `geom.rs`.
+    #[wasm_bindgen(js_name = worldTransforms)]
+    pub fn js_world_transforms(
+        &mut self,
+        paths: Vec<String>,
+        time: Option<f64>,
+        parent: bool,
+    ) -> Result<Vec<f64>, JsValue> {
+        Ok(self.world_transforms(&paths, time, parent)?)
+    }
+
+    /// The record `xformable` builds, as documented in `geom.rs`.
+    #[wasm_bindgen(js_name = xformable)]
+    pub fn js_xformable(&self, path: &str) -> Result<JsValue, JsValue> {
+        Ok(self.xformable(path)?.into())
+    }
+
+    /// The record `visibilities` builds, as documented in `geom.rs`.
+    #[wasm_bindgen(js_name = visibilities)]
+    pub fn js_visibilities(
+        &self,
+        paths: Vec<String>,
+        time: Option<f64>,
+        purpose: Option<String>,
+    ) -> Result<JsValue, JsValue> {
+        Ok(self.visibilities(&paths, time, purpose.as_deref())?.into())
+    }
+
+    /// The record `purposes` builds, as documented in `geom.rs`.
+    #[wasm_bindgen(js_name = purposes)]
+    pub fn js_purposes(&self, paths: Vec<String>) -> Result<JsValue, JsValue> {
+        Ok(self.purposes(&paths)?.into())
+    }
+
+    /// The record `primvars` builds, as documented in `geom.rs`.
+    #[wasm_bindgen(js_name = primvars)]
+    pub fn js_primvars(&self, path: &str, inherited: bool) -> Result<JsValue, JsValue> {
+        Ok(self.primvars(path, inherited)?.into())
+    }
+
+    /// The record `primvar` builds, as documented in `geom.rs`.
+    #[wasm_bindgen(js_name = primvar)]
+    pub fn js_primvar(&self, path: &str, name: &str, inherited: bool) -> Result<JsValue, JsValue> {
+        Ok(self.primvar(path, name, inherited)?.into())
+    }
+
+    /// The record `primvar_value` builds, as documented in `geom.rs`.
+    #[wasm_bindgen(js_name = primvarValue)]
+    pub fn js_primvar_value(
+        &self,
+        path: &str,
+        name: &str,
+        time: Option<f64>,
+        flattened: bool,
+    ) -> Result<JsValue, JsValue> {
+        Ok(self.primvar_value(path, name, time, flattened)?.into())
+    }
+
+    /// The record `primvar_indices` builds, as documented in `geom.rs`.
+    #[wasm_bindgen(js_name = primvarIndices)]
+    pub fn js_primvar_indices(
+        &self,
+        path: &str,
+        name: &str,
+        time: Option<f64>,
+    ) -> Result<JsValue, JsValue> {
+        Ok(self.primvar_indices(path, name, time)?.into())
     }
 
     /// The record `supplied_bytes` builds, as documented in `stage.rs`.

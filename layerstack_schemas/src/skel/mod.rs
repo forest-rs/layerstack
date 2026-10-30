@@ -9,6 +9,7 @@
 //! Matrices use USD row vectors. OpenUSD: `UsdSkelSkeletonQuery` and
 //! `UsdSkelBindingAPI`; composition follows AOUSD Core §12.3–12.4.
 
+use crate::diagnostic::{Describe, Names, with_store};
 use crate::{
     PrimView, Scene, Time, gf,
     usd_skel::{SkelAnimation, SkelBindingApi, Skeleton},
@@ -142,9 +143,93 @@ pub enum SkelError {
         joint: usize,
     },
 }
+impl SkelError {
+    /// The error in words, its prims, properties and targets written as paths
+    /// with `store`, the store the stage was composed from. `Display` writes the same with ids.
+    #[must_use]
+    pub fn display<'a>(
+        &'a self,
+        store: &'a dyn layerstack::LayerStore,
+    ) -> impl core::fmt::Display + 'a {
+        with_store(self, store)
+    }
+}
+impl Describe for SkelError {
+    fn describe(&self, f: &mut core::fmt::Formatter<'_>, names: Names<'_>) -> core::fmt::Result {
+        f.write_str("invalid skeleton input: ")?;
+        match self {
+            Self::Decode { property, error } => {
+                write!(f, "cannot decode {}: {error}", names.property(*property))
+            }
+            Self::InvalidTopology { joint } => write!(
+                f,
+                "joint {joint} is duplicated, malformed or ordered before its parent"
+            ),
+            Self::InvalidInput { prim, property } => write!(
+                f,
+                "{}.{property} is missing, blocked or of an incompatible type",
+                names.path(*prim)
+            ),
+            Self::ArrayLength {
+                prim,
+                property,
+                expected,
+                actual,
+            } => write!(
+                f,
+                "{}.{property} has {actual} values where {expected} are needed",
+                names.path(*prim)
+            ),
+            Self::InvalidTarget {
+                prim,
+                relationship,
+                target,
+            } => write!(
+                f,
+                "{}.{relationship} targets {}, which is missing or of an incompatible type",
+                names.path(*prim),
+                names.target(*target)
+            ),
+            Self::Primvar { prim, source } => {
+                write!(
+                    f,
+                    "the joint influences of {} cannot be flattened: ",
+                    names.path(*prim)
+                )?;
+                source.reason(f, names)
+            }
+            Self::InvalidDeformation {
+                element: Some(element),
+                reason,
+            } => write!(
+                f,
+                "element {element} of the deformation input is invalid: {reason}"
+            ),
+            Self::InvalidDeformation {
+                element: None,
+                reason,
+            } => write!(f, "the deformation input is invalid: {reason}"),
+            Self::UnsupportedSkinningMethod { prim } => write!(
+                f,
+                "the skinning method of {} is neither `classicLinear` nor `dualQuaternion`",
+                names.path(*prim)
+            ),
+            Self::SingularNormalTransform { joint: Some(joint) } => write!(
+                f,
+                "the normal transform of joint {joint} is singular or not finite"
+            ),
+            Self::SingularNormalTransform { joint: None } => f.write_str(
+                "the normal transform of the geometry bind transform is singular or not finite",
+            ),
+            Self::SingularBind { joint } => {
+                write!(f, "the bind transform of joint {joint} cannot be inverted")
+            }
+        }
+    }
+}
 impl core::fmt::Display for SkelError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "invalid skeleton input: {self:?}")
+        self.describe(f, Names(None))
     }
 }
 impl core::error::Error for SkelError {

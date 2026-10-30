@@ -72,7 +72,7 @@ impl Describe for SubsetAuthoringError {
             Self::CannotEdit(error) => error.describe(f, names),
             Self::InvalidName => f.write_str("the name is not a single prim identifier"),
             Self::Geometry(error) => error.describe(f, names),
-            Self::Indices(problem) => write!(f, "the indices do not fit the geometry: {problem:?}"),
+            Self::Indices(problem) => write!(f, "the indices do not fit the geometry: {problem}"),
             Self::IncompatibleFamilyDeclaration => f.write_str(
                 "the family attribute is declared as something other than a scalar `token`",
             ),
@@ -411,6 +411,42 @@ pub enum SubsetProblemKind {
     InvalidPair([i32; 2]),
     /// A partition leaves some of the geometry unassigned.
     IncompletePartition,
+}
+impl core::fmt::Display for SubsetProblemKind {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::InvalidGeometry => f.write_str("the geometry cannot support the element type"),
+            Self::ElementTypeMismatch => {
+                f.write_str("a family member declares a different element type")
+            }
+            Self::InvalidTopology => f.write_str("the geometry's topology is missing or malformed"),
+            Self::NoIndices => {
+                f.write_str("no family member supplies indices at any evaluated time")
+            }
+            Self::OddPairCount => f.write_str("an edge or segment has an incomplete index pair"),
+            Self::DuplicateIndex(index) => {
+                write!(f, "the restricted family repeats the element index {index}")
+            }
+            Self::DuplicatePair([a, b]) => {
+                write!(f, "the restricted family repeats the pair ({a}, {b})")
+            }
+            Self::InvalidIndex(index) => {
+                write!(
+                    f,
+                    "the index {index} is negative or past the geometry's elements"
+                )
+            }
+            Self::InvalidPair([a, b]) => {
+                write!(
+                    f,
+                    "the pair ({a}, {b}) is not an edge or segment of the geometry"
+                )
+            }
+            Self::IncompletePartition => {
+                f.write_str("the partition leaves some of the geometry unassigned")
+            }
+        }
+    }
 }
 /// A validation problem with its source prim and stage time.
 #[derive(Clone, Debug, PartialEq)]

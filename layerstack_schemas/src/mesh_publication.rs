@@ -130,9 +130,13 @@ impl MeshPublicationError {
         with_store(self, store)
     }
 }
-impl Describe for MeshPublicationError {
-    fn describe(&self, f: &mut core::fmt::Formatter<'_>, names: Names<'_>) -> core::fmt::Result {
-        f.write_str("invalid mesh publication: ")?;
+impl MeshPublicationError {
+    /// Why, without the operation: shared with the errors that wrap this one.
+    pub(crate) fn reason(
+        &self,
+        f: &mut core::fmt::Formatter<'_>,
+        names: Names<'_>,
+    ) -> core::fmt::Result {
         match self {
             Self::Topology(error) => error.describe(f, names),
             Self::DegenerateFace(face) => write!(f, "face {face} has fewer than three corners"),
@@ -178,6 +182,12 @@ impl Describe for MeshPublicationError {
                 "the publication site already declares `{name}` differently"
             ),
         }
+    }
+}
+impl Describe for MeshPublicationError {
+    fn describe(&self, f: &mut core::fmt::Formatter<'_>, names: Names<'_>) -> core::fmt::Result {
+        f.write_str("invalid mesh publication: ")?;
+        self.reason(f, names)
     }
 }
 impl core::fmt::Display for MeshPublicationError {

@@ -1,6 +1,7 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
+use crate::diagnostic::{Describe, Names, with_store};
 use crate::{
     BindingOptions, BoundMaterial, LocalTransform, MaterialBindingSubsets, MaterialPurpose,
     MaterialSubsetError, MeshPublicationError, MeshValidationWork, ValidatedMesh, Visibility,
@@ -436,9 +437,92 @@ pub enum SceneError {
         source: crate::shading::MaterialCaptureError,
     },
 }
+impl SceneError {
+    /// The error in words, its prims and properties written as paths with
+    /// `store`, the store the stage was composed from; a nested mesh, primvar, subset, instancer
+    /// or material failure is written with the same store. `Display`
+    /// writes the same with ids.
+    #[must_use]
+    pub fn display<'a>(
+        &'a self,
+        store: &'a dyn layerstack::LayerStore,
+    ) -> impl core::fmt::Display + 'a {
+        with_store(self, store)
+    }
+}
+impl Describe for SceneError {
+    fn describe(&self, f: &mut core::fmt::Formatter<'_>, names: Names<'_>) -> core::fmt::Result {
+        f.write_str("cannot extract the scene: ")?;
+        match self {
+            Self::ForeignStore => f.write_str(
+                "the store's interners differ from the observer's or the composed stage's; use \
+                 the store the stage was composed from",
+            ),
+            Self::InvalidTime => f.write_str("the time is not finite"),
+            Self::MissingSchemas => f.write_str(
+                "the stage has no geometry and shading schema registry; compose it with one",
+            ),
+            Self::UnsupportedGeometry { prim, type_name } => write!(
+                f,
+                "{} is a `{type_name}`, which is outside the supported meshes and point \
+                 instancers",
+                names.path(*prim)
+            ),
+            Self::MissingAttribute(property) => write!(
+                f,
+                "{} is missing or has an incompatible type",
+                names.property(*property)
+            ),
+            Self::MissingProperty { prim, name } => write!(
+                f,
+                "the schema registry does not define `{name}`, which {} needs",
+                names.path(*prim)
+            ),
+            Self::Decode { property, source } => {
+                write!(f, "cannot decode {}: {source}", names.property(*property))
+            }
+            Self::Mesh { prim, source } => {
+                write!(f, "the mesh {} is invalid: ", names.path(*prim))?;
+                source.reason(f, names)
+            }
+            Self::Hole { prim, index } => write!(
+                f,
+                "the hole index {index} of {} names no face",
+                names.path(*prim)
+            ),
+            Self::Primvar { prim, name, source } => {
+                write!(
+                    f,
+                    "the primvar `{name}` of {} is invalid: ",
+                    names.path(*prim)
+                )?;
+                source.reason(f, names)
+            }
+            Self::Materials { prim, source } => {
+                write!(
+                    f,
+                    "cannot read the material subsets of {}: ",
+                    names.path(*prim)
+                )?;
+                source.reason(f, names)
+            }
+            Self::PointInstancer { prim, source } => {
+                write!(f, "the point instancer {} is invalid: ", names.path(*prim))?;
+                source.reason(f, names)
+            }
+            Self::Transform(prim) => {
+                write!(f, "cannot compute the transform of {}", names.path(*prim))
+            }
+            Self::MaterialNetwork { prim, source } => {
+                write!(f, "cannot capture the material {}: ", names.path(*prim))?;
+                source.reason(f, names)
+            }
+        }
+    }
+}
 impl core::fmt::Display for SceneError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "scene extraction failed: {self:?}")
+        self.describe(f, Names(None))
     }
 }
 impl core::error::Error for SceneError {

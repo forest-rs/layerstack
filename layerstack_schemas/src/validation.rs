@@ -50,6 +50,7 @@
 //! `usdValidation/coreValidators.cpp`. No scene edits or global registration.
 
 use crate::Scene;
+use crate::diagnostic::{Describe, Names, with_store};
 use alloc::{sync::Arc, vec::Vec};
 use layerstack::sort;
 use layerstack::{CompositionError, LayerId, LayerStore, PathId, SpecPath, Time, TokenId};
@@ -360,7 +361,7 @@ impl ValidationProblem {
                 ValidationProblemKind::MeshTopology(error) => write!(f, "{}", error.display(store)),
                 #[cfg(feature = "usd-geom")]
                 ValidationProblemKind::SubsetFamily { family, problem } => {
-                    write!(f, "the `{family}` subset family: {problem:?}")
+                    write!(f, "the `{family}` subset family: {problem}")
                 }
                 #[cfg(feature = "usd-geom")]
                 ValidationProblemKind::SubsetParentNotImageable => {
@@ -476,9 +477,32 @@ pub enum ValidationError {
     /// The prim/subtree root is absent from the composed stage.
     MissingScopePrim(PathId),
 }
+impl ValidationError {
+    /// The error in words, the scope's root written as its path with `store`,
+    /// the store the stage was composed from. `Display` writes the same with ids.
+    #[must_use]
+    pub fn display<'a>(&'a self, store: &'a dyn LayerStore) -> impl core::fmt::Display + 'a {
+        with_store(self, store)
+    }
+}
+impl Describe for ValidationError {
+    fn describe(&self, f: &mut core::fmt::Formatter<'_>, names: Names<'_>) -> core::fmt::Result {
+        f.write_str("invalid validation request: ")?;
+        match self {
+            Self::InvalidTimes => {
+                f.write_str("the time list is empty or has a time that is not finite")
+            }
+            Self::MissingScopePrim(path) => write!(
+                f,
+                "no composed prim is at {}, the root of the requested scope",
+                names.path(*path)
+            ),
+        }
+    }
+}
 impl core::fmt::Display for ValidationError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "invalid validation request: {self:?}")
+        self.describe(f, Names(None))
     }
 }
 impl core::error::Error for ValidationError {}

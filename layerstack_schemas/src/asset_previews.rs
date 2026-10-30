@@ -8,6 +8,7 @@
 //! [`asset_default_previews`] reads them from a layer's default prim
 //! without composing the rest of the asset, for asset browsers and pickers.
 
+use crate::diagnostic::{Describe, Names, with_store};
 use crate::{
     MetadataError, PrimView, Scene, SchemaEdit,
     assets::AssetReference,
@@ -170,15 +171,32 @@ pub enum AssetPreviewsError {
     InvalidDefaultPrim(String),
 }
 
+impl AssetPreviewsError {
+    /// The error in words, the layer written with its identifier when
+    /// `store` names it. `Display` writes the same with the layer's id.
+    #[must_use]
+    pub fn display<'a>(&'a self, store: &'a dyn LayerStore) -> impl core::fmt::Display + 'a {
+        with_store(self, store)
+    }
+}
+impl Describe for AssetPreviewsError {
+    fn describe(&self, f: &mut core::fmt::Formatter<'_>, names: Names<'_>) -> core::fmt::Result {
+        f.write_str("cannot read the default previews: ")?;
+        match self {
+            Self::NoSuchLayer(layer) => {
+                write!(f, "the store holds no {}", names.layer(*layer))
+            }
+            Self::NoDefaultPrim => f.write_str("the layer authors no `defaultPrim`"),
+            Self::InvalidDefaultPrim(text) => write!(
+                f,
+                "the layer's `defaultPrim` `{text}` is not a prim name or an absolute prim path"
+            ),
+        }
+    }
+}
 impl core::fmt::Display for AssetPreviewsError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            Self::NoSuchLayer(layer) => write!(f, "the store holds no layer {layer:?}"),
-            Self::NoDefaultPrim => f.write_str("the layer names no default prim"),
-            Self::InvalidDefaultPrim(text) => {
-                write!(f, "defaultPrim `{text}` names no prim path")
-            }
-        }
+        self.describe(f, Names(None))
     }
 }
 

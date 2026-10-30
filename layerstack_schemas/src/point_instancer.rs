@@ -683,9 +683,13 @@ impl PointInstancerError {
         with_store(self, store)
     }
 }
-impl Describe for PointInstancerError {
-    fn describe(&self, f: &mut core::fmt::Formatter<'_>, names: Names<'_>) -> core::fmt::Result {
-        f.write_str("invalid point instancer: ")?;
+impl PointInstancerError {
+    /// Why, without the operation: shared with the errors that wrap this one.
+    pub(crate) fn reason(
+        &self,
+        f: &mut core::fmt::Formatter<'_>,
+        names: Names<'_>,
+    ) -> core::fmt::Result {
         match self {
             Self::MissingAttribute(name) => {
                 write!(
@@ -717,6 +721,12 @@ impl Describe for PointInstancerError {
                  unsupported"
             ),
         }
+    }
+}
+impl Describe for PointInstancerError {
+    fn describe(&self, f: &mut core::fmt::Formatter<'_>, names: Names<'_>) -> core::fmt::Result {
+        f.write_str("invalid point instancer: ")?;
+        self.reason(f, names)
     }
 }
 impl core::fmt::Display for PointInstancerError {

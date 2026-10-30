@@ -221,9 +221,13 @@ impl MaterialCaptureError {
         with_store(self, store)
     }
 }
-impl Describe for MaterialCaptureError {
-    fn describe(&self, f: &mut core::fmt::Formatter<'_>, names: Names<'_>) -> core::fmt::Result {
-        f.write_str("cannot capture the material: ")?;
+impl MaterialCaptureError {
+    /// Why, without the operation: shared with the errors that wrap this one.
+    pub(crate) fn reason(
+        &self,
+        f: &mut core::fmt::Formatter<'_>,
+        names: Names<'_>,
+    ) -> core::fmt::Result {
         match self {
             Self::SceneDomain => f.write_str(
                 "the stage was not composed from the supplied store; pass the store it was \
@@ -239,6 +243,12 @@ impl Describe for MaterialCaptureError {
             ),
             Self::InvalidTime => f.write_str("the time is NaN or infinite"),
         }
+    }
+}
+impl Describe for MaterialCaptureError {
+    fn describe(&self, f: &mut core::fmt::Formatter<'_>, names: Names<'_>) -> core::fmt::Result {
+        f.write_str("cannot capture the material: ")?;
+        self.reason(f, names)
     }
 }
 impl core::fmt::Display for MaterialCaptureError {

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 //! Owned asset values and their authoring anchors; hosts own lookup and loading.
+use crate::diagnostic::{Describe, Names, with_store};
 use crate::{Scene, Time};
 use alloc::string::{String, ToString};
 use layerstack::{AssetResolver, PropertyKind, PropertyPath, Provenance, Value};
@@ -39,9 +40,35 @@ pub enum AssetReadError {
     /// A selected authored value is not an asset.
     InvalidValue(PropertyPath),
 }
+impl AssetReadError {
+    /// The error in words, the attribute written as its path with `store`,
+    /// the store the stage was composed from. `Display` writes the same with ids.
+    #[must_use]
+    pub fn display<'a>(
+        &'a self,
+        store: &'a dyn layerstack::LayerStore,
+    ) -> impl core::fmt::Display + 'a {
+        with_store(self, store)
+    }
+}
+impl Describe for AssetReadError {
+    fn describe(&self, f: &mut core::fmt::Formatter<'_>, names: Names<'_>) -> core::fmt::Result {
+        f.write_str("cannot read the asset: ")?;
+        match self {
+            Self::MissingAttribute(property) => {
+                write!(f, "no attribute is at {}", names.property(*property))
+            }
+            Self::InvalidValue(property) => write!(
+                f,
+                "the value of {} is not an asset",
+                names.property(*property)
+            ),
+        }
+    }
+}
 impl core::fmt::Display for AssetReadError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "asset capture: {self:?}")
+        self.describe(f, Names(None))
     }
 }
 impl core::error::Error for AssetReadError {}

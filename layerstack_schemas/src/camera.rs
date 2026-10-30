@@ -64,9 +64,10 @@ fn read<'a, T>(
 /// Matrices use USD row vectors, right-handed eye space looking down `-Z`, and
 /// OpenGL NDC depth `[-1,1]`. Rebuild after camera/ancestor edits. The view conforms
 /// reflection, scale and shear as `GfFrustum`; the authored world matrix remains
-/// available separately. Resolution, aspect conforming, GPU conventions, depth
-/// of field and additional clipping-plane execution belong to consumers.
-#[derive(Clone, Debug)]
+/// available separately; [`Self::conform_window`] fits it to an aspect ratio.
+/// Resolution, GPU conventions, depth of field and additional clipping-plane
+/// execution belong to consumers.
+#[derive(Clone, Debug, PartialEq)]
 pub struct ComputedCamera {
     projection: CameraProjection,
     camera_to_world: Matrix,

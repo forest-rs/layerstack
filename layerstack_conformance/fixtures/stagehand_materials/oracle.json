@@ -1,0 +1,1622 @@
+{
+ "defaults": {
+  "UsdPreviewSurface": {
+   "clearcoat": 0.0,
+   "clearcoatRoughness": 0.009999999776482582,
+   "diffuseColor": [
+    0.18000000715255737,
+    0.18000000715255737,
+    0.18000000715255737
+   ],
+   "displacement": 0.0,
+   "emissiveColor": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "ior": 1.5,
+   "metallic": 0.0,
+   "normal": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "occlusion": 1.0,
+   "opacity": 1.0,
+   "opacityMode": "transparent",
+   "opacityThreshold": 0.0,
+   "roughness": 0.5,
+   "specularColor": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "useSpecularWorkflow": 0
+  },
+  "UsdPrimvarReader_float2": {
+   "fallback": [
+    0.0,
+    0.0
+   ],
+   "varname": ""
+  },
+  "UsdPrimvarReader_float3": {
+   "fallback": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "varname": ""
+  },
+  "UsdTransform2d": {
+   "in": [
+    0.0,
+    0.0
+   ],
+   "rotation": 0.0,
+   "scale": [
+    1.0,
+    1.0
+   ],
+   "translation": [
+    0.0,
+    0.0
+   ]
+  },
+  "UsdUVTexture": {
+   "bias": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "fallback": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "file": "",
+   "scale": [
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "sourceColorSpace": "auto",
+   "st": [
+    0.0,
+    0.0
+   ],
+   "wrapS": "useMetadata",
+   "wrapT": "useMetadata"
+  }
+ },
+ "lights": [
+  {
+   "inputs": {
+    "color": [
+     {
+      "attribute": "/Lights/Rig.inputs:tint",
+      "value": [
+       1.0,
+       0.5,
+       0.25
+      ],
+      "value10": [
+       1.0,
+       0.5,
+       0.25
+      ]
+     }
+    ],
+    "exposure": [
+     {
+      "attribute": "/Lights/Lamp.inputs:exposure",
+      "value": 2.0,
+      "value10": 2.0
+     }
+    ],
+    "intensity": [
+     {
+      "attribute": "/Lights/Rig.inputs:power",
+      "value": 7.0,
+      "value10": 7.0
+     }
+    ],
+    "radius": [
+     {
+      "attribute": "/Lights/Rig.inputs:spread",
+      "value": null,
+      "value10": 2.0
+     }
+    ]
+   },
+   "path": "/Lights/Lamp"
+  }
+ ],
+ "materials": [
+  {
+   "contexts": [],
+   "id": "UsdPreviewSurface",
+   "nodes": {},
+   "output": "surface",
+   "path": "/Looks/Plain",
+   "shader": "/Looks/Plain/Surface",
+   "sourceType": "Output",
+   "surface": {
+    "id": "UsdPreviewSurface",
+    "inputs": {
+     "clearcoat": [
+      {
+       "attribute": "/Looks/Plain/Surface.inputs:clearcoat",
+       "value": 0.5,
+       "value10": 0.5
+      }
+     ],
+     "clearcoatRoughness": [
+      {
+       "attribute": "/Looks/Plain/Surface.inputs:clearcoatRoughness",
+       "value": 0.10000000149011612,
+       "value10": 0.10000000149011612
+      }
+     ],
+     "diffuseColor": [
+      {
+       "attribute": "/Looks/Plain/Surface.inputs:diffuseColor",
+       "value": [
+        0.800000011920929,
+        0.20000000298023224,
+        0.10000000149011612
+       ],
+       "value10": [
+        0.800000011920929,
+        0.20000000298023224,
+        0.10000000149011612
+       ]
+      }
+     ],
+     "displacement": [
+      {
+       "attribute": "/Looks/Plain/Surface.inputs:displacement",
+       "value": 0.125,
+       "value10": 0.125
+      }
+     ],
+     "emissiveColor": [
+      {
+       "attribute": "/Looks/Plain/Surface.inputs:emissiveColor",
+       "value": [
+        0.10000000149011612,
+        0.10000000149011612,
+        0.0
+       ],
+       "value10": [
+        0.10000000149011612,
+        0.10000000149011612,
+        0.0
+       ]
+      }
+     ],
+     "ior": [
+      {
+       "attribute": "/Looks/Plain/Surface.inputs:ior",
+       "value": 1.3300000429153442,
+       "value10": 1.3300000429153442
+      }
+     ],
+     "metallic": [
+      {
+       "attribute": "/Looks/Plain/Surface.inputs:metallic",
+       "value": 1.0,
+       "value10": 1.0
+      }
+     ],
+     "occlusion": [
+      {
+       "attribute": "/Looks/Plain/Surface.inputs:occlusion",
+       "value": 0.75,
+       "value10": 0.75
+      }
+     ],
+     "opacity": [
+      {
+       "attribute": "/Looks/Plain/Surface.inputs:opacity",
+       "value": 0.5,
+       "value10": 0.5
+      }
+     ],
+     "opacityMode": [
+      {
+       "attribute": "/Looks/Plain/Surface.inputs:opacityMode",
+       "value": "presence",
+       "value10": "presence"
+      }
+     ],
+     "roughness": [
+      {
+       "attribute": "/Looks/Plain/Surface.inputs:roughness",
+       "value": 0.25,
+       "value10": 0.25
+      }
+     ]
+    }
+   }
+  },
+  {
+   "contexts": [
+    "mtlx"
+   ],
+   "id": "UsdPreviewSurface",
+   "nodes": {},
+   "output": "surface",
+   "path": "/Looks/Plain",
+   "shader": "/Looks/Plain/Surface",
+   "sourceType": "Output",
+   "surface": {
+    "id": "UsdPreviewSurface",
+    "inputs": {
+     "clearcoat": [
+      {
+       "attribute": "/Looks/Plain/Surface.inputs:clearcoat",
+       "value": 0.5,
+       "value10": 0.5
+      }
+     ],
+     "clearcoatRoughness": [
+      {
+       "attribute": "/Looks/Plain/Surface.inputs:clearcoatRoughness",
+       "value": 0.10000000149011612,
+       "value10": 0.10000000149011612
+      }
+     ],
+     "diffuseColor": [
+      {
+       "attribute": "/Looks/Plain/Surface.inputs:diffuseColor",
+       "value": [
+        0.800000011920929,
+        0.20000000298023224,
+        0.10000000149011612
+       ],
+       "value10": [
+        0.800000011920929,
+        0.20000000298023224,
+        0.10000000149011612
+       ]
+      }
+     ],
+     "displacement": [
+      {
+       "attribute": "/Looks/Plain/Surface.inputs:displacement",
+       "value": 0.125,
+       "value10": 0.125
+      }
+     ],
+     "emissiveColor": [
+      {
+       "attribute": "/Looks/Plain/Surface.inputs:emissiveColor",
+       "value": [
+        0.10000000149011612,
+        0.10000000149011612,
+        0.0
+       ],
+       "value10": [
+        0.10000000149011612,
+        0.10000000149011612,
+        0.0
+       ]
+      }
+     ],
+     "ior": [
+      {
+       "attribute": "/Looks/Plain/Surface.inputs:ior",
+       "value": 1.3300000429153442,
+       "value10": 1.3300000429153442
+      }
+     ],
+     "metallic": [
+      {
+       "attribute": "/Looks/Plain/Surface.inputs:metallic",
+       "value": 1.0,
+       "value10": 1.0
+      }
+     ],
+     "occlusion": [
+      {
+       "attribute": "/Looks/Plain/Surface.inputs:occlusion",
+       "value": 0.75,
+       "value10": 0.75
+      }
+     ],
+     "opacity": [
+      {
+       "attribute": "/Looks/Plain/Surface.inputs:opacity",
+       "value": 0.5,
+       "value10": 0.5
+      }
+     ],
+     "opacityMode": [
+      {
+       "attribute": "/Looks/Plain/Surface.inputs:opacityMode",
+       "value": "presence",
+       "value10": "presence"
+      }
+     ],
+     "roughness": [
+      {
+       "attribute": "/Looks/Plain/Surface.inputs:roughness",
+       "value": 0.25,
+       "value10": 0.25
+      }
+     ]
+    }
+   }
+  },
+  {
+   "contexts": [],
+   "id": "UsdPreviewSurface",
+   "nodes": {
+    "/Looks/Textured/Albedo": {
+     "file": {
+      "anchored": "textures/grid.png",
+      "authored": "./textures/grid.png",
+      "resolved": "textures/grid.png",
+      "tiles": [],
+      "udim": false
+     },
+     "id": "UsdUVTexture",
+     "inputs": {
+      "fallback": [
+       {
+        "attribute": "/Looks/Textured/Albedo.inputs:fallback",
+        "value": [
+         1.0,
+         0.0,
+         1.0,
+         1.0
+        ],
+        "value10": [
+         1.0,
+         0.0,
+         1.0,
+         1.0
+        ]
+       }
+      ],
+      "file": [
+       {
+        "attribute": "/Looks/Textured/Albedo.inputs:file",
+        "value": "./textures/grid.png",
+        "value10": "./textures/grid.png"
+       }
+      ],
+      "sourceColorSpace": [
+       {
+        "attribute": "/Looks/Textured/Albedo.inputs:sourceColorSpace",
+        "value": "sRGB",
+        "value10": "sRGB"
+       }
+      ],
+      "st": [
+       {
+        "attribute": "/Looks/Textured/Place.outputs:result",
+        "output": "result",
+        "shader": "UsdTransform2d"
+       }
+      ],
+      "wrapS": [
+       {
+        "attribute": "/Looks/Textured/Albedo.inputs:wrapS",
+        "value": "repeat",
+        "value10": "repeat"
+       }
+      ],
+      "wrapT": [
+       {
+        "attribute": "/Looks/Textured/Albedo.inputs:wrapT",
+        "value": "mirror",
+        "value10": "mirror"
+       }
+      ]
+     }
+    },
+    "/Looks/Textured/Normal": {
+     "file": {
+      "anchored": "textures/normal.png",
+      "authored": "./textures/../textures/normal.png",
+      "resolved": "textures/normal.png",
+      "tiles": [],
+      "udim": false
+     },
+     "id": "UsdUVTexture",
+     "inputs": {
+      "bias": [
+       {
+        "attribute": "/Looks/Textured/Normal.inputs:bias",
+        "value": [
+         -1.0,
+         -1.0,
+         -1.0,
+         0.0
+        ],
+        "value10": [
+         -1.0,
+         -1.0,
+         -1.0,
+         0.0
+        ]
+       }
+      ],
+      "file": [
+       {
+        "attribute": "/Looks/Textured/Normal.inputs:file",
+        "value": "./textures/../textures/normal.png",
+        "value10": "./textures/../textures/normal.png"
+       }
+      ],
+      "scale": [
+       {
+        "attribute": "/Looks/Textured/Normal.inputs:scale",
+        "value": [
+         2.0,
+         2.0,
+         2.0,
+         1.0
+        ],
+        "value10": [
+         2.0,
+         2.0,
+         2.0,
+         1.0
+        ]
+       }
+      ],
+      "sourceColorSpace": [
+       {
+        "attribute": "/Looks/Textured/Normal.inputs:sourceColorSpace",
+        "value": "raw",
+        "value10": "raw"
+       }
+      ],
+      "st": [
+       {
+        "attribute": "/Looks/Textured/Reader.outputs:result",
+        "output": "result",
+        "shader": "UsdPrimvarReader_float2"
+       }
+      ],
+      "wrapS": [
+       {
+        "attribute": "/Looks/Textured/Normal.inputs:wrapS",
+        "value": "black",
+        "value10": "black"
+       }
+      ]
+     }
+    },
+    "/Looks/Textured/Packed": {
+     "file": {
+      "anchored": "textures/packed.png",
+      "authored": "textures/packed.png",
+      "resolved": "textures/packed.png",
+      "tiles": [],
+      "udim": false
+     },
+     "id": "UsdUVTexture",
+     "inputs": {
+      "file": [
+       {
+        "attribute": "/Looks/Textured/Packed.inputs:file",
+        "value": "textures/packed.png",
+        "value10": "textures/packed.png"
+       }
+      ],
+      "sourceColorSpace": [
+       {
+        "attribute": "/Looks/Textured/Packed.inputs:sourceColorSpace",
+        "value": "raw",
+        "value10": "raw"
+       }
+      ],
+      "st": [
+       {
+        "attribute": "/Looks/Textured/Reader.outputs:result",
+        "output": "result",
+        "shader": "UsdPrimvarReader_float2"
+       }
+      ],
+      "wrapS": [
+       {
+        "attribute": "/Looks/Textured/Packed.inputs:wrapS",
+        "value": "clamp",
+        "value10": "clamp"
+       }
+      ]
+     }
+    },
+    "/Looks/Textured/Place": {
+     "id": "UsdTransform2d",
+     "inputs": {
+      "in": [
+       {
+        "attribute": "/Looks/Textured/Reader.outputs:result",
+        "output": "result",
+        "shader": "UsdPrimvarReader_float2"
+       }
+      ],
+      "rotation": [
+       {
+        "attribute": "/Looks/Textured/Place.inputs:rotation",
+        "value": 30.0,
+        "value10": 30.0
+       }
+      ],
+      "scale": [
+       {
+        "attribute": "/Looks/Textured/Place.inputs:scale",
+        "value": [
+         2.0,
+         3.0
+        ],
+        "value10": [
+         2.0,
+         3.0
+        ]
+       }
+      ],
+      "translation": [
+       {
+        "attribute": "/Looks/Textured/Place.inputs:translation",
+        "value": [
+         0.5,
+         -0.25
+        ],
+        "value10": [
+         0.5,
+         -0.25
+        ]
+       }
+      ]
+     }
+    },
+    "/Looks/Textured/Reader": {
+     "id": "UsdPrimvarReader_float2",
+     "inputs": {
+      "fallback": [
+       {
+        "attribute": "/Looks/Textured/Reader.inputs:fallback",
+        "value": [
+         0.5,
+         0.25
+        ],
+        "value10": [
+         0.5,
+         0.25
+        ]
+       }
+      ],
+      "varname": [
+       {
+        "attribute": "/Looks/Textured.inputs:coordinates",
+        "value": "uv",
+        "value10": "uv"
+       }
+      ]
+     }
+    }
+   },
+   "output": "surface",
+   "path": "/Looks/Textured",
+   "shader": "/Looks/Textured/Surface",
+   "sourceType": "Output",
+   "surface": {
+    "id": "UsdPreviewSurface",
+    "inputs": {
+     "diffuseColor": [
+      {
+       "attribute": "/Looks/Textured/Albedo.outputs:rgb",
+       "output": "rgb",
+       "shader": "UsdUVTexture"
+      }
+     ],
+     "metallic": [
+      {
+       "attribute": "/Looks/Textured/Packed.outputs:b",
+       "output": "b",
+       "shader": "UsdUVTexture"
+      }
+     ],
+     "normal": [
+      {
+       "attribute": "/Looks/Textured/Normal.outputs:rgb",
+       "output": "rgb",
+       "shader": "UsdUVTexture"
+      }
+     ],
+     "occlusion": [
+      {
+       "attribute": "/Looks/Textured/Packed.outputs:r",
+       "output": "r",
+       "shader": "UsdUVTexture"
+      }
+     ],
+     "opacity": [
+      {
+       "attribute": "/Looks/Textured/Albedo.outputs:a",
+       "output": "a",
+       "shader": "UsdUVTexture"
+      }
+     ],
+     "opacityThreshold": [
+      {
+       "attribute": "/Looks/Textured/Surface.inputs:opacityThreshold",
+       "value": 0.5,
+       "value10": 0.5
+      }
+     ],
+     "roughness": [
+      {
+       "attribute": "/Looks/Textured/Packed.outputs:g",
+       "output": "g",
+       "shader": "UsdUVTexture"
+      }
+     ],
+     "specularColor": [
+      {
+       "attribute": "/Looks/Textured/Surface.inputs:specularColor",
+       "value": [
+        0.03999999910593033,
+        0.03999999910593033,
+        0.03999999910593033
+       ],
+       "value10": [
+        0.03999999910593033,
+        0.03999999910593033,
+        0.03999999910593033
+       ]
+      }
+     ],
+     "useSpecularWorkflow": [
+      {
+       "attribute": "/Looks/Textured/Surface.inputs:useSpecularWorkflow",
+       "value": 1,
+       "value10": 1
+      }
+     ]
+    }
+   }
+  },
+  {
+   "contexts": [
+    "mtlx"
+   ],
+   "id": "UsdPreviewSurface",
+   "nodes": {
+    "/Looks/Textured/Albedo": {
+     "file": {
+      "anchored": "textures/grid.png",
+      "authored": "./textures/grid.png",
+      "resolved": "textures/grid.png",
+      "tiles": [],
+      "udim": false
+     },
+     "id": "UsdUVTexture",
+     "inputs": {
+      "fallback": [
+       {
+        "attribute": "/Looks/Textured/Albedo.inputs:fallback",
+        "value": [
+         1.0,
+         0.0,
+         1.0,
+         1.0
+        ],
+        "value10": [
+         1.0,
+         0.0,
+         1.0,
+         1.0
+        ]
+       }
+      ],
+      "file": [
+       {
+        "attribute": "/Looks/Textured/Albedo.inputs:file",
+        "value": "./textures/grid.png",
+        "value10": "./textures/grid.png"
+       }
+      ],
+      "sourceColorSpace": [
+       {
+        "attribute": "/Looks/Textured/Albedo.inputs:sourceColorSpace",
+        "value": "sRGB",
+        "value10": "sRGB"
+       }
+      ],
+      "st": [
+       {
+        "attribute": "/Looks/Textured/Place.outputs:result",
+        "output": "result",
+        "shader": "UsdTransform2d"
+       }
+      ],
+      "wrapS": [
+       {
+        "attribute": "/Looks/Textured/Albedo.inputs:wrapS",
+        "value": "repeat",
+        "value10": "repeat"
+       }
+      ],
+      "wrapT": [
+       {
+        "attribute": "/Looks/Textured/Albedo.inputs:wrapT",
+        "value": "mirror",
+        "value10": "mirror"
+       }
+      ]
+     }
+    },
+    "/Looks/Textured/Normal": {
+     "file": {
+      "anchored": "textures/normal.png",
+      "authored": "./textures/../textures/normal.png",
+      "resolved": "textures/normal.png",
+      "tiles": [],
+      "udim": false
+     },
+     "id": "UsdUVTexture",
+     "inputs": {
+      "bias": [
+       {
+        "attribute": "/Looks/Textured/Normal.inputs:bias",
+        "value": [
+         -1.0,
+         -1.0,
+         -1.0,
+         0.0
+        ],
+        "value10": [
+         -1.0,
+         -1.0,
+         -1.0,
+         0.0
+        ]
+       }
+      ],
+      "file": [
+       {
+        "attribute": "/Looks/Textured/Normal.inputs:file",
+        "value": "./textures/../textures/normal.png",
+        "value10": "./textures/../textures/normal.png"
+       }
+      ],
+      "scale": [
+       {
+        "attribute": "/Looks/Textured/Normal.inputs:scale",
+        "value": [
+         2.0,
+         2.0,
+         2.0,
+         1.0
+        ],
+        "value10": [
+         2.0,
+         2.0,
+         2.0,
+         1.0
+        ]
+       }
+      ],
+      "sourceColorSpace": [
+       {
+        "attribute": "/Looks/Textured/Normal.inputs:sourceColorSpace",
+        "value": "raw",
+        "value10": "raw"
+       }
+      ],
+      "st": [
+       {
+        "attribute": "/Looks/Textured/Reader.outputs:result",
+        "output": "result",
+        "shader": "UsdPrimvarReader_float2"
+       }
+      ],
+      "wrapS": [
+       {
+        "attribute": "/Looks/Textured/Normal.inputs:wrapS",
+        "value": "black",
+        "value10": "black"
+       }
+      ]
+     }
+    },
+    "/Looks/Textured/Packed": {
+     "file": {
+      "anchored": "textures/packed.png",
+      "authored": "textures/packed.png",
+      "resolved": "textures/packed.png",
+      "tiles": [],
+      "udim": false
+     },
+     "id": "UsdUVTexture",
+     "inputs": {
+      "file": [
+       {
+        "attribute": "/Looks/Textured/Packed.inputs:file",
+        "value": "textures/packed.png",
+        "value10": "textures/packed.png"
+       }
+      ],
+      "sourceColorSpace": [
+       {
+        "attribute": "/Looks/Textured/Packed.inputs:sourceColorSpace",
+        "value": "raw",
+        "value10": "raw"
+       }
+      ],
+      "st": [
+       {
+        "attribute": "/Looks/Textured/Reader.outputs:result",
+        "output": "result",
+        "shader": "UsdPrimvarReader_float2"
+       }
+      ],
+      "wrapS": [
+       {
+        "attribute": "/Looks/Textured/Packed.inputs:wrapS",
+        "value": "clamp",
+        "value10": "clamp"
+       }
+      ]
+     }
+    },
+    "/Looks/Textured/Place": {
+     "id": "UsdTransform2d",
+     "inputs": {
+      "in": [
+       {
+        "attribute": "/Looks/Textured/Reader.outputs:result",
+        "output": "result",
+        "shader": "UsdPrimvarReader_float2"
+       }
+      ],
+      "rotation": [
+       {
+        "attribute": "/Looks/Textured/Place.inputs:rotation",
+        "value": 30.0,
+        "value10": 30.0
+       }
+      ],
+      "scale": [
+       {
+        "attribute": "/Looks/Textured/Place.inputs:scale",
+        "value": [
+         2.0,
+         3.0
+        ],
+        "value10": [
+         2.0,
+         3.0
+        ]
+       }
+      ],
+      "translation": [
+       {
+        "attribute": "/Looks/Textured/Place.inputs:translation",
+        "value": [
+         0.5,
+         -0.25
+        ],
+        "value10": [
+         0.5,
+         -0.25
+        ]
+       }
+      ]
+     }
+    },
+    "/Looks/Textured/Reader": {
+     "id": "UsdPrimvarReader_float2",
+     "inputs": {
+      "fallback": [
+       {
+        "attribute": "/Looks/Textured/Reader.inputs:fallback",
+        "value": [
+         0.5,
+         0.25
+        ],
+        "value10": [
+         0.5,
+         0.25
+        ]
+       }
+      ],
+      "varname": [
+       {
+        "attribute": "/Looks/Textured.inputs:coordinates",
+        "value": "uv",
+        "value10": "uv"
+       }
+      ]
+     }
+    }
+   },
+   "output": "surface",
+   "path": "/Looks/Textured",
+   "shader": "/Looks/Textured/Surface",
+   "sourceType": "Output",
+   "surface": {
+    "id": "UsdPreviewSurface",
+    "inputs": {
+     "diffuseColor": [
+      {
+       "attribute": "/Looks/Textured/Albedo.outputs:rgb",
+       "output": "rgb",
+       "shader": "UsdUVTexture"
+      }
+     ],
+     "metallic": [
+      {
+       "attribute": "/Looks/Textured/Packed.outputs:b",
+       "output": "b",
+       "shader": "UsdUVTexture"
+      }
+     ],
+     "normal": [
+      {
+       "attribute": "/Looks/Textured/Normal.outputs:rgb",
+       "output": "rgb",
+       "shader": "UsdUVTexture"
+      }
+     ],
+     "occlusion": [
+      {
+       "attribute": "/Looks/Textured/Packed.outputs:r",
+       "output": "r",
+       "shader": "UsdUVTexture"
+      }
+     ],
+     "opacity": [
+      {
+       "attribute": "/Looks/Textured/Albedo.outputs:a",
+       "output": "a",
+       "shader": "UsdUVTexture"
+      }
+     ],
+     "opacityThreshold": [
+      {
+       "attribute": "/Looks/Textured/Surface.inputs:opacityThreshold",
+       "value": 0.5,
+       "value10": 0.5
+      }
+     ],
+     "roughness": [
+      {
+       "attribute": "/Looks/Textured/Packed.outputs:g",
+       "output": "g",
+       "shader": "UsdUVTexture"
+      }
+     ],
+     "specularColor": [
+      {
+       "attribute": "/Looks/Textured/Surface.inputs:specularColor",
+       "value": [
+        0.03999999910593033,
+        0.03999999910593033,
+        0.03999999910593033
+       ],
+       "value10": [
+        0.03999999910593033,
+        0.03999999910593033,
+        0.03999999910593033
+       ]
+      }
+     ],
+     "useSpecularWorkflow": [
+      {
+       "attribute": "/Looks/Textured/Surface.inputs:useSpecularWorkflow",
+       "value": 1,
+       "value10": 1
+      }
+     ]
+    }
+   }
+  },
+  {
+   "contexts": [],
+   "id": "UsdPreviewSurface",
+   "nodes": {},
+   "output": "surface",
+   "path": "/Looks/Graph",
+   "shader": "/Looks/Graph/Group/Surface",
+   "sourceType": "Output",
+   "surface": {
+    "id": "UsdPreviewSurface",
+    "inputs": {
+     "diffuseColor": [
+      {
+       "attribute": "/Looks/Graph.inputs:tint",
+       "value": [
+        0.20000000298023224,
+        0.4000000059604645,
+        0.6000000238418579
+       ],
+       "value10": [
+        0.20000000298023224,
+        0.4000000059604645,
+        0.6000000238418579
+       ]
+      }
+     ],
+     "emissiveColor": [
+      {
+       "attribute": "/Looks/Graph/Group/Surface.inputs:emissiveColor",
+       "value": [
+        1.0,
+        1.0,
+        1.0
+       ],
+       "value10": [
+        1.0,
+        1.0,
+        1.0
+       ]
+      }
+     ],
+     "roughness": [
+      {
+       "attribute": "/Looks/Graph.inputs:shine",
+       "value": 0.30000001192092896,
+       "value10": 0.30000001192092896
+      }
+     ]
+    }
+   }
+  },
+  {
+   "contexts": [
+    "mtlx"
+   ],
+   "id": "UsdPreviewSurface",
+   "nodes": {},
+   "output": "surface",
+   "path": "/Looks/Graph",
+   "shader": "/Looks/Graph/Group/Surface",
+   "sourceType": "Output",
+   "surface": {
+    "id": "UsdPreviewSurface",
+    "inputs": {
+     "diffuseColor": [
+      {
+       "attribute": "/Looks/Graph.inputs:tint",
+       "value": [
+        0.20000000298023224,
+        0.4000000059604645,
+        0.6000000238418579
+       ],
+       "value10": [
+        0.20000000298023224,
+        0.4000000059604645,
+        0.6000000238418579
+       ]
+      }
+     ],
+     "emissiveColor": [
+      {
+       "attribute": "/Looks/Graph/Group/Surface.inputs:emissiveColor",
+       "value": [
+        1.0,
+        1.0,
+        1.0
+       ],
+       "value10": [
+        1.0,
+        1.0,
+        1.0
+       ]
+      }
+     ],
+     "roughness": [
+      {
+       "attribute": "/Looks/Graph.inputs:shine",
+       "value": 0.30000001192092896,
+       "value10": 0.30000001192092896
+      }
+     ]
+    }
+   }
+  },
+  {
+   "contexts": [],
+   "id": "UsdPreviewSurface",
+   "nodes": {},
+   "output": "surface",
+   "path": "/Looks/Contexts",
+   "shader": "/Looks/Contexts/Preview",
+   "sourceType": "Output",
+   "surface": {
+    "id": "UsdPreviewSurface",
+    "inputs": {
+     "diffuseColor": [
+      {
+       "attribute": "/Looks/Contexts/Preview.inputs:diffuseColor",
+       "value": [
+        0.0,
+        1.0,
+        0.0
+       ],
+       "value10": [
+        0.0,
+        1.0,
+        0.0
+       ]
+      }
+     ]
+    }
+   }
+  },
+  {
+   "contexts": [
+    "mtlx"
+   ],
+   "id": "ND_standard_surface_surfaceshader",
+   "output": "out",
+   "path": "/Looks/Contexts",
+   "shader": "/Looks/Contexts/Standard",
+   "sourceType": "Output"
+  },
+  {
+   "contexts": [],
+   "id": "UsdPreviewSurface",
+   "nodes": {
+    "/Looks/Udim/Tiles": {
+     "file": {
+      "anchored": "textures/rock.<UDIM>.png",
+      "authored": "./textures/rock.<UDIM>.png",
+      "resolved": "",
+      "tiles": [
+       [
+        1001,
+        "textures/rock.1001.png"
+       ],
+       [
+        1002,
+        "textures/rock.1002.png"
+       ],
+       [
+        1011,
+        "textures/rock.1011.png"
+       ]
+      ],
+      "udim": true
+     },
+     "id": "UsdUVTexture",
+     "inputs": {
+      "file": [
+       {
+        "attribute": "/Looks/Udim/Tiles.inputs:file",
+        "value": "./textures/rock.<UDIM>.png",
+        "value10": "./textures/rock.<UDIM>.png"
+       }
+      ]
+     }
+    }
+   },
+   "output": "surface",
+   "path": "/Looks/Udim",
+   "shader": "/Looks/Udim/Surface",
+   "sourceType": "Output",
+   "surface": {
+    "id": "UsdPreviewSurface",
+    "inputs": {
+     "diffuseColor": [
+      {
+       "attribute": "/Looks/Udim/Tiles.outputs:rgb",
+       "output": "rgb",
+       "shader": "UsdUVTexture"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "contexts": [
+    "mtlx"
+   ],
+   "id": "UsdPreviewSurface",
+   "nodes": {
+    "/Looks/Udim/Tiles": {
+     "file": {
+      "anchored": "textures/rock.<UDIM>.png",
+      "authored": "./textures/rock.<UDIM>.png",
+      "resolved": "",
+      "tiles": [
+       [
+        1001,
+        "textures/rock.1001.png"
+       ],
+       [
+        1002,
+        "textures/rock.1002.png"
+       ],
+       [
+        1011,
+        "textures/rock.1011.png"
+       ]
+      ],
+      "udim": true
+     },
+     "id": "UsdUVTexture",
+     "inputs": {
+      "file": [
+       {
+        "attribute": "/Looks/Udim/Tiles.inputs:file",
+        "value": "./textures/rock.<UDIM>.png",
+        "value10": "./textures/rock.<UDIM>.png"
+       }
+      ]
+     }
+    }
+   },
+   "output": "surface",
+   "path": "/Looks/Udim",
+   "shader": "/Looks/Udim/Surface",
+   "sourceType": "Output",
+   "surface": {
+    "id": "UsdPreviewSurface",
+    "inputs": {
+     "diffuseColor": [
+      {
+       "attribute": "/Looks/Udim/Tiles.outputs:rgb",
+       "output": "rgb",
+       "shader": "UsdUVTexture"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "contexts": [],
+   "id": "UsdPreviewSurface",
+   "nodes": {
+    "/Looks/Broken/A": {
+     "file": {
+      "anchored": "textures/grid.png",
+      "authored": "./textures/grid.png",
+      "resolved": "textures/grid.png",
+      "tiles": [],
+      "udim": false
+     },
+     "id": "UsdUVTexture",
+     "inputs": {
+      "file": [
+       {
+        "attribute": "/Looks/Broken/A.inputs:file",
+        "value": "./textures/grid.png",
+        "value10": "./textures/grid.png"
+       }
+      ]
+     }
+    },
+    "/Looks/Broken/B": {
+     "file": {
+      "anchored": "textures/packed.png",
+      "authored": "./textures/packed.png",
+      "resolved": "textures/packed.png",
+      "tiles": [],
+      "udim": false
+     },
+     "id": "UsdUVTexture",
+     "inputs": {
+      "file": [
+       {
+        "attribute": "/Looks/Broken/B.inputs:file",
+        "value": "./textures/packed.png",
+        "value10": "./textures/packed.png"
+       }
+      ]
+     }
+    },
+    "/Looks/Broken/Empty": {
+     "id": "UsdUVTexture",
+     "inputs": {}
+    },
+    "/Looks/Broken/Noise": {
+     "id": "MyNoise",
+     "inputs": {}
+    }
+   },
+   "output": "surface",
+   "path": "/Looks/Broken",
+   "shader": "/Looks/Broken/Surface",
+   "sourceType": "Output",
+   "surface": {
+    "id": "UsdPreviewSurface",
+    "inputs": {
+     "clearcoat": [
+      {
+       "attribute": "/Looks/Broken/A.outputs:r",
+       "output": "r",
+       "shader": "UsdUVTexture"
+      },
+      {
+       "attribute": "/Looks/Broken/B.outputs:r",
+       "output": "r",
+       "shader": "UsdUVTexture"
+      }
+     ],
+     "diffuseColor": [],
+     "emissiveColor": [
+      {
+       "attribute": "/Looks/Broken/Empty.outputs:rgb",
+       "output": "rgb",
+       "shader": "UsdUVTexture"
+      }
+     ],
+     "metallic": [],
+     "roughness": [
+      {
+       "attribute": "/Looks/Broken/Noise.outputs:out",
+       "output": "out",
+       "shader": "MyNoise"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "contexts": [
+    "mtlx"
+   ],
+   "id": "UsdPreviewSurface",
+   "nodes": {
+    "/Looks/Broken/A": {
+     "file": {
+      "anchored": "textures/grid.png",
+      "authored": "./textures/grid.png",
+      "resolved": "textures/grid.png",
+      "tiles": [],
+      "udim": false
+     },
+     "id": "UsdUVTexture",
+     "inputs": {
+      "file": [
+       {
+        "attribute": "/Looks/Broken/A.inputs:file",
+        "value": "./textures/grid.png",
+        "value10": "./textures/grid.png"
+       }
+      ]
+     }
+    },
+    "/Looks/Broken/B": {
+     "file": {
+      "anchored": "textures/packed.png",
+      "authored": "./textures/packed.png",
+      "resolved": "textures/packed.png",
+      "tiles": [],
+      "udim": false
+     },
+     "id": "UsdUVTexture",
+     "inputs": {
+      "file": [
+       {
+        "attribute": "/Looks/Broken/B.inputs:file",
+        "value": "./textures/packed.png",
+        "value10": "./textures/packed.png"
+       }
+      ]
+     }
+    },
+    "/Looks/Broken/Empty": {
+     "id": "UsdUVTexture",
+     "inputs": {}
+    },
+    "/Looks/Broken/Noise": {
+     "id": "MyNoise",
+     "inputs": {}
+    }
+   },
+   "output": "surface",
+   "path": "/Looks/Broken",
+   "shader": "/Looks/Broken/Surface",
+   "sourceType": "Output",
+   "surface": {
+    "id": "UsdPreviewSurface",
+    "inputs": {
+     "clearcoat": [
+      {
+       "attribute": "/Looks/Broken/A.outputs:r",
+       "output": "r",
+       "shader": "UsdUVTexture"
+      },
+      {
+       "attribute": "/Looks/Broken/B.outputs:r",
+       "output": "r",
+       "shader": "UsdUVTexture"
+      }
+     ],
+     "diffuseColor": [],
+     "emissiveColor": [
+      {
+       "attribute": "/Looks/Broken/Empty.outputs:rgb",
+       "output": "rgb",
+       "shader": "UsdUVTexture"
+      }
+     ],
+     "metallic": [],
+     "roughness": [
+      {
+       "attribute": "/Looks/Broken/Noise.outputs:out",
+       "output": "out",
+       "shader": "MyNoise"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "contexts": [],
+   "id": "UsdPreviewSurface",
+   "nodes": {},
+   "output": "surface",
+   "path": "/Looks/Animated",
+   "shader": "/Looks/Animated/Surface",
+   "sourceType": "Output",
+   "surface": {
+    "id": "UsdPreviewSurface",
+    "inputs": {
+     "roughness": [
+      {
+       "attribute": "/Looks/Animated/Surface.inputs:roughness",
+       "value": null,
+       "value10": 0.5
+      }
+     ]
+    }
+   }
+  },
+  {
+   "contexts": [
+    "mtlx"
+   ],
+   "id": "UsdPreviewSurface",
+   "nodes": {},
+   "output": "surface",
+   "path": "/Looks/Animated",
+   "shader": "/Looks/Animated/Surface",
+   "sourceType": "Output",
+   "surface": {
+    "id": "UsdPreviewSurface",
+    "inputs": {
+     "roughness": [
+      {
+       "attribute": "/Looks/Animated/Surface.inputs:roughness",
+       "value": null,
+       "value10": 0.5
+      }
+     ]
+    }
+   }
+  },
+  {
+   "contexts": [],
+   "id": "UsdPreviewSurface",
+   "nodes": {
+    "/Looks/Painted/Color": {
+     "id": "UsdPrimvarReader_float3",
+     "inputs": {
+      "fallback": [
+       {
+        "attribute": "/Looks/Painted/Color.inputs:fallback",
+        "value": [
+         0.5,
+         0.5,
+         0.5
+        ],
+        "value10": [
+         0.5,
+         0.5,
+         0.5
+        ]
+       }
+      ],
+      "varname": [
+       {
+        "attribute": "/Looks/Painted/Color.inputs:varname",
+        "value": "displayColor",
+        "value10": "displayColor"
+       }
+      ]
+     }
+    }
+   },
+   "output": "surface",
+   "path": "/Looks/Painted",
+   "shader": "/Looks/Painted/Surface",
+   "sourceType": "Output",
+   "surface": {
+    "id": "UsdPreviewSurface",
+    "inputs": {
+     "diffuseColor": [
+      {
+       "attribute": "/Looks/Painted/Color.outputs:result",
+       "output": "result",
+       "shader": "UsdPrimvarReader_float3"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "contexts": [
+    "mtlx"
+   ],
+   "id": "UsdPreviewSurface",
+   "nodes": {
+    "/Looks/Painted/Color": {
+     "id": "UsdPrimvarReader_float3",
+     "inputs": {
+      "fallback": [
+       {
+        "attribute": "/Looks/Painted/Color.inputs:fallback",
+        "value": [
+         0.5,
+         0.5,
+         0.5
+        ],
+        "value10": [
+         0.5,
+         0.5,
+         0.5
+        ]
+       }
+      ],
+      "varname": [
+       {
+        "attribute": "/Looks/Painted/Color.inputs:varname",
+        "value": "displayColor",
+        "value10": "displayColor"
+       }
+      ]
+     }
+    }
+   },
+   "output": "surface",
+   "path": "/Looks/Painted",
+   "shader": "/Looks/Painted/Surface",
+   "sourceType": "Output",
+   "surface": {
+    "id": "UsdPreviewSurface",
+    "inputs": {
+     "diffuseColor": [
+      {
+       "attribute": "/Looks/Painted/Color.outputs:result",
+       "output": "result",
+       "shader": "UsdPrimvarReader_float3"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "contexts": [],
+   "id": null,
+   "output": "",
+   "path": "/Looks/Bare",
+   "shader": null,
+   "sourceType": null
+  },
+  {
+   "contexts": [
+    "mtlx"
+   ],
+   "id": null,
+   "output": "",
+   "path": "/Looks/Bare",
+   "shader": null,
+   "sourceType": null
+  }
+ ],
+ "version": "26.11"
+}

@@ -1,0 +1,356 @@
+#usda 1.0
+(
+    defaultPrim = "World"
+)
+
+def Xform "World"
+{
+    def Mesh "Plain" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        int[] faceVertexCounts = [3]
+        int[] faceVertexIndices = [0, 1, 2]
+        point3f[] points = [(0, 0, 0), (1, 0, 0), (0, 1, 0)]
+        rel material:binding = </Looks/Plain>
+    }
+
+    def Mesh "Textured" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        int[] faceVertexCounts = [3]
+        int[] faceVertexIndices = [0, 1, 2]
+        point3f[] points = [(0, 0, 0), (1, 0, 0), (0, 1, 0)]
+        texCoord2f[] primvars:uv = [(0, 0), (1, 0), (0, 1)] (
+            interpolation = "vertex"
+        )
+        rel material:binding = </Looks/Textured>
+    }
+
+    def Sphere "Graph" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        rel material:binding = </Looks/Graph>
+    }
+
+    def Sphere "Contexts" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        double radius = 2
+        rel material:binding = </Looks/Contexts>
+    }
+
+    def Cube "Udim" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        rel material:binding = </Looks/Udim>
+    }
+
+    def Cube "Broken" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        double size = 3
+        rel material:binding = </Looks/Broken>
+    }
+
+    def Cube "Animated" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        double size = 4
+        rel material:binding = </Looks/Animated>
+    }
+
+    def Cube "Painted" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        double size = 5
+        rel material:binding = </Looks/Painted>
+    }
+
+    def Cube "Bare" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        double size = 6
+        rel material:binding = </Looks/Bare>
+    }
+}
+
+def Scope "Looks"
+{
+    def Material "Plain"
+    {
+        token outputs:surface.connect = </Looks/Plain/Surface.outputs:surface>
+
+        def Shader "Surface"
+        {
+            uniform token info:id = "UsdPreviewSurface"
+            color3f inputs:diffuseColor = (0.8, 0.2, 0.1)
+            color3f inputs:emissiveColor = (0.1, 0.1, 0)
+            float inputs:metallic = 1
+            float inputs:roughness = 0.25
+            float inputs:clearcoat = 0.5
+            float inputs:clearcoatRoughness = 0.1
+            float inputs:opacity = 0.5
+            token inputs:opacityMode = "presence"
+            float inputs:ior = 1.33
+            float inputs:occlusion = 0.75
+            float inputs:displacement = 0.125
+            token outputs:surface
+        }
+    }
+
+    def Material "Textured"
+    {
+        string inputs:coordinates = "uv"
+        token outputs:surface.connect = </Looks/Textured/Surface.outputs:surface>
+
+        def Shader "Surface"
+        {
+            uniform token info:id = "UsdPreviewSurface"
+            color3f inputs:diffuseColor.connect = </Looks/Textured/Albedo.outputs:rgb>
+            float inputs:opacity.connect = </Looks/Textured/Albedo.outputs:a>
+            float inputs:opacityThreshold = 0.5
+            float inputs:roughness.connect = </Looks/Textured/Packed.outputs:g>
+            float inputs:metallic.connect = </Looks/Textured/Packed.outputs:b>
+            float inputs:occlusion.connect = </Looks/Textured/Packed.outputs:r>
+            normal3f inputs:normal.connect = </Looks/Textured/Normal.outputs:rgb>
+            int inputs:useSpecularWorkflow = 1
+            color3f inputs:specularColor = (0.04, 0.04, 0.04)
+            token outputs:surface
+        }
+
+        def Shader "Reader"
+        {
+            uniform token info:id = "UsdPrimvarReader_float2"
+            string inputs:varname.connect = </Looks/Textured.inputs:coordinates>
+            float2 inputs:fallback = (0.5, 0.25)
+            float2 outputs:result
+        }
+
+        def Shader "Place"
+        {
+            uniform token info:id = "UsdTransform2d"
+            float2 inputs:in.connect = </Looks/Textured/Reader.outputs:result>
+            float inputs:rotation = 30
+            float2 inputs:scale = (2, 3)
+            float2 inputs:translation = (0.5, -0.25)
+            float2 outputs:result
+        }
+
+        def Shader "Albedo"
+        {
+            uniform token info:id = "UsdUVTexture"
+            asset inputs:file = @./textures/grid.png@
+            float2 inputs:st.connect = </Looks/Textured/Place.outputs:result>
+            token inputs:wrapS = "repeat"
+            token inputs:wrapT = "mirror"
+            token inputs:sourceColorSpace = "sRGB"
+            float4 inputs:fallback = (1, 0, 1, 1)
+            float3 outputs:rgb
+            float outputs:a
+        }
+
+        def Shader "Packed"
+        {
+            uniform token info:id = "UsdUVTexture"
+            asset inputs:file = @textures/packed.png@
+            float2 inputs:st.connect = </Looks/Textured/Reader.outputs:result>
+            token inputs:wrapS = "clamp"
+            token inputs:sourceColorSpace = "raw"
+            float outputs:r
+            float outputs:g
+            float outputs:b
+        }
+
+        def Shader "Normal"
+        {
+            uniform token info:id = "UsdUVTexture"
+            asset inputs:file = @./textures/../textures/normal.png@
+            float2 inputs:st.connect = </Looks/Textured/Reader.outputs:result>
+            float4 inputs:scale = (2, 2, 2, 1)
+            float4 inputs:bias = (-1, -1, -1, 0)
+            token inputs:sourceColorSpace = "raw"
+            token inputs:wrapS = "black"
+            float3 outputs:rgb
+        }
+    }
+
+    def Material "Graph"
+    {
+        color3f inputs:tint = (0.2, 0.4, 0.6)
+        float inputs:shine = 0.3
+        token outputs:surface.connect = </Looks/Graph/Group.outputs:surface>
+
+        def NodeGraph "Group"
+        {
+            color3f inputs:tint.connect = </Looks/Graph.inputs:tint>
+            float inputs:shine.connect = </Looks/Graph.inputs:shine>
+            token outputs:surface.connect = </Looks/Graph/Group/Surface.outputs:surface>
+
+            def Shader "Surface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor.connect = </Looks/Graph/Group.inputs:tint>
+                float inputs:roughness.connect = </Looks/Graph/Group.inputs:shine>
+                color3f inputs:emissiveColor = (1, 1, 1)
+                color3f inputs:emissiveColor.connect = </Looks/Graph/Group.inputs:glow>
+                token outputs:surface
+            }
+        }
+    }
+
+    def Material "Contexts"
+    {
+        token outputs:surface.connect = </Looks/Contexts/Preview.outputs:surface>
+        token outputs:mtlx:surface.connect = </Looks/Contexts/Standard.outputs:out>
+
+        def Shader "Preview"
+        {
+            uniform token info:id = "UsdPreviewSurface"
+            color3f inputs:diffuseColor = (0, 1, 0)
+            token outputs:surface
+        }
+
+        def Shader "Standard"
+        {
+            uniform token info:id = "ND_standard_surface_surfaceshader"
+            token outputs:out
+        }
+    }
+
+    def Material "Udim"
+    {
+        token outputs:surface.connect = </Looks/Udim/Surface.outputs:surface>
+
+        def Shader "Surface"
+        {
+            uniform token info:id = "UsdPreviewSurface"
+            color3f inputs:diffuseColor.connect = </Looks/Udim/Tiles.outputs:rgb>
+            token outputs:surface
+        }
+
+        def Shader "Tiles"
+        {
+            uniform token info:id = "UsdUVTexture"
+            asset inputs:file = @./textures/rock.<UDIM>.png@
+            float3 outputs:rgb
+        }
+    }
+
+    def Material "Broken"
+    {
+        float inputs:loop.connect = </Looks/Broken/Ring.inputs:loop>
+        token outputs:surface.connect = </Looks/Broken/Surface.outputs:surface>
+
+        def NodeGraph "Ring"
+        {
+            float inputs:loop.connect = </Looks/Broken.inputs:loop>
+        }
+
+        def Shader "Surface"
+        {
+            uniform token info:id = "UsdPreviewSurface"
+            color3f inputs:diffuseColor.connect = </Looks/Broken/Gone.outputs:rgb>
+            float inputs:roughness.connect = </Looks/Broken/Noise.outputs:out>
+            float inputs:metallic.connect = </Looks/Broken.inputs:loop>
+            float inputs:clearcoat.connect = [</Looks/Broken/A.outputs:r>, </Looks/Broken/B.outputs:r>]
+            color3f inputs:emissiveColor.connect = </Looks/Broken/Empty.outputs:rgb>
+            token outputs:surface
+        }
+
+        def Shader "Noise"
+        {
+            uniform token info:id = "MyNoise"
+            float outputs:out
+        }
+
+        def Shader "A"
+        {
+            uniform token info:id = "UsdUVTexture"
+            asset inputs:file = @./textures/grid.png@
+            float outputs:r
+        }
+
+        def Shader "B"
+        {
+            uniform token info:id = "UsdUVTexture"
+            asset inputs:file = @./textures/packed.png@
+            float outputs:r
+        }
+
+        def Shader "Empty"
+        {
+            uniform token info:id = "UsdUVTexture"
+            float3 outputs:rgb
+        }
+    }
+
+    def Material "Animated"
+    {
+        token outputs:surface.connect = </Looks/Animated/Surface.outputs:surface>
+
+        def Shader "Surface"
+        {
+            uniform token info:id = "UsdPreviewSurface"
+            float inputs:roughness.timeSamples = {
+                0: 0.1,
+                20: 0.9,
+            }
+            token outputs:surface
+        }
+    }
+
+    def Material "Painted"
+    {
+        token outputs:surface.connect = </Looks/Painted/Surface.outputs:surface>
+
+        def Shader "Surface"
+        {
+            uniform token info:id = "UsdPreviewSurface"
+            color3f inputs:diffuseColor.connect = </Looks/Painted/Color.outputs:result>
+            token outputs:surface
+        }
+
+        def Shader "Color"
+        {
+            uniform token info:id = "UsdPrimvarReader_float3"
+            string inputs:varname = "displayColor"
+            float3 inputs:fallback = (0.5, 0.5, 0.5)
+            float3 outputs:result
+        }
+    }
+
+    def Material "Bare"
+    {
+    }
+}
+
+def Scope "Lights"
+{
+    def NodeGraph "Rig"
+    {
+        float inputs:power = 7
+        color3f inputs:tint = (1, 0.5, 0.25)
+        float inputs:spread.timeSamples = {
+            0: 1,
+            10: 2,
+        }
+    }
+
+    def SphereLight "Lamp"
+    {
+        float inputs:intensity.connect = </Lights/Rig.inputs:power>
+        color3f inputs:color.connect = </Lights/Rig.inputs:tint>
+        float inputs:radius.connect = </Lights/Rig.inputs:spread>
+        float inputs:exposure = 2
+        float inputs:exposure.connect = </Lights/Rig.inputs:missing>
+    }
+}

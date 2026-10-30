@@ -29,11 +29,20 @@ browser.
   `GfFrustum` compute them, fitted to a viewport by `conform_window`) and
   the built-in `UsdLux` lights with renderer-ready values (world placement
   and direction, emission with exposure, blackbody color and `normalize`,
-  shape, shaping, shadow and link collections), with diffs and
-  time-variability like draw items.
+  shape, shaping, shadow and link collections; inputs read through their
+  connections), with diffs and time-variability like draw items.
 
-Subdivision surfaces are drawn as their control cage. Materials (beyond their
-bindings), curves, points and light linking evaluation are not covered yet.
+- **Materials** (with `stage`): each material the items bind as a
+  renderer-ready `UsdPreviewSurface` record: every input a constant, a
+  primvar or a `UsdUVTexture` lookup (file anchored to its layer, UDIM
+  tiles, wrap, scale and bias, color space, `UsdPrimvarReader_float2`
+  coordinates and `UsdTransform2d`), connections followed through node
+  graphs and interface inputs, spec fallbacks, the alpha mode, and notes
+  for what cannot be represented; diffed, and read again only when
+  something it reads changes.
+
+Subdivision surfaces are drawn as their control cage. Other shaders, curves,
+points and light linking evaluation are not covered yet.
 
 ```rust
 use layerstack_stagehand::{MeshInput, MeshOptions, MeshPlan, MeshTopology};

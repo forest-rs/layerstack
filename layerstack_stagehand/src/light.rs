@@ -25,9 +25,11 @@
 
 use alloc::sync::Arc;
 use alloc::vec::Vec;
+use core::cell::RefCell;
 
-use layerstack::{PathId, TargetPath, Time};
+use layerstack::{PathId, TargetPath, Time, TokenInterner, Value};
 use layerstack_schemas::light::blackbody_temperature_rgb;
+use layerstack_schemas::shading::ValueSourceKind;
 use layerstack_schemas::value::{read_asset, read_bool, read_float, read_float3, read_token};
 use layerstack_schemas::{PrimView, Scene};
 
@@ -288,8 +290,9 @@ pub(crate) const LIGHT_INPUTS: &[&str] = &[
 ];
 
 /// Reads the light at `path` of `kind` at `time`, given its world matrix
-/// and visibility. Inputs are read as their own values with the schema
-/// fallbacks; a connected input's source is not followed.
+/// and visibility, and the prims its connected inputs read. Inputs are read
+/// with the schema fallbacks; a connected input reads its source
+/// ([`input_at`]).
 pub(crate) fn read_light(
     scene: &Scene<'_>,
     path: PathId,
@@ -297,29 +300,66 @@ pub(crate) fn read_light(
     time: Time,
     matrix: [[f64; 4]; 4],
     hidden: bool,
-) -> LightItem {
+) -> (LightItem, Vec<PathId>) {
     let prim = PrimView::new(*scene, path);
+    let sources = RefCell::new(Vec::new());
     let float = |name: &str, fallback: f32| {
-        prim.read_value_at(name, time, read_float)
-            .filter(|v| v.is_finite())
-            .unwrap_or(fallback)
+        input_at(
+            scene,
+            path,
+            name,
+            time,
+            read_float,
+            &mut sources.borrow_mut(),
+        )
+        .filter(|v| v.is_finite())
+        .unwrap_or(fallback)
     };
     let boolean = |name: &str, fallback: bool| {
-        prim.read_value_at(name, time, read_bool)
-            .unwrap_or(fallback)
+        input_at(
+            scene,
+            path,
+            name,
+            time,
+            read_bool,
+            &mut sources.borrow_mut(),
+        )
+        .unwrap_or(fallback)
     };
-    let color = |name: &str| {
-        prim.read_value_at(name, time, read_float3)
-            .unwrap_or([1., 1., 1.])
+    let float3 = |name: &str, fallback: [f32; 3]| {
+        input_at(
+            scene,
+            path,
+            name,
+            time,
+            read_float3,
+            &mut sources.borrow_mut(),
+        )
+        .unwrap_or(fallback)
     };
+    let color = |name: &str| float3(name, [1., 1., 1.]);
     let asset = |name: &str| {
-        prim.read_value_at(name, time, read_asset)
-            .filter(|asset| !asset.is_empty())
+        input_at(
+            scene,
+            path,
+            name,
+            time,
+            read_asset,
+            &mut sources.borrow_mut(),
+        )
+        .filter(|asset| !asset.is_empty())
     };
     let token = |name: &str, fallback: &str| -> Arc<str> {
-        prim.read_value_at(name, time, read_token)
-            .unwrap_or(fallback)
-            .into()
+        input_at(
+            scene,
+            path,
+            name,
+            time,
+            read_token,
+            &mut sources.borrow_mut(),
+        )
+        .unwrap_or(fallback)
+        .into()
     };
     let geometry = match kind {
         LightKind::Distant => LightGeometry::Distant {
@@ -389,18 +429,14 @@ pub(crate) fn read_light(
             cone_angle: float("inputs:shaping:cone:angle", 90.),
             cone_softness: float("inputs:shaping:cone:softness", 0.),
             focus: float("inputs:shaping:focus", 0.),
-            focus_tint: prim
-                .read_value_at("inputs:shaping:focusTint", time, read_float3)
-                .unwrap_or([0., 0., 0.]),
+            focus_tint: float3("inputs:shaping:focusTint", [0., 0., 0.]),
             ies_file: asset("inputs:shaping:ies:file"),
             ies_angle_scale: float("inputs:shaping:ies:angleScale", 0.),
             ies_normalize: boolean("inputs:shaping:ies:normalize", false),
         });
     let shadow = scene.has_api(path, "ShadowAPI", None).then(|| LightShadow {
         enable: boolean("inputs:shadow:enable", true),
-        color: prim
-            .read_value_at("inputs:shadow:color", time, read_float3)
-            .unwrap_or([0., 0., 0.]),
+        color: float3("inputs:shadow:color", [0., 0., 0.]),
         distance: float("inputs:shadow:distance", -1.),
         falloff: float("inputs:shadow:falloff", -1.),
         falloff_gamma: float("inputs:shadow:falloffGamma", 1.),
@@ -416,7 +452,7 @@ pub(crate) fn read_light(
         includes: prim.read_targets(&alloc::format!("collection:{name}:includes")),
         excludes: prim.read_targets(&alloc::format!("collection:{name}:excludes")),
     };
-    LightItem {
+    let item = LightItem {
         path,
         kind,
         matrix,
@@ -429,7 +465,49 @@ pub(crate) fn read_light(
         shadow,
         light_link: link("lightLink"),
         shadow_link: link("shadowLink"),
+    };
+    (item, sources.into_inner())
+}
+
+/// Reads the light's attribute `name` at `time` by `read`. An input with
+/// connections reads what they lead to, through node graphs and interface
+/// inputs (`UsdShadeInput::GetValueProducingAttributes`, as
+/// `layerstack_schemas::light::LightInput` reads it): one attribute with an
+/// authored value is read (the input's own value when every connection
+/// fails, as OpenUSD falls back to it); a shader output or several sources
+/// read nothing, so the input takes its fallback. The prims the connections inspected are added to
+/// `sources`. AOUSD Core §12.4 (connections).
+fn input_at<'a, T>(
+    scene: &Scene<'a>,
+    path: PathId,
+    name: &str,
+    time: Time,
+    read: impl Fn(&Value, &'a TokenInterner) -> Option<T>,
+    sources: &mut Vec<PathId>,
+) -> Option<T> {
+    let prim = PrimView::new(*scene, path);
+    if name.starts_with("inputs:")
+        && let Some(property) = prim.property_path(name)
+    {
+        let connected = scene.connected_sources(property);
+        if !connected.sources.is_empty() || !connected.invalid.is_empty() {
+            let found = scene.value_sources(property);
+            for dependency in &found.dependencies {
+                if dependency.prim != path && !sources.contains(&dependency.prim) {
+                    sources.push(dependency.prim);
+                }
+            }
+            return match found.sources.as_slice() {
+                [one] if one.kind == ValueSourceKind::AuthoredValue => {
+                    let property = scene.store().tokens().resolve(one.attribute.property());
+                    PrimView::new(*scene, one.attribute.prim_path())
+                        .read_value_at(property, time, read)
+                }
+                _ => None,
+            };
+        }
     }
+    prim.read_value_at(name, time, read)
 }
 
 /// `color * temperature_color * intensity * 2^exposure / size_factor`.

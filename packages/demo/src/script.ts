@@ -221,4 +221,13 @@ export const steps: readonly Step[] = [
       session.select(sample.rock, sample.radius);
     },
   },
+  {
+    title: "Mute the robot asset",
+    look: "The explanation: the rover's color has one opinion left, the painted variant's; the asset's is gone, and the rover reports its reference to the muted asset (composition.muted_asset). The tree: Body and Head are gone, and the rover has no height. The layers: assets/robot.usda is muted, still held. Press its Unmute: one change brings every opinion back, and nothing is fetched.",
+    async run(session) {
+      const editor = session.current;
+      session.select(sample.rover, sample.roverColor);
+      await editor.setMuted(editor.layerNamed(sample.robotAsset), true);
+    },
+  },
 ];

@@ -7,6 +7,8 @@
 // `@forest-rs/layerstack` and building buffers in this package's module.
 import type { Changes, Prim, Stage } from "@forest-rs/layerstack";
 import type { Stagehand, StagehandMesh } from "./index.js";
+import { CAMERA_INPUTS, LIGHT_INPUTS, lightKind, readLight } from "./light.js";
+import type { CameraItem, LightItem, LightKind } from "./light.js";
 import { readMesh, readShape, shapeSchema } from "./read.js";
 import type { MeshInput, MeshOptions, PrimvarInput, Shape, Tessellation } from "./types.js";
 
@@ -107,6 +109,10 @@ export interface DrawWork {
   readonly triangulations: number;
   /** Implicit shapes tessellated. */
   readonly tessellations: number;
+  /** Cameras read: computed again. */
+  readonly camerasRead: number;
+  /** Lights read again. */
+  readonly lightsRead: number;
 }
 
 /**
@@ -133,6 +139,14 @@ export interface DrawDiff {
   readonly rebuilt: readonly number[];
   /** Buffers no item draws any more: disposed. */
   readonly freed: readonly number[];
+  readonly camerasAdded: readonly string[];
+  readonly camerasRemoved: readonly string[];
+  /** Cameras read again and found different: moved, or a lens changed. */
+  readonly camerasChanged: readonly string[];
+  readonly lightsAdded: readonly string[];
+  readonly lightsRemoved: readonly string[];
+  /** Lights read again and found different. */
+  readonly lightsChanged: readonly string[];
   readonly work: DrawWork;
 }
 
@@ -141,6 +155,8 @@ interface Kind {
   readonly gprim: "mesh" | "shape" | null;
   readonly instancer: boolean;
   readonly subset: boolean;
+  readonly camera: boolean;
+  readonly light: LightKind | null;
 }
 
 /** What a change may have changed of an item. */
@@ -333,7 +349,34 @@ function covers(scope: Scope, source: ItemSource): boolean {
 interface Found {
   sources: ItemSource[];
   scopes: Scope[];
+  cameras: string[];
+  lights: [string, LightKind][];
   prims: number;
+}
+
+/** A camera or a light, and whether what it reads might differ at another time, as last read. */
+interface Held<T> {
+  item: T;
+  varies: boolean;
+}
+
+/** Cameras or lights added, removed and changed in the diff being gathered. */
+class Changed {
+  added = new Set<string>();
+  removed = new Set<string>();
+  changed = new Set<string>();
+
+  finish(): [string[], string[], string[]] {
+    for (const path of this.added) this.changed.delete(path);
+    const sortedPaths = (set: Set<string>) => [...set].sort();
+    return [sortedPaths(this.added), sortedPaths(this.removed), sortedPaths(this.changed)];
+  }
+}
+
+/** Whether two records hold the same values, typed arrays included. */
+function sameRecord(a: unknown, b: unknown): boolean {
+  const plain = (_: string, value: unknown) => (ArrayBuffer.isView(value) ? Array.from(value as Float64Array) : value);
+  return JSON.stringify(a, plain) === JSON.stringify(b, plain);
 }
 
 interface Entry {
@@ -363,6 +406,8 @@ class Gather {
   refilled = new Set<number>();
   rebuilt = new Set<number>();
   freed = new Set<number>();
+  cameras = new Changed();
+  lights = new Changed();
   work = {
     primsTraversed: 0,
     itemsRead: 0,
@@ -374,6 +419,8 @@ class Gather {
     refills: 0,
     triangulations: 0,
     tessellations: 0,
+    camerasRead: 0,
+    lightsRead: 0,
   };
 }
 
@@ -396,6 +443,8 @@ const sorted = (set: Set<number>) => [...set].sort((a, b) => a - b);
  *   implicit shapes share one. A buffer is disposed, and listed in
  *   {@link DrawDiff.freed}, in the diff that drops its last item;
  *   {@link dispose} frees them all.
+ * - Cameras ({@link CameraItem}) and lights ({@link LightItem}) are held
+ *   by path beside the items, and diffed as added, removed and changed.
  * - Diffs ({@link DrawDiff}): {@link refresh} reads the whole stage;
  *   {@link applyChanges} reads what a change record reaches (resynced
  *   paths rediscover their subtree; changed properties are classified by
@@ -423,6 +472,8 @@ export class DrawList implements Disposable {
   readonly #buffers = new Map<number, Retained>();
   readonly #meshBuffers = new Map<string, number>();
   readonly #shapeBuffers = new Map<string, number>();
+  readonly #cameras = new Map<string, Held<CameraItem>>();
+  readonly #lights = new Map<string, Held<LightItem>>();
   /** Each prim type's {@link Kind}: `IsA` depends on the type alone. */
   readonly #kinds = new Map<string, Kind>();
   #nextItem = 0;
@@ -456,6 +507,26 @@ export class DrawList implements Disposable {
   /** The buffer `key`, while an item draws it. */
   buffers(key: number): DrawBuffers | null {
     return this.#buffers.get(key)?.buffers ?? null;
+  }
+
+  /** The cameras ({@link CameraItem}), by path. */
+  cameras(): CameraItem[] {
+    return [...this.#cameras.values()].map((held) => held.item);
+  }
+
+  /** The camera at `path`, while it is listed. */
+  camera(path: string): CameraItem | null {
+    return this.#cameras.get(path)?.item ?? null;
+  }
+
+  /** The lights ({@link LightItem}), by path. */
+  lights(): LightItem[] {
+    return [...this.#lights.values()].map((held) => held.item);
+  }
+
+  /** The light at `path`, while it is listed. */
+  light(path: string): LightItem | null {
+    return this.#lights.get(path)?.item ?? null;
   }
 
   /** Reads the whole stage: the first call adds every item; a later one reports what differs, reusing what did not change. */
@@ -501,6 +572,8 @@ export class DrawList implements Disposable {
       read.add(id);
       if (!this.#read(id, entry.item.source, what, false, gather)) this.#remove(id, gather);
     }
+    for (const [path, held] of [...this.#cameras]) if (held.varies) this.#readCamera(path, gather);
+    for (const [path, held] of [...this.#lights]) if (held.varies) this.#readLight(path, held.item.kind, gather);
     return this.#finish(gather, read, before);
   }
 
@@ -512,6 +585,8 @@ export class DrawList implements Disposable {
     this.#keys.clear();
     this.#meshBuffers.clear();
     this.#shapeBuffers.clear();
+    this.#cameras.clear();
+    this.#lights.clear();
   }
 
   [Symbol.dispose](): void {
@@ -528,7 +603,7 @@ export class DrawList implements Disposable {
       if (at === undefined) dirty.set(id, { ...what });
       else merge(at, what);
     };
-    const found: Found = { sources: [], scopes: [], prims: 0 };
+    const found: Found = { sources: [], scopes: [], cameras: [], lights: [], prims: 0 };
     const firsts = new Map<string, string>();
     for (const prototype of stage.prototypes()) {
       for (const instance of prototype.instances) firsts.set(instance, prototype.instances[0]!);
@@ -580,6 +655,7 @@ export class DrawList implements Disposable {
       this.#discoverPrototype(first, found);
     }
     gather.work.primsTraversed = found.prims;
+    this.#applyToViews(changes, found, gather);
     // New items first, so a buffer a gone item shares with a new one (a
     // renamed prim's shape) is kept rather than freed and made again.
     const seen = new Set(found.sources.map(sourceKey));
@@ -625,6 +701,8 @@ export class DrawList implements Disposable {
       gather.rebuilt.delete(key);
     }
     for (const key of gather.rebuilt) gather.refilled.delete(key);
+    const [camerasAdded, camerasRemoved, camerasChanged] = gather.cameras.finish();
+    const [lightsAdded, lightsRemoved, lightsChanged] = gather.lights.finish();
     const live = [...read].filter((id) => this.#entries.has(id));
     gather.work.itemsRead = live.length;
     gather.work.itemsUntouched = this.#entries.size - live.length;
@@ -640,6 +718,12 @@ export class DrawList implements Disposable {
       refilled: sorted(gather.refilled),
       rebuilt: sorted(gather.rebuilt),
       freed: sorted(gather.freed),
+      camerasAdded,
+      camerasRemoved,
+      camerasChanged,
+      lightsAdded,
+      lightsRemoved,
+      lightsChanged,
       work: { ...gather.work },
     };
   }
@@ -650,7 +734,7 @@ export class DrawList implements Disposable {
    * as one. Cached by type name.
    */
   #kind(prim: Prim | null): Kind {
-    if (prim === null) return { gprim: null, instancer: false, subset: false };
+    if (prim === null) return { gprim: null, instancer: false, subset: false, camera: false, light: null };
     const key = prim.typeName ?? "";
     let kind = this.#kinds.get(key);
     if (kind === undefined) {
@@ -659,6 +743,8 @@ export class DrawList implements Disposable {
         gprim: mesh ? "mesh" : shapeSchema(prim) !== null ? "shape" : null,
         instancer: prim.typeName === "PointInstancer" || prim.isA("PointInstancer"),
         subset: prim.typeName === "GeomSubset" || prim.isA("GeomSubset"),
+        camera: prim.typeName === "Camera" || prim.isA("Camera"),
+        light: lightKind(prim),
       };
       this.#kinds.set(key, kind);
     }
@@ -696,13 +782,109 @@ export class DrawList implements Disposable {
         if (first !== undefined) prototypes.add(first);
         continue;
       }
-      if (this.#drawn(prim)) found.sources.push({ kind: "gprim", path });
+      const kind = this.#kind(prim);
+      if (kind.gprim !== null) found.sources.push({ kind: "gprim", path });
+      else if (kind.camera) found.cameras.push(path);
+      else if (kind.light !== null) found.lights.push([path, kind.light]);
       stack.push(...prim.children().reverse());
     }
     for (const first of prototypes) {
       found.scopes.push({ kind: "prototype", first });
       this.#discoverPrototype(first, found);
     }
+  }
+
+  /**
+   * Brings the cameras and lights up to the stage after `changes`, given
+   * what discovery found, as `layerstack_stagehand` does: new ones are
+   * added, those a resync covers but did not find removed, and those a
+   * change reaches read again (any change of the prim itself, a transform
+   * or visibility change above it, a resync over it).
+   */
+  #applyToViews(
+    changes: Pick<Changes, "resynced" | "changedInfoOnly" | "properties" | "resyncedProperties">,
+    found: Found,
+    gather: Gather,
+  ): void {
+    const roots = found.scopes.flatMap((scope) => (scope.kind === "resync" ? [scope.root] : []));
+    const resynced = (path: string) => roots.some((root) => under(path, root));
+    const reached: [string, boolean][] = [];
+    for (const prim of changes.changedInfoOnly) {
+      const inventory = changes.properties.find((changed) => changed.prim === prim);
+      const placement =
+        inventory === undefined ||
+        inventory.fields.some((field) => {
+          const dirt = propertyDirt(field.property);
+          return dirt.transform || dirt.visibility;
+        });
+      reached.push([prim, placement]);
+    }
+    for (const property of changes.resyncedProperties) {
+      const dot = property.lastIndexOf(".");
+      const dirt = propertyDirt(property.slice(dot + 1));
+      reached.push([property.slice(0, dot), dirt.transform || dirt.visibility]);
+    }
+    const reaches = (path: string) =>
+      resynced(path) || reached.some(([prim, placement]) => prim === path || (placement && under(path, prim)));
+
+    const cameras = new Set(found.cameras);
+    for (const path of [...this.#cameras.keys()]) {
+      if (resynced(path) && !cameras.has(path)) {
+        this.#cameras.delete(path);
+        gather.cameras.removed.add(path);
+      }
+    }
+    for (const path of this.#cameras.keys()) if (reaches(path)) cameras.add(path);
+    for (const path of [...cameras].sort()) this.#readCamera(path, gather);
+
+    const lights = new Map(found.lights);
+    for (const path of [...this.#lights.keys()]) {
+      if (resynced(path) && !lights.has(path)) {
+        this.#lights.delete(path);
+        gather.lights.removed.add(path);
+      }
+    }
+    for (const [path, held] of this.#lights) if (reaches(path) && !lights.has(path)) lights.set(path, held.item.kind);
+    for (const [path, kind] of [...lights].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) this.#readLight(path, kind, gather);
+  }
+
+  /** Computes the camera at `path` again ({@link Stage.camera}) and records whether it changed. */
+  #readCamera(path: string, gather: Gather): void {
+    gather.work.camerasRead++;
+    const prim = this.#stage.prim(path);
+    if (prim === null || !this.#kind(prim).camera) {
+      if (this.#cameras.delete(path)) gather.cameras.removed.add(path);
+      return;
+    }
+    let item: CameraItem;
+    try {
+      item = Object.freeze({ path, camera: this.#stage.camera(path, this.#time === undefined ? {} : { time: this.#time }), error: null });
+    } catch (error) {
+      if ((error as { code?: string }).code !== "camera.invalid") throw error;
+      item = Object.freeze({ path, camera: null, error: (error as Error).message });
+    }
+    const varies = this.#worldMightVary([path]) || this.#inputsMightVary([path], CAMERA_INPUTS);
+    const old = this.#cameras.get(path);
+    this.#cameras.set(path, { item, varies });
+    if (old === undefined) gather.cameras.added.add(path);
+    else if (!sameRecord(old.item, item)) gather.cameras.changed.add(path);
+  }
+
+  /** Reads the light at `path` again ({@link readLight}) and records whether it changed. */
+  #readLight(path: string, kind: LightKind, gather: Gather): void {
+    gather.work.lightsRead++;
+    if (this.#stage.prim(path) === null) {
+      if (this.#lights.delete(path)) gather.lights.removed.add(path);
+      return;
+    }
+    const at = this.#time === undefined ? {} : { time: this.#time };
+    const hidden = this.#stage.visibilities([path], at)[0] === "invisible";
+    const item = readLight(this.#stage, path, kind, this.#time, this.#world([path]), hidden);
+    const varies = this.#worldMightVary([path]) || this.#visibilityMightVary([path]) || this.#inputsMightVary([path], LIGHT_INPUTS);
+    const old = this.#lights.get(path);
+    this.#lights.set(path, { item, varies });
+    if (old === undefined) gather.lights.added.add(path);
+    else if (!sameRecord(old.item, item)) gather.lights.changed.add(path);
   }
 
   #discoverPrototype(first: string, found: Found): void {

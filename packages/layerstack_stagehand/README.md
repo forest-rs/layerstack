@@ -67,6 +67,19 @@ items with time samples, splines or value clips on their geometry,
 visibility or transform chain. Matrices are 16 numbers per instance, row by
 row, as OpenUSD's.
 
+The list also holds the stage's cameras and lights, by path:
+`list.cameras()` (`CameraItem`: the `Camera` `stage.camera` computes, view
+and projection matrices as `GfFrustum` computes them; conform it to a
+viewport with `stage.camera(path, { conform: { policy, aspect } })`) and
+`list.lights()` (`LightItem`: world `matrix`, `position` and `direction`,
+`emission` with `radiance = color * blackbody * intensity * 2^exposure /
+sizeFactor` in nits as `UsdLux` defines it, `geometry`, `shaping`,
+`shadow` and the `lightLink` and `shadowLink` collections as data). A diff
+lists `camerasAdded`, `camerasRemoved`, `camerasChanged` and the same for
+lights, and `work.camerasRead` and `work.lightsRead`: an edit reads only
+the lights and cameras it reaches, and `setTime` only those whose inputs
+or transform might vary.
+
 ## Two modules, typed arrays between them
 
 This package's WebAssembly module is its own (`layerstack_stagehand_wasm`)
@@ -79,9 +92,9 @@ copies the buffers out. A native engine calls the Rust crate
 (`layerstack_stagehand`) with a `Stage` directly.
 
 Subdivision surfaces are drawn as their control cage (`report.refined` is
-false; `report.subdivisionScheme` says what was not applied). Cameras,
-lights, materials (beyond their bindings), curves and points are not
-covered yet.
+false; `report.subdivisionScheme` says what was not applied). Materials
+(beyond their bindings), curves, points and light linking evaluation are
+not covered yet, nor lights and cameras inside instances.
 
 Errors are `StagehandError`s with a stable `code` (`argument.invalid`,
 `plan.mismatch`, `mesh.disposed`, `module.load`, `module.abi`) and a

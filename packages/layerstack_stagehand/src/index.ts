@@ -28,8 +28,8 @@
  * ```
  *
  * A {@link DrawList} ({@link Stagehand.drawList}) keeps a whole stage's
- * instanced draws and buffers, and applies the stage's change records as
- * diffs.
+ * instanced draws and buffers, cameras and lights, and applies the stage's
+ * change records as diffs.
  *
  * @module
  */
@@ -48,6 +48,17 @@ export type * from "./types.js";
 export { DrawList } from "./draw.js";
 export type { DrawBuffers, DrawDiff, DrawItem, DrawOptions, DrawWork, ItemSource, Purpose } from "./draw.js";
 export { SHAPE_SCHEMAS, readMesh, readPoints, readShape, shapeSchema } from "./read.js";
+export { LIGHT_SCHEMAS, lightKind, lightSizeFactor, readLight } from "./light.js";
+export type {
+  CameraItem,
+  LightEmission,
+  LightGeometry,
+  LightItem,
+  LightKind,
+  LightLink,
+  LightShadow,
+  LightShaping,
+} from "./light.js";
 
 /** The exports' version this wrapper speaks (`layerstack_stagehand_wasm::ABI`). */
 const ABI = 2;

@@ -66,6 +66,8 @@ export const sample = {
   /** A strip drawn with UDIM tiles (`tile.<UDIM>.png`: 1001 and 1002), and its material. */
   strip: "/World/Strip",
   tiles: "/World/Looks/Tiles",
+  /** The stage's `documentation`, which the last step sets. */
+  documentation: "A rock, a robot, two beacons and their lights",
 } as const;
 
 /** What the script needs of its host: the instance, the fetch, and a way to hand saved layers to the user. */
@@ -277,6 +279,15 @@ export const steps: readonly Step[] = [
     async run(session) {
       session.current.setValue(sample.tint, { type: "float4", value: [...sample.warmer] });
       session.select(sample.checker, sample.tint);
+    },
+  },
+  {
+    title: "Document the stage",
+    look: "The change log: the root layer's documentation, stage metadata that composes nothing, changes / info-only. The stats line: the draw list reads nothing, no draw, light, camera or material.",
+    async run(session) {
+      session.current.apply("document the stage", [
+        { type: "setLayerMetadata", key: "documentation", value: { type: "string", value: sample.documentation } },
+      ]);
     },
   },
 ];

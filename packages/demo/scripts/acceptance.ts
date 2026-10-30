@@ -465,6 +465,11 @@ const checks: ((session: Session) => void)[] = [
     assert.equal(attribute, sample.tint);
     assert.deepEqual(read(current.stage, sample.tint).opinions, ["scene.usda /World/Looks/Checker.inputs:tint local contributed"]);
   },
+  // 17. The stage's documentation: `/` info-only, nothing resynced.
+  ({ current }) => {
+    const changes = current.changeLog.at(-1)?.changes;
+    assert.deepEqual([changes?.resynced, changes?.resyncedProperties, changes?.changedInfoOnly], [[], [], ["/"]]);
+  },
 ];
 
 /**
@@ -614,6 +619,8 @@ const viewports: ViewportSummary[] = [
 viewports.push(viewports.at(-1)!);
 // The checker warmed: its texture's scale is the new tint.
 viewports.push({ ...viewports.at(-1)!, materials: materials(null, "1, 0.85, 0.6, 1") });
+// The stage documented: the same draws.
+viewports.push(viewports.at(-1)!);
 
 /**
  * What the viewport's draw list did after each step, from the editor's
@@ -693,6 +700,9 @@ const updates: UpdateSummary[] = [
   // The checker's tint: that material alone read and changed; no draw,
   // light or camera read.
   update({ itemsUntouched: 10, materialsRead: 1, materials: 1 }),
+  // The stage's documentation: `/` info-only, which no draw, light,
+  // camera or material reads: nothing read.
+  update({ itemsUntouched: 10 }),
 ];
 
 /** The transform cache's counters after the last viewport was built. */

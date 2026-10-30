@@ -24,8 +24,8 @@
 //! Generic folds use [`opinionated`]: explanation runs the same chains
 //! through the kernel's reporting entry points
 //! ([`opinionated::resolve_family_chain_report`],
-//! [`opinionated::combine_dictionary_chain_report`] and
-//! [`opinionated::resolve_ordered_chain_report`]) and attaches layer, spec
+//! [`opinionated::combine_dictionary_chain_report`] and, for the roles of a
+//! strongest-wins chain, [`opinionated::ordered_chain_events`]) and attaches layer, spec
 //! and composition-node provenance to their events. Resolution itself never
 //! reports, so it pays nothing for this. USD actual-kind grouping is reported
 //! by the host's default composer and numeric source planner.
@@ -39,7 +39,7 @@ use core::hash::Hash;
 
 use opinionated::{
     ChainOpinion, DictionaryEvent, FamilyEvent, IgnoreReason, OpinionOp, ResolutionEvent,
-    combine_dictionary_chain_report, resolve_list_chain_report, resolve_ordered_chain_report,
+    combine_dictionary_chain_report, ordered_chain_events, resolve_list_chain_report,
 };
 
 use super::{
@@ -1292,12 +1292,13 @@ impl<'s> Roles<'s> {
                 }
             })
             .collect();
-        let chain = ops
+        let chain: Vec<_> = ops
             .iter()
             .zip(&members)
-            .map(|(op, provenance)| ChainOpinion { op, provenance });
-        let report = resolve_ordered_chain_report(chain);
-        for event in &report.events {
+            .map(|(op, provenance)| ChainOpinion { op, provenance })
+            .collect();
+        // Only the roles are needed: the value is resolved elsewhere.
+        for event in &ordered_chain_events(&chain) {
             let (position, role) = chain_role(event);
             self.roles[position] = Some(role);
         }
@@ -1543,12 +1544,13 @@ impl<'s> Roles<'s> {
                 _ => OpinionOp::Set(()),
             })
             .collect();
-        let chain = ops
+        let chain: Vec<_> = ops
             .iter()
             .zip(&members)
-            .map(|(op, provenance)| ChainOpinion { op, provenance });
-        let report = resolve_ordered_chain_report(chain);
-        for event in &report.events {
+            .map(|(op, provenance)| ChainOpinion { op, provenance })
+            .collect();
+        // Only the roles are needed: the value is resolved elsewhere.
+        for event in &ordered_chain_events(&chain) {
             let (position, role) = chain_role(event);
             self.roles[position] = Some(role);
         }

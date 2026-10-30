@@ -1552,14 +1552,46 @@ where
         }),
         fallback,
     );
-    let Some(strongest) = opinions.first() else {
-        return ResolutionReport {
-            resolution,
-            events: Vec::new(),
-        };
-    };
+    let events = ordered_chain_events(&opinions);
+    ResolutionReport { resolution, events }
+}
 
+/// The events [`resolve_ordered_chain_report`] reports for an ordered
+/// chain, without resolving its value: which opinions contributed, which a
+/// block stopped and which were ignored, and why.
+///
+/// For a caller that needs only the opinions' roles, such as an
+/// explanation of a value resolved elsewhere, this compiles and runs none
+/// of the value fold. A fallback seed adds no event, so the events are
+/// those of [`resolve_ordered_chain_with_fallback_report`] too.
+///
+/// ```
+/// use opinionated::{
+///     ChainOpinion, IgnoreReason, OpinionKind, OpinionOp, ResolutionEvent, ordered_chain_events,
+/// };
+/// let ops = [OpinionOp::<(), (), ()>::Set(()), OpinionOp::Block];
+/// let chain: Vec<_> = ops
+///     .iter()
+///     .zip(&["strong", "weak"])
+///     .map(|(op, provenance)| ChainOpinion { op, provenance })
+///     .collect();
+/// assert_eq!(
+///     ordered_chain_events(&chain),
+///     [
+///         ResolutionEvent::Contributed { provenance: "strong", kind: OpinionKind::Set },
+///         ResolutionEvent::Ignored { provenance: "weak", reason: IgnoreReason::WeakerThanSet },
+///     ]
+/// );
+/// ```
+#[must_use]
+pub fn ordered_chain_events<V, I, K, P: Clone>(
+    opinions_strong_to_weak: &[ChainOpinion<'_, V, I, K, P>],
+) -> Vec<ResolutionEvent<P>> {
+    let opinions = opinions_strong_to_weak;
     let mut events = Vec::new();
+    let Some(strongest) = opinions.first() else {
+        return events;
+    };
 
     match strongest.op {
         OpinionOp::Block => {
@@ -1592,13 +1624,13 @@ where
             );
         }
         OpinionOp::List(_) => {
-            record_list_events(&opinions, &mut events);
+            record_list_events(opinions, &mut events);
         }
         OpinionOp::Dictionary(_) => {
-            record_dictionary_events(&opinions, &mut events);
+            record_dictionary_events(opinions, &mut events);
         }
     }
-    ResolutionReport { resolution, events }
+    events
 }
 
 fn record_list_events<'a, V, I, K, P>(

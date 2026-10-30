@@ -13,6 +13,12 @@ You can find its changes [documented below](#020-2026-10-28).
 
 ## [Unreleased]
 
+### Added
+
+- `ordered_chain_events` gives the events `resolve_ordered_chain_report`
+  reports for an ordered chain without resolving its value, for a caller that
+  needs only the opinions' roles.
+
 ## [0.2.0][] (2026-10-28)
 
 This release has an [MSRV][] of 1.89.

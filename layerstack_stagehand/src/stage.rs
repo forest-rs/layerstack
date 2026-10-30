@@ -164,6 +164,23 @@ impl StageMesh {
         &self.unread
     }
 
+    /// Whether `other` holds the same points and primvars, value for
+    /// value (the same shared arrays, or equal ones).
+    pub(crate) fn same_values(&self, other: &Self) -> bool {
+        same(&self.points, &other.points) && self.same_primvars(other) && {
+            let (a, b) = (self.input(), other.input());
+            same_primvar(a.normals.as_ref(), b.normals.as_ref())
+        }
+    }
+
+    /// Whether `other` holds the same `st` and colors, value for value:
+    /// then new points and normals alone refill the buffers.
+    pub(crate) fn same_primvars(&self, other: &Self) -> bool {
+        let (a, b) = (self.input(), other.input());
+        same_primvar(a.st.as_ref(), b.st.as_ref())
+            && same_primvar(a.display_color.as_ref(), b.display_color.as_ref())
+    }
+
     /// The mesh as a plan's input, borrowing the arrays.
     #[must_use]
     pub fn input(&self) -> MeshInput<'_> {
@@ -186,6 +203,26 @@ impl StageMesh {
                 ends: &self.subset_ends,
             },
         }
+    }
+}
+
+/// Whether two shared arrays hold the same values: the same allocation,
+/// or equal elements.
+fn same<T: PartialEq>(a: &Arc<Vec<T>>, b: &Arc<Vec<T>>) -> bool {
+    Arc::ptr_eq(a, b) || a == b
+}
+
+/// Whether two primvars are laid out alike and hold the same values.
+fn same_primvar<T: PartialEq>(a: Option<&Primvar<'_, T>>, b: Option<&Primvar<'_, T>>) -> bool {
+    match (a, b) {
+        (None, None) => true,
+        (Some(a), Some(b)) => {
+            a.interpolation == b.interpolation
+                && a.element_size == b.element_size
+                && a.indices == b.indices
+                && (core::ptr::eq(a.values, b.values) || a.values == b.values)
+        }
+        _ => false,
     }
 }
 

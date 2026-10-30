@@ -30,7 +30,8 @@ exedra_triangulate = { default-features = false, git = "https://github.com/fores
 # The vertex split's corner keys.
 hashbrown = { workspace = true }
 layerstack = { optional = true, workspace = true }
-layerstack_schemas = { features = ["usd-geom"], optional = true, workspace = true }
+# `usd-shade` for the material bindings a draw list reports.
+layerstack_schemas = { features = ["usd-geom", "usd-shade"], optional = true, workspace = true }
 # Square roots and the trigonometry of the implicit shapes, in `no_std`;
 # `layerstack` already depends on it.
 libm = { workspace = true }

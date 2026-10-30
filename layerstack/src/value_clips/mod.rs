@@ -180,9 +180,51 @@ pub struct ClipValueSource {
     /// Upper bracketing source.
     pub upper: ClipSampleSource,
 }
+/// A prim's attribute specs in a clip, sorted by name.
+///
+/// A prim has a few attributes, so a sorted vector rather than a map
+/// compiled for this one table.
+#[derive(Clone, Debug, Default)]
+struct Properties(Vec<(TokenId, Arc<PropertySpec>)>);
+impl Properties {
+    /// The specs `specs` names, the last of each name kept.
+    fn new(mut specs: Vec<(TokenId, Arc<PropertySpec>)>) -> Self {
+        sort::sort_by_key(&mut specs, |(name, _)| *name);
+        // Of equal names, the stable sort keeps the last in place last.
+        let mut properties: Vec<(TokenId, Arc<PropertySpec>)> = Vec::with_capacity(specs.len());
+        for (name, spec) in specs {
+            match properties.last_mut() {
+                Some(last) if last.0 == name => last.1 = spec,
+                _ => properties.push((name, spec)),
+            }
+        }
+        Self(properties)
+    }
+    /// The spec named `name`.
+    fn get(&self, name: &TokenId) -> Option<&Arc<PropertySpec>> {
+        let at = self.position(*name).ok()?;
+        Some(&self.0[at].1)
+    }
+    /// The spec named `name`, mutably.
+    fn get_mut(&mut self, name: &TokenId) -> Option<&mut Arc<PropertySpec>> {
+        let at = self.position(*name).ok()?;
+        Some(&mut self.0[at].1)
+    }
+    /// Sets the spec named `name`.
+    fn insert(&mut self, name: TokenId, spec: Arc<PropertySpec>) {
+        match self.position(name) {
+            Ok(at) => self.0[at].1 = spec,
+            Err(at) => self.0.insert(at, (name, spec)),
+        }
+    }
+    /// Where the spec named `name` is, or would go.
+    fn position(&self, name: TokenId) -> Result<usize, usize> {
+        self.0.binary_search_by_key(&name, |(at, _)| *at)
+    }
+}
 #[derive(Clone, Debug, Default)]
 struct RawLayer {
-    properties: HashMap<PathId, BTreeMap<TokenId, Arc<PropertySpec>>>,
+    properties: HashMap<PathId, Properties>,
 }
 impl RawLayer {
     fn capture(store: &dyn LayerStore, id: LayerId) -> Option<Self> {
@@ -193,18 +235,19 @@ impl RawLayer {
                 .iter()
                 .filter(|(_, spec)| spec.outer_variant_sites().is_empty())
                 .map(|(&path, spec)| {
-                    let attributes = sort::collect_map(
+                    let attributes = Properties::new(
                         spec.properties
                             .iter()
                             .filter(|p| p.spec.kind == crate::PropertyKind::Attribute)
-                            .map(|p| (p.name, p.spec.clone())),
+                            .map(|p| (p.name, p.spec.clone()))
+                            .collect(),
                     );
                     (path, attributes)
                 })
                 .collect(),
         })
     }
-    fn at(&self, path: PathId) -> Option<&BTreeMap<TokenId, Arc<PropertySpec>>> {
+    fn at(&self, path: PathId) -> Option<&Properties> {
         self.properties.get(&path)
     }
 }
@@ -746,7 +789,7 @@ impl Catalog {
         let unseen_clips = self.demands[&prim]
             .last()
             .is_some_and(demand::DemandSet::has_unresolved_clips);
-        let mut manifest_props: BTreeMap<TokenId, Arc<PropertySpec>> = BTreeMap::new();
+        let mut manifest_props = Properties::default();
         if let Some((_, manifest)) = &set.manifest {
             if let Some(props) = manifest.at(clip_path) {
                 manifest_props = props.clone();
@@ -756,7 +799,8 @@ impl Catalog {
             // erase a prior spline marker. Raw defaults never create eligibility.
             for (_, clip) in set.clips.iter().flatten() {
                 if let Some(props) = clip.at(clip_path) {
-                    for (&name, spec) in props {
+                    for (name, spec) in &props.0 {
+                        let name = *name;
                         let samples = spec.time_samples.get().is_some_and(|s| !s.is_empty());
                         if !samples && spec.spline.is_none() {
                             continue;
@@ -780,7 +824,7 @@ impl Catalog {
         for (id, _) in set.clips.iter().flatten().chain(set.manifest.iter()) {
             self.sites.entry(prim).or_default().insert((*id, clip_path));
         }
-        for (field, manifest) in manifest_props {
+        for (field, manifest) in manifest_props.0 {
             if manifest.kind != crate::PropertyKind::Attribute
                 || manifest.variability != Variability::Varying
             {
@@ -1379,7 +1423,10 @@ fn definitions(
         .lookup("clipSets")
         .and_then(|t| index.metadata_opinions(t))
         .unwrap_or_default();
-    let mut composed: BTreeMap<Arc<str>, Definition> = BTreeMap::new();
+    // A prim has a few clip sets, so the sets are kept in vectors and found
+    // by name rather than in maps compiled for these types alone; the result
+    // is sorted at the end.
+    let mut composed: Vec<Definition> = Vec::new();
     for node in index.graph.strength_order() {
         let mut layers: Vec<_> = clips
             .iter()
@@ -1392,8 +1439,8 @@ fn definitions(
         sort::sort_by(&mut layers, |a, b| {
             index.graph.cmp_keys(&b.source().key, &a.source().key)
         });
-        let mut node_sets: BTreeMap<Arc<str>, Definition> = BTreeMap::new();
-        let mut offsets: BTreeMap<Arc<str>, OffsetLayers> = BTreeMap::new();
+        // Each set with the layers it takes its offsets from.
+        let mut node_sets: Vec<(Definition, Option<OffsetLayers>)> = Vec::new();
         let mut names = Vec::new();
         for opinion in layers {
             if store.tokens().resolve(opinion.field()) == "clipSets" {
@@ -1437,31 +1484,36 @@ fn definitions(
                 }
                 let anchor = assets(get(value, "assetPaths")).is_some()
                     || matches!(get(value, "templateAssetPath"), Some(Value::String(_)));
-                let entry = node_sets.entry(name.clone()).or_insert_with(|| Definition {
-                    owner,
-                    name: name.clone(),
-                    anchor: opinion.key(),
-                    offset: opinion.layer_offset(),
-                    times_offset: None,
-                    dictionary: Vec::new(),
-                    order: usize::MAX,
-                    sources: Vec::new(),
-                });
+                let at = match node_sets.iter().position(|(set, _)| set.name == *name) {
+                    Some(at) => at,
+                    None => {
+                        let set = Definition {
+                            owner,
+                            name: name.clone(),
+                            anchor: opinion.key(),
+                            offset: opinion.layer_offset(),
+                            times_offset: None,
+                            dictionary: Vec::new(),
+                            order: usize::MAX,
+                            sources: Vec::new(),
+                        };
+                        node_sets.push((set, None));
+                        node_sets.len() - 1
+                    }
+                };
+                let (entry, offsets) = &mut node_sets[at];
                 // OpenUSD 26.11 `_RecordAnchorInfo`: asset paths anchor the
                 // set and reset both offset layers; a stronger `active`
                 // moves the offset unless a weaker layer authors a template,
                 // and a stronger `times` moves the layer it is read in.
                 let here = (opinion.key(), opinion.layer_offset());
                 if anchor {
-                    offsets.insert(
-                        name.clone(),
-                        OffsetLayers {
-                            offset: here.clone(),
-                            times: here.clone(),
-                        },
-                    );
+                    *offsets = Some(OffsetLayers {
+                        offset: here.clone(),
+                        times: here.clone(),
+                    });
                 }
-                if let Some(layers) = offsets.get_mut(name) {
+                if let Some(layers) = offsets {
                     if pairs(get(value, "active")).is_some()
                         && !matches!(
                             get(&entry.dictionary, "templateAssetPath"),
@@ -1489,8 +1541,8 @@ fn definitions(
             sort::sort(&mut added);
             names = ListOp::default().with_added(added).apply_to(&names);
         }
-        for (name, mut definition) in node_sets {
-            let Some(order) = names.iter().position(|n| n == &name) else {
+        for (mut definition, offsets) in node_sets {
+            let Some(order) = names.iter().position(|n| *n == definition.name) else {
                 continue;
             };
             let anchored = definition.order != usize::MAX;
@@ -1498,7 +1550,7 @@ fn definitions(
             // The node's offset, and `times` re-expressed for it when read in
             // another layer (OpenUSD 26.11 `_ResolveClipSetsInNode`,
             // `clipSetDefinition.cpp:510`).
-            if let Some(layers) = offsets.get(&name).filter(|_| anchored) {
+            if let Some(layers) = offsets.filter(|_| anchored) {
                 definition.offset = layers.offset.1;
                 if layers.offset.0 != layers.times.0 {
                     let (offset, times) = (layers.offset.1, layers.times.1);
@@ -1514,7 +1566,7 @@ fn definitions(
                     }
                 }
             }
-            if let Some(strong) = composed.get_mut(&name) {
+            if let Some(strong) = composed.iter_mut().find(|d| d.name == definition.name) {
                 strong.dictionary = over(&strong.dictionary, &definition.dictionary);
                 strong.sources.extend(definition.sources);
                 if strong.order == usize::MAX && anchored {
@@ -1524,14 +1576,14 @@ fn definitions(
                     strong.order = order;
                 }
             } else {
-                composed.insert(name, definition);
+                composed.push(definition);
             }
         }
     }
     // `active` and `times` are in the clip set's layer time; the stage reads
     // them through its offset (OpenUSD 26.11 `toStageOffset`, `clipSetDefinition.cpp:613`).
     let mut result: Vec<_> = composed
-        .into_values()
+        .into_iter()
         .filter(|d| d.order != usize::MAX)
         .map(|mut definition| {
             let offset = definition.offset;

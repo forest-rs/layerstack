@@ -18,19 +18,18 @@
 //! [`slice::sort_unstable`] does. The shared routine allocates one `usize`
 //! per element (the unstable sorts here may allocate on WebAssembly).
 //!
-//! Collecting into a [`BTreeSet`] or [`BTreeMap`] sorts too: the standard
-//! library's `FromIterator` sorts the items with a stable sort compiled for
-//! the element type and bulk-builds the tree from them. [`collect_set`] and
-//! [`collect_map`] keep that on native targets and, on WebAssembly, insert
-//! the items one at a time through `insert`, which every tree the library
-//! fills also compiles.
+//! Collecting into a [`BTreeSet`] sorts too: the standard library's
+//! `FromIterator` sorts the items with a stable sort compiled for the
+//! element type and bulk-builds the tree from them. [`collect_set`] keeps
+//! that on native targets and, on WebAssembly, inserts the items one at a
+//! time through `insert`, which every set the library fills also compiles.
 //!
 //! Library code in this workspace sorts through these functions. Tests use
 //! the standard library's directly, as does an unstable sort whose equal
 //! elements can differ, so their order on WebAssembly stays the standard
 //! library's.
 
-use alloc::collections::{BTreeMap, BTreeSet};
+use alloc::collections::BTreeSet;
 use core::cmp::Ordering;
 
 /// Sorts `v` stably by [`Ord`], like [`slice::sort`].
@@ -97,21 +96,6 @@ pub fn collect_set<T: Ord>(items: impl IntoIterator<Item = T>) -> BTreeSet<T> {
             set.insert(item);
         }
         set
-    }
-}
-
-/// Collects `items` into a map, like [`Iterator::collect`]: of entries with
-/// equal keys, the last one's value is kept.
-pub fn collect_map<K: Ord, V>(items: impl IntoIterator<Item = (K, V)>) -> BTreeMap<K, V> {
-    #[cfg(not(target_family = "wasm"))]
-    return items.into_iter().collect();
-    #[cfg(target_family = "wasm")]
-    {
-        let mut map = BTreeMap::new();
-        for (key, value) in items {
-            map.insert(key, value);
-        }
-        map
     }
 }
 

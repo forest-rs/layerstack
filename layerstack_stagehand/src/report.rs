@@ -198,6 +198,15 @@ pub struct SubsetReport {
     pub already_claimed: u32,
 }
 
+/// A texture coordinate set's fate ([`crate::MeshInput::uv_sets`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UvSetReport {
+    /// The primvar's name.
+    pub name: alloc::string::String,
+    /// Its channel's fate.
+    pub state: ChannelState,
+}
+
 /// What a [`crate::MeshPlan`] made of a mesh: counts and notes enough to
 /// check the buffers without reading them.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -250,6 +259,9 @@ pub struct MeshReport {
     pub st: ChannelState,
     /// The `displayColor` channel's fate.
     pub display_color: ChannelState,
+    /// Each texture coordinate set's fate besides `st`, in the input's
+    /// order.
+    pub uv_sets: Vec<UvSetReport>,
     /// Each face subset's part, in the input's order.
     pub subsets: Vec<SubsetReport>,
     /// Faces drawn in no subset (the last range).

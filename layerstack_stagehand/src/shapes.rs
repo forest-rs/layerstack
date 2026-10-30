@@ -243,6 +243,7 @@ pub fn tessellate(shape: &Shape, tessellation: &Tessellation) -> MeshBuffers {
     }
     let count = small(out.indices.len());
     MeshBuffers {
+        uv_sets: Vec::new(),
         triangle_faces: vec![0; out.indices.len() / 3],
         positions: out.positions,
         normals: out.normals,

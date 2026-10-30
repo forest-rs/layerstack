@@ -4,6 +4,7 @@
 //! The retained per-mesh plan: triangles, the vertex split and the draw
 //! ranges, decided once per topology, and the buffers it fills.
 
+use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::fmt;
@@ -13,7 +14,7 @@ use hashbrown::HashMap;
 use crate::input::{Interpolation, MeshInput, MeshTopology, Orientation, Primvar};
 use crate::report::{
     ChannelState, DropReason, FaceNote, FaceNoteKind, MeshReport, NormalsSource, SubsetReport,
-    TopologyProblem,
+    TopologyProblem, UvSetReport,
 };
 use crate::triangulate::{FaceOutcome, Scratch, Triangulation, triangulate_face};
 
@@ -89,6 +90,9 @@ pub struct MeshBuffers {
     /// Each vertex's display color (linear RGB), when `displayColor` is
     /// drawn.
     pub colors: Option<Vec<[f32; 3]>>,
+    /// Each drawn texture coordinate set besides `st`, in the input's
+    /// order ([`MeshInput::uv_sets`]).
+    pub uv_sets: Vec<UvSet>,
     /// Three vertex indices per triangle.
     pub indices: Vec<u32>,
     /// The authored face each triangle comes from, for picking and
@@ -97,6 +101,15 @@ pub struct MeshBuffers {
     /// The draw ranges: one per subset, in the input's order, then one for
     /// the faces in no subset (empty ranges included).
     pub ranges: Vec<DrawRange>,
+}
+
+/// A texture coordinate set's buffer: each vertex's coordinates.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct UvSet {
+    /// The primvar's name.
+    pub name: String,
+    /// Each vertex's coordinates.
+    pub values: Vec<[f32; 2]>,
 }
 
 /// Why a plan cannot fill buffers from an input: the input is not the
@@ -112,7 +125,8 @@ pub enum PlanMismatch {
     },
     /// A primvar channel is given where the plan has none, missing where
     /// it has one, or has another interpolation, indexing or too few
-    /// elements: `normals`, `st` or `displayColor`.
+    /// elements: `normals`, `st`, `displayColor`, or `uvSets` for a
+    /// texture coordinate set besides `st`.
     Channel(&'static str),
 }
 
@@ -169,6 +183,8 @@ pub struct MeshPlan {
     normals: Option<Layout>,
     st: Option<Layout>,
     color: Option<Layout>,
+    /// The drawn texture coordinate sets besides `st`, by name.
+    uv_sets: Vec<(String, Layout)>,
 }
 
 impl MeshPlan {
@@ -211,6 +227,7 @@ impl MeshPlan {
             normals: None,
             st: None,
             color: None,
+            uv_sets: Vec::new(),
         };
         if let Err(problem) = validate_topology(topology, input.points.len()) {
             report.topology_problem = Some(problem);
@@ -240,6 +257,23 @@ impl MeshPlan {
         let normal_keys = normals.1.and(input.normals.as_ref()).map(split_keys);
         let st_keys = st.1.and(input.st.as_ref()).map(split_keys);
         let color_keys = color.1.and(input.display_color.as_ref()).map(split_keys);
+        let mut uv_keys = Vec::new();
+        for set in input.uv_sets {
+            if set.name == "st" || report.uv_sets.iter().any(|seen| seen.name == set.name) {
+                continue;
+            }
+            let (state, layout) = checked(Some(&set.primvar), faces, points, corners);
+            report.uv_sets.push(UvSetReport {
+                name: set.name.into(),
+                state,
+            });
+            if let Some(layout) = layout {
+                plan.uv_sets.push((set.name.into(), layout));
+                uv_keys.push(split_keys(&set.primvar));
+            }
+        }
+        // The sets' elements at a corner, interned: one more key.
+        let mut uv_elements: HashMap<Vec<u32>, u32> = HashMap::new();
 
         // Faces to triangles, in face order, skipping holes and degenerate
         // faces as Hydra does (`HdMeshUtil::ComputeTriangleIndices`).
@@ -321,7 +355,7 @@ impl MeshPlan {
 
         // Triangles in range order, each corner a vertex keyed by its point
         // and its channels' elements.
-        let mut vertices: HashMap<[u32; 4], u32> = HashMap::with_capacity(corners);
+        let mut vertices: HashMap<[u32; 5], u32> = HashMap::with_capacity(corners);
         // The faces in range order, each range in face order (a stable sort).
         let mut order: Vec<u32> = (0..faces).collect();
         order.sort_by_key(|&face| owner[face as usize]);
@@ -346,11 +380,22 @@ impl MeshPlan {
                     for &corner in triangle {
                         let point = topology.face_vertex_indices[corner as usize] as u32;
                         let face = corner_face[corner as usize];
+                        let uv = if uv_keys.is_empty() {
+                            NONE
+                        } else {
+                            let elements: Vec<u32> = uv_keys
+                                .iter()
+                                .map(|keys| key_of(Some(keys), corner, face, point))
+                                .collect();
+                            let next = small(uv_elements.len());
+                            *uv_elements.entry(elements).or_insert(next)
+                        };
                         let key = [
                             point,
                             key_of(normal_keys.as_ref(), corner, face, point),
                             key_of(st_keys.as_ref(), corner, face, point),
                             key_of(color_keys.as_ref(), corner, face, point),
+                            uv,
                         ];
                         let next = small(plan.vertex_point.len());
                         let vertex = *vertices.entry(key).or_insert(next);
@@ -421,11 +466,27 @@ impl MeshPlan {
     pub fn buffers(&self, input: &MeshInput<'_>) -> Result<MeshBuffers, PlanMismatch> {
         let st = self.gather("st", self.st, input.st.as_ref())?;
         let colors = self.gather("displayColor", self.color, input.display_color.as_ref())?;
+        let mut uv_sets = Vec::with_capacity(self.uv_sets.len());
+        for (name, layout) in &self.uv_sets {
+            let primvar = input
+                .uv_sets
+                .iter()
+                .find(|set| set.name == name.as_str())
+                .map(|set| &set.primvar);
+            let values = self
+                .gather("uvSets", Some(*layout), primvar)?
+                .unwrap_or_default();
+            uv_sets.push(UvSet {
+                name: name.clone(),
+                values,
+            });
+        }
         let mut buffers = MeshBuffers {
             positions: Vec::new(),
             normals: Vec::new(),
             st,
             colors,
+            uv_sets,
             indices: self.indices.clone(),
             triangle_faces: self.triangle_faces.clone(),
             ranges: self.ranges.clone(),

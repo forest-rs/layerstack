@@ -5,7 +5,7 @@
 // from the stage after each action; the sample is small, and reading the
 // stage is what the demo shows.
 import { LayerstackError, loadLayerstack } from "@forest-rs/layerstack";
-import type { Attribute, EditTarget, Layer, Prim, Stage } from "@forest-rs/layerstack";
+import type { Attribute, EditTarget, Issue, Layer, Prim, Stage } from "@forest-rs/layerstack";
 import type { Editor, LayerFile } from "./editor.ts";
 import { Session, steps } from "./script.ts";
 import type { Host } from "./script.ts";
@@ -137,9 +137,14 @@ function render(): void {
   for (const asset of unavailable) {
     for (const prim of asset.prims) waiting.set(prim, [...(waiting.get(prim) ?? []), asset.identifier]);
   }
-  renderTree(stage, waiting);
+  // Composition errors by prim, such as an arc to a muted layer (`composition.muted_asset`).
+  const issues = new Map<string, Issue[]>();
+  for (const issue of stage.status().compositionErrors) {
+    if (issue.prim !== null) issues.set(issue.prim, [...(issues.get(issue.prim) ?? []), issue]);
+  }
+  renderTree(stage, waiting, issues);
   renderInspector(editor);
-  renderExplanation(stage, waiting);
+  renderExplanation(stage, waiting, issues);
   renderLayers(editor);
   renderUndo(editor);
   renderLoop(editor);
@@ -238,7 +243,16 @@ function renderError(): void {
   fill(target, h("strong", {}, "Failed: "), text);
 }
 
-function renderTree(stage: Stage, waiting: ReadonlyMap<string, readonly string[]>): void {
+/** A tree badge's words for a composition error. */
+function issueBadge(issue: Issue): string {
+  return issue.code === "composition.muted_asset" ? "muted asset" : issue.code.replace(/^composition\./, "");
+}
+
+function renderTree(
+  stage: Stage,
+  waiting: ReadonlyMap<string, readonly string[]>,
+  issues: ReadonlyMap<string, readonly Issue[]>,
+): void {
   const branch = (path: string): HTMLUListElement =>
     h(
       "ul",
@@ -263,6 +277,7 @@ function renderTree(stage: Stage, waiting: ReadonlyMap<string, readonly string[]
           prim.instanceProxy &&
             h("span", { class: "badge proxy", title: "An instance proxy: a prim of the prototype, read through this instance" }, "proxy"),
           wants !== undefined && h("span", { class: "badge waiting", title: `Composed without ${wants.join(", ")}` }, "waiting"),
+          ...(issues.get(child) ?? []).map((issue) => h("span", { class: "badge issue", title: `${issue.code}: ${issue.message}` }, issueBadge(issue))),
         );
         return h("li", {}, row, stage.children(child).length > 0 && branch(child));
       }),
@@ -429,7 +444,11 @@ function editForm(editor: Editor, path: string): HTMLElement | null {
   return form;
 }
 
-function renderExplanation(stage: Stage, waiting: ReadonlyMap<string, readonly string[]>): void {
+function renderExplanation(
+  stage: Stage,
+  waiting: ReadonlyMap<string, readonly string[]>,
+  issues: ReadonlyMap<string, readonly Issue[]>,
+): void {
   const target = panel("explanation-body");
   const attribute = session.attribute === null ? null : stage.attribute(session.attribute);
   const time = session.time;
@@ -440,7 +459,8 @@ function renderExplanation(stage: Stage, waiting: ReadonlyMap<string, readonly s
   }
   const value = formatValue(explanation.value);
   releaseValue(explanation.value);
-  const wants = waiting.get(attribute.path.slice(0, attribute.path.lastIndexOf(".")));
+  const primPath = attribute.path.slice(0, attribute.path.lastIndexOf("."));
+  const wants = waiting.get(primPath);
   const rows = explanation.opinions.map((opinion, index) =>
     h(
       "tr",
@@ -482,6 +502,7 @@ function renderExplanation(stage: Stage, waiting: ReadonlyMap<string, readonly s
     ),
     wants !== undefined &&
       h("p", { class: "warning" }, `The prim is composed without ${wants.join(", ")}: stronger opinions may arrive.`),
+    ...(issues.get(primPath) ?? []).map((issue) => h("p", { class: "warning" }, h("code", {}, issue.code), `: ${issue.message}`)),
     explanation.opinions.length > 0 &&
       h(
         "table",
@@ -557,15 +578,25 @@ function renderLayers(editor: Editor): void {
   const edit = stage.editLayer;
   const rows = stage.layers().map((layer) => {
     const dirty = stage.isDirty(layer);
+    // The muted state comes from the changes the stage reported (`Editor.muted`).
+    const muted = layer.identifier !== null && editor.muted.has(layer.identifier);
     return h(
       "tr",
-      { class: dirty ? "dirty" : "" },
-      h("td", {}, layerName(layer)),
+      { class: `${dirty ? "dirty" : ""}${muted ? " muted" : ""}` },
+      h("td", { class: "name" }, layerName(layer)),
       h("td", {}, layer.format),
-      h("td", {}, [dirty && "dirty", layer.readOnly && "read-only", layer === edit && "edit layer"].filter(Boolean).join(", ")),
+      h(
+        "td",
+        {},
+        [muted && "muted", dirty && "dirty", layer.readOnly && "read-only", layer === edit && "edit layer"].filter(Boolean).join(", "),
+      ),
+      h("td", {}, muteToggle(editor, layer, muted)),
     );
   });
-  const dirty = editor.dirtyLayers().length;
+  // `save()` skips a muted layer and leaves it dirty.
+  const dirtyLayers = editor.dirtyLayers();
+  const skipped = dirtyLayers.filter((layer) => layer.identifier !== null && editor.muted.has(layer.identifier)).length;
+  const dirty = dirtyLayers.length - skipped;
   fill(panel("layers-body"), 
     h("table", { class: "layers" }, h("tbody", {}, ...rows)),
     h(
@@ -580,9 +611,9 @@ function renderLayers(editor: Editor): void {
               editor.save();
               await host.download(editor.saved);
             }),
-          title: "Save the dirty layers and download them",
+          title: "Save the dirty layers and download them; a muted layer stays dirty until it is unmuted",
         },
-        `Save and download ${dirty} dirty layer${dirty === 1 ? "" : "s"}`,
+        `Save and download ${dirty} dirty layer${dirty === 1 ? "" : "s"}${skipped === 0 ? "" : ` (${skipped} muted, skipped)`}`,
       ),
       h(
         "button",
@@ -605,6 +636,26 @@ function renderLayers(editor: Editor): void {
           return h("li", {}, anchor, ` ${bytes(link.size)}`);
         }),
       ),
+  );
+}
+
+/**
+ * The button that mutes or unmutes a layer: the stage recomposes without
+ * or with its opinions, as one change. The root cannot be muted.
+ */
+function muteToggle(editor: Editor, layer: Layer, muted: boolean): Child {
+  if (layer === editor.stage.root) return h("span", { class: "detail", title: "The root layer cannot be muted" }, "root");
+  return h(
+    "button",
+    {
+      class: "mute",
+      disabled: busy,
+      title: muted
+        ? "Compose the layer's opinions again"
+        : "Compose the stage without the layer's opinions, wherever it is reached; its content and unsaved edits are kept",
+      onclick: () => void act(() => editor.setMuted(layer, !muted)),
+    },
+    muted ? "Unmute" : "Mute",
   );
 }
 
@@ -678,6 +729,8 @@ function renderChanges(editor: Editor): void {
       list("removed", entry.changes.removed),
       list("resynced", entry.changes.resynced),
       list("info", entry.changes.changedInfoOnly),
+      list("muted", entry.changes.mutedIdentifiers),
+      list("unmuted", entry.changes.unmutedIdentifiers),
     ),
   );
   const body = panel("changes-body");

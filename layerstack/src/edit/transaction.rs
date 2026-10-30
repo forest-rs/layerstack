@@ -753,11 +753,13 @@ impl Transaction {
     /// see [`ReferenceSource::Layer`](crate::ReferenceSource::Layer)) are stage paths, mapped to the layer's
     /// namespace as relationship targets are
     /// ([`Transaction::set_targets`]), and one the target does not map
-    /// rejects the edit. An external arc names a path in its asset and is
-    /// authored as given, with its layer offset. An arc to the pseudo-root
-    /// is rejected.
+    /// rejects the edit, except that a root prim path (`/Cls`) is authored
+    /// as given, whether or not the target maps it. An external arc names
+    /// a path in its asset and is authored as given, with its layer
+    /// offset. An arc to the pseudo-root is rejected.
     ///
-    /// OpenUSD: `UsdReferences::SetReferences`.
+    /// OpenUSD: `UsdReferences::SetReferences`, whose paths
+    /// `Usd_ListEditImplBase::_TranslatePath` maps.
     ///
     /// Spec: AOUSD Core §10.3.2 (references), §12.4 (list ops).
     pub fn set_references(&mut self, at: Address, references: ListOp<Reference>) -> &mut Self {
@@ -842,8 +844,10 @@ impl Transaction {
     /// Sets the inherits list op of the prim or variant spec at `at`,
     /// replacing the one authored there, and creating the spec as an `over`
     /// if needed. Through an edit target the paths are stage paths, each
-    /// mapped to the layer's namespace; one the target does not map
-    /// rejects the edit, where OpenUSD drops it and reports success.
+    /// mapped to the layer's namespace but a root prim path, which is
+    /// authored as given (see [`Transaction::set_references`]); one the
+    /// target does not map rejects the edit, as OpenUSD fails the call and
+    /// authors nothing.
     ///
     /// OpenUSD: `UsdInherits::SetInherits`.
     ///

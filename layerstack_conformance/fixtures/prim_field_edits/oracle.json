@@ -1366,6 +1366,2197 @@
     "kind": "reference",
     "prim": "/R"
    }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_reference_add_inherit_r",
+   "prim": "/R",
+   "spec": {
+    "inheritPaths": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      "/R"
+     ]
+    },
+    "specifier": "def"
+   },
+   "spec_path": "/Asset",
+   "steps": [
+    {
+     "call": "add_inherit",
+     "path": "/R"
+    }
+   ],
+   "target": {
+    "kind": "reference",
+    "prim": "/R"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_reference_add_specialize_r",
+   "prim": "/R",
+   "spec": {
+    "specializes": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      "/R"
+     ]
+    },
+    "specifier": "def"
+   },
+   "spec_path": "/Asset",
+   "steps": [
+    {
+     "call": "add_specialize",
+     "path": "/R"
+    }
+   ],
+   "target": {
+    "kind": "reference",
+    "prim": "/R"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_reference_add_reference_r",
+   "prim": "/R",
+   "spec": {
+    "references": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/R",
+       "scale": 1.0
+      }
+     ]
+    },
+    "specifier": "def"
+   },
+   "spec_path": "/Asset",
+   "steps": [
+    {
+     "call": "add_reference",
+     "path": "/R"
+    }
+   ],
+   "target": {
+    "kind": "reference",
+    "prim": "/R"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_reference_add_payload_r",
+   "prim": "/R",
+   "spec": {
+    "payload": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/R",
+       "scale": 1.0
+      }
+     ]
+    },
+    "specifier": "def"
+   },
+   "spec_path": "/Asset",
+   "steps": [
+    {
+     "call": "add_payload",
+     "path": "/R"
+    }
+   ],
+   "target": {
+    "kind": "reference",
+    "prim": "/R"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_reference_remove_inherit_r",
+   "prim": "/R",
+   "spec": {
+    "inheritPaths": {
+     "append": [],
+     "delete": [
+      "/R"
+     ],
+     "explicit": null,
+     "prepend": []
+    },
+    "specifier": "def"
+   },
+   "spec_path": "/Asset",
+   "steps": [
+    {
+     "call": "remove_inherit",
+     "path": "/R"
+    }
+   ],
+   "target": {
+    "kind": "reference",
+    "prim": "/R"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_reference_remove_reference_r",
+   "prim": "/R",
+   "spec": {
+    "references": {
+     "append": [],
+     "delete": [
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/R",
+       "scale": 1.0
+      }
+     ],
+     "explicit": null,
+     "prepend": []
+    },
+    "specifier": "def"
+   },
+   "spec_path": "/Asset",
+   "steps": [
+    {
+     "call": "remove_reference",
+     "path": "/R"
+    }
+   ],
+   "target": {
+    "kind": "reference",
+    "prim": "/R"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_reference_add_inherit_b",
+   "prim": "/R",
+   "spec": {
+    "inheritPaths": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      "/B"
+     ]
+    },
+    "specifier": "def"
+   },
+   "spec_path": "/Asset",
+   "steps": [
+    {
+     "call": "add_inherit",
+     "path": "/B"
+    }
+   ],
+   "target": {
+    "kind": "reference",
+    "prim": "/R"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_reference_add_specialize_b",
+   "prim": "/R",
+   "spec": {
+    "specializes": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      "/B"
+     ]
+    },
+    "specifier": "def"
+   },
+   "spec_path": "/Asset",
+   "steps": [
+    {
+     "call": "add_specialize",
+     "path": "/B"
+    }
+   ],
+   "target": {
+    "kind": "reference",
+    "prim": "/R"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_reference_add_reference_b",
+   "prim": "/R",
+   "spec": {
+    "references": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/B",
+       "scale": 1.0
+      }
+     ]
+    },
+    "specifier": "def"
+   },
+   "spec_path": "/Asset",
+   "steps": [
+    {
+     "call": "add_reference",
+     "path": "/B"
+    }
+   ],
+   "target": {
+    "kind": "reference",
+    "prim": "/R"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_reference_add_payload_b",
+   "prim": "/R",
+   "spec": {
+    "payload": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/B",
+       "scale": 1.0
+      }
+     ]
+    },
+    "specifier": "def"
+   },
+   "spec_path": "/Asset",
+   "steps": [
+    {
+     "call": "add_payload",
+     "path": "/B"
+    }
+   ],
+   "target": {
+    "kind": "reference",
+    "prim": "/R"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_reference_remove_inherit_b",
+   "prim": "/R",
+   "spec": {
+    "inheritPaths": {
+     "append": [],
+     "delete": [
+      "/B"
+     ],
+     "explicit": null,
+     "prepend": []
+    },
+    "specifier": "def"
+   },
+   "spec_path": "/Asset",
+   "steps": [
+    {
+     "call": "remove_inherit",
+     "path": "/B"
+    }
+   ],
+   "target": {
+    "kind": "reference",
+    "prim": "/R"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_reference_remove_reference_b",
+   "prim": "/R",
+   "spec": {
+    "references": {
+     "append": [],
+     "delete": [
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/B",
+       "scale": 1.0
+      }
+     ],
+     "explicit": null,
+     "prepend": []
+    },
+    "specifier": "def"
+   },
+   "spec_path": "/Asset",
+   "steps": [
+    {
+     "call": "remove_reference",
+     "path": "/B"
+    }
+   ],
+   "target": {
+    "kind": "reference",
+    "prim": "/R"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_reference_add_inherit_r_child",
+   "prim": "/R",
+   "spec": {
+    "inheritPaths": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      "/Asset/Child"
+     ]
+    },
+    "specifier": "def"
+   },
+   "spec_path": "/Asset",
+   "steps": [
+    {
+     "call": "add_inherit",
+     "path": "/R/Child"
+    }
+   ],
+   "target": {
+    "kind": "reference",
+    "prim": "/R"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_reference_add_specialize_r_child",
+   "prim": "/R",
+   "spec": {
+    "specializes": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      "/Asset/Child"
+     ]
+    },
+    "specifier": "def"
+   },
+   "spec_path": "/Asset",
+   "steps": [
+    {
+     "call": "add_specialize",
+     "path": "/R/Child"
+    }
+   ],
+   "target": {
+    "kind": "reference",
+    "prim": "/R"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_reference_add_reference_r_child",
+   "prim": "/R",
+   "spec": {
+    "references": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/Asset/Child",
+       "scale": 1.0
+      }
+     ]
+    },
+    "specifier": "def"
+   },
+   "spec_path": "/Asset",
+   "steps": [
+    {
+     "call": "add_reference",
+     "path": "/R/Child"
+    }
+   ],
+   "target": {
+    "kind": "reference",
+    "prim": "/R"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_reference_add_payload_r_child",
+   "prim": "/R",
+   "spec": {
+    "payload": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/Asset/Child",
+       "scale": 1.0
+      }
+     ]
+    },
+    "specifier": "def"
+   },
+   "spec_path": "/Asset",
+   "steps": [
+    {
+     "call": "add_payload",
+     "path": "/R/Child"
+    }
+   ],
+   "target": {
+    "kind": "reference",
+    "prim": "/R"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_reference_remove_inherit_r_child",
+   "prim": "/R",
+   "spec": {
+    "inheritPaths": {
+     "append": [],
+     "delete": [
+      "/Asset/Child"
+     ],
+     "explicit": null,
+     "prepend": []
+    },
+    "specifier": "def"
+   },
+   "spec_path": "/Asset",
+   "steps": [
+    {
+     "call": "remove_inherit",
+     "path": "/R/Child"
+    }
+   ],
+   "target": {
+    "kind": "reference",
+    "prim": "/R"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_reference_remove_reference_r_child",
+   "prim": "/R",
+   "spec": {
+    "references": {
+     "append": [],
+     "delete": [
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/Asset/Child",
+       "scale": 1.0
+      }
+     ],
+     "explicit": null,
+     "prepend": []
+    },
+    "specifier": "def"
+   },
+   "spec_path": "/Asset",
+   "steps": [
+    {
+     "call": "remove_reference",
+     "path": "/R/Child"
+    }
+   ],
+   "target": {
+    "kind": "reference",
+    "prim": "/R"
+   }
+  },
+  {
+   "accepted": [
+    false
+   ],
+   "name": "translate_reference_add_inherit_b_child",
+   "prim": "/R",
+   "spec": {
+    "specifier": "def"
+   },
+   "spec_path": "/Asset",
+   "steps": [
+    {
+     "call": "add_inherit",
+     "path": "/B/Child"
+    }
+   ],
+   "target": {
+    "kind": "reference",
+    "prim": "/R"
+   }
+  },
+  {
+   "accepted": [
+    false
+   ],
+   "name": "translate_reference_add_specialize_b_child",
+   "prim": "/R",
+   "spec": {
+    "specifier": "def"
+   },
+   "spec_path": "/Asset",
+   "steps": [
+    {
+     "call": "add_specialize",
+     "path": "/B/Child"
+    }
+   ],
+   "target": {
+    "kind": "reference",
+    "prim": "/R"
+   }
+  },
+  {
+   "accepted": [
+    false
+   ],
+   "name": "translate_reference_add_reference_b_child",
+   "prim": "/R",
+   "spec": {
+    "specifier": "def"
+   },
+   "spec_path": "/Asset",
+   "steps": [
+    {
+     "call": "add_reference",
+     "path": "/B/Child"
+    }
+   ],
+   "target": {
+    "kind": "reference",
+    "prim": "/R"
+   }
+  },
+  {
+   "accepted": [
+    false
+   ],
+   "name": "translate_reference_add_payload_b_child",
+   "prim": "/R",
+   "spec": {
+    "specifier": "def"
+   },
+   "spec_path": "/Asset",
+   "steps": [
+    {
+     "call": "add_payload",
+     "path": "/B/Child"
+    }
+   ],
+   "target": {
+    "kind": "reference",
+    "prim": "/R"
+   }
+  },
+  {
+   "accepted": [
+    false
+   ],
+   "name": "translate_reference_remove_inherit_b_child",
+   "prim": "/R",
+   "spec": {
+    "specifier": "def"
+   },
+   "spec_path": "/Asset",
+   "steps": [
+    {
+     "call": "remove_inherit",
+     "path": "/B/Child"
+    }
+   ],
+   "target": {
+    "kind": "reference",
+    "prim": "/R"
+   }
+  },
+  {
+   "accepted": [
+    false
+   ],
+   "name": "translate_reference_remove_reference_b_child",
+   "prim": "/R",
+   "spec": {
+    "specifier": "def"
+   },
+   "spec_path": "/Asset",
+   "steps": [
+    {
+     "call": "remove_reference",
+     "path": "/B/Child"
+    }
+   ],
+   "target": {
+    "kind": "reference",
+    "prim": "/R"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_inherit_add_inherit_i",
+   "prim": "/I",
+   "spec": {
+    "inheritPaths": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      "/I"
+     ]
+    },
+    "specifier": "class"
+   },
+   "spec_path": "/Cls",
+   "steps": [
+    {
+     "call": "add_inherit",
+     "path": "/I"
+    }
+   ],
+   "target": {
+    "kind": "inherit",
+    "prim": "/I"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_inherit_add_specialize_i",
+   "prim": "/I",
+   "spec": {
+    "specializes": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      "/I"
+     ]
+    },
+    "specifier": "class"
+   },
+   "spec_path": "/Cls",
+   "steps": [
+    {
+     "call": "add_specialize",
+     "path": "/I"
+    }
+   ],
+   "target": {
+    "kind": "inherit",
+    "prim": "/I"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_inherit_add_reference_i",
+   "prim": "/I",
+   "spec": {
+    "references": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/I",
+       "scale": 1.0
+      }
+     ]
+    },
+    "specifier": "class"
+   },
+   "spec_path": "/Cls",
+   "steps": [
+    {
+     "call": "add_reference",
+     "path": "/I"
+    }
+   ],
+   "target": {
+    "kind": "inherit",
+    "prim": "/I"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_inherit_add_payload_i",
+   "prim": "/I",
+   "spec": {
+    "payload": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/I",
+       "scale": 1.0
+      }
+     ]
+    },
+    "specifier": "class"
+   },
+   "spec_path": "/Cls",
+   "steps": [
+    {
+     "call": "add_payload",
+     "path": "/I"
+    }
+   ],
+   "target": {
+    "kind": "inherit",
+    "prim": "/I"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_inherit_remove_inherit_i",
+   "prim": "/I",
+   "spec": {
+    "inheritPaths": {
+     "append": [],
+     "delete": [
+      "/I"
+     ],
+     "explicit": null,
+     "prepend": []
+    },
+    "specifier": "class"
+   },
+   "spec_path": "/Cls",
+   "steps": [
+    {
+     "call": "remove_inherit",
+     "path": "/I"
+    }
+   ],
+   "target": {
+    "kind": "inherit",
+    "prim": "/I"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_inherit_remove_reference_i",
+   "prim": "/I",
+   "spec": {
+    "references": {
+     "append": [],
+     "delete": [
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/I",
+       "scale": 1.0
+      }
+     ],
+     "explicit": null,
+     "prepend": []
+    },
+    "specifier": "class"
+   },
+   "spec_path": "/Cls",
+   "steps": [
+    {
+     "call": "remove_reference",
+     "path": "/I"
+    }
+   ],
+   "target": {
+    "kind": "inherit",
+    "prim": "/I"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_inherit_add_inherit_b",
+   "prim": "/I",
+   "spec": {
+    "inheritPaths": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      "/B"
+     ]
+    },
+    "specifier": "class"
+   },
+   "spec_path": "/Cls",
+   "steps": [
+    {
+     "call": "add_inherit",
+     "path": "/B"
+    }
+   ],
+   "target": {
+    "kind": "inherit",
+    "prim": "/I"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_inherit_add_specialize_b",
+   "prim": "/I",
+   "spec": {
+    "specializes": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      "/B"
+     ]
+    },
+    "specifier": "class"
+   },
+   "spec_path": "/Cls",
+   "steps": [
+    {
+     "call": "add_specialize",
+     "path": "/B"
+    }
+   ],
+   "target": {
+    "kind": "inherit",
+    "prim": "/I"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_inherit_add_reference_b",
+   "prim": "/I",
+   "spec": {
+    "references": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/B",
+       "scale": 1.0
+      }
+     ]
+    },
+    "specifier": "class"
+   },
+   "spec_path": "/Cls",
+   "steps": [
+    {
+     "call": "add_reference",
+     "path": "/B"
+    }
+   ],
+   "target": {
+    "kind": "inherit",
+    "prim": "/I"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_inherit_add_payload_b",
+   "prim": "/I",
+   "spec": {
+    "payload": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/B",
+       "scale": 1.0
+      }
+     ]
+    },
+    "specifier": "class"
+   },
+   "spec_path": "/Cls",
+   "steps": [
+    {
+     "call": "add_payload",
+     "path": "/B"
+    }
+   ],
+   "target": {
+    "kind": "inherit",
+    "prim": "/I"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_inherit_remove_inherit_b",
+   "prim": "/I",
+   "spec": {
+    "inheritPaths": {
+     "append": [],
+     "delete": [
+      "/B"
+     ],
+     "explicit": null,
+     "prepend": []
+    },
+    "specifier": "class"
+   },
+   "spec_path": "/Cls",
+   "steps": [
+    {
+     "call": "remove_inherit",
+     "path": "/B"
+    }
+   ],
+   "target": {
+    "kind": "inherit",
+    "prim": "/I"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_inherit_remove_reference_b",
+   "prim": "/I",
+   "spec": {
+    "references": {
+     "append": [],
+     "delete": [
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/B",
+       "scale": 1.0
+      }
+     ],
+     "explicit": null,
+     "prepend": []
+    },
+    "specifier": "class"
+   },
+   "spec_path": "/Cls",
+   "steps": [
+    {
+     "call": "remove_reference",
+     "path": "/B"
+    }
+   ],
+   "target": {
+    "kind": "inherit",
+    "prim": "/I"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_inherit_add_inherit_i_child",
+   "prim": "/I",
+   "spec": {
+    "inheritPaths": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      "/Cls/Child"
+     ]
+    },
+    "specifier": "class"
+   },
+   "spec_path": "/Cls",
+   "steps": [
+    {
+     "call": "add_inherit",
+     "path": "/I/Child"
+    }
+   ],
+   "target": {
+    "kind": "inherit",
+    "prim": "/I"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_inherit_add_specialize_i_child",
+   "prim": "/I",
+   "spec": {
+    "specializes": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      "/Cls/Child"
+     ]
+    },
+    "specifier": "class"
+   },
+   "spec_path": "/Cls",
+   "steps": [
+    {
+     "call": "add_specialize",
+     "path": "/I/Child"
+    }
+   ],
+   "target": {
+    "kind": "inherit",
+    "prim": "/I"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_inherit_add_reference_i_child",
+   "prim": "/I",
+   "spec": {
+    "references": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/Cls/Child",
+       "scale": 1.0
+      }
+     ]
+    },
+    "specifier": "class"
+   },
+   "spec_path": "/Cls",
+   "steps": [
+    {
+     "call": "add_reference",
+     "path": "/I/Child"
+    }
+   ],
+   "target": {
+    "kind": "inherit",
+    "prim": "/I"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_inherit_add_payload_i_child",
+   "prim": "/I",
+   "spec": {
+    "payload": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/Cls/Child",
+       "scale": 1.0
+      }
+     ]
+    },
+    "specifier": "class"
+   },
+   "spec_path": "/Cls",
+   "steps": [
+    {
+     "call": "add_payload",
+     "path": "/I/Child"
+    }
+   ],
+   "target": {
+    "kind": "inherit",
+    "prim": "/I"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_inherit_remove_inherit_i_child",
+   "prim": "/I",
+   "spec": {
+    "inheritPaths": {
+     "append": [],
+     "delete": [
+      "/Cls/Child"
+     ],
+     "explicit": null,
+     "prepend": []
+    },
+    "specifier": "class"
+   },
+   "spec_path": "/Cls",
+   "steps": [
+    {
+     "call": "remove_inherit",
+     "path": "/I/Child"
+    }
+   ],
+   "target": {
+    "kind": "inherit",
+    "prim": "/I"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_inherit_remove_reference_i_child",
+   "prim": "/I",
+   "spec": {
+    "references": {
+     "append": [],
+     "delete": [
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/Cls/Child",
+       "scale": 1.0
+      }
+     ],
+     "explicit": null,
+     "prepend": []
+    },
+    "specifier": "class"
+   },
+   "spec_path": "/Cls",
+   "steps": [
+    {
+     "call": "remove_reference",
+     "path": "/I/Child"
+    }
+   ],
+   "target": {
+    "kind": "inherit",
+    "prim": "/I"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_inherit_add_inherit_b_child",
+   "prim": "/I",
+   "spec": {
+    "inheritPaths": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      "/B/Child"
+     ]
+    },
+    "specifier": "class"
+   },
+   "spec_path": "/Cls",
+   "steps": [
+    {
+     "call": "add_inherit",
+     "path": "/B/Child"
+    }
+   ],
+   "target": {
+    "kind": "inherit",
+    "prim": "/I"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_inherit_add_specialize_b_child",
+   "prim": "/I",
+   "spec": {
+    "specializes": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      "/B/Child"
+     ]
+    },
+    "specifier": "class"
+   },
+   "spec_path": "/Cls",
+   "steps": [
+    {
+     "call": "add_specialize",
+     "path": "/B/Child"
+    }
+   ],
+   "target": {
+    "kind": "inherit",
+    "prim": "/I"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_inherit_add_reference_b_child",
+   "prim": "/I",
+   "spec": {
+    "references": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/B/Child",
+       "scale": 1.0
+      }
+     ]
+    },
+    "specifier": "class"
+   },
+   "spec_path": "/Cls",
+   "steps": [
+    {
+     "call": "add_reference",
+     "path": "/B/Child"
+    }
+   ],
+   "target": {
+    "kind": "inherit",
+    "prim": "/I"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_inherit_add_payload_b_child",
+   "prim": "/I",
+   "spec": {
+    "payload": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/B/Child",
+       "scale": 1.0
+      }
+     ]
+    },
+    "specifier": "class"
+   },
+   "spec_path": "/Cls",
+   "steps": [
+    {
+     "call": "add_payload",
+     "path": "/B/Child"
+    }
+   ],
+   "target": {
+    "kind": "inherit",
+    "prim": "/I"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_inherit_remove_inherit_b_child",
+   "prim": "/I",
+   "spec": {
+    "inheritPaths": {
+     "append": [],
+     "delete": [
+      "/B/Child"
+     ],
+     "explicit": null,
+     "prepend": []
+    },
+    "specifier": "class"
+   },
+   "spec_path": "/Cls",
+   "steps": [
+    {
+     "call": "remove_inherit",
+     "path": "/B/Child"
+    }
+   ],
+   "target": {
+    "kind": "inherit",
+    "prim": "/I"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_inherit_remove_reference_b_child",
+   "prim": "/I",
+   "spec": {
+    "references": {
+     "append": [],
+     "delete": [
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/B/Child",
+       "scale": 1.0
+      }
+     ],
+     "explicit": null,
+     "prepend": []
+    },
+    "specifier": "class"
+   },
+   "spec_path": "/Cls",
+   "steps": [
+    {
+     "call": "remove_reference",
+     "path": "/B/Child"
+    }
+   ],
+   "target": {
+    "kind": "inherit",
+    "prim": "/I"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_variant_add_inherit_v",
+   "prim": "/V",
+   "spec": {
+    "inheritPaths": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      "/V"
+     ]
+    },
+    "specifier": "over"
+   },
+   "spec_path": "/V{v=x}",
+   "steps": [
+    {
+     "call": "add_inherit",
+     "path": "/V"
+    }
+   ],
+   "target": {
+    "kind": "local_direct_variant",
+    "variant": "/V{v=x}"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_variant_add_specialize_v",
+   "prim": "/V",
+   "spec": {
+    "specializes": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      "/V"
+     ]
+    },
+    "specifier": "over"
+   },
+   "spec_path": "/V{v=x}",
+   "steps": [
+    {
+     "call": "add_specialize",
+     "path": "/V"
+    }
+   ],
+   "target": {
+    "kind": "local_direct_variant",
+    "variant": "/V{v=x}"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_variant_add_reference_v",
+   "prim": "/V",
+   "spec": {
+    "references": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/V",
+       "scale": 1.0
+      }
+     ]
+    },
+    "specifier": "over"
+   },
+   "spec_path": "/V{v=x}",
+   "steps": [
+    {
+     "call": "add_reference",
+     "path": "/V"
+    }
+   ],
+   "target": {
+    "kind": "local_direct_variant",
+    "variant": "/V{v=x}"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_variant_add_payload_v",
+   "prim": "/V",
+   "spec": {
+    "payload": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/V",
+       "scale": 1.0
+      }
+     ]
+    },
+    "specifier": "over"
+   },
+   "spec_path": "/V{v=x}",
+   "steps": [
+    {
+     "call": "add_payload",
+     "path": "/V"
+    }
+   ],
+   "target": {
+    "kind": "local_direct_variant",
+    "variant": "/V{v=x}"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_variant_remove_inherit_v",
+   "prim": "/V",
+   "spec": {
+    "inheritPaths": {
+     "append": [],
+     "delete": [
+      "/V"
+     ],
+     "explicit": null,
+     "prepend": []
+    },
+    "specifier": "over"
+   },
+   "spec_path": "/V{v=x}",
+   "steps": [
+    {
+     "call": "remove_inherit",
+     "path": "/V"
+    }
+   ],
+   "target": {
+    "kind": "local_direct_variant",
+    "variant": "/V{v=x}"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_variant_remove_reference_v",
+   "prim": "/V",
+   "spec": {
+    "references": {
+     "append": [],
+     "delete": [
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/V",
+       "scale": 1.0
+      }
+     ],
+     "explicit": null,
+     "prepend": []
+    },
+    "specifier": "over"
+   },
+   "spec_path": "/V{v=x}",
+   "steps": [
+    {
+     "call": "remove_reference",
+     "path": "/V"
+    }
+   ],
+   "target": {
+    "kind": "local_direct_variant",
+    "variant": "/V{v=x}"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_variant_add_inherit_b",
+   "prim": "/V",
+   "spec": {
+    "inheritPaths": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      "/B"
+     ]
+    },
+    "specifier": "over"
+   },
+   "spec_path": "/V{v=x}",
+   "steps": [
+    {
+     "call": "add_inherit",
+     "path": "/B"
+    }
+   ],
+   "target": {
+    "kind": "local_direct_variant",
+    "variant": "/V{v=x}"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_variant_add_specialize_b",
+   "prim": "/V",
+   "spec": {
+    "specializes": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      "/B"
+     ]
+    },
+    "specifier": "over"
+   },
+   "spec_path": "/V{v=x}",
+   "steps": [
+    {
+     "call": "add_specialize",
+     "path": "/B"
+    }
+   ],
+   "target": {
+    "kind": "local_direct_variant",
+    "variant": "/V{v=x}"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_variant_add_reference_b",
+   "prim": "/V",
+   "spec": {
+    "references": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/B",
+       "scale": 1.0
+      }
+     ]
+    },
+    "specifier": "over"
+   },
+   "spec_path": "/V{v=x}",
+   "steps": [
+    {
+     "call": "add_reference",
+     "path": "/B"
+    }
+   ],
+   "target": {
+    "kind": "local_direct_variant",
+    "variant": "/V{v=x}"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_variant_add_payload_b",
+   "prim": "/V",
+   "spec": {
+    "payload": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/B",
+       "scale": 1.0
+      }
+     ]
+    },
+    "specifier": "over"
+   },
+   "spec_path": "/V{v=x}",
+   "steps": [
+    {
+     "call": "add_payload",
+     "path": "/B"
+    }
+   ],
+   "target": {
+    "kind": "local_direct_variant",
+    "variant": "/V{v=x}"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_variant_remove_inherit_b",
+   "prim": "/V",
+   "spec": {
+    "inheritPaths": {
+     "append": [],
+     "delete": [
+      "/B"
+     ],
+     "explicit": null,
+     "prepend": []
+    },
+    "specifier": "over"
+   },
+   "spec_path": "/V{v=x}",
+   "steps": [
+    {
+     "call": "remove_inherit",
+     "path": "/B"
+    }
+   ],
+   "target": {
+    "kind": "local_direct_variant",
+    "variant": "/V{v=x}"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_variant_remove_reference_b",
+   "prim": "/V",
+   "spec": {
+    "references": {
+     "append": [],
+     "delete": [
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/B",
+       "scale": 1.0
+      }
+     ],
+     "explicit": null,
+     "prepend": []
+    },
+    "specifier": "over"
+   },
+   "spec_path": "/V{v=x}",
+   "steps": [
+    {
+     "call": "remove_reference",
+     "path": "/B"
+    }
+   ],
+   "target": {
+    "kind": "local_direct_variant",
+    "variant": "/V{v=x}"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_variant_add_inherit_v_child",
+   "prim": "/V",
+   "spec": {
+    "inheritPaths": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      "/V/Child"
+     ]
+    },
+    "specifier": "over"
+   },
+   "spec_path": "/V{v=x}",
+   "steps": [
+    {
+     "call": "add_inherit",
+     "path": "/V/Child"
+    }
+   ],
+   "target": {
+    "kind": "local_direct_variant",
+    "variant": "/V{v=x}"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_variant_add_specialize_v_child",
+   "prim": "/V",
+   "spec": {
+    "specializes": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      "/V/Child"
+     ]
+    },
+    "specifier": "over"
+   },
+   "spec_path": "/V{v=x}",
+   "steps": [
+    {
+     "call": "add_specialize",
+     "path": "/V/Child"
+    }
+   ],
+   "target": {
+    "kind": "local_direct_variant",
+    "variant": "/V{v=x}"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_variant_add_reference_v_child",
+   "prim": "/V",
+   "spec": {
+    "references": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/V/Child",
+       "scale": 1.0
+      }
+     ]
+    },
+    "specifier": "over"
+   },
+   "spec_path": "/V{v=x}",
+   "steps": [
+    {
+     "call": "add_reference",
+     "path": "/V/Child"
+    }
+   ],
+   "target": {
+    "kind": "local_direct_variant",
+    "variant": "/V{v=x}"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_variant_add_payload_v_child",
+   "prim": "/V",
+   "spec": {
+    "payload": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/V/Child",
+       "scale": 1.0
+      }
+     ]
+    },
+    "specifier": "over"
+   },
+   "spec_path": "/V{v=x}",
+   "steps": [
+    {
+     "call": "add_payload",
+     "path": "/V/Child"
+    }
+   ],
+   "target": {
+    "kind": "local_direct_variant",
+    "variant": "/V{v=x}"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_variant_remove_inherit_v_child",
+   "prim": "/V",
+   "spec": {
+    "inheritPaths": {
+     "append": [],
+     "delete": [
+      "/V/Child"
+     ],
+     "explicit": null,
+     "prepend": []
+    },
+    "specifier": "over"
+   },
+   "spec_path": "/V{v=x}",
+   "steps": [
+    {
+     "call": "remove_inherit",
+     "path": "/V/Child"
+    }
+   ],
+   "target": {
+    "kind": "local_direct_variant",
+    "variant": "/V{v=x}"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_variant_remove_reference_v_child",
+   "prim": "/V",
+   "spec": {
+    "references": {
+     "append": [],
+     "delete": [
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/V/Child",
+       "scale": 1.0
+      }
+     ],
+     "explicit": null,
+     "prepend": []
+    },
+    "specifier": "over"
+   },
+   "spec_path": "/V{v=x}",
+   "steps": [
+    {
+     "call": "remove_reference",
+     "path": "/V/Child"
+    }
+   ],
+   "target": {
+    "kind": "local_direct_variant",
+    "variant": "/V{v=x}"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_reference_set_inherits_kept_and_mapped",
+   "prim": "/R",
+   "spec": {
+    "inheritPaths": {
+     "append": [],
+     "delete": [],
+     "explicit": [
+      "/B",
+      "/R",
+      "/Asset/Child"
+     ],
+     "prepend": []
+    },
+    "specifier": "def"
+   },
+   "spec_path": "/Asset",
+   "steps": [
+    {
+     "call": "set_inherits",
+     "value": [
+      "/B",
+      "/R",
+      "/R/Child"
+     ]
+    }
+   ],
+   "target": {
+    "kind": "reference",
+    "prim": "/R"
+   }
+  },
+  {
+   "accepted": [
+    false
+   ],
+   "name": "translate_reference_set_inherits_unmapped",
+   "prim": "/R",
+   "spec": {
+    "specifier": "def"
+   },
+   "spec_path": "/Asset",
+   "steps": [
+    {
+     "call": "set_inherits",
+     "value": [
+      "/B",
+      "/B/Child"
+     ]
+    }
+   ],
+   "target": {
+    "kind": "reference",
+    "prim": "/R"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_reference_set_references_kept",
+   "prim": "/R",
+   "spec": {
+    "references": {
+     "append": [],
+     "delete": [],
+     "explicit": [
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/R",
+       "scale": 1.0
+      },
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "/Asset/Child",
+       "scale": 1.0
+      }
+     ],
+     "prepend": []
+    },
+    "specifier": "def"
+   },
+   "spec_path": "/Asset",
+   "steps": [
+    {
+     "call": "set_references",
+     "value": [
+      {
+       "path": "/R"
+      },
+      {
+       "path": "/R/Child"
+      }
+     ]
+    }
+   ],
+   "target": {
+    "kind": "reference",
+    "prim": "/R"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_reference_external_kept",
+   "prim": "/R",
+   "spec": {
+    "references": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      {
+       "asset": "asset.usda",
+       "offset": 0.0,
+       "path": "/Other/Deep",
+       "scale": 1.0
+      }
+     ]
+    },
+    "specifier": "def"
+   },
+   "spec_path": "/Asset",
+   "steps": [
+    {
+     "asset": "asset.usda",
+     "call": "add_reference",
+     "path": "/Other/Deep"
+    }
+   ],
+   "target": {
+    "kind": "reference",
+    "prim": "/R"
+   }
+  },
+  {
+   "accepted": [
+    true
+   ],
+   "name": "translate_reference_default_prim_kept",
+   "prim": "/R",
+   "spec": {
+    "references": {
+     "append": [],
+     "delete": [],
+     "explicit": null,
+     "prepend": [
+      {
+       "asset": "",
+       "offset": 0.0,
+       "path": "",
+       "scale": 1.0
+      }
+     ]
+    },
+    "specifier": "def"
+   },
+   "spec_path": "/Asset",
+   "steps": [
+    {
+     "call": "add_reference",
+     "path": ""
+    }
+   ],
+   "target": {
+    "kind": "reference",
+    "prim": "/R"
+   }
   }
  ],
  "openusd_version": "26.11"

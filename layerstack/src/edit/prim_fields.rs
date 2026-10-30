@@ -326,10 +326,19 @@ pub(super) fn prim_address(store: &mut dyn LayerStore, at: &Address) -> Result<L
 }
 
 /// Maps the stage path `path` of an inherit, a specialize or an internal
-/// arc through `at`, as relationship targets are mapped. OpenUSD drops a
-/// path its edit target does not map and reports success; rejecting it
-/// tells the caller nothing was authored. An arc to the pseudo-root is
-/// rejected, as OpenUSD rejects it.
+/// arc through `at`, as relationship targets are mapped, except that a
+/// root prim path (`/Cls`) is authored as given: through a reference to
+/// `/Asset`, inheriting `/Cls` authors `/Cls` and inheriting `/R/Child`
+/// authors `/Asset/Child`. A path that is not a root prim path and does
+/// not map is rejected, and so is an arc to the pseudo-root.
+///
+/// OpenUSD: `Usd_ListEditImplBase::_TranslatePath`
+/// (`pxr/usd/usd/listEditImpl.h`), behind `UsdInherits`,
+/// `UsdSpecializes`, `UsdReferences` and `UsdPayloads`: "root prim paths
+/// for all list edit types aren't expected to be mappable across non-local
+/// edit targets", so they are kept; any other path is mapped by
+/// `UsdEditTarget::MapToSpecPath` with its variant selections stripped,
+/// and one that does not map is a coding error that authors nothing.
 ///
 /// Spec: AOUSD Core §8 (spec paths), §10 (arcs target prims).
 fn map_arc_path(
@@ -337,8 +346,10 @@ fn map_arc_path(
     at: &Address,
     path: PathId,
 ) -> Result<PathId, Rejection> {
-    if store.paths().resolve(path).depth() == 0 {
-        return Err(Rejection::PseudoRootArc);
+    match store.paths().resolve(path).depth() {
+        0 => return Err(Rejection::PseudoRootArc),
+        1 => return Ok(path),
+        _ => {}
     }
     match at.map_target(TargetPath::Prim(path), store.tokens(), store.paths()) {
         Some(TargetPath::Prim(mapped)) => Ok(mapped),

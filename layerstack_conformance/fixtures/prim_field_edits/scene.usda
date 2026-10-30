@@ -47,3 +47,9 @@ def "R" (
 )
 {
 }
+
+def "I" (
+    prepend inherits = </Cls>
+)
+{
+}

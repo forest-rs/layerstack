@@ -229,7 +229,11 @@ fn invalid_missing_and_recreated_recipes_preserve_last_good_publication() {
         "/Recipes/Tree.primvars:height",
         Value::Float(-1.),
     );
-    assert!(generated.evaluate_asset(Time::Default).is_err());
+    let error = generated.evaluate_asset(Time::Default).unwrap_err();
+    assert_eq!(
+        error.display(&generated.store),
+        "procedural evaluation: the evaluator failed: invalid procedural parameter height"
+    );
     assert!(Arc::ptr_eq(
         &initial,
         &Mesh::get(

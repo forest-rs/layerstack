@@ -52,11 +52,15 @@ fn main() {
     );
     // Host-owned ordering: evaluate the upstream producer, then the dependent asset.
     assert_eq!(
-        generated.evaluate_terrain(Time::Default).unwrap(),
+        generated
+            .evaluate_terrain(Time::Default)
+            .unwrap_or_else(|error| panic!("{}", error.display(&generated.store))),
         layerstack::Changes::default(),
         "unchanged terrain inputs reuse their output without authoring"
     );
-    let changes = generated.evaluate_asset(Time::Default).unwrap();
+    let changes = generated
+        .evaluate_asset(Time::Default)
+        .unwrap_or_else(|error| panic!("{}", error.display(&generated.store)));
     let scene = Scene::new(generated.live.stage(), &generated.store);
     bounds.apply_changes(&scene, &changes);
     let after = bounds
@@ -88,7 +92,9 @@ fn main() {
         "the independent terrain producer remains published"
     );
     assert_eq!(
-        generated.evaluate_asset(Time::Default).unwrap(),
+        generated
+            .evaluate_asset(Time::Default)
+            .unwrap_or_else(|error| panic!("{}", error.display(&generated.store))),
         layerstack::Changes::default(),
         "unchanged recipe inputs reuse the generated asset"
     );

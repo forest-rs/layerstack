@@ -26,17 +26,52 @@ pub enum EvidenceError {
     /// An input no longer has its expected kind or cannot be decoded.
     Input(ProceduralInputError),
 }
+impl EvidenceError {
+    /// The error in words, its paths written as text with `store`, the
+    /// store the stage was composed from: why the evaluated result no
+    /// longer justifies publication, and how to recover. `Display` writes
+    /// the same with ids.
+    #[must_use]
+    pub fn display<'a>(&'a self, store: &'a dyn LayerStore) -> impl fmt::Display + 'a {
+        with_store(self, store)
+    }
+
+    /// Why the result is rejected, without the operation: shared with the
+    /// procedural build errors that wrap this one.
+    pub(crate) fn reason(&self, f: &mut fmt::Formatter<'_>, names: Names<'_>) -> fmt::Result {
+        match self {
+            Self::DifferentStore => f.write_str(
+                "the scene is not composed from the store the result was evaluated with; \
+                 check it against that store and a stage composed from it",
+            ),
+            Self::Invalidated => f.write_str(
+                "the procedural binding was invalidated after the evaluation; evaluate the \
+                 recipe again",
+            ),
+            Self::NotProcedural(path) => write!(
+                f,
+                "the recipe {} is absent or no longer a `GenerativeProcedural`",
+                names.path(*path)
+            ),
+            Self::Changed { prim, property } => write!(
+                f,
+                "the consumed input {}.{property} changed since the evaluation; evaluate the \
+                 recipe again",
+                names.path(*prim)
+            ),
+            Self::Input(error) => error.describe(f, names),
+        }
+    }
+}
+impl Describe for EvidenceError {
+    fn describe(&self, f: &mut fmt::Formatter<'_>, names: Names<'_>) -> fmt::Result {
+        f.write_str("cannot publish the procedural result: ")?;
+        self.reason(f, names)
+    }
+}
 impl fmt::Display for EvidenceError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::DifferentStore => f.write_str("evaluation belongs to different store interners"),
-            Self::Invalidated => f.write_str("evaluation was explicitly invalidated"),
-            Self::NotProcedural(path) => write!(f, "recipe is no longer procedural at {path:?}"),
-            Self::Changed { prim, property } => {
-                write!(f, "consumed input changed at {prim:?}.{property}")
-            }
-            Self::Input(error) => error.fmt(f),
-        }
+        self.describe(f, Names(None))
     }
 }
 impl core::error::Error for EvidenceError {}
@@ -50,12 +85,32 @@ pub enum EvidenceApplyError {
     /// Authoring failed, including a stale target-layer generation guard.
     Edit(EditError),
 }
+impl EvidenceApplyError {
+    /// The error in words, its paths written as text with `store`, the
+    /// store the stage was composed from; a rejected transaction through
+    /// [`EditError::display`]. `Display` writes the same with ids.
+    #[must_use]
+    pub fn display<'a>(&'a self, store: &'a dyn LayerStore) -> impl fmt::Display + 'a {
+        with_store(self, store)
+    }
+
+    /// Why publication failed, without the operation.
+    pub(crate) fn reason(&self, f: &mut fmt::Formatter<'_>, names: Names<'_>) -> fmt::Result {
+        match self {
+            Self::Evidence(error) => error.reason(f, names),
+            Self::Edit(error) => names.edit(f, error),
+        }
+    }
+}
+impl Describe for EvidenceApplyError {
+    fn describe(&self, f: &mut fmt::Formatter<'_>, names: Names<'_>) -> fmt::Result {
+        f.write_str("cannot publish the procedural result: ")?;
+        self.reason(f, names)
+    }
+}
 impl fmt::Display for EvidenceApplyError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Evidence(error) => error.fmt(f),
-            Self::Edit(error) => error.fmt(f),
-        }
+        self.describe(f, Names(None))
     }
 }
 impl core::error::Error for EvidenceApplyError {}

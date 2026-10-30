@@ -241,12 +241,22 @@ pub(crate) enum RecipeError {
     Publication(layerstack_schemas::MeshPublicationError),
     Apply(EvidenceApplyError),
 }
+impl RecipeError {
+    /// The error in words, its paths written as text with `store`.
+    pub(crate) fn display(&self, store: &dyn LayerStore) -> String {
+        match self {
+            Self::Evaluation(e) => e.display(store).to_string(),
+            Self::Publication(e) => e.to_string(),
+            Self::Apply(e) => e.display(store).to_string(),
+        }
+    }
+}
 impl std::fmt::Display for RecipeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Evaluation(e) => e.fmt(f),
-            Self::Publication(e) => write!(f, "publication: {e:?}"),
-            Self::Apply(e) => write!(f, "application: {e:?}"),
+            Self::Publication(e) => e.fmt(f),
+            Self::Apply(e) => e.fmt(f),
         }
     }
 }
@@ -290,12 +300,14 @@ impl GeneratedScene {
         let topology = self.geometry.face_vertex_indices.clone();
         let before = self.asset_generator.work();
         assert_eq!(
-            self.evaluate_terrain(Time::Default).unwrap(),
+            self.evaluate_terrain(Time::Default)
+                .unwrap_or_else(|error| panic!("{}", error.display(&self.store))),
             layerstack::Changes::default(),
             "unchanged terrain authors no opinions"
         );
         assert_eq!(
-            self.evaluate_asset(Time::Default).unwrap(),
+            self.evaluate_asset(Time::Default)
+                .unwrap_or_else(|error| panic!("{}", error.display(&self.store))),
             layerstack::Changes::default(),
             "unchanged asset authors no opinions"
         );
@@ -324,7 +336,8 @@ impl GeneratedScene {
         );
         self.live.apply(&mut self.store, &edit).unwrap();
         assert_eq!(
-            self.evaluate_asset(Time::Default).unwrap(),
+            self.evaluate_asset(Time::Default)
+                .unwrap_or_else(|error| panic!("{}", error.display(&self.store))),
             layerstack::Changes::default(),
             "unrelated edits do not republish"
         );
@@ -339,7 +352,8 @@ impl GeneratedScene {
         let mut delete = Transaction::new();
         delete.remove_spec(EditTarget::for_layer(ASSET).property(points));
         self.live.apply(&mut self.store, &delete).unwrap();
-        self.evaluate_asset(Time::Default).unwrap();
+        self.evaluate_asset(Time::Default)
+            .unwrap_or_else(|error| panic!("{}", error.display(&self.store)));
         assert_eq!(
             self.asset_generator.work().evaluations,
             before.evaluations,
@@ -393,7 +407,8 @@ impl GeneratedScene {
             ),
             "input evidence rejects stale work independently of the target guard"
         );
-        self.evaluate_asset(Time::Default).unwrap();
+        self.evaluate_asset(Time::Default)
+            .unwrap_or_else(|error| panic!("{}", error.display(&self.store)));
         assert_eq!(
             self.geometry.points[2][1], 2.,
             "source replacement refreshes dependent geometry"
@@ -440,8 +455,12 @@ impl GeneratedScene {
         // Cursors advance on expiry. Notice-dependent consumers rebuild explicitly.
         bounds.clear();
         // Query-backed producers inspect current records and need no notice replay.
-        let terrain = self.evaluate_terrain(Time::Default).unwrap();
-        let asset = self.evaluate_asset(Time::Default).unwrap();
+        let terrain = self
+            .evaluate_terrain(Time::Default)
+            .unwrap_or_else(|error| panic!("{}", error.display(&self.store)));
+        let asset = self
+            .evaluate_asset(Time::Default)
+            .unwrap_or_else(|error| panic!("{}", error.display(&self.store)));
         let scene = Scene::new(self.live.stage(), &self.store);
         bounds.apply_changes(&scene, &terrain);
         bounds.apply_changes(&scene, &asset);
@@ -472,7 +491,8 @@ impl GeneratedScene {
             .unwrap()
             .for_each(|change| bounds.apply_changes(&scene, change));
         assert_eq!(
-            self.evaluate_asset(Time::Default).unwrap(),
+            self.evaluate_asset(Time::Default)
+                .unwrap_or_else(|error| panic!("{}", error.display(&self.store))),
             layerstack::Changes::default(),
             "recovered producer settles to unchanged work"
         );

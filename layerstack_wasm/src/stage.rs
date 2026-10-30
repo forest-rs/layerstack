@@ -187,6 +187,11 @@ impl Stage {
         &self.document
     }
 
+    /// The skinning state.
+    pub(crate) fn skel_state(&self) -> &crate::skel::SkelState {
+        &self.skel
+    }
+
     /// The document, and the skinning state, which reads it.
     pub(crate) fn document_and_skel(
         &mut self,
@@ -2238,6 +2243,12 @@ impl Stage {
     #[wasm_bindgen(js_name = coordSysBindings)]
     pub fn js_coord_sys_bindings(&self, path: &str, inherited: bool) -> Result<JsValue, JsValue> {
         Ok(self.coord_sys_bindings(path, inherited)?.into())
+    }
+
+    /// The record `skinning_cache` builds, as documented in `skel.rs`.
+    #[wasm_bindgen(js_name = skinningCache)]
+    pub fn js_skinning_cache(&self) -> JsValue {
+        self.skinning_cache().into()
     }
 
     /// The record `skinning` builds, as documented in `skel.rs`.

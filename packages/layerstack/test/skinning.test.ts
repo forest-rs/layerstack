@@ -172,6 +172,13 @@ describe("an engine skinning a mesh", () => {
     using stage = openRobot();
     const skin = stage.skinning("/Robot/Arm")!;
     assert.deepEqual([...(skin.deformedPoints(10).copy() as Float32Array)], [0, 0, 0, 2, 1, 0, 3, 1, 0]);
+    const first = stage.skinningCache();
+    assert.equal(first.misses, 1);
+    assert.equal(first.bindings, 1);
+    skin.deformedPoints(10).release();
+    const again = stage.skinningCache();
+    assert.equal(again.hits, first.hits + 1, "the same frame is reused");
+    assert.equal(again.pointVertices, first.pointVertices, "nothing skinned again");
     const receipt = stage.apply([
       {
         type: "setValue",
@@ -181,6 +188,7 @@ describe("an engine skinning a mesh", () => {
       },
     ]);
     assert.deepEqual([...(skin.deformedPoints(10).copy() as Float32Array)], [0, 0, 0, 4, 1, 0, 5, 1, 0]);
+    assert.ok(stage.skinningCache().invalidations > again.invalidations, "the edit invalidated the arm");
     receipt.undo();
     assert.deepEqual([...(skin.deformedPoints(10).copy() as Float32Array)], [0, 0, 0, 2, 1, 0, 3, 1, 0]);
   });

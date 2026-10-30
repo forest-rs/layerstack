@@ -120,30 +120,49 @@ pub(crate) struct PrimTypeInfo {
     definition: Arc<PrimDefinition>,
 }
 
-/// A typed read through one of the stage's type-erased selections:
-/// `select` is handed `accept(value, keep)`, which converts `value` with
-/// `read` and says whether it converted, keeping the conversion when
-/// `keep` is set, and returns the kept answer's provenance. Each value type
-/// compiles only this wrapper and its closure; the selection is shared.
-fn read_typed<T, E>(
-    read: impl Fn(&Value) -> Option<T>,
-    select: impl FnOnce(&dyn Fn(&Value, bool) -> bool) -> Result<Option<Option<Provenance>>, E>,
-) -> Result<Option<Resolved<T>>, E> {
-    let kept = core::cell::Cell::new(None);
-    let accept = |value: &Value, keep: bool| match read(value) {
-        Some(value) => {
-            if keep {
-                kept.set(Some(value));
-            }
-            true
+/// The typed side of the stage's typed reads: [`Self::accept`] converts a
+/// candidate value with `read` and says whether it converted, keeping the
+/// conversion when asked to, and [`Self::finish`] turns the kept answer
+/// and its provenance into a [`Resolved`]. The selections between them
+/// ([`Stage::try_read_default_by`] and the rest) take the conversion as
+/// `accept(value, keep)`, a `&dyn Fn`, so that one copy of each selection
+/// serves every value type: each copy of the default-time walk was about
+/// 2.7 KB of WebAssembly.
+struct TypedRead<T, R> {
+    read: R,
+    kept: core::cell::Cell<Option<T>>,
+}
+
+impl<T, R: Fn(&Value) -> Option<T>> TypedRead<T, R> {
+    fn new(read: R) -> Self {
+        Self {
+            read,
+            kept: core::cell::Cell::new(None),
         }
-        None => false,
-    };
-    let provenance = select(&accept)?;
-    Ok(provenance.map(|provenance| Resolved {
-        value: kept.take().expect("an accepted value is kept"),
-        provenance,
-    }))
+    }
+
+    /// Converts `value`; whether it converted. With `keep`, the conversion
+    /// is the answer.
+    fn accept(&self, value: &Value, keep: bool) -> bool {
+        match (self.read)(value) {
+            Some(value) => {
+                if keep {
+                    self.kept.set(Some(value));
+                }
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// The answer a selection found, with its provenance; `None` when it
+    /// accepted nothing.
+    fn finish(self, provenance: Option<Option<Provenance>>) -> Option<Resolved<T>> {
+        provenance.map(|provenance| Resolved {
+            value: self.kept.take().expect("an accepted value is kept"),
+            provenance,
+        })
+    }
 }
 
 /// A dictionary schema fallback composed as a one-opinion dictionary
@@ -4077,9 +4096,10 @@ impl Stage {
         time: Time,
         read: impl Fn(&Value) -> Option<T>,
     ) -> Result<Option<Resolved<T>>, crate::ArrayReadError> {
-        read_typed(read, |accept| {
-            self.try_read_property_by(property, time, accept)
-        })
+        let typed = TypedRead::new(read);
+        let accept = |value: &Value, keep: bool| typed.accept(value, keep);
+        let found = self.try_read_property_by(property, time, &accept)?;
+        Ok(typed.finish(found))
     }
 
     /// [`Stage::try_read_property`] through the type-erased conversion of
@@ -4208,19 +4228,27 @@ impl Stage {
         below: Option<LayerId>,
     ) -> Option<Resolved<T>> {
         let (prim, field) = (property.prim_path(), property.property());
-        let read = read_typed(read, |accept| {
-            Ok::<_, crate::ArrayReadError>(match time {
-                Time::Default => self
-                    .try_read_default_by(prim, field, accept, with_source, below)
-                    .ok()
-                    .flatten(),
-                Time::At {
-                    code,
-                    interpolation,
-                } => self.read_at_by(prim, field, code, interpolation, accept, with_source, below),
-            })
-        });
-        read.ok().flatten()
+        let typed = TypedRead::new(read);
+        let accept = |value: &Value, keep: bool| typed.accept(value, keep);
+        let found = match time {
+            Time::Default => self
+                .try_read_default_by(prim, field, &accept, with_source, below)
+                .ok()
+                .flatten(),
+            Time::At {
+                code,
+                interpolation,
+            } => self.read_at_by(
+                prim,
+                field,
+                code,
+                interpolation,
+                &accept,
+                with_source,
+                below,
+            ),
+        };
+        typed.finish(found)
     }
 
     /// A numeric-time read through the type-erased conversion of
@@ -4282,11 +4310,9 @@ impl Stage {
     /// §13.3.2.4 (schema fallbacks). The typed default-time retry is an
     /// OpenUSD API behavior beyond the untyped value-resolution contract.
     ///
-    /// The conversion is type-erased, so that one copy of the selection
-    /// serves every value type (each copy was about 2.7 KB of WebAssembly):
-    /// `accept(value, keep)` converts `value` and says whether it converted,
-    /// and with `keep` the caller keeps the result as the answer
-    /// ([`read_typed`]). Returns the answer's provenance, `None` when
+    /// `accept(value, keep)` converts `value` and says whether it
+    /// converted, and with `keep` the caller keeps the result as the answer
+    /// ([`TypedRead`]). Returns the answer's provenance, `None` when
     /// nothing was accepted. A selected value that does not decode answers
     /// with its error: a stronger incompatible opinion can hide the failing
     /// array from untyped resolution.

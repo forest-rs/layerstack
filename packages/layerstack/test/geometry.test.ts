@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 // The reads a renderer makes each frame: transforms, visibility and
-// purpose and primvars, checked against the
+// purpose, primvars and bounds, checked against the
 // answers OpenUSD 26.11 gives for the conformance fixtures
 // (`layerstack_conformance/fixtures`), and the retained caches behind
 // them hearing edits.
@@ -11,7 +11,7 @@ import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 
 import { LayerstackError, Primvar, Xformable, loadLayerstack } from "../dist/index.js";
-import type { Layerstack, Stage } from "../dist/index.js";
+import type { BoundingBoxes, Layerstack, Stage } from "../dist/index.js";
 
 const layerstack: Layerstack = await loadLayerstack();
 const fixtures = new URL("../../../layerstack_conformance/fixtures/", import.meta.url);
@@ -55,6 +55,11 @@ function failure(f: () => unknown): LayerstackError {
 
 /** `{ time }`, or no time at all for the default time. */
 const at = (time: number | undefined): { time?: number } => (time === undefined ? {} : { time });
+
+const box = (bounds: BoundingBoxes, i: number) => ({
+  range: [...bounds.ranges.subarray(6 * i, 6 * i + 6)],
+  matrix: [...bounds.matrices.subarray(16 * i, 16 * i + 16)],
+});
 
 describe("transforms, visibility and purpose", () => {
   it("agree with OpenUSD for every prim of the transform fixture", async () => {
@@ -137,10 +142,10 @@ def "Loose" {
   });
 });
 
-describe("the retained transform cache", () => {
-  it("hears edits and undos as OpenUSD's cache recomputes them", async () => {
-    // `retained_queries_oracle.py`: OpenUSD's `XformCache` after each edit
-    // of the sequence; here one stage's cache hears them.
+describe("the retained caches", () => {
+  it("hear edits and undos as OpenUSD's caches recompute them", async () => {
+    // `retained_queries_oracle.py`: OpenUSD's `XformCache` and `BBoxCache`
+    // after each edit of the sequence; here one stage's caches hear them.
     const stage = await openFixture("", "retained_queries.usda");
     const { records } = oracle("retained_queries.json");
     const byName = new Map(records.map((record: any) => [record.name, record]));
@@ -148,6 +153,8 @@ describe("the retained transform cache", () => {
       const expected = byName.get(name) as any;
       const world = stage.worldTransforms(["/World/Shape"], at(time));
       assert.ok(close(world, expected.matrix.flat()), `${name} matrix`);
+      const bounds = stage.worldBounds(["/World"], at(time));
+      assert.ok(close(bounds.alignedRanges, [...expected.min, ...expected.max]), `${name} bounds`);
     };
     const set = (path: string, type: string, value: unknown) =>
       stage.apply([{ type: "setValue", path, value: { type, value } as never }]);
@@ -165,12 +172,14 @@ describe("the retained transform cache", () => {
     check("time_1", 1);
     const sized = set("/World/Shape.size", "double", 4);
     check("size_4", 1);
+    const boundsBefore = stage.boundsCache();
     sized.undo();
     check("undo_size", 1);
+    assert.ok(stage.boundsCache().invalidated > boundsBefore.invalidated, "the undo evicted the shape's bound");
     assert.equal(stage.transformCache().resets, 0);
   });
 
-  it("reuses every transform an edit did not touch", () => {
+  it("reuse every transform an edit did not touch", () => {
     const stage = layerstack.open({
       identifier: "row.usda",
       bytes: new TextEncoder().encode(`#usda 1.0
@@ -273,5 +282,86 @@ def Mesh "Rock" {
     assert.deepEqual([...(flat.array.view() as Float32Array)], [0, 0, 1, 1, 1, 1]);
     flat.array.release();
     assert.equal(stage.primvar("/Rock", "nothing"), null);
+  });
+});
+
+describe("bounds", () => {
+  it("agree with OpenUSD's BBoxCache for every option, purpose and prim", async () => {
+    const stage = await openFixture("bounds/", "scene.usda");
+    const { records } = oracle("bounds/oracle.json");
+    const spaces = {
+      world: (paths: string[], options: object) => stage.worldBounds(paths, options),
+      local: (paths: string[], options: object) => stage.localBounds(paths, options),
+      untransformed: (paths: string[], options: object) => stage.untransformedBounds(paths, options),
+    };
+    let checked = 0;
+    for (const record of records) {
+      if (record.relative_to !== undefined) continue;
+      const options = {
+        ...at(record.time ?? undefined),
+        purposes: record.purposes,
+        useExtentsHint: record.hints,
+        ignoreVisibility: record.ignore,
+      };
+      for (const [space, read] of Object.entries(spaces)) {
+        const expected = record.bounds[space];
+        const got = box(read([record.path], options), 0);
+        const label = `${record.path} ${space} ${JSON.stringify(options)}`;
+        // An empty box is empty whatever its range and matrix: OpenUSD
+        // keeps a float extent's empty range and the prim's matrix, this
+        // `GfRange3d()` and the identity.
+        const empty = (range: readonly number[]) => [0, 1, 2].some((i) => range[i]! > range[i + 3]!);
+        const want = [...expected.min, ...expected.max];
+        assert.equal(empty(got.range), empty(want), `${label}: ${got.range}`);
+        if (empty(want)) continue;
+        assert.ok(close(got.range, want, 1e-12), `${label}: ${got.range}`);
+        assert.ok(close(got.matrix, expected.matrix.flat(), 1e-12), `${label} matrix`);
+        checked += 1;
+      }
+    }
+    assert.ok(checked > 300, `${checked} bounds checked`);
+    assert.ok(stage.boundsCache().caches <= 4);
+  });
+
+  it("compute a model's extentsHint as OpenUSD does", async () => {
+    const stage = await openFixture("extents_hint/", "scene.usda");
+    const { computed } = oracle("extents_hint/oracle.json");
+    let checked = 0;
+    for (const [path, byOptions] of Object.entries(computed) as [string, Record<string, number[][]>][]) {
+      for (const [key, expected] of Object.entries(byOptions)) {
+        const [time, hints] = key.split("_");
+        const hint = stage.extentsHint(path, {
+          ...at(time === "default" ? undefined : Number(time)),
+          useExtentsHint: hints === "hints",
+        });
+        assert.ok(close(hint, expected.flat(), 1e-6), `${path} ${key}: ${hint}`);
+        checked += 1;
+      }
+    }
+    assert.ok(checked > 40, `${checked} hints checked`);
+  });
+
+  it("frame a batch, with the root counted even when invisible", () => {
+    const stage = layerstack.open({
+      identifier: "lamp.usda",
+      bytes: new TextEncoder().encode(`#usda 1.0
+def Xform "Lamp" {
+    token visibility = "invisible"
+    double3 xformOp:translate = (0, 0, 10)
+    uniform token[] xformOpOrder = ["xformOp:translate"]
+    def Sphere "Bulb" {
+        double radius = 2
+    }
+}
+def "Empty" {
+}
+`),
+    });
+    const bounds = stage.worldBounds(["/Lamp", "/Lamp/Bulb", "/Empty"]);
+    assert.equal(bounds.count, 3);
+    assert.deepEqual([...bounds.alignedRanges.subarray(0, 6)], [-2, -2, 8, 2, 2, 12]);
+    assert.deepEqual([...bounds.alignedRanges.subarray(6, 12)], [-2, -2, 8, 2, 2, 12]);
+    assert.ok(bounds.alignedRanges[12]! > bounds.alignedRanges[15]!, "an empty box's minimum is above its maximum");
+    assert.equal(failure(() => stage.worldBounds(["/Gone"])).code, "prim.not_found");
   });
 });

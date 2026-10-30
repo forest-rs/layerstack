@@ -88,7 +88,8 @@ pub struct Stage {
     identity: Arc<()>,
     /// The retained skinning evaluator and the changes it has heard.
     skel: crate::skel::SkelState,
-    /// The retained transform cache and the changes it has heard.
+    /// The retained transform and bounds caches and the changes they have
+    /// heard.
     geom: crate::geom::GeomState,
 }
 
@@ -2320,6 +2321,12 @@ impl Stage {
         self.transform_cache().into()
     }
 
+    /// The record `bounds_cache` builds, as documented in `geom.rs`.
+    #[wasm_bindgen(js_name = boundsCache)]
+    pub fn js_bounds_cache(&self) -> JsValue {
+        self.bounds_cache().into()
+    }
+
     /// The record `local_transform` builds, as documented in `geom.rs`.
     #[wasm_bindgen(js_name = localTransform)]
     pub fn js_local_transform(
@@ -2397,6 +2404,35 @@ impl Stage {
         time: Option<f64>,
     ) -> Result<JsValue, JsValue> {
         Ok(self.primvar_indices(path, name, time)?.into())
+    }
+
+    /// The record `bounds` builds, as documented in `geom.rs`.
+    #[wasm_bindgen(js_name = bounds)]
+    pub fn js_bounds(
+        &mut self,
+        paths: Vec<String>,
+        time: Option<f64>,
+        purposes: Vec<String>,
+        hints: bool,
+        ignore_visibility: bool,
+        space: &str,
+    ) -> Result<JsValue, JsValue> {
+        Ok(self
+            .bounds(&paths, time, &purposes, hints, ignore_visibility, space)?
+            .into())
+    }
+
+    /// The extents `extents_hint` computes, as documented in `geom.rs`.
+    #[wasm_bindgen(js_name = extentsHint)]
+    pub fn js_extents_hint(
+        &mut self,
+        path: &str,
+        time: Option<f64>,
+        purposes: Vec<String>,
+        hints: bool,
+        ignore_visibility: bool,
+    ) -> Result<Vec<f64>, JsValue> {
+        Ok(self.extents_hint(path, time, &purposes, hints, ignore_visibility)?)
     }
 
     /// The record `supplied_bytes` builds, as documented in `stage.rs`.

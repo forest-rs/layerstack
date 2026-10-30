@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 // The geometry a renderer reads: `Xformable` and `Primvar`, over the
-// native module's transform and primvar reads, and the
+// native module's transform, primvar and bounds reads, and the
 // decoders of their records.
 import { ArrayHandle } from "./arrays.js";
 import type { NativeArrayHandle } from "./arrays.js";
@@ -10,6 +10,7 @@ import { decodeValue } from "./stage.js";
 import type { Stage } from "./stage.js";
 import type {
   ArrayData,
+  BoundingBoxes,
   LocalTransform,
   PurposeInfo,
   Value,
@@ -150,4 +151,10 @@ export function decodePurpose(row: unknown): PurposeInfo | null {
   if (row === null) return null;
   const [purpose, inheritable, authoredOn] = row as [string, boolean, string | null];
   return Object.freeze({ purpose, inheritable, authoredOn });
+}
+
+/** @internal A bounds record. */
+export function decodeBounds(row: Row): BoundingBoxes {
+  const [ranges, matrices, aligned] = row as [Float64Array, Float64Array, Float64Array];
+  return Object.freeze({ count: ranges.length / 6, ranges, matrices, alignedRanges: aligned });
 }

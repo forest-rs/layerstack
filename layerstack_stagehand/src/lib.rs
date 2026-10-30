@@ -80,12 +80,33 @@
 //! assert_eq!(buffers.normals[0], [0.0, 0.0, 1.0]);
 //! ```
 //!
-//! Not yet: instancing, draw-list diffs, cameras, lights, materials,
-//! curves and points.
+//! # Draw lists
+//!
+//! A [`DrawList`] (with `stage`) is what a renderer draws from a stage,
+//! retained: [`DrawItem`]s, each one instanced draw of a retained buffer
+//! ([`DrawBuffers`], owned by the list) at one or more world matrices. A
+//! gprim outside any instance is an item drawn once; a native instancing
+//! prototype's gprims are an item each, drawn at every instance binding
+//! the same material; a `PointInstancer`'s prototypes are an item each,
+//! drawn at every unmasked instance. Visibility and purpose hide items
+//! without dropping their buffers.
+//!
+//! [`DrawList::apply_changes`] takes the change records an edit produced
+//! (`layerstack::Changes`) and reads only what they reach;
+//! [`DrawList::set_time`] reads every item at a new time. Each returns a
+//! [`DrawDiff`]: the items added, removed, moved, shown or hidden or
+//! rebound to new materials, and the buffers added, refilled (by a kept
+//! plan, no triangulation), rebuilt or freed, with [`DrawWork`] counting
+//! what was read, reused, recomputed and rebuilt.
+//!
+//! Not yet: cameras, lights, materials beyond their bindings, curves and
+//! points.
 
 #![no_std]
 extern crate alloc;
 
+#[cfg(feature = "stage")]
+mod draw;
 mod input;
 mod plan;
 mod report;
@@ -97,6 +118,11 @@ mod triangulate;
 #[cfg(test)]
 mod tests;
 
+#[cfg(feature = "stage")]
+pub use draw::{
+    BufferKey, DrawBuffers, DrawDiff, DrawItem, DrawList, DrawOptions, DrawWork, ItemId,
+    ItemSource, Purposes,
+};
 pub use input::{
     FaceSubsets, Interpolation, MeshInput, MeshTopology, Orientation, Primvar, SubdivisionScheme,
 };

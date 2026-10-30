@@ -18,8 +18,14 @@ browser.
   and why, concave faces and fallbacks, dropped primvars and subset
   overlaps.
 
-Subdivision surfaces are drawn as their control cage. Instancing, cameras,
-lights, materials, curves and points are not covered yet.
+- **Draw lists** (with `stage`): a retained `DrawList` of instanced
+  draws (gprims, native instancing prototypes, point instancer
+  prototypes) over buffers it owns, kept up to date from `Changes` and
+  time changes by `DrawDiff`s that list what changed and count what was
+  reused, refilled or rebuilt.
+
+Subdivision surfaces are drawn as their control cage. Cameras, lights,
+materials (beyond their bindings), curves and points are not covered yet.
 
 ```rust
 use layerstack_stagehand::{MeshInput, MeshOptions, MeshPlan, MeshTopology};

@@ -357,7 +357,7 @@ impl ValidationProblem {
                     write!(f, "the root layer authors no `{key}`")
                 }
                 #[cfg(feature = "usd-geom")]
-                ValidationProblemKind::MeshTopology(error) => write!(f, "{error}"),
+                ValidationProblemKind::MeshTopology(error) => write!(f, "{}", error.display(store)),
                 #[cfg(feature = "usd-geom")]
                 ValidationProblemKind::SubsetFamily { family, problem } => {
                     write!(f, "the `{family}` subset family: {problem:?}")
@@ -389,7 +389,9 @@ impl ValidationProblem {
                     f.write_str("the `materialBind` subset family is unrestricted")
                 }
                 #[cfg(feature = "usd-shade")]
-                ValidationProblemKind::ShadingConnection(error) => write!(f, "{error}"),
+                ValidationProblemKind::ShadingConnection(error) => {
+                    write!(f, "{}", error.display(store))
+                }
                 #[cfg(feature = "usd-shade")]
                 ValidationProblemKind::ShadingSourceNotProperty(source) => write!(
                     f,

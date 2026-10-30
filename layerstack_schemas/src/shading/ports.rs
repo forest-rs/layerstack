@@ -4,9 +4,12 @@
 //! Named shading attributes and source-opinion authoring.
 
 use super::{ConnectedSources, ShaderSources, ValueSources, shading_kind};
+use crate::diagnostic::{Describe, Names, with_store};
 use crate::{CannotEdit, PrimEdit, PrimView, Scene, SchemaEdit, Time};
 use alloc::{format, string::String, vec::Vec};
-use layerstack::{ListOp, ListPosition, PathId, PropertyPath, PropertyType, TargetPath, Value};
+use layerstack::{
+    LayerStore, ListOp, ListPosition, PathId, PropertyPath, PropertyType, TargetPath, Value,
+};
 
 /// A shading attribute's namespace, independent of its value type.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -160,18 +163,39 @@ pub enum PortError {
         name: String,
     },
 }
+impl PortError {
+    /// The error in words, its prim written as a path with `store`, the
+    /// store the stage was composed from. `Display` writes the same with
+    /// ids.
+    #[must_use]
+    pub fn display<'a>(&'a self, store: &'a dyn LayerStore) -> impl core::fmt::Display + 'a {
+        with_store(self, store)
+    }
+}
+impl Describe for PortError {
+    fn describe(&self, f: &mut core::fmt::Formatter<'_>, names: Names<'_>) -> core::fmt::Result {
+        f.write_str("cannot edit the shading port: ")?;
+        match self {
+            Self::MissingPrim(path) => write!(f, "no prim is at {}", names.path(*path)),
+            Self::InvalidName(name) => write!(
+                f,
+                "`{name}` is not a nonempty, colon-separated sequence of identifiers"
+            ),
+            Self::InvalidAttribute { prim, name } => write!(
+                f,
+                "{}.{name} exists but is not a typed shading attribute",
+                names.path(*prim)
+            ),
+            Self::TypeMismatch { name } => write!(
+                f,
+                "`{name}` is already declared with another type; the port would change it"
+            ),
+        }
+    }
+}
 impl core::fmt::Display for PortError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            Self::MissingPrim(path) => write!(f, "no prim at {path:?}"),
-            Self::InvalidName(name) => write!(f, "invalid shading port name {name:?}"),
-            Self::InvalidAttribute { prim, name } => {
-                write!(f, "{prim:?}.{name} is not a typed shading attribute")
-            }
-            Self::TypeMismatch { name } => {
-                write!(f, "{name} already has a different declared type")
-            }
-        }
+        self.describe(f, Names(None))
     }
 }
 impl core::error::Error for PortError {}

@@ -7,13 +7,14 @@
 //! and transforms remain owned by `Scene` and `XformCache`.
 //! AOUSD Core §12.3 (attribute values), §11.4 (models); OpenUSD 26.8
 //! `UsdGeomTetMesh`, `UsdGeomBasisCurves`, and `UsdGeomConstraintTarget`.
+use crate::diagnostic::{Describe, Names, with_store};
 use crate::{
     PrimView, Scene, XformCache,
     usd_geom::{BasisCurves, GeomModelApi, TetMesh},
 };
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
 use layerstack::sort;
-use layerstack::{PathId, PropertyPath, Time, Value};
+use layerstack::{LayerStore, PathId, PropertyPath, Time, Value};
 
 /// Why a geometry calculation cannot consume its input safely.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -60,9 +61,68 @@ pub enum GeometryError {
     /// An inversion query requires four points and one tetrahedron.
     EmptyTetMesh,
 }
+impl GeometryError {
+    /// The error in words, a constraint target written as its path with
+    /// `store`, the store the stage was composed from. `Display` writes
+    /// the same with ids.
+    #[must_use]
+    pub fn display<'a>(&'a self, store: &'a dyn LayerStore) -> impl core::fmt::Display + 'a {
+        with_store(self, store)
+    }
+}
+impl Describe for GeometryError {
+    fn describe(&self, f: &mut core::fmt::Formatter<'_>, names: Names<'_>) -> core::fmt::Result {
+        f.write_str("invalid geometry input: ")?;
+        match self {
+            Self::MissingAttribute(name) => {
+                write!(f, "`{name}` is absent, blocked or of another type")
+            }
+            Self::InvalidVertexIndex {
+                element,
+                index,
+                point_count: Some(points),
+            } => write!(
+                f,
+                "tetrahedron {element} has the vertex index {index}, outside its {points} points"
+            ),
+            Self::InvalidVertexIndex {
+                element,
+                index,
+                point_count: None,
+            } => write!(
+                f,
+                "tetrahedron {element} has the negative vertex index {index}"
+            ),
+            Self::RepeatedVertex { element } => {
+                write!(f, "tetrahedron {element} repeats a vertex index")
+            }
+            Self::NonFinite => f.write_str("a point or intermediate result is not finite"),
+            Self::InvalidOrientation(token) => write!(
+                f,
+                "`{token}` is not an orientation (`rightHanded` or `leftHanded`)"
+            ),
+            Self::InvalidCurveToken { attribute, token } => {
+                write!(f, "`{token}` is not a supported value of `{attribute}`")
+            }
+            Self::NegativeCurveCount { curve, count } => {
+                write!(f, "curve {curve} has the negative vertex count {count}")
+            }
+            Self::SizeOverflow => f.write_str("a summed layout size overflows"),
+            Self::InvalidConstraintTarget(path) => write!(
+                f,
+                "the constraint target {} is not a `matrix4d` in a model's `constraintTargets` \
+                 namespace, or its model has no world transform",
+                names.property(*path)
+            ),
+            Self::EmptyTetMesh => {
+                f.write_str("an inversion query needs at least four points and one tetrahedron")
+            }
+        }
+    }
+}
 impl core::fmt::Display for GeometryError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "geometry input: {self:?}")
+        self.describe(f, Names(None))
     }
 }
 impl core::error::Error for GeometryError {}

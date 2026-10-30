@@ -246,7 +246,7 @@ impl RecipeError {
     pub(crate) fn display(&self, store: &dyn LayerStore) -> String {
         match self {
             Self::Evaluation(e) => e.display(store).to_string(),
-            Self::Publication(e) => e.to_string(),
+            Self::Publication(e) => e.display(store).to_string(),
             Self::Apply(e) => e.display(store).to_string(),
         }
     }

@@ -12,6 +12,7 @@ use super::{
     ConnectedSources, MaterialSource, MaterialTerminal, PortKind, ShadingDependency, ShadingIssue,
     ValueSourceKind, ValueSources,
 };
+use crate::diagnostic::{Describe, Names, with_store};
 use crate::{
     PrimView, Scene, Time,
     assets::AssetReference,
@@ -25,8 +26,8 @@ use alloc::{
 };
 use layerstack::sort;
 use layerstack::{
-    ArrayReadError, AttributeQuery, Changes, PathId, PrimSnapshot, PropertyPath, PropertyType,
-    Provenance, StoreIdentity, Value,
+    ArrayReadError, AttributeQuery, Changes, LayerStore, PathId, PrimSnapshot, PropertyPath,
+    PropertyType, Provenance, StoreIdentity, Value,
 };
 
 mod cache;
@@ -211,9 +212,38 @@ pub enum MaterialCaptureError {
     /// Numeric time is NaN or infinite.
     InvalidTime,
 }
+impl MaterialCaptureError {
+    /// The error in words, the material written as its path with `store`,
+    /// the store the stage was composed from. `Display` writes the same
+    /// with ids.
+    #[must_use]
+    pub fn display<'a>(&'a self, store: &'a dyn LayerStore) -> impl core::fmt::Display + 'a {
+        with_store(self, store)
+    }
+}
+impl Describe for MaterialCaptureError {
+    fn describe(&self, f: &mut core::fmt::Formatter<'_>, names: Names<'_>) -> core::fmt::Result {
+        f.write_str("cannot capture the material: ")?;
+        match self {
+            Self::SceneDomain => f.write_str(
+                "the stage was not composed from the supplied store; pass the store it was \
+                 composed from",
+            ),
+            Self::CacheDomain => f.write_str(
+                "the cache belongs to another store; clear it before using it with this one",
+            ),
+            Self::MissingMaterial(path) => write!(
+                f,
+                "{} is not a composed, typed `Material`",
+                names.path(*path)
+            ),
+            Self::InvalidTime => f.write_str("the time is NaN or infinite"),
+        }
+    }
+}
 impl core::fmt::Display for MaterialCaptureError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "material capture: {self:?}")
+        self.describe(f, Names(None))
     }
 }
 impl core::error::Error for MaterialCaptureError {}

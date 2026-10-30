@@ -10,6 +10,7 @@
 //! Geometry is published at an editable authored source; instance proxies are rejected.
 //! Runtime prototype IDs are snapshot identities, not publication addresses or content hashes.
 
+use crate::diagnostic::{Describe, Names, with_store};
 use crate::subset::{MeshTopologyError, validate_mesh_topology};
 use alloc::{format, string::String, sync::Arc, vec::Vec};
 use layerstack::edit::{EditTarget, Transaction};
@@ -120,9 +121,68 @@ pub enum MeshPublicationError {
     /// A producer-owned property has another declaration at this authored site.
     PropertyConflict(String),
 }
+impl MeshPublicationError {
+    /// The error in words, its paths written as text with `store`, the
+    /// store the stage was composed from. `Display` writes the same with
+    /// ids.
+    #[must_use]
+    pub fn display<'a>(&'a self, store: &'a dyn LayerStore) -> impl core::fmt::Display + 'a {
+        with_store(self, store)
+    }
+}
+impl Describe for MeshPublicationError {
+    fn describe(&self, f: &mut core::fmt::Formatter<'_>, names: Names<'_>) -> core::fmt::Result {
+        f.write_str("invalid mesh publication: ")?;
+        match self {
+            Self::Topology(error) => error.describe(f, names),
+            Self::DegenerateFace(face) => write!(f, "face {face} has fewer than three corners"),
+            Self::NonFinitePoint(point) => write!(f, "point {point} has a nonfinite coordinate"),
+            Self::PrimvarName(name) => {
+                write!(f, "the primvar name `{name}` is malformed or repeated")
+            }
+            Self::PrimvarType(name) => write!(
+                f,
+                "the values of the primvar `{name}` do not match its declared array type"
+            ),
+            Self::Interpolation(name) => write!(
+                f,
+                "`{name}` is not a geometry interpolation (`constant`, `uniform`, `vertex`, \
+                 `varying` or `faceVarying`)"
+            ),
+            Self::ElementSize => {
+                f.write_str("the element size is zero, too large or does not divide the values")
+            }
+            Self::Cardinality { expected, actual } => write!(
+                f,
+                "{actual} elements were supplied where the interpolation needs {expected}"
+            ),
+            Self::Index { position, index } => write!(
+                f,
+                "the primvar index {index} at position {position} is negative or out of bounds"
+            ),
+            Self::InvalidTarget => {
+                f.write_str("the target layer is missing or the edit target does not map the prim")
+            }
+            Self::InstanceProxy(path) => write!(
+                f,
+                "{} is an instance proxy, which cannot be edited; publish beneath no instance",
+                names.path(*path)
+            ),
+            Self::NotMesh(path) => write!(
+                f,
+                "{} is authored with another type, or cannot be read as a composed `Mesh`",
+                names.path(*path)
+            ),
+            Self::PropertyConflict(name) => write!(
+                f,
+                "the publication site already declares `{name}` differently"
+            ),
+        }
+    }
+}
 impl core::fmt::Display for MeshPublicationError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "invalid mesh publication: {self:?}")
+        self.describe(f, Names(None))
     }
 }
 impl core::error::Error for MeshPublicationError {}

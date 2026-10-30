@@ -4,10 +4,11 @@
 //! `UsdShade` and `UsdLux` connectability policies: OpenUSD's built-in
 //! behaviors, and the default behavior a schema's plugin metadata
 //! configures.
+use crate::diagnostic::{Describe, Names, with_store};
 use crate::{PrimView, Scene};
 use layerstack::{
-    PathId, PropertyKind, PropertyPath, SchemaDefinition, SchemaKind, SchemaRegistry, TokenId,
-    TokenInterner, Value,
+    LayerStore, PathId, PropertyKind, PropertyPath, SchemaDefinition, SchemaKind, SchemaRegistry,
+    TokenId, TokenInterner, Value,
 };
 
 /// How a prim's inputs and outputs may connect: one of OpenUSD's built-in
@@ -61,13 +62,54 @@ pub struct ConnectionError {
     /// Machine-readable failed invariant.
     pub issue: ConnectionIssue,
 }
-impl core::fmt::Display for ConnectionError {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+impl ConnectionError {
+    /// The rejection in words, its destination and source written as
+    /// paths with `store`, the store the stage was composed from: "cannot
+    /// connect /Looks/Rock/Shader.inputs:diffuseColor to
+    /// /Looks/Rock/Texture.outputs:rgb: ...". `Display` writes the same
+    /// with ids.
+    #[must_use]
+    pub fn display<'a>(&'a self, store: &'a dyn LayerStore) -> impl core::fmt::Display + 'a {
+        with_store(self, store)
+    }
+}
+impl Describe for ConnectionError {
+    fn describe(&self, f: &mut core::fmt::Formatter<'_>, names: Names<'_>) -> core::fmt::Result {
         write!(
             f,
-            "connection {:?} <- {:?}: {:?}",
-            self.destination, self.source, self.issue
-        )
+            "cannot connect {} to {}: ",
+            names.property(self.destination),
+            names.property(self.source)
+        )?;
+        f.write_str(match self.issue {
+            ConnectionIssue::InvalidDestination => {
+                "the destination is not an existing shading attribute"
+            }
+            ConnectionIssue::InvalidSource => "the source is not an existing attribute",
+            ConnectionIssue::UnsupportedBehavior => {
+                "the destination's prim has no supported connectability behavior"
+            }
+            ConnectionIssue::OutputNotConnectable => {
+                "this prim's outputs may not receive connections"
+            }
+            ConnectionIssue::InterfaceOnly => {
+                "an `interfaceOnly` input may only connect to another `interfaceOnly` input"
+            }
+            ConnectionIssue::UnknownConnectability => {
+                "the input's `connectability` is neither `full` nor `interfaceOnly`"
+            }
+            ConnectionIssue::PassthroughForbidden => {
+                "a derived container forbids connecting an output to an input of itself"
+            }
+            ConnectionIssue::Encapsulation => {
+                "the source is outside the container boundary of the destination's owner"
+            }
+        })
+    }
+}
+impl core::fmt::Display for ConnectionError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        self.describe(f, Names(None))
     }
 }
 impl core::error::Error for ConnectionError {}

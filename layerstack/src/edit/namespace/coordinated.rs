@@ -407,6 +407,20 @@ fn prepare_with(
             }
         }
     }
+    // The paths the repairs passed over, in the specs no prim index uses.
+    let mut unrepaired_paths = Vec::new();
+    for id in &inspected {
+        let Some(layer) = edited.get(id) else {
+            continue;
+        };
+        let by = unrepaired::Edited::Move {
+            local: local_moves.get(id).map_or(&[][..], Vec::as_slice),
+            source: &source_move,
+            root_layers,
+        };
+        unrepaired::collect(&*store, layer, &dormant[id], &by, &mut unrepaired_paths);
+    }
+    unrepaired::sort(&*store, &mut unrepaired_paths);
     // The slots each working copy may differ from its layer at.
     let delta: HashMap<LayerId, Vec<PathId>> = copied
         .iter()
@@ -506,6 +520,7 @@ fn prepare_with(
             })
             .collect(),
         relocates,
+        unrepaired: unrepaired_paths,
     })
 }
 

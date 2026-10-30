@@ -19,6 +19,9 @@ mod delete;
 #[cfg(test)]
 mod differential_tests;
 mod retained;
+mod unrepaired;
+
+pub use unrepaired::{PathField, UnrepairedPath};
 
 use super::{
     EditTarget, Transaction,
@@ -66,7 +69,8 @@ use crate::{
 /// a prim composed from an ancestor's selected variant moves by a relocate.
 /// Paths are repaired only in the variants a composed prim index selects:
 /// specs in a variant no prim selects keep naming the old paths, as
-/// `UsdNamespaceEditor` leaves them. Edits through a variant's edit target,
+/// `UsdNamespaceEditor` leaves them, and [`Self::unrepaired_paths`] lists
+/// them. Edits through a variant's edit target,
 /// instance proxies, inactive composition, unloaded assets and ambiguous
 /// mappings are rejected before layer mutation.
 /// Relationships, shader connections, all path-list-op buckets, reference and
@@ -85,6 +89,7 @@ pub struct NamespaceEdit {
     specs: Vec<(LayerId, SpecPath)>,
     namespace_moves: Vec<(LayerId, TargetPath, TargetPath)>,
     relocates: Vec<(LayerId, Vec<crate::Relocate>)>,
+    unrepaired: Vec<UnrepairedPath>,
 }
 
 /// Why a namespace move or delete cannot be prepared. No layer has been
@@ -347,6 +352,8 @@ impl NamespaceEdit {
             specs,
             namespace_moves: alloc::vec![(root, source, destination)],
             relocates: Vec::new(),
+            // Every variant of the source asset is repaired.
+            unrepaired: Vec::new(),
         })
     }
 
@@ -388,6 +395,65 @@ impl NamespaceEdit {
     pub fn relocates_to_author(&self) -> &[(LayerId, Vec<crate::Relocate>)] {
         &self.relocates
     }
+    /// The authored paths the edit leaves naming the moved or deleted
+    /// object, or something beneath it, sorted by layer, then spec,
+    /// field and path: those in the specs no composed prim uses, such as
+    /// the variants no prim selects, which the edit moves or removes with
+    /// their prim without repairing, as `UsdNamespaceEditor` does. Empty
+    /// when every path naming the object is repaired.
+    ///
+    /// Each names the location the object had before the edit, so a
+    /// later edit that composes its spec (selecting its variant) finds a
+    /// reference, target or connection to nothing there. The edit is
+    /// written as OpenUSD writes it, whatever this reports; a caller that
+    /// wants these repaired can edit them through the
+    /// [`UnrepairedPath::spec`] each names, after applying this edit.
+    ///
+    /// A mapped source-asset edit ([`Self::prepare`] through a target
+    /// outside the root layer stack) repairs every variant and reports
+    /// none.
+    ///
+    /// ```
+    /// use std::sync::Arc;
+    /// use layerstack::{EditTarget, InMemoryStore, Layer, LayerId, ListOp, LiveStage,
+    ///     NamespaceEdit, PathField, PrimSpec, PropertyEntry, PropertySpec, StageOptions,
+    ///     TargetPath, VariantSetSpec, VariantSpec};
+    /// let mut store = InMemoryStore::default();
+    /// let (world, lamp) = (store.path("/World"), store.path("/World/Lamp"));
+    /// let (light, on, off) = (store.tokens().intern("light"), store.tokens().intern("on"),
+    ///     store.tokens().intern("off"));
+    /// // `/World` selects `light=on`; its `off` variant targets the lamp.
+    /// let mut targets = VariantSpec::default();
+    /// targets.properties.push(PropertyEntry {
+    ///     name: store.tokens().intern("lamp"),
+    ///     spec: Arc::new(PropertySpec::relationship()
+    ///         .with_targets(ListOp::explicit(vec![TargetPath::Prim(lamp)]))),
+    /// });
+    /// let mut spec = PrimSpec::def();
+    /// let rare = spec.rare_mut();
+    /// rare.variant_sets.insert(light, VariantSetSpec {
+    ///     variants: [(on, VariantSpec::default()), (off, targets)].into_iter().collect(),
+    /// });
+    /// rare.variant_set_names.make_mut().prepend.push(light);
+    /// rare.variant_selections.insert(light, on);
+    /// let mut layer = Layer::new(LayerId(1));
+    /// layer.insert_prim(world, spec);
+    /// layer.insert_prim(lamp, PrimSpec::def());
+    /// store.insert_layer(layer);
+    /// let live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+    /// let lamp2 = store.path("/World/Lamp2");
+    /// let edit = NamespaceEdit::prepare(live.stage(), &mut store,
+    ///     &EditTarget::for_layer(LayerId(1)), TargetPath::Prim(lamp),
+    ///     TargetPath::Prim(lamp2)).unwrap();
+    /// let [left] = edit.unrepaired_paths() else { panic!("one path left") };
+    /// assert_eq!((left.field, left.path), (PathField::Targets, TargetPath::Prim(lamp)));
+    /// assert_eq!(left.display(&store).to_string(),
+    ///     "/World/Lamp in the relationship targets of /World{light=off}.lamp in layer 1");
+    /// ```
+    #[must_use]
+    pub fn unrepaired_paths(&self) -> &[UnrepairedPath] {
+        &self.unrepaired
+    }
     /// Atomic, generation-guarded edit; apply through [`crate::LiveStage::apply`].
     #[must_use]
     pub fn transaction(&self) -> &Transaction {
@@ -416,7 +482,9 @@ impl NamespaceEdit {
     /// inherits, specializes, internal references and payloads, path
     /// expression terms (`/A /B` without `/A` is `/B`) and `defaultPrim`;
     /// those in a variant no composed prim index selects stay, as
-    /// `UsdNamespaceEditor` leaves them. The local specs that compose over
+    /// `UsdNamespaceEditor` leaves them ([`Self::unrepaired_paths`] lists
+    /// them, and the arcs into the root layer stack that other layers
+    /// author, which a delete never edits). The local specs that compose over
     /// the deleted namespace through an internal arc authored at an
     /// ancestor (`/X/Kid` when `/X` inherits `/B` and `/B/Kid` goes), or
     /// over a deleted property (`/X.x` for `/B.x`), go too, outside every
@@ -1449,6 +1517,9 @@ pub(super) struct Dormant(crate::HashSet<(PathId, Vec<VariantSelectionSite>)>);
 impl Dormant {
     pub(super) fn insert(&mut self, path: PathId, sites: Vec<VariantSelectionSite>) {
         self.0.insert((path, sites));
+    }
+    pub(super) fn is_empty(&self) -> bool {
+        self.0.is_empty()
     }
     pub(super) fn contains(&self, path: PathId, sites: &[VariantSelectionSite]) -> bool {
         !self.0.is_empty() && self.0.contains(&(path, sites.to_vec()))

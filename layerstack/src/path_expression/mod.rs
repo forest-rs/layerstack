@@ -871,6 +871,36 @@ impl PathExpression {
         }
     }
 
+    /// The literal prefixes of its patterns, and the prim paths of its
+    /// expression references, made absolute at the prim whose names are
+    /// `anchor`, left to right, each as prim names and a property name:
+    /// the paths [`Self::edit_namespace`] and [`Self::remove_namespace`]
+    /// look for.
+    pub(crate) fn absolute_prefixes(
+        &self,
+        anchor: &[String],
+    ) -> Vec<(Vec<String>, Option<String>)> {
+        let absolute = self.make_absolute(anchor);
+        let mut out = Vec::new();
+        if let Some(root) = &absolute.root {
+            root.for_each_atom(&mut |atom| match atom {
+                Expr::Pattern(pattern) if pattern.prefix.absolute => {
+                    out.push((
+                        pattern.prefix.prims.clone(),
+                        pattern.prefix.property.clone(),
+                    ));
+                }
+                Expr::Reference(reference) => {
+                    if let Some(path) = reference.path.as_ref().filter(|path| path.absolute) {
+                        out.push((path.prims.clone(), None));
+                    }
+                }
+                _ => {}
+            });
+        }
+        out
+    }
+
     /// The expression's text, as `SdfPathExpression::GetText` writes it.
     ///
     /// That text does not always parse back to the same expression:

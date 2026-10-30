@@ -151,6 +151,43 @@ fn prepare_with(
             "the delete does not remove the object from the composed stage",
         ));
     }
+    // The paths the repairs passed over, in the specs no prim index uses.
+    let mut unrepaired_paths = Vec::new();
+    for id in &repaired {
+        unrepaired::collect(
+            &*store,
+            &edited[id],
+            &dormant[id],
+            &unrepaired::Edited::Delete(object),
+            &mut unrepaired_paths,
+        );
+    }
+    // The arcs into the root layer stack from the other layers the stage
+    // reaches, which the delete leaves as they are.
+    let reached = match index {
+        Some(index) => retained::reachable_layers(store, &indexes, index, root),
+        None => reachable_layers(stage, store, root),
+    };
+    let by = unrepaired::Edited::DeleteFrom {
+        object,
+        root_layers: &stack,
+    };
+    for id in reached.iter().filter(|id| !stack.contains(id)) {
+        let layer = store.layer(*id).ok_or(NamespaceError::NoSuchObject)?;
+        let mut slots: Vec<PathId> = match index {
+            Some(_) => retained::arcs_of(&indexes, layer).naming(&stack).collect(),
+            None => layer
+                .prims
+                .keys()
+                .chain(layer.variant_prims.keys())
+                .copied()
+                .collect(),
+        };
+        sort::sort_unstable(&mut slots);
+        slots.dedup();
+        unrepaired::collect_all(&*store, layer, &slots, &by, &mut unrepaired_paths);
+    }
+    unrepaired::sort(&*store, &mut unrepaired_paths);
 
     let mut transaction = Transaction::new();
     let mut layers = Vec::new();
@@ -212,6 +249,7 @@ fn prepare_with(
         specs,
         namespace_moves: Vec::new(),
         relocates,
+        unrepaired: unrepaired_paths,
     })
 }
 

@@ -115,7 +115,7 @@ use alloc::vec::Vec;
 use crate::path::PathId;
 
 pub use error::{EditError, Rejection, Slot};
-pub use namespace::{NamespaceEdit, NamespaceError};
+pub use namespace::{NamespaceEdit, NamespaceError, PathField, UnrepairedPath};
 pub use prim_fields::{ListPosition, PrimField};
 pub use target::{Address, EditTarget};
 pub use transaction::Transaction;

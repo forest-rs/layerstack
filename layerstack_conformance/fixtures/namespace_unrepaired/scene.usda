@@ -1,0 +1,76 @@
+#usda 1.0
+
+def "World"
+{
+    # The prim the cases move and delete.
+    def "Lamp"
+    {
+        float intensity = 1
+
+        def "Bulb"
+        {
+        }
+    }
+
+    # Named only from composed specs.
+    def "Switch"
+    {
+    }
+
+    def "Group"
+    {
+    }
+
+    # `off` is not selected: its specs compose nothing.
+    def "Room" (
+        variants = {
+            string light = "on"
+        }
+        prepend variantSets = "light"
+    )
+    {
+        rel switch = </World/Switch>
+
+        variantSet "light" = {
+            "off" (
+                prepend inherits = </World/Lamp>
+            ) {
+                float glow.connect = </World/Lamp.intensity>
+                rel lamp = </World/Lamp>
+                pathExpression members = "/World/Lamp//* + ../Group"
+                rel self = </World/Room>
+                pathExpression timed.timeSamples = {
+                    1: "%/World/Lamp/Bulb:bulbs",
+                }
+
+                def "Fixture" (
+                    prepend payload = </World/Lamp/Bulb>
+                    prepend references = </World/Lamp>
+                    prepend specializes = </World/Lamp>
+                )
+                {
+                    rel bulb = </World/Lamp/Bulb>
+                }
+
+            }
+            "on" {
+                rel lamp = </World/Lamp>
+                rel switch = </World/Switch>
+
+                def "Fixture" (
+                    prepend references = </World/Lamp>
+                )
+                {
+                    float glow.connect = </World/Lamp.intensity>
+                }
+
+            }
+        }
+    }
+
+    def "Shelf" (
+        prepend references = @asset.usda@</Asset>
+    )
+    {
+    }
+}

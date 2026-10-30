@@ -253,6 +253,19 @@ impl IoCause {
             Self::Localization(error) => error,
         }
     }
+    /// The cause's message: its error's [`Display`](core::fmt::Display).
+    ///
+    /// Each arm formats its error directly rather than through
+    /// [`Self::as_error`]: a `dyn Error` drags every wrapped error's
+    /// `Debug` (a supertrait) into the WebAssembly module, where only
+    /// [`core::error::Error::source`] needs it.
+    fn message(&self) -> String {
+        match self {
+            Self::Save(error) => error.to_string(),
+            Self::UsdcWrite(error) => error.to_string(),
+            Self::Localization(error) => error.to_string(),
+        }
+    }
     /// The save error inside the cause, however it is wrapped.
     fn save_error(&self) -> Option<&layerstack_usda::save::SaveError> {
         match self {
@@ -2697,7 +2710,7 @@ fn caused(cause: IoCause) -> IoError {
         Some(SaveError::Invalid { .. }) => IoErrorKind::Rejected,
         _ => IoErrorKind::Unsupported,
     };
-    let message = cause.as_error().to_string();
+    let message = cause.message();
     IoError {
         cause: Some(Arc::new(cause)),
         ..IoError::new(kind, message)

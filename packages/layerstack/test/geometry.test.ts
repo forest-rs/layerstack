@@ -247,6 +247,37 @@ describe("primvars", () => {
     );
   });
 
+  it("list every prim's primvars as OpenUSD's GetPrimvars does", async () => {
+    // `primvar_listing_oracle.py`: name, type, interpolation, element size,
+    // indexed, id target and indices of every primvar, schema-declared
+    // ones included, and `FindPrimvarsWithInheritance`.
+    const { scenes } = oracle("primvar_listing.json");
+    let checked = 0;
+    for (const [scene, prims] of Object.entries(scenes) as [string, Record<string, any>][]) {
+      const stage = await openFixture("", scene);
+      for (const [path, expected] of Object.entries(prims)) {
+        const listed = stage.primvars(path).map((primvar) => {
+          // OpenUSD's `GetIndices` is an empty array where there are none at the time.
+          let indices: number[] | null = null;
+          if (primvar.indexed) {
+            const array = primvar.indices();
+            indices = array === null ? [] : Array.from(array.copy() as Int32Array);
+            array?.release();
+          }
+          return [primvar.name, primvar.typeName, primvar.interpolation, primvar.elementSize, primvar.indexed, primvar.idTarget, indices];
+        });
+        assert.deepEqual(listed, expected.primvars, `${scene} ${path}`);
+        const inherited = stage
+          .primvars(path, { inherited: true })
+          .map((primvar) => [primvar.name, primvar.prim])
+          .sort();
+        assert.deepEqual(inherited, expected.inherited, `${scene} ${path} inherited`);
+        checked += listed.length;
+      }
+    }
+    assert.ok(checked > 40, `${checked} primvars checked`);
+  });
+
   it("inherit from the ancestors OpenUSD finds", async () => {
     const stage = await openFixture("", "primvar_queries.usda");
     const { inheritance } = oracle("primvar_queries.json");

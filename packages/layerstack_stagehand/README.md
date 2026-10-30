@@ -2,8 +2,9 @@
 
 Render-ready mesh buffers from a [Layerstack](https://github.com/forest-rs/layerstack)
 stage, in the browser or Node: triangles as Hydra fans them (concave faces
-ear-clipped), vertices split for face-varying normals, `st` and
-`displayColor`, authored or smooth normals, one draw range per
+ear-clipped), vertices split for face-varying normals, `st`,
+`displayColor` and the other texture coordinate sets the materials read
+(`uvSets`: `st1`, `uv`, each a channel of its own), authored or smooth normals, one draw range per
 `materialBind` subset, a report to check it all by, and tessellated implicit
 shapes (the `_1` cylinder and capsule included), and a draw list kept up
 to date from the stage's change records.

@@ -1994,7 +1994,11 @@ impl fmt::Display for MetadataError {
             Self::NoSuchProperty => f.write_str("no such property"),
             Self::CannotEdit(error) => error.fmt(f),
             Self::Field(error) => error.fmt(f),
-            Self::InvalidKeyPath(path) => write!(f, "invalid dictionary key path {path:?}"),
+            Self::InvalidKeyPath(path) => write!(
+                f,
+                "`{}` is not a dictionary key path: one of its parts is empty",
+                path.escape_debug()
+            ),
         }
     }
 }

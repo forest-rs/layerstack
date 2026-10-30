@@ -132,6 +132,36 @@ pub enum RuleTimeDomain {
     AuthoredTimes,
 }
 impl BuiltinRule {
+    /// The rule's name, as a [`ValidationProblem`]'s `display` begins
+    /// with it: its variant's name (`DefaultPrim`).
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::CompositionErrors => "CompositionErrors",
+            Self::DefaultPrim => "DefaultPrim",
+            Self::AttributeTypes => "AttributeTypes",
+            Self::AllowedTokens => "AllowedTokens",
+            #[cfg(feature = "usd-geom")]
+            Self::GeometryStageMetadata => "GeometryStageMetadata",
+            #[cfg(feature = "usd-geom")]
+            Self::MeshTopology => "MeshTopology",
+            #[cfg(feature = "usd-geom")]
+            Self::SubsetFamilies => "SubsetFamilies",
+            #[cfg(feature = "usd-geom")]
+            Self::SubsetParent => "SubsetParent",
+            #[cfg(feature = "usd-geom")]
+            Self::GeometryEncapsulation => "GeometryEncapsulation",
+            #[cfg(feature = "usd-shade")]
+            Self::MaterialBindingApi => "MaterialBindingApi",
+            #[cfg(feature = "usd-shade")]
+            Self::MaterialBindingPropertyKinds => "MaterialBindingPropertyKinds",
+            #[cfg(all(feature = "usd-shade", feature = "usd-geom"))]
+            Self::MaterialSubsetFamilies => "MaterialSubsetFamilies",
+            #[cfg(feature = "usd-shade")]
+            Self::ShadingConnections => "ShadingConnections",
+        }
+    }
+
     /// The actual temporal coverage of this rule.
     #[must_use]
     pub fn time_domain(self) -> RuleTimeDomain {
@@ -289,7 +319,7 @@ impl ValidationProblem {
         crate::diagnostic::Shown(move |f: &mut core::fmt::Formatter<'_>| {
             let (paths, tokens) = (store.paths(), store.tokens());
             match &self.rule {
-                ValidatorId::Builtin(rule) => write!(f, "{rule:?}: ")?,
+                ValidatorId::Builtin(rule) => write!(f, "{}: ", rule.name())?,
                 ValidatorId::Custom(id) => write!(f, "{id}: ")?,
             }
             match (self.site.prim, self.site.property) {
@@ -351,7 +381,12 @@ impl ValidationProblem {
                     if let Some(index) = index {
                         write!(f, " at index {index}")?;
                     }
-                    write!(f, " is not one of its `allowedTokens` {allowed:?}")
+                    f.write_str(" is not one of its `allowedTokens` [")?;
+                    for (index, token) in allowed.iter().enumerate() {
+                        let comma = if index == 0 { "" } else { ", " };
+                        write!(f, "{comma}\"{token}\"")?;
+                    }
+                    f.write_str("]")
                 }
                 #[cfg(feature = "usd-geom")]
                 ValidationProblemKind::MissingGeometryMetadata(key) => {

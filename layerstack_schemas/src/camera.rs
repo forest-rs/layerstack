@@ -34,7 +34,21 @@ pub enum CameraError {
 }
 impl core::fmt::Display for CameraError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "invalid camera: {self:?}")
+        match self {
+            Self::InvalidAttribute(name) => write!(
+                f,
+                "invalid camera: `{name}` has no value of its type, or one that makes no camera"
+            ),
+            Self::UnsupportedProjection => f.write_str(
+                "invalid camera: its `projection` is neither `perspective` nor `orthographic`",
+            ),
+            Self::InvalidTransform => {
+                f.write_str("invalid camera: its transform is missing, singular or not finite")
+            }
+            Self::InvalidTime => {
+                f.write_str("invalid camera: a time, or a shutter end it gives, is not finite")
+            }
+        }
     }
 }
 impl core::error::Error for CameraError {}

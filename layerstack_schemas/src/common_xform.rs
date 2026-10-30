@@ -195,7 +195,9 @@ impl core::fmt::Display for CommonTransformError {
                 requested,
             } => write!(
                 f,
-                "rotation order {existing:?} differs from requested {requested:?}"
+                "the existing rotation op is `{}`, which cannot become `{}`",
+                existing.op_type().as_str(),
+                requested.op_type().as_str()
             ),
             Self::OpAlreadyInOrder { op } => write!(f, "xformOpOrder already lists {op}"),
             Self::IncompatibleAttribute { name, expected } => {

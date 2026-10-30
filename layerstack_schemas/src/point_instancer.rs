@@ -36,7 +36,18 @@ pub enum InstanceIdEditError {
 }
 impl core::fmt::Display for InstanceIdEditError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "cannot edit instance IDs: {self:?}")
+        match self {
+            Self::InvalidInactiveIds => f.write_str(
+                "cannot edit instance IDs: the target layer's `inactiveIds` is not an int64 list op",
+            ),
+            Self::InvalidInvisibleIds => f.write_str(
+                "cannot edit instance IDs: the composed `invisibleIds` is not an `int64[]`",
+            ),
+            Self::Decode(error) => write!(
+                f,
+                "cannot edit instance IDs: `invisibleIds` failed to decode: {error}"
+            ),
+        }
     }
 }
 impl core::error::Error for InstanceIdEditError {

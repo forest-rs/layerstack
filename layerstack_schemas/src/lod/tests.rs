@@ -59,6 +59,10 @@ fn transition_edges_blends_and_missing_blends() {
         d.validate(),
         Err(LodError::UnsortedThresholds("thresholds"))
     );
+    assert_eq!(
+        alloc::string::ToString::to_string(&d.validate().unwrap_err()),
+        "invalid LOD input: the thresholds of `thresholds` are not in the order its metric needs"
+    );
     assert_eq!(s.compute_lod(f64::NAN), Err(LodError::InvalidMetric));
 }
 #[test]

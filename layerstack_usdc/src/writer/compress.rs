@@ -7,8 +7,8 @@
 //! (`TfFastCompression::CompressToBuffer`) and `pxr/usd/sdf/integerCoding.cpp`
 //! (`_EncodeIntegers`).
 
-use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
+use hashbrown::HashMap;
 
 /// Largest input one LZ4 block may hold (`LZ4_MAX_INPUT_SIZE`).
 const LZ4_MAX_INPUT_SIZE: usize = 0x7E00_0000;
@@ -89,7 +89,9 @@ pub(crate) fn encode_integers(values: &[i64], width: IntWidth) -> Vec<u8> {
         IntWidth::W64 => cur.wrapping_sub(prev),
     };
 
-    let mut counts: BTreeMap<i64, usize> = BTreeMap::new();
+    // Hashed: the most common delta below is the greatest by count, then
+    // by value, whatever order the counts are visited in.
+    let mut counts: HashMap<i64, usize> = HashMap::new();
     // AOUSD Core §16.3.4: count every delta exactly. Keep the first inter-element
     // delta in a separate counter: ramps and repeated ranges avoid a tree lookup
     // for their usual step, without a preliminary pass or a guessed mode.
@@ -174,6 +176,7 @@ pub(crate) fn compressed_ints(values: &[i64], width: IntWidth) -> Vec<u8> {
 
 #[cfg(test)]
 mod tests {
+    use alloc::collections::BTreeMap;
     use alloc::vec;
 
     use super::*;

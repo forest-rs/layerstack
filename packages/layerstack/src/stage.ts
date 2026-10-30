@@ -20,9 +20,19 @@ import {
   readPorts,
 } from "./schemas.js";
 import { SkinningQuery } from "./skinning.js";
+import {
+  Primvar,
+  Xformable,
+  decodeLocalTransform,
+  decodePurpose,
+} from "./geometry.js";
 import type {
   ArcKind,
   ArrayData,
+  LocalTransform,
+  PurposeInfo,
+  TransformCacheStats,
+  Visibility,
   EditTargetKind,
   AssetFailure,
   AssetSource,
@@ -71,7 +81,7 @@ export const PACKAGE_VERSION = "0.1.0";
  * The ABI this package speaks: the version of the records it exchanges
  * with the native module (`layerstack_wasm::ABI`).
  */
-export const ABI = 7;
+export const ABI = 8;
 
 /** The native stage the generated glue exports (`layerstack_wasm::Stage`). Borrowed only by same-module extensions. */
 export interface NativeStage extends Disposable {
@@ -138,6 +148,16 @@ export interface NativeStage extends Disposable {
   deformedPoints(path: string, time?: number | null): unknown;
   deformedNormals(path: string, time?: number | null): unknown;
   skinningCache(): unknown;
+  transformCache(): unknown;
+  localTransform(path: string, time?: number | null): unknown;
+  worldTransforms(paths: string[], time: number | null | undefined, parent: boolean): Float64Array;
+  xformable(path: string): unknown;
+  visibilities(paths: string[], time?: number | null, purpose?: string | null): unknown;
+  purposes(paths: string[]): unknown;
+  primvars(path: string, inherited: boolean): unknown;
+  primvar(path: string, name: string, inherited: boolean): unknown;
+  primvarValue(path: string, name: string, time: number | null | undefined, flattened: boolean): unknown;
+  primvarIndices(path: string, name: string, time?: number | null): unknown;
 }
 
 /**
@@ -1073,6 +1093,136 @@ export class Stage implements Disposable {
     };
   }
 
+  /**
+   * What the stage's transform cache has done and holds: the cache behind
+   * {@link Stage.worldTransforms}, {@link Stage.parentToWorldTransforms}
+   * and {@link Stage.localTransform}, which hears the stage's edits before
+   * each read and invalidates only what they touch. Compare two reads to
+   * see what a frame cost.
+   */
+  transformCache(): TransformCacheStats {
+    const [localComputed, worldComputed, hits, prims, changeBatches, resets] = this.#call("transformCache", (native) =>
+      native.transformCache(),
+    ) as number[];
+    return {
+      localComputed: localComputed as number,
+      worldComputed: worldComputed as number,
+      hits: hits as number,
+      prims: prims as number,
+      changeBatches: changeBatches as number,
+      resets: resets as number,
+    };
+  }
+
+  /**
+   * The local-to-world transform of each prim of `paths` at `time`, in
+   * order: 16 numbers per prim in one `Float64Array`, prim `i` at
+   * `16 * i`. The pseudo-root's is the identity.
+   *
+   * Matrices are row by row in OpenUSD's row-vector convention
+   * (`GfMatrix4d`): a point `p` transforms as `p * M`, the translation is
+   * the last row (`M[12..14]`), and a prim's world transform is its local
+   * transform times its parent's. The same 16 numbers, read as
+   * column-major, are the column-vector matrix WebGL's `uniformMatrix4fv`
+   * and most engines take: upload them as they are.
+   *
+   * The stage keeps a transform cache that hears its edits: each frame
+   * recomputes only the transforms an edit touched or that vary with time
+   * (`UsdGeomXformCache::GetLocalToWorldTransform`).
+   *
+   * Throws `prim.not_found` naming the first path no prim is at.
+   */
+  worldTransforms(paths: readonly string[], options: { readonly time?: number } = {}): Float64Array {
+    return this.#call("worldTransforms", (native) => native.worldTransforms([...paths], options.time, false));
+  }
+
+  /** The local-to-world transform of each prim's parent of `paths` at `time`, as {@link Stage.worldTransforms} lays them out (`UsdGeomXformCache::GetParentToWorldTransform`). */
+  parentToWorldTransforms(paths: readonly string[], options: { readonly time?: number } = {}): Float64Array {
+    return this.#call("parentToWorldTransforms", (native) =>
+      native.worldTransforms([...paths], options.time, true),
+    );
+  }
+
+  /**
+   * The local transform of the prim at `path` at `time`: the product of
+   * its ops, whether it resets the transform stack, and the ops that did
+   * not contribute as written (`UsdGeomXformCache::GetLocalTransformation`).
+   * The identity for a prim that is not `Xformable`.
+   *
+   * Throws `prim.not_found`.
+   */
+  localTransform(path: string, options: { readonly time?: number } = {}): LocalTransform {
+    return decodeLocalTransform(
+      this.#call("localTransform", (native) => native.localTransform(path, options.time)) as Row,
+    );
+  }
+
+  /** The transform ops of the prim at `path` ({@link Xformable}), or `null` when it is not `Xformable`. Throws `prim.not_found`. */
+  xformable(path: string): Xformable | null {
+    const row = this.#call("xformable", (native) => native.xformable(path)) as Row | null;
+    return row === null ? null : new Xformable(this, path, row);
+  }
+
+  /**
+   * The computed visibility of each prim of `paths` at `time`, in order:
+   * `invisible` when it or an ancestor is, else `inherited`
+   * (`UsdGeomImageable::ComputeVisibility`). With a `purpose`, its
+   * visibility for that purpose, `visible` among the answers
+   * (`ComputeEffectiveVisibility`). `null` for a prim that is not
+   * `Imageable`.
+   *
+   * Throws `prim.not_found` naming the first path no prim is at.
+   */
+  visibilities(
+    paths: readonly string[],
+    options: { readonly time?: number; readonly purpose?: string } = {},
+  ): (Visibility | null)[] {
+    return this.#call("visibilities", (native) =>
+      native.visibilities([...paths], options.time, options.purpose ?? null),
+    ) as (Visibility | null)[];
+  }
+
+  /**
+   * The computed purpose of each prim of `paths`, in order: its own
+   * authored `purpose`, else the nearest `Imageable` ancestor's, else its
+   * fallback (`UsdGeomImageable::ComputePurposeInfo`); `null` for a prim
+   * that is not `Imageable`.
+   *
+   * Throws `prim.not_found` naming the first path no prim is at.
+   */
+  purposeInfos(paths: readonly string[]): (PurposeInfo | null)[] {
+    const rows = this.#call("purposeInfos", (native) => native.purposes([...paths])) as unknown[];
+    return rows.map(decodePurpose);
+  }
+
+  /**
+   * The primvars of the prim at `path`, sorted by name: its declared ones,
+   * schema-defined included (`UsdGeomPrimvarsAPI::GetPrimvars`), or with
+   * `inherited` those that produce a value, its own and the constant ones
+   * its ancestors pass down (`FindPrimvarsWithInheritance`), each
+   * {@link Primvar.prim} the prim it is on.
+   *
+   * Throws `prim.not_found`.
+   */
+  primvars(path: string, options: { readonly inherited?: boolean } = {}): Primvar[] {
+    const rows = this.#call("primvars", (native) => native.primvars(path, options.inherited ?? false)) as Row[];
+    return rows.map((row) => new Primvar(this, row));
+  }
+
+  /**
+   * The primvar `name` (`displayColor` or `primvars:displayColor`) of the
+   * prim at `path`, or `null` (`UsdGeomPrimvarsAPI::GetPrimvar`); with
+   * `inherited`, its own when it authors a value, else the nearest
+   * ancestor's constant one, else its own declaration
+   * (`FindPrimvarWithInheritance`).
+   *
+   * Throws `prim.not_found`.
+   */
+  primvar(path: string, name: string, options: { readonly inherited?: boolean } = {}): Primvar | null {
+    const row = this.#call("primvar", (native) => native.primvar(path, name, options.inherited ?? false)) as Row | null;
+    return row === null ? null : new Primvar(this, row);
+  }
+
   /** The composed prim at `path`, or `null`. Throws `path.invalid` for a path that is not an absolute prim path. */
   prim(path: string): Prim | null {
     const row = this.#call("prim", (native) => native.prim(path)) as Row | null;
@@ -1857,6 +2007,41 @@ export class Prim {
     return decodeCoordSys(rows);
   }
 
+  /** Its local transform at `time` ({@link Stage.localTransform}). */
+  localTransform(options: { readonly time?: number } = {}): LocalTransform {
+    return this.stage.localTransform(this.path, options);
+  }
+
+  /** Its local-to-world transform at `time`, 16 numbers row by row ({@link Stage.worldTransforms}). */
+  worldTransform(options: { readonly time?: number } = {}): Float64Array {
+    return this.stage.worldTransforms([this.path], options);
+  }
+
+  /** Its transform ops ({@link Stage.xformable}), or `null` when it is not `Xformable`. */
+  xformable(): Xformable | null {
+    return this.stage.xformable(this.path);
+  }
+
+  /** Its computed visibility at `time`, for `purpose` when given ({@link Stage.visibilities}); `null` when it is not `Imageable`. */
+  visibility(options: { readonly time?: number; readonly purpose?: string } = {}): Visibility | null {
+    return this.stage.visibilities([this.path], options)[0] ?? null;
+  }
+
+  /** Its computed purpose ({@link Stage.purposeInfos}); `null` when it is not `Imageable`. */
+  purposeInfo(): PurposeInfo | null {
+    return this.stage.purposeInfos([this.path])[0] ?? null;
+  }
+
+  /** Its primvars ({@link Stage.primvars}). */
+  primvars(options: { readonly inherited?: boolean } = {}): Primvar[] {
+    return this.stage.primvars(this.path, options);
+  }
+
+  /** Its primvar `name` ({@link Stage.primvar}), or `null`. */
+  primvar(name: string, options: { readonly inherited?: boolean } = {}): Primvar | null {
+    return this.stage.primvar(this.path, name, options);
+  }
+
   /** Its skinning binding ({@link Stage.skinning}), or `null` when nothing skins it. */
   skinning(): SkinningQuery | null {
     return this.stage.skinning(this.path);
@@ -2175,7 +2360,8 @@ function report(error: LayerstackError): void {
   else console.error(error);
 }
 
-function decodeValue(layerstack: Layerstack, record: unknown): Value | null {
+/** @internal A value record. */
+export function decodeValue(layerstack: Layerstack, record: unknown): Value | null {
   if (record === null || record === undefined) return null;
   const [type, tag, ...rest] = record as [string, string, ...unknown[]];
   switch (tag) {

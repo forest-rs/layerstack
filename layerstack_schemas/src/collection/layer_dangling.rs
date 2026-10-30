@@ -81,10 +81,10 @@ impl LayerDanglingTarget {
     /// property that reads it when that is another path, the list, the
     /// authored path, the stage path when that differs, and the problem.
     ///
-    /// `/Spot.shade appended /Gone (NoPrim)` from a sublayer;
+    /// `/Spot.shade appended /Gone (no prim)` from a sublayer;
     /// `/Asset.shade (as /World/A.shade) explicit /Asset/Gone ->
-    /// /World/A/Gone (NoPrim)` through a reference; `/Asset.shade (as
-    /// /World/A.shade) explicit /Outside (OutsideArc(References))` for a
+    /// /World/A/Gone (no prim)` through a reference; `/Asset.shade (as
+    /// /World/A.shade) explicit /Outside (outside the namespace the reference maps)` for a
     /// path the reference drops.
     ///
     /// Its paths are written as text with `store`, the store the stage was
@@ -111,9 +111,9 @@ impl LayerDanglingTarget {
                 write!(f, " -> {}", target.display(paths, tokens))?;
             }
             match self.problem {
-                AuthoredTargetProblem::Dangling(kind) => write!(f, " ({kind:?})"),
-                AuthoredTargetProblem::NoCollection => f.write_str(" (NoCollection)"),
-                AuthoredTargetProblem::Dropped(reason) => write!(f, " ({reason:?})"),
+                AuthoredTargetProblem::Dangling(kind) => write!(f, " ({kind})"),
+                AuthoredTargetProblem::NoCollection => f.write_str(" (no collection)"),
+                AuthoredTargetProblem::Dropped(reason) => write!(f, " ({reason})"),
             }
         })
     }
@@ -207,7 +207,7 @@ impl LayerDangling {
 /// assert_eq!(example.problem, AuthoredTargetProblem::Dangling(layerstack::DanglingKind::NoPrim));
 /// assert_eq!(
 ///     example.display(&store).to_string(),
-///     "/Lamp.shinesOn appended /Gone (NoPrim)"
+///     "/Lamp.shinesOn appended /Gone (no prim)"
 /// );
 /// assert_eq!(report.layer(LayerId(1)).unwrap().total(), 0);
 /// ```

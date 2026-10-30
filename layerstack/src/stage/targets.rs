@@ -92,6 +92,21 @@ pub enum DropReason {
     InstanceOfClass,
 }
 
+impl core::fmt::Display for DropReason {
+    /// Why the path was dropped, in words: `outside the namespace the
+    /// reference maps`, or `an instance of the class authoring it`.
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::OutsideArc(arc) => write!(
+                f,
+                "outside the namespace the {} maps",
+                crate::composition_error::arc_name(*arc)
+            ),
+            Self::InstanceOfClass => f.write_str("an instance of the class authoring it"),
+        }
+    }
+}
+
 impl Stage {
     /// Explains the targets of the relationship, or the connections of the
     /// attribute, at `property_path` (see [`TargetsExplanation`]); `None`

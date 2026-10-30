@@ -307,23 +307,23 @@ fn layer_report_counts_and_displays() {
     assert_eq!(
         shown("planter.usda"),
         [
-            "/Planter.water (as /World/Bed_A.water) explicit /Planter/Gone -> /World/Bed_A/Gone (NoPrim)",
-            "/Planter.water (as /World/Bed_A.water) explicit /Outside (OutsideArc(References))",
-            "/Planter.water (as /World/Bed_C.water) explicit /Planter/Gone -> /World/Bed_C/Gone (NoPrim)",
-            "/Planter.water (as /World/Bed_C.water) explicit /Outside (OutsideArc(References))",
-            "/Planter/Soil.feeds (as /World/Bed_A/Soil.feeds) explicit /Planter/Roots -> /World/Bed_A/Roots (NoPrim)",
-            "/Planter/Soil.feeds (as /World/Bed_B/Soil.feeds) explicit /Planter/Roots -> /World/Bed_B/Roots (NoPrim)",
-            "/Planter/Soil.feeds (as /World/Bed_C/Soil.feeds) explicit /Planter/Roots -> /World/Bed_C/Roots (NoPrim)",
+            "/Planter.water (as /World/Bed_A.water) explicit /Planter/Gone -> /World/Bed_A/Gone (no prim)",
+            "/Planter.water (as /World/Bed_A.water) explicit /Outside (outside the namespace the reference maps)",
+            "/Planter.water (as /World/Bed_C.water) explicit /Planter/Gone -> /World/Bed_C/Gone (no prim)",
+            "/Planter.water (as /World/Bed_C.water) explicit /Outside (outside the namespace the reference maps)",
+            "/Planter/Soil.feeds (as /World/Bed_A/Soil.feeds) explicit /Planter/Roots -> /World/Bed_A/Roots (no prim)",
+            "/Planter/Soil.feeds (as /World/Bed_B/Soil.feeds) explicit /Planter/Roots -> /World/Bed_B/Roots (no prim)",
+            "/Planter/Soil.feeds (as /World/Bed_C/Soil.feeds) explicit /Planter/Roots -> /World/Bed_C/Roots (no prim)",
         ]
     );
     let weak = by_name("scope_weak.usda");
     assert_eq!(
         shown("scope_weak.usda"),
         [
-            "/World/Bed_A.shade appended /World/Lost (NoPrim)",
-            "/Path_1.shade appended /World/Lost (NoPrim)",
-            "/Path_1.shade appended /World/Shed/Soil (Unloaded)",
-            "/Lights.collection:lit:includes appended /World/Gone_weak (NoPrim)",
+            "/World/Bed_A.shade appended /World/Lost (no prim)",
+            "/Path_1.shade appended /World/Lost (no prim)",
+            "/Path_1.shade appended /World/Shed/Soil (unloaded)",
+            "/Lights.collection:lit:includes appended /World/Gone_weak (no prim)",
         ]
     );
     // The stronger scope deletes `/Path_1`'s `/World/Lost` and
@@ -333,12 +333,12 @@ fn layer_report_counts_and_displays() {
     assert_eq!(
         shown("scene.usda"),
         [
-            "/World/Bed_B.water explicit /World/Bed_B/Dry (NoPrim)",
-            "/Lights.collection:lit:excludes explicit /World/Bed_A/Soil/Gone (NoPrim)",
-            "/Lights.collection:lit:includes prepended /World/Gone_lit (NoPrim)",
-            "/Lights.collection:lit:includes prepended /Lights.collection:glare (NoCollection)",
-            "/Lights.collection:lit:includes prepended /Spot.collection:lit (NoCollection)",
-            "/Spot{look=bright}.shade explicit /World/Gone_bright (NoPrim)",
+            "/World/Bed_B.water explicit /World/Bed_B/Dry (no prim)",
+            "/Lights.collection:lit:excludes explicit /World/Bed_A/Soil/Gone (no prim)",
+            "/Lights.collection:lit:includes prepended /World/Gone_lit (no prim)",
+            "/Lights.collection:lit:includes prepended /Lights.collection:glare (no collection)",
+            "/Lights.collection:lit:includes prepended /Spot.collection:lit (no collection)",
+            "/Spot{look=bright}.shade explicit /World/Gone_bright (no prim)",
         ]
     );
     let scene_layer = by_name("scene.usda");
@@ -348,7 +348,7 @@ fn layer_report_counts_and_displays() {
     );
     assert_eq!(
         shown("scope_strong.usda"),
-        ["/Path_1.shade prepended /World/Bed_B/Soil.wetness (NoProperty)"]
+        ["/Path_1.shade prepended /World/Bed_B/Soil.wetness (no property)"]
     );
 }
 

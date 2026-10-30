@@ -14,10 +14,14 @@ default, the layers below (`scene.usda`, whose `/World/Shelf` references
 `/World/Room` selects `light=on`; its `off` variant authors every kind of
 path naming `/World/Lamp` (references, payloads, inherits, specializes,
 relationship targets, attribute connections, path expressions in a
-default and a time sample), as do composed specs beside it. `asset.usda`
+default and a time sample), as do composed specs beside it. `asset.usda`,
+referenced by `/World/Shelf` and through a payload by `/World/Rack`,
 names the lamp from an unselected variant of the composed `/Asset` and
-from `/Unused`, a prim no arc reaches. `/World/Switch` is named only from
-composed specs.
+from `/Unused`, a prim no arc reaches, and arcs back into the stage from
+composed specs: `/Asset/Front` references the lamp and overs its bulb
+and `intensity`, `/Asset/Base` (inherited by `/Asset/Side`) payloads the
+bulb, and the selected variant's `/Asset{mode=plain}Under` references the
+lamp. `/World/Switch` is named only from composed specs.
 
 Each case opens the scene afresh, queues one `UsdNamespaceEditor` move or
 delete through the root layer and applies it. It records each layer's
@@ -33,7 +37,12 @@ editor repairs only the paths of composed specs (`_DependencyCollector`,
 `_GatherPathBearingFieldEditsForStage` and
 `PcpGatherDependentNamespaceEdits`, `pxr/usd/usd/namespaceEditor.cpp`),
 so every recorded path is in a spec no composed prim uses, and the
-specs of an unselected variant move with their prim.
+specs of an unselected variant move with their prim. An arc back into
+the stage from a composed spec of another layer is repaired there, and
+the specs that compose over the edited namespace through it move or go
+in every layer stack on the way up to the stage
+(`_PrimIndexDependentNodeEditProcessor`,
+`pxr/usd/pcp/dependentNamespaceEditUtils.cpp`).
 
 `--check` rewrites everything into a temporary directory and fails unless
 the layers and `oracle.json` match the checked-in fixture.
@@ -124,6 +133,22 @@ def "World"
         prepend references = @asset.usda@</Asset>
     )
     {
+        # Over the lamp `asset.usda`'s `/Asset/Front` references back.
+        over "Front"
+        {
+            float intensity = 3
+
+            over "Bulb"
+            {
+            }
+        }
+    }
+
+    # The asset again, through a payload.
+    def "Rack" (
+        prepend payload = @asset.usda@</Asset>
+    )
+    {
     }
 }
 ''',
@@ -136,6 +161,32 @@ def "Asset" (
     prepend variantSets = "mode"
 )
 {
+    # Composed through `/World/Shelf` and `/World/Rack`: the edit repairs
+    # its arc back into the stage and moves its specs over the lamp.
+    def "Front" (
+        prepend references = @scene.usda@</World/Lamp>
+    )
+    {
+        float intensity = 2
+
+        over "Bulb"
+        {
+        }
+    }
+
+    # Reaches the bulb through an inherit.
+    def "Side" (
+        prepend inherits = </Asset/Base>
+    )
+    {
+    }
+
+    class "Base" (
+        prepend payload = @scene.usda@</World/Lamp/Bulb>
+    )
+    {
+    }
+
     variantSet "mode" = {
         "lit" {
             def "Back" (
@@ -146,6 +197,11 @@ def "Asset" (
 
         }
         "plain" {
+            def "Under" (
+                prepend references = @scene.usda@</World/Lamp>
+            )
+            {
+            }
 
         }
     }
@@ -170,6 +226,8 @@ CASES = [
     ("reparent_lamp", "/World/Lamp", "/World/Group/Lamp"),
     ("delete_lamp", "/World/Lamp", None),
     ("rename_bulb", "/World/Lamp/Bulb", "/World/Lamp/Bulb2"),
+    ("reparent_bulb", "/World/Lamp/Bulb", "/World/Group/Bulb"),
+    ("delete_bulb", "/World/Lamp/Bulb", None),
     ("rename_property", "/World/Lamp.intensity", "/World/Lamp.power"),
     ("delete_property", "/World/Lamp.intensity", None),
     ("rename_room", "/World/Room", "/World/Room2"),

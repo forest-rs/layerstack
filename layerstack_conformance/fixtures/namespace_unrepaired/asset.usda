@@ -7,6 +7,32 @@ def "Asset" (
     prepend variantSets = "mode"
 )
 {
+    # Composed through `/World/Shelf` and `/World/Rack`: the edit repairs
+    # its arc back into the stage and moves its specs over the lamp.
+    def "Front" (
+        prepend references = @scene.usda@</World/Lamp>
+    )
+    {
+        float intensity = 2
+
+        over "Bulb"
+        {
+        }
+    }
+
+    # Reaches the bulb through an inherit.
+    def "Side" (
+        prepend inherits = </Asset/Base>
+    )
+    {
+    }
+
+    class "Base" (
+        prepend payload = @scene.usda@</World/Lamp/Bulb>
+    )
+    {
+    }
+
     variantSet "mode" = {
         "lit" {
             def "Back" (
@@ -17,6 +43,11 @@ def "Asset" (
 
         }
         "plain" {
+            def "Under" (
+                prepend references = @scene.usda@</World/Lamp>
+            )
+            {
+            }
 
         }
     }

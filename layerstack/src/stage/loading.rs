@@ -202,14 +202,11 @@ impl PayloadLoadRules {
 pub enum LayerMuteError {
     /// The stage's root layer cannot be muted.
     RootLayer,
-    /// A layer was requested in both the mute and unmute sets.
-    ConflictingRequest,
 }
 impl core::fmt::Display for LayerMuteError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.write_str(match self {
             Self::RootLayer => "the stage root layer cannot be muted",
-            Self::ConflictingRequest => "a layer cannot be muted and unmuted in one request",
         })
     }
 }

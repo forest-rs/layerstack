@@ -366,8 +366,16 @@ impl LiveStage {
     }
 
     /// Queue an atomic mute/unmute batch. Muting never edits or evicts a layer.
-    /// Root muting and conflicting requests fail without changing any controls.
+    /// A request to mute the root fails without changing any controls.
     /// A changed batch queues a structural recomposition and its usual notices.
+    /// Returns whether the muted set changed.
+    ///
+    /// The layers of `mute` are muted first, then those of `unmute`, except
+    /// that a layer named in both stays muted: OpenUSD's
+    /// `PcpCache::RequestLayerMuting` drops an unmute request the mute
+    /// requests repeat (`pxr/usd/pcp/cache.cpp`). Unmuting the root, or a
+    /// layer not muted, changes nothing.
+    ///
     /// OpenUSD: `UsdStage::MuteAndUnmuteLayers`.
     #[doc(alias = "UsdStage::MuteAndUnmuteLayers")]
     #[doc(alias = "MuteAndUnmuteLayers")]
@@ -379,14 +387,11 @@ impl LiveStage {
         if mute.contains(&self.root) {
             return Err(crate::LayerMuteError::RootLayer);
         }
-        if mute.iter().any(|l| unmute.contains(l)) {
-            return Err(crate::LayerMuteError::ConflictingRequest);
-        }
         let mut changed = false;
         for &layer in mute {
             changed |= self.options.muted_layers.insert(layer);
         }
-        for layer in unmute {
+        for layer in unmute.iter().filter(|layer| !mute.contains(layer)) {
             changed |= self.options.muted_layers.remove(layer);
         }
         self.controls_pending |= changed;

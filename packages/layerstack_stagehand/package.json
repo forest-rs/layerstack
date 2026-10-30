@@ -1,0 +1,45 @@
+{
+  "name": "@forest-rs/layerstack_stagehand",
+  "version": "0.1.0",
+  "description": "Render-ready mesh buffers from a Layerstack stage: triangulated meshes, face-varying primvars, normals, subset draw ranges and tessellated implicit shapes, in WebAssembly.",
+  "license": "Apache-2.0 OR MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/forest-rs/layerstack",
+    "directory": "packages/layerstack_stagehand"
+  },
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "wasm/layerstack_stagehand.js",
+    "wasm/layerstack_stagehand.d.ts",
+    "wasm/layerstack_stagehand_bg.wasm"
+  ],
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "build:wasm": "bash scripts/build-wasm.sh",
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.test.json",
+    "size": "node scripts/check-size.mjs",
+    "test": "node --test test/*.test.ts"
+  },
+  "peerDependencies": {
+    "@forest-rs/layerstack": "0.1.0"
+  },
+  "devDependencies": {
+    "@forest-rs/layerstack": "file:../layerstack",
+    "@types/node": "24.4.0",
+    "typescript": "5.9.3"
+  }
+}

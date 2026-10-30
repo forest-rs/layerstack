@@ -10,6 +10,7 @@ members = [
     "layerstack_schemagen",
     "layerstack_schemas",
     "layerstack_stagehand",
+    "layerstack_stagehand_wasm",
     "layerstack_usda",
     "layerstack_usdc",
     "layerstack_usdz",

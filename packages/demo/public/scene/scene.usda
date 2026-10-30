@@ -1,7 +1,7 @@
 #usda 1.0
 (
     defaultPrim = "World"
-    doc = "The demo editor's sample: a root layer, a sublayer, a class the rock inherits, a robot referenced from its own file with a variant set, two instances of a beacon, a ground mesh with a face subset, a concave path and a point instancer of stones."
+    doc = "The demo editor's sample: a root layer, a sublayer, a class the rock inherits, a robot referenced from its own file with a variant set, two instances of a beacon, a ground mesh with a face subset, a concave path, a point instancer of stones, a spinning top animated by time samples, a camera and lights."
     subLayers = [
         @./library.usda@
     ]
@@ -89,6 +89,71 @@ def Xform "World"
             interpolation = "uniform"
         )
         uniform token subdivisionScheme = "none"
+    }
+
+    def Cube "Top"
+    {
+        double size = 0.6
+        color3f[] primvars:displayColor = [(0.2, 0.62, 0.6)]
+        double3 xformOp:translate = (5.5, 0.8, 1.5)
+        double xformOp:rotateY = 0
+        double xformOp:rotateY.timeSamples = {
+            0: 0,
+            48: 360,
+        }
+        double xformOp:rotateX = 35
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateY", "xformOp:rotateX"]
+    }
+
+    def Camera "Camera"
+    {
+        float focalLength = 24
+        float horizontalAperture = 36
+        float verticalAperture = 20.25
+        float2 clippingRange = (0.1, 300)
+        double3 xformOp:translate = (10, 7, 14)
+        float3 xformOp:rotateXYZ = (-18.4, 33.69, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ"]
+    }
+
+    def DistantLight "Sun"
+    {
+        float inputs:intensity = 2.5
+        bool inputs:normalize = true
+        color3f inputs:color = (1, 0.95, 0.88)
+        float3 xformOp:rotateXYZ = (-55, 40, 0)
+        uniform token[] xformOpOrder = ["xformOp:rotateXYZ"]
+    }
+
+    def DomeLight "Sky"
+    {
+        float inputs:intensity = 0.35
+        color3f inputs:color = (0.62, 0.72, 0.95)
+    }
+
+    def DiskLight "Spot" (
+        prepend apiSchemas = ["ShapingAPI"]
+    )
+    {
+        float inputs:radius = 0.15
+        float inputs:intensity = 4000
+        color3f inputs:color = (0.75, 0.85, 1)
+        float inputs:shaping:cone:angle = 30
+        float inputs:shaping:cone:softness = 0.4
+        double3 xformOp:translate = (3, 5, 0)
+        float3 xformOp:rotateXYZ = (-90, 0, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ"]
+    }
+
+    def RectLight "Panel"
+    {
+        float inputs:width = 3
+        float inputs:height = 1.2
+        float inputs:intensity = 6
+        color3f inputs:color = (1, 0.75, 0.5)
+        double3 xformOp:translate = (-7.5, 1.5, -2)
+        float3 xformOp:rotateXYZ = (0, -90, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ"]
     }
 
     def PointInstancer "Stones"

@@ -8,14 +8,24 @@
 // triangles, an implicit shape's tessellation), their world matrices,
 // visibility and purpose, their colors (the `displayColor` primvar, per
 // vertex where it varies, else the bound material's `diffuseColor`), their
-// face subsets' draw ranges, and the world bounds to frame. After each
+// face subsets' draw ranges, the world bounds to frame, and the stage's
+// cameras and lights with renderer-ready values. After each
 // action the model hands the list the editor's change records, and the
 // list answers with diffs: what to add, remove, move, show or hide, refill
 // or rebuild. Nothing here draws: `viewport3d.ts` applies the diffs to
 // three.js, and `scripts/acceptance.ts` checks `viewportSummary` and the
 // diffs' counts headless.
 import type { Stage } from "@forest-rs/layerstack";
-import type { DrawBuffers, DrawDiff, DrawItem, DrawList, DrawWork, Stagehand } from "@forest-rs/layerstack_stagehand";
+import type {
+  CameraItem,
+  DrawBuffers,
+  DrawDiff,
+  DrawItem,
+  DrawList,
+  DrawWork,
+  LightItem,
+  Stagehand,
+} from "@forest-rs/layerstack_stagehand";
 import type { Editor } from "./editor.ts";
 import { releaseValue } from "./values.ts";
 
@@ -46,6 +56,10 @@ export interface ViewportScene {
   readonly hidden: readonly string[];
   /** The aligned world bounds of everything drawable, `[minX, minY, minZ, maxX, maxY, maxZ]`; `null` when empty. */
   readonly bounds: readonly number[] | null;
+  /** The stage's lights, by path. */
+  readonly lights: readonly LightItem[];
+  /** The camera the viewport looks through: the stage's first, by path; `null` when it has none. */
+  readonly camera: CameraItem | null;
 }
 
 /**
@@ -71,6 +85,12 @@ export interface ViewportUpdate {
   readonly refilled: ReadonlySet<number>;
   readonly rebuilt: ReadonlySet<number>;
   readonly freed: ReadonlySet<number>;
+  /** Light paths: added, removed, read again and found different. */
+  readonly lightsAdded: ReadonlySet<string>;
+  readonly lightsRemoved: ReadonlySet<string>;
+  readonly lightsChanged: ReadonlySet<string>;
+  /** Camera paths whose camera to set again: added, removed or changed. */
+  readonly cameras: ReadonlySet<string>;
   /** The work done, summed. */
   readonly work: DrawWork;
 }
@@ -86,6 +106,10 @@ export interface ViewportSummary {
   readonly bounds: readonly number[] | null;
   /** Each drawn mesh's stagehand report, in brief, sorted: triangles, vertices, concave faces, triangles per range. */
   readonly meshes: readonly string[];
+  /** Each light, `path kind`, with `hidden` when invisible, sorted. */
+  readonly lights: readonly string[];
+  /** The camera looked through. */
+  readonly camera: string | null;
 }
 
 /** The counts of an update, as the acceptance script checks them and the page shows them. */
@@ -105,6 +129,12 @@ export interface UpdateSummary {
   /** Draws a time change did not read because nothing they read is animated, summed. */
   readonly itemsTimeInvariant: number;
   readonly localTransforms: number;
+  /** Lights read, summed. */
+  readonly lightsRead: number;
+  /** Lights added, removed or changed. */
+  readonly lights: number;
+  /** Cameras read, summed. */
+  readonly camerasRead: number;
 }
 
 const EMPTY_WORK: DrawWork = {
@@ -118,6 +148,8 @@ const EMPTY_WORK: DrawWork = {
   refills: 0,
   triangulations: 0,
   tessellations: 0,
+  camerasRead: 0,
+  lightsRead: 0,
 };
 
 /** The `diffuseColor` of the surface shader of the material at `material`, if it has one. */
@@ -177,6 +209,8 @@ function addWork(into: DrawWork, work: DrawWork): DrawWork {
     refills: into.refills + work.refills,
     triangulations: into.triangulations + work.triangulations,
     tessellations: into.tessellations + work.tessellations,
+    camerasRead: into.camerasRead + work.camerasRead,
+    lightsRead: into.lightsRead + work.lightsRead,
   };
 }
 
@@ -244,6 +278,7 @@ export class ViewportModel {
       }
     }
     const union = (pick: (diff: DrawDiff) => readonly number[]) => new Set(diffs.flatMap(pick));
+    const paths = (pick: (diff: DrawDiff) => readonly string[]) => new Set(diffs.flatMap(pick));
     const update = {
       reset,
       records,
@@ -258,6 +293,10 @@ export class ViewportModel {
       refilled: union((d) => d.refilled),
       rebuilt: union((d) => d.rebuilt),
       freed: union((d) => d.freed),
+      lightsAdded: paths((d) => d.lightsAdded),
+      lightsRemoved: paths((d) => d.lightsRemoved),
+      lightsChanged: paths((d) => d.lightsChanged),
+      cameras: paths((d) => [...d.camerasAdded, ...d.camerasRemoved, ...d.camerasChanged]),
       work: diffs.reduce((work, diff) => addWork(work, diff.work), EMPTY_WORK),
     };
     // Colors: read again for new items, and for items whose materials,
@@ -287,7 +326,7 @@ export class ViewportModel {
   scene(time: number | undefined): ViewportScene {
     const list = this.#list;
     const stage = this.#stage;
-    if (list === null || stage === null) return { items: [], hidden: [], bounds: null };
+    if (list === null || stage === null) return { items: [], hidden: [], bounds: null, lights: [], camera: null };
     const items: ViewItem[] = [];
     const hidden = new Set<string>();
     for (const item of list.items()) {
@@ -305,7 +344,14 @@ export class ViewportModel {
     }
     const bounds = stage.worldBounds(["/"], { ...(time === undefined ? {} : { time }), purposes: [...PURPOSES] }).alignedRanges;
     const empty = bounds[0]! > bounds[3]!;
-    return { items, hidden: [...hidden], bounds: empty ? null : Array.from(bounds) };
+    const cameras = list.cameras().sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+    return {
+      items,
+      hidden: [...hidden],
+      bounds: empty ? null : Array.from(bounds),
+      lights: list.lights(),
+      camera: cameras[0] ?? null,
+    };
   }
 
   /** Frees the list's buffers. */
@@ -331,6 +377,9 @@ export function updateSummary(update: ViewportUpdate): UpdateSummary {
     itemsUntouched: update.work.itemsUntouched,
     itemsTimeInvariant: update.work.itemsTimeInvariant,
     localTransforms: update.work.localTransforms,
+    lightsRead: update.work.lightsRead,
+    lights: update.lightsAdded.size + update.lightsRemoved.size + update.lightsChanged.size,
+    camerasRead: update.work.camerasRead,
   };
 }
 
@@ -366,5 +415,7 @@ export function viewportSummary(scene: ViewportScene): ViewportSummary {
     instances,
     bounds: scene.bounds === null ? null : scene.bounds.map((value) => Math.round(value * 1000) / 1000),
     meshes: meshes.sort(),
+    lights: scene.lights.map((light) => `${light.path} ${light.kind}${light.hidden ? " hidden" : ""}`).sort(),
+    camera: scene.camera?.path ?? null,
   };
 }

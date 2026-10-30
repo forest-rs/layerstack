@@ -140,6 +140,14 @@ main {
   background: #20201e;
 }
 
+.viewport-camera {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  margin-top: 4px;
+  font-size: 12px;
+}
+
 .viewport-summary {
   margin-top: 6px;
   color: var(--muted);

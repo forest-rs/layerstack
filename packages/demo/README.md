@@ -9,8 +9,11 @@ robot and whose `flicker` is sampled, then blocked at time 24; a robot
 referenced from its own file, which binds it a material with a preview
 surface shader, with a variant set whose `chrome` variant
 references an asset fetched only when it is selected; two instances of
-a beacon, which share one prototype; a ground mesh; and a point instancer
-of five stones.
+a beacon, which share one prototype; a ground mesh; a point instancer
+of five stones; a top spun by time samples on its `xformOp:rotateY`; a
+camera; and lights: the lamp (a sphere light, in the sublayer), a sun
+(distant), a sky (dome), a spot (a disk light with `ShapingAPI`) and a
+panel (rect).
 
 The viewport (`src/viewport.ts`, drawn by three.js in `src/viewport3d.ts`)
 takes everything from layerstack, with no USD loader, through a
@@ -26,7 +29,14 @@ per-vertex `displayColor` where it varies, concave faces ear-clipped (the
 path), and a three.js group per subset range (the ground), colored by the
 `displayColor` primvar (inherited from an ancestor or a class too) or else
 the bound material's surface `diffuseColor`; `stage.worldBounds(["/"])`
-frames the camera.
+frames the free camera. The view looks through the stage's camera
+(`/World/Camera`: its view and projection matrices as `GfFrustum` computes
+them, fitted to the canvas by `CameraUtilConformWindow`'s `fit` policy,
+with its `ComputeLinearExposureScale` as the tone mapping exposure) until
+"Free camera" is checked. The draw list's lights become three.js lights
+in physical units (`PointLight`, `SpotLight`, `RectAreaLight`,
+`DirectionalLight`, a `HemisphereLight` for the dome); `src/viewport3d.ts`
+documents the conversion from `UsdLux` luminance.
 
 After every action the draw list hears the editor's change records and
 answers with a diff, which the view applies in place: an `InstancedMesh`
@@ -39,7 +49,7 @@ bounds) and what the last update did: draws added, removed, moved, shown
 or hidden, buffers refilled or rebuilt, meshes triangulated and shapes
 tessellated, draws read and left untouched (after a time change, the
 draws nothing animated reaches, which it does not read), local transforms
-recomputed.
+recomputed, lights and cameras read and changed.
 `scripts/acceptance.ts` checks both after every step without rendering a
 pixel.
 
@@ -59,7 +69,7 @@ header. The layers panel shows which layers are muted from the changes the
 stage reports (`Changes.mutedIdentifiers` and `unmutedIdentifiers`), not by
 asking the stage again.
 
-The script runs fourteen steps, one button each:
+The script runs fifteen steps, one button each:
 
 1. Open the sample: the stage wants its sublayer, the robot's reference and
    the beacon's (once, for both instances), and `resolve` fetches them.
@@ -90,7 +100,8 @@ The script runs fourteen steps, one button each:
 10. Read the lamp's `flicker` at time 30: the explanation names the time
     samples as the source, held from 24, where a block is authored, so
     there is no value. At time 6 it reads 0.5, between the samples at 0
-    and 12.
+    and 12. The viewport reads at time 30 the top alone, the one animated
+    draw, and moves it; no other draw, light or camera is read.
 11. Explain `/World/Beacons/North/Bulb`, an instance proxy: its radius
     comes from `assets/beacon.usda` through North's reference.
 12. Save: the three dirty layers are downloaded, and the root is opened again
@@ -114,6 +125,9 @@ The script runs fourteen steps, one button each:
     and reuses the rest: the rock's first `visibility` opinion is a new
     property spec, which resyncs only `/World/Rock.visibility`, as
     OpenUSD's `ObjectsChanged` does, and no transform reads it.
+15. Brighten the lamp: its `inputs:intensity` in the edit layer, over the
+    sublayer's. The draw list reads that light alone (no draw, no camera,
+    no other light), and the viewport replaces its three.js light alone.
 
 `scripts/acceptance.ts` runs the same steps headless in Node, reading the
 sample from disk, and checks the values and explanations after each one,

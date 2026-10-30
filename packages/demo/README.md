@@ -5,14 +5,17 @@ in plain DOM, with no 3D and no UI framework, so what it shows is
 composition. It opens the layered sample in `public/scene/`: a root layer;
 a sublayer with a class the rock inherits and a lamp whose `aim` names the
 robot and whose `flicker` is sampled, then blocked at time 24; a robot
-referenced from its own file, with a variant set whose `chrome` variant
+referenced from its own file, which binds it a material with a preview
+surface shader, with a variant set whose `chrome` variant
 references an asset fetched only when it is selected; and two instances of
 a beacon, which share one prototype.
 
 Panels: the prim tree (instances, instance proxies and composition errors
 badged), the
 attribute inspector (the variant dropdowns, the time to read at, the
-relationships and their targets, an edit field, and rename and delete), the
+relationships and their targets, the bound material with the binding that
+decides it and its surface shader's inputs, an edit field, and rename and
+delete), the
 explanation (every opinion with its layer, arc and role, the value's source,
 and an "Edit here" button that points the edit field at where the opinion
 lives, through the arc that reaches it, and the prim's composition errors),

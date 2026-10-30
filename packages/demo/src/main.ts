@@ -9,6 +9,7 @@ import type { Attribute, EditTarget, Issue, Layer, Prim, Stage } from "@forest-r
 import type { Editor, LayerFile } from "./editor.ts";
 import { Session, steps } from "./script.ts";
 import type { Host } from "./script.ts";
+import { materialSummary } from "./materials.ts";
 import { formatNumber, formatValue, parseValue, releaseValue } from "./values.ts";
 import "./style.css";
 
@@ -340,11 +341,34 @@ function renderInspector(editor: Editor): void {
     variants.length > 0 && h("div", { class: "variants" }, ...variants),
     timeForm(),
     h("table", { class: "attributes" }, h("tbody", {}, ...rows, ...relationships)),
+    materialSection(editor.stage, prim.path, time),
     h("p", { class: "hint" }, "Bold attributes have authored opinions. Select one to explain and edit it; rel rows are relationships and their targets."),
     prim.instanceProxy &&
       h("p", { class: "hint" }, "An instance proxy is read through its instance: edit the asset the instance references, or the instance itself."),
     !prim.instanceProxy && session.attribute !== null && editForm(editor, session.attribute),
     !prim.instanceProxy && namespaceForm(editor, prim),
+  );
+}
+
+/** The prim's bound material, and its surface shader's inputs; nothing when no material binds it. */
+function materialSection(stage: Stage, path: string, time: number | undefined): HTMLElement | false {
+  const summary = materialSummary(stage, path, time);
+  if (summary === null) return false;
+  const inputs = summary.inputs.map((input) =>
+    h(
+      "tr",
+      {},
+      h("td", { class: "name" }, `inputs:${input.name}`),
+      h("td", { class: "type" }, input.type),
+      h("td", { class: "value" }, input.value),
+    ),
+  );
+  return h(
+    "div",
+    { class: "material" },
+    h("p", {}, "Material ", h("code", {}, summary.material), ` (${summary.binding})`),
+    summary.shader !== null && h("p", { class: "hint" }, "Surface shader ", h("code", {}, summary.shader)),
+    inputs.length > 0 && h("table", { class: "attributes" }, h("tbody", {}, ...inputs)),
   );
 }
 

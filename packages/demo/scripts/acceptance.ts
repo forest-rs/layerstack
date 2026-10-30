@@ -15,6 +15,7 @@ import type { EditTarget, Explanation, Stage, Value } from "@forest-rs/layerstac
 import type { LayerFile } from "../src/editor.ts";
 import { Session, sample, steps } from "../src/script.ts";
 import type { Host } from "../src/script.ts";
+import { materialSummary } from "../src/materials.ts";
 import { formatValue, releaseValue } from "../src/values.ts";
 
 const scene = fileURLToPath(new URL("../public/scene/", import.meta.url));
@@ -107,6 +108,18 @@ const checks: ((session: Session) => void)[] = [
     assert.equal(current.stage.prim("/Shape")?.abstract, true);
     assert.equal(current.stage.editLayer?.identifier, sample.root);
     assert.equal(current.changeLog.length, 1, "one recomposition for the one round");
+    // The inspector's material section: the body inherits the robot's
+    // binding, which the reference maps into the scene's namespace.
+    assert.deepEqual(materialSummary(current.stage, `${sample.robot}/Body`), {
+      material: `${sample.robot}/Looks/Paint`,
+      binding: `direct from ${sample.robot}.material:binding`,
+      shader: `${sample.robot}/Looks/Paint/Surface`,
+      inputs: [
+        { name: "diffuseColor", type: "color3f", value: "(0.5, 0.5, 0.5)" },
+        { name: "roughness", type: "float", value: "0.6" },
+      ],
+    });
+    assert.equal(materialSummary(current.stage, sample.rock), null);
   },
   // 2. The rock's radius is inherited from the class in the sublayer.
   ({ current, prim, attribute }) => {
@@ -358,7 +371,13 @@ const checks: ((session: Session) => void)[] = [
     assert.deepEqual(change?.changes.mutedIdentifiers, [sample.robotAsset]);
     assert.deepEqual(change?.changes.mutedLayers, [asset]);
     assert.deepEqual(change?.changes.resynced, [sample.rover]);
-    assert.deepEqual(change?.changes.removed, [`${sample.rover}/Body`, `${sample.rover}/Head`]);
+    assert.deepEqual(change?.changes.removed, [
+      `${sample.rover}/Body`,
+      `${sample.rover}/Head`,
+      `${sample.rover}/Looks`,
+      `${sample.rover}/Looks/Paint`,
+      `${sample.rover}/Looks/Paint/Surface`,
+    ]);
     const color = read(current.stage, sample.roverColor);
     assert.equal(color.value, "(0.8, 0.2, 0.1)");
     assert.deepEqual(color.opinions, [`scene.usda ${sample.rover}{finish=painted}.color variants contributed`], "the asset's opinion is gone");
@@ -395,7 +414,7 @@ async function unmuteWithTheToggle(session: Session): Promise<void> {
     "assets/robot.usda /Robot.color references ignored (shadowed)",
   ]);
   assert.equal(read(current.stage, `${sample.rover}.height`).value, String(sample.assetHeight), "the saved height is back");
-  assert.deepEqual(current.stage.children(sample.rover), [`${sample.rover}/Body`, `${sample.rover}/Head`]);
+  assert.deepEqual(current.stage.children(sample.rover), [`${sample.rover}/Body`, `${sample.rover}/Head`, `${sample.rover}/Looks`]);
   assert.deepEqual(current.stage.status().compositionErrors, []);
   assert.equal(await current.setMuted(asset, false), false, "unmuting again changes nothing");
   assert.equal(current.changeLog.length, changes + 1);

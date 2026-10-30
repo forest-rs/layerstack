@@ -1748,7 +1748,7 @@ impl<'s> SchemaEdit<'s> {
         self.samples.retain(|sample| sample.property != property);
     }
 
-    #[cfg(feature = "usd-geom")]
+    #[cfg(any(feature = "usd-geom", feature = "usd-shade"))]
     pub(crate) fn remove_property(&mut self, path: PathId, name: &str) {
         let name = self.store.tokens().intern(name);
         let at = self.target.property(PropertyPath::new(path, name));
@@ -1756,8 +1756,11 @@ impl<'s> SchemaEdit<'s> {
         self.removed.push((path, name));
         self.created.retain(|(p, n, _)| (*p, *n) != (path, name));
         self.defaults.retain(|(p, n, _)| (*p, *n) != (path, name));
-        let property = PropertyPath::new(path, name);
-        self.samples.retain(|sample| sample.property != property);
+        #[cfg(feature = "usd-geom")]
+        {
+            let property = PropertyPath::new(path, name);
+            self.samples.retain(|sample| sample.property != property);
+        }
         #[cfg(feature = "usd-ui")]
         self.ui_hints
             .retain(|(at, _)| *at != TargetPath::Property(PropertyPath::new(path, name)));
@@ -1819,6 +1822,18 @@ impl<'s> SchemaEdit<'s> {
         self.transaction
             .create_property(at, PropertySpec::relationship());
         self.created.push((path, name, None));
+    }
+
+    /// Clears the targets the edit target authors on the relationship
+    /// `name`, leaving its spec (created as [`Self::ensure_relationship`]
+    /// creates it, if needed) with no target opinion.
+    /// OpenUSD: `UsdRelationship::ClearTargets(false)`.
+    #[cfg(feature = "usd-shade")]
+    pub(crate) fn clear_targets(&mut self, path: PathId, name: &str) {
+        self.ensure_relationship(path, name, false);
+        let token = self.store.tokens().intern(name);
+        let at = self.target.property(PropertyPath::new(path, token));
+        self.transaction.clear_targets(at);
     }
 
     /// Authors `targets` as the explicit targets of the relationship `name`.

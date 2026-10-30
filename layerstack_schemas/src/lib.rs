@@ -544,7 +544,11 @@ pub use collection::{
     MembershipSample,
 };
 #[cfg(feature = "usd-shade")]
-pub use coord_sys::{CoordSysBinding, CoordSysCache, CoordSysCacheStats, local_coord_sys_bindings};
+pub use coord_sys::{
+    CoordSysBinding, CoordSysCache, CoordSysCacheStats, CoordSysError,
+    can_contain_coord_sys_property_name, coord_sys_binding_base_name, has_local_coord_sys_bindings,
+    local_coord_sys_bindings,
+};
 pub use edit::{MetadataError, SchemaEdit};
 pub use generated::views::*;
 pub use generated::{Domain, OPENUSD_VERSION};

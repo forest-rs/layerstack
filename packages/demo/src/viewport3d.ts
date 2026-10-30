@@ -92,7 +92,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { RectAreaLightUniformsLib } from "three/addons/lights/RectAreaLightUniformsLib.js";
 import { conformCamera, lightSizeFactor } from "@forest-rs/layerstack_stagehand";
 import type { CameraItem, LightItem, MaterialItem, StagehandMesh } from "@forest-rs/layerstack_stagehand";
-import { TextureStore, surfaceMaterial } from "./surfaces.ts";
+import { TextureStore, surfaceMaterial, uvChannels } from "./surfaces.ts";
 import type { AssetExists, AssetReader } from "./surfaces.ts";
 import type { ViewItem, ViewportScene, ViewportUpdate } from "./viewport.ts";
 
@@ -400,13 +400,15 @@ function materials(
   const highlighted =
     selected !== null && paths.some((path) => selected === path || selected.startsWith(`${path}/`) || path.startsWith(`${selected}/`));
   const colors = view.buffers.mesh.colors;
+  // One map for every range's material: a subset's reads its sets' channels.
+  const channels = uvChannels(view.buffers.mesh);
   const doubleSided = view.kind === "mesh" || view.kind === "Plane";
   const record = (path: string | null) => {
     const found = path === null ? undefined : records.get(path);
     return found?.surface == null ? null : found;
   };
   const surface = (found: MaterialItem) => {
-    const material = surfaceMaterial(found, textures, { vertexColors: colors !== null, doubleSided, highlighted });
+    const material = surfaceMaterial(found, textures, { vertexColors: colors !== null, doubleSided, highlighted, uvChannels: channels });
     // A constant `displayColor` the buffer does not carry (a shape's) is the prim's color.
     if (found.diffuseColor.kind === "primvar" && !material.vertexColors && found.diffuseColor.name === "displayColor" && view.colorSource === "displayColor") {
       material.color.setRGB(...(view.color as [number, number, number]));
@@ -440,11 +442,15 @@ function materials(
 
 /**
  * The texture coordinate sets besides `st` stagehand drew for the mesh's
- * materials, in its order, as three.js's `uv1` to `uv3` (`st` is `uv`);
- * `surfaces.ts` points a texture reading one at the same channel.
+ * materials, as three.js's `uv1` to `uv3` (`st` is `uv`) by the mesh's
+ * {@link uvChannels}, which `surfaces.ts` points each texture at.
  */
 function setUvSets(geometry: BufferGeometry, mesh: StagehandMesh): void {
-  mesh.uvSets.slice(0, 3).forEach((set, index) => geometry.setAttribute(`uv${index + 1}`, new BufferAttribute(set.values, 2)));
+  const channels = uvChannels(mesh);
+  for (const set of mesh.uvSets) {
+    const channel = channels.get(set.name);
+    if (channel !== undefined) geometry.setAttribute(`uv${channel}`, new BufferAttribute(set.values, 2));
+  }
 }
 
 /** A geometry over the item's stagehand buffer: indexed, with normals, colors and a group per range. */

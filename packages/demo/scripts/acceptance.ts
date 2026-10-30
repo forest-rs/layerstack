@@ -17,6 +17,7 @@ import type { LayerFile } from "../src/editor.ts";
 import { Session, sample, steps } from "../src/script.ts";
 import type { Host } from "../src/script.ts";
 import { materialSummary } from "../src/materials.ts";
+import { channelOf, uvChannels } from "../src/surfaces.ts";
 import { formatValue, releaseValue } from "../src/values.ts";
 import { ViewportModel, primColor, updateSummary, viewportSummary } from "../src/viewport.ts";
 import type { UpdateSummary, ViewportSummary } from "../src/viewport.ts";
@@ -55,6 +56,62 @@ const host: Host = {
     return back;
   },
 };
+
+/** A material reading the primvar `coordinates` names through a texture. */
+const reading = (name: string, coordinates: string) => `
+    def Material "${name}" {
+        token outputs:surface.connect = </Looks/${name}/Surface.outputs:surface>
+        token inputs:coordinates = "${coordinates}"
+        def Shader "Surface" {
+            uniform token info:id = "UsdPreviewSurface"
+            color3f inputs:diffuseColor.connect = </Looks/${name}/Texture.outputs:rgb>
+            token outputs:surface
+        }
+        def Shader "Texture" {
+            uniform token info:id = "UsdUVTexture"
+            asset inputs:file = @./textures/checker.png@
+            float2 inputs:st.connect = </Looks/${name}/Reader.outputs:result>
+            float3 outputs:rgb
+        }
+        def Shader "Reader" {
+            uniform token info:id = "UsdPrimvarReader_float2"
+            string inputs:varname.connect = </Looks/${name}.inputs:coordinates>
+            float2 outputs:result
+        }
+    }`;
+
+/** One mesh, two subsets: the first's material reads `st2`, the second's `st1`. */
+const TWO_SUBSETS = `#usda 1.0
+def Mesh "Plate" {
+    int[] faceVertexCounts = [3, 3]
+    int[] faceVertexIndices = [0, 1, 2, 0, 2, 3]
+    point3f[] points = [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0)]
+    texCoord2f[] primvars:st1 = [(0, 0), (2, 0), (2, 2), (0, 2)] (
+        interpolation = "vertex"
+    )
+    texCoord2f[] primvars:st2 = [(0, 0), (3, 0), (3, 3), (0, 3)] (
+        interpolation = "vertex"
+    )
+    def GeomSubset "Back" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    ) {
+        uniform token elementType = "face"
+        uniform token familyName = "materialBind"
+        int[] indices = [0]
+        rel material:binding = </Looks/Far>
+    }
+    def GeomSubset "Front" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    ) {
+        uniform token elementType = "face"
+        uniform token familyName = "materialBind"
+        int[] indices = [1]
+        rel material:binding = </Looks/Near>
+    }
+}
+def Scope "Looks" {${reading("Far", "st2")}${reading("Near", "st1")}
+}
+`;
 
 /** One opinion of an explanation as `layer specPath arc role`, the explanation panel's columns. */
 function opinions(explanation: Explanation | null): string[] {
@@ -782,6 +839,28 @@ try {
     [[sample.card, [0, 0, Math.fround(1.3333334), 0]]],
   );
   console.log("ok the sign's card set, drawn for the checker");
+  // A mesh whose two subsets bind materials reading different sets: each
+  // texture samples its own set's channel in the mesh's buffer, not its
+  // place among the sets its own material reads.
+  const plate = host.layerstack.open({ identifier: "plate.usda", bytes: new TextEncoder().encode(TWO_SUBSETS) });
+  const plates = stagehand.drawList(plate);
+  try {
+    plates.refresh();
+    const [item] = plates.items();
+    const mesh = plates.buffers(item!.buffer)!.mesh;
+    assert.deepEqual(
+      mesh.uvSets.map((set) => set.name),
+      ["st1", "st2"],
+    );
+    assert.deepEqual(item!.subsetMaterials, ["/Looks/Far", "/Looks/Near"]);
+    const channels = uvChannels(mesh);
+    const sampled = (path: string) => channelOf(plates.material(path)!.textures[0]!, channels);
+    assert.deepEqual([sampled("/Looks/Far"), sampled("/Looks/Near")], [2, 1]);
+  } finally {
+    plates.dispose();
+    plate.free();
+  }
+  console.log("ok each subset's texture samples its own set's channel");
   // The strip's UDIM set: the tiles the scene's storage has, as the page
   // finds them from the directory's listing and OpenUSD tile by tile.
   const strip = model.list!.material(sample.tiles)!.textures[0]!;

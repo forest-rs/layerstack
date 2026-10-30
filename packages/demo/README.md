@@ -151,11 +151,16 @@ The script runs eighteen steps, one button each:
     set, instead of `st`. The draw list reads that material again and
     plans the sign's mesh again with `card` as a buffer channel of its own
     (rebuilt); the viewport gives it to three.js as `uv1` and samples the
-    checker from it, and its checks turn square.
+    checker from it, and its checks turn square. Channels follow the
+    mesh's buffer: each set it draws has one, by name, and a texture
+    samples its set's, so the materials of a mesh's subsets reading
+    different sets each find their own.
 
 `scripts/acceptance.ts` runs the same steps headless in Node, reading the
 sample from disk, and checks the values and explanations after each one,
-then unmutes the robot asset as the layers panel's toggle does; CI runs it.
+then unmutes the robot asset as the layers panel's toggle does, and
+checks that two subsets' materials reading different sets sample their
+own channels; CI runs it.
 
 ```sh
 # Build the packages first (see ../layerstack/README.md):

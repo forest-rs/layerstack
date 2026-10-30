@@ -1,0 +1,10 @@
+#usda 1.0
+
+def "Rock"
+{
+    asset albedo = @./albedo.png@
+    asset missingAbsolute = @/package_external_missing/gone.png@
+    asset missingRelative = @./gone.png@
+    asset missingSearch = @gone.png@
+    asset outside = @../far/outside.png@
+}

@@ -24,6 +24,22 @@ pub enum PackageInclusion {
     /// A UDIM pattern is anchored to the directory of its first tile
     /// (`UsdShadeUdimUtils::ResolveUdimPath`); expressions and other
     /// patterns remain authored for host expansion.
+    ///
+    /// The packaged layer names it as storage identifies it
+    /// ([`Storage::identify`] with the authoring layer as the anchor): an
+    /// absolute path or a URL as one, and a path relative to the host's
+    /// root as a search path (`set/albedo.png`), never marked `./`. Inside
+    /// a package, a path starting with `./` or `../` names a member, while
+    /// a search path that names no member resolves beside the package file
+    /// and then as it stands, from the host's root
+    /// (`SdfComputeAssetPathRelativeToLayer`), so it names the same file
+    /// from a package written there.
+    ///
+    /// OpenUSD's packaging has no such choice: `UsdUtilsCreateNewUsdzPackage`
+    /// copies every asset it resolves into the package, even one outside
+    /// the root layer's directory or one a processing function names by
+    /// its absolute path (`_ProcessAssetPath` in
+    /// `pxr/usd/usdUtils/assetLocalizationPackage.cpp`).
     KeepExternal,
 }
 /// Explicit inventory and opaque resource limits. Format imports can themselves

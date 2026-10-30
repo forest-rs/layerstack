@@ -70,7 +70,8 @@
 //! - The layer metadata composes the session root over the persistent root: `defaultPrim`, `upAxis`,
 //!   `metersPerUnit`, `timeCodesPerSecond`, `startTimeCode`,
 //!   `endTimeCode`, `documentation`, `reorder rootPrims` and the rest
-//!   (AOUSD Core §12.2.7).
+//!   (AOUSD Core §12.2.7). A field is written only when one of the two
+//!   authors it, as OpenUSD copies the pseudo-root's authored metadata.
 //!
 //! What a flattened layer cannot hold is a [`Loss`], never dropped
 //! silently: value clips with unavailable assets or unsupported spline schedules;
@@ -266,9 +267,6 @@ impl Stage {
                 }
                 crate::doc::set_field_vec(&mut metadata, entry.name, entry.value);
             }
-            let tcps = flattener.store.tokens().intern("timeCodesPerSecond");
-            let rate = self.time_codes_per_second(flattener.store);
-            crate::doc::set_field_vec(&mut metadata, tcps, FieldValue::Value(Value::Double(rate)));
         }
         for entry in &metadata {
             if let FieldValue::Value(value) = &entry.value {

@@ -169,6 +169,7 @@ mod schemas;
 mod session_layers;
 mod shade_connections;
 mod shade_node_def;
+mod shade_sdr_metadata;
 mod shader_nodes;
 mod shading;
 mod shading_defaults;

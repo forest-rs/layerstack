@@ -46,6 +46,16 @@ pub struct StageMetadata<'a> {
 /// The entry at the colon-separated `key_path` of a nested dictionary
 /// value; a path with an empty part names none.
 pub(crate) fn dictionary_entry<'v>(value: &'v Value, key_path: &str) -> Option<&'v FieldValue> {
+    if key_path.split(':').any(str::is_empty) {
+        return None;
+    }
+    dictionary_entry_at(value, key_path)
+}
+
+/// The entry at the colon-separated `key_path` of a nested dictionary
+/// value, an empty part naming an entry named `""`, as
+/// `VtDictionary::GetValueAtPath` splits a path.
+pub(crate) fn dictionary_entry_at<'v>(value: &'v Value, key_path: &str) -> Option<&'v FieldValue> {
     let Value::Dictionary(entries) = value else {
         return None;
     };
@@ -53,10 +63,7 @@ pub(crate) fn dictionary_entry<'v>(value: &'v Value, key_path: &str) -> Option<&
     let mut keys = key_path.split(':').peekable();
     loop {
         let key = keys.next()?;
-        let entry = &entries
-            .iter()
-            .find(|(name, _)| name.as_ref() == key && !key.is_empty())?
-            .1;
+        let entry = &entries.iter().find(|(name, _)| name.as_ref() == key)?.1;
         if keys.peek().is_none() {
             return Some(entry);
         }

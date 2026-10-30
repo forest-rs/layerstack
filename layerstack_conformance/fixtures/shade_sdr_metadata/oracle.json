@@ -1,0 +1,825 @@
+{
+  "calls": [
+    {
+      "call": "shader set role",
+      "dictionaries": {
+        "/Look/S": {
+          "role": "surface"
+        }
+      }
+    },
+    {
+      "call": "shader set nested",
+      "dictionaries": {
+        "/Look/S": {
+          "page": {
+            "name": "Base"
+          },
+          "role": "surface"
+        }
+      }
+    },
+    {
+      "call": "shader set map",
+      "dictionaries": {
+        "/Look/S": {
+          "page": {
+            "name": "Base",
+            "open": "1"
+          },
+          "role": "texture"
+        }
+      }
+    },
+    {
+      "call": "shader clear nested",
+      "dictionaries": {
+        "/Look/S": {
+          "page": {
+            "open": "1"
+          },
+          "role": "texture"
+        }
+      }
+    },
+    {
+      "call": "shader clear last nested",
+      "dictionaries": {
+        "/Look/S": {
+          "role": "texture"
+        }
+      }
+    },
+    {
+      "call": "shader clear missing",
+      "dictionaries": {
+        "/Look/S": {
+          "role": "texture"
+        }
+      }
+    },
+    {
+      "call": "shader set a:",
+      "dictionaries": {
+        "/Look/S": {
+          "a": {
+            "": "e"
+          },
+          "role": "texture"
+        }
+      }
+    },
+    {
+      "call": "shader set x::y",
+      "dictionaries": {
+        "/Look/S": {
+          "a": {
+            "": "e"
+          },
+          "role": "texture",
+          "x": {
+            "": {
+              "y": "v"
+            }
+          }
+        }
+      }
+    },
+    {
+      "call": "shader set :b",
+      "dictionaries": {
+        "/Look/S": {
+          "": {
+            "b": "w"
+          },
+          "a": {
+            "": "e"
+          },
+          "role": "texture",
+          "x": {
+            "": {
+              "y": "v"
+            }
+          }
+        }
+      }
+    },
+    {
+      "call": "shader set map with empty parts",
+      "dictionaries": {
+        "/Look/S": {
+          "": {
+            "": "z",
+            "b": "w"
+          },
+          "a": {
+            "": "e"
+          },
+          "page": {
+            "": "p"
+          },
+          "role": "texture",
+          "x": {
+            "": {
+              "y": "v"
+            }
+          }
+        }
+      }
+    },
+    {
+      "call": "shader clear x::y",
+      "dictionaries": {
+        "/Look/S": {
+          "": {
+            "": "z",
+            "b": "w"
+          },
+          "a": {
+            "": "e"
+          },
+          "page": {
+            "": "p"
+          },
+          "role": "texture"
+        }
+      }
+    },
+    {
+      "call": "shader clear :",
+      "dictionaries": {
+        "/Look/S": {
+          "": {
+            "b": "w"
+          },
+          "a": {
+            "": "e"
+          },
+          "page": {
+            "": "p"
+          },
+          "role": "texture"
+        }
+      }
+    },
+    {
+      "call": "shader clear a:",
+      "dictionaries": {
+        "/Look/S": {
+          "": {
+            "b": "w"
+          },
+          "page": {
+            "": "p"
+          },
+          "role": "texture"
+        }
+      }
+    },
+    {
+      "call": "input set label",
+      "dictionaries": {
+        "/Look/S": {
+          "": {
+            "b": "w"
+          },
+          "page": {
+            "": "p"
+          },
+          "role": "texture"
+        },
+        "/Look/S.inputs:x": {
+          "label": "Tint"
+        }
+      }
+    },
+    {
+      "call": "input set map",
+      "dictionaries": {
+        "/Look/S": {
+          "": {
+            "b": "w"
+          },
+          "page": {
+            "": "p"
+          },
+          "role": "texture"
+        },
+        "/Look/S.inputs:x": {
+          "help": "A tint",
+          "label": "Tint",
+          "widget": {
+            "kind": "color"
+          }
+        }
+      }
+    },
+    {
+      "call": "output set",
+      "dictionaries": {
+        "/Look/S": {
+          "": {
+            "b": "w"
+          },
+          "page": {
+            "": "p"
+          },
+          "role": "texture"
+        },
+        "/Look/S.inputs:x": {
+          "help": "A tint",
+          "label": "Tint",
+          "widget": {
+            "kind": "color"
+          }
+        },
+        "/Look/S.outputs:out": {
+          "renderType": "terminal"
+        }
+      }
+    },
+    {
+      "call": "input clear widget",
+      "dictionaries": {
+        "/Look/S": {
+          "": {
+            "b": "w"
+          },
+          "page": {
+            "": "p"
+          },
+          "role": "texture"
+        },
+        "/Look/S.inputs:x": {
+          "help": "A tint",
+          "label": "Tint"
+        },
+        "/Look/S.outputs:out": {
+          "renderType": "terminal"
+        }
+      }
+    },
+    {
+      "call": "output clear",
+      "dictionaries": {
+        "/Look/S": {
+          "": {
+            "b": "w"
+          },
+          "page": {
+            "": "p"
+          },
+          "role": "texture"
+        },
+        "/Look/S.inputs:x": {
+          "help": "A tint",
+          "label": "Tint"
+        }
+      }
+    },
+    {
+      "call": "shader clear",
+      "dictionaries": {
+        "/Look/S.inputs:x": {
+          "help": "A tint",
+          "label": "Tint"
+        }
+      }
+    },
+    {
+      "call": "input clear label",
+      "dictionaries": {
+        "/Look/S.inputs:x": {
+          "help": "A tint"
+        }
+      }
+    },
+    {
+      "call": "input clear help",
+      "dictionaries": {}
+    },
+    {
+      "call": "input set :k",
+      "dictionaries": {
+        "/Look/S.inputs:x": {
+          "": {
+            "k": "1"
+          }
+        }
+      }
+    },
+    {
+      "call": "shader clear empty key",
+      "dictionaries": {
+        "/Look/S.inputs:x": {
+          "": {
+            "k": "1"
+          }
+        }
+      }
+    },
+    {
+      "call": "input clear empty key",
+      "dictionaries": {}
+    }
+  ],
+  "openusd_version": "26.11",
+  "reads": {
+    "/Look/Bare": {
+      "by_key": {
+        "": "",
+        ":": "",
+        ":b": "",
+        "a": "",
+        "a:": "",
+        "arr": "",
+        "label": "",
+        "missing": "",
+        "nested": "",
+        "nested:a": "",
+        "nested:missing": "",
+        "nested:n": "",
+        "page:name": "",
+        "renderType": "",
+        "role": "",
+        "tok": "",
+        "x": "",
+        "x:": "",
+        "x::": "",
+        "x::y": ""
+      },
+      "has": false,
+      "has_by_key": {
+        "": false,
+        ":": false,
+        ":b": false,
+        "a": false,
+        "a:": false,
+        "arr": false,
+        "label": false,
+        "missing": false,
+        "nested": false,
+        "nested:a": false,
+        "nested:missing": false,
+        "nested:n": false,
+        "page:name": false,
+        "renderType": false,
+        "role": false,
+        "tok": false,
+        "x": false,
+        "x:": false,
+        "x::": false,
+        "x::y": false
+      },
+      "map": {}
+    },
+    "/Look/Bare.inputs:x": {
+      "by_key": {
+        "": "",
+        ":": "",
+        ":b": "",
+        "a": "",
+        "a:": "",
+        "arr": "",
+        "label": "",
+        "missing": "",
+        "nested": "",
+        "nested:a": "",
+        "nested:missing": "",
+        "nested:n": "",
+        "page:name": "",
+        "renderType": "",
+        "role": "",
+        "tok": "",
+        "x": "",
+        "x:": "",
+        "x::": "",
+        "x::y": ""
+      },
+      "has": false,
+      "has_by_key": {
+        "": false,
+        ":": false,
+        ":b": false,
+        "a": false,
+        "a:": false,
+        "arr": false,
+        "label": false,
+        "missing": false,
+        "nested": false,
+        "nested:a": false,
+        "nested:missing": false,
+        "nested:n": false,
+        "page:name": false,
+        "renderType": false,
+        "role": false,
+        "tok": false,
+        "x": false,
+        "x:": false,
+        "x::": false,
+        "x::y": false
+      },
+      "map": {}
+    },
+    "/Look/Empty": {
+      "by_key": {
+        "": "{}",
+        ":": "",
+        ":b": "",
+        "a": "",
+        "a:": "",
+        "arr": "",
+        "label": "",
+        "missing": "",
+        "nested": "",
+        "nested:a": "",
+        "nested:missing": "",
+        "nested:n": "",
+        "page:name": "",
+        "renderType": "",
+        "role": "",
+        "tok": "",
+        "x": "",
+        "x:": "",
+        "x::": "",
+        "x::y": ""
+      },
+      "has": true,
+      "has_by_key": {
+        "": true,
+        ":": false,
+        ":b": false,
+        "a": false,
+        "a:": false,
+        "arr": false,
+        "label": false,
+        "missing": false,
+        "nested": false,
+        "nested:a": false,
+        "nested:missing": false,
+        "nested:n": false,
+        "page:name": false,
+        "renderType": false,
+        "role": false,
+        "tok": false,
+        "x": false,
+        "x:": false,
+        "x::": false,
+        "x::y": false
+      },
+      "map": {}
+    },
+    "/Look/Surface": {
+      "by_key": {
+        "": "{'arr': [1, 2], 'asset': @rock.png@, 'big': 1e20, 'bool': 1, 'dbl': 1.5, 'empty': , 'flt': 0.1, 'i64': 5, 'int': 3, 'nested': {'a': b, 'n': 1}, 'primvars': st|uv, 'role': surface, 'tok': t, 'vec': (1, 0.5, 2)}",
+        ":": "",
+        ":b": "",
+        "a": "",
+        "a:": "",
+        "arr": "[1, 2]",
+        "label": "",
+        "missing": "",
+        "nested": "{'a': b, 'n': 1}",
+        "nested:a": "b",
+        "nested:missing": "",
+        "nested:n": "1",
+        "page:name": "",
+        "renderType": "",
+        "role": "surface",
+        "tok": "t",
+        "x": "",
+        "x:": "",
+        "x::": "",
+        "x::y": ""
+      },
+      "has": true,
+      "has_by_key": {
+        "": true,
+        ":": false,
+        ":b": false,
+        "a": false,
+        "a:": false,
+        "arr": true,
+        "label": false,
+        "missing": false,
+        "nested": true,
+        "nested:a": true,
+        "nested:missing": false,
+        "nested:n": true,
+        "page:name": false,
+        "renderType": false,
+        "role": true,
+        "tok": true,
+        "x": false,
+        "x:": false,
+        "x::": false,
+        "x::y": false
+      },
+      "map": {
+        "arr": "[1, 2]",
+        "asset": "@rock.png@",
+        "big": "1e20",
+        "bool": "1",
+        "dbl": "1.5",
+        "empty": "",
+        "flt": "0.1",
+        "i64": "5",
+        "int": "3",
+        "nested": "{'a': b, 'n': 1}",
+        "primvars": "st|uv",
+        "role": "surface",
+        "tok": "t",
+        "vec": "(1, 0.5, 2)"
+      }
+    },
+    "/Look/Surface.inputs:roughness": {
+      "by_key": {
+        "": "{'label': Roughness, 'page': {'name': Specular}}",
+        ":": "",
+        ":b": "",
+        "a": "",
+        "a:": "",
+        "arr": "",
+        "label": "Roughness",
+        "missing": "",
+        "nested": "",
+        "nested:a": "",
+        "nested:missing": "",
+        "nested:n": "",
+        "page:name": "Specular",
+        "renderType": "",
+        "role": "",
+        "tok": "",
+        "x": "",
+        "x:": "",
+        "x::": "",
+        "x::y": ""
+      },
+      "has": true,
+      "has_by_key": {
+        "": true,
+        ":": false,
+        ":b": false,
+        "a": false,
+        "a:": false,
+        "arr": false,
+        "label": true,
+        "missing": false,
+        "nested": false,
+        "nested:a": false,
+        "nested:missing": false,
+        "nested:n": false,
+        "page:name": true,
+        "renderType": false,
+        "role": false,
+        "tok": false,
+        "x": false,
+        "x:": false,
+        "x::": false,
+        "x::y": false
+      },
+      "map": {
+        "label": "Roughness",
+        "page": "{'name': Specular}"
+      }
+    },
+    "/Look/Surface.inputs:tint": {
+      "by_key": {
+        "": "",
+        ":": "",
+        ":b": "",
+        "a": "",
+        "a:": "",
+        "arr": "",
+        "label": "",
+        "missing": "",
+        "nested": "",
+        "nested:a": "",
+        "nested:missing": "",
+        "nested:n": "",
+        "page:name": "",
+        "renderType": "",
+        "role": "",
+        "tok": "",
+        "x": "",
+        "x:": "",
+        "x::": "",
+        "x::y": ""
+      },
+      "has": false,
+      "has_by_key": {
+        "": false,
+        ":": false,
+        ":b": false,
+        "a": false,
+        "a:": false,
+        "arr": false,
+        "label": false,
+        "missing": false,
+        "nested": false,
+        "nested:a": false,
+        "nested:missing": false,
+        "nested:n": false,
+        "page:name": false,
+        "renderType": false,
+        "role": false,
+        "tok": false,
+        "x": false,
+        "x:": false,
+        "x::": false,
+        "x::y": false
+      },
+      "map": {}
+    },
+    "/Look/Surface.outputs:surface": {
+      "by_key": {
+        "": "{'renderType': terminal surface}",
+        ":": "",
+        ":b": "",
+        "a": "",
+        "a:": "",
+        "arr": "",
+        "label": "",
+        "missing": "",
+        "nested": "",
+        "nested:a": "",
+        "nested:missing": "",
+        "nested:n": "",
+        "page:name": "",
+        "renderType": "terminal surface",
+        "role": "",
+        "tok": "",
+        "x": "",
+        "x:": "",
+        "x::": "",
+        "x::y": ""
+      },
+      "has": true,
+      "has_by_key": {
+        "": true,
+        ":": false,
+        ":b": false,
+        "a": false,
+        "a:": false,
+        "arr": false,
+        "label": false,
+        "missing": false,
+        "nested": false,
+        "nested:a": false,
+        "nested:missing": false,
+        "nested:n": false,
+        "page:name": false,
+        "renderType": true,
+        "role": false,
+        "tok": false,
+        "x": false,
+        "x:": false,
+        "x::": false,
+        "x::y": false
+      },
+      "map": {
+        "renderType": "terminal surface"
+      }
+    },
+    "/Look/Typed": {
+      "by_key": {
+        "": "{'a': {'': e}, 'assets': [@a.png@], 'bools': [1, 0], 'dinf': inf, 'dneg': -0, 'emptyArray': [], 'emptyDictionary': {}, 'fnan': nan, 'h': 0.0999756, 'h3': (0.0999756, 1, 1.00136e-05), 'hbig': 65504, 'hneg': -2.5, 'hs': [0.0999756, 1], 'm2': ( (1, 2.5), (3, 4) ), 'm2s': [( (1, 0), (0, 1) )], 'm3': ( (1, 0, 0), (0, 1, 0), (0, 0, 1e-7) ), 'm4': ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0.1, 2, 3, 1) ), 'pe': /a//b, 'qd': (0.5, 1, 2, 3.25), 'qf': (0.1, 1, 2, 3), 'qfs': [(1, 0, 0, 0)], 'qh': (0.5, 1, 2, 3), 'strs': [a, b c], 'tc': 1.23457, 'tcBig': 1.23457e+06, 'tcSmall': 1e-05, 'tcs': [1.5, 2], 'toks': [t, u], 'u64': 18446744073709551615, 'uc': 65, 'ui': 7, 'v2d': (1e20, 0.5), 'v3fs': [(1, 2, 3)], 'v4i': (1, 2, 3, 4), 'x': {'': {'y': v}}}",
+        ":": "",
+        ":b": "",
+        "a": "{'': e}",
+        "a:": "e",
+        "arr": "",
+        "label": "",
+        "missing": "",
+        "nested": "",
+        "nested:a": "",
+        "nested:missing": "",
+        "nested:n": "",
+        "page:name": "",
+        "renderType": "",
+        "role": "",
+        "tok": "",
+        "x": "{'': {'y': v}}",
+        "x:": "{'y': v}",
+        "x::": "",
+        "x::y": "v"
+      },
+      "has": true,
+      "has_by_key": {
+        "": true,
+        ":": false,
+        ":b": false,
+        "a": true,
+        "a:": true,
+        "arr": false,
+        "label": false,
+        "missing": false,
+        "nested": false,
+        "nested:a": false,
+        "nested:missing": false,
+        "nested:n": false,
+        "page:name": false,
+        "renderType": false,
+        "role": false,
+        "tok": false,
+        "x": true,
+        "x:": true,
+        "x::": false,
+        "x::y": true
+      },
+      "map": {
+        "a": "{'': e}",
+        "assets": "[@a.png@]",
+        "bools": "[1, 0]",
+        "dinf": "inf",
+        "dneg": "-0",
+        "emptyArray": "[]",
+        "emptyDictionary": "{}",
+        "fnan": "nan",
+        "h": "0.0999756",
+        "h3": "(0.0999756, 1, 1.00136e-05)",
+        "hbig": "65504",
+        "hneg": "-2.5",
+        "hs": "[0.0999756, 1]",
+        "m2": "( (1, 2.5), (3, 4) )",
+        "m2s": "[( (1, 0), (0, 1) )]",
+        "m3": "( (1, 0, 0), (0, 1, 0), (0, 0, 1e-7) )",
+        "m4": "( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0.1, 2, 3, 1) )",
+        "pe": "/a//b",
+        "qd": "(0.5, 1, 2, 3.25)",
+        "qf": "(0.1, 1, 2, 3)",
+        "qfs": "[(1, 0, 0, 0)]",
+        "qh": "(0.5, 1, 2, 3)",
+        "strs": "[a, b c]",
+        "tc": "1.23457",
+        "tcBig": "1.23457e+06",
+        "tcSmall": "1e-05",
+        "tcs": "[1.5, 2]",
+        "toks": "[t, u]",
+        "u64": "18446744073709551615",
+        "uc": "65",
+        "ui": "7",
+        "v2d": "(1e20, 0.5)",
+        "v3fs": "[(1, 2, 3)]",
+        "v4i": "(1, 2, 3, 4)",
+        "x": "{'': {'y': v}}"
+      }
+    },
+    "/Ops": {
+      "by_key": {
+        "": "{'empty': SdfStringListOp(Explicit Items: []), 'i64': SdfInt64ListOp(Explicit Items: [3]), 'int': SdfIntListOp(Explicit Items: [1, 2]), 'str': SdfStringListOp(Explicit Items: [x y]), 'tok': SdfTokenListOp(Explicit Items: [a, b]), 'u64': SdfUInt64ListOp(Explicit Items: [4]), 'uint': SdfUIntListOp(Explicit Items: [])}",
+        ":": "",
+        ":b": "",
+        "a": "",
+        "a:": "",
+        "arr": "",
+        "label": "",
+        "missing": "",
+        "nested": "",
+        "nested:a": "",
+        "nested:missing": "",
+        "nested:n": "",
+        "page:name": "",
+        "renderType": "",
+        "role": "",
+        "tok": "SdfTokenListOp(Explicit Items: [a, b])",
+        "x": "",
+        "x:": "",
+        "x::": "",
+        "x::y": ""
+      },
+      "has": true,
+      "has_by_key": {
+        "": true,
+        ":": false,
+        ":b": false,
+        "a": false,
+        "a:": false,
+        "arr": false,
+        "label": false,
+        "missing": false,
+        "nested": false,
+        "nested:a": false,
+        "nested:missing": false,
+        "nested:n": false,
+        "page:name": false,
+        "renderType": false,
+        "role": false,
+        "tok": true,
+        "x": false,
+        "x:": false,
+        "x::": false,
+        "x::y": false
+      },
+      "map": {
+        "empty": "SdfStringListOp(Explicit Items: [])",
+        "i64": "SdfInt64ListOp(Explicit Items: [3])",
+        "int": "SdfIntListOp(Explicit Items: [1, 2])",
+        "str": "SdfStringListOp(Explicit Items: [x y])",
+        "tok": "SdfTokenListOp(Explicit Items: [a, b])",
+        "u64": "SdfUInt64ListOp(Explicit Items: [4])",
+        "uint": "SdfUIntListOp(Explicit Items: [])"
+      }
+    }
+  }
+}

@@ -57,6 +57,10 @@ impl<'a> Port<'a> {
     pub fn path(&self) -> PropertyPath {
         self.path
     }
+    /// The scene it is read from.
+    pub(super) fn scene(&self) -> Scene<'a> {
+        self.scene
+    }
     /// Whether it is an input or an output.
     #[must_use]
     pub fn kind(&self) -> PortKind {

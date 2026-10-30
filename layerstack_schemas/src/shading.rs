@@ -24,6 +24,8 @@ pub use behavior::{ConnectableBehavior, ConnectionError, ConnectionIssue};
 mod node_def;
 pub use node_def::NodeDefError;
 mod ports;
+mod sdr_metadata;
+mod stringify;
 pub use ports::{ConnectionModification, ConnectionSource, Port, PortEdit, PortError, PortKind};
 /// Immutable upstream material capture and caller-owned retention.
 pub mod network;

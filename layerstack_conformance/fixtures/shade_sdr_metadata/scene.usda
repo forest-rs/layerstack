@@ -1,0 +1,103 @@
+#usda 1.0
+
+def Material "Look"
+{
+    def Shader "Surface" (
+        sdrMetadata = {
+            int[] arr = [1, 2]
+            asset asset = @rock.png@
+            double big = 1e20
+            bool bool = 1
+            double dbl = 1.5
+            string empty = ""
+            float flt = 0.1
+            int64 i64 = 5
+            int int = 3
+            dictionary nested = {
+                string a = "b"
+                int n = 1
+            }
+            string primvars = "st|uv"
+            string role = "surface"
+            token tok = "t"
+            double3 vec = (1, 0.5, 2)
+        }
+    )
+    {
+        float inputs:roughness = 0.5 (
+            sdrMetadata = {
+                string label = "Roughness"
+                dictionary page = {
+                    string name = "Specular"
+                }
+            }
+        )
+        color3f inputs:tint = (1, 1, 1)
+        token outputs:surface (
+            sdrMetadata = {
+                string renderType = "terminal surface"
+            }
+        )
+    }
+
+    def Shader "Typed" (
+        sdrMetadata = {
+            dictionary a = {
+                string "" = "e"
+            }
+            string[] strs = ["a", "b c"]
+            token[] toks = ["t", "u"]
+            bool[] bools = [1, 0]
+            asset[] assets = [@a.png@]
+            double dinf = inf
+            double dneg = -0
+            float fnan = nan
+            int[] emptyArray = []
+            dictionary emptyDictionary = {
+            }
+            half h = 0.1
+            half hneg = -2.5
+            half hbig = 65504
+            half3 h3 = (0.1, 1, 0.00001)
+            half[] hs = [0.1, 1]
+            matrix2d m2 = ( (1, 2.5), (3, 4) )
+            matrix3d m3 = ( (1, 0, 0), (0, 1, 0), (0, 0, 1e-7) )
+            matrix4d m4 = ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0.1, 2, 3, 1) )
+            matrix2d[] m2s = [( (1, 0), (0, 1) )]
+            pathExpression pe = "/a//b"
+            quatd qd = (0.5, 1, 2, 3.25)
+            quatf qf = (0.1, 1, 2, 3)
+            quath qh = (0.5, 1, 2, 3)
+            quatf[] qfs = [(1, 0, 0, 0)]
+            timecode tc = 1.2345678
+            timecode tcBig = 1234567
+            timecode tcSmall = 0.00001
+            timecode[] tcs = [1.5, 2]
+            uchar uc = 65
+            uint ui = 7
+            uint64 u64 = 18446744073709551615
+            double2 v2d = (1e20, 0.5)
+            float3[] v3fs = [(1, 2, 3)]
+            int4 v4i = (1, 2, 3, 4)
+            dictionary x = {
+                dictionary "" = {
+                    string y = "v"
+                }
+            }
+        }
+    )
+    {
+    }
+
+    def Shader "Bare"
+    {
+        float inputs:x
+    }
+
+    def Shader "Empty" (
+        sdrMetadata = {
+        }
+    )
+    {
+    }
+}

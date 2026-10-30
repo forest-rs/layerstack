@@ -1762,7 +1762,8 @@ impl Stage {
             .iter()
             .filter_map(|&id| {
                 let identifier = self.document.identifier(id)?;
-                let bytes = written.remove(identifier)?;
+                let at = written.iter().position(|(at, _)| at == identifier)?;
+                let (_, bytes) = written.swap_remove(at);
                 Some(Wire::List(vec![
                     Wire::UInt64(id.0),
                     Wire::text(identifier),

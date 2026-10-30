@@ -45,8 +45,10 @@ enum Source {
 pub struct HostStorage {
     sources: BTreeMap<String, Source>,
     supplied_bytes: u64,
-    /// What saves wrote since the host last took it, by identifier.
-    written: BTreeMap<String, EncodedBytes>,
+    /// What saves wrote since the host last took it: the last bytes
+    /// written to each identifier. A save writes a few layers, so a vector,
+    /// not another map's code.
+    written: Vec<(String, EncodedBytes)>,
     written_bytes: u64,
 }
 
@@ -95,10 +97,12 @@ impl HostStorage {
         self.supplied_bytes
     }
 
-    /// What saves wrote since the last call, by identifier: the last bytes
-    /// written to each. They stay the identifiers' sources.
-    pub fn take_written(&mut self) -> BTreeMap<String, EncodedBytes> {
-        core::mem::take(&mut self.written)
+    /// What saves wrote since the last call, in identifier order: the last
+    /// bytes written to each identifier. They stay the identifiers' sources.
+    pub fn take_written(&mut self) -> Vec<(String, EncodedBytes)> {
+        let mut written = core::mem::take(&mut self.written);
+        layerstack::sort::sort_unstable_by(&mut written, |a, b| a.0.cmp(&b.0));
+        written
     }
 
     /// The bytes saves wrote so far, summed over every write.
@@ -168,7 +172,10 @@ impl Storage for HostStorage {
     fn write(&mut self, identifier: &str, bytes: &[u8]) -> Result<(), IoError> {
         let bytes = EncodedBytes::from(bytes.to_vec());
         self.written_bytes += bytes.len() as u64;
-        self.written.insert(identifier.to_string(), bytes.clone());
+        match self.written.iter_mut().find(|(at, _)| at == identifier) {
+            Some((_, last)) => *last = bytes.clone(),
+            None => self.written.push((identifier.to_string(), bytes.clone())),
+        }
         self.sources
             .insert(identifier.to_string(), Source::Supplied(bytes));
         Ok(())
@@ -276,10 +283,18 @@ mod tests {
         storage.write("a.usda", b"one").unwrap();
         storage.write("a.usda", b"two").unwrap();
         assert_eq!(storage.read("a.usda").unwrap(), b"two");
+        storage.write("b.usda", b"three").unwrap();
         let written = storage.take_written();
-        assert_eq!(written.len(), 1);
-        assert_eq!(&*written["a.usda"], b"two");
-        assert_eq!(storage.written_bytes(), 6);
+        assert_eq!(written.len(), 2);
+        assert_eq!(
+            (written[0].0.as_str(), &*written[0].1),
+            ("a.usda", &b"two"[..])
+        );
+        assert_eq!(
+            (written[1].0.as_str(), &*written[1].1),
+            ("b.usda", &b"three"[..])
+        );
+        assert_eq!(storage.written_bytes(), 11);
         assert!(storage.take_written().is_empty(), "taken once");
         assert_eq!(storage.read("a.usda").unwrap(), b"two", "still the source");
     }

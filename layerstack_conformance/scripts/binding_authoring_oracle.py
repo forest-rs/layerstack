@@ -11,7 +11,8 @@ including `/Set/Mesh`), `/Set/Mesh` and the materials `/Looks/A` and
 `/Looks/B`, both prims with `MaterialBindingAPI` applied, it calls
 `UsdShadeMaterialBindingAPI::Bind` (direct and collection),
 `UnbindDirectBinding`, `UnbindCollectionBinding` and `UnbindAllBindings`
-one at a time. After each it records whether the call was accepted and,
+one at a time, then `Bind` of a material where no prim is (refused) and
+of an existing prim that is not a `Material` (bound, whatever its type). After each it records whether the call was accepted and,
 for every binding relationship spec in the root layer, its explicit
 targets, its `bindMaterialAs` and whether it is `custom`.
 
@@ -62,6 +63,9 @@ def main():
     api = UsdShade.MaterialBindingAPI.Apply(mesh)
     set_api = UsdShade.MaterialBindingAPI.Apply(set_prim)
     T = UsdShade.Tokens
+    # A material where no prim is, as `UsdShadeMaterial(stage.GetPrimAtPath(...))`
+    # names one: an invalid schema object, whose path is empty.
+    gone = UsdShade.Material(stage.GetPrimAtPath("/Looks/Gone"))
     calls = [
         ("bind A", lambda: api.Bind(a)),
         ("bind A stronger", lambda: api.Bind(a, T.strongerThanDescendants)),
@@ -78,6 +82,10 @@ def main():
         ("unbind collection metalBits", lambda: set_api.UnbindCollectionBinding("metalBits")),
         ("unbind all /Set", lambda: set_api.UnbindAllBindings()),
         ("unbind all /Set/Mesh", lambda: api.UnbindAllBindings()),
+        ("bind missing /Looks/Gone draft", lambda: api.Bind(gone, T.fallbackStrength, "draft")),
+        ("bind non-material /Set", lambda: api.Bind(UsdShade.Material(set_prim))),
+        ("bind collection missing gone", lambda: set_api.Bind(collection, gone, "gone")),
+        ("bind collection non-material odd", lambda: set_api.Bind(collection, UsdShade.Material(mesh), "odd")),
     ]
     log = []
     for label, call in calls:

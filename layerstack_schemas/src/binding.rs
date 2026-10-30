@@ -660,16 +660,51 @@ pub enum MaterialBindingError {
     /// A collection binding's name has a namespace (`bad:name`). C++
     /// refuses it with a coding error.
     NamespacedBindingName(String),
+    /// No prim is at the material's path, on the stage or defined earlier
+    /// in the edit. C++ binds a `UsdShadeMaterial`, and one of a missing
+    /// prim has an empty path, which the relationship refuses as a target;
+    /// an existing prim of any type is bound.
+    MissingMaterial(PathId),
 }
 
-impl core::fmt::Display for MaterialBindingError {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+impl MaterialBindingError {
+    /// The error in words, a material's path written with `store`, the
+    /// store the stage was composed from. `Display` writes the same with
+    /// ids.
+    #[must_use]
+    pub fn display<'a>(
+        &'a self,
+        store: &'a dyn layerstack::LayerStore,
+    ) -> impl core::fmt::Display + 'a {
+        crate::diagnostic::with_store(self, store)
+    }
+}
+
+impl crate::diagnostic::Describe for MaterialBindingError {
+    fn describe(
+        &self,
+        f: &mut core::fmt::Formatter<'_>,
+        names: crate::diagnostic::Names<'_>,
+    ) -> core::fmt::Result {
         match self {
             Self::InvalidName(name) => write!(f, "invalid binding relationship name `{name}`"),
             Self::NamespacedBindingName(name) => {
                 write!(f, "collection binding name `{name}` has a namespace")
             }
+            Self::MissingMaterial(material) => {
+                write!(
+                    f,
+                    "no prim is at the material path {}",
+                    names.path(*material)
+                )
+            }
         }
+    }
+}
+
+impl core::fmt::Display for MaterialBindingError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        crate::diagnostic::Describe::describe(self, f, crate::diagnostic::Names(None))
     }
 }
 
@@ -683,7 +718,11 @@ fn is_property_name(name: &str) -> bool {
 impl MaterialBindingApiEdit {
     /// Binds `material` directly to this prim for `purpose`: the
     /// relationship `material:binding[:<purpose>]`, created not `custom`,
-    /// gets `material` as its only target. `strength` `Some` authors
+    /// gets `material` as its only target. `material` is any prim on the
+    /// stage or defined earlier in the edit, whatever its type, as C++
+    /// binds any prim it is given as a `UsdShadeMaterial` (one that is not
+    /// a `Material` resolves no material: [`BoundMaterial::material`] is
+    /// `None`). `strength` `Some` authors
     /// `bindMaterialAs`; `None` is C++'s `fallbackStrength`, which leaves
     /// it unauthored, or rewrites an authored `strongerThanDescendants` to
     /// `weakerThanDescendants`. The prim should have `MaterialBindingAPI`
@@ -695,7 +734,8 @@ impl MaterialBindingApiEdit {
     /// # Errors
     ///
     /// [`MaterialBindingError::InvalidName`] for a purpose that is not an
-    /// identifier.
+    /// identifier, then [`MaterialBindingError::MissingMaterial`] when no
+    /// prim is at `material`.
     #[doc(alias = "Bind")]
     #[doc(alias = "UsdShadeMaterialBindingAPI::Bind")]
     pub fn bind(
@@ -706,7 +746,13 @@ impl MaterialBindingApiEdit {
         purpose: &MaterialPurpose,
     ) -> Result<(), MaterialBindingError> {
         let name = purpose.direct_name();
-        self.author_binding(edit, &name, &[TargetPath::Prim(material)], strength)
+        self.author_binding(
+            edit,
+            &name,
+            material,
+            &[TargetPath::Prim(material)],
+            strength,
+        )
     }
 
     /// Binds `material` to the prims of `collection` (a collection's path,
@@ -721,8 +767,10 @@ impl MaterialBindingApiEdit {
     /// # Errors
     ///
     /// [`MaterialBindingError::NamespacedBindingName`] for a binding name
-    /// with a `:`, and [`MaterialBindingError::InvalidName`] for a purpose
-    /// or name that is not an identifier.
+    /// with a `:`, [`MaterialBindingError::InvalidName`] for a purpose
+    /// or name that is not an identifier, then
+    /// [`MaterialBindingError::MissingMaterial`] when no prim is at
+    /// `material`, as [`Self::bind`] refuses it.
     #[doc(alias = "Bind")]
     #[doc(alias = "UsdShadeMaterialBindingAPI::Bind")]
     pub fn bind_collection(
@@ -747,7 +795,7 @@ impl MaterialBindingApiEdit {
         };
         let name = format!("{}:{binding_name}", purpose.collection_prefix());
         let targets = [TargetPath::Property(collection), TargetPath::Prim(material)];
-        self.author_binding(edit, &name, &targets, strength)
+        self.author_binding(edit, &name, material, &targets, strength)
     }
 
     /// Unbinds this prim's direct binding for `purpose`: the relationship,
@@ -807,11 +855,18 @@ impl MaterialBindingApiEdit {
         &self,
         edit: &mut SchemaEdit<'_>,
         name: &str,
+        material: PathId,
         targets: &[TargetPath],
         strength: Option<BindingStrength>,
     ) -> Result<(), MaterialBindingError> {
         if !is_property_name(name) {
             return Err(MaterialBindingError::InvalidName(name.into()));
+        }
+        // C++ creates the relationship before `SetTargets` refuses the
+        // empty path of a missing material, leaving an empty relationship
+        // spec behind its error; a refusal here collects nothing.
+        if !edit.exists(material) {
+            return Err(MaterialBindingError::MissingMaterial(material));
         }
         edit.ensure_relationship(self.path(), name, false);
         let strength = match strength {

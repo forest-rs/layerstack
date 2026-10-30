@@ -395,7 +395,10 @@ impl EditTarget {
     /// `SdfPathExpression::MakeAbsolute`, `PcpMapFunction::MapTargetToSource`.
     /// OpenUSD keeps a variant selection in a mapped prefix
     /// (`/Rock{look=a}Child`), which names no prim; this strips it, as
-    /// relationship targets are stripped.
+    /// relationship targets are stripped. OpenUSD cannot read that output
+    /// back: `SdfPathExpression` parses the `{` as a predicate, so its
+    /// USDA reader rejects the saved layer ("Ill-formed path expression
+    /// ... expected '}' to close predicate expression").
     ///
     /// Spec: AOUSD Core §12.3.2.1 (layer offsets), §10 (arcs map
     /// namespace).

@@ -54,7 +54,11 @@ const PRIMS: [&str; 4] = ["/Root", "/Inst", "/Rock", "/Sub"];
 /// Through an edit target that maps a prim into a variant, OpenUSD maps a
 /// path expression's prefixes into the variant, selection and all
 /// (`/Rock{look=a}Child`, which names no prim); layerstack strips the
-/// selection, as both strip it from relationship targets.
+/// selection, as both strip it from relationship targets. OpenUSD cannot
+/// read its own output back: its USDA reader rejects the saved layer
+/// ("Ill-formed path expression </Rock{look=a}Child> ... expected '}' to
+/// close predicate expression"), as `SdfPathExpression` parses `{` as the
+/// start of a predicate.
 const DIFFERING: &[&str] = &[
     "reference_variant_expressions",
     "variant_expressions",

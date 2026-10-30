@@ -144,21 +144,23 @@ struct Packer<'a> {
     /// Last sorted map of each size: a borrowed fast path before child packing.
     dictionaries: HashMap<usize, (SortedDictionary<'a>, u64)>,
     tokens: Vec<String>,
-    token_index: BTreeMap<String, u32>,
+    /// The index of each token, string, path, field and field set: looked
+    /// up only, so hashed, which compiles less than ordered maps.
+    token_index: HashMap<String, u32>,
     /// Token index of each string (`_strings`).
     strings: Vec<u32>,
-    string_index: BTreeMap<String, u32>,
+    string_index: HashMap<String, u32>,
     /// Each path, `None` for the empty path (`SdfPath()`), which has an
     /// index but no place in the path tree.
     paths: Vec<Option<CratePath>>,
-    path_index: BTreeMap<CratePath, u32>,
+    path_index: HashMap<CratePath, u32>,
     empty_path_index: Option<u32>,
     /// `(token index, value representation)` of each field.
     fields: Vec<(u32, u64)>,
-    field_index: BTreeMap<(u32, u64), u32>,
+    field_index: HashMap<(u32, u64), u32>,
     /// Field indexes, each set terminated by `u32::MAX` (`FieldIndex()`).
     fieldsets: Vec<u32>,
-    fieldset_index: BTreeMap<Vec<u32>, u32>,
+    fieldset_index: HashMap<Vec<u32>, u32>,
     /// `(path index, field set index, spec form)`.
     specs: Vec<(u32, u32, u32)>,
     /// The `SdfUnregisteredValue` holding each held value's representation.
@@ -173,16 +175,16 @@ impl<'a> Packer<'a> {
         let mut packer = Self {
             out: alloc::vec![0; BOOTSTRAP_SIZE],
             tokens: Vec::new(),
-            token_index: BTreeMap::new(),
+            token_index: HashMap::new(),
             strings: Vec::new(),
-            string_index: BTreeMap::new(),
+            string_index: HashMap::new(),
             paths: Vec::new(),
-            path_index: BTreeMap::new(),
+            path_index: HashMap::new(),
             empty_path_index: None,
             fields: Vec::new(),
-            field_index: BTreeMap::new(),
+            field_index: HashMap::new(),
             fieldsets: Vec::new(),
-            fieldset_index: BTreeMap::new(),
+            fieldset_index: HashMap::new(),
             specs: Vec::new(),
             blobs: HashMap::default(),
             unregistered: HashMap::default(),

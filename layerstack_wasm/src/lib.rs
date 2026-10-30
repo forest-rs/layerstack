@@ -126,10 +126,10 @@ use alloc::vec;
 use wasm_bindgen::prelude::*;
 
 /// The version of the records the module exchanges with the TypeScript
-/// wrapper: currently 4. It changes whenever an export's arguments or a
+/// wrapper: currently 5. It changes whenever an export's arguments or a
 /// record's layout change incompatibly; the wrapper
 /// refuses a module whose ABI differs from its own (`module.abi`).
-pub const ABI: u32 = 4;
+pub const ABI: u32 = 5;
 
 /// The crate version, the source revision the module was built from
 /// (`LAYERSTACK_REVISION` at build time, `unknown` when unset) and [`ABI`],

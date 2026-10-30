@@ -34,6 +34,8 @@ import type {
   StageStatus,
   Transfer,
   UnavailableAsset,
+  UnrepairedField,
+  UnrepairedPath,
   UnresolvedAsset,
   Value,
   ValueSource,
@@ -48,7 +50,7 @@ export const PACKAGE_VERSION = "0.1.0";
  * The ABI this package speaks: the version of the records it exchanges
  * with the native module (`layerstack_wasm::ABI`).
  */
-export const ABI = 4;
+export const ABI = 5;
 
 /** The native stage the generated glue exports (`layerstack_wasm::Stage`). Borrowed only by same-module extensions. */
 export interface NativeStage extends Disposable {
@@ -938,6 +940,11 @@ export class Stage implements Disposable {
    * several layers of the stack. Atomic, with change listeners run before
    * it returns; the receipt undoes it.
    *
+   * As OpenUSD, it repairs only the paths of specs a composed prim uses:
+   * those in a variant no prim selects keep naming the old path, and
+   * {@link EditReceipt.unrepaired} lists them, so a variant switch that
+   * would compose a dangling arc or target can be caught at the move.
+   *
    * `target` must be a layer of the stage's layer stack (or its
    * `"layer"` {@link EditTarget}): as OpenUSD's `UsdNamespaceEditor`, a
    * move does not go through an arc or into a variant, and such a target
@@ -965,7 +972,8 @@ export class Stage implements Disposable {
    * Deletes the prim or property at `path` from the composed stage, as
    * OpenUSD's `UsdNamespaceEditor` deletes it: every opinion of the layer
    * stack `target` is in (the {@link Stage.editLayer} by default), and the
-   * paths and arcs that name it where a composed prim depends on them.
+   * paths and arcs that name it where a composed prim depends on them;
+   * {@link EditReceipt.unrepaired} lists those it leaves naming it.
    * A `removePrim` edit, by contrast, removes one spec from one layer.
    * Atomic; the receipt undoes it.
    *
@@ -1255,13 +1263,14 @@ export class Stage implements Disposable {
   }
 
   #receipt(native: NativeReceipt): EditReceipt {
-    const [target, changes, loaded, failures, unavailable, layers] = native.record() as [
+    const [target, changes, loaded, failures, unavailable, layers, unrepaired] = native.record() as [
       NativeTarget,
       Row,
       bigint[],
       Row[],
       Row[],
       bigint[],
+      [bigint, string, UnrepairedField, string, string | null][],
     ];
     const receipt = new EditReceipt(
       this,
@@ -1271,6 +1280,9 @@ export class Stage implements Disposable {
       loaded.map((id) => this.#layer(id)),
       failures.map(([asset, anchor, code, message]) => this.#failure(asset, anchor, code, message)),
       unavailable.map((row) => this.#unavailable(row)),
+      unrepaired.map(([layer, spec, field, path, metadata]) =>
+        Object.freeze({ layer: this.#layer(layer), spec, field, metadata, path }),
+      ),
     );
     receiptNatives.set(receipt, native);
     return receipt;
@@ -1649,6 +1661,14 @@ export class EditReceipt implements Disposable {
   readonly failures: readonly AssetFailure[];
   /** The assets the edits ask for that the host has not supplied: run {@link Stage.resolve}. */
   readonly unavailable: readonly UnavailableAsset[];
+  /**
+   * For a {@link Stage.move} or {@link Stage.delete}, the authored paths
+   * it leaves naming the old location, in specs no composed prim uses
+   * (a variant no prim selects): what a later variant switch would find
+   * dangling. Sorted by layer, spec, field and path; empty when every
+   * path naming the object was repaired, and for other edits.
+   */
+  readonly unrepaired: readonly UnrepairedPath[];
 
   /** @internal Use {@link Stage.apply}. */
   constructor(
@@ -1659,6 +1679,7 @@ export class EditReceipt implements Disposable {
     loaded: readonly Layer[],
     failures: readonly AssetFailure[],
     unavailable: readonly UnavailableAsset[],
+    unrepaired: readonly UnrepairedPath[] = [],
   ) {
     this.stage = stage;
     this.target = target;
@@ -1667,6 +1688,7 @@ export class EditReceipt implements Disposable {
     this.loaded = loaded;
     this.failures = failures;
     this.unavailable = unavailable;
+    this.unrepaired = unrepaired;
   }
 
   /** Whether it was undone or released: it can no longer undo. */

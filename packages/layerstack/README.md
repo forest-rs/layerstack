@@ -161,10 +161,14 @@ await stage.resolve(source);
   opinion of the target's layer stack moves (or goes) together, a prim's
   variant sets and the specs inside its variants with it, and the
   relationship targets, connections, internal arcs and path expressions
-  that name it are repaired, so one call may edit several layers. Each is
-  atomic and returns a receipt; one that cannot be made throws a
-  `namespace.*` code and changes nothing. A `removePrim` edit, by
-  contrast, removes one spec from one layer.
+  that name it are repaired, so one call may edit several layers. As
+  OpenUSD, only the specs a composed prim uses are repaired: the paths in
+  a variant no prim selects keep naming the old location, and
+  `receipt.unrepaired` lists each (`layer`, `spec`, `field`, `path`), so
+  a later variant switch that would compose a dangling target or arc is
+  caught at the edit. Each is atomic and returns a receipt; one that
+  cannot be made throws a `namespace.*` code and changes nothing. A
+  `removePrim` edit, by contrast, removes one spec from one layer.
 - **Undo is a receipt.** `apply` (and `move`, `delete`) returns an `EditReceipt` holding the
   native inverse: `receipt.undo()` restores exactly what the edits changed
   and returns the receipt that redoes them. An undo whose slots another
@@ -296,7 +300,7 @@ The package and the `layerstack_wasm` crate are released together, at the
 same version. They meet at an ABI number, the layout of the records the
 module exchanges with this package: `layerstack.version` is `{ package,
 crate, revision, abi }`, and loading a module of another ABI fails with
-`module.abi`. This package speaks ABI 4; changing an export's arguments or
+`module.abi`. This package speaks ABI 5; changing an export's arguments or
 record layout brings a new ABI.
 
 ## Building and testing

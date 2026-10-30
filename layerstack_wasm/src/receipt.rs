@@ -32,8 +32,8 @@ pub struct EditReceipt {
     pub(crate) target_record: Wire,
     /// The transaction that undoes the edits; `None` once undone.
     pub(crate) inverse: Option<Transaction>,
-    /// `[target, changes, loaded, failures, unavailable, layers]`, as
-    /// `Stage::receipt` documents it.
+    /// `[target, changes, loaded, failures, unavailable, layers,
+    /// unrepaired]`, as `Stage::receipt` documents it.
     pub(crate) record: Wire,
 }
 

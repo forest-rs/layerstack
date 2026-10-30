@@ -81,6 +81,49 @@ export interface AssetFailure {
   readonly message: string;
 }
 
+/**
+ * An authored path a {@link Stage.move} or {@link Stage.delete} leaves
+ * naming the old location: one in a spec no composed prim uses, such as
+ * a variant no prim selects, which the edit moves or removes with its
+ * prim without repairing, as OpenUSD's `UsdNamespaceEditor` does. Once
+ * a later edit composes that spec (selecting the variant), the path
+ * names a location that is gone. What the edit writes does not depend on
+ * it.
+ */
+export interface UnrepairedPath {
+  /** The layer that authors it. */
+  readonly layer: Layer;
+  /** The prim, variant or property spec holding it, where the edit leaves that spec (`/World/Lamp2{light=off}.lamp`). */
+  readonly spec: string;
+  /** The field of the spec that authors it. */
+  readonly field: UnrepairedField;
+  /** For `"metadata"`, the metadata field's name; otherwise `null`. */
+  readonly metadata: string | null;
+  /**
+   * The path it names: the moved or deleted object or a path beneath it
+   * (`/World/Lamp/Bulb`); for a path expression, a pattern's literal
+   * prefix or an expression reference's prim, made absolute.
+   */
+  readonly path: string;
+}
+
+/**
+ * The field that authors an {@link UnrepairedPath}: a prim or variant
+ * spec's arcs, a relationship's `targets`, an attribute's `connections`,
+ * a path expression in a `default` or `timeSamples`, or a `metadata`
+ * field.
+ */
+export type UnrepairedField =
+  | "references"
+  | "payloads"
+  | "inherits"
+  | "specializes"
+  | "targets"
+  | "connections"
+  | "default"
+  | "timeSamples"
+  | "metadata";
+
 /** What {@link Stage.loadSupplied} read. */
 export interface LoadResult {
   /** The layers read, package members included. */
